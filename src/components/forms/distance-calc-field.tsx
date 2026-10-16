@@ -43,6 +43,7 @@ interface DistanceCalcFieldProps {
    * (e.g. the transport-leg form's distance-source select).
    */
   showSourceBadge?: boolean;
+  allowEstimate?: boolean;
   distanceKm: number | null | undefined;
   distanceSource: DistanceSourceValue | null | undefined;
   onDistanceChange: (km: number | null, source: DistanceSourceValue | null) => void;
@@ -121,6 +122,7 @@ export function DistanceCalcField({
   certifyStatus,
   disabled = false,
   showSourceBadge = true,
+  allowEstimate = true,
   distanceKm,
   distanceSource,
   onDistanceChange,
@@ -209,7 +211,7 @@ export function DistanceCalcField({
           value: draft,
           onChange: (event) => handleManualChange(event.target.value),
         }}
-        action={
+        action={allowEstimate ? (
           <Tooltip content={tooltipContent} side="top">
             {/* span trigger: disabled buttons swallow hover, and the tooltip
                 matters most exactly when the button is disabled. It is only a
@@ -229,11 +231,11 @@ export function DistanceCalcField({
                 aria-label={`Estimate road distance ${originLabel} to ${destinationLabel}`}
                 onClick={handleCalc}
               >
-                Estimate
+                Estimate from GPS
               </Button>
             </span>
           </Tooltip>
-        }
+        ) : null}
         footer={
           showSourceBadge && source ? (
             <p

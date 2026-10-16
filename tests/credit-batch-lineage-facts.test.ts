@@ -1,3 +1,4 @@
+import { customerLocationFacilityDistances } from "@/db/schema";
 import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
@@ -67,7 +68,8 @@ describe("credit batch accounting", () => {
       { organizationId: TEST_ORG_ID, biocharProductId: multiRunProduct.id, productionRunId: runs[1].id, sourceStorageLocationId: sourceBin.id, allocatedWetMassKg: 150, allocatedDryMassKg: 60 },
     ]).returning();
     const [customer] = await db.insert(customers).values({ organizationId: TEST_ORG_ID, code: `LF-C-${tag}`, name: `Lineage ${tag}` }).returning();
-    const [location] = await db.insert(customerLocations).values({ ...TEST_SITE_POSITION, organizationId: TEST_ORG_ID, customerId: customer.id, name: `Lineage destination ${tag}`, distanceFromFacilityKm: 15 }).returning();
+    const [location] = await db.insert(customerLocations).values({ ...TEST_SITE_POSITION, organizationId: TEST_ORG_ID, customerId: customer.id, name: `Lineage destination ${tag}` }).returning();
+    await db.insert(customerLocationFacilityDistances).values({ organizationId: TEST_ORG_ID, locationId: location.id, facilityId: facility.id, distanceKm: 15, distanceSource: "manual" });
     const ordersRows = await db.insert(orders).values(await outputOrderFixtureValues(db, products.map((product, n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, customerId: customer.id, customerLocationId: location.id, biocharProductId: product.id, code: `LF-O${n}-${tag}`, orderDate: new Date("2026-07-03"), quantityKg: 100, packaging: "loose" as const })))).returning();
     const deliveryRows = await insertOutputDeliveryFixture(db, [
       { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: ordersRows[1].id, biocharProductId: products[0].id, code: `LF-D1-${tag}`, distanceKmOverride: 7, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 1_000, massDryKg: 500 },
@@ -106,13 +108,13 @@ describe("credit batch accounting", () => {
       }
       expect(facts.applications.find((application) => application.id === appRows[0].id)?.delivery).toMatchObject({
         customerLocationId: location.id,
-        locationDistanceKm: 15,
+        recordedDistanceKm: 15,
         distanceKmOverride: 7,
         status: deliveryRows[0].status,
         proofOfDeliveryCount: 1,
       });
       expect(facts.applications.find((application) => application.id === appRows[1].id)?.delivery).toMatchObject({
-        customerLocationId: location.id, locationDistanceKm: 15,
+        customerLocationId: location.id, recordedDistanceKm: 15,
       });
       expect(facts.applications.find((application) => application.id === multiRunApplication.id)?.delivery.customerLocationId).toBe(location.id);
       expect(facts.productionRunIds).toHaveLength(2);

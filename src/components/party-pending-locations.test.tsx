@@ -82,8 +82,7 @@ const supplierRow = (name: string, isDefault: boolean) => ({
   address: "",
   gpsLatitude: -6.8,
   gpsLongitude: 39.2,
-  distanceFromFacilityKm: null,
-  distanceSource: null,
+  facilityDistances: [],
   isDefault,
 });
 const customerRow = (name: string, isDefault: boolean) => ({

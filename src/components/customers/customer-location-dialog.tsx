@@ -12,6 +12,7 @@ import {
   useUpdateCustomerLocation,
 } from "@/hooks/use-customers";
 import { toSaveErrorMessage } from "@/lib/stale-version";
+import { facilityDistanceChanges } from "@/lib/facility-distance-changes";
 import type { CustomerLocationFormData } from "@/schemas/customers";
 import type { Facility } from "@/db/schema";
 import {
@@ -70,8 +71,7 @@ export function CustomerLocationDialog({
         address: data.address,
         gpsLatitude: data.gpsLatitude,
         gpsLongitude: data.gpsLongitude,
-        distanceFromFacilityKm: data.distanceFromFacilityKm,
-        distanceSource: data.distanceSource,
+        facilityDistances: facilityDistanceChanges(data.facilityDistances, location?.facilityDistances),
         defaultSoilTemperatureC: data.defaultSoilTemperatureC,
         isDefault: data.isDefault,
       };

@@ -109,8 +109,7 @@ const customerFormData = customerLocationFormSchema.parse({
   address: "E2E application site",
   gpsLatitude: GPS_LATITUDE,
   gpsLongitude: GPS_LONGITUDE,
-  distanceFromFacilityKm: DISTANCE_KM,
-  distanceSource: "manual",
+  facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: DISTANCE_KM, distanceSource: "manual" }],
   defaultSoilTemperatureC: 25,
   isDefault: true,
 });
@@ -123,8 +122,7 @@ const supplierFormData = supplierLocationFormSchema.parse({
   address: "",
   gpsLatitude: GPS_LATITUDE,
   gpsLongitude: GPS_LONGITUDE,
-  distanceFromFacilityKm: DISTANCE_KM,
-  distanceSource: "manual",
+  facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: DISTANCE_KM, distanceSource: "manual" }],
   isDefault: true,
 });
 
@@ -137,8 +135,7 @@ const customerLocation: EditableCustomerLocation = {
   gpsLatitude: GPS_LATITUDE,
   gpsLongitude: GPS_LONGITUDE,
   address: "E2E application site",
-  distanceFromFacilityKm: DISTANCE_KM,
-  distanceSource: "manual",
+  facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: DISTANCE_KM, distanceSource: "manual" }],
   defaultSoilTemperatureC: 25,
   isDefault: true,
   version: 1,
@@ -156,8 +153,7 @@ const supplierLocation: SupplierLocation = {
   gpsLatitude: GPS_LATITUDE,
   gpsLongitude: GPS_LONGITUDE,
   address: null,
-  distanceFromFacilityKm: DISTANCE_KM,
-  distanceSource: "manual",
+  facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: DISTANCE_KM, distanceSource: "manual" }],
   isDefault: true,
   createdAt: new Date("2026-01-01T00:00:00Z"),
   version: 1,
@@ -204,8 +200,7 @@ describe("CustomerLocationDialog submission", () => {
       address: "E2E application site",
       gpsLatitude: GPS_LATITUDE,
       gpsLongitude: GPS_LONGITUDE,
-      distanceFromFacilityKm: DISTANCE_KM,
-      distanceSource: "manual",
+      facilityDistances: [],
       defaultSoilTemperatureC: 25,
       isDefault: true,
     });
@@ -231,7 +226,7 @@ describe("CustomerLocationDialog submission", () => {
       customerId: CUSTOMER_ID,
       gpsLatitude: GPS_LATITUDE,
       gpsLongitude: GPS_LONGITUDE,
-      distanceSource: "manual",
+      facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: DISTANCE_KM, distanceSource: "manual" }],
     });
     expect(harness.customerCreate.mock.calls[0]?.[0]).not.toHaveProperty(
       "locationId",
@@ -261,11 +256,12 @@ describe("SupplierLocationDialog submission", () => {
       locationId: SUPPLIER_LOCATION_ID,
       expectedVersion: 1,
       ...supplierFormData,
+      facilityDistances: [],
     });
     expect(harness.supplierUpdate.mock.calls[0]?.[0]).toMatchObject({
       gpsLatitude: GPS_LATITUDE,
       gpsLongitude: GPS_LONGITUDE,
-      distanceSource: "manual",
+      facilityDistances: [],
     });
   });
 
@@ -289,10 +285,28 @@ describe("SupplierLocationDialog submission", () => {
       supplierId: SUPPLIER_ID,
       gpsLatitude: GPS_LATITUDE,
       gpsLongitude: GPS_LONGITUDE,
-      distanceSource: "manual",
+      facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: DISTANCE_KM, distanceSource: "manual" }],
     });
     expect(harness.supplierCreate.mock.calls[0]?.[0]).not.toHaveProperty(
       "locationId",
     );
   });
+});
+
+it.each(["customer", "supplier"] as const)("%s name-only edit submits no distance rows", async kind => {
+  const onClose = vi.fn();
+  renderToStaticMarkup(kind === "customer"
+    ? <CustomerLocationDialog isOpen onClose={onClose} customerId={CUSTOMER_ID} location={customerLocation} />
+    : <SupplierLocationDialog isOpen onClose={onClose} supplierId={SUPPLIER_ID} location={supplierLocation} />);
+  const data = kind === "customer" ? customerFormData : supplierFormData;
+  const submit = kind === "customer" ? harness.customerOnSubmit : harness.supplierOnSubmit;
+  const update = kind === "customer" ? harness.customerUpdate : harness.supplierUpdate;
+  await submit?.({ ...data, facilityDistances: [
+    ...data.facilityDistances!,
+    { facilityId: SUPPLIER_LOCATION_ID, distanceKm: null, distanceSource: "manual" },
+  ] } as never);
+  expect(update).toHaveBeenCalledWith(expect.objectContaining({
+    name: data.name, facilityDistances: [],
+  }));
+  expect(onClose).toHaveBeenCalledOnce();
 });

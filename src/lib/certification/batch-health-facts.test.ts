@@ -73,18 +73,19 @@ describe("toBatchHealthFacts", () => {
       ...readyContext.transportCoverage,
       feedstock: { ...readyContext.transportCoverage.feedstock, missingEntityIds: ["fs-2"] },
     } };
+    ctx.submissionLineageBlockers[0].record.href = "/suppliers?location=location-2&mode=edit";
     expect(deriveBatchHealth(toBatchHealthFacts(readyContext, "batch-1")).state).toBe("ready");
     const health = deriveBatchHealth(toBatchHealthFacts(ctx, "batch-1"));
     expect(health.state).toBe("incomplete");
     expect(health.issueCount).toBe(1);
     const check = health.checks.find((check) => check.status === "unmet")!;
     expect(check.affectedRecords?.[0].id).toBe("fs-2");
-    expect(batchHealthFixLinkFor(check, "facility-1").href).toContain("feedstock=fs-2");
+    expect(batchHealthFixLinkFor(check, "facility-1").href).toBe("/suppliers?location=location-2&mode=edit");
     const removalFacts = toRemovalReadinessFacts(ctx);
     expect(deriveRemovalReadiness(removalFacts)).toMatchObject({ state: "blocked", reasons: ["Missing feedstock transport legs"] });
     const checklist = buildRemovalRequirementsChecklist(removalFacts);
     expect(checklist.filter((check) => check.status === "unmet")).toEqual([
-      expect.objectContaining({ key: "transport", transportCategory: "feedstock" }),
+      expect.objectContaining({ key: "transport", transportCategory: "feedstock", lineageIssues: ctx.submissionLineageBlockers }),
     ]);
     expect(health.checks).toContainEqual(expect.objectContaining({ key: "transport", status: "unmet" }));
   });

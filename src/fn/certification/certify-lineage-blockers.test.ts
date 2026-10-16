@@ -5,7 +5,7 @@ import { buildSubmissionLineageBlockers } from "./certify-lineage-blockers";
 const lineage = {
   application: { id: "app-1", code: "AP-1" },
   order: { id: "order-1", code: "OR-1" },
-  delivery: { id: "delivery-1", code: "DL-1", status: "delivered", proofOfDeliveryCount: 1, customerLocationId: null, distanceKmOverride: null, locationDistanceKm: null },
+  delivery: { id: "delivery-1", code: "DL-1", status: "delivered", proofOfDeliveryCount: 1, customerLocationId: null, distanceKmOverride: null, recordedDistanceKm: null },
 } as unknown as ChainOfCustodyData;
 
 describe("submission lineage blockers", () => {
@@ -19,7 +19,7 @@ describe("submission lineage blockers", () => {
       { fixTarget: "deliveryDistances", record: { id: "delivery-1", code: "DL-1" } },
     ]);
     expect(buildSubmissionLineageBlockers([{
-      ...lineage, delivery: { ...lineage.delivery, customerLocationId: "location", locationDistanceKm: 10 },
+      ...lineage, delivery: { ...lineage.delivery, customerLocationId: "location", recordedDistanceKm: 10 },
     }], [], {}, ["biochar"])).toEqual([]);
   });
 

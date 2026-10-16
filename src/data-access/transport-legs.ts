@@ -1,4 +1,5 @@
 import { diffActivityChanges } from "@/lib/activity-changes";
+import { supplierLocationFacilityDistances } from "@/db/schema";
 import { recordScopedActivityChange, resolveWriteActivityScopes } from "./write-activity";
 import type { ActivityEventInput } from "./activity-events";
 import { assertRowVersion, nextVersion } from "./row-version";
@@ -561,8 +562,8 @@ export async function syncFeedstockTransportLeg(
       locationName: supplierLocations.name,
       locationGpsLatitude: supplierLocations.gpsLatitude,
       locationGpsLongitude: supplierLocations.gpsLongitude,
-      locationDistanceFromFacilityKm: supplierLocations.distanceFromFacilityKm,
-      locationDistanceSource: supplierLocations.distanceSource,
+      locationDistanceFromFacilityKm: supplierLocationFacilityDistances.distanceKm,
+      locationDistanceSource: supplierLocationFacilityDistances.distanceSource,
       facilityName: facilities.name,
       facilityGpsLatitude: facilities.gpsLatitude,
       facilityGpsLongitude: facilities.gpsLongitude,
@@ -593,6 +594,11 @@ export async function syncFeedstockTransportLeg(
         eq(transportLegs.organizationId, ctx.organizationId),
       ),
     )
+    .leftJoin(supplierLocationFacilityDistances, and(
+      eq(supplierLocationFacilityDistances.organizationId, ctx.organizationId),
+      eq(supplierLocationFacilityDistances.locationId, supplierLocations.id),
+      eq(supplierLocationFacilityDistances.facilityId, feedstocks.facilityId),
+    ))
     .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
 
   if (!row) {
@@ -708,8 +714,8 @@ async function syncLockedBiocharProductTransportLeg(
       distanceKmOverride: deliveries.distanceKmOverride,
       distanceSource: deliveries.distanceSource,
       location: {
-        distanceFromFacilityKm: customerLocations.distanceFromFacilityKm,
-        distanceSource: customerLocations.distanceSource,
+        distanceKm: deliveries.recordedDistanceKm,
+        distanceSource: deliveries.recordedDistanceSource,
         name: customerLocations.name,
         gpsLatitude: customerLocations.gpsLatitude,
         gpsLongitude: customerLocations.gpsLongitude,
@@ -811,40 +817,4 @@ export async function syncBiocharProductTransportLegs(
       deferredRetirements,
     );
   }
-}
-
-/**
- * Resync the derived biochar legs of every product delivered to a given
- * customer location. The leg's distance comes from
- * `customer_locations.distance_from_facility_km`, so editing that distance must
- * recompute the affected products' legs. Call after a customer-location update.
- */
-export async function syncBiocharLegsForCustomerLocation(
-  ctx: OrgContext,
-  tx: DbTransaction,
-  customerLocationId: string,
-): Promise<void> {
-  requireOrgScope(ctx);
-
-  // Match deliveries whose order destination is this location.
-  const allocated = deliveryProductAllocations(ctx, tx);
-  const rows = await tx
-    .selectDistinct({
-      biocharProductId: allocated.biocharProductId,
-    })
-    .from(deliveries)
-    .innerJoin(allocated, eq(allocated.deliveryId, deliveries.id))
-    .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
-    .where(
-      and(
-        eq(orders.customerLocationId, customerLocationId),
-        eq(deliveries.organizationId, ctx.organizationId),
-      ),
-    );
-
-  const productIds = rows
-    .map((row) => row.biocharProductId)
-    .filter((id): id is string => Boolean(id));
-
-  await syncBiocharProductTransportLegs(ctx, tx, productIds);
 }

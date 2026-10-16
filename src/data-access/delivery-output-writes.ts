@@ -1,4 +1,5 @@
 import type { CaptureActivity } from "@/lib/activity-changes";
+import { deliveryDistanceSnapshot } from "./delivery-distance-snapshot";
 /**
  * Delivery create lock order: organization route topology, movement request
  * (replay exits without writes), sorted advisory bin locks, lineage artifact
@@ -149,7 +150,7 @@ export async function createDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
           moistureContentPercent: data.moisturePercent, driverId: data.driverId, vehicleId: data.vehicleId,
           distanceKmOverride: data.distanceKmOverride ?? null, distanceSource: resolveDeliveryDistanceSource(data.distanceKmOverride ?? null, data.distanceSource), distanceNote: data.distanceNote || null }).returning();
         const posted = await post({ deliveryId: delivery.id });
-        const [saved] = await postingTx.update(deliveries).set({ version: nextVersion(deliveries.version), massDryKg: posted.preview.removedDryKg, moistureContentPercent: posted.moisturePercent }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, delivery.id))).returning();
+        const [saved] = await postingTx.update(deliveries).set({ version: nextVersion(deliveries.version), ...await deliveryDistanceSnapshot(ctx, postingTx, delivery), massDryKg: posted.preview.removedDryKg, moistureContentPercent: posted.moisturePercent }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, delivery.id))).returning();
         await syncBiocharProductTransportLegs(ctx, postingTx, posted.preview.allocations.map(a => a.layerId));
         return { delivery: { ...saved, savedProducts: posted.savedProducts }, basisFingerprint: posted.preview.basisFingerprint, allocations: await deliveryAllocations(ctx, postingTx, posted.movement) };
       },
@@ -218,7 +219,9 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
         reason: `Delivery ${data.code ?? existing.code}: mass or moisture edited`,
       }, { requireLatestCorrection: true }));
     }
-    const [saved] = await tx.update(deliveries).set({ version: nextVersion(deliveries.version), code: data.code, driverId: data.driverId, vehicleId: data.vehicleId, distanceKmOverride: data.distanceKmOverride,
+    const distanceSnapshot = existing.recordedDistanceKm == null
+      ? await deliveryDistanceSnapshot(ctx, tx, existing) : {};
+    const [saved] = await tx.update(deliveries).set({ ...distanceSnapshot, version: nextVersion(deliveries.version), code: data.code, driverId: data.driverId, vehicleId: data.vehicleId, distanceKmOverride: data.distanceKmOverride,
       distanceSource: resolveDeliveryDistanceSource(data.distanceKmOverride === undefined && data.distanceSource !== undefined ? existing.distanceKmOverride : data.distanceKmOverride, data.distanceSource), distanceNote: data.distanceNote === '' ? null : data.distanceNote, updatedAt: new Date() }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId))).returning();
     const savedRows = await getOutputStockAllocationProjection(ctx, { deliveryId }, tx);
     await syncBiocharProductTransportLegs(ctx, tx, [...new Set(savedRows.flatMap(r => r.allocation.biocharProductId ? [r.allocation.biocharProductId] : []))]);

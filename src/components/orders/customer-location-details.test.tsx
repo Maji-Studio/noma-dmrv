@@ -14,10 +14,9 @@ const location: CustomerLocationDetailsLocation = {
   country: "Tanzania",
   gpsLatitude: null,
   gpsLongitude: null,
-  distanceFromFacilityKm: 25,
-  distanceSource: "map_estimate",
+  facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: 25, distanceSource: "map_estimate" }],
 };
-const facility = { name: "Moshi plant", gpsLatitude: null, gpsLongitude: null };
+const facility = { id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", name: "Moshi plant", gpsLatitude: null, gpsLongitude: null };
 
 describe("CustomerLocationDetails", () => {
   it("names the delivery location by its address, not by repeating its name in the header", () => {
@@ -49,7 +48,7 @@ describe("CustomerLocationDetails", () => {
 
   it("says when no distance from the facility is recorded", () => {
     const html = renderToStaticMarkup(
-      <CustomerLocationDetails location={{ ...location, distanceFromFacilityKm: null }} facility={facility} />,
+      <CustomerLocationDetails location={{ ...location, facilityDistances: [] }} facility={facility} />,
     );
     expect(html).toContain("Distance from facility not recorded.");
     expect(html).not.toContain("Route calculation");

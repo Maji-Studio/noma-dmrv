@@ -1,4 +1,5 @@
 import type { CaptureActivity } from "@/lib/activity-changes";
+import { customerLocationFacilityDistances } from "@/db/schema";
 import type { ActivityEventInput } from "./activity-events";
 import { assertRowVersion, nextVersion, staleRowVersion } from "./row-version";
 /**
@@ -294,13 +295,18 @@ export async function getOrdersForSelect(
       destinationName: customerLocations.name,
       destinationGpsLatitude: customerLocations.gpsLatitude,
       destinationGpsLongitude: customerLocations.gpsLongitude,
-      destinationDistanceKm: customerLocations.distanceFromFacilityKm,
-      destinationDistanceSource: customerLocations.distanceSource,
+      destinationDistanceKm: customerLocationFacilityDistances.distanceKm,
+      destinationDistanceSource: customerLocationFacilityDistances.distanceSource,
     })
     .from(orders)
     .leftJoin(customers, and(eq(orders.customerId, customers.id), eq(customers.organizationId, ctx.organizationId)))
     .leftJoin(formulations, and(eq(orders.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
     .leftJoin(customerLocations, and(eq(orders.customerLocationId, customerLocations.id), eq(customerLocations.organizationId, ctx.organizationId)))
+    .leftJoin(customerLocationFacilityDistances, and(
+      eq(customerLocationFacilityDistances.organizationId, ctx.organizationId),
+      eq(customerLocationFacilityDistances.locationId, customerLocations.id),
+      eq(customerLocationFacilityDistances.facilityId, orders.facilityId),
+    ))
     .where(whereClause)
     .orderBy(desc(orders.orderDate));
 }

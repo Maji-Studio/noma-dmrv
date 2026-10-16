@@ -155,14 +155,14 @@ export function resolveDeliveryTransportRoute(input: {
   distanceKmOverride: number | null;
   distanceSource: DistanceSourceValue | null;
   location: (TransportPartyRef & {
-    distanceFromFacilityKm: number | null;
+    distanceKm: number | null;
     distanceSource: DistanceSourceValue | null;
   }) | null;
 }): Omit<DistributionLegRow, "loadMassKg"> {
   const { location } = input;
   const override = positiveOrNull(input.distanceKmOverride);
   return {
-    distanceKm: override ?? location?.distanceFromFacilityKm ?? null,
+    distanceKm: override ?? location?.distanceKm ?? null,
     // A delivery can document the stored route without overriding its distance.
     distanceSource: input.distanceSource === "document"
       ? "document"

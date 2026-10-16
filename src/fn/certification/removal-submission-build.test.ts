@@ -357,7 +357,7 @@ describe("buildRemovalSubmissionBuild", () => {
   it("refuses a delivered delivery without distance before preparing registry inputs", async () => {
     const lineages = [{ application: { id: "app-1", code: "AP-1" }, delivery: {
       id: "delivery-1", code: "DL-1", status: "delivered", customerLocationId: "location-1",
-      distanceKmOverride: null, locationDistanceKm: null,
+      distanceKmOverride: null, recordedDistanceKm: null,
     }, order: null }] as RemovalSubmissionContext["lineages"];
     const ctx = {
       entityReadinessGaps: [],

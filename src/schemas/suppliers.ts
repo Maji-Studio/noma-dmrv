@@ -4,10 +4,8 @@
  */
 
 import { z } from "zod";
-import { optionalDistanceSource } from "./distance-source";
+import { facilityDistancesInputSchema } from "./facility-distances";
 import {
-  clearableLocationDistance,
-  optionalLocationDistance,
   expectedVersionSchema,
   gpsPairSuperRefine,
   requiredLatitudeSchema,
@@ -157,8 +155,7 @@ export const supplierLocationFormSchema = z.object({
   gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLongitudeSchema),
   address: z.string().max(500, "Address must be less than 500 characters").optional().or(z.literal("")),
   // Road distance (km) from this location to the delivery facility.
-  distanceFromFacilityKm: optionalLocationDistance,
-  distanceSource: optionalDistanceSource,
+  facilityDistances: facilityDistancesInputSchema,
   // Marks this as the supplier's default source location.
   isDefault: z.boolean().optional().default(false),
 });
@@ -168,6 +165,7 @@ export const supplierQuickAddSchema = supplierFormSchema
   .extend(
     supplierLocationFormSchema.pick({
       country: true,
+      facilityDistances: true,
       gpsLatitude: true,
       gpsLongitude: true,
     }).shape,
@@ -201,8 +199,7 @@ export const updateSupplierLocationSchema = z.object({
   gpsLatitude: requiredLatitudeSchema.optional(),
   gpsLongitude: requiredLongitudeSchema.optional(),
   address: z.string().max(500).optional().nullable().or(z.literal("")),
-  distanceFromFacilityKm: clearableLocationDistance,
-  distanceSource: optionalDistanceSource,
+  facilityDistances: facilityDistancesInputSchema,
   isDefault: z.boolean().optional(),
 }).superRefine(gpsPairSuperRefine);
 

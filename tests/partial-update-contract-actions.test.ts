@@ -80,8 +80,7 @@ describe("updateCustomerLocationFn", () => {
       "address",
       "gpsLatitude",
       "gpsLongitude",
-      "distanceFromFacilityKm",
-      "distanceSource",
+      "facilityDistances",
       "defaultSoilTemperatureC",
     ]) {
       expect(patch[key]).toBeUndefined();
@@ -94,7 +93,7 @@ describe("updateCustomerLocationFn", () => {
       stateRegion: "",
       city: "",
       address: "",
-      distanceFromFacilityKm: "",
+      facilityDistances: [{ facilityId: LOCATION_ID, distanceKm: "", distanceSource: "manual" }],
       defaultSoilTemperatureC: "",
     } as never);
 
@@ -102,8 +101,7 @@ describe("updateCustomerLocationFn", () => {
       stateRegion: null,
       city: null,
       address: null,
-      distanceFromFacilityKm: null,
-      distanceSource: null,
+      facilityDistances: [{ facilityId: LOCATION_ID, distanceKm: null, distanceSource: "manual" }],
       defaultSoilTemperatureC: null,
     });
   });
@@ -113,17 +111,16 @@ describe("updateCustomerLocationFn", () => {
       locationId: LOCATION_ID,
       stateRegion: "Iringa",
       city: "Mafinga",
-      distanceFromFacilityKm: 1,
+      facilityDistances: [{ facilityId: LOCATION_ID, distanceKm: 1, distanceSource: "manual" }],
       defaultSoilTemperatureC: 0,
     } as never);
 
     expect(lastPatch()).toMatchObject({
       stateRegion: "Iringa",
       city: "Mafinga",
-      distanceFromFacilityKm: 1,
+      facilityDistances: [{ facilityId: LOCATION_ID, distanceKm: 1, distanceSource: "manual" }],
       defaultSoilTemperatureC: 0,
       // A present distance typed without explicit provenance is operator-entered.
-      distanceSource: "manual",
     });
   });
 

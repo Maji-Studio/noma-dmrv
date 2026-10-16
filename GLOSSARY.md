@@ -335,8 +335,11 @@ equating it with noma's local CO₂e estimate; "carbon component".
 
 **Supplier**:
 An external organization feedstock is sourced from. A supplier has one
-or more locations; each location carries the stored transport distance
-its feedstock deliveries inherit. Deliberately distinct from
+or more locations. Each location stores a separate distance and provenance
+for each facility in supplier location facility distance rows. Feedstock
+deliveries inherit the default location's pair for their facility. Saving a pair
+fills missing distances on unlocked feedstock transport without changing a
+recorded distance. Deliberately distinct from
 **Customer** — the same real-world company in both roles is two records;
 a unified party registry was considered and rejected.
 _Avoid_: vendor, party, external organization.
@@ -344,7 +347,10 @@ _Avoid_: vendor, party, external organization.
 **Customer**:
 An external organization biochar is delivered to. A customer has one or
 more locations; a customer location is a GPS-pinned application site
-carrying per-site defaults. Distinct from **Supplier**.
+carrying per-site defaults. Customer location facility distance rows store
+one distance and provenance per facility. Existing delivery transport keeps
+its recorded distance when a location or pair changes. Saving a pair fills missing
+delivery distances unless certification lineage is locked. Distinct from **Supplier**.
 _Avoid_: client (collides with client components / API clients), buyer.
 
 **Application site**:
@@ -552,9 +558,13 @@ _Avoid_: validation failure (the photo is not rejected).
 
 **Distance override**:
 A one-way distance recorded on a delivery only when that delivery's
-routing differs from the destination's stored distance. Absence means
-the stored distance governs — so later corrections to the stored
-distance keep propagating.
+routing differs from the destination's stored distance for the delivery's facility.
+The delivery records its location and facility distance independently of the
+override. Clearing an override restores that recorded distance. Pair saves fill
+missing distances on unlocked deliveries and feedstock transport, but never
+replace a recorded distance, including for unsubmitted Removals. Deliberate
+refresh and per-leg overrides are separate operations; submitted and certified
+lineage remains locked.
 _Avoid_: treating the override as the primary distance value.
 
 ### Geography & transport
@@ -574,8 +584,8 @@ _Avoid_: treating a routed distance as a measurement.
 The provenance of a stored distance — `map_estimate` (routed via the
 map's routing service), `manual` (hand-entered), or `document`
 (bill-of-lading / weigh-ticket backed). Lives wherever a distance can be
-written (supplier location, customer location, transport leg) and is inherited by
-a derived leg from its supplier-location/customer-location default. Orthogonal to a leg's
+written (supplier location and facility pair, customer location and facility pair, transport leg) and is inherited by
+a derived leg from its location and facility pair. Orthogonal to a leg's
 `isDerived` flag. Without a configured routing key there is no
 `map_estimate` path — distance entry stays manual.
 
