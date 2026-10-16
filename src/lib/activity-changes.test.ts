@@ -57,6 +57,26 @@ it("preserves leading zeroes in boundary string properties", () => {
     .toEqual({ changedFields: ["gisBoundary"], changes: {} });
 });
 
+it("reports a change to a feature's properties.id in a boundary column", () => {
+  const boundary = (id: string) => ({ type: "FeatureCollection", features: [{ type: "Feature", properties: { id } }] });
+  expect(diffActivityChanges("application", { gisBoundary: boundary("old") }, { gisBoundary: boundary("new") }))
+    .toEqual({ changedFields: ["gisBoundary"], changes: {} });
+});
+
+it("reports reordered lists inside a boundary column", () => {
+  expect(diffActivityChanges("application", { gisBoundary: { properties: { labels: ["first", "second"] } } },
+    { gisBoundary: { properties: { labels: ["second", "first"] } } }))
+    .toEqual({ changedFields: ["gisBoundary"], changes: {} });
+});
+
+it("compares column JSON with sorted object keys and verbatim number types", () => {
+  const before = { metadata: { id: "document", count: 1 } };
+  expect(diffActivityChanges("document", before, { metadata: { count: 1, id: "document" } }))
+    .toEqual({ changedFields: [], changes: {} });
+  expect(diffActivityChanges("document", before, { metadata: { id: "document", count: "1" } }))
+    .toEqual({ changedFields: ["metadata"], changes: {} });
+});
+
 it.each(["1e1000000000", "1e-1000000000"])("bounds decimal expansion for %s", value => {
   expect(diffActivityChanges("feedstock", null, { massWetKg: value }).changes)
     .toEqual({ massWetKg: { from: null, to: value } });

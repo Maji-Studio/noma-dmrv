@@ -28,6 +28,8 @@ export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
     massWetKg: "value",
     massDryKg: "value",
     moistureContentPercent: "value",
+    transportDistanceKm: "value",
+    transportDistanceSource: "value",
     storageLocationId: { link: "storage_location" },
     notes: "name",
     archivedAt: "value",

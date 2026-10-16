@@ -19,9 +19,6 @@ const PRODUCT_ENTITY = "biocharProduct";
 const NOT_A_LINE_MESSAGE = "This ingredient is not part of the chosen formulation.";
 const MISSING_LINES_MESSAGE = "Enter a mass for every ingredient of the formulation, 0 kg for one not used.";
 
-/** Preconditions, request keys and the target describe how a write was sent, not what it changed. */
-
-
 /**
  * The composition a product records: each formulation line as mixed, with the
  * material and ratio the formulation names now, in recipe order whatever

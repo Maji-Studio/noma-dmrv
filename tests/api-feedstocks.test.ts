@@ -462,7 +462,7 @@ describe("feedstock REST guards and audit", { timeout: SUITE_TIMEOUT_MS }, () =>
     expect(events).toHaveLength(3);
     const expected = [
       { response: created.response, operationId: "log_feedstock_delivery", action: "created", versionBefore: null, versionAfter: 1,
-        changedFields: ["code", "deliveryDate", "facilityId", "feedstockTypeId", "massDryKg", "massWetKg", "moistureContentPercent", "notes", "status", "storageLocationId", "supplierId"] },
+        changedFields: ["code", "deliveryDate", "facilityId", "feedstockTypeId", "massDryKg", "massWetKg", "moistureContentPercent", "notes", "status", "storageLocationId", "supplierId", "transportDistanceKm", "transportDistanceSource"] },
       { response: updated, operationId: "update_feedstock", action: "updated", versionBefore: 1, versionAfter: 2, changedFields: ["notes"] },
       { response: deleted, operationId: "delete_feedstock", action: "deleted", versionBefore: 2, versionAfter: null, changedFields: [] },
     ];
@@ -479,6 +479,25 @@ describe("feedstock REST guards and audit", { timeout: SUITE_TIMEOUT_MS }, () =>
       massWetKg: { from: null, to: String(created.row.massWetKg) }, supplierId: { from: null, to: a.supplierId },
     });
     expect(stringifyWithBigint(events)).not.toContain(privateNotes);
+  });
+
+  it("audits persisted transport distance on create and a distance-only PATCH", async () => {
+    const oldDistanceKm = 18;
+    const newDistanceKm = 27;
+    const created = await create({ ...a.input(), transportDistanceKm: oldDistanceKm });
+    const updated = await patch(created.row.id, { transportDistanceKm: newDistanceKm }, created.etag);
+    expect(updated.status).toBe(200);
+    const events = await auditRows();
+    expect(events).toHaveLength(2);
+    expect(events.find(event => event.requestId === created.response.headers.get("x-request-id"))?.changes).toMatchObject({
+      transportDistanceKm: { from: null, to: oldDistanceKm },
+      transportDistanceSource: { from: null, to: "manual" },
+    });
+    expect(events.find(event => event.requestId === updated.headers.get("x-request-id"))).toMatchObject({
+      operationId: "update_feedstock", entityType: "feedstock", entityId: created.row.id,
+      changedFields: ["transportDistanceKm"],
+      changes: { transportDistanceKm: { from: oldDistanceKm, to: newDistanceKm } },
+    });
   });
 
   it("adds no audit rows for dry runs or create, update and delete replays", async () => {

@@ -28,13 +28,15 @@ function decimal(value: unknown): string {
 
 const NESTED_BOOKKEEPING_KEYS = new Set(["id", "organizationId", "createdAt", "updatedAt", "version"]);
 
-function canonical(value: unknown, nested = false): unknown {
+function canonical(value: unknown, synthetic: boolean, nested = false): unknown {
   if (value == null) return null;
   if (value instanceof Date) return value.toISOString();
-  if (Array.isArray(value)) return value.map(item => canonical(item, true))
-    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
-  if (typeof value === "object") return Object.fromEntries(Object.entries(value).filter(([key]) => !NESTED_BOOKKEEPING_KEYS.has(key)).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item, true)]));
-  if (nested && typeof value === "number") return decimal(value);
+  if (Array.isArray(value)) {
+    const items = value.map(item => canonical(item, synthetic, true));
+    return synthetic ? items.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))) : items;
+  }
+  if (typeof value === "object") return Object.fromEntries(Object.entries(value).filter(([key]) => !synthetic || !NESTED_BOOKKEEPING_KEYS.has(key)).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item, synthetic, true)]));
+  if (synthetic && nested && typeof value === "number") return decimal(value);
   return value;
 }
 
@@ -51,7 +53,7 @@ export function diffActivityChanges(entityType: string, before: ActivitySnapshot
     if (column?.dataType === "number" || column?.getSQLType().startsWith("numeric")) return decimal(value);
     if (column?.getSQLType() === "date") return value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
     if (column?.dataType === "date") return new Date(value as string | number | Date).toISOString();
-    return canonical(value);
+    return canonical(value, !column);
   };
   const scalar = (value: unknown): value is ActivityValue => value === null || ["string", "number", "boolean"].includes(typeof value);
   for (const field of [...new Set([...Object.keys(before ?? {}), ...Object.keys(after)])].sort()) {
