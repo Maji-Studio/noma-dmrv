@@ -340,10 +340,10 @@ Flow: change schema → `pnpm db:generate` → review the emitted SQL → run ta
 
 ### Your migration number is taken after merging staging
 
-1. Merge `origin/staging`, then take its metadata: `git checkout origin/staging -- drizzle/meta`.
+1. Merge `origin/staging`, then replace your metadata with its: `rm -rf drizzle/meta && git checkout origin/staging -- drizzle/meta`. A plain checkout keeps your branch-only snapshots, and `db:generate` would diff against them.
 2. Delete your own `NNNN_*.sql`, then rerun `pnpm db:generate --name <same name>`.
 3. Re-apply any hand-written SQL you added to the generated file.
-4. Migrate or reset your worktree DBs. Before pushing, `git status --short drizzle/` should show only your new migration files and metadata changes.
+4. Reset your worktree DBs, then migrate. A plain migrate skips staging's migration when its `when` is older than the one you already applied. Before pushing, `git status --short drizzle/` should show only your new migration files and metadata changes.
 5. Never rename the file and edit the journal by hand: Drizzle skips migrations whose `when` is older than the last applied one. `pnpm check:migrations` catches this.
 
 ### Migration files are immutable once applied

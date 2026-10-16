@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const MIGRATION_FILE = /^(\d{4})_.*\.sql$/;
 const TAG_PREFIX = /^(\d{4})_/;
 // Preserve only the existing idx 9 -> 10 inversion; new timestamps must increase.
-const HISTORIC_TIMESTAMP_INVERSION = {
+export const HISTORIC_TIMESTAMP_INVERSION = {
   previousIdx: 9,
   idx: 10,
   previousWhen: 1775491200000,

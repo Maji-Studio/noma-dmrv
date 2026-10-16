@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkMigrations } from "./check-migrations";
+import { checkMigrations, HISTORIC_TIMESTAMP_INVERSION as HISTORIC } from "./check-migrations";
 
 const ENTRIES = [
   { idx: 0, tag: "0000_first", when: 100 },
@@ -35,9 +35,9 @@ describe("checkMigrations", () => {
 
   it("exempts only the historic timestamp pair", () => {
     const entries = Array.from({ length: 12 }, (_, idx) => ({
-      idx, tag: `${String(idx).padStart(4, "0")}_migration`, when: 1775491199991 + idx,
+      idx, tag: `${String(idx).padStart(4, "0")}_migration`, when: HISTORIC.previousWhen - HISTORIC.previousIdx + idx,
     }));
-    entries[10].when = 1775474419206;
+    entries[HISTORIC.idx].when = HISTORIC.when;
     const files = entries.map((entry) => `${entry.tag}.sql`);
     expect(checkMigrations(entries, files)).toEqual([]);
     entries[10].when -= 1;
