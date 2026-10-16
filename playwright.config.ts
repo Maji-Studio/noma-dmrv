@@ -3,6 +3,7 @@ import { config } from "dotenv";
 
 // Load test environment variables (only .env.test, never .env.local)
 config({ path: ".env.test" });
+(process.env as Record<string, string | undefined>).NODE_ENV ??= "test";
 
 // Validate that tests only target localhost to prevent accidentally running against staging/production
 const baseURL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100";

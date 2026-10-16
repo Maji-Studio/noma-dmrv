@@ -31,6 +31,8 @@ const testEnvDefaults: Record<string, string> = {
   // while a second claim and a third mutation each need their own
   // connection — a pool of 1 starves them into connect timeouts.
   DB_POOL_MAX: "10",
+  // Barrier tests hold a lock across writers; the app default (1 s) aborts them.
+  DB_POOL_LOCK_TIMEOUT_MS: "5000",
   NEXT_PUBLIC_APP_URL: "http://localhost:3100",
   BETTER_AUTH_SECRET: "test-secret-32-chars-minimum-length",
   RESEND_API_KEY: "",

@@ -8,8 +8,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 vi.hoisted(() => {
   process.env.DB_POOL_MAX = "1";
-  // Barrier tests hold a batch lock across writers; the pooled default (1 s) would abort them.
-  process.env.DB_POOL_LOCK_TIMEOUT_MS = "5000";
 });
 import { and, eq } from "drizzle-orm";
 import type { Pool } from "pg";
