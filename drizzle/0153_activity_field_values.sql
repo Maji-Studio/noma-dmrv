@@ -1,1 +1,0 @@
-ALTER TABLE "activity_events" ADD COLUMN "changes" jsonb DEFAULT '{}'::jsonb NOT NULL;

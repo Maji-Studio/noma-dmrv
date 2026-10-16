@@ -1072,13 +1072,6 @@
       "when": 1792135562059,
       "tag": "0152_product_production_date_as_day",
       "breakpoints": true
-    },
-    {
-      "idx": 153,
-      "version": "7",
-      "when": 1792140877550,
-      "tag": "0153_activity_field_values",
-      "breakpoints": true
     }
   ]
 }
