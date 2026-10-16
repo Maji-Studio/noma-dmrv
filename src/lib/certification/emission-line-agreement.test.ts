@@ -58,7 +58,9 @@ it.each(cases)("coverage, readiness and submission agree for %s", (name, code, r
     } },
   } as unknown as FacilityCertifierFacts);
   expect(resolved.emissionLines?.filter((line) => line.blocker).map((line) => line.componentId).sort()).toEqual(blockedIds);
-  if (name === "forbidden") expect(resolved.templateBlockers).toContainEqual({ code: "forbiddenLine", message: "This line belongs at the project level in Isometric." });
+  // The typed blocker rides on the line; preparation keeps the coverage text
+  // that names the component as the first refusal, with the bundle prepared.
+  if (name === "forbidden") expect(resolved.templateBlockers.map((blocker) => blocker.code)).not.toContain("forbiddenLine");
   const facts: RemovalReadinessFacts = { local: null, lockInFlight: false, hasOrgCredentials: true, hasMapping: true, hasRemovalTemplate: true,
     unresolvedBlueprintKeys: [], unbindableTemplateInputs: coverage, hasSubmittableRuns: true, requiredTransport: [], feedstockTypeMappingGaps: [],
     templateBlockers: resolved.templateBlockers,

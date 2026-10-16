@@ -34,7 +34,6 @@ export function resolveRemovalTemplate(
     problems: facts.lineSourceProblems, enrichmentComplete: facts.enrichmentProblems.length === 0,
     automaticFigures: {}, entries: [],
   }) : null;
-  if (emissionLines?.some((line) => line.blocker?.code === "forbiddenLine")) templateBlockers.push(removalTemplateBlocker("forbiddenLine"));
   return {
     emissionLines,
     removalTemplate: facts.template, lineSources: facts.observation?.lineSources ?? {}, templateBlockers,

@@ -95,13 +95,14 @@ it("compiles a carried component moved between compatible group instances withou
   expect(compiled.datapointBodyByKey).toEqual(baseline.datapointBodyByKey);
 });
 
-it("compiles stored-bucket Sample/application inputs without an emissions automatic source", () => {
+it("refuses stored inputs whose reviewed contract has no automatic source", () => {
   const template = structuredClone(cula);
   template.groups = template.groups.filter((group) => group.key === "co2-stored");
   const sources = resolveLineSources({ definition: normalizeTemplateDefinition(template) });
+  expect(compile(template, sources).monitored.map((input) => input.inputKey).sort()).toEqual(["carbon_content", "product_mass"]);
   for (const contract of Object.values(sources)) { delete contract.automaticSource; contract.entryPolicy = "none"; }
-  const result = compile(template, sources);
-  expect(result.monitored.map((input) => input.inputKey).sort()).toEqual(["carbon_content", "product_mass"]);
+  expect(findUnbindableTemplateInputs(template, { lineSources: sources }).map((finding) => finding.inputKey).sort()).toEqual(["carbon_content", "product_mass"]);
+  expect(() => compile(template, sources)).toThrow();
 });
 it("blocks incomplete template reads through the same line decision", () => {
   const template = structuredClone(sandbox);

@@ -18,14 +18,15 @@ export interface EmissionLineBindingDecision {
   unknownInputKeys?: string[];
 }
 
-/** Fixed inputs are prebound; storage inputs compile from Samples/applications.
- * This is the coverage exemption, shared with state derivation and submission.
+/** Fixed inputs are prebound; sequestration-family inputs compile from Samples
+ * and applications. This is the coverage exemption, shared with state
+ * derivation and submission. Other stored inputs (legacy carbon content,
+ * Safety margin) still need a reviewed contract with an automatic source.
  */
-export function lineCompilesWithoutEmissionSource(component: TemplateComponent, groupKey: string): boolean {
+export function lineCompilesWithoutEmissionSource(component: TemplateComponent): boolean {
   return component.inputs.every((input) => input.type === "fixed" ||
-    (isSequestrationBlueprintFamily(component.blueprintKey)
-      ? !hasExplicitSequestrationBinding(component.blueprintKey) || !!getSequestrationInputBinding(component.blueprintKey, input.key)
-      : lookupInputMapping(groupKey, component.blueprintKey, input.key)?.bucket === "stored"));
+    (isSequestrationBlueprintFamily(component.blueprintKey) &&
+      (!hasExplicitSequestrationBinding(component.blueprintKey) || !!getSequestrationInputBinding(component.blueprintKey, input.key))));
 }
 
 /** The shared, batch-independent decision. Entries cannot supply submission inputs until PR 4. */
@@ -57,7 +58,7 @@ export function emissionLineBindingDecision(args: {
     state: "needsSetup", reason: "project-scope", inputKeys: [keys[0]],
     blocker: { ...templateRemovalBlocker("forbiddenLine"), lineRef },
   };
-  if (lineCompilesWithoutEmissionSource(component, groupKey)) return undefined;
+  if (lineCompilesWithoutEmissionSource(component)) return undefined;
   const unmappedKeys = component.inputs.filter((input) => input.type === "monitored" &&
     !getSequestrationInputBinding(component.blueprintKey, input.key) &&
     !lookupInputMapping(groupKey, component.blueprintKey, input.key, contract)).map((input) => input.key);
