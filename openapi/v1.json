@@ -209,8 +209,7 @@
         "properties": {
           "createdAt": {"description": "Creation event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "customerId": {"description": "Owning customer identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
-          "distanceFromFacilityKm": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "One-way road distance from the facility in kilometres, or null when unspecified. The server counts the round trip."},
-          "distanceSource": {"description": "Provenance of the one-way distance, or null when unspecified. The server counts the round trip.", "enum": ["map_estimate", "manual", "document", null]},
+          "facilityDistances": {"description": "One-way road distances by facility, in kilometres. Missing pairs have no recorded default. GPS-derived values are estimates. The server counts the round trip.", "items": {"additionalProperties": false, "properties": {"distanceKm": {"description": "Positive one-way road distance in kilometres.", "exclusiveMinimum": 0, "type": "number"}, "distanceSource": {"description": "Distance provenance: manual entry, GPS route estimate, or supporting document.", "enum": ["map_estimate", "manual", "document"], "type": "string"}, "facilityId": {"description": "Organization facility identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}, "required": ["facilityId", "distanceKm", "distanceSource"], "type": "object"}, "type": "array"},
           "gpsLatitude": {"description": "WGS 84 latitude in decimal degrees.", "type": "number"},
           "gpsLongitude": {"description": "WGS 84 longitude in decimal degrees.", "type": "number"},
           "id": {"description": "Resource identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
@@ -219,7 +218,7 @@
           "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "version": {"description": "Positive integer row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
         },
-        "required": ["id", "name", "createdAt", "updatedAt", "customerId", "gpsLatitude", "gpsLongitude", "distanceFromFacilityKm", "distanceSource", "isDefault", "version"],
+        "required": ["id", "name", "createdAt", "updatedAt", "customerId", "facilityDistances", "gpsLatitude", "gpsLongitude", "isDefault", "version"],
         "type": "object"
       },
       "delivery": {
@@ -674,6 +673,7 @@
         "properties": {
           "archivedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Archive event instant in UTC (RFC 3339), or null when active or archiving is unsupported."},
           "createdAt": {"description": "Creation event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "facilityDistances": {"description": "One-way road distances by facility, in kilometres. Missing pairs have no recorded default. GPS-derived values are estimates. The server counts the round trip.", "items": {"additionalProperties": false, "properties": {"distanceKm": {"description": "Positive one-way road distance in kilometres.", "exclusiveMinimum": 0, "type": "number"}, "distanceSource": {"description": "Distance provenance: manual entry, GPS route estimate, or supporting document.", "enum": ["map_estimate", "manual", "document"], "type": "string"}, "facilityId": {"description": "Organization facility identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}, "required": ["facilityId", "distanceKm", "distanceSource"], "type": "object"}, "type": "array"},
           "gpsLatitude": {"description": "WGS 84 latitude in decimal degrees.", "type": "number"},
           "gpsLongitude": {"description": "WGS 84 longitude in decimal degrees.", "type": "number"},
           "id": {"description": "Resource identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
@@ -682,7 +682,7 @@
           "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "version": {"description": "Positive integer row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
         },
-        "required": ["id", "name", "archivedAt", "createdAt", "updatedAt", "version", "supplierId", "gpsLatitude", "gpsLongitude"],
+        "required": ["id", "name", "archivedAt", "createdAt", "updatedAt", "version", "supplierId", "facilityDistances", "gpsLatitude", "gpsLongitude"],
         "type": "object"
       },
       "vehicle": {
@@ -1370,7 +1370,7 @@
     },
     "/customers/{idOrCode}/locations": {
       "get": {
-        "description": "List customer destinations by parent UUID or exact code. Search matches a literal name prefix; the cursor binds the parent. Distances are one-way kilometres; the server counts the round trip. No contact details, address or soil temperature. Required scope: customers:read.",
+        "description": "List customer destinations by parent UUID or exact code. Search matches a literal name prefix; the cursor binds the parent. facilityDistances lists one-way kilometres by facility with distanceSource; missing pairs are absent. Location edits leave existing transport legs frozen; the server counts the round trip. No contact details, address or soil temperature. Required scope: customers:read.",
         "operationId": "find_customer_locations",
         "parameters": [
           {"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}},
@@ -3227,7 +3227,7 @@
     },
     "/suppliers/{idOrCode}/locations": {
       "get": {
-        "description": "List supplier source locations by parent UUID only. Search matches a literal name prefix; the cursor also binds the parent. Required scope: suppliers:read.",
+        "description": "List supplier source locations by parent UUID only. Search matches a literal name prefix; the cursor also binds the parent. facilityDistances lists one-way kilometres by facility with distanceSource; missing pairs are absent. GPS-derived distances are estimates. Location edits leave existing transport legs frozen. Required scope: suppliers:read.",
         "operationId": "find_supplier_locations",
         "parameters": [
           {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},

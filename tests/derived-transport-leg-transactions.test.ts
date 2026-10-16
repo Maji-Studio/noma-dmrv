@@ -1,3 +1,4 @@
+import { customerLocationFacilityDistances, supplierLocationFacilityDistances } from "@/db/schema";
 import { createTestApplication } from "./helpers/application-writers";
 import { cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
@@ -28,6 +29,9 @@ import {
   suppliers,
   transportLegs,
 } from "@/db/schema";
+import { updateSupplierLocation } from "@/data-access/suppliers";
+import { getTransportDistanceFixLinks } from "@/data-access/transport-distance-fix-links";
+import { missingFeedstockTransportIds } from "@/lib/certification/submission-readiness";
 import { updateCustomerLocation } from "@/data-access/customers";
 import { deleteDelivery } from "@/data-access/deliveries";
 import { createDelivery } from "./helpers/create-delivery";
@@ -132,6 +136,39 @@ describe("derived transport-leg transaction boundaries", () => {
     }
 
     for (const ids of Object.values(created)) ids.length = 0;
+  });
+
+  it("resolves the supplier default pair for each intake facility (DEF-003)", async () => {
+    const tag = crypto.randomUUID();
+    const [supplier] = await db.insert(suppliers).values({ organizationId: TEST_ORG_ID, code: `SUP-PAIR-${tag}`, name: "E2E pair supplier" }).returning();
+    created.supplierIds.push(supplier.id);
+    const [location] = await db.insert(supplierLocations).values({ ...TEST_SITE_POSITION, organizationId: TEST_ORG_ID, supplierId: supplier.id, isDefault: true }).returning();
+    created.supplierLocationIds.push(location.id);
+    const [feedstockType] = await db.insert(feedstockTypes).values({ organizationId: TEST_ORG_ID, code: `FT-PAIR-${tag}`, name: "E2E pair feedstock", usage: "pyrolysis", category: "forestry" }).returning();
+    created.feedstockTypeIds.push(feedstockType.id);
+    let locationVersion = location.version;
+    for (const distanceKm of [20, 80]) {
+      const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-PAIR-${distanceKm}-${tag}`, name: `E2E pair facility ${distanceKm} ${tag}` }).returning();
+      created.facilityIds.push(facility.id);
+      const [bin] = await db.insert(storageLocations).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, code: `BIN-PAIR-${distanceKm}-${tag}`, name: "E2E pair bin", type: "feedstock_bin" }).returning();
+      created.storageLocationIds.push(bin.id);
+      const result = await db.transaction(tx => createFeedstockInTransaction(ctx, tx, {
+        facilityId: facility.id, supplierId: supplier.id, feedstockTypeId: feedstockType.id,
+        deliveryDate: new Date("2026-07-19T00:00:00Z"), totalWetMassKg: 100, moisturePercent: 10,
+        allocations: [{ storageLocationId: bin.id, allocatedWetMassKg: 100 }],
+      }));
+      const feedstockId = result.feedstocks[0].id;
+      const before = await db.select().from(transportLegs).where(eq(transportLegs.entityId, feedstockId));
+      expect(missingFeedstockTransportIds([feedstockId], before)).toEqual([feedstockId]);
+      const links = await getTransportDistanceFixLinks(ctx, [feedstockId], []);
+      expect(links.get(feedstockId)).toContain(`location=${location.id}`);
+      const saved = await updateSupplierLocation(ctx, location.id, { expectedVersion: locationVersion,
+        facilityDistances: [{ facilityId: facility.id, distanceKm, distanceSource: "manual" }] });
+      locationVersion = saved.version;
+      const legs = await db.select().from(transportLegs).where(eq(transportLegs.entityId, result.feedstocks[0].id));
+      expect(missingFeedstockTransportIds([feedstockId], legs)).toEqual([]);
+      expect(legs).toEqual(expect.arrayContaining([expect.objectContaining({ distanceKm })]));
+    }
   });
 
   it("rolls back feedstock creation and bin locking when derived persistence fails", async () => {
@@ -242,9 +279,9 @@ describe("derived transport-leg transaction boundaries", () => {
     const [originalLocation] = await db.insert(supplierLocations).values({
       organizationId: TEST_ORG_ID, supplierId: supplier.id, ...TEST_SITE_POSITION,
       isDefault: true,
-      distanceFromFacilityKm: 10, distanceSource: "map_estimate",
     }).returning();
     created.supplierLocationIds.push(originalLocation.id);
+    await db.insert(supplierLocationFacilityDistances).values({ organizationId: TEST_ORG_ID, locationId: originalLocation.id, facilityId: facility.id, distanceKm: 10, distanceSource: "map_estimate" });
 
     const [newDefaultLocation] = await db
       .insert(supplierLocations)
@@ -254,11 +291,10 @@ describe("derived transport-leg transaction boundaries", () => {
         supplierId: newRouteSupplier.id,
         name: `New Route Source ${tag}`,
         isDefault: true,
-        distanceFromFacilityKm: 45,
-        distanceSource: "map_estimate",
       })
       .returning({ id: supplierLocations.id });
     created.supplierLocationIds.push(newDefaultLocation.id);
+    await db.insert(supplierLocationFacilityDistances).values({ organizationId: TEST_ORG_ID, locationId: newDefaultLocation.id, facilityId: facility.id, distanceKm: 45, distanceSource: "map_estimate" });
 
     const [feedstockType] = await db
       .insert(feedstockTypes)
@@ -388,7 +424,7 @@ describe("derived transport-leg transaction boundaries", () => {
     const [location] = await db.insert(customerLocations).values({
       ...TEST_SITE_POSITION,
       organizationId: TEST_ORG_ID, customerId: customer.id,
-      name: `Retirement Site ${tag}`, distanceFromFacilityKm: null,
+      name: `Retirement Site ${tag}`,
     }).returning({ id: customerLocations.id });
     created.customerLocationIds.push(location.id);
     const [product] = await db.insert(biocharProducts).values(await outputProductFixtureValues(db, {
@@ -431,7 +467,7 @@ describe("derived transport-leg transaction boundaries", () => {
     });
   });
 
-  it("preserves posted source relationships, recomputes location-affected legs and sweeps retired evidence without touching manual legs", async () => {
+  it("preserves posted source relationships, freezes location-affected legs without touching manual legs", async () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
@@ -461,20 +497,17 @@ describe("derived transport-leg transaction boundaries", () => {
           organizationId: TEST_ORG_ID,
           customerId: customer.id,
           name: `First Site ${tag}`,
-          distanceFromFacilityKm: 20,
-          distanceSource: "manual" as const,
         },
         {
           ...TEST_SITE_POSITION,
           organizationId: TEST_ORG_ID,
           customerId: customer.id,
           name: `Second Site ${tag}`,
-          distanceFromFacilityKm: 60,
-          distanceSource: "document" as const,
         },
       ])
       .returning({ id: customerLocations.id });
     created.customerLocationIds.push(firstLocation.id, secondLocation.id);
+    await db.insert(customerLocationFacilityDistances).values([{ organizationId: TEST_ORG_ID, locationId: firstLocation.id, facilityId: facility.id, distanceKm: 20, distanceSource: "manual" }, { organizationId: TEST_ORG_ID, locationId: secondLocation.id, facilityId: facility.id, distanceKm: 60, distanceSource: "document" }]);
 
     const [firstProduct, secondProduct] = await db
       .insert(biocharProducts)
@@ -587,8 +620,7 @@ describe("derived transport-leg transaction boundaries", () => {
     expect(legsAfterReassignment).toHaveLength(3);
 
     await updateCustomerLocation(ctx, secondLocation.id, { expectedVersion: await masterDataVersion(ctx, "customerLocations", secondLocation.id),
-      distanceFromFacilityKm: 80,
-      distanceSource: "map_estimate",
+      facilityDistances: [{ facilityId: facility.id, distanceKm: 80, distanceSource: "map_estimate" }],
     });
 
     const [updatedDerived] = await db
@@ -598,12 +630,11 @@ describe("derived transport-leg transaction boundaries", () => {
         eq(transportLegs.entityId, secondProduct.id),
         eq(transportLegs.isDerived, true),
       ));
-    expect(updatedDerived.distanceKm).toBe(80);
-    expect(await removalTransport()).toBe(5);
+    expect(updatedDerived.distanceKm).toBe(60);
+    expect(await removalTransport()).toBe(4);
 
     await updateCustomerLocation(ctx, firstLocation.id, { expectedVersion: await masterDataVersion(ctx, "customerLocations", firstLocation.id),
-      distanceFromFacilityKm: 40,
-      distanceSource: "map_estimate",
+      facilityDistances: [{ facilityId: facility.id, distanceKm: 40, distanceSource: "map_estimate" }],
     });
     const firstDerived = await db
       .select({ distanceKm: transportLegs.distanceKm })
@@ -612,8 +643,8 @@ describe("derived transport-leg transaction boundaries", () => {
         eq(transportLegs.entityId, firstProduct.id),
         eq(transportLegs.isDerived, true),
       ));
-    expect(firstDerived).toEqual([{ distanceKm: 40 }]);
-    expect(await removalTransport()).toBe(6);
+    expect(firstDerived).toEqual([{ distanceKm: 20 }]);
+    expect(await removalTransport()).toBe(4);
 
     await expect(deleteDelivery(ctx, delivery.id, await labLogisticsVersion(ctx, "deliveries", delivery.id))).rejects.toThrow(/retain their history/);
     const remainingLegs = await db
@@ -635,41 +666,18 @@ describe("derived transport-leg transaction boundaries", () => {
       expectedVersion: await labLogisticsVersion(ctx, "deliveries", laterDelivery.id),
       distanceKmOverride: 100,
     });
-    expect(await removalTransport()).toBe(6);
+    expect(await removalTransport()).toBe(4);
     await expect(loadBiocharDeliveryTransportLegs({ ...ctx, organizationId: "foreign-org" }, slices)).rejects.toThrow(/could not be loaded/);
     await updateCustomerLocation(ctx, secondLocation.id, {
       expectedVersion: await masterDataVersion(ctx, "customerLocations", secondLocation.id),
-      distanceFromFacilityKm: null,
+      facilityDistances: [{ facilityId: facility.id, distanceKm: null, distanceSource: "manual" }],
     });
     // An incomplete unrelated delivery cannot poison the selected first delivery.
     const firstOnly = await loadBiocharDeliveryTransportLegs(ctx, [slices[0]]);
-    expect(aggregateBiocharTransportMassDistance(firstOnly).massDistanceTonneKm).toBe(2);
-    const incomplete = await loadBiocharDeliveryTransportLegs(ctx, slices);
-    expect(incomplete).toHaveLength(2);
-    expect(aggregateBiocharTransportMassDistance(incomplete)).toMatchObject({
-      massDistanceTonneKm: null, warning: expect.stringContaining("distance"),
-    });
+    expect(aggregateBiocharTransportMassDistance(firstOnly).massDistanceTonneKm).toBe(1);
+    const frozen = await loadBiocharDeliveryTransportLegs(ctx, slices);
+    expect(frozen).toHaveLength(2);
+    expect(aggregateBiocharTransportMassDistance(frozen).massDistanceTonneKm).toBe(4);
 
-    // The later delivery's override would keep the product leg alive; clear it first.
-    await updateDelivery(ctx, laterDelivery.id, {
-      expectedVersion: await labLogisticsVersion(ctx, "deliveries", laterDelivery.id),
-      distanceKmOverride: null,
-    });
-    const [retiringLeg] = await db.select({ id: transportLegs.id })
-      .from(transportLegs)
-      .where(and(
-        eq(transportLegs.entityId, firstProduct.id),
-        eq(transportLegs.isDerived, true),
-        eq(transportLegs.organizationId, ctx.organizationId),
-      ));
-    await expectDerivedLegEvidenceSwept(retiringLeg.id, tag, async () => {
-      // Clearing the only distance retires the derived leg and queues its evidence.
-      const updated = await updateCustomerLocation(ctx, firstLocation.id, {
-        expectedVersion: await masterDataVersion(ctx, "customerLocations", firstLocation.id),
-        distanceFromFacilityKm: null,
-      });
-
-      expect(updated).toMatchObject({ id: firstLocation.id, distanceFromFacilityKm: null });
-    });
   });
 });

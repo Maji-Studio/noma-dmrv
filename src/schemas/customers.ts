@@ -4,11 +4,9 @@
  */
 
 import { z } from "zod";
-import { optionalDistanceSource } from "./distance-source";
+import { facilityDistancesInputSchema } from "./facility-distances";
 import {
   clearableDefaultSoilTemperature,
-  clearableLocationDistance,
-  optionalLocationDistance,
   gpsPairSuperRefine,
   defaultSoilTemperatureSchema,
   expectedVersionSchema,
@@ -106,10 +104,8 @@ export const customerLocationFormSchema = z.object({
   address: customerLocationDescriptionSchema,
   gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLat),
   gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLng),
-  // Operational road distance (km) from the origin facility. Certifier
-  // transport is recorded on cargo entities, not deliveries.
-  distanceFromFacilityKm: optionalLocationDistance,
-  distanceSource: optionalDistanceSource,
+  // One-way defaults per origin facility, captured when a delivery is saved.
+  facilityDistances: facilityDistancesInputSchema,
   defaultSoilTemperatureC: defaultSoilTemperatureSchema,
   // Marks this as the customer's default destination.
   isDefault: z.boolean().optional().default(false),
@@ -173,8 +169,7 @@ export const createCustomerLocationSchema = z.object({
   address: customerLocationDescriptionSchema,
   gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLat),
   gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLng),
-  distanceFromFacilityKm: optionalLocationDistance,
-  distanceSource: optionalDistanceSource,
+  facilityDistances: facilityDistancesInputSchema,
   defaultSoilTemperatureC: defaultSoilTemperatureSchema,
   isDefault: z.boolean().optional().default(false),
 });
@@ -221,8 +216,7 @@ export const updateCustomerLocationSchema = z.object({
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
   address: customerLocationDescriptionSchema,
-  distanceFromFacilityKm: clearableLocationDistance,
-  distanceSource: optionalDistanceSource,
+  facilityDistances: facilityDistancesInputSchema,
   defaultSoilTemperatureC: clearableDefaultSoilTemperature,
   isDefault: z.boolean().optional(),
 }).superRefine(gpsPairSuperRefine);

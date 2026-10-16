@@ -8,7 +8,8 @@ import { DeliveryForm } from "./delivery-form";
 import { useCreateCustomerLocation, useUpdateCustomerLocation, useDeleteCustomerLocation } from "@/hooks/use-customers";
 import { orderKeys } from "@/hooks/use-orders";
 
-const state = vi.hoisted(() => ({ locked: false, distance: 12, save: vi.fn(), read: vi.fn() }));
+const state = vi.hoisted(() => ({ refreshed: undefined as Delivery | undefined, locked: false, distance: 12, save: vi.fn(), read: vi.fn() }));
+vi.mock("@/fn/deliveries", () => ({ getDeliveryWithRelationsFn: async () => ({ success: true, data: state.refreshed }) }));
 vi.mock("@/fn/orders", () => ({
   getOrdersForSelectFn: () => {
     state.read();
@@ -49,7 +50,7 @@ vi.mock("@/hooks/use-entities", () => ({
 const delivery = {
   id: "delivery-one", facilityId: "facility-one", orderId: "order-one", storageLocationId: "bin-one",
   deliveryDate: new Date("2026-10-01T12:00:00Z"), deliveredWetMassKg: 100,
-  moistureContentPercent: 20, distanceKmOverride: null, distanceSource: null,
+  moistureContentPercent: 20, recordedDistanceKm: 12, recordedDistanceSource: "manual", distanceKmOverride: null, distanceSource: null,
 } as Delivery;
 let client: QueryClient;
 function wrapper({ children }: { children: ReactNode }) {
@@ -57,6 +58,7 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } } });
+  state.refreshed = undefined;
   state.distance = 12;
   state.locked = false;
   vi.clearAllMocks();
@@ -98,7 +100,7 @@ it("opens the existing delivery's source bin picker with only Edit and preserves
   expect(trigger.textContent).toBe("Source bin");
 });
 
-it.each(["create", "update", "delete"] as const)("refreshes the open delivery's inherited distance after a nested location %s without saving its parents", async (operation) => {
+it.each(["create", "update", "delete"] as const)("preserves the open delivery's recorded distance after a nested location %s without saving its parents", async (operation) => {
   const parentSave = vi.fn();
   client.setQueryData(orderKeys.select("other-facility"), []);
   render(<DeliveryForm delivery={delivery} onSubmit={parentSave} />, { wrapper });
@@ -108,13 +110,21 @@ it.each(["create", "update", "delete"] as const)("refreshes the open delivery's 
   }), { wrapper });
   await act(async () => {
     if (operation === "create") await result.current.create.mutateAsync({ customerId: "customer-one", name: "Destination", country: "TZ", gpsLatitude: -7, gpsLongitude: 35, isDefault: false });
-    else if (operation === "update") await result.current.update.mutateAsync({ locationId: "location-one", expectedVersion: 1, distanceFromFacilityKm: 34 });
+    else if (operation === "update") await result.current.update.mutateAsync({ locationId: "location-one", expectedVersion: 1, facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: 34, distanceSource: "manual" }] });
     else await result.current.delete.mutateAsync({ locationId: "location-one", expectedVersion: 1 });
   });
-  await waitFor(() => expect((screen.getByRole("spinbutton", { name: /One-way distance/ }) as HTMLInputElement).value).toBe("34"));
+  await waitFor(() => expect(client.getQueryData<{ destinationDistanceKm: number }[]>(orderKeys.select("facility-one"))?.[0]?.destinationDistanceKm).toBe(34));
+  expect((screen.getByRole("spinbutton", { name: /One-way distance/ }) as HTMLInputElement).value).toBe("12");
   expect(client.getQueryState(orderKeys.select("other-facility"))?.isInvalidated).toBe(true);
   expect(state.read).toHaveBeenCalledTimes(2);
   expect(parentSave).not.toHaveBeenCalled();
+});
+
+it("shows the recorded distance even when the order already has a different live pair", async () => {
+  state.distance = 80;
+  render(<DeliveryForm delivery={delivery} onSubmit={vi.fn()} />, { wrapper });
+  await waitFor(() => expect(client.getQueryData<{ destinationDistanceKm: number }[]>(orderKeys.select("facility-one"))?.[0]?.destinationDistanceKm).toBe(80));
+  expect((screen.getByRole("spinbutton", { name: /One-way distance/ }) as HTMLInputElement).value).toBe("12");
 });
 
 it("allows latest delivery mass edits and keeps its event time locked", () => {
@@ -156,4 +166,28 @@ it("reports a handled mass refusal and focuses its field", async () => {
   fireEvent.submit(container.querySelector("form")!);
   await screen.findByText("Only 100 kg remains on this order.");
   expect(document.activeElement).toBe(screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }));
+});
+
+it("refreshes a missing snapshot after a nested repair without discarding the delivery draft", async () => {
+  const opened = { ...delivery, orderId: "00000000-0000-4000-8000-000000000001", storageLocationId: "00000000-0000-4000-8000-000000000002", version: 3, recordedDistanceKm: null, recordedDistanceSource: null };
+  state.refreshed = opened;
+  const parentSave = vi.fn();
+  const { container } = render(<DeliveryForm delivery={opened} onSubmit={parentSave} />, { wrapper });
+  fireEvent.change(screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }), { target: { value: "125" } });
+  const { result } = renderHook(() => useUpdateCustomerLocation(), { wrapper });
+  state.save.mockImplementation(async () => {
+    state.refreshed = { ...opened, version: 4, recordedDistanceKm: 34, recordedDistanceSource: "manual" };
+    return { success: true, data: { id: "location-one", customerId: "customer-one", version: 2 } };
+  });
+  await act(async () => {
+    await result.current.mutateAsync({ locationId: "location-one", expectedVersion: 1,
+      facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: 34, distanceSource: "manual" }] });
+  });
+  await waitFor(() => expect((screen.getByRole("spinbutton", { name: /One-way distance/ }) as HTMLInputElement).value).toBe("34"));
+  expect((screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }) as HTMLInputElement).value).toBe("125");
+  expect(parentSave).not.toHaveBeenCalled();
+  fireEvent.submit(container.querySelector("form")!);
+  await waitFor(() => expect(parentSave).toHaveBeenCalledWith(
+    expect.objectContaining({ deliveredWetMassKg: 125 }), expect.any(Function), 4,
+  ));
 });

@@ -12,6 +12,7 @@
  * form can only differ between the levels through a level reader, and those
  * are the primitives exercised with data in `form-detail-parity.test.tsx`.
  */
+import { NuqsTestingAdapter } from "nuqs/adapters/testing";
 import type { ReactElement, ReactNode } from "react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -249,7 +250,7 @@ describe("sheet form detail level parity", () => {
   });
 
   it.each([...CREATE_CASES, ...EDIT_CASES])("$name form shows the same inputs, sections and actions at both levels", async ({ element, shows }) => {
-    const { simple, detailed } = await renderBothLevels(element);
+    const { simple, detailed } = await renderBothLevels(<NuqsTestingAdapter>{element}</NuqsTestingAdapter>);
     expect(simple.items.some(item => item.startsWith("input:"))).toBe(true);
     if (shows) expect(simple.text).toContain(shows);
     expect(detailed.items).toEqual(simple.items);

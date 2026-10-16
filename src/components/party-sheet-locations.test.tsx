@@ -13,7 +13,7 @@ import { DetailSpine } from "./ui/detail-panel";
 const location = {
   name: "North field", country: "Tanzania", stateRegion: "Iringa",
   city: "Mafinga", address: "Plot 4", gpsLatitude: -8.3, gpsLongitude: 35.3,
-  distanceFromFacilityKm: 12, defaultSoilTemperatureC: 24, isDefault: true,
+  facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", facilityName: "Test facility", distanceKm: 12, distanceSource: "manual" as const }], defaultSoilTemperatureC: 24, isDefault: true,
 };
 const customer = { name: "Customer" } as Parameters<typeof customerSheetSections>[0];
 const supplier = { name: "Supplier" } as Parameters<typeof supplierSheetSections>[0];

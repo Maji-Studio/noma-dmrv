@@ -69,7 +69,7 @@ export async function seedDeliveryFixture(caseId: DeliveryCaseId, now = new Date
       .where(and(eq(facilities.organizationId, org), eq(facilities.id, fixture.facilityId)));
     const customer = await createCustomer(fixture.ctx, { code: CUSTOMER_CODE, name: "Evaluation customer" });
     const location = await createCustomerLocation(fixture.ctx, { ...TEST_SITE_POSITION, customerId: customer.id, name: "Evaluation destination",
-      isDefault: true, distanceFromFacilityKm: LOCATION_DISTANCE_KM, distanceSource: "manual" });
+      isDefault: true, facilityDistances: [{ facilityId: fixture.facilityId, distanceKm: LOCATION_DISTANCE_KM, distanceSource: "manual" }] });
     const formulation = await createFormulation(fixture.ctx, { code: FORMULATION_CODE, name: "Evaluation pure biochar", biocharRatio: PURE_BIOCHAR_RATIO });
     const source = await createStorageLocation(fixture.ctx, { code: SOURCE_BIN_CODE, name: SOURCE_BIN_CODE,
       facilityId: fixture.facilityId, type: "biochar_bin", stockMode: "mix" });

@@ -1,3 +1,6 @@
+import { transportLegKeys } from "./use-transport-legs";
+import { feedstockKeys } from "./use-feedstocks";
+import { invalidateCertificationReadiness } from "./use-certification";
 /**
  * Suppliers React Query Hooks
  * Client-side state management for supplier operations
@@ -442,10 +445,15 @@ export function useCreateSupplierLocation(callbacks?: MutationCallbacks<Supplier
       if (!result.success) throwActionError(result);
       return result.data;
     },
-    onSuccess: (data, variables) => {
+    onSuccess: async (data, variables) => {
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(variables.supplierId) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.detail(variables.supplierId) });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: transportLegKeys.all }),
+        queryClient.invalidateQueries({ queryKey: feedstockKeys.all }),
+        invalidateCertificationReadiness(queryClient, { creditBatchPreviews: true }),
+      ]);
       callbacks?.onSuccess?.(data, variables);
     },
     onError: (error, variables) => {
@@ -465,11 +473,16 @@ export function useUpdateSupplierLocation(supplierId: string, callbacks?: Mutati
       if (!result.success) throwActionError(result);
       return result.data;
     },
-    onSuccess: (data, variables) => {
+    onSuccess: async (data, variables) => {
       patchArrayListCacheByExactKeyWithSavedRow<SupplierLocation>(queryClient, supplierKeys.supplierLocations(supplierId), data);
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(supplierId) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.detail(supplierId) });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: transportLegKeys.all }),
+        queryClient.invalidateQueries({ queryKey: feedstockKeys.all }),
+        invalidateCertificationReadiness(queryClient, { creditBatchPreviews: true }),
+      ]);
       callbacks?.onSuccess?.(data, variables);
     },
     onError: (error, variables) => {

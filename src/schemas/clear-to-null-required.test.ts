@@ -1,3 +1,4 @@
+import { facilityDistanceInputSchema } from "./facility-distances";
 import { describe, expect, it } from "vitest";
 import { supplierLocationFormSchema } from "./suppliers";
 import { transportLegFormSchema } from "./transport-legs";
@@ -18,6 +19,6 @@ describe("clearing controller-backed fields with null", () => {
   });
 
   it("accepts a cleared supplier distance as no distance", () => {
-    expect(supplierLocationFormSchema.shape.distanceFromFacilityKm.safeParse(null).success).toBe(true);
+    expect(facilityDistanceInputSchema.shape.distanceKm.safeParse(null).success).toBe(true);
   });
 });

@@ -88,18 +88,18 @@ it("waits for the changed reading's preview before saving the correction", async
   await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
   await act(async () => { fireEvent.submit(form); });
   expect(save).toHaveBeenCalledWith(expect.objectContaining({ sources: [{ layerId: ids.a, moisturePercent: 30 }],
-    correctsMovementId: ids.movement, basisFingerprint: "changed-basis" }), expect.any(Function));
+    correctsMovementId: ids.movement, basisFingerprint: "changed-basis" }), expect.any(Function), undefined);
 });
 
 it("allows a metadata-only save without requesting a stock correction preview", async () => {
   const { save, form } = await open();
   await act(async () => { fireEvent.submit(form); });
-  expect(save).toHaveBeenCalledWith(expect.objectContaining({ deliveredWetMassKg: 100, moistureContentPercent: 20, sources: undefined, correctsMovementId: undefined }), expect.any(Function));
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ deliveredWetMassKg: 100, moistureContentPercent: 20, sources: undefined, correctsMovementId: undefined }), expect.any(Function), undefined);
   expect(state.preview).not.toHaveBeenCalled();
 });
 
 it("clears a legacy zero distance override when saving a metadata edit", async () => {
   const { save, form } = await open({ ...delivery, distanceKmOverride: 0, distanceSource: "manual", distanceNote: "Legacy override note" });
   await act(async () => { fireEvent.submit(form); });
-  expect(save).toHaveBeenCalledWith(expect.objectContaining({ distanceKmOverride: null, distanceNote: "" }), expect.any(Function));
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ distanceKmOverride: null, distanceNote: "" }), expect.any(Function), undefined);
 });

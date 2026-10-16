@@ -1,3 +1,5 @@
+import { upsertLocationFacilityDistances, withLocationFacilityDistances } from "./location-facility-distances";
+import type { FacilityDistanceInput } from "@/schemas/facility-distances";
 /**
  * Customers Data Access Layer
  * CRUD operations for customers and customer locations with auth guards, pagination, and filtering
@@ -14,7 +16,7 @@ import {
   type CustomerLocation,
 } from "@/db/schema";
 import type { CustomerFilterData } from "@/schemas/customers";
-import type { DistanceSourceValue } from "@/schemas/distance-source";
+import type { FacilityDistance } from "@/schemas/facility-distances";
 import { assertRowVersion, nextVersion } from "./row-version";
 
 /** Entity keys on a customer's and a customer location's version conflicts. */
@@ -60,7 +62,6 @@ import { SafeError } from "@/lib/errors";
 import { guardCustomerName } from "./unique-name-guards";
 import {
   lockBiocharTransportRouteTopology,
-  syncBiocharLegsForCustomerLocation,
 } from "./transport-legs";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import {
@@ -259,8 +260,7 @@ export async function getCustomerLocations(
     gpsLatitude: number;
     gpsLongitude: number;
     address: string | null;
-    distanceFromFacilityKm: number | null;
-    distanceSource: DistanceSourceValue | null;
+    facilityDistances: FacilityDistance[];
     defaultSoilTemperatureC: number | null;
     isDefault: boolean;
     createdAt: Date;
@@ -280,7 +280,7 @@ export async function getCustomerLocations(
     throw new SafeError("Customer not found");
   }
 
-  return db
+  const locations = await db
     .select({
       id: customerLocations.id,
       name: customerLocations.name,
@@ -290,8 +290,6 @@ export async function getCustomerLocations(
       gpsLatitude: customerLocations.gpsLatitude,
       gpsLongitude: customerLocations.gpsLongitude,
       address: customerLocations.address,
-      distanceFromFacilityKm: customerLocations.distanceFromFacilityKm,
-      distanceSource: customerLocations.distanceSource,
       defaultSoilTemperatureC: customerLocations.defaultSoilTemperatureC,
       isDefault: customerLocations.isDefault,
       createdAt: customerLocations.createdAt,
@@ -301,6 +299,7 @@ export async function getCustomerLocations(
     .from(customerLocations)
     .where(and(eq(customerLocations.customerId, customerId), eq(customerLocations.organizationId, ctx.organizationId)))
     .orderBy(...CUSTOMER_LOCATION_ORDER);
+  return withLocationFacilityDistances(ctx, "customer", locations);
 }
 
 // ============================================
@@ -478,8 +477,7 @@ export async function updateCustomerLocation(
     gpsLatitude?: number;
     gpsLongitude?: number;
     address?: string | null;
-    distanceFromFacilityKm?: number | null;
-    distanceSource?: "map_estimate" | "manual" | "document" | null;
+    facilityDistances?: FacilityDistanceInput[];
     defaultSoilTemperatureC?: number | null;
     isDefault?: boolean;
     /** `version` the edit form loaded; refuses a save built on a stale read. */
@@ -496,8 +494,7 @@ export async function updateCustomerLocation(
     gpsLatitude?: number;
     gpsLongitude?: number;
     address?: string | null;
-    distanceFromFacilityKm?: number | null;
-    distanceSource?: "map_estimate" | "manual" | "document" | null;
+    facilityDistances?: FacilityDistanceInput[];
     defaultSoilTemperatureC?: number | null;
     isDefault?: boolean;
     updatedAt: Date;
@@ -512,8 +509,6 @@ export async function updateCustomerLocation(
   if (data.gpsLatitude !== undefined) updateData.gpsLatitude = data.gpsLatitude;
   if (data.gpsLongitude !== undefined) updateData.gpsLongitude = data.gpsLongitude;
   if (data.address !== undefined) updateData.address = data.address;
-  if (data.distanceFromFacilityKm !== undefined) updateData.distanceFromFacilityKm = data.distanceFromFacilityKm;
-  if (data.distanceSource !== undefined) updateData.distanceSource = data.distanceSource;
   if (data.defaultSoilTemperatureC !== undefined) updateData.defaultSoilTemperatureC = data.defaultSoilTemperatureC;
   if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
 
@@ -522,8 +517,7 @@ export async function updateCustomerLocation(
       data.name !== undefined ||
       data.gpsLatitude !== undefined ||
       data.gpsLongitude !== undefined ||
-      data.distanceFromFacilityKm !== undefined ||
-      data.distanceSource !== undefined;
+      data.facilityDistances !== undefined;
     if (routeAnchorCanChange) {
       await lockBiocharTransportRouteTopology(ctx, tx);
     }
@@ -590,9 +584,9 @@ export async function updateCustomerLocation(
       .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)))
       .returning();
 
-    await syncBiocharLegsForCustomerLocation(ctx, tx, locationId);
+    await upsertLocationFacilityDistances(ctx, tx, "customer", locationId, data.facilityDistances);
 
-    return updated;
+    return (await withLocationFacilityDistances(ctx, "customer", [updated], tx))[0];
   });
   await processPendingStorageObjectDeletions(ctx);
   return updated;

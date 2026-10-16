@@ -2,12 +2,12 @@ import { TEST_SITE_POSITION } from "./test-org";
 import type { OrgContext } from "@/lib/auth/server";
 import { formatUtcDate } from "@/lib/date-utils";
 import { randomUUID } from "node:crypto";
-import { eq, inArray, type SQL } from "drizzle-orm";
+import { and, eq, inArray, type SQL } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   biocharProducts, biocharProductSourceAllocations, binMovements, deliveries,
   formulations, orders, outputStockAllocations, outputStockMoistureReadings, outputStockRunAllocations,
-  activityEvents, applicationOutputAllocations, applications, customerLocations, facilities, productionRuns,
+  activityEvents, applicationOutputAllocations, applications, customerLocations, customerLocationFacilityDistances, facilities, productionRuns,
   reactors, storageLocations, users, productIngredientSnapshots, type Delivery,
 } from "@/db/schema";
 
@@ -203,7 +203,15 @@ export async function insertOutputDeliveryFixture<T>(executor: Executor, input: 
       ownedBins.add(bin.id);
       storageLocationId = bin.id;
     }
-    const [saved] = await executor.insert(deliveries).values({ ...values, storageLocationId, status: "delivered" }).returning();
+    const [pair] = await executor.select().from(customerLocationFacilityDistances).where(and(
+      eq(customerLocationFacilityDistances.organizationId, values.organizationId),
+      eq(customerLocationFacilityDistances.locationId, order.customerLocationId),
+      eq(customerLocationFacilityDistances.facilityId, values.facilityId),
+    ));
+    const [saved] = await executor.insert(deliveries).values({
+      recordedDistanceKm: pair?.distanceKm ?? null, recordedDistanceSource: pair?.distanceSource ?? null,
+      ...values, storageLocationId, status: "delivered",
+    }).returning();
     await persistFixtureProvenance(executor, saved, productId, requireEstablishedSource);
     result.push(select(saved));
   }

@@ -18,10 +18,7 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import type { DeliveryFilterData, DeliveryStatus } from "@/schemas/deliveries";
 import { and, asc, count, desc, eq, gte, ilike, isNull, lte, sql, SQL } from "drizzle-orm";
-import {
-  effectiveDeliveryDistanceKm,
-  effectiveDeliveryDistanceSource,
-} from "./delivery-distance-projections";
+import { effectiveDeliveryDistance } from "./delivery-distance-projections";
 import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
 export interface DeliveryWithRelations extends Delivery {
   status: DeliveryStatus;
@@ -149,6 +146,8 @@ function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
     distanceKmOverride: columns.distanceKmOverride
       ? deliveries.distanceKmOverride
       : sql<number | null>`null`.as("distance_km_override"),
+    recordedDistanceKm: deliveries.recordedDistanceKm,
+    recordedDistanceSource: deliveries.recordedDistanceSource,
     distanceSource: columns.distanceSource
       ? deliveries.distanceSource
       : sql<"map_estimate" | "manual" | "document" | null>`null`.as(
@@ -279,8 +278,6 @@ export async function getDeliveries(
       destinationGpsLongitude: customerLocations.gpsLongitude,
       driverName: drivers.name,
       vehicleName: vehicles.name,
-      effectiveDistanceKm: effectiveDeliveryDistanceKm(deliveryColumns),
-      effectiveDistanceSource: effectiveDeliveryDistanceSource(deliveryColumns),
       transportEvidenceDocumentCount: transportEvidenceDocumentCount(
         ctx.organizationId,
         "delivery",
@@ -310,7 +307,7 @@ export async function getDeliveries(
 
   const proofCounts = await getDeliveryProofCounts(ctx, deliveryList.map((delivery) => delivery.id));
   return {
-    items: deliveryList.map((delivery) => ({ ...delivery, proofOfDeliveryCount: proofCounts.get(delivery.id) ?? 0 })),
+    items: deliveryList.map((delivery) => ({ ...delivery, ...effectiveDeliveryDistance(delivery), proofOfDeliveryCount: proofCounts.get(delivery.id) ?? 0 })),
     total,
     page,
     pageSize,
@@ -346,8 +343,6 @@ export async function getDeliveryWithRelations(
       driverName: drivers.name,
       vehicleName: vehicles.name,
       vehicleIdentifier: vehicles.identifier,
-      effectiveDistanceKm: effectiveDeliveryDistanceKm(deliveryColumns),
-      effectiveDistanceSource: effectiveDeliveryDistanceSource(deliveryColumns),
       transportEvidenceDocumentCount: transportEvidenceDocumentCount(
         ctx.organizationId,
         "delivery",
@@ -391,6 +386,8 @@ export async function getDeliveryWithRelations(
     moistureContentPercent: deliveryRow.moistureContentPercent,
     distanceKmOverride: deliveryRow.distanceKmOverride,
     distanceSource: deliveryRow.distanceSource,
+    recordedDistanceKm: deliveryRow.recordedDistanceKm,
+    recordedDistanceSource: deliveryRow.recordedDistanceSource,
     distanceNote: deliveryRow.distanceNote,
     driverId: deliveryRow.driverId,
     vehicleId: deliveryRow.vehicleId,
@@ -398,8 +395,7 @@ export async function getDeliveryWithRelations(
     createdAt: deliveryRow.createdAt,
     updatedAt: deliveryRow.updatedAt,
     version: deliveryRow.version,
-    effectiveDistanceKm: deliveryRow.effectiveDistanceKm,
-    effectiveDistanceSource: deliveryRow.effectiveDistanceSource,
+    ...effectiveDeliveryDistance(deliveryRow),
     transportEvidenceDocumentCount:
       deliveryRow.transportEvidenceDocumentCount,
     customerName: deliveryRow.customerName,

@@ -13,6 +13,7 @@ vi.mock("./bin-movement-requests", () => ({ lockMovementRequest: vi.fn() }));
 vi.mock("./delivery-order-balance", () => ({ lockDeliveryOrderAndAssertBalance: vi.fn() }));
 vi.mock("./lock-bin-stocks", () => ({ lockBinStock: vi.fn() }));
 vi.mock("./output-stock", () => ({ getOutputStockAllocationProjection: vi.fn() }));
+vi.mock("./delivery-distance-snapshot", () => ({ deliveryDistanceSnapshot: vi.fn().mockResolvedValue({ recordedDistanceKm: null, recordedDistanceSource: null }) }));
 vi.mock("./transport-legs", () => ({ lockBiocharTransportRouteTopology: vi.fn(), syncBiocharProductTransportLegs: mocks.sync }));
 
 vi.mock("./facility-reference-guards", () => ({ lockActiveFacilityReference: vi.fn() }));

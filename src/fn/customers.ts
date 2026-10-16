@@ -34,8 +34,6 @@ import {
   updateCustomerLocationSchema,
   deleteCustomerLocationSchema,
 } from "@/schemas/customers";
-import { resolveDistanceSource } from "@/schemas/distance-source";
-import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
 
@@ -96,8 +94,7 @@ export async function getCustomerLocationsFn(
       gpsLatitude: number;
       gpsLongitude: number;
       address: string | null;
-      distanceFromFacilityKm: number | null;
-      distanceSource: DistanceSourceValue | null;
+      facilityDistances: import("@/schemas/facility-distances").FacilityDistance[];
       defaultSoilTemperatureC: number | null;
       isDefault: boolean;
       createdAt: Date;
@@ -152,11 +149,7 @@ export async function createCustomerWithLocationsFn(
               gpsLongitude: location.gpsLongitude,
               // An empty textarea submits "", which must land as NULL.
               address: location.address || null,
-              distanceFromFacilityKm: location.distanceFromFacilityKm,
-              distanceSource: resolveDistanceSource(
-                location.distanceFromFacilityKm ?? null,
-                location.distanceSource,
-              ),
+              facilityDistances: location.facilityDistances,
               defaultSoilTemperatureC: location.defaultSoilTemperatureC,
               isDefault: location.isDefault,
             })),
@@ -245,11 +238,7 @@ export async function createCustomerLocationFn(
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
       address: validated.address || null,
-      distanceFromFacilityKm: validated.distanceFromFacilityKm,
-      distanceSource: resolveDistanceSource(
-        validated.distanceFromFacilityKm ?? null,
-        validated.distanceSource,
-      ),
+      facilityDistances: validated.facilityDistances,
       defaultSoilTemperatureC: validated.defaultSoilTemperatureC,
       isDefault: validated.isDefault,
     });
@@ -285,11 +274,7 @@ export async function updateCustomerLocationFn(
       gpsLongitude: validated.gpsLongitude,
       address:
         validated.address === undefined ? undefined : validated.address || null,
-      distanceFromFacilityKm: validated.distanceFromFacilityKm,
-      distanceSource: resolveDistanceSource(
-        validated.distanceFromFacilityKm,
-        validated.distanceSource,
-      ),
+      facilityDistances: validated.facilityDistances,
       defaultSoilTemperatureC: validated.defaultSoilTemperatureC,
       isDefault: validated.isDefault,
     });

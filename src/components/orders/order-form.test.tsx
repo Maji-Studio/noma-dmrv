@@ -188,7 +188,12 @@ describe("OrderForm customer field", () => {
   });
 
   it("keeps the opening version fixed while refreshed detail data updates the selected label", () => {
-    const location = { id: "location-1", customerId: "customer-1", name: "North field", country: "TZ", version: 1 } as CustomerLocation;
+    const location: CustomerLocation = {
+      id: "location-1", customerId: "customer-1", name: "North field", country: "TZ", version: 1,
+      facilityDistances: [], organizationId: "organization-1", gpsLatitude: -6.8, gpsLongitude: 39.2,
+      address: null, city: null, stateRegion: null, defaultSoilTemperatureC: null, isDefault: true,
+      createdAt: new Date("2026-09-12"), updatedAt: new Date("2026-09-12"),
+    };
     state.locations = [location];
     state.locationOptions = [{ id: location.id, code: "", name: location.name! }];
     const orderFacility = { id: "order-facility", name: "Order facility", timezone: "UTC", gpsLatitude: -6.8, gpsLongitude: 39.2 } as Facility;

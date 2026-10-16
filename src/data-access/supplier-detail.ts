@@ -1,3 +1,4 @@
+import { withLocationFacilityDistances } from "./location-facility-distances";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -52,7 +53,7 @@ export async function findSupplierLocations(
 ): Promise<SupplierLocation[]> {
   requireOrgScope(ctx);
 
-  return db
+  const locations = await db
     .select()
     .from(supplierLocations)
     .where(
@@ -62,4 +63,5 @@ export async function findSupplierLocations(
       ),
     )
     .orderBy(...SUPPLIER_LOCATION_ORDER);
+  return withLocationFacilityDistances(ctx, "supplier", locations);
 }

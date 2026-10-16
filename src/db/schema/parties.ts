@@ -1,7 +1,7 @@
+import type { FacilityDistance } from "@/schemas/facility-distances";
 import { relations, sql } from 'drizzle-orm';
 import { integer, boolean, check, doublePrecision, index, pgTable, real, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { organizations, users } from './auth';
-import { distanceSource } from './common';
 
 // ============================================
 // Suppliers - Biomass/feedstock suppliers
@@ -92,12 +92,6 @@ export const customerLocations = pgTable(
     gpsLatitude: doublePrecision('gps_latitude').notNull(),
     gpsLongitude: doublePrecision('gps_longitude').notNull(),
     address: text('address'),
-    // Road distance (km) from the origin facility to this customer location.
-    // Stored as operational route metadata; certifier transport is recorded on
-    // cargo entities, not deliveries.
-    distanceFromFacilityKm: real('distance_from_facility_km'),
-    // Provenance of distanceFromFacilityKm (null when no distance stored).
-    distanceSource: distanceSource('distance_source'),
     // Conservative default for the Isometric 200-year soil durability equation.
     // New applications can prefill from this site value while staying editable.
     defaultSoilTemperatureC: real('default_soil_temperature_c'),
@@ -125,10 +119,6 @@ export const customerLocations = pgTable(
     check(
       'customer_locations_gps_longitude_range',
       sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
-    ),
-    check(
-      'customer_locations_distance_from_facility_km_positive',
-      sql`${table.distanceFromFacilityKm} is null or ${table.distanceFromFacilityKm} > 0`
     ),
     check(
       'customer_locations_default_soil_temperature_c_range',
@@ -159,11 +149,6 @@ export const supplierLocations = pgTable(
     gpsLatitude: doublePrecision('gps_latitude').notNull(),
     gpsLongitude: doublePrecision('gps_longitude').notNull(),
     address: text('address'),
-    // Road distance (km) from this supplier location to the delivery facility.
-    // Default distance for feedstock delivered from this location.
-    distanceFromFacilityKm: real('distance_from_facility_km'),
-    // Provenance of distanceFromFacilityKm (null when no distance stored).
-    distanceSource: distanceSource('distance_source'),
     // Marks the supplier's primary source. At most one per supplier
     // (enforced by the partial unique index below).
     isDefault: boolean('is_default').notNull().default(false),
@@ -171,6 +156,7 @@ export const supplierLocations = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    unique('supplier_locations_id_organization_id_unique').on(table.id, table.organizationId),
     index('supplier_locations_organization_id_idx').on(table.organizationId),
     index('supplier_locations_supplier_id_idx').on(table.supplierId),
     // One default location per supplier (partial — only default rows are unique).
@@ -184,10 +170,6 @@ export const supplierLocations = pgTable(
     check(
       'supplier_locations_gps_longitude_range',
       sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
-    ),
-    check(
-      'supplier_locations_distance_from_facility_km_positive',
-      sql`${table.distanceFromFacilityKm} is null or ${table.distanceFromFacilityKm} > 0`
     ),
   ]
 );
@@ -267,9 +249,9 @@ export type Supplier = typeof suppliers.$inferSelect;
 export type NewSupplier = typeof suppliers.$inferInsert;
 export type Customer = typeof customers.$inferSelect;
 export type NewCustomer = typeof customers.$inferInsert;
-export type CustomerLocation = typeof customerLocations.$inferSelect;
+export type CustomerLocation = typeof customerLocations.$inferSelect & { facilityDistances: FacilityDistance[] };
 export type NewCustomerLocation = typeof customerLocations.$inferInsert;
-export type SupplierLocation = typeof supplierLocations.$inferSelect;
+export type SupplierLocation = typeof supplierLocations.$inferSelect & { facilityDistances: FacilityDistance[] };
 export type NewSupplierLocation = typeof supplierLocations.$inferInsert;
 export type Driver = typeof drivers.$inferSelect;
 export type NewDriver = typeof drivers.$inferInsert;

@@ -176,8 +176,11 @@ test.describe("Transport round trip (#852)", () => {
       name: "Add location",
     });
     await expect(
-      supplierLocationDialog.getByRole("spinbutton", { name: "Distance to facility (km)" })
+      supplierLocationDialog.getByTestId(`facility-distance-${seededData.facility.id}`).getByRole("spinbutton")
     ).toBeVisible();
+    const supplierRow = supplierLocationDialog.getByTestId(`facility-distance-${seededData.facility.id}`);
+    await supplierRow.getByRole("spinbutton").fill("25");
+    await expect(supplierRow).toContainText("50 km round trip counted");
     await page.keyboard.press("Escape");
 
     // Customer detail → Add location dialog.
@@ -188,9 +191,10 @@ test.describe("Transport round trip (#852)", () => {
     // The locations table header now carries the same copy (QA detail-view
     // pass), so target the form INPUT via its accessible name.
     await expect(
-      page.getByRole("spinbutton", {
-        name: "Distance from facility",
-      })
+      page.getByRole("dialog", { name: "Add location" }).getByTestId(`facility-distance-${seededData.facility.id}`).getByRole("spinbutton")
     ).toBeVisible({ timeout: 10000 });
+    const customerRow = page.getByRole("dialog", { name: "Add location" }).getByTestId(`facility-distance-${seededData.facility.id}`);
+    await customerRow.getByRole("spinbutton").fill("30");
+    await expect(customerRow).toContainText("60 km round trip counted");
   });
 });

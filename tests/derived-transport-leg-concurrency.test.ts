@@ -1,3 +1,4 @@
+import { customerLocationFacilityDistances } from "@/db/schema";
 import { updateOrder } from "@/lib/operations/orders";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
@@ -119,12 +120,11 @@ describe(
             organizationId: TEST_ORG_ID,
             customerId: customer.id,
             name: `Transport Sync Site ${tag}-${index}`,
-            distanceFromFacilityKm: distance,
-            distanceSource: "manual" as const,
           })),
         )
         .returning({ id: customerLocations.id });
       const locationIds = locations.map((location) => location.id);
+      await db.insert(customerLocationFacilityDistances).values(locations.map((location, index) => ({ organizationId: TEST_ORG_ID, locationId: location.id, facilityId: facility.id, distanceKm: locationDistances[index], distanceSource: "manual" as const })));
       created.customerLocationIds.push(...locationIds);
 
       const recipe = await outputProductFixtureValues(db, { organizationId: TEST_ORG_ID, facilityId: facility.id, code: "unused", massKg: 1_000 });
@@ -377,7 +377,7 @@ describe(
         locationUpdatePromise = updateCustomerLocation(
           ctx,
           fixture.locationIds[0],
-          { expectedVersion: await masterDataVersion(ctx, "customerLocations", fixture.locationIds[0]), distanceFromFacilityKm: 55, distanceSource: "manual" },
+          { expectedVersion: await masterDataVersion(ctx, "customerLocations", fixture.locationIds[0]), facilityDistances: [{ facilityId: fixture.facilityId, distanceKm: 55, distanceSource: "manual" }] },
         );
 
         await expect
@@ -429,7 +429,7 @@ describe(
             eq(transportLegs.isDerived, true),
           ));
 
-        expect(derived).toEqual({ distanceKm: 55, loadMassKg: 100 });
+        expect(derived).toEqual({ distanceKm: 10, loadMassKg: 100 });
       } finally {
         releaseBarrier();
         await barrierTransaction.catch(() => undefined);
@@ -519,7 +519,7 @@ describe(
 
       await expect(runOperationInProcess(updateOrder, ctx, { orderId: fixture.orderId, expectedVersion: await labLogisticsVersion(ctx, "orders", fixture.orderId),
         customerLocationId: fixture.locationIds[1], })).rejects.toThrow(/Order relationship is used by delivery/);
-      await updateCustomerLocation(ctx, fixture.locationIds[0], { expectedVersion: await masterDataVersion(ctx, "customerLocations", fixture.locationIds[0]), distanceFromFacilityKm: 60, distanceSource: "manual" });
+      await updateCustomerLocation(ctx, fixture.locationIds[0], { expectedVersion: await masterDataVersion(ctx, "customerLocations", fixture.locationIds[0]), facilityDistances: [{ facilityId: fixture.facilityId, distanceKm: 60, distanceSource: "manual" }] });
 
       const [derived] = await db
         .select({
@@ -531,7 +531,7 @@ describe(
           eq(transportLegs.entityId, fixture.productIds[0]),
           eq(transportLegs.isDerived, true),
         ));
-      expect(derived).toEqual({ distanceKm: 80, loadMassKg: 200 });
+      expect(derived).toEqual({ distanceKm: 60, loadMassKg: 200 });
 
       const deliveryLocations = await db
         .select({ id: deliveries.id, customerLocationId: orders.customerLocationId })

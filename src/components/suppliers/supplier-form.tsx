@@ -11,6 +11,7 @@
  * longer carries a single GPS position.
  */
 "use client";
+import { useLocationEditIntent } from "@/hooks/use-location-edit-intent";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 import { useToast } from "@/components/ui/toast";
 
@@ -40,7 +41,6 @@ import {
   type SupplierFormData,
   type SupplierLocationFormData,
 } from "@/schemas/suppliers";
-import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { Supplier, SupplierLocation } from "@/db/schema/parties";
 import { Button } from "@/components/ui/button";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -67,8 +67,7 @@ export interface PendingSupplierLocation {
   gpsLatitude: number;
   gpsLongitude: number;
   // Road distance (km) from this source location to the delivery facility.
-  distanceFromFacilityKm: number | null;
-  distanceSource: DistanceSourceValue | null;
+  facilityDistances: import("@/schemas/facility-distances").FacilityDistanceInput[];
   // Marks this as the supplier's default source location.
   isDefault: boolean;
 }
@@ -84,8 +83,7 @@ function normalizePendingSupplierLocation(
     address: location.address ?? "",
     gpsLatitude: location.gpsLatitude,
     gpsLongitude: location.gpsLongitude,
-    distanceFromFacilityKm: location.distanceFromFacilityKm ?? null,
-    distanceSource: location.distanceSource ?? null,
+    facilityDistances: location.facilityDistances ?? [],
     isDefault: location.isDefault,
   };
 }
@@ -488,6 +486,11 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
 
   const { data: locations, isLoading, isError } = useSupplierLocationsBySupplier(supplierId);
   const deleteLocation = useDeleteSupplierLocation(supplierId);
+
+  useLocationEditIntent(locations, (location) => {
+    setEditingLocation(location);
+    setIsLocationDialogOpen(true);
+  });
 
   const handleDeleteConfirm = async () => {
     if (!deletingLocation) return;

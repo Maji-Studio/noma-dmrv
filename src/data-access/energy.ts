@@ -1,3 +1,4 @@
+import { effectiveDeliveryDistance } from "./delivery-distance-projections";
 /**
  * The energy read (ADR 0031): everything the attribution in
  * `@/lib/energy/attribution` needs for one facility, in one pass.
@@ -43,8 +44,6 @@ import type {
 } from "@/lib/energy/types";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
-import { getDeliveryColumnAvailability } from "./deliveries";
-import { effectiveDeliveryDistanceKm } from "./delivery-distance-projections";
 import { requireOrgScope } from "./utils";
 
 const FEEDSTOCK_LEG_ENTITY_TYPE = "feedstock";
@@ -90,7 +89,6 @@ export async function getEnergyInputs(
   }
   const timeZone = facility.timezone;
   const dayOf = (instant: Date) => formatFacilityDate(instant, timeZone);
-  const deliveryColumns = await getDeliveryColumnAvailability();
 
   const facilityRuns = and(
     eq(productionRuns.facilityId, facilityId),
@@ -213,7 +211,10 @@ export async function getEnergyInputs(
         code: deliveries.code,
         deliveryDate: deliveries.deliveryDate,
         customerName: customers.name,
-        effectiveDistanceKm: effectiveDeliveryDistanceKm(deliveryColumns),
+        recordedDistanceKm: deliveries.recordedDistanceKm,
+        recordedDistanceSource: deliveries.recordedDistanceSource,
+        distanceSource: deliveries.distanceSource,
+        distanceKmOverride: deliveries.distanceKmOverride,
         deliveredWetMassKg: deliveries.deliveredWetMassKg,
         massDryKg: deliveries.massDryKg,
       })
@@ -315,7 +316,7 @@ export async function getEnergyInputs(
         code: delivery.code,
         day: dayOf(delivery.deliveryDate),
         customerName: delivery.customerName,
-        effectiveDistanceKm: delivery.effectiveDistanceKm,
+        effectiveDistanceKm: effectiveDeliveryDistance(delivery).effectiveDistanceKm,
         deliveredWetMassKg: delivery.deliveredWetMassKg,
         massDryKg: delivery.massDryKg,
       })),

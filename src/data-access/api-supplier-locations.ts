@@ -1,3 +1,4 @@
+import { withLocationFacilityDistances } from "./location-facility-distances";
 import { and, desc, eq, getTableColumns } from "drizzle-orm";
 import { db } from "@/db";
 import { supplierLocations } from "@/db/schema";
@@ -16,10 +17,11 @@ export async function listApiSupplierLocations(
 ) {
   requireOrgScope(ctx);
   await findApiSupplier(ctx, { id: filters.supplierId });
-  return db.select({
+  const locations = await db.select({
     ...getTableColumns(supplierLocations), cursorCreatedAt: lookupCursorCreatedAt(supplierLocations.createdAt),
   }).from(supplierLocations).where(and(
     eq(supplierLocations.organizationId, ctx.organizationId), eq(supplierLocations.supplierId, filters.supplierId),
     lookupSearch({ name: supplierLocations.name }, filters.q), lookupPosition(supplierLocations, cursor),
   )).orderBy(desc(supplierLocations.createdAt), desc(supplierLocations.id)).limit(limit + 1);
+  return withLocationFacilityDistances(ctx, "supplier", locations);
 }

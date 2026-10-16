@@ -1,3 +1,4 @@
+import { customerLocationFacilityDistances } from "@/db/schema";
 import { TEST_SITE_POSITION } from "./helpers/test-org";
 /** Real handlers, credentials and Postgres. Not run by the implementation agent. */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -28,7 +29,8 @@ beforeEach(async () => {
     .where(and(eq(customers.organizationId, a.ctx.organizationId), eq(customers.id, a.customer.id)));
   await db.update(customers).set({ createdAt: sql`'2026-10-01 12:00:00.123456'::timestamp` })
     .where(and(eq(customers.organizationId, a.ctx.organizationId), eq(customers.id, a.otherCustomer.id)));
-  await db.update(customerLocations).set({ createdAt: sql`'2026-10-01 12:00:00.123455'::timestamp`, gpsLatitude: 0, gpsLongitude: 8.5, distanceFromFacilityKm: 20, distanceSource: "document", isDefault: true, address: "hidden", defaultSoilTemperatureC: 25 })
+  await db.insert(customerLocationFacilityDistances).values({ organizationId: a.ctx.organizationId, locationId: a.location.id, facilityId: a.facility.id, distanceKm: 20, distanceSource: "document" });
+  await db.update(customerLocations).set({ createdAt: sql`'2026-10-01 12:00:00.123455'::timestamp`, gpsLatitude: 0, gpsLongitude: 8.5, isDefault: true, address: "hidden", defaultSoilTemperatureC: 25 })
     .where(and(eq(customerLocations.organizationId, a.ctx.organizationId), eq(customerLocations.id, a.location.id)));
   [extra] = await db.insert(customerLocations).values({ ...TEST_SITE_POSITION, organizationId: a.ctx.organizationId, customerId: a.customer.id, name: `E2E Field ${a.tag}`, createdAt: sql`'2026-10-01 12:00:00.123456'::timestamp` }).returning();
 }, READ_TIMEOUT_MS);
@@ -79,8 +81,8 @@ describe("customer and destination REST reads", { timeout: READ_TIMEOUT_MS }, ()
         expect(customerLocationRepresentationSchema.parse(row)).toEqual(row);
         expect(Object.keys(row).sort()).toEqual(Object.keys(customerLocationRepresentationSchema.shape).sort());
       }
-      expect(page.data[1]).toMatchObject({ customerId: a.customer.id, gpsLatitude: 0, gpsLongitude: 8.5, distanceFromFacilityKm: 20, distanceSource: "document", isDefault: true });
-      expect(page.data[0]).toMatchObject({ gpsLatitude: TEST_SITE_POSITION.gpsLatitude, gpsLongitude: TEST_SITE_POSITION.gpsLongitude, distanceFromFacilityKm: null, distanceSource: null, isDefault: false });
+      expect(page.data[1]).toMatchObject({ customerId: a.customer.id, gpsLatitude: 0, gpsLongitude: 8.5, facilityDistances: [{ facilityId: a.facility.id, distanceKm: 20, distanceSource: "document" }], isDefault: true });
+      expect(page.data[0]).toMatchObject({ gpsLatitude: TEST_SITE_POSITION.gpsLatitude, gpsLongitude: TEST_SITE_POSITION.gpsLongitude, facilityDistances: [], isDefault: false });
     }
     expect(await ids(await locations(a.otherCustomer.id))).toEqual([]);
   });

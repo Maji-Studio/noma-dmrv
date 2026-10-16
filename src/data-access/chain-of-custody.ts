@@ -75,7 +75,7 @@ export interface ChainDeliveryLineage {
   deliveryDate: Date;
   deliveredWetMassKg?: number | null;
   distanceKmOverride?: number | null;
-  locationDistanceKm?: number | null;
+  recordedDistanceKm?: number | null;
   /** Resolved from the delivery's order. */
   customerLocationId?: string | null;
   proofOfDeliveryCount: number;

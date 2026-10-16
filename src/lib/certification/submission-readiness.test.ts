@@ -28,11 +28,11 @@ describe("submission readiness predicates", () => {
     expect(applicationDestinationBlocker({ applicationCode: "AP-1", customerLocationId: "location" })).toBeNull();
   });
   it("accepts either positive distance source and checks delivered deliveries only", () => {
-    const input = { deliveryCode: "DL-1", deliveryStatus: "delivered", distanceKmOverride: null, locationDistanceKm: null };
+    const input = { deliveryCode: "DL-1", deliveryStatus: "delivered", distanceKmOverride: null, recordedDistanceKm: null };
     expect(deliveryDistanceBlocker(input)).toContain("Delivery DL-1 has no positive transport distance");
     expect(deliveryDistanceBlocker({ ...input, distanceKmOverride: 5 })).toBeNull();
-    expect(deliveryDistanceBlocker({ ...input, locationDistanceKm: 5 })).toBeNull();
-    expect(deliveryDistanceBlocker({ ...input, distanceKmOverride: 0, locationDistanceKm: 5 })).toBeNull();
+    expect(deliveryDistanceBlocker({ ...input, recordedDistanceKm: 5 })).toBeNull();
+    expect(deliveryDistanceBlocker({ ...input, distanceKmOverride: 0, recordedDistanceKm: 5 })).toBeNull();
     expect(deliveryDistanceBlocker({ ...input, deliveryStatus: "scheduled" })).toBeNull();
   });
   it.each([

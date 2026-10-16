@@ -1,3 +1,4 @@
+import { withLocationFacilityDistances } from "./location-facility-distances";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { customerLocations } from "@/db/schema";
@@ -16,10 +17,9 @@ export async function listApiCustomerLocations(
 ) {
   requireOrgScope(ctx);
   await findApiCustomer(ctx, { id: filters.customerId });
-  return db.select({
+  const locations = await db.select({
     id: customerLocations.id, customerId: customerLocations.customerId, name: customerLocations.name,
     gpsLatitude: customerLocations.gpsLatitude, gpsLongitude: customerLocations.gpsLongitude,
-    distanceFromFacilityKm: customerLocations.distanceFromFacilityKm, distanceSource: customerLocations.distanceSource,
     isDefault: customerLocations.isDefault, version: customerLocations.version,
     createdAt: customerLocations.createdAt, updatedAt: customerLocations.updatedAt,
     cursorCreatedAt: lookupCursorCreatedAt(customerLocations.createdAt),
@@ -27,4 +27,5 @@ export async function listApiCustomerLocations(
     eq(customerLocations.organizationId, ctx.organizationId), eq(customerLocations.customerId, filters.customerId),
     lookupSearch({ name: customerLocations.name }, filters.q), lookupPosition(customerLocations, cursor),
   )).orderBy(desc(customerLocations.createdAt), desc(customerLocations.id)).limit(limit + 1);
+  return withLocationFacilityDistances(ctx, "customer", locations);
 }

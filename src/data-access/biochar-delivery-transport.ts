@@ -9,7 +9,7 @@ import { transportEvidenceDocumentCount } from "./transport-evidence-projections
 import { requireOrgScope } from "./utils";
 
 /**
- * Project frozen application loads onto live delivery routes. These rows are
+ * Project frozen application loads onto recorded delivery distances. These rows are
  * read-model legs, identified by delivery, not persisted product transport legs.
  */
 export async function loadBiocharDeliveryTransportLegs(
@@ -42,7 +42,7 @@ export async function loadBiocharDeliveryTransportLegs(
   const locationsById = new Map(locations.map(location => [location.id, location]));
   return rows.sort((a, b) => a.delivery.id.localeCompare(b.delivery.id)).map(({ delivery, facility, orderLocationId, transportEvidenceDocumentCount }) => {
     const location = locationsById.get(orderLocationId ?? "");
-    const route = resolveDeliveryTransportRoute({ ...delivery, location: location ?? null });
+    const route = resolveDeliveryTransportRoute({ ...delivery, location: location ? { ...location, distanceKm: delivery.recordedDistanceKm, distanceSource: delivery.recordedDistanceSource } : null });
     const derived = deriveTransportLeg({
       origin: facility, destination: {
         name: route.locationName,

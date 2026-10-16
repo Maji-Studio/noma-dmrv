@@ -92,6 +92,7 @@ export interface BatchHealthCheck {
 }
 
 export interface BatchHealthAffectedRecord {
+  href?: string;
   id: string;
   code: string;
   missing: string[];

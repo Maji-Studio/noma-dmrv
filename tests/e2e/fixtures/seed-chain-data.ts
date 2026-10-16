@@ -134,9 +134,9 @@ export async function seedChainData(
         address: "123 Farm Road, Dar es Salaam",
         gpsLatitude: -6.8,
         gpsLongitude: 39.28,
-        distanceFromFacilityKm: 25,
-        distanceSource: "manual",
       });
+
+      await tx.insert(schema.customerLocationFacilityDistances).values({ organizationId: DEC_ORG_ID, locationId: customerLocationId, facilityId, distanceKm: 25, distanceSource: "manual" });
 
       // 6. Formulation
       await tx.insert(schema.formulations).values({

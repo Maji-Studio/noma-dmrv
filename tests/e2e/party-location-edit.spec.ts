@@ -48,6 +48,9 @@ async function editLocationName(
 
   const dialog = page.getByTestId(dialogTestId);
   await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("Saving fills a missing distance; never changes a recorded one.")).toBeVisible();
+  await expect(dialog.getByTestId("facility-distances")).toBeVisible();
+  expect(await dialog.getByTestId("facility-distances").getByRole("spinbutton").count()).toBeGreaterThanOrEqual(2);
   await dialog.locator('input[name="name"]').fill(updatedName);
   await dialog.getByRole("button", { name: "Save changes" }).click();
 
@@ -75,9 +78,11 @@ test("supplier and customer locations can be edited from their edit sheets", asy
   const updatedCustomerLocationName = `E2E Customer Location Updated ${runId}`;
 
   let facilityId: string | undefined;
+  let secondFacilityId: string | undefined;
   try {
     const facility = await createTestFacility();
     facilityId = facility.id;
+    secondFacilityId = (await createTestFacility()).id;
 
     await db.insert(schema.suppliers).values({
       id: supplierId,
@@ -93,8 +98,6 @@ test("supplier and customer locations can be edited from their edit sheets", asy
       country: "Tanzania",
       gpsLatitude: LOCATION_GPS_LATITUDE,
       gpsLongitude: LOCATION_GPS_LONGITUDE,
-      distanceFromFacilityKm: LOCATION_DISTANCE_KM,
-      distanceSource: LOCATION_DISTANCE_SOURCE,
       isDefault: true,
     });
     await db.insert(schema.customers).values({
@@ -112,11 +115,11 @@ test("supplier and customer locations can be edited from their edit sheets", asy
       address: "E2E application site",
       gpsLatitude: LOCATION_GPS_LATITUDE,
       gpsLongitude: LOCATION_GPS_LONGITUDE,
-      distanceFromFacilityKm: LOCATION_DISTANCE_KM,
-      distanceSource: LOCATION_DISTANCE_SOURCE,
       isDefault: true,
     });
 
+    await db.insert(schema.supplierLocationFacilityDistances).values({ organizationId: DEC_ORG_ID, locationId: supplierLocationId, facilityId, distanceKm: LOCATION_DISTANCE_KM, distanceSource: LOCATION_DISTANCE_SOURCE });
+    await db.insert(schema.customerLocationFacilityDistances).values({ organizationId: DEC_ORG_ID, locationId: customerLocationId, facilityId, distanceKm: LOCATION_DISTANCE_KM, distanceSource: LOCATION_DISTANCE_SOURCE });
     await openPartyEditSheet(
       page,
       "/suppliers",
@@ -136,7 +139,6 @@ test("supplier and customer locations can be edited from their edit sheets", asy
         name: schema.supplierLocations.name,
         gpsLatitude: schema.supplierLocations.gpsLatitude,
         gpsLongitude: schema.supplierLocations.gpsLongitude,
-        distanceSource: schema.supplierLocations.distanceSource,
       })
       .from(schema.supplierLocations)
       .where(eq(schema.supplierLocations.id, supplierLocationId));
@@ -147,9 +149,8 @@ test("supplier and customer locations can be edited from their edit sheets", asy
     expect(Number(updatedSupplierLocation?.gpsLongitude)).toBeCloseTo(
       LOCATION_GPS_LONGITUDE,
     );
-    expect(updatedSupplierLocation?.distanceSource).toBe(
-      LOCATION_DISTANCE_SOURCE,
-    );
+    const [savedSupplierDistance] = await db.select().from(schema.supplierLocationFacilityDistances).where(eq(schema.supplierLocationFacilityDistances.locationId, supplierLocationId));
+    expect(savedSupplierDistance).toMatchObject({ facilityId, distanceKm: LOCATION_DISTANCE_KM, distanceSource: LOCATION_DISTANCE_SOURCE });
 
     await openPartyEditSheet(
       page,
@@ -170,7 +171,6 @@ test("supplier and customer locations can be edited from their edit sheets", asy
         name: schema.customerLocations.name,
         gpsLatitude: schema.customerLocations.gpsLatitude,
         gpsLongitude: schema.customerLocations.gpsLongitude,
-        distanceSource: schema.customerLocations.distanceSource,
       })
       .from(schema.customerLocations)
       .where(eq(schema.customerLocations.id, customerLocationId));
@@ -181,9 +181,20 @@ test("supplier and customer locations can be edited from their edit sheets", asy
     expect(Number(updatedCustomerLocation?.gpsLongitude)).toBeCloseTo(
       LOCATION_GPS_LONGITUDE,
     );
-    expect(updatedCustomerLocation?.distanceSource).toBe(
-      LOCATION_DISTANCE_SOURCE,
-    );
+    const [savedCustomerDistance] = await db.select().from(schema.customerLocationFacilityDistances).where(eq(schema.customerLocationFacilityDistances.locationId, customerLocationId));
+    expect(savedCustomerDistance).toMatchObject({ facilityId, distanceKm: LOCATION_DISTANCE_KM, distanceSource: LOCATION_DISTANCE_SOURCE });
+
+    for (const target of [
+      { path: "suppliers", param: "supplier", id: supplierId, location: supplierLocationId, name: updatedSupplierLocationName, dialog: "supplier-location-edit-dialog" },
+      { path: "customers", param: "customer", id: customerId, location: customerLocationId, name: updatedCustomerLocationName, dialog: "customer-location-edit-dialog" },
+    ]) {
+      await page.goto(`/${target.path}?facility=${facilityId}&${target.param}=${target.id}&mode=edit&location=${target.location}`);
+      await expect(page.locator("aside").getByText(facility.name, { exact: false })).toBeVisible();
+      const dialog = page.getByTestId(target.dialog);
+      await expect(dialog).toBeVisible();
+      await expect(dialog.locator('input[name="name"]')).toHaveValue(target.name);
+      await expect(dialog.getByTestId("facility-distances")).toBeVisible();
+    }
   } finally {
     try {
       await db
@@ -196,6 +207,7 @@ test("supplier and customer locations can be edited from their edit sheets", asy
         .delete(schema.supplierLocations)
         .where(eq(schema.supplierLocations.id, supplierLocationId));
       await db.delete(schema.suppliers).where(eq(schema.suppliers.id, supplierId));
+      if (secondFacilityId) await deleteTestFacility(secondFacilityId);
       if (facilityId) {
         await deleteTestFacility(facilityId);
       }

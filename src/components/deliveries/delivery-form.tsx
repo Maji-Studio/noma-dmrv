@@ -7,6 +7,8 @@
 
 import { deliveryActionFieldIssues } from "@/lib/delivery-action-errors";
 import { Notice } from "@/components/ui/notice";
+import { deliveryAfterDistanceFill } from "@/lib/delivery-distance-refresh";
+import { useDeliveryWithRelations } from "@/hooks/use-deliveries";
 import { useDeliveryStockEdit } from "@/hooks/use-delivery-stock-edit";
 import { DeliveryStockDetails } from "./delivery-stock-details";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
@@ -69,7 +71,7 @@ interface DeliveryFormProps {
   /** Existing delivery data for editing (undefined for create mode) */
   delivery?: Delivery;
   /** Form submission handler */
-  onSubmit: (data: DeliveryFormData, onError: (error: unknown) => boolean) => Promise<void> | void;
+  onSubmit: (data: DeliveryFormData, onError: (error: unknown) => boolean, expectedVersion?: number) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -83,6 +85,8 @@ interface DeliveryFormProps {
 }
 
 export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, errorMessage, submitLabel, deferredAttachments, focusTarget }: DeliveryFormProps) {
+  const refreshedDelivery = useDeliveryWithRelations(delivery?.id ?? "");
+  const distanceRecord = delivery ? deliveryAfterDistanceFill(delivery, refreshedDelivery.data) : undefined;
   const isEditMode = !!delivery;
   const stockEdit = useDeliveryStockEdit(delivery);
   const [openedMovement, setOpenedMovement] = useState(stockEdit.movement);
@@ -152,18 +156,11 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   }) as number | null | undefined;
   const draftDistanceSource = useWatch({ control, name: "distanceSource" });
 
-  // Destination's stored distance (+ provenance) — the value the derived
-  // transport leg falls back to when this delivery has no override
-  // (data-access/transport-legs.ts, map-integration plan decision 3).
   const selectedOrder = orders.find((o) => o.id === watchOrderId);
-  const storedDistanceKm = selectedOrder?.destinationDistanceKm ?? null;
-  const storedDistanceSource = selectedOrder?.destinationDistanceSource ?? null;
+  const storedDistanceKm = distanceRecord ? distanceRecord.recordedDistanceKm ?? null : selectedOrder?.destinationDistanceKm ?? null;
+  const storedDistanceSource = distanceRecord ? distanceRecord.recordedDistanceSource ?? null : selectedOrder?.destinationDistanceSource ?? null;
 
-  // The field displays the effective distance: override beats stored. The
-  // override is persisted only when the value genuinely differs from the
-  // stored distance, so later corrections on the customer location keep
-  // propagating to deliveries that never overrode (null-override invariant,
-  // schemas/distance-source.ts header).
+  // An override changes the effective distance; clearing it restores the snapshot.
   const effectiveDistanceKm = distanceKmOverride ?? storedDistanceKm;
   const effectiveDraftDistanceSource: DistanceSourceValue | null =
     draftDistanceSource === "document"
@@ -297,7 +294,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         setError(issue.field, { type: "server", message: issue.message }, { shouldFocus: index === 0 });
       });
       return true;
-    });
+    }, distanceRecord?.version);
   });
 
   // Why the field is empty stays visible (a cue). With a distance there is no

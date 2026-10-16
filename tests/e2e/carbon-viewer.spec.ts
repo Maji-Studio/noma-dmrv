@@ -36,10 +36,10 @@ const INBOUND_DISTANCE_KM = 41.5;
 // Outbound (biochar) leg distance carried on the seeded transport_legs row. The
 // rail does NOT read this for biochar — it derives the outbound leg from the
 // delivery (mass = deliveredWetMassKg, distance = the customer-location's
-// distanceFromFacilityKm). Kept for the seeded row's own provenance.
+// facilityDistances). Kept for the seeded row's own provenance.
 const OUTBOUND_DISTANCE_KM = 12.3;
 // Distance the rail actually renders on the outbound pill: the shared seed's
-// customerLocation.distanceFromFacilityKm (see fixtures/seed-chain-data.ts).
+// customer location facility pair (see fixtures/seed-chain-data.ts).
 const OUTBOUND_RAIL_DISTANCE_KM = 25;
 
 function createDbConnection() {

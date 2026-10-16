@@ -4,10 +4,13 @@
  * read as empty, or a new location would take the default from an existing one.
  */
 
+import { NuqsTestingAdapter } from "nuqs/adapters/testing";
 import { act, create } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CustomerForm } from "./customers/customer-form";
 import { SupplierForm } from "./suppliers/supplier-form";
+
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams() }));
 
 const harness = vi.hoisted(() => ({
   query: { data: undefined as unknown[] | undefined, isLoading: false, isError: false },
@@ -49,7 +52,7 @@ describe.each([
   const render = async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     await act(async () => {
-      create(renderForm());
+      create(<NuqsTestingAdapter>{renderForm()}</NuqsTestingAdapter>);
     });
   };
 

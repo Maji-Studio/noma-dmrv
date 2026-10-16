@@ -811,7 +811,7 @@ describe("readiness matches submission refusals", () => {
     ["Feedstock FS-2 has no usable transport leg. Record a positive distance and load mass before submitting.", "feedstocks"],
     [deliveryProofBlocker({ deliveryCode: "D-0012", proofOfDeliveryCount: 0 })!, "deliveryEvidence"],
     [applicationDestinationBlocker({ applicationCode: "AP-1", customerLocationId: null })!, "orders"],
-    [deliveryDistanceBlocker({ deliveryCode: "DL-1", deliveryStatus: "delivered", distanceKmOverride: null, locationDistanceKm: null })!, "deliveryDistances"],
+    [deliveryDistanceBlocker({ deliveryCode: "DL-1", deliveryStatus: "delivered", distanceKmOverride: null, recordedDistanceKm: null })!, "deliveryDistances"],
   ] as const)("shows the lineage refusal in readiness and the checklist: %s", (reason, fixTarget) => {
     const facts = ready({ submissionLineageIssues: [{ detail: reason, fixTarget, record: { id: "delivery-1", code: "D-0012" } }] });
     expect(deriveRemovalReadiness(facts)).toMatchObject({ state: "blocked", reasons: [reason] });

@@ -120,7 +120,7 @@ export function TransportLegForm({
         : (["manual"] as const)
   ).map((value) => ({ value, label: DISTANCE_SOURCE_LABELS[value] }));
 
-  // CALC endpoints: this leg's own origin/destination pickers.
+  // This leg's recorded origin and destination coordinates.
   const originLat = useWatch({ control, name: "originGpsLatitude" }) as number | null | undefined;
   const originLng = useWatch({ control, name: "originGpsLongitude" }) as number | null | undefined;
   const destinationLat = useWatch({ control, name: "destinationGpsLatitude" }) as number | null | undefined;
@@ -130,13 +130,6 @@ export function TransportLegForm({
   const transportMethod =
     (useWatch({ control, name: "transportMethodType" }) as string | undefined) ??
     selectableTransportMethods[0];
-
-  const originPoint =
-    originLat != null && originLng != null ? { lat: originLat, lng: originLng } : null;
-  const destinationPoint =
-    destinationLat != null && destinationLng != null
-      ? { lat: destinationLat, lng: destinationLng }
-      : null;
 
   const submit = handleSubmit(async (data) => {
     await onSubmit(data as TransportLegFormData);
@@ -252,6 +245,9 @@ export function TransportLegForm({
               disabled={isSubmitting}
               // The provenance select above this field is the source UI.
               showSourceBadge={false}
+              allowEstimate={false}
+              origin={null}
+              destination={null}
               distanceKm={distanceKm}
               distanceSource={distanceSource}
               onDistanceChange={(km, source) => {
@@ -261,8 +257,6 @@ export function TransportLegForm({
                 const nextSource = nextTransportDistanceSource(source, distanceSource);
                 if (nextSource) distanceSourceField.onChange(nextSource);
               }}
-              origin={originPoint}
-              destination={destinationPoint}
               originLabel="origin position"
               destinationLabel="destination position"
             />

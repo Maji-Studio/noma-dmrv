@@ -131,6 +131,14 @@ describe("CustomerList deep-linked sheet", () => {
     };
   });
 
+  it("opens edit mode for a location repair link", async () => {
+    harness.query.mode = "edit";
+    harness.query.location = "location-one";
+    await act(async () => { renderer = create(<CustomerList />); });
+    expect(harness.sheet).toEqual({ open: true, mode: "edit" });
+    renderer?.unmount();
+  });
+
   it("shows pending location fields until the saved locations arrive", async () => {
     harness.locationsQuery.data = undefined;
     harness.locationsQuery.isPending = true;
@@ -147,7 +155,7 @@ describe("CustomerList deep-linked sheet", () => {
     harness.locationsQuery.data = [{
       name: "North field", country: "Tanzania", stateRegion: "Iringa",
       city: "Mafinga", address: "Plot 4", gpsLatitude: -8.3, gpsLongitude: 35.3,
-      distanceFromFacilityKm: 12, defaultSoilTemperatureC: 24, isDefault: true,
+      facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", facilityName: "Test facility", distanceKm: 12, distanceSource: "manual" as const }], defaultSoilTemperatureC: 24, isDefault: true,
     }];
     harness.locationsQuery.isPending = false;
     harness.locationsQuery.isFetching = false;

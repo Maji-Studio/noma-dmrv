@@ -1,3 +1,8 @@
+import { fillMissingLocationDistances } from "./location-distance-fill";
+import { lockActiveFacilityReference } from "./facility-reference-guards";
+import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
+import { upsertLocationFacilityDistances, withLocationFacilityDistances } from "./location-facility-distances";
+import type { FacilityDistanceInput } from "@/schemas/facility-distances";
 /**
  * Suppliers Data Access Layer
  * CRUD operations for suppliers with auth guards, pagination, and filtering
@@ -15,7 +20,6 @@ import {
   type SupplierLocation,
 } from "@/db/schema";
 import type { SupplierFilterData } from "@/schemas/suppliers";
-import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { formatSupplierLocationDisplay } from "@/lib/supplier-location-display";
 import { assertRowVersion, nextVersion } from "./row-version";
 import {
@@ -65,8 +69,7 @@ interface SupplierLocationCreateFields {
   gpsLatitude: number;
   gpsLongitude: number;
   address?: string | null;
-  distanceFromFacilityKm?: number | null;
-  distanceSource?: DistanceSourceValue | null;
+  facilityDistances?: FacilityDistanceInput[];
   isDefault?: boolean;
 }
 
@@ -381,7 +384,7 @@ export async function createSupplierWithLocations(
       if (location.isDefault === true) defaultIndex = index;
     });
 
-    await tx.insert(supplierLocations).values(
+    const insertedLocations = await tx.insert(supplierLocations).values(
       data.locations.map((location, index) => ({
         organizationId: ctx.organizationId,
         supplierId: supplier.id,
@@ -392,11 +395,12 @@ export async function createSupplierWithLocations(
         gpsLatitude: location.gpsLatitude,
         gpsLongitude: location.gpsLongitude,
         address: location.address ?? null,
-        distanceFromFacilityKm: location.distanceFromFacilityKm ?? null,
-        distanceSource: location.distanceSource ?? null,
         isDefault: index === defaultIndex,
       }))
-    );
+    ).returning();
+    for (const [index, location] of insertedLocations.entries()) {
+      await upsertLocationFacilityDistances(ctx, tx, "supplier", location.id, data.locations[index].facilityDistances);
+    }
 
     return supplier;
     })
@@ -583,21 +587,25 @@ export async function createSupplierLocation(
     gpsLatitude: number;
     gpsLongitude: number;
     address?: string | null;
-    distanceFromFacilityKm?: number | null;
-    distanceSource?: "map_estimate" | "manual" | "document" | null;
+    facilityDistances?: FacilityDistanceInput[];
     isDefault?: boolean;
   }
 ): Promise<SupplierLocation> {
   requireOrgScope(ctx);
   await ensureSupplierExists(ctx, data.supplierId);
 
-  return db.transaction(async (tx) => {
+  const saved = await db.transaction(async (tx) => {
+    // Match intake writers: active facilities before the supplier parent.
+    for (const row of [...(data.facilityDistances ?? [])].sort((a, b) => a.facilityId.localeCompare(b.facilityId))) {
+      if (row.distanceKm !== null) await lockActiveFacilityReference(ctx, tx, row.facilityId);
+    }
     // Serialize location writers with parent deletion before locking children.
-    // A lock alone does not change the supplier's version.
+    // Pair saves also wait for intake FK inserts, so fill-only cannot miss an
+    // intake committing with a missing distance. The lock does not bump version.
     const [parent] = await tx.select({ id: suppliers.id })
       .from(suppliers)
       .where(and(eq(suppliers.id, data.supplierId), eq(suppliers.organizationId, ctx.organizationId)))
-      .for("no key update");
+      .for(data.facilityDistances?.length ? "update" : "no key update");
     if (!parent) throw new SafeError("Supplier not found");
 
     // The supplier's first location is always its default.
@@ -638,14 +646,15 @@ export async function createSupplierLocation(
         gpsLatitude: data.gpsLatitude,
         gpsLongitude: data.gpsLongitude,
         address: data.address ?? null,
-        distanceFromFacilityKm: data.distanceFromFacilityKm ?? null,
-        distanceSource: data.distanceSource ?? null,
         isDefault: makeDefault,
       })
       .returning();
 
-    return location;
+    await upsertLocationFacilityDistances(ctx, tx, "supplier", location.id, data.facilityDistances);
+    return (await withLocationFacilityDistances(ctx, "supplier", [location], tx))[0];
   });
+  await processPendingStorageObjectDeletions(ctx);
+  return saved;
 }
 
 export async function updateSupplierLocation(
@@ -659,8 +668,7 @@ export async function updateSupplierLocation(
     gpsLatitude?: number;
     gpsLongitude?: number;
     address?: string | null;
-    distanceFromFacilityKm?: number | null;
-    distanceSource?: "map_estimate" | "manual" | "document" | null;
+    facilityDistances?: FacilityDistanceInput[];
     isDefault?: boolean;
     /** `version` the edit form loaded; refuses a save built on a stale read. */
     expectedVersion: number;
@@ -668,15 +676,30 @@ export async function updateSupplierLocation(
 ): Promise<SupplierLocation> {
   requireOrgScope(ctx);
   const { supplierId } = await ensureSupplierLocationExists(ctx, locationId);
-  const { expectedVersion, ...locationData } = data;
+  const { expectedVersion, facilityDistances, ...locationData } = data;
 
-  return db.transaction(async (tx) => {
+  const saved = await db.transaction(async (tx) => {
+    // Discover promotion pairs before taking facilities, then the supplier lock.
+    // The location version check below rejects concurrent pair edits.
+    const promotionPairs = data.isDefault === true
+      ? (await withLocationFacilityDistances(ctx, "supplier", [{ id: locationId }], tx))[0].facilityDistances
+      : [];
+    const pairsToLock = new Map<string, FacilityDistanceInput>(promotionPairs.map(row => [row.facilityId, row]));
+    for (const row of facilityDistances ?? []) {
+      if (row.distanceKm === null) pairsToLock.delete(row.facilityId);
+      else pairsToLock.set(row.facilityId, row);
+    }
+    // Match intake writers: active facilities before the supplier parent.
+    for (const row of [...pairsToLock.values()].sort((a, b) => a.facilityId.localeCompare(b.facilityId))) {
+      if (row.distanceKm !== null) await lockActiveFacilityReference(ctx, tx, row.facilityId);
+    }
     // Serialize location writers with parent deletion before locking children.
-    // A lock alone does not change the supplier's version.
+    // Pair saves also wait for intake FK inserts, so fill-only cannot miss an
+    // intake committing with a missing distance. The lock does not bump version.
     const [parent] = await tx.select({ id: suppliers.id })
       .from(suppliers)
       .where(and(eq(suppliers.id, supplierId), eq(suppliers.organizationId, ctx.organizationId)))
-      .for("no key update");
+      .for(data.facilityDistances?.length || promotionPairs.length ? "update" : "no key update");
     if (!parent) throw new SafeError("Supplier not found");
 
     const [locked] = await tx
@@ -738,8 +761,18 @@ export async function updateSupplierLocation(
       throw new SafeError("Supplier location not found");
     }
 
-    return updated;
+    const promotingDefault = data.isDefault === true && !locked.isDefault;
+    // Promotion must lock all eligible feedstocks in one ascending-id pass,
+    // matching vehicle edits, rather than filling changed pairs first.
+    await upsertLocationFacilityDistances(ctx, tx, "supplier", locationId, facilityDistances, { deferFill: promotingDefault });
+    const result = (await withLocationFacilityDistances(ctx, "supplier", [updated], tx))[0];
+    if (promotingDefault) {
+      await fillMissingLocationDistances(ctx, tx, "supplier", locationId, result.facilityDistances);
+    }
+    return result;
   });
+  await processPendingStorageObjectDeletions(ctx);
+  return saved;
 }
 
 export async function deleteSupplierLocation(

@@ -137,7 +137,6 @@ const ACTIVITY_COVERAGE = {
     deleteTransportLegsForEntity: { status: "direct" },
     syncFeedstockTransportLeg: { status: "direct" },
     syncBiocharProductTransportLegs: { status: "direct" },
-    syncBiocharLegsForCustomerLocation: { status: "direct" },
   },
 } satisfies Record<string, Record<string, Coverage>>;
 

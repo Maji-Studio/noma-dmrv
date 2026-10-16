@@ -153,7 +153,7 @@ describe("customer and supplier location patches", () => {
       isDefault: true,
     });
 
-    expect(result.distanceFromFacilityKm).toBeUndefined();
+    expect(result.facilityDistances).toBeUndefined();
     expect(result.defaultSoilTemperatureC).toBeUndefined();
     expect(result.stateRegion).toBeUndefined();
     expect(result.city).toBeUndefined();
@@ -163,21 +163,21 @@ describe("customer and supplier location patches", () => {
     expect(
       parsed(updateCustomerLocationSchema, { expectedVersion: 1,
         locationId: LOCATION_ID,
-        distanceFromFacilityKm: "",
+        facilityDistances: [{ facilityId: LOCATION_ID, distanceKm: "", distanceSource: "manual" }],
         defaultSoilTemperatureC: "",
       }),
     ).toMatchObject({
-      distanceFromFacilityKm: null,
+      facilityDistances: [{ facilityId: LOCATION_ID, distanceKm: null, distanceSource: "manual" }],
       defaultSoilTemperatureC: null,
     });
     expect(
       parsed(updateCustomerLocationSchema, { expectedVersion: 1,
         locationId: LOCATION_ID,
-        distanceFromFacilityKm: 1,
+        facilityDistances: [{ facilityId: LOCATION_ID, distanceKm: 1, distanceSource: "manual" }],
         defaultSoilTemperatureC: 0,
       }),
     ).toMatchObject({
-      distanceFromFacilityKm: 1,
+      facilityDistances: [{ facilityId: LOCATION_ID, distanceKm: 1, distanceSource: "manual" }],
       defaultSoilTemperatureC: 0,
     });
   });
@@ -185,13 +185,13 @@ describe("customer and supplier location patches", () => {
   it("applies the same contract to supplier distances", () => {
     expect(
       parsed(updateSupplierLocationSchema, { expectedVersion: 1, locationId: LOCATION_ID })
-        .distanceFromFacilityKm,
+        .facilityDistances,
     ).toBeUndefined();
     expect(
       parsed(updateSupplierLocationSchema, { expectedVersion: 1,
         locationId: LOCATION_ID,
-        distanceFromFacilityKm: "",
-      }).distanceFromFacilityKm,
+        facilityDistances: [{ facilityId: LOCATION_ID, distanceKm: "", distanceSource: "manual" }],
+      }).facilityDistances?.[0]?.distanceKm,
     ).toBeNull();
   });
 });

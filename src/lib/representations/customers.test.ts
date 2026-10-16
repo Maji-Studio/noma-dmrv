@@ -13,9 +13,9 @@ it("publishes exactly the customer lookup fields without contact or archive fiel
 
 it("publishes a destination's GPS and one-way distance without address or soil temperature", () => {
   const row = { ...base, ...hidden, customerId: id, gpsLatitude: 0, gpsLongitude: 0,
-    distanceFromFacilityKm: 20, distanceSource: "document" as const, isDefault: true };
+    facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: 20, distanceSource: "document" as const }], isDefault: true };
   expect(representCustomerLocation(row)).toEqual({ id, customerId: id, name: "Customer", version: 1,
-    gpsLatitude: 0, gpsLongitude: 0, distanceFromFacilityKm: 20, distanceSource: "document", isDefault: true, createdAt: at, updatedAt: at });
-  expect(representCustomerLocation({ ...row, distanceFromFacilityKm: null, distanceSource: null }))
-    .toMatchObject({ distanceFromFacilityKm: null, distanceSource: null });
+    gpsLatitude: 0, gpsLongitude: 0, facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: 20, distanceSource: "document" }], isDefault: true, createdAt: at, updatedAt: at });
+  expect(representCustomerLocation({ ...row, facilityDistances: [], }))
+    .toMatchObject({ facilityDistances: [], });
 });
