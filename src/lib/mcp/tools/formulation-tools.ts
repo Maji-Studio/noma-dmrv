@@ -15,7 +15,7 @@ import type { WriteTool } from "./write-tools";
 const itemOutput = z.object({ data: formulationRepresentationSchema });
 const deleteOutput = z.union([itemOutput, z.object({ deleted: z.object({ id: z.uuid(), code: z.string() }) })]);
 const guidance = `${REQUEST_KEY_RULE} ${UNTRUSTED_TEXT}`;
-const ratioGuidance = "Ratios are shares of the solid blend from 0 to 1 with at most 6 decimals; their sum must be at most 1. Use find_feedstock_types (feedstock-types:read) to select active blend-usage feedstock types for lines. Ratios are guidance, never masses.";
+const ratioGuidance = "Ratios are shares of the solid blend from 0 to 1 with at most 6 decimals; their sum must be at most 1. Use find_feedstock_types (feedstock-types:read) to select active blend-usage feedstock types for lines. A missing blend type is added in the app first. Ratios are guidance, never masses.";
 const versionGuidance = "Use find_formulations (formulations:read) for the UUID and version, then pass version as expectedVersion. Archived formulations are hidden unless archived: true.";
 const commands = ["create", "update", "delete", "archive", "restore"] as const;
 const descriptions = {

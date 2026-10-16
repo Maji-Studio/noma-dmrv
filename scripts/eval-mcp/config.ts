@@ -111,3 +111,21 @@ export const APPLICATION_CASES = [
     `Applied 1.2 t of ${deliveryCode} yesterday on 3 ha, field South, maize.` },
 ] as const;
 export type ApplicationCaseId = typeof APPLICATION_CASES[number]["id"];
+
+const FORMULATION_CREATE_BUDGET = 5;
+const FORMULATION_COMMAND_BUDGET = 4;
+const FORMULATION_CREATE_SCOPES = ["formulations:write", "feedstock-types:read"];
+const FORMULATION_COMMAND_SCOPES = ["formulations:read", "formulations:write"];
+export const FORMULATION_CASES = [
+  { id: "formulation-blend", budget: FORMULATION_CREATE_BUDGET, scopes: FORMULATION_CREATE_SCOPES,
+    text: () => "Add a formulation called Compost blend: 70% biochar and 30% compost." },
+  { id: "formulation-unknown-ingredient", budget: FORMULATION_CREATE_BUDGET, scopes: FORMULATION_CREATE_SCOPES,
+    text: () => "Add a formulation called Compost blend: 70% biochar and 30% rock dust." },
+  { id: "formulation-guarded-delete", budget: FORMULATION_COMMAND_BUDGET, scopes: ["formulations:read", "formulations:delete"],
+    text: ({ code }: { code: string }) => `Delete the formulation ${code}.` },
+  { id: "formulation-archived", budget: FORMULATION_COMMAND_BUDGET, scopes: FORMULATION_COMMAND_SCOPES,
+    text: ({ code }: { code: string }) => `Archive formulation ${code}.` },
+  { id: "formulation-restore", budget: FORMULATION_COMMAND_BUDGET, scopes: FORMULATION_COMMAND_SCOPES,
+    text: ({ code }: { code: string }) => `We use ${code} again.` },
+] as const;
+export type FormulationCaseId = typeof FORMULATION_CASES[number]["id"];

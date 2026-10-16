@@ -74,6 +74,7 @@ it("publishes solid blend guidance and strict ratio constraints without expandin
     expect(tool.description).toContain("Required unless dryRun is true");
     if (tool.name === "create_formulation" || tool.name === "update_formulation") {
       expect(tool.description).toContain("find_feedstock_types (feedstock-types:read)");
+      expect(tool.description).toContain("A missing blend type is added in the app first.");
       expect(tool.description).toContain("at most 6 decimals");
       expect(tool.input.safeParse({ ...args(tool.name), biocharRatio: 0.3333333 }).success).toBe(false);
       expect(tool.input.safeParse({ ...args(tool.name), biocharRatio: 0.8, lines: [{ feedstockTypeId: ID, ratio: 0.3 }] }).success).toBe(false);
