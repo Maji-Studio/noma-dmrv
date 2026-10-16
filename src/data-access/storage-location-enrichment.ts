@@ -271,7 +271,7 @@ export async function enrichStorageLocationRows(
           .groupBy(biocharProducts.storageLocationId),
         tx.select({ storageLocationId: deliveries.storageLocationId, appliedApplicationCount: count(),
           appliedDryMassKg: numericAggregate(sql<number>`COALESCE(SUM(COALESCE(${applications.biocharAppliedDryTons}, 0) * 1000), 0)`),
-          lastAppliedAt: sql<Date | null>`MAX(${applications.applicationDate})` })
+          lastAppliedAt: sql<Date | null>`MAX(${applications.applicationDate})`.mapWith(applications.applicationDate) })
           .from(applications).innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
           .where(and(eq(applications.organizationId, ctx.organizationId), eq(applications.status, "applied"), inArray(deliveries.storageLocationId, storageLocationIds)))
           .groupBy(deliveries.storageLocationId),

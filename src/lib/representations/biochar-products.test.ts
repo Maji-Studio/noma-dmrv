@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { formatDate } from "@/lib/format-utils";
 import { biocharProductRepresentationSchema, representBiocharProduct, type BiocharProductRepresentationInput } from "./biochar-products";
 
 const id = "df2795a4-886b-4a89-bbdd-532c6b1b8e45";
@@ -6,7 +7,7 @@ const other = "ea31ace1-5b30-4443-adb4-26b43bfa5599";
 const now = new Date("2026-10-06T12:00:00Z");
 const row: BiocharProductRepresentationInput = {
   id, code: "BP-26-0001", version: 3, facilityId: id, formulationId: id, status: "testing",
-  placedAt: now, productionDate: now, sourceBiocharStorageLocationId: id, storageLocationId: other,
+  placedAt: now, productionDate: "2026-10-06", sourceBiocharStorageLocationId: id, storageLocationId: other,
   blendMassKg: 130, biocharMoisturePercent: 4, waterAddedKg: 10, densityKgM3: null,
   ingredients: [
     { formulationIngredientId: id, feedstockTypeId: other, storageLocationId: other, wetMassKg: 30, moisturePercent: 20 },
@@ -36,6 +37,12 @@ it("keeps ingredient and allocation order, normalizes instants and passes nulls 
 
 it("is stable: the same stored facts always give the same bytes", () => {
   expect(JSON.stringify(representBiocharProduct(row))).toBe(JSON.stringify(representBiocharProduct({ ...row })));
+});
+
+it("preserves and renders the source run's calendar day without converting it to an instant", () => {
+  const data = representBiocharProduct({ ...row, productionDate: "2026-07-06" });
+  expect({ day: data.productionDate, displayed: formatDate(data.productionDate) })
+    .toEqual({ day: "2026-07-06", displayed: "Jul 6, 2026" });
 });
 
 it.each(["sourceBiocharStorageLocationId", "storageLocationId", "biocharWetMassKg", "biocharMoisturePercent", "waterAddedKg"] as const)("requires the stored %s fact", (field) => {

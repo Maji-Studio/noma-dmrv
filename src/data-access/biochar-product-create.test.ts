@@ -29,7 +29,7 @@ const data = { code: 'BP-1', facilityId: 'facility', formulationId: 'recipe', pl
 
 beforeEach(() => {
   vi.resetAllMocks();
-  const rows = [[{ id: 'facility' }], [{ id: 'recipe', biocharRatio: 1 }], [{ id: 'destination', formulationId: 'recipe' }], [{ productionRunId: 'run', wetMassKg: '100' }]];
+  const rows = [[{ id: 'facility' }], [{ id: 'recipe', biocharRatio: 1 }], [{ id: 'destination', formulationId: 'recipe' }], [{ date: '2026-09-13' }], [{ productionRunId: 'run', wetMassKg: '100' }]];
   mocks.select.mockImplementation(() => {
     const result = rows.shift();
     const query = { from: () => query, where: () => query, for: async () => result, then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve) };

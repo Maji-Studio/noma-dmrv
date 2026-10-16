@@ -8,7 +8,7 @@ import type { ChainRunRollForward } from "@/data-access/chain-of-custody-roll-fo
 import { kgToTonnes, tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { resolveChainSources } from "@/lib/chain-of-custody/sources";
 import { isMissingValueCopy, MISSING_VALUE } from "@/lib/copy-utils";
-import { formatDate } from "@/lib/format-utils";
+import { formatCalendarDate, formatDate } from "@/lib/format-utils";
 import { formatWetDryMass, splitWetMass } from "@/lib/mass-moisture";
 import dagre from "@dagrejs/dagre";
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
@@ -305,9 +305,9 @@ export function assignEdgeRouteOffsets(
   }
 }
 
-function formatDateOrNull(value: Date | string | null | undefined): string | null {
+function formatDateOrNull(value: Date | string | null | undefined, calendarDay = false): string | null {
   if (!value) return null;
-  const formatted = formatDate(value);
+  const formatted = calendarDay ? formatCalendarDate(value) : formatDate(value);
   return isMissingValueCopy(formatted) ? null : formatted;
 }
 
@@ -363,7 +363,7 @@ function buildSourceNodes(sources: ChainSourceLineage[]): LineageGraphNode[] {
       code: feedstock.code,
       href: feedstock.href,
       status: feedstock.status,
-      date: formatDateOrNull(feedstock.deliveryDate),
+      date: formatDateOrNull(feedstock.deliveryDate, true),
       details,
     });
     seenNodeIds.add(`feedstock:${feedstock.id}`);
@@ -489,7 +489,7 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
       kind: "order",
       code: "Order",
       href: data.order.href,
-      date: formatDateOrNull(data.order.orderDate),
+      date: formatDateOrNull(data.order.orderDate, true),
       details,
     });
   }
@@ -515,7 +515,7 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
         data.application.fieldIdentifier ?? "Field application",
       href: data.application.href,
       status: data.application.status,
-      date: formatDateOrNull(data.application.applicationDate),
+      date: formatDateOrNull(data.application.applicationDate, true),
       details,
     });
   }

@@ -335,7 +335,7 @@
     "id": "Unique product batch identifier",
     "code": "Human-readable product batch code",
     "facility_id": "FK to the facility that produced the product",
-    "production_date": "Date the product was finished",
+    "production_date": "Production run calendar day of the oldest biochar lot drawn",
     "status": "Product lifecycle status (in_stock, shipped, etc.)",
     "formulation_id": "FK to the formulation recipe used",
     "source_storage_location_id": "FK to the source storage location of raw biochar",

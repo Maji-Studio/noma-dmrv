@@ -95,7 +95,7 @@ export interface ChainBiocharProductLineage {
   id: string;
   code: string;
   status: string | null;
-  productionDate: Date;
+  productionDate: string;
   massKg: number | null;
   /**
    * Recorded moisture (%) of the lot's wet `massKg`. Lets the Sankey convert

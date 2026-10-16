@@ -41,7 +41,7 @@ function application(): BatchLineageApplicationFact {
       id: "product-1",
       code: "Product 1",
       status: "ready",
-      productionDate: new Date("2026-07-02T00:00:00.000Z"),
+      productionDate: "2026-07-02",
       massKg: 4_000,
       moistureContentPercent: 50,
       formulationName: null,

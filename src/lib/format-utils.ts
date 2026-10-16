@@ -15,7 +15,7 @@ import { isValid } from "date-fns/isValid";
 import { parseISO } from "date-fns/parseISO";
 import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatFacilityTime, parseLocalDateString, SHORT_MONTH_NAMES } from "@/lib/date-utils";
+import { formatFacilityTime, formatUtcDate, parseLocalDateString, SHORT_MONTH_NAMES } from "@/lib/date-utils";
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_FORMAT = "MMM d, yyyy";
@@ -73,6 +73,14 @@ export function formatDayString(day: string | null | undefined): string {
   const monthName = SHORT_MONTH_NAMES[month - 1];
   if (!monthName) return MISSING_VALUE.notAvailable;
   return `${monthName} ${dayOfMonth}, ${year}`;
+}
+
+/** Business dates still persisted as UTC-midnight timestamps, such as order and intake dates. */
+export function formatCalendarDate(value: DateValue): string {
+  if (!value) return MISSING_VALUE.notRecorded;
+  if (typeof value === "string" && DATE_ONLY_PATTERN.test(value)) return formatDayString(value);
+  const date = typeof value === "string" ? parseISO(value) : value;
+  return isValid(date) ? formatDayString(formatUtcDate(date)) : MISSING_VALUE.notAvailable;
 }
 
 /**

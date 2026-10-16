@@ -181,6 +181,12 @@ If that dry run fails, the 409 carries no `preview`; a failure the API treats as
 unexpected is logged value-free with the operation and request ids, a domain
 refusal is not. The fallback never claims an idempotency key.
 
+Biochar product representation revision 3 returns `productionDate` as the
+oldest drawn lot's production-run calendar day (`YYYY-MM-DD`, OpenAPI `date`).
+Clients must preserve it as a day instead of parsing it as an instant. `placedAt`
+remains the actual mixing and placement instant. Earlier representation ETags
+must be refreshed before PATCH.
+
 Production-run operation inputs accept offset date-time strings or facility-local
 `{ date, time }` objects. Local times resolve through the transaction's effective
 facility, including a new facility on update. Native Dates are an in-process

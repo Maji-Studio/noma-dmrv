@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Edge } from "@xyflow/react";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
@@ -81,6 +81,27 @@ function lineage(): ChainOfCustodyData {
 }
 
 describe("biochar mass labels", () => {
+  const originalTz = process.env.TZ;
+  beforeEach(() => {
+    process.env.TZ = "America/Los_Angeles";
+  });
+  afterEach(() => {
+    if (originalTz === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTz;
+  });
+
+  it("renders the product day and UTC-midnight application day without viewer timezone drift", () => {
+    const data = lineage();
+    data.biocharProduct = {
+      id: "product-1", code: "BP-1", status: "ready", productionDate: "2026-07-06",
+      massKg: 850, moistureContentPercent: 2, formulationName: null,
+      linkedProductionRunId: "run-1", href: "/biochar-products",
+    };
+    const nodes = buildLineageNodes(data);
+    expect(nodes.find(node => node.kind === "biocharProduct")?.date).toBe("Jul 6, 2026");
+    expect(nodes.find(node => node.kind === "application")?.date).toBe("May 20, 2026");
+  });
+
   it("shows wet and dry mass together on run, delivery, and application nodes", () => {
     const nodes = buildLineageNodes(lineage());
 
@@ -167,7 +188,7 @@ describe("biochar mass labels", () => {
       id: "product-1",
       code: "BP-1",
       status: "available",
-      productionDate: new Date("2026-05-18T00:00:00Z"),
+      productionDate: "2026-05-18",
       massKg: 850,
       moistureContentPercent: 2,
       formulationName: null,
@@ -238,7 +259,7 @@ describe("biochar mass labels", () => {
       id: "product-1",
       code: "BP-1",
       status: "available",
-      productionDate: new Date("2026-05-18T00:00:00Z"),
+      productionDate: "2026-05-18",
       massKg: 850,
       moistureContentPercent: 2,
       formulationName: null,
@@ -356,7 +377,7 @@ function rollForwardProduct(productId: string): ChainRollForwardProduct {
       id: productId,
       code: productId.toUpperCase(),
       status: "available",
-      productionDate: new Date("2026-05-18T00:00:00Z"),
+      productionDate: "2026-05-18",
       massKg: 600,
       moistureContentPercent: 5,
       formulationName: null,

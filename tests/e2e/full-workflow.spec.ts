@@ -241,7 +241,6 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       facilityId: ids.facility,
       formulationId: ids.formulation,
       linkedProductionRunId: ids.productionRun,
-      productionDate: new Date(),
       status: "ready",
       massKg: 150,
       moistureContentPercent: 0,

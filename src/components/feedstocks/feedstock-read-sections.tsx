@@ -1,6 +1,6 @@
 /** Feedstock delivery side-sheet view mode: the sections config for EntitySideSheet. */
 import { TRANSPORT_EVIDENCE_HINTS } from "@/components/transport-legs/transport-evidence-hints";
-import { formatDate, formatMassKg } from "@/lib/format-utils";
+import { formatCalendarDate, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { TransportEvidencePanel, TransportLegsSummary } from "@/components/transport-legs";
@@ -12,7 +12,7 @@ export function feedstockSheetSections(feedstock: FeedstockWithRelations): Detai
     {
       title: "Delivery information",
       fields: [
-        { label: "Delivery date", value: formatDate(feedstock.deliveryDate) },
+        { label: "Delivery date", value: formatCalendarDate(feedstock.deliveryDate) },
         { label: "Supplier", value: feedstock.supplierName },
       ],
     },

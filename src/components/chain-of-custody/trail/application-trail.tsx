@@ -21,7 +21,7 @@ import type {
 import { useApplicationTrail } from "@/hooks/use-chain-of-custody";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { resolveChainSources } from "@/lib/chain-of-custody/sources";
-import { formatDate, formatDateTime, formatLegDistanceKm, formatMassKg } from "@/lib/format-utils";
+import { formatCalendarDate, formatDate, formatDateTime, formatLegDistanceKm, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import { humanizeEnum } from "@/lib/copy-utils";
@@ -42,6 +42,7 @@ interface TrailStepDescriptor {
   code: string;
   status: string | null;
   date: Date | string | null;
+  calendarDay?: boolean;
   massLine: string | null;
   contextLine: string | null;
 }
@@ -50,8 +51,8 @@ function formatKg(value: number | null): string | null {
   return value == null ? null : formatMassKg(value);
 }
 
-function formatStepDate(value: Date | string | null): string {
-  return formatDate(value);
+function formatStepDate(value: Date | string | null, calendarDay = false): string {
+  return calendarDay ? formatCalendarDate(value) : formatDate(value);
 }
 
 /** Custody order, upstream to soil: feedstocks → run → lot → order → delivery → application. */
@@ -69,6 +70,7 @@ export function buildTrailSteps(chain: ChainOfCustodyData): TrailStepDescriptor[
       code: feedstock.feedstockTypeName ?? "Feedstock",
       status: feedstock.status,
       date: feedstock.deliveryDate,
+      calendarDay: true,
       massLine:
         feedstock.wetMassUsedKg == null
           ? null
@@ -122,6 +124,7 @@ export function buildTrailSteps(chain: ChainOfCustodyData): TrailStepDescriptor[
       code: "Order",
       status: null,
       date: chain.order.orderDate,
+      calendarDay: true,
       massLine: formatWetDryMass({
         wetKg: chain.order.quantityKg,
         dryKg: null,
@@ -149,6 +152,7 @@ export function buildTrailSteps(chain: ChainOfCustodyData): TrailStepDescriptor[
     code: chain.application.fieldIdentifier ?? "Field application",
     status: chain.application.status,
     date: chain.application.applicationDate,
+    calendarDay: true,
     massLine: formatWetDryMass({
       wetKg:
         chain.application.biocharAppliedTons == null
@@ -346,7 +350,7 @@ export function ApplicationTrail({ applicationId, chainData }: ApplicationTrailP
                       <ChainStatusBadge status={step.status} />
                     </div>
                     <span className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                      {formatStepDate(step.date)}
+                      {formatStepDate(step.date, step.calendarDay)}
                     </span>
                   </div>
 

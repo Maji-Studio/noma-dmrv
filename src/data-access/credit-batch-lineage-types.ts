@@ -68,7 +68,7 @@ export interface BatchLineageApplicationFact {
     id: string;
     code: string;
     status: string | null;
-    productionDate: Date;
+    productionDate: string;
     massKg: number | null;
     moistureContentPercent: number | null;
     formulationName: string | null;
@@ -94,7 +94,7 @@ export interface BatchRunForwardProductFact {
   id: string;
   code: string;
   status: string | null;
-  productionDate: Date;
+  productionDate: string;
   massKg: number;
   moistureContentPercent: number;
   formulationName: string | null;
