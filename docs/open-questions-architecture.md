@@ -217,6 +217,17 @@ these areas; the entry rules and invariants live in
   transaction, race the callback against the deadline and keep the client out
   of the pool until the callback settles; until then keep `execute` database-only.
 
+### Location distance fill runs inside the pair save (`data/location-distance-fill-cost`, opened 2026-10-16)
+
+- **Anchor:** `src/data-access/location-distance-fill.ts:fillMissingLocationDistances`.
+- A supplier pair save locks the supplier FOR UPDATE and every unfilled intake of
+  that supplier, then fills their legs in the same transaction. On a large
+  supplier this is a long transaction under the 10 s operation budget.
+- The fill stays synchronous and atomic: past the deadline the whole write fails
+  with retryable `deadline_exceeded`, never a partial fill. No batch cap.
+- **Follow-up:** measure the p99 on the Mafinga seed. If it does not fit, design a
+  durable queued continuation with changed response semantics.
+
 ### Production run row precedes delivery lineage artifacts (`data/production-run-artifact-order`, opened 2026-10-14)
 
 `updateProductionRunInTransaction` in `src/data-access/production-runs/mutations.ts`
