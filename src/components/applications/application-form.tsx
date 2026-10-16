@@ -13,7 +13,7 @@
 
 import { FACILITY_REFERENCE_TEMPERATURE_NOTICE } from "@/lib/application-guidance";
 import { nullableNumericValue, numericValue } from "@/lib/form-utils";
-import { formatLocalDate, formatUtcDate, toDateInputValue } from "@/lib/date-utils";
+import { formatUtcDate, toDateInputValue } from "@/lib/date-utils";
 import { formatDayString } from "@/lib/format-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
@@ -162,7 +162,7 @@ export function ApplicationForm({
   const defaultValues = {
     applicationDate: application?.applicationDate
       ? toDateInputValue(application.applicationDate)
-      : formatLocalDate(new Date()),
+      : resolveApplicationDateDefault(),
     deliveryId: application?.deliveryId ?? "",
     biocharAppliedKg: applicationTonsToKg(application?.biocharAppliedTons) ?? undefined,
     fieldSizeHa: application?.fieldSizeHa ?? "",
