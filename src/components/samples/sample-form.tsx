@@ -98,6 +98,8 @@ interface SampleFormProps {
   onDeferredLegsChange?: (legs: TransportLegFormData[]) => void;
   onRetryDeferredLegs?: () => Promise<void>;
   focusTarget?: EntityFocusTarget | null;
+  /** Sample shipping is recorded as an emissions entry; drop the Transport step. */
+  hideTransport?: boolean;
 }
 
 export function SampleForm({
@@ -115,6 +117,7 @@ export function SampleForm({
   onDeferredLegsChange,
   onRetryDeferredLegs,
   focusTarget,
+  hideTransport = false,
 }: SampleFormProps) {
   const formId = useId();
   const isEditMode = !!sample;
@@ -952,15 +955,17 @@ export function SampleForm({
         onRemoveAttachment={onRemoveDeferredAttachment}
         isSubmitting={isSubmitting}
       />
-      <SampleTransportSection
-        sample={sample}
-        isEditMode={isEditMode}
-        deferredLegs={deferredLegs}
-        onDeferredLegsChange={onDeferredLegsChange}
-        onRetryLegs={onRetryDeferredLegs}
-        focusTarget={focusTarget}
-        isSubmitting={isSubmitting}
-      />
+      {!hideTransport && (
+        <SampleTransportSection
+          sample={sample}
+          isEditMode={isEditMode}
+          deferredLegs={deferredLegs}
+          onDeferredLegsChange={onDeferredLegsChange}
+          onRetryLegs={onRetryDeferredLegs}
+          focusTarget={focusTarget}
+          isSubmitting={isSubmitting}
+        />
+      )}
       </FormSpine>
 
       <FormActions
