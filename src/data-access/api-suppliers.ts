@@ -19,7 +19,7 @@ export async function findApiSupplier(ctx: OrgContext, identifier: ApiLookupIden
     eq(suppliers.organizationId, ctx.organizationId),
     "id" in identifier ? eq(suppliers.id, identifier.id) : eq(suppliers.code, identifier.code),
   )).limit(1);
-  if (!row) throw new DomainError("not_found", "Supplier was not found.");
+  if (!row) throw new DomainError("not_found", "Supplier was not found.", { issues: [{ path: ["supplierId"], code: "not_found", message: "Supplier was not found." }] });
   return row;
 }
 

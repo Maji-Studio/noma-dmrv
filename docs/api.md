@@ -296,7 +296,7 @@ negative net movements. The operator message remains unchanged.
 
 Supplier and customer lists hide archived rows by default; `archived=true` lists only archived rows, cursors bind this filter, and detail reads retain archived rows.
 
-Facilities, suppliers, feedstock types, storage locations, vehicles and drivers
+Facilities, feedstock types, storage locations, vehicles and drivers
 expose read-only list and id-or-code routes through `lib/api/route.ts` and their
 resource scopes. `lib/api/*-queries.ts` validates strict query schemas and calls
 `lib/read-models/api-*.ts`, including the supplier-location list. The read models
@@ -315,8 +315,9 @@ Lists exclude archived rows where supported; detail reads return them with
 and drivers return row versions and strong version/revision ETags on detail reads.
 Vehicles and drivers have no archive column and return `archivedAt: null`.
 `GET /formulations` lists active rows by default; `archived=true` lists only archived rows, including exact code lookups, and a cursor stays bound to that choice.
-Formulation writes return the revision 2 representation, including `description`
-and `archivedAt`, through the shared runner:
+Formulation, supplier and customer writes use the shared runner and revision 2
+representations. Formulations include `description`; parties include
+`sourceRegion` or `cropType`. All three include `archivedAt`:
 
 | Method and path | Scope | Contract |
 |---|---|---|
@@ -325,9 +326,19 @@ and `archivedAt`, through the shared runner:
 | DELETE `/formulations/{id}` | `formulations:delete` | UUID and strong `If-Match`; unused targets only, including archived; bodyless 204, or 409 with reference metadata |
 | POST `/formulations/{id}/archive` | `formulations:write` | Empty object or no body; UUID and strong `If-Match`; 200 with ETag; already archived is 409 |
 | POST `/formulations/{id}/restore` | `formulations:write` | Empty object or no body; UUID and strong `If-Match`; 200 with ETag; active target is 409 |
+| POST `/suppliers` | `suppliers:write` | Required `Idempotency-Key`, including dry runs; 201 with `data` and `locations`, ETag and Location |
+| PATCH `/suppliers/{id}` | `suppliers:write` | UUID and strong `If-Match`; 200 with ETag; archived target is 404 before stale checks |
+| DELETE `/suppliers/{id}` | `suppliers:delete` | UUID and strong `If-Match`; removes unreferenced locations and pairs; bodyless 204, or 409 with blocker metadata |
+| POST `/suppliers/{id}/archive` | `suppliers:write` | Empty object or no body; UUID and strong `If-Match`; 200 with ETag; already archived is 409 |
+| POST `/suppliers/{id}/restore` | `suppliers:write` | Empty object or no body; UUID and strong `If-Match`; 200 with ETag; active target is 409 |
+| POST `/customers` | `customers:write` | Required `Idempotency-Key`, including dry runs; 201 with `data` and `locations`, ETag and Location |
+| PATCH `/customers/{id}` | `customers:write` | UUID and strong `If-Match`; 200 with ETag; archived target is 404 before stale checks |
+| DELETE `/customers/{id}` | `customers:delete` | UUID and strong `If-Match`; removes unreferenced locations and pairs; bodyless 204, or 409 with blocker metadata |
+| POST `/customers/{id}/archive` | `customers:write` | Empty object or no body; UUID and strong `If-Match`; 200 with ETag; already archived is 409 |
+| POST `/customers/{id}/restore` | `customers:write` | Empty object or no body; UUID and strong `If-Match`; 200 with ETag; active target is 409 |
 
 Every write supports `dryRun=true`, returning 200 without ETag or Location and
-committing no row, lines or Activity event. Missing If-Match answers 428; stale
+committing no parent, child, distance pair or Activity event. Missing If-Match answers 428; stale
 tags answer 412 with `current`. Optional mutation keys replay before domain
 preconditions. Unknown properties answer 422; ratios use millionth steps and
 known shares cannot total more than 1. PATCH omission keeps, null clears, and
