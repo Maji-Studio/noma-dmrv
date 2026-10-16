@@ -1,3 +1,4 @@
+import { LINE_NO_MAPPING_MESSAGE, LINE_TRANSPORT_REPLACEMENT_MESSAGE, TRANSPORT_BLUEPRINT_KEY } from "@/lib/isometric/emission-line-constants";
 import { lookupInputMapping, lookupPeriodInputTuple } from "@/lib/isometric/datapoint-mapping";
 import { getSequestrationInputBinding, hasExplicitSequestrationBinding } from "@/lib/isometric/sequestration-input-bindings";
 import { isSequestrationBlueprintFamily } from "@/lib/isometric/storage-blueprints";
@@ -6,7 +7,7 @@ import type { TemplateComponent } from "@/lib/isometric/template-observations/ty
 import { REMOVAL_TEMPLATE_BLOCKERS } from "./removal-template-blockers";
 import { templateRemovalBlocker, type RemovalBlocker } from "./removal-blockers";
 
-export const LINE_NO_MAPPING_MESSAGE = "Pick another Removal template or ask support to add the mapping.";
+export { LINE_NO_MAPPING_MESSAGE } from "@/lib/isometric/emission-line-constants";
 export type LineCoverageReason = "unmapped" | "ambiguous" | "project-scope" | "unrecognized-component" | "unassigned";
 export interface EmissionLineBindingDecision {
   state: "needsReview" | "needsSetup" | "empty";
@@ -65,9 +66,9 @@ export function emissionLineBindingDecision(args: {
   if (!contract?.automaticSource || unmappedKeys.length) {
     const entryOnly = !contract?.automaticSource && contract?.entryPolicy !== "none";
     return {
-      state: entryOnly ? "empty" : "needsSetup", reason: "unmapped", inputKeys: component.blueprintKey === "transport" ? [keys[0]] : unmappedKeys.length ? unmappedKeys : keys,
-      blocker: { code: entryOnly ? "lineHasNoSource" : "lineNeedsSetup", message: component.blueprintKey === "transport"
-        ? "Replace it with a Mass-distance-based CI emissions component in Isometric, or pick another Removal template."
+      state: entryOnly ? "empty" : "needsSetup", reason: "unmapped", inputKeys: component.blueprintKey === TRANSPORT_BLUEPRINT_KEY ? [keys[0]] : unmappedKeys.length ? unmappedKeys : keys,
+      blocker: { code: entryOnly ? "lineHasNoSource" : "lineNeedsSetup", message: component.blueprintKey === TRANSPORT_BLUEPRINT_KEY
+        ? LINE_TRANSPORT_REPLACEMENT_MESSAGE
         : LINE_NO_MAPPING_MESSAGE, fixTarget: "templateLineReview", lineRef },
     };
   }

@@ -3,12 +3,14 @@
 import { getCertifierRemovalById } from "@/data-access/certifier-removals";
 import { getCo2eStoredPreviews } from "@/data-access/credit-batch-accounting";
 import { requireOrgFacility } from "@/data-access/utils";
+import { logger } from "@/lib/log";
 import { SafeError } from "@/lib/errors";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
 import {
   compileRemovalSubmission,
+  REMOVAL_COMPILATION_FAILED_MESSAGE,
   type CompiledRemovalSubmission,
   type RemovalSubmissionReview,
 } from "./removal-submission-build";
@@ -42,7 +44,17 @@ export async function loadRemovalCompilation(
 
     const ctx = await loadRemovalSubmissionContext(orgCtx, removalId, { refreshEnrichment: true });
     const preparation = prepareRemovalSubmission(ctx);
-    const removalBlockers = await evaluateRemovalBlockers({ orgCtx, removalId, ctx });
+    let removalBlockers: RemovalBlocker[];
+    try {
+      removalBlockers = await evaluateRemovalBlockers({ orgCtx, removalId, ctx });
+    } catch (error) {
+      if (error instanceof SafeError) throw error;
+      logger.error(
+        { organizationId: orgCtx.organizationId, removalId },
+        "removal preflight build failed",
+      );
+      removalBlockers = [legacyBlocker(REMOVAL_COMPILATION_FAILED_MESSAGE)];
+    }
     const blockers = removalBlockers.map((blocker) => blocker.message);
     if (!preparation.prepared) {
       return {

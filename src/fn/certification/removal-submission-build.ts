@@ -188,6 +188,8 @@ export interface MaterializedRemovalSubmissionSnapshot {
   metadata: { supersedePreviousId: string | null };
 }
 
+export const REMOVAL_COMPILATION_FAILED_MESSAGE = "Removal submission could not be compiled from the current source data.";
+
 const DATAPOINT_POST_TARGET = "/datapoints";
 const MEASUREMENT_SAMPLE_POST_TARGET = "/measurement-samples";
 const GHG_ENTRY_POST_TARGET = "/ghg-entries";
@@ -233,7 +235,7 @@ export async function compileRemovalSubmission(
     allowPendingSources?: boolean;
   },
 ): Promise<CompiledRemovalSubmission> {
-  const unbindable = findUnbindableTemplateInputs(args.prepared.removalTemplate, { lineSources: args.prepared.lineSources, allowPeriodInputStub: args.prepared.allowPeriodInputStub });
+  const unbindable = findUnbindableTemplateInputs(args.prepared.removalTemplate, { lineSources: args.prepared.lineSources });
   if (unbindable.length > 0) {
     return {
       review: emptyReview(args.prepared.removalTemplate),
@@ -278,7 +280,7 @@ export async function compileRemovalSubmission(
       blockers: [
         error instanceof SafeError
           ? error.message
-          : "Removal submission could not be compiled from the current source data.",
+          : REMOVAL_COMPILATION_FAILED_MESSAGE,
       ],
       warnings: [...(args.ctx.submissionWarnings ?? [])],
       snapshot: null,

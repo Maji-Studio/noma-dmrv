@@ -1,3 +1,4 @@
+import { removalLineBlockerMessage } from "@/lib/certification/removal-blockers";
 import { emissionLineBindingDecision } from "@/lib/certification/emission-line-binding";
 import { type LineContract } from "../template-observations/line-sources";
 import { SafeError } from "@/lib/errors";
@@ -194,7 +195,7 @@ export function buildCreateDatapointRequest(
     const decision = emissionLineBindingDecision({ groupKey, contract: lineContract, problems: [], enrichmentComplete: true,
       component: { id: "", displayName: componentDisplayName ?? "", description: null, blueprintKey: componentBlueprintKey,
         inputs: [{ key: rtcInput.input_key, type: rtcInput.type, quantityKind: rtcInput.quantity_kind }] } });
-    if (decision) throw new SafeError(decision.blocker.message);
+    if (decision) throw new SafeError(removalLineBlockerMessage(decision.blocker));
   }
   const inputKey = rtcInput.input_key;
   const componentLabel =

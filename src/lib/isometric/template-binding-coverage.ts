@@ -1,3 +1,4 @@
+import { LINE_NO_MAPPING_MESSAGE, LINE_TRANSPORT_REPLACEMENT_MESSAGE, TRANSPORT_BLUEPRINT_KEY } from "./emission-line-constants";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { emissionLineBindingDecision, type LineCoverageReason } from "@/lib/certification/emission-line-binding";
 import type { components } from "./generated/certify";
@@ -5,7 +6,6 @@ import { ownValue } from "./semantic-binding-catalog";
 import { validateLineSources, type LineSources } from "./template-observations/line-sources";
 import { normalizeTemplateDefinition } from "./template-observations/normalize";
 
-const TRANSPORT_BLUEPRINT_KEY = "transport";
 export interface UnbindableTemplateInput {
   groupKey: string;
   componentId: string;
@@ -18,8 +18,9 @@ export interface UnbindableTemplateInput {
 
 export function findUnbindableTemplateInputs(
   template: components["schemas"]["GhgEntryTemplate"],
-  options: { allowPeriodInputStub?: boolean; lineSources?: LineSources; enrichmentComplete?: boolean } = {},
+  options: { lineSources?: LineSources; enrichmentComplete?: boolean } = {},
 ): UnbindableTemplateInput[] {
+  if (options.enrichmentComplete === false) return [];
   const definition = normalizeTemplateDefinition(template);
   const lineSources = options.lineSources ?? {};
   const problems = validateLineSources(definition, lineSources);
@@ -51,8 +52,8 @@ function formatInstruction(input: UnbindableTemplateInput, count = 1): string {
     return `Add ${target} as a project component in Isometric, then remove ${plural ? "them" : "it"} from the Removal template.`;
   }
   if (input.reason === "ambiguous") return `${REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview} Choose a different automatic source for each line.`;
-  if (input.blueprintKey === TRANSPORT_BLUEPRINT_KEY) return `Replace ${target} with a Mass-distance-based CI emissions component in Isometric, or pick another Removal template.`;
-  return "Pick another Removal template or ask support to add the mapping.";
+  if (input.blueprintKey === TRANSPORT_BLUEPRINT_KEY) return LINE_TRANSPORT_REPLACEMENT_MESSAGE.replace("Replace it", `Replace ${target}`);
+  return LINE_NO_MAPPING_MESSAGE;
 }
 
 export function formatUnbindableTemplateInputs(inputs: readonly UnbindableTemplateInput[]): { lead: string; lines: string[] } {

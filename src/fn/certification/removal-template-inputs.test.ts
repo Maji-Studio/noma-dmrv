@@ -104,11 +104,11 @@ it("refuses stored inputs whose reviewed contract has no automatic source", () =
   expect(findUnbindableTemplateInputs(template, { lineSources: sources }).map((finding) => finding.inputKey).sort()).toEqual(["carbon_content", "product_mass"]);
   expect(() => compile(template, sources)).toThrow();
 });
-it("blocks incomplete template reads through the same line decision", () => {
+it("leaves incomplete template reads to the template blocker and still refuses input resolution", () => {
   const template = structuredClone(sandbox);
   template.groups = template.groups.filter((group) => group.key === "pyrolysis");
   const lineSources = resolveLineSources({ definition: normalizeTemplateDefinition(template) });
-  expect(findUnbindableTemplateInputs(template, { lineSources, enrichmentComplete: false }).every((finding) => finding.reason === "unassigned")).toBe(true);
+  expect(findUnbindableTemplateInputs(template, { lineSources, enrichmentComplete: false })).toEqual([]);
   expect(() => resolveTemplateInputs({ template, lineSources, enrichmentComplete: false, blueprintsByKey, agg,
     externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: true, omitProductionComponents: true,
   })).toThrow(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);

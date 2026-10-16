@@ -54,6 +54,16 @@ describe("batch emission line states", () => {
     f.lineSources[id].entryPolicy = "none";
     expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state: "needsSetup", blocker: { code: "lineNeedsSetup" } });
   });
+  it.each([
+    ["filled", { kind: "value", hasEvidence: true }],
+    ["confirmedZero", { kind: "zero", total: null, hasEvidence: false }],
+    ["missingEvidence", { kind: "value", hasEvidence: false }],
+  ] as const)("keeps the entry-only source blocker when entries display as %s", (state, overrides) => {
+    const f = facts(); const id = f.definition.groups[0].components[0].id;
+    f.lineSources[id] = { scope: "operating", origin: "reviewed", entryPolicy: "additive" };
+    f.entries = [entry(f, overrides)];
+    expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state, blocker: { code: "lineHasNoSource" } });
+  });
   it("exports the agreed labels", () => {
     expect(EMISSION_LINE_STATE_LABELS).toEqual({ filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing", needsReview: "Needs review", needsSetup: "Needs setup", confirmedZero: "Recorded as zero" });
   });

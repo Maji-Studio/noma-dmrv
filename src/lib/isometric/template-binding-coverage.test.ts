@@ -10,13 +10,16 @@ import { lookupInputMapping, resolveDatapointSource } from "./datapoint-mapping"
 
 const template = sandbox as GhgEntryTemplate;
 const sourceLines = reviewedTemplateSources(template);
-function coverage(value: GhgEntryTemplate, lineSources: LineSources = reviewedTemplateSources(value), allowPeriodInputStub = false) {
-  return findUnbindableTemplateInputs(value, { lineSources, allowPeriodInputStub });
+function coverage(value: GhgEntryTemplate, lineSources: LineSources = reviewedTemplateSources(value)) {
+  return findUnbindableTemplateInputs(value, { lineSources });
 }
 
 describe("contract-based template coverage", () => {
-  it.each([true, false])("accepts the bootstrap sandbox template (stubs: %s)", (stubs) => {
-    expect(coverage(template, sourceLines, stubs)).toEqual([]);
+  it("accepts the bootstrap sandbox template", () => {
+    expect(coverage(template, sourceLines)).toEqual([]);
+  });
+  it("defers incomplete reads to the template-level blocker", () => {
+    expect(findUnbindableTemplateInputs(template, { enrichmentComplete: false })).toEqual([]);
   });
   it("blocks every unassigned line", () => {
     const findings = coverage(template, {});
@@ -59,15 +62,13 @@ describe("contract-based template coverage", () => {
     const value = realTemplate as GhgEntryTemplate;
     const sources = reviewedTemplateSources(value);
     const ids = Object.entries(sources).filter(([, contract]) => contract.scope === "operating" && !contract.automaticSource).map(([id]) => id).sort();
-    for (const stubs of [true, false]) {
-      const findings = coverage(value, sources, stubs);
-      expect([...new Set(findings.map((finding) => finding.componentId))].sort()).toEqual(ids);
-      expect(findings.every((finding) => finding.reason === "unmapped")).toBe(true);
-    }
+    const findings = coverage(value, sources);
+    expect([...new Set(findings.map((finding) => finding.componentId))].sort()).toEqual(ids);
+    expect(findings.every((finding) => finding.reason === "unmapped")).toBe(true);
   });
   it("blocks forbidden lines even in sandbox", () => {
     const first = template.groups.flatMap((group) => group.components)[0];
-    expect(coverage(template, { ...sourceLines, [first.id]: { scope: "forbidden", entryPolicy: "none", origin: "reviewed" } }, true))
+    expect(coverage(template, { ...sourceLines, [first.id]: { scope: "forbidden", entryPolicy: "none", origin: "reviewed" } }))
       .toContainEqual(expect.objectContaining({ componentId: first.id, reason: "project-scope" }));
   });
   it("reports unsupported paired transport with repair guidance", () => {

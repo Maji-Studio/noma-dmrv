@@ -57,11 +57,11 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     const values = counting.filter((entry) => entry.kind === "value");
     const automaticFigure = contract?.automaticSource ? ownValue(facts.automaticFigures, contract.automaticSource) ?? null : null;
     let state: EmissionLineState;
-    let blocker: RemovalBlocker | undefined;
+    let blocker: RemovalBlocker | undefined = decision?.blocker;
     if (decision && decision.state !== "empty") { state = decision.state; blocker = decision.blocker; }
     else if (values.some((entry) => !entry.hasEvidence)) {
       state = "missingEvidence";
-      blocker = { code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+      blocker ??= { code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     } else if (automaticFigure || values.length) state = "filled";
     else if (counting.some((entry) => entry.kind === "zero")) state = "confirmedZero";
     else { state = "empty"; blocker = decision?.blocker; }

@@ -1,8 +1,6 @@
-import { env } from "@/config/env";
 import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
 import type { OrgContext } from "@/lib/auth/server";
 import type { IsometricClient, IsometricComponentBlueprint, IsometricGhgEntryTemplate } from "@/lib/isometric";
-import { allowsPeriodInputStub } from "@/lib/isometric/datapoint-mapping";
 import { findUnbindableTemplateInputs, type UnbindableTemplateInput } from "@/lib/isometric/template-binding-coverage";
 import { enrichmentProblems, normalizeTemplateDefinition, validateLineSources, type EnrichmentProblem, type LineSourceProblem } from "@/lib/isometric/template-observations";
 import { hasExplicitSequestrationBinding } from "@/lib/isometric/transformers/sequestration-binding";
@@ -40,7 +38,7 @@ export async function loadRemovalTemplateFacts(ctx: OrgContext, input: {
     lineSourceProblems: validateLineSources(definition, lineSources),
     blueprintsForTemplate: referencedKeys.flatMap((key) => blueprintByKey.get(key) ?? []),
     unresolvedBlueprintKeys: referencedKeys.filter((key) => !blueprintByKey.has(key) && !hasExplicitSequestrationBinding(key)),
-    unbindableTemplateInputs: findUnbindableTemplateInputs(input.template, { lineSources, enrichmentComplete: !!observation && problems.length === 0, allowPeriodInputStub: allowsPeriodInputStub(env.ISOMETRIC_ENVIRONMENT) }),
+    unbindableTemplateInputs: findUnbindableTemplateInputs(input.template, { lineSources, enrichmentComplete: !!observation && problems.length === 0 }),
     requiredTransportCategories: deriveRequiredTransportCategories(input.template),
   };
 }

@@ -81,7 +81,7 @@ describe("production template binding coverage", () => {
   });
 
   it.each([false, true])("agrees with actual datapoint builds (sandbox stubs: %s)", (allowPeriodInputStub) => {
-    const findings = findUnbindableTemplateInputs(template, { allowPeriodInputStub });
+    const findings = findUnbindableTemplateInputs(template);
     for (const group of template.groups) for (const component of group.components) {
       for (const input of component.inputs) {
         if (input.type === "fixed") {

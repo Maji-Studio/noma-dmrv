@@ -9,30 +9,6 @@ import type { RemovalSubmissionContext } from "./certify-context-types";
 import { prepareRemovalSubmission, REMOVAL_PREPARATION_BLOCKERS, type RemovalPreparationBlocker } from "./removal-submission-prepare";
 import { assertEntityReadinessGapsResolved, buildRemovalSubmissionBuild } from "./removal-submission-build";
 
-/**
- * Submit's blocker precedence: prepare's template-shape blockers (not a
- * REMOVAL template, out of date, empty) win first, then the submit-only
- * tier↔template guard, then prepare's durability-availability blocker last.
- * The tier guard must never be masked by durability support being off,
- * since a tier mismatch stays actionable once durability support ships
- * while the availability message alone would not tell the operator to fix
- * it (PR #840 review thread PRRT_kwDORRVpZc6nImrB).
- */
-export function firstSubmitBlockerMessage(
-  preparationBlockers: RemovalPreparationBlocker[],
-  tierBlocker: string | null,
-): string | null {
-  const structuralBlocker = preparationBlockers.find(
-    (blocker) => blocker.code !== "durabilityUnavailable",
-  );
-  if (structuralBlocker) return structuralBlocker.message;
-  if (tierBlocker) return tierBlocker;
-  const durabilityBlocker = preparationBlockers.find(
-    (blocker) => blocker.code === "durabilityUnavailable",
-  );
-  return durabilityBlocker?.message ?? null;
-}
-
 function preparationBlocker(blocker: RemovalPreparationBlocker): RemovalBlocker {
   if (blocker.code === "noTemplate") {
     return { code: "unpinnedTemplate", message: blocker.message, fixTarget: "creditBatchTemplate" };
@@ -41,8 +17,7 @@ function preparationBlocker(blocker: RemovalPreparationBlocker): RemovalBlocker 
     const code = blocker.code as RemovalTemplateBlockerCode;
     return { ...blocker, code, fixTarget: removalTemplateBlockerDestination(code) };
   }
-  return legacyBlocker(blocker.message,
-    blocker.code === "durabilityUnavailable" ? "labSamples" : "certificationTemplates");
+  return legacyBlocker(blocker.message);
 }
 
 /** Pure over loaded facts. The prefix ends at submit's user-confirmation boundary. */
@@ -62,7 +37,7 @@ export function collectContextRemovalBlockers(
   } catch (error) {
     if (!(error instanceof SafeError)) throw error;
     const targets = new Set(ctx.entityReadinessIssues?.map((issue) => issue.fixTarget));
-    blockers.push({ code: "entityReadiness", message: error.message, fixTarget: targets.size === 1 ? [...targets][0] : "sourceData" });
+    blockers.push({ code: "entityReadiness", message: error.message, fixTarget: targets.size === 1 ? [...targets][0] : null });
   }
   const { prepared } = preparation;
   if (!prepared) {
@@ -99,8 +74,12 @@ export async function evaluateRemovalBlockers(args: {
   } catch (error) {
     if (!(error instanceof SafeError)) throw error;
     const lineage = args.ctx.submissionLineageBlockers;
-    const targets = new Set(lineage?.map((blocker) => blocker.fixTarget));
-    blockers.push(legacyBlocker(error.message, targets.size === 1 ? [...targets][0] : "sourceData"));
+    // The build joins exactly these details for its lineage refusal. Other
+    // build errors must never inherit an unrelated lineage repair target.
+    const matchingLineage = lineage?.filter((blocker) => blocker.detail === error.message);
+    const matchesAggregate = lineage?.length && error.message === `Removal submission blocked:\n${lineage.map((blocker) => blocker.detail).join("\n")}`;
+    const targets = new Set((matchesAggregate ? lineage : matchingLineage)?.map((blocker) => blocker.fixTarget));
+    blockers.push(legacyBlocker(error.message, targets.size === 1 ? [...targets][0] : null));
   }
   return blockers;
 }

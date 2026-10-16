@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { creditBatches, creditBatchProductionRuns, productionRuns, removalTemplateObservations } from "@/db/schema";
 import { observeTemplate } from "@/data-access/removal-template-observations";
-import { loadBatchEmissionLines } from "@/fn/certification/batch-emission-lines";
+import { loadBatchEmissionLines } from "@/fn/certification/batch-emission-lines-core";
 import type { GhgEntryTemplate } from "@/lib/isometric/template-observations";
 import fixture from "./fixtures/isometric/sandbox-template-2026-10-15.json";
 import { createLineageFixture, cleanupLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";

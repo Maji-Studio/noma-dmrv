@@ -17,3 +17,9 @@ export function legacyBlocker(message: string, fixTarget: BatchHealthFixTarget |
 export function templateRemovalBlocker(code: RemovalTemplateBlockerCode): RemovalBlocker {
   return { ...removalTemplateBlocker(code), fixTarget: removalTemplateBlockerDestination(code) };
 }
+
+/** Name line-specific refusals; template-wide guidance remains unchanged. */
+export function removalLineBlockerMessage(blocker: RemovalBlocker): string {
+  const namesLine = blocker.code === "lineHasNoSource" || blocker.code === "lineNeedsSetup" || blocker.code === "forbiddenLine";
+  return namesLine && blocker.lineRef ? `${blocker.lineRef.displayName}: ${blocker.message}` : blocker.message;
+}

@@ -1,3 +1,4 @@
+import { removalLineBlockerMessage } from "@/lib/certification/removal-blockers";
 import { deriveBatchEmissionLines } from "@/lib/certification/emission-lines";
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
@@ -77,7 +78,7 @@ export function resolveTemplateInputs(args: {
     for (const component of group.components) {
       const lineContract = ownValue(lineSources, component.id);
       const blocker = lineDecisions.get(component.id)?.blocker;
-      if (blocker) throw new SafeError(blocker.message);
+      if (blocker) throw new SafeError(removalLineBlockerMessage(blocker));
       const monitoredMappings = component.inputs
         .filter((input) => input.type === "monitored")
         .map((input) =>

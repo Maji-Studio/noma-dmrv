@@ -194,7 +194,7 @@ it.each([unsupportedTemplate(), production as RegistryComponents["schemas"]["Ghg
 it("blocks all entry-only lines in sandbox as well as production", () => {
   const removalTemplate = production as RegistryComponents["schemas"]["GhgEntryTemplate"];
   const result = prepareRemovalSubmission(context({ removalTemplate }), { isometricEnvironment: "sandbox" });
-  const findings = findUnbindableTemplateInputs(removalTemplate, { allowPeriodInputStub: true });
+  const findings = findUnbindableTemplateInputs(removalTemplate);
   expect(findings).toHaveLength(13);
   expect(result.prepared?.allowPeriodInputStub).toBe(true);
   expect(result.blockers).toContainEqual({ code: "templateUnbindable", message: formatUnbindableTemplateInputsText(findings) });
@@ -204,3 +204,13 @@ it("blocks all entry-only lines in sandbox as well as production", () => {
 function findUnbindableTemplateInputs(template: Parameters<typeof findCoverage>[0], options: Parameters<typeof findCoverage>[1] = {}) {
   return findCoverage(template, { lineSources: reviewedTemplateSources(template), ...options });
 }
+
+it("keeps incomplete enrichment blocked by the template refusal without per-line coverage findings", () => {
+  flags.durabilityEnabled = true;
+  const result = prepareRemovalSubmission(context({
+    removalTemplate: unsupportedTemplate(),
+    templateBlockers: [{ code: "templateNotFullyRead", message: REMOVAL_PREPARATION_BLOCKERS.templateNotFullyRead }],
+  }));
+  expect(result.prepared).toBeNull();
+  expect(result.blockers).toEqual([{ code: "templateNotFullyRead", message: REMOVAL_PREPARATION_BLOCKERS.templateNotFullyRead }]);
+});

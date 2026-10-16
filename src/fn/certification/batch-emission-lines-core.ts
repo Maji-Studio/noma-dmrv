@@ -13,6 +13,7 @@ import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-
 import { isEnrichmentComplete, validateLineSources } from "@/lib/isometric/template-observations";
 import { SafeError } from "@/lib/errors";
 
+// A PR 3 action wrapping this trusted-context read must also check the facility.
 /** Batch display facts only. A stored observation never authorizes submission. */
 export async function loadBatchEmissionLines(ctx: OrgContext, creditBatchId: string) {
   const batch = await getCreditBatchById(ctx, creditBatchId, { skipPreview: true });
@@ -31,7 +32,8 @@ export async function loadBatchEmissionLines(ctx: OrgContext, creditBatchId: str
   const feedstockIds = [...new Set(lineage.runs.flatMap((run) => run.feedstocks.map((feedstock) => feedstock.id)))];
   // Run-forward slices include shipments not yet applied, and only this batch's share.
   const deliveries = Object.values(lineage.runForwards ?? {}).flatMap((products) => products.flatMap((product) => product.deliveries));
-  if (deliveries.some((delivery) => delivery.wetMassKg == null)) throw new SafeError("A delivery is missing its load mass. Check the source records before submitting.");
+  const missingLoadMass = deliveries.find((delivery) => delivery.wetMassKg == null);
+  if (missingLoadMass) throw new SafeError(`Delivery ${missingLoadMass.code} has no load mass. Add it before submitting.`);
   const [feedstock, biochar, sample] = await Promise.all([
     getTransportLegsForEntities(ctx, "feedstock", feedstockIds),
     loadBiocharDeliveryTransportLegs(ctx, deliveries.map((delivery) => ({ deliveryId: delivery.id, loadMassKg: delivery.wetMassKg! }))),

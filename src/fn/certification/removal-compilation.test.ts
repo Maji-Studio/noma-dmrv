@@ -34,10 +34,11 @@ vi.mock("@/data-access/credit-batch-accounting", () => ({
 }));
 import { getCertifierRemovalById } from "@/data-access/certifier-removals";
 import { getCo2eStoredPreviews } from "@/data-access/credit-batch-accounting";
-import { compileRemovalSubmission } from "./removal-submission-build";
+import { compileRemovalSubmission, buildRemovalSubmissionBuild, REMOVAL_COMPILATION_FAILED_MESSAGE } from "./removal-submission-build";
 import { REMOVAL_PREPARATION_BLOCKERS } from "./removal-submission-prepare";
 import { requireOrgFacility } from "@/data-access/utils";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
+import { logger } from "@/lib/log";
 import { loadRemovalCompilation } from "./removal-compilation";
 
 describe("loadRemovalCompilation facility scope", () => {
@@ -123,6 +124,25 @@ describe("loadRemovalCompilation preparation blockers", () => {
     expect(result.data.removalBlockers.map((blocker) => blocker.code)).toEqual(expect.arrayContaining(["feedstockTypeMapping", "durabilityConfiguration"]));
     expect(result.data.blockers).toEqual(result.data.removalBlockers.map((blocker) => blocker.message));
     expect(result.data.snapshot).toBeNull();
+  });
+
+  it("keeps review available with one generic blocker after an unexpected preflight build failure", async () => {
+    vi.mocked(loadRemovalSubmissionContext).mockResolvedValue(baseContext as never);
+    vi.mocked(buildRemovalSubmissionBuild).mockRejectedValue(new Error("private source detail"));
+    // Even a rich compile with a snapshot cannot override the preflight refusal.
+    vi.mocked(compileRemovalSubmission).mockResolvedValue({ review: { template: { id: "rvt-1" } }, blockers: [], warnings: [], snapshot: { semanticPayload: {} } } as never);
+    const log = vi.spyOn(logger, "error").mockImplementation(() => {});
+    try {
+      expect(await loadRemovalCompilation(FACILITY_ID, REMOVAL_ID)).toMatchObject({
+        success: true,
+        data: {
+          blockers: [REMOVAL_COMPILATION_FAILED_MESSAGE],
+          removalBlockers: [{ code: "legacy", message: REMOVAL_COMPILATION_FAILED_MESSAGE, fixTarget: null }],
+          snapshot: null, compilationHash: null,
+        },
+      });
+      expect(log).toHaveBeenCalledExactlyOnceWith({ organizationId: ORG_CTX.organizationId, removalId: REMOVAL_ID }, "removal preflight build failed");
+    } finally { log.mockRestore(); }
   });
 
   it("lists a rich compilation blocker found after a clear preflight", async () => {

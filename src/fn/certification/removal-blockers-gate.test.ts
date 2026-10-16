@@ -9,7 +9,7 @@ import { loadRemovalSubmissionContext } from "./certify-context-core";
 import { submitRemoval } from "./submit-removal";
 import { SafeError } from "@/lib/errors";
 import { describeFeedstockTypeMappingGap } from "@/lib/certification/feedstock-type-mapping";
-import { collectContextRemovalBlockers, evaluateRemovalBlockers, firstSubmitBlockerMessage } from "./removal-blockers-gate";
+import { collectContextRemovalBlockers, evaluateRemovalBlockers } from "./removal-blockers-gate";
 import { prepareRemovalSubmission, REMOVAL_PREPARATION_BLOCKERS } from "./removal-submission-prepare";
 import { assertEntityReadinessGapsResolved, buildRemovalSubmissionBuild, removalTemplateTierCompatibilityBlocker } from "./removal-submission-build";
 import { assertSupportedDurabilityConfiguration } from "./durability-measurement-samples";
@@ -32,7 +32,15 @@ async function oldFirstMessage(ctx: ReturnType<typeof makeContext>) {
     const preparation = prepareRemovalSubmission(ctx);
     if (!preparation.prepared) throw new SafeError(preparation.blockers[0]?.message ?? REMOVAL_PREPARATION_BLOCKERS.noTemplate);
     const { prepared } = preparation;
-    const message = firstSubmitBlockerMessage(preparation.blockers, removalTemplateTierCompatibilityBlocker(ctx, prepared.removalTemplate));
+    // Frozen body of the removed firstSubmitBlockerMessage helper.
+    const tierBlocker = removalTemplateTierCompatibilityBlocker(ctx, prepared.removalTemplate);
+    const message = (() => {
+      const structuralBlocker = preparation.blockers.find((blocker) => blocker.code !== "durabilityUnavailable");
+      if (structuralBlocker) return structuralBlocker.message;
+      if (tierBlocker) return tierBlocker;
+      const durabilityBlocker = preparation.blockers.find((blocker) => blocker.code === "durabilityUnavailable");
+      return durabilityBlocker?.message ?? null;
+    })();
     if (message) throw new SafeError(message);
     if (prepared.hasDurabilityComponents) assertSupportedDurabilityConfiguration(ctx.batchesWithSamples);
     if (!ctx.memberBatches.length) throw new SafeError("This Removal has no credit batches.");
@@ -71,6 +79,49 @@ describe("Removal preflight", () => {
     }));
     expect(blockers.map(({ code }) => code)).toEqual(["feedstockTypeMapping", "entityReadiness", "durabilityTier"]);
     expect(blockers[1].fixTarget).toBe("labSamples");
+  });
+
+  it.each([undefined, [], ["labSamples", "applications"]] as const)("does not guess an entity target from %j", (targets) => {
+    const ctx = makeContext(undefined, {
+      entityReadinessGaps: ["Complete the source records."],
+      entityReadinessIssues: targets?.map((fixTarget) => ({ key: "sampleMoisture", label: "Sample moisture", fixTarget, affectedRecords: [] })),
+    });
+    expect(collectContextRemovalBlockers(ctx)[0]).toMatchObject({ code: "entityReadiness", fixTarget: null });
+  });
+
+  it.each([
+    ["noProject", { mapping: null }],
+    ["noCredentials", { hasOrgCredentials: false }],
+    ["templateOutOfDate", { unresolvedBlueprintKeys: ["retired"] }],
+    ["emptyTemplate", { removalTemplate: { ...make1000YearSequestrationTemplate(), groups: [] } }],
+  ] satisfies Array<[keyof typeof REMOVAL_PREPARATION_BLOCKERS, Partial<ReturnType<typeof makeContext>>]>)("does not guess a repair target for %s", (code, overrides) => {
+    const blockers = collectContextRemovalBlockers(makeContext(undefined, overrides));
+    expect(blockers.find((blocker) => blocker.message === REMOVAL_PREPARATION_BLOCKERS[code])?.fixTarget).toBeNull();
+  });
+
+  it("uses the template blocker destination when the preparation code has one", () => {
+    const ctx = makeContext();
+    ctx.removalTemplate!.credit_type = "REDUCTION";
+    expect(collectContextRemovalBlockers(ctx)[0]).toMatchObject({ code: "notRemovalTemplate", fixTarget: "creditBatchTemplate" });
+  });
+
+  it("uses the lineage target for the build's exact joined lineage refusal", async () => {
+    const detail = "Delivery DL-1 has no proof of delivery.";
+    const ctx = makeContext(undefined, { submissionLineageBlockers: [{ detail, fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }] });
+    expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([
+      { code: "legacy", message: `Removal submission blocked:\n${detail}`, fixTarget: "deliveryEvidence" },
+    ]);
+  });
+
+  it.each([
+    ["mass", "Removal submission blocked:\nProduction run PR-1 has no dry mass."],
+    ["window", "The Removal reporting window is inverted."],
+  ])("does not attribute a %s build error to an unrelated lineage blocker", async (_label, message) => {
+    const spy = vi.spyOn(build, "buildRemovalSubmissionBuild").mockRejectedValue(new SafeError(message));
+    try {
+      const ctx = makeContext(undefined, { submissionLineageBlockers: [{ detail: "Delivery DL-1 has no proof of delivery.", fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }] });
+      expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([{ code: "legacy", message, fixTarget: null }]);
+    } finally { spy.mockRestore(); }
   });
 
   it("does not perform submission side effects even on a successful build", async () => {

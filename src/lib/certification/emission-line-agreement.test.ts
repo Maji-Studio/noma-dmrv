@@ -8,6 +8,8 @@ import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-c
 import { resolveTemplateInputs } from "@/fn/certification/removal-template-inputs";
 import { aggregateProductionRuns, type AggregatedProductionData, type ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import type { IsometricComponentBlueprint } from "@/lib/isometric";
+import { buildCreateDatapointRequest } from "@/lib/isometric/transformers/datapoint";
+import { SafeError } from "@/lib/errors";
 import { deriveBatchEmissionLines } from "./emission-lines";
 import { buildRemovalRequirementsChecklist, deriveRemovalReadiness, type RemovalReadinessFacts } from "./readiness";
 
@@ -47,7 +49,7 @@ it.each(cases)("coverage, readiness and submission agree for %s", (name, code, r
   }
   const lines = deriveBatchEmissionLines({ definition: normalizeTemplateDefinition(template), lineSources: sources, problems: [], enrichmentComplete: true, automaticFigures: {}, entries: [] });
   const blockedIds = lines.filter((line) => line.blocker).map((line) => line.componentId);
-  const coverage = findUnbindableTemplateInputs(template, { lineSources: sources, allowPeriodInputStub: true });
+  const coverage = findUnbindableTemplateInputs(template, { lineSources: sources });
   expect([...new Set(coverage.map((finding) => finding.componentId))].sort()).toEqual(blockedIds.sort());
   expect(lines[0].blocker?.code).toBe(code);
   expect(coverage[0]?.reason).toBe(reason);
@@ -71,7 +73,20 @@ it.each(cases)("coverage, readiness and submission agree for %s", (name, code, r
   const agg = { ...aggregateProductionRuns([{ id: "run", code: "RUN", startTime: new Date("2026-10-01"), endTime: new Date("2026-10-02"), electricityKwh: 10 } as ProductionRunForCertification]), weightedOrganicCarbonPercent: null, weightedHToCorgRatio: null, weightedOToCorgRatio: null } satisfies AggregatedProductionData;
   const compile = () => resolveTemplateInputs({ template, lineSources: sources, blueprintsByKey: new Map((enrichment.blueprints as IsometricComponentBlueprint[]).map((blueprint) => [blueprint.key, blueprint])), agg,
     externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: true, omitProductionComponents: false });
-  if (code) expect(compile).toThrow(lines[0].blocker!.message);
+  if (code) {
+    const blocker = lines[0].blocker!;
+    const namesLine = code === "lineHasNoSource" || code === "lineNeedsSetup" || code === "forbiddenLine";
+    const message = namesLine ? `${component.display_name}: ${blocker.message}` : blocker.message;
+    expect(compile).toThrowError(new SafeError(message));
+    if (namesLine) {
+      const rtcInput = component.inputs.find((input) => input.type === "monitored")!;
+      expect(() => buildCreateDatapointRequest({ groupKey: group.key, componentBlueprintKey: component.blueprint_key,
+        componentDisplayName: component.display_name, lineContract: sources[component.id], rtcInput,
+        blueprintInput: { input_key: rtcInput.input_key } as IsometricComponentBlueprint["inputs"][number], agg,
+        projectId: template.project_id, supplierRefId: "line-refusal-test",
+      })).toThrowError(new SafeError(message));
+    }
+  }
   else expect(compile).not.toThrow();
 });
 
