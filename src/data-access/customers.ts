@@ -1,11 +1,10 @@
-import { upsertLocationFacilityDistances, withLocationFacilityDistances } from "./location-facility-distances";
-import type { FacilityDistanceInput } from "@/schemas/facility-distances";
+import { withLocationFacilityDistances } from "./location-facility-distances";
 /**
  * Customers Data Access Layer
  * CRUD operations for customers and customer locations with auth guards, pagination, and filtering
  */
 
-import { isNull, isNotNull, ne, and, asc, desc, eq, ilike, inArray, or, sql, SQL, count } from "drizzle-orm";
+import { isNull, isNotNull, and, asc, desc, eq, ilike, inArray, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
@@ -16,13 +15,9 @@ import {
 } from "@/db/schema";
 import type { CustomerFilterData } from "@/schemas/customers";
 import type { FacilityDistance } from "@/schemas/facility-distances";
-import { assertRowVersion, nextVersion } from "./row-version";
-
-/** Entity keys on a customer's and a customer location's version conflicts. */
-const CUSTOMER_LOCATION_CONFLICT_ENTITY = "customerLocation";
 
 /** Customer location list order; promotion on delete uses the same order. */
-const CUSTOMER_LOCATION_ORDER = [
+export const CUSTOMER_LOCATION_ORDER = [
   sql`${customerLocations.name} asc nulls last`,
   asc(customerLocations.id),
 ];
@@ -56,21 +51,11 @@ export interface CustomerLocationDetail extends CustomerLocation {
 // ============================================
 
 import { requireOrgScope } from "./utils";
-import { partyArchived } from "@/lib/party-domain-errors";
 import { SafeError } from "@/lib/errors";
-import {
-  lockBiocharTransportRouteTopology,
-} from "./transport-legs";
-import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import {
   findCustomerWithRelations,
   type CustomerDetail,
 } from "./customer-detail";
-import {
-  createCustomerLocationInTransaction,
-  type CustomerLocationInsertInput,
-} from "./customer-create";
-
 export type { CustomerDetail } from "./customer-detail";
 export type { CustomerLocationInsertInput } from "./customer-create";
 export type { CreatedCustomerWithLocations } from "./customer-writes";
@@ -296,212 +281,3 @@ export async function getCustomerLocations(
     .orderBy(...CUSTOMER_LOCATION_ORDER);
   return withLocationFacilityDistances(ctx, "customer", locations);
 }
-
-// ============================================
-// Customer Location Operations
-// ============================================
-
-/**
- * Create a new customer location on an existing customer.
- */
-export async function createCustomerLocation(
-  ctx: OrgContext,
-  data: CustomerLocationInsertInput & { customerId: string }
-): Promise<CustomerLocation> {
-  requireOrgScope(ctx);
-
-  const { customerId, ...location } = data;
-  return db.transaction((tx) =>
-    createCustomerLocationInTransaction(ctx, tx, customerId, location)
-  );
-}
-
-/**
- * Update a customer location
- */
-export async function updateCustomerLocation(
-  ctx: OrgContext,
-  locationId: string,
-  data: {
-    name?: string;
-    country?: string;
-    stateRegion?: string | null;
-    city?: string | null;
-    gpsLatitude?: number;
-    gpsLongitude?: number;
-    address?: string | null;
-    facilityDistances?: FacilityDistanceInput[];
-    defaultSoilTemperatureC?: number | null;
-    isDefault?: boolean;
-    /** `version` the edit form loaded; refuses a save built on a stale read. */
-    expectedVersion: number;
-  }
-): Promise<CustomerLocation> {
-  requireOrgScope(ctx);
-
-  const updateData: {
-    name?: string;
-    country?: string;
-    stateRegion?: string | null;
-    city?: string | null;
-    gpsLatitude?: number;
-    gpsLongitude?: number;
-    address?: string | null;
-    facilityDistances?: FacilityDistanceInput[];
-    defaultSoilTemperatureC?: number | null;
-    isDefault?: boolean;
-    updatedAt: Date;
-  } = {
-    updatedAt: new Date(),
-  };
-
-  if (data.name !== undefined) updateData.name = data.name;
-  if (data.country !== undefined) updateData.country = data.country;
-  if (data.stateRegion !== undefined) updateData.stateRegion = data.stateRegion;
-  if (data.city !== undefined) updateData.city = data.city;
-  if (data.gpsLatitude !== undefined) updateData.gpsLatitude = data.gpsLatitude;
-  if (data.gpsLongitude !== undefined) updateData.gpsLongitude = data.gpsLongitude;
-  if (data.address !== undefined) updateData.address = data.address;
-  if (data.defaultSoilTemperatureC !== undefined) updateData.defaultSoilTemperatureC = data.defaultSoilTemperatureC;
-  if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
-
-  const updated = await db.transaction(async (tx) => {
-    const routeAnchorCanChange =
-      data.name !== undefined ||
-      data.gpsLatitude !== undefined ||
-      data.gpsLongitude !== undefined ||
-      data.facilityDistances !== undefined;
-    if (routeAnchorCanChange) {
-      await lockBiocharTransportRouteTopology(ctx, tx);
-    }
-
-    // Discover the immutable parent ID without locking a child first.
-    const [location] = await tx.select({ customerId: customerLocations.customerId })
-      .from(customerLocations)
-      .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)));
-    if (!location) throw new SafeError("Customer location not found");
-
-    // Keep topology -> parent -> child order. Locking does not bump the parent version.
-    const [parent] = await tx.select({ id: customers.id, code: customers.code, archivedAt: customers.archivedAt })
-      .from(customers)
-      .where(and(eq(customers.id, location.customerId), eq(customers.organizationId, ctx.organizationId)))
-      .for("no key update");
-    if (!parent) throw new SafeError("Customer not found");
-    if (parent.archivedAt) throw partyArchived("customer", parent.code);
-
-    // Locked read after the topology lock, so the version check and the write
-    // it guards see the same row.
-    const [existing] = await tx
-      .select({
-        id: customerLocations.id,
-        customerId: customerLocations.customerId,
-        version: customerLocations.version,
-        updatedAt: customerLocations.updatedAt,
-        isDefault: customerLocations.isDefault,
-      })
-      .from(customerLocations)
-      .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)))
-      .for("update");
-
-    if (!existing) {
-      throw new SafeError("Customer location not found");
-    }
-    // The default moves only by setting another location as default.
-    if (existing.isDefault && updateData.isDefault === false) {
-      updateData.isDefault = true;
-    }
-    assertRowVersion({
-      entity: CUSTOMER_LOCATION_CONFLICT_ENTITY,
-      id: locationId,
-      expectedVersion: data.expectedVersion,
-      actualVersion: existing.version,
-    });
-
-    // Promoting this location to default demotes the customer's current default.
-    if (data.isDefault === true) {
-      await tx
-        .update(customerLocations)
-        .set({ version: nextVersion(customerLocations.version), isDefault: false, updatedAt: new Date() })
-        .where(
-          and(
-            eq(customerLocations.customerId, existing.customerId),
-            eq(customerLocations.organizationId, ctx.organizationId),
-            eq(customerLocations.isDefault, true),
-            ne(customerLocations.id, locationId)
-          )
-        );
-    }
-
-    const [updated] = await tx
-      .update(customerLocations)
-      .set({ ...updateData, version: nextVersion(customerLocations.version) })
-      .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)))
-      .returning();
-
-    await upsertLocationFacilityDistances(ctx, tx, "customer", locationId, data.facilityDistances);
-
-    return (await withLocationFacilityDistances(ctx, "customer", [updated], tx))[0];
-  });
-  await processPendingStorageObjectDeletions(ctx);
-  return updated;
-}
-
-/**
- * Delete a customer location
- */
-export async function deleteCustomerLocation(
-  ctx: OrgContext,
-  locationId: string,
-  expectedVersion: number
-): Promise<void> {
-  requireOrgScope(ctx);
-  return db.transaction(async (tx) => {
-    // Discover the immutable parent ID without locking a child first.
-    const [located] = await tx.select({ customerId: customerLocations.customerId })
-      .from(customerLocations)
-      .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)));
-    if (!located) throw new SafeError("Customer location not found");
-
-    // Keep parent -> child order. Locking does not bump the parent version.
-    const [parent] = await tx.select({ id: customers.id })
-      .from(customers)
-      .where(and(eq(customers.id, located.customerId), eq(customers.organizationId, ctx.organizationId)))
-      .for("no key update");
-    if (!parent) throw new SafeError("Customer not found");
-
-    const [versioned] = await tx.select({ version: customerLocations.version })
-      .from(customerLocations)
-      .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)))
-      .for("update");
-    if (!versioned) throw new SafeError("Customer location not found");
-    assertRowVersion({ entity: CUSTOMER_LOCATION_CONFLICT_ENTITY, id: locationId, expectedVersion, actualVersion: versioned.version });
-
-    const [gone] = await tx
-      .delete(customerLocations)
-      .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)))
-      .returning({ customerId: customerLocations.customerId, isDefault: customerLocations.isDefault });
-
-    // Deleting the default promotes the first remaining location (list order)
-    // so a customer with locations always has a default.
-    if (gone?.isDefault) {
-      const [next] = await tx
-        .select({ id: customerLocations.id })
-        .from(customerLocations)
-        .where(and(eq(customerLocations.customerId, gone.customerId), eq(customerLocations.organizationId, ctx.organizationId)))
-        .orderBy(...CUSTOMER_LOCATION_ORDER)
-        .limit(1)
-        .for("update");
-      if (next) {
-        await tx
-          .update(customerLocations)
-          .set({ version: nextVersion(customerLocations.version), isDefault: true, updatedAt: new Date() })
-          .where(and(eq(customerLocations.id, next.id), eq(customerLocations.organizationId, ctx.organizationId)));
-      }
-    }
-
-  });
-}
-
-// ============================================
-// Utility Operations
-// ============================================

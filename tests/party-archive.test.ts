@@ -18,7 +18,8 @@ import { createPartyArchiveFixture, cleanupPartyArchiveFixture, partyIntakeInput
 import { getSuppliers, getSupplierById, getSupplierLocationsBySupplier } from "@/data-access/suppliers";
 import { createSupplierLocation, updateSupplierLocation, deleteSupplierLocation } from "./helpers/supplier-location-operations";
 import { createSupplierLocationInTransaction } from "@/data-access/supplier-writes";
-import { getCustomers, getCustomerWithRelations, getCustomerLocations, createCustomerLocation, updateCustomerLocation, deleteCustomerLocation } from "@/data-access/customers";
+import { getCustomers, getCustomerWithRelations, getCustomerLocations } from "@/data-access/customers";
+import { createCustomerLocation, updateCustomerLocation, deleteCustomerLocation } from "./helpers/customer-location-operations";
 import { getEntities, getEntityById } from "@/data-access/entities";
 import { supplierFilterSchema } from "@/schemas/suppliers";
 import { customerFilterSchema } from "@/schemas/customers";
@@ -265,9 +266,9 @@ describe("archived party locations and reads", { timeout: TIMEOUT_MS }, () => {
       await expect(updateCustomerLocation(f.ctx, f.location.id, { expectedVersion: f.location.version, isDefault: true, facilityDistances })).rejects.toMatchObject(issue("not_found", "customer"));
     }
     await expect(deleteSupplierLocation(f.ctx, source.id, source.version)).rejects.toMatchObject(issue("not_found", "supplier"));
-    await deleteCustomerLocation(f.ctx, f.location.id, f.location.version);
+    await expect(deleteCustomerLocation(f.ctx, f.location.id, f.location.version)).rejects.toMatchObject(issue("not_found", "customer"));
     expect(await getSupplierLocationsBySupplier(f.ctx, supplier.id)).toEqual([source]);
-    expect(await getCustomerLocations(f.ctx, f.customer.id)).toEqual([]);
+    expect(await getCustomerLocations(f.ctx, f.customer.id)).toMatchObject([{ id: f.location.id }]);
     expect(await getSupplierById(f.ctx, supplier.id)).toMatchObject({ version: 2, archivedAt: expect.any(Date) });
     expect(await getCustomerWithRelations(f.ctx, f.customer.id)).toMatchObject({ version: 2, archivedAt: expect.any(Date) });
   });

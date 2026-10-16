@@ -19,7 +19,7 @@ import { archiveFacility, restoreFacility } from "@/data-access/facilities";
 import { updateReactor, deleteReactor } from "@/data-access/reactors";
 import { updateStorageLocation, archiveStorageLocation, restoreStorageLocation, deleteStorageLocation } from "@/data-access/storage-locations";
 import { createSupplierLocation, updateSupplierLocation, deleteSupplierLocation } from "./helpers/supplier-location-operations";
-import { createCustomerLocation, updateCustomerLocation, deleteCustomerLocation } from "@/data-access/customers";
+import { createCustomerLocation, updateCustomerLocation, deleteCustomerLocation } from "./helpers/customer-location-operations";
 import { updateFormulationInTransaction, deleteFormulationInTransaction } from "@/data-access/formulation-writes";
 import { updateFeedstockType, archiveFeedstockType, unarchiveFeedstockType, deleteFeedstockType } from "@/data-access/feedstock-types";
 import { TEST_SITE_POSITION, makeTestOrgContext } from "./helpers/test-org";

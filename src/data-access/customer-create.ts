@@ -6,6 +6,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { FacilityDistanceInput } from "@/schemas/facility-distances";
 import { partyArchived, partyNotFound } from "@/lib/party-domain-errors";
 import { upsertLocationFacilityDistances, withLocationFacilityDistances } from "./location-facility-distances";
+import { lockLocationFacilities } from "./party-reference-guards";
 import { nextVersion } from "./row-version";
 import { requireOrgScope } from "./utils";
 
@@ -36,6 +37,7 @@ export async function createCustomerLocationInTransaction(
 ): Promise<CustomerLocation> {
   requireOrgScope(ctx);
 
+  await lockLocationFacilities(ctx, tx, data.facilityDistances, []);
   const [customer] = await tx
     .select({ id: customers.id, code: customers.code, archivedAt: customers.archivedAt })
     .from(customers)

@@ -6,6 +6,7 @@
  */
 
 import { createCustomer, updateCustomer, deleteCustomer, archiveCustomer, restoreCustomer } from "@/lib/operations/customers";
+import { addCustomerLocation, updateCustomerLocation, deleteCustomerLocation } from "@/lib/operations/customer-locations";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { z } from "zod";
 import { type Customer, type CustomerLocation } from "@/db/schema";
@@ -13,9 +14,6 @@ import {
   getCustomers as getCustomersData,
   getCustomerWithRelations as getCustomerWithRelationsData,
   getCustomerLocations as getCustomerLocationsData,
-  createCustomerLocation,
-  updateCustomerLocation,
-  deleteCustomerLocation,
   type PaginatedCustomers,
   type CustomerDetail,
   type CreatedCustomerWithLocations,
@@ -212,7 +210,7 @@ export async function createCustomerLocationFn(
   return withAction(async (ctx) => {
     const validated = createCustomerLocationSchema.parse(data);
 
-    const location = await createCustomerLocation(ctx, {
+    const location = await runOperationInProcess(addCustomerLocation, ctx, {
       customerId: validated.customerId,
       name: validated.name,
       country: validated.country,
@@ -244,7 +242,8 @@ export async function updateCustomerLocationFn(
 
     const validated = updateCustomerLocationSchema.parse(data);
 
-    const location = await updateCustomerLocation(ctx, validated.locationId, {
+    const location = await runOperationInProcess(updateCustomerLocation, ctx, {
+      locationId: validated.locationId,
       expectedVersion: validated.expectedVersion,
       name: validated.name,
       country: validated.country,
@@ -276,7 +275,7 @@ export async function deleteCustomerLocationFn(
   return withAction(async (ctx) => {
 
     const validated = deleteCustomerLocationSchema.parse(data);
-    await deleteCustomerLocation(ctx, validated.locationId, validated.expectedVersion);
+    await runOperationInProcess(deleteCustomerLocation, ctx, validated);
 
     return undefined;
   }, { fallbackMessage: "Failed to delete customer location", log: { message: LOG_MESSAGE, context: { op: "customer-location:delete" } } });
