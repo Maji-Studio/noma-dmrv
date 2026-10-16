@@ -6,7 +6,7 @@ Guidance for Claude Code. **These instructions OVERRIDE default behavior — fol
 
 - ❌ **NEVER use npm or yarn** — always `pnpm`.
 - ❌ **NEVER skip org scoping without an explicit waiver** — every normal `data-access/` function takes `ctx: OrgContext` first, calls `requireOrgScope(ctx)` (`src/data-access/utils.ts`), and filters on `organizationId`. Filtering only on `facilityId` is a cross-tenant leak. Deliberate public or privileged seams use `// org-scope-ok:`; do not "fix" them. (`requireAuth` is a *route* guard in `src/lib/auth/server.ts` — not this layer.)
-- ❌ **NEVER let a file exceed 1000 lines** — split into modular files.
+- ❌ **Source files are capped at 1000 lines by ESLint `max-lines`**; exemptions are listed in `docs/code-style.md`.
 - ❌ **NEVER hard-code magic numbers** — constants at top of file or in `@/config`; use design tokens, never hardcoded values.
 - ❌ **NEVER commit `.env` files, secrets, API keys, or credentials** — not even in docs or tests.
 - ❌ **NEVER log PII (emails, names)** — log IDs (`userId`, `removalId`); the server logger redacts as a backstop, not a license.
@@ -37,7 +37,7 @@ Never skip layers: UI → `hooks/` → `fn/` → `data-access/` → `db/`, plus 
 
 ## Review Remediation (CodeRabbit / Claude review / audits)
 
-For every finding: **verify it against the actual code first**, fix only valid ones with minimal changes, skip invalid ones with a one-line written reason (false positives are common, including bogus P0s). Validate with `pnpm lint` + `pnpm typecheck` + tests before committing. Never blanket-apply a findings list.
+For every finding: **verify it against the actual code first**, fix only valid ones with minimal changes, skip invalid ones with a one-line written reason (false positives are common, including bogus P0s). Validate with `pnpm verify:static` + tests before committing. Never blanket-apply a findings list.
 
 ## Model Selection
 
