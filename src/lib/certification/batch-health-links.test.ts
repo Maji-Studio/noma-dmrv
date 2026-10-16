@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { batchHealthFixLinkFor } from "./batch-health-links";
+import { batchHealthFixLinkFor, fallbackBatchHealthFixTarget } from "./batch-health-links";
 
 const records = [
   { id: "one", code: "DL-1", missing: ["distance"], href: "/customers?location=one" },
@@ -21,4 +21,11 @@ it("keeps evidence and merged-delivery links even when a record has a location h
 });
 it("does not label generic hrefs as location repairs", () => {
   expect(batchHealthFixLinkFor({ key: "carbon", affectedRecords: records }, "facility").label).toBe("Fix 2 Samples");
+});
+
+it("keeps emissions evidence separate from emission estimates and opens the batch sheet", () => {
+  expect(fallbackBatchHealthFixTarget("emissions")).toBe("emissions");
+  expect(batchHealthFixLinkFor({ key: "emissions" }, "facility-1", "batch-1")).toEqual({
+    label: "Review emissions", href: "/credit-batches?facility=facility-1&batch=batch-1",
+  });
 });

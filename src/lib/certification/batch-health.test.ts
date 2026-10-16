@@ -13,6 +13,7 @@ import { removalTemplateBlocker } from "./removal-template-blockers";
 // A fully-healthy batch: no missing carbon inputs, production linked, facility
 // set up, and every required transport category present.
 const HEALTHY: BatchHealthFacts = {
+  emissionLines: [],
   carbonMissingInputs: [],
   facilityEmissionsBlockers: [],
   feedstockTypeMappingGaps: [],
@@ -65,6 +66,7 @@ describe("deriveBatchHealth", () => {
     expect(result.state).toBe("ready");
     expect(result.issueCount).toBe(0);
     expect(result.checks.map((c) => c.status)).toEqual([
+      "met",
       "met",
       "met",
       "met",
@@ -369,4 +371,26 @@ describe("deriveBatchHealth", () => {
       "Missing: At least 3 usable 1000-year Samples",
     );
   });
+});
+
+it("only evidence gaps fail emissions; line review and setup gaps stay in Removal readiness", () => {
+  const line = { componentId: "line", displayName: "Line", groupKey: "pyrolysis", blueprintKey: "grid_electricity_use",
+    contract: { scope: "operating" as const, entryPolicy: "additive" as const, origin: "reviewed" as const },
+    automaticFigure: null, entries: [], total: null };
+  const missingEvidence = { ...line, state: "missingEvidence" as const,
+    blocker: { code: "entryMissingEvidence" as const, message: "Add a file for each emissions entry with a value.", fixTarget: "emissions" as const } };
+  const health = deriveBatchHealth(facts({ emissionLines: [missingEvidence] }));
+  expect(health.issueCount).toBe(1);
+  expect(health.checks.find((check) => check.key === "emissions")).toMatchObject({ status: "unmet", fixTarget: "emissions" });
+  expect(health.checks.some((check) => check.key === "template")).toBe(false);
+  for (const state of ["needsReview", "needsSetup", "empty"] as const) {
+    const result = deriveBatchHealth(facts({ emissionLines: [{ ...line, state,
+      blocker: { code: "lineHasNoSource", message: "Review the line.", fixTarget: "templateLineReview" } }] }));
+    // Template-level blockers arrive as templateBlockers; a line blocker alone
+    // never makes the batch incomplete (batch-health.ts header).
+    expect(result.issueCount).toBe(0);
+    expect(result.checks.find((check) => check.key === "emissions")?.status).toBe("met");
+    expect(result.checks.some((check) => check.key === "template")).toBe(false);
+  }
+  expect(deriveBatchHealth(facts({ emissionLines: null })).checks.some((check) => check.key === "emissions")).toBe(false);
 });
