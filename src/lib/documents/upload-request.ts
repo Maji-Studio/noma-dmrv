@@ -1,7 +1,7 @@
 import type { ApiContext } from "@/lib/auth/api-context";
 import { canonicalUuid } from "@/lib/api/canonical-uuid";
 import { lookupIdentifier } from "@/lib/api/lookup-query";
-import { remainingDeadlineMs } from "@/lib/api/feedstock-write-checks";
+import { remainingDeadlineMs } from "@/lib/api/write-checks";
 import { resolveApiDocumentOwner } from "@/lib/read-models/api-documents";
 import { requestDocumentUpload } from "@/lib/operations/document-uploads";
 import { runOperation, type RunOptions } from "@/lib/operations/runner";

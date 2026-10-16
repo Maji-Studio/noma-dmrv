@@ -6,7 +6,7 @@ import { orderRepresentationSchema } from "@/lib/representations/orders";
 import { recordOrderInput, updateOrderApiInput } from "@/schemas/order-input";
 import { canonicalUuid } from "./canonical-uuid";
 import { parseIfMatch } from "./etag";
-import { remainingDeadlineMs } from "./feedstock-write-checks";
+import { remainingDeadlineMs } from "./write-checks";
 import {
   orderBody, representationCheckedDelete, representationCheckedRecord, representationCheckedUpdate, withCurrentOnStale,
 } from "./order-write-checks";

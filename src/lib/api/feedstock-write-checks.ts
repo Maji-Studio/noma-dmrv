@@ -3,17 +3,11 @@ import type { ApiContext } from "@/lib/auth/api-context";
 import { logFeedstockDelivery, updateFeedstock, deleteFeedstock } from "@/lib/operations/feedstocks";
 import type { feedstockCreateEnvelopeSchema } from "@/lib/representations/envelopes";
 import { representFeedstock } from "@/lib/representations/feedstocks";
-import { ApiHttpError } from "./http-error";
+import { withCurrentOnStale as withCurrentOnStaleRepresentation } from "./write-checks";
 import { API_FEEDSTOCK_MAX_ALLOCATIONS, FEEDSTOCK_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { readApiFeedstock } from "@/lib/read-models/api-feedstocks";
-import { deadlineExceeded, DomainError } from "@/lib/domain-errors";
+import { DomainError } from "@/lib/domain-errors";
 import type { Operation, OperationResult, OperationScope } from "@/lib/operations/runner";
-
-export function remainingDeadlineMs(deadlineAt: number): number {
-  const remaining = deadlineAt - Date.now();
-  if (remaining <= 0) throw deadlineExceeded("before starting");
-  return remaining;
-}
 
 export function checkFeedstockAllocations(body: unknown) {
   if (body && typeof body === "object" && "allocations" in body &&
@@ -57,15 +51,7 @@ export function representationCheckedDelete(id: string, revision: number): Opera
 }
 
 export async function withCurrentOnStale<T>(ctx: ApiContext, id: string, fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (error) {
-    if (error instanceof DomainError && error.code === "stale_version") {
-      const current = await readApiFeedstock(ctx, { id });
-      throw new ApiHttpError(412, "stale_version", "The feedstock has changed. Read the current representation before retrying.", current);
-    }
-    throw error;
-  }
+  return withCurrentOnStaleRepresentation(fn, { noun: "feedstock", readCurrent: () => readApiFeedstock(ctx, { id }) });
 }
 
 export function feedstockCreateBody(result: OperationResult<Awaited<ReturnType<typeof logFeedstockDelivery.execute>>>, dryRun: boolean) {

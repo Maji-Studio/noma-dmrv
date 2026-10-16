@@ -9,7 +9,7 @@ import { readApiDelivery } from "@/lib/read-models/api-deliveries";
 import { deliveryRepresentationSchema, type DeliveryRepresentation } from "@/lib/representations/deliveries";
 import { deliveryAllocationSchema } from "@/lib/representations/delivery-writes";
 import { recordDeliveryInput } from "@/schemas/delivery-input";
-import { ApiHttpError } from "./http-error";
+import { withCurrentOnStale as withCurrentOnStaleRepresentation } from "./write-checks";
 
 type RecordedDelivery = Awaited<ReturnType<typeof recordDelivery.execute>>;
 interface DeliveryWriteOutput { delivery: DeliveryRepresentation; warnings: string[] }
@@ -46,13 +46,7 @@ export function representationCheckedUpdate(id: string, revision: number): Opera
 }
 
 export async function withCurrentOnStale<T>(ctx: ApiContext, id: string, fn: () => Promise<T>): Promise<T> {
-  try { return await fn(); } catch (error) {
-    if (error instanceof DomainError && error.code === "stale_version") {
-      const current = await readApiDelivery(ctx, { id });
-      throw new ApiHttpError(412, "stale_version", "The delivery has changed. Read the current representation before retrying.", current);
-    }
-    throw error;
-  }
+  return withCurrentOnStaleRepresentation(fn, { noun: "delivery", readCurrent: () => readApiDelivery(ctx, { id }) });
 }
 
 export function deliveryBody(output: DeliveryWriteOutput) {

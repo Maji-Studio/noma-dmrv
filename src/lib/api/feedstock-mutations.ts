@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { checkFeedstockAllocations, feedstockCreateBody, remainingDeadlineMs, representationCheckedUpdate, representationCheckedDelete, withCurrentOnStale } from "./feedstock-write-checks";
+import { checkFeedstockAllocations, feedstockCreateBody, representationCheckedUpdate, representationCheckedDelete, withCurrentOnStale } from "./feedstock-write-checks";
+import { remainingDeadlineMs } from "./write-checks";
 import { DomainError } from "@/lib/domain-errors";
 import { logFeedstockDelivery, updateFeedstock } from "@/lib/operations/feedstocks";
 import { runOperation } from "@/lib/operations/runner";

@@ -5,7 +5,7 @@ import { ApiHttpError } from "@/lib/api/http-error";
 import { IDEMPOTENCY_KEY_PATTERN } from "@/lib/api/request-body";
 import { representationEtag } from "@/lib/api/etag";
 import { rejectUnknownFields } from "@/lib/api/unknown-fields";
-import { remainingDeadlineMs } from "@/lib/api/feedstock-write-checks";
+import { remainingDeadlineMs } from "@/lib/api/write-checks";
 import { validationFailed } from "@/lib/operations/errors";
 import type { JsonSchema } from "@/lib/operations/json-schema";
 import { REQUEST_KEY_RULE } from "@/lib/operations/agent-guidance";
