@@ -954,6 +954,11 @@ revision 2 reads, scoped evals, fuzz fixtures and master-data documentation.
    Dry-run examples cover all party writes, distance bounds, 5e-324 and 50/51 locations;
    eight party mutation ids join the 428 list. The master-data guide moves to
    `docs/api-master-data.md`, linked from the API guide.
+6. App (`cf91d2ffe`, `40dc17714`): Archived toggle, archive and restore on both
+   lists, "Archive instead" on in-use delete refusals, read-only archived sheets,
+   archived kept selections in pickers, and an order destination locked under an
+   archived customer (also while the customer loads). Every in-use delete refusal
+   is built from `IN_USE_DELETE_MARKER` (`src/lib/delete-refusal.ts`).
 
 **Decisions made during implementation:**
 
@@ -975,7 +980,9 @@ revision 2 reads, scoped evals, fuzz fixtures and master-data documentation.
 docs references and eval unit tests passed. OpenAPI generation left the snapshot
 unchanged. Offline hooks tests use CI's pinned Schemathesis 4.29.3 environment.
 
-Evals and fuzz: <results recorded by the supervisor>
+Evals and fuzz (merged tree, staging `907c1d93c`): `pnpm eval:mcp` 27/27 after two
+scorer false fails were fixed in `012633b82`; local Schemathesis 9,727 cases, 0
+failures; related DB suites 264 files, 3,426 tests.
 
 Customer-stale-version is skipped: `runClaude` has no deterministic hook between
 an agent's read and write. Add that seam before enabling the case; no timer race
