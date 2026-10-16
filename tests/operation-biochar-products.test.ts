@@ -10,7 +10,7 @@ import { feedstockFixtureValues } from "./helpers/feedstock-fixture";
  */
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -33,13 +33,6 @@ import { openOperationBarrier, waitForBlockedOperations } from "./helpers/operat
 import { createTestPool } from "./helpers/operation-fixture";
 import { cleanupOutputStockFixture } from "./helpers/output-stock-cleanup";
 import { seedOutputStockParents } from "./helpers/output-stock-fixture";
-
-// The collision test holds a row lock across two writers; the pooled default (1 s) would abort them.
-const poolEnv = vi.hoisted(() => {
-  const original = process.env.DB_POOL_LOCK_TIMEOUT_MS;
-  process.env.DB_POOL_LOCK_TIMEOUT_MS = "5000";
-  return original;
-});
 
 type Fixture = Awaited<ReturnType<typeof seedOutputStockParents>>;
 type Created = Awaited<ReturnType<typeof makeBiocharProduct.execute>>;
@@ -82,8 +75,6 @@ afterEach(async () => {
 });
 afterAll(async () => {
   await barrierPool.end();
-  if (poolEnv === undefined) delete process.env.DB_POOL_LOCK_TIMEOUT_MS;
-  else process.env.DB_POOL_LOCK_TIMEOUT_MS = poolEnv;
 });
 
 /** Parents, a Pure product bin, and a blend ingredient bin holding 100 kg wet at 20%. */

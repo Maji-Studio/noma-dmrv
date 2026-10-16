@@ -5,10 +5,7 @@
  * queue wins, and the second sees its result under the batch lock. Writers
  * run on their own pool so two of them can wait at once.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-vi.hoisted(() => {
-  process.env.DB_POOL_LOCK_TIMEOUT_MS = "5000";
-});
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import type { Pool } from "pg";
 import { db } from "@/db";

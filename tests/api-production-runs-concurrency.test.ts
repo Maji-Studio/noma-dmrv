@@ -19,9 +19,8 @@ import {
 } from "./helpers/api-production-run-fixture";
 
 const poolEnv = vi.hoisted(() => {
-  const original = { max: process.env.DB_POOL_MAX, lockTimeout: process.env.DB_POOL_LOCK_TIMEOUT_MS };
+  const original = process.env.DB_POOL_MAX;
   process.env.DB_POOL_MAX = "4";
-  process.env.DB_POOL_LOCK_TIMEOUT_MS = "5000";
   return original;
 });
 const TIMEOUT_MS = 30_000;
@@ -39,10 +38,8 @@ beforeEach(async () => { fixture = await createApiProductionRunFixture("run-race
 afterEach(async () => { vi.restoreAllMocks(); await removeApiFeedstockFixture(fixture); });
 afterAll(async () => {
   await barrierPool.end();
-  if (poolEnv.max === undefined) delete process.env.DB_POOL_MAX;
-  else process.env.DB_POOL_MAX = poolEnv.max;
-  if (poolEnv.lockTimeout === undefined) delete process.env.DB_POOL_LOCK_TIMEOUT_MS;
-  else process.env.DB_POOL_LOCK_TIMEOUT_MS = poolEnv.lockTimeout;
+  if (poolEnv === undefined) delete process.env.DB_POOL_MAX;
+  else process.env.DB_POOL_MAX = poolEnv;
 });
 
 /** Start both writers while a separate transaction holds their shared bin. */

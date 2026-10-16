@@ -8,6 +8,9 @@ import {
   resolveTestDatabaseUrl,
 } from "./helpers/throwaway-database";
 
+// Barrier tests hold a lock across writers; the app default (1 s) aborts them.
+const TEST_LOCK_TIMEOUT_MS = "5000";
+
 // Load environment variables for testing
 config({ path: ".env.test" });
 
@@ -54,6 +57,7 @@ if (underVitest) {
   // URLs checked against this origin; a worktree's .env.test moves it to the
   // worktree's dev port for Playwright.
   process.env.NEXT_PUBLIC_APP_URL = testEnvDefaults.NEXT_PUBLIC_APP_URL;
+  process.env.DB_POOL_LOCK_TIMEOUT_MS = TEST_LOCK_TIMEOUT_MS;
   // Last, so it judges the URL every suite will actually connect to.
   assertThrowawayTestDatabase(process.env.DATABASE_URL!);
 }
