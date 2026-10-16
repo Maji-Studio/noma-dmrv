@@ -36,7 +36,6 @@ import { ChainStatusBadge } from "@/components/chain-of-custody/chain-status-bad
 
 const TAG_CLASS = "inline-flex h-[20px] shrink-0 items-center border px-6 body-caption-fit font-medium";
 const RECORD_ICON_PX = 18;
-/** The row turns to three columns once its own box (not the viewport) is 34rem wide. Class names are literal so Tailwind sees them. */
 const TOMBSTONE_TAG_CLASS = `${TAG_CLASS} border-dashed border-[var(--color-border-primary)] text-[var(--color-text-secondary)]`;
 const CHANGE_ARROW_PX = 12;
 type ChangeSide = "from" | "to";
@@ -127,7 +126,8 @@ function EntryBody({ item, showDate, hideMeta }: { item: ActivityItem; showDate:
         <span className="flex min-w-0 flex-wrap items-center gap-x-8 gap-y-4">
           <span className="min-w-0 body-small text-[var(--color-text-primary)]">
             <span className="font-medium group-hover:underline">{label ? `${typeLabel} ${label}` : typeLabel}</span>
-            <span className="ml-6 text-[var(--color-text-secondary)]">{ACTIVITY_KIND_LABELS[item.action].toLowerCase()}</span>
+            {" "}
+            <span className="text-[var(--color-text-secondary)]">{ACTIVITY_KIND_LABELS[item.action].toLowerCase()}</span>
           </span>
           {deleted ? (
             <span className={TOMBSTONE_TAG_CLASS} data-testid="activity-tombstone">{ACTIVITY_DELETED_RECORD_LABEL}</span>
@@ -146,24 +146,36 @@ function EntryBody({ item, showDate, hideMeta }: { item: ActivityItem; showDate:
           </>
         ) : null}
       </span>
-      {hideMeta ? null : <span
-        className={cn(
-          "col-start-2 flex flex-wrap items-baseline gap-x-8 body-caption text-[var(--color-text-tertiary)]",
-          "@min-[34rem]:col-start-3 @min-[34rem]:row-span-2 @min-[34rem]:row-start-1 @min-[34rem]:flex-col @min-[34rem]:items-end @min-[34rem]:gap-x-0 @min-[34rem]:text-right",
-        )}
-      >
-        <time dateTime={item.occurredAt.toISOString()} title={formatDateTime(item.occurredAt)} className="tabular-nums">
-          {showDate ? formatDateTime(item.occurredAt) : activityTimeLabel(item.occurredAt)}
-        </time>
-        <span>
-          <span className={cn(!actor.missing && "text-[var(--color-text-secondary)]")}>{actor.name}</span>
-          {actor.channel ? ` ${actor.channel}` : null}
+      {hideMeta ? (
+        // The burst header above carries the visible time and actor; the row keeps them for screen readers.
+        <span className="sr-only">
+          <time dateTime={item.occurredAt.toISOString()}>{formatDateTime(item.occurredAt)}</time>{" "}
+          <span>
+            {actor.name}
+            {actor.channel ? ` ${actor.channel}` : null}
+          </span>
         </span>
-      </span>}
+      ) : (
+        <span
+          className={cn(
+            "col-start-2 flex flex-wrap items-baseline gap-x-8 body-caption text-[var(--color-text-tertiary)]",
+            "@min-[34rem]:col-start-3 @min-[34rem]:row-span-2 @min-[34rem]:row-start-1 @min-[34rem]:flex-col @min-[34rem]:items-end @min-[34rem]:gap-x-0 @min-[34rem]:text-right",
+          )}
+        >
+          <time dateTime={item.occurredAt.toISOString()} title={formatDateTime(item.occurredAt)} className="tabular-nums">
+            {showDate ? formatDateTime(item.occurredAt) : activityTimeLabel(item.occurredAt)}
+          </time>
+          <span>
+            <span className={cn(!actor.missing && "text-[var(--color-text-secondary)]")}>{actor.name}</span>
+            {actor.channel ? ` ${actor.channel}` : null}
+          </span>
+        </span>
+      )}
     </>
   );
 }
 
+/** The row turns to three columns once its own box (not the viewport) is 34rem wide. Class names are literal so Tailwind sees them. */
 const ROW_CLASS = "grid min-h-44 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-12 gap-y-4 px-8 py-8 @min-[34rem]:grid-cols-[auto_minmax(0,1fr)_auto] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]";
 
 export function ActivityEntry({
@@ -184,7 +196,7 @@ export function ActivityEntry({
 }) {
   const href = activityRecordHref(item, { creditBatchId });
   return (
-    <li data-testid="activity-entry" data-kind={item.action} data-record-type={item.entityType} className="@container">
+    <li data-testid="activity-entry" data-kind={item.action} data-record-type={item.entityType} className="@container relative">
       {href ? (
         <Link
           ref={focusRef}
