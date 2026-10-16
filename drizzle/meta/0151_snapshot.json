@@ -1,5 +1,5 @@
 {
-  "id": "0cd86c4d-2752-4e98-a605-29d9266ca04f",
+  "id": "240830f7-8d62-41ed-ad24-c4756f55175b",
   "prevId": "c95b515b-8d34-4635-bd22-0d0cf554a750",
   "version": "7",
   "dialect": "postgresql",
@@ -125,9 +125,33 @@
           "primaryKey": false,
           "notNull": false
         },
+        "oauth_client_id": {
+          "name": "oauth_client_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "operation_id": {
+          "name": "operation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "request_id": {
           "name": "request_id",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "version_before": {
+          "name": "version_before",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "version_after": {
+          "name": "version_after",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },
@@ -677,153 +701,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.api_audit_events": {
-      "name": "api_audit_events",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "credential_id": {
-          "name": "credential_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "oauth_client_id": {
-          "name": "oauth_client_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "operation_id": {
-          "name": "operation_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "entity_type": {
-          "name": "entity_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "entity_ids": {
-          "name": "entity_ids",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "changed_fields": {
-          "name": "changed_fields",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "version_before": {
-          "name": "version_before",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "version_after": {
-          "name": "version_after",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "request_id": {
-          "name": "request_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "outcome_code": {
-          "name": "outcome_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "transport": {
-          "name": "transport",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'rest'"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "api_audit_events_org_created_idx": {
-          "name": "api_audit_events_org_created_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "api_audit_events_organization_id_organizations_id_fk": {
-          "name": "api_audit_events_organization_id_organizations_id_fk",
-          "tableFrom": "api_audit_events",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "api_audit_events_transport": {
-          "name": "api_audit_events_transport",
-          "value": "\"api_audit_events\".\"transport\" in ('rest', 'mcp')"
-        }
-      },
       "isRLSEnabled": false
     },
     "public.api_idempotency_records": {
@@ -5723,152 +5600,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.customer_location_facility_distances": {
-      "name": "customer_location_facility_distances",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "location_id": {
-          "name": "location_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "facility_id": {
-          "name": "facility_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "distance_km": {
-          "name": "distance_km",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "distance_source": {
-          "name": "distance_source",
-          "type": "distance_source",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "customer_location_facility_distances_org_idx": {
-          "name": "customer_location_facility_distances_org_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "customer_location_facility_distances_organization_id_organizations_id_fk": {
-          "name": "customer_location_facility_distances_organization_id_organizations_id_fk",
-          "tableFrom": "customer_location_facility_distances",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "customer_location_facility_distance_location_fk": {
-          "name": "customer_location_facility_distance_location_fk",
-          "tableFrom": "customer_location_facility_distances",
-          "tableTo": "customer_locations",
-          "columnsFrom": [
-            "location_id",
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id",
-            "organization_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "customer_location_facility_distance_facility_fk": {
-          "name": "customer_location_facility_distance_facility_fk",
-          "tableFrom": "customer_location_facility_distances",
-          "tableTo": "facilities",
-          "columnsFrom": [
-            "facility_id",
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id",
-            "organization_id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "customer_location_facility_distance_pair_unique": {
-          "name": "customer_location_facility_distance_pair_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "location_id",
-            "facility_id"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "customer_location_facility_distance_positive": {
-          "name": "customer_location_facility_distance_positive",
-          "value": "\"customer_location_facility_distances\".\"distance_km\" > 0"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.documents": {
       "name": "documents",
       "schema": "",
@@ -7736,19 +7467,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "recorded_distance_km": {
-          "name": "recorded_distance_km",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "recorded_distance_source": {
-          "name": "recorded_distance_source",
-          "type": "distance_source",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": false
-        },
         "distance_source": {
           "name": "distance_source",
           "type": "distance_source",
@@ -8613,6 +8331,19 @@
           "primaryKey": false,
           "notNull": false
         },
+        "distance_from_facility_km": {
+          "name": "distance_from_facility_km",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "distance_source": {
+          "name": "distance_source",
+          "type": "distance_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
         "default_soil_temperature_c": {
           "name": "default_soil_temperature_c",
           "type": "real",
@@ -8737,6 +8468,10 @@
         "customer_locations_gps_longitude_range": {
           "name": "customer_locations_gps_longitude_range",
           "value": "\"customer_locations\".\"gps_longitude\" is null or (\"customer_locations\".\"gps_longitude\" >= -180 and \"customer_locations\".\"gps_longitude\" <= 180)"
+        },
+        "customer_locations_distance_from_facility_km_positive": {
+          "name": "customer_locations_distance_from_facility_km_positive",
+          "value": "\"customer_locations\".\"distance_from_facility_km\" is null or \"customer_locations\".\"distance_from_facility_km\" > 0"
         },
         "customer_locations_default_soil_temperature_c_range": {
           "name": "customer_locations_default_soil_temperature_c_range",
@@ -9159,6 +8894,19 @@
           "primaryKey": false,
           "notNull": false
         },
+        "distance_from_facility_km": {
+          "name": "distance_from_facility_km",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "distance_source": {
+          "name": "distance_source",
+          "type": "distance_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
         "is_default": {
           "name": "is_default",
           "type": "boolean",
@@ -9258,16 +9006,7 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "supplier_locations_id_organization_id_unique": {
-          "name": "supplier_locations_id_organization_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "organization_id"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
         "supplier_locations_gps_latitude_range": {
@@ -9277,6 +9016,10 @@
         "supplier_locations_gps_longitude_range": {
           "name": "supplier_locations_gps_longitude_range",
           "value": "\"supplier_locations\".\"gps_longitude\" is null or (\"supplier_locations\".\"gps_longitude\" >= -180 and \"supplier_locations\".\"gps_longitude\" <= 180)"
+        },
+        "supplier_locations_distance_from_facility_km_positive": {
+          "name": "supplier_locations_distance_from_facility_km_positive",
+          "value": "\"supplier_locations\".\"distance_from_facility_km\" is null or \"supplier_locations\".\"distance_from_facility_km\" > 0"
         }
       },
       "isRLSEnabled": false
@@ -12742,152 +12485,6 @@
         "product_ingredient_snapshot_mass": {
           "name": "product_ingredient_snapshot_mass",
           "value": "\"product_ingredient_snapshots\".\"wet_mass_kg\" >= 0 and \"product_ingredient_snapshots\".\"dry_solids_kg\" >= 0 and \"product_ingredient_snapshots\".\"dry_solids_kg\" <= \"product_ingredient_snapshots\".\"wet_mass_kg\" and \"product_ingredient_snapshots\".\"moisture_percent_used\" >= 0 and \"product_ingredient_snapshots\".\"moisture_percent_used\" <= 100"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.supplier_location_facility_distances": {
-      "name": "supplier_location_facility_distances",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "location_id": {
-          "name": "location_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "facility_id": {
-          "name": "facility_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "distance_km": {
-          "name": "distance_km",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "distance_source": {
-          "name": "distance_source",
-          "type": "distance_source",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "supplier_location_facility_distances_org_idx": {
-          "name": "supplier_location_facility_distances_org_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "supplier_location_facility_distances_organization_id_organizations_id_fk": {
-          "name": "supplier_location_facility_distances_organization_id_organizations_id_fk",
-          "tableFrom": "supplier_location_facility_distances",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "supplier_location_facility_distance_location_fk": {
-          "name": "supplier_location_facility_distance_location_fk",
-          "tableFrom": "supplier_location_facility_distances",
-          "tableTo": "supplier_locations",
-          "columnsFrom": [
-            "location_id",
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id",
-            "organization_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "supplier_location_facility_distance_facility_fk": {
-          "name": "supplier_location_facility_distance_facility_fk",
-          "tableFrom": "supplier_location_facility_distances",
-          "tableTo": "facilities",
-          "columnsFrom": [
-            "facility_id",
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id",
-            "organization_id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "supplier_location_facility_distance_pair_unique": {
-          "name": "supplier_location_facility_distance_pair_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "location_id",
-            "facility_id"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "supplier_location_facility_distance_positive": {
-          "name": "supplier_location_facility_distance_positive",
-          "value": "\"supplier_location_facility_distances\".\"distance_km\" > 0"
         }
       },
       "isRLSEnabled": false

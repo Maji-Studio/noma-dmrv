@@ -1,9 +1,10 @@
+import { apiActivityWhere, apiAuditColumns, toApiAuditRow } from "../../tests/helpers/api-activity";
 import { TEST_SITE_POSITION } from "../../tests/helpers/test-org";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  apiAuditEvents, binMovements, biocharProducts, biocharProductSourceAllocations, customerLocations, customers,
+  activityEvents, binMovements, biocharProducts, biocharProductSourceAllocations, customerLocations, customers,
   deliveries, facilities, formulationIngredients, formulations, members, orders, outputStockAllocations,
   outputStockMoistureReadings, outputStockRunAllocations, productIngredientSnapshots, productionRuns, transportLegs, users,
 } from "@/db/schema";
@@ -128,8 +129,8 @@ export async function readDeliverySnapshot(fixture: DeliveryEvalFixture): Promis
       .from(deliveries).where(eq(deliveries.organizationId, org)),
     db.select({ id: binMovements.id, binId: binMovements.storageLocationId, kind: binMovements.outputKind, input: binMovements.inputSnapshot })
       .from(binMovements).where(eq(binMovements.organizationId, org)),
-    db.select({ transport: apiAuditEvents.transport, operationId: apiAuditEvents.operationId })
-      .from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, org)),
+    db.select(apiAuditColumns)
+      .from(activityEvents).where(apiActivityWhere(org)).then((rows) => rows.map(toApiAuditRow)),
   ]);
   return { deliveries: rows.map((row) => ({ ...row, deliveredAt: row.deliveredAt.toISOString() })),
     movements: movements.filter(({ id }) => !fixture.seededMovementIds.includes(id)), audits };

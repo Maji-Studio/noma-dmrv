@@ -109,7 +109,7 @@ describe("lab sample MCP tools", { timeout: TIMEOUT_MS }, () => {
     for (const warning of made.structuredContent.warnings) expect(text).toContain(warning);
     expect(await labSampleRows(a)).toMatchObject([{ id: made.structuredContent.data.id, hToCOrgRatio: EXPECTED_H_TO_C }]);
     expect(await labSampleAudits(a)).toMatchObject([{
-      operationId: "record_lab_sample", outcomeCode: "created", transport: "mcp", credentialId: a.writeCredentialId, versionAfter: 1,
+      operationId: "record_lab_sample", action: "created", source: "mcp", credentialId: a.writeCredentialId, versionAfter: 1,
     }]);
   });
 
@@ -174,7 +174,7 @@ describe("lab sample MCP tools", { timeout: TIMEOUT_MS }, () => {
     expect(updateReplay.content[0].text).toMatch(/^Replayed: Updated lab sample/);
     expect(updateReplay.structuredContent).toEqual(await restUpdate.json());
     expect((await labSampleRows(a))).toMatchObject([{ version: 2, labName: "REST Lab" }]);
-    expect(await labSampleAudits(a)).toMatchObject([{ transport: "rest" }, { transport: "rest" }]);
+    expect(await labSampleAudits(a)).toMatchObject([{ source: "rest" }, { source: "rest" }]);
   });
 
   it("replays an uppercase-UUID REST key over MCP in lowercase (api/uuid-case)", async () => {
@@ -224,7 +224,7 @@ describe("lab sample MCP tools", { timeout: TIMEOUT_MS }, () => {
     expect(refused).toMatchObject({ isError: true, structuredContent: { code: "validation_failed" } });
     const moved = await write("update_lab_sample", { labSampleId: seeded.id, expectedVersion: 3, creditBatchId: a.batchB!.id, samplingTime: AUGUST_SAMPLED_AT });
     expect(moved.structuredContent.data).toMatchObject({ creditBatchId: a.batchB!.id, version: 4 });
-    expect(await labSampleAudits(a)).toMatchObject([{ transport: "mcp" }, { transport: "mcp" }, { transport: "mcp" }, { transport: "mcp" }]);
+    expect(await labSampleAudits(a)).toMatchObject([{ source: "mcp" }, { source: "mcp" }, { source: "mcp" }, { source: "mcp" }]);
   });
 
   it("deletes with the delete scope only, previews the deletion, and returns the stale record", async () => {
@@ -285,7 +285,7 @@ describe("lab sample MCP tools", { timeout: TIMEOUT_MS }, () => {
     expect(await labSampleRows(a)).toEqual([]);
     expect(await labSampleAudits(a)).toEqual([]);
     expect(await labSampleRows(b)).toHaveLength(1);
-    expect((await labSampleAudits(b)).filter((row) => row.transport === "mcp")).toEqual([]);
+    expect((await labSampleAudits(b)).filter((row) => row.source === "mcp")).toEqual([]);
   });
 
   it("refuses an archived batch on create and move with no side effect", async () => {
