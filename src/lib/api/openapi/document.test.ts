@@ -239,7 +239,7 @@ it("types current as a feedstock only on feedstock precondition responses", () =
     expect.objectContaining({ properties: { current: expect.objectContaining({ $ref: "#/components/schemas/feedstock" }) }, required: ["current"] }),
   ]);
   for (const [name, response] of Object.entries(document.components.responses)) {
-    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412" || name === "BiocharProductProblem412" || name === "LabSampleProblem412" || name === "OrderProblem412" || name === "DeliveryProblem412") continue;
+    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412" || name === "BiocharProductProblem412" || name === "LabSampleProblem412" || name === "OrderProblem412" || name === "DeliveryProblem412" || name === "FormulationProblem412") continue;
     expect(response.content["application/problem+json"].schema).toEqual({ $ref: "#/components/schemas/Problem" });
   }
 });

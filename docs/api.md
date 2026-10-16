@@ -309,6 +309,24 @@ Lists exclude archived rows where supported; detail reads return them with
 and drivers return row versions and strong version/revision ETags on detail reads.
 Vehicles and drivers have no archive column and return `archivedAt: null`.
 `GET /formulations` lists active rows by default; `archived=true` lists only archived rows, including exact code lookups, and a cursor stays bound to that choice.
+Formulation writes return the revision 2 representation, including `description`
+and `archivedAt`, through the shared runner:
+
+| Method and path | Scope | Contract |
+|---|---|---|
+| POST `/formulations` | `formulations:write` | Required `Idempotency-Key`, including dry runs; 201 with ETag and Location |
+| PATCH `/formulations/{id}` | `formulations:write` | UUID and strong `If-Match`; 200 with ETag; archived target is 404 before stale checks |
+| DELETE `/formulations/{id}` | `formulations:delete` | UUID and strong `If-Match`; unused targets only, including archived; bodyless 204, or 409 with reference metadata |
+| POST `/formulations/{id}/archive` | `formulations:write` | Empty object or no body; UUID and strong `If-Match`; 200 with ETag; already archived is 409 |
+| POST `/formulations/{id}/restore` | `formulations:write` | Empty object or no body; UUID and strong `If-Match`; 200 with ETag; active target is 409 |
+
+Every write supports `dryRun=true`, returning 200 without ETag or Location and
+committing no row, lines or Activity event. Missing If-Match answers 428; stale
+tags answer 412 with `current`. Optional mutation keys replay before domain
+preconditions. Unknown properties answer 422; ratios use millionth steps and
+known shares cannot total more than 1. PATCH omission keeps, null clears, and
+zero stays zero; supplied `lines` replace the list. Used lines cannot be removed.
+
 Output projections exclude contact fields and driver license numbers. Facilities expose `timeZone`, storage
 locations expose the material lane, capacity in kilograms and feedstock-type
 restriction, and vehicles expose their stored identifier/plate and vehicle type.

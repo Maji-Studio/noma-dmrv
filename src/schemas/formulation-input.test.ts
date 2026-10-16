@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createFormulationInput, updateFormulationInput, formulationVersionInput } from "./formulation-input";
+import { createFormulationInput, updateFormulationInput, updateFormulationApiInput, formulationVersionInput } from "./formulation-input";
 import { createFormulationSchema, updateFormulationSchema, formulationPercentFormSchema, percentFormToRatioPayload } from "./formulations";
 
 const TYPE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -10,6 +10,16 @@ describe("formulation operation inputs", () => {
     expect(createFormulationInput.parse({ name: " Blend ", lines: [{ feedstockTypeId: TYPE_ID.toUpperCase(), ratio: null }] })).toEqual({ name: "Blend", lines: [{ feedstockTypeId: TYPE_ID, ratio: null }] });
     expect(updateFormulationInput.parse({ formulationId: FORMULATION_ID, expectedVersion: 1 })).toEqual({ formulationId: FORMULATION_ID, expectedVersion: 1 });
     expect(updateFormulationInput.parse({ formulationId: FORMULATION_ID, expectedVersion: 1, biocharRatio: null, description: null })).toMatchObject({ biocharRatio: null, description: null });
+  });
+  it("keeps REST PATCH partial and strict while sharing the operation's refinements", () => {
+    expect(updateFormulationApiInput.parse({})).toEqual({});
+    expect(updateFormulationApiInput.parse({ biocharRatio: 0, description: null })).toEqual({ biocharRatio: 0, description: null });
+    for (const body of [
+      { formulationId: FORMULATION_ID }, { expectedVersion: 1 },
+      { lines: [{ feedstockTypeId: TYPE_ID, extra: true }] },
+      { biocharRatio: 0.700001, lines: [{ feedstockTypeId: TYPE_ID, ratio: 0.3 }] },
+      { lines: [{ feedstockTypeId: TYPE_ID }, { feedstockTypeId: TYPE_ID.toUpperCase() }] },
+    ]) expect(updateFormulationApiInput.safeParse(body).success).toBe(false);
   });
   it("refuses unknown keys and caller-supplied create codes", () => {
     for (const extra of [{ code: "BCF-MANUAL" }, { userId: "user" }, { extra: true }]) expect(createFormulationInput.safeParse({ name: "Blend", ...extra }).success).toBe(false);
