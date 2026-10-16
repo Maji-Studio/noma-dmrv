@@ -3,21 +3,40 @@ import type { ReactNode } from "react";
 import { useController, type Control } from "react-hook-form";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
 import type { CreditBatch } from "@/db/schema/credits";
 import { CreditBatchForm } from "./credit-batch-form";
 
-const mocks = vi.hoisted(() => ({ certifierSummary: vi.fn(), methodBEligibility: vi.fn(), showFacilitySelect: false }));
+const mocks = vi.hoisted(() => ({
+  certifierSummary: vi.fn(), methodBEligibility: vi.fn(), recordPrerequisites: vi.fn(),
+  showFacilitySelect: false, showFeedstockSelect: false,
+}));
 
 const ISOMETRIC_FACILITY_ID = "00000000-0000-4000-8000-000000000002";
 const UNMAPPED_FACILITY_ID = "00000000-0000-4000-8000-000000000004";
+const FEEDSTOCK_TYPE_ID = "00000000-0000-4000-8000-000000000003";
+const EARLIER_PROCESS_ID = "00000000-0000-4000-8000-000000000005";
+const LATER_PROCESS_ID = "00000000-0000-4000-8000-000000000006";
 const MONTH_REFUSAL = "A credit batch may span at most one month (one calendar month; noma rule).";
 
-function FacilitySelect({ control }: { control: Control<{ facilityId: string }> }) {
+type SelectFields = { facilityId: string; feedstockTypeId: string };
+
+function FacilitySelect({ control }: { control: Control<SelectFields> }) {
   const { field } = useController({ control, name: "facilityId" });
   return (
     <select aria-label="Facility" {...field}>
       <option value={ISOMETRIC_FACILITY_ID}>Isometric facility</option>
       <option value={UNMAPPED_FACILITY_ID}>Facility without a certifier</option>
+    </select>
+  );
+}
+
+function FeedstockSelect({ control }: { control: Control<SelectFields> }) {
+  const { field } = useController({ control, name: "feedstockTypeId" });
+  return (
+    <select aria-label="Feedstock type" {...field}>
+      <option value="">Select feedstock type</option>
+      <option value={FEEDSTOCK_TYPE_ID}>Pyrolysis feedstock</option>
     </select>
   );
 }
@@ -29,11 +48,12 @@ vi.mock("@/hooks/use-certification", async (importOriginal) => ({
 }));
 vi.mock("@/hooks/use-feedstock-types", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-feedstock-types")>(),
-  useFeedstockTypeList: () => ({ data: [] }),
+  useFeedstockTypeList: () => ({ data: [{ id: FEEDSTOCK_TYPE_ID, usage: "pyrolysis" }] }),
 }));
 vi.mock("@/hooks/use-production-processes", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-production-processes")>(),
   useMethodBEligibility: mocks.methodBEligibility,
+  useRecordMethodBPrerequisites: () => ({ mutateAsync: mocks.recordPrerequisites, isPending: false }),
 }));
 vi.mock("@/hooks/use-credit-batches", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-credit-batches")>(),
@@ -41,10 +61,12 @@ vi.mock("@/hooks/use-credit-batches", async (importOriginal) => ({
 }));
 vi.mock("@/components/forms", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/components/forms")>(),
-  // Expose the form's facility field without coupling this test to the entity picker.
-  FormEntitySelect: ({ control }: { control: Control<{ facilityId: string }> }) =>
-    mocks.showFacilitySelect ? <FacilitySelect control={control} /> : null,
+  // Expose selected fields without coupling this test to the entity picker.
+  FormEntitySelect: ({ control }: { control: Control<SelectFields> }) =>
+    mocks.showFacilitySelect ? <FacilitySelect control={control} />
+      : mocks.showFeedstockSelect ? <FeedstockSelect control={control} /> : null,
 }));
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn() }) }));
 vi.mock("@/components/ui/tooltip", () => ({
   InfoHint: () => null,
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -55,6 +77,9 @@ beforeEach(() => {
   mocks.methodBEligibility.mockClear();
   mocks.methodBEligibility.mockReturnValue({ data: undefined });
   mocks.showFacilitySelect = false;
+  mocks.showFeedstockSelect = false;
+  mocks.recordPrerequisites.mockReset();
+  mocks.recordPrerequisites.mockResolvedValue(undefined);
   mocks.certifierSummary.mockReturnValue({ data: undefined });
 });
 
@@ -78,6 +103,48 @@ describe("CreditBatchForm required dates", () => {
       const label = container.querySelector(`label[for="${field}"]`)!;
       expect(label.textContent).toContain("Required");
       expect(label.querySelector('[aria-hidden="true"]')?.textContent).toBe("*");
+    }
+  });
+});
+
+describe("CreditBatchForm Method-B prerequisites", () => {
+  it("submits the resolved process id when switching between cached epoch results", async () => {
+    mocks.showFeedstockSelect = true;
+    mocks.certifierSummary.mockReturnValue({ data: { mapping: { provider: "isometric" } } });
+    const eligibility = {
+      eligibleSampleCount: METHOD_B_MINIMUM_METHOD_A_SAMPLES,
+      agreedBaselineSize: METHOD_B_MINIMUM_METHOD_A_SAMPLES,
+      prerequisitesRecorded: false, randomSamplingPlanRef: null, moisturePathway: null, unsampledAllowed: false,
+    };
+    const earlier = { data: { ...eligibility, productionProcessId: EARLIER_PROCESS_ID } };
+    const later = { data: { ...eligibility, productionProcessId: LATER_PROCESS_ID } };
+    mocks.methodBEligibility.mockImplementation((_facilityId, _feedstockTypeId, _enabled, startDate?: Date) =>
+      startDate?.getUTCMonth() === 0 ? earlier : later,
+    );
+    const { container } = render(<CreditBatchForm onSubmit={vi.fn()} canManage />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Feedstock type" }), {
+      target: { value: FEEDSTOCK_TYPE_ID },
+    });
+
+    const selections = [
+      ["2025-01-01", EARLIER_PROCESS_ID],
+      ["2025-06-01", LATER_PROCESS_ID],
+      ["2025-01-01", EARLIER_PROCESS_ID],
+    ];
+    for (const [index, [day, processId]] of selections.entries()) {
+      fireEvent.change(container.querySelector('input[name="startDate"]')!, { target: { value: day } });
+      fireEvent.click(screen.getByRole("button", { name: "Set up Method-B prerequisites" }));
+      const plan = await screen.findByRole("textbox", { name: /Random sampling plan reference/ });
+      expect((plan as HTMLInputElement).value).toBe("");
+      fireEvent.change(plan, { target: { value: "Agreed sampling plan" } });
+      fireEvent.click(screen.getByRole("button", { name: "Record prerequisites" }));
+      await waitFor(() => expect(mocks.recordPrerequisites).toHaveBeenNthCalledWith(index + 1, {
+        processId,
+        agreedBaselineSize: METHOD_B_MINIMUM_METHOD_A_SAMPLES,
+        randomSamplingPlanRef: "Agreed sampling plan",
+        moisturePathway: "measured_every_batch",
+      }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     }
   });
 });

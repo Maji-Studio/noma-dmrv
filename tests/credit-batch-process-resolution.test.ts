@@ -208,22 +208,22 @@ describe("credit batch production-process resolution", () => {
   it.each([
     ["midnight", "2025-06-01T00:00:00Z"],
     ["same UTC day through an offset instant", "2025-05-31T23:30:00-02:00"],
-  ])("uses the new process on its UTC established day for preview, create and update (%s)", async (_label, start) => {
+  ])("keeps the previous process for a start day with a noon reset in preview, create and update (%s)", async (_label, start) => {
     await db.update(productionProcesses).set({ establishedAt: new Date("2025-06-01T12:00:00Z") }).where(and(
       eq(productionProcesses.organizationId, ctx.organizationId), eq(productionProcesses.id, middleProcessId),
     ));
     const startDate = new Date(start);
     expect(await getMethodBEligibility(ctx, { facilityId, feedstockTypeId, batchStartDate: startDate })).toMatchObject({
-      productionProcessId: middleProcessId,
+      productionProcessId: earliestProcessId,
     });
     const batch = await create(startDate);
-    expect(batch).toMatchObject({ startDate: "2025-06-01", productionProcessId: middleProcessId });
+    expect(batch).toMatchObject({ startDate: "2025-06-01", productionProcessId: earliestProcessId });
     const previousDay = await updateCreditBatch(ctx, batch.id, {
       expectedVersion: batch.version, startDate: new Date("2025-05-31T00:00:00Z"),
     });
     expect(previousDay.productionProcessId).toBe(earliestProcessId);
     const updated = await updateCreditBatch(ctx, batch.id, { expectedVersion: previousDay.version, startDate });
-    expect(updated.productionProcessId).toBe(middleProcessId);
+    expect(updated.productionProcessId).toBe(earliestProcessId);
   });
 
   it.each([

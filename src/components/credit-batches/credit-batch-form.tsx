@@ -354,6 +354,7 @@ export function CreditBatchForm({
           prerequisitesSetup={
             methodBEligibility.data?.productionProcessId ? (
               <MethodBPrerequisitesSetup
+                key={methodBEligibility.data.productionProcessId}
                 processId={methodBEligibility.data.productionProcessId}
                 agreedBaselineSize={methodBEligibility.data.agreedBaselineSize}
               />
