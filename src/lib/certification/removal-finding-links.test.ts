@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { batchHealthFixLinkFor } from "./batch-health-links";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
+import { sampleCreateHref } from "@/lib/sample-create-intent";
 import { removalFindingFixLink } from "./removal-finding-links";
 
 describe("removalFindingFixLink", () => {
@@ -32,5 +33,14 @@ describe("removalFindingFixLink", () => {
     expect(removalFindingFixLink({ fixTarget: "creditBatchTemplate" }, "fac-1", ["b1", "b2"])?.href).toBe(
       batchHealthFixLinkFor({ key: "template", fixTarget: "creditBatchTemplate" }, "fac-1")?.href,
     );
+  });
+
+  it("keeps per-record targets off the batch, matching the checks list", () => {
+    for (const fixTarget of ["labSamples", "productionRuns", "deliveryDistances"] as const) {
+      const link = removalFindingFixLink({ fixTarget }, "fac-1", ["b1"]);
+      expect(link).toEqual(batchHealthFixLinkFor({ key: "template", fixTarget }, "fac-1"));
+    }
+    expect(removalFindingFixLink({ fixTarget: "labSamples" }, "fac-1", ["b1"])?.href).toBe("/samples?facility=fac-1");
+    expect(removalFindingFixLink({ fixTarget: "labSamples" }, "fac-1", ["b1"])?.href).not.toBe(sampleCreateHref("fac-1", "b1"));
   });
 });

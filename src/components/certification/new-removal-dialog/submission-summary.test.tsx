@@ -136,6 +136,24 @@ describe("SubmissionSummary", () => {
     expect(html).not.toContain("Review template lines");
   });
 
+  it("sends a per-record blocker to the records list, not a create intent, with one member batch", () => {
+    const html = render({
+      compilation: {
+        ...COMPILATION,
+        blockers: ["Complete these fields before submitting the Removal:\nRecord Sample moisture"],
+        removalBlockers: [
+          { code: "entityReadiness", message: "Complete these fields before submitting the Removal:\nRecord Sample moisture", fixTarget: "labSamples" },
+          { code: "legacy", message: "Delivery DL-1 has no proof of delivery.", fixTarget: "deliveryEvidence" },
+        ],
+        snapshot: null,
+        compilationHash: null,
+      } as unknown as RemovalCompilationView,
+    });
+    expect(html).toContain('href="/samples?facility=facility-1"');
+    expect(html).not.toContain("batch=batch-1&amp;");
+    expect(html).toContain('href="/deliveries?facility=facility-1"');
+  });
+
   it("shows vehicle advisories without adding a blocker", () => {
     const html = render({ transportVehicleAdvisories: ["Feedstock transport uses more than one vehicle type."] });
     expect(html).toContain("Feedstock transport uses more than one vehicle type.");

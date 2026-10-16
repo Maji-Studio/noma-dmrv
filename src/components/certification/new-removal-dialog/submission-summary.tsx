@@ -172,7 +172,7 @@ export function SubmissionSummary({
         </div>
       </div>
 
-      <RemovalBlockerList blockers={facts.blockerItems} facilityId={facilityId} memberBatchIds={memberBatchIds} />
+      <RemovalBlockerList blockers={facts.blockers} facilityId={facilityId} memberBatchIds={memberBatchIds} />
 
       <DerivedHeadline
         label={
