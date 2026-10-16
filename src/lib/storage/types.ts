@@ -1,3 +1,5 @@
+export const PDF_MIME_TYPE = "application/pdf";
+
 export interface PresignedUpload {
   url: string;
   method: "PUT";
