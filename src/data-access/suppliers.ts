@@ -761,9 +761,12 @@ export async function updateSupplierLocation(
       throw new SafeError("Supplier location not found");
     }
 
-    await upsertLocationFacilityDistances(ctx, tx, "supplier", locationId, facilityDistances);
+    const promotingDefault = data.isDefault === true && !locked.isDefault;
+    // Promotion must lock all eligible feedstocks in one ascending-id pass,
+    // matching vehicle edits, rather than filling changed pairs first.
+    await upsertLocationFacilityDistances(ctx, tx, "supplier", locationId, facilityDistances, { deferFill: promotingDefault });
     const result = (await withLocationFacilityDistances(ctx, "supplier", [updated], tx))[0];
-    if (data.isDefault === true && !locked.isDefault) {
+    if (promotingDefault) {
       await fillMissingLocationDistances(ctx, tx, "supplier", locationId, result.facilityDistances);
     }
     return result;

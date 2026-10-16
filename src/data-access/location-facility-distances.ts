@@ -38,6 +38,7 @@ export async function withLocationFacilityDistances<T extends { id: string }>(
 export async function upsertLocationFacilityDistances(
   ctx: OrgContext, tx: DbTransaction, kind: LocationKind, locationId: string,
   input: FacilityDistanceInput[] | undefined,
+  options: { deferFill?: boolean } = {},
 ) {
   requireOrgScope(ctx);
   const rows = facilityDistancesInputSchema.parse(input);
@@ -58,6 +59,8 @@ export async function upsertLocationFacilityDistances(
         }, setWhere: eq(table.organizationId, ctx.organizationId) });
     }
   }
-  await fillMissingLocationDistances(ctx, tx, kind, locationId,
-    rows.flatMap(row => row.distanceKm === null ? [] : [{ ...row, distanceKm: row.distanceKm }]));
+  if (!options.deferFill) {
+    await fillMissingLocationDistances(ctx, tx, kind, locationId,
+      rows.flatMap(row => row.distanceKm === null ? [] : [{ ...row, distanceKm: row.distanceKm }]));
+  }
 }
