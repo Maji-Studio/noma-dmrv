@@ -74,9 +74,10 @@ verbatim from the registry (read 2026-10-15; [...] marks omitted text):
 
 The approved PDD evidence in #627 says no recurring temperature CSV is required.
 That is a file-format statement; it does not remove the operational temperature
-measurements or five-year raw-data retention required above. How DEC retains and
-retrieves that series, and whether noma should require it on the Production Run,
-remain [questions for Kenji/DEC](../open-questions-isometric.md#reporting-period-flue-stack-temperature-evidence-isometricflue-stack-temperature-retention-opened-2026-10-15).
+measurements or five-year raw-data retention required above. Kenji decided
+(2026-10-16): the reactor CSV uploaded on each Production Run is the retained
+raw record. noma stores it unchanged as `sensor_data` and does not check its
+contents; file presence is the readiness gate.
 The approved project route does not require continuous gas telemetry.
 
 The pressure file is retained unchanged on the production run as `sensor_data`.

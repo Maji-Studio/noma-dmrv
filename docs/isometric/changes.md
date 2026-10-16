@@ -24,9 +24,10 @@ calibration at least annual and meeting or exceeding manufacturer requirements.
 §9.2.4.1 requires raw pyrolyzer temperature data for the Reporting Period to be
 retained for at least five years. Both passages are quoted in the shortlist.
 The approved PDD's lack of a recurring temperature CSV requirement is a format
-question only, not a reason to omit that series. Its current retention/retrieval
-and whether noma should require it on the Production Run remain open for
-[Kenji/DEC](../open-questions-isometric.md#reporting-period-flue-stack-temperature-evidence-isometricflue-stack-temperature-retention-opened-2026-10-15).
+question only, not a reason to omit that series. Kenji decided
+(2026-10-16) that the reactor CSV uploaded on each Production Run is the retained
+raw record: noma stores it unchanged as `sensor_data` and does not check its
+contents, so file presence stays the readiness gate.
 No continuous-gas CSV extension is needed for the approved emissions-testing
 route. A future project choosing another emissions method needs its own evidence
 contract. Historical research stays archived.

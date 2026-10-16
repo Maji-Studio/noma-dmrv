@@ -8,28 +8,6 @@ Current interpretation pin: Biochar Protocol v1.1 with the five module versions
 in [`docs/isometric/versions.json`](./isometric/versions.json). Resolved or
 retired questions do not belong in this file.
 
-### Reporting Period flue-stack temperature evidence (`isometric/flue-stack-temperature-retention`, opened 2026-10-15)
-
-- **Anchor:** `src/data-access/production-runs/queries.ts:getProductionRunsForCertification`
-  derives `hasReadingsFile` from an uploaded `sensor_data` CSV on the Production
-  Run; `src/db/schema/production.ts:productionRunReadings.temperatureC` does not
-  identify the sensor's physical channel.
-- **Verified requirement:** the approved PDD E.1/E.3 uses emissions testing.
-  Biochar v1.1.1 §9.2.4 requires flue-stack temperature during project operations
-  within 10% of the emissions-test value(s), at one-minute intervals or more
-  frequently. §9.2.4.1 requires retaining raw pyrolyzer temperature data for the
-  Reporting Period for at least five years. See the
-  [verbatim passages](./isometric/requirements-shortlist.md#project-reactor-monitoring).
-  The PDD's lack of a recurring temperature CSV requirement concerns format;
-  it does not waive the data or retention requirement.
-- **Decision needed from Kenji/DEC:** how is the raw flue-stack temperature data
-  for each Reporting Period retained and retrieved today? Is it included in the
-  retained pressure/sensor file, or kept separately? Should noma require that
-  evidence on the Production Run?
-- **Current handling:** uploaded-file presence gates readiness without inspecting
-  the file's channels. Confirm the retained series, retrieval path and ownership
-  before deciding whether to change that gate or require a separate upload.
-
 ### Biochar Application claims retain a replaced Storage Location (`isometric/biochar-application-storage-location-replaced`, opened 2026-09-08, `needs-registry-check`)
 
 - **Observed** — `src/data-access/certifier-storage-locations.ts:replaceMissingStorageLocationRegistration`
