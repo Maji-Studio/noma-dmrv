@@ -30,6 +30,11 @@ export const lookupListSchema = z.strictObject({
   q: prefixSchema.describe("Case-insensitive literal prefix search on code or name."),
   code: codeSchema,
 });
+const archivedSchema = z.union([z.boolean(), z.enum(["true", "false"])])
+  .transform(value => value === true || value === "true").default(false)
+  .describe("false lists active formulations (default); true lists only archived formulations. Exact code lookups use the selected set.");
+publishedJsonSchemas.add(archivedSchema, { jsonSchema: { type: "boolean", default: false } });
+export const formulationListSchema = lookupListSchema.extend({ archived: archivedSchema });
 export const facilityLookupListSchema = lookupListSchema.extend({ facilityId: facilityIdSchema });
 export const supplierLocationListSchema = z.strictObject({
   ...paginationShape,
@@ -116,7 +121,7 @@ export const resourceQueries = {
   "production-runs": { list: productionRunListSchema, get: lookupGetSchema },
   reactors: { list: facilityLookupListSchema, get: lookupGetSchema },
   "biochar-products": { list: biocharProductListSchema, get: lookupGetSchema },
-  formulations: { list: lookupListSchema, get: lookupGetSchema },
+  formulations: { list: formulationListSchema, get: lookupGetSchema },
   feedstocks: { list: feedstockListSchema, get: lookupGetSchema },
   facilities: { list: lookupListSchema, get: lookupGetSchema },
   customers: { list: lookupListSchema, get: lookupGetSchema },

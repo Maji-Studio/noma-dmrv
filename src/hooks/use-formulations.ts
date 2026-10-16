@@ -22,6 +22,8 @@ import {
   createFormulationFn,
   updateFormulationFn,
   deleteFormulationFn,
+  archiveFormulationFn,
+  restoreFormulationFn,
 } from "@/fn/formulations";
 
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
@@ -369,6 +371,57 @@ export function useDeleteFormulation(
       await callbacks?.onSettled?.(data, error, variables);
     },
   });
+}
+
+type FormulationVersionVariables = { formulationId: string; expectedVersion: number };
+
+/** Archive and restore share one shape: a version-checked flip of `archivedAt`. */
+function useFormulationLifecycle(
+  action: (variables: FormulationVersionVariables) => ReturnType<typeof archiveFormulationFn>,
+  callbacks?: MutationCallbacks<FormulationWithIngredients, FormulationVersionVariables>,
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (variables: FormulationVersionVariables) => {
+      const result = await action(variables);
+      if (!result.success) {
+        throwActionError(result);
+      }
+      return result.data;
+    },
+    onSuccess: async (data, variables) => {
+      patchListCachesWithSavedRow<FormulationWithIngredients>(queryClient, formulationKeys.lists(), data);
+      invalidateEntityTypeQueries(queryClient, "formulation");
+      queryClient.setQueryData(formulationKeys.detail(data.id), data);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: formulationKeys.lists() }),
+        queryClient.invalidateQueries({ queryKey: formulationKeys.options() }),
+      ]);
+      await callbacks?.onSuccess?.(data, variables);
+    },
+    onError: async (error, variables) => {
+      if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: formulationKeys.all });
+      await callbacks?.onError?.(error, variables);
+    },
+    onSettled: async (data, error, variables) => {
+      await callbacks?.onSettled?.(data, error, variables);
+    },
+  });
+}
+
+/** Hook to archive a formulation: pickers hide it, stored records keep it. */
+export function useArchiveFormulation(
+  callbacks?: MutationCallbacks<FormulationWithIngredients, FormulationVersionVariables>,
+) {
+  return useFormulationLifecycle(archiveFormulationFn, callbacks);
+}
+
+/** Hook to restore an archived formulation. */
+export function useRestoreFormulation(
+  callbacks?: MutationCallbacks<FormulationWithIngredients, FormulationVersionVariables>,
+) {
+  return useFormulationLifecycle(restoreFormulationFn, callbacks);
 }
 
 // ============================================

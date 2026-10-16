@@ -27,6 +27,21 @@ beforeEach(() => {
   });
 });
 describe("shared operation runner", () => {
+  it("forwards status transitions to Activity and records nothing on dry run or replay", async () => {
+    const effect = { outcome: "status_changed" as const, entityType: "formulation", entityIds: ["recipe-id"], versionBefore: 1, versionAfter: 2, changedFields: [], fromStatus: "active", toStatus: "archived" };
+    const op = { ...operation, describe: () => effect };
+    await runOperation(op, ctx, { amount: 1 });
+    expect(activity).toHaveBeenCalledExactlyOnceWith(ctx, tx, expect.objectContaining({
+      action: "status_changed", fromStatus: "active", toStatus: "archived", changedFields: [],
+    }));
+    activity.mockClear();
+    await runOperation(op, ctx, { amount: 1 }, { dryRun: true });
+    claim.mockResolvedValueOnce({ kind: "replay", outcome: {}, effect });
+    await expect(runOperation(op, ctx, { amount: 1 }, { idempotency: { credentialId: "credential", key: "archive" } }))
+      .resolves.toMatchObject({ replayed: true, effect });
+    expect(activity).not.toHaveBeenCalled();
+  });
+
   it.each(["form", "rest", "mcp", "script"] as const)("passes %s source to nested writers and uses it for runner activity", async source => {
     const execute = vi.fn(operation.execute);
     const op = { ...operation, execute, describe: () => ({ outcome: "updated", entityType: "labSample", entityIds: ["sample-id"], versionBefore: 1, versionAfter: 2 }) } satisfies Operation<typeof operation.input, { date: Date; amount: number }>;

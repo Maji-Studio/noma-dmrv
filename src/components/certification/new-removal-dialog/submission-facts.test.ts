@@ -59,6 +59,7 @@ const READY_COMPILATION = {
 const BLOCKED_COMPILATION = {
   review: { pendingSourceCount: 0 },
   blockers: ["Latest production run ends at 2028-01-02T15:00:00.000Z."],
+  removalBlockers: [{ code: "legacy", message: "Latest production run ends at 2028-01-02T15:00:00.000Z.", fixTarget: null }],
   warnings: [],
   snapshot: null,
   compilationHash: null,
@@ -163,7 +164,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
         compilation: BLOCKED_COMPILATION,
         checks: [check("measurementDates", "unmet")],
       }).blockers,
-    ).toEqual(BLOCKED_COMPILATION.blockers);
+    ).toEqual(BLOCKED_COMPILATION.removalBlockers);
   });
 
   it("pluralises the blocking issue count", () => {
@@ -193,7 +194,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
       state: "blocked",
       headline: "Cannot submit yet",
       detail: "Clear the blockers below.",
-      blockers: BLOCKED_COMPILATION.blockers,
+      blockers: BLOCKED_COMPILATION.removalBlockers,
     });
   });
 
@@ -229,8 +230,29 @@ describe("buildSubmissionFacts verdict precedence", () => {
     ).toMatchObject({
       state: "blocked",
       headline: "Cannot submit yet",
-      blockers: ["Facility not linked"],
+      blockers: [{ code: "legacy", message: "Facility not linked", fixTarget: null }],
     });
+  });
+
+  it("shows a typed advisory once, not again as a free-text note", () => {
+    const message = "Electricity is recorded, but the active Removal template has no automatic source for it.";
+    const advisory = { code: "droppedRecordedFact", fixTarget: "templateLineReview", message } as const;
+    const result = facts({
+      compilation: { ...READY_COMPILATION, submissionAdvisories: [advisory], warnings: [message, "Other note."] } as unknown as RemovalCompilationView,
+      ctx: { ...CONTEXT, submissionWarnings: [message] } as unknown as RemovalCertifyContext,
+    });
+    expect(result.advisories).toEqual([advisory]);
+    expect(result.warnings).toEqual(["Other note."]);
+    expect(result.state).toBe("ready");
+  });
+
+  it("falls back to the context advisories before the compilation arrives", () => {
+    const advisory = { code: "droppedRecordedFact", fixTarget: "templateLineReview", message: "Startup diesel is recorded." } as const;
+    const result = facts({
+      compilation: null,
+      ctx: { ...CONTEXT, submissionAdvisories: [advisory] } as unknown as RemovalCertifyContext,
+    });
+    expect(result.advisories).toEqual([advisory]);
   });
 
   it("stays ready for a resubmittable removal", () => {

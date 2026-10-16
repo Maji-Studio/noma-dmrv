@@ -23,16 +23,17 @@ import { createBiocharProduct, createBiocharProductInTransaction } from './bioch
 import type { DbTransaction } from '@/db';
 
 const ctx = { organizationId: 'org', userId: 'operator', orgRole: 'owner' as const, isPlatformAdmin: false };
+const recipeLine = { id: 'line', feedstockTypeId: 'type', feedstockTypeName: 'Compost', feedstockTypeCategory: 'compost', ratio: 0.2 };
 const data = { code: 'BP-1', facilityId: 'facility', formulationId: 'recipe', placedAt: '2026-09-14T12:00:00.000Z',
   idempotencyKey: 'request', basisFingerprint: 'aggregate', sourceBiocharStorageLocationId: 'source', storageLocationId: 'destination',
-  massKg: 120, moistureContentPercent: 10, waterAddedKg: 0, composition: { ingredients: [{ storageLocationId: 'ingredient', massKg: 20 }] } };
+  massKg: 120, moistureContentPercent: 10, waterAddedKg: 0, composition: { ingredients: [{ ...recipeLine, formulationIngredientId: recipeLine.id, storageLocationId: 'ingredient', massKg: 20 }] } };
 
 beforeEach(() => {
   vi.resetAllMocks();
-  const rows = [[{ id: 'facility' }], [{ id: 'recipe', biocharRatio: 1 }], [{ id: 'destination', formulationId: 'recipe' }], [{ date: '2026-09-13' }], [{ productionRunId: 'run', wetMassKg: '100' }]];
+  const rows = [[{ id: 'facility' }], [{ id: 'recipe', biocharRatio: 1 }], [{ id: 'destination', formulationId: 'recipe' }], [{ id: 'recipe' }], [recipeLine], [{ date: '2026-09-13' }], [{ productionRunId: 'run', wetMassKg: '100' }]];
   mocks.select.mockImplementation(() => {
     const result = rows.shift();
-    const query = { from: () => query, where: () => query, for: async () => result, then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve) };
+    const query = { from: () => query, innerJoin: () => query, orderBy: () => query, where: () => query, for: async () => result, then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve) };
     return query;
   });
   mocks.insert.mockReturnValue({ values: () => ({ returning: async () => [{ id: 'product' }] }) });
@@ -54,6 +55,16 @@ describe('locked product preview revalidation', () => {
     expect(mocks.revalidate).toHaveBeenCalledWith(ctx, expect.objectContaining({ massKg: 100, ingredientBins: data.composition.ingredients }), expect.anything(), 'aggregate');
     expect(mocks.insert).not.toHaveBeenCalled();
     expect(mocks.persist).not.toHaveBeenCalled();
+  });
+  it('skips ingredient stock locks for nonpositive masses and absent bins', async () => {
+    const ingredients = [
+      { ...data.composition.ingredients[0], massKg: 0, storageLocationId: 'unused-bin' },
+      { ...data.composition.ingredients[0], massKg: -1, storageLocationId: 'negative-bin' },
+      { ...data.composition.ingredients[0], storageLocationId: null },
+    ];
+    await createBiocharProduct(ctx, { ...data, composition: { ingredients } });
+    expect(mocks.posting).toHaveBeenCalledWith(ctx, tx,
+      expect.objectContaining({ additionalBinIds: ['destination'] }), { snapshotStock: undefined });
   });
   it('checks the source plan against its own basis and records the product-wide basis', async () => {
     await expect(createBiocharProduct(ctx, data)).resolves.toEqual({ id: 'product' });
