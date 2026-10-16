@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
-import { certificationSubmissions } from "@/db/schema";
+import { certificationSubmissions, certifierGhgStatements, certifierRemovals } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { getMetadataValue } from "@/lib/certification/submission-metadata";
 import { getGhgStatement } from "@/lib/isometric/ghg-statements";
@@ -14,7 +14,7 @@ type Removal = { removalId: string; ghgStatementId: string | null };
 type Submission = typeof certificationSubmissions.$inferSelect;
 
 /** Include historical statement membership, not just the Removal's current FK. */
-export async function readRecordLockLineage(ctx: OrgContext, tx: DbTransaction, removals: readonly Removal[], fresh = false): Promise<RecordLockRemoval[]> {
+export async function readRecordLockLineage(ctx: OrgContext, tx: Pick<DbTransaction, "select">, removals: readonly Removal[], fresh = false): Promise<RecordLockRemoval[]> {
   requireOrgScope(ctx);
   const ids = [...new Set(removals.map(row => row.removalId))];
   if (!ids.length) return [];
@@ -26,6 +26,12 @@ export async function readRecordLockLineage(ctx: OrgContext, tx: DbTransaction, 
     inArray(certificationSubmissions.submissionType, REMOVAL_SCOPED_SUBMISSION_TYPES),
   ));
   const statementRows = await tx.select().from(certificationSubmissions).where(and(
+    inArray(certificationSubmissions.localEntityId, tx.select({ id: certifierGhgStatements.id }).from(certifierGhgStatements).where(and(
+      eq(certifierGhgStatements.organizationId, ctx.organizationId),
+      inArray(certifierGhgStatements.facilityId, tx.select({ facilityId: certifierRemovals.facilityId }).from(certifierRemovals).where(and(
+        eq(certifierRemovals.organizationId, ctx.organizationId), inArray(certifierRemovals.id, ids),
+      ))),
+    ))),
     eq(certificationSubmissions.organizationId, ctx.organizationId),
     eq(certificationSubmissions.provider, "isometric"),
     eq(certificationSubmissions.localEntityType, "ghgStatement"),
@@ -42,26 +48,40 @@ export async function readRecordLockLineage(ctx: OrgContext, tx: DbTransaction, 
       const members = getMetadataValue(row.metadata, "removalIds");
       return currentIds.has(row.localEntityId) || (Array.isArray(members) && members.some(member => externalIds.has(member)));
     });
+    const canRefresh = fresh && !submissions.some(row => isLockedInFlight(row) || !["submitted", "accepted", "rejected", "superseded"].includes(row.status)) &&
+      covering.every(row => {
+        const status = getMetadataValue(row.metadata, "remoteStatus");
+        const submitted = getMetadataValue(row.metadata, "submittedToVerifierAt");
+        return !isLockedInFlight(row) && (status === "FAILED_VERIFICATION" ||
+          (status === "DRAFT" && typeof submitted === "string" && Number.isFinite(Date.parse(submitted))));
+      });
     return { id, submissions: submissions.map(submissionFact),
       statements: await Promise.all(covering.map(row => {
-        if (!statementFacts.has(row.id)) statementFacts.set(row.id, readStatement(ctx, tx, row, fresh));
-        return statementFacts.get(row.id)!;
+        const key = `${row.id}:${canRefresh}`;
+        if (!statementFacts.has(key)) statementFacts.set(key, readStatement(ctx, tx, row, canRefresh));
+        return statementFacts.get(key)!;
       })) };
   }));
 }
 
-async function readStatement(ctx: OrgContext, tx: DbTransaction, row: Submission, fresh: boolean): Promise<RecordLockStatement> {
+async function readStatement(ctx: OrgContext, tx: Pick<DbTransaction, "select">, row: Submission, fresh: boolean): Promise<RecordLockStatement> {
   const savedStatus = getMetadataValue(row.metadata, "remoteStatus");
   const savedSubmitted = getMetadataValue(row.metadata, "submittedToVerifierAt");
   const fact: RecordLockStatement = { id: row.localEntityId,
     status: typeof savedStatus === "string" ? savedStatus : null,
     fresh: false, submittedToVerifier: typeof savedSubmitted === "string" && Number.isFinite(Date.parse(savedSubmitted)),
+    removalExternalIds: Array.isArray(getMetadataValue(row.metadata, "removalIds")) ? getMetadataValue(row.metadata, "removalIds") as string[] : [],
     inFlight: isLockedInFlight(row) || !["submitted", "accepted", "rejected", "superseded"].includes(row.status),
   };
-  if (!fresh || !row.externalId || fact.inFlight) return fact;
+  if (!fresh || !row.externalId || fact.inFlight ||
+    !(fact.status === "FAILED_VERIFICATION" || (fact.status === "DRAFT" && fact.submittedToVerifier))) return fact;
   try {
     const remote = await getGhgStatement(await resolveIsometricClient(ctx, tx), row.externalId);
     return { ...fact, status: remote.status, fresh: true,
+      // REST has no return timestamp. A verifier submission is a conservative
+      // lower bound for its subsequent return, never the time of this read.
+      returnedAt: remote.submitted_at ?? (typeof savedSubmitted === "string" ? savedSubmitted : null),
+      removalExternalIds: remote.ghg_entry_ids,
       submittedToVerifier: fact.submittedToVerifier || Boolean(remote.submitted_at && Number.isFinite(Date.parse(remote.submitted_at))) };
   } catch {
     // A failed registry read cannot authorize an edit of previously sent data.
@@ -70,6 +90,6 @@ async function readStatement(ctx: OrgContext, tx: DbTransaction, row: Submission
 }
 
 function submissionFact(row: Submission) {
-  return { status: row.status, inFlight: isLockedInFlight(row),
+  return { id: row.id, externalId: row.externalId, submittedAt: row.submittedAt?.toISOString(), createdAt: row.createdAt.toISOString(), status: row.status, inFlight: isLockedInFlight(row),
     hasRemoteMutation: Boolean(row.externalId) || ["possible", "confirmed"].includes(String(getMetadataValue(row.metadata, "externalMutation"))) };
 }

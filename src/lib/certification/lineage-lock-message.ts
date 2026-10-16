@@ -1,4 +1,4 @@
-import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
+import { recordLocks, withRecordLockGuidance, type RecordLock } from "@/lib/record-lock";
 
 const SENT_LOCK = recordLocks.removal({ dependents: [], removals: [{ id: "removal", submissions: [{ status: "submitted" }], statements: [] }] });
 
@@ -34,6 +34,7 @@ const ENTITY_LABELS: Record<CertificationLineageLockEntityType, string> = {
 };
 
 interface CertificationLineageLockMessageInput {
+  lock?: RecordLock;
   mutation: CertificationLineageMutation;
   subjectEntityType: CertificationLineageLockEntityType;
   lineageEntityType: CertificationLineageLockEntityType;
@@ -45,9 +46,10 @@ export function formatCertificationLineageLockMessage({
   subjectEntityType,
   lineageEntityType,
   lineageRelationship,
+  lock = SENT_LOCK,
 }: CertificationLineageLockMessageInput): string {
   if (subjectEntityType === lineageEntityType) {
-    return withRecordLockGuidance(`Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because it is locked by a certification submission.`, SENT_LOCK);
+    return withRecordLockGuidance(`Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because it is locked by a certification submission.`, lock);
   }
 
   const lineageLabel = ENTITY_LABELS[lineageEntityType];
@@ -58,5 +60,5 @@ export function formatCertificationLineageLockMessage({
 
   return relationship === "selected"
     ? `${explanation} Select ${article} ${lineageLabel} that is not locked.`
-    : withRecordLockGuidance(explanation, SENT_LOCK);
+    : withRecordLockGuidance(explanation, lock);
 }

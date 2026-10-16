@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { getRecordLockForTarget } from "@/data-access/record-certification-lock";
+import { getRecordLocksForTargets } from "@/data-access/record-certification-lock";
 import type { RecordLock } from "@/lib/record-lock";
 import { env } from "@/config/env";
 import { listCreditBatchCertificationLinks } from "@/data-access/credit-batch-certification-links";
@@ -361,6 +361,8 @@ export async function loadCreditBatchHealthSummaries(
       ids,
       facilityFacts,
     );
+    const locks = await getRecordLocksForTargets(orgCtx, ids.map(entityId => ({ entityType: "creditBatch", entityId })));
+    const locksById = new Map(ids.map((id, index) => [id, locks[index]]));
     const summaries: Record<string, CreditBatchHealthSummary> = {};
     for (const batchId of ids) {
       const ctx = contextsByBatch[batchId];
@@ -378,7 +380,7 @@ export async function loadCreditBatchHealthSummaries(
         ? (ghgStatementSubmissions.get(ghgStatementId) ?? null)
         : null;
       summaries[batchId] = {
-        recordLock: await getRecordLockForTarget(orgCtx, { entityType: "creditBatch", entityId: batchId }),
+        recordLock: locksById.get(batchId)!,
         state: health.state,
         issueCount: health.issueCount,
         removalId,

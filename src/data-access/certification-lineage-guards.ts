@@ -107,12 +107,12 @@ function lineageQuery(
 
 function lineageQueryWhere(
   ctx: OrgContext,
-  tx: DbTransaction,
+  tx: Pick<DbTransaction, "select">,
   condition: SQL,
 ) {
   requireOrgScope(ctx);
   return tx
-    .selectDistinct({
+    .select({
       removalId: certifierRemovals.id,
       ghgStatementId: certifierRemovals.ghgStatementId,
       creditBatchId: creditBatchApplications.creditBatchId,
@@ -340,12 +340,14 @@ export async function assertLockedLineagesAllowMutation(
     if (lineageArtifactLocks(lineage).some((artifact) => !lockedKeys.has(certificationArtifactLockKey(artifact)))) {
       throw new CertificationLineageChangedError();
     }
-    if (!lineage.some(isSubmittedLineageRow)) continue;
+    const lock = recordLocks[check.target.entityType]({ removals: lineage.map(row => row.recordLockRemoval), dependents: [] });
+    if (lock.level !== "sent") continue;
     throw new DomainError("certification_locked", formatCertificationLineageLockMessage({
       mutation: check.mutation,
       subjectEntityType: check.subjectEntityType ?? check.target.entityType,
       lineageEntityType: check.target.entityType,
       lineageRelationship: check.lineageRelationship,
+      lock,
     }));
   }
 }
@@ -376,6 +378,7 @@ export async function assertCanMutateCertifiedLineage(
       subjectEntityType,
       lineageEntityType: target.entityType,
       lineageRelationship,
+      lock,
     }),
   );
 }
@@ -398,4 +401,15 @@ export async function getRecordLock(ctx: OrgContext, tx: DbTransaction, target: 
     removals: lineage.map(row => row.recordLockRemoval),
     dependents: await readRecordDependents(ctx, tx, target),
   });
+}
+
+/** Resolve shared registry facts once for an entire advisory request. */
+export async function getRecordLocks(ctx: OrgContext, tx: Pick<DbTransaction, "select">, targets: readonly CertifiedLineageTarget[]) {
+  requireOrgScope(ctx);
+  const groups = await Promise.all(targets.map(target => lineageQueryWhere(ctx, tx, targetCondition(target))));
+  const facts = await readRecordLockLineage(ctx, tx, groups.flat(), true);
+  return Promise.all(targets.map(async (target, index) => recordLocks[target.entityType]({
+    removals: facts.filter(fact => groups[index].some(row => row.removalId === fact.id)),
+    dependents: await readRecordDependents(ctx, tx, target),
+  })));
 }

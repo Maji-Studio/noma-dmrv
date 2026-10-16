@@ -192,7 +192,7 @@ export async function updateFacility(
     if (tierIsLocked) {
       throw new DomainError(
         "certification_locked",
-        "Cannot change this facility's durability tier because registry submissions use it. Resolve those submissions before changing the tier.",
+        "Cannot change this facility's durability tier because registry submissions use it. Delete interrupted Removals and their registry records first. Completed submissions keep this tier fixed.",
       );
     }
 

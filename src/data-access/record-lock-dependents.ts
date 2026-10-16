@@ -1,13 +1,14 @@
 import { and, eq, isNotNull } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
-import { applications, biocharProductSourceAllocations, creditBatchApplications, creditBatchProductionRuns, deliveries, outputStockAllocations, productionRunFeedstocks, samples } from "@/db/schema";
+import { applications, biocharProductSourceAllocations, creditBatchApplications, creditBatchProductionRuns, deliveries, outputStockAllocations, productionRunFeedstocks, samples, outputStockRunAllocations, binMovements, productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { RecordLockHolder } from "@/lib/record-lock";
 import type { CertifiedLineageTarget } from "./certification-lineage-guards";
+import { isCountMovement } from "./output-stock-count";
 import { requireOrgScope } from "./utils";
 
 /** Numeric consumers only. Merely sharing a bin does not establish a dependency. */
-export async function readRecordDependents(ctx: OrgContext, tx: DbTransaction, target: CertifiedLineageTarget): Promise<RecordLockHolder[]> {
+export async function readRecordDependents(ctx: OrgContext, tx: Pick<DbTransaction, "select">, target: CertifiedLineageTarget): Promise<RecordLockHolder[]> {
   requireOrgScope(ctx);
   const id = target.entityId;
   switch (target.entityType) {
@@ -21,7 +22,16 @@ export async function readRecordDependents(ctx: OrgContext, tx: DbTransaction, t
         .where(and(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId), eq(biocharProductSourceAllocations.productionRunId, id)));
       const batches = await tx.select({ id: creditBatchProductionRuns.creditBatchId }).from(creditBatchProductionRuns)
         .where(and(eq(creditBatchProductionRuns.organizationId, ctx.organizationId), eq(creditBatchProductionRuns.productionRunId, id)));
-      return [...rows.map(row => ({ kind: "biocharProduct", id: row.id })), ...batches.map(row => ({ kind: "creditBatch", id: row.id }))];
+      const effects = await tx.select({ id: outputStockAllocations.movementId }).from(outputStockRunAllocations)
+        .innerJoin(outputStockAllocations, and(eq(outputStockAllocations.organizationId, ctx.organizationId), eq(outputStockAllocations.id, outputStockRunAllocations.allocationId)))
+        .where(and(eq(outputStockRunAllocations.organizationId, ctx.organizationId), eq(outputStockRunAllocations.productionRunId, id)));
+      const [run] = await tx.select().from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, id)));
+      const movements = !run?.biocharStorageLocationId ? [] : await tx.select().from(binMovements)
+        .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, run.biocharStorageLocationId)));
+      const counts = movements.filter(movement => isCountMovement(movement) && run!.createdAt <= movement.createdAt &&
+        (!run!.endTime || (movement.occurredAt && run!.endTime <= movement.occurredAt)));
+      return [...rows.map(row => ({ kind: "biocharProduct", id: row.id })), ...batches.map(row => ({ kind: "creditBatch", id: row.id })),
+        ...effects.map(row => ({ kind: "stockEntry", id: row.id })), ...counts.map(row => ({ kind: "stockEntry", id: row.id }))];
     }
     case "biocharProduct": {
       const rows = await tx.select({ id: outputStockAllocations.movementId }).from(outputStockAllocations)
@@ -50,9 +60,11 @@ export async function readRecordDependents(ctx: OrgContext, tx: DbTransaction, t
       return rows.map(row => ({ kind: "removal", id: row.id! }));
     }
     case "creditBatch": {
+      const batchSamples = await tx.select({ id: samples.id }).from(samples)
+        .where(and(eq(samples.organizationId, ctx.organizationId), eq(samples.creditBatchId, id)));
       const rows = await tx.select({ id: creditBatchApplications.removalId }).from(creditBatchApplications)
         .where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.creditBatchId, id), isNotNull(creditBatchApplications.removalId)));
-      return rows.map(row => ({ kind: "removal", id: row.id! }));
+      return [...rows.map(row => ({ kind: "removal", id: row.id! })), ...batchSamples.map(row => ({ kind: "sample", id: row.id }))];
     }
   }
 }

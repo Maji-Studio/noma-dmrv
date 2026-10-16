@@ -233,7 +233,7 @@ export interface RecordedOutputStockMovement {
 }
 
 export interface RecordOutputStockMovementOptions extends OutputStockPostingOptions {
-  /** Own-form edits require the entry to be the bin's latest, regardless of layer dependencies. */
+  /** Legacy option name: own-form edits check dependencies and Sent, not latest-entry order. */
   requireLatestCorrection?: boolean;
   /** Injectable server clock for exact-boundary tests. */
   now?: Date;

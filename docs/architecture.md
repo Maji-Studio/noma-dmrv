@@ -537,15 +537,16 @@ Statement). Every submission HTTP attempt appends to `certifier_sync_events`
 [0008](./adr/0008-submission-ledger-internal-seam.md). Source
 creation POST directly and reconcile through separate state.
 
-**Source-data immutability:** once a Removal or GHG Statement
-has a blocking ledger row (`draft`, `submitted`, `accepted`), its upstream
-operational records are locked at the data-access boundary. The guard validates
-the Removal's captured application-slice set against the reachable source
-records before every mutation; it does not recompute submitted membership from
-mutable current lineage. It blocks edits/deletes to production runs, samples,
-applications, deliveries, orders, biochar products, feedstocks, and credit-batch
-grouping records. Corrections are new submission versions or
-correction-workflow records, never in-place edits.
+**Source-data immutability:** the converted source-data guards resolve every
+Removal ledger version and covering statement through `record-lock-lineage.ts`.
+Draft, unknown, in-flight and remotely effective attempts hold Sent. A fresh
+returned statement can reopen only the covered attempts that predate its return
+evidence; missing evidence or a failed registry read keeps Sent. REST's verifier
+submission timestamp is a conservative lower bound for return, not an exact
+return time. Mutations re-resolve under artifact locks and refuse lineage drift.
+Numeric dependencies still apply after reopening. Independent master-data,
+document and Removal lifecycle guards remain outside this policy; see
+[Record locks](./database.md#record-locks).
 
 **Workspace:** `/certification` (ADR
 [0007](./adr/0007-certification-workspace-consolidation.md)) is a first-class

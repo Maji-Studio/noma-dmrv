@@ -10,8 +10,8 @@ describe.each(Object.entries(recordLocks))("%s record lock", (_kind, lock) => {
 
   it.each(["FAILED_VERIFICATION", "DRAFT"])("reopens after a fresh %s from Certify, retaining dependency locks", status => {
     expect(lock({ dependents: [{ kind: "application", id: "application" }], removals: [{
-      id: "removal", submissions: [{ status: "submitted" }], statements: [{
-        id: "statement", status, fresh: true, submittedToVerifier: true,
+      id: "removal", submissions: [{ status: "submitted", externalId: "entry", submittedAt: "2026-10-01T00:00:00Z" }], statements: [{
+        id: "statement", status, fresh: true, submittedToVerifier: true, returnedAt: "2026-10-02T00:00:00Z", removalExternalIds: ["entry"],
       }],
     }] }).level).toBe("inUse");
   });
@@ -44,4 +44,18 @@ describe.each(Object.entries(recordLocks))("%s record lock", (_kind, lock) => {
       ], statements: [] }],
     })).toMatchObject({ level: "sent", freeFields: [] });
   });
+});
+
+it.each([['2026-10-03', 'sent'], ['2026-10-01', 'open']])('version 2 submitted at %s yields %s after return', (submittedAt, level) => {
+  expect(recordLocks.removal({ dependents: [], removals: [{ id: 'removal', submissions: [
+    { id: 'v1', status: 'superseded', externalId: 'entry1', hasRemoteMutation: true, submittedAt: '2026-09-30' },
+    { id: 'v2', status: 'submitted', externalId: 'entry2', submittedAt },
+  ], statements: [{ id: 'statement', status: 'FAILED_VERIFICATION', fresh: true, submittedToVerifier: true,
+    returnedAt: '2026-10-02', removalExternalIds: ['entry1', 'entry2'] }] }] }).level).toBe(level);
+});
+it('a returned statement cannot release a version it does not cover', () => {
+  expect(recordLocks.removal({ dependents: [], removals: [{ id: 'removal', submissions: [
+    { status: 'submitted', externalId: 'entry2', submittedAt: '2026-10-01' },
+  ], statements: [{ id: 'statement', status: 'FAILED_VERIFICATION', fresh: true, submittedToVerifier: true,
+    returnedAt: '2026-10-02', removalExternalIds: ['entry1'] }] }] }).level).toBe('sent');
 });

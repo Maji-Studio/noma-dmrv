@@ -274,7 +274,7 @@ export async function upsertCertifierProject(
         );
       }
 
-      // Rebinding either registry identifier requires superseding blocking submissions first.
+      // Remote effects keep the registry mapping fixed until their Removal is deleted.
       const mappingIdentifiersChanged =
         existing &&
         (existing.externalProjectId !== values.externalProjectId ||
@@ -288,7 +288,7 @@ export async function upsertCertifierProject(
         );
         if (blocked) {
           throw new SafeError(
-            "Cannot change certifier project or facility ID: this facility has certifier submissions. Supersede or reject them first.",
+            "Cannot change certifier project or facility ID: this facility has certifier submissions. Delete interrupted Removals and their registry records first. Completed submissions keep this mapping fixed.",
           );
         }
         if (
@@ -432,7 +432,7 @@ export async function deleteCertifierProject(
     const blocked = await hasBlockingFacilitySubmission(ctx, tx, facilityId, provider);
     if (blocked) {
       throw new SafeError(
-        "Cannot unlink: this facility has certifier submissions. Supersede or reject them first.",
+        "Cannot unlink: this facility has certifier submissions. Delete interrupted Removals and their registry records first. Completed submissions keep this mapping fixed.",
       );
     }
 

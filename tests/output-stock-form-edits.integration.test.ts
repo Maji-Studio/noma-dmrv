@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, expect, it, vi } from "vitest";
 import { db } from "@/db";
-import { binMovements } from "@/db/schema";
+import { binMovements, productionRuns } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { getRecordLock } from "@/data-access/certification-lineage-guards";
 import { getOutputStockHistory } from "@/data-access/output-stock-history";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { correctOutputStockEntry } from "@/lib/operations/output-stock-form-edits";
@@ -140,4 +141,28 @@ it("keeps a loss editable after a newer intake, including a backdated placement"
   const preview = await previewOutputStock(f.ctx, input);
   await expect(correctOutputStockEntry(f.ctx, { ...input, reason: "Wrong reading", idempotencyKey: randomUUID(),
     basisFingerprint: preview.basisFingerprint, expectedProductVersions: preview.expectedProductVersions })).resolves.toBeDefined();
+});
+
+it('locks a loss after a product draws from the same source bin', async () => {
+  const f = await fixture();
+  const loss = await postMeasurement(f, { storageLocationId: f.source.id, kind: 'loss', wetMassKg: 10, occurredAt: '2026-09-13T12:00:00.000Z' });
+  await postProduct(f, { massKg: 100, placedAt: STOCK_TIME });
+  const history = await getOutputStockHistory(f.ctx, f.source.id);
+  expect(history.find(entry => entry.id === loss.movementId)?.editLockedReason).toContain('later');
+});
+it('keeps history readable when an archived intake cannot be projected', async () => {
+  const f = await fixture();
+  const loss = await postMeasurement(f, { storageLocationId: f.source.id, kind: 'loss', wetMassKg: 10 });
+  await db.update(productionRuns).set({ biocharDryMassKg: null, archivedAt: new Date() }).where(eq(productionRuns.biocharStorageLocationId, f.source.id));
+  const history = await getOutputStockHistory(f.ctx, f.source.id);
+  expect(history.find(entry => entry.id === loss.movementId)?.editLockedReason).toContain('cannot be verified');
+});
+
+it.each(['loss', 'count'] as const)('reports a run In use when only a stock %s consumes it', async kind => {
+  const f = await postedStockFixture({ stockKg: 0 }); fixtures.push(f);
+  expect((await db.transaction(tx => getRecordLock(f.ctx, tx, { entityType: 'productionRun', entityId: f.runs[0].id }))).level).toBe('open');
+  await postMeasurement(f, { storageLocationId: f.source.id, kind, wetMassKg: kind === 'loss' ? 10 : 1400 });
+  const lock = await db.transaction(tx => getRecordLock(f.ctx, tx, { entityType: 'productionRun', entityId: f.runs[0].id }));
+  expect(lock.level).toBe('inUse');
+  expect(lock.heldBy).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'stockEntry' })]));
 });

@@ -5,7 +5,7 @@ import { SafeError } from '@/lib/errors';
 import { orderedSourcesSchema } from '@/schemas/output-stock';
 import type { OutputMoistureReset, OutputStockHistoryEntry, OutputStockPreview } from '@/types/output-stock';
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import { getOutputStockAllocationProjection } from './output-stock';
+import { getOutputStockAllocationProjection, readOutputBinAllLayers, UnresolvedOutputStockError } from './output-stock';
 import { outputMovementLockReason } from './output-stock-edit-lock';
 import { requireOrgScope } from './utils';
 import { deliveryAppliedLockedReason } from '@/lib/output-stock/labels';
@@ -103,11 +103,17 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   const applied = deliveryIds.length === 0 ? [] : await reader.select({ deliveryId: applications.deliveryId, code: applications.code }).from(applications)
     .where(and(eq(applications.organizationId, ctx.organizationId), inArray(applications.deliveryId, deliveryIds)));
   const applicationCode = new Map(applied.map(row => [row.deliveryId, row.code]));
+  let layers: Awaited<ReturnType<typeof readOutputBinAllLayers>>['layers'] | null = null;
+  try {
+    ({ layers } = await readOutputBinAllLayers(ctx, storageLocationId, reader, { includeArchived: true }));
+  } catch (error) {
+    if (!(error instanceof UnresolvedOutputStockError)) throw error;
+  }
   for (const entry of history) {
     if (entry.kind === 'reversal' || !['loss', 'delivery'].includes(entry.eventKind ?? entry.kind)) continue;
     const original = movements.find(row => row.movement.id === entry.id)?.movement;
     const code = entry.deliveryId ? applicationCode.get(entry.deliveryId) : undefined;
-    if (original) entry.editLockedReason = code ? deliveryAppliedLockedReason(code) : await outputMovementLockReason(ctx, storageLocationId, original.id, reader);
+    if (original) entry.editLockedReason = code ? deliveryAppliedLockedReason(code) : await outputMovementLockReason(ctx, storageLocationId, original.id, reader, { original, facilityId: bin.facilityId, all: rows, layers });
   }
   return history;
 }
