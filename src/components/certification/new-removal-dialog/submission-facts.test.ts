@@ -233,6 +233,27 @@ describe("buildSubmissionFacts verdict precedence", () => {
     });
   });
 
+  it("shows a typed advisory once, not again as a free-text note", () => {
+    const message = "Electricity is recorded, but the active Removal template has no automatic source for it.";
+    const advisory = { code: "droppedRecordedFact", fixTarget: "templateLineReview", message } as const;
+    const result = facts({
+      compilation: { ...READY_COMPILATION, submissionAdvisories: [advisory], warnings: [message, "Other note."] } as unknown as RemovalCompilationView,
+      ctx: { ...CONTEXT, submissionWarnings: [message] } as unknown as RemovalCertifyContext,
+    });
+    expect(result.advisories).toEqual([advisory]);
+    expect(result.warnings).toEqual(["Other note."]);
+    expect(result.state).toBe("ready");
+  });
+
+  it("falls back to the context advisories before the compilation arrives", () => {
+    const advisory = { code: "droppedRecordedFact", fixTarget: "templateLineReview", message: "Startup diesel is recorded." } as const;
+    const result = facts({
+      compilation: null,
+      ctx: { ...CONTEXT, submissionAdvisories: [advisory] } as unknown as RemovalCertifyContext,
+    });
+    expect(result.advisories).toEqual([advisory]);
+  });
+
   it("stays ready for a resubmittable removal", () => {
     expect(facts({ readiness: readiness("submitted") })).toMatchObject({
       state: "ready",

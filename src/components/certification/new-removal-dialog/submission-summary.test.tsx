@@ -70,6 +70,7 @@ const PASSING_CHECKS: RemovalRequirementCheck[] = [
 ];
 
 function render(overrides: {
+  compilation?: RemovalCompilationView;
   ctx?: RemovalCertifyContext;
   checks?: RemovalRequirementCheck[];
   facilityName?: string;
@@ -81,7 +82,7 @@ function render(overrides: {
       ctx={overrides.ctx ?? CONTEXT}
       facilityId="facility-1"
       facilityName={overrides.facilityName ?? "Tanzania facility"}
-      compilation={COMPILATION}
+      compilation={overrides.compilation ?? COMPILATION}
       isCompilationLoading={false}
       compilationError={null}
       checks={overrides.checks ?? PASSING_CHECKS}
@@ -96,6 +97,42 @@ describe("SubmissionSummary", () => {
     const html = render({ advisories: ["3 files are sent automatically when you submit"] });
     expect(html).not.toContain("3 files are sent automatically when you submit");
     expect(html).toBe(render());
+  });
+
+  it("links a dropped recorded fact as a warning, not a blocker", () => {
+    const message = "Genset diesel is recorded, but the active Removal template has no automatic source for it.";
+    const html = render({
+      compilation: {
+        ...COMPILATION,
+        submissionAdvisories: [{ code: "droppedRecordedFact", fixTarget: "templateLineReview", message }],
+        warnings: [message],
+      } as unknown as RemovalCompilationView,
+    });
+    expect(html).toContain("Submission notes");
+    expect(html.split(message)).toHaveLength(2);
+    expect(html).toContain("Review template lines");
+    expect(html).toContain("/certification/settings?section=removal-templates&amp;facility=facility-1");
+    expect(html).not.toContain('role="alert"');
+  });
+
+  it("links a blocker to its one repair destination and leaves an aggregate one unlinked", () => {
+    const html = render({
+      compilation: {
+        ...COMPILATION,
+        blockers: ["Choose a Removal template for this credit batch.", "Complete these fields before submitting the Removal:\nRecord Sample moisture"],
+        removalBlockers: [
+          { code: "unpinnedTemplate", message: "Choose a Removal template for this credit batch.", fixTarget: "creditBatchTemplate" },
+          { code: "entityReadiness", message: "Complete these fields before submitting the Removal:\nRecord Sample moisture", fixTarget: null },
+        ],
+        snapshot: null,
+        compilationHash: null,
+      } as unknown as RemovalCompilationView,
+    });
+    expect(html).toContain("Choose a Removal template for this credit batch.");
+    expect(html).toContain("Review credit batches");
+    expect(html).toContain("Record Sample moisture");
+    expect(html.split("Review credit batches")).toHaveLength(2);
+    expect(html).not.toContain("Review template lines");
   });
 
   it("shows vehicle advisories without adding a blocker", () => {
