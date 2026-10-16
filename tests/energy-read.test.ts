@@ -5,7 +5,7 @@ import { feedstockFixtureValues } from "./helpers/feedstock-fixture";
  * They execute every query the read composes (the delivery and application
  * run-share sums, the feedstock leg join, the effective-distance coalesce)
  * and pin the tenancy contract: another organization reads the facility as
- * empty and cannot write its factors.
+ * empty.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";

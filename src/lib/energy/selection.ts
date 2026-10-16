@@ -3,7 +3,7 @@
  * per-source totals for the summary line, and the list ranking. Activity
  * only; no CO2e.
  */
-import { creditBatchInPeriod } from "./period";
+import { creditBatchInPeriod, dayInPeriod } from "./period";
 import {
   DIESEL_SOURCE_KEYS,
   ENERGY_SOURCE_KEYS,
@@ -21,8 +21,7 @@ import type {
 /**
  * The credit batch a selection resolves to. A batch counts when its dates
  * overlap the period or when energy in the period reaches it: a July batch's
- * delivery in September puts a July node on September's Sankey, and clicking
- * that node must filter by it.
+ * delivery in September is September energy, so that batch stays selectable.
  */
 export function resolveSelectedBatch(
   creditBatches: EnergyCreditBatchInput[],
@@ -35,13 +34,17 @@ export function resolveSelectedBatch(
   return batch && batchReachesPeriod(batch, period, flows) ? batch : null;
 }
 
-/** Whether a batch's dates overlap the period or energy in the period reaches it. */
+/**
+ * Whether a batch's dates overlap the period or a flow dated inside the period
+ * reaches it. Flows outside the period never count, so a selection held from a
+ * longer period is not kept by energy the new period does not contain.
+ */
 export function batchReachesPeriod(
   batch: EnergyCreditBatchInput,
   period: EnergyPeriod,
   flows: EnergyFlow[],
 ): boolean {
-  return creditBatchInPeriod(batch, period) || flows.some((flow) => flow.creditBatchId === batch.id);
+  return creditBatchInPeriod(batch, period) || flows.some((flow) => flow.creditBatchId === batch.id && dayInPeriod(flow.day, period));
 }
 
 /**

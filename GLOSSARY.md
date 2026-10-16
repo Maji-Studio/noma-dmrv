@@ -54,11 +54,9 @@ submission data noma does not measure directly. Distinct from a measured value.
 
 **Emission factor**:
 kg CO₂e per unit of recorded activity (litre of diesel, kWh of grid
-electricity, tonne-km of road freight). noma holds no editable factors and the
-Energy page shows activity only (ADR 0031, estimates paused 2026-10-16);
-Isometric applies the **fixed constants** on its template to what is
-submitted. The dormant `facility_emission_factors` table is the only local
-trace.
+electricity, tonne-km of road freight). Isometric applies its own **fixed
+constants** on the template to what is submitted; noma shows recorded
+activity only (ADR 0031).
 _Avoid_: carbon intensity (the registry's word for its template factor),
 emission estimate (a submission input, above).
 
@@ -330,7 +328,7 @@ The Isometric removal-template **component** (group `co2-stored`) that
 turns applied biochar into the registry's stored-CO₂e figure. noma feeds
 it from aggregated **Sample** chemistry and applied biochar mass; the
 durable fraction (**durability tier**) scales the result. _Avoid_:
-equating it with noma's local CO₂e estimate; "carbon component".
+equating it with a CO₂e figure noma computes locally; "carbon component".
 
 ### External parties
 

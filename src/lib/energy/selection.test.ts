@@ -53,6 +53,12 @@ describe("batchReachesPeriod", () => {
     expect(batchReachesPeriod(JULY, OCTOBER, [])).toBe(false);
     expect(batchReachesPeriod(SEPTEMBER, PERIOD, [])).toBe(true);
   });
+
+  it("ignores flows dated outside the period, such as old-period flows under a narrower period", () => {
+    const narrower = { from: "2026-09-20", to: "2026-09-30" };
+    expect(batchReachesPeriod(JULY, PERIOD, [julyDeliveryInSeptember])).toBe(true);
+    expect(batchReachesPeriod(JULY, narrower, [julyDeliveryInSeptember])).toBe(false);
+  });
 });
 
 describe("totalsBySource", () => {

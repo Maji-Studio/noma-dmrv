@@ -1,7 +1,7 @@
 /**
  * EnergyToolbar: the period and the credit batch filter. The
- * batch select lists only the batches whose dates overlap the period,
- * newest first, grouped by year.
+ * batch select lists the batches whose dates overlap the period or whose
+ * energy reaches it, newest first, grouped by year.
  */
 "use client";
 
@@ -19,7 +19,7 @@ export const ALL_CREDIT_BATCHES = "all";
 interface EnergyToolbarProps {
   preset: EnergyPeriodPreset;
   onPresetChange: (preset: EnergyPeriodPreset) => void;
-  /** Credit batches in the period. */
+  /** Credit batches whose dates overlap the period or whose energy reaches it. */
   creditBatches: EnergyCreditBatchInput[];
   batchId: string | null;
   onBatchChange: (batchId: string | null) => void;
