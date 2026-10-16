@@ -77,7 +77,7 @@ function selectReturning(read: { rows: unknown[] } | { error: Error }) {
 function makeTx(enrichment: { rows: unknown[] } | { error: Error }) {
   const reads = [{ rows: [STORED_ROW] }, enrichment];
   const select = vi.fn(() => selectReturning(reads.shift() ?? { rows: [] }));
-  const update = vi.fn(() => ({ set: () => ({ where: async () => undefined }) }));
+  const update = vi.fn(() => ({ set: () => ({ where: () => ({ returning: async () => [STORED_ROW] }) }) }));
   return { select, update } as unknown as DbTransaction & {
     select: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;

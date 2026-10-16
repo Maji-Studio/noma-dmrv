@@ -6,7 +6,7 @@ import { Pool } from "pg";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { db } from "@/db";
-import { applications, applicationOutputAllocations, creditBatchApplications, deliveries, documents, facilities, users, outputStockAllocations, soilTemperatureMeasurements } from "@/db/schema";
+import { activityEvents, applications, applicationOutputAllocations, creditBatchApplications, deliveries, documents, facilities, users, outputStockAllocations, soilTemperatureMeasurements } from "@/db/schema";
 import { getPgPoolConfig } from "@/lib/pg-pool-config";
 import { runOperation, runOperationInProcess } from "@/lib/operations/runner";
 import { recordApplication, updateApplication, deleteApplication } from "@/lib/operations/applications";
@@ -178,3 +178,14 @@ it("holds mix-bin delivery applications out of unowned credit slices", async () 
     await cleanupLineageFixture(f);
   }
 });
+
+it("records only the scalar change when allocation rows are replaced unchanged", () => fixtureTest(async f => {
+  const app = (await runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0]), options)).application;
+  const before = await db.select().from(applicationOutputAllocations).where(eq(applicationOutputAllocations.applicationId, app.id));
+  expect(before.length).toBeGreaterThan(0);
+  await runOperationInProcess(updateApplication, ctx, { applicationId: app.id, expectedVersion: app.version, cropType: "Maize" }, options);
+  const events = await db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.entityId, app.id), eq(activityEvents.action, "updated")));
+  expect(events).toHaveLength(1);
+  expect(events[0].changedFields).toEqual(["cropType"]);
+  expect(events[0].changes).toEqual({ cropType: { from: null, to: "Maize" } });
+}));

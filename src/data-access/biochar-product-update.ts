@@ -1,3 +1,4 @@
+import type { CaptureActivity } from "@/lib/activity-changes";
 import { db, type DbTransaction } from "@/db";
 import { biocharProducts, type BiocharProduct } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -47,7 +48,7 @@ function productNotFound(): DomainError {
  * immutable. Lock order as every product writer: bins, certification lineage
  * (refused as `certification_locked`), then the product row for the version check.
  */
-export async function updateBiocharProductInTransaction(ctx: OrgContext, tx: DbTransaction, productId: string, data: UpdateBiocharProductInput): Promise<BiocharProduct> {
+export async function updateBiocharProductInTransaction(ctx: OrgContext, tx: DbTransaction, productId: string, data: UpdateBiocharProductInput, capture?: CaptureActivity): Promise<BiocharProduct> {
   requireOrgScope(ctx);
   const [product] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId)));
   if (!product) throw productNotFound();
@@ -63,6 +64,7 @@ export async function updateBiocharProductInTransaction(ctx: OrgContext, tx: DbT
   const [saved] = await withUniqueCodeGuard(ctx, biocharProducts, biocharProducts.code, CODE_CONFLICT_MESSAGES.biocharProduct, () => tx.update(biocharProducts)
     .set({ version: nextVersion(biocharProducts.version), code: data.code, status: data.status, densityKgM3: data.densityKgM3, updatedAt: new Date() })
     .where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).returning());
+  capture?.(productId, locked, saved);
   return saved;
 }
 

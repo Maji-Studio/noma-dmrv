@@ -106,7 +106,7 @@ it("records exactly one event for each application write with its batch and sour
   expect(rows.map(row => row.action)).toEqual(["deleted", "updated", "created"]);
   for (const row of rows) expect(row).toMatchObject({ creditBatchId: fixture.batch.id, productionRunId: fixture.run.id, source: "form", actorUserId: ctx.userId });
   expect(rows[1].changedFields).toEqual(["cropType"]);
-  expect(stringifyWithBigint(rows)).not.toContain("private crop value");
+  expect(rows[1].changes.cropType).toEqual({ from: null, to: "private crop value" });
 });
 
 it.each(["different", "same", "unbatched"] as const)("records both run scopes when moving applications between %s batches", async batchScope => {
@@ -138,11 +138,13 @@ it.each(["different", "same", "unbatched"] as const)("records both run scopes wh
 
 it("records batch create, scalar update and delete once each", async () => {
   const created = await createCreditBatch(ctx, batchInput());
-  const updated = await updateCreditBatch(ctx, created.id, { expectedVersion: created.version, siteManagementNotes: "private notes" });
+  const updated = await updateCreditBatch(ctx, created.id, { expectedVersion: created.version, code: "ACT-CB-EDITED", siteManagementNotes: "private notes" });
   await deleteCreditBatch(ctx, updated.id, updated.version);
   const rows = await events("credit_batch", created.id);
   expect(rows.map(row => row.action)).toEqual(["deleted", "updated", "created"]);
-  expect(rows[1].changedFields).toEqual(["siteManagementNotes"]);
+  expect(rows[1].changedFields).toEqual(["code", "siteManagementNotes"]);
+  expect(rows[1].changes).toEqual({ code: { from: created.code, to: "ACT-CB-EDITED" } });
+  expect(stringifyWithBigint(rows)).not.toContain("private notes");
   for (const row of rows) expect(row.creditBatchId).toBe(created.id);
 });
 
@@ -152,7 +154,7 @@ it("keeps detach history on a run after its batch is deleted", async () => {
   await deleteCreditBatch(ctx, updated.id, updated.version);
   const rows = await events("production_run", fixture.run.id);
   expect(rows).toHaveLength(1);
-  expect(rows[0]).toMatchObject({ action: "updated", changedFields: ["credit_batch"], creditBatchId: fixture.batch.id, reasonCode: "detached" });
+  expect(rows[0]).toMatchObject({ action: "updated", changedFields: ["credit_batch"], creditBatchId: fixture.batch.id, reasonCode: "detached", changes: { credit_batch: { from: fixture.batch.id, to: null } } });
 });
 
 it("records manual attach and scalar edits as one batch update plus one run event", async () => {
@@ -273,6 +275,8 @@ it.each(["form", "rest", "mcp", "script"] as const)("preserves %s source through
 
 it.each(["application", "credit_batch", "document", "transport_leg"] as const)("rolls back a %s create when activity recording fails after insert", async type => {
   const original = activity.recordActivity;
+  const originalChange = activity.recordActivityChange;
+  vi.spyOn(activity, "recordActivityChange").mockImplementationOnce(async (...args) => { await originalChange(...args); throw FAILURE; });
   const spy = vi.spyOn(activity, "recordActivity").mockImplementationOnce(async (...args) => {
     await original(...args);
     throw FAILURE;
@@ -321,6 +325,8 @@ it.each(["update", "delete"] as const)("rolls back application %s and its activi
 });
 
 it.each(["update", "delete"] as const)("rolls back batch %s, membership and activity after a recording failure", async action => {
+  const originalChange = activity.recordActivityChange;
+  vi.spyOn(activity, "recordActivityChange").mockImplementationOnce(async (...args) => { await originalChange(...args); throw FAILURE; });
   const original = activity.recordActivity;
   vi.spyOn(activity, "recordActivity").mockImplementationOnce(async (...args) => {
     await original(...args);
@@ -353,6 +359,8 @@ it("rolls back legacy document deletion and activity on failure", async () => {
 it.each(["update", "delete"] as const)("rolls back transport %s and its activity after a recording failure", async action => {
   const saved = await createTransportLeg(ctx, legInput());
   const before = await allEvents();
+  const originalChange = activity.recordActivityChange;
+  vi.spyOn(activity, "recordActivityChange").mockImplementationOnce(async (...args) => { await originalChange(...args); throw FAILURE; });
   const original = activity.recordActivity;
   vi.spyOn(activity, "recordActivity").mockImplementationOnce(async (...args) => {
     await original(...args);
@@ -497,11 +505,22 @@ it("records vehicle snapshot refreshes as system leg updates with batch and run 
   const rows = await events("transport_leg", leg.id);
   expect(rows).toHaveLength(2);
   expect(rows[0]).toMatchObject({ action: "updated", source: "system", actorUserId: ctx.userId,
-    changedFields: ["vehicleType", "modelYear"], creditBatchId: fixture.batch.id, productionRunId: fixture.run.id });
+    changedFields: ["modelYear", "vehicleType"], changes: { vehicleType: { from: "truck", to: "van" }, modelYear: { from: String(INITIAL_MODEL_YEAR), to: String(UPDATED_MODEL_YEAR) } }, creditBatchId: fixture.batch.id, productionRunId: fixture.run.id });
   const [refreshed] = await db.select().from(transportLegs).where(eq(transportLegs.id, leg.id));
   expect(refreshed).toMatchObject({ vehicleType: "van", modelYear: UPDATED_MODEL_YEAR, version: leg.version + 1 });
   await updateVehicle(ctx, vehicle.id, { name: "Renamed vehicle", vehicleType: updated.vehicleType, modelYear: updated.modelYear }, updated.version);
   expect(await events("transport_leg", leg.id)).toHaveLength(2);
+
+  // A leg already carrying the requested snapshot still refreshes its version only.
+  await db.update(transportLegs).set({ vehicleType: "truck", modelYear: INITIAL_MODEL_YEAR }).where(and(
+    eq(transportLegs.id, leg.id), eq(transportLegs.organizationId, ctx.organizationId),
+  ));
+  await updateVehicle(ctx, vehicle.id, { name: "Renamed vehicle", vehicleType: "truck", modelYear: INITIAL_MODEL_YEAR }, updated.version + 1);
+  expect(await events("transport_leg", leg.id)).toHaveLength(2);
+  const [unchangedSnapshot] = await db.select().from(transportLegs).where(and(
+    eq(transportLegs.id, leg.id), eq(transportLegs.organizationId, ctx.organizationId),
+  ));
+  expect(unchangedSnapshot.version).toBe(refreshed.version + 1);
 });
 
 it("excludes fully reversed product shares from delivery and order activity scopes", async () => {

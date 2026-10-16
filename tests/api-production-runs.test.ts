@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { facilities, storageLocations, productionRuns, productionRunFeedstockDraws } from "@/db/schema";
+import { activityEvents, facilities, storageLocations, productionRuns, productionRunFeedstockDraws } from "@/db/schema";
 import { createApiKey } from "@/data-access/api-keys";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { GET as LIST, POST } from "@/app/api/v1/production-runs/route";
@@ -39,6 +39,20 @@ const patch = (id: string, body: unknown, tag: string, path = "", fixture = a) =
 const rows = () => db.select().from(productionRuns).where(eq(productionRuns.organizationId, a.ctx.organizationId));
 
 describe("production run REST outcomes", { timeout: TIMEOUT_MS }, () => {
+  it("omits feedstockDraws when the same multi-bin draws are re-sent in reverse order", async () => {
+    const [secondBin] = await db.insert(storageLocations).values({ organizationId: a.ctx.organizationId,
+      facilityId: a.facilityId, code: `DRAW-${randomUUID()}`, name: "Second draw bin", type: "feedstock_bin", feedstockTypeId: a.feedstockTypeId }).returning();
+    await seedApiFeedstock({ ...a, binId: secondBin.id, input: wetMassKg => ({ ...a.input(wetMassKg), allocations: [{ storageLocationId: secondBin.id, allocatedWetMassKg: wetMassKg ?? 4200 }] }) });
+    const draws = [{ storageLocationId: a.binId, wetMassKg: 100 }, { storageLocationId: secondBin.id, wetMassKg: 200 }];
+    const saved = await create({ ...productionRunInput(a), feedstockDraws: draws });
+    expect((await patch(saved.row.id, { feedstockDraws: [...draws].reverse() }, saved.etag)).status).toBe(200);
+    const events = await db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, a.ctx.organizationId),
+      eq(activityEvents.entityId, saved.row.id), eq(activityEvents.action, "updated")));
+    expect(events).toHaveLength(1);
+    expect(events[0].changedFields).toEqual([]);
+    expect(events[0].changes).toEqual({});
+  });
+
   it("persists the run, explicit draw and resulting bin stock and returns a stable projection", async () => {
     const saved = await create();
     expect(saved.response.headers.get("location")).toBe(`/api/v1/production-runs/${saved.row.id}`);
