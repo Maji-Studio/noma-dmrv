@@ -51,7 +51,7 @@ export function VariantB() {
   return (
     <div className="flex flex-col gap-20">
       <BatchHeader />
-      <div className="grid gap-20 lg:grid-cols-[232px_minmax(0,1fr)]">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-20 lg:grid-cols-[232px_minmax(0,1fr)]">
         <nav aria-label="Credit batch sections" className="lg:sticky lg:top-24 lg:self-start">
           <div role="tablist" aria-orientation="vertical" className="flex gap-0 overflow-x-auto border border-[var(--clr-dark-purple-40)] bg-[var(--paper)] lg:flex-col lg:overflow-visible">
             {TABS.map((key) => {

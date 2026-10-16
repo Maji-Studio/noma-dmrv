@@ -73,7 +73,7 @@ export function PrototypeBatchPage({ batch, canManage }: { batch: CreditBatchWit
 
   return (
     <ProtoProvider value={value}>
-      <div className="container-max page-shell">
+      <div className="container-max page-shell min-w-0 pb-[240px] sm:pb-[160px]">
         {message && (
           <p role="status" className="border border-[var(--st-run)] bg-[var(--st-run-bg)] px-16 py-10 body-small">
             {message}

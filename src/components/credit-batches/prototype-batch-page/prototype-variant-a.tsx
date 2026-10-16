@@ -33,7 +33,7 @@ export function VariantA() {
         ))}
       </div>
       {tab === "overview" ? (
-        <div className="grid gap-20 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-20 lg:grid-cols-[minmax(0,1fr)_380px]">
           <Panel title="What is still open">
             <OpenItemGroups />
           </Panel>
