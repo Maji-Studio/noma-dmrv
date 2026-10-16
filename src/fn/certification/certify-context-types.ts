@@ -60,6 +60,7 @@ export interface RemovalCertifyContext {
   entityReadinessGaps: string[];
   submissionLineageBlockers: SubmissionLineageBlocker[];
   durabilityConfigurationBlockers: string[];
+  templateTierBlocker?: string | null;
   entityReadinessIssues?: import("@/lib/certification/batch-health").BatchEntityReadinessIssue[];
   // Fail-closed durability sampling/eligibility blockers (D3) — the EXACT list
   // the submit pipeline blocks on, so readiness predicts the gate. [] ⇒ ready.

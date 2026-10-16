@@ -12,6 +12,8 @@ import {
   type CompiledRemovalSubmission,
   type RemovalSubmissionReview,
 } from "./removal-submission-build";
+import { evaluateRemovalBlockers } from "./removal-blockers-gate";
+import { legacyBlocker, type RemovalBlocker } from "@/lib/certification/removal-blockers";
 import { prepareRemovalSubmission } from "./removal-submission-prepare";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 
@@ -19,6 +21,7 @@ export interface RemovalCompilationView {
   /** Null when preparation is blocked before anything could be compiled. */
   review: RemovalSubmissionReview | null;
   blockers: string[];
+  removalBlockers: RemovalBlocker[];
   warnings: string[];
   snapshot: CompiledRemovalSubmission["snapshot"];
   compilationHash: string | null;
@@ -39,13 +42,13 @@ export async function loadRemovalCompilation(
 
     const ctx = await loadRemovalSubmissionContext(orgCtx, removalId, { refreshEnrichment: true });
     const preparation = prepareRemovalSubmission(ctx);
-    const preparationBlockers = preparation.blockers.map(
-      (blocker) => blocker.message,
-    );
+    const removalBlockers = await evaluateRemovalBlockers({ orgCtx, removalId, ctx });
+    const blockers = removalBlockers.map((blocker) => blocker.message);
     if (!preparation.prepared) {
       return {
         review: null,
-        blockers: preparationBlockers,
+        blockers,
+        removalBlockers,
         warnings: [...(ctx.submissionWarnings ?? [])],
         snapshot: null,
         compilationHash: null,
@@ -61,6 +64,13 @@ export async function loadRemovalCompilation(
       prepared: preparation.prepared,
       allowPendingSources: true,
     });
+    // Rich review compilation also walks candidate Sources. A blocker it finds
+    // after a clear preflight still blocks: list it so no snapshot or hash is
+    // handed out, and the operator sees why.
+    if (removalBlockers.length === 0) {
+      removalBlockers.push(...compiled.blockers.map((message) => legacyBlocker(message)));
+      blockers.push(...compiled.blockers);
+    }
     const previews = await getCo2eStoredPreviews(
       orgCtx,
       ctx.memberBatches.map((batch) => batch.id),
@@ -77,11 +87,11 @@ export async function loadRemovalCompilation(
         batchPreviews.flatMap((preview) => preview?.missingInputs ?? []),
       ),
     ];
-    const blockers = [...new Set([...preparationBlockers, ...compiled.blockers])];
 
     return {
       review: compiled.review,
       blockers,
+      removalBlockers,
       warnings: compiled.warnings,
       snapshot: blockers.length === 0 ? compiled.snapshot : null,
       compilationHash:

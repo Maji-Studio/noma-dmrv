@@ -94,6 +94,7 @@ export interface RemovalReadinessFacts {
   durabilityGateBlockers?: string[];
   /** Registry capabilities shared with the measurement-sample builder. */
   durabilityConfigurationBlockers?: string[];
+  templateTierBlocker?: string | null;
   /**
    * Production-run ends, Sample times, or application dates that still lie in the
    * future, already phrased as blocker sentences. Computed SERVER-SIDE (this
@@ -277,6 +278,7 @@ export function deriveRemovalReadiness(
 
   const reasons: string[] = [...(facts.submissionLineageIssues?.map((issue) => issue.detail) ?? [])];
 
+  if (facts.templateTierBlocker) reasons.push(facts.templateTierBlocker);
   const templateReason = templateBlockerReason(facts);
   if (templateReason) reasons.push(templateReason);
 
@@ -631,7 +633,7 @@ export function buildRemovalRequirementsChecklist(
     if (!facts.hasSubmittableRuns) {
       return { key: "durability", label: DURABILITY_LABEL, status: "skipped" };
     }
-    const blockers = [...(facts.durabilityConfigurationBlockers ?? []), ...(facts.durabilityGateBlockers ?? [])];
+    const blockers = [...(facts.templateTierBlocker ? [facts.templateTierBlocker] : []), ...(facts.durabilityConfigurationBlockers ?? []), ...(facts.durabilityGateBlockers ?? [])];
     return blockers.length === 0
       ? { key: "durability", label: DURABILITY_LABEL, status: "met" }
       : {

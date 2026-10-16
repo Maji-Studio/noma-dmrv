@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { firstSubmitBlockerMessage } from "./submit-removal";
+import { firstSubmitBlockerMessage } from "./removal-blockers-gate";
 import {
   REMOVAL_PREPARATION_BLOCKERS,
   type RemovalPreparationBlocker,

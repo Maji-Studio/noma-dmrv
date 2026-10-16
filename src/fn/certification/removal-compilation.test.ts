@@ -24,8 +24,10 @@ vi.mock("@/data-access/certifier-removals", () => ({
 vi.mock("./certify-context-core", () => ({
   loadRemovalSubmissionContext: vi.fn(),
 }));
-vi.mock("./removal-submission-build", () => ({
+vi.mock("./removal-submission-build", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./removal-submission-build")>(),
   compileRemovalSubmission: vi.fn(),
+  buildRemovalSubmissionBuild: vi.fn(),
 }));
 vi.mock("@/data-access/credit-batch-accounting", () => ({
   getCo2eStoredPreviews: vi.fn(),
@@ -84,7 +86,10 @@ describe("loadRemovalCompilation preparation blockers", () => {
     unbindableTemplateInputs: [],
     unresolvedBlueprintKeys: [],
     blueprintsForTemplate: [],
-    memberBatches: [],
+    memberBatches: [{ id: "batch" }],
+    batchesWithSamples: [{ sampling: "sampled", durabilityOption: "1000_year" }],
+    feedstockTypeMappingGaps: [],
+    entityReadinessGaps: [],
     submissionWarnings: [],
   };
 
@@ -102,6 +107,36 @@ describe("loadRemovalCompilation preparation blockers", () => {
       snapshot: null,
       transportPlan: null,
     } as never);
+  });
+
+  it("reports feedstock mapping and durability configuration through the shared gate", async () => {
+    const { make1000YearSequestrationTemplate } = await import("../../../tests/fixtures/submit-removal-templates");
+    const removalTemplate = make1000YearSequestrationTemplate();
+    vi.mocked(loadRemovalSubmissionContext).mockResolvedValue({
+      ...baseContext, removalTemplate, lineSources: reviewedTemplateSources(removalTemplate),
+      feedstockTypeMappingGaps: [{ creditBatchId: "batch", creditBatchCode: "CB-1", feedstockTypeId: "type", feedstockTypeName: "Wood" }],
+      batchesWithSamples: [{ sampling: "unsampled", durabilityOption: "1000_year" }],
+    } as never);
+    const result = await loadRemovalCompilation(FACILITY_ID, REMOVAL_ID);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.removalBlockers.map((blocker) => blocker.code)).toEqual(expect.arrayContaining(["feedstockTypeMapping", "durabilityConfiguration"]));
+    expect(result.data.blockers).toEqual(result.data.removalBlockers.map((blocker) => blocker.message));
+    expect(result.data.snapshot).toBeNull();
+  });
+
+  it("lists a rich compilation blocker found after a clear preflight", async () => {
+    vi.mocked(loadRemovalSubmissionContext).mockResolvedValue(baseContext as never);
+    const result = await loadRemovalCompilation(FACILITY_ID, REMOVAL_ID);
+    expect(result).toMatchObject({
+      success: true,
+      data: {
+        blockers: ["Add the application logbook."],
+        removalBlockers: [{ code: "legacy", message: "Add the application logbook.", fixTarget: null }],
+        snapshot: null,
+        compilationHash: null,
+      },
+    });
   });
 
   it("lists missing credentials as a blocker instead of failing the review", async () => {
@@ -128,7 +163,7 @@ describe("loadRemovalCompilation preparation blockers", () => {
   it("deduplicates template blockers from preparation and compilation", async () => {
     const removalTemplate = unsupportedTemplate();
     const message = formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(removalTemplate));
-    vi.mocked(loadRemovalSubmissionContext).mockResolvedValue({ ...baseContext, removalTemplate } as never);
+    vi.mocked(loadRemovalSubmissionContext).mockResolvedValue({ ...baseContext, removalTemplate, lineSources: reviewedTemplateSources(removalTemplate) } as never);
     vi.mocked(compileRemovalSubmission).mockResolvedValue({ review: { template: { id: removalTemplate.id } }, blockers: [message], warnings: [], snapshot: null, transportPlan: null } as never);
     const result = await loadRemovalCompilation(FACILITY_ID, REMOVAL_ID);
     expect(result.success && result.data.blockers.filter((blocker) => blocker === message)).toEqual([message]);
@@ -148,7 +183,6 @@ describe("loadRemovalCompilation preparation blockers", () => {
         review: { template: { id: "rvt-1" } },
         blockers: [
           REMOVAL_PREPARATION_BLOCKERS.notRemovalTemplate,
-          "Add the application logbook.",
         ],
         snapshot: null,
         compilationHash: null,

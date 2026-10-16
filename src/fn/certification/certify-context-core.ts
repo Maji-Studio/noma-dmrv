@@ -1,3 +1,4 @@
+import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 import { getTransportDistanceFixLinks } from "@/data-access/transport-distance-fix-links";
 import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
 import { TRANSPORT_CATEGORIES } from "@/lib/isometric/semantic-binding-catalog";
@@ -212,6 +213,9 @@ export async function buildRemovalContext(
   });
   const durabilityConfigBlockers = hasDurabilityMeasurementComponents(templateFacts.removalTemplate)
     ? durabilityConfigurationBlockers(batchesWithSamples) : [];
+  const templateTierBlocker = templateFacts.removalTemplate
+    ? removalTemplateTierCompatibilityBlocker({ batchesWithSamples }, templateFacts.removalTemplate)
+    : null;
   const durabilityGateBlockers = [
     ...durabilityBatchBlockers,
     ...soilTemperatureGate.blockers,
@@ -244,6 +248,7 @@ export async function buildRemovalContext(
       submissionLineageBlockers: [],
       durabilityGateBlockers,
       durabilityConfigurationBlockers: durabilityConfigBlockers,
+      templateTierBlocker,
       // No applications and no runs resolved ⇒ no date to be in the future.
       futureDatedMeasurements: [],
       submissionAdvisories: [],
@@ -376,6 +381,7 @@ export async function buildRemovalContext(
     entityReadinessIssues: entityReadiness.issues,
     durabilityGateBlockers,
     durabilityConfigurationBlockers: durabilityConfigBlockers,
+    templateTierBlocker,
     futureDatedMeasurements: collectFutureDatedMeasurements({
       runs,
       samples: batchesWithSamples.flatMap((batch) => batch.samples),
@@ -448,6 +454,7 @@ function projectUiContext(
     entityReadinessIssues: ctx.entityReadinessIssues ?? [],
     durabilityGateBlockers: ctx.durabilityGateBlockers,
     durabilityConfigurationBlockers: ctx.durabilityConfigurationBlockers,
+    templateTierBlocker: ctx.templateTierBlocker,
     futureDatedMeasurements: ctx.futureDatedMeasurements,
     submissionWarnings: ctx.submissionWarnings,
     submissionAdvisories: ctx.submissionAdvisories,

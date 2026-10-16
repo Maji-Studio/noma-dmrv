@@ -1,7 +1,7 @@
 import type { BatchHealthFixTarget } from "./batch-health";
 import { removalTemplateBlocker, removalTemplateBlockerDestination, type RemovalTemplateBlockerCode } from "./removal-template-blockers";
 
-export type RemovalBlockerCode = RemovalTemplateBlockerCode | "lineNeedsReview" | "lineNeedsSetup" | "entryMissingEvidence" | "lineHasNoSource" | "legacy";
+export type RemovalBlockerCode = RemovalTemplateBlockerCode | "lineNeedsReview" | "lineNeedsSetup" | "entryMissingEvidence" | "lineHasNoSource" | "feedstockTypeMapping" | "entityReadiness" | "durabilityTier" | "durabilityConfiguration" | "legacy";
 export interface RemovalBlocker {
   code: RemovalBlockerCode;
   message: string;

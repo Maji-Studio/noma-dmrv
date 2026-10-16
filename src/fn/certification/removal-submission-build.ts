@@ -1,3 +1,5 @@
+import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
+export { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
 import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import type { OrgContext } from "@/lib/auth/server";
@@ -14,7 +16,6 @@ import {
 } from "@/lib/isometric";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import {
-  expectedSequestrationBlueprintKeys,
   isSequestrationBlueprintFamily,
   isStorageBlueprintKey,
 } from "@/lib/isometric/storage-blueprints";
@@ -221,28 +222,6 @@ function emptyReview(
     reportingWindow: { startedOn: "", completedOn: "" },
     productionEmissionClaims: [],
   };
-}
-
-export function removalTemplateTierCompatibilityBlocker(
-  ctx: Pick<RemovalSubmissionContext, "batchesWithSamples">,
-  template: IsometricGhgEntryTemplate,
-): string | null {
-  const facilityTier = ctx.batchesWithSamples[0]?.durabilityOption ?? null;
-  if (!facilityTier) return null;
-  const expectedKeys = expectedSequestrationBlueprintKeys(facilityTier);
-  const mismatched = template.groups
-    .flatMap((group) => group.components)
-    .map((component) => component.blueprint_key)
-    .filter(isSequestrationBlueprintFamily)
-    .find((key) => !expectedKeys.has(key));
-  if (!mismatched) return null;
-
-  const tierLabel = facilityTier === "1000_year" ? "1000-year" : "200-year";
-  return (
-    `This facility uses ${tierLabel} durability, but the credit batch's Removal ` +
-    `template uses an incompatible storage component (${mismatched}). ` +
-    `Switch the credit batch to a ${tierLabel} template or change the facility's durability tier.`
-  );
 }
 
 export async function compileRemovalSubmission(
