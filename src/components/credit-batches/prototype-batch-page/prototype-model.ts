@@ -231,8 +231,9 @@ function progressFor(scenario: Scenario, blockingCount: number, masses: Record<M
     const submitted = masses.sent;
     plan[scenario][1][1] = `R-07, ${submitted.toFixed(2)} of ${(masses.sent + masses.inRemoval + masses.notIn + masses.notApplied).toFixed(2)} t`;
   }
-  return steps.map((label, index) => ({
-    label,
+  return steps.map((stepLabel, index) => ({
+    // While blocking items hold the first step it reads "Missing data"; once done it is "Data complete".
+    label: index === 0 && plan[scenario][0][0] === "current" && blockingCount > 0 ? "Missing data" : stepLabel,
     state: plan[scenario][index][0],
     caption: plan[scenario][index][1],
     count: scenario === "blocking" && index === 0 ? blockingCount : undefined,

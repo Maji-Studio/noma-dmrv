@@ -5,7 +5,11 @@
  * One group per Removal (coloured by its status, split into its applications), then the two
  * open parts: applied but not in a Removal, and not applied yet.
  */
-import { useState } from "react";
+import Link from "next/link";
+import { useState, type ReactNode } from "react";
+import { PreviewCard } from "@base-ui/react/preview-card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { certificationRemovalsHref } from "@/lib/certification/links";
 import { parseAsStringLiteral, useQueryState } from "nuqs";
 import { cn } from "@/lib/utils";
 import { useProto } from "./prototype-context";
@@ -25,6 +29,25 @@ export function useBarTotal(): string {
   const { model } = useProto();
   const bar = useBarOption();
   return bar === "b" ? `${tonnes(model.appliedTons)} applied` : `${tonnes(model.appliedTons + model.masses.notApplied)} produced`;
+}
+
+const OPEN_DELAY_MS = 200;
+const CLOSE_DELAY_MS = 120;
+const SIDE_OFFSET_PX = 8;
+const FOCUS_RING = "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--ink)]";
+
+/**
+ * PROTOTYPE: the stub Removals (R-07, R-08, R-09) have no ids, so they link to the
+ * Removals list for this facility. The real build links `/certification/removals/<id>`.
+ */
+function useRemovalHref(): string {
+  const { batch } = useProto();
+  return certificationRemovalsHref({ facility: batch.facilityId });
+}
+
+function groupLabel(group: { name: string; removal: RemovalRef | null; tons: number }): string {
+  const status = group.removal ? (group.removal.status === "draft" ? "Draft" : "Submitted") : "";
+  return [group.name, status, tonnes(group.tons)].filter(Boolean).join(", ");
 }
 
 const MUTED = "text-[var(--color-text-secondary)]";
@@ -90,21 +113,81 @@ function useGroups(): Group[] {
   return groups;
 }
 
-/** Overview version: one slim bar and one wrapping line of inline legend items. */
+function RemovalCardBody({ group }: { group: Group }) {
+  const removal = group.removal;
+  if (!removal) return null;
+  const date = removal.statusNote.split(". ")[0];
+  return (
+    <div className="flex w-[280px] flex-col gap-10 px-16 py-12">
+      <div className="flex items-center justify-between gap-12">
+        <span className="body-medium font-medium tabular-nums">{removal.code}</span>
+        <StatusBadge status={removal.status === "submitted" ? "issued" : "draft"} label={removal.status === "submitted" ? "Submitted" : undefined} size="small" />
+      </div>
+      <span className={cn("body-small", MUTED)}>{date}</span>
+      <span className="body-medium tabular-nums">{tonnes(group.tons)} <span className={cn("body-small", MUTED)}>from this credit batch</span></span>
+      <ul className="flex flex-col gap-4 border-t border-[var(--color-border-tertiary)] pt-8">
+        {group.parts.map((part) => (
+          <li key={part.id} className="flex items-baseline justify-between gap-12 body-caption">
+            <span className="min-w-0 truncate">{part.label}</span>
+            <span className="shrink-0 tabular-nums">{tonnes(part.tons)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** A link to the Removal that opens a facts-only hover card on hover or focus. */
+function RemovalHoverLink({ group, className, style, children }: { group: Group; className?: string; style?: React.CSSProperties; children: ReactNode }) {
+  const href = useRemovalHref();
+  return (
+    <PreviewCard.Root>
+      <PreviewCard.Trigger delay={OPEN_DELAY_MS} closeDelay={CLOSE_DELAY_MS} render={<Link href={href} aria-label={groupLabel(group)} className={cn(FOCUS_RING, className)} style={style} />}>
+        {children}
+      </PreviewCard.Trigger>
+      <PreviewCard.Portal>
+        <PreviewCard.Positioner side="top" sideOffset={SIDE_OFFSET_PX} className="z-[var(--z-layer-popover)]">
+          <PreviewCard.Popup className="border border-[var(--ink)] bg-[var(--paper)] transition-opacity duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0">
+            <RemovalCardBody group={group} />
+          </PreviewCard.Popup>
+        </PreviewCard.Positioner>
+      </PreviewCard.Portal>
+    </PreviewCard.Root>
+  );
+}
+
+/** Overview version: one slim bar and one wrapping line of inline legend items. Removals open a hover card. */
 function CompactBar({ groups }: { groups: Group[] }) {
   return (
     <div className="flex flex-col gap-12">
-      <div role="img" aria-label={groups.map((group) => `${group.name} ${tonnes(group.tons)}`).join(", ")} className="flex h-12 gap-2 bg-[var(--paper)]">
+      <div role="group" aria-label="Biochar by Removal" className="flex h-12 gap-2 bg-[var(--paper)]">
         {groups.map((group) => {
           const seg = SEGMENT_BY_KEY[group.segment];
-          return <span key={group.id} className="h-full border border-[var(--st-off-border)]" style={{ flexGrow: group.tons, flexBasis: 0, minWidth: MIN_SEGMENT_PX, backgroundColor: seg.fill, backgroundImage: seg.background }} />;
+          const style = { flexGrow: group.tons, flexBasis: 0, minWidth: MIN_SEGMENT_PX, backgroundColor: seg.fill, backgroundImage: seg.background };
+          const className = "h-full border border-[var(--st-off-border)]";
+          return group.removal ? (
+            <RemovalHoverLink key={group.id} group={group} className={cn(className, "hover:opacity-80")} style={style}>
+              <span className="sr-only">{groupLabel(group)}</span>
+            </RemovalHoverLink>
+          ) : (
+            <span key={group.id} aria-hidden className={className} style={style} />
+          );
         })}
       </div>
       <ul className="flex flex-wrap gap-x-16 gap-y-4 body-small">
         {groups.map((group) => (
-          <li key={group.id} className="inline-flex items-center gap-6">
-            <Swatch segment={group.segment} />
-            <span>{compactLabel(group)}</span>
+          <li key={group.id}>
+            {group.removal ? (
+              <RemovalHoverLink group={group} className="group inline-flex items-center gap-6">
+                <Swatch segment={group.segment} />
+                <span className="underline-offset-2 group-hover:underline">{compactLabel(group)}</span>
+              </RemovalHoverLink>
+            ) : (
+              <span className="inline-flex items-center gap-6">
+                <Swatch segment={group.segment} />
+                <span>{compactLabel(group)}</span>
+              </span>
+            )}
           </li>
         ))}
       </ul>
@@ -124,7 +207,7 @@ function NotAppliedCaption() {
   return <p className={cn("body-small", MUTED)}>{tonnes(model.masses.notApplied)} produced but not applied yet</p>;
 }
 
-export function RemovalMassBar(props: { onOpenRemoval?: (code: string) => void; compact?: boolean }) {
+export function RemovalMassBar(props: { compact?: boolean }) {
   return (
     <div className="flex flex-col gap-12">
       <BarBody {...props} />
@@ -133,8 +216,9 @@ export function RemovalMassBar(props: { onOpenRemoval?: (code: string) => void; 
   );
 }
 
-function BarBody({ onOpenRemoval, compact }: { onOpenRemoval?: (code: string) => void; compact?: boolean }) {
+function BarBody({ compact }: { compact?: boolean }) {
   const groups = useGroups();
+  const href = useRemovalHref();
   const [active, setActive] = useState<{ text: string; center: number } | null>(null);
   const total = groups.reduce((sum, group) => sum + group.tons, 0);
   if (groups.length === 0) return null;
@@ -149,27 +233,30 @@ function BarBody({ onOpenRemoval, compact }: { onOpenRemoval?: (code: string) =>
             const seg = SEGMENT_BY_KEY[group.segment];
             return (
               <div key={group.id} className="flex min-w-0 flex-col gap-4" style={{ flexGrow: group.tons, flexBasis: 0, minWidth: MIN_SEGMENT_PX }}>
-                <span className={cn("block h-18 truncate body-caption", group.removal ? "text-[var(--color-text-primary)]" : MUTED)}>
-                  {group.removal ? `${group.name} ${tonnes(group.tons)}` : ""}
-                </span>
+                {group.removal ? (
+                  <Link href={href} aria-label={groupLabel(group)} className={cn("block h-18 truncate body-caption underline-offset-2 hover:underline", FOCUS_RING)}>
+                    {`${group.name} ${tonnes(group.tons)}`}
+                  </Link>
+                ) : (
+                  <span className={cn("block h-18 truncate body-caption", MUTED)} />
+                )}
                 <div className="flex h-24 gap-2 bg-[var(--paper)]">
                   {group.parts.map((part, index) => {
                     const before = group.parts.slice(0, index).reduce((sum, p) => sum + p.tons, 0);
                     const center = ((start + before + part.tons / 2) / total) * 100;
                     const text = group.removal ? `${group.name}: ${part.label}, ${tonnes(part.tons)}` : `${part.label}, ${tonnes(part.tons)}`;
-                    return (
-                      <span
-                        key={part.id}
-                        role="img"
-                        tabIndex={0}
-                        aria-label={text}
-                        onMouseEnter={() => setActive({ text, center })}
-                        onMouseLeave={() => setActive(null)}
-                        onFocus={() => setActive({ text, center })}
-                        onBlur={() => setActive(null)}
-                        className="h-full border border-[var(--st-off-border)] outline-offset-2"
-                        style={{ flexGrow: part.tons, flexBasis: 0, minWidth: 2, backgroundColor: seg.fill, backgroundImage: seg.background }}
-                      />
+                    const handlers = {
+                      onMouseEnter: () => setActive({ text, center }),
+                      onMouseLeave: () => setActive(null),
+                      onFocus: () => setActive({ text, center }),
+                      onBlur: () => setActive(null),
+                    };
+                    const style = { flexGrow: part.tons, flexBasis: 0, minWidth: 2, backgroundColor: seg.fill, backgroundImage: seg.background };
+                    const className = "h-full border border-[var(--st-off-border)]";
+                    return group.removal ? (
+                      <Link key={part.id} href={href} aria-label={`${groupLabel(group)}, ${part.label}`} {...handlers} className={cn(className, "cursor-pointer hover:opacity-80", FOCUS_RING)} style={style} />
+                    ) : (
+                      <span key={part.id} role="img" tabIndex={0} aria-label={text} {...handlers} className={cn(className, FOCUS_RING)} style={style} />
                     );
                   })}
                 </div>
@@ -199,8 +286,8 @@ function BarBody({ onOpenRemoval, compact }: { onOpenRemoval?: (code: string) =>
           const rowClass = "grid w-full grid-cols-[12px_minmax(0,1fr)_auto] items-center gap-x-12 py-8 text-left";
           return (
             <li key={group.id} className={cn(index === firstOpen && index > 0 && "mt-4 border-t border-[var(--color-border-secondary)] pt-4", open && "bg-transparent")}>
-              {group.removal && onOpenRemoval ? (
-                <button type="button" onClick={() => onOpenRemoval(group.id)} className={cn(rowClass, "hover:bg-[var(--color-surface-medium)]")}>{row}</button>
+              {group.removal ? (
+                <Link href={href} aria-label={groupLabel(group)} className={cn(rowClass, "group hover:bg-[var(--color-surface-medium)]", FOCUS_RING)}>{row}</Link>
               ) : (
                 <div className={rowClass}>{row}</div>
               )}

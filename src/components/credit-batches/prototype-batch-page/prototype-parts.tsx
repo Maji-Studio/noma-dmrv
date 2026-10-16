@@ -99,7 +99,7 @@ export function RemovalChip({ removal }: { removal: RemovalRef | null }) {
   if (!removal) return <span className={cn("body-small", MUTED)}>Not in a Removal</span>;
   return (
     <span className="inline-flex flex-wrap items-center gap-8">
-      <span className="body-small font-medium">{removal.code}</span>
+      <span className="body-small font-medium underline-offset-2 group-hover:underline">{removal.code}</span>
       {/* Same labels as SubmissionStatusBadge: a Removal ends at Submitted. */}
       <StatusBadge status={removal.status === "submitted" ? "issued" : "draft"} label={removal.status === "submitted" ? "Submitted" : undefined} size="small" />
     </span>
