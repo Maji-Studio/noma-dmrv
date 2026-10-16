@@ -1,29 +1,25 @@
 import type { AppConfirmOutcome, ConfirmOutcome } from "@/lib/documents/confirm-outcome";
-import type { OperationEffect } from "./runner";
+import type { OperationDescription } from "@/lib/operation-effect";
 
 interface SavedDocument { id: string; version: number }
-const NOT_CHANGES = new Set(["documentId", "expectedVersion", "storageProvider", "storageBucket"]);
-function changedFields(input: object): string[] {
-  return Object.entries(input).filter(([key, value]) => value !== undefined && !NOT_CHANGES.has(key)).map(([key]) => key).sort();
-}
 
-export const describeRequestedDocument = (input: object, document: SavedDocument): OperationEffect => ({
+export const describeRequestedDocument = (input: object, document: SavedDocument): OperationDescription => ({
   outcome: "created", entityType: "document", entityIds: [document.id],
-  versionBefore: null, versionAfter: document.version, changedFields: changedFields(input),
+  versionBefore: null, versionAfter: document.version,
 });
 
-export function describeConfirmedDocument(_input: unknown, outcome: (ConfirmOutcome<SavedDocument> | Extract<AppConfirmOutcome, { kind: "failed" }>) & { transitioned?: boolean }): OperationEffect | null {
+export function describeConfirmedDocument(_input: unknown, outcome: (ConfirmOutcome<SavedDocument> | Extract<AppConfirmOutcome, { kind: "failed" }>) & { transitioned?: boolean }): OperationDescription | null {
   if (outcome.kind === "gone" || outcome.kind === "failed" || (outcome.kind === "uploaded" && !outcome.transitioned)) return null;
   return { outcome: "updated", entityType: "document", entityIds: [outcome.document.id], versionBefore: outcome.document.version - 1,
-    versionAfter: outcome.document.version, changedFields: ["uploadStatus", "version"] };
+    versionAfter: outcome.document.version };
 }
 
-export const describeDeletedDocument = (input: { documentId: string; expectedVersion: number }): OperationEffect => ({
+export const describeDeletedDocument = (input: { documentId: string; expectedVersion: number }): OperationDescription => ({
   outcome: "deleted", entityType: "document", entityIds: [input.documentId],
-  versionBefore: input.expectedVersion, versionAfter: null, changedFields: [],
+  versionBefore: input.expectedVersion, versionAfter: null,
 });
 
-export const describeUpdatedDocument = (input: { expectedVersion: number }, document: SavedDocument): OperationEffect => ({
+export const describeUpdatedDocument = (input: { expectedVersion: number }, document: SavedDocument): OperationDescription => ({
   outcome: "updated", entityType: "document", entityIds: [document.id],
-  versionBefore: input.expectedVersion, versionAfter: document.version, changedFields: changedFields(input),
+  versionBefore: input.expectedVersion, versionAfter: document.version,
 });

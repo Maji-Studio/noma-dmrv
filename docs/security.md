@@ -368,5 +368,8 @@ omit registry credentials.
 ## API write audit
 
 The API audit row contract is defined in [Activity events](./database.md#activity-events).
-Stored idempotency outcome schema v2 includes effect metadata;
+Allowlisted values are internal to `activity_events.changes`, retained forever.
+Notes, reasons and file names are never stored as activity values. Linked
+records store IDs only and resolve current labels in org-scoped reads.
+Stored idempotency outcome schema v2 includes value-free effect metadata;
 older outcomes answer `replay_unavailable` without a compatibility mapper.

@@ -1,4 +1,3 @@
-import { stringifyWithBigint } from "./helpers/api-activity";
 /** Real handlers, credentials and Postgres. Written for reviewer execution; never run by the implementation agent. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -56,7 +55,7 @@ describe("lab sample create", { timeout: TIMEOUT_MS }, () => {
       entityId: data.id, versionBefore: null, versionAfter: 1,
     }]);
     expect(audits[0].changedFields).toEqual(expect.arrayContaining(["creditBatchId", "totalCarbonPercent", "totalHydrogenPercent"]));
-    expect(stringifyWithBigint(audits[0])).not.toContain(WRITE_SAMPLED_AT);
+    expect(audits[0].changes.samplingTime).toEqual({ from: null, to: new Date(WRITE_SAMPLED_AT).toISOString() });
   });
 
   it("answers with certification warnings but no calculated-ratio notice when hydrogen and moisture are missing", async () => {
@@ -195,7 +194,7 @@ describe("lab sample update", { timeout: TIMEOUT_MS }, () => {
     const audit = (await labSampleAudits(a)).find((row) => row.operationId === "update_lab_sample");
     expect(audit).toMatchObject({
       action: "updated", source: "rest", credentialId: a.writeCredentialId, entityId: saved.row.id,
-      versionBefore: 1, versionAfter: 2, changedFields: ["labName", "totalHydrogenPercent"],
+      versionBefore: 1, versionAfter: 2, changedFields: ["hToCOrgRatio", "labName", "totalHydrogenPercent"],
     });
   });
 

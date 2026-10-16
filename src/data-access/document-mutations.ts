@@ -1,4 +1,5 @@
 import { bumpEmissionEntryEvidence } from "./emission-entry-lock";
+import type { CaptureActivity } from "@/lib/activity-changes";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { DbTransaction } from "@/db";
@@ -38,16 +39,17 @@ export async function deleteDocumentInTransaction(ctx: OrgContext, tx: DbTransac
   await tx.delete(documents).where(and(eq(documents.id, row.id), eq(documents.organizationId, ctx.organizationId)));
   return row;
 }
-export async function setDocumentVisibilityInTransaction(ctx: OrgContext, tx: DbTransaction, input: z.infer<typeof setVisibilitySchema> & { expectedVersion: number }): Promise<DocumentRow> {
+export async function setDocumentVisibilityInTransaction(ctx: OrgContext, tx: DbTransaction, input: z.infer<typeof setVisibilitySchema> & { expectedVersion: number }, capture?: CaptureActivity): Promise<DocumentRow> {
   requireOrgScope(ctx);
   if (!hasOrgRole(ctx, "admin")) throw new DomainError("forbidden", "Only organization owners and admins can change file visibility.");
   const data = setVisibilitySchema.parse(input);
   const row = await lockDocument(ctx, tx, data.documentId);
   assertRowVersion({ entity: "document", id: row.id, expectedVersion: input.expectedVersion, actualVersion: row.version });
   const [saved] = await tx.update(documents).set({ visibility: data.visibility, version: nextVersion(documents.version), updatedAt: new Date() }).where(and(eq(documents.id, row.id), eq(documents.organizationId, ctx.organizationId))).returning();
+  capture?.(saved.id, row, saved);
   return saved;
 }
-export async function updateApplicationEvidenceMetadataInTransaction(ctx: OrgContext, tx: DbTransaction, input: z.infer<typeof updateApplicationEvidenceMetadataSchema> & { expectedVersion: number }): Promise<DocumentRow> {
+export async function updateApplicationEvidenceMetadataInTransaction(ctx: OrgContext, tx: DbTransaction, input: z.infer<typeof updateApplicationEvidenceMetadataSchema> & { expectedVersion: number }, capture?: CaptureActivity): Promise<DocumentRow> {
   requireOrgScope(ctx);
   const data = updateApplicationEvidenceMetadataSchema.parse(input);
   const row = await lockDocument(ctx, tx, data.documentId);
@@ -63,5 +65,6 @@ export async function updateApplicationEvidenceMetadataInTransaction(ctx: OrgCon
     patch.logbookEvidenceType = data.applicationLogbookEvidenceType;
   }
   const [saved] = await tx.update(documents).set({ metadata: { ...metadataRecord(row.metadata), ...patch }, version: nextVersion(documents.version), updatedAt: new Date() }).where(and(eq(documents.id, row.id), eq(documents.organizationId, ctx.organizationId))).returning();
+  capture?.(saved.id, row, saved);
   return saved;
 }
