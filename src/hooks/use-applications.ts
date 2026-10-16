@@ -1,5 +1,5 @@
 import type { ActionResult } from "@/types/actions";
-import type { DeleteApplicationData } from "@/schemas/applications";
+import type { DeleteApplicationInput } from "@/schemas/application-input";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import {
@@ -17,7 +17,7 @@ import {
 } from "@/fn/applications";
 import { creditBatchKeys } from "@/hooks/use-credit-batches";
 import { invalidateCertificationReadiness } from "@/hooks/use-certification";
-import type { ApplicationFormData, UpdateApplicationData } from "@/schemas/applications";
+import type { ApplicationFormData } from "@/schemas/applications";
 import type { ApplicationListOptions } from "@/data-access/applications";
 import { unwrap } from "@/hooks/types";
 
@@ -101,7 +101,7 @@ export function useCreateApplication() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: ApplicationFormData) => createApplicationFn(data),
+    mutationFn: (data: ApplicationFormData) => createApplicationFn(applicationOperationInput(data)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
       queryClient.invalidateQueries({
@@ -123,8 +123,8 @@ export function useUpdateApplication() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: UpdateApplicationData): Promise<Awaited<ReturnType<typeof updateApplicationFn>>> => {
-      const result = await updateApplicationFn(data);
+    mutationFn: async (data: ApplicationFormData & { applicationId: string; expectedVersion: number; code?: string }): Promise<Awaited<ReturnType<typeof updateApplicationFn>>> => {
+      const result = await updateApplicationFn({ ...applicationOperationInput(data), applicationId: data.applicationId, expectedVersion: data.expectedVersion, code: data.code });
       if (!result.success) throwActionError(result);
       return result;
     },
@@ -156,7 +156,7 @@ export function useDeleteApplication() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: DeleteApplicationData): Promise<ActionResult<void>> => {
+    mutationFn: async (data: DeleteApplicationInput): Promise<ActionResult<void>> => {
       const result = await deleteApplicationFn(data);
       if (!result.success) throwActionError(result);
       return result;
@@ -179,4 +179,11 @@ export function useDeleteApplication() {
       invalidateCertificationReadiness(queryClient);
     },
   });
+}
+
+function applicationOperationInput(data: ApplicationFormData) {
+  const { biocharAppliedKg, applicationMethodType, ...fields } = data;
+  return { ...fields, gpsLatitude: fields.gpsLatitude ?? null, gpsLongitude: fields.gpsLongitude ?? null,
+    soilTemperatureC: fields.soilTemperatureC ?? null, soilTemperatureSource: fields.soilTemperatureSource ?? null,
+    appliedWetMassKg: biocharAppliedKg, applicationMethod: applicationMethodType };
 }

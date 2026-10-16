@@ -1,9 +1,10 @@
+import { apiActivityWhere, apiAuditColumns, toApiAuditRow } from "../../tests/helpers/api-activity";
 import { TEST_SITE_POSITION } from "../../tests/helpers/test-org";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  apiAuditEvents, binMovements, biocharProducts, biocharProductSourceAllocations, customerLocations, customers,
+  activityEvents, binMovements, biocharProducts, biocharProductSourceAllocations, customerLocations, customers,
   deliveries, facilities, formulationIngredients, formulations, members, orders, outputStockAllocations,
   outputStockMoistureReadings, outputStockRunAllocations, productIngredientSnapshots, productionRuns, transportLegs, users,
 } from "@/db/schema";
@@ -56,15 +57,15 @@ export interface DeliveryEvalFixture extends IntakeFixture {
 }
 
 /** Seed upstream production facts like the stock fixture; post products and create the order through real writers. */
-export async function seedDeliveryFixture(caseId: DeliveryCaseId, now = new Date()): Promise<DeliveryEvalFixture> {
+export async function seedDeliveryFixture(caseId: DeliveryCaseId, now = new Date(), scopes = DELIVERY_SCOPES, timeZone = FACILITY_TIME_ZONE): Promise<DeliveryEvalFixture> {
   const fixture = await db.transaction((tx) => createIntakeFixture(`eval-${caseId}-${randomUUID()}`, tx));
   const org = fixture.ctx.organizationId;
-  const today = formatFacilityDate(now, FACILITY_TIME_ZONE);
-  const localInstant = (daysAgo: number, time: string) => combineDateAndTime(addDaysIso(today, -daysAgo), time, FACILITY_TIME_ZONE);
+  const today = formatFacilityDate(now, timeZone);
+  const localInstant = (daysAgo: number, time: string) => combineDateAndTime(addDaysIso(today, -daysAgo), time, timeZone);
   try {
     await db.insert(users).values({ id: fixture.ctx.userId, email: `${fixture.ctx.userId}@example.test`, name: "MCP evaluation", emailVerified: true });
     await db.insert(members).values({ id: randomUUID(), organizationId: org, userId: fixture.ctx.userId, role: "owner" });
-    await db.update(facilities).set({ timezone: FACILITY_TIME_ZONE, archivedAt: null })
+    await db.update(facilities).set({ timezone: timeZone, archivedAt: null })
       .where(and(eq(facilities.organizationId, org), eq(facilities.id, fixture.facilityId)));
     const customer = await createCustomer(fixture.ctx, { code: CUSTOMER_CODE, name: "Evaluation customer" });
     const location = await createCustomerLocation(fixture.ctx, { ...TEST_SITE_POSITION, customerId: customer.id, name: "Evaluation destination",
@@ -95,12 +96,12 @@ export async function seedDeliveryFixture(caseId: DeliveryCaseId, now = new Date
     const order = await db.transaction((tx) => createOrderInTransaction(fixture.ctx, tx, { code: DELIVERY_ORDER_CODE,
       facilityId: fixture.facilityId, customerId: customer.id, customerLocationId: location.id, formulationId: formulation.id,
       orderDate: new Date(today), quantityKg: ORDER_QUANTITY_KG, packaging: "loose" }));
-    const credential = await createApiKey(fixture.ctx, { name: "MCP evaluation", scopes: DELIVERY_SCOPES, expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS });
+    const credential = await createApiKey(fixture.ctx, { name: "MCP evaluation", scopes, expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS });
     const bin = splitBin ?? mixBin;
     return { ...fixture, key: credential.key, customer: { id: customer.id, code: customer.code }, locationId: location.id,
       formulation: { id: formulation.id, code: formulation.code }, mixBin: { id: mixBin.id, code: mixBin.code }, splitBin,
       products: products.map(({ id, code }) => ({ id, code })),
-      target: { facilityId: fixture.facilityId, timeZone: FACILITY_TIME_ZONE, orderId: order.id, orderCode: order.code, binId: bin.id, binCode: bin.code },
+      target: { facilityId: fixture.facilityId, timeZone, orderId: order.id, orderCode: order.code, binId: bin.id, binCode: bin.code },
       seededMovementIds: (await db.select({ id: binMovements.id }).from(binMovements).where(eq(binMovements.organizationId, org))).map(({ id }) => id),
     };
   } catch (error) {
@@ -128,8 +129,8 @@ export async function readDeliverySnapshot(fixture: DeliveryEvalFixture): Promis
       .from(deliveries).where(eq(deliveries.organizationId, org)),
     db.select({ id: binMovements.id, binId: binMovements.storageLocationId, kind: binMovements.outputKind, input: binMovements.inputSnapshot })
       .from(binMovements).where(eq(binMovements.organizationId, org)),
-    db.select({ transport: apiAuditEvents.transport, operationId: apiAuditEvents.operationId })
-      .from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, org)),
+    db.select(apiAuditColumns)
+      .from(activityEvents).where(apiActivityWhere(org)).then((rows) => rows.map(toApiAuditRow)),
   ]);
   return { deliveries: rows.map((row) => ({ ...row, deliveredAt: row.deliveredAt.toISOString() })),
     movements: movements.filter(({ id }) => !fixture.seededMovementIds.includes(id)), audits };

@@ -1,6 +1,6 @@
 import { nextVersion } from "./row-version";
 import { db, type DbTransaction } from '@/db';
-import { biocharProducts, facilities, formulations, outputStockAllocations, productIngredientSnapshots, storageLocations, type BiocharProduct, type ProductIngredientSnapshot } from '@/db/schema';
+import { biocharProducts, facilities, formulations, outputStockAllocations, productIngredientSnapshots, productionRuns, storageLocations, type BiocharProduct, type ProductIngredientSnapshot } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import { grams, kilograms } from '@/lib/output-stock';
@@ -14,6 +14,7 @@ import { blockedOutputStockError } from './output-stock-errors';
 import { findPostedOutputRequest, withOutputStockPostingInTransaction, type OutputStockPostingOptions, type PostedOutputRequest } from './output-stock-post';
 import { postedMoisturePercent } from './output-stock-operations';
 import { requireOrgScope } from './utils';
+import { productionRunDateExpr } from './production-runs/date-expr';
 
 const BIOCHAR_MOISTURE_REQUIRED = 'Enter the measured biochar moisture.';
 const INGREDIENT_REPLAY_FACTS = ['formulationIngredientId', 'storageLocationId', 'massKg', 'moistureContentPercent'] as const;
@@ -144,11 +145,14 @@ export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbT
     // The production date is the oldest lot drawn, whatever order the operator emptied them in.
     const drawnLayers = prepared.plan.allocations.map(a => prepared.layers.find(l => l.id === a.layerId)!);
     const firstLayer = drawnLayers.reduce((oldest, layer) => layer.placedAt < oldest.placedAt ? layer : oldest);
+    const [sourceRun] = await writeTx.select({ date: productionRunDateExpr() }).from(productionRuns).where(and(
+      eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.facilityId, data.facilityId), eq(productionRuns.id, firstLayer.id)));
+    if (!sourceRun) throw new SafeError('Source production run not found.');
     const moistureContentPercent = postedMoisturePercent(prepared);
     if (moistureContentPercent == null) throw new SafeError(BIOCHAR_MOISTURE_REQUIRED);
     const [product] = await writeTx.insert(biocharProducts).values({ organizationId: ctx.organizationId, code: data.code, facilityId: data.facilityId,
       formulationId: data.formulationId, biocharRatio: formulation.biocharRatio, placedAt: new Date(data.placedAt),
-      productionDate: new Date(firstLayer.placedAt), status: data.status ?? 'testing',
+      productionDate: sourceRun.date, status: data.status ?? 'testing',
       sourceBiocharStorageLocationId: input.storageLocationId, linkedProductionRunId: prepared.plan.allocations.length === 1 ? firstLayer.id : null,
       // A split draw's biochar moisture is its overall 1 − solids ÷ wet across the sub-bins read.
       storageLocationId: productBinId, massKg, moistureContentPercent, densityKgM3: data.densityKgM3,

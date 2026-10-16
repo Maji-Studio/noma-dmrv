@@ -22,6 +22,7 @@ import {
   productionRuns,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { formatUtcDate } from "@/lib/date-utils";
 import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
@@ -98,6 +99,8 @@ export type DashboardKpiKey =
 export interface DashboardKpi {
   key: DashboardKpiKey;
   label: string;
+  /** Optional explanation shown beside the label in an InfoHint. */
+  hint?: string;
   /** Display unit, e.g. "t", "tCO₂e". */
   unit: string;
   /** Null = no data in range (render "Not available", not 0). */
@@ -278,7 +281,7 @@ export async function getDashboardOverview(
               eq(biocharProducts.facilityId, facilityId),
               isNull(biocharProducts.archivedAt),
               ne(biocharProducts.status, "draft"),
-              ...(fetchStart ? [gte(biocharProducts.productionDate, fetchStart)] : []),
+              ...(fetchStart ? [gte(biocharProducts.productionDate, formatUtcDate(fetchStart))] : []),
             ),
           ),
         db
@@ -439,6 +442,7 @@ export async function getDashboardOverview(
     {
       key: "appliedToSoil",
       label: "Applied to soil",
+      hint: "Dry mass of biochar applied to soil at customer sites.",
       unit: "t",
       value: currentApplications.length > 0 ? appliedCurrentTons : null,
       deltaPercent:
@@ -449,7 +453,7 @@ export async function getDashboardOverview(
     },
     {
       key: "co2eStored",
-      label: "CO₂e stored",
+      label: "Estimated CO₂e stored",
       unit: "t",
       value: currentStoredBatches.length > 0 ? storedCurrentTons : null,
       deltaPercent:
@@ -459,7 +463,7 @@ export async function getDashboardOverview(
       detail:
         currentStoredBatches.length > 0
           ? `${currentStoredBatches.length} ${currentStoredBatches.length === 1 ? "credit batch" : "credit batches"}`
-          : "no verified storage in period",
+          : "no estimate in period",
     },
   ];
 

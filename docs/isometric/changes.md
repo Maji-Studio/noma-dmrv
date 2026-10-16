@@ -1,5 +1,61 @@
 # Isometric Docs Change Log
 
+## 2026-10-15: Correct reactor-monitoring citations and retain document-only gates (#627 slices 1, 2, 4)
+
+The passages were read through the Isometric MCP (`how_to`, then
+`protocols_get_content` for Biochar v1.1, tag 1.1.1) on 2026-10-15.
+The [authoritative registry text](https://registry.isometric.com/protocol/biochar/1.1?tag=1.1.1)
+confirms §9.1.2's sub-atmospheric pressure alternative: records at one-minute
+intervals or more frequently, accuracy 2% FS or better, manufacturer calibration
+requirements met or exceeded and calibration at least annual, with raw data
+available on request. PDD B.19 supplies the project's five-year operational-record
+retention commitment; §9.1.2 itself says only that raw data must be available on
+request. The [project monitoring requirement](./requirements-shortlist.md#project-reactor-monitoring)
+records the exact quoted clauses, registry URL and approved-PDD basis.
+The schema's former Appendix II citation, five-minute reactor-temperature
+cadence and pressure-threshold condition were unsupported. The protocol's
+only appendix is Appendix 1: Risk of Reversal Questionnaire.
+
+This resolves `isometric/readings-research-corrections`. The approved PDD
+uses annual accredited emissions testing (E.1/E.3), so §9.2.4 requires flue-stack
+temperature during project operations within 10% of the emissions-test value(s),
+at one-minute intervals or more frequently, with 2% FS accuracy or better and
+calibration at least annual and meeting or exceeding manufacturer requirements.
+§9.2.4.1 requires raw pyrolyzer temperature data for the Reporting Period to be
+retained for at least five years. Both passages are quoted in the shortlist.
+The approved PDD's lack of a recurring temperature CSV requirement is a format
+question only, not a reason to omit that series. Decision added 2026-10-16:
+Kenji confirmed that the Readings file (`sensor_data`) uploaded on each production
+run is the retained raw record for both the pressure and flue-stack temperature
+series. noma stores it unchanged and does not check its contents, which are the
+operator's responsibility, so file presence stays the readiness gate.
+No continuous-gas CSV extension is needed for the approved emissions-testing
+route. A future project choosing another emissions method needs its own evidence
+contract. Historical research stays archived.
+
+The Readings file stays unchanged on the production run. Readiness and Removal
+submission use file presence, not parsed rows, Sensors, Parquet or reactor MeasurementSamples. Focused tests cover empty
+structured readings, missing/pending/failed files, and submission without
+telemetry calls. The optional readings importer retained by #942 q25 and
+#1014 is unchanged; its wiring/query-bounds deferral stays open with these
+tests as the safety net. The registry upload pipeline and TelemetryPanel
+were already retired in #987, as recorded on 2026-10-13; this slice removes
+no modules or schema.
+
+## 2026-10-15: Removal templates pinned per credit batch (#1067, #1058)
+
+`removal_template_observations` retains normalized definitions, enriched inputs
+and component-ID line contracts. Owner/Admin review settles proposed or invalid
+contracts. Credit batches copy the facility default on creation; only Switch
+template changes the pin. Removal grouping and compilation use member pins,
+with connection prerequisites kept separate from default-template setup advice.
+Pre-existing rows are not backfilled under the pre-production policy. See
+[ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
+
+Fixed-datapoint REST responses expose no deprecation flag. The deprecated-factor
+readiness advisory remains deferred pending a registry signal; see
+[the open question](../open-questions-isometric.md#fixed-datapoint-deprecation-signal-isometricfixed-datapoint-deprecation).
+
 ## 2026-10-15: Sample moisture retained as evidence only (#942 q1)
 
 Kenji resolved `isometric/sample-moisture-submission`: Sample moisture stays
@@ -137,7 +193,7 @@ a new design; registry requirements still apply.
 ## 2026-10-13: Reactor time-series upload retired
 
 The reactor time-series upload pipeline was removed in issue #987. The approved
-MVP retains the original pressure CSV on each production run and needs no
+MVP retains the Readings file (`sensor_data`) on each production run and needs no
 registry sensor registration or bulk time-series upload. ADR 0006 is retired;
 the full pipeline can be restored from `archive/reactor-telemetry-upload`
 (staging commit `5b7a252c2`).

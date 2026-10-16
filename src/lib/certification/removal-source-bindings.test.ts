@@ -373,7 +373,7 @@ describe("buildRemovalSourceBindingPlan", () => {
             {
               id: "component-safety-margin",
               blueprint_key: "mass_based_ci_emissions",
-              display_name: "  SAFETY Margin  ",
+              display_name: "Renamed reserve mass",
               inputs: [{ input_key: "mass" }],
             },
           ],
@@ -383,6 +383,7 @@ describe("buildRemovalSourceBindingPlan", () => {
     const plan = buildRemovalSourceBindingPlan({
       candidates: [classified[0]],
       template: templateWithSafetyMargin as never,
+      lineSources: { "component-safety-margin": { scope: "operating", automaticSource: "safety-margin", entryPolicy: "none", origin: "reviewed" } },
       applicationIdsByCreditBatchId,
     });
 
@@ -484,6 +485,10 @@ describe("buildRemovalSourceBindingPlan", () => {
       buildRemovalSourceBindingPlan({
         candidates: [classified[0]],
         template: ambiguousTemplate as never,
+        lineSources: {
+          "component-safety-margin-1": { scope: "operating", automaticSource: "safety-margin", entryPolicy: "none", origin: "reviewed" },
+          "component-safety-margin-2": { scope: "operating", automaticSource: "safety-margin", entryPolicy: "none", origin: "reviewed" },
+        },
         applicationIdsByCreditBatchId,
       }),
     ).toThrow(/expected exactly one/i);

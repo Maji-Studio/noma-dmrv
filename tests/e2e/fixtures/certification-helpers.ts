@@ -1,4 +1,5 @@
 import { insertEstablishedOutputApplicationFixture as insertOutputApplicationFixture } from "../../helpers/output-contract-fixtures";
+import { formatUtcDate } from "@/lib/date-utils";
 import { deleteOutputApplicationFixtures } from "../../helpers/output-contract-fixtures";
 import { preparePureOutputProductFixture, outputProductFixtureValues, outputOrderFixtureValues, insertEstablishedOutputDeliveryFixture as insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures } from "../../helpers/output-contract-fixtures";
 /**
@@ -182,7 +183,7 @@ export async function seedGroupedRemovalWithChain(
         biocharRatio: productBiocharRatio,
         sourceBiocharStorageLocationId: refs.biocharStorageLocationId,
         linkedProductionRunId: id.productionRun,
-        productionDate: productionStartTime,
+        productionDate: formatUtcDate(productionStartTime),
         status: "ready",
         massKg: PRODUCT_WET_MASS_KG,
         moistureContentPercent: PRODUCT_MOISTURE_PCT,
@@ -274,6 +275,7 @@ export async function seedGroupedRemovalWithChain(
         startDate: today,
         endDate: today,
         status: "draft",
+        removalTemplateId: await facilityDefaultRemovalTemplateId(tx, refs.facilityId),
         // Tier is inherited from the facility (ADR 0021), not a batch column.
       });
       await tx.insert(schema.creditBatchProductionRuns).values({
@@ -468,6 +470,15 @@ export interface SeededReadyBatch {
  * `seedGroupedRemovalWithChain` but never creates a removal, and adds the
  * carbon samples and transport legs the readiness gate requires.
  */
+/** createCreditBatch pins new batches to the facility default; raw inserts must too. */
+async function facilityDefaultRemovalTemplateId(tx: DbTransaction, facilityId: string): Promise<string | null> {
+  const [project] = await tx
+    .select({ id: schema.certifierProjects.defaultRemovalTemplateId })
+    .from(schema.certifierProjects)
+    .where(and(eq(schema.certifierProjects.organizationId, DEC_ORG_ID), eq(schema.certifierProjects.facilityId, facilityId)));
+  return project?.id || null;
+}
+
 export async function seedUngroupedReadyBatchWithChain(
   refs: ChainSeedRefs,
   testRunId: string,
@@ -660,7 +671,7 @@ export async function seedUngroupedReadyBatchWithChain(
         biocharRatio: productBiocharRatio,
         sourceBiocharStorageLocationId: refs.biocharStorageLocationId,
         linkedProductionRunId: id.productionRun,
-        productionDate: productionStartTime,
+        productionDate: formatUtcDate(productionStartTime),
         status: "ready",
         massKg: PRODUCT_WET_MASS_KG,
         moistureContentPercent: READY_BIOCHAR_MOISTURE_PCT,
@@ -776,6 +787,7 @@ export async function seedUngroupedReadyBatchWithChain(
         startDate: today,
         endDate: today,
         status: "draft",
+        removalTemplateId: await facilityDefaultRemovalTemplateId(tx, refs.facilityId),
         // Tier is inherited from the facility (ADR 0021), not a batch column.
       });
       if (withLabAndRun) {

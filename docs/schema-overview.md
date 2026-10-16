@@ -13,7 +13,7 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 |---|---|
 | Auth, orgs, members, invitations | `src/db/schema/auth.ts` |
 | API credentials (`api_keys`) and management records (`api_key_owners`) | `src/db/schema/api-keys.ts` |
-| API bookkeeping (`api_idempotency_records`, `api_audit_events`, `api_rate_limit_buckets`, `organization_api_access`) | `src/db/schema/api.ts` |
+| API bookkeeping (`api_idempotency_records`, `api_rate_limit_buckets`, `organization_api_access`) | `src/db/schema/api.ts` |
 | Activity history (`activity_events`) | `src/db/schema/activity.ts` |
 | Facilities, reactors, storage locations | `src/db/schema/facilities.ts` |
 | Suppliers, customers, their locations, drivers, operators | `src/db/schema/parties.ts` |
@@ -110,30 +110,17 @@ verification fields.
 
 ## API bookkeeping
 
-All four tables live in `src/db/schema/api.ts`:
+All three tables live in `src/db/schema/api.ts`:
 
 | Table | Grain and scope |
 |---|---|
 | `api_idempotency_records` | Unique organization/credential/key claim with fingerprint, expiry and stored outcome v2. Normal claims are org-scoped; expiry purge is a system seam. |
-| `api_audit_events` | One committed API write effect with organization, actor, credential, optional OAuth client, operation, entity ids, field names, versions, request id, outcome code and transport (`rest` or `mcp`, default `rest`). No field values; inserts are org-scoped in the write transaction. |
 | `api_rate_limit_buckets` | Token balance and refill time per bucket key. Organization-neutral system seam for hashed-IP, credential and organization budgets; no org column. |
 | `organization_api_access` | Organization primary key, enabled flag, changing user id and time. Missing row means on. Credential lookup and Platform Admin directory/toggle are privileged seams; non-Platform-Admins cannot administer it. |
 
 ## Activity history
 
-`activity_events` stores org-scoped, value-free entity changes, status
-transitions and actor/source attribution. The caller's transaction owns each
-insert; reads order by `occurred_at` then unique `sequence`, newest first.
-The organization FK cascades on delete; the nullable facility reference deliberately
-has no FK to avoid deadlocks against facility archive/restore. `recordActivity`
-checks same-org facility ownership with a non-locking read in the caller's
-transaction, including archived facilities. Facilities are never hard-deleted;
-entity references survive deletes. Entity types
-use canonical snake_case names from
-`ACTIVITY_ENTITY_TYPES`; `bin_movement` identifies `bin_movements` rows.
-`src/lib/activity-entity-type.ts` maps existing runner/certification aliases to
-these names and rejects unknown values. See the full vocabulary and mapper
-contract in [database.md](./database.md#activity-events).
+`activity_events` stores entity changes and API writes under the [Activity events contract](./database.md#activity-events).
 
 ## Invariants and traps
 
@@ -157,6 +144,8 @@ contract in [database.md](./database.md#activity-events).
 - **`credit_batches` stores no aggregate totals** — applied weight and CO2e stored are derived on read ([ADR 0019](./adr/0019-credit-batch-aggregates-derived-on-read.md)). The deliberate exception is Removal-owned `credit_batch_applications` mass: each assigned application-by-batch slice is an immutable submission snapshot, while unassigned slices are reconciled from live provenance. The batch also stores a permanent production-emissions Removal claim and a pre-POST submission reservation; the reservation's submission ledger row supplies its lock, status, and external-mutation state ([ADR 0020](./adr/0020-production-emissions-front-loaded-per-credit-batch.md)). Project emissions are registry-owned ([ADR 0018](./adr/0018-isometric-owns-project-emissions.md)); durability tier is inherited from the facility, not stored per batch ([ADR 0021](./adr/0021-durability-tier-is-facility-scoped.md)).
 - **`production_processes` owns the process epoch and Method-B prerequisites**, keyed `(facility, feedstock)`; `credit_batches.sampling` owns the immutable per-batch choice. Eligibility is computed, never stored. See [ADR 0022](./adr/0022-method-b-is-computed-eligibility-not-stored-unlock.md).
 - **`certifier_credentials` holds provider auth** (encrypted access token + client secret, unique per `(organization_id, provider)`) — separate from `certifier_projects`, which only maps facilities to provider project IDs plus emission-estimate config ([ADR 0015](./adr/0015-energy-single-combined-measurement-point.md)). Submission-unit shape: [ADR 0003](./adr/0003-removal-as-submission-unit.md), [ADR 0004](./adr/0004-ghg-statement-as-independent-artifact.md), [ADR 0008](./adr/0008-submission-ledger-internal-seam.md).
+- **`credit_batches.removal_template_id` pins the Removal template**, copied from the facility default at creation and from the target facility default on a facility move. Other pin changes use the audited Switch template action; a move records the pin change in activity. Removals compile against matching member pins, never the current default. Pre-existing rows are not backfilled under the pre-production policy; local resets are supported and shared staging resets require notification.
+- **`removal_template_observations` stores Isometric template observations**, scoped by organization, provider and external template ID. Definition and enrichment fingerprints identify versions; component-ID line contracts carry forward across observations, with Owner/Admin review for proposed, unassigned or invalid contracts. It lives in its own schema module ([ADR 0032](./adr/0032-per-batch-emissions-entries-bound-to-template-lines.md)).
 - **`certifier_production_batches` mirrors the registry's Production Batch id for a credit batch** (`external_production_batch_id` = `ptb_…`, one row per `(provider, credit_batch_id)`, provider pinned to `isometric`). The credit batch IS the protocol production batch ([ADR 0016](./adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md)), so the row is written before its MeasurementSamples POST and is the idempotency journal for them: present ⇒ GET the exact `ptb_…` and verify its saved identity and current mapping before reuse; absent remotely or locally ⇒ reconcile by the `nm-ptb-…` supplier reference before POSTing. Only a 404 or the exact provider missing-ProductionBatch 400 permits replacement. Recovery validates current facts, refuses duplicate references or mismatched payloads, and replaces the old journal through an organization-scoped compare-and-set after confirmation. A live batch with a changed project/facility mapping blocks submission. It also mirrors the registered `mass_kg` (total dry biochar, `M_biochar (DM)` — NOT the attribution-scaled GHG-entry `product_mass`), window, and payload hash so local payload drift remains detectable while the live registry identity stays authoritative.
 - **`certifier_storage_locations` journals one reusable agricultural site per certifier project and Customer Location.** Isometric scopes Storage Locations to a project, so the same Customer Location can own a separate `slc_...` identity under another project. Each row records that identity, its project, stable supplier reference, submitted payload/hash, and operator-visible local or remote drift state. Only a confirmed 404 under registration locks permits replacing the external ID through an organization-scoped compare-and-set. Recovery preserves the submitted payload/hash and flags dependent Biochar Application journals for review rather than repointing them. It is distinct from facility inventory-bin `storage_locations`; application create/update never writes it. A project mapping with registered sites cannot be rebound or unlinked.
 - **`certifier_biochar_applications` journals Biochar Application creation at the Removal-versioned allocation-slice grain.** One row represents one `(Application, credit batch/Production Batch, Removal submission version)` slice and retains the linked submission, Production Batch and Storage Location registrations, exact submitted payload/hash, external identity, observed GHG Entry/Removal identity, and ordinary `creating` or `confirmed` lifecycle state. Supersession owns a new supplier reference and remote Biochar Application associated with the new GHG Entry; an exact confirmed retry reads that version's persisted external identity and performs zero writes. The provider arrival mass is the slice's immutable allocated wet kg and departure is zero; commingled slices therefore partition the physical Application total. An unconfirmed claim reconciles every bounded list page by its exact stable supplier reference before POST. Payload or current-GHG identity drift fails closed.

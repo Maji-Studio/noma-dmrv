@@ -30,6 +30,10 @@ on:
     - cron: "33 9 * * *"
   workflow_dispatch:
     inputs:
+      force_failure:
+        description: "Fail a probe job to verify GitHub issue notifications (skips health checks)"
+        type: boolean
+        default: false
       repair_cors:
         description: "Allow the exact staging app origin to upload (preserves existing bucket CORS rules)"
         type: boolean
@@ -49,6 +53,7 @@ env:
 
 jobs:
   smoke:
+    if: ${{ !inputs.force_failure }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -108,3 +113,28 @@ jobs:
       - name: Storage round-trip smoke (staging bucket)
         if: ${{ env.LOAD_OP_SECRETS == 'true' }}
         run: pnpm storage:smoke
+
+  notification-probe:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.force_failure }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - name: Force a health failure notification
+        run: exit 1
+
+  notify-failure:
+    needs: [smoke, notification-probe]
+    if: >-
+      ${{ always() &&
+          ((github.event_name == 'schedule' &&
+            (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))) ||
+           (github.event_name == 'workflow_dispatch' && inputs.force_failure &&
+            contains(needs.*.result, 'failure'))) }}
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/health-failure-notify.yml
+    with:
+      workflow-file: storage-health.yml
+      environment: staging

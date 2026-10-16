@@ -99,7 +99,7 @@ describe("delivery MCP tools", { timeout: DELIVERY_TEST_TIMEOUT_MS }, () => {
     const current = (await readDelivery(a, row.id)).data;
     expect(changed.structuredContent).toEqual({ data: current });
     expect(await write("update_delivery", { deliveryId: row.id, expectedVersion: row.version })).toMatchObject({ isError: true, structuredContent: { code: "stale_version", current } });
-    expect((await deliveryAudits(a)).map(audit => audit.transport)).toEqual(["mcp", "mcp"]);
+    expect((await deliveryAudits(a)).map(audit => audit.source)).toEqual(["mcp", "mcp"]);
   });
   it("requires requestKey on real writes and expectedVersion on update", async () => {
     expect(await call("record_delivery", deliveryInput(a))).toMatchObject({ isError: true, structuredContent: { code: "idempotency_key_required", issues: [{ pointer: "/requestKey" }] } });

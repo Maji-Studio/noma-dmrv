@@ -22,7 +22,7 @@ const DELIVERED_KG = 100;
 const APPLIED_TONNES = 0.1;
 const FIELD = { fieldSizeHa: 1, gpsLatitude: -3.3349, gpsLongitude: 37.3404 };
 /** Rows this fixture adds beyond the output-stock parents and the certified lineage. */
-const SAMPLE_TABLES = ["storage_object_deletions", "documents", "transport_legs", "samples", "api_audit_events", "api_idempotency_records"];
+const SAMPLE_TABLES = ["storage_object_deletions", "documents", "transport_legs", "samples", "api_idempotency_records"];
 
 export interface LabSampleFixtureOptions {
   timeZone?: string;

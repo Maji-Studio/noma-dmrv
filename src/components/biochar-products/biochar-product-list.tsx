@@ -45,7 +45,7 @@ import {
   ENTITY_DEEP_LINK_MODE_PARAM,
   parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
-import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { formatDayString, formatDateRange } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
 } from "@/lib/mass-moisture";
@@ -59,6 +59,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
+import { BIOCHAR_PRODUCT_DEEP_LINK_PARAM } from "@/lib/biochar-product-links";
 import { useEffect, useState } from "react";
 import { BiocharProductForm } from "./biochar-product-form";
 import { productSheetSections } from "./product-read-details";
@@ -131,7 +132,7 @@ function createColumns(
       accessorKey: "productionDate",
       meta: { nowrap: true },
       header: "Production date",
-      cell: ({ row }) => formatDate(row.original.productionDate),
+      cell: ({ row }) => formatDayString(row.original.productionDate),
     },
     {
       id: "facility",
@@ -252,7 +253,7 @@ export function BiocharProductPageMassSummary({
 export function BiocharProductList() {
   const { facilityId: contextFacilityId, facilities } = useFacilityContext();
   const [focusedProductId, setFocusedProductId] = useQueryState(
-    "biocharProduct",
+    BIOCHAR_PRODUCT_DEEP_LINK_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const [deepLinkMode, setDeepLinkMode] = useQueryState(
@@ -601,7 +602,7 @@ export function BiocharProductList() {
         mode={displaySideSheet?.mode ?? "create"}
         onModeChange={handleModeChange}
         title={displaySideSheet?.mode === "create" ? "Create biochar product" : (displaySideSheet?.entity?.code ?? "")}
-        subtitle={displaySideSheet?.mode === "create" ? undefined : (displaySideSheet?.entity ? formatDate(displaySideSheet.entity.productionDate) : undefined)}
+        subtitle={displaySideSheet?.mode === "create" ? undefined : (displaySideSheet?.entity ? formatDayString(displaySideSheet.entity.productionDate) : undefined)}
         editLabel="Edit product"
         sections={viewedEntity ? productSheetSections(viewedEntity, resolveFacilityTimezone(facilities, viewedEntity.facilityId)) : undefined}
       >

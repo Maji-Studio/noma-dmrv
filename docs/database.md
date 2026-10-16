@@ -26,8 +26,6 @@ are not examples for new domain tables. Domain tenancy is enforced in
 
 `src/db/schema/api.ts` also defines:
 
-- `api_audit_events`: organization-scoped, value-free API write effects and
-  actor/credential/request ids. Inserts use the operation's transaction.
 - `api_rate_limit_buckets`: system seam keyed by IP hash, credential or
   organization and access type. It intentionally has no `organization_id`;
   request guards debit it outside business transactions.
@@ -39,7 +37,7 @@ are not examples for new domain tables. Domain tenancy is enforced in
 
 The purge helpers are system seams that delete expired idempotency records and
 idle buckets across organizations. These waivers do not relax ordinary
-org-scoped reads or audit inserts.
+org-scoped reads.
 
 ## Activity events
 
@@ -51,7 +49,14 @@ path exists and test fixtures delete organizations. The nullable `facility_id`
 has no FK under the exception documented in [ADR 0033](./adr/0033-activity-events-facility-without-fk.md). Entity, credit-batch, production-run and
 actor references have no FKs, so history survives record
 deletion as tombstones. V1 stores field names only, never field
-values, alongside status transitions and attribution.
+values, alongside status transitions and attribution. API writes are audited
+only here: an API audit row has `source in ('rest','mcp') and operation_id is not null`
+and carries operation, credential and request IDs, versions and field names.
+Nested document, membership, transport-leg and document-retirement rows from
+the same API call carry only actor and source attribution, without operation,
+credential or request IDs. Nullable `operation_id`, `version_before` and
+`version_after` also record described form and script runner writes.
+`oauth_client_id` is reserved and null until OAuth grants ship.
 
 `ACTIVITY_ENTITY_TYPES` in `src/db/schema/common.ts` allows only canonical
 snake_case names: `removal`, `ghg_statement`, `production_run`, `biochar_product`,
@@ -69,18 +74,21 @@ order by `occurred_at` then unique `sequence`, newest first.
 
 The operation runner appends activity from `describe()` in its write transaction.
 This covers feedstock intake, production runs, products, stock movements, lab
-samples, orders, deliveries, app/API document requests and confirmations, and
-app document deletes. App document visibility and evidence classification edits
+samples, orders, deliveries, applications, app/API document requests and
+confirmations, and app document deletes. App document visibility and evidence classification edits
 also use the runner. No-op descriptions, repeated confirmations, dry runs and idempotent
 replays add no events. The runner computes one source for both its own event and
 nested writers: audited transport, then the trusted `script` override, then `form`.
 Runner-reached transactional and cascade writers require an explicit source.
 
-Application, credit-batch, membership and transport-leg writers append activity
-directly in their write transaction. A record spanning several batches emits one
-event per batch, including both former and current batches when an application
-moves. Membership changes emit a batch update per changed run and a run update
-with the former batch ID on detach, so each event retains its run scope.
+Application operations call `activity.scope(entityId, scopes)` in
+`src/lib/operations/activity-links.ts`. The runner emits one event per distinct
+batch/run scope, including both former and current batches when an application
+moves. Delete captures scopes before removing shares and passes them with the
+initiating source to document retirement. Credit-batch, membership and
+transport-leg writers append activity directly in their write transaction.
+Membership changes emit a batch update per changed run and a run update with
+the former batch ID on detach, so each event retains its run scope.
 Automatic cohort attachment uses `system` with no actor; derived transport writes
 retain the initiating actor, including document retirements when a derived leg
 is cleared. Identical derived syncs still upsert and bump the leg version without
@@ -108,9 +116,11 @@ Failed-upload retention deletes also use `deleteDocumentRow`, with source `syste
 and no actor. Lease renewal, promotion cleanup metadata and pending-upload expiry
 are internal upload bookkeeping and do not emit activity.
 
-Direct document events keep only the document ID, applicable batch/run IDs and a
+Direct and runner document events keep only the document ID, applicable batch/run IDs and a
 `document:<document_type>:<owner_type>:<owner_uuid>` reason code containing
-controlled type keys and the owning record ID. Events never copy filenames,
+controlled type keys and the owning record ID. Both paths use the shared
+`documentActivityReasonCode` helper for every owner type, including document
+creation, updates and deletion. Events never copy filenames,
 URLs, storage keys or descriptions. Parent deletes capture ownership before
 removing the rows needed to resolve it.
 
@@ -120,6 +130,27 @@ unclassified write exports. Its inventory distinguishes `direct` recording,
 `runner` coverage with operation IDs, and reasoned `exempt` entries. Certification status
 transitions use `certification-status-activity.ts`. Reference data, energy,
 readings and incidents are outside this activity scope.
+
+The batch activity list and summary share one membership predicate: an explicit
+link to the requested batch, or a null batch link with a current member-run link
+or current member record identity. An explicit link to another batch never matches,
+including copies of fanned-out edits and membership events. Member identities
+come from `loadCreditBatchRollups` (including
+run forwards), lab samples, owned documents and transport legs. Removal and GHG
+Statement identities follow the application slice tables; multi-run stock movements
+follow saved output allocations. These identity matches
+recover best-effort links, including events written before membership existed;
+explicit batch links preserve detach and deletion history. One event-page query
+uses bound ID arrays and OR predicates, so overlapping matches do not duplicate
+rows. Pages order by descending millisecond timestamp and sequence, with a
+validated opaque cursor. Record labels and actor names resolve in batches at
+read time; missing records are tombstones, unknown types have generic labels,
+and documents never expose filenames. The summary counts every matching event by
+entity type and action and resolves the latest event with the same labels and actors.
+The list optionally filters by action and entity type (the summary never does), and
+each record also resolves the facility it belongs to now (a document takes its
+owner's), so links follow records that moved; ids that are not UUIDs read as
+missing. The UI built on these reads: [traceability.md](./traceability.md).
 
 ## Row-Level Guards
 
@@ -132,6 +163,21 @@ through lookups. Its strong ETag covers the run version and representation
 revision. Feedstock edits change bin stock and their own version, but do not
 rewrite the run's measured moisture, draws or batch allocations and do not bump
 the run version. A change to the run itself bumps its version.
+
+Application writers use `src/data-access/application-write-scope.ts`: unlocked
+discovery, sorted lineage artifacts, facilities `FOR SHARE`, runs `FOR SHARE`,
+batches `FOR SHARE`, deliveries `FOR UPDATE`, application `FOR UPDATE` with its
+version check, revalidation, then application slices `FOR UPDATE` and writes.
+Changed lineage, parent or discovered sets return retryable `conflict` to the
+client; no new locks are taken late. Explicit credit-batch membership takes
+artifacts before facilities and runs, then process scope and batch. Scalar
+edits and delete take no member run locks; late auto-membership acquisition is
+non-blocking `SKIP LOCKED` and refuses a missed row. See
+[Database boundaries](./architecture.md#database-boundaries) for the full order.
+`src/lib/db/transaction-retry.ts` shares the runner's bounded retry policy with
+all three membership transactions. It retries 40P01, 40001 and 55P03; production
+run writers still take runs before artifacts. The residual order is tracked in
+`data/production-run-artifact-order` and `data/lock-order`.
 
 ## Numeric Column Families
 
@@ -297,6 +343,14 @@ Generated SQL lives in `drizzle/`; metadata snapshots in `drizzle/meta/`. **Migr
 
 Flow: change schema → `pnpm db:generate` → review the emitted SQL → run targeted tests → `pnpm db:migrate` in shared environments.
 
+### Your migration number is taken after merging staging
+
+1. Merge `origin/staging`, then replace your metadata with its: `rm -rf drizzle/meta && git checkout origin/staging -- drizzle/meta`. A plain checkout keeps your branch-only snapshots, and `db:generate` would diff against them.
+2. Delete your own `NNNN_*.sql`, then rerun `pnpm db:generate --name <same name>`.
+3. Re-apply any hand-written SQL you added to the generated file.
+4. Reset your worktree DBs, then migrate. A plain migrate skips staging's migration when its `when` is older than the one you already applied. Before pushing, `git status --short drizzle/` should show only your new migration files and metadata changes.
+5. Never rename the file and edit the journal by hand: Drizzle skips migrations whose `when` is older than the last applied one. `pnpm check:migrations` catches this.
+
 ### Migration files are immutable once applied
 
 **Never edit a migration file after it has been applied to any database** (staging, production, or a teammate's). `drizzle-kit migrate` tracks applied migrations by journal order/timestamp, not file content, so an edited migration is silently skipped on databases that ran the original — CI reports success while the new DDL never executes, and the drift only surfaces in `db:verify-schema`. Need more changes? Generate a new migration. To repair drift that already happened, write a new migration with guarded DDL (`IF NOT EXISTS` / existence checks) so it no-ops where the objects exist.
@@ -317,7 +371,7 @@ Document destructive changes and their reset requirement in the related feature 
 
 The development gate applies the merge candidate's complete migration chain to an empty, disposable database, bootstraps its admin and organization, seeds current development data, and verifies the schema. It tests the supported reset-and-seed development path without requiring upgrades of obsolete demo rows.
 
-The independent `fresh-database-gate` also runs on every matching PR or manual run. It applies the full chain to another empty database, runs production-mode bootstrap twice to prove idempotence, and verifies the schema. Neither job substitutes schema push for migrations; promotion labels do not bypass either job.
+The independent `fresh-database-gate` also runs on every PR, merge-queue group and manual run. It applies the full chain to another empty database, runs production-mode bootstrap twice to prove idempotence, and verifies the schema. Neither job substitutes schema push for migrations; promotion labels do not bypass either job.
 
 ## Certification Tables
 
@@ -330,14 +384,28 @@ Source visibility), `certifier_projects`,
 `certifier_ghg_statements`, `certifier_ghg_statement_reports`,
 `certifier_removals`, `certification_submissions`,
 `certifier_document_uploads`, `certifier_sync_events`,
-`certifier_production_batches`, `certifier_storage_locations`, and
-`certifier_biochar_applications`. The last three live in separate schema
-modules named after their tables. They are Isometric-specific registry journals
-and use provider payload types; `certification.ts` remains the provider-neutral
+`certifier_production_batches`, `certifier_storage_locations`,
+`certifier_biochar_applications`, and `removal_template_observations`. The last
+four live in separate schema modules named after their tables. They are
+Isometric-specific registry journals and template observations that use provider
+payload types; `certification.ts` remains the provider-neutral
 submission and configuration boundary. Purpose per table:
 [`schema-overview.md`](./schema-overview.md); submission-unit rationale:
 [ADR 0003](./adr/0003-removal-as-submission-unit.md), [ADR
 0008](./adr/0008-submission-ledger-internal-seam.md).
+
+`removal_template_observations` stores normalized Isometric templates, enriched
+input metadata, fingerprints and versioned component-ID line contracts. Reviews
+require Owner/Admin permission; compilation requires complete enrichment and
+valid contracts. See [ADR 0032](./adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
+
+`credit_batches.removal_template_id` pins the facility default at creation.
+Moving a batch to another facility copies the target facility's default and
+records the pin change in activity. Other pin changes use the audited Switch
+template action. Removals compile against their member batches' pins, never the
+current default. Pre-existing rows receive
+no backfill under the pre-production policy; local resets are supported and any
+shared staging reset requires notifying the user first.
 
 `certifier_biochar_applications` is an organization-scoped idempotency journal,
 not a second source of application facts. Every row links its Application and

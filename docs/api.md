@@ -41,8 +41,8 @@ samples on archived batches from lists and still serve them by id.
 
 ### Documents
 
-Feedstocks, deliveries and lab samples expose nested document reads and upload
-requests at `/{owner}/{idOrCode}/documents`. Reads use the owner's read scope;
+Feedstocks, deliveries, lab samples and applications expose nested document
+reads and upload requests at `/{owner}/{idOrCode}/documents`. Reads use the owner's read scope;
 uploads and confirmation use its write scope. Files never travel in these API
 bodies. POST a declaration with its SHA-256 and a required `Idempotency-Key`
 (400 `idempotency_key_required` when missing), PUT the bytes to `upload.url` with `upload.headers`, then
@@ -72,8 +72,9 @@ The published owners and types are:
 | `feedstocks` | `feedstock` | `bill_of_lading`, `weighbridge_ticket`, `other_transport_evidence` | `feedstocks:read`, `feedstocks:write` |
 | `deliveries` | `delivery` | `bill_of_lading`, `weighbridge_ticket`, `other_transport_evidence`, `delivery_receipt`, `photo` | `deliveries:read`, `deliveries:write` |
 | `lab-samples` | `lab_sample` | `lab_report` | `lab-samples:read`, `lab-samples:write` |
+| `applications` | `application` | `photo`, `pdf` | `applications:read`, `applications:write` |
 
-Applications are reserved for Phase 6b. There is no separate document scope.
+There is no separate document scope.
 The app retains its internal owner and type table. API uploads stay private.
 
 Under `/api/v1/{owner}/{idOrCode}/documents`:
@@ -90,8 +91,8 @@ All reads enforce the owner and organization, including content; wrong-owner
 and foreign documents return 404. Content has `Cache-Control: private, no-store`
 and `Referrer-Policy: no-referrer`. Fetch the redirect without the API bearer.
 There is no public-visibility fallback. Legacy URL-only documents can appear
-with unknown content type and size, but have no API content link. Reads do not
-answer 304. Document writes do not bump owner versions or change owner ETags.
+with unknown content type and size, but have no API content link. Document
+writes do not bump owner versions or change owner ETags.
 
 MCP exposes `find_documents`, `get_document_download_url`,
 `request_document_upload` and `confirm_document_upload`. Downloads return a
@@ -145,7 +146,7 @@ code (`created`, `updated`, `deleted`), entity type and ids, versions before and
 after, and changed field names. It contains no field values. The runner returns
 this transport-neutral effect alongside data. A state-machine operation can
 return no effect when its outcome changes no entity, so a gone confirmation
-writes no audit event.
+writes no activity event.
 
 Dry-run stock writes also return `stockEffects` beside `data`. The runner supplies
 an optional `OperationScope.snapshotStock` observer, passed to transaction writers.
@@ -180,21 +181,35 @@ If that dry run fails, the 409 carries no `preview`; a failure the API treats as
 unexpected is logged value-free with the operation and request ids, a domain
 refusal is not. The fallback never claims an idempotency key.
 
+Biochar product representation revision 3 returns `productionDate` as the
+oldest drawn lot's production-run calendar day (`YYYY-MM-DD`, OpenAPI `date`).
+Clients must preserve it as a day instead of parsing it as an instant. `placedAt`
+remains the actual mixing and placement instant. Earlier representation ETags
+must be refreshed before PATCH.
+
 Production-run operation inputs accept offset date-time strings or facility-local
 `{ date, time }` objects. Local times resolve through the transaction's effective
 facility, including a new facility on update. Native Dates are an in-process
 convenience and do not appear as a third published shape. UI actions validate
 the form contract before passing only operation fields to the runner.
 
-The `audit` run option supplies request id, credential id and optional OAuth
-client id for API writes only. Audited operations must implement `describe`.
-`src/data-access/api-audit-events.ts:writeApiAuditEvent` records the effect and
-resolved organization/user inside the operation's transaction. UI writes do
-not pass `audit`; dry runs and idempotent replays add no audit row.
-Committed runner writes with a non-null `describe` effect also record value-free
-`activity_events` in that same transaction for UI, REST and MCP calls, with the source identifying the transport.
-The runner records one activity event per entity ID in the effect.
-No-ops, dry runs and idempotent replays add neither kind of event.
+The `audit` run option supplies request and credential IDs for API writes only.
+Audited operations must implement `describe`.
+`src/data-access/activity-events.ts:recordActivity` is the single audit writer.
+Committed runner writes with a non-null `describe` effect record value-free
+`activity_events` in the operation's transaction for form, script, REST and MCP
+calls. Every runner event carries `operationId`, `versionBefore` and
+`versionAfter`. The API audit row contract is defined in [Activity events](./database.md#activity-events).
+Form writes have null credential IDs.
+No-op descriptions, dry runs, idempotent replays and `activity.skip()` add no
+events. An audited write whose effect yields no activity rows throws and rolls
+back.
+The runner records one event per entity and distinct batch/run scope supplied by
+`activity.scope(entityId, scopes)` in `src/lib/operations/activity-links.ts`.
+Application create resolves its scopes after saving; update includes the batches
+it leaves and joins; delete captures scopes before removing shares. Activity
+source is `rest`, `mcp` or `form` for the corresponding transport, or `script`
+for a trusted script call.
 
 Stored outcome v2 is `{ kind: "success", data, effect? }` in
 `api_idempotency_records`, with schema version 2. Effects retain outcome code,
@@ -336,9 +351,10 @@ Products stay locked by posting after the insert: the facility lock serializes
 archive and restore before their delivery/product/order locks; topology
 serializes order writes, delivery updates and corrections, and sorted bins
 serialize product placement. Application create takes no topology or bin lock:
-`createApplication` locks lineage artifacts first, then the delivery row, then
-FK key-share locks on products and runs. Delivery create also locks artifacts
-first and never locks an existing delivery, so these writers cannot cycle.
+`lockApplicationWriteScope` locks lineage artifacts, facilities, runs and batches
+before delivery and application rows. See
+[Database boundaries](./architecture.md#database-boundaries). Delivery create
+also locks artifacts first and never locks an existing delivery, so these writers cannot cycle.
 Delivery updates take artifacts before the facility share lock, then the delivery
 row, preserving the same archive ordering.
 
@@ -434,6 +450,92 @@ Both app operations remain unregistered. Public outcomes strip native product
 rows with bigint posting sequences before JSON serialization. The app create
 shares the runner's retries, deadline and statement timeout.
 
+### Applications on REST and MCP
+
+Applications record spreading from one delivered load. They consume its wet mass
+without moving bin stock. Read scope `applications:read` is on by default;
+`applications:write` is opt-in and `applications:delete` is off by default.
+
+| Route under `/api/v1` | Scope | Contract |
+|---|---|---|
+| GET `/applications` | `applications:read` | Keyset page, newest first |
+| GET `/applications/{idOrCode}` | `applications:read` | UUID or exact code, strong version/revision ETag |
+| GET `/applications/{idOrCode}/boundary` | `applications:read` | Full normalized GeoJSON collection and summary, 404 without a boundary |
+| POST `/applications` | `applications:write` | One application; required `Idempotency-Key`, including dry runs |
+| PATCH `/applications/{id}` | `applications:write` | UUID and strong `If-Match` required |
+| DELETE `/applications/{id}` | `applications:delete` | UUID and strong `If-Match` required; optional empty JSON body |
+| GET `/deliveries/{idOrCode}/application-balance` | `deliveries:read` | Delivered, applied and remaining wet kg, earliest date and site defaults |
+
+List filters include `facilityId`, `deliveryId`, `orderId`, `creditBatchId`,
+`evidenceMethod`, `q`, `code`, `appliedFrom` inclusive and `appliedBefore`
+exclusive. The dates are calendar dates. `creditBatchId` follows physical
+lineage through slices or frozen shares from member runs, including mix-bin
+applications held out of credit batches. The app page still uses delivery
+lineage; its alignment is tracked in `app/application-batch-lineage-filter`.
+
+Send `appliedWetMassKg` in 0.001 kg steps and positive `fieldSizeHa` in hectares.
+`dryBiocharKg` is derived from the delivery's saved provenance and cannot be
+supplied. Capacity is rechecked under the delivery lock; no stock fingerprint
+is needed and committed allocations are authoritative. `applicationDate` is
+`YYYY-MM-DD` on the delivery facility's clock, stored as a UTC-midnight calendar
+date. It cannot precede the delivery's facility-local day or be in the future.
+Never invent field size or GPS. `visual` cannot be selected; legacy rows remain
+readable until that method is changed.
+
+On create only (Q78), omitted GPS coordinates for `location` copy the order
+customer location's pair, with a warning naming the location. An explicit null
+stays null; a `location` record without a complete GPS pair after defaulting
+is refused. Soil temperature
+copies the customer location default, else the facility default, only when both
+its value and source are omitted and the facility is not 1000-year. The copied
+source is `global_database`, with a warning naming its origin. PATCH never
+fills defaults. Omitted PATCH fields stay unchanged and null clears optional
+fields, subject to validation of the merged record. Other non-blocking warnings
+cover mix-bin credit holds and the 200-year facility reference temperature.
+
+`gisBoundary` accepts raw WGS 84 Polygon, MultiPolygon, Feature or
+FeatureCollection GeoJSON. The server normalizes it with `source: "api"` inside
+the operation, after fingerprinting the client's body for replay. Do not send
+the app's boundary envelope. The whole JSON request must fit `API_BODY_MAX_BYTES`
+(256 KiB); larger boundaries must be added in the app. Lists and detail bodies
+carry only the boundary summary; the boundary route returns geometry. Q79
+requires a boundary whenever `evidenceMethod` is `boundary`, on create and after
+merging PATCH. Removing that boundary without changing the method answers 422
+at `/gisBoundary` in both the app and API.
+
+POST returns 201 with Location and ETag; PATCH returns 200. Both return `data`,
+`allocations`, target `deliveryBalance` before/after and optional `warnings`.
+Repointing rebuilds shares and reports the target delivery's balance only.
+A missing If-Match on PATCH or DELETE answers 428; a stale tag answers 412 with
+`current`, the current application representation. Optional mutation keys replay
+before precondition checks. DELETE returns 204; a DELETE dry run returns the
+representation that would be removed. Create and PATCH dry runs return 200
+without Location or ETag and commit no application or activity event.
+Deletion retires documents in the same transaction and drains storage after
+commit. Submitted lineage refuses every edit; Removal-owned slices refuse mass,
+delivery and delete changes. Verified or issued linked batches refuse deletion.
+
+Lists hide applications on archived deliveries. Detail, boundary and document
+reads remain available. Archived deliveries or facilities refuse create and
+PATCH with 404 `not_found`; DELETE remains allowed subject to certification
+rules. Application writes never bump the delivery version. The balance read
+uses one repeatable-read snapshot and a body-hash ETag covering every published
+field, including site defaults. Remaining wet mass clamps at zero and rounds
+down to the gram. It is not a reservation. `hasRemainingMass=true` on
+`GET /deliveries` and `find_deliveries` selects deliveries with capacity;
+`false` selects exhausted deliveries.
+
+MCP exposes `find_applications`, `get_application`, `record_application`,
+`update_application` and `delete_application` with their matching application
+scopes. `get_delivery_application_balance` requires `deliveries:read`. Find a
+delivery and read that balance before recording an application. MCP updates
+and deletes take UUID `applicationId` and `expectedVersion`; write retries use
+`requestKey`, optional on dry runs. There is no MCP boundary tool;
+`get_application` points to the REST boundary read. Application photos and PDFs
+use the shared document routes and tools with `ownerType: "application"`.
+Activity uses `form` for app actions, `rest` for REST and `mcp` for MCP, with one
+runner event per affected batch scope, including both sides of a repoint.
+
 ### Output-bin stock read
 
 `GET /api/v1/storage-locations/{idOrCode}/stock` and MCP `get_bin_stock`
@@ -451,6 +553,9 @@ See [output-stock.md](./output-stock.md#api-stock-read) for bins, figures and
 unresolved stock.
 
 ### Public API contract
+
+No resource answers 304. API reads return their representation even when a
+client supplies `If-None-Match`; ETags support version checks and body comparison.
 
 Published UUID inputs accept either case and are lowercased before the operation
 runs: body and query fields through `src/schemas/helpers.ts:uuidSchema` (older
@@ -489,9 +594,10 @@ then checks that file with the repository's TypeScript compiler using
 the generated client is not committed. CI runs this check in `quality-static`
 on every PR and push, including the first release without a base snapshot.
 
-The CI `openapi-breaking` job compares the PR base SHA snapshot with the head
-using checksum-verified oasdiff v1.32.1 and `breaking --fail-on ERR`. A base without
-the snapshot is the first release and passes with an explicit notice.
+The CI `openapi-breaking` job compares the snapshot at `git merge-base(base, head)`
+with the head, so breaks that landed on staging meanwhile are not blamed on the PR.
+It uses checksum-verified oasdiff v1.32.1 and `breaking --fail-on ERR`. A merge base
+without the snapshot is the first release and passes with an explicit notice.
 
 Prefer additive changes in v1; incompatible versions use v2 with Deprecation and
 Sunset headers. For an accepted deliberate break or contract correction, regenerate
@@ -522,7 +628,7 @@ get_feedstock. Each request captures its resolved context in a fresh server.
 `src/lib/mcp/tools/write-tools.ts` adds log_feedstock_delivery, update_feedstock
 and delete_feedstock through the same operation runner as REST. Each write needs
 one requestKey reused on retry; dryRun previews may omit it. Updates and deletes
-take expectedVersion from get_feedstock. Audit rows record transport `mcp`.
+take expectedVersion from get_feedstock. Activity audit rows record source `mcp`.
 Existing tools keep their single `hasRoleAndScope` scope check. Document tools
 use `visible(ctx)` to appear when the role floor and any supported owner's
 scope allow them, then `authorize(ctx, args)` checks the selected owner before

@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui";
 import type { Application } from "@/db/schema/application";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatDate } from "@/lib/format-utils";
+import { formatCalendarDate } from "@/lib/format-utils";
 import { MASS_MOISTURE_LABELS } from "@/lib/mass-moisture";
 import {
   formatApplicationMethod,
@@ -56,7 +56,7 @@ export function ApplicationCard({
         {/* Date + method */}
         <div>
           <h3 className="title-heading-3 text-[var(--color-text-primary)]">
-            {formatDate(application.applicationDate)}
+            {formatCalendarDate(application.applicationDate)}
           </h3>
           {application.applicationMethodType && (
             <p className="mt-6 body-caption text-[var(--color-text-tertiary)]">

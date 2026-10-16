@@ -10,7 +10,7 @@ import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import type { OrderWithRelations } from "@/data-access/orders";
 import { pluralize } from "@/lib/copy-utils";
-import { formatDate, formatMassKg } from "@/lib/format-utils";
+import { formatCalendarDate, formatMassKg } from "@/lib/format-utils";
 import { ORDER_FULFILLMENT_DISPLAY } from "@/lib/orders/fulfillment";
 import { MatchingOutputBins } from "./matching-output-bins";
 import { OrderLocationRead } from "./order-location-read";
@@ -33,7 +33,7 @@ export function orderSheetSections(order: OrderWithRelations): DetailPanelSectio
   return [
     {
       title: "Order information",
-      fields: [{ label: "Order date", value: formatDate(order.orderDate) }],
+      fields: [{ label: "Order date", value: formatCalendarDate(order.orderDate) }],
     },
     {
       title: "Customer details",

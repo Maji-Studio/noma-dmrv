@@ -42,7 +42,7 @@ import { APPLICATION_EVIDENCE_RULE_SPEC } from "@/lib/certification/application-
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
-import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { formatCalendarDate, formatDateRange } from "@/lib/format-utils";
 import { sumNullableBy } from "@/lib/nullable-sum";
 import {
   isStaleVersionFailure,
@@ -83,7 +83,7 @@ function createColumns(
       meta: { nowrap: true },
       header: "Date",
       cell: ({ row }) => (
-        <span>{formatDate(row.original.applicationDate)}</span>
+        <span>{formatCalendarDate(row.original.applicationDate)}</span>
       ),
     },
     {
@@ -553,7 +553,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     sideSheetMode === "create"
       ? undefined
       : sideSheetEntity
-        ? formatDate(sideSheetEntity.applicationDate)
+        ? formatCalendarDate(sideSheetEntity.applicationDate)
         : undefined;
   const sideSheetDelivery = sideSheetEntity
     ? deliveryOptions.find((delivery) => delivery.id === sideSheetEntity.deliveryId)

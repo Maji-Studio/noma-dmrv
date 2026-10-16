@@ -190,19 +190,19 @@ describe("biochar product three-way parity", { timeout: TIMEOUT_MS }, () => {
       if (transport === "action") expect([...events, ...movementEvents]).toEqual([]); // API audit only.
       else {
         for (const event of [...events, ...movementEvents]) {
-          expect(event.transport).toBe(transport);
+          expect(event.source).toBe(transport);
           expect(event.credentialId).toBe(f.writeCredentialId);
         }
       }
-      audits.push([...events, ...movementEvents].map(({ operationId, outcomeCode, versionBefore, versionAfter, changedFields }) =>
-        ({ operationId, outcomeCode, versionBefore, versionAfter, changedFields })).sort((x, y) => x.operationId.localeCompare(y.operationId)));
+      audits.push([...events, ...movementEvents].map(({ operationId, action, versionBefore, versionAfter, changedFields }) =>
+        ({ operationId, action, versionBefore, versionAfter, changedFields })).sort((x, y) => (x.operationId ?? "").localeCompare(y.operationId ?? "")));
     }
     expect(captured[1]).toEqual(captured[0]);
     expect(captured[2]).toEqual(captured[0]);
     expect(previewed[2]).toEqual(previewed[1]);
     expect(audits[2]).toEqual(audits[1]);
     expect(audits[1]).toEqual(expect.arrayContaining([
-      expect.objectContaining({ operationId: "make_biochar_product", outcomeCode: "created", versionBefore: null, versionAfter: 1 }),
+      expect.objectContaining({ operationId: "make_biochar_product", action: "created", versionBefore: null, versionAfter: 1 }),
     ]));
   });
 });

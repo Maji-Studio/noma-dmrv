@@ -5,9 +5,10 @@ import { metadataRecord } from "@/lib/documents/metadata";
 import { API_DOCUMENT_TYPES } from "@/lib/documents/api-types";
 
 export { DOCUMENT_REPRESENTATION_REVISION } from "@/config/api-rest";
+export const documentOwnerTypeRepresentationSchema = z.enum(API_DOCUMENT_OWNER_TYPES).describe("Record type owning this document. The published vocabulary can grow as owners are added.");
 export const documentRepresentationSchema = z.object({
   id: z.uuid().describe("Document identifier, UUID."),
-  ownerType: z.enum(API_DOCUMENT_OWNER_TYPES).describe("Record type owning this document."),
+  ownerType: documentOwnerTypeRepresentationSchema,
   ownerId: z.uuid().describe("Owning record identifier, UUID."),
   documentType: z.enum(API_DOCUMENT_TYPES).describe("Document classification."),
   fileName: z.string().describe("Original file name, untrusted plain text."),

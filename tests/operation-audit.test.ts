@@ -1,9 +1,10 @@
 /** Database coverage for transactional API write audit events. */
+import { apiActivityWhere, stringifyWithBigint } from "./helpers/api-activity";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { apiAuditEvents, apiIdempotencyRecords } from "@/db/schema";
-import * as auditWriter from "@/data-access/api-audit-events";
+import { activityEvents, apiIdempotencyRecords } from "@/db/schema";
+import * as auditWriter from "@/data-access/activity-events";
 import { logFeedstockDelivery, updateFeedstock, deleteFeedstock } from "@/lib/operations/feedstocks";
 import { runOperation } from "@/lib/operations/runner";
 import { createIntakeFixture, feedstockCount, removeIntakeFixture, type IntakeFixture } from "./helpers/operation-fixture";
@@ -12,7 +13,7 @@ let fixture: IntakeFixture;
 beforeEach(async () => { fixture = await createIntakeFixture("audit"); });
 afterEach(async () => { vi.restoreAllMocks(); await removeIntakeFixture(fixture); });
 const audit = () => ({ transport: "rest" as const, requestId: crypto.randomUUID(), credentialId: "audit-credential" });
-const rows = () => db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, fixture.ctx.organizationId));
+const rows = () => db.select().from(activityEvents).where(apiActivityWhere(fixture.ctx.organizationId));
 const records = () => db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, fixture.ctx.organizationId));
 
 it("commits one audit and replays its effect without another event", async () => {
@@ -27,12 +28,12 @@ it("commits one audit and replays its effect without another event", async () =>
   const events = await rows();
   expect(events).toHaveLength(1);
   expect(events[0]).toMatchObject({
-    organizationId: fixture.ctx.organizationId, userId: fixture.ctx.userId,
+    organizationId: fixture.ctx.organizationId, actorUserId: fixture.ctx.userId,
     credentialId: options.audit.credentialId, requestId: options.audit.requestId,
-    operationId: logFeedstockDelivery.id, outcomeCode: "created", entityIds: first.effect!.entityIds,
+    operationId: logFeedstockDelivery.id, action: "created", entityId: first.data.feedstocks[0].id,
     changedFields: first.effect!.changedFields, versionBefore: null, versionAfter: 1,
   });
-  expect(JSON.stringify(events)).not.toContain(input.notes);
+  expect(stringifyWithBigint(events)).not.toContain(input.notes);
   expect((await records())[0]).toMatchObject({ outcomeSchemaVersion: 2, outcome: { data: first.data, effect: first.effect } });
   const replay = await runOperation(logFeedstockDelivery, fixture.ctx, input, { ...options, audit: audit() });
   expect(replay).toEqual({ ...first, replayed: true });
@@ -50,13 +51,12 @@ it("returns a dry-run effect without audit, business rows or idempotency claims"
 });
 
 it("rolls back audit, business rows and claim together after the audit insert", async () => {
-  const write = auditWriter.writeApiAuditEvent;
+  const write = auditWriter.recordActivity;
   const error = new Error("Injected failure after audit insert");
-  vi.spyOn(auditWriter, "writeApiAuditEvent").mockImplementationOnce(async (ctx, tx, event) => {
+  vi.spyOn(auditWriter, "recordActivity").mockImplementation(async (ctx, tx, event) => {
     await write(ctx, tx, event);
-    const inTransaction = await tx.select().from(apiAuditEvents).where(and(
-      eq(apiAuditEvents.organizationId, ctx.organizationId), eq(apiAuditEvents.requestId, event.requestId),
-    ));
+    if (event.operationId !== logFeedstockDelivery.id) return;
+    const inTransaction = await tx.select().from(activityEvents).where(apiActivityWhere(ctx.organizationId, eq(activityEvents.requestId, event.requestId!)));
     expect(inTransaction).toHaveLength(1);
     throw error;
   });
@@ -68,11 +68,19 @@ it("rolls back audit, business rows and claim together after the audit insert", 
   expect(await feedstockCount(fixture)).toBe(0);
 });
 
-it("does not audit an execute failure or a UI-style call without audit", async () => {
+it("does not record an execute failure and records form metadata without API credentials", async () => {
   const failing = { ...logFeedstockDelivery, execute: async () => { throw new Error("Injected write failure"); } };
   await expect(runOperation(failing, fixture.ctx, fixture.input(), { audit: audit() })).rejects.toThrow("Injected write failure");
-  await runOperation(logFeedstockDelivery, fixture.ctx, fixture.input());
   expect(await rows()).toEqual([]);
+  const result = await runOperation(logFeedstockDelivery, fixture.ctx, fixture.input());
+  const events = await db.select().from(activityEvents).where(and(
+    eq(activityEvents.organizationId, fixture.ctx.organizationId),
+    eq(activityEvents.operationId, logFeedstockDelivery.id),
+  ));
+  expect(events).toMatchObject([{
+    entityId: result.data.feedstocks[0].id, source: "form", operationId: logFeedstockDelivery.id,
+    versionBefore: null, versionAfter: 1, credentialId: null, oauthClientId: null,
+  }]);
 });
 
 it("rejects an audited operation without describe before executing", async () => {
@@ -88,6 +96,10 @@ it("returns update and delete effects with the actual versions and no identifier
   const updated = await runOperation(updateFeedstock, fixture.ctx, { feedstockId, expectedVersion: 1, notes: "Changed" }, { audit: audit() });
   expect(updated.effect).toEqual({ outcome: "updated", entityType: "feedstock", entityIds: [feedstockId], versionBefore: 1, versionAfter: 2, changedFields: ["notes"] });
   const deleted = await runOperation(deleteFeedstock, fixture.ctx, { feedstockId, expectedVersion: 2 }, { audit: audit() });
+  expect(await rows()).toEqual(expect.arrayContaining([
+    expect.objectContaining({ action: "updated", versionBefore: 1, versionAfter: 2, changedFields: ["notes"] }),
+    expect.objectContaining({ action: "deleted", versionBefore: 2, versionAfter: null, changedFields: [] }),
+  ]));
   expect(deleted.effect).toEqual({ outcome: "deleted", entityType: "feedstock", entityIds: [feedstockId], versionBefore: 2, versionAfter: null, changedFields: [] });
 });
 
@@ -99,5 +111,42 @@ it("answers replay_unavailable for a v1 stored outcome without executing or audi
     .where(eq(apiIdempotencyRecords.organizationId, fixture.ctx.organizationId));
   await expect(runOperation(logFeedstockDelivery, fixture.ctx, input, options)).rejects.toMatchObject({ code: "replay_unavailable" });
   expect(await rows()).toHaveLength(1);
+  expect(await feedstockCount(fixture)).toBe(1);
+});
+
+it("records the OAuth client for an MCP runner write", async () => {
+  const oauthClientId = "audit-oauth-client";
+  await runOperation(logFeedstockDelivery, fixture.ctx, fixture.input(), {
+    audit: { ...audit(), transport: "mcp", oauthClientId },
+  });
+  expect(await rows()).toMatchObject([{
+    source: "mcp", oauthClientId, operationId: logFeedstockDelivery.id,
+    credentialId: "audit-credential", versionBefore: null, versionAfter: 1,
+  }]);
+});
+
+it.each(["empty entities", "empty scopes"] as const)("rolls back an audited write with %s", async (mode) => {
+  const operation = {
+    ...logFeedstockDelivery,
+    execute: async (...args: Parameters<typeof logFeedstockDelivery.execute>) => {
+      const result = await logFeedstockDelivery.execute(...args);
+      if (mode === "empty scopes") {
+        for (const item of result.feedstocks) args[0].activity.scope(item.id, []);
+      }
+      return result;
+    },
+    describe: (...args: Parameters<NonNullable<typeof logFeedstockDelivery.describe>>) => ({
+      ...logFeedstockDelivery.describe!(...args)!,
+      ...(mode === "empty entities" ? { entityIds: [] } : {}),
+    }),
+  };
+  await expect(runOperation(operation, fixture.ctx, fixture.input(), {
+    audit: audit(), idempotency: { credentialId: "audit-credential", key: crypto.randomUUID() },
+  })).rejects.toThrow("Audited operation recorded no activity");
+  expect(await db.select().from(activityEvents).where(eq(activityEvents.organizationId, fixture.ctx.organizationId))).toEqual([]);
+  expect(await records()).toEqual([]);
+  expect(await feedstockCount(fixture)).toBe(0);
+
+  await runOperation(operation, fixture.ctx, fixture.input());
   expect(await feedstockCount(fixture)).toBe(1);
 });

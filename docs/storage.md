@@ -345,6 +345,43 @@ same-origin.
 
 ## Testing
 
+`pnpm vitest run tests/s3-compatible-storage.integration.test.ts` exercises the
+S3-compatible adapter against disposable local MinIO. PR CI starts a pinned
+MinIO container in each Vitest shard with throwaway credentials; no cloud
+credentials are needed. For a local run, start MinIO separately and export:
+
+- `MINIO_TEST_ENDPOINT`
+- `MINIO_TEST_REGION`
+- `MINIO_TEST_ACCESS_KEY_ID`
+- `MINIO_TEST_SECRET_ACCESS_KEY`
+
+These map directly to adapter config, never to the app's `STORAGE_*` settings
+or singleton. The endpoint must be an HTTP loopback origin. The suite creates
+a unique bucket with a nested prefix, then removes its objects and bucket
+even after test failures. Without any MinIO test env it skips with one log
+line; partial configuration fails rather than silently skipping.
+
+Coverage includes server uploads, real HTTP presigned PUT and GET, metadata,
+`getObject` bytes/content type, deletion, missing objects and wrong credentials.
+The deadline case forwards a real MinIO response through a loopback proxy that
+stalls its body, then checks that the named `getObject` deadline aborts the
+connection after headers and the first byte arrive. It injects a one-second
+timeout through the S3-compatible provider's optional `getObject` timeout
+parameter, asserts `get_object_timeout` within five seconds, and keeps a
+15-second test budget. The production default remains 30 seconds.
+The current presigner does not sign the Content-Type header: MinIO accepts a
+different Content-Type on PUT and stores the supplied type. The suite asserts
+that behavior; document confirmation enforces the declared MIME separately.
+A PUT signed in the past with an elapsed TTL returns 403 (`Request has expired`)
+and creates no object.
+Presigned PUT does not cap upload size (`maxBytes` is not enforced by the PUT),
+and `putObject` has no size cap. The adapter enforces `maxBytes` when
+`readObjectBounded` reads the object back, rejecting oversized objects with
+`StorageError` code `object_too_large`. The suite covers this rejection, an
+exact-limit read (bytes, size, SHA-256 and content type), and a missing-key read
+returning `null`. Document confirmation uses this bounded read to enforce the
+application upload policy described above.
+
 `pnpm storage:smoke` (`scripts/storage-smoke.ts`) does a real round-trip against
 the configured bucket — presigned PUT → HEAD → signed GET byte-for-byte → DELETE →
 HEAD 404 — covering exactly what the unit-test fakes deliberately don't:

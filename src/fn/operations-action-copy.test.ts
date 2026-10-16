@@ -12,7 +12,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth/server", () => ({ requireOrgContext: mocks.auth }));
-vi.mock("@/lib/log", () => ({ logger: { error: mocks.log }, sanitizeErrorMessage: vi.fn() }));
+vi.mock("@/lib/log", () => {
+  const logger = { error: mocks.log, child: () => logger };
+  return { logger, sanitizeErrorMessage: vi.fn() };
+});
 vi.mock("@/data-access/utils", () => ({ requireOrgScope: vi.fn(), requireOrgFacility: vi.fn() }));
 vi.mock("@/data-access/applications", () => ({ getApplications: mocks.list }));
 vi.mock("@/data-access/production-samples", () => ({

@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { CalendarIcon, PackageIcon, PlusIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, useQueryState } from "nuqs";
+import { FEEDSTOCK_DEEP_LINK_PARAM } from "@/lib/feedstock-links";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -23,7 +24,7 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatDate, formatMass, formatMassKg } from "@/lib/format-utils";
+import { formatCalendarDate, formatMass, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { StaleVersionError, staleDeleteMessage, toSaveErrorMessage } from "@/lib/stale-version";
 import { getConflict, type ConflictRef } from "@/lib/conflict-ref";
@@ -83,7 +84,7 @@ function createColumns(
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <CalendarIcon size={16} className="text-[var(--color-text-tertiary)]" />
-          <span>{formatDate(row.original.deliveryDate)}</span>
+          <span>{formatCalendarDate(row.original.deliveryDate)}</span>
         </div>
       ),
     },
@@ -225,7 +226,7 @@ const BLOCKERS_LEAD = "Drawing on this bin:";
 export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const { facilityId: contextFacilityId } = useFacilityContext();
   const [focusedFeedstockId, setFocusedFeedstockId] = useQueryState(
-    "feedstock",
+    FEEDSTOCK_DEEP_LINK_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const [deepLinkMode, setDeepLinkMode] = useQueryState(

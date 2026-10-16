@@ -1,3 +1,4 @@
+import { reviewedTemplateSources } from "../helpers/template-line-sources";
 import { beforeEach, vi } from "vitest";
 
 vi.mock("@/data-access/certifier-credentials", () => ({
@@ -446,13 +447,14 @@ export function makeContext(
     reportingWindowCompletedOn: storedRemovalCompletedOn,
     mapping: makeMapping(),
     project: { id: EXTERNAL_PROJECT_ID, name: "Test project" } as never,
-    defaultTemplate: makeTemplate(),
-    missingDefaultTemplateId: null,
+    removalTemplate: makeTemplate(),
+    templateBlockers: [],
     blueprintsForTemplate: makeBlueprints(),
     unbindableTemplateInputs: [],
     unresolvedBlueprintKeys: [],
     memberBatches: [{
       id: CREDIT_BATCH_ID,
+      removalTemplateId: makeTemplate().id,
       code: "CB-TEST-001",
       startDate: "2026-07-01",
       endDate: "2026-07-31",
@@ -544,6 +546,7 @@ export function makeContext(
       warnings: [],
     },
     ...overrides,
+    lineSources: overrides.lineSources ?? reviewedTemplateSources(overrides.removalTemplate ?? makeTemplate()),
     submissionLineageBlockers: overrides.submissionLineageBlockers ?? [],
     durabilityConfigurationBlockers: overrides.durabilityConfigurationBlockers ?? [],
     entityReadinessGaps: overrides.entityReadinessGaps ?? [],
@@ -596,6 +599,7 @@ export function makeFreshScope(overrides: {
     memberBatches: [
       {
         id: CREDIT_BATCH_ID,
+      removalTemplateId: makeTemplate().id,
         code: "CB-TEST-001",
         productionRunIds: overrides.productionRunIds ?? [PRODUCTION_RUN_ID],
         applicationIds: overrides.applicationIds ?? [APPLICATION_ID],

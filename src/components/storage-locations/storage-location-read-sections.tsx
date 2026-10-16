@@ -1,5 +1,5 @@
 /** Storage bin side-sheet view mode: the sections config for EntitySideSheet. */
-import { formatDate, formatMassKg } from "@/lib/format-utils";
+import { formatCalendarDate, formatMassKg } from "@/lib/format-utils";
 import { formatStorageLocationType, OUTPUT_DRAW_ORDER_LABELS, OUTPUT_STOCK_MODE_LABELS } from "@/schemas/storage-locations";
 import { FeedstockBinBalance } from "./feedstock-bin-balance";
 import { OutputBinBalance } from "./output-bin-balance";
@@ -9,7 +9,7 @@ import type { StorageLocationWithFacility } from "@/data-access/storage-location
 
 function formatDateOrFallback(value: Date | null) {
   if (!value) return "No completed applications";
-  return formatDate(value);
+  return formatCalendarDate(value);
 }
 
 /**

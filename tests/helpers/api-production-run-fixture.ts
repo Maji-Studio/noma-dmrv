@@ -1,8 +1,9 @@
+import { apiActivityWhere } from "./api-activity";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { expect } from "vitest";
 import { db } from "@/db";
-import { apiAuditEvents, apiIdempotencyRecords, productionRunFeedstockDraws, productionRunFeedstocks, productionRuns } from "@/db/schema";
+import { activityEvents, apiIdempotencyRecords, productionRunFeedstockDraws, productionRunFeedstocks, productionRuns } from "@/db/schema";
 import { getOutputBinStocks } from "@/data-access/output-stock";
 import { GET, PATCH, DELETE } from "@/app/api/v1/production-runs/[idOrCode]/route";
 import { POST } from "@/app/api/v1/production-runs/route";
@@ -66,12 +67,12 @@ export async function restoreProductionRunState(fixture: ApiProductionRunFixture
     if (state.runs.length) await tx.insert(productionRuns).values(state.runs);
     if (state.draws.length) await tx.insert(productionRunFeedstockDraws).values(state.draws);
     if (state.allocations.length) await tx.insert(productionRunFeedstocks).values(state.allocations);
-    await tx.delete(apiAuditEvents).where(eq(apiAuditEvents.organizationId, org));
+    await tx.delete(activityEvents).where(eq(activityEvents.organizationId, org));
     await tx.delete(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, org));
   });
 }
 
 export async function productionRunAudits(fixture: ApiProductionRunFixture) {
-  return (await db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, fixture.ctx.organizationId)))
-    .filter((event) => event.entityType === "productionRun");
+  return (await db.select().from(activityEvents).where(apiActivityWhere(fixture.ctx.organizationId)))
+    .filter((event) => event.entityType === "production_run");
 }

@@ -23,3 +23,28 @@ export function toActivityDocumentOwnerType(value: string): string {
   if (value === "ghgStatementReport" || value === "ghg_statement_report") return "ghg_statement_report";
   return toActivityEntityType(value);
 }
+
+/** Preserve document ownership in activity without copying file details. */
+export function documentActivityReasonCode(document: { documentType: string; entityType: string; entityId: string }): string {
+  return `document:${document.documentType}:${toActivityDocumentOwnerType(document.entityType)}:${document.entityId}`;
+}
+
+export interface DocumentActivityReason {
+  documentType: string;
+  ownerType: string;
+  ownerId: string;
+}
+
+/** Reads `documentActivityReasonCode` back. Document types may contain colons; the owner is always the last two parts. */
+export function parseDocumentActivityReasonCode(reasonCode: string | null | undefined): DocumentActivityReason | null {
+  if (!reasonCode?.startsWith("document:")) return null;
+  const parts = reasonCode.split(":");
+  if (parts.length < 4) return null;
+  return { documentType: parts.slice(1, -2).join(":"), ownerType: parts.at(-2)!, ownerId: parts.at(-1)! };
+}
+
+/** The activity type of a document owner, when the owner is a record with activity of its own. */
+export function documentOwnerActivityType(ownerType: string): ActivityEntityType | null {
+  if (ownerType === "sample") return "lab_sample";
+  return isActivityEntityType(ownerType) ? ownerType : null;
+}

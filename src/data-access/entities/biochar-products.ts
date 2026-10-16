@@ -24,7 +24,7 @@ import {
 } from "@/lib/biochar-composition";
 import { resolveProductDryBiocharKg } from "@/lib/biochar-mass-accounting";
 import { formatWetDryStock } from "@/lib/mass-moisture";
-import { and, desc, eq, gt, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gt, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { sourceBiocharMassKgSql } from "../biochar-product-source-mass";
 import { requireOrgScope } from "../utils";
 import { buildSourceAllocationAggregate } from "./source-allocation-aggregate";
@@ -247,7 +247,7 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
       eq(sourceAllocationAggregate.biocharProductId, biocharProducts.id),
     )
     .where(and(eq(biocharProducts.organizationId, ctx.organizationId), whereClause))
-    .orderBy(desc(biocharProducts.productionDate))
+    .orderBy(desc(biocharProducts.productionDate), desc(biocharProducts.createdAt), asc(biocharProducts.id))
     .limit(limit);
 
   return results.map((result) =>

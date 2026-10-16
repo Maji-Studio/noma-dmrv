@@ -1,10 +1,12 @@
+import { stringifyWithBigint } from "./helpers/api-activity";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, applications, creditBatches, creditBatchProductionRuns, documents, productionRuns, samples, transportLegs, biocharProducts, biocharProductSourceAllocations, vehicles, feedstocks, outputStockAllocations, outputStockRunAllocations, binMovements, deliveries, applicationOutputAllocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { formatUtcDate } from "@/lib/date-utils";
 import * as activity from "@/data-access/activity-events";
-import { createApplication, updateApplication, deleteApplication } from "@/data-access/applications";
+import { recordApplication, updateApplication as updateApplicationOperation, deleteApplication as deleteApplicationOperation } from "@/lib/operations/applications";
 import { createCreditBatch, updateCreditBatch, deleteCreditBatch } from "@/data-access/credit-batches";
 import { attachProductionRunToMatchingCreditBatch } from "@/data-access/credit-batch-membership";
 import { insertDocument, deleteDocumentRow, retireDocumentsForEntities } from "@/data-access/documents";
@@ -33,7 +35,7 @@ const SAMPLE_TOTAL_CARBON_PERCENT = 80;
 const SAMPLE_ORGANIC_CARBON_PERCENT = 75;
 const INITIAL_MODEL_YEAR = 2020;
 const UPDATED_MODEL_YEAR = 2024;
-const APPLICATION_TONNES = 0.01;
+const APPLICATION_WET_KG = 10;
 const DOCUMENT_SIZE_BYTES = 8;
 const SHA256_HEX_LENGTH = 64;
 const RETENTION_BOUNDARY_OFFSET_MS = 1;
@@ -56,8 +58,21 @@ afterEach(async () => {
   if (ctx) await cleanupActivityWriteFixture(ctx);
 });
 
+function calendarDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
 function applicationInput() {
-  return { code: "ACT-AP", deliveryId: fixture.delivery.id, applicationDate: ACTIVITY_FIXTURE_DATE, biocharAppliedTons: APPLICATION_TONNES, fieldSizeHa: 1, evidenceMethod: "location" as const, gpsLatitude: 1, gpsLongitude: 1 };
+  return { deliveryId: fixture.delivery.id, applicationDate: calendarDate(ACTIVITY_FIXTURE_DATE), appliedWetMassKg: APPLICATION_WET_KG, fieldSizeHa: 1, evidenceMethod: "location" as const, gpsLatitude: 1, gpsLongitude: 1 };
+}
+// Application writes run on the operation runner, which records their activity.
+async function createApplication(_ctx: OrgContext, input: ReturnType<typeof applicationInput>) {
+  return (await runOperationInProcess(recordApplication, _ctx, input)).application;
+}
+async function updateApplication(_ctx: OrgContext, applicationId: string, input: Record<string, unknown>) {
+  return (await runOperationInProcess(updateApplicationOperation, _ctx, { ...input, applicationId })).application;
+}
+function deleteApplication(_ctx: OrgContext, applicationId: string, expectedVersion: number) {
+  return runOperationInProcess(deleteApplicationOperation, _ctx, { applicationId, expectedVersion });
 }
 function batchInput() {
   return { code: "ACT-CB-NEW", facilityId: fixture.facility.id, feedstockTypeId: fixture.feedstockType.id, startDate: new Date("2026-02-01"), endDate: new Date("2026-02-28"), productionRunIds: [] };
@@ -91,7 +106,7 @@ it("records exactly one event for each application write with its batch and sour
   expect(rows.map(row => row.action)).toEqual(["deleted", "updated", "created"]);
   for (const row of rows) expect(row).toMatchObject({ creditBatchId: fixture.batch.id, productionRunId: fixture.run.id, source: "form", actorUserId: ctx.userId });
   expect(rows[1].changedFields).toEqual(["cropType"]);
-  expect(JSON.stringify(rows, (_, value) => typeof value === "bigint" ? String(value) : value)).not.toContain("private crop value");
+  expect(stringifyWithBigint(rows)).not.toContain("private crop value");
 });
 
 it.each(["different", "same", "unbatched"] as const)("records both run scopes when moving applications between %s batches", async batchScope => {
@@ -104,7 +119,7 @@ it.each(["different", "same", "unbatched"] as const)("records both run scopes wh
   const previousBatchId = batchScope === "unbatched" ? null : fixture.batch.id;
   const nextBatchId = batchScope === "same" ? fixture.batch.id : batchScope === "unbatched" ? null : nextBatch.id;
   if (nextBatchId) await db.insert(creditBatchProductionRuns).values({ organizationId: ctx.organizationId, creditBatchId: nextBatchId, productionRunId: nextRun.id });
-  const [nextProduct] = await db.insert(biocharProducts).values({ ...fixture.product, id: crypto.randomUUID(), code: "ACT-BP-NEXT", linkedProductionRunId: nextRun.id, productionDate: nextDate, placedAt: nextDate }).returning();
+  const [nextProduct] = await db.insert(biocharProducts).values({ ...fixture.product, id: crypto.randomUUID(), code: "ACT-BP-NEXT", linkedProductionRunId: nextRun.id, productionDate: formatUtcDate(nextDate), placedAt: nextDate }).returning();
   await db.insert(biocharProductSourceAllocations).values({
     organizationId: ctx.organizationId, biocharProductId: nextProduct.id, productionRunId: nextRun.id,
     sourceStorageLocationId: nextRun.biocharStorageLocationId!, allocatedWetMassKg: nextRun.biocharOutputKg!, allocatedDryMassKg: nextRun.biocharDryMassKg!,
@@ -112,7 +127,7 @@ it.each(["different", "same", "unbatched"] as const)("records both run scopes wh
   const [nextDelivery] = await insertOutputDeliveryFixture(db, {
     ...fixture.delivery, id: crypto.randomUUID(), code: "ACT-DL-NEXT", biocharProductId: nextProduct.id, deliveryDate: nextDate,
   }, row => row);
-  await updateApplication(ctx, created.id, { expectedVersion: created.version, deliveryId: nextDelivery.id, applicationDate: nextDate });
+  await updateApplication(ctx, created.id, { expectedVersion: created.version, deliveryId: nextDelivery.id, applicationDate: calendarDate(nextDate) });
   const updates = (await events("application", created.id)).filter(row => row.action === "updated");
   expect(updates).toHaveLength(2);
   expect(updates).toEqual(expect.arrayContaining([
@@ -179,7 +194,7 @@ it("records legacy document create/delete without any filename", async () => {
   const rows = await events("document", document.id);
   expect(rows.map(row => row.action)).toEqual(["deleted", "created"]);
   for (const row of rows) expect(row).toMatchObject({ creditBatchId: fixture.batch.id, reasonCode: `document:pdf:credit_batch:${fixture.batch.id}`, changedFields: [] });
-  expect(JSON.stringify(rows, (_, value) => typeof value === "bigint" ? String(value) : value)).not.toContain(PRIVATE_FILENAME);
+  expect(stringifyWithBigint(rows)).not.toContain(PRIVATE_FILENAME);
   expect(await deleteWriter(ctx, document.id, "form")).toBeNull();
   expect(await events("document", document.id)).toHaveLength(2);
 });
@@ -394,7 +409,7 @@ it("records exactly one document event for each app upload request, confirm and 
   const rows = await events("document", document.id);
   expect(rows.map(row => row.action)).toEqual(["deleted", "updated", "created"]);
   for (const row of rows) expect(row).toMatchObject({ entityType: "document", source: "form", creditBatchId: fixture.batch.id });
-  const serialized = JSON.stringify(rows, (_key, value) => typeof value === "bigint" ? String(value) : value);
+  const serialized = stringifyWithBigint(rows);
   for (const value of [PRIVATE_FILENAME, declaration.sha256, facts.finalKey]) expect(serialized).not.toContain(value);
 });
 
@@ -493,7 +508,7 @@ it("excludes fully reversed product shares from delivery and order activity scop
   const [nextRun] = await db.insert(productionRuns).values({ ...fixture.run, id: crypto.randomUUID(), code: "ACT-RUN-NEXT", startTime: NEXT_RUN_START, endTime: NEXT_ACTIVITY_DATE }).returning();
   const [nextBatch] = await db.insert(creditBatches).values({ ...fixture.batch, id: crypto.randomUUID(), code: "ACT-CB-NEXT", startDate: "2026-02-01", endDate: "2026-02-28" }).returning();
   await db.insert(creditBatchProductionRuns).values({ organizationId: ctx.organizationId, creditBatchId: nextBatch.id, productionRunId: nextRun.id });
-  const [nextProduct] = await db.insert(biocharProducts).values({ ...fixture.product, id: crypto.randomUUID(), code: "ACT-BP-NEXT", linkedProductionRunId: nextRun.id, productionDate: NEXT_ACTIVITY_DATE, placedAt: NEXT_ACTIVITY_DATE }).returning();
+  const [nextProduct] = await db.insert(biocharProducts).values({ ...fixture.product, id: crypto.randomUUID(), code: "ACT-BP-NEXT", linkedProductionRunId: nextRun.id, productionDate: formatUtcDate(NEXT_ACTIVITY_DATE), placedAt: NEXT_ACTIVITY_DATE }).returning();
   await db.insert(biocharProductSourceAllocations).values({ organizationId: ctx.organizationId, biocharProductId: nextProduct.id, productionRunId: nextRun.id,
     sourceStorageLocationId: nextRun.biocharStorageLocationId!, allocatedWetMassKg: nextRun.biocharOutputKg!, allocatedDryMassKg: nextRun.biocharDryMassKg! });
   const [original] = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, fixture.delivery.id));

@@ -5,7 +5,7 @@
  * without row locks so activity does not join the facility archive lock order.
  */
 import { sql } from "drizzle-orm";
-import { bigserial, check, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigserial, check, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organizations } from "./auth";
 import { ACTIVITY_ACTIONS, ACTIVITY_ENTITY_TYPES, ACTIVITY_SOURCES, ACTORLESS_ACTIVITY_SOURCES } from "./common";
 
@@ -34,7 +34,14 @@ export const activityEvents = pgTable("activity_events", {
   source: text("source", { enum: ACTIVITY_SOURCES }).notNull(),
   actorUserId: text("actor_user_id"),
   credentialId: text("credential_id"),
+  /** Reserved for OAuth grants; null until OAuth grants ship. */
+  oauthClientId: text("oauth_client_id"),
+  /** Runner operation id (e.g. `update_feedstock`); null for writes outside the runner. */
+  operationId: text("operation_id"),
   requestId: text("request_id"),
+  /** Row version counters around the write, as the operation effect reports them. Not field values. */
+  versionBefore: integer("version_before"),
+  versionAfter: integer("version_after"),
   registryAt: timestamp("registry_at", { withTimezone: true, precision: 3 }),
   reasonCode: text("reason_code"),
 }, (table) => [
@@ -43,6 +50,9 @@ export const activityEvents = pgTable("activity_events", {
   ),
   index("activity_events_org_batch_occurred_sequence_idx").on(
     table.organizationId, table.creditBatchId, table.occurredAt, table.sequence,
+  ),
+  index("activity_events_org_run_occurred_sequence_idx").on(
+    table.organizationId, table.productionRunId, table.occurredAt, table.sequence,
   ),
   index("activity_events_org_occurred_idx").on(table.organizationId, table.occurredAt),
   check("activity_events_entity_type", sql`${table.entityType} in (${sql.join(
