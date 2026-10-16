@@ -36,6 +36,7 @@ describe('archived storage board tile', () => {
     expect(tile.props.onKeyDown).toBeUndefined();
     const buttons = renderer.root.findAllByType('button');
     expect(buttons).toHaveLength(1);
+    expect(buttons[0]!.props['aria-label']).toMatch(/, Fixture bin$/);
     const stopPropagation = vi.fn();
     await act(async () => buttons[0]!.props.onClick({ stopPropagation }));
     expect(onView).toHaveBeenCalledTimes(1);

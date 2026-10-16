@@ -11,6 +11,12 @@ declare module "@tanstack/react-table" {
      * cell carries a leading hairline as the in-region overflow signal.
      */
     stickyEnd?: boolean;
+    /**
+     * The record's identity column (code or name). In a table with
+     * `onRowClick` its cell renders as the record link, and it cannot be
+     * hidden. Never mark a column whose cell renders its own controls.
+     */
+    recordLink?: boolean;
   }
 }
 

@@ -4,20 +4,16 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * Column ids that never carry the record's identity: selection checkboxes and
- * the overflow menu.
- */
-const STRUCTURAL_COLUMN_IDS: ReadonlySet<string> = new Set(["select", "actions"]);
-
-/**
- * The first data column of a clickable table holds the record's code or name.
- * It is the one keyboard and screen-reader target that opens the record, so
- * rows and cards need no interactive role of their own.
+ * The column marked `meta.recordLink` holds the record's code or name. It is
+ * the one keyboard and screen-reader target that opens the record, so rows and
+ * cards need no interactive role of their own. Only a designated identity
+ * column is wrapped: an arbitrary first cell may render its own controls
+ * (status history, readiness), and a control inside a control is invalid.
  */
 export function rowLinkColumnId(
-  columns: ReadonlyArray<{ id: string }>,
+  columns: ReadonlyArray<{ id: string; columnDef: { meta?: { recordLink?: boolean } } }>,
 ): string | undefined {
-  return columns.find((column) => !STRUCTURAL_COLUMN_IDS.has(column.id))?.id;
+  return columns.find((column) => column.columnDef.meta?.recordLink)?.id;
 }
 
 interface RowLinkProps {

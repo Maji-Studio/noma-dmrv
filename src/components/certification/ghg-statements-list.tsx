@@ -253,6 +253,7 @@ function StatusCell({ item }: { item: GhgStatementListItem }) {
 const columns: ColumnDef<GhgStatementListItem>[] = [
   {
     id: "period",
+    meta: { recordLink: true },
     header: "Reporting period",
     accessorFn: (item) => statementPeriod(item).primary,
     cell: ({ row }) => <PeriodCell item={row.original} />,

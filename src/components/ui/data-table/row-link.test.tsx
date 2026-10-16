@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RowActionsMenu } from "@/components/ui/row-actions-menu";
@@ -19,7 +19,7 @@ const rows: Row[] = [
 ];
 
 const columns: ColumnDef<Row>[] = [
-  { accessorKey: "code", header: "Code" },
+  { accessorKey: "code", header: "Code", meta: { recordLink: true } },
   { accessorKey: "name", header: "Name" },
   {
     id: "actions",
@@ -102,5 +102,45 @@ describe("DataTable clickable rows", () => {
   it("renders no record link without onRowClick", () => {
     const { container } = render(<DataTable columns={columns} data={rows} />);
     expect(container.querySelector("[data-row-link]")).toBeNull();
+  });
+
+  it("never wraps a first cell that renders its own button, and keeps the identity link", () => {
+    const statusFirst: ColumnDef<Row>[] = [
+      {
+        id: "status",
+        header: "Status",
+        cell: () => <button type="button">Submitted, status history</button>,
+      },
+      ...columns,
+    ];
+    const { container } = render(
+      <DataTable
+        columns={statusFirst}
+        data={rows}
+        onRowClick={vi.fn()}
+        // A caller (or saved view) trying to hide the identity column.
+        columnVisibility={{ code: false, name: false }}
+      />,
+    );
+    const first = container.querySelector("tbody tr")!;
+    const links = first.querySelectorAll("[data-row-link]");
+    expect(links).toHaveLength(1);
+    expect(links[0]!.textContent).toBe("SUP-001");
+    expect(first.querySelector("td")!.querySelector("[data-row-link]")).toBeNull();
+    for (const control of Array.from(first.querySelectorAll(INTERACTIVE))) {
+      expect(control.parentElement?.closest(INTERACTIVE)).toBeNull();
+    }
+  });
+
+  it("does not offer the identity column in the column visibility menu", () => {
+    render(
+      <DataTable columns={columns} data={rows} onRowClick={vi.fn()}>
+        <DataTable.ColumnVisibility />
+      </DataTable>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /columns/i }));
+    const menu = screen.getByRole("dialog", { name: "Column visibility" });
+    expect(within(menu).getByText("Name")).toBeTruthy();
+    expect(within(menu).queryByText("Code")).toBeNull();
   });
 });

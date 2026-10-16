@@ -209,12 +209,13 @@ test.describe("Certification workspace — status history", () => {
       await expect(history).toBeHidden();
       await expect(listBadge).toBeFocused();
 
-      // The row itself still opens the sheet, by keyboard and by click.
+      // The record link in the row's first cell opens the sheet by keyboard
+      // (the row itself has no tab stop); a click on the row opens it too.
       const row = page
         .getByRole("table", { name: "Removals" })
         .getByRole("row")
         .filter({ hasText: removalId.slice(0, 8) });
-      await row.focus();
+      await row.locator("[data-row-link]").focus();
       await page.keyboard.press("Enter");
       await expect(sheet).toBeVisible();
       await expect(page).toHaveURL(new RegExp(`removal=${removalId}`));

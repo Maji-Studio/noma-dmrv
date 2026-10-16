@@ -129,6 +129,9 @@ export function StorageBinTile({
                 onView(bin);
               }}
               title={material}
+              // Visible text first (WCAG 2.5.3), then the bin: two bins can hold
+              // the same material, and a bare "Biochar" repeats down the board.
+              aria-label={`${material}, ${bin.name}`}
               className="block max-w-full cursor-pointer truncate text-left underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
             >
               {material}

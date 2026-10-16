@@ -177,6 +177,19 @@ export function recordRowId<TData>(row: TData, index: number): string {
   return String(index);
 }
 
+function recordLinkVisibility<TData, TValue>(
+  columns: ColumnDef<TData, TValue>[],
+): VisibilityState {
+  const visible: VisibilityState = {};
+  for (const column of columns) {
+    if (!column.meta?.recordLink) continue;
+    const id =
+      column.id ?? ("accessorKey" in column ? String(column.accessorKey) : undefined);
+    if (id) visible[id] = true;
+  }
+  return visible;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Main DataTable Component                                            */
 /* ------------------------------------------------------------------ */
@@ -305,7 +318,12 @@ function DataTableRoot<TData, TValue>({
 
   // Use external values if provided
   const effectiveGlobalFilter = externalGlobalFilter ?? globalFilter;
-  const effectiveColumnVisibility = externalColumnVisibility ?? columnVisibility;
+  // The record-link column is the only way to open a record by keyboard, so no
+  // visibility state (including a caller's) may hide it.
+  const requestedColumnVisibility = externalColumnVisibility ?? columnVisibility;
+  const effectiveColumnVisibility = onRowClick
+    ? { ...requestedColumnVisibility, ...recordLinkVisibility(columns) }
+    : requestedColumnVisibility;
   const effectiveRowSelection = externalRowSelection ?? rowSelection;
   const effectivePagination = {
     pageIndex: externalPageIndex ?? pagination.pageIndex,
@@ -728,7 +746,12 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
   const menuId = React.useId();
   const hideableColumns = table
     .getAllLeafColumns()
-    .filter((column) => column.getCanHide() && columnLabel(column));
+    .filter(
+      (column) =>
+        column.getCanHide() &&
+        !column.columnDef.meta?.recordLink &&
+        columnLabel(column),
+    );
   const hasVisibilityChanges = hideableColumns.some((column) => !column.getIsVisible());
 
   React.useEffect(() => {

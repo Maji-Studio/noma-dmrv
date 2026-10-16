@@ -205,6 +205,7 @@ export function StatusCell({ summary }: { summary: RemovalListRow }) {
 const columns: ColumnDef<RemovalListRow>[] = [
   {
     id: "removal",
+    meta: { recordLink: true },
     header: "Removal",
     accessorFn: (summary) =>
       `${summary.removalId} ${reportingWindow(summary) ?? ""}`,

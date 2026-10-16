@@ -134,6 +134,7 @@ function createColumns(params: {
   const columns: ColumnDef<FeedstockType>[] = [
     {
       accessorKey: "name",
+      meta: { recordLink: true },
       header: "Name",
       cell: ({ row }) => (
         <MutedValue archived={!!row.original.archivedAt}>
