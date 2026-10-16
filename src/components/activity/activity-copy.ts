@@ -6,7 +6,7 @@ import { ACTIVITY_RECORDING_STARTED_AT } from "@/config/activity";
 import { pluralize } from "@/lib/copy-utils";
 import { formatDate } from "@/lib/format-utils";
 
-export const ACTIVITY_TITLE = "Activity";
+export const ACTIVITY_TITLE = "Activities";
 
 export function activityRecordingStartLabel(): string {
   return formatDate(ACTIVITY_RECORDING_STARTED_AT);
