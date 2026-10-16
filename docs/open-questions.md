@@ -602,3 +602,10 @@ before allowing confirmation to convert stored entry values to the new unit.
   therefore matches the message text to offer "Archive instead". Carry the action
   error code and meta to the client (for example on a typed error subclass) so
   refusal UIs branch on the code, not on copy.
+
+## Operator-marked zeros in PR 4
+
+How does PR 4 claim operator-marked zeros? They have no draft Removal owner yet.
+Their note is optional and can be added later or never.
+The Removal flow should treat a line with an active operator zero as answered and
+claim the zero like an entry. See [ADR 0032](adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).

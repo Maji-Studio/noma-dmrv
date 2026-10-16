@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   normalizedEntryValues,
+  validateOperatorZero,
   emissionEntryCounts,
   validateEmissionEntry,
   multiplyEntryDecimals,
@@ -217,5 +218,37 @@ it("still allows confirmation for a fixed-factor change with unchanged entry uni
   after.enrichment.line.factor = { unit: "kWh", fixedValue: "2" };
   expect(emissionEntryCounts(before, after, "line")).toMatchObject({
     counts: false, canConfirm: true, reason: "Confirm this entry for the changed template line.",
+  });
+});
+
+describe("operator-marked zeros", () => {
+  const zero = () => ({ ...args(), activeOperatorZeroCount: 0, automaticFigure: null });
+  it("trims an optional note without values or evidence", () => {
+    expect(validateOperatorZero({ ...zero(), note: "  No lab work this batch.  " })).toMatchObject({ note: "No lab work this batch.", lineRule: "additive" });
+  });
+  it.each([undefined, null, "", " \n\t"])("accepts an absent or blank note %j as null", note => {
+    expect(validateOperatorZero({ ...zero(), note })).toMatchObject({ note: null, lineRule: "additive" });
+  });
+  it("accepts marking a line with the note field omitted", () => {
+    expect(validateOperatorZero(zero()).note).toBeNull();
+  });
+  it("refuses counting values and duplicate operator zeros", () => {
+    expect(() => validateOperatorZero({ ...zero(), activeValueCount: 1 })).toThrow("This line has entries. Delete them before marking nothing to record.");
+    expect(() => validateOperatorZero({ ...zero(), activeOperatorZeroCount: 1 })).toThrow("This line is already marked nothing to record. Edit its note instead.");
+  });
+  it("accepts absent or zero automatic figures and refuses positive run figures", () => {
+    const input = zero();
+    input.observation.lineSources.line.automaticSource = "run-electricity";
+    expect(validateOperatorZero({ ...input, automaticFigure: { magnitude: "0" } }).lineRule).toBe("additive");
+    expect(() => validateOperatorZero({ ...input, automaticFigure: { magnitude: "0.01" } })).toThrow("This line already has records from production runs. Nothing to record does not apply.");
+  });
+  it.each(["2026-10-14", "2026-10-16", "2026-02-30"])("enforces facility date bounds for %s", (occurredOn) => {
+    expect(() => validateOperatorZero({ ...zero(), occurredOn })).toThrow();
+  });
+  it("allows single lines without entering their paired values", () => {
+    const input = zero();
+    input.observation.lineSources.line.entryPolicy = "single";
+    input.observation.definition.groups[0].components[0].inputs = ["initial_readout", "final_readout"].map(key => ({ key, type: "monitored", quantityKind: "energy" }));
+    expect(validateOperatorZero(input).lineRule).toBe("single");
   });
 });

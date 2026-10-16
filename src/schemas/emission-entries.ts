@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { uuidSchema, expectedVersionSchema } from "@/schemas/helpers";
-import { ENTRY_DECIMAL_PATTERN } from "@/lib/certification/emission-entry-rules";
+import { ENTRY_DECIMAL_PATTERN, normalizeNothingToRecordNote } from "@/lib/certification/emission-entry-rules";
 import type { QuantityKind } from "@/lib/isometric/template-observations/types";
 
 const MAX_ENTRY_TEXT_LENGTH = 4000;
@@ -39,3 +39,12 @@ export const updateEmissionEntrySchema = emissionEntryVersionSchema.extend({
 });
 export type CreateEmissionEntryInput = z.infer<typeof createEmissionEntrySchema>;
 export type UpdateEmissionEntryInput = z.infer<typeof updateEmissionEntrySchema>;
+
+export const markNothingToRecordSchema = z.object({
+  facilityId: uuidSchema(),
+  creditBatchId: uuidSchema(),
+  componentId: z.string().min(1),
+  note: z.string().trim().max(MAX_ENTRY_TEXT_LENGTH).nullable().transform(normalizeNothingToRecordNote).optional(),
+  occurredOn: z.iso.date().optional(),
+});
+export type MarkNothingToRecordInput = z.infer<typeof markNothingToRecordSchema>;

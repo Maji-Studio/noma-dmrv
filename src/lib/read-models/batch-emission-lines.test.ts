@@ -1,6 +1,6 @@
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntries: vi.fn() }));
 vi.mock("@/data-access/emission-automatic-masses", () => ({ getEmissionAutomaticMasses: vi.fn() }));
-vi.mock("@/data-access/utils", () => ({ requireOrgFacility: vi.fn() }));
+vi.mock("@/data-access/utils", () => ({ requireOrgFacility: vi.fn(), requireOrgScope: vi.fn() }));
 import { beforeEach, expect, it, vi } from "vitest";
 import { SafeError } from "@/lib/errors";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";

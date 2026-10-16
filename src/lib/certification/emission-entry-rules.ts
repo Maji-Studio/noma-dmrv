@@ -122,11 +122,7 @@ export function validateEmissionEntry(args: {
     } else if (detail)
       throw new SafeError("Mass and distance detail is only supported for mass-distance inputs.");
   }
-  if (!z.iso.date().safeParse(args.occurredOn).success) throw new SafeError("Enter a valid entry date.");
-  if (args.occurredOn < args.batchStartDate)
-    throw new SafeError("Entry date cannot be before the credit batch start date.");
-  if (args.occurredOn > formatFacilityDate(args.now ?? new Date(), args.timezone))
-    throw new SafeError("Entry date cannot be in the future at this facility.");
+  validateEntryDate(args);
   return { inputShape: shape, lineRule: line.entryPolicy as "additive" | "single" };
 }
 export function emissionEntryCounts(
@@ -189,4 +185,50 @@ export function normalizedEntryValues(values: Omit<EntryValueInput, "quantityKin
         : null,
     }))
     .sort((a, b) => a.inputKey.localeCompare(b.inputKey));
+}
+
+export function normalizeNothingToRecordNote(note: string | null | undefined) {
+  return note?.trim() || null;
+}
+
+export function validateEntryDate(args: {
+  occurredOn: string; batchStartDate: string; timezone: string; now?: Date;
+}) {
+  if (!z.iso.date().safeParse(args.occurredOn).success) throw new SafeError("Enter a valid entry date.");
+  if (args.occurredOn < args.batchStartDate)
+    throw new SafeError("Entry date cannot be before the credit batch start date.");
+  if (args.occurredOn > formatFacilityDate(args.now ?? new Date(), args.timezone))
+    throw new SafeError("Entry date cannot be in the future at this facility.");
+}
+
+export function validateOperatorZero(args: {
+  observation: EntryObservation; componentId: string; note?: string | null;
+  occurredOn: string; batchStartDate: string; timezone: string; now?: Date;
+  activeValueCount: number; activeOperatorZeroCount: number;
+  automaticFigure: { magnitude: string } | null;
+}) {
+  const note = normalizeNothingToRecordNote(args.note);
+  const line = entryLine(args.observation, args.componentId);
+  if (!line) throw new SafeError("This template line is no longer available. Choose another line.");
+  if (line.contract.scope !== "operating" || line.entryPolicy === "none" ||
+      validateLineSources(args.observation.definition, args.observation.lineSources)
+        .some((problem) => problem.componentId === args.componentId))
+    throw new SafeError("This template line does not allow entries. Review its setup.");
+  if (args.activeValueCount > 0)
+    throw new SafeError("This line has entries. Delete them before marking nothing to record.");
+  if (args.automaticFigure && Number(args.automaticFigure.magnitude) > 0) {
+    const source = line.contract.automaticSource;
+    const label = source?.startsWith("run-") ? "production runs"
+      : source === "delivery-transport" ? "deliveries"
+      : source?.endsWith("-transport") ? "transport legs"
+      : source === "sequestration" ? "applications" : null;
+    throw new SafeError(label
+      ? `This line already has records from ${label}. Nothing to record does not apply.`
+      : "This line already has records. Nothing to record does not apply.");
+  }
+  if (args.activeOperatorZeroCount > 0)
+    throw new SafeError("This line is already marked nothing to record. Edit its note instead.");
+  validateEntryDate(args);
+  return { note, inputShape: line.component.inputs.filter((input) => input.type === "monitored"),
+    lineRule: line.entryPolicy as "additive" | "single" };
 }

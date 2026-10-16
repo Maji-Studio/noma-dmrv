@@ -3,6 +3,7 @@ import { z } from "zod";
 import { withAction } from "./with-action";
 import {
   createEmissionEntry,
+  markNothingToRecord,
   updateEmissionEntry,
   confirmEmissionEntry,
   deleteEmissionEntry,
@@ -10,6 +11,7 @@ import {
 import { loadBatchEmissionLines } from "@/lib/read-models/batch-emission-lines";
 import {
   createEmissionEntrySchema,
+  markNothingToRecordSchema,
   updateEmissionEntrySchema,
   emissionEntryVersionSchema,
 } from "@/schemas/emission-entries";
@@ -50,4 +52,10 @@ export async function getBatchEmissionLinesFn(input: {
     const data = z.object({ facilityId: uuidSchema(), creditBatchId: uuidSchema() }).parse(input);
     return loadBatchEmissionLines(ctx, data.facilityId, data.creditBatchId);
   });
+}
+
+export async function markNothingToRecordFn(
+  input: z.input<typeof markNothingToRecordSchema>,
+): Promise<ActionResult<Awaited<ReturnType<typeof markNothingToRecord>>>> {
+  return withAction((ctx) => markNothingToRecord(ctx, markNothingToRecordSchema.parse(input)));
 }

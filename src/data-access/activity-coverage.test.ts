@@ -9,10 +9,11 @@ type Coverage = { status: "direct" } | { status: "runner"; operations: string[] 
 const ACTIVITY_COVERAGE = {
   "emission-entries.ts": {
     createEmissionEntry: { status: "direct" },
+    markNothingToRecord: { status: "direct" },
     updateEmissionEntry: { status: "direct" },
     confirmEmissionEntry: { status: "direct" },
     deleteEmissionEntry: { status: "direct" },
-    tombstoneEmissionZeros: { status: "exempt", reason: "No zero rows are written before PR 4; PR 4 must record zero tombstoning activity (docs/open-questions.md)." },
+    tombstoneEmissionZeros: { status: "direct" },
   },
   "emission-entry-lock.ts": {
     bumpEmissionEntryEvidence: { status: "exempt", reason: "The document writer records the activity." },

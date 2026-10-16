@@ -1,5 +1,5 @@
 import { removalLineBlockerMessage } from "@/lib/certification/removal-blockers";
-import { deriveBatchEmissionLines } from "@/lib/certification/emission-lines";
+import { deriveBatchEmissionLines, type BatchEmissionLine } from "@/lib/certification/emission-lines";
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { type LineSources } from "@/lib/isometric/template-observations/line-sources";
@@ -43,6 +43,7 @@ export function resolveTemplateInputs(args: {
   template: IsometricGhgEntryTemplate;
   lineSources: LineSources;
   enrichmentComplete?: boolean;
+  emissionLines?: BatchEmissionLine[] | null;
   blueprintsByKey: Map<string, IsometricComponentBlueprint>;
   agg: AggregatedProductionData;
   externalProjectId: string;
@@ -63,10 +64,11 @@ export function resolveTemplateInputs(args: {
     omitProductionComponents,
   } = args;
 
-  const lineDecisions = new Map(deriveBatchEmissionLines({
+  // Keep compilation capability guards until PR 4 supplies entry contributions.
+  const lineDecisions = [...(args.emissionLines ?? []), ...deriveBatchEmissionLines({
     definition: normalizeTemplateDefinition(template), lineSources, problems: [],
     enrichmentComplete: args.enrichmentComplete ?? true, automaticFigures: {}, entries: [],
-  }).map((line) => [line.componentId, line]));
+  })];
 
   const monitored: ResolvedMonitoredInput[] = [];
   const fixed: ResolvedFixedInput[] = [];
@@ -77,7 +79,7 @@ export function resolveTemplateInputs(args: {
   for (const group of template.groups) {
     for (const component of group.components) {
       const lineContract = ownValue(lineSources, component.id);
-      const blocker = lineDecisions.get(component.id)?.blocker;
+      const blocker = lineDecisions.find((line) => line.componentId === component.id && line.blocker)?.blocker;
       if (blocker) throw new SafeError(removalLineBlockerMessage(blocker));
       const monitoredMappings = component.inputs
         .filter((input) => input.type === "monitored")

@@ -1,3 +1,8 @@
+import { loadBatchAutomaticFigures } from "./batch-emission-automatic-figures";
+import { loadBatchEmissionEntryFacts } from "./emission-entry-facts";
+import { formatFacilityDate } from "@/lib/date-utils";
+import { entryLine, validateOperatorZero, validateEntryDate, normalizeNothingToRecordNote } from "@/lib/certification/emission-entry-rules";
+import { markNothingToRecordSchema, type MarkNothingToRecordInput } from "@/schemas/emission-entries";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
@@ -62,9 +67,9 @@ export async function getEmissionEntry(ctx: OrgContext, id: string, executor: Ex
     );
   return { ...entry, values, documentCount: count };
 }
-export async function listEmissionEntries(ctx: OrgContext, creditBatchId: string) {
+export async function listEmissionEntries(ctx: OrgContext, creditBatchId: string, executor: Executor = db) {
   requireOrgScope(ctx);
-  const entries = await db
+  const entries = await executor
     .select()
     .from(emissionEntries)
     .where(
@@ -77,7 +82,7 @@ export async function listEmissionEntries(ctx: OrgContext, creditBatchId: string
     .orderBy(asc(emissionEntries.occurredOn), asc(emissionEntries.id));
   if (!entries.length) return [];
   const ids = entries.map((entry) => entry.id);
-  const values = await db
+  const values = await executor
     .select()
     .from(emissionEntryValues)
     .where(
@@ -87,7 +92,7 @@ export async function listEmissionEntries(ctx: OrgContext, creditBatchId: string
       ),
     )
     .orderBy(asc(emissionEntryValues.inputKey));
-  const counts = await db
+  const counts = await executor
     .select({ entryId: documents.entityId, count: sql<number>`count(*)::int` })
     .from(documents)
     .where(
@@ -161,6 +166,24 @@ export async function tombstoneEmissionZeros(
   entry: { creditBatchId: string; removalTemplateId: string; componentId: string },
 ) {
   requireOrgScope(ctx);
+  const zeros = await tx.select().from(emissionEntries).where(and(
+    eq(emissionEntries.organizationId, ctx.organizationId),
+    eq(emissionEntries.creditBatchId, entry.creditBatchId),
+    eq(emissionEntries.componentId, entry.componentId),
+    eq(emissionEntries.kind, "zero"), isNull(emissionEntries.confirmedForRemovalId),
+    isNull(emissionEntries.deletedAt),
+  )).orderBy(asc(emissionEntries.id));
+  for (const zero of zeros) {
+    const locked = await lockWritableEmissionEntry(ctx, tx, zero.id);
+    const { values } = await getEmissionEntry(ctx, zero.id, tx);
+    const before = { ...locked, values };
+    const [after] = await tx.update(emissionEntries).set({
+      deletedAt: new Date(), updatedAt: new Date(),
+      version: nextVersion(emissionEntries.version),
+      contentRevision: nextVersion(emissionEntries.contentRevision),
+    }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, zero.id))).returning();
+    await recordEmissionEntryActivity(ctx, tx, "deleted", before, { ...after, values: before.values });
+  }
   await tx
     .update(emissionEntries)
     .set({
@@ -176,6 +199,7 @@ export async function tombstoneEmissionZeros(
         eq(emissionEntries.removalTemplateId, entry.removalTemplateId),
         eq(emissionEntries.componentId, entry.componentId),
         eq(emissionEntries.kind, "zero"),
+        sql`${emissionEntries.confirmedForRemovalId} is not null`,
         isNull(emissionEntries.deletedAt),
         isNull(emissionEntries.sentByRemovalId),
         isNull(emissionEntries.sendReservedBySubmissionId),
@@ -242,7 +266,13 @@ export async function updateEmissionEntry(ctx: OrgContext, input: UpdateEmission
   requireEmissionsEntriesEnabled();
   const data = updateEmissionEntrySchema.parse(input);
   return mutateEntry(ctx, data.id, data.expectedVersion, async (tx, entry, context) => {
-    if (data.values || data.occurredOn) {
+    if (entry.kind === "zero") {
+      if (data.values) throw new SafeError("Recorded zeros do not have values. Add an entry instead.");
+      if (data.note !== undefined) data.note = normalizeNothingToRecordNote(data.note);
+      validateEntryDate({ occurredOn: data.occurredOn ?? entry.occurredOn,
+        batchStartDate: context.batch.startDate, timezone: context.facility.timezone });
+    }
+    if (entry.kind === "value" && (data.values || data.occurredOn)) {
       const values =
         data.values ??
         entry.values.map((value) => ({
@@ -307,7 +337,7 @@ async function mutateEntry<T>(
     const locked = await lockWritableEmissionEntry(ctx, tx, id);
     if (locked.creditBatchId !== initial.creditBatchId) throw emissionEntryParentChanged();
     assertRowVersion({ entity: "emission_entry", id, expectedVersion, actualVersion: locked.version });
-    if (locked.kind !== "value")
+    if (locked.kind === "zero" && locked.confirmedForRemovalId !== null)
       throw new SafeError("Recorded zeros can only be changed through their Removal.");
     const { values } = await getEmissionEntry(ctx, id, tx);
     return write(tx, { ...locked, values }, context);
@@ -330,6 +360,7 @@ export async function confirmEmissionEntry(ctx: OrgContext, id: string, expected
       })
       .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, id)))
       .returning();
+    if (entry.kind === "value") await tombstoneEmissionZeros(ctx, tx, saved);
     await recordEmissionEntryActivity(ctx, tx, "updated", entry, { ...saved, values: entry.values });
     return getEmissionEntry(ctx, id, tx);
   });
@@ -357,4 +388,33 @@ export async function deleteEmissionEntry(ctx: OrgContext, id: string, expectedV
     },
     true,
   );
+}
+
+/** The automatic read is server-owned and precedes the write transaction to avoid pool starvation. */
+export async function markNothingToRecord(ctx: OrgContext, input: MarkNothingToRecordInput) {
+  requireOrgScope(ctx);
+  requireEmissionsEntriesEnabled();
+  const data = markNothingToRecordSchema.parse(input);
+  const automaticFigures = await loadBatchAutomaticFigures(ctx, data.facilityId, data.creditBatchId);
+  return db.transaction(async (tx) => {
+    const { batch, facility, observation } = await lockedBatch(ctx, tx, data.creditBatchId);
+    if (batch.facilityId !== data.facilityId) throw emissionEntryParentChanged();
+    const { entries } = await loadBatchEmissionEntryFacts(ctx, batch.id, observation, tx);
+    const siblings = entries.filter((entry) => entry.componentId === data.componentId);
+    const source = entryLine(observation, data.componentId)?.contract.automaticSource;
+    const occurredOn = data.occurredOn ?? formatFacilityDate(new Date(), facility.timezone);
+    const binding = validateOperatorZero({ ...data, occurredOn, observation,
+      batchStartDate: batch.startDate, timezone: facility.timezone,
+      activeValueCount: siblings.filter((entry) => entry.kind === "value" && entry.counts).length,
+      activeOperatorZeroCount: siblings.filter((entry) => entry.kind === "zero" && !entry.confirmedForRemovalId).length,
+      automaticFigure: source ? automaticFigures[source] ?? null : null,
+    });
+    const [entry] = await tx.insert(emissionEntries).values({
+      organizationId: ctx.organizationId, creditBatchId: batch.id,
+      removalTemplateId: observation.externalTemplateId, observationId: observation.id,
+      componentId: data.componentId, kind: "zero", occurredOn, createdBy: ctx.userId, ...binding,
+    }).returning();
+    await recordEmissionEntryActivity(ctx, tx, "created", null, { ...entry, values: [] });
+    return getEmissionEntry(ctx, entry.id, tx);
+  });
 }
