@@ -8,17 +8,11 @@ import { withAction } from "./with-action";
  */
 
 import { z } from "zod";
-import { formulations } from "@/db/schema";
+import { createFormulation, updateFormulation, deleteFormulation } from "@/lib/operations/formulations";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import {
-  CODE_CONFLICT_MESSAGES,
-  withAutoCode,
-} from "@/data-access/code-generator";
-import {
-  createFormulation,
-  deleteFormulation,
   getFormulations as getFormulationsData,
   getFormulationById as getFormulationByIdData,
-  updateFormulation,
   type FormulationWithIngredients,
   type PaginatedFormulations,
 } from "@/data-access/formulations";
@@ -84,25 +78,12 @@ export async function createFormulationFn(
   return withAction(async (ctx) => {
     const validated = createFormulationSchema.parse(data);
 
-    const formulation = await withAutoCode(
-      ctx,
-      "BCF",
-      formulations,
-      formulations.code,
-      undefined,
-      (code) =>
-        createFormulation(ctx, {
-          code,
-          name: validated.name,
-          biocharRatio: validated.biocharRatio ?? null,
-          description: validated.description || null,
-          ingredients: validated.ingredients?.map((ing) => ({
-            feedstockTypeId: ing.feedstockTypeId,
-            ratio: ing.ratio ?? null,
-          })),
-        }),
-      CODE_CONFLICT_MESSAGES.formulation,
-    );
+    const formulation = await runOperationInProcess(createFormulation, ctx, {
+      name: validated.name,
+      biocharRatio: validated.biocharRatio ?? null,
+      description: validated.description || null,
+      lines: validated.ingredients?.map(({ feedstockTypeId, ratio }) => ({ feedstockTypeId, ratio: ratio ?? null })),
+    });
 
     return formulation;
   }, {
@@ -125,13 +106,14 @@ export async function updateFormulationFn(
 
     const validated = updateFormulationSchema.parse(data);
 
-    const formulation = await updateFormulation(ctx, validated.formulationId, {
+    const formulation = await runOperationInProcess(updateFormulation, ctx, {
+      formulationId: validated.formulationId,
       expectedVersion: validated.expectedVersion,
       code: validated.code,
       name: validated.name,
       biocharRatio: validated.biocharRatio,
-      description: validated.description || null,
-      ingredients: validated.ingredients?.map((ing) => ({
+      description: validated.description === undefined ? undefined : validated.description || null,
+      lines: validated.ingredients?.map((ing) => ({
         feedstockTypeId: ing.feedstockTypeId,
         ratio: ing.ratio ?? null,
       })),
@@ -154,7 +136,7 @@ export async function deleteFormulationFn(
   return withAction(async (ctx) => {
 
     const validated = deleteFormulationSchema.parse(data);
-    await deleteFormulation(ctx, validated.formulationId, validated.expectedVersion);
+    await runOperationInProcess(deleteFormulation, ctx, validated);
 
     return undefined;
   }, { fallbackMessage: "Failed to delete formulation", log: { message: LOG_MESSAGE, context: { op: "formulation:delete" } } });

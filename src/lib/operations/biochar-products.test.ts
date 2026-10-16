@@ -5,7 +5,17 @@ import { DomainError } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
 
 const mocks = vi.hoisted(() => ({ facility: vi.fn(), lines: vi.fn(), create: vi.fn(), committed: vi.fn(), update: vi.fn(), autoCodes: vi.fn() }));
-vi.mock("@/data-access/biochar-product-input", () => ({ readProductFacility: mocks.facility, readProductFormulationLines: mocks.lines }));
+vi.mock("@/data-access/biochar-product-input", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/data-access/biochar-product-input")>(),
+  readProductFacility: mocks.facility,
+  resolveProductComposition: async (_ctx: unknown, _tx: unknown, _id: unknown, composition: unknown) => {
+    const { resolveProductComposition } = await importOriginal<typeof import("@/data-access/biochar-product-input")>();
+    const query = { from: () => query, where: () => query, innerJoin: () => query, orderBy: mocks.lines,
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve([{ id: RECIPE_ID }]).then(resolve) };
+    return resolveProductComposition(ctx, { select: () => query } as unknown as OperationScope["tx"], RECIPE_ID,
+      composition as Record<string, unknown>);
+  },
+}));
 vi.mock("@/data-access/biochar-product-create", () => ({ createBiocharProductInTransaction: mocks.create, findCommittedBiocharProduct: mocks.committed }));
 vi.mock("@/data-access/biochar-product-update", () => ({ updateBiocharProductInTransaction: mocks.update }));
 vi.mock("@/data-access/code-generator", () => ({ withAutoCodes: mocks.autoCodes, CODE_CONFLICT_MESSAGES: { biocharProduct: "A biochar product with this code already exists" } }));
@@ -58,8 +68,10 @@ describe("make_biochar_product", () => {
     expect(mocks.autoCodes).toHaveBeenCalledWith(ctx, tx, "BP", expect.anything(), expect.anything(), 1, expect.any(Function), "A biochar product with this code already exists");
     const [, writer, data, options] = mocks.create.mock.calls[0];
     expect(writer).toBe(savepoint);
-    expect(options).toEqual({ snapshotStock, onReplay: scope.activity.skip });
-    expect(data).toMatchObject({
+    expect(options).toEqual({ snapshotStock, onReplay: scope.activity.skip, resolveComposition: expect.any(Function) });
+    const composition = await options.resolveComposition(writer);
+    expect(mocks.lines).toHaveBeenCalledTimes(1);
+    expect({ ...data, composition }).toMatchObject({
       code: "BP-26-001", facilityId: FACILITY_ID, placedAt: "2026-09-14T12:00:00.000Z", status: "testing",
       // 100.125 kg biochar and 20.25 kg ingredient, before the 5 kg of water.
       massKg: 120.375, moistureContentPercent: 10, waterAddedKg: 5, densityKgM3: null, basisFingerprint: undefined,
@@ -132,7 +144,8 @@ describe("make_biochar_product", () => {
     mocks.lines.mockResolvedValue([line, second]);
     const other = { formulationIngredientId: RUN_A, storageLocationId: null, wetMassKg: 0 };
     await make({ ...blended, ingredients: [other, blended.ingredients[0]] });
-    const { ingredients } = mocks.create.mock.calls[0][2].composition;
+    const [, writer, , options] = mocks.create.mock.calls[0];
+    const { ingredients } = await options.resolveComposition(writer);
     expect(ingredients.map((row: { formulationIngredientId: string }) => row.formulationIngredientId)).toEqual([LINE_ID, RUN_A]);
   });
 
@@ -145,11 +158,15 @@ describe("make_biochar_product", () => {
   });
 
   it("refuses an ingredient outside the formulation, and a formulation line left out", async () => {
+    mocks.create.mockImplementation(async (_ctx, writer, _data, options) => {
+      await options.resolveComposition(writer);
+      return created;
+    });
     mocks.lines.mockResolvedValue([{ ...line, id: RUN_A }]);
     await expect(make(blended)).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["ingredients", 0, "formulationIngredientId"] }] });
     mocks.lines.mockResolvedValue([line, { ...line, id: RUN_A }]);
     await expect(make(blended)).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["ingredients"] }] });
-    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.create).toHaveBeenCalledTimes(2);
   });
 
   it("answers a moved basis with stock_basis_changed and keeps the bin conflict", async () => {

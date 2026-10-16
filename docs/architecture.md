@@ -408,6 +408,21 @@ local, and deployed builds remain on the stable default.
 
 ## Database Boundaries
 
+Formulation creates lock referenced feedstock types `FOR SHARE` in id order,
+then insert the parent and lines inside the `withAutoCodes` BCF savepoint and
+read back through `tx`. Updates lock the formulation `FOR UPDATE`, check its
+version, lock incoming types `FOR SHARE` in id order (retained archived types
+pass), then existing lines `FOR UPDATE` in id order; plain snapshot/product
+reference reads and the merged integer-millionths total precede the
+`withUniqueCodeGuard` write. Deletes lock the formulation `FOR UPDATE`, check
+its version and read product, bin and order references (archived included)
+without locks before cascading deletion. Bin create, update and quick-add hold
+the formulation `FOR SHARE` after their facility/bin locks; product creation
+reads recipe lines after its formulation share lock. Feedstock-type usage edits
+hold the type `FOR UPDATE` and read formulation usage without locking parents.
+Formulation writers request no facility, bin, product or order locks, so these
+paths do not reverse product/order writers or the facility archive cascade.
+
 Application writers share `src/data-access/application-write-scope.ts`: unlocked
 discovery, sorted lineage artifacts, facilities `FOR SHARE`, production runs `FOR SHARE`, credit batches `FOR SHARE`, deliveries
 `FOR UPDATE`, then the application `FOR UPDATE` and its version check. They

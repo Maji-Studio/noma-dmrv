@@ -3,7 +3,6 @@ import {
   createFormulationSchema,
   exceedsFormulationRatioSum,
   formulationPercentFormSchema,
-  formulationRatioSum,
   percentFormToRatioPayload,
   percentToRatio,
   ratioToPercent,
@@ -12,29 +11,14 @@ import {
 
 const UUID = "11111111-1111-4111-8111-111111111111";
 
-describe("formulationRatioSum", () => {
-  it("treats missing ratios as zero", () => {
-    expect(formulationRatioSum(null, null)).toBe(0);
-    expect(formulationRatioSum(undefined, undefined)).toBe(0);
-    expect(formulationRatioSum(0.5, [{ ratio: null }])).toBe(0.5);
-  });
-
-  it("sums biochar and ingredient ratios", () => {
-    expect(
-      formulationRatioSum(0.7, [{ ratio: 0.2 }, { ratio: 0.1 }]),
-    ).toBeCloseTo(1, 10);
-  });
-});
-
 describe("exceedsFormulationRatioSum", () => {
   it("is false at or below 100%", () => {
     expect(exceedsFormulationRatioSum(0.7, [{ ratio: 0.3 }])).toBe(false);
     expect(exceedsFormulationRatioSum(0.5, [{ ratio: 0.4 }])).toBe(false);
   });
 
-  it("absorbs floating-point artifacts within tolerance", () => {
-    // 0.7 + 0.1 + 0.2 drifts to 1.0000000000000002 in float math — not a real
-    // over-allocation, so the tolerance must swallow it.
+  it("compares stored millionths without floating-point drift", () => {
+    // These three stored shares total exactly one million millionths.
     expect(
       exceedsFormulationRatioSum(0.7, [{ ratio: 0.1 }, { ratio: 0.2 }]),
     ).toBe(false);

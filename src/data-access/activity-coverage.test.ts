@@ -41,6 +41,11 @@ const ACTIVITY_COVERAGE = {
   "certifier-removal-deletion.ts": {
     finalizeRemovalDeletion: { status: "direct" },
   },
+  "formulation-writes.ts": {
+    createFormulationInTransaction: { status: "runner", operations: ["create_formulation"] },
+    updateFormulationInTransaction: { status: "runner", operations: ["update_formulation"] },
+    deleteFormulationInTransaction: { status: "runner", operations: ["delete_formulation"] },
+  },
   "application-writes.ts": {
     createApplicationInTransaction: { status: "runner", operations: ["record_application"] },
     updateApplicationInTransaction: { status: "runner", operations: ["update_application"] },
@@ -143,7 +148,7 @@ const ACTIVITY_COVERAGE = {
 
 const COVERED_TABLES = new Set([
   "creditBatches", "creditBatchProductionRuns", "creditBatchApplications",
-  "applications", "documents", "transportLegs",
+  "applications", "documents", "transportLegs", "formulations", "formulationIngredients",
 ]);
 const WRITE_PREFIX = /^(create|update|delete|attach|detach|archive|insert|upsert|sync|replace|retire|remove|set|mark)/;
 type Inventory = Record<string, Record<string, Coverage>>;

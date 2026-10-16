@@ -69,7 +69,7 @@ async function main(): Promise<void> {
   const { startProductionRun, updateProductionRun } = await import("@/lib/operations/production-runs");
   const { productionRunEtag } = await import("@/lib/api/representation-etags");
   const { createStorageLocation } = await import("@/data-access/storage-locations");
-  const { createFormulation } = await import("@/data-access/formulations");
+  const { createFormulationInTransaction } = await import("@/data-access/formulation-writes");
   const { readApiBiocharProduct } = await import("@/lib/read-models/api-biochar-products");
   const { makeBiocharProduct } = await import("@/lib/operations/biochar-products");
   const { recordOutputStockMovement } = await import("@/lib/operations/output-stock");
@@ -179,14 +179,14 @@ async function main(): Promise<void> {
     totalCarbonPercent: SAMPLE_TOTAL_CARBON_PERCENT, organicCarbonPercent: SAMPLE_ORGANIC_CARBON_PERCENT,
     inorganicCarbonPercent: SAMPLE_INORGANIC_CARBON_PERCENT, totalHydrogenPercent: SAMPLE_HYDROGEN_PERCENT,
   })).data.sample;
-  const pure = await createFormulation(ctx, { code: "FUZZ-PURE", name: `${FIXTURE_LABEL} pure biochar`, biocharRatio: 1 });
+  const pure = await db.transaction(tx => createFormulationInTransaction(ctx, tx, { code: "FUZZ-PURE", name: `${FIXTURE_LABEL} pure biochar`, biocharRatio: 1 }));
   const blendType = await createFeedstockType(ctx, {
     code: "FUZZ-BLEND", name: `${FIXTURE_LABEL} blend ingredient`, category: "compost", usage: "blend",
   });
-  const blend = await createFormulation(ctx, {
+  const blend = await db.transaction(tx => createFormulationInTransaction(ctx, tx, {
     code: "FUZZ-MIX", name: `${FIXTURE_LABEL} blend`, biocharRatio: BLEND_BIOCHAR_RATIO,
-    ingredients: [{ feedstockTypeId: blendType.id, ratio: BLEND_INGREDIENT_RATIO }],
-  });
+    lines: [{ feedstockTypeId: blendType.id, ratio: BLEND_INGREDIENT_RATIO }],
+  }));
   const product = (await runOperation(makeBiocharProduct, ctx, {
     facilityId: facility.id, formulationId: pure.id,
     placedAt: new Date(now - PRODUCT_PLACED_HOURS_AGO * MS_PER_HOUR).toISOString(),

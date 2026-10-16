@@ -3,9 +3,11 @@ import { db, type DbTransaction } from '@/db';
 import { biocharProducts, facilities, formulations, outputStockAllocations, productIngredientSnapshots, productionRuns, storageLocations, type BiocharProduct, type ProductIngredientSnapshot } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
+import { formulationNotFound } from '@/lib/formulation-domain-errors';
 import { grams, kilograms } from '@/lib/output-stock';
 import { and, eq, isNull } from 'drizzle-orm';
-import { assertCompositionIngredientDrawsWithinStock, deriveCompositionSourceBiocharMassKg, getCompositionIngredientDraws, validateCompositionIngredientBins } from './biochar-product-composition';
+import { assertCompositionIngredientDrawsWithinStock, deriveCompositionSourceBiocharMassKg, validateCompositionIngredientBins } from './biochar-product-composition';
+import { resolveProductComposition } from './biochar-product-input';
 import { insertBiocharProductSourceAllocations } from './biochar-product-source-allocations';
 import { assertEventTimesNotFuture } from './future-event-time';
 import { revalidateProductStock } from './product-stock-preview';
@@ -51,6 +53,8 @@ export interface CreatedBiocharProduct<Product = BiocharProduct> {
 export interface CreateBiocharProductOptions extends OutputStockPostingOptions {
   /** Injectable server clock for exact-boundary tests. */
   now?: Date;
+  /** Operations supply only operator facts; resolve recipe metadata under its lock. */
+  resolveComposition?: (tx: DbTransaction) => Promise<Record<string, unknown>>;
 }
 
 /** The facts an operator enters per ingredient; a retried request must repeat them exactly. */
@@ -122,21 +126,27 @@ export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbT
     ...(data.sources?.length ? { sources: data.sources } : { moisturePercent: data.moistureContentPercent }),
     idempotencyKey: data.idempotencyKey, reason: `Product ${data.code}` };
   const payload = productRequestPayload(data);
-  const additionalBinIds = [productBinId, ...getCompositionIngredientDraws(data.composition).map(d => d.storageLocationId)];
+  // Bin identity comes from operator facts and does not need a recipe read.
+  const ingredientFacts = (data.composition?.ingredients ?? []) as { storageLocationId?: string | null; massKg?: number | null }[];
+  const additionalBinIds = [productBinId, ...ingredientFacts.filter(line => (line.massKg ?? 0) > 0 && line.storageLocationId).map(line => line.storageLocationId)];
   return withOutputStockPostingInTransaction(ctx, tx, { input, payload, additionalBinIds, replay: (replayTx, existing) => replayPostedProduct(ctx, replayTx, existing), write: async (writeTx, post) => {
     const [facility] = await writeTx.select({ id: facilities.id }).from(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, data.facilityId), isNull(facilities.archivedAt))).for('share');
     if (!facility) throw new SafeError('Facility not found or archived');
     const [formulation] = await writeTx.select().from(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, data.formulationId))).for('share');
-    if (!formulation) throw new SafeError('Formulation not found');
+    if (!formulation) throw formulationNotFound();
     const [bin] = await writeTx.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, productBinId), eq(storageLocations.facilityId, data.facilityId), eq(storageLocations.type, 'product_bin'), isNull(storageLocations.archivedAt))).for('update');
     if (!bin || (bin.formulationId && bin.formulationId !== data.formulationId)) throw new SafeError('Choose a product bin for this formulation.');
     await assertAdditionAfterSplit(ctx, writeTx, bin, new Date(data.placedAt));
-    await validateCompositionIngredientBins(ctx, writeTx, data.composition, data.formulationId, data.facilityId);
+    const compositionInput = options.resolveComposition ? await options.resolveComposition(writeTx) : data.composition;
+    await validateCompositionIngredientBins(ctx, writeTx, compositionInput, data.formulationId, data.facilityId);
+    const resolvedComposition = options.resolveComposition
+      ? compositionInput!
+      : await resolveProductComposition(ctx, writeTx, data.formulationId, compositionInput);
     const productBasis = await revalidateProductStock(ctx, {
       facilityId: data.facilityId, formulationId: data.formulationId, placedAt: data.placedAt,
       sourceBiocharStorageLocationId: input.storageLocationId, storageLocationId: productBinId,
       massKg: wet, moistureContentPercent: data.moistureContentPercent ?? undefined, sources: data.sources, waterAddedKg: data.waterAddedKg!,
-      ingredientBins: (data.composition?.ingredients ?? []) as Record<string, unknown>[],
+      ingredientBins: (resolvedComposition.ingredients ?? []) as Record<string, unknown>[],
     }, writeTx, data.basisFingerprint);
     const { composition, source: prepared } = productBasis;
     // A short ingredient bin is a typed wet-stock shortage; a short source bin a typed solids shortage.
