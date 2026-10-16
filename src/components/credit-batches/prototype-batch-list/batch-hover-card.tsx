@@ -3,13 +3,13 @@
 /**
  * PROTOTYPE (throwaway): the hover card for a credit batch on the timeline.
  * Base UI PreviewCard (hover card for links): it opens on hover or focus of the
- * bar, stays open while the pointer is on it, and its footer link is clickable.
+ * bar. The bar itself is the link, so the card carries facts only.
  * Elevated surface per the design system: paper, full-ink border, no shadow.
  */
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { PreviewCard } from "@base-ui/react/preview-card";
-import { ArrowRightIcon, CalendarBlankIcon, LeafIcon, WarningCircleIcon } from "@phosphor-icons/react/dist/ssr";
+import { CalendarBlankIcon, LeafIcon, WarningCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
 import { STATE_BADGE, type StubBatch } from "./list-model";
@@ -28,7 +28,7 @@ function Figure({ label, value }: { label: string; value: string }) {
   );
 }
 
-function HoverCardBody({ batch, href }: { batch: StubBatch; href: string }) {
+function HoverCardBody({ batch }: { batch: StubBatch }) {
   const badge = STATE_BADGE[batch.state];
   const notIn = batch.applied - batch.inRemoval;
   return (
@@ -59,25 +59,9 @@ function HoverCardBody({ batch, href }: { batch: StubBatch; href: string }) {
         <Figure label="Produced" value={tons(batch.produced)} />
         <Figure label="Applied" value={tons(batch.applied)} />
       </dl>
-      <div className="flex flex-wrap items-center gap-6 border-t border-[var(--color-border-tertiary)] px-16 py-10 body-small">
-        {batch.removals.length > 0 ? (
-          <>
-            <span className={MUTED}>In</span>
-            {batch.removals.map((code) => (
-              <span key={code} className="border border-[var(--color-border-secondary)] px-6 body-caption font-medium tabular-nums">
-                {code}
-              </span>
-            ))}
-            {notIn > 0.005 && <span className={MUTED}>, {tons(notIn)} not in a Removal</span>}
-          </>
-        ) : (
-          <span className={MUTED}>Not in a Removal</span>
-        )}
-      </div>
-      <Link href={href} className="flex min-h-44 items-center justify-between gap-8 border-t border-[var(--ink)] px-16 label-button hover:bg-[var(--color-surface-medium)]">
-        Open batch page
-        <ArrowRightIcon size={16} aria-hidden />
-      </Link>
+      {notIn > 0.005 && (
+        <p className={cn("border-t border-[var(--color-border-tertiary)] px-16 py-10 body-small", MUTED)}>{tons(notIn)} not in a Removal</p>
+      )}
     </div>
   );
 }
@@ -92,7 +76,7 @@ export function BatchHoverCard({ batch, href, label, className, children }: { ba
       <PreviewCard.Portal>
         <PreviewCard.Positioner side="top" sideOffset={SIDE_OFFSET_PX} className="z-[var(--z-layer-popover)]">
           <PreviewCard.Popup className="border border-[var(--ink)] bg-[var(--paper)] transition-opacity duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0">
-            <HoverCardBody batch={batch} href={href} />
+            <HoverCardBody batch={batch} />
           </PreviewCard.Popup>
         </PreviewCard.Positioner>
       </PreviewCard.Portal>

@@ -2,32 +2,38 @@
 
 /**
  * PROTOTYPE (throwaway): the credit batch overview with a made-up full
- * production (two feedstocks, October 2025 to October 2026). Three timeline refinements on
- * ?variant=A|B|C share the mass strip on top. Each batch opens the batch page
+ * production (two feedstocks, October 2025 to October 2026). The quiet-bars timeline sits under the mass strip. Each batch opens the batch page
  * prototype in the scenario that matches its state. ?real=1 shows today's list.
  */
 import Link from "next/link";
 import { useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { PageHeader } from "@/components/ui";
 import { Button } from "@/components/ui/button";
-import { PrototypeSwitcher, resolveVariant } from "@/components/ui/prototype-switcher";
+import { PrototypeSwitcher } from "@/components/ui/prototype-switcher";
 import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { BATCHES, type PipelineStage } from "./list-model";
+import { Notice } from "@/components/ui/notice";
+import { formatDateRange } from "@/lib/format-utils";
+import { BATCHES, defaultNewBatchWindow, FEEDSTOCKS, type NewBatchSlot, type PipelineStage } from "./list-model";
 import { ListProvider, MassPipeline, StageFilterNote } from "./list-parts";
-import { QuietTimeline, TrackTimeline, VolumeTimeline } from "./timeline-versions";
+import { QuietTimeline } from "./quiet-timeline";
+import { TODAY } from "./timeline-core";
 
-const VARIANTS = [
-  { key: "A", name: "Quiet bars" },
-  { key: "B", name: "Thin track" },
-  { key: "C", name: "Bars and volume" },
-] as const;
+const VARIANTS = [{ key: "A", name: "Quiet bars" }] as const;
+
+const CREATE_FORM_HREF = "/credit-batches?real=1&create=1";
+
+/** One line per feedstock: the window the header button proposes. */
+function defaultSlots(): NewBatchSlot[] {
+  return FEEDSTOCKS.map((feedstock) => ({
+    feedstock,
+    ...defaultNewBatchWindow(BATCHES.filter((batch) => batch.feedstock === feedstock), TODAY),
+  }));
+}
 
 export function PrototypeBatchList() {
-  const searchParams = useSearchParams();
-  const variant = resolveVariant(VARIANTS, searchParams.get("variant"));
+  const [proposed, setProposed] = useState<NewBatchSlot[] | null>(null);
   const [stage, setStage] = useState<PipelineStage["key"] | null>(null);
   const { facilityId } = useFacilityContext();
   const real = useCreditBatches(facilityId ?? undefined);
@@ -41,7 +47,7 @@ export function PrototypeBatchList() {
           title="Credit Batches"
           subtitle="Carbon credit batches for verification and registry"
           actions={
-            <Button variant="primary">
+            <Button variant="primary" onClick={() => setProposed(defaultSlots())}>
               <PlusIcon size={20} aria-hidden />
               New credit batch
             </Button>
@@ -49,9 +55,27 @@ export function PrototypeBatchList() {
         />
         <MassPipeline />
         <StageFilterNote />
-        {variant.key === "A" && <QuietTimeline />}
-        {variant.key === "B" && <TrackTimeline />}
-        {variant.key === "C" && <VolumeTimeline />}
+        <QuietTimeline onPick={(slot) => setProposed([slot])} />
+        {/* PROTOTYPE: the real form cannot be prefilled with a stub feedstock, so the windows are named here. */}
+        {proposed && (
+          <Notice
+            tone="info"
+            title="New credit batch"
+            action={
+              <Link href={CREATE_FORM_HREF} className="body-small font-medium underline underline-offset-2">
+                Open the form
+              </Link>
+            }
+          >
+            <ul>
+              {proposed.map((slot) => (
+                <li key={slot.feedstock}>
+                  {slot.feedstock}: {formatDateRange(slot.start, slot.end)}
+                </li>
+              ))}
+            </ul>
+          </Notice>
+        )}
       </div>
       <PrototypeSwitcher variants={VARIANTS} title="Credit batch overview">
         <ul className="list-disc pl-16">

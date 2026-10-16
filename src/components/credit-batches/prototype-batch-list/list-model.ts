@@ -183,3 +183,82 @@ export function matchesStage(batch: StubBatch, stage: PipelineStage["key"] | nul
   }
 }
 
+
+/* ---------- Proposed windows for a new credit batch ---------- */
+
+const DAY_MS = 86_400_000;
+/** Months a search for a free calendar month may look ahead. */
+const MAX_MONTH_SEARCH = 120;
+
+export interface ProposedWindow {
+  /** YYYY-MM-DD, inclusive. */
+  start: string;
+  end: string;
+}
+
+function toDay(date: string): number {
+  const [y, m, d] = date.split("-").map(Number);
+  return Date.UTC(y, m - 1, d) / DAY_MS;
+}
+
+function fromDay(day: number): string {
+  return new Date(day * DAY_MS).toISOString().slice(0, 10);
+}
+
+/** The last day of the calendar month a day falls in. */
+function endOfMonth(day: number): number {
+  const date = new Date(day * DAY_MS);
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1) / DAY_MS - 1;
+}
+
+/**
+ * The window a new credit batch gets after a batch that ends on `previousEnd`.
+ * It starts the day after and runs to the end of that calendar month, or to the
+ * day before the next batch (`nextStart`) if that comes first. After the last
+ * batch (`nextStart` null) it is the rest of the month, or the whole next month
+ * when the last batch ended on a month's last day. Always at most one month.
+ * Null when there is no whole day between the two batches.
+ */
+export function proposeWindow(previousEnd: string, nextStart: string | null): ProposedWindow | null {
+  const start = toDay(previousEnd) + 1;
+  const end = nextStart === null ? endOfMonth(start) : Math.min(endOfMonth(start), toDay(nextStart) - 1);
+  return end < start ? null : { start: fromDay(start), end: fromDay(end) };
+}
+
+export interface NewBatchSlot extends ProposedWindow {
+  feedstock: Feedstock;
+}
+
+/** Every place on a row where a new credit batch fits: each gap filled window by window, then one window after the last batch. */
+export function slotsFor(feedstock: Feedstock, batches: { start: string; end: string }[]): NewBatchSlot[] {
+  const rows = [...batches].sort((a, b) => a.start.localeCompare(b.start));
+  const slots: NewBatchSlot[] = [];
+  rows.forEach((batch, index) => {
+    const nextStart = rows[index + 1]?.start ?? null;
+    let previousEnd = batch.end;
+    for (let window = proposeWindow(previousEnd, nextStart); window; window = nextStart ? proposeWindow(previousEnd, nextStart) : null) {
+      slots.push({ ...window, feedstock });
+      previousEnd = window.end;
+    }
+  });
+  return slots;
+}
+
+export function newBatchSlots(feedstock: Feedstock): NewBatchSlot[] {
+  return slotsFor(feedstock, BATCHES.filter((batch) => batch.feedstock === feedstock));
+}
+
+/**
+ * The window the header "New credit batch" button proposes for one facility and
+ * feedstock: the current calendar month, or the next whole calendar month with
+ * no batch in it. A partly used month counts as taken.
+ */
+export function defaultNewBatchWindow(batches: { start: string; end: string }[], today: string): ProposedWindow {
+  const [year, month] = today.split("-").map(Number);
+  for (let offset = 0; offset < MAX_MONTH_SEARCH; offset += 1) {
+    const first = Date.UTC(year, month - 1 + offset, 1) / DAY_MS;
+    const window = { start: fromDay(first), end: fromDay(endOfMonth(first)) };
+    if (!batches.some((batch) => batch.start <= window.end && batch.end >= window.start)) return window;
+  }
+  throw new Error("No free calendar month found");
+}
