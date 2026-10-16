@@ -3,7 +3,7 @@ import { ACTIVITY_ENTITY_TYPES } from "@/db/schema/common";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { getStatusState } from "@/lib/status-state";
 import { toBadgeProps } from "@/components/chain-of-custody/chain-status-badge";
-import { activityFieldNameLabels } from "./activity-change-lines";
+import { activityFieldLines } from "./activity-change-lines";
 import {
   ACTIVITY_RECORD_TYPE_LABELS,
   ACTIVITY_RECORD_TYPE_ORDER,
@@ -86,7 +86,8 @@ describe("changed field names", () => {
   });
 
   it("drops bookkeeping fields and repeats", () => {
-    expect(activityFieldNameLabels(item({ changedFields: ["version", "notes", "notes", "facilityId"] }))).toEqual(["Notes"]);
+    expect(activityFieldLines(item({ changedFields: ["version", "notes", "notes", "facilityId"] })))
+      .toEqual([{ kind: "changed", key: "notes", label: "Notes" }]);
   });
 });
 

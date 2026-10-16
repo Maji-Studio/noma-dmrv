@@ -75,19 +75,6 @@ function gpsPairFor(entityType: string, field: string): GpsPair | undefined {
   return GPS_PAIRS[entityType]?.find((pair) => pair.latitude === field || pair.longitude === field);
 }
 
-/** A field's name in a list of names: a coordinate reads as its point. */
-export function activityFieldNameLabel(entityType: string, field: string): string {
-  return gpsPairFor(entityType, field)?.label ?? activityFieldLabel(entityType, field);
-}
-
-/** Field names, deduplicated, bookkeeping dropped: what a creation recorded. */
-export function activityFieldNameLabels(item: Pick<ActivityItem, "entityType" | "changedFields">): string[] {
-  const labels = item.changedFields
-    .filter((field) => !isHiddenActivityField(field))
-    .map((field) => activityFieldNameLabel(item.entityType, field));
-  return [...new Set(labels)];
-}
-
 // ─── Values ──────────────────────────────────────────────────────────────────
 
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -283,9 +270,8 @@ function fieldLine(
 
 /**
  * One line per changed field of an update, in the order the server listed
- * them; a coordinate pair reads as one GPS point. Creations list field names
- * instead (`activityFieldNameLabels`), and deletions and registry status
- * events list none.
+ * them; a coordinate pair reads as one GPS point. Creations, deletions and
+ * registry status events list none.
  */
 export function activityFieldLines(item: ActivityItem): ActivityFieldLine[] {
   if (item.action !== "updated") return [];

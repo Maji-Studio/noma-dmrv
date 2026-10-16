@@ -20,9 +20,9 @@ const item: ActivityItem = {
 };
 
 /** The rendered row as a DOM tree, so text is read the way a browser reads it. */
-function renderEntry(): HTMLElement {
+function renderEntry(entry: ActivityItem = item): HTMLElement {
   const container = document.createElement("div");
-  container.innerHTML = renderToStaticMarkup(<ActivityEntry item={item} creditBatchId="batch-1" />);
+  container.innerHTML = renderToStaticMarkup(<ActivityEntry item={entry} creditBatchId="batch-1" />);
   return container;
 }
 
@@ -46,5 +46,13 @@ describe("ActivityEntry field lines", () => {
     const status = [...row.querySelectorAll("p")].find((node) => node.textContent?.startsWith("Status"));
     expect(status?.textContent).toBe("StatusDraftComplete");
     expect(status?.querySelector('[aria-label="to"]')).not.toBeNull();
+  });
+
+  it("lists no fields on created and deleted rows", () => {
+    for (const action of ["created", "deleted"] as const) {
+      const row = renderEntry({ ...item, action, changes: undefined, changeLabels: undefined });
+      expect(row.querySelectorAll('[data-testid="activity-field-change"]')).toHaveLength(0);
+      expect(readText(row)).not.toMatch(/Wet mass|Notes|Recorded/);
+    }
   });
 });

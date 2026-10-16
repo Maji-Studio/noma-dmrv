@@ -22,11 +22,10 @@ import {
 import {
   ACTIVITY_CHANGED_WORD,
   activityFieldLines,
-  activityFieldNameLabels,
   type ActivityFieldLine,
   type ActivityValueText,
 } from "./activity-change-lines";
-import { ACTIVITY_CREATED_FIELDS_LABEL, ACTIVITY_DELETED_RECORD_LABEL } from "./activity-copy";
+import { ACTIVITY_DELETED_RECORD_LABEL } from "./activity-copy";
 // By file, not the barrel: the chain-of-custody barrel imports this folder.
 import { ChainStatusBadge } from "@/components/chain-of-custody/chain-status-badge";
 
@@ -109,8 +108,6 @@ function EntryBody({ item }: { item: ActivityItem }) {
   const deleted = item.record.deleted;
   const summary = activityChangeSummary(item);
   const lines = activityFieldLines(item);
-  // A creation names the fields it recorded; their values are the record itself.
-  const created = item.action === "created" ? activityFieldNameLabels(item) : [];
   const actor = activityActorDisplay(item);
   return (
     <span className="flex min-w-0 flex-col gap-4">
@@ -125,11 +122,6 @@ function EntryBody({ item }: { item: ActivityItem }) {
         ) : null}
       </span>
       {summary ? <span className="body-caption text-[var(--color-text-secondary)]">{summary}</span> : null}
-      {created.length > 0 ? (
-        <span className="body-caption text-[var(--color-text-secondary)]">
-          {ACTIVITY_CREATED_FIELDS_LABEL}: {created.join(", ")}
-        </span>
-      ) : null}
       {lines.length > 0 ? (
         <span className="flex min-w-0 flex-col gap-2">
           {lines.map((line) => <FieldChange key={line.key} line={line} />)}

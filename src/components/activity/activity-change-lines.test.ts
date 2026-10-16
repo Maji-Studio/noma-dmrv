@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { formatDateTime } from "@/lib/format-utils";
 import {
   activityFieldLines,
-  activityFieldNameLabels,
   activityLinkRecordNoun,
   formatActivityValue,
   formatStoredDecimal,
@@ -228,10 +227,5 @@ describe("labels", () => {
     expect(activityFieldLabel("lab_sample", "bulkDensityKgPerM3")).toBe("Bulk density (kg/m³)");
     expect(activityFieldLabel("lab_sample", "saltContentGPerKg")).toBe("Salt content (g/kg)");
     expect(activityFieldLabel("production_run", "feedingRateKgHr")).toBe("Feeding rate (kg/h)");
-  });
-
-  it("names a creation's fields only, a coordinate pair as its point", () => {
-    expect(activityFieldNameLabels(item({ action: "created", changedFields: ["code", "gpsLatitude", "gpsLongitude", "version", "fieldSizeHa"] })))
-      .toEqual(["Code", "GPS point", "Field size (ha)"]);
   });
 });
