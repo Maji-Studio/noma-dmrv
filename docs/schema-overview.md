@@ -122,7 +122,7 @@ and missing feedstock legs in the same transaction, skipping locked certificatio
 lineage and archived cargo. Saving a pair fills a missing distance; never changes a recorded one. Missing pairs permit entry and block
 certification readiness where transport is required.
 
-Migration 0151 contains Kenji's approved one-off copy: pair defaults are copied
+Migration 0153 contains Kenji's approved one-off copy: pair defaults are copied
 only for organizations with exactly one active facility. All existing deliveries,
 including archived and lineage-locked deliveries in multi-facility organizations,
 keep their old location scalar as a recorded snapshot before the scalar columns

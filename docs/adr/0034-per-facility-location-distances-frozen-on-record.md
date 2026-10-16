@@ -16,7 +16,7 @@ between reusable route defaults and recorded transport facts.
   Fill within the pair transaction, skipping archived cargo and locked lineage.
 - Reject pair writes for facilities the organization cannot actively use.
   GPS estimation is opt-in and available only in location forms.
-- Migration 0151's owner-approved copy creates pair defaults only for organizations
+- Migration 0153's owner-approved copy creates pair defaults only for organizations
   with exactly one active facility. Independently, every existing delivery retains
   its old location scalar and provenance, including locked and archived history.
 

@@ -1,3 +1,4 @@
+import { effectiveDeliveryDistance } from "./delivery-distance-projections";
 /**
  * The energy read (ADR 0031): everything the attribution in
  * `@/lib/energy/attribution` needs for one facility, in one pass.
@@ -211,6 +212,8 @@ export async function getEnergyInputs(
         deliveryDate: deliveries.deliveryDate,
         customerName: customers.name,
         recordedDistanceKm: deliveries.recordedDistanceKm,
+        recordedDistanceSource: deliveries.recordedDistanceSource,
+        distanceSource: deliveries.distanceSource,
         distanceKmOverride: deliveries.distanceKmOverride,
         deliveredWetMassKg: deliveries.deliveredWetMassKg,
         massDryKg: deliveries.massDryKg,
@@ -313,7 +316,7 @@ export async function getEnergyInputs(
         code: delivery.code,
         day: dayOf(delivery.deliveryDate),
         customerName: delivery.customerName,
-        effectiveDistanceKm: delivery.distanceKmOverride ?? delivery.recordedDistanceKm,
+        effectiveDistanceKm: effectiveDeliveryDistance(delivery).effectiveDistanceKm,
         deliveredWetMassKg: delivery.deliveredWetMassKg,
         massDryKg: delivery.massDryKg,
       })),

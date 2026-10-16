@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { customerLocations, deliveries, feedstocks, orders, supplierLocations } from "@/db/schema";
 import { updateCustomerLocation } from "@/data-access/customers";
-import { updateSupplierLocation } from "@/data-access/suppliers";
+import { createSupplierLocation, updateSupplierLocation } from "@/data-access/suppliers";
 import { getTransportLegsForEntity } from "@/data-access/transport-legs";
 import { getDeliveryWithRelations } from "@/data-access/deliveries";
 import { withLineageFixture } from "./helpers/certification-lineage-fixture";
@@ -69,4 +69,37 @@ it("does not fill archived deliveries or feedstocks at an active facility", asyn
       await db.delete(supplierLocations).where(eq(supplierLocations.id, supplierLocation.id));
     }
   }, "none");
+});
+
+
+it.each(["removal", "ghgStatement", "none"] as const)("fills from persisted pairs on default promotion with %s lineage", async blockingVia => {
+  await withLineageFixture(async fixture => {
+    const [feedstock] = await db.select().from(feedstocks).where(eq(feedstocks.id, fixture.feedstockId));
+    const original = await createSupplierLocation(ctx, {
+      ...TEST_SITE_POSITION, supplierId: feedstock.supplierId, isDefault: true,
+    });
+    const promoted = await createSupplierLocation(ctx, {
+      ...TEST_SITE_POSITION, supplierId: feedstock.supplierId, isDefault: false,
+      facilityDistances: [{ facilityId: fixture.facilityId, distanceKm: 35, distanceSource: "manual" }],
+    });
+    try {
+      expect(await getTransportLegsForEntity(ctx, "feedstock", feedstock.id)).toEqual([]);
+      await updateSupplierLocation(ctx, promoted.id, {
+        expectedVersion: promoted.version, isDefault: true, facilityDistances: [],
+      });
+      const legs = await getTransportLegsForEntity(ctx, "feedstock", feedstock.id);
+      expect(legs).toHaveLength(blockingVia === "none" ? 1 : 0);
+      if (blockingVia === "none") {
+        expect(legs[0].distanceKm).toBe(35);
+        const [currentOriginal] = await db.select().from(supplierLocations).where(eq(supplierLocations.id, original.id));
+        await updateSupplierLocation(ctx, original.id, {
+          expectedVersion: currentOriginal.version, isDefault: true,
+          facilityDistances: [{ facilityId: fixture.facilityId, distanceKm: 80, distanceSource: "document" }],
+        });
+        expect(await getTransportLegsForEntity(ctx, "feedstock", feedstock.id)).toEqual(legs);
+      }
+    } finally {
+      await db.delete(supplierLocations).where(and(eq(supplierLocations.organizationId, TEST_ORG_ID), eq(supplierLocations.supplierId, feedstock.supplierId)));
+    }
+  }, blockingVia);
 });

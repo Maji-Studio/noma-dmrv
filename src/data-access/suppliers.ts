@@ -1,3 +1,4 @@
+import { fillMissingLocationDistances } from "./location-distance-fill";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import { upsertLocationFacilityDistances, withLocationFacilityDistances } from "./location-facility-distances";
@@ -596,7 +597,7 @@ export async function createSupplierLocation(
   const saved = await db.transaction(async (tx) => {
     // Match intake writers: active facilities before the supplier parent.
     for (const row of [...(data.facilityDistances ?? [])].sort((a, b) => a.facilityId.localeCompare(b.facilityId))) {
-      await lockActiveFacilityReference(ctx, tx, row.facilityId);
+      if (row.distanceKm !== null) await lockActiveFacilityReference(ctx, tx, row.facilityId);
     }
     // Serialize location writers with parent deletion before locking children.
     // Pair saves also wait for intake FK inserts, so fill-only cannot miss an
@@ -678,9 +679,19 @@ export async function updateSupplierLocation(
   const { expectedVersion, facilityDistances, ...locationData } = data;
 
   const saved = await db.transaction(async (tx) => {
+    // Discover promotion pairs before taking facilities, then the supplier lock.
+    // The location version check below rejects concurrent pair edits.
+    const promotionPairs = data.isDefault === true
+      ? (await withLocationFacilityDistances(ctx, "supplier", [{ id: locationId }], tx))[0].facilityDistances
+      : [];
+    const pairsToLock = new Map<string, FacilityDistanceInput>(promotionPairs.map(row => [row.facilityId, row]));
+    for (const row of facilityDistances ?? []) {
+      if (row.distanceKm === null) pairsToLock.delete(row.facilityId);
+      else pairsToLock.set(row.facilityId, row);
+    }
     // Match intake writers: active facilities before the supplier parent.
-    for (const row of [...(facilityDistances ?? [])].sort((a, b) => a.facilityId.localeCompare(b.facilityId))) {
-      await lockActiveFacilityReference(ctx, tx, row.facilityId);
+    for (const row of [...pairsToLock.values()].sort((a, b) => a.facilityId.localeCompare(b.facilityId))) {
+      if (row.distanceKm !== null) await lockActiveFacilityReference(ctx, tx, row.facilityId);
     }
     // Serialize location writers with parent deletion before locking children.
     // Pair saves also wait for intake FK inserts, so fill-only cannot miss an
@@ -688,7 +699,7 @@ export async function updateSupplierLocation(
     const [parent] = await tx.select({ id: suppliers.id })
       .from(suppliers)
       .where(and(eq(suppliers.id, supplierId), eq(suppliers.organizationId, ctx.organizationId)))
-      .for(data.facilityDistances?.length ? "update" : "no key update");
+      .for(data.facilityDistances?.length || promotionPairs.length ? "update" : "no key update");
     if (!parent) throw new SafeError("Supplier not found");
 
     const [locked] = await tx
@@ -751,7 +762,11 @@ export async function updateSupplierLocation(
     }
 
     await upsertLocationFacilityDistances(ctx, tx, "supplier", locationId, facilityDistances);
-    return (await withLocationFacilityDistances(ctx, "supplier", [updated], tx))[0];
+    const result = (await withLocationFacilityDistances(ctx, "supplier", [updated], tx))[0];
+    if (data.isDefault === true && !locked.isDefault) {
+      await fillMissingLocationDistances(ctx, tx, "supplier", locationId, result.facilityDistances);
+    }
+    return result;
   });
   await processPendingStorageObjectDeletions(ctx);
   return saved;

@@ -61,11 +61,11 @@ export function deliveryDistanceBlocker(input: {
   deliveryCode: string;
   deliveryStatus: string | null;
   distanceKmOverride: number | null;
-  locationDistanceKm: number | null;
+  recordedDistanceKm: number | null;
 }): string | null {
   return input.deliveryStatus === "delivered" &&
     positiveOrNull(input.distanceKmOverride) == null &&
-    positiveOrNull(input.locationDistanceKm) == null
+    positiveOrNull(input.recordedDistanceKm) == null
     ? `Delivery ${input.deliveryCode} has no positive transport distance. Set the customer location distance or a delivery distance override before submitting.`
     : null;
 }

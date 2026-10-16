@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { eq } from "drizzle-orm";
 import { createFeedstockInTransaction } from "@/data-access/feedstocks";
-import { updateSupplierLocation } from "@/data-access/suppliers";
+import { createSupplierLocation, updateSupplierLocation } from "@/data-access/suppliers";
 import { facilities, orders, feedstocks, supplierLocations } from "@/db/schema";
 import { updateCustomerLocation, getCustomerLocations } from "@/data-access/customers";
 import { getLocationFacilityDistances } from "@/data-access/location-facility-distances";
@@ -37,14 +37,14 @@ describe("location facility distances", () => {
     const { delivery } = await db.transaction(tx => createDeliveryInTransaction(f.ctx, tx, f.input));
     expect(delivery.recordedDistanceKm).toBeNull();
     const legs = await loadBiocharDeliveryTransportLegs(f.ctx, [{ deliveryId: delivery.id, loadMassKg: 100 }]);
-    expect(deliveryDistanceBlocker({ deliveryCode: delivery.code, deliveryStatus: delivery.status, distanceKmOverride: null, locationDistanceKm: legs[0].distanceKm })).toContain("no positive transport distance");
+    expect(deliveryDistanceBlocker({ deliveryCode: delivery.code, deliveryStatus: delivery.status, distanceKmOverride: null, recordedDistanceKm: legs[0].distanceKm })).toContain("no positive transport distance");
     const links = await getTransportDistanceFixLinks(f.ctx, [], [delivery.id]);
     expect(links.get(delivery.id)).toBe(`/customers?facility=${f.facility.id}&customer=${f.customer.id}&mode=edit&location=${f.location.id}`);
     await updateCustomerLocation(f.ctx, f.location.id, { expectedVersion: f.location.version,
       facilityDistances: [{ facilityId: f.facility.id, distanceKm: 25, distanceSource: "manual" }] });
     const repaired = await loadBiocharDeliveryTransportLegs(f.ctx, [{ deliveryId: delivery.id, loadMassKg: 100 }]);
     expect(repaired[0].distanceKm).toBe(25);
-    expect(deliveryDistanceBlocker({ deliveryCode: delivery.code, deliveryStatus: delivery.status, distanceKmOverride: null, locationDistanceKm: repaired[0].distanceKm })).toBeNull();
+    expect(deliveryDistanceBlocker({ deliveryCode: delivery.code, deliveryStatus: delivery.status, distanceKmOverride: null, recordedDistanceKm: repaired[0].distanceKm })).toBeNull();
   });
 
   it("keeps distinct distances for the same location at two facilities (DEF-003)", async () => {
@@ -186,6 +186,28 @@ describe("location facility distances", () => {
       facilityDistances: [{ facilityId: f.facility.id, distanceKm: 20, distanceSource: "manual" }],
     })).rejects.toThrow(/Facility .*not found.*archived/);
     expect(await getLocationFacilityDistances(f.ctx, "customer", f.location.id)).toEqual([]);
+  });
+
+  it("allows supplier pair clears for archived and missing facilities on create and update", async () => {
+    const f = await fixture();
+    const [existing] = await db.select().from(feedstocks).where(eq(feedstocks.organizationId, f.ctx.organizationId));
+    const location = await createSupplierLocation(f.ctx, {
+      ...TEST_SITE_POSITION, supplierId: existing.supplierId,
+      facilityDistances: [{ facilityId: f.facility.id, distanceKm: 20, distanceSource: "manual" }],
+    });
+    await db.update(facilities).set({ archivedAt: new Date() }).where(eq(facilities.id, f.facility.id));
+    const clears = [f.facility.id, "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"].map(facilityId => ({
+      facilityId, distanceKm: null, distanceSource: "manual" as const,
+    }));
+    await updateSupplierLocation(f.ctx, location.id, { expectedVersion: location.version, facilityDistances: clears });
+    expect(await getLocationFacilityDistances(f.ctx, "supplier", location.id)).toEqual([]);
+    const created = await createSupplierLocation(f.ctx, {
+      ...TEST_SITE_POSITION, supplierId: existing.supplierId, facilityDistances: clears,
+    });
+    expect(await getLocationFacilityDistances(f.ctx, "supplier", created.id)).toEqual([]);
+    await expect(updateSupplierLocation(f.ctx, created.id, { expectedVersion: created.version,
+      facilityDistances: [{ facilityId: f.facility.id, distanceKm: 20, distanceSource: "manual" }],
+    })).rejects.toThrow(/Facility .*not found.*archived/);
   });
 
 });

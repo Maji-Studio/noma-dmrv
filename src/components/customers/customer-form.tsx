@@ -4,8 +4,7 @@
  * Used in both create and edit views for customers
  */
 "use client";
-import { LOCATION_DEEP_LINK_PARAM } from "@/lib/entity-deep-link";
-import { useSearchParams } from "next/navigation";
+import { useLocationEditIntent } from "@/hooks/use-location-edit-intent";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 import { useToast } from "@/components/ui/toast";
 
@@ -424,15 +423,10 @@ function LocationsSection({ customerId }: { customerId: string }) {
   const { data: locations, isLoading, isError } = useCustomerLocations(customerId);
   const deleteLocation = useDeleteCustomerLocation(customerId);
 
-  const searchParams = useSearchParams();
-  const locationIntent = searchParams.get(LOCATION_DEEP_LINK_PARAM);
-  const [handledIntent, setHandledIntent] = useState<string | null>(null);
-  const intendedLocation = locations?.find(row => row.id === locationIntent);
-  if (intendedLocation && locationIntent !== handledIntent) {
-    setHandledIntent(locationIntent);
-    setEditingLocation(intendedLocation);
+  useLocationEditIntent(locations, (location) => {
+    setEditingLocation(location);
     setIsLocationDialogOpen(true);
-  }
+  });
 
   const handleDeleteConfirm = async () => {
     if (!deletingLocation) return;

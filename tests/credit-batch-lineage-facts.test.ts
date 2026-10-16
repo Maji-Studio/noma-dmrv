@@ -108,13 +108,13 @@ describe("credit batch accounting", () => {
       }
       expect(facts.applications.find((application) => application.id === appRows[0].id)?.delivery).toMatchObject({
         customerLocationId: location.id,
-        locationDistanceKm: 15,
+        recordedDistanceKm: 15,
         distanceKmOverride: 7,
         status: deliveryRows[0].status,
         proofOfDeliveryCount: 1,
       });
       expect(facts.applications.find((application) => application.id === appRows[1].id)?.delivery).toMatchObject({
-        customerLocationId: location.id, locationDistanceKm: 15,
+        customerLocationId: location.id, recordedDistanceKm: 15,
       });
       expect(facts.applications.find((application) => application.id === multiRunApplication.id)?.delivery.customerLocationId).toBe(location.id);
       expect(facts.productionRunIds).toHaveLength(2);
