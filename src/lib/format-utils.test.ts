@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MISSING_VALUE } from "./copy-utils";
 import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import {
   formatCo2e,
+  formatCalendarDate,
   formatDayString,
   formatDistanceKm,
   formatLegDistanceCompactKm,
@@ -133,6 +134,28 @@ describe("formatDayString", () => {
     expect(formatDayString("")).toBe("Not recorded");
     expect(formatDayString("2026-08-01T12:00:00Z")).toBe("Not available");
     expect(formatDayString("2026-13-01")).toBe("Not available");
+  });
+});
+
+describe("formatCalendarDate", () => {
+  const originalTz = process.env.TZ;
+  beforeEach(() => {
+    process.env.TZ = "America/Los_Angeles";
+  });
+  afterEach(() => {
+    if (originalTz === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTz;
+  });
+
+  it.each(["2026-07-06", "2026-07-06T00:00:00.000Z", new Date("2026-07-06T00:00:00.000Z")])(
+    "renders a persisted business date on its UTC calendar: %s",
+    value => expect(formatCalendarDate(value)).toBe("Jul 6, 2026"),
+  );
+
+  it("preserves missing and invalid date feedback", () => {
+    expect(formatCalendarDate(null)).toBe(MISSING_VALUE.notRecorded);
+    expect(formatCalendarDate(undefined)).toBe(MISSING_VALUE.notRecorded);
+    expect(formatCalendarDate("invalid")).toBe(MISSING_VALUE.notAvailable);
   });
 });
 

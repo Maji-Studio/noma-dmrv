@@ -44,7 +44,7 @@ describe("biochar product reads", { timeout: TIMEOUT_MS }, () => {
       expect(body).not.toHaveProperty("expiresAt");
       expect(data).toEqual({
         id: pure.id, code: pure.code, version: pure.version, facilityId: a.facility.id, formulationId: a.pure.id, status: "testing",
-        placedAt: FIRST_PLACED_AT, productionDate: expect.any(String),
+        placedAt: FIRST_PLACED_AT, productionDate: "2026-09-09",
         sourceBiocharStorageLocationId: a.source.id, storageLocationId: a.pureBin.id,
         biocharWetMassKg: BIOCHAR_WET_KG, biocharMoisturePercent: BIOCHAR_MOISTURE_PERCENT, waterAddedKg: 0, densityKgM3: null,
         ingredients: [], sourceAllocations: [{ productionRunId: a.r1, wetMassKg: BIOCHAR_WET_KG, dryMassKg: BIOCHAR_DRY_KG }],
