@@ -3,7 +3,7 @@
 /** PROTOTYPE (throwaway): panels and rows used by the overview and the tabs. */
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRightIcon, ArrowSquareOutIcon, CheckCircleIcon, LockSimpleIcon, LockSimpleOpenIcon } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRightIcon, ArrowSquareOutIcon, CheckCircleIcon, LockSimpleIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,12 +54,17 @@ export function tonnes(value: number): string {
   return formatTonnes(value);
 }
 
-export function Panel({ title, action, children, className }: { title?: string; action?: ReactNode; children: ReactNode; className?: string }) {
+export function Panel({ title, titleAddon, action, children, className }: { title?: string; titleAddon?: ReactNode; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={cn(PANEL, "flex flex-col gap-16 p-20 sm:p-24", className)}>
       {(title || action) && (
         <div className="flex min-h-40 items-center justify-between gap-12">
-          {title && <h2 className="title-heading-3">{title}</h2>}
+          {title && (
+            <span className="inline-flex items-center gap-8">
+              <h2 className="title-heading-3">{title}</h2>
+              {titleAddon}
+            </span>
+          )}
           {action}
         </div>
       )}
@@ -196,11 +201,21 @@ function DetailRow({ field, label, value, editing, input }: { field: LockableFie
   );
 }
 
-const LOCK_TEXT = {
-  Open: "All fields editable",
-  "Partly sent": "Some fields locked",
-  "Fully sent": "All fields locked",
-} as const;
+/** Shown only when something is locked; an editable batch needs no symbol. */
+function LockMark() {
+  const { model } = useProto();
+  if (model.lockLevel === "Open") return null;
+  const lock = model.locks.endDate ?? model.locks.startDate;
+  const text = model.lockLevel === "Fully sent" ? "All fields are locked." : "Some fields are locked.";
+  return (
+    <span className="inline-flex items-center gap-2 text-[var(--color-text-secondary)]">
+      <LockSimpleIcon size={20} aria-hidden />
+      <InfoHint label="Why fields are locked">
+        {text} {lock?.reason} {lock?.howTo}
+      </InfoHint>
+    </span>
+  );
+}
 
 /** Batch details: definition, Removal template, sampling, gas composition, notes. Edit starts from the header. */
 export function DetailsPanel({ className }: { className?: string }) {
@@ -212,16 +227,9 @@ export function DetailsPanel({ className }: { className?: string }) {
     ["N₂O", batch.n2oCompositionPercent],
   ] as const;
   const gasText = gas.every(([, v]) => v == null) ? "Not recorded" : gas.map(([name, v]) => (v == null ? `${name} not recorded` : `${name} ${v}%`)).join(", ");
-  const allLocked = model.lockLevel === "Fully sent";
-  const LockIcon = model.lockLevel === "Open" ? LockSimpleOpenIcon : LockSimpleIcon;
   return (
     <FocusRow rowId="details">
-      <Panel title="Batch details" className={className}>
-        <p className={cn("inline-flex items-center gap-6 body-small", MUTED)}>
-          <LockIcon size={16} className="shrink-0" aria-hidden />
-          {allLocked && model.locks.startDate ? model.locks.startDate.reason : LOCK_TEXT[model.lockLevel]}
-          {allLocked && model.locks.startDate && <InfoHint label="How to change a locked credit batch">{model.locks.startDate.howTo}</InfoHint>}
-        </p>
+      <Panel title="Batch details" titleAddon={<LockMark />} className={className}>
         <dl className="flex flex-col">
           <DetailRow field="feedstock" label="Feedstock" value={batch.feedstockTypeName ?? "Not recorded"} editing={editing} />
           <DetailRow field="startDate" label="Start date" value={formatDate(batch.startDate)} editing={editing} input={<Input type="date" defaultValue={String(batch.startDate).slice(0, 10)} aria-label="Start date" />} />

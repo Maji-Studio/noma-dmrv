@@ -34,7 +34,7 @@ function Card({ batch }: { batch: StubBatch }) {
             <span className="title-heading-3 tabular-nums">{batch.code}</span>
             <span className="flex flex-wrap items-center gap-8">
               <Chip>{batch.feedstock}</Chip>
-              <span className={cn("body-small", MUTED)}>{periodLabel(batch.month)}</span>
+              <span className={cn("body-small", MUTED)}>{periodLabel(batch)}</span>
             </span>
           </span>
           <SampledMark batch={batch} />

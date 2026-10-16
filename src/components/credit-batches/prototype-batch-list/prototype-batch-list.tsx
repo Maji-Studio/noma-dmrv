@@ -2,7 +2,7 @@
 
 /**
  * PROTOTYPE (throwaway): the credit batch overview with a made-up full
- * production (two feedstocks, March to September 2026). Three layouts on
+ * production (two feedstocks, October 2025 to October 2026). Three layouts on
  * ?variant=A|B|C share the mass strip on top. Each batch opens the batch page
  * prototype in the scenario that matches its state. ?real=1 shows today's list.
  */
@@ -17,13 +17,13 @@ import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { BATCHES, type PipelineStage } from "./list-model";
 import { ListProvider, MassPipeline, StageFilterNote } from "./list-parts";
-import { CalendarVariant } from "./list-variant-calendar";
 import { CardsVariant } from "./list-variant-cards";
-import { LanesVariant } from "./list-variant-lanes";
+import { KanbanVariant } from "./list-variant-kanban";
+import { TimelineVariant } from "./list-variant-timeline";
 
 const VARIANTS = [
-  { key: "A", name: "Work queue" },
-  { key: "B", name: "Production calendar" },
+  { key: "A", name: "Board" },
+  { key: "B", name: "Timeline" },
   { key: "C", name: "Cards" },
 ] as const;
 
@@ -51,13 +51,13 @@ export function PrototypeBatchList() {
         />
         <MassPipeline />
         <StageFilterNote />
-        {variant.key === "A" && <LanesVariant />}
-        {variant.key === "B" && <CalendarVariant />}
+        {variant.key === "A" && <KanbanVariant />}
+        {variant.key === "B" && <TimelineVariant />}
         {variant.key === "C" && <CardsVariant />}
       </div>
       <PrototypeSwitcher variants={VARIANTS} title="Credit batch overview">
         <ul className="list-disc pl-16">
-          <li>{BATCHES.length} made-up credit batches, two feedstocks, Mar to Sep 2026, no Maize cobs batch in June.</li>
+          <li>{BATCHES.length} made-up credit batches, two feedstocks, Oct 2025 to Oct 2026. Maize cobs runs mid-month to mid-month and pauses Jun 10 to Jul 19.</li>
           <li>The mass strip filters: click a stage to keep batches with biochar stuck before it.</li>
           <li>Every batch opens CB-26-001 in the matching scenario.</li>
           <li>
