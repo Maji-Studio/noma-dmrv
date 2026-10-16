@@ -624,8 +624,10 @@ export function useSubmitRemoval() {
         { kind: "removal", input: vars.input },
         vars.onProgress,
       ),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
+      return queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
     onError: () => {
       // A Removal failure can happen after its draft was claimed. Refresh the
       // submission state before the operator returns to review so the active
@@ -646,6 +648,7 @@ export function useCreateRemovalWithBatches() {
     mutationFn: async (input: CreateRemovalWithBatchesInput) =>
       unwrap(await createRemovalWithBatchesAction(input)),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
   });
@@ -716,6 +719,7 @@ export function useSyncGhgStatementsFromRegistry() {
     mutationFn: async (facilityId: string) =>
       unwrap(await reconcileGhgStatementsFromRegistry(facilityId)),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
   });
@@ -769,6 +773,7 @@ export function usePrepareGhgStatementReport() {
     mutationFn: async (input: PrepareGhgStatementReportInput) =>
       unwrap(await prepareGhgStatementReport(input)),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
   });
@@ -804,8 +809,10 @@ export function useCreateGhgStatement() {
   return useMutation({
     mutationFn: async (input: CreateGhgStatementInput) =>
       unwrap(await createGhgStatementDraft(input)),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
+      return queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
   });
 }
 
@@ -827,8 +834,10 @@ export function useSubmitGhgStatementToVerifier() {
         vars.onProgress,
       );
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
+      return queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
     onError: () => {
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
@@ -842,6 +851,7 @@ export function useRefreshGhgStatementStatus() {
     mutationFn: async (submissionId: string) =>
       unwrap(await refreshGhgStatementStatus(submissionId)),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
   });

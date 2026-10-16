@@ -12,7 +12,29 @@ const savedDelivery = vi.hoisted(() => () => Promise.resolve({ success: true, da
 vi.mock("@/fn/deliveries", () => ({ deleteDeliveryFn: vi.fn(ok), createDeliveryFn: vi.fn(savedDelivery), updateDeliveryFn: vi.fn(savedDelivery) }));
 vi.mock("@/fn/orders", () => ({ deleteOrderFn: vi.fn(ok) }));
 vi.mock("@/fn/biochar-products", () => ({ deleteBiocharProductFn: vi.fn(ok) }));
-vi.mock("@/fn/documents", () => ({ requestUpload: vi.fn(ok), setDocumentVisibility: vi.fn(ok) }));
+vi.mock("@/fn/documents", () => ({ requestUpload: vi.fn(ok), setDocumentVisibility: vi.fn(ok), deleteDocument: vi.fn(ok) }));
+vi.mock("@/fn/production-incidents", () => ({ deleteProductionIncidentFn: vi.fn(ok) }));
+vi.mock("@/fn/production-samples", () => ({ deleteProductionSampleFn: vi.fn(ok) }));
+vi.mock("@/fn/reactors", () => ({ deleteReactorFn: vi.fn(ok) }));
+const savedRecord = vi.hoisted(() => () => Promise.resolve({ success: true, data: { id: "22222222-2222-4222-8222-222222222222" } }));
+vi.mock("@/fn/customers", () => ({ updateCustomerLocationFn: vi.fn(savedRecord) }));
+vi.mock("@/fn/fleet", () => ({
+  listVehiclesFn: vi.fn(ok), listDriversFn: vi.fn(ok), listOperatorsFn: vi.fn(ok),
+  updateVehicleFn: vi.fn(async () => {
+    const saved = await savedRecord();
+    return { ...saved, data: { ...saved.data, vehicleType: "truck" } };
+  }),
+}));
+vi.mock("@/fn/output-stock", () => ({ postOutputStockFn: vi.fn(() => Promise.resolve({ success: true, data: { savedDeliveries: [], savedProducts: [] } })) }));
+vi.mock("@/fn/certification/removal-template-review", () => ({ switchCreditBatchRemovalTemplate: vi.fn(savedRecord) }));
+vi.mock("@/fn/certification", () => ({
+  createRemovalWithBatchesAction: vi.fn(ok),
+  reconcileGhgStatementsFromRegistry: vi.fn(ok),
+  prepareGhgStatementReport: vi.fn(ok),
+  createGhgStatementDraft: vi.fn(ok),
+  refreshGhgStatementStatus: vi.fn(ok),
+}));
+vi.mock("@/lib/certification/submission-progress-client", () => ({ streamCertificationSubmission: vi.fn(ok) }));
 
 import { useDeleteTransportLeg } from "./use-transport-legs";
 import { useDeleteFeedstock } from "./use-feedstocks";
@@ -20,7 +42,23 @@ import { useCreateDelivery, useDeleteDelivery, useUpdateDelivery } from "./use-d
 import { orderKeys } from "./use-orders";
 import { useDeleteOrder } from "./use-orders";
 import { useDeleteBiocharProduct } from "./use-biochar-products";
-import { useRequestUpload, useSetDocumentVisibility } from "./use-documents";
+import { useDeleteDocument, useRequestUpload, useSetDocumentVisibility } from "./use-documents";
+import { useDeleteProductionIncident } from "./use-production-incidents";
+import { useDeleteProductionSample } from "./use-production-samples";
+import { useDeleteReactor } from "./use-reactors";
+import { useUpdateCustomerLocation } from "./use-customers";
+import { useUpdateVehicle } from "./use-fleet";
+import { usePostOutputStock } from "./use-output-stock";
+import { useSwitchCreditBatchRemovalTemplate } from "./use-removal-template-review";
+import {
+  useCreateGhgStatement,
+  useCreateRemovalWithBatches,
+  usePrepareGhgStatementReport,
+  useRefreshGhgStatementStatus,
+  useSubmitGhgStatementToVerifier,
+  useSubmitRemoval,
+  useSyncGhgStatementsFromRegistry,
+} from "./use-certification";
 
 afterEach(cleanup);
 
@@ -37,6 +75,21 @@ it.each([
   ["biochar product", () => useDeleteBiocharProduct(undefined, { optimistic: false }), { productId: RECORD_ID, expectedVersion: 1 }],
   ["document upload request", () => useRequestUpload(), { entityType: "feedstock", entityId: RECORD_ID }],
   ["document visibility", () => useSetDocumentVisibility(), { documentId: RECORD_ID, visibility: "internal", expectedVersion: 1 }],
+  ["production incident deletion", () => useDeleteProductionIncident(RECORD_ID), { productionIncidentId: RECORD_ID, expectedVersion: 1 }],
+  ["production sample deletion", () => useDeleteProductionSample(RECORD_ID), { productionSampleId: RECORD_ID, expectedVersion: 1 }],
+  ["reactor deletion", () => useDeleteReactor(undefined, { optimistic: false }), { reactorId: RECORD_ID, expectedVersion: 1 }],
+  ["document deletion without an owner", () => useDeleteDocument(), { documentId: RECORD_ID, expectedVersion: 1 }],
+  ["customer location update", () => useUpdateCustomerLocation(), { locationId: RECORD_ID, expectedVersion: 1 }],
+  ["vehicle update", () => useUpdateVehicle(), { vehicleId: RECORD_ID, expectedVersion: 1 }],
+  ["output stock", () => usePostOutputStock(), { storageLocationId: RECORD_ID }],
+  ["credit batch template switch", () => useSwitchCreditBatchRemovalTemplate(), { creditBatchId: BATCH_ID, expectedVersion: 1 }],
+  ["removal submission", () => useSubmitRemoval(), { input: { removalId: RECORD_ID }, onProgress: (): void => undefined }],
+  ["removal creation", () => useCreateRemovalWithBatches(), { creditBatchIds: [BATCH_ID] }],
+  ["GHG statement sync", () => useSyncGhgStatementsFromRegistry(), RECORD_ID],
+  ["GHG statement report preparation", () => usePrepareGhgStatementReport(), { ghgStatementId: RECORD_ID }],
+  ["GHG statement creation", () => useCreateGhgStatement(), { facilityId: RECORD_ID }],
+  ["GHG statement submission", () => useSubmitGhgStatementToVerifier(), { ghgStatementId: RECORD_ID, input: {}, onProgress: (): void => undefined }],
+  ["GHG statement status refresh", () => useRefreshGhgStatementStatus(), RECORD_ID],
 ] as const)("refreshes batch activity after a %s write", async (_family, useHook, variables) => {
   const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
   client.setQueryData(activityKeys.creditBatchSummary(BATCH_ID), { total: 0, counts: [], latest: null });
