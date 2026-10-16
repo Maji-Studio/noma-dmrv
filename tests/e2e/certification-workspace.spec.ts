@@ -209,7 +209,7 @@ test.describe("Certification workspace — status history", () => {
       await expect(history).toBeHidden();
       await expect(listBadge).toBeFocused();
 
-      // The record link in the row's first cell opens the sheet by keyboard
+      // The record link in the row's identity column opens the sheet by keyboard
       // (the row itself has no tab stop); a click on the row opens it too.
       const row = page
         .getByRole("table", { name: "Removals" })

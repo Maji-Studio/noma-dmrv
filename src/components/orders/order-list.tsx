@@ -1,5 +1,6 @@
 "use client";
 
+import { orderDeepLinkHref } from "@/lib/order-links";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * OrderList component
@@ -390,6 +391,7 @@ export function OrderList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => orderDeepLinkHref(row.id, row.facilityId)}
         emptyMessage={
           <EmptyState
             padding="md"

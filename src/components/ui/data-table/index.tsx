@@ -40,7 +40,12 @@ import {
   columnLabel,
   handleRowActivationClick,
 } from "./data-table-helpers";
-import { RowLink, rowLinkColumnId } from "./row-link";
+import {
+  RowLink,
+  recordLinkVisibility,
+  rowLinkColumnId,
+  warnMissingRecordLink,
+} from "./row-link";
 
 /* ------------------------------------------------------------------ */
 /*  Data Table Context                                                  */
@@ -149,6 +154,12 @@ export interface DataTableProps<TData, TValue> extends VariantProps<typeof table
   hoverable?: boolean;
   // Callbacks
   onRowClick?: (row: TData) => void;
+  /**
+   * Deep link that opens a row's record (the same URL `onRowClick` opens in
+   * place). The record-link column then renders as a real `<a href>` so
+   * open-in-new-tab works; omit it for tables without a deep link.
+   */
+  getRowHref?: (row: TData) => string | undefined;
   // Loading state
   isLoading?: boolean;
   // Empty state
@@ -175,19 +186,6 @@ export function recordRowId<TData>(row: TData, index: number): string {
   if (typeof id === "string" && id.length > 0) return id;
   if (typeof id === "number") return String(id);
   return String(index);
-}
-
-function recordLinkVisibility<TData, TValue>(
-  columns: ColumnDef<TData, TValue>[],
-): VisibilityState {
-  const visible: VisibilityState = {};
-  for (const column of columns) {
-    if (!column.meta?.recordLink) continue;
-    const id =
-      column.id ?? ("accessorKey" in column ? String(column.accessorKey) : undefined);
-    if (id) visible[id] = true;
-  }
-  return visible;
 }
 
 /* ------------------------------------------------------------------ */
@@ -225,6 +223,7 @@ function DataTableRoot<TData, TValue>({
   hoverable = false,
   // Callbacks
   onRowClick,
+  getRowHref,
   // Loading state
   isLoading = false,
   // Empty state
@@ -359,16 +358,30 @@ function DataTableRoot<TData, TValue>({
     getRowId,
   });
 
-  // With `onRowClick`, the first data cell is the record's link and the only
-  // keyboard / screen-reader activation target; the row itself stays a plain
-  // row (see `row-link.tsx`).
+  // With `onRowClick`, the column marked `meta.recordLink` renders as the
+  // record's link, the only keyboard / screen-reader activation target; the
+  // row itself stays a plain row (see `row-link.tsx`).
+  if (
+    process.env.NODE_ENV !== "production" &&
+    onRowClick &&
+    !columns.some((column) => column.meta?.recordLink)
+  ) {
+    warnMissingRecordLink(ariaLabel);
+  }
   const linkColumnId = onRowClick
     ? rowLinkColumnId(table.getVisibleLeafColumns())
     : undefined;
   const renderCell = (cell: Cell<TData, unknown>, record: TData) => {
     const content = flexRender(cell.column.columnDef.cell, cell.getContext());
     if (!onRowClick || cell.column.id !== linkColumnId) return content;
-    return <RowLink onActivate={() => onRowClick(record)}>{content}</RowLink>;
+    return (
+      <RowLink
+        onActivate={() => onRowClick(record)}
+        href={getRowHref?.(record)}
+      >
+        {content}
+      </RowLink>
+    );
   };
 
   const contextValue = React.useMemo(
@@ -504,7 +517,7 @@ function DataTableRoot<TData, TValue>({
                       onRowClick && "cursor-pointer"
                     )}
                     // Pointer-only convenience. No role, tabIndex or key
-                    // handler: the first-cell link is the accessible target.
+                    // handler: the `meta.recordLink` link is the accessible target.
                     onClick={
                       onRowClick
                         ? (event) =>
@@ -554,6 +567,7 @@ function DataTableRoot<TData, TValue>({
             table.getRowModel().rows.map((row) => (
               <div
                 key={row.id}
+                data-record-card=""
                 className={cn(
                   "border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-16 py-8",
                   row.getIsSelected() && "bg-[var(--color-interaction)]/10",

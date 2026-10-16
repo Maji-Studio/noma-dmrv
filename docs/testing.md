@@ -426,8 +426,9 @@ retry**. Specs must not assume ordering across files, workers, or shards.
   main checkout is the live dev database. For a Vitest-only problem reset the test DB instead:
   `DATABASE_URL=<TEST_DATABASE_URL> pnpm db:reset`.
 - A side sheet is `[role="dialog"]`; assert on the sheet **closing** as the success signal.
-- A DataTable row stays a plain `<tr>` (role `row`) when `onRowClick` is set; its first
-  cell holds the record link (`[data-row-link]`, a link-styled button). Select rows with
+- A DataTable row stays a plain `<tr>` (role `row`) when `onRowClick` is set; the
+  `meta.recordLink` column holds the record link (`[data-row-link]`, an `<a href>` deep
+  link, or a link-styled button on reactors and formulations). Select rows with
   `getByRole("row")` or `locator("table tbody tr")`, open one by clicking the row or that
   link, and never rely on `role="button"` / `tabindex` on a row or mobile card.
 - **Wait for hydration before touching a control on a server-rendered form.** Forms are

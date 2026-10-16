@@ -1,5 +1,6 @@
 "use client";
 
+import { entityViewHref } from "@/lib/entity-deep-link";
 import { toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
 
 import { useState } from "react";
@@ -484,6 +485,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
         columns={columns}
         data={filteredFeedstockTypes}
         onRowClick={openView}
+        getRowHref={(row) => entityViewHref("/feedstock-types", FEEDSTOCK_TYPE_QUERY_PARAM, row.id, facilityId)}
         enableSorting
         enableFiltering
         enablePagination

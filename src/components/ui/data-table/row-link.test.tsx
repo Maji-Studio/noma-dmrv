@@ -144,3 +144,68 @@ describe("DataTable clickable rows", () => {
     expect(within(menu).queryByText("Code")).toBeNull();
   });
 });
+
+describe("DataTable record link with getRowHref", () => {
+  function setupHref() {
+    const onRowClick = vi.fn();
+    const view = render(
+      <DataTable
+        columns={columns}
+        data={rows}
+        onRowClick={onRowClick}
+        getRowHref={(row) => `/suppliers?supplier=${row.id}`}
+      />,
+    );
+    const link = view.container.querySelector("tbody tr [data-row-link]")!;
+    return { onRowClick, link };
+  }
+
+  it("renders a real anchor with the deep link", () => {
+    const { link } = setupHref();
+    expect(link.tagName).toBe("A");
+    expect(link.getAttribute("href")).toBe("/suppliers?supplier=r1");
+  });
+
+  it("opens in place on a plain click without navigating", () => {
+    const { onRowClick, link } = setupHref();
+    const notPrevented = fireEvent.click(link);
+    expect(notPrevented).toBe(false);
+    expect(onRowClick).toHaveBeenCalledTimes(1);
+    expect(onRowClick).toHaveBeenCalledWith(rows[0]);
+  });
+
+  it.each([{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }])(
+    "leaves a modified click %o to the browser",
+    (init) => {
+      const { onRowClick, link } = setupHref();
+      const notPrevented = fireEvent.click(link, init);
+      expect(notPrevented).toBe(true);
+      expect(onRowClick).not.toHaveBeenCalled();
+    },
+  );
+
+  it("keeps rows and cards role-free with an anchor", () => {
+    const { link } = setupHref();
+    expect(link.closest("tr")!.hasAttribute("tabindex")).toBe(false);
+  });
+});
+
+describe("DataTable without a record-link column", () => {
+  it("warns once in development", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const unmarked: ColumnDef<Row>[] = [{ accessorKey: "code", header: "Code" }];
+    render(<DataTable columns={unmarked} data={rows} onRowClick={vi.fn()} aria-label="Unmarked" />);
+    render(<DataTable columns={unmarked} data={rows} onRowClick={vi.fn()} aria-label="Unmarked" />);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]![0]).toContain("meta.recordLink");
+    warn.mockRestore();
+  });
+
+  it("does not warn for a marked column or a non-clickable table", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    render(<DataTable columns={columns} data={rows} onRowClick={vi.fn()} aria-label="Marked" />);
+    render(<DataTable columns={[{ accessorKey: "code", header: "Code" }]} data={rows} aria-label="Plain" />);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});

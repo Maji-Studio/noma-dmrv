@@ -6,6 +6,7 @@
  * Includes stat cards, status badges, and EntitySideSheet
  */
 
+import { deliveryDeepLinkHref } from "@/lib/delivery-links";
 import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { ServerError } from "@/components/forms";
@@ -525,6 +526,7 @@ export function DeliveryList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => deliveryDeepLinkHref(row.id, row.facilityId)}
         emptyMessage={
           <EmptyState
             padding="md"

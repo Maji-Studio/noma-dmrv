@@ -17,6 +17,7 @@
  */
 "use client";
 
+import { ghgStatementDeepLinkHref } from "@/lib/ghg-statement-links";
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
 import { parseAsString, useQueryState } from "nuqs";
@@ -419,6 +420,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
           isLoading={query.isLoading}
           hoverable
           onRowClick={(row) => setStatementId(row.statement.id)}
+          getRowHref={(row) => ghgStatementDeepLinkHref(row.statement.id, facilityId)}
           aria-label="GHG Statements"
           emptyMessage={
             <EmptyState

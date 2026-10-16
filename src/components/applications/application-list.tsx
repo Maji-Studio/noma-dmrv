@@ -7,6 +7,7 @@
  */
 
 
+import { applicationDeepLinkHref } from "@/lib/application-links";
 import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { ServerError } from "@/components/forms";
@@ -611,6 +612,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => applicationDeepLinkHref(row.id, contextFacilityId)}
         emptyMessage={
           <EmptyState
             padding="md"

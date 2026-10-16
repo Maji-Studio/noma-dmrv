@@ -3,6 +3,7 @@
  * Main supplier listing with CRUD operations, stat cards, and DataTable
  */
 "use client";
+import { entityViewHref } from "@/lib/entity-deep-link";
 import { StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { useEffect, useRef, useState } from "react";
@@ -348,6 +349,7 @@ export function SupplierList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => entityViewHref("/suppliers", SUPPLIER_QUERY_PARAM, row.id)}
         emptyMessage={
           <EmptyState
             padding="md"

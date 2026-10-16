@@ -23,6 +23,7 @@
 "use client";
 
 import { RowActionsMenu } from "@/components/ui";
+import { handleRowActivationClick } from "@/components/ui/data-table/data-table-helpers";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { useOutputStockBalance } from "@/hooks/use-output-stock";
@@ -75,12 +76,9 @@ export function StorageBinTile({
       // Pointer-only convenience: the material heading below is the link and
       // the only keyboard / screen-reader target. No role or tabIndex here, so
       // the actions menu is not nested inside an interactive element.
-      onClick={(event) => {
-        // Controls inside the tile (actions menu, Reconcile) keep their press.
-        if ((event.target as HTMLElement).closest("button, a")) return;
-        if (!event.currentTarget.contains(event.target as Node)) return;
-        onView(bin);
-      }}
+      // Same guard as DataTable rows: nested controls (actions menu,
+      // Reconcile) and portaled menus keep their own press.
+      onClick={(event) => handleRowActivationClick(event, () => onView(bin))}
       // Named for the bin, not for the material: several tiles can hold the same
       // material, and a screen reader moving between them needs them distinct.
       // Bin names are unique per org (`guardStorageLocationName`), so the name

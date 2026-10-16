@@ -59,7 +59,7 @@ function isFromPortal(event: React.SyntheticEvent<HTMLElement>): boolean {
 
 /**
  * Pointer-only row click. Keyboard and screen-reader users activate the
- * first-cell link instead (see `row-link.tsx`); a nested control keeps its own
+ * record link (`meta.recordLink`) instead (see `row-link.tsx`); a nested control keeps its own
  * press.
  */
 export function handleRowActivationClick(

@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { feedstockDeepLinkHref } from "@/lib/feedstock-links";
 import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
 import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -568,6 +569,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => feedstockDeepLinkHref(row.id, row.facilityId)}
         emptyMessage={
           <EmptyState
             padding="md"

@@ -515,6 +515,7 @@ export function ProductionRunList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={productionRunDetailHref}
         emptyMessage={
           <EmptyState
             padding="md"

@@ -16,6 +16,7 @@
  */
 "use client";
 
+import { certificationRemovalsHref } from "@/lib/certification/links";
 import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { useState } from "react";
@@ -288,6 +289,7 @@ function ListBody({
           isLoading={identities.isLoading}
           hoverable
           onRowClick={(row) => setRemovalId(row.removalId)}
+          getRowHref={(row) => certificationRemovalsHref({ facility: facilityId, removal: row.removalId })}
           aria-label="Removals"
           emptyMessage={
             <EmptyState

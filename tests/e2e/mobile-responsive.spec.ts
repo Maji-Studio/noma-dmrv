@@ -10,7 +10,7 @@
  *  2. The mobile chrome is present: the desktop rail is hidden and the sticky
  *     top bar + hamburger drawer (`MobileNav`) takes over below `md`.
  *  3. `DataTable` swaps its desktop `<table>` for the stacked card view, and
- *     each card keeps one keyboard-reachable record link (the first cell); the
+ *     each card keeps one keyboard-reachable record link (`meta.recordLink` column); the
  *     card itself has no role or tab stop.
  *
  * Method mirrors the desktop specs: auth via the HTTP API (`adminPage`
@@ -151,15 +151,16 @@ test.describe("Mobile responsiveness (390×844)", () => {
     // collapses it); the stacked card view takes over.
     await expect(page.getByRole("table")).toBeHidden();
 
-    // The seeded reactor renders as a card whose first cell is a focusable
-    // record link — the a11y contract the card view must preserve. The card
+    // The seeded reactor renders as a card whose record-link column is a
+    // focusable link — the a11y contract the card view must preserve. The card
     // itself is a plain `<div>` with no role or tab stop, distinct from the
     // (hidden) desktop `<tr>`.
     const recordLink = page.locator("[data-row-link]:visible").first();
     await expect(recordLink).toBeVisible({ timeout: 15000 });
     await recordLink.focus();
     await expect(recordLink).toBeFocused();
-    const card = recordLink.locator("xpath=ancestor::div[contains(@class,'border')][1]");
+    const card = page.locator("[data-record-card]:visible").first();
+    await expect(card.locator("[data-row-link]")).toHaveCount(1);
     await expect(card).not.toHaveAttribute("role", /.+/);
     await expect(card).not.toHaveAttribute("tabindex", /.+/);
 
