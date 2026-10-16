@@ -76,12 +76,13 @@ export async function loadRemovalCompilation(
       prepared: preparation.prepared,
       allowPendingSources: true,
     });
-    // Rich review compilation also walks candidate Sources. A blocker it finds
-    // after a clear preflight still blocks: list it so no snapshot or hash is
-    // handed out, and the operator sees why.
-    if (removalBlockers.length === 0) {
-      removalBlockers.push(...compiled.blockers.map((message) => legacyBlocker(message)));
-      blockers.push(...compiled.blockers);
+    // Rich review compilation also walks candidate Sources. Append its blockers
+    // after the gate's list, deduplicated by message, so operators see all details
+    // and any blocker still prevents a snapshot or hash.
+    for (const message of compiled.blockers) {
+      if (blockers.includes(message)) continue;
+      removalBlockers.push(legacyBlocker(message));
+      blockers.push(message);
     }
     const previews = await getCo2eStoredPreviews(
       orgCtx,

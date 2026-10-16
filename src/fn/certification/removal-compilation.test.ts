@@ -39,6 +39,7 @@ import { REMOVAL_PREPARATION_BLOCKERS } from "./removal-submission-prepare";
 import { requireOrgFacility } from "@/data-access/utils";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
 import { logger } from "@/lib/log";
+import { SafeError } from "@/lib/errors";
 import { loadRemovalCompilation } from "./removal-compilation";
 
 describe("loadRemovalCompilation facility scope", () => {
@@ -180,6 +181,28 @@ describe("loadRemovalCompilation preparation blockers", () => {
     expect(loadRemovalSubmissionContext).toHaveBeenCalledWith(expect.anything(), REMOVAL_ID, { refreshEnrichment: true });
   });
 
+  it("lists a shared preflight build and rich compilation refusal only once", async () => {
+    const message = "Removal submission blocked:\nProduction run PR-1 has no dry mass.";
+    vi.mocked(loadRemovalSubmissionContext).mockResolvedValue(baseContext as never);
+    vi.mocked(buildRemovalSubmissionBuild).mockRejectedValue(new SafeError(message));
+    vi.mocked(compileRemovalSubmission).mockResolvedValue({
+      review: { template: { id: "rvt-1" } },
+      blockers: [message],
+      warnings: [],
+      snapshot: { semanticPayload: {} },
+    } as never);
+
+    expect(await loadRemovalCompilation(FACILITY_ID, REMOVAL_ID)).toMatchObject({
+      success: true,
+      data: {
+        blockers: [message],
+        removalBlockers: [{ code: "legacy", message, fixTarget: null }],
+        snapshot: null,
+        compilationHash: null,
+      },
+    });
+  });
+
   it("deduplicates template blockers from preparation and compilation", async () => {
     const removalTemplate = unsupportedTemplate();
     const message = formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(removalTemplate));
@@ -203,6 +226,11 @@ describe("loadRemovalCompilation preparation blockers", () => {
         review: { template: { id: "rvt-1" } },
         blockers: [
           REMOVAL_PREPARATION_BLOCKERS.notRemovalTemplate,
+          "Add the application logbook.",
+        ],
+        removalBlockers: [
+          { code: "notRemovalTemplate", message: REMOVAL_PREPARATION_BLOCKERS.notRemovalTemplate, fixTarget: "creditBatchTemplate" },
+          { code: "legacy", message: "Add the application logbook.", fixTarget: null },
         ],
         snapshot: null,
         compilationHash: null,
