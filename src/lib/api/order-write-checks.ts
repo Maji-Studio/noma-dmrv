@@ -8,7 +8,7 @@ import type { Operation } from "@/lib/operations/runner";
 import { readApiOrder } from "@/lib/read-models/api-orders";
 import { representOrder, orderRepresentationSchema, type OrderRepresentation } from "@/lib/representations/orders";
 import { deleteOrderInput, recordOrderInput, updateOrderInput } from "@/schemas/order-input";
-import { ApiHttpError } from "./http-error";
+import { withCurrentOnStale as withCurrentOnStaleRepresentation } from "./write-checks";
 
 /** The saved row as published, with the guidance the write produced. Stored as the idempotent outcome. */
 export interface OrderWriteOutput {
@@ -60,13 +60,7 @@ export function representationCheckedDelete(id: string, revision: number): Opera
 }
 
 export async function withCurrentOnStale<T>(ctx: ApiContext, id: string, fn: () => Promise<T>): Promise<T> {
-  try { return await fn(); } catch (error) {
-    if (error instanceof DomainError && error.code === "stale_version") {
-      const current = await readApiOrder(ctx, { id });
-      throw new ApiHttpError(412, "stale_version", "The order has changed. Read the current representation before retrying.", current);
-    }
-    throw error;
-  }
+  return withCurrentOnStaleRepresentation(fn, { noun: "order", readCurrent: () => readApiOrder(ctx, { id }) });
 }
 
 /** Replays come back from JSON storage with keys reordered; the schema restores the published order. */
