@@ -43,6 +43,7 @@ import { productionIncidentKeys } from "./use-production-incidents";
 import { productionRunKeys } from "./use-production-runs";
 import { productionSampleKeys } from "./use-production-samples";
 import { transportLegKeys } from "./use-transport-legs";
+import { activityKeys } from "./activity-query-keys";
 
 export interface FleetRecords {
   vehicle: Vehicle;
@@ -160,8 +161,10 @@ function useFleetMutation<K extends FleetKind, TInput, TData>(
 }
 
 export function useUpdateVehicle() {
-  return useFleetMutation("vehicle", (input: UpdateVehicleInput) => updateVehicleFn(input), (client, saved) =>
-    applySavedFleetRecord(client, "vehicle", saved));
+  return useFleetMutation("vehicle", (input: UpdateVehicleInput) => updateVehicleFn(input), (client, saved) => {
+    applySavedFleetRecord(client, "vehicle", saved);
+    void client.invalidateQueries({ queryKey: activityKeys.all });
+  });
 }
 
 export function useDeleteVehicle() {

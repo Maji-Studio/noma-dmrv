@@ -6,6 +6,7 @@ import { StaleVersionError, throwActionError } from "@/lib/stale-version";
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { activityKeys } from "./activity-query-keys";
 import type {
   CreateProductionSampleData,
   UpdateProductionSampleData,
@@ -130,6 +131,7 @@ export function useDeleteProductionSample(
       if (!result.success) throwActionError(result);
     },
     onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
       if (productionRunId) {
         queryClient.invalidateQueries({
           queryKey: productionSampleKeys.list(productionRunId),

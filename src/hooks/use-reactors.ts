@@ -7,6 +7,7 @@ import { throwActionError, StaleVersionError } from "@/lib/stale-version";
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { activityKeys } from "./activity-query-keys";
 import type { Reactor } from "@/db/schema";
 import type { ReactorFilterData, CreateReactorData, UpdateReactorData } from "@/schemas/reactors";
 import type { PaginatedReactors, ReactorWithRelations } from "@/data-access/reactors";
@@ -318,6 +319,7 @@ export function useDeleteReactor(
       return { previousReactor, previousLists, facilityId };
     },
     onSuccess: async (_, variables, context) => {
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
       const reactorId = variables.reactorId;
       const facilityId = (context as { facilityId?: string })?.facilityId;
 

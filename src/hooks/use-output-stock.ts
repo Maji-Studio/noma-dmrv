@@ -15,6 +15,7 @@ import { storageLocationKeys } from "./use-storage-locations";
 import { certificationKeys } from "./use-certification";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 import { unwrap } from "@/hooks/types";
+import { activityKeys } from "./activity-query-keys";
 
 export const outputStockKeys = {
   all: ["outputStock"] as const,
@@ -102,6 +103,7 @@ export function usePostOutputStock() {
       return result.data;
     },
     onSuccess: (data) => {
+      void client.invalidateQueries({ queryKey: activityKeys.all });
       for (const row of data.savedDeliveries) {
         patchListCachesWithSavedRow(client, deliveryKeys.lists(), row);
         client.setQueriesData({ queryKey: deliveryKeys.detail(row.id) }, (old: object | undefined) => old ? { ...old, ...row } : old);
