@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { feedstockTypes, formulationIngredients, formulations, members, orders, users } from "@/db/schema";
 import { createApiKey } from "@/data-access/api-keys";
-import { createCustomer, createCustomerLocation } from "@/data-access/customers";
+import { createCustomerInTransaction } from "@/data-access/customer-writes";
 import { createFeedstockType } from "@/data-access/feedstock-types";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { runOperationInProcess } from "@/lib/operations/runner";
@@ -32,8 +32,9 @@ export async function seedFormulationFixture(caseId: FormulationCaseId): Promise
     await runOperationInProcess(createFormulation, ctx, { name: "Other formulation", biocharRatio: PURE_BIOCHAR_RATIO }, scriptOptions);
     // Only an order references this row: no product or bin can mask the order guard.
     if (caseId === "formulation-guarded-delete") {
-      const customer = await createCustomer(ctx, { code: "CUS-EVAL", name: "Evaluation customer" });
-      const location = await createCustomerLocation(ctx, { ...TEST_SITE_POSITION, customerId: customer.id, name: "Evaluation field", isDefault: true });
+      const { customer, locations: [location] } = await db.transaction(tx => createCustomerInTransaction(ctx, tx, {
+        code: "CUS-EVAL", name: "Evaluation customer", locations: [{ ...TEST_SITE_POSITION, name: "Evaluation field", isDefault: true }],
+      }));
       await runOperationInProcess(recordOrder, ctx, {
         facilityId: fixture.facilityId, customerId: customer.id, customerLocationId: location.id,
         formulationId: formulation.id, orderDate: ORDER_DATE, quantityKg: ORDER_QUANTITY_KG, packaging: "loose",
