@@ -16,19 +16,21 @@ import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-conte
 import { formatFacilityDate } from "@/lib/date-utils";
 import {
   DEFAULT_ENERGY_PERIOD_PRESET,
-  creditBatchInPeriod,
   energyPresetPeriod,
   type EnergyPeriodPreset,
 } from "@/lib/energy/period";
 import {
+  batchReachesPeriod,
   creditBatchOptions,
   flowsForBatch,
   gapsForBatch,
   recordsForBatch,
   resolveSelectedBatch,
+  totalsBySource,
 } from "@/lib/energy/selection";
 import type { EnergyRecordScope } from "@/lib/energy/types";
 import { formatDateRange } from "@/lib/format-utils";
+import { EnergyActivityPanel } from "./energy-activity-panel";
 import { EnergyRecordList } from "./energy-record-list";
 import { EnergySummaryLine } from "./energy-summary-line";
 import { EnergyToolbar } from "./energy-toolbar";
@@ -77,7 +79,7 @@ export function EnergyPage() {
     data?.flows ?? [],
     requestedBatchId,
   );
-  const batchOptions = creditBatchOptions(data?.creditBatches ?? [], resolvedPeriod, selectedBatch);
+  const batchOptions = creditBatchOptions(data?.creditBatches ?? [], resolvedPeriod, data?.flows ?? []);
   const batchId = selectedBatch?.id ?? null;
   const periodText = resolvedPeriod.from
     ? formatDateRange(resolvedPeriod.from, resolvedPeriod.to)
@@ -87,7 +89,8 @@ export function EnergyPage() {
     setPreset(next);
     const nextPeriod = energyPresetPeriod(next, today);
     const stillInPeriod = (data?.creditBatches ?? []).some(
-      (batch) => batch.id === requestedBatchId && creditBatchInPeriod(batch, nextPeriod),
+      (batch) =>
+        batch.id === requestedBatchId && batchReachesPeriod(batch, nextPeriod, data?.flows ?? []),
     );
     if (!stillInPeriod) setRequestedBatchId(null);
   };
@@ -119,13 +122,31 @@ export function EnergyPage() {
       {isLoading || !data ? (
         <Skeleton className={LOADING_PANEL_CLASS} />
       ) : (
-        <EnergyRecordList
-          records={recordsForBatch(data.records, batchId)}
-          creditBatches={data.creditBatches}
-          facilityId={facilityId}
-          scope={scope}
-          onScopeChange={setScope}
-        />
+        <div className="flex flex-col gap-24 lg:flex-row lg:items-start">
+          <div className="min-w-0 flex-1">
+            <EnergyRecordList
+              records={recordsForBatch(data.records, batchId)}
+              creditBatches={data.creditBatches}
+              facilityId={facilityId}
+              scope={scope}
+              onScopeChange={setScope}
+            />
+          </div>
+          <div className="lg:w-[320px] lg:shrink-0">
+            <EnergyActivityPanel
+              title={selectedBatch ? selectedBatch.code : "Whole facility"}
+              caption={
+                selectedBatch
+                  ? `Produced ${formatDateRange(selectedBatch.startDate, selectedBatch.endDate)}. Counted within ${periodText}.`
+                  : periodText
+              }
+              totals={totalsBySource(
+                flowsForBatch(data.flows, batchId),
+                gapsForBatch(data.gaps, batchId),
+              )}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

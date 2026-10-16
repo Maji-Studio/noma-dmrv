@@ -18,7 +18,7 @@ interface EnergySummaryLineProps {
 export function EnergySummaryLine({ flows, gaps, batch, periodText }: EnergySummaryLineProps) {
   const where = `from ${periodText}${batch ? ` in ${batch.code}` : ""}`;
   const missing = gaps.length > 0 ? `, ${formatCount(gaps.length, "missing reading")}` : "";
-  const totals = totalsBySource(flows);
+  const totals = totalsBySource(flows, gaps);
   const diesel = DIESEL_SOURCE_KEYS.reduce((sum, key) => sum + totals[key].activity, 0);
   const transport = totals.feedstockTransport.activity + totals.biocharTransport.activity;
   return (

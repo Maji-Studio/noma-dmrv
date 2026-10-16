@@ -50,12 +50,14 @@ test.describe("Energy page", () => {
       const runLink = page.getByRole("link", { name: code });
       await expect(runLink).toBeVisible();
       await page.getByRole("button", { name: `Show the breakdown of ${code}` }).click();
-      await expect(page.getByText("Startup diesel")).toBeVisible();
-      await expect(page.getByText("8 L", { exact: true }).first()).toBeVisible();
-      await expect(page.getByText("24 kWh", { exact: true }).first()).toBeVisible();
+      const records = page.getByRole("region", { name: "Records" });
+      await expect(records.getByText("Startup diesel")).toBeVisible();
+      await expect(records.getByText("8 L", { exact: true })).toBeVisible();
+      await expect(records.getByText("24 kWh", { exact: true })).toBeVisible();
       await expect(page.getByText(/CO₂e/)).toHaveCount(0);
       await expect(page.getByText(/emission factors/i)).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Flow" })).toHaveCount(0);
+      await expect(page.getByRole("complementary", { name: "Activity totals" })).toContainText("Whole facility");
 
       await page.getByRole("link", { name: code }).click();
       await expect(page).toHaveURL(/\/production-runs\?.*run=/);

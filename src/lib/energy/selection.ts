@@ -32,26 +32,29 @@ export function resolveSelectedBatch(
 ): EnergyCreditBatchInput | null {
   if (requestedId == null) return null;
   const batch = creditBatches.find((candidate) => candidate.id === requestedId);
-  if (!batch) return null;
-  return creditBatchInPeriod(batch, period) || flows.some((flow) => flow.creditBatchId === requestedId)
-    ? batch
-    : null;
+  return batch && batchReachesPeriod(batch, period, flows) ? batch : null;
+}
+
+/** Whether a batch's dates overlap the period or energy in the period reaches it. */
+export function batchReachesPeriod(
+  batch: EnergyCreditBatchInput,
+  period: EnergyPeriod,
+  flows: EnergyFlow[],
+): boolean {
+  return creditBatchInPeriod(batch, period) || flows.some((flow) => flow.creditBatchId === batch.id);
 }
 
 /**
- * Credit batch select options: the batches whose dates overlap the period,
- * plus the selected one when it reached the period only through its energy,
- * so the select can show what is selected.
+ * Credit batch select options: the batches whose dates overlap the period
+ * plus those the period's energy reaches (a July batch delivered in October),
+ * so every batch with figures in the period can be picked.
  */
 export function creditBatchOptions(
   creditBatches: EnergyCreditBatchInput[],
   period: EnergyPeriod,
-  selected: EnergyCreditBatchInput | null,
+  flows: EnergyFlow[],
 ): EnergyCreditBatchInput[] {
-  const options = creditBatches.filter((batch) => creditBatchInPeriod(batch, period));
-  return selected && !options.some((batch) => batch.id === selected.id)
-    ? [...options, selected]
-    : options;
+  return creditBatches.filter((batch) => batchReachesPeriod(batch, period, flows));
 }
 
 export function flowsForBatch(flows: EnergyFlow[], batchId: string | null): EnergyFlow[] {
@@ -70,16 +73,24 @@ export function recordsForBatch(records: EnergyRecord[], batchId: string | null)
 
 export interface SourceTotal {
   activity: number;
+  /** False when no reading of this source was recorded in the selection. */
+  recorded: boolean;
+  missingReadings: number;
 }
 
-export function totalsBySource(flows: EnergyFlow[]): Record<EnergySourceKey, SourceTotal> {
+export function totalsBySource(
+  flows: EnergyFlow[],
+  gaps: EnergyGap[],
+): Record<EnergySourceKey, SourceTotal> {
   const totals = Object.fromEntries(
-    ENERGY_SOURCE_KEYS.map((key) => [key, { activity: 0 }]),
+    ENERGY_SOURCE_KEYS.map((key) => [key, { activity: 0, recorded: false, missingReadings: 0 }]),
   ) as Record<EnergySourceKey, SourceTotal>;
   for (const flow of flows) {
     const total = totals[flow.source];
     total.activity += flow.activity;
+    total.recorded = true;
   }
+  for (const gap of gaps) totals[gap.source].missingReadings += 1;
   return totals;
 }
 
