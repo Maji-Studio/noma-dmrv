@@ -104,6 +104,7 @@ export class S3CompatibleProvider implements StorageProvider {
       if (!res.Body) return null;
       return await readBoundedStream(res.Body as Readable, args.maxBytes, res.ContentType ?? "application/octet-stream", args.signal);
     } catch (error) {
+      if ((error as { name?: string }).name === "NoSuchBucket") throw error;
       if (error instanceof NoSuchKey || error instanceof NotFound || (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404) return null;
       throw error;
     }

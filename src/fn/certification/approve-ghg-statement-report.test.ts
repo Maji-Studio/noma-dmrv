@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as storageModule from "@/lib/storage";
 import { logger } from "@/lib/log";
@@ -61,10 +62,11 @@ afterEach(() => { vi.restoreAllMocks(); __setStorageProviderForTests(null); });
 
 describe("stored GHG Statement report approval", () => {
   it("keeps a truncated report prepared", async () => {
-    readObjectBounded.mockResolvedValue({ bytes: Buffer.from("ab"), sizeBytes: 2, sha256: "changed", contentType: "application/pdf" });
+    const bytes = Buffer.from("ab");
+    readObjectBounded.mockResolvedValue({ bytes, sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"), contentType: "application/pdf" });
     expect(await approve()).toEqual({
       success: false, code: "report_verification_failed",
-      error: "Version 1 of the GHG Statement report failed the file size check. Prepare a new report.",
+      error: "Version 1 of the GHG Statement report failed the file size check. Generate and approve a new report.",
     });
     expect(report.lifecycle).toBe("prepared");
     expect(approveRow).not.toHaveBeenCalled();
@@ -74,37 +76,38 @@ describe("stored GHG Statement report approval", () => {
 // Stored-PDF verification before approval/submission — verify provider, bucket, key, MIME, size, and SHA-256 against the stored record.
 describe("stored report checks", () => {
   it.each([
-    ["storageProvider", "s3", "storage location"],
-    ["storageBucket", "other", "storage location"],
-    ["storageKey", null, "stored file"],
-    ["storageKey", `org/other/ghgStatementReport/${REPORT_ID}/pdf/report.pdf`, "stored file"],
-    ["storageKey", `org/org-test/ghgStatementReport/another-report/pdf/report.pdf`, "stored file"],
-    ["storageKey", `org/org-test/ghgStatementReport/${REPORT_ID}/pdf/../report.pdf`, "stored file"],
+    ["storageProvider", "s3", "storage provider"],
+    ["storageBucket", "other", "storage bucket"],
+    ["storageKey", null, "storage key"],
+    ["storageKey", `org/other/ghgStatementReport/${REPORT_ID}/pdf/report.pdf`, "storage key"],
+    ["storageKey", `org/org-test/ghgStatementReport/another-report/pdf/report.pdf`, "storage key"],
+    ["storageKey", `org/org-test/ghgStatementReport/${REPORT_ID}/pdf/../report.pdf`, "storage key"],
     ["mimeType", "text/plain", "file type"],
     ["fileSizeBytes", null, "file size"],
-    ["checksumSha256", null, "file fingerprint (SHA-256)"],
-    ["checksumSha256", "0".repeat(64), "file fingerprint (SHA-256)"],
+    ["checksumSha256", null, "report checksum"],
+    ["checksumSha256", "0".repeat(64), "report checksum"],
     ["uploadStatus", "pending", "stored file"],
     ["entityId", "another-report", "stored file"],
   ] as const)("refuses %s = %s", async (field, value, check) => {
     Object.assign(document, { [field]: value });
     expect(await approve()).toEqual({
       success: false, code: "report_verification_failed",
-      error: `Version 1 of the GHG Statement report failed the ${check} check. Prepare a new report.`,
+      error: `Version 1 of the GHG Statement report failed the ${check} check. Generate and approve a new report.`,
     });
     expect(report.lifecycle).toBe("prepared");
     expect(logger.warn).toHaveBeenCalledExactlyOnceWith({ reportId: REPORT_ID, documentId: REPORT_DOCUMENT_ID, check: expect.any(String), storageErrorCode: null }, expect.any(String));
   });
 
   it("rejects a same-size replacement", async () => {
-    readObjectBounded.mockResolvedValue({ bytes: Buffer.from("xyz"), sizeBytes: 3, sha256: "changed", contentType: "application/pdf" });
-    expect(await approve()).toMatchObject({ success: false, code: "report_verification_failed", error: expect.stringContaining("file fingerprint (SHA-256)") });
+    const bytes = Buffer.from("xyz");
+    readObjectBounded.mockResolvedValue({ bytes, sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"), contentType: "application/pdf" });
+    expect(await approve()).toMatchObject({ success: false, code: "report_verification_failed", error: expect.stringContaining("report checksum") });
     expect(report.lifecycle).toBe("prepared");
   });
 
   it("compares the freshly computed hash to the report row too", async () => {
     report.contentChecksumSha256 = "0".repeat(64);
-    expect(await approve()).toMatchObject({ success: false, code: "report_verification_failed", error: expect.stringContaining("file fingerprint (SHA-256)") });
+    expect(await approve()).toMatchObject({ success: false, code: "report_verification_failed", error: expect.stringContaining("report checksum") });
   });
 
   it("checks the object MIME type", async () => {
@@ -128,12 +131,12 @@ describe("stored report checks", () => {
 
   it("treats a missing object as a stored file failure", async () => {
     readObjectBounded.mockResolvedValue(null);
-    expect(await approve()).toMatchObject({ code: "report_verification_failed", error: "Version 1 of the GHG Statement report failed the stored file check. Prepare a new report." });
+    expect(await approve()).toMatchObject({ code: "report_verification_failed", error: "Version 1 of the GHG Statement report failed the stored file check. Generate and approve a new report." });
   });
 
   it("rejects an oversized replacement at the read limit", async () => {
     readObjectBounded.mockRejectedValue(new StorageError("secret URL", "object_too_large"));
-    expect(await approve()).toMatchObject({ code: "report_verification_failed", error: "Version 1 of the GHG Statement report failed the file size check. Prepare a new report." });
+    expect(await approve()).toMatchObject({ code: "report_verification_failed", error: "Version 1 of the GHG Statement report failed the file size check. Generate and approve a new report." });
     expect(logger.warn).toHaveBeenCalledWith({ reportId: REPORT_ID, documentId: REPORT_DOCUMENT_ID, check: "byte size", storageErrorCode: "object_too_large" }, expect.any(String));
     expect(approveRow).not.toHaveBeenCalled();
   });

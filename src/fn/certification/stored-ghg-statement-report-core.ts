@@ -5,22 +5,54 @@ import { DomainError, type DomainErrorCode } from "@/lib/domain-errors";
 import { logger } from "@/lib/log";
 import { getStorageProvider, isSafeStorageKey, StorageError } from "@/lib/storage";
 import { STORAGE_GET_OBJECT_TIMEOUT_MS } from "@/lib/storage/get-object";
-import type { InspectedObject } from "@/lib/storage/types";
+import { ghgStatementReportKeyPrefix } from "@/lib/storage/keys";
+import { PDF_MIME_TYPE, type InspectedObject } from "@/lib/storage/types";
 
-const PDF_MIME_TYPE = "application/pdf";
 const READ_SIZE_MARGIN_BYTES = 1;
 const CHECK_LABELS = {
   "document record": "stored file",
   "document ownership": "stored file",
   "upload status": "stored file",
-  key: "stored file",
+  key: "storage key",
   "stored object read": "stored file",
   "MIME type": "file type",
   "byte size": "file size",
-  "SHA-256": "file fingerprint (SHA-256)",
-  provider: "storage location",
-  bucket: "storage location",
+  "SHA-256": "report checksum",
+  provider: "storage provider",
+  bucket: "storage bucket",
 } as const;
+
+const STORAGE_CONFIGURATION_ERRORS = new Set([
+  "AccessDenied", "InvalidAccessKeyId", "NoSuchBucket", "SignatureDoesNotMatch",
+  "CredentialsProviderError", "ExpiredToken", "InvalidToken", "EACCES", "EPERM",
+]);
+const STORAGE_TRANSIENT_ERRORS = new Set([
+  "TimeoutError", "AbortError", "NetworkingError", "ECONNRESET", "ECONNREFUSED",
+  "ECONNABORTED", "ETIMEDOUT", "EPIPE", "ENOTFOUND", "EAI_AGAIN", "ENETUNREACH", "EHOSTUNREACH",
+]);
+const HTTP_FORBIDDEN = 403;
+const HTTP_SERVER_ERROR_MIN = 500;
+const HTTP_SERVER_ERROR_MAX = 599;
+
+function classifyReadError(cause: unknown): DomainErrorCode {
+  if (cause instanceof StorageError) {
+    return cause.code === "get_object_timeout" ? "storage_unavailable" : "report_verification_failed";
+  }
+  if (!cause || typeof cause !== "object") return "report_verification_failed";
+  const error = cause as { code?: string; name?: string; $metadata?: { httpStatusCode?: number } };
+  const status = error.$metadata?.httpStatusCode;
+  if (
+    status === HTTP_FORBIDDEN ||
+    STORAGE_CONFIGURATION_ERRORS.has(error.code ?? "") ||
+    STORAGE_CONFIGURATION_ERRORS.has(error.name ?? "")
+  ) return "storage_not_configured";
+  if (
+    (status !== undefined && status >= HTTP_SERVER_ERROR_MIN && status <= HTTP_SERVER_ERROR_MAX) ||
+    STORAGE_TRANSIENT_ERRORS.has(error.code ?? "") ||
+    STORAGE_TRANSIENT_ERRORS.has(error.name ?? "")
+  ) return "storage_unavailable";
+  return "report_verification_failed";
+}
 
 export async function verifyStoredGhgStatementReport(
   orgCtx: OrgContext,
@@ -43,7 +75,7 @@ export async function verifyStoredGhgStatementReport(
       ? `${subject} could not be checked because storage is unavailable. Try again.`
       : code === "storage_not_configured"
         ? `${subject} could not be checked because storage is not configured. Contact a Platform Admin to configure storage.`
-        : `${subject} failed the ${CHECK_LABELS[check]} check. Prepare a new report.`;
+        : `${subject} failed the ${CHECK_LABELS[check]} check. Generate and approve a new report.`;
     return new DomainError(code, message, { retryable: code === "storage_unavailable", cause });
   };
   const document = await getDocumentById(orgCtx, report.documentId);
@@ -67,7 +99,7 @@ export async function verifyStoredGhgStatementReport(
   // The adapter returns bytes and MIME, not a second key. Bind the saved key
   // to this report's namespace and read that exact logical key (no URL fallback).
   const key = document.storageKey;
-  const prefix = `org/${orgCtx.organizationId}/ghgStatementReport/${report.id}/pdf/`;
+  const prefix = ghgStatementReportKeyPrefix(orgCtx.organizationId, report.id);
   if (
     !key || !isSafeStorageKey(key) || !key.startsWith(prefix) ||
     !key.slice(prefix.length) || key.slice(prefix.length).includes("/")
@@ -87,7 +119,7 @@ export async function verifyStoredGhgStatementReport(
     if (cause instanceof StorageError && cause.code === "object_too_large") {
       throw failure("byte size", cause);
     }
-    throw failure("stored object read", cause, "storage_unavailable");
+    throw failure("stored object read", cause, classifyReadError(cause));
   }
   if (!object) throw failure("stored object read");
   if (document.mimeType !== PDF_MIME_TYPE || object.contentType !== document.mimeType) {

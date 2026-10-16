@@ -26,3 +26,9 @@ it("never presigns a final key and carries verified checksums on server writes",
   expect(send).toHaveBeenCalledWith(expect.objectContaining({ input: expect.objectContaining({ Key: "test/final", ChecksumSHA256: Buffer.from("a".repeat(64), "hex").toString("base64") }) }), { abortSignal: undefined });
   expect(send.mock.calls[0][0]).toBeInstanceOf(PutObjectCommand);
 });
+
+it("preserves a missing bucket error for configuration classification", async () => {
+  const cause = Object.assign(new Error("missing bucket"), { name: "NoSuchBucket", $metadata: { httpStatusCode: 404 } });
+  vi.spyOn(S3Client.prototype, "send").mockRejectedValue(cause);
+  await expect(provider().readObjectBounded({ key: "key", maxBytes: 3 })).rejects.toBe(cause);
+});

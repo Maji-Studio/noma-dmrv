@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/data-access/certifier-credentials", () => ({
@@ -193,21 +194,21 @@ afterEach(() => __setStorageProviderForTests(null));
 describe("stored report verification before registry submission", () => {
   it.each([
     ["DRAFT", "ab", "file size"],
-    ["DRAFT", "xyz", "file fingerprint (SHA-256)"],
+    ["DRAFT", "xyz", "report checksum"],
     ["FAILED_VERIFICATION", "ab", "file size"],
-    ["FAILED_VERIFICATION", "xyz", "file fingerprint (SHA-256)"],
+    ["FAILED_VERIFICATION", "xyz", "report checksum"],
   ] as const)("blocks %s with changed bytes %s", async (status, bytes, check) => {
     vi.mocked(getGhgStatement).mockResolvedValue(makeRemoteStatement({ status }));
     const remoteAfter = makeRemoteStatement({ status: "AWAITING_VERIFICATION", ghg_statement_report_url: GENERATED_REPORT_URL });
     vi.mocked(submitGhgStatement).mockResolvedValue(remoteAfter);
     vi.mocked(resubmitGhgStatement).mockResolvedValue(remoteAfter);
-    readObjectBounded.mockResolvedValue({ bytes: Buffer.from(bytes), sizeBytes: bytes.length, sha256: "changed", contentType: "application/pdf" });
+    readObjectBounded.mockResolvedValue({ bytes: Buffer.from(bytes), sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"), contentType: "application/pdf" });
     await expect(submitGhgStatementToVerifierCore({
       orgCtx, ghgStatementId: STATEMENT_ID,
       input: { reportId: REPORT_ID, summaryOfChanges: "Prepared corrected report." },
     })).rejects.toMatchObject({
       code: "report_verification_failed",
-      message: `Version 1 of the GHG Statement report failed the ${check} check. Prepare a new report.`,
+      message: `Version 1 of the GHG Statement report failed the ${check} check. Generate and approve a new report.`,
     });
     expect(submitGhgStatement).not.toHaveBeenCalled();
     expect(resubmitGhgStatement).not.toHaveBeenCalled();
@@ -217,7 +218,7 @@ describe("stored report verification before registry submission", () => {
 
   it.each([
     new StorageError("read timed out", "get_object_timeout"),
-    new TypeError("network failure"),
+    Object.assign(new Error("network failure"), { code: "ECONNRESET" }),
     Object.assign(new Error("service unavailable"), { name: "ServiceUnavailable", $metadata: { httpStatusCode: 503 } }),
   ])("preserves the cause and retryability before any report URL is issued: %s", async (cause) => {
     vi.mocked(getGhgStatement).mockResolvedValue(makeRemoteStatement({ status: "DRAFT" }));
@@ -225,6 +226,28 @@ describe("stored report verification before registry submission", () => {
     await expect(submitGhgStatementToVerifierCore({
       orgCtx, ghgStatementId: STATEMENT_ID, input: { reportId: REPORT_ID },
     })).rejects.toMatchObject({ code: "storage_unavailable", retryable: true, cause });
+    expect(submitGhgStatement).not.toHaveBeenCalled();
+    expect(resubmitGhgStatement).not.toHaveBeenCalled();
+    expect(issueVerifierReportUrl).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [Object.assign(new Error("denied"), { name: "AccessDenied", $metadata: { httpStatusCode: 403 } }), "storage_not_configured"],
+    [Object.assign(new Error("forbidden"), { $metadata: { httpStatusCode: 403 } }), "storage_not_configured"],
+    ...["InvalidAccessKeyId", "NoSuchBucket", "CredentialsProviderError"].map((name) => [Object.assign(new Error("configuration"), { name }), "storage_not_configured"]),
+    [Object.assign(new Error("permission"), { code: "EACCES" }), "storage_not_configured"],
+    [new StorageError("unsafe", "unsafe_key"), "report_verification_failed"],
+    [new StorageError("failed", "get_object_failed"), "report_verification_failed"],
+    [new TypeError("invalid argument"), "report_verification_failed"],
+    [Object.assign(new Error("bad request"), { $metadata: { httpStatusCode: 400 } }), "report_verification_failed"],
+    [Object.assign(new Error("timeout"), { name: "TimeoutError" }), "storage_unavailable"],
+    [Object.assign(new Error("abort"), { name: "AbortError" }), "storage_unavailable"],
+  ])("classifies read errors before issuing a report URL: %s", async (cause, code) => {
+    vi.mocked(getGhgStatement).mockResolvedValue(makeRemoteStatement({ status: "DRAFT" }));
+    readObjectBounded.mockRejectedValue(cause);
+    await expect(submitGhgStatementToVerifierCore({
+      orgCtx, ghgStatementId: STATEMENT_ID, input: { reportId: REPORT_ID },
+    })).rejects.toMatchObject({ code, retryable: code === "storage_unavailable", cause });
     expect(submitGhgStatement).not.toHaveBeenCalled();
     expect(resubmitGhgStatement).not.toHaveBeenCalled();
     expect(issueVerifierReportUrl).not.toHaveBeenCalled();
