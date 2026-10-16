@@ -8,7 +8,7 @@ import type { Operation, OperationResult, OperationScope } from "@/lib/operation
 import { readApiBiocharProduct } from "@/lib/read-models/api-biochar-products";
 import { biocharProductRepresentationSchema, type BiocharProductRepresentation } from "@/lib/representations/biochar-products";
 import { makeBiocharProductApiInput, updateBiocharProductInput, type MakeBiocharProductInput } from "@/schemas/biochar-product-input";
-import { ApiHttpError } from "./http-error";
+import { withCurrentOnStale as withCurrentOnStaleRepresentation } from "./write-checks";
 
 const NOT_FOUND_MESSAGES: Record<ProductReferenceKind, string> = {
   facility: "Facility was not found.",
@@ -86,13 +86,7 @@ export function representationCheckedUpdate(id: string, revision: number): Opera
 }
 
 export async function withCurrentOnStale<T>(ctx: ApiContext, id: string, fn: () => Promise<T>): Promise<T> {
-  try { return await fn(); } catch (error) {
-    if (error instanceof DomainError && error.code === "stale_version") {
-      const current = await readApiBiocharProduct(ctx, { id });
-      throw new ApiHttpError(412, "stale_version", "The biochar product has changed. Read the current representation before retrying.", current);
-    }
-    throw error;
-  }
+  return withCurrentOnStaleRepresentation(fn, { noun: "biochar product", readCurrent: () => readApiBiocharProduct(ctx, { id }) });
 }
 
 /** Replays come back from JSON storage with keys reordered; the schema restores the published order. */
