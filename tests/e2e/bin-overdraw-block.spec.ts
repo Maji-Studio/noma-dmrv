@@ -631,8 +631,8 @@ test.describe("createDelivery order-balance guard", () => {
   });
 });
 
-/** Latest delivery measurements can be corrected; a newer stock entry locks them. */
-test("edits latest delivery mass, links its saved source and locks it after newer stock", async ({ adminPage: page, testUsers }) => {
+/** Delivery measurements can be corrected until a later draw depends on them. */
+test("edits delivery mass, links its saved source and locks it after a dependent draw", async ({ adminPage: page, testUsers }) => {
   const f = await seedOutputStockBrowserFixture(testUsers.admin.id, true);
   const created = f.delivery!;
   await page.goto(`/deliveries?facility=${f.facility.id}&delivery=${created.id}`);
@@ -677,5 +677,5 @@ test("edits latest delivery mass, links its saved source and locks it after newe
   await page.getByRole("button", { name: "Edit delivery", exact: true }).click();
   await expect(wet).toBeDisabled();
   await expect(page.locator('input[name="moistureContentPercent"]')).toBeDisabled();
-  await expect(page.getByRole("dialog")).toContainText("Locked because newer stock entries were recorded on this bin after it.");
+  await expect(page.getByRole("dialog")).toContainText("Correction blocked by a later lost mass:");
 });

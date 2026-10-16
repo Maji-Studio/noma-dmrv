@@ -1,3 +1,7 @@
+import { withGhgVerifierSubmissionLock } from "@/data-access/ghg-verifier-submission-lock";
+vi.mock("@/data-access/ghg-verifier-submission-lock", () => ({
+  withGhgVerifierSubmissionLock: vi.fn(async (_ctx, _id, callback: () => Promise<unknown>) => callback()),
+}));
 import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -162,6 +166,7 @@ describe("GHG verifier success audit failures", () => {
         remoteStatus: "AWAITING_VERIFICATION",
       });
 
+      expect(withGhgVerifierSubmissionLock).toHaveBeenCalledWith(orgCtx, STATEMENT_ID, expect.any(Function));
       expect(submission.metadata).toMatchObject({
         remoteStatus: "AWAITING_VERIFICATION",
         lastReportDocumentId: REPORT_DOCUMENT_ID,

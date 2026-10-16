@@ -39,12 +39,11 @@ components (UI)
   `delete_order`). Application writes use the registered `record_application`,
   `update_application` and `delete_application` operations. UI product deletes
   stay off the runner. Lost mass form edits run `record_output_stock_movement`
-  with the unpublished `requireLatestCorrection` option. Delivery updates run
+  with the unpublished `checkFormEditLock` option. Delivery updates run
   the UI-only `update_posted_delivery` operation: the delivery row, stock
   correction and transport legs share its transaction. Both use the shared
-  stock writer with a strict latest-entry check. These UI options and the
-  delivery operation are not published in REST/MCP. The native correction
-  contract stays dependency-based.
+  stock writer with the same dependency check as native corrections (ADR 0035).
+  These UI options and the delivery operation are not published in REST/MCP.
 - The runner owns the transaction. Data-access ...InTransaction(ctx, tx, ...)
   functions and the helpers they call read and write only through `tx`,
   including reference checks and result enrichment. After-commit hooks run
@@ -493,6 +492,12 @@ above, closing their document-write inversion. Membership refresh also takes
 artifacts before runs. The remaining production-run and membership cycles are
 tracked in the [lock-order follow-up](./open-questions-architecture.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
 
+Emission entry writers discover ancestors unlocked, then lock the facility
+`FOR SHARE`, credit batch `FOR UPDATE`, entry `FOR UPDATE`, and documents last.
+They revalidate the batch's facility and the entry's batch after locking; changed
+parents return retryable `conflict` without taking a new ancestor lock.
+This order matches facility archive and applies to confirmation and deletion too.
+
 Upload promotion, leases and the privileged expiry sweep are described in
 [Object storage](./storage.md#abandoned-uploads-and-cleanup).
 
@@ -571,15 +576,16 @@ Statement). Every submission HTTP attempt appends to `certifier_sync_events`
 [0008](./adr/0008-submission-ledger-internal-seam.md). Source
 creation POST directly and reconcile through separate state.
 
-**Source-data immutability:** once a Removal or GHG Statement
-has a blocking ledger row (`draft`, `submitted`, `accepted`), its upstream
-operational records are locked at the data-access boundary. The guard validates
-the Removal's captured application-slice set against the reachable source
-records before every mutation; it does not recompute submitted membership from
-mutable current lineage. It blocks edits/deletes to production runs, samples,
-applications, deliveries, orders, biochar products, feedstocks, and credit-batch
-grouping records. Corrections are new submission versions or
-correction-workflow records, never in-place edits.
+**Source-data immutability:** the converted source-data guards resolve every
+Removal ledger version and covering statement through `record-lock-lineage.ts`.
+Draft, unknown, in-flight and remotely effective attempts hold Sent. A fresh
+returned statement can reopen only the covered attempts that predate its return
+evidence; missing evidence or a failed registry read keeps Sent. REST's verifier
+submission timestamp is a conservative lower bound for return, not an exact
+return time. Mutations re-resolve under artifact locks and refuse lineage drift.
+Numeric dependencies still apply after reopening. Independent master-data,
+document and Removal lifecycle guards remain outside this policy; see
+[Record locks](./database.md#record-locks).
 
 **Workspace:** `/certification` (ADR
 [0007](./adr/0007-certification-workspace-consolidation.md)) is a first-class

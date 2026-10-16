@@ -1,5 +1,5 @@
 import type { PgTable } from "drizzle-orm/pg-core";
-import { formulations, suppliers, supplierLocations, customers, customerLocations, feedstocks, productionRuns, biocharProducts, samples, orders, deliveries, applications, documents, transportLegs, creditBatches, binMovements, certifierRemovals, certifierGhgStatements } from "@/db/schema";
+import { emissionEntries, formulations, suppliers, supplierLocations, customers, customerLocations, feedstocks, productionRuns, biocharProducts, samples, orders, deliveries, applications, documents, transportLegs, creditBatches, binMovements, certifierRemovals, certifierGhgStatements } from "@/db/schema";
 
 export type ActivityFieldPolicy = "value" | "name" | "ignore" | { link: string };
 export type ActivityEntityPolicy = { table: PgTable; fields: Record<string, ActivityFieldPolicy> };
@@ -14,6 +14,29 @@ export const activityCoordinatePairs: Readonly<Record<string, readonly (readonly
 
 /** Explicit column decisions. New columns must be classified before they ship. */
 export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
+  emission_entry: { table: emissionEntries, fields: {
+    id: "ignore",
+    organizationId: "ignore",
+    creditBatchId: { link: "credit_batch" },
+    removalTemplateId: { link: "removal_template" },
+    componentId: "value",
+    inputShape: "name",
+    lineRule: "value",
+    observationId: "name",
+    kind: "value",
+    confirmedForRemovalId: { link: "removal" },
+    occurredOn: "value",
+    note: "name",
+    createdBy: "ignore",
+    version: "ignore",
+    contentRevision: "ignore",
+    deletedAt: "value",
+    sentByRemovalId: { link: "removal" },
+    sendReservedBySubmissionId: { link: "submission" },
+    createdAt: "ignore",
+    updatedAt: "ignore",
+    values: "name",
+  } },
   formulation: { table: formulations, fields: {
     id: "ignore", organizationId: "ignore", version: "ignore", createdAt: "ignore", updatedAt: "ignore",
     code: "value", name: "value", biocharRatio: "value", archivedAt: "value",

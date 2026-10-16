@@ -1,3 +1,4 @@
+import { isReturnedStatement } from "@/lib/record-lock";
 import { DomainError } from '@/lib/domain-errors';
 import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, formulations, productionRuns, storageLocations } from '@/db/schema';
@@ -15,7 +16,7 @@ import type { MatchingOutputBin, OutputStockPreview, OutputStockPreviewInput } f
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { requestFingerprint } from './bin-movement-requests';
 import { getBiocharOutputStockLayers, getLayerMoistureBases, getOutputBinStocks, getProductOutputStockLayers } from './output-stock';
-import { getCertifiedLineage } from './certification-lineage-guards';
+import { isSubmittedLineageRow, getCertifiedLineage } from './certification-lineage-guards';
 import { changedOutputLayerIds, outputLayerTarget } from './output-stock-lineage';
 import { getStockModeChanges } from './output-bin-stock-mode';
 import { getOutputStockFacilityTimezone } from './output-stock-dates';
@@ -225,22 +226,21 @@ export async function previewOutputStock(ctx: OrgContext, input: OutputStockPrev
         const targets = (await changedOutputLayerIds(ctx, tx, prepared)).map(layerId => outputLayerTarget(prepared.lane, layerId));
         const lineage = (await Promise.all(targets.map(target => getCertifiedLineage(ctx, tx, target)))).flat();
         if (prepared.correction.deliveryId) lineage.push(...await getCertifiedLineage(ctx, tx, { entityType: 'delivery', entityId: prepared.correction.deliveryId }));
-        const blockers = lineage.filter(row => row.removalSubmissionId || row.ghgStatementSubmissionId).map(row => ({
-          entity: row.ghgStatementSubmissionId ? 'ghgStatement' : 'removal',
-          id: row.ghgStatementSubmissionId ? row.ghgStatementId! : row.removalId,
-          code: row.ghgStatementSubmissionId ? 'GHG Statement' : 'Removal',
-        }));
+        const blockers = lineage.filter(isSubmittedLineageRow).map(row => {
+          const statement = row.recordLockRemoval.statements.find(statement => !isReturnedStatement(statement));
+          return { entity: statement ? 'ghgStatement' : 'removal', id: statement?.id ?? row.removalId, code: statement ? 'GHG Statement' : 'Removal' };
+        });
         if (blockers.length) return { ...prepared.preview, blockingMessage: 'Correction blocked by certification. Open the linked artifact to review its dependencies.', blockers: [...new Map(blockers.map(b => [b.id, b])).values()] };
       }
       return prepared.preview;
     });
   } catch (error) {
-    if (!(error instanceof ActionConflictError)) throw error;
+    if (!(error instanceof ActionConflictError) && !(error instanceof DomainError && error.code === "certification_locked")) throw error;
     // Only the current balance is shown. A correction that replays saved
     // readings carries none of its own, so its balance is read as a zero count.
     const balanceInput = input.moisturePercent == null ? { ...input, sources: undefined, kind: 'count' as const, wetMassKg: 0 } : { ...input, sources: undefined };
     const preview = (await prepareOutputStock(ctx, { ...balanceInput, correctsMovementId: undefined })).preview;
-    return { ...preview, discrepancySolidsKg: 0, moistureReset: null, afterDryKg: preview.beforeDryKg, afterSolidsKg: preview.beforeSolidsKg, afterEstimatedWetKg: preview.beforeEstimatedWetKg, afterAllocations: preview.beforeAllocations, allocations: [], removedDryKg: 0, removedWetKg: null, blockingMessage: `${error.message} Replacement balances are unavailable until this dependency is resolved.`, blockers: error.blockers ?? [error.conflict] };
+    return { ...preview, discrepancySolidsKg: 0, moistureReset: null, afterDryKg: preview.beforeDryKg, afterSolidsKg: preview.beforeSolidsKg, afterEstimatedWetKg: preview.beforeEstimatedWetKg, afterAllocations: preview.beforeAllocations, allocations: [], removedDryKg: 0, removedWetKg: null, blockingMessage: `${error.message} Replacement balances are unavailable until this dependency is resolved.`, blockers: error.blockers ?? (error.conflict ? [error.conflict] : []) };
   }
 }
 export async function getMatchingOutputBins(ctx: OrgContext, input: { facilityId: string; formulationId: string }): Promise<MatchingOutputBin[]> {

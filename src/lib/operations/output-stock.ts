@@ -31,7 +31,7 @@ export const recordOutputStockMovement: Operation<typeof recordOutputStockMoveme
   input: recordOutputStockMovementInput,
   supportsDryRun: true,
   describe: (input, output) => describeRecordedMovement(input, output.movementId),
-  execute: ({ ctx, tx, snapshotStock, activity }, { idempotencyKey, occurredAt, facilityId, requireLatestCorrection, ...command }) => withOutputStockErrors(async () => {
+  execute: ({ ctx, tx, snapshotStock, activity }, { idempotencyKey, occurredAt, facilityId, checkFormEditLock, ...command }) => withOutputStockErrors(async () => {
     // The bin supplies the facility and the zone a facility-local time is read in.
     const bin = await readOutputStockBin(ctx, tx, { storageLocationId: command.storageLocationId, facilityId });
     const result = await recordOutputStockMovementInTransaction(ctx, tx, {
@@ -39,7 +39,7 @@ export const recordOutputStockMovement: Operation<typeof recordOutputStockMoveme
       facilityId: bin.facilityId,
       occurredAt: resolveEventInstant(occurredAt, bin.timeZone, ["occurredAt"]).toISOString(),
       idempotencyKey: idempotencyKey ?? `${GENERATED_MOVEMENT_KEY_PREFIX}${randomUUID()}`,
-    }, { snapshotStock, capture: activity.capture, onReplay: activity.skip, ...(requireLatestCorrection ? { requireLatestCorrection } : {}) });
+    }, { snapshotStock, capture: activity.capture, onReplay: activity.skip, ...(checkFormEditLock ? { checkFormEditLock } : {}) });
     activity.link({ facilityId: bin.facilityId, productionRunId: singleProductionRunId(result.preview.allocations.flatMap(allocation => allocation.runs.map(run => run.productionRunId))) });
     return result;
   }, {

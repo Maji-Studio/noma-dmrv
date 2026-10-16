@@ -99,7 +99,7 @@ import {
 const REMOVAL_CLAIM_BLOCKED_MESSAGES: Record<ClaimBlockedReason, string> = {
   "in-flight": "A submission for this Removal is already in progress.",
   "rejected-with-external":
-    "This Removal was rejected by the verifier. Resolve the rejection in the Isometric registry before retrying.",
+    "This Removal submission failed after data reached Isometric. Delete or resume the Removal, or review its records in Isometric.",
   // Removal policy is `supersede`; invalid-changed-hash is unreachable but
   // kept so future policy changes are explicit.
   "invalid-changed-hash":

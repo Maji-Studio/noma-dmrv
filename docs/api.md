@@ -474,7 +474,7 @@ Drawn products are available through stock movements under `biochar-products:rea
 
 `src/lib/operations/deliveries.ts` registers `record_delivery` and
 `update_delivery`. App create runs on the runner as `record_posted_delivery`;
-app edit uses `update_posted_delivery` for metadata and latest-entry corrections.
+app edit uses `update_posted_delivery` for metadata and dependency-checked corrections.
 Both app operations remain unregistered. Public outcomes strip native product
 rows with bigint posting sequences before JSON serialization. The app create
 shares the runner's retries, deadline and statement timeout.
@@ -542,7 +542,7 @@ representation that would be removed. Create and PATCH dry runs return 200
 without Location or ETag and commit no application or activity event.
 Deletion retires documents in the same transaction and drains storage after
 commit. Submitted lineage refuses every edit; Removal-owned slices refuse mass,
-delivery and delete changes. Verified or issued linked batches refuse deletion.
+delivery and delete changes. Removal-owned applied mass refuses deletion through the record-lock guard.
 
 Lists hide applications on archived deliveries. Detail, boundary and document
 reads remain available. Archived deliveries or facilities refuse create and
@@ -686,3 +686,13 @@ request deadline before each tool. `API_WRITES_DISABLED` returns an in-MCP
 `isError` result with code `api_writes_disabled`; reads keep working. No sessions
 are exposed. Initialize returns short server instructions built from the domain
 section shared with `llms.txt`, plus MCP grounding and retry guidance.
+
+### Record-lock refusals
+
+Record dependencies and Sent certification lineage use `certification_locked`
+(HTTP 409), preserving the existing problem type and MCP error code. The message
+names what holds the record and how to free it; available conflict and blocker
+references remain in the structured error. REST and MCP execute the same
+org-scoped data-access guards as Server Actions. See [Record locks](./database.md#record-locks)
+for all-version ledger and fresh reopening rules. Stock insufficiency,
+validation failures and stale versions retain their distinct error codes.

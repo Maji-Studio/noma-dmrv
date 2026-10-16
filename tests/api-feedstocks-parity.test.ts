@@ -50,7 +50,7 @@ const cases: {
   { scenario: "foreign-reference", status: 404, code: "not_found", paths: [["supplierId"]], rowCount: 0, stock: 0, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
   { scenario: "update-validation", status: 422, code: "validation_failed", paths: [["massWetKg"]], rowCount: 1, stock: INTAKE_WET_KG, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
   { scenario: "stale", status: 412, code: "stale_version", paths: [], rowCount: 1, stock: INTAKE_WET_KG, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: NEXT_VERSION, notes: "Saved first" },
-  { scenario: "blocked-delete", status: 409, code: "conflict", paths: [], rowCount: 1, stock: INTAKE_WET_KG - DRAW_WET_KG, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
+  { scenario: "blocked-delete", status: 409, code: "certification_locked", paths: [], rowCount: 1, stock: INTAKE_WET_KG - DRAW_WET_KG, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
   { scenario: "stock-blocked-delete", status: 409, code: "insufficient_stock", paths: [["storageLocationId"]], rowCount: 1, stock: INTAKE_WET_KG - DRAW_WET_KG, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
 ];
 

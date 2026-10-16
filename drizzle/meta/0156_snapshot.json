@@ -1,5 +1,5 @@
 {
-  "id": "1dd50cbc-65c9-4c14-8b65-9c02a97c04d5",
+  "id": "3c851292-b820-4387-b1bf-1d6f62ca9093",
   "prevId": "dd8c42cc-2684-4da2-9468-1aee86b6fc7c",
   "version": "7",
   "dialect": "postgresql",
@@ -332,7 +332,7 @@
       "checkConstraints": {
         "activity_events_entity_type": {
           "name": "activity_events_entity_type",
-          "value": "\"activity_events\".\"entity_type\" in ('removal', 'ghg_statement', 'production_run', 'biochar_product', 'lab_sample', 'order', 'delivery', 'application', 'credit_batch', 'document', 'transport_leg', 'feedstock', 'bin_movement', 'supplier', 'supplier_location', 'customer', 'customer_location', 'formulation')"
+          "value": "\"activity_events\".\"entity_type\" in ('emission_entry', 'removal', 'ghg_statement', 'production_run', 'biochar_product', 'lab_sample', 'order', 'delivery', 'application', 'credit_batch', 'document', 'transport_leg', 'feedstock', 'bin_movement', 'supplier', 'supplier_location', 'customer', 'customer_location', 'formulation')"
         },
         "activity_events_action": {
           "name": "activity_events_action",
@@ -6171,6 +6171,449 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.emission_entries": {
+      "name": "emission_entries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credit_batch_id": {
+          "name": "credit_batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "removal_template_id": {
+          "name": "removal_template_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "component_id": {
+          "name": "component_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "input_shape": {
+          "name": "input_shape",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "line_rule": {
+          "name": "line_rule",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "observation_id": {
+          "name": "observation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "confirmed_for_removal_id": {
+          "name": "confirmed_for_removal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "occurred_on": {
+          "name": "occurred_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "content_revision": {
+          "name": "content_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sent_by_removal_id": {
+          "name": "sent_by_removal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "send_reserved_by_submission_id": {
+          "name": "send_reserved_by_submission_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "emission_entries_org_batch_idx": {
+          "name": "emission_entries_org_batch_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "credit_batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "emission_entries_single_value_unique": {
+          "name": "emission_entries_single_value_unique",
+          "columns": [
+            {
+              "expression": "credit_batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "removal_template_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "component_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"emission_entries\".\"line_rule\" = 'single' and \"emission_entries\".\"kind\" = 'value' and \"emission_entries\".\"deleted_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "emission_entries_confirmed_zero_unique": {
+          "name": "emission_entries_confirmed_zero_unique",
+          "columns": [
+            {
+              "expression": "confirmed_for_removal_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "credit_batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "component_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"emission_entries\".\"deleted_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "emission_entries_organization_id_organizations_id_fk": {
+          "name": "emission_entries_organization_id_organizations_id_fk",
+          "tableFrom": "emission_entries",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "emission_entries_created_by_users_id_fk": {
+          "name": "emission_entries_created_by_users_id_fk",
+          "tableFrom": "emission_entries",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "emission_entries_credit_batch_id_organization_id_credit_batches_id_organization_id_fk": {
+          "name": "emission_entries_credit_batch_id_organization_id_credit_batches_id_organization_id_fk",
+          "tableFrom": "emission_entries",
+          "tableTo": "credit_batches",
+          "columnsFrom": [
+            "credit_batch_id",
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id",
+            "organization_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "emission_entries_observation_id_organization_id_removal_template_observations_id_organization_id_fk": {
+          "name": "emission_entries_observation_id_organization_id_removal_template_observations_id_organization_id_fk",
+          "tableFrom": "emission_entries",
+          "tableTo": "removal_template_observations",
+          "columnsFrom": [
+            "observation_id",
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id",
+            "organization_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "emission_entries_sent_by_removal_id_organization_id_certifier_removals_id_organization_id_fk": {
+          "name": "emission_entries_sent_by_removal_id_organization_id_certifier_removals_id_organization_id_fk",
+          "tableFrom": "emission_entries",
+          "tableTo": "certifier_removals",
+          "columnsFrom": [
+            "sent_by_removal_id",
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id",
+            "organization_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "emission_entries_confirmed_for_removal_id_organization_id_certifier_removals_id_organization_id_fk": {
+          "name": "emission_entries_confirmed_for_removal_id_organization_id_certifier_removals_id_organization_id_fk",
+          "tableFrom": "emission_entries",
+          "tableTo": "certifier_removals",
+          "columnsFrom": [
+            "confirmed_for_removal_id",
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id",
+            "organization_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "emission_entries_send_reserved_by_submission_id_organization_id_certification_submissions_id_organization_id_fk": {
+          "name": "emission_entries_send_reserved_by_submission_id_organization_id_certification_submissions_id_organization_id_fk",
+          "tableFrom": "emission_entries",
+          "tableTo": "certification_submissions",
+          "columnsFrom": [
+            "send_reserved_by_submission_id",
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id",
+            "organization_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "emission_entries_id_org_unique": {
+          "name": "emission_entries_id_org_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "organization_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "emission_entries_kind": {
+          "name": "emission_entries_kind",
+          "value": "\"emission_entries\".\"kind\" in ('value', 'zero')"
+        },
+        "emission_entries_rule": {
+          "name": "emission_entries_rule",
+          "value": "\"emission_entries\".\"line_rule\" in ('additive', 'single')"
+        },
+        "emission_entries_zero_owner": {
+          "name": "emission_entries_zero_owner",
+          "value": "(\"emission_entries\".\"kind\" = 'zero') = (\"emission_entries\".\"confirmed_for_removal_id\" is not null)"
+        },
+        "emission_entries_revisions": {
+          "name": "emission_entries_revisions",
+          "value": "\"emission_entries\".\"version\" > 0 and \"emission_entries\".\"content_revision\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.emission_entry_values": {
+      "name": "emission_entry_values",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entry_id": {
+          "name": "entry_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "input_key": {
+          "name": "input_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "magnitude": {
+          "name": "magnitude",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit": {
+          "name": "unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mass_distance_detail": {
+          "name": "mass_distance_detail",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "emission_entry_values_organization_id_organizations_id_fk": {
+          "name": "emission_entry_values_organization_id_organizations_id_fk",
+          "tableFrom": "emission_entry_values",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "emission_entry_values_entry_id_organization_id_emission_entries_id_organization_id_fk": {
+          "name": "emission_entry_values_entry_id_organization_id_emission_entries_id_organization_id_fk",
+          "tableFrom": "emission_entry_values",
+          "tableTo": "emission_entries",
+          "columnsFrom": [
+            "entry_id",
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id",
+            "organization_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "emission_entry_values_input_unique": {
+          "name": "emission_entry_values_input_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "entry_id",
+            "input_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "emission_entry_values_nonnegative": {
+          "name": "emission_entry_values_nonnegative",
+          "value": "\"emission_entry_values\".\"magnitude\" >= 0 and \"emission_entry_values\".\"magnitude\" <> 'NaN'::numeric and \"emission_entry_values\".\"magnitude\" <> 'Infinity'::numeric"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.facility_emission_factors": {
       "name": "facility_emission_factors",
       "schema": "",
@@ -8689,12 +9132,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "archived_at": {
-          "name": "archived_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -9246,12 +9683,6 @@
         "source_region": {
           "name": "source_region",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "archived_at": {
-          "name": "archived_at",
-          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },

@@ -1,3 +1,4 @@
+import { bumpEmissionEntryEvidence } from "./emission-entry-lock";
 import type { CaptureActivity } from "@/lib/activity-changes";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -34,6 +35,7 @@ export async function deleteDocumentInTransaction(ctx: OrgContext, tx: DbTransac
   const [mapping] = await tx.select({ id: certifierDocumentUploads.id }).from(certifierDocumentUploads).where(and(eq(certifierDocumentUploads.documentId, row.id), eq(certifierDocumentUploads.organizationId, ctx.organizationId))).limit(1);
   if (mapping) throw new DomainError("conflict", "This document is mirrored to a certification provider and cannot be deleted.");
   await enqueueDocumentKeys(ctx, tx, row);
+  if (row.uploadStatus === "uploaded") await bumpEmissionEntryEvidence(ctx, tx, row.entityType, row.entityId);
   await tx.delete(documents).where(and(eq(documents.id, row.id), eq(documents.organizationId, ctx.organizationId)));
   return row;
 }
