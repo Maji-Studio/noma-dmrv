@@ -1,3 +1,5 @@
+import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
+export { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
 import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import type { OrgContext } from "@/lib/auth/server";
@@ -14,7 +16,6 @@ import {
 } from "@/lib/isometric";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import {
-  expectedSequestrationBlueprintKeys,
   isSequestrationBlueprintFamily,
   isStorageBlueprintKey,
 } from "@/lib/isometric/storage-blueprints";
@@ -187,6 +188,8 @@ export interface MaterializedRemovalSubmissionSnapshot {
   metadata: { supersedePreviousId: string | null };
 }
 
+export const REMOVAL_COMPILATION_FAILED_MESSAGE = "Removal submission could not be compiled from the current source data.";
+
 const DATAPOINT_POST_TARGET = "/datapoints";
 const MEASUREMENT_SAMPLE_POST_TARGET = "/measurement-samples";
 const GHG_ENTRY_POST_TARGET = "/ghg-entries";
@@ -223,28 +226,6 @@ function emptyReview(
   };
 }
 
-export function removalTemplateTierCompatibilityBlocker(
-  ctx: Pick<RemovalSubmissionContext, "batchesWithSamples">,
-  template: IsometricGhgEntryTemplate,
-): string | null {
-  const facilityTier = ctx.batchesWithSamples[0]?.durabilityOption ?? null;
-  if (!facilityTier) return null;
-  const expectedKeys = expectedSequestrationBlueprintKeys(facilityTier);
-  const mismatched = template.groups
-    .flatMap((group) => group.components)
-    .map((component) => component.blueprint_key)
-    .filter(isSequestrationBlueprintFamily)
-    .find((key) => !expectedKeys.has(key));
-  if (!mismatched) return null;
-
-  const tierLabel = facilityTier === "1000_year" ? "1000-year" : "200-year";
-  return (
-    `This facility uses ${tierLabel} durability, but the credit batch's Removal ` +
-    `template uses an incompatible storage component (${mismatched}). ` +
-    `Switch the credit batch to a ${tierLabel} template or change the facility's durability tier.`
-  );
-}
-
 export async function compileRemovalSubmission(
   args: Parameters<typeof buildRemovalSubmissionBuild>[0] & {
     /**
@@ -254,7 +235,7 @@ export async function compileRemovalSubmission(
     allowPendingSources?: boolean;
   },
 ): Promise<CompiledRemovalSubmission> {
-  const unbindable = findUnbindableTemplateInputs(args.prepared.removalTemplate, { lineSources: args.prepared.lineSources, allowPeriodInputStub: args.prepared.allowPeriodInputStub });
+  const unbindable = findUnbindableTemplateInputs(args.prepared.removalTemplate, { lineSources: args.prepared.lineSources });
   if (unbindable.length > 0) {
     return {
       review: emptyReview(args.prepared.removalTemplate),
@@ -299,7 +280,7 @@ export async function compileRemovalSubmission(
       blockers: [
         error instanceof SafeError
           ? error.message
-          : "Removal submission could not be compiled from the current source data.",
+          : REMOVAL_COMPILATION_FAILED_MESSAGE,
       ],
       warnings: [...(args.ctx.submissionWarnings ?? [])],
       snapshot: null,

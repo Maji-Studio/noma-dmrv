@@ -1,3 +1,4 @@
+import type { CaptureActivity } from "@/lib/activity-changes";
 import { and, eq } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { samples } from "@/db/schema";
@@ -29,7 +30,7 @@ export async function updateSampleInTransaction(
   tx: DbTransaction,
   sampleId: string,
   request: UpdateSampleRequest,
-  options: { now?: Date } = {},
+  options: { now?: Date; capture?: CaptureActivity } = {},
 ): Promise<SampleWriteResult> {
   requireOrgScope(ctx);
   // Unlocked read for the batches to lock; the locked row below is authoritative.
@@ -66,7 +67,7 @@ export async function updateSampleInTransaction(
   }
   if (request.samplingTime !== undefined && samplingTime) assertSamplingTimeNotFuture(samplingTime, options.now ?? new Date());
 
-  await tx.update(samples).set({
+  const [saved] = await tx.update(samples).set({
     ...optionalColumns(request, false),
     ...ratios.columns,
     ...(request.sampleCode !== undefined ? { sampleCode: request.sampleCode } : {}),
@@ -76,7 +77,8 @@ export async function updateSampleInTransaction(
     ...(request.organicCarbonPercent !== undefined ? { organicCarbonPercent: request.organicCarbonPercent } : {}),
     updatedAt: new Date(),
     version: nextVersion(samples.version),
-  }).where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
+  }).where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId))).returning();
+  options.capture?.(sampleId, locked, saved);
 
   return {
     // Read back inside the transaction (issue #769).

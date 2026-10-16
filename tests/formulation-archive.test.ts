@@ -43,8 +43,12 @@ describe("formulation archive and restore", { timeout: TIMEOUT_MS }, () => {
     });
     const events = await db.select().from(activityEvents).where(eq(activityEvents.entityId, f.recipe.id)).orderBy(activityEvents.sequence);
     expect(events).toMatchObject([
-      { action: "status_changed", fromStatus: "active", toStatus: "archived", changedFields: [], versionBefore: 1, versionAfter: 2 },
-      { action: "status_changed", fromStatus: "archived", toStatus: "active", changedFields: [], versionBefore: 2, versionAfter: 3 },
+      { action: "status_changed", fromStatus: "active", toStatus: "archived", changedFields: ["archivedAt"], versionBefore: 1, versionAfter: 2 },
+      { action: "status_changed", fromStatus: "archived", toStatus: "active", changedFields: ["archivedAt"], versionBefore: 2, versionAfter: 3 },
+    ]);
+    expect(events.map(event => event.changes)).toEqual([
+      { archivedAt: { from: null, to: archived.archivedAt!.toISOString() } },
+      { archivedAt: { from: archived.archivedAt!.toISOString(), to: null } },
     ]);
   });
 

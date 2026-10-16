@@ -268,7 +268,7 @@ describe("deleteRemoval", () => {
     expect(batchHistory).toHaveLength(1);
     expect(batchHistory[0]).toMatchObject({
       creditBatchId: fixture.creditBatchId, action: "updated", source: "form",
-      changedFields: ["productionClaimReservation"], actorUserId: makeTestOrgContext().userId,
+      changedFields: ["productionEmissionsClaimReservedBySubmissionId"], actorUserId: makeTestOrgContext().userId,
     });
     const events = await db
       .select({
@@ -425,7 +425,7 @@ describe("deleteRemoval", () => {
     expect(batchHistory).toHaveLength(1);
     expect(batchHistory[0]).toMatchObject({
       creditBatchId: fixture.creditBatchId, action: "updated", source: "form",
-      changedFields: ["productionClaimReservation", "productionClaim", "removalAssignment"],
+      changedFields: ["productionEmissionsClaimReservedBySubmissionId", "productionEmissionsClaimedByRemovalId", "removalAssignment"],
       actorUserId: makeTestOrgContext().userId,
     });
     const row = await ledgerRow(submissionId);

@@ -12,15 +12,15 @@ const expectedFindings = [
   ["rtc_1KWKNGJZY1S0D548", "distance", "unmapped"],
   ["rtc_1KWKNGJZY1S0MEVJ", "final_readout", "unmapped"],
   ["rtc_1KWKNGJZY1S0MEVJ", "initial_readout", "unmapped"],
-  ["rtc_1KWKNGJZY1S0VRJW", "concentration", "project-scope"],
-  ["rtc_1KWKNGJZY1S0VRJW", "mass_flow", "project-scope"],
-  ["rtc_1KWKNGJZY1S0FDEH", "concentration", "project-scope"],
-  ["rtc_1KWKNGJZY1S0FDEH", "mass_flow", "project-scope"],
+  ["rtc_1KWKNGJZY1S0VRJW", "concentration", "unmapped"],
+  ["rtc_1KWKNGJZY1S0VRJW", "mass_flow", "unmapped"],
+  ["rtc_1KWKNGJZY1S0FDEH", "concentration", "unmapped"],
+  ["rtc_1KWKNGJZY1S0FDEH", "mass_flow", "unmapped"],
   ["rtc_1KWKNGJZY1S032A6", "distance", "unmapped"],
-  ["rtc_1KWKNGJZY1S0AC1G", "electricity_use", "project-scope"],
-  ["rtc_1KWKNGJZY1S0Y0X5", "mass", "project-scope"],
-  ["rtc_1KWKNGJZY1S05AMF", "distance", "project-scope"],
-  ["rtc_1KWKNGJZY1S0RZG4", "distance", "project-scope"],
+  ["rtc_1KWKNGJZY1S0AC1G", "electricity_use", "unmapped"],
+  ["rtc_1KWKNGJZY1S0Y0X5", "mass", "unmapped"],
+  ["rtc_1KWKNGJZY1S05AMF", "distance", "unmapped"],
+  ["rtc_1KWKNGJZY1S0RZG4", "distance", "unmapped"],
   ["rtc_1KWKNGJZY1S0CMBS", "mass", "project-scope"],
 ];
 const acceptedInputs: Record<string, { unit: string; magnitude: number }> = {
@@ -70,8 +70,8 @@ describe("production template binding coverage", () => {
     expect(copy.split("\n")).toEqual([
       "The Removal template has 10 components noma cannot submit.",
       "Biomass transportation to processing site via truck (rtc_1KWKNGJZY1S0D548; blueprint transport; input distance) and Biochar transportation to storage site via truck (rtc_1KWKNGJZY1S032A6; blueprint transport; input distance): Replace each one with a Mass-distance-based CI emissions component in Isometric, or pick another Removal template.",
-      "Metered electricity use emissions (rtc_1KWKNGJZY1S0MEVJ; blueprint metered_energy_based_ci_emissions; inputs final_readout, initial_readout): Pick another Removal template or ask support to add the mapping.",
-      "Pyrolyzer CO emissions (rtc_1KWKNGJZY1S0VRJW; blueprint ghg_direct_emissions; inputs concentration, mass_flow), Pyrolyzer CH4 emissions (rtc_1KWKNGJZY1S0FDEH; blueprint ghg_direct_emissions; inputs concentration, mass_flow), Laboratory analysis electricity use (rtc_1KWKNGJZY1S0AC1G; blueprint grid_electricity_use; input electricity_use), Sampling consumables (rtc_1KWKNGJZY1S0Y0X5; blueprint mass_based_ci_emissions; input mass), Staff travel flights (rtc_1KWKNGJZY1S05AMF; blueprint distance_based_ci_emissions; input distance), Staff travel local (rtc_1KWKNGJZY1S0RZG4; blueprint distance_based_ci_emissions; input distance) and Mass-based CI emissions (rtc_1KWKNGJZY1S0CMBS; blueprint mass_based_ci_emissions; input mass): Add each one as a project component in Isometric, then remove them from the Removal template.",
+      "Metered electricity use emissions (rtc_1KWKNGJZY1S0MEVJ; blueprint metered_energy_based_ci_emissions; inputs final_readout, initial_readout), Pyrolyzer CO emissions (rtc_1KWKNGJZY1S0VRJW; blueprint ghg_direct_emissions; inputs concentration, mass_flow), Pyrolyzer CH4 emissions (rtc_1KWKNGJZY1S0FDEH; blueprint ghg_direct_emissions; inputs concentration, mass_flow), Laboratory analysis electricity use (rtc_1KWKNGJZY1S0AC1G; blueprint grid_electricity_use; input electricity_use), Sampling consumables (rtc_1KWKNGJZY1S0Y0X5; blueprint mass_based_ci_emissions; input mass), Staff travel flights (rtc_1KWKNGJZY1S05AMF; blueprint distance_based_ci_emissions; input distance) and Staff travel local (rtc_1KWKNGJZY1S0RZG4; blueprint distance_based_ci_emissions; input distance): Pick another Removal template or ask support to add the mapping.",
+      "Mass-based CI emissions (rtc_1KWKNGJZY1S0CMBS; blueprint mass_based_ci_emissions; input mass): Add it as a project component in Isometric, then remove it from the Removal template.",
     ]);
     expect(copy.match(/Metered electricity use emissions/g)).toHaveLength(1);
     expect(copy).toContain("blueprint ghg_direct_emissions; inputs concentration, mass_flow");
@@ -81,7 +81,7 @@ describe("production template binding coverage", () => {
   });
 
   it.each([false, true])("agrees with actual datapoint builds (sandbox stubs: %s)", (allowPeriodInputStub) => {
-    const findings = findUnbindableTemplateInputs(template, { allowPeriodInputStub });
+    const findings = findUnbindableTemplateInputs(template);
     for (const group of template.groups) for (const component of group.components) {
       for (const input of component.inputs) {
         if (input.type === "fixed") {
@@ -91,7 +91,7 @@ describe("production template binding coverage", () => {
         const accepted = acceptedInputs[`${component.id}/${input.input_key}`];
         const expected = expectedFindings.find(([id, key]) => id === component.id && (key === input.input_key || component.blueprint_key === "transport"));
         const contract = reviewedTemplateSources(template)[component.id];
-        const shouldReject = contract.scope === "forbidden" || (!!expected && !(allowPeriodInputStub && expected[2] === "project-scope"));
+        const shouldReject = contract.scope === "forbidden" || !!expected;
         const build = () => buildCreateDatapointRequest({
           groupKey: group.key,
           componentBlueprintKey: component.blueprint_key,
@@ -105,7 +105,7 @@ describe("production template binding coverage", () => {
         });
         expect(findings.some((finding) => finding.componentId === component.id && (finding.inputKey === input.input_key || component.blueprint_key === "transport"))).toBe(shouldReject);
         if (shouldReject) {
-          expect(build).toThrow(expected?.[2] === "project-scope" ? /belongs at the project level/ : /not supported/);
+          expect(build).toThrow(expected?.[2] === "project-scope" ? /belongs at the project level/ : /Pick another Removal template|pick another Removal template/);
         } else {
           expect(build().quantity.magnitude).toBe(accepted?.magnitude ?? 0);
         }
