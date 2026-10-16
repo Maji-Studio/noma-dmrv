@@ -14,7 +14,6 @@ import Link from "next/link";
 import {
   ArrowRightIcon,
   ArrowUpRightIcon,
-  CaretLeftIcon,
   DotsThreeVerticalIcon,
   FileIcon,
   WarningIcon,
@@ -51,13 +50,11 @@ import {
 import { DisclosureButton, LineStateBadge, ProtoNote, ReviewBlock, YEARLY_REPORT_FILE, type BatchView } from "./prototype-emissions-shared";
 import {
   entriesText,
-  entryGuard,
   lineCase,
   nothingToRecordRefusal,
   recordsSource,
   recordsText,
   rowMenuItems,
-  totalAfter,
 } from "./prototype-line-sources";
 
 const KG_PER_TONNE = 1000;
@@ -88,7 +85,6 @@ export function parseAmount(raw: string): number | null {
   return /^\d+(?:\.\d+)?$/.test(raw.trim()) ? Number(raw) : null;
 }
 const sumValues = (line: PrototypeLine) => line.values.reduce((sum, entry) => sum + entryAmount(line.def, entry), 0);
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** "18,420 kWh from 22 production runs" as figure and source, so the cell can stack them. */
 function recordsParts(line: PrototypeLine): { figure: string | null; source: string } {
@@ -104,17 +100,6 @@ function entriesParts(line: PrototypeLine): { figure: string; detail: string | n
   const at = text.lastIndexOf(", ");
   if (line.def.shape === "gas" || at < 0) return { figure: text, detail: null };
   return { figure: text.slice(0, at), detail: text.slice(at + 2) };
-}
-
-/** What to do instead of Nothing to record when runs or legs exist. */
-function upstreamHint(line: PrototypeLine): string | null {
-  if (!hasRecordsGap(line) || !line.records) return null;
-  if (line.records.label === "production runs") {
-    const what = line.def.activity === "diesel" ? "diesel" : line.def.activity === "electricity" ? "electricity" : "anything";
-    return `If ${what} was used, record it on the run instead.`;
-  }
-  if (line.records.label === "deliveries") return "If biochar left for storage, record the delivery instead.";
-  return "If there was a pickup, record it on a transport leg instead.";
 }
 
 /* ---------- the three equation cells ---------- */
@@ -498,21 +483,12 @@ function EntryForm({ line, batch, panel, ops }: { line: PrototypeLine; batch: Pr
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [showDescription, setShowDescription] = useState(false);
-  const [showEarlier, setShowEarlier] = useState(false);
   const set = (key: keyof FormValues) => (event: { target: { value: string } }) => setValues((v) => ({ ...v, [key]: event.target.value }));
   const back = () => (panel.from === "ledger" ? ops.openPanel({ lineId: def.id, view: "ledger" }) : ops.closePanel());
 
   const mass = parseAmount(values.mass);
   const distance = parseAmount(values.distance);
   const product = mass != null && distance != null ? (mass * distance) / KG_PER_TONNE : null;
-  const amount = def.shape === "massDistance" ? product : parseAmount(values.value);
-  const oldAmount = editing && editing.kind === "value" ? entryAmount(def, editing) : 0;
-  const preview = def.shape === "gas" || nothing ? null : totalAfter(line, amount == null ? null : amount - oldAmount);
-  const others = line.values.filter((e) => e.id !== editing?.id);
-  const entriesAfter = amount == null ? null : `${formatFigure(sumValues({ ...line, values: others }) + amount, def.unit)} from ${plural(others.length + 1, "entry", "entries")}`;
-  const recordsPart = line.records ? recordsText(line) : null;
-  const guard = entryGuard(line);
-  const gap = hasRecordsGap(line);
 
   const save = () => {
     const next: FormErrors = {};
@@ -588,21 +564,6 @@ function EntryForm({ line, batch, panel, ops }: { line: PrototypeLine; batch: Pr
             {showDescription && <p className="body-small whitespace-pre-line text-[var(--color-text-secondary)]">{def.description}</p>}
           </div>
 
-          {line.records && def.rule === "additive" && (
-            <section className="flex flex-col gap-8 p-16 bg-[var(--sea)]">
-              <SectionHead title="From records" aside="Fixed" />
-              <RecordsCell line={line} align="left" />
-              {nothing ? (
-                upstreamHint(line) && <Notice tone="warning">{upstreamHint(line)}</Notice>
-              ) : gap ? (
-                guard && <Notice tone="warning">{guard}</Notice>
-              ) : (
-                guard && <p className="body-caption text-[var(--color-text-secondary)]">{guard}</p>
-              )}
-            </section>
-          )}
-          {nothing && !line.records && <p className="body-small text-[var(--color-text-secondary)]">No records source</p>}
-
           {!nothing && line.nothing && !line.values.length && !editing && (
             <Notice tone="info">{`This replaces Nothing to record on ${def.name}.`}</Notice>
           )}
@@ -641,37 +602,12 @@ function EntryForm({ line, batch, panel, ops }: { line: PrototypeLine; batch: Pr
             {nothing && <p className="body-caption text-[var(--color-text-tertiary)]">{ISOMETRIC_ZERO}</p>}
           </section>
 
-          {preview && (
-            <section className="flex flex-col gap-8 pt-16 [border-top:var(--row-divider)]">
-              <SectionHead op={line.records ? "=" : undefined} title="Total after save" />
-              <BeforeAfter before={preview.before} after={amount == null ? null : preview.after} className="body-medium" />
-              {entriesAfter && (
-                <p className="body-caption text-[var(--color-text-secondary)]">{[recordsPart, entriesAfter].filter(Boolean).join(" + ")}</p>
-              )}
-              {others.length > 0 && (
-                <>
-                  <DisclosureButton open={showEarlier} onToggle={() => setShowEarlier((v) => !v)} className="self-start">{`Earlier entries (${others.length})`}</DisclosureButton>
-                  {showEarlier && (
-                    <ul className="flex flex-col">
-                      {others.map((entry) => (
-                        <li key={entry.id} className="flex justify-between gap-12 py-6 body-small [border-top:var(--row-divider)] first:[border-top:none]">
-                          <span className="tabular-nums">{entryText(def, entry)}</span>
-                          <span className="text-[var(--color-text-tertiary)]">{formatDate(entry.date)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </>
-              )}
-            </section>
-          )}
           {kind === "S" && <p className="body-caption text-[var(--color-text-tertiary)]">One entry per credit batch, so there is no sum.</p>}
         </div>
       </SlideOverPanelBody>
       <SlideOverPanelFooter className="justify-between">
         <Button variant="weak" onClick={back}>
-          {panel.from === "ledger" && <CaretLeftIcon size={16} weight="bold" aria-hidden="true" />}
-          {panel.from === "ledger" ? "Back" : "Cancel"}
+          Cancel
         </Button>
         <Button variant="primary" onClick={save}>{nothing ? (editing ? "Save note" : "Mark nothing to record") : "Save entry"}</Button>
       </SlideOverPanelFooter>

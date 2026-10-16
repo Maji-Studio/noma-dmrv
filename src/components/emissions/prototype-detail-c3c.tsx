@@ -16,7 +16,7 @@
 
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowRightIcon, DotsThreeVerticalIcon, MinusCircleIcon, PaperclipIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
+import { DotsThreeVerticalIcon, MinusCircleIcon, PaperclipIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField } from "@/components/forms";
 import { Button, DropdownMenu, Input, Notice, PageHeader, Tooltip } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
@@ -636,15 +636,7 @@ function GridRow({ line, detail, draft, errors, onChange }: GridRowProps) {
       {showPreview && (
         <div className="flex flex-col gap-4 lg:items-end" aria-live="polite">
           <span className="body-caption text-[var(--color-text-tertiary)]">Total</span>
-          <span className="flex flex-wrap items-center gap-8 tabular-nums">
-            <span className={cn("[border:var(--hair-2)] px-8 py-4 body-small", !typed && "text-[var(--color-text-tertiary)]")}>{preview.before}</span>
-            {typed && (
-              <>
-                <ArrowRightIcon size={14} weight="bold" aria-hidden="true" className="text-[var(--color-text-tertiary)]" />
-                <span className="[border:var(--hair)] px-8 py-4 body-small font-medium">{draft.nothing ? `0 ${def.unit}` : preview.after}</span>
-              </>
-            )}
-          </span>
+          <span className="body-small tabular-nums">{typed ? (draft.nothing ? `0 ${def.unit}` : preview.after) : preview.before}</span>
         </div>
       )}
     </li>

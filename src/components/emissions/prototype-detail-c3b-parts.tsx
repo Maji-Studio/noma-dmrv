@@ -28,7 +28,6 @@ import { formatDate } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import {
   GAS_INPUTS,
-  entryAmount,
   entryText,
   formatFigure,
   formatNumber,
@@ -38,8 +37,8 @@ import {
   type PrototypeEntry,
   type PrototypeLine,
 } from "./prototype-emissions-data";
-import { DisclosureButton, EntryList, LineStateBadge, ReviewBlock, YEARLY_REPORT_FILE } from "./prototype-emissions-shared";
-import { entryGuard, lineCase, recordsSource, recordsText, totalAfter } from "./prototype-line-sources";
+import { DisclosureButton, LineStateBadge, ReviewBlock, YEARLY_REPORT_FILE } from "./prototype-emissions-shared";
+import { entryGuard, lineCase, recordsSource, recordsText } from "./prototype-line-sources";
 import type { BatchDetail } from "./prototype-detail-shared";
 
 const KG_PER_TONNE = 1000;
@@ -126,13 +125,13 @@ export type C3bSheet = ReturnType<typeof useC3bSheet>;
 
 const TITLES: Record<C3bMode, string> = { add: "Add entry", edit: "Edit entry", again: "Enter again" };
 
-export function C3bEntrySheet({ sheet, batch, lines, offerOnGap }: { sheet: C3bSheet; batch: PrototypeBatch; lines: PrototypeLine[]; offerOnGap: boolean }) {
+export function C3bEntrySheet({ sheet, batch, lines }: { sheet: C3bSheet; batch: PrototypeBatch; lines: PrototypeLine[] }) {
   const line = lines.find((l) => l.def.id === sheet.target?.lineId);
   return (
     <SlideOverPanelRoot open={sheet.open && !!line} onOpenChange={(next) => !next && sheet.close()}>
       <SlideOverPanelContent size="default">
         {line && sheet.target && (
-          <EntryForm key={`${line.def.id}-${sheet.target.mode}-${sheet.target.entryId ?? ""}`} target={sheet.target} batch={batch} line={line} offerOnGap={offerOnGap} onDone={sheet.close} />
+          <EntryForm key={`${line.def.id}-${sheet.target.mode}-${sheet.target.entryId ?? ""}`} target={sheet.target} batch={batch} line={line} onDone={sheet.close} />
         )}
       </SlideOverPanelContent>
     </SlideOverPanelRoot>
@@ -155,7 +154,7 @@ function seedValues(line: PrototypeLine, seed: PrototypeEntry | undefined, defau
   };
 }
 
-function EntryForm({ target, batch, line, offerOnGap, onDone }: { target: C3bTarget; batch: PrototypeBatch; line: PrototypeLine; offerOnGap: boolean; onDone: () => void }) {
+function EntryForm({ target, batch, line, onDone }: { target: C3bTarget; batch: PrototypeBatch; line: PrototypeLine; onDone: () => void }) {
   const toast = useToast();
   const { def } = line;
   const editing = target.mode === "edit" ? line.entries.find((e) => e.id === target.entryId) : undefined;
@@ -164,7 +163,6 @@ function EntryForm({ target, batch, line, offerOnGap, onDone }: { target: C3bTar
   const [values, setValues] = useState<FormValues>(() => seedValues(line, editing ?? again, defaultDate, !!editing));
   const [errors, setErrors] = useState<FormErrors>({});
   const [showDescription, setShowDescription] = useState(false);
-  const [showEarlier, setShowEarlier] = useState(false);
   const set = (key: "a" | "b" | "date" | "note") => (event: { target: { value: string } }) => setValues((v) => ({ ...v, [key]: event.target.value }));
 
   const gas = def.shape === "gas";
@@ -173,20 +171,7 @@ function EntryForm({ target, batch, line, offerOnGap, onDone }: { target: C3bTar
   const hasRecords = source.kind === "records";
   const gap = hasRecords && source.value == null;
   const replacesZero = !editing && line.nothing && !line.values.length ? line.nothing : null;
-  const guard = entryGuard(line);
-  const others = line.values.filter((e) => e.id !== editing?.id);
   const figure = draftFigure(line, values.a, values.b);
-
-  // Total after save: totalAfter covers add and enter again; an edit swaps its own entry out first.
-  const othersSum = others.reduce((sum, e) => sum + entryAmount(def, e), 0);
-  const total = editing
-    ? { before: line.totalText, after: figure == null ? line.totalText : formatFigure((line.auto?.value ?? 0) + othersSum + figure, def.unit) }
-    : totalAfter(line, figure);
-  const composition = [
-    hasRecords ? recordsText(line) : null,
-    others.length ? `${formatFigure(othersSum, def.unit)} from ${plural(others.length, editing ? "other entry" : "earlier entry", editing ? "other entries" : "earlier entries")}` : null,
-    figure != null ? `${formatFigure(figure, def.unit)} from this entry` : "this entry",
-  ].filter(Boolean).join(" + ");
 
   const save = () => {
     const next: FormErrors = {};
@@ -240,25 +225,11 @@ function EntryForm({ target, batch, line, offerOnGap, onDone }: { target: C3bTar
             {showDescription && <p className="body-small whitespace-pre-line text-[var(--color-text-secondary)]">{def.description}</p>}
           </div>
 
-          {hasRecords && (
-            <section aria-labelledby="c3b-form-records" className="flex flex-col gap-8 border-l-2 border-[var(--clr-dark-purple-40)] pl-16">
-              <div className="flex items-baseline justify-between gap-12">
-                <h3 id="c3b-form-records" className="body-small font-medium">From records</h3>
-                <span className="body-caption text-[var(--color-text-tertiary)]">Fixed, not typed here</span>
-              </div>
-              <p className={cn("body-medium tabular-nums", gap ? "text-[var(--color-text-secondary)]" : "font-medium")}>{recordsText(line)}</p>
-              <RecordsLink line={line} className="body-small text-[var(--color-text-interaction-primary)]" />
-              {gap && guard && <Notice tone="warning">{guard}</Notice>}
-              {gap && !offerOnGap && <p className="body-small text-[var(--color-text-secondary)]">Record it on the source page instead.</p>}
-            </section>
-          )}
-
           <section aria-labelledby="c3b-form-entry" className={cn("flex flex-col gap-20", hasRecords && "border-l-2 border-[var(--clr-purple)] pl-16")}>
             <div className="flex items-baseline justify-between gap-12">
               <h3 id="c3b-form-entry" className="body-small font-medium">Entry</h3>
               {gap && <span className="body-caption text-[var(--color-text-tertiary)]">On top of nothing from records</span>}
             </div>
-            {!gap && guard && hasRecords && <p className="-mt-12 body-caption text-[var(--color-text-secondary)]">{guard}</p>}
             {replacesZero && <Notice tone="warning">{`This replaces Nothing to record on ${def.name}.`}</Notice>}
             {again && <p className="body-small text-[var(--color-text-secondary)]">{`Replaces ${entryText(def, again)} from ${formatDate(again.date)}, which stopped counting after a template change.`}</p>}
             {amountFields}
@@ -295,19 +266,6 @@ function EntryForm({ target, batch, line, offerOnGap, onDone }: { target: C3bTar
             </FormField>
           </section>
 
-          {!gas && (
-            <section aria-labelledby="c3b-form-total" className="flex flex-col gap-10 border-t border-[var(--color-border-tertiary)] pt-16">
-              <h3 id="c3b-form-total" className="body-small font-medium">Total after save</h3>
-              <BeforeAfter before={total.before} after={total.after} />
-              <p className="body-caption text-[var(--color-text-secondary)]">{composition}</p>
-              {others.length > 0 && (
-                <div className="flex flex-col gap-6">
-                  <DisclosureButton open={showEarlier} onToggle={() => setShowEarlier((v) => !v)}>{editing ? "Show other entries" : "Show earlier entries"}</DisclosureButton>
-                  {showEarlier && <EntryList line={{ ...line, entries: others }} />}
-                </div>
-              )}
-            </section>
-          )}
         </div>
       </SlideOverPanelBody>
       <SlideOverPanelFooter>
@@ -487,8 +445,6 @@ function GridRow({ line, detail, offerOnGap, onEnterAgain, draft, errors, onChan
   const gap = kind === "B1" || kind === "B2" || kind === "F";
   const canNothing = line.state === "empty" && def.rule !== "none";
   const missingEntry = line.values.find((e) => !e.files.length);
-  const figure = draftFigure(line, draft.a, draft.b);
-  const preview = !draft.nothing && figure != null && def.shape !== "gas" ? totalAfter(line, figure) : null;
 
   // Read only, above the input: what the entry lands on top of.
   const recordsCaption = recordsSource(line).kind === "records" && def.rule === "additive" ? (
@@ -582,7 +538,6 @@ function GridRow({ line, detail, offerOnGap, onEnterAgain, draft, errors, onChan
             </button>
           )}
         </div>
-        {preview && <BeforeAfter compact before={preview.before} after={preview.after} beforeLabel="Total now" afterLabel="After save" />}
       </div>
     );
   }

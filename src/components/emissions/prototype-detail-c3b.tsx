@@ -172,7 +172,7 @@ export function DetailC3B({ data: raw, batchId }: { data: Data; batchId: string 
       ) : (
         <ReadLedger detail={detail} openLine={openLine} ops={ops} />
       )}
-      <C3bEntrySheet sheet={sheet} batch={view.batch} lines={view.lines} offerOnGap={OFFER_ENTRY_ON_RECORDS_GAP} />
+      <C3bEntrySheet sheet={sheet} batch={view.batch} lines={view.lines} />
       {undo && (
         <div role="status" className="fixed bottom-[72px] left-1/2 z-[var(--z-layer-popover)] flex w-[min(560px,calc(100vw-32px))] -translate-x-1/2 flex-wrap items-center justify-between gap-x-16 gap-y-4 bg-[var(--paper)] px-16 py-8 [border:var(--hair)]">
           <span className="body-small">{undo.message}</span>
