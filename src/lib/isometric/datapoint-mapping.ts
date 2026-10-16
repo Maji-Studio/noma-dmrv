@@ -32,7 +32,9 @@ export function lookupInputMapping(
   if (!mapping || !contract) return mapping;
   const effective = effectiveContract(contract);
   if (effective.scope !== "operating") return undefined;
-  if (effective.automaticSource === "sequestration") return mapping;
+  // Stored inputs compile from Samples and applications. A per-component stored
+  // source (the Safety margin carve-out) still needs its reviewed contract.
+  if (effective.automaticSource === "sequestration" || (mapping.bucket === "stored" && !mapping.sourceByComponent)) return mapping;
   if (effective.automaticSource) return { ...mapping, source: automaticSourceFact(effective.automaticSource), sourceByComponent: undefined };
   // A contract without an automatic source is entry-only; the catalog default
   // would feed one total to every such line (two sample shipping lines).
@@ -45,7 +47,7 @@ export function resolveDatapointSource(
   contract?: LineContract,
 ): keyof AggregatedProductionData {
   const effective = contract && effectiveContract(contract);
-  if (effective?.scope === "operating" && effective.automaticSource === "sequestration") return mapping.source;
+  if (effective?.scope === "operating" && (effective.automaticSource === "sequestration" || (mapping.bucket === "stored" && !mapping.sourceByComponent))) return mapping.source;
   if (effective?.scope === "operating" && effective.automaticSource) return automaticSourceFact(effective.automaticSource);
   if (contract || mapping.sourceByComponent) {
     throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview);

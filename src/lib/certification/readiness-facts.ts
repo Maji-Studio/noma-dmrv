@@ -32,6 +32,7 @@ export function toRemovalReadinessFacts(
     hasMapping: !!ctx.mapping,
     hasRemovalTemplate: !!ctx.removalTemplate,
     templateBlockers: ctx.templateBlockers,
+    emissionLineBlockers: ctx.emissionLines?.flatMap((line) => line.blocker ? [line.blocker] : []),
     unresolvedBlueprintKeys: ctx.unresolvedBlueprintKeys,
     unbindableTemplateInputs: ctx.unbindableTemplateInputs,
     feedstockTypeMappingGaps: ctx.feedstockTypeMappingGaps ?? [],

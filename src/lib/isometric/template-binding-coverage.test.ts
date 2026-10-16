@@ -55,13 +55,15 @@ describe("contract-based template coverage", () => {
     const mapping = lookupInputMapping("pyrolysis", "fuel_usage_by_volume", "volume_of_fuel")!;
     expect(() => resolveDatapointSource(mapping)).toThrow("Review the Removal template lines in Certification settings.");
   });
-  it("preserves production period guards and sandbox stubs for entry-only lines", () => {
+  it("blocks entry-only operating lines in both environments until entries can be submitted", () => {
     const value = realTemplate as GhgEntryTemplate;
-    expect(coverage(value).some((finding) => finding.reason === "project-scope")).toBe(true);
-    // Sandbox stubs period lines only. Sample shipping lines have no automatic
-    // source, so they block instead of each receiving the full sample transport total.
-    const sampleLines = ["rtc_1M4ZRPH1RSBXADG2", "rtc_1M4ZRRN6PSBXHQ7C"];
-    expect(coverage(value, reviewedTemplateSources(value), true).map((finding) => finding.componentId).sort()).toEqual(sampleLines);
+    const sources = reviewedTemplateSources(value);
+    const ids = Object.entries(sources).filter(([, contract]) => contract.scope === "operating" && !contract.automaticSource).map(([id]) => id).sort();
+    for (const stubs of [true, false]) {
+      const findings = coverage(value, sources, stubs);
+      expect([...new Set(findings.map((finding) => finding.componentId))].sort()).toEqual(ids);
+      expect(findings.every((finding) => finding.reason === "unmapped")).toBe(true);
+    }
   });
   it("blocks forbidden lines even in sandbox", () => {
     const first = template.groups.flatMap((group) => group.components)[0];

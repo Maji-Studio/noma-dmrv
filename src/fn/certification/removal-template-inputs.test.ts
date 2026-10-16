@@ -94,3 +94,21 @@ it("compiles a carried component moved between compatible group instances withou
   expect(byId(compiled.monitored)).toEqual(byId(baseline.monitored));
   expect(compiled.datapointBodyByKey).toEqual(baseline.datapointBodyByKey);
 });
+
+it("compiles stored-bucket Sample/application inputs without an emissions automatic source", () => {
+  const template = structuredClone(cula);
+  template.groups = template.groups.filter((group) => group.key === "co2-stored");
+  const sources = resolveLineSources({ definition: normalizeTemplateDefinition(template) });
+  for (const contract of Object.values(sources)) { delete contract.automaticSource; contract.entryPolicy = "none"; }
+  const result = compile(template, sources);
+  expect(result.monitored.map((input) => input.inputKey).sort()).toEqual(["carbon_content", "product_mass"]);
+});
+it("blocks incomplete template reads through the same line decision", () => {
+  const template = structuredClone(sandbox);
+  template.groups = template.groups.filter((group) => group.key === "pyrolysis");
+  const lineSources = resolveLineSources({ definition: normalizeTemplateDefinition(template) });
+  expect(findUnbindableTemplateInputs(template, { lineSources, enrichmentComplete: false }).every((finding) => finding.reason === "unassigned")).toBe(true);
+  expect(() => resolveTemplateInputs({ template, lineSources, enrichmentComplete: false, blueprintsByKey, agg,
+    externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: true, omitProductionComponents: true,
+  })).toThrow(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
+});

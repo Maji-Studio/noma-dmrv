@@ -191,11 +191,11 @@ it.each([unsupportedTemplate(), production as RegistryComponents["schemas"]["Ghg
   });
 });
 
-it("preserves sandbox stubs without hiding production project-scope blockers", () => {
+it("blocks all entry-only lines in sandbox as well as production", () => {
   const removalTemplate = production as RegistryComponents["schemas"]["GhgEntryTemplate"];
   const result = prepareRemovalSubmission(context({ removalTemplate }), { isometricEnvironment: "sandbox" });
   const findings = findUnbindableTemplateInputs(removalTemplate, { allowPeriodInputStub: true });
-  expect(findings).toHaveLength(5);
+  expect(findings).toHaveLength(13);
   expect(result.prepared?.allowPeriodInputStub).toBe(true);
   expect(result.blockers).toContainEqual({ code: "templateUnbindable", message: formatUnbindableTemplateInputsText(findings) });
   expect(result.blockers.some((blocker) => blocker.message.includes("project level"))).toBe(false);

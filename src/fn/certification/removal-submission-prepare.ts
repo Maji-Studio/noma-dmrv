@@ -130,7 +130,7 @@ export function prepareRemovalSubmission(
   const hasDurabilityComponents = hasDurabilityMeasurementComponents(removalTemplate);
   const blockers: RemovalPreparationBlocker[] = [...ctx.templateBlockers];
   const isometricEnvironment = options.isometricEnvironment ?? env.ISOMETRIC_ENVIRONMENT;
-  const unbindable = findUnbindableTemplateInputs(removalTemplate, { lineSources: ctx.lineSources, allowPeriodInputStub: allowsPeriodInputStub(isometricEnvironment) });
+  const unbindable = findUnbindableTemplateInputs(removalTemplate, { lineSources: ctx.lineSources, enrichmentComplete: !ctx.templateBlockers.some((blocker) => blocker.code === "templateNotFullyRead"), allowPeriodInputStub: allowsPeriodInputStub(isometricEnvironment) });
   // The template lives on Isometric and can change credit_type after binding;
   // a REDUCTION template must never mislabel a GHG entry.
   if (removalTemplate.credit_type !== "REMOVAL") {

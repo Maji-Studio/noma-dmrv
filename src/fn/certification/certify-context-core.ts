@@ -45,7 +45,7 @@ import {
 import { buildCertifyEntityReadiness } from "./certify-entity-readiness";
 import { loadDurabilityBatchData } from "./durability-readiness";
 import { collectFutureDatedMeasurements } from "./future-dated-measurements";
-import { buildSubmissionWarnings } from "./submission-warnings";
+import { buildSubmissionAdvisories, buildSubmissionWarnings } from "./submission-warnings";
 import { productionReadinessGapForScope } from "@/lib/certification/production-readiness-from-lineage";
 import { loadEvidenceMirrorSummaryForScope } from "./evidence-mirror-summary";
 import {
@@ -246,6 +246,7 @@ export async function buildRemovalContext(
       durabilityConfigurationBlockers: durabilityConfigBlockers,
       // No applications and no runs resolved ⇒ no date to be in the future.
       futureDatedMeasurements: [],
+      submissionAdvisories: [],
       submissionWarnings: [
         ...durabilityWarnings,
         ...soilTemperatureGate.warnings,
@@ -338,6 +339,10 @@ export async function buildRemovalContext(
     runs,
   );
 
+  const submissionAdvisories = buildSubmissionAdvisories({
+    removalTemplate: templateFacts.removalTemplate, lineSources: templateFacts.lineSources,
+    transportLegs: recordedTransportLegs, runs, lineages,
+  });
   const submissionWarnings = [
     ...buildSubmissionWarnings({
       removalTemplate: templateFacts.removalTemplate,
@@ -377,6 +382,7 @@ export async function buildRemovalContext(
       lineages,
     }),
     submissionWarnings,
+    submissionAdvisories,
     supportingDocuments,
     runSummary,
     latestSubmission,
@@ -426,6 +432,7 @@ function projectUiContext(
     removalTemplate: ctx.removalTemplate,
     lineSources: ctx.lineSources,
     templateBlockers: ctx.templateBlockers,
+    emissionLines: ctx.emissionLines,
     blueprintsForTemplate: ctx.blueprintsForTemplate,
     unresolvedBlueprintKeys: ctx.unresolvedBlueprintKeys,
     unbindableTemplateInputs: ctx.unbindableTemplateInputs,
@@ -443,6 +450,7 @@ function projectUiContext(
     durabilityConfigurationBlockers: ctx.durabilityConfigurationBlockers,
     futureDatedMeasurements: ctx.futureDatedMeasurements,
     submissionWarnings: ctx.submissionWarnings,
+    submissionAdvisories: ctx.submissionAdvisories,
     supportingDocuments: ctx.supportingDocuments,
     runSummary: ctx.runSummary,
     latestSubmission: ctx.latestSubmission,

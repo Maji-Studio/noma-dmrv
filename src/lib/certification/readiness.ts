@@ -1,3 +1,4 @@
+import type { RemovalBlocker } from "./removal-blockers";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 /**
  * Removal readiness classifier — the single pure decision behind every
@@ -63,6 +64,7 @@ export interface RemovalReadinessFacts {
   /** The member batches' pinned Removal template resolved on Isometric. */
   hasRemovalTemplate: boolean;
   templateBlockers?: RemovalTemplateBlocker[];
+  emissionLineBlockers?: RemovalBlocker[];
   /** Template blueprint keys with no matching component blueprint. */
   unresolvedBlueprintKeys: string[];
   unbindableTemplateInputs: UnbindableTemplateInput[];
@@ -181,6 +183,9 @@ function templateBlockerReason(facts: RemovalReadinessFacts): string | null {
   if (facts.unbindableTemplateInputs.length > 0) {
     return formatUnbindableTemplateInputsText(facts.unbindableTemplateInputs);
   }
+  // Coverage derives from the same line decision, so this only catches line
+  // blockers coverage has no wording for.
+  if (facts.emissionLineBlockers?.length) return [...new Set(facts.emissionLineBlockers.map((blocker) => blocker.message))].join(" ");
   return null;
 }
 
@@ -188,6 +193,7 @@ function templateResolvesCleanly(facts: RemovalReadinessFacts): boolean {
   return (
     facts.hasRemovalTemplate &&
     !facts.templateBlockers?.length &&
+    !facts.emissionLineBlockers?.length &&
     facts.unresolvedBlueprintKeys.length === 0 &&
     facts.unbindableTemplateInputs.length === 0
   );
