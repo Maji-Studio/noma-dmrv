@@ -660,10 +660,6 @@ export async function restoreFacility(
       .where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.archivedAt, cascadeArchiveStamp)))
       .orderBy(asc(biocharProducts.id)).for("no key update");
 
-    const previousBatches = await tx.select().from(creditBatches)
-      .where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.archivedAt, cascadeArchiveStamp)))
-      .orderBy(asc(creditBatches.id)).for("no key update");
-
     // Restore only children stamped by this facility archive. Rows archived
     // individually keep their earlier stamp and remain archived.
     await tx.update(reactors).set({ version: nextVersion(reactors.version), archivedAt }).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId), eq(reactors.archivedAt, cascadeArchiveStamp)));
@@ -677,7 +673,7 @@ export async function restoreFacility(
     for (const batch of batches) await recordActivityChange(ctx, tx, {
       entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
       action: "updated", source: "form",
-    }, previousBatches.find(row => row.id === batch.id)!, batch);
+    }, { ...batch, archivedAt: existing.archivedAt }, batch);
     await tx.update(stockpileEvents).set({ archivedAt }).where(and(eq(stockpileEvents.facilityId, facilityId), eq(stockpileEvents.organizationId, ctx.organizationId), eq(stockpileEvents.archivedAt, cascadeArchiveStamp)));
     await tx.update(powerProcurementEvidence).set({ archivedAt }).where(and(eq(powerProcurementEvidence.facilityId, facilityId), eq(powerProcurementEvidence.organizationId, ctx.organizationId), eq(powerProcurementEvidence.archivedAt, cascadeArchiveStamp)));
 

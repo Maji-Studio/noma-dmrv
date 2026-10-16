@@ -20,18 +20,17 @@ it("describes all created allocation IDs using returned versions and leaves fiel
   expect(effect).toEqual({
     outcome: "created", entityType: "feedstock", entityIds: ["first", "second"],
     versionBefore: null, versionAfter: 1,
-    changedFields: [],
   });
   expect(JSON.stringify(effect)).not.toContain("private note");
 });
 it("describes update identity and versions independently of input fields", () => {
   const input = updateFeedstock.input.parse({ feedstockId: id, expectedVersion: 4, supplierId: id, notes: null });
   expect(updateFeedstock.describe!(input, { id, version: 5 } as FeedstockWithRelations)).toEqual({
-    outcome: "updated", entityType: "feedstock", entityIds: [id], versionBefore: 4, versionAfter: 5, changedFields: [],
+    outcome: "updated", entityType: "feedstock", entityIds: [id], versionBefore: 4, versionAfter: 5,
   });
 });
 it("describes a void delete from its decoded input", () => {
   expect(deleteFeedstock.describe!({ feedstockId: id, expectedVersion: 5 }, undefined)).toEqual({
-    outcome: "deleted", entityType: "feedstock", entityIds: [id], versionBefore: 5, versionAfter: null, changedFields: [],
+    outcome: "deleted", entityType: "feedstock", entityIds: [id], versionBefore: 5, versionAfter: null,
   });
 });

@@ -285,15 +285,16 @@ describe("production-emissions claim reservations", () => {
     expect(await readReservation(fixture.batchId)).toBeNull();
     const history = await db.select().from(activityEvents).where(eq(activityEvents.creditBatchId, fixture.batchId))
       .orderBy(activityEvents.sequence);
-    // The successful reserve, its resume, and the release each update this batch.
-    expect(history).toHaveLength(3);
+    // A resume keeps the same reservation, so only reserve and release record activity.
+    expect(history).toHaveLength(2);
     for (const event of history) expect(event).toMatchObject({
       entityType: "credit_batch", entityId: fixture.batchId, creditBatchId: fixture.batchId,
       action: "updated", source: "form", actorUserId: ctx.userId,
     });
     expect(history[0].changedFields).toEqual(["productionEmissionsClaimReservedBySubmissionId"]);
-    expect(history[1].changedFields).toEqual([]);
-    expect(history[2].changedFields).toEqual(["productionEmissionsClaimReservedBySubmissionId"]);
+    expect(history[1].changedFields).toEqual(["productionEmissionsClaimReservedBySubmissionId"]);
+    expect(history[0].changes).toEqual({ productionEmissionsClaimReservedBySubmissionId: { from: null, to: winner.id } });
+    expect(history[1].changes).toEqual({ productionEmissionsClaimReservedBySubmissionId: { from: winner.id, to: null } });
     await rejectSubmissionAndReleaseProductionClaims(ctx, {
       submissionId: winner.id, expectedLockedAt: winner.lockedAt, errorMessage: "Repeated refusal",
     });

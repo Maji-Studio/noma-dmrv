@@ -21,7 +21,7 @@ export const startProductionRun: Operation<typeof createProductionRunInput, Prod
   supportsDryRun: true,
   describe: (input, output) => ({
     outcome: "created", entityType: "productionRun", entityIds: [output.id],
-    versionBefore: null, versionAfter: output.version, changedFields: [],
+    versionBefore: null, versionAfter: output.version,
   }),
   execute: async ({ ctx, tx, snapshotStock, activity }, validated) => {
     const timeZone = hasLocalRunInstant(validated.startTime, validated.endTime)
@@ -63,7 +63,7 @@ export const updateProductionRun: Operation<typeof updateProductionRunInput, Pro
   supportsDryRun: true,
   describe: (input, output) => ({
     outcome: "updated", entityType: "productionRun", entityIds: [output.id],
-    versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: [],
+    versionBefore: input.expectedVersion, versionAfter: output.version,
   }),
   execute: async ({ ctx, tx, snapshotStock, activity }, validated) => {
     const timeZone = hasLocalRunInstant(validated.startTime, validated.endTime)
@@ -101,7 +101,7 @@ export const deleteProductionRun: Operation<typeof deleteProductionRunSchema, vo
   supportsDryRun: true,
   describe: (input) => ({
     outcome: "deleted", entityType: "productionRun", entityIds: [input.productionRunId],
-    versionBefore: input.expectedVersion, versionAfter: null, changedFields: [],
+    versionBefore: input.expectedVersion, versionAfter: null,
   }),
   execute: async ({ ctx, tx, source, afterCommit, snapshotStock, activity }, { productionRunId, expectedVersion }) => {
     const run = await withProductionRunErrors(() => deleteProductionRunInTransaction(ctx, tx, productionRunId, expectedVersion, source, snapshotStock));

@@ -4,6 +4,12 @@ import { feedstocks, productionRuns, biocharProducts, samples, orders, deliverie
 export type ActivityFieldPolicy = "value" | "name" | "ignore" | { link: string };
 export type ActivityEntityPolicy = { table: PgTable; fields: Record<string, ActivityFieldPolicy> };
 
+/** A coordinate change captures the whole point, while naming only changed fields. */
+export const activityCoordinatePairs: Readonly<Record<string, readonly (readonly [string, string])[]>> = {
+  application: [["gpsLatitude", "gpsLongitude"]],
+  transport_leg: [["originGpsLatitude", "originGpsLongitude"], ["destinationGpsLatitude", "destinationGpsLongitude"]],
+};
+
 /** Explicit column decisions. New columns must be classified before they ship. */
 export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
   feedstock: { table: feedstocks, fields: {

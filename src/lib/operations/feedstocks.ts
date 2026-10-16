@@ -20,7 +20,6 @@ export const logFeedstockDelivery: Operation<
   describe: (input, output) => ({
     outcome: "created", entityType: "feedstock", entityIds: output.feedstocks.map((item) => item.id),
     versionBefore: null, versionAfter: output.feedstocks[0]?.version ?? null,
-    changedFields: [],
   }),
   input: createFeedstockSchema,
   supportsDryRun: true,
@@ -42,7 +41,6 @@ export const updateFeedstock: Operation<typeof updateFeedstockSchema, FeedstockW
   describe: (input, output) => ({
     outcome: "updated", entityType: "feedstock", entityIds: [output.id],
     versionBefore: input.expectedVersion, versionAfter: output.version,
-    changedFields: [],
   }),
   input: updateFeedstockSchema,
   supportsDryRun: true,
@@ -62,7 +60,7 @@ export const deleteFeedstock: Operation<typeof deleteFeedstockSchema, void> = {
   id: "delete_feedstock",
   describe: (input) => ({
     outcome: "deleted", entityType: "feedstock", entityIds: [input.feedstockId],
-    versionBefore: input.expectedVersion, versionAfter: null, changedFields: [],
+    versionBefore: input.expectedVersion, versionAfter: null,
   }),
   input: deleteFeedstockSchema,
   supportsDryRun: true,

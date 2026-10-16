@@ -7,3 +7,6 @@ export interface OperationEffect {
   versionAfter: number | null;
   changedFields: string[];
 }
+
+/** Writers describe identity and versions; the runner derives changed fields. */
+export type OperationDescription = Omit<OperationEffect, "changedFields">;

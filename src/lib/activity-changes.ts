@@ -1,6 +1,6 @@
 import { getTableColumns } from "drizzle-orm";
 import type { ActivityChanges, ActivityValue } from "@/db/schema/activity";
-import { activityFieldPolicies } from "./activity-field-policy";
+import { activityCoordinatePairs, activityFieldPolicies } from "./activity-field-policy";
 export { activityFieldPolicies } from "./activity-field-policy";
 
 export type ActivitySnapshot = Readonly<Record<string, unknown>>;
@@ -41,23 +41,32 @@ export function diffActivityChanges(entityType: string, before: ActivitySnapshot
   if (!after) return { changedFields, changes };
   const policy = Object.hasOwn(activityFieldPolicies, entityType) ? activityFieldPolicies[entityType] : undefined;
   const columns = policy ? getTableColumns(policy.table) : {};
+  const normalize = (field: string, value: unknown): unknown => {
+    if (value == null) return null;
+    const column = columns[field];
+    if (column?.dataType === "number" || column?.getSQLType().startsWith("numeric")) return decimal(value);
+    if (column?.getSQLType() === "date") return value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
+    if (column?.dataType === "date") return new Date(value as string | number | Date).toISOString();
+    return canonical(value);
+  };
+  const scalar = (value: unknown): value is ActivityValue => value === null || ["string", "number", "boolean"].includes(typeof value);
   for (const field of [...new Set([...Object.keys(before ?? {}), ...Object.keys(after)])].sort()) {
     const classification = policy && Object.hasOwn(policy.fields, field) ? policy.fields[field] : "name";
     if (classification === "ignore") continue;
-    const column = columns[field];
-    const normalize = (value: unknown): unknown => {
-      if (value == null) return null;
-      if (column?.dataType === "number" || column?.getSQLType().startsWith("numeric")) return decimal(value);
-      if (column?.getSQLType() === "date") return value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
-      if (column?.dataType === "date") return new Date(value as string | number | Date).toISOString();
-      return canonical(value);
-    };
-    const from = normalize(before?.[field]);
-    const to = normalize(after[field]);
+    const from = normalize(field, before?.[field]);
+    const to = normalize(field, after[field]);
     if (JSON.stringify(from) === JSON.stringify(to)) continue;
     changedFields.push(field);
-    const scalar = (value: unknown): value is ActivityValue => value === null || ["string", "number", "boolean"].includes(typeof value);
     if (classification !== "name" && scalar(from) && scalar(to)) changes[field] = { from, to };
+  }
+  const pairs = Object.hasOwn(activityCoordinatePairs, entityType) ? activityCoordinatePairs[entityType] : [];
+  for (const pair of pairs) {
+    if (!pair.some(field => changedFields.includes(field))) continue;
+    for (const field of pair) {
+      const from = normalize(field, before?.[field]);
+      const to = normalize(field, after[field]);
+      if (scalar(from) && scalar(to)) changes[field] = { from, to };
+    }
   }
   return { changedFields, changes };
 }

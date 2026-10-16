@@ -61,9 +61,34 @@ it("covers every canonical activity entity and keeps choices, places and people 
   });
   expect(diffActivityChanges("transport_leg", null, { originName: "Dar es Salaam", originGpsLatitude: -6.8 }).changes).toEqual({
     originName: { from: null, to: "Dar es Salaam" }, originGpsLatitude: { from: null, to: "-6.8" },
+    originGpsLongitude: { from: null, to: null },
   });
   expect(diffActivityChanges("bin_movement", null, { outputKind: "loss", correctsMovementId: "prior", id: "movement" })).toEqual({
     changedFields: ["outputKind"], changes: { outputKind: { from: null, to: "loss" } },
+  });
+});
+
+it.each([
+  ["application", "gpsLatitude", "gpsLongitude"],
+  ["transport_leg", "originGpsLatitude", "originGpsLongitude"],
+  ["transport_leg", "destinationGpsLatitude", "destinationGpsLongitude"],
+])("captures the full %s point for %s and %s changes", (entityType, latitude, longitude) => {
+  const before = { [latitude]: "1.00", [longitude]: "2.00" };
+  expect(diffActivityChanges(entityType, before, { [latitude]: "3", [longitude]: "2" })).toEqual({
+    changedFields: [latitude], changes: {
+      [latitude]: { from: "1", to: "3" }, [longitude]: { from: "2", to: "2" },
+    },
+  });
+  expect(diffActivityChanges(entityType, before, { [latitude]: "1", [longitude]: "3" })).toEqual({
+    changedFields: [longitude], changes: {
+      [latitude]: { from: "1", to: "1" }, [longitude]: { from: "2", to: "3" },
+    },
+  });
+  expect(diffActivityChanges(entityType, before, { [latitude]: "1", [longitude]: "2" })).toEqual({ changedFields: [], changes: {} });
+  expect(diffActivityChanges(entityType, before, { [latitude]: null, [longitude]: null })).toEqual({
+    changedFields: [latitude, longitude].sort(), changes: {
+      [latitude]: { from: "1", to: null }, [longitude]: { from: "2", to: null },
+    },
   });
 });
 

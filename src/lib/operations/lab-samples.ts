@@ -12,7 +12,8 @@ import {
   deleteLabSampleInput, recordLabSampleInput, updateLabSampleInput,
   type DeleteLabSampleInput, type RecordLabSampleInput, type UpdateLabSampleInput,
 } from "@/schemas/lab-sample-input";
-import type { Operation, OperationEffect } from "./runner";
+import type { Operation } from "./runner";
+import type { OperationDescription } from "@/lib/operation-effect";
 
 /**
  * Lab Sample writes (Phase 5a): one replicate's lab results on one credit
@@ -32,18 +33,18 @@ const ENTITY_TYPE = "labSample";
 interface SavedSample { id: string; version: number }
 
 /** Audit effect of a create, shared with the API adapter that publishes the saved row instead. */
-export function describeRecordedLabSample(input: RecordLabSampleInput, sample: SavedSample): OperationEffect {
+export function describeRecordedLabSample(input: RecordLabSampleInput, sample: SavedSample): OperationDescription {
   return {
     outcome: "created", entityType: ENTITY_TYPE, entityIds: [sample.id],
-    versionBefore: null, versionAfter: sample.version, changedFields: [],
+    versionBefore: null, versionAfter: sample.version,
   };
 }
 
 /** Audit effect of an update, shared with the API adapter. */
-export function describeUpdatedLabSample(input: UpdateLabSampleInput, sample: SavedSample): OperationEffect {
+export function describeUpdatedLabSample(input: UpdateLabSampleInput, sample: SavedSample): OperationDescription {
   return {
     outcome: "updated", entityType: ENTITY_TYPE, entityIds: [sample.id],
-    versionBefore: input.expectedVersion, versionAfter: sample.version, changedFields: [],
+    versionBefore: input.expectedVersion, versionAfter: sample.version,
   };
 }
 
@@ -79,9 +80,9 @@ export const updateLabSample: Operation<typeof updateLabSampleInput, SampleWrite
   },
 };
 
-export const describeDeletedLabSample = (input: DeleteLabSampleInput): OperationEffect => ({
+export const describeDeletedLabSample = (input: DeleteLabSampleInput): OperationDescription => ({
   outcome: "deleted", entityType: ENTITY_TYPE, entityIds: [input.labSampleId],
-  versionBefore: input.expectedVersion, versionAfter: null, changedFields: [],
+  versionBefore: input.expectedVersion, versionAfter: null,
 });
 
 export const deleteLabSample: Operation<typeof deleteLabSampleInput, void> = {

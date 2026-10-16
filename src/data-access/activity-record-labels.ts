@@ -101,7 +101,7 @@ function groupIds(refs: Iterable<{ type: string; id: string }>): Map<string, str
  */
 export async function resolveActivityRecords(
   ctx: OrgContext,
-  events: readonly { entityType: string; entityId: string; reasonCode?: string | null; changes?: ActivityChanges }[],
+  events: readonly { entityType: string; entityId: string; action: string; reasonCode?: string | null; changes?: ActivityChanges }[],
 ) {
   requireOrgScope(ctx);
   const result = new Map<string, ActivityRecordLabel>();
@@ -111,7 +111,7 @@ export async function resolveActivityRecords(
     const type = reason && documentOwnerActivityType(reason.ownerType);
     return reason && type ? [{ documentId: row.entityId, type, id: reason.ownerId }] : [];
   });
-  const changeRefs = events.flatMap(row => Object.entries(row.changes ?? {}).flatMap(([field, change]) =>
+  const changeRefs = events.filter(row => row.action === "updated").flatMap(row => Object.entries(row.changes ?? {}).flatMap(([field, change]) =>
     (["from", "to"] as const).flatMap(side => {
       const type = changeLinkTarget(row.entityType, field, row.changes ?? {}, side, row.reasonCode);
       const id = change[side];
@@ -146,7 +146,7 @@ function changeLinkTarget(entityType: string, field: string, changes: ActivityCh
   return owner === "sample" ? "lab_sample" : owner === "biochar" ? "biochar_product" : owner;
 }
 
-export type ActivityChangeLabel = { label: string | null; deleted: boolean };
+export type ActivityChangeLabel = { label: string | null; deleted: boolean; type: string | null };
 export type ActivityChangeLabels = Record<string, { from: ActivityChangeLabel | null; to: ActivityChangeLabel | null }>;
 
 /** Current labels and tombstones, separate from persisted IDs. */
@@ -160,7 +160,8 @@ export function activityChangeLabels(entityType: string, changes: ActivityChange
       if (change[side] === null) return null;
       const record = target && Object.hasOwn(sources, target) && typeof change[side] === "string"
         ? records.get(`${target}:${change[side]}`) : undefined;
-      return { label: record?.label ?? null, deleted: record?.deleted ?? false };
+      return { label: record?.label ?? null, deleted: record?.deleted ?? false,
+        type: target && Object.hasOwn(sources, target) ? target : null };
     };
     result[field] = { from: label("from"), to: label("to") };
   }

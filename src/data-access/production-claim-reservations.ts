@@ -201,7 +201,7 @@ export async function reserveProductionEmissionsClaims(
     for (const batch of reserved) await recordActivityChange(ctx, tx, {
       entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
       action: "updated", source: "form",
-    }, batches.find(row => row.id === batch.id)!, batch);
+    }, batches.find(row => row.id === batch.id)!, batch, { skipEmpty: true });
   });
 }
 
@@ -252,10 +252,6 @@ export async function rejectSubmissionAndReleaseProductionClaims(
       });
     }
     // Lock order: submission, then reserved credit batches.
-    const previousBatches = await tx.select().from(creditBatches).where(and(
-      eq(creditBatches.productionEmissionsClaimReservedBySubmissionId, args.submissionId),
-      eq(creditBatches.organizationId, ctx.organizationId),
-    )).orderBy(creditBatches.id).for("update");
     const released = await tx
       .update(creditBatches)
       .set({ version: nextVersion(creditBatches.version),
@@ -275,6 +271,6 @@ export async function rejectSubmissionAndReleaseProductionClaims(
     for (const batch of released) await recordActivityChange(ctx, tx, {
       entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
       action: "updated", source: "form",
-    }, previousBatches.find(row => row.id === batch.id)!, batch);
+    }, { ...batch, productionEmissionsClaimReservedBySubmissionId: args.submissionId }, batch, { skipEmpty: true });
   });
 }

@@ -84,9 +84,10 @@ export async function recordScopedWriteActivity(
 export async function recordScopedActivityChange(
   ctx: OrgContext, tx: DbTransaction, event: Omit<ActivityEventInput, "changedFields" | "changes">,
   scopes: ActivityScope[], before: ActivitySnapshot | null, after: ActivitySnapshot | null,
+  options: { skipEmpty?: boolean } = {},
 ): Promise<void> {
   requireOrgScope(ctx);
-  for (const scope of scopes) await recordActivityChange(ctx, tx, { ...event, ...scope }, before, after);
+  for (const scope of scopes) await recordActivityChange(ctx, tx, { ...event, ...scope }, before, after, options);
 }
 
 export async function recordMembershipActivity(

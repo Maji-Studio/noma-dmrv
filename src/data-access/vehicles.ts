@@ -278,7 +278,7 @@ async function updateVehicleOnce(
       .returning();
     for (const leg of refreshed) await recordScopedActivityChange(ctx, tx, {
       entityType: "transport_leg", entityId: leg.id, action: "updated", source: "system", actorUserId: ctx.userId,
-    }, await resolveWriteActivityScopes(ctx, tx, leg.entityType, leg.entityId), previousLegs.find(row => row.id === leg.id)!, leg);
+    }, await resolveWriteActivityScopes(ctx, tx, leg.entityType, leg.entityId), previousLegs.find(row => row.id === leg.id)!, leg, { skipEmpty: true });
   }
 
   return updated;

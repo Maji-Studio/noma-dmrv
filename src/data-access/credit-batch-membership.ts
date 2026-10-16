@@ -787,17 +787,17 @@ export async function attachProductionRunToMatchingCreditBatch(
     throw error;
   }
 
-  const attached = await tx.insert(creditBatchProductionRuns).values({
+  await tx.insert(creditBatchProductionRuns).values({
     organizationId: ctx.organizationId,
     creditBatchId: batch.id,
     productionRunId,
-  }).returning({ productionRunId: creditBatchProductionRuns.productionRunId });
+  });
   // The edit form includes membership, so auto-attachment also invalidates an
   // already-open batch form even though no scalar batch field was edited.
   await tx.update(creditBatches)
     .set({ version: nextVersion(creditBatches.version), updatedAt: new Date() })
     .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, ctx.organizationId)));
 
-  await recordMembershipActivity(ctx, tx, batch.id, [], attached.map(row => row.productionRunId), { source: "system" });
+  await recordMembershipActivity(ctx, tx, batch.id, [], [productionRunId], { source: "system" });
   return batch.id;
 }

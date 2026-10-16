@@ -87,7 +87,6 @@ describe("record_output_stock_movement", () => {
     const input = recordOutputStockMovementInput.parse({ ...loss, basisFingerprint: "basis", idempotencyKey: "form-key" });
     expect(recordOutputStockMovement.describe!(input, { movementId: "movement", basisFingerprint: "basis", preview: {} as never, savedProducts: [], savedDeliveries: [] })).toEqual({
       outcome: "created", entityType: "binMovement", entityIds: ["movement"], versionBefore: null, versionAfter: null,
-      changedFields: [],
     });
   });
 });

@@ -29,7 +29,7 @@ beforeEach(() => {
 describe("shared operation runner", () => {
   it.each(["form", "rest", "mcp", "script"] as const)("passes %s source to nested writers and uses it for runner activity", async source => {
     const execute = vi.fn(operation.execute);
-    const op = { ...operation, execute, describe: () => ({ outcome: "updated", entityType: "labSample", entityIds: ["sample-id"], versionBefore: 1, versionAfter: 2, changedFields: [] }) } satisfies Operation<typeof operation.input, { date: Date; amount: number }>;
+    const op = { ...operation, execute, describe: () => ({ outcome: "updated", entityType: "labSample", entityIds: ["sample-id"], versionBefore: 1, versionAfter: 2 }) } satisfies Operation<typeof operation.input, { date: Date; amount: number }>;
     if (source === "form") await runOperationInProcess(op, ctx, { amount: 1 });
     else if (source === "script") await runOperation(op, ctx, { amount: 1 }, { activitySource: source });
     else await runOperation(op, ctx, { amount: 1 }, { audit: { transport: source, requestId: "request-id", credentialId: "credential-id" } });
@@ -37,8 +37,9 @@ describe("shared operation runner", () => {
     expect(activity.mock.calls[0][2].source).toBe(source);
   });
 
-  const effect = { outcome: "created" as const, entityType: "productionRun", entityIds: ["run-a", "run-b"], versionBefore: null, versionAfter: 1, changedFields: ["amount"] };
-  const described = { ...operation, describe: () => ({ ...effect }), execute: async (scope: OperationScope, input: { amount: number }) => {
+  const description = { outcome: "created" as const, entityType: "productionRun", entityIds: ["run-a", "run-b"], versionBefore: null, versionAfter: 1 };
+  const effect = { ...description, changedFields: ["amount"] };
+  const described = { ...operation, describe: () => ({ ...description }), execute: async (scope: OperationScope, input: { amount: number }) => {
     for (const id of effect.entityIds) scope.activity.capture(id, null, { amount: input.amount });
     return operation.execute(scope, input);
   } };
@@ -64,7 +65,7 @@ describe("shared operation runner", () => {
     const hook = vi.fn();
     const op = {
       ...described,
-      describe: () => ({ ...effect, entityIds: mode === "empty entities" ? [] : effect.entityIds }),
+      describe: () => ({ ...description, entityIds: mode === "empty entities" ? [] : effect.entityIds }),
       execute: async (scope: OperationScope, input: { amount: number }) => {
         scope.afterCommit(hook);
         if (mode === "empty scopes") for (const id of effect.entityIds) scope.activity.scope(id, []);
@@ -354,7 +355,7 @@ describe("transaction retries", () => {
 
 it("records per-entity values, returns value-free union names and retains empty saves", async () => {
   const op = { ...operation,
-    describe: () => ({ outcome: "updated" as const, entityType: "feedstock", entityIds: ["a", "b"], versionBefore: 1, versionAfter: 2, changedFields: [] }),
+    describe: () => ({ outcome: "updated" as const, entityType: "feedstock", entityIds: ["a", "b"], versionBefore: 1, versionAfter: 2 }),
     execute: async (scope: OperationScope, input: { amount: number }) => {
       scope.activity.capture("a", { massWetKg: "1", notes: "private old" }, { massWetKg: "2", notes: "private new" });
       scope.activity.capture("b", { massWetKg: "3.00" }, { massWetKg: "3" });

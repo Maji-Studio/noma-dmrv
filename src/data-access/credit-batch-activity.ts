@@ -98,5 +98,6 @@ export type CreditBatchActivitySummary = {
 function changePayload(row: typeof activityEvents.$inferSelect, records: Awaited<ReturnType<typeof resolveActivityRecords>>): {
   changes?: ActivityChanges; changeLabels?: ReturnType<typeof activityChangeLabels>;
 } {
+  if (row.action !== "updated") return {};
   return { changes: row.changes, changeLabels: activityChangeLabels(row.entityType, row.changes, records, row.reasonCode) };
 }

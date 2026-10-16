@@ -184,8 +184,7 @@ describe("make_biochar_product", () => {
   it("describes the created product without request facts", () => {
     const effect = makeBiocharProduct.describe!(makeBiocharProductInput.parse({ ...blended, basisFingerprint: "b", idempotencyKey: "k" }), created as never);
     expect(effect).toMatchObject({ outcome: "created", entityType: "biocharProduct", entityIds: [PRODUCT_ID], versionAfter: 1 });
-    expect(effect!.changedFields).not.toContain("basisFingerprint");
-    expect(effect!.changedFields).not.toContain("idempotencyKey");
+    expect(effect).not.toHaveProperty("changedFields");
   });
 });
 

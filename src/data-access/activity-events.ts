@@ -38,9 +38,12 @@ export async function recordActivityChange(
   ctx: OrgContext, tx: DbTransaction,
   event: Omit<ActivityEventInput, "changedFields" | "changes">,
   before: ActivitySnapshot | null, after: ActivitySnapshot | null,
+  options: { skipEmpty?: boolean } = {},
 ): Promise<void> {
   requireOrgScope(ctx);
-  await recordActivity(ctx, tx, { ...event, ...diffActivityChanges(event.entityType, before, after) });
+  const diff = diffActivityChanges(event.entityType, before, after);
+  if (options.skipEmpty && diff.changedFields.length === 0) return;
+  await recordActivity(ctx, tx, { ...event, ...diff });
 }
 
 export async function listEntityActivity(

@@ -7,19 +7,19 @@ import { randomUUID } from "node:crypto";
 import { recordDeliveryInput, updateDeliveryApiInput } from "@/schemas/delivery-input";
 import { uuidSchema } from "@/schemas/helpers";
 import type { Delivery } from "@/db/schema";
-import type { OperationEffect } from "@/lib/operation-effect";
+import type { OperationDescription } from "@/lib/operation-effect";
 import { GENERATED_MOVEMENT_KEY_PREFIX } from "./output-stock";
 import { runOperationInProcess, type Operation } from "./runner";
 
 
-export const describeRecordedDelivery = (input: object, output: { delivery: Pick<Delivery, "id" | "version"> }): OperationEffect => ({
+export const describeRecordedDelivery = (input: object, output: { delivery: Pick<Delivery, "id" | "version"> }): OperationDescription => ({
   outcome: "created", entityType: "delivery", entityIds: [output.delivery.id],
-  versionBefore: null, versionAfter: output.delivery.version, changedFields: [],
+  versionBefore: null, versionAfter: output.delivery.version,
 });
 
-export const describeUpdatedDelivery = (input: { expectedVersion: number }, output: Pick<Delivery, "id" | "version">): OperationEffect => ({
+export const describeUpdatedDelivery = (input: { expectedVersion: number }, output: Pick<Delivery, "id" | "version">): OperationDescription => ({
   outcome: "updated", entityType: "delivery", entityIds: [output.id],
-  versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: [],
+  versionBefore: input.expectedVersion, versionAfter: output.version,
 });
 
 /** Custom codes and stock request keys belong only to the native app path. */

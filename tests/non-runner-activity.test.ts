@@ -510,6 +510,17 @@ it("records vehicle snapshot refreshes as system leg updates with batch and run 
   expect(refreshed).toMatchObject({ vehicleType: "van", modelYear: UPDATED_MODEL_YEAR, version: leg.version + 1 });
   await updateVehicle(ctx, vehicle.id, { name: "Renamed vehicle", vehicleType: updated.vehicleType, modelYear: updated.modelYear }, updated.version);
   expect(await events("transport_leg", leg.id)).toHaveLength(2);
+
+  // A leg already carrying the requested snapshot still refreshes its version only.
+  await db.update(transportLegs).set({ vehicleType: "truck", modelYear: INITIAL_MODEL_YEAR }).where(and(
+    eq(transportLegs.id, leg.id), eq(transportLegs.organizationId, ctx.organizationId),
+  ));
+  await updateVehicle(ctx, vehicle.id, { name: "Renamed vehicle", vehicleType: "truck", modelYear: INITIAL_MODEL_YEAR }, updated.version + 1);
+  expect(await events("transport_leg", leg.id)).toHaveLength(2);
+  const [unchangedSnapshot] = await db.select().from(transportLegs).where(and(
+    eq(transportLegs.id, leg.id), eq(transportLegs.organizationId, ctx.organizationId),
+  ));
+  expect(unchangedSnapshot.version).toBe(refreshed.version + 1);
 });
 
 it("excludes fully reversed product shares from delivery and order activity scopes", async () => {

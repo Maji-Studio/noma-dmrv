@@ -11,7 +11,7 @@ import { withOutputStockErrors } from "@/lib/output-stock-domain-errors";
 import { makeBiocharProductInput, updateBiocharProductInput, type MakeBiocharProductInput } from "@/schemas/biochar-product-input";
 import { hasLocalEventInstant, resolveEventInstant } from "./event-times";
 import { GENERATED_MOVEMENT_KEY_PREFIX } from "./output-stock";
-import type { OperationEffect } from "@/lib/operation-effect";
+import type { OperationDescription } from "@/lib/operation-effect";
 import type { Operation, OperationScope } from "./runner";
 
 const AUTO_CODE_COUNT = 1;
@@ -89,17 +89,17 @@ async function findCommittedProduct({ ctx, tx }: OperationScope, input: MakeBioc
 }
 
 /** The audit effects of a created and an updated product; adapters that publish a different output reuse them. */
-export function describeMadeProduct(input: object, product: { id: string; version: number }): OperationEffect {
+export function describeMadeProduct(input: object, product: { id: string; version: number }): OperationDescription {
   return {
     outcome: "created", entityType: PRODUCT_ENTITY, entityIds: [product.id],
-    versionBefore: null, versionAfter: product.version, changedFields: [],
+    versionBefore: null, versionAfter: product.version,
   };
 }
 
-export function describeUpdatedProduct(input: object, product: { id: string; version: number }, versionBefore: number): OperationEffect {
+export function describeUpdatedProduct(input: object, product: { id: string; version: number }, versionBefore: number): OperationDescription {
   return {
     outcome: "updated", entityType: PRODUCT_ENTITY, entityIds: [product.id],
-    versionBefore, versionAfter: product.version, changedFields: [],
+    versionBefore, versionAfter: product.version,
   };
 }
 

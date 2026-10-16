@@ -7,15 +7,15 @@ import { processPendingStorageObjectDeletions } from "@/data-access/storage-obje
 import { resolveWriteActivityScopes } from "@/data-access/write-activity";
 import { applications, type Application } from "@/db/schema";
 import { recordApplicationInput, updateApplicationInput, deleteApplicationInput } from "@/schemas/application-input";
-import type { OperationEffect } from "@/lib/operation-effect";
+import type { OperationDescription } from "@/lib/operation-effect";
 import type { Operation } from "./runner";
 
 const AUTO_CODE_COUNT = 1;
 
-export const describeRecordedApplication = (input: object, output: Pick<Application, "id" | "version">): OperationEffect => ({ outcome: "created", entityType: "application", entityIds: [output.id],
-    versionBefore: null, versionAfter: output.version, changedFields: [] });
-export const describeUpdatedApplication = (input: { expectedVersion: number }, output: Pick<Application, "id" | "version">): OperationEffect => ({ outcome: "updated", entityType: "application", entityIds: [output.id],
-    versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: [] });
+export const describeRecordedApplication = (input: object, output: Pick<Application, "id" | "version">): OperationDescription => ({ outcome: "created", entityType: "application", entityIds: [output.id],
+    versionBefore: null, versionAfter: output.version });
+export const describeUpdatedApplication = (input: { expectedVersion: number }, output: Pick<Application, "id" | "version">): OperationDescription => ({ outcome: "updated", entityType: "application", entityIds: [output.id],
+    versionBefore: input.expectedVersion, versionAfter: output.version });
 
 export const recordApplication: Operation<typeof recordApplicationInput, ApplicationOperationOutput> = {
   id: "record_application", input: recordApplicationInput, supportsDryRun: true,
@@ -57,7 +57,7 @@ export const updateApplication: Operation<typeof updateApplicationInput, Applica
 export const deleteApplication: Operation<typeof deleteApplicationInput, void> = {
   id: "delete_application", input: deleteApplicationInput, supportsDryRun: true,
   describe: (input) => ({ outcome: "deleted", entityType: "application", entityIds: [input.applicationId],
-    versionBefore: input.expectedVersion, versionAfter: null, changedFields: [] }),
+    versionBefore: input.expectedVersion, versionAfter: null }),
   execute: async ({ ctx, tx, source, activity, afterCommit }, input) => {
     activity.scope(input.applicationId, await deleteApplicationInTransaction(ctx, tx, input, source));
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
