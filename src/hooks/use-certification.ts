@@ -810,10 +810,10 @@ export function useCreateGhgStatement() {
   return useMutation({
     mutationFn: async (input: CreateGhgStatementInput) =>
       unwrap(await createGhgStatementDraft(input)),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
-      return queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-    },
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
+    // A definitive registry refusal records rejection activity before the create fails.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: activityKeys.all }),
   });
 }
 

@@ -36,6 +36,7 @@ vi.mock("@/fn/certification", () => ({
 }));
 vi.mock("@/lib/certification/submission-progress-client", () => ({ streamCertificationSubmission: vi.fn(ok) }));
 import { streamCertificationSubmission } from "@/lib/certification/submission-progress-client";
+import { createGhgStatementDraft } from "@/fn/certification";
 
 import { useDeleteTransportLeg } from "./use-transport-legs";
 import { useDeleteFeedstock } from "./use-feedstocks";
@@ -129,13 +130,14 @@ it.each([
   client.clear();
 });
 
-// Submissions commit claim and document activity before the registry call,
-// so a failed submission must still refresh activity.
+// Failed certification writes can commit claim, document, or rejection activity,
+// so they must still refresh activity.
 it.each([
-  ["removal", () => useSubmitRemoval(), { input: { removalId: RECORD_ID }, onProgress: (): void => undefined }],
-  ["GHG statement", () => useSubmitGhgStatementToVerifier(), { ghgStatementId: RECORD_ID, input: {}, onProgress: (): void => undefined }],
-] as const)("refreshes batch activity after a failed %s submission", async (_kind, useHook, variables) => {
-  vi.mocked(streamCertificationSubmission).mockRejectedValueOnce(new Error("Registry unavailable."));
+  ["removal submission", () => useSubmitRemoval(), { input: { removalId: RECORD_ID }, onProgress: (): void => undefined }, streamCertificationSubmission],
+  ["GHG statement submission", () => useSubmitGhgStatementToVerifier(), { ghgStatementId: RECORD_ID, input: {}, onProgress: (): void => undefined }, streamCertificationSubmission],
+  ["GHG statement creation", () => useCreateGhgStatement(), { facilityId: RECORD_ID }, createGhgStatementDraft],
+] as const)("refreshes batch activity after a failed %s write", async (_kind, useHook, variables, action) => {
+  vi.mocked(action).mockRejectedValueOnce(new Error("Registry unavailable."));
   const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
   client.setQueryData(activityKeys.creditBatchSummary(BATCH_ID), { total: 0, counts: [], latest: null });
   const { result, unmount } = renderHook(() => useHook(), {
