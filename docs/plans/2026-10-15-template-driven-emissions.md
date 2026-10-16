@@ -33,6 +33,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 |---|---|
 | Operating lines | Stay on each Removal and are entered per batch. #1020 drops the move to project level. |
 | Pyrolyzer CO, CH₄ | Ordinary entries per batch, typed by the operator. The form shows Cula's line description (with the 36,792 / 17,520 formula) and the batch's dry feedstock beside the gas-mass field. Nothing is computed for the operator. |
+| Entry dates (2026-10-16) | Single lines cover the whole batch and store its start date; other create dates are optional and default to facility today clamped to the batch window. Explicit dates keep their validation; updates never move single-line dates. |
 | Sample shipping | Entered per line. Sample transport legs are hidden in the app, API and MCP, and stop feeding Removals. There is no production data to keep. Sample labs are deferred. |
 | Lab electricity, consumables | Typed per batch with evidence. |
 | Project-wide flight | Goes on one batch the operator picks. |
@@ -247,6 +248,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - "Add entry" opens the form for that line's shape. Estimates (ADR 0031) keep their "est." treatment.
 
 **Forms**
+- Single lines take no operator date and store the batch start; other create dates are optional, defaulting to facility today clamped to the batch window (Kenji, 2026-10-16).
 - Each form shows the line name and description, the unit, the existing figures and an evidence drop zone.
 - Forms follow `docs/forms.md` and `docs/ux-writing.md`.
 - An additive form says "Adds to 120 L from runs" before save.

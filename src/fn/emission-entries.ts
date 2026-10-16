@@ -8,6 +8,7 @@ import {
   confirmEmissionEntry,
   deleteEmissionEntry,
 } from "@/data-access/emission-entries";
+import { loadFacilityEmissionsOverview, type FacilityEmissionsOverview } from "@/lib/read-models/facility-emissions-overview";
 import { loadBatchEmissionLines } from "@/lib/read-models/batch-emission-lines";
 import {
   createEmissionEntrySchema,
@@ -58,4 +59,13 @@ export async function markNothingToRecordFn(
   input: z.input<typeof markNothingToRecordSchema>,
 ): Promise<ActionResult<Awaited<ReturnType<typeof markNothingToRecord>>>> {
   return withAction((ctx) => markNothingToRecord(ctx, markNothingToRecordSchema.parse(input)));
+}
+
+export async function getFacilityEmissionsOverviewFn(input: {
+  facilityId: string;
+}): Promise<ActionResult<FacilityEmissionsOverview>> {
+  return withAction((ctx) => {
+    const data = z.object({ facilityId: uuidSchema() }).parse(input);
+    return loadFacilityEmissionsOverview(ctx, data.facilityId);
+  });
 }

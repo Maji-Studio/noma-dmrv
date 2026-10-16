@@ -65,7 +65,7 @@ describe("batch emission line states", () => {
     expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state, blocker: { code: state === "missingEvidence" ? "entryMissingEvidence" : "lineHasNoSource" } });
   });
   it("exports the agreed labels", () => {
-    expect(EMISSION_LINE_STATE_LABELS).toEqual({ filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing", needsReview: "Needs review", needsSetup: "Needs setup", confirmedZero: "Recorded as zero" });
+    expect(EMISSION_LINE_STATE_LABELS).toEqual({ filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing", needsReview: "Needs review", needsSetup: "Needs setup", confirmedZero: "Nothing to record" });
   });
 });
 
@@ -97,4 +97,31 @@ it("operator zeros take precedence over a zero automatic figure and need no file
   expect(deriveBatchEmissionLines(f)[0].blocker).toBeUndefined();
   f.lineSources[f.entries[0].componentId] = { scope: "operating", origin: "reviewed", entryPolicy: "additive" };
   expect(deriveBatchEmissionLines(f)[0].blocker).toBeUndefined();
+});
+
+it("reports the automatic record kind, count and figure independently of entries", () => {
+  const f = facts();
+  f.automaticRecordCounts = { "run-electricity": 22 };
+  expect(deriveBatchEmissionLines(f)[0]).toMatchObject({
+    records: { source: "productionRuns", count: 22, figure: null }, entryPolicy: "additive",
+  });
+  f.automaticFigures = { "run-electricity": { magnitude: "18420", unit: "kWh" } };
+  const [line] = deriveBatchEmissionLines(f);
+  expect(line.records).toEqual({ source: "productionRuns", count: 22, figure: line.automaticFigure });
+  f.lineSources[line.componentId] = { scope: "operating", origin: "reviewed", entryPolicy: "additive" };
+  expect(deriveBatchEmissionLines(f)[0].records).toBeNull();
+});
+
+it("reports catalog transport and stored sources using their record kinds", () => {
+  const definition = normalizeTemplateDefinition(fixture as GhgEntryTemplate);
+  const lines = deriveBatchEmissionLines({ definition, lineSources: resolveLineSources({ definition }),
+    problems: [], enrichmentComplete: true, automaticFigures: {}, entries: [],
+    automaticRecordCounts: { "feedstock-transport": 3, "delivery-transport": 4, sequestration: 5 },
+  });
+  expect(lines.find((line) => line.contract?.automaticSource === "feedstock-transport")?.records)
+    .toEqual({ source: "transportLegs", count: 3, figure: null });
+  expect(lines.find((line) => line.contract?.automaticSource === "delivery-transport")?.records)
+    .toEqual({ source: "deliveries", count: 4, figure: null });
+  expect(lines.find((line) => line.contract?.automaticSource === "sequestration")?.records)
+    .toEqual({ source: "applications", count: 5, figure: null });
 });

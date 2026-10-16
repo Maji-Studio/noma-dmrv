@@ -1,5 +1,5 @@
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { removalTemplateObservations as observations, type RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
 import type { CertifierProvider } from "@/schemas/credit-batches";
@@ -29,6 +29,29 @@ export async function getLatestTemplateObservation(ctx: OrgContext, provider: Ce
     eq(observations.externalTemplateId, externalTemplateId),
   )).orderBy(desc(observations.lastObservedAt), desc(observations.id)).limit(1);
   return row ?? null;
+}
+
+/** Latest stored observation once per distinct template, without a query loop. */
+export async function getLatestTemplateObservations(
+  ctx: OrgContext, provider: CertifierProvider, externalTemplateIds: string[],
+  executor: Pick<typeof db, "selectDistinctOn"> = db,
+): Promise<RemovalTemplateObservation[]> {
+  requireOrgScope(ctx);
+  if (!externalTemplateIds.length) return [];
+  return executor.selectDistinctOn([observations.externalTemplateId]).from(observations).where(and(
+    eq(observations.organizationId, ctx.organizationId), eq(observations.provider, provider),
+    inArray(observations.externalTemplateId, [...new Set(externalTemplateIds)]),
+  )).orderBy(observations.externalTemplateId, desc(observations.lastObservedAt), desc(observations.id));
+}
+
+export async function getTemplateObservationsByIds(
+  ctx: OrgContext, ids: string[], executor: Executor = db,
+): Promise<RemovalTemplateObservation[]> {
+  requireOrgScope(ctx);
+  if (!ids.length) return [];
+  return executor.select().from(observations).where(and(
+    eq(observations.organizationId, ctx.organizationId), inArray(observations.id, [...new Set(ids)]),
+  ));
 }
 
 export async function getTemplateObservationById(ctx: OrgContext, id: string, executor: Executor = db): Promise<RemovalTemplateObservation | null> {

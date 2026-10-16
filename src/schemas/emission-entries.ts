@@ -27,6 +27,7 @@ export const createEmissionEntrySchema = z.object({
   creditBatchId: uuidSchema(),
   componentId: z.string().min(1),
   ...fields,
+  occurredOn: fields.occurredOn.optional(),
 });
 export const emissionEntryVersionSchema = z.object({
   id: uuidSchema(),

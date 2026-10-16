@@ -7,8 +7,7 @@ import { loadBatchEmissionLines } from "@/lib/read-models/batch-emission-lines";
 import { loadFacilityEmissionEntryFlows } from "@/data-access/emission-entry-energy";
 import { createLineageFixture, cleanupLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
-import { formatFacilityDate } from "@/lib/date-utils";
-import { facilities, productionRuns } from "@/db/schema";
+import { productionRuns } from "@/db/schema";
 
 const gate = vi.hoisted(() => ({ enabled: true }));
 vi.mock("@/lib/certification/emissions-entry-gate", () => ({
@@ -74,8 +73,8 @@ it.each(["", " \t\n", null])("creates a zero without a note, adds and clears its
   const withoutNote = { facilityId: fixture.facilityId, creditBatchId: fixture.batchId, componentId: "lab" };
   const row = await markNothingToRecord(ctx, withoutNote);
   entryIds.push(row.id);
-  const [facility] = await db.select().from(facilities).where(eq(facilities.id, fixture.facilityId));
-  expect(row).toMatchObject({ note: null, confirmedForRemovalId: null, values: [], occurredOn: formatFacilityDate(new Date(), facility.timezone) });
+  const [batch] = await db.select().from(creditBatches).where(eq(creditBatches.id, fixture.batchId));
+  expect(row).toMatchObject({ note: null, confirmedForRemovalId: null, values: [], occurredOn: batch.endDate });
   const lines = await loadBatchEmissionLines(ctx, fixture.facilityId, fixture.batchId);
   expect(lines.find(line => line.componentId === "lab")).toMatchObject({ state: "confirmedZero", entries: [expect.objectContaining({ note: null, confirmedForRemovalId: null })] });
   expect(lines.find(line => line.componentId === "lab")?.blocker).toBeUndefined();
