@@ -9,7 +9,7 @@ import { toDateInputValue } from "@/lib/date-utils";
 import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import type { Order } from "@/db/schema";
-import { useCustomerLocations } from "@/hooks/use-customers";
+import { useCustomerLocations, useCustomerWithRelations } from "@/hooks/use-customers";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import {
@@ -22,6 +22,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, PackageIcon, StorefrontIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm, useWatch } from "react-hook-form";
 
+import { ServerError } from "@/components/forms/server-error";
+import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 import { CustomerLocationDetails } from "./customer-location-details";
 import { isRecordFieldLocked, type RecordLockView } from "@/lib/record-lock-view";
 import { MatchingOutputBins } from "./matching-output-bins";
@@ -134,6 +137,16 @@ export function OrderForm({
   // Get customer locations for selected customer
   const customerLocations = customerLocationsData ?? [];
 
+  // An archived customer keeps the order's stored destination, but the order
+  // cannot move to another one or edit the location, so the parent's archive
+  // state is read explicitly rather than inferred from the picker.
+  // The destination stays locked until the read confirms an active customer, so
+  // a slow or failed read cannot open a change the server would refuse.
+  const customerQuery = useCustomerWithRelations(selectedCustomerId ?? "", !!selectedCustomerId);
+  const isCustomerArchived = !!customerQuery.data?.archivedAt;
+  const isCustomerStatusUnknown = !!selectedCustomerId && !customerQuery.data;
+  const isDestinationLocked = isCustomerArchived || isCustomerStatusUnknown;
+
   // Details panel data for the selected location (issue #196). The facility
   // resolves from the form's own facilityId so edit mode shows the order's
   // facility even when the global selector points elsewhere.
@@ -216,7 +229,8 @@ export function OrderForm({
             required
             label="Customer location"
             entityType="customerLocation"
-            onEditSelected={selectedLocation && selectedCustomerId
+            selectionLocked={isDestinationLocked}
+            onEditSelected={selectedLocation && selectedCustomerId && !isDestinationLocked
               ? () => setEditingLocation({ customerId: selectedCustomerId, location: selectedLocation })
               : undefined}
             placeholder={selectedCustomerId ? "Select location..." : "Select a customer first"}
@@ -227,6 +241,19 @@ export function OrderForm({
             autoSelectSingle
           />
         </div>
+
+        {isCustomerArchived && (
+          <Notice tone="info">
+            This customer is archived, so the customer location stays as stored. Restore the customer to change it.
+          </Notice>
+        )}
+
+        {isCustomerStatusUnknown && customerQuery.isError && (
+          <ServerError
+            message="The customer could not be loaded, so the customer location is locked. Try again."
+            action={<Button size="small" onClick={() => void customerQuery.refetch()}>Try again</Button>}
+          />
+        )}
 
         {selectedLocation && (
           <CustomerLocationDetails

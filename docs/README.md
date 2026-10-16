@@ -7,7 +7,7 @@ QA report.
 
 - [Architecture](./architecture.md), [code organization](./organization.md),
   [database](./database.md), and [forms](./forms.md)
-- [REST and MCP data-entry API](./api.md)
+- [REST and MCP data-entry API](./api.md) and [master data writes](./api-master-data.md)
 - [Authentication](./auth.md), [security](./security.md), and
   [storage](./storage.md)
 - [Testing](./testing.md), [troubleshooting](./troubleshooting.md), and

@@ -9,6 +9,10 @@ export interface ToolCall {
   applicationResult?: Record<string, unknown>;
   /** Stock read body for the layer-grounding oracle. */
   stockResult?: Record<string, unknown>;
+  /** Lookup rows identify the existing or restored party in the eval oracle. */
+  partyRows?: Record<string, unknown>[];
+  /** Published party write refusal, including scoped name-conflict metadata. */
+  partyResult?: Record<string, unknown>;
   /** Number of calls already issued when this read's result arrived. */
   resultAfterCalls?: number;
 }
@@ -55,6 +59,21 @@ function stockBody(value: unknown): Record<string, unknown> | undefined {
   return stockBody(result.structuredContent) ?? stockBody(result.content) ?? stockBody(result.text);
 }
 
+/** Find the published lookup envelope inside Claude Code's result wrappers. */
+function partyRows(value: unknown): Record<string, unknown>[] | undefined {
+  if (value == null) return undefined;
+  if (typeof value === "string") {
+    try { return partyRows(JSON.parse(value)); } catch { return undefined; }
+  }
+  if (Array.isArray(value)) {
+    for (const block of value) { const rows = partyRows(block); if (rows) return rows; }
+    return undefined;
+  }
+  const result = object(value);
+  if (Array.isArray(result.data)) return result.data.map(object);
+  return partyRows(result.structuredContent) ?? partyRows(result.content) ?? partyRows(result.text);
+}
+
 /** Retain only application write envelopes and problems needed by the oracle. */
 function applicationBody(value: unknown): Record<string, unknown> | undefined {
   if (value == null) return undefined;
@@ -99,6 +118,12 @@ export function parseTranscript(raw: string, allowIncomplete = false): Transcrip
           call.isError = resultHasError(block) || resultHasError(event.tool_use_result);
           if (call.name === "mcp__noma__record_application") {
             call.applicationResult = applicationBody(event.tool_use_result) ?? applicationBody(block.content);
+          }
+          if (call.name === "mcp__noma__find_suppliers" || call.name === "mcp__noma__find_customers") {
+            call.partyRows = partyRows(event.tool_use_result) ?? partyRows(block.content);
+          }
+          if (call.name === "mcp__noma__create_supplier") {
+            call.partyResult = applicationBody(event.tool_use_result) ?? applicationBody(block.content);
           }
           if (call.name === "mcp__noma__get_bin_stock") {
             call.stockResult = stockBody(event.tool_use_result) ?? stockBody(block.content);

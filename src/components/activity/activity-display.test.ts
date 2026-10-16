@@ -146,3 +146,7 @@ describe("record links", () => {
     expect(activityRecordHref(item({ entityType: "document", reasonCode: null }), CONTEXT)).toBeNull();
   });
 });
+
+it("labels emissions entries with the glossary name", () => {
+  expect(ACTIVITY_RECORD_TYPE_LABELS.emission_entry).toBe("Emissions entry");
+});

@@ -1,5 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
-import { db, withDedicatedSessionAdvisoryLock } from "@/db";
+import { db, withDedicatedSessionAdvisoryLock, type DbTransaction } from "@/db";
 import { certifierBiocharApplications } from "@/db/schema/certifier-biochar-applications";
 import { applications } from "@/db/schema/application";
 import { certifierProjects } from "@/db/schema/certification";
@@ -374,4 +374,19 @@ export async function replaceMissingStorageLocationRegistration(
       ));
     return row;
   });
+}
+
+/** Transaction-local reference lookup for customer cascade and location deletes. */
+export async function findRegisteredCustomerLocationIds(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  locationId: string,
+): Promise<string[]> {
+  requireOrgScope(ctx);
+  const rows = await tx.select({ locationId: certifierStorageLocations.customerLocationId })
+    .from(certifierStorageLocations).where(and(
+      eq(certifierStorageLocations.organizationId, ctx.organizationId),
+      eq(certifierStorageLocations.customerLocationId, locationId),
+    )).limit(1);
+  return rows.map(row => row.locationId);
 }

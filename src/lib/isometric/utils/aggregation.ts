@@ -166,6 +166,19 @@ export function transportVehicleAdvisories(
   return advisories;
 }
 
+function missingTransportMassLegs(legs: TransportLeg[]) {
+  return legs.filter((leg) => positiveOrNull(leg.loadMassKg) == null);
+}
+function missingTransportDistanceLegs(legs: TransportLeg[]) {
+  return legs.filter((leg) => positiveOrNull(leg.distanceKm) == null);
+}
+/** Presence and factor gates shared by decimal display totals and submission. */
+export function transportMassDistanceAvailable(legs: TransportLeg[], requirePositiveDistance = false): boolean {
+  return legs.length > 0 && missingTransportMassLegs(legs).length === 0 &&
+    getMixedTransportFactorWarning(legs, "") === null &&
+    (!requirePositiveDistance || missingTransportDistanceLegs(legs).length === 0);
+}
+
 export function aggregateTransportMassDistance(
   legs: TransportLeg[],
   categoryLabel: string,
@@ -176,9 +189,7 @@ export function aggregateTransportMassDistance(
 
   // Every leg needs a load mass to contribute distⱼ × massⱼ. A leg without it
   // would silently drop its tonne·km, under-counting transport emissions.
-  const missingMassLegs = legs.filter(
-    (leg) => positiveOrNull(leg.loadMassKg) == null,
-  );
+  const missingMassLegs = missingTransportMassLegs(legs);
   if (missingMassLegs.length > 0) {
     const missingMassLegLabels = missingMassLegs.map(transportLegLabel);
     return {
@@ -214,7 +225,7 @@ export function aggregateTransportMassDistance(
 export function aggregateBiocharTransportMassDistance(legs: TransportLeg[]): TransportAggregationResult {
   const checked = aggregateTransportMassDistance(legs, "Biochar");
   if (checked.warning || !legs.length) return checked;
-  const missingDistanceLegs = legs.filter((leg) => positiveOrNull(leg.distanceKm) == null);
+  const missingDistanceLegs = missingTransportDistanceLegs(legs);
   if (missingDistanceLegs.length > 0) {
     return {
       massDistanceTonneKm: null,

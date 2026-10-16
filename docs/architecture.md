@@ -403,6 +403,22 @@ local, and deployed builds remain on the stable default.
 
 ## Database Boundaries
 
+Supplier and customer creates lock all named facilities `FOR SHARE` in id order,
+then insert the party, ordered locations and pairs inside the `withAutoCodes`
+savepoint and read back through `tx`. Last explicit default wins, otherwise the
+first location wins; pair filling on a new party has no references to fill.
+Metadata edits take `NO KEY UPDATE`, code edits take `UPDATE`, then check the
+version and code/name constraints. Deletes take the party `UPDATE`, check all
+intakes/orders including archived rows, lock children in id order, check each
+customer location's orders and storage-site mappings, then delete children and
+the party atomically. Intake writes take facility `SHARE`, then supplier `KEY SHARE`, before their row;
+orders take customer then location `KEY SHARE`. Deletes never lock references,
+facilities, formulations or certification artifacts. Pair saves can take facility
+and downstream locks; creates only fill new, unreferenced parents, while party
+updates/deletes never request those locks. Registration takes the location FK
+lock without a later parent lock. These paths introduce no reverse edge against
+facility archive or formulation writes.
+
 Formulation creates lock referenced feedstock types `FOR SHARE` in id order,
 then insert the parent and lines inside the `withAutoCodes` BCF savepoint and
 read back through `tx`. Updates lock the formulation `FOR UPDATE`, check its
@@ -475,6 +491,12 @@ retry. Application writers now use the runner and the artifacts-first sequence
 above, closing their document-write inversion. Membership refresh also takes
 artifacts before runs. The remaining production-run and membership cycles are
 tracked in the [lock-order follow-up](./open-questions-architecture.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
+
+Emission entry writers discover ancestors unlocked, then lock the facility
+`FOR SHARE`, credit batch `FOR UPDATE`, entry `FOR UPDATE`, and documents last.
+They revalidate the batch's facility and the entry's batch after locking; changed
+parents return retryable `conflict` without taking a new ancestor lock.
+This order matches facility archive and applies to confirmation and deletion too.
 
 Upload promotion, leases and the privileged expiry sweep are described in
 [Object storage](./storage.md#abandoned-uploads-and-cleanup).

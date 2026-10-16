@@ -1,3 +1,5 @@
+import { lockEmissionEntryDocumentOwner, lockWritableEmissionEntry } from "./emission-entry-lock";
+import { emissionEntries } from "@/db/schema/emission-entries";
 import { and, eq, sql } from "drizzle-orm";
 import type { AnyPgColumn, AnyPgTable } from "drizzle-orm/pg-core";
 import type { DbTransaction } from "@/db";
@@ -12,6 +14,7 @@ import { requireOrgScope } from "./utils";
 type OwnerTable = AnyPgTable & { id: AnyPgColumn; organizationId: AnyPgColumn; archivedAt?: AnyPgColumn };
 interface OwnerSpec { table: OwnerTable; target?: CertifiedLineageTarget["entityType"]; parent?: { type: DocumentEntityType; column: AnyPgColumn } }
 const OWNERS: Record<DocumentEntityType, OwnerSpec> = {
+  emission_entry: { table: emissionEntries },
   sample: { table: samples, target: "sample", parent: { type: "credit_batch", column: samples.creditBatchId } },
   application: { table: applications, target: "application", parent: { type: "delivery", column: applications.deliveryId } },
   production_incident: { table: incidentReports, parent: { type: "production_run", column: incidentReports.productionRunId } },
@@ -26,6 +29,7 @@ const OWNERS: Record<DocumentEntityType, OwnerSpec> = {
   transport_leg: { table: transportLegs },
 };
 const OWNER_FIELDS: Record<DocumentEntityType, string> = {
+  emission_entry: "emissionEntryId",
   sample: "labSampleId", delivery: "deliveryId", feedstock: "feedstockId", application: "applicationId",
   production_run: "productionRunId", production_incident: "productionIncidentId", production_sample: "productionSampleId",
   biochar_product: "biocharProductId", credit_batch: "creditBatchId", order: "orderId", facility: "facilityId",
@@ -71,6 +75,10 @@ export async function lockDocumentOwner(ctx: OrgContext, tx: DbTransaction, enti
   requireOrgScope(ctx);
   if (!DOCUMENT_ENTITY_TYPES.includes(entityType as DocumentEntityType)) throw documentNotFound("entityId");
   const type = entityType as DocumentEntityType;
+  if (type === "emission_entry") {
+    const { archived } = await lockEmissionEntryDocumentOwner(ctx, tx, entityId);
+    return { links: [{ type, id: entityId, archived, parentId: null, legacyId: null, parentType: null }], targets: [], keys: new Set(), field: OWNER_FIELDS[type] };
+  }
   const links = await discover(ctx, tx, type, entityId);
   const targets = targetsFor(links);
   const keys = await lockCertifiedLineageArtifacts(ctx, tx, targets);
@@ -86,6 +94,7 @@ export async function lockDocumentOwner(ctx: OrgContext, tx: DbTransaction, enti
 export async function assertDocumentOwnerWritable(ctx: OrgContext, tx: DbTransaction, scope: DocumentWriteScope, allowArchived = false): Promise<void> {
   requireOrgScope(ctx);
   if (!allowArchived && scope.links.some((row) => row.archived)) throw documentNotFound(scope.field);
+  for (const link of scope.links) if (link.type === "emission_entry") await lockWritableEmissionEntry(ctx, tx, link.id);
   const currentTargets = targetsFor(scope.links);
   if (JSON.stringify(currentTargets) !== JSON.stringify(scope.targets)) throw changedOwner();
   try {
