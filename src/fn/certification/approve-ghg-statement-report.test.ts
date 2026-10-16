@@ -131,7 +131,7 @@ describe("stored report checks", () => {
 
   it("treats an access-denied object as a stored file failure", async () => {
     readObjectBounded.mockRejectedValue(new StorageError("denied", "object_access_denied"));
-    expect(await approve()).toMatchObject({ code: "report_verification_failed", error: "Version 1 of the GHG Statement report failed the stored file check. Generate and approve a new report." });
+    expect(await approve()).toMatchObject({ code: "report_verification_failed", error: "Version 1 of the GHG Statement report failed the stored file check. The stored file could not be read because it is missing or storage read access is denied. Generate and approve a new report. If this happens again, ask a Platform Admin to check storage read access." });
     expect(approveRow).not.toHaveBeenCalled();
   });
 

@@ -59,7 +59,9 @@ export async function verifyStoredGhgStatementReport(
       ? `${subject} could not be checked because storage is unavailable. Try again.`
       : code === "storage_not_configured"
         ? `${subject} could not be checked because storage is not configured. Contact a Platform Admin to configure storage.`
-        : `${subject} failed the ${CHECK_LABELS[check]} check. Generate and approve a new report.`;
+        : cause instanceof StorageError && cause.code === "object_access_denied"
+          ? `${subject} failed the ${CHECK_LABELS[check]} check. The stored file could not be read because it is missing or storage read access is denied. Generate and approve a new report. If this happens again, ask a Platform Admin to check storage read access.`
+          : `${subject} failed the ${CHECK_LABELS[check]} check. Generate and approve a new report.`;
     return new DomainError(code, message, { retryable: code === "storage_unavailable", cause });
   };
   const document = await getDocumentById(orgCtx, report.documentId);

@@ -245,7 +245,12 @@ describe("stored report verification before registry submission", () => {
     readObjectBounded.mockRejectedValue(cause);
     await expect(submitGhgStatementToVerifierCore({
       orgCtx, ghgStatementId: STATEMENT_ID, input: { reportId: REPORT_ID },
-    })).rejects.toMatchObject({ code, retryable: code === "storage_unavailable", cause });
+    })).rejects.toMatchObject({
+      code, retryable: code === "storage_unavailable", cause,
+      message: code === "report_verification_failed"
+        ? "Version 1 of the GHG Statement report failed the stored file check. The stored file could not be read because it is missing or storage read access is denied. Generate and approve a new report. If this happens again, ask a Platform Admin to check storage read access."
+        : expect.any(String),
+    });
     expect(submitGhgStatement).not.toHaveBeenCalled();
     expect(resubmitGhgStatement).not.toHaveBeenCalled();
     expect(issueVerifierReportUrl).not.toHaveBeenCalled();
