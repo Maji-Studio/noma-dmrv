@@ -12,7 +12,6 @@ import { and, eq } from "drizzle-orm";
 import { DEC_ORG_ID } from "@/db/org-defaults";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
-import { allowsPeriodInputStub } from "@/lib/isometric/datapoint-mapping";
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import { normalizeTemplateDefinition, resolveLineSources } from "@/lib/isometric/template-observations";
 import * as schema from "../../../src/db/schema";
@@ -128,7 +127,7 @@ function templateCompilesOnFirstRead(template: RawRemovalTemplate): boolean {
   const lineSources = resolveLineSources({ definition: normalizeTemplateDefinition(ghgTemplate) });
   if (Object.values(lineSources).some((contract) => contract.origin === "proposed")) return false;
   return findUnbindableTemplateInputs(ghgTemplate, {
-    lineSources, allowPeriodInputStub: allowsPeriodInputStub(process.env.ISOMETRIC_ENVIRONMENT ?? "sandbox"),
+    lineSources,
   }).length === 0;
 }
 

@@ -266,3 +266,10 @@ describe("batchHealthFixLinkFor", () => {
   expect(batchHealthFixLinkFor({ key: "entityReadiness", fixTarget: "deliveryDistances", affectedRecords: [{ id: "d1", code: "DL-1", href, missing: ["Distance"] }] }, "f1"))
     .toEqual({ label: "Edit location distances", href });
 });
+
+it("routes emissions to the batch sheet separately from facility emission estimates", () => {
+  expect(fallbackBatchHealthFixTarget("emissions")).toBe("emissions");
+  expect(batchHealthFixLinkFor({ key: "emissions" }, "facility-1", "batch-1")).toEqual({
+    label: "Review emissions", href: "/credit-batches?facility=facility-1&batch=batch-1",
+  });
+});

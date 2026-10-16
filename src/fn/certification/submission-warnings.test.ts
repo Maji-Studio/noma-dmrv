@@ -50,3 +50,20 @@ describe("dropped recorded automatic sources", () => {
     })).toEqual([expect.stringContaining("Genset diesel")]);
   });
 });
+
+it("classifies every automatic source as covered or deliberately excluded", async () => {
+  const { SOURCE_IDS, AUTOMATIC_SOURCE_IDS } = await import("@/lib/isometric/template-observations/catalog-sources");
+  const { RECORDED_AUTOMATIC_SOURCES, RECORDED_TRANSPORT_SOURCES, DELIBERATELY_EXCLUDED_SOURCES } = await import("./submission-warnings");
+  const covered = [...RECORDED_AUTOMATIC_SOURCES, ...RECORDED_TRANSPORT_SOURCES].map((source) => source.id as string);
+  const excluded = Object.keys(DELIBERATELY_EXCLUDED_SOURCES);
+  for (const id of new Set([...Object.values(SOURCE_IDS), ...AUTOMATIC_SOURCE_IDS])) {
+    expect(Number(covered.includes(id)) + Number(excluded.includes(id))).toBe(1);
+  }
+  expect(Object.values(DELIBERATELY_EXCLUDED_SOURCES).every((reason) => reason.length > 0)).toBe(true);
+});
+it("exposes dropped facts as nonblocking advisories with the same message", async () => {
+  const { buildSubmissionAdvisories } = await import("./submission-warnings");
+  const args = { removalTemplate: cula, lineSources: resolveLineSources({ definition: normalizeTemplateDefinition(cula) }),
+    runs: [{ electricityKwh: 10, startTime: new Date("2026-10-01") } as ProductionRunForCertification], lineages: [] };
+  expect(buildSubmissionAdvisories(args)).toEqual([{ code: "droppedRecordedFact", fixTarget: "templateLineReview", message: buildSubmissionWarnings(args)[0] }]);
+});

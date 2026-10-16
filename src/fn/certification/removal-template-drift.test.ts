@@ -132,7 +132,7 @@ describe("pinned-template compilation drift matrix", () => {
     expect(result.prepared).toBeNull();
     expect(result.blockers.map((blocker) => blocker.code)).toEqual(["templateLinesNeedReview", "templateUnbindable"]);
     const diagnostic = result.blockers.find((blocker) => blocker.code === "templateUnbindable")!.message;
-    for (const detail of ["Generator diesel", GENSET, "fuel_usage_by_volume", "unknown_pressure", "Pick another Removal template or ask support"]) {
+    for (const detail of ["Generator diesel", GENSET, "fuel_usage_by_volume", "unknown_pressure", "Review the Removal template lines in Certification settings."]) {
       expect(diagnostic).toContain(detail);
     }
   });

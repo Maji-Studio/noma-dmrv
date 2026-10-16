@@ -1,3 +1,5 @@
+import { deriveBatchEmissionLines, type BatchEmissionLine } from "@/lib/certification/emission-lines";
+import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
 import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import type { LineSources } from "@/lib/isometric/template-observations/line-sources";
@@ -10,6 +12,7 @@ export function resolveRemovalTemplate(
   facilityFacts: FacilityCertifierFacts,
 ) {
   const unresolved = (code: "unpinnedTemplate" | "mixedTemplatePins" | "templateNotFound") => ({
+    emissionLines: null as BatchEmissionLine[] | null,
     removalTemplate: null as IsometricGhgEntryTemplate | null, lineSources: {} as LineSources,
     templateBlockers: [removalTemplateBlocker(code)],
     blueprintsForTemplate: [], unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], requiredTransportCategories: [],
@@ -26,7 +29,13 @@ export function resolveRemovalTemplate(
   if (facts.lineSourceProblems.length) {
     templateBlockers.push(removalTemplateBlocker("templateLinesNeedReview"));
   }
+  const emissionLines = facts.observation ? deriveBatchEmissionLines({
+    definition: normalizeTemplateDefinition(facts.template), lineSources: facts.observation.lineSources,
+    problems: facts.lineSourceProblems, enrichmentComplete: facts.enrichmentProblems.length === 0,
+    automaticFigures: {}, entries: [],
+  }) : null;
   return {
+    emissionLines,
     removalTemplate: facts.template, lineSources: facts.observation?.lineSources ?? {}, templateBlockers,
     blueprintsForTemplate: facts.blueprintsForTemplate, unresolvedBlueprintKeys: facts.unresolvedBlueprintKeys,
     unbindableTemplateInputs: facts.unbindableTemplateInputs, requiredTransportCategories: facts.requiredTransportCategories,

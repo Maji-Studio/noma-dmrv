@@ -1,5 +1,8 @@
+import { removalLineBlockerMessage } from "@/lib/certification/removal-blockers";
+import { deriveBatchEmissionLines } from "@/lib/certification/emission-lines";
+import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
-import { effectiveContract, type LineSources } from "@/lib/isometric/template-observations/line-sources";
+import { type LineSources } from "@/lib/isometric/template-observations/line-sources";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 import { pluralize } from "@/lib/copy-utils";
 import { SafeError } from "@/lib/errors";
@@ -39,6 +42,7 @@ export interface ResolvedTemplateInputs {
 export function resolveTemplateInputs(args: {
   template: IsometricGhgEntryTemplate;
   lineSources: LineSources;
+  enrichmentComplete?: boolean;
   blueprintsByKey: Map<string, IsometricComponentBlueprint>;
   agg: AggregatedProductionData;
   externalProjectId: string;
@@ -59,6 +63,11 @@ export function resolveTemplateInputs(args: {
     omitProductionComponents,
   } = args;
 
+  const lineDecisions = new Map(deriveBatchEmissionLines({
+    definition: normalizeTemplateDefinition(template), lineSources, problems: [],
+    enrichmentComplete: args.enrichmentComplete ?? true, automaticFigures: {}, entries: [],
+  }).map((line) => [line.componentId, line]));
+
   const monitored: ResolvedMonitoredInput[] = [];
   const fixed: ResolvedFixedInput[] = [];
   const datapointBodyByKey = new Map<string, CreateDatapointRequest>();
@@ -68,10 +77,8 @@ export function resolveTemplateInputs(args: {
   for (const group of template.groups) {
     for (const component of group.components) {
       const lineContract = ownValue(lineSources, component.id);
-      if (!lineContract || effectiveContract(lineContract).scope === "unassigned") {
-        throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview);
-      }
-      if (effectiveContract(lineContract).scope === "forbidden") throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.forbiddenLine);
+      const blocker = lineDecisions.get(component.id)?.blocker;
+      if (blocker) throw new SafeError(removalLineBlockerMessage(blocker));
       const monitoredMappings = component.inputs
         .filter((input) => input.type === "monitored")
         .map((input) =>

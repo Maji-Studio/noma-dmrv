@@ -14,12 +14,20 @@ describe("toBatchHealthFacts", () => {
     submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
     memberBatches: [{ id: "batch-1", durabilityGateBlockers: [], facilityEmissionsGateBlockers: [] }],
     latestSubmission: null, hasOrgCredentials: true, supportingDocuments: { total: 0, mirrored: 0 },
-    mapping: {}, removalTemplate: {},
+    mapping: {}, removalTemplate: {}, emissionLines: [],
     unresolvedBlueprintKeys: [], unbindableTemplateInputs: [],
     hasSubmittableRuns: true, entityReadinessGaps: [], entityReadinessIssues: [],
     requiredTransportCategories: ["feedstock"],
     transportCoverage: { feedstock: { count: 1, missingEntityIds: [], aggregationWarning: null, vehicleAdvisories: [] } },
   } as unknown as RemovalCertifyContext;
+
+  it("only emits the emissions check when pinned lines were derived", () => {
+    expect(deriveBatchHealth(toBatchHealthFacts(readyContext, "batch-1")).checks.map((check) => check.key))
+      .toEqual(["emissions", "carbon", "feedstockTypeMapping", "production", "transport", "entityReadiness"]);
+    const unresolved = { ...readyContext, removalTemplate: null, emissionLines: null };
+    expect(toBatchHealthFacts(unresolved, "batch-1").emissionLines).toBeNull();
+    expect(deriveBatchHealth(toBatchHealthFacts(unresolved, "batch-1")).checks.some((check) => check.key === "emissions")).toBe(false);
+  });
 
   it("carries only the selected batch's document warnings without blocking", () => {
     const context = { ...readyContext,

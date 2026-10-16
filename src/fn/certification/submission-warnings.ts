@@ -1,3 +1,4 @@
+import type { RemovalAdvisory } from "@/lib/certification/removal-blockers";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { effectiveContract, type LineSources } from "@/lib/isometric/template-observations/line-sources";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
@@ -7,13 +8,22 @@ import { normalizeTemplateDefinition } from "@/lib/isometric/template-observatio
 import type { TransportLegsByCategory } from "./shared";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 
-const RECORDED_AUTOMATIC_SOURCES = [
+// Run masses exist on every run and sequestration is required on every Removal
+// template. Warning for those would fire on nearly every template. Safety margin
+// reuses dry biochar mass rather than an independently recorded emissions fact.
+export const DELIBERATELY_EXCLUDED_SOURCES = {
+  "feedstock-dry-mass": "Run mass is recorded on every run.",
+  "biochar-dry-mass": "Run mass is recorded on every run.",
+  sequestration: "Every Removal template requires sequestration.",
+  "safety-margin": "Reuses biochar dry mass, not an independent recorded fact.",
+} as const;
+export const RECORDED_AUTOMATIC_SOURCES = [
   { id: "run-genset-diesel", label: "Genset diesel", recorded: (run: ProductionRunForCertification) => (run.dieselGensetLiters ?? 0) > 0 || (run.preprocessingFuelLiters ?? 0) > 0 },
   { id: "run-startup-diesel", label: "Startup diesel", recorded: (run: ProductionRunForCertification) => (run.dieselOperationLiters ?? 0) > 0 },
   { id: "run-electricity", label: "Electricity", recorded: (run: ProductionRunForCertification) => (run.electricityKwh ?? 0) > 0 },
 ] as const satisfies readonly { id: AutomaticSourceId; label: string; recorded: (run: ProductionRunForCertification) => boolean }[];
 
-const RECORDED_TRANSPORT_SOURCES = [
+export const RECORDED_TRANSPORT_SOURCES = [
   { category: "feedstock", id: "feedstock-transport", label: "Feedstock transport" },
   { category: "biochar", id: "delivery-transport", label: "Delivery transport" },
   { category: "sample", id: "sample-transport", label: "Sample transport" },
@@ -72,16 +82,15 @@ function buildStraddleWarning(args: {
 }
 
 // Warn when a recorded fact has no effective automatic source in the live template.
-export function buildSubmissionWarnings(args: {
+export function buildSubmissionAdvisories(args: {
   removalTemplate: IsometricGhgEntryTemplate | null;
   lineSources: LineSources;
   runs: ProductionRunForCertification[];
   lineages: { application: { applicationDate: Date } }[];
   transportLegs?: TransportLegsByCategory;
-}): string[] {
-  const { removalTemplate, lineSources, runs, lineages } = args;
-  const warnings = buildStraddleWarning({ runs, lineages });
-  if (!removalTemplate) return warnings;
+}): RemovalAdvisory[] {
+  const { removalTemplate, lineSources, runs } = args;
+  if (!removalTemplate) return [];
   const carried = carriedAutomaticSources(removalTemplate, lineSources);
   const droppedFacts = [
     ...RECORDED_AUTOMATIC_SOURCES.filter((source) => runs.some(source.recorded) && !carried.has(source.id)),
@@ -93,8 +102,12 @@ export function buildSubmissionWarnings(args: {
       return recorded && !carried.has(source.id);
     }),
   ];
-  return [
-    ...droppedFacts.map((source) => `${source.label} is recorded, but the active Removal template has no automatic source for it. ${REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview}`),
-    ...warnings,
-  ];
+  return droppedFacts.map((source) => ({
+    code: "droppedRecordedFact", fixTarget: "templateLineReview",
+    message: `${source.label} is recorded, but the active Removal template has no automatic source for it. ${REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview}`,
+  }));
+}
+
+export function buildSubmissionWarnings(args: Parameters<typeof buildSubmissionAdvisories>[0]): string[] {
+  return [...buildSubmissionAdvisories(args).map((advisory) => advisory.message), ...buildStraddleWarning(args)];
 }

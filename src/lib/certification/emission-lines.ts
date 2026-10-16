@@ -1,0 +1,76 @@
+import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
+import type { AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
+import { effectiveContract, validateLineSources, type LineSources, type LineSourceProblem } from "@/lib/isometric/template-observations/line-sources";
+import type { TemplateDefinition } from "@/lib/isometric/template-observations/types";
+import { canonicalDecimal } from "@/lib/isometric/template-observations/units";
+import { emissionLineBindingDecision } from "./emission-line-binding";
+import type { RemovalBlocker } from "./removal-blockers";
+
+export const EMISSION_LINE_STATE_LABELS = {
+  filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing",
+  needsReview: "Needs review", needsSetup: "Needs setup", confirmedZero: "Recorded as zero",
+} as const;
+export type EmissionLineState = keyof typeof EMISSION_LINE_STATE_LABELS;
+export interface EmissionFigure { magnitude: string; unit: string }
+export interface EmissionLineEntryFact {
+  componentId: string; kind: "value" | "zero"; hasEvidence: boolean;
+  total: EmissionFigure | null; counts: boolean;
+}
+export interface BatchEmissionLineFacts {
+  definition: TemplateDefinition; lineSources: LineSources; problems: readonly LineSourceProblem[];
+  enrichmentComplete: boolean;
+  automaticFigures: Partial<Record<AutomaticSourceId, EmissionFigure | null>>;
+  entries: readonly EmissionLineEntryFact[];
+}
+
+/** Decimal strings use the observation canonicalizer and integer arithmetic.
+ * Unit conversion belongs at the fact boundary; never sum unlike units.
+ */
+function sumFigures(figures: EmissionFigure[]): EmissionFigure | null {
+  if (!figures.length) return null;
+  const unit = figures[0].unit;
+  if (figures.some((figure) => figure.unit !== unit)) throw new Error("Emission figure units must match");
+  const values = figures.map(({ magnitude }) => {
+    const value = canonicalDecimal(magnitude);
+    if (value === undefined) throw new Error("Invalid emission magnitude");
+    return value;
+  });
+  const scale = Math.max(...values.map((value) => value.split(".")[1]?.length ?? 0));
+  const sum = values.reduce((total, value) => {
+    const [whole, fraction = ""] = value.replace(/^-/, "").split(".");
+    return total + BigInt(`${whole}${fraction.padEnd(scale, "0")}`) * (value.startsWith("-") ? BigInt(-1) : BigInt(1));
+  }, BigInt(0));
+  const digits = (sum < BigInt(0) ? -sum : sum).toString().padStart(scale + 1, "0");
+  const magnitude = `${sum < BigInt(0) ? "-" : ""}${scale ? `${digits.slice(0, -scale)}.${digits.slice(-scale)}` : digits}`;
+  return { magnitude: canonicalDecimal(magnitude)!, unit };
+}
+
+export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
+  // Revalidate as well as accepting observation problems: callers cannot hide an invalid contract.
+  const problems = [...facts.problems, ...validateLineSources(facts.definition, facts.lineSources)];
+  return facts.definition.groups.flatMap((group) => group.components.map((component) => {
+    const stored = ownValue(facts.lineSources, component.id);
+    const contract = stored ? effectiveContract(stored) : undefined;
+    const decision = emissionLineBindingDecision({ component, groupKey: group.key, contract: stored, problems, enrichmentComplete: facts.enrichmentComplete });
+    const entries = facts.entries.filter((entry) => entry.componentId === component.id);
+    const counting = entries.filter((entry) => entry.counts);
+    const values = counting.filter((entry) => entry.kind === "value");
+    const automaticFigure = contract?.automaticSource ? ownValue(facts.automaticFigures, contract.automaticSource) ?? null : null;
+    let state: EmissionLineState;
+    let blocker: RemovalBlocker | undefined = decision?.blocker;
+    if (decision && decision.state !== "empty") { state = decision.state; blocker = decision.blocker; }
+    else if (values.some((entry) => !entry.hasEvidence)) {
+      state = "missingEvidence";
+      blocker ??= { code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+    } else if (automaticFigure || values.length) state = "filled";
+    else if (counting.some((entry) => entry.kind === "zero")) state = "confirmedZero";
+    else { state = "empty"; blocker = decision?.blocker; }
+    // A paired-input value has no scalar total. Do not show a partial sum.
+    const total = values.some((entry) => entry.total === null) ? null : sumFigures([
+      ...(automaticFigure ? [automaticFigure] : []), ...values.flatMap((entry) => entry.total ? [entry.total] : []),
+    ]);
+    return { componentId: component.id, displayName: component.displayName, groupKey: group.key,
+      blueprintKey: component.blueprintKey, contract, state, automaticFigure, entries, total, ...(blocker ? { blocker } : {}) };
+  }));
+}
+export type BatchEmissionLine = ReturnType<typeof deriveBatchEmissionLines>[number];

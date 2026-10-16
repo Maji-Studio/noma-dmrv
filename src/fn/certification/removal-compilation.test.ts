@@ -24,18 +24,22 @@ vi.mock("@/data-access/certifier-removals", () => ({
 vi.mock("./certify-context-core", () => ({
   loadRemovalSubmissionContext: vi.fn(),
 }));
-vi.mock("./removal-submission-build", () => ({
+vi.mock("./removal-submission-build", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./removal-submission-build")>(),
   compileRemovalSubmission: vi.fn(),
+  buildRemovalSubmissionBuild: vi.fn(),
 }));
 vi.mock("@/data-access/credit-batch-accounting", () => ({
   getCo2eStoredPreviews: vi.fn(),
 }));
 import { getCertifierRemovalById } from "@/data-access/certifier-removals";
 import { getCo2eStoredPreviews } from "@/data-access/credit-batch-accounting";
-import { compileRemovalSubmission } from "./removal-submission-build";
+import { compileRemovalSubmission, buildRemovalSubmissionBuild, REMOVAL_COMPILATION_FAILED_MESSAGE } from "./removal-submission-build";
 import { REMOVAL_PREPARATION_BLOCKERS } from "./removal-submission-prepare";
 import { requireOrgFacility } from "@/data-access/utils";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
+import { logger } from "@/lib/log";
+import { SafeError } from "@/lib/errors";
 import { loadRemovalCompilation } from "./removal-compilation";
 
 describe("loadRemovalCompilation facility scope", () => {
@@ -84,7 +88,10 @@ describe("loadRemovalCompilation preparation blockers", () => {
     unbindableTemplateInputs: [],
     unresolvedBlueprintKeys: [],
     blueprintsForTemplate: [],
-    memberBatches: [],
+    memberBatches: [{ id: "batch" }],
+    batchesWithSamples: [{ sampling: "sampled", durabilityOption: "1000_year" }],
+    feedstockTypeMappingGaps: [],
+    entityReadinessGaps: [],
     submissionWarnings: [],
   };
 
@@ -102,6 +109,55 @@ describe("loadRemovalCompilation preparation blockers", () => {
       snapshot: null,
       transportPlan: null,
     } as never);
+  });
+
+  it("reports feedstock mapping and durability configuration through the shared gate", async () => {
+    const { make1000YearSequestrationTemplate } = await import("../../../tests/fixtures/submit-removal-templates");
+    const removalTemplate = make1000YearSequestrationTemplate();
+    vi.mocked(loadRemovalSubmissionContext).mockResolvedValue({
+      ...baseContext, removalTemplate, lineSources: reviewedTemplateSources(removalTemplate),
+      feedstockTypeMappingGaps: [{ creditBatchId: "batch", creditBatchCode: "CB-1", feedstockTypeId: "type", feedstockTypeName: "Wood" }],
+      batchesWithSamples: [{ sampling: "unsampled", durabilityOption: "1000_year" }],
+    } as never);
+    const result = await loadRemovalCompilation(FACILITY_ID, REMOVAL_ID);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.removalBlockers.map((blocker) => blocker.code)).toEqual(expect.arrayContaining(["feedstockTypeMapping", "durabilityConfiguration"]));
+    expect(result.data.blockers).toEqual(result.data.removalBlockers.map((blocker) => blocker.message));
+    expect(result.data.snapshot).toBeNull();
+  });
+
+  it("keeps review available with one generic blocker after an unexpected preflight build failure", async () => {
+    vi.mocked(loadRemovalSubmissionContext).mockResolvedValue(baseContext as never);
+    vi.mocked(buildRemovalSubmissionBuild).mockRejectedValue(new Error("private source detail"));
+    // Even a rich compile with a snapshot cannot override the preflight refusal.
+    vi.mocked(compileRemovalSubmission).mockResolvedValue({ review: { template: { id: "rvt-1" } }, blockers: [], warnings: [], snapshot: { semanticPayload: {} } } as never);
+    const log = vi.spyOn(logger, "error").mockImplementation(() => {});
+    try {
+      expect(await loadRemovalCompilation(FACILITY_ID, REMOVAL_ID)).toMatchObject({
+        success: true,
+        data: {
+          blockers: [REMOVAL_COMPILATION_FAILED_MESSAGE],
+          removalBlockers: [{ code: "legacy", message: REMOVAL_COMPILATION_FAILED_MESSAGE, fixTarget: null }],
+          snapshot: null, compilationHash: null,
+        },
+      });
+      expect(log).toHaveBeenCalledExactlyOnceWith({ organizationId: ORG_CTX.organizationId, removalId: REMOVAL_ID }, "removal preflight build failed");
+    } finally { log.mockRestore(); }
+  });
+
+  it("lists a rich compilation blocker found after a clear preflight", async () => {
+    vi.mocked(loadRemovalSubmissionContext).mockResolvedValue(baseContext as never);
+    const result = await loadRemovalCompilation(FACILITY_ID, REMOVAL_ID);
+    expect(result).toMatchObject({
+      success: true,
+      data: {
+        blockers: ["Add the application logbook."],
+        removalBlockers: [{ code: "legacy", message: "Add the application logbook.", fixTarget: null }],
+        snapshot: null,
+        compilationHash: null,
+      },
+    });
   });
 
   it("lists missing credentials as a blocker instead of failing the review", async () => {
@@ -125,10 +181,32 @@ describe("loadRemovalCompilation preparation blockers", () => {
     expect(loadRemovalSubmissionContext).toHaveBeenCalledWith(expect.anything(), REMOVAL_ID, { refreshEnrichment: true });
   });
 
+  it("lists a shared preflight build and rich compilation refusal only once", async () => {
+    const message = "Removal submission blocked:\nProduction run PR-1 has no dry mass.";
+    vi.mocked(loadRemovalSubmissionContext).mockResolvedValue(baseContext as never);
+    vi.mocked(buildRemovalSubmissionBuild).mockRejectedValue(new SafeError(message));
+    vi.mocked(compileRemovalSubmission).mockResolvedValue({
+      review: { template: { id: "rvt-1" } },
+      blockers: [message],
+      warnings: [],
+      snapshot: { semanticPayload: {} },
+    } as never);
+
+    expect(await loadRemovalCompilation(FACILITY_ID, REMOVAL_ID)).toMatchObject({
+      success: true,
+      data: {
+        blockers: [message],
+        removalBlockers: [{ code: "legacy", message, fixTarget: null }],
+        snapshot: null,
+        compilationHash: null,
+      },
+    });
+  });
+
   it("deduplicates template blockers from preparation and compilation", async () => {
     const removalTemplate = unsupportedTemplate();
     const message = formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(removalTemplate));
-    vi.mocked(loadRemovalSubmissionContext).mockResolvedValue({ ...baseContext, removalTemplate } as never);
+    vi.mocked(loadRemovalSubmissionContext).mockResolvedValue({ ...baseContext, removalTemplate, lineSources: reviewedTemplateSources(removalTemplate) } as never);
     vi.mocked(compileRemovalSubmission).mockResolvedValue({ review: { template: { id: removalTemplate.id } }, blockers: [message], warnings: [], snapshot: null, transportPlan: null } as never);
     const result = await loadRemovalCompilation(FACILITY_ID, REMOVAL_ID);
     expect(result.success && result.data.blockers.filter((blocker) => blocker === message)).toEqual([message]);
@@ -149,6 +227,10 @@ describe("loadRemovalCompilation preparation blockers", () => {
         blockers: [
           REMOVAL_PREPARATION_BLOCKERS.notRemovalTemplate,
           "Add the application logbook.",
+        ],
+        removalBlockers: [
+          { code: "notRemovalTemplate", message: REMOVAL_PREPARATION_BLOCKERS.notRemovalTemplate, fixTarget: "creditBatchTemplate" },
+          { code: "legacy", message: "Add the application logbook.", fixTarget: null },
         ],
         snapshot: null,
         compilationHash: null,

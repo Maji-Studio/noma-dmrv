@@ -1,5 +1,6 @@
-import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
-import { effectiveContract, type LineContract } from "../template-observations/line-sources";
+import { removalLineBlockerMessage } from "@/lib/certification/removal-blockers";
+import { emissionLineBindingDecision } from "@/lib/certification/emission-line-binding";
+import { type LineContract } from "../template-observations/line-sources";
 import { SafeError } from "@/lib/errors";
 import type { components } from "../generated/certify";
 import type { AggregatedProductionData } from "../utils/aggregation";
@@ -190,8 +191,12 @@ export function buildCreateDatapointRequest(
     sourceIds,
     allowPeriodInputStub,
   } = args;
-  if (lineContract && effectiveContract(lineContract).scope === "forbidden") throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.forbiddenLine);
-  if (lineContract && effectiveContract(lineContract).scope === "unassigned") throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview);
+  if (lineContract) {
+    const decision = emissionLineBindingDecision({ groupKey, contract: lineContract, problems: [], enrichmentComplete: true,
+      component: { id: "", displayName: componentDisplayName ?? "", description: null, blueprintKey: componentBlueprintKey,
+        inputs: [{ key: rtcInput.input_key, type: rtcInput.type, quantityKind: rtcInput.quantity_kind }] } });
+    if (decision) throw new SafeError(removalLineBlockerMessage(decision.blocker));
+  }
   const inputKey = rtcInput.input_key;
   const componentLabel =
     componentDisplayName?.trim() &&

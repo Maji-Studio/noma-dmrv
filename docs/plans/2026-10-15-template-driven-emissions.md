@@ -329,7 +329,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - "Correction needed" is derived, not stored, and only inside an open correction window: the snapshot's contribution manifest differs from the current entries.
 - Once a Removal is submitted, the entries it sent stay locked, as today. noma never corrects a submitted Removal on its own initiative.
 - Edits reopen only after Isometric changes the state, and only when all of these hold:
-  - a statement covering the lineage, freshly refreshed, is FAILED_VERIFICATION, or is back in DRAFT after noma submitted it to the verifier. `ghgStatementSubmissionId` is not enough: creating a statement already marks its ledger row submitted with remote status DRAFT (`finalizeGhgStatement`). PR 4 records a verifier submission marker in `submitGhgStatementToVerifierCore` and requires it;
+  - a statement covering the lineage, freshly refreshed, is FAILED_VERIFICATION, or is back in DRAFT after it was sent to the verifier. `ghgStatementSubmissionId` is not enough: creating a statement already marks its ledger row submitted with remote status DRAFT (`finalizeGhgStatement`). "Sent to the verifier" follows #1101: a marker PR 4 records in `submitGhgStatementToVerifierCore`, or Certify's own record of a submission (REST `GhgStatement.submitted_at`, GraphQL `GhgStatement.submissions`), because a statement can be submitted from the Certify web UI and noma only learns of it on Refresh or Sync. A noma-only marker would leave such a statement locked after it returns to DRAFT;
   - no other statement covering it is AWAITING_VERIFICATION, VERIFIED or CREDITS_ISSUED, and an unknown status fails closed;
   - no submission for the lineage is in flight;
   - the edit runs under the lineage locks of `getLockedCertifiedLineage`, serialized against statement submission.
@@ -341,7 +341,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 Kenji's round 2 note asks to reopen general edits when Isometric pushes a submission back, as before submission.
 
 - **Change:** under the same conditions as §4.5 Corrections, unlock the lineage guard for the rest of the lineage, not only entries. Resubmitting relocks it.
-- **Ownership:** the app-wide lock predicate (issue pending, see #687; a prerequisite, §5) owns the Open, In use and Sent levels and the lock predicates (`BLOCKING_SUBMISSION_STATUSES`, `REMOVAL_LOCK_BY_KIND`). PR 4 and PR 5 call that rule's predicate rather than adding their own.
+- **Ownership:** the app-wide lock predicate (#1101; a prerequisite, §5) owns the Open, In use and Sent levels and the lock predicates (`BLOCKING_SUBMISSION_STATUSES`, `REMOVAL_LOCK_BY_KIND`). PR 4 and PR 5 call that rule's predicate rather than adding their own.
 - **Shared lineage:** a record that also backs a verified Removal stays locked.
 - **Sync:** status comes from the refresh paths and from the scheduled registry sync of #1047 once it exists.
 - **Prerequisite:** none from Isometric, since Kenji decided the trigger on 2026-10-15. Folds item 1 of #687.

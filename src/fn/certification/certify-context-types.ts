@@ -1,3 +1,5 @@
+import type { BatchEmissionLine } from "@/lib/certification/emission-lines";
+import type { RemovalAdvisory } from "@/lib/certification/removal-blockers";
 import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
 import type { UnbindableTemplateInput } from "@/lib/isometric/template-binding-coverage";
 import type { CertificationSubmissionRow, CertifierProjectRow } from "@/data-access/certification";
@@ -34,6 +36,7 @@ export interface RemovalCertifyContext {
   removalTemplate: IsometricGhgEntryTemplate | null;
   lineSources: LineSources;
   templateBlockers: RemovalTemplateBlocker[];
+  emissionLines?: BatchEmissionLine[] | null;
   blueprintsForTemplate: IsometricComponentBlueprint[];
   unresolvedBlueprintKeys: string[];
   unbindableTemplateInputs: UnbindableTemplateInput[];
@@ -57,6 +60,7 @@ export interface RemovalCertifyContext {
   entityReadinessGaps: string[];
   submissionLineageBlockers: SubmissionLineageBlocker[];
   durabilityConfigurationBlockers: string[];
+  templateTierBlocker?: string | null;
   entityReadinessIssues?: import("@/lib/certification/batch-health").BatchEntityReadinessIssue[];
   // Fail-closed durability sampling/eligibility blockers (D3) — the EXACT list
   // the submit pipeline blocks on, so readiness predicts the gate. [] ⇒ ready.
@@ -72,6 +76,7 @@ export interface RemovalCertifyContext {
   // durabilityGateBlockers / entityReadinessGaps, these do NOT gate submission;
   // they tell the operator a recorded value will not be submitted.
   submissionWarnings: string[];
+  submissionAdvisories?: RemovalAdvisory[];
   supportingDocuments: EvidenceMirrorSummary;
   // Focused run aggregation (run count, total biochar output, applied dry kg)
   // surfaced on the lean UI context so the Review step can show what's being

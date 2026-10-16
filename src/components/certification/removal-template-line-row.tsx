@@ -80,7 +80,7 @@ function LineInputs({ line, enrichment }: { line: RemovalTemplateReviewLine; enr
       <thead>
         <tr>
           <th scope="col" className={headerClass}>Input</th>
-          <th scope="col" className={headerClass}>Quantity kind</th>
+          <th scope="col" className={headerClass}>Measures</th>
           <th scope="col" className={headerClass}>Unit</th>
         </tr>
       </thead>

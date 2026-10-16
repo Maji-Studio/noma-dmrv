@@ -1,13 +1,10 @@
+import { LINE_NO_MAPPING_MESSAGE, LINE_TRANSPORT_REPLACEMENT_MESSAGE, TRANSPORT_BLUEPRINT_KEY } from "./emission-line-constants";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
-import { getSequestrationInputBinding, hasExplicitSequestrationBinding } from "./sequestration-input-bindings";
+import { emissionLineBindingDecision, type LineCoverageReason } from "@/lib/certification/emission-line-binding";
 import type { components } from "./generated/certify";
 import { ownValue } from "./semantic-binding-catalog";
-import { isSequestrationBlueprintFamily } from "./storage-blueprints";
-import { lookupInputMapping, lookupPeriodInputTuple, resolveDatapointSource } from "./datapoint-mapping";
-import { effectiveContract, validateLineSources, type LineSources } from "./template-observations/line-sources";
+import { validateLineSources, type LineSources } from "./template-observations/line-sources";
 import { normalizeTemplateDefinition } from "./template-observations/normalize";
-
-const TRANSPORT_BLUEPRINT_KEY = "transport";
 
 export interface UnbindableTemplateInput {
   groupKey: string;
@@ -16,68 +13,30 @@ export interface UnbindableTemplateInput {
   blueprintKey: string;
   inputKey: string;
   takenComponentNames?: string[];
-  reason: "unmapped" | "ambiguous" | "project-scope" | "unrecognized-component" | "unassigned";
+  reason: LineCoverageReason;
 }
 
-/** Contracts own source identity. Entry-only period lines use the sandbox stub policy.
- * Policy tracking: docs/open-questions-isometric.md#template-component-source-assignments-certificationtemplate-component-source-wizard.
- */
 export function findUnbindableTemplateInputs(
   template: components["schemas"]["GhgEntryTemplate"],
-  options: { allowPeriodInputStub?: boolean; lineSources?: LineSources } = {},
+  options: { lineSources?: LineSources; enrichmentComplete?: boolean } = {},
 ): UnbindableTemplateInput[] {
+  if (options.enrichmentComplete === false) return [];
+  const definition = normalizeTemplateDefinition(template);
   const lineSources = options.lineSources ?? {};
-  const problems = validateLineSources(normalizeTemplateDefinition(template), lineSources);
-  const findings: UnbindableTemplateInput[] = [];
-  for (const group of template.groups) {
-    for (const component of group.components) {
-      const stored = ownValue(lineSources, component.id);
-      const contract = stored && effectiveContract(stored);
-      const componentProblems = problems.filter((problem) => problem.componentId === component.id);
-      for (const input of component.inputs) {
-        const target: UnbindableTemplateInput = {
-          groupKey: group.key, componentId: component.id, componentDisplayName: component.display_name,
-          blueprintKey: component.blueprint_key, inputKey: input.input_key, reason: "unmapped",
-        };
-        if (!contract || contract.scope === "unassigned") { findings.push({ ...target, reason: "unassigned" }); break; }
-        if (contract.scope === "forbidden") { findings.push({ ...target, inputKey: component.inputs.find((candidate) => candidate.type === "monitored")?.input_key ?? input.input_key, reason: "project-scope" }); break; }
-        if (componentProblems.some((problem) => problem.code === "ambiguous")) { findings.push({ ...target, reason: "ambiguous" }); break; }
-        if (componentProblems.length) {
-          if (input.type === "fixed") continue;
-          // Invalid carried contracts still need review, but review cannot add
-          // support for an input absent from the catalog. Keep its exact key.
-          const knownInput = lookupInputMapping(group.key, component.blueprint_key, input.input_key) ||
-            lookupPeriodInputTuple(group.key, component.blueprint_key, input.input_key) ||
-            getSequestrationInputBinding(component.blueprint_key, input.input_key);
-          if (!knownInput) findings.push(target);
-          else if (!findings.some((finding) => finding.componentId === component.id)) findings.push({ ...target, reason: "unassigned" });
-          continue;
-        }
-        if (isSequestrationBlueprintFamily(component.blueprint_key)) {
-          if (hasExplicitSequestrationBinding(component.blueprint_key) && !getSequestrationInputBinding(component.blueprint_key, input.input_key)) findings.push(target);
-          continue;
-        }
-        if (input.type === "fixed") continue;
-        if (lookupPeriodInputTuple(group.key, component.blueprint_key, input.input_key, contract)) {
-          if (!options.allowPeriodInputStub) findings.push({ ...target, reason: "project-scope" });
-          continue;
-        }
-        const mapping = lookupInputMapping(group.key, component.blueprint_key, input.input_key, contract);
-        if (!mapping) {
-          if (component.blueprint_key !== TRANSPORT_BLUEPRINT_KEY || !findings.some((finding) => finding.componentId === component.id)) findings.push(target);
-          continue;
-        }
-        try { resolveDatapointSource(mapping, contract); }
-        catch { findings.push({ ...target, reason: "unassigned" }); }
-      }
-      // Empty lines also require a contract.
-      if (component.inputs.length === 0 && (!contract || contract.scope === "unassigned")) findings.push({
-        groupKey: group.key, componentId: component.id, componentDisplayName: component.display_name,
-        blueprintKey: component.blueprint_key, inputKey: "", reason: "unassigned",
-      });
-    }
-  }
-  return findings;
+  const problems = validateLineSources(definition, lineSources);
+  const componentsById = new Map(definition.groups.flatMap((group) => group.components.map((component) => [component.id, component] as const)));
+  return template.groups.flatMap((group) => group.components.flatMap((rawComponent) => {
+    const component = componentsById.get(rawComponent.id)!;
+    const decision = emissionLineBindingDecision({ component, groupKey: group.key,
+      contract: ownValue(lineSources, component.id), problems, enrichmentComplete: options.enrichmentComplete ?? true });
+    if (!decision) return [];
+    const finding = (inputKey: string, reason: LineCoverageReason) => ({ groupKey: group.key, componentId: component.id,
+      componentDisplayName: component.displayName, blueprintKey: component.blueprintKey, inputKey, reason });
+    return [
+      ...(decision.unknownInputKeys ?? []).map((inputKey) => finding(inputKey, "unmapped")),
+      ...decision.inputKeys.map((inputKey) => finding(inputKey, decision.reason)),
+    ];
+  }));
 }
 
 function listNames(names: string[]): string {
@@ -93,8 +52,8 @@ function formatInstruction(input: UnbindableTemplateInput, count = 1): string {
     return `Add ${target} as a project component in Isometric, then remove ${plural ? "them" : "it"} from the Removal template.`;
   }
   if (input.reason === "ambiguous") return `${REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview} Choose a different automatic source for each line.`;
-  if (input.blueprintKey === TRANSPORT_BLUEPRINT_KEY) return `Replace ${target} with a Mass-distance-based CI emissions component in Isometric, or pick another Removal template.`;
-  return "Pick another Removal template or ask support to add the mapping.";
+  if (input.blueprintKey === TRANSPORT_BLUEPRINT_KEY) return LINE_TRANSPORT_REPLACEMENT_MESSAGE.replace("Replace it", `Replace ${target}`);
+  return LINE_NO_MAPPING_MESSAGE;
 }
 
 export function formatUnbindableTemplateInputs(inputs: readonly UnbindableTemplateInput[]): { lead: string; lines: string[] } {
