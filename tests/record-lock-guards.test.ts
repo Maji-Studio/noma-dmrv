@@ -1,4 +1,5 @@
 import { withGhgVerifierSubmissionLock } from "@/data-access/ghg-verifier-submission-lock";
+import { runOwnedTransaction } from "@/data-access/owned-transaction";
 import { withFacilityDurabilitySessionLock } from "@/data-access/facility-durability-lock";
 import { getOutputMovementCertificationLocks } from "@/data-access/output-stock-edit-lock";
 import { beforeEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -17,6 +18,7 @@ import { withLineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 const LOCK_OBSERVATION_TIMEOUT_MS = 5_000;
+const SAVEPOINT_GUARD_BUDGET_MS = 750;
 const pgActivity = pgSchema("pg_catalog").view("pg_stat_activity", {
   pid: integer("pid"), waitEventType: text("wait_event_type"), waitEvent: text("wait_event"),
 }).existing();
@@ -329,6 +331,23 @@ it('fails closed when a fresh statement read exceeds its timeout', async () => {
   await withLineageFixture(async fixture => {
     await db.update(certificationSubmissions).set({ metadata: { remoteStatus: 'FAILED_VERIFICATION' } }).where(and(eq(certificationSubmissions.organizationId, TEST_ORG_ID), eq(certificationSubmissions.localEntityId, fixture.ghgStatementId!)));
     await expect(db.transaction(tx => assertCanMutateCertifiedLineage(makeTestOrgContext(), tx, { entityType: 'feedstock', entityId: fixture.feedstockId }, 'update'))).rejects.toMatchObject({ code: 'certification_locked' });
+    expect(remote.calls).toBe(1);
+  }, 'ghgStatement');
+});
+
+it('preserves the Sent refusal when a registry read stalls inside an owned savepoint', async () => {
+  remote.stall = true;
+  await withLineageFixture(async fixture => {
+    await db.update(certificationSubmissions).set({ metadata: { remoteStatus: 'FAILED_VERIFICATION' } }).where(and(
+      eq(certificationSubmissions.organizationId, TEST_ORG_ID),
+      eq(certificationSubmissions.localEntityId, fixture.ghgStatementId!),
+    ));
+    const ctx = makeTestOrgContext();
+    const result = runOwnedTransaction(ctx, Date.now() + SAVEPOINT_GUARD_BUDGET_MS, tx =>
+      tx.transaction(savepoint => assertCanMutateCertifiedLineage(ctx, savepoint,
+        { entityType: 'feedstock', entityId: fixture.feedstockId }, 'update')));
+
+    await expect(result).resolves.toMatchObject({ kind: 'callback_threw', error: { code: 'certification_locked' } });
     expect(remote.calls).toBe(1);
   }, 'ghgStatement');
 });

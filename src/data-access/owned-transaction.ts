@@ -28,6 +28,16 @@ function remainingMs(deadlineAt: number): number {
   return deadlineAt - Date.now();
 }
 
+/** Drizzle creates distinct transaction objects for each savepoint. */
+function shareDeadlineWithSavepoints(tx: DbTransaction, deadlineAt: number): void {
+  setTransactionDeadline(tx, deadlineAt);
+  const transaction = tx.transaction;
+  tx.transaction = callback => transaction.bind(tx)(async savepoint => {
+    shareDeadlineWithSavepoints(savepoint, deadlineAt);
+    return callback(savepoint);
+  });
+}
+
 /**
  * Check out a connection before the deadline, or answer without starting. A
  * connection that arrives after the answer is released untouched.
@@ -94,7 +104,7 @@ export async function runOwnedTransaction<T>(
         if (budget <= 0) throw deadlineExceeded("before it started");
         await tx.execute(sql.raw(`set local transaction_timeout = ${budget}`));
         await tx.execute(sql.raw(`set local statement_timeout = ${budget}`));
-        setTransactionDeadline(tx, deadlineAt);
+        shareDeadlineWithSavepoints(tx, deadlineAt);
         const result = await callback(tx);
         if (connectionError) throw connectionError;
         if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("before saving");
