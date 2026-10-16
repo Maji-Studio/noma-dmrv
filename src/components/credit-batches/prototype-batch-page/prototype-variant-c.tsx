@@ -49,7 +49,7 @@ export function VariantC() {
                 ))}
               </div>
             </div>
-            <div className="grid gap-0 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-0 md:grid-cols-2 xl:grid-cols-4">
               {SEGMENTS.map((s) => {
                 const items = model.items.filter((item) => item.affects === s.key);
                 return (
@@ -76,7 +76,7 @@ export function VariantC() {
               })}
             </div>
           </Panel>
-          <div className="grid gap-20 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-20 lg:grid-cols-[minmax(0,1fr)_340px]">
             <DetailsPanel />
             <div className="flex flex-col gap-20">
               <FedPanel />

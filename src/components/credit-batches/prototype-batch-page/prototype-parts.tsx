@@ -316,9 +316,15 @@ export function DetailsPanel({ className }: { className?: string }) {
         <DetailRow field={null} label="Gas composition" value={gasText} editing={editing} input={<Input defaultValue={gasText} aria-label="Gas composition" />} />
         <DetailRow field={null} label="Notes" value={batch.siteManagementNotes || "No notes"} editing={editing} input={<Input defaultValue={batch.siteManagementNotes ?? ""} aria-label="Notes" />} />
       </dl>
-      <div className="flex flex-col gap-8 border-t border-[var(--color-border-tertiary)] pt-12">
-        <h3 className="body-small font-medium">Removal template</h3>
-        <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} locked={model.locks.template != null} />
+      <div className="border-t border-[var(--color-border-tertiary)] pt-12">
+        {model.scenario === "blocking" ? (
+          <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} locked={model.locks.template != null} />
+        ) : (
+          // PROTOTYPE: a sent Removal needs a template, so these scenarios show a stub pin.
+          <dl>
+            <DetailRow field="template" label="Removal template" value="Mafinga biochar, sandbox v2" editing={false} />
+          </dl>
+        )}
       </div>
     </Panel>
   );
