@@ -1,6 +1,7 @@
 /**
  * Client-side narrowing of an energy breakdown: the credit batch filter,
- * per-source totals for the activity panel, and the list ranking.
+ * per-source totals for the summary line, and the list ranking. Activity
+ * only; no CO2e.
  */
 import { creditBatchInPeriod } from "./period";
 import {
@@ -14,7 +15,6 @@ import type {
   EnergyFlow,
   EnergyGap,
   EnergyPeriod,
-  EnergyProduction,
   EnergyRecord,
 } from "./types";
 
@@ -68,60 +68,28 @@ export function recordsForBatch(records: EnergyRecord[], batchId: string | null)
     : records.filter((record) => record.creditBatchIds.includes(batchId));
 }
 
-export function producedDryKg(production: EnergyProduction[], batchId: string | null): number {
-  return production
-    .filter((entry) => batchId == null || entry.creditBatchId === batchId)
-    .reduce((total, entry) => total + entry.dryMassKg, 0);
-}
-
 export interface SourceTotal {
   activity: number;
-  /** Null when the facility has no factors. */
-  kg: number | null;
-  /** False when no reading of this source was recorded in the selection. */
-  recorded: boolean;
-  missingReadings: number;
 }
 
-export function totalsBySource(
-  flows: EnergyFlow[],
-  gaps: EnergyGap[],
-  hasFactors: boolean,
-): Record<EnergySourceKey, SourceTotal> {
+export function totalsBySource(flows: EnergyFlow[]): Record<EnergySourceKey, SourceTotal> {
   const totals = Object.fromEntries(
-    ENERGY_SOURCE_KEYS.map((key) => [
-      key,
-      { activity: 0, kg: hasFactors ? 0 : null, recorded: false, missingReadings: 0 },
-    ]),
+    ENERGY_SOURCE_KEYS.map((key) => [key, { activity: 0 }]),
   ) as Record<EnergySourceKey, SourceTotal>;
   for (const flow of flows) {
     const total = totals[flow.source];
     total.activity += flow.activity;
-    total.recorded = true;
-    if (total.kg != null) total.kg += flow.kg ?? 0;
   }
-  for (const gap of gaps) totals[gap.source].missingReadings += 1;
   return totals;
-}
-
-export function totalKg(flows: EnergyFlow[]): number {
-  return flows.reduce((total, flow) => total + (flow.kg ?? 0), 0);
-}
-
-export function recordKg(record: EnergyRecord): number | null {
-  return record.footprint.kg ? sumSourceAmounts(record.footprint.kg) : null;
 }
 
 export function recordDieselLitres(record: EnergyRecord): number {
   return sumSourceAmounts(record.footprint.activity, DIESEL_SOURCE_KEYS);
 }
 
-/**
- * What the list ranks by: estimated kg CO2e, or litres of diesel when the
- * facility has no factors (one unit across the three diesel sources).
- */
+/** What the list ranks by: litres of diesel, one unit across the three diesel sources. */
 export function recordRankValue(record: EnergyRecord): number {
-  return recordKg(record) ?? recordDieselLitres(record);
+  return recordDieselLitres(record);
 }
 
 export function rankRecords(records: EnergyRecord[]): EnergyRecord[] {

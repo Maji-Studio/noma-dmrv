@@ -54,10 +54,11 @@ submission data noma does not measure directly. Distinct from a measured value.
 
 **Emission factor**:
 kg CO₂e per unit of recorded activity (litre of diesel, kWh of grid
-electricity, tonne-km of road freight), set per facility by an Owner or
-Admin. Activity times factor is the estimated CO₂e the Energy page shows.
-Display only: it never reaches a submission, where Isometric applies the
-**fixed constants** on its template (ADR 0031).
+electricity, tonne-km of road freight). noma holds no editable factors and the
+Energy page shows activity only (ADR 0031, estimates paused 2026-10-16);
+Isometric applies the **fixed constants** on its template to what is
+submitted. The dormant `facility_emission_factors` table is the only local
+trace.
 _Avoid_: carbon intensity (the registry's word for its template factor),
 emission estimate (a submission input, above).
 
