@@ -624,16 +624,17 @@ export function useSubmitRemoval() {
         { kind: "removal", input: vars.input },
         vars.onProgress,
       ),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
-      return queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-    },
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
     onError: () => {
       // A Removal failure can happen after its draft was claimed. Refresh the
       // submission state before the operator returns to review so the active
       // lock, if any, gates the next attempt.
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
+    // Claim reservation and release record activity even when the registry
+    // call fails afterwards.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: activityKeys.all }),
   });
 }
 
@@ -834,13 +835,14 @@ export function useSubmitGhgStatementToVerifier() {
         vars.onProgress,
       );
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
-      return queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-    },
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
     onError: () => {
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
+    // The report attachment records document activity before the provider
+    // submission, so a failed submission still leaves new activity.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: activityKeys.all }),
   });
 }
 

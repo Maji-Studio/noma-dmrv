@@ -35,6 +35,7 @@ vi.mock("@/fn/certification", () => ({
   refreshGhgStatementStatus: vi.fn(ok),
 }));
 vi.mock("@/lib/certification/submission-progress-client", () => ({ streamCertificationSubmission: vi.fn(ok) }));
+import { streamCertificationSubmission } from "@/lib/certification/submission-progress-client";
 
 import { useDeleteTransportLeg } from "./use-transport-legs";
 import { useDeleteFeedstock } from "./use-feedstocks";
@@ -124,6 +125,26 @@ it.each([
   });
   expect(client.getQueryState(orderKeys.detailWithRelations(RECORD_ID))?.isInvalidated).toBe(true);
   expect(client.getQueryState(orderKeys.list({}))?.isInvalidated).toBe(true);
+  unmount();
+  client.clear();
+});
+
+// Submissions commit claim and document activity before the registry call,
+// so a failed submission must still refresh activity.
+it.each([
+  ["removal", () => useSubmitRemoval(), { input: { removalId: RECORD_ID }, onProgress: (): void => undefined }],
+  ["GHG statement", () => useSubmitGhgStatementToVerifier(), { ghgStatementId: RECORD_ID, input: {}, onProgress: (): void => undefined }],
+] as const)("refreshes batch activity after a failed %s submission", async (_kind, useHook, variables) => {
+  vi.mocked(streamCertificationSubmission).mockRejectedValueOnce(new Error("Registry unavailable."));
+  const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  client.setQueryData(activityKeys.creditBatchSummary(BATCH_ID), { total: 0, counts: [], latest: null });
+  const { result, unmount } = renderHook(() => useHook(), {
+    wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+  });
+  await act(async () => {
+    await expect((result.current.mutateAsync as (input: unknown) => Promise<unknown>)(variables)).rejects.toThrow("Registry unavailable.");
+  });
+  expect(client.getQueryState(activityKeys.creditBatchSummary(BATCH_ID))?.isInvalidated).toBe(true);
   unmount();
   client.clear();
 });
