@@ -7,8 +7,8 @@ export function partyRefusal(code: DomainErrorCode, message: string, path: Domai
   const detail = new SafeError(message).message;
   return new DomainError(code, detail, { issues: [{ path, code, message: detail, ...(meta ? { meta } : {}) }] });
 }
-export function partyNotFound(kind: Party): DomainError {
-  return partyRefusal("not_found", kind === "supplier" ? "Supplier not found" : "Customer not found", [`${kind}Id`]);
+export function partyNotFound(kind: Party, path: DomainIssue["path"] = [`${kind}Id`]): DomainError {
+  return partyRefusal("not_found", kind === "supplier" ? "Supplier not found" : "Customer not found", path);
 }
 export function partyArchived(kind: Party, code: string, path: DomainIssue["path"] = [`${kind}Id`]): DomainError {
   const noun = kind === "supplier" ? "Supplier" : "Customer";

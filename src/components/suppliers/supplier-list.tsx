@@ -34,7 +34,7 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { useToast } from "@/components/ui/toast";
 import { DeleteConflictNotice, isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
-import { ArchivedSupplierNotice } from "@/components/parties/party-notices";
+import { ArchivedSupplierNotice } from "@/components/parties";
 import { SupplierForm, type PendingSupplierLocation } from "./supplier-form";
 import type { SupplierFormData } from "@/schemas/suppliers";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
@@ -432,7 +432,7 @@ export function SupplierList() {
                 ? "Try clearing your search."
                 : showArchived
                   ? "Suppliers you archive will appear here and can be restored."
-                  : "Suppliers are where your feedstock deliveries come from."
+                  : "Suppliers are where your feedstock intakes come from."
             }
             action={
               !hasActiveSearch && !showArchived ? (
@@ -482,7 +482,7 @@ export function SupplierList() {
       <DeleteConfirmDialog
         isOpen={!!deletingSupplier}
         title="Delete supplier"
-        message="Are you sure you want to delete this supplier and its locations? This action cannot be undone. Note: Suppliers with associated feedstock deliveries cannot be deleted."
+        message="Are you sure you want to delete this supplier and its locations? This action cannot be undone. Note: Suppliers used by feedstock intakes cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
           setDeletingSupplier(null);

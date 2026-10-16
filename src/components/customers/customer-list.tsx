@@ -32,7 +32,7 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { useToast } from "@/components/ui/toast";
 import { DeleteConflictNotice, isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
-import { ArchivedCustomerNotice } from "@/components/parties/party-notices";
+import { ArchivedCustomerNotice } from "@/components/parties";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { CustomerForm, type PendingLocation } from "./customer-form";
 import type { CustomerFormData } from "@/schemas/customers";

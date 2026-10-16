@@ -7,7 +7,7 @@
 
 import { useState, type ComponentType, type ReactNode } from "react";
 import { ArchivedFormulationNotice } from "@/components/formulations/formulation-notices";
-import { ArchivedCustomerNotice, ArchivedSupplierNotice } from "@/components/parties/party-notices";
+import { ArchivedCustomerNotice, ArchivedSupplierNotice } from "@/components/parties";
 import { useToast } from "@/components/ui/toast";
 import { useRestoreFormulation } from "@/hooks/use-formulations";
 import { useRestoreSupplier } from "@/hooks/use-suppliers";

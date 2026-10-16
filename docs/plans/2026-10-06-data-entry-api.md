@@ -975,6 +975,10 @@ revision 2 reads, scoped evals, fuzz fixtures and master-data documentation.
   require 2xx; out-of-range distance and location count examples require 422.
 - Decisions 119 and 120 record round 12: customer-location archive/restore in
   7c, and existing-order delivery/application continuation after party archive.
+- Feedstock types share the in-use delete notice with formulations, suppliers and
+  customers (7a review round 2 asked for one pattern): the server refusal is now
+  "Feedstock type was not deleted because records still use it. Archive it
+  instead." and the notice is titled by code.
 
 **Validation and follow-ups:** lint passed with 16 existing warnings; typecheck,
 docs references and eval unit tests passed. OpenAPI generation left the snapshot

@@ -4,7 +4,7 @@ import { suppliers, customers } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import type { DomainIssue } from "@/lib/domain-errors";
-import { partyArchived, partyRefusal } from "@/lib/party-domain-errors";
+import { partyArchived, partyNotFound, partyRefusal } from "@/lib/party-domain-errors";
 import type { FacilityDistanceInput } from "@/schemas/facility-distances";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
 import { requireOrgScope } from "./utils";
@@ -17,7 +17,7 @@ export async function lockSupplierReference(ctx: OrgContext, tx: DbTransaction, 
   const pointer = options.pointer ?? ["supplierId"];
   const [supplier] = await tx.select({ id: suppliers.id, code: suppliers.code, archivedAt: suppliers.archivedAt }).from(suppliers)
     .where(and(eq(suppliers.organizationId, ctx.organizationId), eq(suppliers.id, supplierId))).for("key share");
-  if (!supplier) throw partyRefusal("not_found", "Supplier was not found in this Organization.", pointer);
+  if (!supplier) throw partyNotFound("supplier", pointer);
   if (supplier.archivedAt && !options.allowArchived) throw partyArchived("supplier", supplier.code, pointer);
   return supplier;
 }
@@ -27,7 +27,7 @@ export async function lockCustomerReference(ctx: OrgContext, tx: DbTransaction, 
   const pointer = options.pointer ?? ["customerId"];
   const [customer] = await tx.select({ id: customers.id, code: customers.code, archivedAt: customers.archivedAt }).from(customers)
     .where(and(eq(customers.organizationId, ctx.organizationId), eq(customers.id, customerId))).for("key share");
-  if (!customer) throw partyRefusal("not_found", "Customer not found", pointer);
+  if (!customer) throw partyNotFound("customer", pointer);
   if (customer.archivedAt && !options.allowArchived) throw partyArchived("customer", customer.code, pointer);
   return customer;
 }

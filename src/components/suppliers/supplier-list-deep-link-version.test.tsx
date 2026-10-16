@@ -41,7 +41,7 @@ vi.mock("@/hooks/use-suppliers", () => ({
   useRestoreSupplier: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));
 vi.mock("@/components/ui/lifecycle-notices", () => ({ DeleteConflictNotice: () => null, isInUseDeleteRefusal: () => false }));
-vi.mock("@/components/parties/party-notices", () => ({ ArchivedSupplierNotice: () => null }));
+vi.mock("@/components/parties", () => ({ ArchivedSupplierNotice: () => null }));
 vi.mock("@/hooks/use-debounce", () => ({ useDebounce: (value: unknown) => value }));
 vi.mock("@/hooks/use-list-pagination", () => ({
   useListPagination: () => ({ currentPage: 1, pageSize: 10, setCurrentPage: vi.fn(), onPaginationChange: vi.fn() }),

@@ -120,8 +120,8 @@ describe("party refusals and atomic effects", () => {
     const foreign = await createIntakeFixture("foreign-supplier"); intakeFixtures.push(foreign);
     for (const supplierId of [foreign.supplierId, crypto.randomUUID()]) {
       const failure = await runOperation(logFeedstockDelivery, f.ctx, { ...f.input(), supplierId }).catch(error => error);
-      expect(failure).toMatchObject({ code: "not_found", message: "Supplier was not found in this Organization.", issues: [expect.objectContaining({ path: ["supplierId"] })] });
-      expect(toActionFailure(failure, { fallbackMessage: "Failed to create feedstock", log: { message: "feedstock creation failed" } })).toMatchObject({ success: false, error: "Supplier was not found in this Organization." });
+      expect(failure).toMatchObject({ code: "not_found", message: "Supplier was not found.", issues: [expect.objectContaining({ path: ["supplierId"] })] });
+      expect(toActionFailure(failure, { fallbackMessage: "Failed to create feedstock", log: { message: "feedstock creation failed" } })).toMatchObject({ success: false, error: "Supplier was not found." });
     }
   });
   it("refuses normalized names, duplicate codes and foreign ids with field issues", async () => {
