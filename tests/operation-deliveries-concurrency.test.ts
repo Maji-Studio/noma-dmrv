@@ -15,7 +15,6 @@ import { openOperationBarrier, waitForBlockedOperations } from "./helpers/operat
 import { createDeliveryFixture } from "./helpers/delivery-create-fixture";
 import { cleanupOutputStockFixture } from "./helpers/output-stock-cleanup";
 
-vi.hoisted(() => { process.env.DB_POOL_LOCK_TIMEOUT_MS = "5000"; });
 const SUITE_TIMEOUT_MS = 60_000;
 const BARRIER_POOL_SIZE = 2;
 const WRITER_POOL_SIZE = 2;

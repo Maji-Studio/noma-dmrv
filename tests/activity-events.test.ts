@@ -1,8 +1,5 @@
 /** Database contracts for transaction-owned, organization-scoped activity history. */
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
-vi.hoisted(() => {
-  process.env.DB_POOL_LOCK_TIMEOUT_MS = "5000";
-});
+import { afterEach, beforeEach, expect, it } from "vitest";
 import { setTimeout as delay } from "node:timers/promises";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";

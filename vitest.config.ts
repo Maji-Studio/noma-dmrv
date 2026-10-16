@@ -1,11 +1,19 @@
 import { defineConfig } from "vitest/config";
 import { resolve } from "path";
 
+const DEFAULT_LOCAL_MAX_WORKERS = 2;
+const configuredMaxWorkers = Number(process.env.VITEST_MAX_WORKERS ?? DEFAULT_LOCAL_MAX_WORKERS);
+const localMaxWorkers = Number.isInteger(configuredMaxWorkers) && configuredMaxWorkers > 0
+  ? configuredMaxWorkers
+  : DEFAULT_LOCAL_MAX_WORKERS;
+
 export default defineConfig({
   test: {
     globals: true,
     environment: "node",
     setupFiles: ["./tests/setup.ts"],
+    globalSetup: ["./tests/global-setup.ts"],
+    maxWorkers: process.env.CI ? undefined : localMaxWorkers,
     restoreMocks: true,
     exclude: [
       "**/node_modules/**",
