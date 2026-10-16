@@ -38,6 +38,51 @@
 | Quantify and deduct spilled or lost biochar and allocate the loss to the affected batch | Per incident | Incident, mass adjustment, affected lineage, and credited-mass deduction | [Biochar v1.1 required records](https://registry.isometric.com/protocol/biochar/1.1#required-records--documentation---coestored-n) |
 | Keep legal, environmental, social, stakeholder, adaptive-management, and additionality support in the PDD | Validation and material change | Permits, risk/mitigation narratives, engagement evidence, response plan, additionality demonstration | [Biochar v1.1](https://registry.isometric.com/protocol/biochar/1.1) |
 
+### Project reactor monitoring
+
+The project uses the sub-atmospheric pressure alternative in
+[Biochar v1.1.1 §9.1.2, Pyrolysis gas loss](https://registry.isometric.com/protocol/biochar/1.1?tag=1.1.1).
+The registry text requires pressure to be "Recorded at a frequency of 1-minute
+intervals at minimum" and the calibrated sensor to "have an accuracy of 2% of
+full scale or better". Calibration must meet or exceed manufacturer requirements
+and be at least annual. §9.1.2 says "Raw data must be made available upon request."
+The project's five-year retention commitment comes from PDD B.19.
+
+The [approved PDD evidence in #627](https://github.com/Maji-Studio/noma-dmrv/issues/627)
+selects this route: B.18 uses no external reactor model; B.19 retains batch dates,
+total production and continuous operational records in the dMRV for at least
+five years; E.3 adds annual accredited leakage inspection. E.1/E.3 use annual
+accredited emissions testing, so the following operational temperature and
+record-retention requirements apply to this project.
+
+[Biochar v1.1.1 §9.2.4, Emissions testing](https://registry.isometric.com/protocol/biochar/1.1?tag=1.1.1),
+verbatim from the registry (read 2026-10-15; [...] marks omitted text):
+
+> For emissions testing to be considered representative of actual project operations, the following criteria must be satisfied:
+> * The biomass feedstock used during project operations should be identical or similar to the feedstock used during emissions testing. [...]
+> * The temperature within the flue stack during project operations should be similar to that of the emissions test, defined as being within 10% of the measured value(s) during the corresponding emissions test.
+> Measurement of the temperature within the flue stack should be conducted using a calibrated sensor which satisfies the below requirements:
+> * Must have an accuracy of 2% of full scale or better;
+> * Recorded at a frequency of 1-minute intervals at minimum;
+> * Must be calibrated in accordance with and at a frequency which meets or exceeds manufacturer calibration requirements, but which in any case must be no less than annual; and
+> * Raw data must be made available upon request.
+
+[§9.2.4.1, Required Records & Documentation - emissions testing](https://registry.isometric.com/protocol/biochar/1.1?tag=1.1.1),
+verbatim from the registry (read 2026-10-15; [...] marks omitted text):
+
+> The Project Proponent must maintain the following records as evidence supporting calculation of direct emissions from the biomass conversion process for a period of at least five years: * Results of emissions tests [...] including a signed report from the accredited emissions testing entity; * Raw data provided via pyrolyzer temperature measurements for the Reporting Period, $RP$; * Calibration records for all temperature measurement equipment; and * Manufacturer operating manuals [...]
+
+The Readings file (`sensor_data`) uploaded on each production run is the retained
+raw record, stored unchanged; file presence is the readiness gate
+(Kenji, 2026-10-16; [decision](./changes.md#2026-10-15-correct-reactor-monitoring-citations-and-retain-document-only-gates-627-slices-1-2-4)).
+This one file is the retained evidence for both the §9.1.2 pressure series and the
+§9.2.4 / §9.2.4.1 flue-stack temperature series; noma does not check its contents,
+which are the operator's responsibility.
+The approved project route does not require continuous gas telemetry.
+
+See the [integration contract](./integration-plan.md#reactor-time-series-upload)
+for the file-presence gate and the separate optional readings importer.
+
 ## Agricultural-soil storage and application
 
 | Requirement | When | Minimum records or computation | Source |

@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, applications, creditBatches, creditBatchProductionRuns, documents, productionRuns, samples, transportLegs, biocharProducts, biocharProductSourceAllocations, vehicles, feedstocks, outputStockAllocations, outputStockRunAllocations, binMovements, deliveries, applicationOutputAllocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { formatUtcDate } from "@/lib/date-utils";
 import * as activity from "@/data-access/activity-events";
 import { recordApplication, updateApplication as updateApplicationOperation, deleteApplication as deleteApplicationOperation } from "@/lib/operations/applications";
 import { createCreditBatch, updateCreditBatch, deleteCreditBatch } from "@/data-access/credit-batches";
@@ -118,7 +119,7 @@ it.each(["different", "same", "unbatched"] as const)("records both run scopes wh
   const previousBatchId = batchScope === "unbatched" ? null : fixture.batch.id;
   const nextBatchId = batchScope === "same" ? fixture.batch.id : batchScope === "unbatched" ? null : nextBatch.id;
   if (nextBatchId) await db.insert(creditBatchProductionRuns).values({ organizationId: ctx.organizationId, creditBatchId: nextBatchId, productionRunId: nextRun.id });
-  const [nextProduct] = await db.insert(biocharProducts).values({ ...fixture.product, id: crypto.randomUUID(), code: "ACT-BP-NEXT", linkedProductionRunId: nextRun.id, productionDate: nextDate, placedAt: nextDate }).returning();
+  const [nextProduct] = await db.insert(biocharProducts).values({ ...fixture.product, id: crypto.randomUUID(), code: "ACT-BP-NEXT", linkedProductionRunId: nextRun.id, productionDate: formatUtcDate(nextDate), placedAt: nextDate }).returning();
   await db.insert(biocharProductSourceAllocations).values({
     organizationId: ctx.organizationId, biocharProductId: nextProduct.id, productionRunId: nextRun.id,
     sourceStorageLocationId: nextRun.biocharStorageLocationId!, allocatedWetMassKg: nextRun.biocharOutputKg!, allocatedDryMassKg: nextRun.biocharDryMassKg!,
@@ -507,7 +508,7 @@ it("excludes fully reversed product shares from delivery and order activity scop
   const [nextRun] = await db.insert(productionRuns).values({ ...fixture.run, id: crypto.randomUUID(), code: "ACT-RUN-NEXT", startTime: NEXT_RUN_START, endTime: NEXT_ACTIVITY_DATE }).returning();
   const [nextBatch] = await db.insert(creditBatches).values({ ...fixture.batch, id: crypto.randomUUID(), code: "ACT-CB-NEXT", startDate: "2026-02-01", endDate: "2026-02-28" }).returning();
   await db.insert(creditBatchProductionRuns).values({ organizationId: ctx.organizationId, creditBatchId: nextBatch.id, productionRunId: nextRun.id });
-  const [nextProduct] = await db.insert(biocharProducts).values({ ...fixture.product, id: crypto.randomUUID(), code: "ACT-BP-NEXT", linkedProductionRunId: nextRun.id, productionDate: NEXT_ACTIVITY_DATE, placedAt: NEXT_ACTIVITY_DATE }).returning();
+  const [nextProduct] = await db.insert(biocharProducts).values({ ...fixture.product, id: crypto.randomUUID(), code: "ACT-BP-NEXT", linkedProductionRunId: nextRun.id, productionDate: formatUtcDate(NEXT_ACTIVITY_DATE), placedAt: NEXT_ACTIVITY_DATE }).returning();
   await db.insert(biocharProductSourceAllocations).values({ organizationId: ctx.organizationId, biocharProductId: nextProduct.id, productionRunId: nextRun.id,
     sourceStorageLocationId: nextRun.biocharStorageLocationId!, allocatedWetMassKg: nextRun.biocharOutputKg!, allocatedDryMassKg: nextRun.biocharDryMassKg! });
   const [original] = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, fixture.delivery.id));
