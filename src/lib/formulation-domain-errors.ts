@@ -9,6 +9,15 @@ function refusal(code: DomainErrorCode, message: string, path: DomainIssue["path
 export function formulationNotFound(path: DomainIssue["path"] = ["formulationId"]): DomainError {
   return refusal("not_found", "Formulation not found", path);
 }
+export function formulationArchived(code: string, path: DomainIssue["path"] = ["formulationId"]): DomainError {
+  return refusal("not_found", `Formulation ${code} is archived. Restore it or choose another formulation.`, path);
+}
+export function formulationArchivedForEdit(code: string): DomainError {
+  return refusal("not_found", `Formulation ${code} is archived. Restore it before editing it.`, ["formulationId"]);
+}
+export function formulationArchiveConflict(code: string, archived: boolean): DomainError {
+  return refusal("conflict", `Formulation ${code} is ${archived ? "already archived" : "not archived"}.`, ["formulationId"]);
+}
 export function formulationTypeNotFound(index: number): DomainError {
   return refusal("not_found", "1 Feedstock type was not found. Refresh the formulation and choose the feedstock types again.", ["lines", index, "feedstockTypeId"]);
 }

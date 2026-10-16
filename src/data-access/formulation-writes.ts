@@ -8,13 +8,14 @@
  * millionths total, then withUniqueCodeGuard update and line reconciliation.
  * Delete: formulation FOR UPDATE and version, plain product/bin/order references
  * including archived rows, then delete with cascading lines.
- * Bin create/update/quick-add: existing facility/bin locks, formulation FOR SHARE
- * held through the write. Product create reads lines after formulation FOR SHARE.
+ * Archive/restore: formulation FOR UPDATE, version, state, then guarded update.
+ * Bin new claims: existing facility/bin locks, formulation FOR SHARE held through
+ * the write. Kept claims skip it. Products read lines after formulation FOR SHARE.
  * Type usage update: type FOR UPDATE, plain formulation-line usage read; no
  * formulation lock. Formulation writers never request facility, bin, product or
  * order locks, so they cannot reverse those writers' or facility archive's order.
  */
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import {
   biocharProducts,
@@ -28,6 +29,8 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import {
   formulationInUse,
+  formulationArchivedForEdit,
+  formulationArchiveConflict,
   formulationLineInUse,
   formulationNotFound,
   formulationRatioExceeded,
@@ -40,7 +43,7 @@ import {
   updateFormulationInput,
   type CreateFormulationInput,
   type UpdateFormulationInput,
-  type DeleteFormulationInput,
+  type FormulationVersionInput,
 } from "@/schemas/formulation-input";
 import { validationFailed } from "@/lib/operations/errors";
 import { CODE_CONFLICT_MESSAGES, withUniqueCodeGuard } from "./code-generator";
@@ -115,15 +118,14 @@ export async function updateFormulationInTransaction(
   const parsed = updateFormulationInput.safeParse(input);
   if (!parsed.success) throw validationFailed(parsed.error);
   const { formulationId, expectedVersion, lines, ...fields } = parsed.data;
-  const parentWhere = and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, formulationId));
-  const lineWhere = and(eq(formulationIngredients.organizationId, ctx.organizationId), eq(formulationIngredients.formulationId, formulationId));
-  const [locked] = await tx.select().from(formulations).where(parentWhere).for("update");
+  const [locked] = await tx.select().from(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, formulationId))).for("update");
   if (!locked) throw formulationNotFound();
+  if (locked.archivedAt) throw formulationArchivedForEdit(locked.code);
   assertRowVersion({ entity: "formulation", id: formulationId, expectedVersion, actualVersion: locked.version });
   // Parent lock stabilizes this discovery before taking type locks.
-  const stored = await tx.select().from(formulationIngredients).where(lineWhere);
+  const stored = await tx.select().from(formulationIngredients).where(and(eq(formulationIngredients.organizationId, ctx.organizationId), eq(formulationIngredients.formulationId, formulationId)));
   await lockFormulationTypes(ctx, tx, lines, new Set(stored.map(line => line.feedstockTypeId)));
-  const existing = await tx.select().from(formulationIngredients).where(lineWhere).orderBy(asc(formulationIngredients.id)).for("update");
+  const existing = await tx.select().from(formulationIngredients).where(and(eq(formulationIngredients.organizationId, ctx.organizationId), eq(formulationIngredients.formulationId, formulationId))).orderBy(asc(formulationIngredients.id)).for("update");
   const removed = lines === undefined ? []
     : existing.filter(line => !lines.some(incoming => incoming.feedstockTypeId === line.feedstockTypeId));
   for (const line of removed) {
@@ -142,13 +144,13 @@ export async function updateFormulationInTransaction(
   )) throw formulationRatioExceeded();
   return withUniqueCodeGuard(ctx, formulations, formulations.code, CODE_CONFLICT_MESSAGES.formulation, async () => {
     await tx.update(formulations)
-      .set({ ...fields, version: nextVersion(formulations.version), updatedAt: new Date() }).where(parentWhere);
+      .set({ ...fields, version: nextVersion(formulations.version), updatedAt: new Date() }).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, formulationId)));
     if (lines !== undefined) {
       for (const [sortOrder, line] of lines.entries()) {
         const retained = existing.find(old => old.feedstockTypeId === line.feedstockTypeId);
         if (retained) {
           await tx.update(formulationIngredients).set({ ratio: line.ratio ?? null, sortOrder })
-            .where(and(lineWhere, eq(formulationIngredients.id, retained.id)));
+            .where(and(eq(formulationIngredients.organizationId, ctx.organizationId), eq(formulationIngredients.formulationId, formulationId), eq(formulationIngredients.id, retained.id)));
         } else {
           await tx.insert(formulationIngredients).values({
             organizationId: ctx.organizationId, formulationId,
@@ -158,17 +160,16 @@ export async function updateFormulationInTransaction(
       }
       if (removed.length) {
         await tx.delete(formulationIngredients)
-          .where(and(lineWhere, inArray(formulationIngredients.id, removed.map(line => line.id))));
+          .where(and(eq(formulationIngredients.organizationId, ctx.organizationId), eq(formulationIngredients.formulationId, formulationId), inArray(formulationIngredients.id, removed.map(line => line.id))));
       }
     }
     return readBack(ctx, tx, formulationId);
   });
 }
-export async function deleteFormulationInTransaction(ctx: OrgContext, tx: DbTransaction, input: DeleteFormulationInput): Promise<void> {
+export async function deleteFormulationInTransaction(ctx: OrgContext, tx: DbTransaction, input: FormulationVersionInput): Promise<void> {
   requireOrgScope(ctx);
   const { formulationId, expectedVersion } = input;
-  const where = and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, formulationId));
-  const [locked] = await tx.select().from(formulations).where(where).for("update");
+  const [locked] = await tx.select().from(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, formulationId))).for("update");
   if (!locked) throw formulationNotFound();
   assertRowVersion({ entity: "formulation", id: formulationId, expectedVersion, actualVersion: locked.version });
   const products = await tx.select({ code: biocharProducts.code }).from(biocharProducts)
@@ -183,5 +184,36 @@ export async function deleteFormulationInTransaction(ctx: OrgContext, tx: DbTran
     .where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.formulationId, formulationId)))
     .orderBy(asc(orders.code)).limit(BLOCKER_LIMIT);
   if (uses.length) throw formulationInUse("orders", uses.map(row => row.code));
-  await tx.delete(formulations).where(where);
+  await tx.delete(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, formulationId)));
+}
+
+/** Only the formulation row is locked; no referencing rows or types are locked. */
+async function changeFormulationArchiveState(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  { formulationId, expectedVersion }: FormulationVersionInput,
+  archive: boolean,
+): Promise<FormulationWithIngredients> {
+  requireOrgScope(ctx);
+  // Explicit UPDATE strength also serializes with reference SHARE locks.
+  const [locked] = await tx.select().from(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, formulationId))).for("update");
+  if (!locked) throw formulationNotFound();
+  assertRowVersion({ entity: "formulation", id: formulationId, expectedVersion, actualVersion: locked.version });
+  if (Boolean(locked.archivedAt) === archive) throw formulationArchiveConflict(locked.code, archive);
+  const [saved] = await tx.update(formulations).set({
+    archivedAt: archive ? sql`now()` : null,
+    version: nextVersion(formulations.version), updatedAt: sql`now()`,
+  }).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, formulationId), archive ? isNull(formulations.archivedAt) : isNotNull(formulations.archivedAt))).returning();
+  if (!saved) throw formulationArchiveConflict(locked.code, archive);
+  return readBack(ctx, tx, formulationId);
+}
+
+export async function archiveFormulationInTransaction(ctx: OrgContext, tx: DbTransaction, input: FormulationVersionInput): Promise<FormulationWithIngredients> {
+  requireOrgScope(ctx);
+  return changeFormulationArchiveState(ctx, tx, input, true);
+}
+
+export async function restoreFormulationInTransaction(ctx: OrgContext, tx: DbTransaction, input: FormulationVersionInput): Promise<FormulationWithIngredients> {
+  requireOrgScope(ctx);
+  return changeFormulationArchiveState(ctx, tx, input, false);
 }

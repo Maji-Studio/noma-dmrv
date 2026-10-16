@@ -29,7 +29,7 @@ export const updateFormulationInput = z.strictObject({
   formulationId: uuidSchema(), expectedVersion: expectedVersionSchema,
   code: updateFormulationSchema.shape.code,
 }).superRefine(refine);
-export const deleteFormulationInput = z.strictObject({ formulationId: uuidSchema(), expectedVersion: expectedVersionSchema });
+export const formulationVersionInput = z.strictObject({ formulationId: uuidSchema(), expectedVersion: expectedVersionSchema });
 export type CreateFormulationInput = z.output<typeof createFormulationInput>;
 export type UpdateFormulationInput = z.output<typeof updateFormulationInput>;
-export type DeleteFormulationInput = z.output<typeof deleteFormulationInput>;
+export type FormulationVersionInput = z.output<typeof formulationVersionInput>;

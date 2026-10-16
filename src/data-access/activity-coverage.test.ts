@@ -45,6 +45,8 @@ const ACTIVITY_COVERAGE = {
     createFormulationInTransaction: { status: "runner", operations: ["create_formulation"] },
     updateFormulationInTransaction: { status: "runner", operations: ["update_formulation"] },
     deleteFormulationInTransaction: { status: "runner", operations: ["delete_formulation"] },
+    archiveFormulationInTransaction: { status: "runner", operations: ["archive_formulation"] },
+    restoreFormulationInTransaction: { status: "runner", operations: ["restore_formulation"] },
   },
   "application-writes.ts": {
     createApplicationInTransaction: { status: "runner", operations: ["record_application"] },

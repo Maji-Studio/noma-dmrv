@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createFormulationSchema,
   exceedsFormulationRatioSum,
+  formulationFilterSchema,
   formulationPercentFormSchema,
   percentFormToRatioPayload,
   percentToRatio,
@@ -10,6 +11,15 @@ import {
 } from "./formulations";
 
 const UUID = "11111111-1111-4111-8111-111111111111";
+
+describe("formulation list filters", () => {
+  it("defaults to active formulations and preserves an explicit archive filter", () => {
+    expect(formulationFilterSchema.parse({})).toMatchObject({ archived: false });
+    expect(formulationFilterSchema.parse({ archived: false })).toMatchObject({ archived: false });
+    expect(formulationFilterSchema.parse({ archived: true })).toMatchObject({ archived: true });
+    expect(formulationFilterSchema.safeParse({ archived: "true" }).success).toBe(false);
+  });
+});
 
 describe("exceedsFormulationRatioSum", () => {
   it("is false at or below 100%", () => {

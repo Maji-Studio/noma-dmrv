@@ -1,9 +1,9 @@
 import { nextVersion } from "./row-version";
 import { db, type DbTransaction } from '@/db';
-import { biocharProducts, facilities, formulations, outputStockAllocations, productIngredientSnapshots, productionRuns, storageLocations, type BiocharProduct, type ProductIngredientSnapshot } from '@/db/schema';
+import { biocharProducts, facilities, outputStockAllocations, productIngredientSnapshots, productionRuns, storageLocations, type BiocharProduct, type ProductIngredientSnapshot } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
-import { formulationNotFound } from '@/lib/formulation-domain-errors';
+import { lockFormulationReference } from './formulation-reference-guards';
 import { grams, kilograms } from '@/lib/output-stock';
 import { and, eq, isNull } from 'drizzle-orm';
 import { assertCompositionIngredientDrawsWithinStock, deriveCompositionSourceBiocharMassKg, validateCompositionIngredientBins } from './biochar-product-composition';
@@ -132,8 +132,7 @@ export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbT
   return withOutputStockPostingInTransaction(ctx, tx, { input, payload, additionalBinIds, replay: (replayTx, existing) => replayPostedProduct(ctx, replayTx, existing), write: async (writeTx, post) => {
     const [facility] = await writeTx.select({ id: facilities.id }).from(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, data.facilityId), isNull(facilities.archivedAt))).for('share');
     if (!facility) throw new SafeError('Facility not found or archived');
-    const [formulation] = await writeTx.select().from(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, data.formulationId))).for('share');
-    if (!formulation) throw formulationNotFound();
+    const formulation = await lockFormulationReference(ctx, writeTx, data.formulationId);
     const [bin] = await writeTx.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, productBinId), eq(storageLocations.facilityId, data.facilityId), eq(storageLocations.type, 'product_bin'), isNull(storageLocations.archivedAt))).for('update');
     if (!bin || (bin.formulationId && bin.formulationId !== data.formulationId)) throw new SafeError('Choose a product bin for this formulation.');
     await assertAdditionAfterSplit(ctx, writeTx, bin, new Date(data.placedAt));

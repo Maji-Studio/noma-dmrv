@@ -8,7 +8,7 @@ import { withAction } from "./with-action";
  */
 
 import { z } from "zod";
-import { createFormulation, updateFormulation, deleteFormulation } from "@/lib/operations/formulations";
+import { createFormulation, updateFormulation, deleteFormulation, archiveFormulation, restoreFormulation } from "@/lib/operations/formulations";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import {
   getFormulations as getFormulationsData,
@@ -18,7 +18,7 @@ import {
 } from "@/data-access/formulations";
 import {
   createFormulationSchema,
-  deleteFormulationSchema,
+  formulationVersionSchema,
   updateFormulationSchema,
   formulationFilterSchema,
 } from "@/schemas/formulations";
@@ -131,13 +131,31 @@ export async function updateFormulationFn(
  * Delete a formulation (ingredients cascade via FK)
  */
 export async function deleteFormulationFn(
-  data: z.infer<typeof deleteFormulationSchema>
+  data: z.infer<typeof formulationVersionSchema>
 ): Promise<ActionResult<void>> {
   return withAction(async (ctx) => {
 
-    const validated = deleteFormulationSchema.parse(data);
+    const validated = formulationVersionSchema.parse(data);
     await runOperationInProcess(deleteFormulation, ctx, validated);
 
     return undefined;
   }, { fallbackMessage: "Failed to delete formulation", log: { message: LOG_MESSAGE, context: { op: "formulation:delete" } } });
+}
+
+export async function archiveFormulationFn(
+  data: z.infer<typeof formulationVersionSchema>
+): Promise<ActionResult<FormulationWithIngredients>> {
+  return withAction(async (ctx) => {
+    const validated = formulationVersionSchema.parse(data);
+    return runOperationInProcess(archiveFormulation, ctx, validated);
+  }, { fallbackMessage: "Failed to archive formulation", log: { message: LOG_MESSAGE, context: { op: "formulation:archive" } } });
+}
+
+export async function restoreFormulationFn(
+  data: z.infer<typeof formulationVersionSchema>
+): Promise<ActionResult<FormulationWithIngredients>> {
+  return withAction(async (ctx) => {
+    const validated = formulationVersionSchema.parse(data);
+    return runOperationInProcess(restoreFormulation, ctx, validated);
+  }, { fallbackMessage: "Failed to restore formulation", log: { message: LOG_MESSAGE, context: { op: "formulation:restore" } } });
 }

@@ -1,6 +1,8 @@
 /** Transport-neutral write metadata. Never contains field values. */
 export interface OperationEffect {
-  outcome: "created" | "updated" | "deleted";
+  outcome: "created" | "updated" | "deleted" | "status_changed";
+  fromStatus?: string;
+  toStatus?: string;
   entityType: string;
   entityIds: string[];
   versionBefore: number | null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createFormulationInput, updateFormulationInput, deleteFormulationInput } from "./formulation-input";
+import { createFormulationInput, updateFormulationInput, formulationVersionInput } from "./formulation-input";
 import { createFormulationSchema, updateFormulationSchema, formulationPercentFormSchema, percentFormToRatioPayload } from "./formulations";
 
 const TYPE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -15,7 +15,7 @@ describe("formulation operation inputs", () => {
     for (const extra of [{ code: "BCF-MANUAL" }, { userId: "user" }, { extra: true }]) expect(createFormulationInput.safeParse({ name: "Blend", ...extra }).success).toBe(false);
     expect(createFormulationInput.safeParse({ name: "Blend", lines: [{ feedstockTypeId: TYPE_ID, description: "extra" }] }).success).toBe(false);
     expect(updateFormulationInput.safeParse({ formulationId: FORMULATION_ID, expectedVersion: 1, extra: true }).success).toBe(false);
-    expect(deleteFormulationInput.safeParse({ formulationId: FORMULATION_ID, expectedVersion: 1, extra: true }).success).toBe(false);
+    expect(formulationVersionInput.safeParse({ formulationId: FORMULATION_ID, expectedVersion: 1, extra: true }).success).toBe(false);
   });
   it("limits lines and text and enforces the existing code format", () => {
     const lines = Array.from({ length: 51 }, () => ({ feedstockTypeId: crypto.randomUUID() }));

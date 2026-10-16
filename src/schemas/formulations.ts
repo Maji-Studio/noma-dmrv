@@ -159,7 +159,7 @@ export const updateFormulationSchema = z
   .superRefine(ratioSumRefinement)
   .superRefine(duplicateBlendMaterialRefinement);
 
-export const deleteFormulationSchema = z.object({
+export const formulationVersionSchema = z.object({
   expectedVersion: expectedVersionSchema,
   formulationId: z.string().uuid("Choose a valid formulation."),
 });
@@ -169,6 +169,7 @@ export const deleteFormulationSchema = z.object({
 // ============================================
 
 export const formulationFilterSchema = z.object({
+  archived: z.boolean().default(false),
   search: z
     .string()
     .max(255, "Search query must be less than 255 characters")

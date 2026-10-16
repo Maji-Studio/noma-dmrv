@@ -571,7 +571,7 @@ export async function updateStorageLocation(
             : existing.formulationId) ?? null
         : null;
 
-    if (normalizedFormulationId) {
+    if (normalizedFormulationId && normalizedFormulationId !== existing.formulationId) {
       await lockFormulationReference(ctx, tx, normalizedFormulationId);
     }
 

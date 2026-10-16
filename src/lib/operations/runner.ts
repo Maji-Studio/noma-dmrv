@@ -286,6 +286,8 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
             for (const links of activity.scopedLinks(entityType, entityId)) {
               await recordActivity(ctx, tx, {
                 action: effect.outcome, entityType, entityId,
+                ...(effect.fromStatus !== undefined ? { fromStatus: effect.fromStatus } : {}),
+                ...(effect.toStatus !== undefined ? { toStatus: effect.toStatus } : {}),
                 changedFields: effect.changedFields,
                 operationId: operation.id,
                 versionBefore: effect.versionBefore,

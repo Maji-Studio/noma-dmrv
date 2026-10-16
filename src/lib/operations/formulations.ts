@@ -1,8 +1,8 @@
 import { CODE_CONFLICT_MESSAGES, withAutoCodes } from "@/data-access/code-generator";
-import { createFormulationInTransaction, updateFormulationInTransaction, deleteFormulationInTransaction, lockFormulationTypes } from "@/data-access/formulation-writes";
+import { createFormulationInTransaction, updateFormulationInTransaction, deleteFormulationInTransaction, archiveFormulationInTransaction, restoreFormulationInTransaction, lockFormulationTypes } from "@/data-access/formulation-writes";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
 import { formulations } from "@/db/schema";
-import { createFormulationInput, updateFormulationInput, deleteFormulationInput } from "@/schemas/formulation-input";
+import { createFormulationInput, updateFormulationInput, formulationVersionInput } from "@/schemas/formulation-input";
 import type { Operation } from "./runner";
 
 const AUTO_CODE_COUNT = 1;
@@ -24,8 +24,20 @@ export const updateFormulation: Operation<typeof updateFormulationInput, Formula
   describe: (input, output) => ({ outcome: "updated", entityType: "formulation", entityIds: [output.id], versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: changedFields(input) }),
   execute: ({ ctx, tx }, input) => updateFormulationInTransaction(ctx, tx, input),
 };
-export const deleteFormulation: Operation<typeof deleteFormulationInput, void> = {
-  id: "delete_formulation", input: deleteFormulationInput, supportsDryRun: true,
+export const deleteFormulation: Operation<typeof formulationVersionInput, void> = {
+  id: "delete_formulation", input: formulationVersionInput, supportsDryRun: true,
   describe: input => ({ outcome: "deleted", entityType: "formulation", entityIds: [input.formulationId], versionBefore: input.expectedVersion, versionAfter: null, changedFields: [] }),
   execute: ({ ctx, tx }, input) => deleteFormulationInTransaction(ctx, tx, input),
+};
+
+export const archiveFormulation: Operation<typeof formulationVersionInput, FormulationWithIngredients> = {
+  id: "archive_formulation", input: formulationVersionInput, supportsDryRun: true,
+  describe: (input, output) => ({ outcome: "status_changed", fromStatus: "active", toStatus: "archived", entityType: "formulation", entityIds: [output.id], versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: [] }),
+  execute: ({ ctx, tx }, input) => archiveFormulationInTransaction(ctx, tx, input),
+};
+
+export const restoreFormulation: Operation<typeof formulationVersionInput, FormulationWithIngredients> = {
+  id: "restore_formulation", input: formulationVersionInput, supportsDryRun: true,
+  describe: (input, output) => ({ outcome: "status_changed", fromStatus: "archived", toStatus: "active", entityType: "formulation", entityIds: [output.id], versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: [] }),
+  execute: ({ ctx, tx }, input) => restoreFormulationInTransaction(ctx, tx, input),
 };

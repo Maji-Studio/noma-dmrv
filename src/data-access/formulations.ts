@@ -3,7 +3,7 @@
  * Read operations for formulations with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, or, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, or, SQL, count, isNull, isNotNull } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
@@ -62,10 +62,14 @@ export async function getFormulations(
     pageSize = 20,
     sortBy = "name",
     sortOrder = "asc",
+    archived = false,
   } = filters ?? {};
 
   // Build where conditions
-  const conditions: SQL[] = [eq(formulations.organizationId, ctx.organizationId)];
+  const conditions: SQL[] = [
+    eq(formulations.organizationId, ctx.organizationId),
+    archived ? isNotNull(formulations.archivedAt) : isNull(formulations.archivedAt),
+  ];
 
   if (search) {
     const searchPattern = `%${search}%`;
