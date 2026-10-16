@@ -1,6 +1,6 @@
 ---
 name: codex-implementation
-description: Ask Codex CLI (gpt-6.1-sol at high reasoning effort) to implement scoped code changes in the current repository, then have Claude inspect the resulting diff and verification. This is how the Codex model is invoked for implementation work. Use only when the user explicitly asks to delegate implementation to Codex/gpt-6.1-sol; by default implementation goes to Claude agents and gpt-6.1-sol cross-checks.
+description: Ask Codex CLI (gpt-6.1-sol at high reasoning effort) to implement scoped code changes in the current repository, then have Claude inspect the resulting diff and verification. This is how the Codex model is invoked for implementation work. Use when the shared model policy (`~/.claude/model-selection.md`) routes implementation to Codex, which by default covers non-UI work.
 ---
 
 Delegate a **bounded** implementation task to the Codex CLI (gpt-6.1-sol, high reasoning, explicitly selected below), then bring the diff
@@ -52,7 +52,7 @@ authority**.
    Use `-s workspace-write` by default. Use `-s danger-full-access` only when the task truly
    needs machine-level access (app launch, simulators, package-manager global state).
 5. **Inspect** `git status` and `git diff` after Codex exits.
-6. **Verify yourself** with the cheapest reliable checks: `pnpm lint`, `pnpm typecheck`,
+6. **Verify yourself** with the cheapest reliable checks: `pnpm verify:static`,
    focused tests. Never trust the exit code of `cmd | tail` (pipefail gotcha) — a masked
    failure can look green.
 7. **Report** what Codex changed, what Claude verified, and remaining risks.
@@ -99,7 +99,7 @@ Constraints:
 - Do not commit, push, deploy, edit global config, or touch staging/main.
 - Follow existing patterns in <reference files>; do not change <files to avoid>.
 
-Verification: run `pnpm lint` and `pnpm typecheck`; run <focused test> if relevant.
+Verification: run `pnpm verify:static`; run <focused test> if relevant.
 
 Report format: files changed, verification results, and any unresolved questions.
 ```

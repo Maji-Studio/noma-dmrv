@@ -119,6 +119,9 @@ test.describe("production run readings file", () => {
       /\/api\/documents\/[0-9a-f-]+/,
     );
     await expect(openLink).toHaveAttribute("target", "_blank");
+    const originalFile = await page.request.get((await openLink.getAttribute("href"))!);
+    expect(originalFile.ok()).toBe(true);
+    expect(await originalFile.body()).toEqual(Buffer.from(UNINSPECTED_CSV));
     await expect(dialog.getByRole("button", { name: /Re-import/ })).toHaveCount(
       0,
     );

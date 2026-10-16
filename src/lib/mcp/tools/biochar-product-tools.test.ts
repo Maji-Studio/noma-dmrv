@@ -40,7 +40,7 @@ const BIN = "ea31ace1-5b30-4443-adb4-26b43bfa5599";
 const CLOCK = "2026-10-06T10:00:00.000Z";
 const DEADLINE_MS = 10_000;
 const product = {
-  id: ID, code: "BP-26-0001", version: 2, facilityId: ID, formulationId: ID, status: "testing", placedAt: CLOCK, productionDate: CLOCK,
+  id: ID, code: "BP-26-0001", version: 2, facilityId: ID, formulationId: ID, status: "testing", placedAt: CLOCK, productionDate: "2026-10-06",
   sourceBiocharStorageLocationId: BIN, storageLocationId: ID, biocharWetMassKg: 500, biocharMoisturePercent: 10,
   waterAddedKg: 0, densityKgM3: null, ingredients: [], sourceAllocations: [], archivedAt: null, createdAt: CLOCK, updatedAt: CLOCK,
 };

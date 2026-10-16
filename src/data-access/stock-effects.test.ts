@@ -11,7 +11,6 @@ vi.mock("@/db", () => ({ db: {} }));
 vi.mock("./lane-stock-derivation", () => ({ deriveLaneStock: lane }));
 vi.mock("./output-stock", () => ({ getOutputBinAllLayersDryKg: output }));
 vi.mock("./owned-transaction", () => ({ runOwnedTransaction: owned }));
-vi.mock("./api-audit-events", () => ({ writeApiAuditEvent: vi.fn() }));
 vi.mock("./api-idempotency-records", () => ({ recordIdempotencyOutcome: vi.fn(), claimIdempotencyKey: vi.fn(), assertIdempotencyKeyUnused: vi.fn() }));
 vi.mock("@/lib/log", () => ({ logger: { warn, error: vi.fn() }, sanitizeErrorMessage: () => "sanitized" }));
 

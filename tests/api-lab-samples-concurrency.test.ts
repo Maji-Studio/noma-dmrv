@@ -96,7 +96,7 @@ describe("lab sample REST races", { timeout: TIMEOUT_MS }, () => {
     expect(replay.headers.get("etag")).toBe(originalEtag);
     expect(await replay.text()).toBe(originalText);
     expect(await labSampleRows(f)).toHaveLength(1);
-    expect(await labSampleAudits(f)).toMatchObject([{ operationId: "record_lab_sample", outcomeCode: "created", transport: "rest" }]);
+    expect(await labSampleAudits(f)).toMatchObject([{ operationId: "record_lab_sample", action: "created", source: "rest" }]);
     const records = await labIdempotencyRecords(f);
     expect(records).toMatchObject([{ idempotencyKey: key, operationId: "record_lab_sample", credentialId: f.writeCredentialId }]);
     expect(records[0].outcome).not.toBeNull();

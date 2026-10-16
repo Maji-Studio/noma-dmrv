@@ -38,7 +38,6 @@ import { DomainError, validationFailed } from "./errors";
 import { runOwnedTransaction } from "@/data-access/owned-transaction";
 import { deadlineExceeded, idempotencyInProgress } from "@/lib/domain-errors";
 import type { Jsonified } from "./jsonified";
-import { writeApiAuditEvent } from "@/data-access/api-audit-events";
 import { recordActivity, type ActivityEventInput } from "@/data-access/activity-events";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { createOperationActivity, type OperationActivity } from "./activity-links";
@@ -68,7 +67,7 @@ export interface Operation<Input extends z.ZodType, Output, Effect extends Opera
   input: Input;
   /** False for operations with irreversible external effects. */
   supportsDryRun: boolean;
-  /** Null or undefined describes a no-op, which records no activity or API audit. */
+  /** Null or undefined describes a no-op, which records no activity. */
   describe?: (input: z.output<Input>, output: Output) => Effect | null;
   execute: (scope: OperationScope, input: z.output<Input>) => Promise<Output>;
 }
@@ -282,21 +281,25 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
         const result = represent(output);
         if (!dryRun && effect) {
           const entityType = toActivityEntityType(effect.entityType);
+          let activityCount = 0;
           for (const entityId of effect.entityIds) {
             for (const links of activity.scopedLinks(entityType, entityId)) {
               await recordActivity(ctx, tx, {
                 action: effect.outcome, entityType, entityId,
                 changedFields: effect.changedFields,
+                operationId: operation.id,
+                versionBefore: effect.versionBefore,
+                versionAfter: effect.versionAfter,
+                oauthClientId: options.audit?.oauthClientId ?? null,
                 source,
                 credentialId: options.audit?.credentialId,
                 requestId: options.audit?.requestId,
                 ...links,
               });
+              activityCount++;
             }
           }
-          if (options.audit) {
-            await writeApiAuditEvent(ctx, tx, { ...options.audit, operationId: operation.id, effect });
-          }
+          if (options.audit && activityCount === 0) throw new Error("Audited operation recorded no activity");
         }
         if (recordId) {
           await recordIdempotencyOutcome(ctx, tx, recordId, result, effect);

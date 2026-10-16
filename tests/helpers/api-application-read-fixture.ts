@@ -34,7 +34,7 @@ export async function removeApiApplicationReadFixture(f: ApiApplicationReadFixtu
 export async function addReadApplicationAllocation(f: ApiApplicationReadFixture, application: typeof applications.$inferSelect) {
   const [product] = await db.insert(biocharProducts).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id,
     code: `BP-AP-${randomUUID()}`, formulationId: f.recipe.id, sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id,
-    productionDate: new Date("2026-09-12"), placedAt: new Date("2026-09-12"), massKg: 100, moistureContentPercent: 20, waterAddedKg: 0 }).returning();
+    productionDate: "2026-09-12", placedAt: new Date("2026-09-12"), massKg: 100, moistureContentPercent: 20, waterAddedKg: 0 }).returning();
   await db.insert(applicationOutputAllocations).values({ organizationId: f.ctx.organizationId, applicationId: application.id,
     deliveryId: application.deliveryId, biocharProductId: product.id, productionRunId: f.runs[0].id, wetMassKg: "25.000", dryMassKg: "20.000" });
 }

@@ -1,10 +1,11 @@
+import { apiActivityWhere } from "./helpers/api-activity";
 import * as siteDefaults from "@/data-access/application-site-defaults";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { db } from "@/db";
-import { applications, users, customerLocations, certifierProjects, facilities, outputStockAllocations, apiAuditEvents, apiIdempotencyRecords, organizations, documents, storageObjectDeletions } from "@/db/schema";
+import { applications, users, customerLocations, certifierProjects, facilities, outputStockAllocations, activityEvents, apiIdempotencyRecords, organizations, documents, storageObjectDeletions } from "@/db/schema";
 import { getPgPoolConfig } from "@/lib/pg-pool-config";
 import { PRO_RATA_POLICY } from "@/lib/output-stock";
 import { TEST_GIS_BOUNDARY } from "./helpers/application-evidence-fixtures";
@@ -25,7 +26,7 @@ beforeAll(async () => {
   await db.insert(users).values({ id: ctx.userId, email: `operation-applications-${tag}@example.test` }).onConflictDoNothing();
 });
 afterAll(async () => {
-  await db.delete(apiAuditEvents).where(eq(apiAuditEvents.organizationId, ctx.organizationId));
+  await db.delete(activityEvents).where(eq(activityEvents.organizationId, ctx.organizationId));
   await db.delete(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, ctx.organizationId));
   await db.delete(storageObjectDeletions).where(eq(storageObjectDeletions.organizationId, ctx.organizationId));
   await db.delete(organizations).where(eq(organizations.id, ctx.organizationId));
@@ -186,21 +187,27 @@ it("parallel duplicate keys give one application, one outcome and one audit even
   const otherRunner = await import("@/lib/operations/runner");
   const credentialId = randomUUID();
   const keyed = { ...options, idempotency: { credentialId, key: randomUUID() }, audit: { credentialId, transport: "rest" as const, requestId: randomUUID() } };
+  const replayAudit = { ...keyed.audit, requestId: randomUUID() };
   try {
     const results = await Promise.allSettled([
       runOperation(recordApplication, ctx, input(f.deliveryIds[0]), keyed),
-      otherRunner.runOperation(recordApplication, ctx, input(f.deliveryIds[0]), { ...keyed, pool: otherPool }),
+      otherRunner.runOperation(recordApplication, ctx, input(f.deliveryIds[0]), { ...keyed, audit: replayAudit, pool: otherPool }),
     ]);
     expect(results.every(result => result.status === "fulfilled")).toBe(true);
     const responses = results.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
     expect(responses.filter(result => result.replayed)).toHaveLength(1);
     expect(responses[0].data).toEqual(responses[1].data);
     expect(await db.select().from(applications).where(eq(applications.deliveryId, f.deliveryIds[0]))).toHaveLength(1);
-    expect(await db.select().from(apiAuditEvents).where(eq(apiAuditEvents.credentialId, credentialId))).toHaveLength(1);
+    const events = await db.select().from(activityEvents).where(apiActivityWhere(ctx.organizationId, eq(activityEvents.credentialId, credentialId)));
+    expect(new Set(events.map(event => event.requestId)).size).toBe(1);
+    const committedRequestId = responses[0].replayed ? replayAudit.requestId : keyed.audit.requestId;
+    const committedRows = events.filter(event => event.requestId === committedRequestId);
+    expect(committedRows.length).toBeGreaterThan(0);
+    expect(events).toHaveLength(committedRows.length);
     expect(await db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.credentialId, credentialId))).toHaveLength(1);
   } finally {
     await otherPool.end();
-    await db.delete(apiAuditEvents).where(eq(apiAuditEvents.credentialId, credentialId));
+    await db.delete(activityEvents).where(eq(activityEvents.credentialId, credentialId));
     await db.delete(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.credentialId, credentialId));
   }
 }));

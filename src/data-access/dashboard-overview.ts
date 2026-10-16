@@ -22,6 +22,7 @@ import {
   productionRuns,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { formatUtcDate } from "@/lib/date-utils";
 import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
@@ -280,7 +281,7 @@ export async function getDashboardOverview(
               eq(biocharProducts.facilityId, facilityId),
               isNull(biocharProducts.archivedAt),
               ne(biocharProducts.status, "draft"),
-              ...(fetchStart ? [gte(biocharProducts.productionDate, fetchStart)] : []),
+              ...(fetchStart ? [gte(biocharProducts.productionDate, formatUtcDate(fetchStart))] : []),
             ),
           ),
         db

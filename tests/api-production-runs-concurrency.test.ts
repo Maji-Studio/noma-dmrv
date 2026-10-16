@@ -100,7 +100,7 @@ describe("production run REST stock races", { timeout: TIMEOUT_MS }, () => {
     expect(state.allocations).toHaveLength(1);
     expect(state.draws[0]).toMatchObject({ productionRunId: state.runs[0].id, wetMassKg: RUN_DRAW_WET_KG });
     expect(state.wetStock).toBe(RUN_INTAKE_WET_KG - RUN_DRAW_WET_KG);
-    expect(await productionRunAudits(fixture)).toMatchObject([{ operationId: "start_production_run", outcomeCode: "created" }]);
+    expect(await productionRunAudits(fixture)).toMatchObject([{ operationId: "start_production_run", action: "created" }]);
     expect(await productionRunAudits(fixture)).toHaveLength(1);
     const records = await db.select().from(apiIdempotencyRecords).where(and(
       eq(apiIdempotencyRecords.organizationId, fixture.ctx.organizationId),
