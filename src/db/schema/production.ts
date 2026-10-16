@@ -137,9 +137,10 @@ export const productionRuns = pgTable(
 );
 
 // ============================================
-// Production Run Readings - Time-series monitoring data
-// Isometric Protocol: Appendix II Monitoring Plan
-// Temperature: 5-min intervals, Pressure/Emissions: 1-min intervals
+// Production Run Readings - optional structured imports, outside certification.
+// Readiness and Removal submission use the Readings file (`sensor_data`) on the
+// Production Run, without requiring rows here. Monitoring requirements:
+// docs/isometric/requirements-shortlist.md#project-reactor-monitoring
 // ============================================
 
 export const productionRunReadings = pgTable(
@@ -154,10 +155,10 @@ export const productionRunReadings = pgTable(
 
     timestamp: timestamp('timestamp').notNull(),
 
-    // Temperature monitoring (5-min intervals required)
+    // Optional parsed temperature; this column does not identify the sensor channel.
     temperatureC: real('temperature_c'),
 
-    // Pressure monitoring (1-min intervals, required if reactor >0.5 bar)
+    // Optional parsed pressure; the Readings file is the project evidence.
     pressureBar: real('pressure_bar'),
 
     gasFlowRate: real('gas_flow_rate'), // m³/s or equivalent — retained for legacy imports; not in the canonical CSV format
@@ -178,8 +179,7 @@ export const productionRunReadings = pgTable(
     // One canonical reading per (run, UTC timestamp). The unique constraint is
     // the storage-level guarantee behind the idempotent readings import (#398):
     // re-importing a file inserts with ON CONFLICT DO NOTHING against this
-    // index, so duplicate telemetry for the same reactor instant is impossible
-    // and can never reach an Isometric sensor submission.
+    // index, so duplicate telemetry for the same reactor instant is impossible.
     uniqueIndex('production_run_readings_run_timestamp_uq').on(
       table.productionRunId,
       table.timestamp

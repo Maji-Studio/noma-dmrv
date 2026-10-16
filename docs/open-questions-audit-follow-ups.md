@@ -137,6 +137,7 @@ Sizing: (S) small, (M) medium, (L) large.
 - `getProductionRunReadingsList` has no `.limit`, and
   `src/components/production-run-readings/production-run-reading-table.tsx:ProductionRunReadingTable`
   has no virtualization.
+- Safety net for later changes: #627 slice 2's `tests/production-readings-readiness.test.ts` and `tests/isometric-submit-removal-readings.test.ts` lock readiness and Removal submission to retained-file evidence.
 - **Resolve via:** define the operator upload/import flow and bound the readings
   query and table rendering.
 
