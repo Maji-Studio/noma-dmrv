@@ -33,7 +33,7 @@ const unpublishedFields = {
   facilityId: uuidSchema().optional(),
   expectedProductVersions: z.record(z.uuid(), expectedVersionSchema).optional(),
   idempotencyKey: z.string().trim().min(1).max(OUTPUT_STOCK_REQUEST_KEY_MAX_LENGTH).optional(),
-  requireLatestCorrection: z.boolean().optional(),
+  checkFormEditLock: z.boolean().optional(),
 };
 
 /** The published input of `record_output_stock_movement`; adapters reject anything else. */

@@ -229,7 +229,7 @@ test.describe("Output-bin conserved FIFO", () => {
     await evidence(page, info, "delivery-source-from-stock-history");
   });
 
-  test("edits latest Lost mass and locks it after a newer entry", async ({ adminPage: page, testUsers }, info) => {
+  test("edits Lost mass and locks it after a dependent draw", async ({ adminPage: page, testUsers }, info) => {
     const f = await seedOutputStockBrowserFixture(testUsers.admin.id, true);
     await openBin(page, f);
     await page.getByRole("button", { name: "Adjust stock", exact: true }).click();
@@ -276,7 +276,7 @@ test.describe("Output-bin conserved FIFO", () => {
     const locked = history.locator("details").filter({ hasText: "Correction" }).first();
     await locked.locator("summary").click();
     await expect(locked.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
-    await expect(locked).toContainText("Locked because newer stock entries were recorded on this bin after it.");
+    await expect(locked).toContainText("Correction blocked by a later lost mass:");
     await evidence(page, info, "lost-mass-locked");
   });
 });

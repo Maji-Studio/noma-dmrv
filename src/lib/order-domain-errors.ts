@@ -1,4 +1,5 @@
 import { DomainError, type DomainErrorCode, type DomainIssue } from "@/lib/domain-errors";
+import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
 import { SafeError } from "@/lib/errors";
 import { formatStockMinimumKg } from "@/lib/stock-overdraw";
 
@@ -24,7 +25,8 @@ export function orderReferenceNotFound(field: OrderReferenceField): DomainError 
 
 /** Every relationship is frozen once any delivery exists, including archived deliveries. */
 export function orderRelationshipFrozen(field: OrderRelationshipField, deliveryCode: string): DomainError {
-  return refusal("conflict", `Order relationship is used by delivery ${deliveryCode}.`, [field]);
+  const lock = recordLocks.order({ removals: [], dependents: [{ kind: "delivery", id: deliveryCode }] });
+  return refusal("certification_locked", withRecordLockGuidance(`Order relationship is used by delivery ${deliveryCode}.`, lock), [field]);
 }
 
 export function orderQuantityBelowAllocated(allocatedWetKg: number): DomainError {
@@ -33,7 +35,7 @@ export function orderQuantityBelowAllocated(allocatedWetKg: number): DomainError
 }
 
 export function orderHasDeliveries(): DomainError {
-  return refusal("conflict", "Cannot delete an order with deliveries. Deliveries retain their history and cannot be deleted.", ["orderId"]);
+  return refusal("certification_locked", "Cannot delete an order with deliveries. Correct the deliveries that use it first; delivery deletion is not available yet.", ["orderId"]);
 }
 
 /** PATCH refuses archived orders; DELETE still works when the order has no deliveries. */

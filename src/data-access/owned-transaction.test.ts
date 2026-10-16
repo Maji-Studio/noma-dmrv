@@ -4,6 +4,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import type { Pool } from "pg";
 import { PG_TRANSACTION_TIMEOUT } from "@/db/errors";
 import { DomainError } from "@/lib/domain-errors";
+import { getTransactionDeadline } from "@/lib/db/transaction-deadline";
 import { runOwnedTransaction } from "./owned-transaction";
 
 const { transaction, execute, guard } = vi.hoisted(() => ({ transaction: vi.fn(), execute: vi.fn(), guard: vi.fn() }));
@@ -24,6 +25,28 @@ beforeEach(() => {
   transaction.mockImplementation(async (callback) => callback({ execute }));
 });
 describe("owned transaction timeout handling without a database", () => {
+  it("shares the absolute deadline with savepoints and nested savepoints", async () => {
+    const { pool } = connection();
+    const deadlineAt = Date.now() + BUDGET_MS;
+    const nested = {};
+    const savepoint = { transaction: async (callback: (tx: object) => Promise<unknown>) => callback(nested) };
+    const outer = { execute, transaction: async (callback: (tx: object) => Promise<unknown>) => callback(savepoint) };
+    transaction.mockImplementation(async callback => callback(outer));
+
+    await expect(runOwnedTransaction(ctx, deadlineAt, async tx => {
+      expect(getTransactionDeadline(tx)).toBe(deadlineAt);
+      return tx.transaction(async child => {
+        expect(child).toBe(savepoint);
+        expect(getTransactionDeadline(child)).toBe(deadlineAt);
+        return child.transaction(async descendant => {
+          expect(descendant).toBe(nested);
+          expect(getTransactionDeadline(descendant)).toBe(deadlineAt);
+          return "saved";
+        });
+      });
+    }, pool)).resolves.toEqual({ kind: "committed", data: "saved" });
+  });
+
   it("resets the inherited timer and sets both budgets locally", async () => {
     const { client, pool } = connection();
     await expect(runOwnedTransaction(ctx, Date.now() + BUDGET_MS, async () => "saved", pool)).resolves.toEqual({ kind: "committed", data: "saved" });

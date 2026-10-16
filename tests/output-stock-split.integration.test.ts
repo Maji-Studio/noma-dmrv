@@ -136,7 +136,7 @@ describe("split bin draws in PostgreSQL", () => {
     expect(blocked.blockingMessage).toMatch(/Correction blocked by application/);
     // The history locks the applied delivery up front, so its form can still save other fields.
     const history = await getOutputStockHistory(f.ctx, f.bin.id);
-    expect(history.find(entry => entry.deliveryId === delivery.id)).toMatchObject({ editLockedReason: `Locked because application E2E-SPLIT-AP-${f.tag} uses this delivery.` });
+    expect(history.find(entry => entry.deliveryId === delivery.id)).toMatchObject({ editLockedReason: `Locked because application E2E-SPLIT-AP-${f.tag} uses this delivery. Correct or remove the application first.` });
     const [current] = await db.select().from(deliveries).where(eq(deliveries.id, delivery.id));
     const saved = await updateDelivery(f.ctx, delivery.id, { expectedVersion: current.version, distanceNote: "Route note" });
     expect(saved).toMatchObject({ distanceNote: "Route note", deliveredWetMassKg: 500, savedProducts: [] });

@@ -217,3 +217,16 @@ it("locks the predecessor read until the earlier caller transaction commits", as
   expect(first?.fromStatus).toBe("draft");
   expect(second?.fromStatus).toBe(first?.toStatus);
 });
+
+it("retains Certify submission evidence when a returned draft has no current submitted_at", async () => {
+  const row = await submission({ status: "submitted", metadata: { submittedToVerifierAt: REGISTRY_AT } });
+  const remote: GhgStatement = {
+    project_id: "prj_fixture", verifier: null, removal_ids: [], credit_allocation: null,
+    ghg_statement_report_url: null, pending_total_co2e_removed_kg: null,
+    id: "ghg_fixture", status: "DRAFT", submitted_at: null, credits_issued_at: null,
+    ghg_entry_ids: [], reporting_period_start_at: null, reporting_period_end_at: null,
+  };
+  await applyGhgRemoteState(ctx, row, remote);
+  const [stored] = await db.select().from(certificationSubmissions).where(eq(certificationSubmissions.id, row.id));
+  expect(stored.metadata).toMatchObject({ submittedToVerifierAt: REGISTRY_AT });
+});

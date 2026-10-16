@@ -1,3 +1,7 @@
+import { recordLocks, withRecordLockGuidance, formatRecordLockHolders, type RecordLock } from "@/lib/record-lock";
+
+const SENT_LOCK = recordLocks.removal({ dependents: [], removals: [{ id: "removal", submissions: [{ status: "submitted" }], statements: [] }] });
+
 export type CertificationLineageLockEntityType =
   | "creditBatch"
   | "productionRun"
@@ -30,6 +34,7 @@ const ENTITY_LABELS: Record<CertificationLineageLockEntityType, string> = {
 };
 
 interface CertificationLineageLockMessageInput {
+  lock?: RecordLock;
   mutation: CertificationLineageMutation;
   subjectEntityType: CertificationLineageLockEntityType;
   lineageEntityType: CertificationLineageLockEntityType;
@@ -41,9 +46,10 @@ export function formatCertificationLineageLockMessage({
   subjectEntityType,
   lineageEntityType,
   lineageRelationship,
+  lock = SENT_LOCK,
 }: CertificationLineageLockMessageInput): string {
   if (subjectEntityType === lineageEntityType) {
-    return `Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because it is locked by a certification submission.`;
+    return withRecordLockGuidance(`Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because it is locked by a certification submission.`, lock);
   }
 
   const lineageLabel = ENTITY_LABELS[lineageEntityType];
@@ -53,6 +59,14 @@ export function formatCertificationLineageLockMessage({
   const explanation = `Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because the ${relationship} ${lineageLabel} is locked by a certification submission.`;
 
   return relationship === "selected"
-    ? `${explanation} Select ${article} ${lineageLabel} that is not locked.`
-    : explanation;
+    ? withRecordLockGuidance(`${explanation} Select ${article} ${lineageLabel} that is not locked.`, lock)
+    : withRecordLockGuidance(explanation, lock);
+}
+
+export function formatCertificationHolderDetail(lock: RecordLock): string {
+  return formatRecordLockHolders(lock);
+}
+
+export function formatCertifierMappingLockMessage(action: "change" | "unlink"): string {
+  return `${action === "change" ? "Cannot change certifier project or facility ID" : "Cannot unlink"}: this facility has certifier submissions. Delete interrupted Removals and their registry records first. Completed Removal or GHG Statement submissions keep this mapping fixed.`;
 }

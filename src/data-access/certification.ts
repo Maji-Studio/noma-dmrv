@@ -1,3 +1,5 @@
+import { formatCertifierMappingLockMessage } from "@/lib/certification/lineage-lock-message";
+import { DomainError } from "@/lib/domain-errors";
 import { insertDocument } from "./documents";
 import { withCertificationStatusActivity, type CertificationActivityOrigin } from "./certification-status-activity";
 import { nextVersion } from "./row-version";
@@ -14,7 +16,7 @@ import {
 import { creditBatches } from "@/db/schema/credits";
 import { documents } from "@/db/schema/documentation";
 import { facilities } from "@/db/schema/facilities";
-import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
+import { isTerminalAttemptStatus, isRemoteSubmission, submissionHasRemoteEffect } from "@/lib/record-lock";
 import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 import { DEFAULT_PROTOCOL_SLUG } from "@/config/certification";
 import {
@@ -134,11 +136,11 @@ export async function hasBlockingFacilitySubmission(
 ): Promise<boolean> {
   requireOrgScope(ctx);
   // Two facility-scoped artifacts can pin a mapping: a Removal (ADR 0003)
-  // and a GHG Statement (ADR 0004). Each carries facilityId directly — one hop, no lineage walk. Two small probes are
-  // clearer than a UNION/OR and let the planner use each artifact's own index.
+  // and a GHG Statement (ADR 0004). Read every ledger version through
+  // each artifact's facility index; a later failure cannot hide a remote effect.
   const [removalHit, ghgHit] = await Promise.all([
     executor
-      .select({ id: certificationSubmissions.id })
+      .select({ id: certificationSubmissions.id, status: certificationSubmissions.status, externalId: certificationSubmissions.externalId, metadata: certificationSubmissions.metadata })
       .from(certificationSubmissions)
       .innerJoin(
         certifierRemovals,
@@ -153,13 +155,11 @@ export async function hasBlockingFacilitySubmission(
             REMOVAL_SCOPED_SUBMISSION_TYPES,
           ),
           eq(certifierRemovals.facilityId, facilityId),
-          inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
           eq(certificationSubmissions.organizationId, ctx.organizationId),
         ),
-      )
-      .limit(1),
+      ),
     executor
-      .select({ id: certificationSubmissions.id })
+      .select({ id: certificationSubmissions.id, status: certificationSubmissions.status, externalId: certificationSubmissions.externalId, metadata: certificationSubmissions.metadata })
       .from(certificationSubmissions)
       .innerJoin(
         certifierGhgStatements,
@@ -171,13 +171,12 @@ export async function hasBlockingFacilitySubmission(
           eq(certificationSubmissions.localEntityType, "ghgStatement"),
           eq(certificationSubmissions.submissionType, "ghg_statement"),
           eq(certifierGhgStatements.facilityId, facilityId),
-          inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
           eq(certificationSubmissions.organizationId, ctx.organizationId),
         ),
-      )
-      .limit(1),
+      ),
   ]);
-  return removalHit.length > 0 || ghgHit.length > 0;
+  return [...removalHit, ...ghgHit].some(row => !isTerminalAttemptStatus(row.status) ||
+    isRemoteSubmission({ status: row.status, hasRemoteMutation: submissionHasRemoteEffect(row) }));
 }
 
 // DB-level backstop for the (provider, external_facility_id) 1:1 anchor. The
@@ -276,7 +275,7 @@ export async function upsertCertifierProject(
         );
       }
 
-      // Rebinding either registry identifier requires superseding blocking submissions first.
+      // Remote effects keep the registry mapping fixed until their Removal is deleted.
       const mappingIdentifiersChanged =
         existing &&
         (existing.externalProjectId !== values.externalProjectId ||
@@ -289,8 +288,9 @@ export async function upsertCertifierProject(
           input.provider,
         );
         if (blocked) {
-          throw new SafeError(
-            "Cannot change certifier project or facility ID: this facility has certifier submissions. Supersede or reject them first.",
+          throw new DomainError(
+            "certification_locked",
+            formatCertifierMappingLockMessage("change"),
           );
         }
         if (
@@ -433,8 +433,9 @@ export async function deleteCertifierProject(
     // submission depends on this mapping.
     const blocked = await hasBlockingFacilitySubmission(ctx, tx, facilityId, provider);
     if (blocked) {
-      throw new SafeError(
-        "Cannot unlink: this facility has certifier submissions. Supersede or reject them first.",
+      throw new DomainError(
+        "certification_locked",
+        formatCertifierMappingLockMessage("unlink"),
       );
     }
 

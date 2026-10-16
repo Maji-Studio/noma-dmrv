@@ -11,7 +11,7 @@ import { etagHeader, idempotencyParameter, ifMatchParameter, jsonResponse, locat
 const EXAMPLE_CUSTOMER_LOCATION_ID = "a12c2b2d-3296-4ea7-9ff8-24e899bed679";
 const CREATE_GUIDANCE = "A customer location is required for the delivery destination. Quantity is requested wet product kg. Omitted packaging defaults to the organization setting. orderDate is a calendar date (YYYY-MM-DD), not an event instant. An order does not reserve stock. Unknown or foreign references answer 404 not_found with a pointer. Invalid input answers 422 validation_failed.";
 const WRITE_GUIDANCE = "Quantity is requested wet product kg. On create, omitted packaging defaults to the organization setting. On update, omission keeps the stored packaging. orderDate is a calendar date (YYYY-MM-DD), not an event instant. An order does not reserve stock.";
-const ERROR_GUIDANCE = "Missing, foreign or archived references answer 404 not_found with a pointer. Duplicate codes and relationships frozen by deliveries answer 409 conflict. Certified lineage answers 409 certification_locked. Invalid input answers 422 validation_failed; a quantity below allocations includes allocatedWetKg and unit kg in issue metadata.";
+const ERROR_GUIDANCE = "Missing, foreign or archived references answer 404 not_found with a pointer. Duplicate codes answer 409 conflict. Relationships frozen by deliveries and Sent lineage answer 409 certification_locked. Invalid input answers 422 validation_failed; a quantity below allocations includes allocatedWetKg and unit kg in issue metadata.";
 
 interface OrderWriteKit {
   publishOutput: (schema: z.ZodType) => JsonSchema;
@@ -49,7 +49,7 @@ export function addOrderWritePaths(paths: Paths, { publishOutput, writeErrors }:
   };
   paths["/orders/{idOrCode}"].delete = {
     ...privateOperation("delete_order", "orders:delete",
-      "Delete by UUID with a strong If-Match. Requires orders:delete, a separate scope that is off by default. Only orders with no deliveries, including archived deliveries, can be deleted; otherwise the response is 409 conflict. An archived order without deliveries can be deleted. Certified lineage answers 409 certification_locked. The deletion retires order documents; storage cleanup runs after commit. Dry runs roll back and return the representation that would be deleted. A supplied body must be an empty JSON object.",
+      "Delete by UUID with a strong If-Match. Requires orders:delete, a separate scope that is off by default. Only orders with no deliveries, including archived deliveries, can be deleted; otherwise the response is 409 certification_locked. An archived order without deliveries can be deleted. Certified lineage answers 409 certification_locked. The deletion retires order documents; storage cleanup runs after commit. Dry runs roll back and return the representation that would be deleted. A supplied body must be an empty JSON object.",
       {
         ...problemResponses([...writeErrors, 412, 413, 415, 428]),
         "412": { $ref: "#/components/responses/OrderProblem412" },

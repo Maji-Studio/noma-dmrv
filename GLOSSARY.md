@@ -497,6 +497,16 @@ against a production registry project.
 
 ### Provenance & lineage
 
+**Record lock**:
+Whether a record can change because of what uses it. **Open** means nothing
+uses it. **In use** means a later record took a number from it; numeric facts
+stay protected until that dependency is corrected or removed, while reference
+codes and notes may remain free. **Sent** means registry creation has started
+for its Removal and every field locks. A fresh return of the covering statement
+from Isometric can remove Sent, but does not remove existing dependencies.
+_Avoid_: treating a failed submission attempt as a verifier rejection, or a
+latest failed attempt as proof that earlier submissions no longer hold the record.
+
 **Rollback**:
 The upstream trace from one **application** to its originating feedstock
 batches, through the custody path Feedstock (+ Reactor) → Production Run

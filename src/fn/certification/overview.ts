@@ -1,6 +1,8 @@
 "use server";
 
 import { z } from "zod";
+import { getRecordLocksForTargets } from "@/data-access/record-certification-lock";
+import type { RecordLock } from "@/lib/record-lock";
 import { env } from "@/config/env";
 import { listCreditBatchCertificationLinks } from "@/data-access/credit-batch-certification-links";
 import { requireOrgFacility } from "@/data-access/utils";
@@ -77,6 +79,7 @@ export interface CreditBatchHealthSummary {
   removalId: string | null;
   /** The Removal's own registry-submission status. */
   removalStatus: DerivedStatus | null;
+  recordLock?: RecordLock;
   /** The downstream GHG Statement, once the submitted Removal is rolled up. */
   ghgStatementId: string | null;
   /** The GHG Statement's verifier lifecycle, kept distinct from the Removal. */
@@ -358,6 +361,8 @@ export async function loadCreditBatchHealthSummaries(
       ids,
       facilityFacts,
     );
+    const locks = await getRecordLocksForTargets(orgCtx, ids.map(entityId => ({ entityType: "creditBatch", entityId })));
+    const locksById = new Map(ids.map((id, index) => [id, locks[index]]));
     const summaries: Record<string, CreditBatchHealthSummary> = {};
     for (const batchId of ids) {
       const ctx = contextsByBatch[batchId];
@@ -375,6 +380,7 @@ export async function loadCreditBatchHealthSummaries(
         ? (ghgStatementSubmissions.get(ghgStatementId) ?? null)
         : null;
       summaries[batchId] = {
+        recordLock: locksById.get(batchId)!,
         state: health.state,
         issueCount: health.issueCount,
         removalId,

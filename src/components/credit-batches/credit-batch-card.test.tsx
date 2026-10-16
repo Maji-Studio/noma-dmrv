@@ -1,3 +1,5 @@
+import { recordLocks } from "@/lib/record-lock";
+import { deriveRemovalStatus } from "@/lib/certification/status";
 import {
   isValidElement,
   type ButtonHTMLAttributes,
@@ -110,20 +112,16 @@ describe("CreditBatchCard", () => {
     expect(onView).toHaveBeenCalledWith(creditBatch);
   });
 
-  it("offers only Open details once the batch backs a submitted removal", () => {
+  it("uses the shared Sent lock even when the latest removal attempt failed", () => {
     const onEdit = vi.fn();
     const onDelete = vi.fn();
     const lockedHealth: CreditBatchHealthSummary = {
       state: "ready",
       issueCount: 0,
       removalId: "removal-1",
-      removalStatus: {
-        kind: "submitted",
-        value: "issued",
-        label: "Submitted",
-        isActionable: false,
-        isTerminal: true,
-      },
+      removalStatus: deriveRemovalStatus({ local: "rejected", lockInFlight: false }),
+      recordLock: recordLocks.creditBatch({ dependents: [], removals: [{ id: "removal-1",
+        submissions: [{ status: "submitted" }, { status: "rejected" }], statements: [] }] }),
       ghgStatementId: null,
       ghgStatementStatus: null,
     };

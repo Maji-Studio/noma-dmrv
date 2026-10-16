@@ -190,7 +190,7 @@ it("hides a foreign delivery UUID with the delivery pointer", async () => {
     expect(await rows()).toEqual([]);
   } finally { await cleanupMutationFixture(foreign); await removeApiOrderReadFixture(other); }
 }, TIMEOUT);
-it("refuses verified batch DELETE with certification_locked", async () => {
+it("does not use the retired batch status to lock DELETE", async () => {
   const first = await saved();
   const organizationId = f.ctx.organizationId;
   const [process] = await db.insert(productionProcesses).values({ organizationId, facilityId: chain.facilityId, feedstockTypeId: f.ingredientType.id }).returning();
@@ -198,8 +198,8 @@ it("refuses verified batch DELETE with certification_locked", async () => {
     productionProcessId: process.id, code: `CB-API-${randomUUID()}`, startDate: "2025-07-01", endDate: "2025-07-31", status: "verified" }).returning();
   try {
     await db.insert(creditBatchApplications).values({ organizationId, creditBatchId: batch.id, applicationId: first.data.id, allocatedWetMassKg: 4001, allocatedDryMassKg: 3200.8 });
-    await problem(await remove(first.data.id, first.tag), 409, "certification_locked");
-    expect((await read(first.data.id)).status).toBe(200);
+    expect((await remove(first.data.id, first.tag)).status).toBe(204);
+    expect((await read(first.data.id)).status).toBe(404);
   } finally {
     await db.delete(creditBatchApplications).where(eq(creditBatchApplications.creditBatchId, batch.id));
     await db.delete(creditBatches).where(eq(creditBatches.id, batch.id));

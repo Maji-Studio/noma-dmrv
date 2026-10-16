@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DbTransaction } from '@/db';
-import { ActionConflictError } from '@/lib/errors';
+import { DomainError } from '@/lib/domain-errors';
 import type { OutputStockLayer } from '@/lib/output-stock';
 
 const mocks = vi.hoisted(() => ({ projection: vi.fn(), where: vi.fn() }));
@@ -36,7 +36,7 @@ describe('correction dependency identities', () => {
   it('keeps the application guard and returns its saved code and id', async () => {
     mocks.where.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'application', code: 'APP-001' }]);
     const result = prepareOutputCorrection(ctx, input, layers, reader);
-    await expect(result).rejects.toBeInstanceOf(ActionConflictError);
+    await expect(result).rejects.toBeInstanceOf(DomainError);
     await expect(result).rejects.toMatchObject({ conflict: { entity: 'application', id: 'application', code: 'APP-001' } });
   });
 });

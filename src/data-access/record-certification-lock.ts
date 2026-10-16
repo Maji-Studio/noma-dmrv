@@ -1,7 +1,10 @@
+import { applications, biocharProducts, creditBatches, deliveries, feedstocks, orders, productionRuns, samples } from "@/db/schema";
+import { assertSameOrg } from "./utils";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import type { DocumentEntityType } from "@/schemas/documents";
-import { documentOwnerLineageTargets, ownerHasSubmittedLineage } from "./document-write-scope";
+import { documentOwnerLineageTargets } from "./document-write-scope";
+import { getRecordLocks, type CertifiedLineageTarget } from "./certification-lineage-guards";
 import { requireOrgScope } from "./utils";
 
 export interface RecordCertificationLockInput {
@@ -20,6 +23,21 @@ export async function getRecordCertificationLock(ctx: OrgContext, input: RecordC
   requireOrgScope(ctx);
   return db.transaction(async (tx) => {
     const targets = await documentOwnerLineageTargets(ctx, tx, input.entityType, input.entityId);
-    return ownerHasSubmittedLineage(ctx, tx, targets);
+    return (await getRecordLocks(ctx, tx, targets)).some(lock => lock.level === "sent");
   });
 }
+
+export async function getRecordLockForTarget(ctx: OrgContext, target: CertifiedLineageTarget) {
+  requireOrgScope(ctx);
+  return (await getRecordLocksForTargets(ctx, [target]))[0];
+}
+
+export async function getRecordLocksForTargets(ctx: OrgContext, targets: readonly CertifiedLineageTarget[]) {
+  requireOrgScope(ctx);
+  // Explicit existence and tenancy checks, without discarded lineage discovery.
+  for (const target of targets) await assertSameOrg(ctx, TARGET_TABLES[target.entityType], target.entityId);
+  return getRecordLocks(ctx, db, targets);
+}
+
+const TARGET_TABLES = { feedstock: feedstocks, productionRun: productionRuns, sample: samples,
+  biocharProduct: biocharProducts, order: orders, delivery: deliveries, application: applications, creditBatch: creditBatches } as const;

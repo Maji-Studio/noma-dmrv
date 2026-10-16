@@ -6,10 +6,10 @@ import { recordOutputStockMovement } from './output-stock';
 import { runOperationInProcess } from './runner';
 import { requireOrgScope } from '@/data-access/utils';
 
-/** Browser stock edits require the latest entry; API corrections keep their dependency contract. */
+/** Browser stock edits use the same dependency contract as API corrections. */
 export async function correctOutputStockEntry(ctx: OrgContext, raw: OutputStockPostInput) {
   requireOrgScope(ctx);
   const input = outputStockPostSchema.parse(raw);
   if (input.kind !== 'loss' || !input.correctsMovementId) throw new SafeError('Choose a Lost mass entry to edit.');
-  return runOperationInProcess(recordOutputStockMovement, ctx, { ...input, requireLatestCorrection: true });
+  return runOperationInProcess(recordOutputStockMovement, ctx, { ...input, checkFormEditLock: true });
 }

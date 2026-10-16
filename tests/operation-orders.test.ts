@@ -57,11 +57,11 @@ describe("order PATCH guards", { timeout: SUITE_TIMEOUT_MS }, () => {
     for (const [field, value] of Object.entries({ customerId: f.otherCustomer.id, customerLocationId: f.otherLocation.id,
       formulationId: f.pure.id, facilityId: f.otherFacility.id })) {
       await expect(runOperation(updateOrder, f.ctx, { ...patch, [field]: value }))
-        .rejects.toMatchObject({ code: "conflict", issues: [expect.objectContaining({ path: [field] })] });
+        .rejects.toMatchObject({ code: "certification_locked", issues: [expect.objectContaining({ path: [field] })] });
     }
     const saved = await runOperation(updateOrder, f.ctx, { ...patch, customerId: undefined, customerLocationId: undefined, code: "OR-KEPT" });
     expect(saved.data).toMatchObject({ customerId: f.customer.id, customerLocationId: f.location.id, code: "OR-KEPT" });
-    await expect(runOperation(deleteOrder, f.ctx, { orderId: order.id, expectedVersion: 2 })).rejects.toMatchObject({ code: "conflict" });
+    await expect(runOperation(deleteOrder, f.ctx, { orderId: order.id, expectedVersion: 2 })).rejects.toMatchObject({ code: "certification_locked" });
   });
 
   it("moves an order without deliveries to another facility", async () => {

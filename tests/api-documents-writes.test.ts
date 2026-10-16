@@ -123,7 +123,8 @@ describe("document REST writes", { timeout: READ_TIMEOUT_MS }, () => {
     const body = await requested.json();
     await put(body.upload);
     await submitDocumentDelivery(a, a.owners.application.id);
-    await problem(await callDocumentWrite(a, "application", "request"), 409, "certification_locked");
+    const sent = await problem(await callDocumentWrite(a, "application", "request"), 409, "certification_locked");
+    expect(sent.detail).toContain("Wait for Isometric to return the covering GHG Statement");
     await problem(await callDocumentWrite(a, "application", "confirm", { documentId: body.data.id }), 409, "certification_locked");
   });
 

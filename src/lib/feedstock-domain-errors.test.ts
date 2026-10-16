@@ -58,3 +58,9 @@ it("preserves stock metadata and the existing operator message through actions a
     expect(toSaveErrorMessage(formError, "Unable to save")).toBe(message);
   }
 });
+
+it("adds the caller's pointer to a shared lock refusal without replacing its code", async () => {
+  const error = new DomainError("certification_locked", "A Removal holds this record. Refresh after it is returned.");
+  await expect(withFeedstockErrors(async () => { throw error; }, "certification_locked", ["deliveryId"]))
+    .rejects.toMatchObject({ code: "certification_locked", issues: [{ path: ["deliveryId"], code: "certification_locked", message: error.message }] });
+});

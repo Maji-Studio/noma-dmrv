@@ -70,7 +70,7 @@ export const updateDeliveryOperation: Operation<typeof updateDeliveryInput, Deli
   },
 };
 
-/** UI-only: the delivery row and its latest-entry stock correction commit together. */
+/** UI-only: the delivery row and its dependency-checked stock correction commit together. */
 export const updatePostedDelivery: Operation<typeof updateDeliverySchema, UpdatedDelivery> = {
   id: "update_posted_delivery",
   input: updateDeliverySchema,

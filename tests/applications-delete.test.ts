@@ -360,7 +360,7 @@ describe("deleteApplication", () => {
     }
   });
 
-  it("blocks deletion when the application is linked to an issued credit batch", async () => {
+  it("ignores the retired issued batch status when no Removal holds the application", async () => {
     const runId = `${crypto.randomUUID()}-issued`;
     const fixture = await createDeleteFixture(runId);
 
@@ -372,9 +372,8 @@ describe("deleteApplication", () => {
       });
       await createCreditBatchRecord(fixture, runId, "issued");
 
-      await expect(
-        deleteTestApplication(makeTestOrgContext(TEST_USER_ID), applicationId, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", applicationId)),
-      ).rejects.toThrow("Cannot delete application linked to verified or issued credit batches");
+      await deleteTestApplication(makeTestOrgContext(TEST_USER_ID), applicationId,
+        await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", applicationId));
 
       const [applicationStillPresent] = await db
         .select({ id: applications.id })
@@ -386,7 +385,7 @@ describe("deleteApplication", () => {
         .from(creditBatchProductionRuns)
         .where(eq(creditBatchProductionRuns.productionRunId, fixture.productionRunId));
 
-      expect(applicationStillPresent).toEqual({ id: applicationId });
+      expect(applicationStillPresent).toBeUndefined();
       expect(remainingLinks).toHaveLength(1);
     } finally {
       await cleanupDeleteFixture(fixture);
