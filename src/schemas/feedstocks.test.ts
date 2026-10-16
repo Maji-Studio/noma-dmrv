@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { DISTANCE_NOTE_MAX_LENGTH } from "./distance-source";
+import { DELIVERY_DISTANCE_NOTE_MAX_LENGTH } from "./delivery-input";
 import {
   createFeedstockSchema,
   feedstockFormSchema,
@@ -68,4 +70,11 @@ it("coerces positive distance overrides and preserves omitted versus cleared pat
     expect(updateFeedstockSchema.safeParse({ ...patch, transportDistanceKm }).success).toBe(false);
     expect(createFeedstockSchema.safeParse({ ...validForm, deliveryDate: "2026-10-15", transportDistanceKm }).success).toBe(false);
   }
+});
+
+it("limits the distance note like a delivery's", () => {
+  expect(DISTANCE_NOTE_MAX_LENGTH).toBe(DELIVERY_DISTANCE_NOTE_MAX_LENGTH);
+  expect(updateFeedstockSchema.safeParse({ ...patch, distanceNote: "a".repeat(DISTANCE_NOTE_MAX_LENGTH) }).success).toBe(true);
+  expect(updateFeedstockSchema.safeParse({ ...patch, distanceNote: "a".repeat(DISTANCE_NOTE_MAX_LENGTH + 1) }).success).toBe(false);
+  expect(feedstockFormSchema.safeParse({ ...validForm, deliveryDate: "2026-10-15", distanceNote: "a".repeat(DISTANCE_NOTE_MAX_LENGTH + 1) }).success).toBe(false);
 });

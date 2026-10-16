@@ -4,10 +4,23 @@ import { formatCalendarDate, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { TransportEvidencePanel, TransportLegsSummary } from "@/components/transport-legs";
+import { distanceReadFields } from "@/components/transport-legs/distance-override";
+import { TransportDistanceDriftNotice } from "@/components/transport-legs/transport-distance-drift";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 
-export function feedstockSheetSections(feedstock: FeedstockWithRelations): DetailPanelSection[] {
+/** The derived leg's recorded distance, read beside the record (the drift read). */
+export interface FeedstockRecordedDistance {
+  distanceKm: number | null | undefined;
+  pending: boolean;
+}
+
+export function feedstockSheetSections(
+  feedstock: FeedstockWithRelations,
+  recordedDistance: FeedstockRecordedDistance = { distanceKm: null, pending: false },
+): DetailPanelSection[] {
+  const overrideKm = feedstock.distanceKmOverride;
+  const overridden = overrideKm != null && overrideKm > 0;
   return [
     {
       title: "Delivery information",
@@ -20,10 +33,20 @@ export function feedstockSheetSections(feedstock: FeedstockWithRelations): Detai
       title: "Transport details",
       fields: [
         { label: "Vehicle", value: feedstock.vehiclePlateNumber },
+        ...distanceReadFields({
+          overrideKm,
+          effectiveKm: overridden ? overrideKm : recordedDistance.distanceKm,
+          note: feedstock.distanceNote,
+          pending: !overridden && recordedDistance.pending,
+        }),
       ],
-      // The saved leg reads in the step that records it, as on the form. Its
-      // Route field replaces the separate Distance and Distance source fields.
-      content: <TransportLegsSummary entityType="feedstock" entityId={feedstock.id} />,
+      // The saved leg reads in the step that records it, as on the form.
+      content: (
+        <div className="flex flex-col gap-16">
+          <TransportDistanceDriftNotice target={{ entityType: "feedstock", entityId: feedstock.id }} recordCode={feedstock.code} />
+          <TransportLegsSummary entityType="feedstock" entityId={feedstock.id} />
+        </div>
+      ),
     },
     {
       title: "Material",

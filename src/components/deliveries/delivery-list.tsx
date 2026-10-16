@@ -326,7 +326,15 @@ export function DeliveryList() {
           mode: deepLinkMode === "edit" ? "edit" as const : "view" as const,
         }
       : null;
-  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  // View mode reads the live record, so a deliberate distance refresh shows
+  // at once and Edit freezes the refreshed version.
+  const liveViewEntity =
+    sideSheet?.mode === "view" && sideSheet.entity && focusedDelivery.data?.id === sideSheet.entity.id
+      ? deliveryDetailToRelations(focusedDelivery.data)
+      : null;
+  const displaySideSheet = liveViewEntity
+    ? ({ entity: liveViewEntity, mode: "view" } as const)
+    : sideSheet ?? deepLinkedSideSheet;
 
   // Side sheet helpers
   const openCreate = () => {

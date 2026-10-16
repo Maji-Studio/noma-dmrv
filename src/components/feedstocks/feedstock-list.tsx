@@ -38,6 +38,7 @@ import {
   useDeleteFeedstock,
 } from "@/hooks/use-feedstocks";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useTransportDistanceDrift } from "@/hooks/use-transport-distance-refresh";
 import {
   useListPagination,
   useReconcileListPage,
@@ -485,7 +486,21 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       : focusedFeedstock.data
         ? ({ entity: focusedFeedstock.data, mode: "view" } as const)
         : null;
-  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  // View mode reads the live record, so a deliberate distance refresh shows
+  // at once and Edit freezes the refreshed version (#768 freezes on entry).
+  const liveViewEntity =
+    sideSheet?.mode === "view" && sideSheet.entity && focusedFeedstock.data?.id === sideSheet.entity.id
+      ? focusedFeedstock.data
+      : null;
+  const displaySideSheet = liveViewEntity
+    ? ({ entity: liveViewEntity, mode: "view" } as const)
+    : sideSheet ?? deepLinkedSideSheet;
+  const viewedFeedstockId =
+    displaySideSheet?.mode === "view" ? displaySideSheet.entity?.id ?? "" : "";
+  const recordedDistance = useTransportDistanceDrift(
+    { entityType: "feedstock", entityId: viewedFeedstockId },
+    !!viewedFeedstockId,
+  );
   const activeFocusTarget = sideSheet
     ? null
     : parseEntityFocusTarget(deepLinkFocus);
@@ -652,7 +667,10 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit feedstock"
-        sections={sideSheetEntity ? feedstockSheetSections(sideSheetEntity) : undefined}
+        sections={sideSheetEntity ? feedstockSheetSections(sideSheetEntity, {
+          distanceKm: recordedDistance.data?.recordedDistanceKm,
+          pending: recordedDistance.isPending,
+        }) : undefined}
       >
         <FeedstockForm
           key={sideSheetEntity?.id ?? "create"}

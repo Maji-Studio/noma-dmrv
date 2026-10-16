@@ -126,7 +126,15 @@ vi.mock("@/hooks/use-facilities", () => ({
 }));
 vi.mock("@/components/transport-legs", () => ({ TransportRoutePreview: () => null }));
 
-vi.mock("@/components/ui", () => ({ Button: () => null }));
+// The distance field renders the real FormField; its tooltips need a DOM.
+vi.mock("@/components/ui/tooltip", () => ({
+  InfoHint: () => null,
+  Tooltip: ({ children }: { children: ReactNode }) => children,
+}));
+vi.mock("@/components/ui", () => ({
+  Button: () => null,
+  Input: (props: ComponentProps<"input">) => <input {...props} />,
+}));
 vi.mock("@/components/ui/actionable-focus-target", () => ({
   ActionableFocusTarget: ({ children }: { children: ReactNode }) => children,
 }));
@@ -233,21 +241,98 @@ describe("FeedstockForm single-bin mass editing", () => {
     }
   });
 
-  it.each([["60", 60], ["", null]] as const)("submits an explicit distance edit %s as %s", async (value, expected) => {
-    const onSubmit = vi.fn();
-    let renderer: ReactTestRenderer;
+  const buttonByText = (renderer: ReactTestRenderer, text: string) =>
+    renderer.root.findAll((node) => node.type === "button" && [node.props.children].flat().includes(text))[0];
+  const distanceInput = (renderer: ReactTestRenderer) =>
+    renderer.root.findByType("form").findAllByType("input").find(input => input.props.name === "transportDistanceKm");
+  async function renderForm(record: FeedstockWithRelations, onSubmit = vi.fn()) {
+    let renderer!: ReactTestRenderer;
     await act(async () => {
-      renderer = create(<FeedstockForm feedstock={feedstock} onSubmit={onSubmit} />);
+      renderer = create(<FeedstockForm feedstock={record} onSubmit={onSubmit} />);
     });
+    return { renderer, onSubmit };
+  }
+  const submit = (renderer: ReactTestRenderer) =>
+    act(async () => { await renderer.root.findByType("form").props.onSubmit(); });
+
+  it("shows the recorded leg distance read-only and omits it on save", async () => {
+    const { renderer, onSubmit } = await renderForm(feedstock);
     try {
+      expect(distanceInput(renderer)).toBeUndefined();
+      const derived = renderer.root.findByProps({ id: "transportDistanceKm", readOnly: true });
+      expect(derived.props.value).toBe("42");
+      await submit(renderer);
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        transportDistanceKm: undefined, transportDistanceSource: undefined, distanceNote: undefined,
+      }));
+    } finally { await act(async () => renderer.unmount()); }
+  });
+
+  it("sets an override with its source after Override unlocks entry", async () => {
+    const { renderer, onSubmit } = await renderForm(feedstock);
+    try {
+      await act(async () => { buttonByText(renderer, "Override").props.onClick(); });
       await act(async () => {
-        await renderer.root.findByType("form").findAllByType("input")
-          .find(input => input.props.name === "transportDistanceKm")!.props.onChange({
-            target: { name: "transportDistanceKm", value },
-          });
+        await distanceInput(renderer)!.props.onChange({ target: { name: "transportDistanceKm", value: "60" } });
       });
-      await act(async () => { await renderer.root.findByType("form").props.onSubmit(); });
-      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ transportDistanceKm: expected }));
+      await submit(renderer);
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        transportDistanceKm: 60, transportDistanceSource: "manual",
+      }));
+    } finally { await act(async () => renderer.unmount()); }
+  });
+
+  it("refuses an empty override instead of saving it", async () => {
+    const { renderer, onSubmit } = await renderForm(feedstock);
+    try {
+      await act(async () => { buttonByText(renderer, "Override").props.onClick(); });
+      await submit(renderer);
+      expect(onSubmit).not.toHaveBeenCalled();
+    } finally { await act(async () => renderer.unmount()); }
+  });
+
+  const overridden = { ...feedstock, distanceKmOverride: 60, distanceSource: "document", distanceNote: "Detour" } as FeedstockWithRelations;
+
+  it("preserves a saved override by omitting it", async () => {
+    const { renderer, onSubmit } = await renderForm(overridden);
+    try {
+      expect(distanceInput(renderer)?.props.readOnly).toBeUndefined();
+      await submit(renderer);
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        transportDistanceKm: undefined, transportDistanceSource: undefined, distanceNote: undefined,
+      }));
+    } finally { await act(async () => renderer.unmount()); }
+  });
+
+  it("sends a re-entered override in full after the supplier changes", async () => {
+    const { renderer, onSubmit } = await renderForm({ ...overridden, distanceSource: "manual", distanceNote: null } as FeedstockWithRelations);
+    try {
+      // A new supplier is a new route: its saved override no longer applies.
+      await act(async () => {
+        mocks.supplierDialogProps?.onSuccess({ id: "66666666-6666-4666-8666-666666666666", code: "SUP-2", name: "Supplier B" });
+      });
+      expect(distanceInput(renderer)).toBeUndefined();
+      await act(async () => { buttonByText(renderer, "Override").props.onClick(); });
+      await act(async () => {
+        await distanceInput(renderer)!.props.onChange({ target: { name: "transportDistanceKm", value: "60" } });
+      });
+      await submit(renderer);
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        supplierId: "66666666-6666-4666-8666-666666666666",
+        transportDistanceKm: 60, transportDistanceSource: "manual", distanceNote: null,
+      }));
+    } finally { await act(async () => renderer.unmount()); }
+  });
+
+  it("clears a saved override back to the derived distance with null", async () => {
+    const { renderer, onSubmit } = await renderForm(overridden);
+    try {
+      await act(async () => { buttonByText(renderer, "Clear override").props.onClick(); });
+      expect(distanceInput(renderer)).toBeUndefined();
+      await submit(renderer);
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        transportDistanceKm: null, transportDistanceSource: undefined, distanceNote: null,
+      }));
     } finally { await act(async () => renderer.unmount()); }
   });
 

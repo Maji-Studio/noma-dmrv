@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { optionalDistanceSource } from "./distance-source";
+import { DISTANCE_NOTE_MAX_LENGTH, DISTANCE_NOTE_MAX_MESSAGE, optionalDistanceSource } from "./distance-source";
 import { exceedsMassWithTolerance } from "@/lib/calculations/mass-dry";
 import {
   calendarDateSchema,
@@ -24,7 +24,6 @@ import {
 // Shared numeric field helpers
 // ============================================
 
-const MAX_DISTANCE_NOTE_LENGTH = 2000;
 const MOISTURE_MIN = 0;
 const MOISTURE_MAX = 100;
 const ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE =
@@ -92,7 +91,7 @@ export const feedstockFormSchema = z.object({
   vehicleId: emptyToNull.or(uuidSchema()).nullable().optional().describe("Vehicle identifier, UUID, or null when unspecified."),
   // Explicit override; derived distance remains on the transport leg.
   transportDistanceKm: optionalPositiveNumber.describe("Explicit positive transport distance override in kilometres; null returns to the current location distance. Legacy zero is accepted as a clear."),
-  distanceNote: z.string().max(MAX_DISTANCE_NOTE_LENGTH).nullable().optional().describe("Distance override note, untrusted plain text, or null when absent."),
+  distanceNote: z.string().max(DISTANCE_NOTE_MAX_LENGTH, DISTANCE_NOTE_MAX_MESSAGE).nullable().optional().describe("Distance override note, untrusted plain text, or null when absent."),
   transportDistanceSource: optionalDistanceSource.describe("Distance evidence: map_estimate is a mapped route, manual is operator-entered, document is documented evidence; null when unspecified."),
 
   // --- Material ---
@@ -162,7 +161,7 @@ export const updateFeedstockSchema = z.object({
   // leg's stored distance only when this key is absent, so an omitted patch
   // must stay `undefined` instead of collapsing to an explicit clear.
   transportDistanceKm: clearablePositiveNumber.describe("Explicit positive transport distance override in kilometres; null returns to the current location distance. Legacy zero is accepted as a clear."),
-  distanceNote: z.string().max(MAX_DISTANCE_NOTE_LENGTH).nullable().optional().describe("Distance override note, untrusted plain text, or null when absent."),
+  distanceNote: z.string().max(DISTANCE_NOTE_MAX_LENGTH, DISTANCE_NOTE_MAX_MESSAGE).nullable().optional().describe("Distance override note, untrusted plain text, or null when absent."),
   transportDistanceSource: optionalDistanceSource.describe("Distance evidence: map_estimate is a mapped route, manual is operator-entered, document is documented evidence; null when unspecified."),
   feedstockTypeId: uuidSchema().optional().describe("Feedstock type identifier, UUID."),
   massWetKg: positiveMassKgSchema("Must be greater than 0").optional().describe("Allocated wet mass in kilograms."),

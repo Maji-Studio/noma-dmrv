@@ -101,5 +101,66 @@ it("allows a metadata-only save without requesting a stock correction preview", 
 it("clears a legacy zero distance override when saving a metadata edit", async () => {
   const { save, form } = await open({ ...delivery, distanceKmOverride: 0, distanceSource: "manual", distanceNote: "Legacy override note" });
   await act(async () => { fireEvent.submit(form); });
-  expect(save).toHaveBeenCalledWith(expect.objectContaining({ distanceKmOverride: null, distanceNote: "" }), expect.any(Function), undefined);
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ distanceKmOverride: null, distanceNote: null }), expect.any(Function), undefined);
+});
+
+// The two-state distance field's request mapping (GLOSSARY "Distance override").
+const distanceInput = () => screen.getByRole("spinbutton", { name: /One-way distance/ }) as HTMLInputElement;
+const overridden = { ...delivery, distanceKmOverride: 60, distanceSource: "document", distanceNote: "Detour" } as Delivery;
+
+it("shows the derived distance read-only and omits it on save", async () => {
+  const { save, form } = await open({ ...delivery, recordedDistanceKm: 42, recordedDistanceSource: "manual" } as Delivery);
+  expect(distanceInput().readOnly).toBe(true);
+  expect(distanceInput().value).toBe("42");
+  expect(screen.getByText("Location default")).toBeTruthy();
+  await act(async () => { fireEvent.submit(form); });
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({
+    distanceKmOverride: undefined, distanceSource: undefined, distanceNote: undefined,
+  }), expect.any(Function), undefined);
+});
+
+it("sets an override with its source and note", async () => {
+  const { save, form } = await open({ ...delivery, recordedDistanceKm: 42, recordedDistanceSource: "manual" } as Delivery);
+  fireEvent.click(screen.getByRole("button", { name: "Override" }));
+  expect(distanceInput().readOnly).toBe(false);
+  expect(document.activeElement).toBe(distanceInput());
+  fireEvent.change(distanceInput(), { target: { value: "60" } });
+  fireEvent.change(screen.getByRole("combobox", { name: /Distance source/ }), { target: { value: "document" } });
+  fireEvent.change(screen.getByRole("textbox", { name: /Distance note/ }), { target: { value: "Bridge closed" } });
+  expect(screen.getByText("Clearing returns to the location default, 42 km.")).toBeTruthy();
+  await act(async () => { fireEvent.submit(form); });
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({
+    distanceKmOverride: 60, distanceSource: "document", distanceNote: "Bridge closed",
+  }), expect.any(Function), undefined);
+});
+
+it("refuses an override with no distance", async () => {
+  const { save, form } = await open();
+  fireEvent.click(screen.getByRole("button", { name: "Override" }));
+  await act(async () => { fireEvent.submit(form); });
+  expect(save).not.toHaveBeenCalled();
+  expect(screen.getByText("Enter a distance, or clear the override.")).toBeTruthy();
+});
+
+it("preserves a saved override by omitting it", async () => {
+  const { save, form } = await open(overridden);
+  expect(distanceInput().value).toBe("60");
+  expect(screen.getByText("Override")).toBeTruthy();
+  await act(async () => { fireEvent.submit(form); });
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({
+    distanceKmOverride: undefined, distanceSource: undefined, distanceNote: undefined,
+  }), expect.any(Function), undefined);
+});
+
+it("clears a saved override with null and returns to the derived distance", async () => {
+  const { save, form } = await open({ ...overridden, recordedDistanceKm: 42, recordedDistanceSource: "manual" } as Delivery);
+  fireEvent.click(screen.getByRole("button", { name: "Clear override" }));
+  expect(distanceInput().readOnly).toBe(true);
+  expect(distanceInput().value).toBe("42");
+  expect(screen.queryByRole("combobox", { name: /Distance source/ })).toBeNull();
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Override" }));
+  await act(async () => { fireEvent.submit(form); });
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({
+    distanceKmOverride: null, distanceSource: undefined, distanceNote: null,
+  }), expect.any(Function), undefined);
 });

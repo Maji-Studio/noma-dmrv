@@ -16,6 +16,7 @@ import {
 import { z } from "zod";
 import { orderedSourcesSchema } from "./output-stock";
 import {
+  DISTANCE_NOTE_MAX_MESSAGE,
   optionalDistanceSource,
   resolveDistanceSource,
   type DistanceSourceValue,
@@ -72,7 +73,7 @@ const requiredProductMoisturePercent = requiredNumber(
     .min(0, "Moisture content must be 0% or more")
     .lt(100, "Moisture must be below 100%"),
 );
-const optionalNote = z.string().max(DELIVERY_DISTANCE_NOTE_MAX_LENGTH, `Note must be less than ${DELIVERY_DISTANCE_NOTE_MAX_LENGTH} characters`).optional().nullable().or(z.literal(""));
+const optionalNote = z.string().max(DELIVERY_DISTANCE_NOTE_MAX_LENGTH, DISTANCE_NOTE_MAX_MESSAGE).optional().nullable().or(z.literal(""));
 
 function validateDistanceOverride(
   value: { distanceKmOverride?: number | null },

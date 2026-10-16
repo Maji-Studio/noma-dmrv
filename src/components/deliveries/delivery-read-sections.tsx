@@ -1,6 +1,8 @@
 /** Delivery side-sheet view mode: the sections config for EntitySideSheet. */
 import { TRANSPORT_EVIDENCE_HINTS } from "@/components/transport-legs/transport-evidence-hints";
 import { TransportEvidencePanel, TransportRoutePreview } from "@/components/transport-legs";
+import { distanceReadFields } from "@/components/transport-legs/distance-override";
+import { TransportDistanceDriftNotice } from "@/components/transport-legs/transport-distance-drift";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { resolveFacilityTimezone } from "@/lib/date-utils";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
@@ -51,13 +53,15 @@ export function deliverySheetSections(delivery: DeliverySheetRecord, facilities:
     },
     {
       title: "Transport",
-      fields: [
-        ...(delivery.distanceKmOverride != null
-          ? [{ label: "Distance note", value: delivery.distanceNote }]
-          : []),
-      ],
+      fields: distanceReadFields({
+        overrideKm: delivery.distanceKmOverride,
+        effectiveKm: delivery.effectiveDistanceKm,
+        note: delivery.distanceNote,
+      }),
       // The leg this delivery adds to its product's biochar distribution.
       content: (
+        <div className="flex flex-col gap-16">
+        <TransportDistanceDriftNotice target={{ entityType: "delivery", entityId: delivery.id }} recordCode={delivery.code} />
         <TransportRoutePreview
           entityType="biochar"
           originName={delivery.facilityName}
@@ -72,6 +76,7 @@ export function deliverySheetSections(delivery: DeliverySheetRecord, facilities:
           originPoint={{ lat: delivery.facilityGpsLatitude, lng: delivery.facilityGpsLongitude }}
           destinationPoint={{ lat: delivery.destinationGpsLatitude, lng: delivery.destinationGpsLongitude }}
         />
+        </div>
       ),
     },
     {

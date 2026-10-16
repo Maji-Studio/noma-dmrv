@@ -198,6 +198,12 @@ vi.mock("@/components/transport-legs", () => ({
   TransportEvidencePanel: () => null,
   TransportLegsSummary: () => null,
 }));
+vi.mock("@/components/transport-legs/transport-distance-drift", () => ({
+  TransportDistanceDriftNotice: () => null,
+}));
+vi.mock("@/hooks/use-transport-distance-refresh", () => ({
+  useTransportDistanceDrift: () => ({ data: undefined, isPending: false }),
+}));
 vi.mock("@/components/certification/entity-certify-readiness-badge", () => ({
   EntityCertifyReadinessBadge: () => null,
 }));
