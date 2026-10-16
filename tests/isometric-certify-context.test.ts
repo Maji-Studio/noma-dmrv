@@ -10,7 +10,6 @@ import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { makeTestOrgContext } from "./helpers/test-org";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as readings from "@/data-access/production-run-readings";
-import * as runReadings from "@/data-access/production-runs/readings";
 import * as readingImports from "@/data-access/production-run-reading-imports";
 import * as readingsActions from "@/fn/production-run-readings";
 import * as readingImportActions from "@/fn/production-run-reading-imports";
@@ -51,13 +50,12 @@ import {
 } from "./fixtures/certify-context";
 
 vi.mock("@/data-access/production-run-readings");
-vi.mock("@/data-access/production-runs/readings");
 vi.mock("@/data-access/production-run-reading-imports");
 vi.mock("@/fn/production-run-readings");
 vi.mock("@/fn/production-run-reading-imports");
 vi.mock("@/lib/production-readings/readings-csv");
 
-const readingsFunctions = [readings, runReadings, readingImports, readingsActions,
+const readingsFunctions = [readings, readingImports, readingsActions,
   readingImportActions, readingsCsv].flatMap((module) => Object.values(module));
 
 vi.mock("@/data-access/credit-batches", () => ({

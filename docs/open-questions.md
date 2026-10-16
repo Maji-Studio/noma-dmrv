@@ -546,3 +546,12 @@ operational tradeoff, and this is not a registry requirement we verified.
   Production; the site deployment answers 404 to both. If growth matters, add
   scheduled GitHub Actions calls to the secret-authenticated
   `/api/cron/purge-api-records` and `/api/cron/sweep-document-uploads` routes.
+
+## Refusal UIs match server copy (`errors/action-error-code`) - **deferred**
+
+- `src/lib/stale-version.ts:throwActionError` rethrows a failed action as a plain
+  `Error` carrying only the message, so the server's refusal `code` and meta are
+  lost. `src/components/formulations/formulation-notices.tsx:isFormulationInUseRefusal`
+  therefore matches the message text to offer "Archive instead". Carry the action
+  error code and meta to the client (for example on a typed error subclass) so
+  refusal UIs branch on the code, not on copy.

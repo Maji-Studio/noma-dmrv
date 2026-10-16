@@ -86,16 +86,6 @@ export interface ProductionRunStats {
   completedCount: number;
 }
 
-export interface ProductionRunReadingRecord {
-  id: string;
-  productionRunId: string;
-  timestamp: Date;
-  temperatureC: number | null;
-  pressureBar: number | null;
-  gasFlowRate: number | null;
-  createdAt: Date;
-}
-
 export type ProductionRunForCertification = ProductionRun & {
   hasReadingsFile: boolean;
 };

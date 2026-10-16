@@ -7,12 +7,14 @@
  * bulk "delete all" used to clear a run before re-importing.
  */
 
+// Retained non-MVP seam (#942 q25, #1014): called by src/hooks/use-production-run-readings.ts for the unmounted structured readings preview; no mounted operator entry point. See docs/architecture.md#production-run-extensions.
+
 import { withAction } from "./with-action";
 import { z } from "zod";
 import {
   getProductionRunReadingsList as getListData,
   deleteAllProductionRunReadings as deleteAllData,
-  type ProductionRunReadingWithRelations,
+  type ProductionRunReadingsList,
 } from "@/data-access/production-run-readings";
 import { requireOrgFacility } from "@/data-access/utils";
 import {
@@ -24,7 +26,7 @@ import type { ActionResult } from "@/types/actions";
 export async function getProductionRunReadingsListFn(
   productionRunId?: string,
   facilityId?: string
-): Promise<ActionResult<ProductionRunReadingWithRelations[]>> {
+): Promise<ActionResult<ProductionRunReadingsList>> {
   return withAction(async (ctx) => {
     const filters = productionRunReadingListFiltersSchema.parse({
       productionRunId,

@@ -37,8 +37,9 @@ The Readings file stays unchanged on the production run. Readiness and Removal
 submission use file presence, not parsed rows, Sensors, Parquet or reactor MeasurementSamples. Focused tests cover empty
 structured readings, missing/pending/failed files, and submission without
 telemetry calls. The optional readings importer retained by #942 q25 and
-#1014 is unchanged; its wiring/query-bounds deferral stays open with these
-tests as the safety net. The registry upload pipeline and TelemetryPanel
+#1014 is unchanged. #627's remaining query-bounds follow-up is resolved:
+`getProductionRunReadingsList` and the unmounted `ProductionRunReadingTable` cap the preview at 500 newest rows in stable order and signal omitted rows.
+The registry upload pipeline and TelemetryPanel
 were already retired in #987, as recorded on 2026-10-13; this slice removes
 no modules or schema.
 
@@ -108,8 +109,9 @@ registry source and the registry's own time for that transition (submission time
   on each intake. A bin without a type gets one on its first intake.
 - **q25:** Keep the readings import (#1014). The original telemetry CSV stays
   unchanged as sensor-data evidence; the importer can also load its rows as
-  structured readings within the run window. Operator wiring and query bounds
-  remain open in [`open-questions-audit-follow-ups.md`](../open-questions-audit-follow-ups.md#structured-readings-wiring-and-query-bounds-isometricstructured-telemetry-path-deferred).
+  structured readings within the run window. The operator flow retains the file
+  without parsing; the separate structured preview is bounded as described in
+  [Production Run Extensions](../architecture.md#production-run-extensions).
 
 ## 2026-10-15: Samples require a credit batch; unused characterization columns removed
 
