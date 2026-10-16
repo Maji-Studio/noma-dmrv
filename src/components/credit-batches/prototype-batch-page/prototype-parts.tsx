@@ -265,23 +265,23 @@ export function DetailsPanel({ className }: { className?: string }) {
 /** Where the applied biochar sits: each Removal with its mass, the part in none, and the GHG Statement. */
 export function RemovalsPanel() {
   const { model, go } = useProto();
-  const hasStatement = model.scenario === "partly-sent" || model.scenario === "issued";
   return (
-    <Panel title="Removals" action={<span className="body-medium tabular-nums">{tonnes(model.appliedTons + model.masses.notApplied)} <span className={MUTED}>total</span></span>}>
+    <Panel
+      title="Removals"
+      action={
+        <span className="inline-flex items-center gap-16">
+          <span className="body-medium tabular-nums">{tonnes(model.appliedTons + model.masses.notApplied)} <span className={MUTED}>total</span></span>
+          <button type="button" onClick={() => go("removals")} className={cn("inline-flex items-center gap-4 body-small underline-offset-2 hover:underline", MUTED)}>
+            Details
+            <ArrowRightIcon size={14} aria-hidden />
+          </button>
+        </span>
+      }
+    >
       {model.removals.length === 0 && (
         <p className={cn("body-small", MUTED)}>This credit batch is ready. Select Start Removal to submit its applied biochar.</p>
       )}
-      <RemovalMassBar onOpenRemoval={() => go("removals")} />
-      {hasStatement && (
-        <button
-          type="button"
-          onClick={() => go("removals", "ghg")}
-          className="-mx-12 flex w-[calc(100%+24px)] items-center justify-between gap-16 border-t border-[var(--color-border-tertiary)] px-12 pt-12 text-left hover:bg-[var(--color-surface-medium)]"
-        >
-          <span className="body-small font-medium">GHG Statement Q3</span>
-          <span className={cn("body-small", MUTED)}>{model.scenario === "issued" ? "Issued" : "In verification"}</span>
-        </button>
-      )}
+      <RemovalMassBar compact />
     </Panel>
   );
 }

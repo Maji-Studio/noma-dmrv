@@ -73,11 +73,39 @@ function useGroups(): Group[] {
   return groups;
 }
 
-export function RemovalMassBar({ onOpenRemoval }: { onOpenRemoval?: (code: string) => void }) {
+/** Overview version: one slim bar and one wrapping line of inline legend items. */
+function CompactBar({ groups }: { groups: Group[] }) {
+  return (
+    <div className="flex flex-col gap-12">
+      <div role="img" aria-label={groups.map((group) => `${group.name} ${tonnes(group.tons)}`).join(", ")} className="flex h-12 gap-2 bg-[var(--paper)]">
+        {groups.map((group) => {
+          const seg = SEGMENT_BY_KEY[group.segment];
+          return <span key={group.id} className="h-full border border-[var(--st-off-border)]" style={{ flexGrow: group.tons, flexBasis: 0, minWidth: MIN_SEGMENT_PX, backgroundColor: seg.fill, backgroundImage: seg.background }} />;
+        })}
+      </div>
+      <ul className="flex flex-wrap gap-x-16 gap-y-4 body-small">
+        {groups.map((group) => (
+          <li key={group.id} className="inline-flex items-center gap-6">
+            <Swatch segment={group.segment} />
+            <span>{compactLabel(group)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function compactLabel(group: Group): string {
+  if (group.removal) return `${group.name}${group.removal.status === "draft" ? " draft" : ""} ${tonnes(group.tons)}`;
+  return `${tonnes(group.tons)} ${group.segment === "notIn" ? "not in a Removal" : "not applied"}`;
+}
+
+export function RemovalMassBar({ onOpenRemoval, compact }: { onOpenRemoval?: (code: string) => void; compact?: boolean }) {
   const groups = useGroups();
   const [active, setActive] = useState<{ text: string; center: number } | null>(null);
   const total = groups.reduce((sum, group) => sum + group.tons, 0);
   if (groups.length === 0) return null;
+  if (compact) return <CompactBar groups={groups} />;
   const firstOpen = groups.findIndex((group) => group.removal == null);
   return (
     <div className="flex flex-col gap-12">
@@ -88,7 +116,7 @@ export function RemovalMassBar({ onOpenRemoval }: { onOpenRemoval?: (code: strin
             const seg = SEGMENT_BY_KEY[group.segment];
             return (
               <div key={group.id} className="flex min-w-0 flex-col gap-4" style={{ flexGrow: group.tons, flexBasis: 0, minWidth: MIN_SEGMENT_PX }}>
-                <span className={cn("truncate body-caption", group.removal ? "text-[var(--color-text-primary)]" : MUTED)}>
+                <span className={cn("block h-18 truncate body-caption", group.removal ? "text-[var(--color-text-primary)]" : MUTED)}>
                   {group.removal ? `${group.name} ${tonnes(group.tons)}` : ""}
                 </span>
                 <div className="flex h-24 gap-2 bg-[var(--paper)]">
