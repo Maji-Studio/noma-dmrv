@@ -504,6 +504,7 @@ Confirmed without another question:
 118. **Bin saves lock the formulation:** bin create, update and quick-add take the formulation `FOR SHARE`, so a bin cannot point at a formulation being deleted (found in review, fixed in the app too).
 119. **Customer locations get their own archive and restore in 7c** (Q87). Archived locations leave the order destination picker and new order destinations return 404 at `/customerLocationId`; existing orders, deliveries, applications and storage-site registration keep them. Archiving the default moves it to another active location; archiving the last active location is refused. `archive_customer_location` and `restore_customer_location` use `POST /customers/{id}/locations/{locationId}/archive|restore`, `customers:write`, If-Match and Activity status changes, with a 7c migration. Supplier locations get no archive.
 120. **Deliveries and applications on an existing order still save when its customer or formulation is archived** (Q88). Keep the existing behavior and every lineage refusal.
+121. **Customer delete takes its orders without deliveries** (Q89, 7c). A customer is deletable once no delivery (archived included) and no storage-site mapping refers to it; its orders without deliveries are deleted with it, each through the order delete path. `customers:delete` alone covers them, no `orders:delete`; the dry run lists the orders and Activity records each one.
 
 ## 14. What review changed
 

@@ -199,7 +199,7 @@ describe("OrderForm customer field", () => {
     const location: CustomerLocation = {
       id: "location-1", customerId: "customer-1", name: "North field", country: "TZ", version: 1,
       facilityDistances: [], organizationId: "organization-1", gpsLatitude: -6.8, gpsLongitude: 39.2,
-      address: null, city: null, stateRegion: null, defaultSoilTemperatureC: null, isDefault: true,
+      address: null, city: null, stateRegion: null, defaultSoilTemperatureC: null, isDefault: true, archivedAt: null,
       createdAt: new Date("2026-09-12"), updatedAt: new Date("2026-09-12"),
     };
     state.locations = [location];
@@ -285,7 +285,7 @@ describe("OrderForm customer field", () => {
     const location: CustomerLocation = {
       id: "location-1", customerId: "customer-1", name: "North field", country: "TZ", version: 1,
       facilityDistances: [], organizationId: "organization-1", gpsLatitude: -6.8, gpsLongitude: 39.2,
-      address: null, city: null, stateRegion: null, defaultSoilTemperatureC: null, isDefault: true,
+      address: null, city: null, stateRegion: null, defaultSoilTemperatureC: null, isDefault: true, archivedAt: null,
       createdAt: new Date("2026-09-12"), updatedAt: new Date("2026-09-12"),
     };
     const order = { customerId: "customer-1", customerLocationId: "location-1" } as Order;
