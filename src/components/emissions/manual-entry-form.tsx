@@ -8,6 +8,7 @@
  */
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { FormField } from "@/components/forms/form-field";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
@@ -27,6 +28,7 @@ import {
   useDeleteEmissionEntry,
   useUpdateEmissionEntry,
   type EmissionBatchScope,
+  invalidateEmissionEntryReads,
 } from "@/hooks/use-emission-entries";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { EntryFileNames, ENTRY_ENTITY_TYPE } from "./emission-entry-files";
@@ -83,6 +85,7 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const attachments = useDeferredAttachments();
+  const queryClient = useQueryClient();
   const createEntry = useCreateEmissionEntry(scope);
   const updateEntry = useUpdateEmissionEntry(scope);
   const deleteEntry = useDeleteEmissionEntry(scope);
@@ -118,6 +121,8 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
       }
       if (attachments.hasHeld) {
         const flushed = await attachments.flush(ENTRY_ENTITY_TYPE, entryId);
+        // Attaching a file moves the entry's version and file count after the save refreshed the lines.
+        await invalidateEmissionEntryReads(queryClient, scope);
         if (!flushed.ok) {
           onSaved({ warning: FILE_NOT_UPLOADED });
           return;

@@ -3,12 +3,16 @@ import {
   addEntryRefusal,
   defaultEntryDate,
   displayUnit,
+  draftFromEntry,
+  draftMassDistanceFigure,
   entryFields,
   entryValues,
   groupLines,
   lineMatches,
   lineTotalText,
+  kgToTonnes,
   multiplyDecimals,
+  tonnesToKg,
   nothingApplies,
   nothingRefusal,
   recordsChipText,
@@ -59,6 +63,37 @@ describe("units and totals", () => {
   });
 });
 
+describe("mass in kg on mass × distance lines", () => {
+  const line = makeLine({
+    unit: "kg * km",
+    inputShape: [{ key: "leg", type: "monitored", quantityKind: "mass_distance", unit: "km * tonne" }],
+  } as never);
+
+  it("converts kg and tonnes exactly", () => {
+    expect(kgToTonnes("12")).toBe("0.012");
+    expect(kgToTonnes("1500.25")).toBe("1.50025");
+    expect(kgToTonnes("0.1")).toBe("0.0001");
+    expect(tonnesToKg("0.012")).toBe("12");
+    expect(tonnesToKg("1.50025")).toBe("1500.25");
+  });
+
+  it("labels the mass field kg, shows the live t·km and sends tonnes", () => {
+    expect(entryFields(line)[0]).toMatchObject({ part: "mass", unit: "kg" });
+    const draft = { "leg:mass": "12", "leg:distance": "4600" };
+    expect(draftMassDistanceFigure(line, draft)).toBe("55.2 t·km");
+    const [value] = entryValues(line, draft);
+    expect(value.magnitude).toBe("55.2");
+    expect(value.massDistanceDetail?.mass).toEqual({ magnitude: "0.012", unit: "tonne" });
+  });
+
+  it("shows a stored mass back in kg when editing", () => {
+    const entry = makeEntry({
+      values: [{ inputKey: "leg", magnitude: "55.2", unit: "tonne * km", massDistanceDetail: { mass: { magnitude: "0.012", unit: "tonne" }, distance: { magnitude: "4600", unit: "km" } } }],
+    } as never);
+    expect(draftFromEntry(entry)).toEqual({ "leg:mass": "12", "leg:distance": "4600" });
+  });
+});
+
 describe("Nothing to record", () => {
   it("is refused with a reason when entries or records hold a figure", () => {
     expect(nothingRefusal(makeLine())).toBeNull();
@@ -85,9 +120,9 @@ describe("add manual entry", () => {
 
   it("splits a mass-distance input into mass and distance and sends the exact product", () => {
     const line = makeLine({ unit: "km * tonne", inputShape: [{ key: "md", type: "monitored", quantityKind: "mass_distance", unit: "km * tonne" }] });
-    expect(entryFields(line).map((field) => `${field.label} ${field.unit}`)).toEqual(["Mass t", "Distance km"]);
-    expect(validateFields(line, { "md:mass": "0.012", "md:distance": "x" })).toEqual({ "md:distance": "Enter a non-negative decimal value." });
-    expect(entryValues(line, { "md:mass": "0.012", "md:distance": "4600" })).toEqual([
+    expect(entryFields(line).map((field) => `${field.label} ${field.unit}`)).toEqual(["Mass kg", "Distance km"]);
+    expect(validateFields(line, { "md:mass": "12", "md:distance": "x" })).toEqual({ "md:distance": "Enter a non-negative decimal value." });
+    expect(entryValues(line, { "md:mass": "12", "md:distance": "4600" })).toEqual([
       {
         inputKey: "md",
         quantityKind: "mass_distance",

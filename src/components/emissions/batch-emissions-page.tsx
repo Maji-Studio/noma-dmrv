@@ -15,8 +15,8 @@ import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import {
   useBatchEmissionLines,
-  useCreateEmissionEntry,
   useDeleteEmissionEntry,
+  useRestoreEmissionEntry,
   useMarkNothingToRecord,
   type EmissionBatchScope,
 } from "@/hooks/use-emission-entries";
@@ -109,7 +109,7 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
   const [undoing, setUndoing] = useState(false);
   const markNothing = useMarkNothingToRecord(scope);
   const deleteEntry = useDeleteEmissionEntry(scope);
-  const createEntry = useCreateEmissionEntry(scope);
+  const restoreEntry = useRestoreEmissionEntry(scope);
 
   const overviewBatch = overview.data?.batches.find((batch) => batch.creditBatchId === scope.creditBatchId) ?? null;
   const lines = linesQuery.data ?? [];
@@ -159,20 +159,8 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
       } else if (undo.entry.kind === "zero") {
         await markNothing.mutateAsync({ ...scope, componentId: undo.line.componentId, note: undo.entry.note, occurredOn: undo.entry.occurredOn });
       } else {
-        const { line, entry } = undo;
-        await createEntry.mutateAsync({
-          creditBatchId: scope.creditBatchId,
-          componentId: line.componentId,
-          occurredOn: line.entryPolicy === "single" ? undefined : entry.occurredOn,
-          note: entry.note,
-          values: entry.values.map((value) => ({
-            inputKey: value.inputKey,
-            quantityKind: line.inputShape.find((input) => input.key === value.inputKey)?.quantityKind ?? "dimensionless",
-            magnitude: value.magnitude,
-            unit: value.unit,
-            massDistanceDetail: value.massDistanceDetail,
-          })),
-        });
+        // Delete bumped the version once, so the restore expects the next one.
+        await restoreEntry.mutateAsync({ id: undo.entry.id, expectedVersion: undo.entry.version + 1 });
       }
       setUndo(null);
     } catch (error) {
@@ -188,7 +176,7 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
       ? `${undo.lineName} marked Nothing to record.`
       : undo.entry.kind === "zero"
         ? `Nothing to record removed from ${undo.line.displayName}.`
-        : `Manual entry deleted on ${undo.line.displayName}.${undo.entry.documentCount ? " Undo brings back the values. Attach the file again." : ""}`;
+        : `Manual entry deleted on ${undo.line.displayName}.${undo.entry.documentCount ? " Undo brings back the values and the files." : ""}`;
   const undoLine = undo?.kind === "nothing" ? lines.find((line) => line.componentId === undo.componentId) : undefined;
 
   const counts = lineCounts(lines);

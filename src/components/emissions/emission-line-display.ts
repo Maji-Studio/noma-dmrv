@@ -98,6 +98,33 @@ export function multiplyDecimals(a: string, b: string): string {
   return canonicalDecimal(scale ? `${digits.slice(0, -scale)}.${digits.slice(-scale)}` : digits) ?? "0";
 }
 
+const KG_PER_TONNE_DIGITS = 3;
+
+/** Moves the decimal point of a non-negative decimal by `places` (negative moves left), exactly and without floats. */
+function shiftDecimal(raw: string, places: number): string {
+  const [whole, fraction = ""] = (canonicalDecimal(raw) ?? "0").split(".");
+  const digits = `${whole}${fraction}`;
+  const point = whole.length + places;
+  const padded = point < 0 ? `${"0".repeat(-point)}${digits}` : digits.padEnd(point, "0");
+  const at = Math.max(point, 0);
+  return canonicalDecimal(`${padded.slice(0, at) || "0"}${padded.slice(at) ? `.${padded.slice(at)}` : ""}`) ?? "0";
+}
+
+/** Kilograms to tonnes ("12" is "0.012"), exact. The form takes kg; the server stores tonnes. */
+export function kgToTonnes(kg: string): string {
+  return shiftDecimal(kg.trim(), -KG_PER_TONNE_DIGITS);
+}
+
+/** Tonnes to kilograms ("0.012" is "12"), exact. */
+export function tonnesToKg(tonnes: string): string {
+  return shiftDecimal(tonnes.trim(), KG_PER_TONNE_DIGITS);
+}
+
+/** The mass part of a mass-distance entry is typed in kg whenever the line stores it in tonnes. */
+function massTypedInKg(units: { mass: string } | null): boolean {
+  return units?.mass === "tonne";
+}
+
 /* ---------- records ---------- */
 
 interface SourceVocabulary { one: string; many: string; shortOne: string; shortMany: string; open: string }
@@ -313,7 +340,7 @@ export function entryFields(line: EmissionLine): EntryFieldSpec[] {
     if (input.quantityKind === "mass_distance") {
       const units = massDistanceUnits(input.unit);
       return [
-        { key: `${input.key}:mass`, label: "Mass", unit: displayUnit(units?.mass), inputKey: input.key, part: "mass" },
+        { key: `${input.key}:mass`, label: "Mass", unit: massTypedInKg(units) ? "kg" : displayUnit(units?.mass), inputKey: input.key, part: "mass" },
         { key: `${input.key}:distance`, label: "Distance", unit: displayUnit(units?.distance), inputKey: input.key, part: "distance" },
       ];
     }
@@ -327,7 +354,8 @@ export function draftFromEntry(entry: EmissionEntry): Record<string, string> {
   const draft: Record<string, string> = {};
   for (const value of entry.values) {
     if (value.massDistanceDetail) {
-      draft[`${value.inputKey}:mass`] = value.massDistanceDetail.mass.magnitude;
+      const { mass } = value.massDistanceDetail;
+      draft[`${value.inputKey}:mass`] = mass.unit === "tonne" ? tonnesToKg(mass.magnitude) : mass.magnitude;
       draft[`${value.inputKey}:distance`] = value.massDistanceDetail.distance.magnitude;
     } else draft[value.inputKey] = value.magnitude;
   }
@@ -347,7 +375,8 @@ export function draftMassDistanceFigure(line: EmissionLine, draft: Record<string
   const mass = draft[`${input.key}:mass`] ?? "";
   const distance = draft[`${input.key}:distance`] ?? "";
   if (!isDecimal(mass) || !isDecimal(distance)) return null;
-  return formatFigure({ magnitude: multiplyDecimals(mass.trim(), distance.trim()), unit: input.unit ?? "" });
+  const tonnes = massTypedInKg(massDistanceUnits(input.unit)) ? kgToTonnes(mass) : mass.trim();
+  return formatFigure({ magnitude: multiplyDecimals(tonnes, distance.trim()), unit: input.unit ?? "" });
 }
 
 /** Wire values for create and update. Call after validateFields passes. */
@@ -356,7 +385,8 @@ export function entryValues(line: EmissionLine, draft: Record<string, string>) {
     const unit = input.unit ?? "";
     if (input.quantityKind === "mass_distance") {
       const units = massDistanceUnits(unit)!;
-      const mass = draft[`${input.key}:mass`].trim();
+      const typed = draft[`${input.key}:mass`].trim();
+      const mass = massTypedInKg(units) ? kgToTonnes(typed) : typed;
       const distance = draft[`${input.key}:distance`].trim();
       return {
         inputKey: input.key,

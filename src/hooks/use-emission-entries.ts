@@ -13,6 +13,7 @@ import {
   deleteEmissionEntryFn,
   getBatchEmissionLinesFn,
   markNothingToRecordFn,
+  restoreEmissionEntryFn,
   updateEmissionEntryFn,
 } from "@/fn/emission-entries";
 import { throwActionError } from "@/lib/stale-version";
@@ -90,4 +91,7 @@ export function useDeleteEmissionEntry(scope: EmissionBatchScope) {
 }
 export function useMarkNothingToRecord(scope: EmissionBatchScope) {
   return useEntryMutation(scope, markNothingToRecordFn);
+}
+export function useRestoreEmissionEntry(scope: EmissionBatchScope) {
+  return useEntryMutation(scope, restoreEmissionEntryFn);
 }
