@@ -1,0 +1,24 @@
+"use server";
+import { z } from "zod";
+import { withAction } from "./with-action";
+import { createEmissionEntry, updateEmissionEntry, confirmEmissionEntry, deleteEmissionEntry } from "@/data-access/emission-entries";
+import { loadBatchEmissionLines } from "@/lib/read-models/batch-emission-lines";
+import { createEmissionEntrySchema, updateEmissionEntrySchema, emissionEntryVersionSchema } from "@/schemas/emission-entries";
+import { uuidSchema } from "@/schemas/helpers";
+import type { ActionResult } from "@/types/actions";
+
+export async function createEmissionEntryFn(input: z.input<typeof createEmissionEntrySchema>): Promise<ActionResult<Awaited<ReturnType<typeof createEmissionEntry>>>> {
+  return withAction(ctx => createEmissionEntry(ctx, createEmissionEntrySchema.parse(input)));
+}
+export async function updateEmissionEntryFn(input: z.input<typeof updateEmissionEntrySchema>): Promise<ActionResult<Awaited<ReturnType<typeof updateEmissionEntry>>>> {
+  return withAction(ctx => updateEmissionEntry(ctx, updateEmissionEntrySchema.parse(input)));
+}
+export async function confirmEmissionEntryFn(input: z.input<typeof emissionEntryVersionSchema>): Promise<ActionResult<Awaited<ReturnType<typeof confirmEmissionEntry>>>> {
+  return withAction(ctx => { const data = emissionEntryVersionSchema.parse(input); return confirmEmissionEntry(ctx, data.id, data.expectedVersion); });
+}
+export async function deleteEmissionEntryFn(input: z.input<typeof emissionEntryVersionSchema>): Promise<ActionResult<{ id: string }>> {
+  return withAction(ctx => { const data = emissionEntryVersionSchema.parse(input); return deleteEmissionEntry(ctx, data.id, data.expectedVersion); });
+}
+export async function getBatchEmissionLinesFn(input: { facilityId: string; creditBatchId: string }): Promise<ActionResult<Awaited<ReturnType<typeof loadBatchEmissionLines>>>> {
+  return withAction(ctx => { const data = z.object({ facilityId: uuidSchema(), creditBatchId: uuidSchema() }).parse(input); return loadBatchEmissionLines(ctx, data.facilityId, data.creditBatchId); });
+}

@@ -46,6 +46,7 @@ export const DOCUMENT_VISIBILITIES = ["private", "public"] as const;
 export type DocumentVisibility = (typeof DOCUMENT_VISIBILITIES)[number];
 
 export const DOCUMENT_ENTITY_TYPES = [
+  "emission_entry",
   "sample",
   "delivery",
   "production_run",

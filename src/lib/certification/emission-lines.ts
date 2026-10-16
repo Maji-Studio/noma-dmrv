@@ -1,3 +1,4 @@
+import { DomainError } from "@/lib/domain-errors";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 import type { AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
 import { effectiveContract, validateLineSources, type LineSources, type LineSourceProblem } from "@/lib/isometric/template-observations/line-sources";
@@ -26,13 +27,13 @@ export interface BatchEmissionLineFacts {
 /** Decimal strings use the observation canonicalizer and integer arithmetic.
  * Unit conversion belongs at the fact boundary; never sum unlike units.
  */
-function sumFigures(figures: EmissionFigure[]): EmissionFigure | null {
+export function sumFigures(figures: EmissionFigure[]): EmissionFigure | null {
   if (!figures.length) return null;
   const unit = figures[0].unit;
-  if (figures.some((figure) => figure.unit !== unit)) throw new Error("Emission figure units must match");
+  if (figures.some((figure) => figure.unit !== unit)) throw new DomainError("validation_failed", "Emissions values use different units. Use the same unit before adding them.");
   const values = figures.map(({ magnitude }) => {
     const value = canonicalDecimal(magnitude);
-    if (value === undefined) throw new Error("Invalid emission magnitude");
+    if (value === undefined) throw new DomainError("validation_failed", "An emissions value could not be read. Check the recorded values.");
     return value;
   });
   const scale = Math.max(...values.map((value) => value.split(".")[1]?.length ?? 0));
@@ -61,7 +62,7 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     if (decision && decision.state !== "empty") { state = decision.state; blocker = decision.blocker; }
     else if (values.some((entry) => !entry.hasEvidence)) {
       state = "missingEvidence";
-      blocker ??= { code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+      blocker = { code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     } else if (automaticFigure || values.length) state = "filled";
     else if (counting.some((entry) => entry.kind === "zero")) state = "confirmedZero";
     else { state = "empty"; blocker = decision?.blocker; }

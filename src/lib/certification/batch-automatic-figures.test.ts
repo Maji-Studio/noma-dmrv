@@ -31,7 +31,28 @@ it("maps each transport category through the existing round-trip aggregators", (
     distanceKm: 10, loadMassKg: 1000, transportMethodType: "road", calculationMethodType: "distance_based",
   };
   const figures = batchAutomaticFigures([], { feedstock: [leg], biochar: [{ ...leg, distanceKm: 20 }], sample: [{ ...leg, loadMassKg: 10 }] });
-  expect(figures["feedstock-transport"]).toEqual({ magnitude: "20", unit: "tonne * km" });
-  expect(figures["delivery-transport"]).toEqual({ magnitude: "40", unit: "tonne * km" });
-  expect(figures["sample-transport"]).toEqual({ magnitude: "0.2", unit: "tonne * km" });
+  expect(figures["feedstock-transport"]).toEqual({ magnitude: "20", unit: "km * tonne" });
+  expect(figures["delivery-transport"]).toEqual({ magnitude: "40", unit: "km * tonne" });
+  expect(figures["sample-transport"]).toEqual({ magnitude: "0.2", unit: "km * tonne" });
+});
+
+it("preserves DB decimal text and never accumulates energy in floats", () => {
+  const figures = batchAutomaticFigures([run({ id: "a", electricityKwh: 0.1 }), run({ id: "b", electricityKwh: 0.2 })], emptyLegs, {
+    runs: { a: { feedstockMassDryKg: "9007199254740993.001", biocharDryMassKg: null }, b: { feedstockMassDryKg: "0.002", biocharDryMassKg: null } }, legs: {},
+  });
+  expect(figures["feedstock-dry-mass"]?.magnitude).toBe("9007199254740993.003");
+  expect(figures["run-electricity"]?.magnitude).toBe("0.3");
+});
+
+it.each(["empty", "missing-mass", "mixed-mode", "biochar-zero-distance"])("matches submission transport availability for %s", async scenario => {
+  const { aggregateTransportMassDistance, aggregateBiocharTransportMassDistance } = await import("@/lib/isometric/utils/aggregation");
+  const base = { id: "one", distanceKm: 10, loadMassKg: 1000, transportMethodType: "road", calculationMethodType: "distance_based" } as TransportLegsByCategory["feedstock"][number];
+  let legs = [base];
+  if (scenario === "empty") legs = [];
+  if (scenario === "missing-mass") legs = [{ ...base, loadMassKg: null }];
+  if (scenario === "mixed-mode") legs.push({ ...base, id: "two", transportMethodType: "rail" });
+  if (scenario === "biochar-zero-distance") legs = [{ ...base, distanceKm: 0 }];
+  const figures = batchAutomaticFigures([], { feedstock: legs, biochar: legs, sample: legs });
+  expect(figures["feedstock-transport"] === null).toBe(aggregateTransportMassDistance(legs, "Feedstock").massDistanceTonneKm === null);
+  expect(figures["delivery-transport"] === null).toBe(aggregateBiocharTransportMassDistance(legs).massDistanceTonneKm === null);
 });

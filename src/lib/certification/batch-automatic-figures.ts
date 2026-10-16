@@ -1,39 +1,53 @@
-import type { BatchEmissionLineFacts, EmissionFigure } from "./emission-lines";
-import { AUTOMATIC_SOURCE_IDS, automaticSourceFact, type AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
-import { aggregateProductionRuns, aggregateTransportMassDistance, aggregateBiocharTransportMassDistance, type ProductionRunForCertification, type TransportLegsByCategory } from "@/lib/isometric/utils/aggregation";
+import { sumFigures, type BatchEmissionLineFacts, type EmissionFigure } from "./emission-lines";
+import { multiplyEntryDecimals } from "./emission-entry-rules";
+import { ROUND_TRIP_DISTANCE_FACTOR } from "@/lib/calculations/round-trip";
+import type { ProductionRunForCertification, TransportLegsByCategory } from "@/lib/isometric/utils/aggregation";
 
-const SOURCE_UNITS: Record<AutomaticSourceId, string> = {
-  "run-genset-diesel": "L", "run-startup-diesel": "L", "run-electricity": "kWh",
-  "feedstock-transport": "tonne * km", "delivery-transport": "tonne * km", "sample-transport": "tonne * km",
-  "feedstock-dry-mass": "kg", "biochar-dry-mass": "kg", "safety-margin": "kg", sequestration: "%",
-};
+function sourceForCategory(category: "feedstock" | "biochar" | "sample") {
+  return category === "biochar" ? "delivery-transport" : `${category}-transport` as const;
+}
+const KG_TO_TONNES = "0.001";
 const RUN_SOURCE_FIELDS = {
   "run-genset-diesel": ["dieselGensetLiters", "preprocessingFuelLiters"],
   "run-startup-diesel": ["dieselOperationLiters"], "run-electricity": ["electricityKwh"],
   "feedstock-dry-mass": ["feedstockMassDryKg"], "biochar-dry-mass": ["biocharDryMassKg"],
   "safety-margin": ["biocharDryMassKg"],
 } as const;
-
-/** Existing registry aggregation, without application scaling or production claims.
- * Presence is checked separately because that aggregator defaults missing energy to zero.
+export interface ExactEmissionMasses {
+  runs: Record<string, { feedstockMassDryKg: string | null; biocharDryMassKg: string | null }>;
+  legs: Record<string, string | null>;
+}
+/** Same presence and transport guards as submission. Sum decimal text, never floats.
+ * Energy and distances originate in real columns; stringify those once at the boundary.
  */
-export function batchAutomaticFigures(runs: ProductionRunForCertification[], legs: TransportLegsByCategory): BatchEmissionLineFacts["automaticFigures"] {
-  const aggregate = runs.length ? aggregateProductionRuns(runs) : null;
-  const transports = {
-    feedstockTransportMassDistanceTonneKm: aggregateTransportMassDistance(legs.feedstock, "Feedstock").massDistanceTonneKm,
-    biocharTransportMassDistanceTonneKm: aggregateBiocharTransportMassDistance(legs.biochar).massDistanceTonneKm,
-    sampleTransportMassDistanceTonneKm: aggregateTransportMassDistance(legs.sample, "Sample").massDistanceTonneKm,
-  };
-  const figures: Partial<Record<AutomaticSourceId, EmissionFigure | null>> = {};
-  for (const source of AUTOMATIC_SOURCE_IDS) {
-    const fact = automaticSourceFact(source);
-    const fields = source in RUN_SOURCE_FIELDS ? RUN_SOURCE_FIELDS[source as keyof typeof RUN_SOURCE_FIELDS] : null;
-    const recorded = fields ? runs.some((run) => fields.some((field) => run[field] != null)) : true;
-    // Sequestration is a set of Sample/application inputs, not one batch scalar.
-    const value = source === "sequestration" ? null : fact in transports
-      ? transports[fact as keyof typeof transports] : aggregate?.[fact as keyof typeof aggregate];
-    figures[source] = recorded && typeof value === "number" ? { magnitude: String(value), unit: SOURCE_UNITS[source] } : null;
+export function batchAutomaticFigures(runs: ProductionRunForCertification[], legs: TransportLegsByCategory, exact?: ExactEmissionMasses): BatchEmissionLineFacts["automaticFigures"] {
+  const figures: BatchEmissionLineFacts["automaticFigures"] = { sequestration: null };
+  for (const [source, fields] of Object.entries(RUN_SOURCE_FIELDS)) {
+    const unit = source === "run-electricity" ? "kWh" : source.startsWith("run-") ? "L" : "kg";
+    const values = runs.flatMap(run => fields.flatMap(field => {
+      const mass = field === "feedstockMassDryKg" || field === "biocharDryMassKg";
+      const value = mass && exact ? exact.runs[run.id]?.[field] : run[field];
+      return value == null ? [] : [{ magnitude: String(value), unit }];
+    }));
+    figures[source as keyof typeof RUN_SOURCE_FIELDS] = sumFigures(values);
+  }
+  for (const category of ["feedstock", "biochar", "sample"] as const) {
+    const categoryLegs = legs[category];
+    // Match aggregateTransportMassDistance / aggregateBiocharTransportMassDistance
+    // presence and factor gates without running their floating-point sums.
+    const first = categoryLegs[0];
+    const valid = first && categoryLegs.every(leg =>
+      leg.loadMassKg != null && Number.isFinite(leg.loadMassKg) && leg.loadMassKg > 0 &&
+      leg.calculationMethodType === first.calculationMethodType && leg.transportMethodType === first.transportMethodType &&
+      (category !== "biochar" || (Number.isFinite(leg.distanceKm) && leg.distanceKm > 0)));
+    if (!valid) { figures[sourceForCategory(category)] = null; continue; }
+    const source = sourceForCategory(category);
+    const values: EmissionFigure[] = categoryLegs.map(leg => {
+      // Biochar legs are projections of allocated delivery loads, not persisted legs.
+      const mass = exact && Object.hasOwn(exact.legs, leg.id) ? exact.legs[leg.id] : leg.loadMassKg;
+      return { magnitude: multiplyEntryDecimals(multiplyEntryDecimals(String(mass ?? 0), KG_TO_TONNES), multiplyEntryDecimals(String(leg.distanceKm), String(ROUND_TRIP_DISTANCE_FACTOR))), unit: "km * tonne" };
+    });
+    figures[source] = sumFigures(values);
   }
   return figures;
 }
-

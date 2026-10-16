@@ -37,7 +37,7 @@ describe("batch emission line states", () => {
     expect(deriveBatchEmissionLines(f)[0].total).toBeNull();
     f.automaticFigures = { "run-electricity": { magnitude: "1", unit: "Wh" } };
     f.entries = [entry(f)];
-    expect(() => deriveBatchEmissionLines(f)).toThrow("units must match");
+    expect(() => deriveBatchEmissionLines(f)).toThrow("values use different units");
   });
   it("review and setup take precedence over missing evidence", () => {
     const f = facts(); const id = f.definition.groups[0].components[0].id;
@@ -62,7 +62,7 @@ describe("batch emission line states", () => {
     const f = facts(); const id = f.definition.groups[0].components[0].id;
     f.lineSources[id] = { scope: "operating", origin: "reviewed", entryPolicy: "additive" };
     f.entries = [entry(f, overrides)];
-    expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state, blocker: { code: "lineHasNoSource" } });
+    expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state, blocker: { code: state === "missingEvidence" ? "entryMissingEvidence" : "lineHasNoSource" } });
   });
   it("exports the agreed labels", () => {
     expect(EMISSION_LINE_STATE_LABELS).toEqual({ filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing", needsReview: "Needs review", needsSetup: "Needs setup", confirmedZero: "Recorded as zero" });

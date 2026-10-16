@@ -1,3 +1,4 @@
+import { assertEmissionEntryDocumentWritable, bumpEmissionEntryEvidence } from "./emission-entry-lock";
 import { type ActivityScope, recordDocumentActivity } from "./write-activity";
 import type { ActivityEventInput } from "./activity-events";
 import { enqueueDocumentKeys } from "./document-storage-deletions";
@@ -61,6 +62,7 @@ export interface DocumentEntityRef {
 }
 
 const DOCUMENT_ENTITY_LABELS: Record<DocumentEntityType, string> = {
+  emission_entry: "Emissions entry",
   sample: "Sample",
   delivery: "Delivery",
   production_run: "Production run",
@@ -89,7 +91,8 @@ function entityMissingError(entityType: DocumentEntityType) {
 export async function assertCanManageDocumentEntity(
   ctx: OrgContext,
   entityType: string,
-  entityId: string
+  entityId: string,
+  tx?: DbTransaction
 ): Promise<void> {
   requireOrgScope(ctx);
 
@@ -98,6 +101,10 @@ export async function assertCanManageDocumentEntity(
   }
 
   switch (entityType) {
+    case "emission_entry": {
+      await assertEmissionEntryDocumentWritable(ctx, entityId, tx);
+      return;
+    }
     case "sample": {
       const [row] = await db
         .select({ id: samples.id })
@@ -243,7 +250,7 @@ export async function listDocumentsForEntity(
   entityId: string
 ): Promise<DocumentRow[]> {
   requireOrgScope(ctx);
-  await assertCanManageDocumentEntity(ctx, entityType, entityId);
+  if (entityType !== "emission_entry") await assertCanManageDocumentEntity(ctx, entityType, entityId);
   return db
     .select()
     .from(documents)
@@ -263,7 +270,7 @@ export async function listDocumentsForEntityIds(
   if (entityIds.length === 0) return [];
   await Promise.all(
     entityIds.map((entityId) =>
-      assertCanManageDocumentEntity(ctx, entityType, entityId)
+      entityType === "emission_entry" ? Promise.resolve() : assertCanManageDocumentEntity(ctx, entityType, entityId)
     )
   );
 
@@ -381,7 +388,9 @@ export async function insertDocument(
 ): Promise<DocumentRow> {
   requireOrgScope(ctx);
   return db.transaction(async (tx) => {
+    if (input.entityType === "emission_entry") await assertCanManageDocumentEntity(ctx, input.entityType, input.entityId, tx);
     const [row] = await tx.insert(documents).values({ ...input, organizationId: ctx.organizationId }).returning();
+    await bumpEmissionEntryEvidence(ctx, tx, row.entityType, row.entityId);
     await recordDocumentActivity(ctx, tx, row, "created", { source: "form" });
     return row;
   });
@@ -395,9 +404,12 @@ export async function deleteDocumentRow(
 ): Promise<DocumentRow | null> {
   requireOrgScope(ctx);
   if (!tx) return db.transaction(writerTx => deleteDocumentRow(ctx, id, source, writerTx));
+  const [initial] = await tx.select().from(documents).where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)));
+  if (initial?.entityType === "emission_entry" && !(source === "system" && initial.uploadStatus === "failed")) await assertEmissionEntryDocumentWritable(ctx, initial.entityId, tx);
   const [row] = await tx.select().from(documents)
     .where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId))).for("update");
   if (!row) return null;
+  if (row.uploadStatus === "uploaded") await bumpEmissionEntryEvidence(ctx, tx, row.entityType, row.entityId);
   await recordDocumentActivity(ctx, tx, row, "deleted", { source });
   await tx.delete(documents).where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)));
   return row;
@@ -499,6 +511,9 @@ export async function retireDocumentsForEntities(
       ]),
     ).values(),
   ];
+  for (const entity of uniqueEntities.filter(entity => entity.entityType === "emission_entry").sort((a, b) => a.entityId.localeCompare(b.entityId))) {
+    await assertEmissionEntryDocumentWritable(ctx, entity.entityId, tx);
+  }
   const ownershipConditions = uniqueEntities.map((entity) =>
     and(
       eq(documents.entityType, entity.entityType),
@@ -571,6 +586,7 @@ export async function retireDocumentsForEntities(
   }
 
   for (const document of ownedDocuments) {
+    await bumpEmissionEntryEvidence(ctx, tx, document.entityType, document.entityId);
     const owner = uniqueEntities.find(entity => entity.entityType === document.entityType && entity.entityId === document.entityId);
     await recordDocumentActivity(ctx, tx, document, "deleted", { scopes: owner?.activityScopes, source, actorUserId });
     await enqueueDocumentKeys(ctx, tx, document);
