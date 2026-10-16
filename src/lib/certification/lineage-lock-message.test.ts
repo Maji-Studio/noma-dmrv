@@ -57,7 +57,7 @@ describe("formatCertificationLineageLockMessage", () => {
           lineageRelationship: "linked",
         }),
       ).toBe(
-        `Cannot create this transport leg because the linked ${label} is locked by a certification submission.`,
+        `Cannot create this transport leg because the linked ${label} is locked by a certification submission. Wait for Isometric to return the covering GHG Statement, then refresh its status.`,
       );
     },
   );
@@ -70,7 +70,7 @@ describe("formatCertificationLineageLockMessage", () => {
         lineageEntityType: "application",
       }),
     ).toBe(
-      "Cannot update this application because it is locked by a certification submission.",
+      "Cannot update this application because it is locked by a certification submission. Wait for Isometric to return the covering GHG Statement, then refresh its status.",
     );
   });
 
@@ -82,7 +82,7 @@ describe("formatCertificationLineageLockMessage", () => {
         lineageEntityType: "feedstock",
       }),
     ).toBe(
-      "Cannot update this transport leg because the linked feedstock is locked by a certification submission.",
+      "Cannot update this transport leg because the linked feedstock is locked by a certification submission. Wait for Isometric to return the covering GHG Statement, then refresh its status.",
     );
   });
 
@@ -95,7 +95,7 @@ describe("formatCertificationLineageLockMessage", () => {
         lineageRelationship: "linked",
       }),
     ).toBe(
-      "Cannot create this biochar product because the linked production run is locked by a certification submission.",
+      "Cannot create this biochar product because the linked production run is locked by a certification submission. Wait for Isometric to return the covering GHG Statement, then refresh its status.",
     );
   });
 
@@ -120,7 +120,7 @@ describe("formatCertificationLineageLockMessage", () => {
         lineageEntityType: "creditBatch",
       }),
     ).toBe(
-      "Cannot delete this credit batch because it is locked by a certification submission.",
+      "Cannot delete this credit batch because it is locked by a certification submission. Wait for Isometric to return the covering GHG Statement, then refresh its status.",
     );
   });
 });

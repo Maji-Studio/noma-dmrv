@@ -438,7 +438,15 @@ The public verifier download lookup is the one deliberate exception:
 `// org-scope-ok:` waiver, then authorizes with the bearer token digest and
 private-document state. It must not be copied into ordinary data access.
 
-`certification_submissions` is the **freeze point** for certification source data. A blocking ledger status (`draft`, `submitted`, `accepted`) on a Removal or GHG Statement prevents in-place mutation of production runs, lab samples, deliveries, biochar products, and feedstocks captured by that Removal's immutable application-by-credit-batch slices. New downstream physical records may descend from a certified production run without making the captured upstream records editable. The guard lives in data-access (`certification-lineage-guards.ts`) so stale UI membership cannot bypass it.
+## Record locks
+
+All entity mutation paths use the record-lock policy in [ADR 0035](./adr/0035-record-locks-follow-dependencies-and-registry-lineage.md). `src/lib/record-lock.ts` contains the client-safe per-kind predicates returning `level`, `heldBy`, `freeFields` and `howToFree`. Open has no consumers; In use has numeric consumers; Sent takes precedence and has no free fields. Data-access resolves organization-scoped facts rather than trusting screen membership.
+
+`record-lock-lineage.ts` reads every relevant `certification_submissions` row, including older versions and historical statement membership. Registry creation (`draft`), submitted or accepted rows, possible remote effects, unknown statuses and in-flight work hold Sent. A known failed attempt with no remote effects does not. A failed v2 cannot release a submitted v1.
+
+A covering statement must be read fresh from Certify to reopen: FAILED_VERIFICATION, or DRAFT with earlier verifier-submission evidence (`submitted_at`, retained in metadata). This includes submissions made in Certify itself. Every other covering statement must also be known and safe, and nothing may be in flight. Failed reads keep the lock. Writers re-read under sorted certification artifact locks and refuse lineage expansion after locking; advisory reads cannot authorize a write. Resubmission locks the lineage again.
+
+Numeric consumers remain In use after reopening. Output entries share the correction dependency resolver between browser and server; unrelated intake does not lock them. Feedstock retains ADR 0027 wet-lane checks, so an intake edit may still proceed if all withdrawals fit. These rules need no schema migration. Free-field declarations are proposals for the separate free-field save work, not authorization to bypass existing guards.
 
 ## Method-B storage boundary
 

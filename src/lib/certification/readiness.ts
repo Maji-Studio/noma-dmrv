@@ -16,7 +16,6 @@ import type { SubmissionLineageBlocker } from "./submission-readiness";
 import { formatUnbindableTemplateInputsText, type UnbindableTemplateInput } from "@/lib/isometric/template-binding-coverage";
 
 import {
-  BLOCKING_SUBMISSION_STATUSES,
   deriveRemovalStatus,
   type LocalSubmissionStatus,
 } from "./status";
@@ -687,24 +686,4 @@ export function buildRemovalRequirementsChecklist(
   return checks
     .filter((check): check is RemovalRequirementCheckBase => check !== null)
     .map(withRequirementMeta);
-}
-
-/**
- * Whether a removal's credit-batch membership can still be changed. Mirrors the
- * server guard (`assertRemovalAllowsCreditBatchMutation`):
- * a removal with a live (`draft`/`submitted`/`accepted`) or in-flight ledger
- * row is frozen — regrouping it would change what an existing Isometric Removal
- * represents (ADR 0003). The server is authoritative; this only gates the UI so
- * blocked controls aren't offered.
- */
-export function canRegroupRemoval({
-  local,
-  lockInFlight,
-}: {
-  local: LocalSubmissionStatus | null;
-  lockInFlight: boolean;
-}): boolean {
-  if (lockInFlight) return false;
-  if (local === null) return true;
-  return !BLOCKING_SUBMISSION_STATUSES.includes(local);
 }

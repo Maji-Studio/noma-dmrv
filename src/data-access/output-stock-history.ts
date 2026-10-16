@@ -6,9 +6,8 @@ import { orderedSourcesSchema } from '@/schemas/output-stock';
 import type { OutputMoistureReset, OutputStockHistoryEntry, OutputStockPreview } from '@/types/output-stock';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { getOutputStockAllocationProjection } from './output-stock';
-import { outputBinReceipts } from './output-stock-edit-lock';
+import { outputMovementLockReason } from './output-stock-edit-lock';
 import { requireOrgScope } from './utils';
-import { stockEntryLockReason } from '@/lib/output-stock/edit-lock';
 import { deliveryAppliedLockedReason } from '@/lib/output-stock/labels';
 
 /**
@@ -99,8 +98,6 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
     if (entry.kind === 'intake') { entry.beforeDryKg = balance; entry.afterDryKg = balance - entry.dryMassKg; }
     balance -= entry.dryMassKg;
   }
-  const latestSequence = movements.at(-1)?.movement.postingSequence ?? BigInt(0);
-  const receiptFacts = await outputBinReceipts(ctx, storageLocationId, reader);
   // The correction path refuses an applied delivery too; locking it here keeps the delivery's other fields saveable.
   const deliveryIds = [...new Set(history.flatMap(entry => entry.deliveryId ? [entry.deliveryId] : []))];
   const applied = deliveryIds.length === 0 ? [] : await reader.select({ deliveryId: applications.deliveryId, code: applications.code }).from(applications)
@@ -110,7 +107,7 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
     if (entry.kind === 'reversal' || !['loss', 'delivery'].includes(entry.eventKind ?? entry.kind)) continue;
     const original = movements.find(row => row.movement.id === entry.id)?.movement;
     const code = entry.deliveryId ? applicationCode.get(entry.deliveryId) : undefined;
-    if (original) entry.editLockedReason = code ? deliveryAppliedLockedReason(code) : stockEntryLockReason(original, latestSequence, receiptFacts);
+    if (original) entry.editLockedReason = code ? deliveryAppliedLockedReason(code) : await outputMovementLockReason(ctx, storageLocationId, original.id, reader);
   }
   return history;
 }

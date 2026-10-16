@@ -7,7 +7,6 @@ import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from
 import { describe, expect, it } from "vitest";
 import {
   buildRemovalRequirementsChecklist,
-  canRegroupRemoval,
   deriveRemovalReadiness,
   type RemovalRequirementCheck,
   type RemovalRequirementKey,
@@ -751,29 +750,6 @@ describe("shared requirement metadata (Phase 0)", () => {
     }
   });
 });
-
-describe("canRegroupRemoval", () => {
-  it("allows regrouping a removal with no submission yet", () => {
-    expect(canRegroupRemoval({ local: null, lockInFlight: false })).toBe(true);
-  });
-
-  it("blocks regrouping while a submission lock is live", () => {
-    expect(canRegroupRemoval({ local: "draft", lockInFlight: true })).toBe(false);
-  });
-
-  it("blocks regrouping for live ledger statuses (draft/submitted/accepted)", () => {
-    for (const local of ["draft", "submitted", "accepted"] as const) {
-      expect(canRegroupRemoval({ local, lockInFlight: false })).toBe(false);
-    }
-  });
-
-  it("allows regrouping once terminal-but-non-blocking (rejected/superseded)", () => {
-    for (const local of ["rejected", "superseded"] as const) {
-      expect(canRegroupRemoval({ local, lockInFlight: false })).toBe(true);
-    }
-  });
-});
-
 
 describe("vehicle advisories", () => {
   it("keeps readiness and transport uniformity met", () => {

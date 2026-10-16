@@ -11,7 +11,7 @@ import {
   type IsometricClient,
 } from "@/lib/isometric/client";
 import { listProjects } from "@/lib/isometric/projects";
-import { requireOrgScope } from "./utils";
+import { requireOrgScope, type Executor } from "./utils";
 
 type CertifierCredentialRow = typeof certifierCredentials.$inferSelect;
 type CertifierProvider = CertifierCredentialRow["provider"];
@@ -187,17 +187,19 @@ export async function hasCertifierCredentials(
 async function getDecryptedCertifierCredentials(
   ctx: OrgContext,
   provider: CertifierProvider,
+  reader: Executor = db,
 ): Promise<{ accessToken: string; clientSecret: string } | null> {
   requireOrgScope(ctx);
-  return loadDecryptedCertifierCredentials(ctx.organizationId, provider);
+  return loadDecryptedCertifierCredentials(ctx.organizationId, provider, reader);
 }
 
 // org-scope-ok: private lookup shared by the scoped getter and guarded Platform Admin verification.
 async function loadDecryptedCertifierCredentials(
   organizationId: string,
-  provider: CertifierProvider
+  provider: CertifierProvider,
+  reader: Executor = db,
 ): Promise<{ accessToken: string; clientSecret: string } | null> {
-  const [row] = await db
+  const [row] = await reader
     .select({
       accessTokenEncrypted: certifierCredentials.accessTokenEncrypted,
       clientSecretEncrypted: certifierCredentials.clientSecretEncrypted,
@@ -230,9 +232,10 @@ function clientFromCredentials(
 
 export async function resolveIsometricClient(
   ctx: OrgContext,
+  reader: Executor = db,
 ): Promise<IsometricClient> {
   requireOrgScope(ctx);
-  const credentials = await getDecryptedCertifierCredentials(ctx, "isometric");
+  const credentials = await getDecryptedCertifierCredentials(ctx, "isometric", reader);
   return clientFromCredentials(credentials);
 }
 

@@ -1,3 +1,7 @@
+import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
+
+const SENT_LOCK = recordLocks.removal({ dependents: [], removals: [{ id: "removal", submissions: [{ status: "submitted" }], statements: [] }] });
+
 export type CertificationLineageLockEntityType =
   | "creditBatch"
   | "productionRun"
@@ -43,7 +47,7 @@ export function formatCertificationLineageLockMessage({
   lineageRelationship,
 }: CertificationLineageLockMessageInput): string {
   if (subjectEntityType === lineageEntityType) {
-    return `Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because it is locked by a certification submission.`;
+    return withRecordLockGuidance(`Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because it is locked by a certification submission.`, SENT_LOCK);
   }
 
   const lineageLabel = ENTITY_LABELS[lineageEntityType];
@@ -54,5 +58,5 @@ export function formatCertificationLineageLockMessage({
 
   return relationship === "selected"
     ? `${explanation} Select ${article} ${lineageLabel} that is not locked.`
-    : explanation;
+    : withRecordLockGuidance(explanation, SENT_LOCK);
 }

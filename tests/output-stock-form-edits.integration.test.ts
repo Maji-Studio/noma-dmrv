@@ -79,19 +79,17 @@ it("refuses delivery corrections through the Lost mass form boundary", async () 
     .toMatchObject({ deliveryDate: delivery.deliveryDate, deliveredWetMassKg: 40 });
 });
 
-it("refuses a Lost mass edit after a newer movement even from an unrelated sub-bin", async () => {
+it("allows a Lost mass edit after a newer draw from an unrelated sub-bin", async () => {
   const f = await fixture();
   const other = await postProduct(f, { massKg: 100 });
   const original = await postMeasurement(f, { kind: "loss", wetMassKg: 100, sources: [{ layerId: other.id, moisturePercent: 0 }] });
   const input = { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "loss" as const,
     wetMassKg: 40, sources: [{ layerId: other.id, moisturePercent: 0 }], correctsMovementId: original.movementId };
-  const preview = await previewOutputStock(f.ctx, input);
   await postMeasurement(f, { kind: "loss", wetMassKg: 10, sources: [{ layerId: f.product!.id, moisturePercent: 0 }], occurredAt: "2026-09-13T12:00:00.000Z" });
-  expect((await previewOutputStock(f.ctx, input)).blockingMessage).toBeNull();
+  const refreshed = await previewOutputStock(f.ctx, input);
+  expect(refreshed.blockingMessage).toBeNull();
   await expect(correctOutputStockEntry(f.ctx, { ...input, reason: "Wrong reading", idempotencyKey: randomUUID(),
-    basisFingerprint: preview.basisFingerprint, expectedProductVersions: preview.expectedProductVersions })).rejects.toMatchObject({
-    message: "Locked because newer stock entries were recorded on this bin after it.", conflict: { entity: "storageLocation", id: f.bin.id },
-  });
+    basisFingerprint: refreshed.basisFingerprint, expectedProductVersions: refreshed.expectedProductVersions })).resolves.toBeDefined();
 });
 
 it("corrects a latest delivery wet mass and keeps its row and stock movement in agreement", async () => {
@@ -112,7 +110,7 @@ it("refuses delivery mass changes after a newer movement but allows transport ed
   const delivery = await postDelivery(f, 100);
   await postMeasurement(f, { kind: "loss", wetMassKg: 10 });
   await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: delivery.version, deliveredWetMassKg: 40 })).rejects.toMatchObject({
-    message: "Locked because newer stock entries were recorded on this bin after it.", conflict: { entity: "storageLocation", id: f.bin.id },
+    code: "certification_locked", conflict: { entity: "storageLocation", id: f.bin.id },
   });
   expect(await updateDelivery(f.ctx, delivery.id, { expectedVersion: delivery.version, distanceNote: "Route note" })).toMatchObject({ deliveredWetMassKg: 100 });
 });
@@ -132,16 +130,14 @@ it("corrects the delivery's split-bin draw and per-sub-bin moisture and can edit
   expect(again).toMatchObject({ deliveredWetMassKg: 25, moistureContentPercent: 20, massDryKg: 20 });
 });
 
-it("locks a latest loss when a newer product is added, including a physically older placement", async () => {
+it("keeps a loss editable after a newer intake, including a backdated placement", async () => {
   const f = await fixture();
   const original = await postMeasurement(f, { kind: "loss", wetMassKg: 100 });
   const input = { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "loss" as const,
     wetMassKg: 40, moisturePercent: 0, correctsMovementId: original.movementId };
-  const preview = await previewOutputStock(f.ctx, input);
   await postProduct(f, { massKg: 100, placedAt: "2026-09-11T12:00:00.000Z" });
+  expect((await getOutputStockHistory(f.ctx, f.bin.id)).find(e => e.id === original.movementId)?.editLockedReason).toBeNull();
+  const preview = await previewOutputStock(f.ctx, input);
   await expect(correctOutputStockEntry(f.ctx, { ...input, reason: "Wrong reading", idempotencyKey: randomUUID(),
-    basisFingerprint: preview.basisFingerprint, expectedProductVersions: preview.expectedProductVersions })).rejects.toMatchObject({
-    message: "Locked because newer stock entries were recorded on this bin after it.",
-  });
-  expect((await getOutputStockHistory(f.ctx, f.bin.id)).find(e => e.id === original.movementId)?.editLockedReason).toMatch(/^Locked/);
+    basisFingerprint: preview.basisFingerprint, expectedProductVersions: preview.expectedProductVersions })).resolves.toBeDefined();
 });

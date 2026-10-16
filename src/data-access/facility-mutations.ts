@@ -1,8 +1,9 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
-import { creditBatches, facilities, type Facility } from "@/db/schema";
+import { facilities, type Facility } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
 import { hasBlockingFacilitySubmission } from "./certification";
 import {
   CODE_CONFLICT_MESSAGES,
@@ -13,7 +14,6 @@ import { acquireFacilityDurabilityLock } from "./facility-durability-lock";
 import { guardFacilityName } from "./unique-name-guards";
 import { requireOrgScope } from "./utils";
 
-const TIER_LOCKING_BATCH_STATUSES = ["verified", "issued"] as const;
 /** Entity key on a facility's expected-version conflict. */
 export const FACILITY_CONFLICT_ENTITY = "facility";
 
@@ -188,24 +188,11 @@ export async function updateFacility(
       return updateFacilityRow(ctx, tx, facilityId, nonTierData);
     }
 
-    const [blockingBatch] = await tx
-      .select({ id: creditBatches.id })
-      .from(creditBatches)
-      .where(
-        and(
-          eq(creditBatches.facilityId, facilityId),
-          eq(creditBatches.organizationId, ctx.organizationId),
-          isNull(creditBatches.archivedAt),
-          inArray(creditBatches.status, TIER_LOCKING_BATCH_STATUSES),
-        ),
-      )
-      .limit(1);
-    const tierIsLocked =
-      blockingBatch !== undefined ||
-      (await hasBlockingFacilitySubmission(ctx, tx, facilityId, "isometric"));
+    const tierIsLocked = await hasBlockingFacilitySubmission(ctx, tx, facilityId, "isometric");
     if (tierIsLocked) {
-      throw new SafeError(
-        "Cannot change this facility's durability tier: it has verified or issued credit batches, or registry submissions, built under the current tier. Archive or reassign those before changing the tier.",
+      throw new DomainError(
+        "certification_locked",
+        "Cannot change this facility's durability tier because registry submissions use it. Resolve those submissions before changing the tier.",
       );
     }
 

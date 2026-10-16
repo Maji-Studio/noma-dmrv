@@ -42,9 +42,8 @@ components (UI)
   with the unpublished `requireLatestCorrection` option. Delivery updates run
   the UI-only `update_posted_delivery` operation: the delivery row, stock
   correction and transport legs share its transaction. Both use the shared
-  stock writer with a strict latest-entry check. These UI options and the
-  delivery operation are not published in REST/MCP. The native correction
-  contract stays dependency-based.
+  stock writer with the same dependency check as native corrections (ADR 0035).
+  These UI options and the delivery operation are not published in REST/MCP.
 - The runner owns the transaction. Data-access ...InTransaction(ctx, tx, ...)
   functions and the helpers they call read and write only through `tx`,
   including reference checks and result enrichment. After-commit hooks run

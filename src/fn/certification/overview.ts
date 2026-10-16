@@ -1,6 +1,8 @@
 "use server";
 
 import { z } from "zod";
+import { getRecordLockForTarget } from "@/data-access/record-certification-lock";
+import type { RecordLock } from "@/lib/record-lock";
 import { env } from "@/config/env";
 import { listCreditBatchCertificationLinks } from "@/data-access/credit-batch-certification-links";
 import { requireOrgFacility } from "@/data-access/utils";
@@ -77,6 +79,7 @@ export interface CreditBatchHealthSummary {
   removalId: string | null;
   /** The Removal's own registry-submission status. */
   removalStatus: DerivedStatus | null;
+  recordLock?: RecordLock;
   /** The downstream GHG Statement, once the submitted Removal is rolled up. */
   ghgStatementId: string | null;
   /** The GHG Statement's verifier lifecycle, kept distinct from the Removal. */
@@ -375,6 +378,7 @@ export async function loadCreditBatchHealthSummaries(
         ? (ghgStatementSubmissions.get(ghgStatementId) ?? null)
         : null;
       summaries[batchId] = {
+        recordLock: await getRecordLockForTarget(orgCtx, { entityType: "creditBatch", entityId: batchId }),
         state: health.state,
         issueCount: health.issueCount,
         removalId,

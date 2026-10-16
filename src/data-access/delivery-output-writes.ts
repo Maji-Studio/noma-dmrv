@@ -192,7 +192,7 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
     for (const key of ['orderId', 'facilityId', 'storageLocationId'] as const) {
       if (data[key] !== undefined && data[key] !== existing[key]) throw new SafeError('The order, facility and source bin of a posted delivery cannot be changed.');
     }
-    if (data.deliveryDate && data.deliveryDate.getTime() !== existing.deliveryDate.getTime()) throw new SafeError('The date and time of a posted delivery cannot be changed. Edit its mass and moisture while it is the latest stock entry.');
+    if (data.deliveryDate && data.deliveryDate.getTime() !== existing.deliveryDate.getTime()) throw new SafeError('The date and time of a posted delivery cannot be changed. Edit its mass and moisture while no later stock entry depends on it.');
     const rows = await getOutputStockAllocationProjection(ctx, { deliveryId }, tx);
     const reversedIds = new Set(rows.filter(r => r.movement.outputKind === 'reversal').map(r => r.movement.correctsMovementId));
     const current = rows.filter(r => r.movement.outputKind !== 'reversal' && !reversedIds.has(r.movement.id))
@@ -236,6 +236,6 @@ export async function deleteDelivery(ctx: OrgContext, deliveryId: string, expect
     if (!versionRow) throw new SafeError("Delivery not found");
     assertRowVersion({ entity: "delivery", id: deliveryId, expectedVersion: expectedVersion, actualVersion: versionRow.version });
 
-    throw new SafeError("Posted deliveries retain their history and cannot be deleted. Edit mass and moisture while the delivery is the bin's latest stock entry.");
+    throw new SafeError("Posted deliveries retain their history and cannot be deleted. Edit mass and moisture while no later stock entry depends on it.");
   });
 }

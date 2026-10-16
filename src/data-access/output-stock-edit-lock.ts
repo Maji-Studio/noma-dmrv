@@ -1,12 +1,14 @@
 import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, productionRuns, storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
-import { ActionConflictError, SafeError } from '@/lib/errors';
+import { SafeError } from '@/lib/errors';
+import { DomainError } from '@/lib/domain-errors';
 import { conflictCode } from '@/lib/conflict-ref';
-import { stockEntryLockReason, stockReceiptMarker } from '@/lib/output-stock/edit-lock';
-import { STOCK_ENTRY_LOCKED_REASON } from '@/lib/output-stock/labels';
-import { and, eq, gt } from 'drizzle-orm';
+import { stockReceiptMarker } from '@/lib/output-stock/edit-lock';
+import { and, eq } from 'drizzle-orm';
 import { requireOrgScope } from './utils';
+import { assertOutputCorrectionDependencies } from './output-stock-corrections';
+import { getOutputStockAllocationProjection, readOutputBinAllLayers } from './output-stock';
 
 type Reader = Pick<DbTransaction, 'select'>;
 
@@ -26,23 +28,31 @@ export async function outputReceiptMarker(ctx: OrgContext, storageLocationId: st
   return stockReceiptMarker(await outputBinReceipts(ctx, storageLocationId, reader));
 }
 
-/** Posting order, rather than physical event time: a backdated new entry also locks edits. */
+/** Browser advisory uses the same numeric dependency check as correction posting. */
 export async function outputMovementLockReason(ctx: OrgContext, storageLocationId: string, movementId: string, reader: Reader = db): Promise<string | null> {
   requireOrgScope(ctx);
   const [original] = await reader.select().from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, storageLocationId), eq(binMovements.id, movementId)));
   if (!original) throw new SafeError('Stock entry not found.');
-  const [later, receipts] = await Promise.all([
-    reader.select({ id: binMovements.id }).from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, storageLocationId), gt(binMovements.postingSequence, original.postingSequence))).limit(1),
-    outputBinReceipts(ctx, storageLocationId, reader),
-  ]);
-  return stockEntryLockReason(original, original.postingSequence + (later.length ? BigInt(1) : BigInt(0)), receipts);
+  const [bin] = await reader.select({ facilityId: storageLocations.facilityId }).from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
+  if (!bin) throw new SafeError('Storage bin not found.');
+  const all = await getOutputStockAllocationProjection(ctx, { sourceStorageLocationId: storageLocationId }, reader);
+  const allocations = [...new Map(all.filter(row => row.movement.id === movementId).map(row => [row.allocation.id, row.allocation])).values()];
+  const { layers } = await readOutputBinAllLayers(ctx, storageLocationId, reader, { includeArchived: true });
+  try {
+    await assertOutputCorrectionDependencies(ctx, { storageLocationId, facilityId: bin.facilityId }, original, allocations, all, layers, reader);
+    return null;
+  } catch (error) {
+    if (error instanceof DomainError && error.code === "certification_locked") return error.message;
+    throw error;
+  }
 }
 
 /** Caller holds the posting path's transaction-scoped bin-stock lock. */
 export async function assertLatestOutputMovement(ctx: OrgContext, storageLocationId: string, movementId: string, tx: DbTransaction): Promise<void> {
   requireOrgScope(ctx);
-  if (!await outputMovementLockReason(ctx, storageLocationId, movementId, tx)) return;
+  const reason = await outputMovementLockReason(ctx, storageLocationId, movementId, tx);
+  if (!reason) return;
   const [bin] = await tx.select({ code: storageLocations.code }).from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
   if (!bin) throw new SafeError('Storage bin not found.');
-  throw new ActionConflictError(STOCK_ENTRY_LOCKED_REASON, { entity: 'storageLocation', id: storageLocationId, code: conflictCode(bin.code) });
+  throw new DomainError("certification_locked", reason, { conflict: { entity: 'storageLocation', id: storageLocationId, code: conflictCode(bin.code) } });
 }

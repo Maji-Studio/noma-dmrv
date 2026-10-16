@@ -14,7 +14,7 @@ vi.mock('@/db', () => {
 vi.mock('./output-stock', () => ({ getBiocharOutputStockLayers: mocks.state, getProductOutputStockLayers: mocks.state, getOutputBinStocks: mocks.stocks, getLayerMoistureBases: async (_ctx: unknown, _bin: unknown, layers: { id: string; placedAt: string; remainingSolidsKg: unknown }[]) =>
   layers.map(layer => ({ layerId: layer.id, placedAt: layer.placedAt, remainingSolidsKg: layer.remainingSolidsKg, recorded: null, readings: [], removals: [] })) }));
 vi.mock('./output-stock-corrections', () => ({ prepareOutputCorrection: mocks.correction }));
-vi.mock('./certification-lineage-guards', () => ({ getCertifiedLineage: mocks.lineage }));
+vi.mock('./certification-lineage-guards', async importOriginal => ({ ...await importOriginal<typeof import('./certification-lineage-guards')>(), getCertifiedLineage: mocks.lineage }));
 vi.mock('./output-stock-history', () => ({ getOutputStockHistory: vi.fn() }));
 import { getMatchingOutputBins, prepareOutputStock, previewOutputStock } from './output-stock-operations';
 
@@ -59,7 +59,7 @@ it('returns certification artifact identities while checking both affected sourc
   mocks.reads = [[{ id: binId, type: 'biochar_bin', name: 'Source', code: 'BC-001', formulationId: null }], [], [], [{ id: 'run', code: 'RUN-001' }], [{ id: 'run', code: 'RUN-001' }], []];
   mocks.state.mockResolvedValue({ layers });
   mocks.correction.mockResolvedValue({ original: { inputSnapshot: {} }, layers, allocations: [], deliveryId: 'delivery' });
-  mocks.lineage.mockResolvedValueOnce([{ removalId: 'removal', removalSubmissionId: 'submitted', ghgStatementSubmissionId: null }]).mockResolvedValueOnce([{ removalId: 'removal', ghgStatementId: 'statement', ghgStatementSubmissionId: 'submitted' }]);
+  mocks.lineage.mockResolvedValueOnce([{ recordLockRemoval: { id: 'removal', submissions: [{ status: 'submitted' }], statements: [] }, removalId: 'removal', removalSubmissionId: 'submitted', ghgStatementSubmissionId: null }]).mockResolvedValueOnce([{ recordLockRemoval: { id: 'removal', submissions: [{ status: 'submitted' }], statements: [] }, removalId: 'removal', ghgStatementId: 'statement', ghgStatementSubmissionId: 'submitted' }]);
   const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
   const result = await previewOutputStock(ctx, { storageLocationId: binId, facilityId: '00000000-0000-4000-8000-000000000002', correctsMovementId: '00000000-0000-4000-8000-000000000003', occurredAt: '2026-09-14T12:00:00.000Z', kind: 'loss', wetMassKg: 10, moisturePercent: 10 });
   expect(result.blockingMessage).toContain('certification');

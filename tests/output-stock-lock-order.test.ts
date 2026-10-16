@@ -376,7 +376,7 @@ it.each(["update", "delete"] as const)("delivery %s waits for application creati
     expect(await creating).toMatchObject({ ok: true });
     expect(await mutating).toMatchObject(operation === "update"
       ? { ok: true, value: { version: delivery.version + 1, distanceNote: "E2E edited route" } }
-      : { ok: false, error: { message: "Posted deliveries retain their history and cannot be deleted. Edit mass and moisture while the delivery is the bin's latest stock entry." } });
+      : { ok: false, error: { message: "Posted deliveries retain their history and cannot be deleted. Edit mass and moisture while no later stock entry depends on it." } });
   } finally {
     resume.release();
     await Promise.all([creating, mutating]);

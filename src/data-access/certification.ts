@@ -14,8 +14,8 @@ import {
 import { creditBatches } from "@/db/schema/credits";
 import { documents } from "@/db/schema/documentation";
 import { facilities } from "@/db/schema/facilities";
-import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
-import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
+import { isSentRemoval } from "@/lib/record-lock";
+import { SUBMISSION_METADATA_KEYS, getMetadataValue } from "@/lib/certification/submission-metadata";
 import { DEFAULT_PROTOCOL_SLUG } from "@/config/certification";
 import {
   GHG_STATEMENT_ENTITY_TYPE,
@@ -137,7 +137,7 @@ export async function hasBlockingFacilitySubmission(
   // clearer than a UNION/OR and let the planner use each artifact's own index.
   const [removalHit, ghgHit] = await Promise.all([
     executor
-      .select({ id: certificationSubmissions.id })
+      .select({ id: certificationSubmissions.id, status: certificationSubmissions.status, externalId: certificationSubmissions.externalId, metadata: certificationSubmissions.metadata })
       .from(certificationSubmissions)
       .innerJoin(
         certifierRemovals,
@@ -152,13 +152,11 @@ export async function hasBlockingFacilitySubmission(
             REMOVAL_SCOPED_SUBMISSION_TYPES,
           ),
           eq(certifierRemovals.facilityId, facilityId),
-          inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
           eq(certificationSubmissions.organizationId, ctx.organizationId),
         ),
-      )
-      .limit(1),
+      ),
     executor
-      .select({ id: certificationSubmissions.id })
+      .select({ id: certificationSubmissions.id, status: certificationSubmissions.status, externalId: certificationSubmissions.externalId, metadata: certificationSubmissions.metadata })
       .from(certificationSubmissions)
       .innerJoin(
         certifierGhgStatements,
@@ -170,13 +168,13 @@ export async function hasBlockingFacilitySubmission(
           eq(certificationSubmissions.localEntityType, "ghgStatement"),
           eq(certificationSubmissions.submissionType, "ghg_statement"),
           eq(certifierGhgStatements.facilityId, facilityId),
-          inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
           eq(certificationSubmissions.organizationId, ctx.organizationId),
         ),
-      )
-      .limit(1),
+      ),
   ]);
-  return removalHit.length > 0 || ghgHit.length > 0;
+  return isSentRemoval({ id: facilityId, submissions: [...removalHit, ...ghgHit].map(row => ({ status: row.status,
+    hasRemoteMutation: Boolean(row.externalId) || ["possible", "confirmed"].includes(String(getMetadataValue(row.metadata, "externalMutation"))),
+  })), statements: [] });
 }
 
 // DB-level backstop for the (provider, external_facility_id) 1:1 anchor. The

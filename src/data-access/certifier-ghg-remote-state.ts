@@ -116,7 +116,8 @@ function remoteMetadata(remote: GhgStatement): Record<string, unknown> {
     reportUrl: redactReportUrlSecrets(remote.ghg_statement_report_url),
     reportingPeriodStartAt: period.startOn,
     reportingPeriodEndAt: period.endOn,
-    submittedToVerifierAt: remote.submitted_at,
+    // A returned draft may omit the current submission timestamp. Keep earlier registry evidence.
+    ...(remote.submitted_at ? { submittedToVerifierAt: remote.submitted_at } : {}),
     creditsIssuedAt: remote.credits_issued_at,
     verifier: remote.verifier,
     [SUBMISSION_METADATA_KEYS.removalIds]: remote.ghg_entry_ids,
