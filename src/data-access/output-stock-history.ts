@@ -105,7 +105,7 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   history.sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
   let balance = 0;
   for (const entry of history) {
-    if (entry.kind === 'intake') { entry.beforeDryKg = balance; entry.afterDryKg = balance - entry.dryMassKg; }
+    if (entry.kind === 'intake' || entry.kind === 'reversal') { entry.beforeDryKg = balance; entry.afterDryKg = balance - entry.dryMassKg; }
     balance -= entry.dryMassKg;
   }
   // The correction path refuses an applied delivery too; locking it here keeps the delivery's other fields saveable.

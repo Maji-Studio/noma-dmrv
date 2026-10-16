@@ -172,7 +172,7 @@ function buildInventoryAggregates(
     ) AS ingredient(value)`,
     sql`true`,
   )
-  .where(eq(biocharProducts.organizationId, ctx.organizationId))
+  .where(and(eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)))
   .groupBy(sql`ingredient.value ->> 'storageLocationId'`)
   .as("ingredient_consumption_agg");
 

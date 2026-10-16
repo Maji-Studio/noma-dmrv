@@ -1,4 +1,6 @@
 import { feedstockFixtureValues } from './helpers/feedstock-fixture';
+import { getFacilities } from '@/data-access/facilities';
+import { enrichStorageLocationRows } from '@/data-access/storage-location-enrichment';
 import { getFeedstockBinStock } from '@/data-access/feedstock-bin-ledger';
 import { getIngredientMoistureBasis } from '@/data-access/ingredient-moisture-basis';
 import { readRecordDependents } from '@/data-access/record-lock-dependents';
@@ -10,7 +12,7 @@ import { buildStockLevelSeries } from '@/components/storage-locations/stock-leve
 import { afterEach, beforeAll, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { activityEvents, biocharProducts, deliveries, orders, storageLocations, feedstocks, outputStockAllocations, outputStockMoistureReadings, productionRuns } from '@/db/schema';
+import { activityEvents, biocharProducts, deliveries, orders, storageLocations, feedstocks, outputStockAllocations, outputStockMoistureReadings, productionRuns, productionRunFeedstocks, productionRunFeedstockDraws } from '@/db/schema';
 import { getOutputBinStockView, readOutputBinAllLayers, getLayerMoistureBases } from '@/data-access/output-stock';
 import { getOutputStockHistory } from '@/data-access/output-stock-history';
 import { deleteDelivery } from '@/data-access/delivery-delete';
@@ -146,7 +148,7 @@ it('retains destination placement and its reversal pointing at the archived prod
   expect((await readOutputBinAllLayers(f.ctx, f.bin.id, db, { includeArchived: true })).layers).toEqual([]);
 });
 
-it('releases product and run dependencies after each reversal, allowing run edits and deletion', async () => {
+it('releases product and run dependencies after each reversal, allowing run edits but retaining runs held by stock history', async () => {
   const f = await fixture();
   const delivery = await postDelivery(f, 100);
   const dependents = (entityType: 'biocharProduct' | 'productionRun', entityId: string) => readRecordDependents(f.ctx, db, { entityType, entityId });
@@ -161,8 +163,18 @@ it('releases product and run dependencies after each reversal, allowing run edit
   }
   const run = f.runs[0];
   const updated = await updateProductionRun(f.ctx, run.id, { expectedVersion: run.version, biocharOutputKg: 1100 });
-  await deleteProductionRun(f.ctx, run.id, updated.version);
-  expect(await db.select().from(productionRuns).where(eq(productionRuns.id, run.id))).toEqual([expect.objectContaining({ archivedAt: expect.any(Date) })]);
+  const savedRun = await db.select().from(productionRuns).where(eq(productionRuns.id, run.id));
+  const history = await getOutputStockHistory(f.ctx, f.source.id);
+  const links = await db.select().from(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, run.id));
+  const draws = await db.select().from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, run.id));
+  await expect(deleteProductionRun(f.ctx, run.id, updated.version)).rejects.toMatchObject({
+    code: 'certification_locked',
+    message: 'This production run cannot be deleted. Held by stock entry in retained stock history. You can archive it with its facility.',
+  });
+  expect(await db.select().from(productionRuns).where(eq(productionRuns.id, run.id))).toEqual(savedRun);
+  expect(await db.select().from(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, run.id))).toEqual(links);
+  expect(await db.select().from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, run.id))).toEqual(draws);
+  expect(await getOutputStockHistory(f.ctx, f.source.id)).toEqual(history);
 });
 
 it.each(['delivery', 'product'] as const)('restores every frozen FIFO allocation and moisture basis after %s deletion', async kind => {
@@ -218,4 +230,26 @@ it('restores ingredient stock and keeps the crossed-out ingredient history and p
   expect(stock.entries).toContainEqual(expect.objectContaining({ sourceId: product.id, kind: 'ingredient_draw', reversed: true, wetDeltaKg: -20 }));
   expect(await getIngredientMoistureBasis(f.ctx, ingredientBin.id)).toMatchObject({ wetMassKg: 100, dryMassKg: 80 });
   expect((await getOutputStockHistory(f.ctx, f.bin.id)).find(row => row.id === product.id)).toMatchObject({ solidsDeltaKg: 96 });
+});
+
+
+it('excludes a deleted 50 kg pure product from facility and bin inventory totals', async () => {
+  const f = await fixture({ stockKg: 0 });
+  await deleteProductionRun(f.ctx, f.runs[1].id, f.runs[1].version);
+  await updateProductionRun(f.ctx, f.runs[0].id, { expectedVersion: f.runs[0].version, biocharOutputKg: 100, biocharMoisturePercent: 0 });
+  const product = await postProduct(f, { massKg: 50 });
+  expect((await getFacilities(f.ctx)).items[0].inventorySummary).toMatchObject({ biocharKg: 50, productKg: 50 });
+  await deleteBiocharProduct(f.ctx, product.id, product.version);
+  expect((await getFacilities(f.ctx)).items[0].inventorySummary).toMatchObject({ biocharKg: 100, productKg: 0 });
+  const [bin] = await enrichStorageLocationRows(f.ctx, [{ ...f.bin, facilityName: f.facility.name, facilityCode: f.facility.code, feedstockTypeName: null, formulationName: f.pure.name }]);
+  expect(bin.productInventory).toMatchObject({ batchCount: 0, currentMassKg: 0 });
+});
+
+it('replays destination reversal balances alongside another retained product', async () => {
+  const f = await fixture({ stockKg: 0 });
+  await postProduct(f, { massKg: 40 });
+  const removed = await postProduct(f, { massKg: 60 });
+  await deleteBiocharProduct(f.ctx, removed.id, removed.version);
+  const history = await getOutputStockHistory(f.ctx, f.bin.id);
+  expect(history.find(row => row.kind === 'reversal')).toMatchObject({ beforeDryKg: 100, afterDryKg: 40, dryMassKg: 60 });
 });

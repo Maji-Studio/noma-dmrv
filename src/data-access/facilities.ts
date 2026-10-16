@@ -249,7 +249,7 @@ export async function getFacilities(
             `),
           })
           .from(biocharProducts)
-          .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId)))
+          .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)))
           .groupBy(biocharProducts.facilityId),
         db
           .select({
@@ -257,7 +257,7 @@ export async function getFacilities(
             totalProductKg: sumNumeric(biocharProducts.massKg),
           })
           .from(biocharProducts)
-          .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId)))
+          .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)))
           .groupBy(biocharProducts.facilityId),
       ])
     : [[], [], [], [], [], []];

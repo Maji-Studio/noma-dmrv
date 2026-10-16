@@ -33,7 +33,7 @@ import {
   type StorageLocation
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { and, count, eq, inArray, sql } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   productDryBiocharKgSql,
   productWetMassKgSql,
@@ -226,6 +226,7 @@ export async function enrichStorageLocationRows(
                 storageLocationIds,
               ),
               eq(biocharProducts.organizationId, ctx.organizationId),
+              isNull(biocharProducts.archivedAt),
             ),
           )
           .groupBy(biocharProducts.sourceBiocharStorageLocationId),
@@ -266,6 +267,7 @@ export async function enrichStorageLocationRows(
             and(
               inArray(biocharProducts.storageLocationId, storageLocationIds),
               eq(biocharProducts.organizationId, ctx.organizationId),
+              isNull(biocharProducts.archivedAt),
             ),
           )
           .groupBy(biocharProducts.storageLocationId),
