@@ -22,7 +22,7 @@ import {
   type TestFormulation,
 } from "./fixtures";
 import { createDbConnection } from "./fixtures/db";
-import { waitForSideSheet } from "./fixtures/page-helpers";
+import { clickRowMenuItem, waitForSideSheet } from "./fixtures/page-helpers";
 
 const LINE_RATIO = 0.4;
 const SNAPSHOT_WET_KG = 10;
@@ -85,8 +85,7 @@ test.describe("Formulation archive and restore", () => {
   }
 
   async function rowAction(page: Page, code: string, item: string) {
-    await page.getByRole("button", { name: `Actions for ${code}` }).click();
-    await page.getByRole("menuitem", { name: item }).click();
+    await clickRowMenuItem(page, page.getByRole("button", { name: `Actions for ${code}` }), item);
   }
 
   test("archive hides the row, the archived view lists it, restore brings it back", async ({ adminPage: page }) => {

@@ -5,6 +5,7 @@ import * as crypto from "node:crypto";
 import * as schema from "../../src/db/schema";
 import { DEC_ORG_ID } from "../../src/db/org-defaults";
 import { createDbConnection } from "./fixtures/db";
+import { clickRowMenuItem } from "./fixtures/page-helpers";
 import {
   createTestFacility,
   deleteTestFacility,
@@ -24,6 +25,7 @@ async function openPartyEditSheet(
   facilityName: string,
 ) {
   await page.goto(`${path}?facility=${facilityId}`);
+  await page.waitForLoadState("networkidle");
   await expect(
     page.locator("aside").getByText(facilityName, { exact: false }),
   ).toBeVisible();
@@ -34,8 +36,8 @@ async function openPartyEditSheet(
     exact: true,
   });
   await expect(actions).toBeVisible();
-  await actions.click();
-  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  await page.waitForLoadState("networkidle");
+  await clickRowMenuItem(page, actions, "Edit", { exact: true });
 }
 
 async function editLocationName(

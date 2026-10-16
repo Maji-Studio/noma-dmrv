@@ -13,18 +13,23 @@ import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../src/db/schema";
 import { test, expect, createTestSupplier, deleteTestSupplier, waitForSideSheet } from "./fixtures";
 import { createDbConnection } from "./fixtures/db";
+import { clickRowMenuItem } from "./fixtures/page-helpers";
 
 const SEARCH_TIMEOUT_MS = 15_000;
 
 async function openList(page: Page, path: "suppliers" | "customers", facilityId: string, code: string) {
   await page.goto(`/${path}?facility=${facilityId}`);
+  await page.waitForLoadState("networkidle");
   await page.getByRole("textbox", { name: path === "suppliers" ? "Search suppliers" : "Search customers" }).fill(code);
-  await expect(page.locator("table tbody tr", { hasText: code }).first()).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+  const rows = page.locator("table tbody tr");
+  await expect(rows.filter({ hasText: code }).first()).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+  // The debounced search query re-renders the list; wait until it has settled on the match.
+  await expect(rows.filter({ hasNotText: code })).toHaveCount(0, { timeout: SEARCH_TIMEOUT_MS });
+  await page.waitForLoadState("networkidle");
 }
 
 async function rowAction(page: Page, code: string, item: string) {
-  await page.getByRole("button", { name: `Actions for ${code}` }).first().click();
-  await page.getByRole("menuitem", { name: item }).click();
+  await clickRowMenuItem(page, page.getByRole("button", { name: `Actions for ${code}` }).first(), item);
 }
 
 async function seedCustomer(tag: string) {
