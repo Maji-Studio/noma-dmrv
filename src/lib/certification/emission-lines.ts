@@ -11,10 +11,23 @@ const UNIT_MISMATCH_MESSAGE = "Emissions values use different units. Use the sam
 
 export const EMISSION_LINE_STATE_LABELS = {
   filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing",
-  needsReview: "Needs review", needsSetup: "Needs setup", confirmedZero: "Recorded as zero",
+  needsReview: "Needs review", needsSetup: "Needs setup", confirmedZero: "Nothing to record",
 } as const;
 export type EmissionLineState = keyof typeof EMISSION_LINE_STATE_LABELS;
 export interface EmissionFigure { magnitude: string; unit: string }
+export type EmissionRecordSource = "productionRuns" | "transportLegs" | "deliveries" | "applications";
+export interface EmissionLineRecords {
+  source: EmissionRecordSource;
+  count: number;
+  figure: EmissionFigure | null;
+}
+const RECORD_SOURCES: Record<AutomaticSourceId, EmissionRecordSource> = {
+  "run-genset-diesel": "productionRuns", "run-startup-diesel": "productionRuns",
+  "run-electricity": "productionRuns", "feedstock-dry-mass": "productionRuns",
+  "biochar-dry-mass": "deliveries", "safety-margin": "applications",
+  "feedstock-transport": "transportLegs", "sample-transport": "transportLegs",
+  "delivery-transport": "deliveries", sequestration: "applications",
+};
 export interface EmissionLineEntryFact {
   componentId: string; kind: "value" | "zero"; hasEvidence: boolean;
   confirmedForRemovalId?: string | null;
@@ -24,6 +37,7 @@ export interface BatchEmissionLineFacts {
   definition: TemplateDefinition; lineSources: LineSources; problems: readonly LineSourceProblem[];
   enrichmentComplete: boolean;
   automaticFigures: Partial<Record<AutomaticSourceId, EmissionFigure | null>>;
+  automaticRecordCounts?: Partial<Record<AutomaticSourceId, number>>;
   entries: readonly EmissionLineEntryFact[];
 }
 
@@ -61,6 +75,11 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     const operatorZero = counting.some((entry) => entry.kind === "zero" && entry.confirmedForRemovalId === null);
     const values = counting.filter((entry) => entry.kind === "value");
     const automaticFigure = contract?.automaticSource ? ownValue(facts.automaticFigures, contract.automaticSource) ?? null : null;
+    const records: EmissionLineRecords | null = contract?.automaticSource ? {
+      source: RECORD_SOURCES[contract.automaticSource],
+      count: facts.automaticRecordCounts?.[contract.automaticSource] ?? 0,
+      figure: automaticFigure,
+    } : null;
     let state: EmissionLineState;
     let blocker: RemovalBlocker | undefined = decision?.blocker;
     if (decision && decision.state !== "empty") { state = decision.state; blocker = decision.blocker; }
@@ -88,7 +107,8 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     }
     const total = unitMismatch || values.some((entry) => entry.total === null) ? null : sumFigures(figures);
     return { componentId: component.id, displayName: component.displayName, groupKey: group.key,
-      blueprintKey: component.blueprintKey, contract, state, automaticFigure, entries, total, ...(blocker ? { blocker } : {}) };
+      blueprintKey: component.blueprintKey, description: component.description,
+      entryPolicy: contract?.entryPolicy ?? "none", records, contract, state, automaticFigure, entries, total, ...(blocker ? { blocker } : {}) };
   }));
 }
 export type BatchEmissionLine = ReturnType<typeof deriveBatchEmissionLines>[number];

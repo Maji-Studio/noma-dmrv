@@ -375,6 +375,7 @@ describe("deriveBatchHealth", () => {
 
 it("only evidence gaps fail emissions; line review and setup gaps stay in Removal readiness", () => {
   const line = { componentId: "line", displayName: "Line", groupKey: "pyrolysis", blueprintKey: "grid_electricity_use",
+    description: null, entryPolicy: "additive" as const, records: null,
     contract: { scope: "operating" as const, entryPolicy: "additive" as const, origin: "reviewed" as const },
     automaticFigure: null, entries: [], total: null };
   const missingEvidence = { ...line, state: "missingEvidence" as const,

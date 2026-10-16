@@ -1,7 +1,6 @@
 import { loadBatchAutomaticFigures } from "./batch-emission-automatic-figures";
 import { loadBatchEmissionEntryFacts } from "./emission-entry-facts";
-import { formatFacilityDate } from "@/lib/date-utils";
-import { entryLine, validateOperatorZero, validateEntryDate, normalizeNothingToRecordNote } from "@/lib/certification/emission-entry-rules";
+import { entryLine, resolveEmissionEntryDate, validateOperatorZero, validateEntryDate, normalizeNothingToRecordNote } from "@/lib/certification/emission-entry-rules";
 import { markNothingToRecordSchema, type MarkNothingToRecordInput } from "@/schemas/emission-entries";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -69,13 +68,22 @@ export async function getEmissionEntry(ctx: OrgContext, id: string, executor: Ex
 }
 export async function listEmissionEntries(ctx: OrgContext, creditBatchId: string, executor: Executor = db) {
   requireOrgScope(ctx);
+  return listEmissionEntriesForBatches(ctx, [creditBatchId], executor);
+}
+
+/** Three set-based reads, independent of batch and entry counts. */
+export async function listEmissionEntriesForBatches(
+  ctx: OrgContext, creditBatchIds: string[], executor: Executor = db,
+) {
+  requireOrgScope(ctx);
+  if (!creditBatchIds.length) return [];
   const entries = await executor
     .select()
     .from(emissionEntries)
     .where(
       and(
         eq(emissionEntries.organizationId, ctx.organizationId),
-        eq(emissionEntries.creditBatchId, creditBatchId),
+        inArray(emissionEntries.creditBatchId, creditBatchIds),
         isNull(emissionEntries.deletedAt),
       ),
     )
@@ -233,8 +241,16 @@ export async function createEmissionEntry(ctx: OrgContext, input: CreateEmission
           isNull(emissionEntries.deletedAt),
         ),
       );
+    const entryPolicy = entryLine(observation, data.componentId)?.entryPolicy ?? "none";
+    const occurredOn = resolveEmissionEntryDate({
+      entryPolicy,
+      occurredOn: data.occurredOn, batchStartDate: batch.startDate,
+      batchEndDate: batch.endDate, timezone: facility.timezone,
+    });
     const binding = validateEmissionEntry({
       ...data,
+      occurredOn,
+      dateDefaulted: entryPolicy === "single" || data.occurredOn === undefined,
       observation,
       batchStartDate: batch.startDate,
       timezone: facility.timezone,
@@ -250,7 +266,7 @@ export async function createEmissionEntry(ctx: OrgContext, input: CreateEmission
         componentId: data.componentId,
         ...binding,
         kind: "value",
-        occurredOn: data.occurredOn,
+        occurredOn,
         note: data.note,
         createdBy: ctx.userId,
       })
@@ -266,11 +282,14 @@ export async function updateEmissionEntry(ctx: OrgContext, input: UpdateEmission
   requireEmissionsEntriesEnabled();
   const data = updateEmissionEntrySchema.parse(input);
   return mutateEntry(ctx, data.id, data.expectedVersion, async (tx, entry, context) => {
+    // A single-line date is fixed, including when a client still sends its date field.
+    if (entry.lineRule === "single") data.occurredOn = undefined;
     if (entry.kind === "zero") {
       if (data.values) throw new SafeError("Recorded zeros do not have values. Add an entry instead.");
       if (data.note !== undefined) data.note = normalizeNothingToRecordNote(data.note);
       validateEntryDate({ occurredOn: data.occurredOn ?? entry.occurredOn,
-        batchStartDate: context.batch.startDate, timezone: context.facility.timezone });
+        batchStartDate: context.batch.startDate, timezone: context.facility.timezone,
+        dateDefaulted: data.occurredOn === undefined });
     }
     if (entry.kind === "value" && (data.values || data.occurredOn)) {
       const values =
@@ -290,6 +309,7 @@ export async function updateEmissionEntry(ctx: OrgContext, input: UpdateEmission
         batchStartDate: context.batch.startDate,
         timezone: context.facility.timezone,
         activeValueCount: 0,
+        dateDefaulted: data.occurredOn === undefined,
       });
     }
     const contentChanged =
@@ -402,8 +422,14 @@ export async function markNothingToRecord(ctx: OrgContext, input: MarkNothingToR
     const { entries } = await loadBatchEmissionEntryFacts(ctx, batch.id, observation, tx);
     const siblings = entries.filter((entry) => entry.componentId === data.componentId);
     const source = entryLine(observation, data.componentId)?.contract.automaticSource;
-    const occurredOn = data.occurredOn ?? formatFacilityDate(new Date(), facility.timezone);
+    const entryPolicy = entryLine(observation, data.componentId)?.entryPolicy ?? "none";
+    const occurredOn = resolveEmissionEntryDate({
+      entryPolicy,
+      occurredOn: data.occurredOn, batchStartDate: batch.startDate,
+      batchEndDate: batch.endDate, timezone: facility.timezone,
+    });
     const binding = validateOperatorZero({ ...data, occurredOn, observation,
+      dateDefaulted: entryPolicy === "single" || data.occurredOn === undefined,
       batchStartDate: batch.startDate, timezone: facility.timezone,
       activeValueCount: siblings.filter((entry) => entry.kind === "value" && entry.counts).length,
       activeOperatorZeroCount: siblings.filter((entry) => entry.kind === "zero" && !entry.confirmedForRemovalId).length,
