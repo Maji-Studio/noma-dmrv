@@ -77,7 +77,8 @@ function Overview() {
   const { model } = useProto();
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-24 lg:grid-cols-[360px_minmax(0,1fr)]">
-      <div className="order-last lg:order-first">
+      {/* Sticky beside the work on desktop (main is the scrollport); scrolls on its own if taller than the window. */}
+      <div className="order-last lg:sticky lg:top-24 lg:order-first lg:max-h-[calc(100vh-48px)] lg:overflow-y-auto">
         <DetailsPanel />
       </div>
       <div className="flex min-w-0 flex-col gap-24">

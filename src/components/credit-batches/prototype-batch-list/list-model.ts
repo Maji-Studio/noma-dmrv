@@ -1,10 +1,14 @@
 /**
  * PROTOTYPE (throwaway): a made-up full production for the credit batch overview.
  *
- * Two feedstocks at one facility, one credit batch per feedstock per month
- * (GLOSSARY: credit batch), March to September 2026, with one month that has no
- * batch. Every number is a stub. Each batch links to the real batch page in the
- * scenario that matches its state.
+ * Two feedstocks at one facility, October 2025 to September 2026. A credit batch
+ * window is at most one month long but need not follow calendar months (noma rule,
+ * src/lib/credit-batch-production-window.ts), and windows of one facility and
+ * feedstock never overlap (assertNoOverlappingCreditBatchCohort). So Forestry
+ * waste runs calendar months, Maize cobs runs mid-month to mid-month (one batch
+ * crosses New Year), Maize cobs pauses in June and July, and one Forestry waste
+ * batch is short. Every number is a stub. Each batch links to the real batch
+ * page in the scenario that matches its state.
  */
 
 export type BatchState = "blocking" | "ready" | "submitted" | "issued";
@@ -12,23 +16,12 @@ export type BatchState = "blocking" | "ready" | "submitted" | "issued";
 export const FEEDSTOCKS = ["Forestry waste", "Maize cobs"] as const;
 export type Feedstock = (typeof FEEDSTOCKS)[number];
 
-/** Months shown, as ISO month strings, with their column labels. */
-export const MONTHS = ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"] as const;
-export type Month = (typeof MONTHS)[number];
-export const MONTH_LABELS: Record<Month, string> = {
-  "2026-03": "Mar",
-  "2026-04": "Apr",
-  "2026-05": "May",
-  "2026-06": "Jun",
-  "2026-07": "Jul",
-  "2026-08": "Aug",
-  "2026-09": "Sep",
-};
-
 export interface StubBatch {
   code: string;
   feedstock: Feedstock;
-  month: Month;
+  /** Production window, YYYY-MM-DD, inclusive. */
+  start: string;
+  end: string;
   state: BatchState;
   /** Tonnes, dry biochar. Each figure is a subset of the one before. */
   produced: number;
@@ -62,23 +55,33 @@ export const SCENARIO_FOR: Record<BatchState, string> = {
   issued: "issued",
 };
 
-type Row = [Feedstock, Month, BatchState, number, number, number, boolean, string[]];
-// feedstock, month, state, produced t, applied share, blocking, sampled, removals
+type Row = [Feedstock, string, string, BatchState, number, number, number, boolean, string[]];
+// feedstock, start, end, state, produced t, applied share, blocking, sampled, removals. In start order.
 const ROWS: Row[] = [
-  ["Forestry waste", "2026-03", "issued", 21.4, 1, 0, true, ["R-01"]],
-  ["Maize cobs", "2026-03", "issued", 9.8, 1, 0, true, ["R-01"]],
-  ["Forestry waste", "2026-04", "issued", 23.1, 1, 0, false, ["R-02"]],
-  ["Maize cobs", "2026-04", "issued", 10.6, 1, 0, false, ["R-02"]],
-  ["Forestry waste", "2026-05", "issued", 19.7, 1, 0, false, ["R-03"]],
-  ["Maize cobs", "2026-05", "submitted", 8.9, 1, 0, true, ["R-04"]],
-  ["Forestry waste", "2026-06", "submitted", 22.8, 0.96, 0, false, ["R-04", "R-05"]],
-  // Maize cobs, June: no production, so no batch.
-  ["Forestry waste", "2026-07", "submitted", 24.5, 0.9, 0, true, ["R-05"]],
-  ["Maize cobs", "2026-07", "ready", 9.4, 0.84, 0, false, []],
-  ["Forestry waste", "2026-08", "ready", 21.9, 0.78, 0, false, []],
-  ["Maize cobs", "2026-08", "blocking", 11.2, 0.7, 1, false, []],
-  ["Forestry waste", "2026-09", "blocking", 22.7, 0.82, 6, true, []],
-  ["Maize cobs", "2026-09", "blocking", 9.1, 0.4, 2, false, []],
+  ["Forestry waste", "2025-10-01", "2025-10-31", "issued", 20.1, 1, 0, true, ["R-01"]],
+  ["Forestry waste", "2025-11-01", "2025-11-30", "issued", 21.8, 1, 0, false, ["R-01"]],
+  ["Maize cobs", "2025-11-15", "2025-12-14", "issued", 8.4, 1, 0, true, ["R-02"]],
+  ["Forestry waste", "2025-12-01", "2025-12-31", "issued", 18.2, 1, 0, false, ["R-02"]],
+  ["Maize cobs", "2025-12-15", "2026-01-14", "issued", 9.1, 1, 0, false, ["R-03"]],
+  ["Forestry waste", "2026-01-01", "2026-01-31", "issued", 19.5, 1, 0, false, ["R-03"]],
+  ["Maize cobs", "2026-01-15", "2026-02-14", "issued", 9.6, 1, 0, false, ["R-04"]],
+  ["Forestry waste", "2026-02-01", "2026-02-28", "issued", 20.9, 1, 0, false, ["R-04"]],
+  ["Forestry waste", "2026-03-01", "2026-03-31", "issued", 21.4, 1, 0, true, ["R-05"]],
+  ["Maize cobs", "2026-03-10", "2026-04-09", "issued", 9.8, 1, 0, true, ["R-05"]],
+  ["Forestry waste", "2026-04-01", "2026-04-30", "issued", 23.1, 1, 0, false, ["R-06"]],
+  ["Maize cobs", "2026-04-10", "2026-05-09", "issued", 10.6, 1, 0, false, ["R-06"]],
+  ["Forestry waste", "2026-05-01", "2026-05-31", "submitted", 19.7, 1, 0, false, ["R-07"]],
+  ["Maize cobs", "2026-05-10", "2026-06-09", "submitted", 8.9, 1, 0, true, ["R-07"]],
+  // Kiln maintenance from Jun 21: a short batch.
+  ["Forestry waste", "2026-06-01", "2026-06-20", "submitted", 14.2, 0.96, 0, false, ["R-07", "R-08"]],
+  ["Forestry waste", "2026-07-01", "2026-07-31", "submitted", 24.5, 0.9, 0, true, ["R-08"]],
+  // Maize cobs pauses Jun 10 to Jul 19 (no harvest), so no batch.
+  ["Maize cobs", "2026-07-20", "2026-08-19", "ready", 9.4, 0.84, 0, false, []],
+  ["Forestry waste", "2026-08-01", "2026-08-31", "ready", 21.9, 0.78, 0, false, []],
+  ["Maize cobs", "2026-08-20", "2026-09-19", "blocking", 11.2, 0.7, 1, false, []],
+  ["Forestry waste", "2026-09-01", "2026-09-30", "blocking", 22.7, 0.82, 6, true, []],
+  // Still producing: the window ends after today.
+  ["Maize cobs", "2026-09-20", "2026-10-19", "blocking", 9.1, 0.4, 2, false, []],
 ];
 
 const NOTES: Record<BatchState, (b: Omit<StubBatch, "note">) => string> = {
@@ -92,15 +95,21 @@ function round(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-export const BATCHES: StubBatch[] = ROWS.map(([feedstock, month, state, produced, share, blocking, sampled, removals], index) => {
+const yearCounters = new Map<string, number>();
+
+export const BATCHES: StubBatch[] = ROWS.map(([feedstock, start, end, state, produced, share, blocking, sampled, removals]) => {
+  const year = start.slice(2, 4);
+  const sequence = (yearCounters.get(year) ?? 0) + 1;
+  yearCounters.set(year, sequence);
   const applied = round(produced * share);
   const inRemoval = state === "issued" ? applied : state === "submitted" ? round(applied * (removals.length > 1 ? 1 : 0.97)) : 0;
   const submitted = state === "issued" || state === "submitted" ? inRemoval : 0;
   const issued = state === "issued" ? submitted : 0;
   const base = {
-    code: `CB-26-${String(index + 1).padStart(3, "0")}`,
+    code: `CB-${year}-${String(sequence).padStart(3, "0")}`,
     feedstock,
-    month,
+    start,
+    end,
     state,
     produced,
     applied,
@@ -114,6 +123,9 @@ export const BATCHES: StubBatch[] = ROWS.map(([feedstock, month, state, produced
   };
   return { ...base, note: NOTES[state](base) };
 });
+
+/** Years the timeline can show, oldest first. */
+export const YEARS = [...new Set(BATCHES.flatMap((batch) => [Number(batch.start.slice(0, 4)), Number(batch.end.slice(0, 4))]))].sort();
 
 export interface PipelineStage {
   key: "produced" | "applied" | "inRemoval" | "submitted" | "issued";

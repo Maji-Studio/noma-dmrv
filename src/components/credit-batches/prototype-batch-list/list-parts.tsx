@@ -41,10 +41,8 @@ export function useVisible(batch: StubBatch): boolean {
 }
 
 /** The batch window as the shared range formatter prints it ("Sep 1 to Sep 30, 2026"). */
-export function periodLabel(month: string): string {
-  const [year, monthIndex] = month.split("-").map(Number);
-  const lastDay = new Date(Date.UTC(year, monthIndex, 0)).getUTCDate();
-  return formatDateRange(`${month}-01`, `${month}-${String(lastDay).padStart(2, "0")}`);
+export function periodLabel(batch: StubBatch): string {
+  return formatDateRange(batch.start, batch.end);
 }
 
 export function tons(value: number): string {
@@ -148,10 +146,10 @@ export function StageFilterNote() {
   );
 }
 
-export function BatchLink({ batch, className, children }: { batch: StubBatch; className?: string; children: ReactNode }) {
+export function BatchLink({ batch, className, title, children }: { batch: StubBatch; className?: string; title?: string; children: ReactNode }) {
   const { realBatchId } = useList();
   return (
-    <Link href={batchHref(realBatchId, batch)} className={className}>
+    <Link href={batchHref(realBatchId, batch)} className={className} title={title}>
       {children}
     </Link>
   );
