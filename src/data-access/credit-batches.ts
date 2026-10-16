@@ -57,7 +57,7 @@ import {
 import { formatUtcDate } from "@/lib/date-utils";
 import { ActionConflictError, SafeError } from "@/lib/errors";
 import { conflictCode } from "@/lib/conflict-ref";
-import { assertUnsampledBatchEligibility } from "@/lib/certification/credit-batch-sampling";
+import { isBatchEligible } from "@/lib/certifier-policy";
 import { retireDocumentsForEntities } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import {
@@ -151,6 +151,11 @@ async function resolveCreditBatchCertifier(
       eq(certifierProjects.provider, provider),
     )).limit(1);
   return { provider, removalTemplateId: project?.removalTemplateId ?? null };
+}
+
+export async function getCreditBatchCertifierForFacility(ctx: OrgContext, facilityId: string) {
+  requireOrgScope(ctx);
+  return getFacilityCertifierWithExecutor(ctx, db, facilityId);
 }
 
 /**
@@ -355,26 +360,28 @@ export async function createCreditBatch(
   requireOrgScope(ctx);
   const { productionRunIds, ...batchData } = data;
   const sampling = data.sampling ?? "sampled";
-  const hasIsometricCredentials =
-    sampling === "unsampled"
-      ? await hasCertifierCredentials(ctx, "isometric")
-      : false;
-
   const created = await retryTransaction(() => db.transaction(async (tx) => {
-    assertCreditBatchProductionWindow(batchData.startDate, batchData.endDate);
+    // Mapping adoption takes UPDATE on the facility before checking its batches.
+    // Hold SHARE before resolving the provider so a concurrent link cannot be missed.
+    await tx.select({ id: facilities.id }).from(facilities)
+      .where(and(eq(facilities.id, batchData.facilityId), eq(facilities.organizationId, ctx.organizationId)))
+      .for("share");
+    const { provider: certifier, removalTemplateId } = await resolveCreditBatchCertifier(ctx, tx, batchData.facilityId);
+    assertCreditBatchProductionWindow(batchData.startDate, batchData.endDate, certifier);
 
     // ADR 0016 (amended 2026-07-04): the credit batch is the protocol production
     // batch (one feedstock), and the feedstock type is now DECLARED on the form,
     // not derived from the runs. Validate the member runs FIRST (existence,
     // facility, window, prior assignment), then GUARD that they all match the
     // declared feedstock type, then find-or-create the (facility, feedstock)
-    // production process this batch is a <=1-month slice of.
+    // production process this batch belongs to.
     const { runIds, lockedRuns } = await lockCreditBatchDeclarationRuns(
       ctx,
       tx,
       {
         facilityId: batchData.facilityId,
         feedstockTypeId: batchData.feedstockTypeId,
+        certifier,
         startDate: batchData.startDate,
         endDate: batchData.endDate,
         requestedProductionRunIds: productionRunIds ?? [],
@@ -383,10 +390,10 @@ export async function createCreditBatch(
     await assertNoOverlappingCreditBatchCohort(ctx, tx, {
       facilityId: batchData.facilityId,
       feedstockTypeId: batchData.feedstockTypeId,
+      certifier,
       startDate: batchData.startDate,
       endDate: batchData.endDate,
     });
-    const { provider: certifier, removalTemplateId } = await resolveCreditBatchCertifier(ctx, tx, batchData.facilityId);
     const feedstockTypeId = batchData.feedstockTypeId;
     const process = await findOrCreateProductionProcess(
       ctx,
@@ -398,26 +405,20 @@ export async function createCreditBatch(
       tx,
       runIds,
       batchData.facilityId,
+      certifier,
       batchData.startDate,
       batchData.endDate,
       undefined,
       lockedRuns,
     );
     await assertDeclaredFeedstockType(ctx, tx, runIds, feedstockTypeId);
-    if (sampling === "unsampled") {
-      if (certifier !== "isometric" || !hasIsometricCredentials) {
-        throw new SafeError(
-          "Unsampled credit batches require an Isometric connection for the organization and facility.",
-        );
-      }
-      const eligibility = await getMethodBEligibilityForProcess(
-        ctx,
-        process,
-        tx,
-        new Date(),
-      );
-      assertUnsampledBatchEligibility(eligibility);
-    }
+    const eligibility = isBatchEligible(sampling === "unsampled" ? {
+      sampling,
+      certifier,
+      hasIsometricCredentials: await hasCertifierCredentials(ctx, "isometric", tx),
+      methodBEligibility: await getMethodBEligibilityForProcess(ctx, process, tx, new Date()),
+    } : { sampling });
+    if (!eligibility.eligible) throw new SafeError(eligibility.message);
 
     // Insert the credit batch
     const [batch] = await tx
@@ -588,6 +589,7 @@ export async function updateCreditBatch(
     >["lockedRuns"];
     if (shouldRefreshMembership) {
       const declaration = await lockCreditBatchDeclarationRuns(ctx, tx, {
+        certifier: prepared.certifier,
         facilityId:
           updateFields.facilityId ?? declarationSnapshot.facilityId,
         feedstockTypeId:
@@ -625,19 +627,22 @@ export async function updateCreditBatch(
       ? formatUtcDate(updateFields.endDate)
       : existingBatch.endDate;
 
-    assertCreditBatchProductionWindow(effectiveStartDate, effectiveEndDate);
+    // Preparation reads the provider before facility locks to discover runs.
+    // Re-resolve after those locks: a concurrent mapping change may have won.
+    const targetCertifier = await resolveCreditBatchCertifier(ctx, tx, targetFacilityId);
+    assertCreditBatchProductionWindow(effectiveStartDate, effectiveEndDate, targetCertifier.provider);
 
     const effectiveFeedstockTypeId =
       updateFields.feedstockTypeId ?? existingBatch.feedstockTypeId;
     await assertNoOverlappingCreditBatchCohort(ctx, tx, {
       facilityId: targetFacilityId,
       feedstockTypeId: effectiveFeedstockTypeId,
+      certifier: targetCertifier.provider,
       startDate: effectiveStartDate,
       endDate: effectiveEndDate,
       excludeCreditBatchId: id,
     });
 
-    const targetCertifier = await resolveCreditBatchCertifier(ctx, tx, targetFacilityId);
     attemptUpdateData.certifier = targetCertifier.provider;
     const facilityChanged = targetFacilityId !== existingBatch.facilityId;
     if (facilityChanged) attemptUpdateData.removalTemplateId = targetCertifier.removalTemplateId;
@@ -648,6 +653,7 @@ export async function updateCreditBatch(
         tx,
         resolvedProductionRunIds,
         targetFacilityId,
+        targetCertifier.provider,
         effectiveStartDate,
         effectiveEndDate,
         id,

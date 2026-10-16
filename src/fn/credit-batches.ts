@@ -12,6 +12,7 @@ import {
   getCreditBatchById,
   getCo2eStoredPreviews as getCo2eStoredPreviewsData,
   getCreditBatchProductionRunOptions,
+  getCreditBatchCertifierForFacility,
   createCreditBatch as createCreditBatchData,
   updateCreditBatch as updateCreditBatchData,
   deleteCreditBatch as deleteCreditBatchData,
@@ -23,6 +24,7 @@ import {
 } from "@/data-access/credit-batches";
 import {
   createCreditBatchSchema,
+  creditBatchFormSchemaForCertifier,
   updateCreditBatchSchema,
   deleteCreditBatchSchema,
 } from "@/schemas/credit-batches";
@@ -32,6 +34,9 @@ class CreditBatchNotFoundError extends SafeError {}
 
 const MAX_BATCH_PREVIEWS = 50;
 const CREDIT_BATCH_NOT_FOUND = "Credit batch not found";
+const creditBatchFacilitySchema = z.object({
+  facilityId: createCreditBatchSchema.shape.facilityId,
+});
 
 /**
  * Get credit batch by ID
@@ -111,7 +116,9 @@ export async function createCreditBatchFn(
   data: z.infer<typeof createCreditBatchSchema>
 ): Promise<ActionResult<SavedCreditBatch>> {
   const result = await withAction(async (ctx) => {
-    const validated = createCreditBatchSchema.parse(data);
+    const { facilityId } = creditBatchFacilitySchema.parse(data);
+    const certifier = await getCreditBatchCertifierForFacility(ctx, facilityId);
+    const validated = creditBatchFormSchemaForCertifier(certifier).parse(data);
 
     const creditBatch = await withAutoCode(
       ctx,

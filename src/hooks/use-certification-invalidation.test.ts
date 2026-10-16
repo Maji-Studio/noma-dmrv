@@ -1,7 +1,8 @@
 import { activityKeys } from "./activity-query-keys";
-import type { QueryClient } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { creditBatchKeys } from "./credit-batch-query-keys";
+import { onboardingKeys } from "./use-onboarding";
 import { SubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 
 const reactQueryMocks = vi.hoisted(() => ({
@@ -21,6 +22,7 @@ import {
   getRemovalPreflightRefetchInterval,
   invalidateCertificationReadiness,
   useRemovalPreflightSummaries,
+  useSaveFacilityCertifierMapping,
   useSubmitGhgStatementToVerifier,
 } from "./use-certification";
 
@@ -34,6 +36,42 @@ describe("certificationKeys", () => {
       "facility-1",
       "removal-1",
     ]);
+  });
+});
+
+describe("useSaveFacilityCertifierMapping", () => {
+  it("invalidates adopted batch rows, previews and activity alongside mapping and onboarding caches", async () => {
+    const queryClient = new QueryClient();
+    reactQueryMocks.useQueryClient.mockReturnValue(queryClient);
+    reactQueryMocks.useMutation.mockClear();
+    const facilityId = "facility-1";
+    const batchId = "batch-1";
+    const affectedKeys = [
+      certificationKeys.facilityMapping(facilityId),
+      certificationKeys.certifyContextForCreditBatch(batchId),
+      onboardingKeys.status(facilityId, "org-1"),
+      creditBatchKeys.list({ facilityId }),
+      creditBatchKeys.detail(batchId),
+      creditBatchKeys.previews([batchId]),
+      activityKeys.creditBatch(batchId),
+      activityKeys.creditBatchSummary(batchId),
+    ];
+    for (const key of affectedKeys) {
+      queryClient.setQueryData(key, { certifier: null, version: 1 });
+      expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+    }
+
+    useSaveFacilityCertifierMapping();
+
+    const [{ onSuccess }] = reactQueryMocks.useMutation.mock.calls[0] as [{
+      onSuccess: (data: unknown, variables: { facilityId: string }) => void;
+    }];
+    await onSuccess({}, { facilityId });
+
+    for (const key of affectedKeys) {
+      expect(queryClient.getQueryState(key)?.isInvalidated, JSON.stringify(key)).toBe(true);
+    }
+    queryClient.clear();
   });
 });
 

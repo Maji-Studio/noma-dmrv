@@ -18,7 +18,8 @@ import { useFeedstockTypeList } from "@/hooks/use-feedstock-types";
 import { useMethodBEligibility } from "@/hooks/use-production-processes";
 
 import { useEffect } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm, useWatch, type Resolver } from "react-hook-form";
+import type { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   FormActions,
@@ -30,7 +31,7 @@ import {
   FormTextarea,
 } from "@/components/forms";
 import {
-  creditBatchFormSchema,
+  creditBatchFormSchemaForCertifier,
   type CreditBatchFormData,
 } from "@/schemas/credit-batches";
 import type { CreditBatch } from "@/db/schema/credits";
@@ -41,6 +42,9 @@ import { MethodBPrerequisitesSetup } from "./method-b-prerequisites-setup";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { CreditBatchProductionRunsPreview } from "./credit-batch-production-runs-preview";
 import { Notice } from "@/components/ui/notice";
+
+type CreditBatchFormInput = z.input<ReturnType<typeof creditBatchFormSchemaForCertifier>>;
+type CreditBatchFormResolver = Resolver<CreditBatchFormInput, unknown, CreditBatchFormData>;
 
 function parseWatchedDate(value: unknown): Date | null {
   if (value == null || value === "") {
@@ -104,10 +108,10 @@ export function CreditBatchForm({
     handleSubmit,
     control,
     trigger,
-    formState: { errors },
+    formState: { errors, isSubmitted },
     setValue,
-  } = useForm({
-    resolver: zodResolver(creditBatchFormSchema),
+  } = useForm<CreditBatchFormInput, unknown, CreditBatchFormData>({
+    resolver: resolveBatch,
     defaultValues: {
       facilityId: creditBatch?.facilityId ?? contextFacilityId ?? "",
       feedstockTypeId: creditBatch?.feedstockTypeId ?? "",
@@ -134,12 +138,21 @@ export function CreditBatchForm({
   const watchedSampling = useWatch({ control, name: "sampling" });
   const watchedProductionRunIds = useWatch({ control, name: "productionRunIds" });
   const effectiveFacilityId = watchedFacilityId || contextFacilityId || "";
+  const certifierSummary = useFacilityCertifierSummary(effectiveFacilityId, !!effectiveFacilityId);
+  const certifier = certifierSummary.data === undefined
+    ? "isometric"
+    : certifierSummary.data.mapping?.provider ?? null;
+
+  // RHF replaces its resolver option each render. Resolve only when RHF calls
+  // us, after the watched facility and its summary have been read.
+  function resolveBatch(
+    ...args: Parameters<CreditBatchFormResolver>
+  ): ReturnType<CreditBatchFormResolver> {
+    return zodResolver(creditBatchFormSchemaForCertifier(certifier))(...args);
+  }
+
   const declaredFeedstockTypeId = watchedFeedstockTypeId || "";
   const selectedSampling = watchedSampling === "unsampled" ? "unsampled" : "sampled";
-  const certifierSummary = useFacilityCertifierSummary(
-    effectiveFacilityId,
-    !!effectiveFacilityId,
-  );
   const feedstockTypesQuery = useFeedstockTypeList();
   const selectedFeedstockType = feedstockTypesQuery.data?.find(
     (feedstockType) => feedstockType.id === declaredFeedstockTypeId,
@@ -162,6 +175,14 @@ export function CreditBatchForm({
   const startDate = parseWatchedDate(watchedStartDate);
   const endDate = parseWatchedDate(watchedEndDate);
   const hasBothDates = startDate != null && endDate != null && endDate >= startDate;
+
+  // ResolvedErrorRevalidator covers value changes, but not policy query updates.
+  // Recheck only surfaced errors or a submitted form when the policy changes.
+  const shouldRevalidateEndDate = isSubmitted || Boolean(errors.endDate);
+  useEffect(() => {
+    if (hasBothDates && shouldRevalidateEndDate) void trigger("endDate");
+  }, [certifier, effectiveFacilityId, hasBothDates, shouldRevalidateEndDate, trigger]);
+
   // The cohort is scoped by BOTH the window and the declared feedstock type
   // (ADR 0016 amendment): runs load only once both are set.
   const isCohortReady = hasBothDates && declaredFeedstockTypeId !== "";
@@ -290,7 +311,7 @@ export function CreditBatchForm({
       (showSamplingControl && methodBEligibility.data?.unsampledAllowed)
         ? data.sampling
         : "sampled";
-    onSubmit({ ...data, sampling } as CreditBatchFormData);
+    onSubmit({ ...data, sampling });
   });
 
   return (

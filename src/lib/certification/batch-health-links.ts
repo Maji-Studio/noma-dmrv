@@ -10,7 +10,7 @@ import {
   FEEDSTOCK_TYPE_EDIT_LABEL,
 } from "@/lib/entity-deep-link";
 import { sampleCreateHref } from "@/lib/sample-create-intent";
-import { creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
+import { creditBatchDeepLinkHref, creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
 import { certificationEmissionEstimatesHref, certificationRemovalTemplatesHref } from "./links";
 
 export interface BatchHealthFixLink {
@@ -27,6 +27,8 @@ export function fallbackBatchHealthFixTarget(
   key: BatchHealthCheckKey,
 ): BatchHealthFixTarget {
   switch (key) {
+    case "emissions":
+      return "emissions";
     case "template":
       return "certificationTemplates";
     case "carbon":
@@ -79,6 +81,8 @@ export function batchHealthFixLinkFor(
     return params.toString();
   };
   switch (target) {
+    case "emissions":
+      return { label: "Review emissions", href: creditBatchId ? creditBatchDeepLinkHref(creditBatchId, facilityId) : `/credit-batches?${query(undefined, false)}` };
     case "certificationTemplates":
       return { label: "Review Removal templates", href: certificationRemovalTemplatesHref(facilityId) };
     case "creditBatchTemplate":

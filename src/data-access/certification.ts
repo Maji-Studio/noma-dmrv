@@ -31,6 +31,7 @@ import {
 } from "./certifier-storage-locations";
 import { withCertifierProjectMappingLocks } from "./certifier-project-mapping-locks";
 import { rejectDraftSubmission } from "./submission-rejection";
+import { adoptCreditBatchesForIsometric } from "./certifier-project-credit-batches";
 
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
 export type CertifierProjectRow = typeof certifierProjects.$inferSelect;
@@ -224,6 +225,9 @@ export async function upsertCertifierProject(
 
   const runUpsert = () =>
     db.transaction(async (tx) => {
+      if (input.provider === "isometric") {
+        await adoptCreditBatchesForIsometric(ctx, tx, input.facilityId);
+      }
       const [existing] = await tx
         .select()
         .from(certifierProjects)
