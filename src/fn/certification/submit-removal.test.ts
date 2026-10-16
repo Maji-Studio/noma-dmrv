@@ -10,7 +10,7 @@ function blocker(code: RemovalPreparationBlocker["code"]): RemovalPreparationBlo
 }
 
 const TIER_MISMATCH_MESSAGE =
-  "This facility uses 1000-year durability, but its default Removal " +
+  "This facility uses 1000-year durability, but the credit batch's Removal " +
   "template uses an incompatible storage component.";
 
 describe("firstSubmitBlockerMessage", () => {

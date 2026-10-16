@@ -30,8 +30,6 @@ const KNOWN_MIRRORS: Record<string, string[]> = {
     "biochar_sequestration_1000_year_f_durable_max/product_mass",
     "biochar_sequestration_1000_year_f_durable_max/s_fraction",
   ],
-  // Template walk for the diesel warning; #639's compiled plan replaces it.
-  "src/fn/certification/submission-warnings.ts": ["fuel_usage_by_volume/volume_of_fuel"],
 };
 
 function sourceFiles(dir: string): string[] {

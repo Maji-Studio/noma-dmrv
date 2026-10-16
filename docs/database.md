@@ -69,18 +69,21 @@ order by `occurred_at` then unique `sequence`, newest first.
 
 The operation runner appends activity from `describe()` in its write transaction.
 This covers feedstock intake, production runs, products, stock movements, lab
-samples, orders, deliveries, app/API document requests and confirmations, and
-app document deletes. App document visibility and evidence classification edits
+samples, orders, deliveries, applications, app/API document requests and
+confirmations, and app document deletes. App document visibility and evidence classification edits
 also use the runner. No-op descriptions, repeated confirmations, dry runs and idempotent
 replays add no events. The runner computes one source for both its own event and
 nested writers: audited transport, then the trusted `script` override, then `form`.
 Runner-reached transactional and cascade writers require an explicit source.
 
-Application, credit-batch, membership and transport-leg writers append activity
-directly in their write transaction. A record spanning several batches emits one
-event per batch, including both former and current batches when an application
-moves. Membership changes emit a batch update per changed run and a run update
-with the former batch ID on detach, so each event retains its run scope.
+Application operations call `activity.scope(entityId, scopes)` in
+`src/lib/operations/activity-links.ts`. The runner emits one event per distinct
+batch/run scope, including both former and current batches when an application
+moves. Delete captures scopes before removing shares and passes them with the
+initiating source to document retirement. Credit-batch, membership and
+transport-leg writers append activity directly in their write transaction.
+Membership changes emit a batch update per changed run and a run update with
+the former batch ID on detach, so each event retains its run scope.
 Automatic cohort attachment uses `system` with no actor; derived transport writes
 retain the initiating actor, including document retirements when a derived leg
 is cleared. Identical derived syncs still upsert and bump the leg version without
@@ -108,9 +111,11 @@ Failed-upload retention deletes also use `deleteDocumentRow`, with source `syste
 and no actor. Lease renewal, promotion cleanup metadata and pending-upload expiry
 are internal upload bookkeeping and do not emit activity.
 
-Direct document events keep only the document ID, applicable batch/run IDs and a
+Direct and runner document events keep only the document ID, applicable batch/run IDs and a
 `document:<document_type>:<owner_type>:<owner_uuid>` reason code containing
-controlled type keys and the owning record ID. Events never copy filenames,
+controlled type keys and the owning record ID. Both paths use the shared
+`documentActivityReasonCode` helper for every owner type, including document
+creation, updates and deletion. Events never copy filenames,
 URLs, storage keys or descriptions. Parent deletes capture ownership before
 removing the rows needed to resolve it.
 
@@ -120,6 +125,27 @@ unclassified write exports. Its inventory distinguishes `direct` recording,
 `runner` coverage with operation IDs, and reasoned `exempt` entries. Certification status
 transitions use `certification-status-activity.ts`. Reference data, energy,
 readings and incidents are outside this activity scope.
+
+The batch activity list and summary share one membership predicate: an explicit
+link to the requested batch, or a null batch link with a current member-run link
+or current member record identity. An explicit link to another batch never matches,
+including copies of fanned-out edits and membership events. Member identities
+come from `loadCreditBatchRollups` (including
+run forwards), lab samples, owned documents and transport legs. Removal and GHG
+Statement identities follow the application slice tables; multi-run stock movements
+follow saved output allocations. These identity matches
+recover best-effort links, including events written before membership existed;
+explicit batch links preserve detach and deletion history. One event-page query
+uses bound ID arrays and OR predicates, so overlapping matches do not duplicate
+rows. Pages order by descending millisecond timestamp and sequence, with a
+validated opaque cursor. Record labels and actor names resolve in batches at
+read time; missing records are tombstones, unknown types have generic labels,
+and documents never expose filenames. The summary counts every matching event by
+entity type and action and resolves the latest event with the same labels and actors.
+The list optionally filters by action and entity type (the summary never does), and
+each record also resolves the facility it belongs to now (a document takes its
+owner's), so links follow records that moved; ids that are not UUIDs read as
+missing. The UI built on these reads: [traceability.md](./traceability.md).
 
 ## Row-Level Guards
 
@@ -132,6 +158,21 @@ through lookups. Its strong ETag covers the run version and representation
 revision. Feedstock edits change bin stock and their own version, but do not
 rewrite the run's measured moisture, draws or batch allocations and do not bump
 the run version. A change to the run itself bumps its version.
+
+Application writers use `src/data-access/application-write-scope.ts`: unlocked
+discovery, sorted lineage artifacts, facilities `FOR SHARE`, runs `FOR SHARE`,
+batches `FOR SHARE`, deliveries `FOR UPDATE`, application `FOR UPDATE` with its
+version check, revalidation, then application slices `FOR UPDATE` and writes.
+Changed lineage, parent or discovered sets return retryable `conflict` to the
+client; no new locks are taken late. Explicit credit-batch membership takes
+artifacts before facilities and runs, then process scope and batch. Scalar
+edits and delete take no member run locks; late auto-membership acquisition is
+non-blocking `SKIP LOCKED` and refuses a missed row. See
+[Database boundaries](./architecture.md#database-boundaries) for the full order.
+`src/lib/db/transaction-retry.ts` shares the runner's bounded retry policy with
+all three membership transactions. It retries 40P01, 40001 and 55P03; production
+run writers still take runs before artifacts. The residual order is tracked in
+`data/production-run-artifact-order` and `data/lock-order`.
 
 ## Numeric Column Families
 
@@ -330,14 +371,28 @@ Source visibility), `certifier_projects`,
 `certifier_ghg_statements`, `certifier_ghg_statement_reports`,
 `certifier_removals`, `certification_submissions`,
 `certifier_document_uploads`, `certifier_sync_events`,
-`certifier_production_batches`, `certifier_storage_locations`, and
-`certifier_biochar_applications`. The last three live in separate schema
-modules named after their tables. They are Isometric-specific registry journals
-and use provider payload types; `certification.ts` remains the provider-neutral
+`certifier_production_batches`, `certifier_storage_locations`,
+`certifier_biochar_applications`, and `removal_template_observations`. The last
+four live in separate schema modules named after their tables. They are
+Isometric-specific registry journals and template observations that use provider
+payload types; `certification.ts` remains the provider-neutral
 submission and configuration boundary. Purpose per table:
 [`schema-overview.md`](./schema-overview.md); submission-unit rationale:
 [ADR 0003](./adr/0003-removal-as-submission-unit.md), [ADR
 0008](./adr/0008-submission-ledger-internal-seam.md).
+
+`removal_template_observations` stores normalized Isometric templates, enriched
+input metadata, fingerprints and versioned component-ID line contracts. Reviews
+require Owner/Admin permission; compilation requires complete enrichment and
+valid contracts. See [ADR 0032](./adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
+
+`credit_batches.removal_template_id` pins the facility default at creation.
+Moving a batch to another facility copies the target facility's default and
+records the pin change in activity. Other pin changes use the audited Switch
+template action. Removals compile against their member batches' pins, never the
+current default. Pre-existing rows receive
+no backfill under the pre-production policy; local resets are supported and any
+shared staging reset requires notifying the user first.
 
 `certifier_biochar_applications` is an organization-scoped idempotency journal,
 not a second source of application facts. Every row links its Application and

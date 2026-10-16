@@ -13,13 +13,13 @@ vi.mock("@/lib/operations/lab-samples", () => ({ recordLabSample: {}, updateLabS
 vi.mock("@/data-access/orders", () => ({ updateOrder: mocks.write, deleteOrder: mocks.write }));
 vi.mock("@/lib/operations/deliveries", () => ({ updateDelivery: mocks.write }));
 vi.mock("@/data-access/deliveries", () => ({ deleteDelivery: mocks.write }));
-vi.mock("@/data-access/applications", () => ({ updateApplication: mocks.write, deleteApplication: mocks.write, getApplicationById: mocks.read }));
+vi.mock("@/lib/operations/applications", () => ({ recordApplication: {}, updateApplication: {}, deleteApplication: {} }));
 vi.mock("@/data-access/credit-batches", () => ({ updateCreditBatch: mocks.write, deleteCreditBatch: mocks.write, getCreditBatchById: mocks.read }));
 vi.mock("@/data-access/transport-legs", () => ({ updateTransportLeg: mocks.write, deleteTransportLeg: mocks.write }));
 import { updateSampleFn, deleteSampleFn } from "./samples";
 import { createOrderFn, updateOrderFn, deleteOrderFn } from "./orders";
 import { updateDeliveryFn, deleteDeliveryFn } from "./deliveries";
-import { updateApplicationFn, deleteApplicationFn } from "./applications";
+import { createApplicationFn, updateApplicationFn, deleteApplicationFn } from "./applications";
 import { updateCreditBatchFn, deleteCreditBatchFn } from "./credit-batches";
 import { updateTransportLegFn, deleteTransportLegFn } from "./transport-legs";
 const ID = "33333333-3333-4333-8333-333333333333";
@@ -62,4 +62,12 @@ it("refuses order creation without a delivery site before reaching the operation
     orderDate: new Date("2026-09-12T00:00:00Z"), quantityKg: 100, packaging: "loose" } as never);
   expect(result).toMatchObject({ success: false, code: "validation_failed", issues: [{ path: ["customerLocationId"], message: "Select a customer location." }] });
   expect(mocks.write).not.toHaveBeenCalled();
+});
+
+it("returns only the saved application row from create and update actions", async () => {
+  const application = { id: ID, version: 2 };
+  mocks.write.mockResolvedValue({ application, allocations: [], deliveryBalance: {}, warnings: ["Advisory"] });
+  expect(await createApplicationFn({ deliveryId: ID, applicationDate: "2026-01-02", appliedWetMassKg: 1, fieldSizeHa: 1, gpsLatitude: 0, gpsLongitude: 0 }))
+    .toEqual({ success: true, data: application });
+  expect(await updateApplicationFn({ applicationId: ID, expectedVersion: 1 })).toEqual({ success: true, data: application });
 });

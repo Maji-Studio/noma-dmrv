@@ -1,5 +1,5 @@
 {
-  "id": "7cc53557-30ea-441d-b9d1-28e67438d5e4",
+  "id": "b824f666-51b2-4724-af63-028d15fef2e2",
   "prevId": "5549cfa8-5899-44bf-a30f-54b5a92a31f6",
   "version": "7",
   "dialect": "postgresql",
@@ -195,6 +195,39 @@
             },
             {
               "expression": "credit_batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sequence",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "activity_events_org_run_occurred_sequence_idx": {
+          "name": "activity_events_org_run_occurred_sequence_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "production_run_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -10898,7 +10931,7 @@
         },
         "production_date": {
           "name": "production_date",
-          "type": "date",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": true
         },

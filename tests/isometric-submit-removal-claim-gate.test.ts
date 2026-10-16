@@ -1,3 +1,4 @@
+import { reviewedTemplateSources } from "./helpers/template-line-sources";
 import {
   APPLICATION_ID,
   CHANGED_BIOCHAR_MASS_KG,
@@ -36,15 +37,15 @@ const SOURCE_DRIFT_MESSAGE =
 function makePayloadDriftContext() {
   // Grafted carbon_content / feedstock_mass stand in for any chemistry- or mass-bound input; production 200-year templates bind total_carbon_contents / inorganic_carbon_contents instead.
   const ctx = makeContext();
-  const template = ctx.defaultTemplate!;
+  const template = ctx.removalTemplate!;
   const storageGroup = template.groups[0];
   const storageComponent = storageGroup.components[0];
   const massInput = storageComponent.inputs[0];
   const storageBlueprint = ctx.blueprintsForTemplate[0];
   const massBlueprintInput = storageBlueprint.inputs[0];
-  return {
+  const result = {
     ...ctx,
-    defaultTemplate: {
+    removalTemplate: {
       ...template,
       groups: [
         {
@@ -92,6 +93,7 @@ function makePayloadDriftContext() {
       },
     ],
   } satisfies certifyContext.RemovalSubmissionContext;
+  return { ...result, lineSources: reviewedTemplateSources(result.removalTemplate) };
 }
 
 // ---------------------------------------------------------------------------

@@ -59,6 +59,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
+import { BIOCHAR_PRODUCT_DEEP_LINK_PARAM } from "@/lib/biochar-product-links";
 import { useEffect, useState } from "react";
 import { BiocharProductForm } from "./biochar-product-form";
 import { productSheetSections } from "./product-read-details";
@@ -252,7 +253,7 @@ export function BiocharProductPageMassSummary({
 export function BiocharProductList() {
   const { facilityId: contextFacilityId, facilities } = useFacilityContext();
   const [focusedProductId, setFocusedProductId] = useQueryState(
-    "biocharProduct",
+    BIOCHAR_PRODUCT_DEEP_LINK_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const [deepLinkMode, setDeepLinkMode] = useQueryState(

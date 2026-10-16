@@ -26,6 +26,10 @@ export const API_DOCUMENT_OWNERS = {
     entityType: "sample", path: "lab-samples", documentTypes: ["lab_report"],
     readScope: "lab-samples:read", writeScope: "lab-samples:write",
   },
+  application: {
+    entityType: "application", path: "applications", documentTypes: ["photo", "pdf"],
+    readScope: "applications:read", writeScope: "applications:write",
+  },
 } as const satisfies Record<string, ApiDocumentOwner>;
 
 export type ApiDocumentOwnerType = keyof typeof API_DOCUMENT_OWNERS;

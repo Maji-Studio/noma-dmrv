@@ -1,4 +1,5 @@
 /** Application side-sheet view mode: the sections config for EntitySideSheet. */
+import { MIX_BIN_CREDIT_HOLD_NOTICE } from "@/lib/application-guidance";
 import { ApplicationAllocationShares } from "./application-allocation-shares";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
@@ -21,9 +22,6 @@ export interface ApplicationSheetContext {
   lock: Pick<UseQueryResult<unknown>, "data" | "isPending" | "error" | "isFetching" | "refetch">;
   durabilityOption: string;
 }
-
-/** Mix-bin biochar is recorded as usual but feeds no credit batch until the PDD covers mixing (ADR 0030). */
-const MIX_BIN_CREDIT_HOLD_NOTICE = "Not in a credit batch: this biochar was drawn from a mix bin. Mix-bin biochar is held out of credit batches until the project design document (PDD) covers mixing.";
 
 /** "-8.1, 35.2", or null when either coordinate is missing. */
 function formatFieldPosition(

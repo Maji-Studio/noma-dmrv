@@ -4,6 +4,7 @@
  * submission flow (N credit batches → 1 Isometric Removal — ADR 0003).
  */
 
+import { activityKeys } from "./activity-query-keys";
 import {
   type QueryClient,
   useMutation,
@@ -41,6 +42,7 @@ import {
   loadRemovalPreflight,
   loadRemovalsForFacility,
   loadSelectableBatchesForFacility,
+  loadSubmissionStatusHistory,
   refreshGhgStatementStatus,
   prepareGhgStatementReport,
   reconcileGhgStatementsFromRegistry,
@@ -69,6 +71,7 @@ import type {
   PrepareGhgStatementReportInput,
   ApproveGhgStatementReportInput,
 } from "@/schemas/certification";
+import type { StatusHistoryEntityType } from "@/lib/certification/status-history";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 import { unwrap } from "@/hooks/types";
 
@@ -106,6 +109,8 @@ export function getRemovalPreflightRefetchInterval(
 }
 
 export const certificationKeys = {
+  removalTemplateReviewPreview: (facilityId: string, templateId: string) => ["certification", "removal-template-review-preview", facilityId, templateId] as const,
+  removalTemplateReview: (facilityId: string) => ["certification", "removal-template-review", facilityId] as const,
   all: ["certification"] as const,
   /** Whether a submitted Removal or GHG statement freezes the record's files. */
   recordLock: (entityType: string, entityId?: string) =>
@@ -198,17 +203,22 @@ export const certificationKeys = {
     [...certificationKeys.all, "registry-ghg-statements", facilityId] as const,
   overview: (facilityId: string) =>
     [...certificationKeys.all, "overview", facilityId] as const,
+  /** Status history behind a Removal or GHG Statement badge. */
+  statusHistory: (entityType: StatusHistoryEntityType, entityId: string) =>
+    [...certificationKeys.all, "status-history", entityType, entityId] as const,
   health: () => [...certificationKeys.all, "health"] as const,
   registrySourceVisibility: () =>
     [...certificationKeys.all, "registry-source-visibility"] as const,
 };
 
-/** Refresh cached readiness and, when relevant, derived CO₂e previews. */
+/** Refresh cached readiness and activity and, when relevant, derived CO₂e previews. */
 export function invalidateCertificationReadiness(
   queryClient: QueryClient,
   options?: { creditBatchPreviews?: boolean },
 ) {
   const invalidations = [
+    // Readiness-affecting mutations also change the batch activity history.
+    queryClient.invalidateQueries({ queryKey: activityKeys.all }),
     queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
   ];
   if (options?.creditBatchPreviews) {
@@ -295,6 +305,23 @@ export function useRemovalProductionBatches(removalId: string, enabled = true) {
     queryFn: async () => unwrap(await loadRemovalProductionBatches(removalId)),
     enabled: enabled && !!removalId,
     staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+// Status history behind a certification badge. Mounted only while its popover
+// is open, so it fetches on open, never per badge on a list render. Always
+// stale: every open reads the latest changes. Certification mutations
+// invalidate `certificationKeys.all`, which covers this key too.
+export function useSubmissionStatusHistory(
+  entityType: StatusHistoryEntityType,
+  entityId: string,
+) {
+  return useQuery({
+    queryKey: certificationKeys.statusHistory(entityType, entityId),
+    queryFn: async () =>
+      unwrap(await loadSubmissionStatusHistory({ entityType, entityId })),
+    enabled: !!entityId,
+    staleTime: 0,
   });
 }
 

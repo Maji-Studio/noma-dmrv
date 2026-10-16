@@ -57,7 +57,10 @@ DOCUMENT_PENDING_DESCRIPTION = "Document fixture pending confirm refusal"
 DOCUMENT_SUCCESS_DESCRIPTION = "Document fixture success"
 DOCUMENT_TIMEOUT_SECONDS = 10
 DOCUMENT_FIXTURES = []
-DOCUMENT_PATHS = {"delivery": "deliveries", "feedstock": "feedstocks", "lab_sample": "lab-samples"}
+APPLICATION_FIXTURE = {}
+SEEDED_APPLICATION_WET_MASS_KG = 0.001
+SEEDED_APPLICATION_FIELD_SIZE_HA = 1
+DOCUMENT_PATHS = {"delivery": "deliveries", "feedstock": "feedstocks", "lab_sample": "lab-samples", "application": "applications"}
 SEEDED_TARGETS = {}
 SEEDED_ETAGS = {}
 SEEDED_CREATE_BODIES = {}
@@ -109,10 +112,14 @@ def after_load_schema(ctx, schema):
     SEEDED_CREATE_BODIES.clear()
     SEEDED_PATCH_BODIES.clear()
     DOCUMENT_FIXTURES.clear()
+    APPLICATION_FIXTURE.clear()
     fixture_path = os.environ.get("API_FUZZ_FIXTURE")
     if fixture_path:
         with open(fixture_path, encoding="utf-8") as fixture_file:
-            DOCUMENT_FIXTURES.extend(json.load(fixture_file)["documents"])
+            fixture = json.load(fixture_file)
+            DOCUMENT_FIXTURES.extend(fixture["documents"])
+            if fixture.get("applicationId"):
+                APPLICATION_FIXTURE.update(fixture)
     schema.config.parameters.pop("query.cursor", None)
     for result in schema.get_all_operations():
         operation = result.ok()
@@ -214,6 +221,7 @@ def after_load_schema(ctx, schema):
 def before_add_examples(ctx, examples):
     operation = ctx.operation
     add_document_examples(operation, examples)
+    add_application_examples(operation, examples)
     target = SEEDED_TARGETS.get(operation.label)
     create_body = SEEDED_CREATE_BODIES.get(operation.label)
     is_create = create_body is not None
@@ -341,6 +349,39 @@ def document_metadata(description, negative=False):
     )
 
 
+def add_application_examples(operation, examples):
+    if not APPLICATION_FIXTURE:
+        return
+    fixture = APPLICATION_FIXTURE
+    targets = {
+        "GET /applications": None,
+        "GET /applications/{idOrCode}": fixture["applicationId"],
+        "GET /applications/{idOrCode}/boundary": fixture["applicationId"],
+        "GET /deliveries/{idOrCode}/application-balance": fixture["applicationDeliveryId"],
+        "POST /applications": None,
+    }
+    if operation.label not in targets:
+        return
+    create = operation.method.upper() == "POST"
+    kwargs = {"_meta": document_metadata(SEEDED_CREATE_DESCRIPTION if create else SEEDED_TARGET_DESCRIPTION)}
+    if targets[operation.label]:
+        kwargs["path_parameters"] = {"idOrCode": targets[operation.label]}
+    if operation.label == "GET /applications":
+        kwargs["query"] = {"deliveryId": fixture["applicationDeliveryId"]}
+    if create:
+        kwargs.update(query={"dryRun": "true"}, headers={IDEMPOTENCY_HEADER: str(uuid4())},
+                      media_type="application/json", body={
+                          "deliveryId": fixture["applicationDeliveryId"],
+                          "applicationDate": fixture["applicationDate"],
+                          "appliedWetMassKg": SEEDED_APPLICATION_WET_MASS_KG,
+                          "fieldSizeHa": SEEDED_APPLICATION_FIELD_SIZE_HA, "evidenceMethod": "location",
+                          "gpsLatitude": fixture["applicationGpsLatitude"], "gpsLongitude": fixture["applicationGpsLongitude"],
+                      })
+    # Saved tags are not refreshed after stateful writes. No positive PATCH;
+    # the fuzz credential deliberately lacks applications:delete.
+    examples.append(operation.Case(**kwargs))
+
+
 def add_document_examples(operation, examples):
     for fixture in DOCUMENT_FIXTURES:
         path = "/" + DOCUMENT_PATHS[fixture["ownerType"]] + "/{idOrCode}/documents"
@@ -362,7 +403,7 @@ def add_document_examples(operation, examples):
             if operation.path == path:
                 kwargs["headers"] = {IDEMPOTENCY_HEADER: str(uuid4())}
                 kwargs["body"] = {"documentType": fixture["documentType"], "fileName": "fuzz-request.pdf",
-                                  "contentType": "application/pdf", "sizeBytes": 8, "sha256": "a" * 64}
+                                  "contentType": "image/png" if fixture["documentType"] == "photo" else "application/pdf", "sizeBytes": 8, "sha256": "a" * 64}
         examples.append(operation.Case(**kwargs))
         if operation.path.endswith("/confirm"):
             negative = deepcopy(kwargs)

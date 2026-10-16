@@ -22,7 +22,7 @@ export type GisBoundaryCollection = Omit<
 
 export interface GisBoundary {
   version: 1;
-  source: "upload" | "paste";
+  source: "upload" | "paste" | "api";
   fileName: string | null;
   capturedAt: string;
   collection: GisBoundaryCollection;

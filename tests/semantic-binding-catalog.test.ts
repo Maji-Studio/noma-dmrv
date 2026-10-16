@@ -1,3 +1,4 @@
+import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
 /**
  * Parity for the semantic binding catalog (#636): the catalog's projections
  * must resolve every (group, blueprint, input) tuple exactly as the literal
@@ -207,11 +208,11 @@ describe("semantic binding catalog parity", () => {
 
   it("resolves per-component sources and fails closed on unknown names", () => {
     const diesel = lookupInputMapping("pyrolysis", "fuel_usage_by_volume", "volume_of_fuel")!;
-    expect(resolveDatapointSource(diesel, " Generator Diesel Usage ")).toBe("totalGensetDieselLitres");
-    expect(resolveDatapointSource(diesel, "Startup diesel usage")).toBe("totalStartupDieselLitres");
-    expect(() => resolveDatapointSource(diesel, "Diesel")).toThrow();
+    expect(resolveDatapointSource(diesel, { scope: "operating", entryPolicy: "none", origin: "reviewed", automaticSource: "run-genset-diesel" } satisfies LineContract)).toBe("totalGensetDieselLitres");
+    expect(resolveDatapointSource(diesel, { scope: "operating", entryPolicy: "none", origin: "reviewed", automaticSource: "run-startup-diesel" } satisfies LineContract)).toBe("totalStartupDieselLitres");
+    expect(() => resolveDatapointSource(diesel, { scope: "operating", entryPolicy: "none", origin: "reviewed" } satisfies LineContract)).toThrow();
     const margin = lookupInputMapping("miscellaneous", "mass_based_ci_emissions", "mass")!;
-    expect(resolveDatapointSource(margin, "Safety margin")).toBe("totalBiocharDryMassKg");
+    expect(resolveDatapointSource(margin, { scope: "operating", entryPolicy: "none", origin: "reviewed", automaticSource: "safety-margin" } satisfies LineContract)).toBe("totalBiocharDryMassKg");
   });
 
   it("projects PERIOD_INPUT_TUPLES to the pre-catalog literal", () => {
@@ -231,10 +232,10 @@ describe("semantic binding catalog parity", () => {
     }
     // The carve-out is per component: only the named Safety margin is released.
     expect(
-      lookupPeriodInputTuple("miscellaneous", "mass_based_ci_emissions", "mass", "Safety margin"),
+      lookupPeriodInputTuple("miscellaneous", "mass_based_ci_emissions", "mass", { scope: "operating", entryPolicy: "none", origin: "reviewed", automaticSource: "safety-margin" } satisfies LineContract),
     ).toBeUndefined();
     expect(
-      lookupPeriodInputTuple("miscellaneous", "mass_based_ci_emissions", "mass", "Overhead"),
+      lookupPeriodInputTuple("miscellaneous", "mass_based_ci_emissions", "mass", { scope: "operating", entryPolicy: "none", origin: "reviewed" } satisfies LineContract),
     ).toEqual({ category: "miscellaneous" });
   });
 
