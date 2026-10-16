@@ -103,7 +103,15 @@ export async function assertCanManageDocumentEntity(
 
   switch (entityType) {
     case "emission_entry": {
-      await assertEmissionEntryDocumentWritable(ctx, entityId, tx);
+      const [row] = await (tx ?? db)
+        .select({ id: emissionEntries.id })
+        .from(emissionEntries)
+        .where(and(
+          eq(emissionEntries.id, entityId),
+          eq(emissionEntries.organizationId, ctx.organizationId),
+          isNull(emissionEntries.deletedAt),
+        ));
+      if (!row) throw entityMissingError(entityType);
       return;
     }
     case "sample": {
@@ -251,7 +259,7 @@ export async function listDocumentsForEntity(
   entityId: string
 ): Promise<DocumentRow[]> {
   requireOrgScope(ctx);
-  if (entityType !== "emission_entry") await assertCanManageDocumentEntity(ctx, entityType, entityId);
+  await assertCanManageDocumentEntity(ctx, entityType, entityId);
   return db
     .select()
     .from(documents)
@@ -271,7 +279,7 @@ export async function listDocumentsForEntityIds(
   if (entityIds.length === 0) return [];
   await Promise.all(
     entityIds.map((entityId) =>
-      entityType === "emission_entry" ? Promise.resolve() : assertCanManageDocumentEntity(ctx, entityType, entityId)
+      assertCanManageDocumentEntity(ctx, entityType, entityId)
     )
   );
 
@@ -389,7 +397,7 @@ export async function insertDocument(
 ): Promise<DocumentRow> {
   requireOrgScope(ctx);
   return db.transaction(async (tx) => {
-    if (input.entityType === "emission_entry") await assertCanManageDocumentEntity(ctx, input.entityType, input.entityId, tx);
+    if (input.entityType === "emission_entry") await assertEmissionEntryDocumentWritable(ctx, input.entityId, tx);
     const [row] = await tx.insert(documents).values({ ...input, organizationId: ctx.organizationId }).returning();
     await bumpEmissionEntryEvidence(ctx, tx, row.entityType, row.entityId);
     await recordDocumentActivity(ctx, tx, row, "created", { source: "form" });
@@ -493,7 +501,7 @@ export async function retireTombstonedEmissionEntryDocuments(
     .for("update");
   if (entries.length !== entryIds.length || entries.some(entry => !entry.deletedAt ||
     entry.sentByRemovalId || entry.sendReservedBySubmissionId || entry.confirmedForRemovalId)) {
-    throw new SafeError("Delete or move this credit batch's emissions entries before deleting it.");
+    throw new SafeError("Delete this credit batch's emissions entries before deleting it.");
   }
   await retireOwnedDocuments(ctx, tx, entries.map(entry => ({
     entityType: "emission_entry" as const, entityId: entry.id,

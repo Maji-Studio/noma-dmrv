@@ -1,5 +1,13 @@
 # Isometric Docs Change Log
 
+## 2026-10-16: Emissions entries behind EMISSIONS_ENTRIES_ENABLED (#1058)
+
+Added the `emission_entries` and `emission_entry_values` tables and the
+`emission_entry` document owner for entry evidence. Writes are behind
+`EMISSIONS_ENTRIES_ENABLED`, which is off by default; the flag also refuses new
+sample transport legs. No binding or submitted value changed. Entry aggregation
+for submission remains deferred to PR 4. See [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
+
 ## 2026-10-15: Correct reactor-monitoring citations and retain document-only gates (#627 slices 1, 2, 4)
 
 The passages were read through the Isometric MCP (`how_to`, then

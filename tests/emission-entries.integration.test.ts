@@ -25,7 +25,7 @@ import {
   listEmissionEntries,
 } from "@/data-access/emission-entries";
 import { deleteCreditBatch } from "@/data-access/credit-batches";
-import { insertDocument } from "@/data-access/documents";
+import { insertDocument, listDocumentsForEntity, listDocumentsForEntityIds } from "@/data-access/documents";
 import {
   requestDocumentUploadInTransaction,
   confirmDocumentUploadInTransaction,
@@ -752,7 +752,7 @@ it.each(["live", "deleted", "reserved", "sent", "confirmed"] as const)(
     } else {
       await expect(deleteCreditBatch(ctx, batch.id, batch.version)).rejects.toMatchObject({
         name: "ActionConflictError",
-        message: "Delete or move this credit batch's emissions entries before deleting it.",
+        message: "Delete this credit batch's emissions entries before deleting it.",
       });
       expect(await db.select().from(emissionEntries).where(eq(emissionEntries.id, entry.id)))
         .toHaveLength(1);
@@ -762,5 +762,48 @@ it.each(["live", "deleted", "reserved", "sent", "confirmed"] as const)(
     await db.delete(emissionEntryValues).where(eq(emissionEntryValues.entryId, entry.id));
     await db.delete(emissionEntries).where(eq(emissionEntries.id, entry.id));
     await db.delete(creditBatches).where(eq(creditBatches.id, batch.id));
+  }
+});
+
+it("refuses document lists for unknown, tombstoned and other-organization entries", async () => {
+  const entry = await create();
+  await expect(listDocumentsForEntity(ctx, "emission_entry", entry.id)).resolves.toEqual([]);
+  await expect(listDocumentsForEntityIds(ctx, "emission_entry", [entry.id])).resolves.toEqual([]);
+  const otherCtx = { ...ctx, organizationId: otherOrg };
+  await expect(listDocumentsForEntity(otherCtx, "emission_entry", entry.id))
+    .rejects.toThrow("Emissions entry was not found or is archived.");
+  await expect(listDocumentsForEntityIds(otherCtx, "emission_entry", [entry.id]))
+    .rejects.toThrow("Emissions entry was not found or is archived.");
+  await deleteEmissionEntry(ctx, entry.id, entry.version);
+  for (const id of [entry.id, crypto.randomUUID()]) {
+    await expect(listDocumentsForEntity(ctx, "emission_entry", id))
+      .rejects.toThrow("Emissions entry was not found or is archived.");
+    await expect(listDocumentsForEntityIds(ctx, "emission_entry", [id]))
+      .rejects.toThrow("Emissions entry was not found or is archived.");
+  }
+});
+
+it("allows document lists for claimed entries while writes are disabled", async () => {
+  const entry = await create();
+  await claim(entry.id, "sent");
+  flag.enabled = false;
+  try {
+    await expect(listDocumentsForEntity(ctx, "emission_entry", entry.id)).resolves.toEqual([]);
+    await expect(listDocumentsForEntityIds(ctx, "emission_entry", [entry.id])).resolves.toEqual([]);
+  } finally {
+    flag.enabled = true;
+  }
+});
+
+it("uses the read model blocker for an unpinned batch", async () => {
+  await db.update(creditBatches).set({ removalTemplateId: null })
+    .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, lineage.batchId)));
+  try {
+    await expect(create()).rejects.toThrow("Choose a Removal template for this credit batch.");
+    await expect(loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId))
+      .rejects.toThrow("Choose a Removal template for this credit batch.");
+  } finally {
+    await db.update(creditBatches).set({ removalTemplateId: templateId })
+      .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, lineage.batchId)));
   }
 });

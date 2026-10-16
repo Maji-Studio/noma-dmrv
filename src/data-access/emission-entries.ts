@@ -1,13 +1,15 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   emissionEntries,
   emissionEntryValues,
   documents,
-  removalTemplateObservations,
   certificationSubmissions,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
+import { getLatestTemplateObservation, getTemplateObservationById } from "./removal-template-observations";
 import { SafeError } from "@/lib/errors";
 import { requireEmissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import {
@@ -120,33 +122,16 @@ async function lockedBatch(
   const { batch, facility } = await lockEmissionEntryBatch(ctx, tx, creditBatchId);
   if (batch.archivedAt) throw new SafeError("Credit batch was not found.");
   if (facility.archivedAt) throw new SafeError("Facility was not found.");
-  const [observation] = await tx
-    .select()
-    .from(removalTemplateObservations)
-    .where(
-      and(
-        eq(removalTemplateObservations.organizationId, ctx.organizationId),
-        eq(removalTemplateObservations.provider, "isometric"),
-        eq(removalTemplateObservations.externalTemplateId, batch.removalTemplateId ?? ""),
-      ),
-    )
-    .orderBy(desc(removalTemplateObservations.lastObservedAt), desc(removalTemplateObservations.id))
-    .limit(1);
-  const [fallback] =
-    !observation && fallbackObservationId
-      ? await tx
-          .select()
-          .from(removalTemplateObservations)
-          .where(
-            and(
-              eq(removalTemplateObservations.organizationId, ctx.organizationId),
-              eq(removalTemplateObservations.id, fallbackObservationId),
-            ),
-          )
-      : [];
-  if (!observation && !fallback)
+  const pin = resolveBatchPin([batch]);
+  if ("code" in pin) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS[pin.code]);
+  const observation = await getLatestTemplateObservation(ctx, "isometric", pin.pin, tx);
+  const fallback = !observation && fallbackObservationId
+    ? await getTemplateObservationById(ctx, fallbackObservationId, tx)
+    : null;
+  const resolvedObservation = observation ?? fallback;
+  if (!resolvedObservation)
     throw new SafeError("Read the credit batch's Removal template before adding entries.");
-  return { batch, facility, observation: observation ?? fallback };
+  return { batch, facility, observation: resolvedObservation };
 }
 async function writeValues(ctx: OrgContext, tx: DbTransaction, id: string, values: EntryValueInput[]) {
   requireOrgScope(ctx);
@@ -264,15 +249,7 @@ export async function updateEmissionEntry(ctx: OrgContext, input: UpdateEmission
           ...value,
           quantityKind: entry.inputShape.find((input) => input.key === value.inputKey)!.quantityKind,
         }));
-      const [previous] = await tx
-        .select()
-        .from(removalTemplateObservations)
-        .where(
-          and(
-            eq(removalTemplateObservations.organizationId, ctx.organizationId),
-            eq(removalTemplateObservations.id, entry.observationId),
-          ),
-        );
+      const previous = await getTemplateObservationById(ctx, entry.observationId, tx);
       if (!previous || !emissionEntryCounts(previous, context.observation, entry.componentId).counts)
         throw new SafeError("Review the template change before editing this entry's values or date.");
       validateEmissionEntry({
@@ -340,15 +317,7 @@ export async function confirmEmissionEntry(ctx: OrgContext, id: string, expected
   requireOrgScope(ctx);
   requireEmissionsEntriesEnabled();
   return mutateEntry(ctx, id, expectedVersion, async (tx, entry, { observation }) => {
-    const [previous] = await tx
-      .select()
-      .from(removalTemplateObservations)
-      .where(
-        and(
-          eq(removalTemplateObservations.organizationId, ctx.organizationId),
-          eq(removalTemplateObservations.id, entry.observationId),
-        ),
-      );
+    const previous = await getTemplateObservationById(ctx, entry.observationId, tx);
     if (!previous || !emissionEntryCounts(previous, observation, entry.componentId).canConfirm)
       throw new SafeError("This entry no longer matches the template. Enter the values again.");
     const [saved] = await tx

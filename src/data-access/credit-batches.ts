@@ -758,7 +758,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
     if (entries.some(entry => !entry.deletedAt || entry.sendReservedBySubmissionId ||
       entry.sentByRemovalId || entry.confirmedForRemovalId)) {
       throw new ActionConflictError(
-        "Delete or move this credit batch's emissions entries before deleting it.",
+        "Delete this credit batch's emissions entries before deleting it.",
         { entity: "credit_batch", id, code: conflictCode(batch.code) },
       );
     }

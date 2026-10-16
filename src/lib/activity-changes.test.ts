@@ -175,3 +175,10 @@ it("captures emissions dates and claim links while ignoring revisions", () => {
       sentByRemovalId: { from: null, to: "removal-id" },
     } });
 });
+
+it("names emission observation changes without capturing IDs and ignores the creator", () => {
+  expect(diffActivityChanges("emission_entry",
+    { observationId: "previous-observation", createdBy: "previous-user" },
+    { observationId: "current-observation", createdBy: "current-user" }))
+    .toEqual({ changedFields: ["observationId"], changes: {} });
+});
