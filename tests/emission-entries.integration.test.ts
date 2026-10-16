@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { activityEvents, certificationSubmissions, creditBatches, certifierRemovals, facilities, documents, emissionEntries, emissionEntryValues, organizations, removalTemplateObservations, storageObjectDeletions, users } from "@/db/schema";
+import { activityEvents, certificationSubmissions, creditBatches, certifierRemovals, facilities, documents, emissionEntries, emissionEntryValues, organizations, removalTemplateObservations, storageObjectDeletions, transportLegs, users } from "@/db/schema";
 import { createEmissionEntry, updateEmissionEntry, deleteEmissionEntry, confirmEmissionEntry, getEmissionEntry, listEmissionEntries } from "@/data-access/emission-entries";
 import { insertDocument } from "@/data-access/documents";
 import { requestDocumentUploadInTransaction, confirmDocumentUploadInTransaction, uploadFactsFor } from "@/data-access/document-writes";
@@ -86,8 +86,10 @@ it("creates, updates, conflicts and tombstones, with value-free batch activity",
   const events = await db.select().from(activityEvents).where(and(eq(activityEvents.entityType, "emission_entry"), eq(activityEvents.entityId, entry.id)));
   expect(events.map(event => event.action).sort()).toEqual(["created", "deleted", "updated", "updated"]);
   expect(events.every(event => event.creditBatchId === lineage.batchId)).toBe(true);
-  expect(JSON.stringify(events)).not.toContain("Private fixture note");
-  expect(JSON.stringify(events)).not.toContain("0.200000000000000001");
+  // Activity rows carry a bigint `sequence` column, so serialize bigints explicitly.
+  const serialized = JSON.stringify(events, (_key, value) => (typeof value === "bigint" ? value.toString() : value));
+  expect(serialized).not.toContain("Private fixture note");
+  expect(serialized).not.toContain("0.200000000000000001");
 });
 it("enforces the single index even for raw inserts", async () => {
   const entry = await create("meter");
@@ -173,11 +175,15 @@ it("confirms uploaded evidence inside the entry revision transaction", async () 
   expect(await getEmissionEntry(ctx, entry.id)).toMatchObject({ contentRevision: 2, version: 2, documentCount: 1 });
 });
 it("retains sample-leg creation when the flag is off", async () => {
+  // The shared fixture's batch has submissions from earlier cases, which lock its sample.
+  // Use a separate lineage with no submission so only the flag decides the outcome.
+  const unlocked = await createLineageFixture("none");
   flag.enabled = false;
   try {
-    const leg = await createTransportLeg(ctx, { entityType: "sample", entityId: lineage.sampleId, distanceKm: 1, loadMassKg: 1, transportMethodType: "road", calculationMethodType: "distance_based" });
+    const leg = await createTransportLeg(ctx, { entityType: "sample", entityId: unlocked.sampleId, distanceKm: 1, loadMassKg: 1, transportMethodType: "road", calculationMethodType: "distance_based" });
     expect(leg.entityType).toBe("sample");
-  } finally { flag.enabled = true; }
+    await db.delete(transportLegs).where(eq(transportLegs.id, leg.id));
+  } finally { flag.enabled = true; await cleanupLineageFixture(unlocked); }
 });
 
 it("enforces organization consistency independently for observation and claim references", async () => {
