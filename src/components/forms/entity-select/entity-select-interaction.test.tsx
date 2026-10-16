@@ -420,6 +420,20 @@ describe("EntitySelect menu interactions", () => {
       expect(edit).toHaveBeenCalledOnce();
     });
 
+  it("shows a different icon on the View row than on the Edit row", () => {
+    state.selected = { id: "one", code: "X-1", name: "Archived blend", archived: true };
+    const view = render(<EntitySelect entityType="formulation" value="one" onChange={vi.fn()} onEditSelected={vi.fn()} />);
+    open();
+    const viewIcon = screen.getByTestId("entity-select-edit").querySelector("svg")?.innerHTML;
+    view.unmount();
+    state.selected = { id: "one", code: "X-1", name: "Active blend" };
+    render(<EntitySelect entityType="formulation" value="one" onChange={vi.fn()} onEditSelected={vi.fn()} />);
+    open();
+    const editIcon = screen.getByTestId("entity-select-edit").querySelector("svg")?.innerHTML;
+    expect(viewIcon).toBeTruthy();
+    expect(viewIcon).not.toBe(editIcon);
+  });
+
   it("keeps Edit and the plain label for a selection that is not archived", () => {
     state.selected = { id: "one", code: "X-1", name: "Active sawmill" };
     render(<EntitySelect entityType="supplier" value="one" onChange={vi.fn()} onEditSelected={vi.fn()} />);

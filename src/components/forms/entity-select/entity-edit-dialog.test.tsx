@@ -96,7 +96,7 @@ describe("EntityEditDialog", () => {
   });
   it.each([
     ["supplier", "SUP-0007", "supplierId", "restoreSupplier", "This supplier is archived. Pickers hide it and new intakes cannot use it.", "Supplier SUP-0007 restored."],
-    ["customer", "CUST-0007", "customerId", "restoreCustomer", "This customer is archived. Pickers hide it and new orders and deliveries cannot use it.", "Customer CUST-0007 restored."],
+    ["customer", "CUST-0007", "customerId", "restoreCustomer", "This customer is archived. Pickers hide it and new orders cannot use it. Existing orders keep it.", "Customer CUST-0007 restored."],
   ] as const)("opens an archived %s read-only with the archived notice and Restore", async (type, code, idField, restoreMock, notice, toast) => {
     loaded();
     mocks.query.data = { ...record, code, archivedAt: new Date() };

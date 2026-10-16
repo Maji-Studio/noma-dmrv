@@ -791,6 +791,7 @@ function EntitySelectView({
                       value={value}
                       noneOption={noneOption}
                       editLabel={editLabel ?? `${isArchivedSelection ? "View" : "Edit"} ${selectedOption?.name}`}
+                      isViewOnly={isArchivedSelection}
                       createLabel={createLabel || defaultCreateLabel}
                     />
                   ))}

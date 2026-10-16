@@ -41,7 +41,7 @@ import type { SupplierWithRelations } from "@/data-access/suppliers";
 import { resolveSupplierLocationText } from "@/lib/supplier-location-display";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { ENTITY_DEEP_LINK_EDIT_MODE, ENTITY_DEEP_LINK_MODE_PARAM, SUPPLIER_QUERY_PARAM } from "@/lib/entity-deep-link";
+import { ENTITY_DEEP_LINK_EDIT_MODE, ENTITY_DEEP_LINK_MODE_PARAM, SUPPLIER_QUERY_PARAM, LOCATION_DEEP_LINK_PARAM } from "@/lib/entity-deep-link";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { supplierSheetSections } from "./supplier-read-sections";
 import { ILLUSTRATION_SIZE, SupplierArt } from "@/components/ui/illustrations";
@@ -134,6 +134,7 @@ export function SupplierList() {
     SUPPLIER_QUERY_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
+  const [, setLocationIntent] = useQueryState(LOCATION_DEEP_LINK_PARAM, parseAsString.withOptions({ shallow: true, history: "replace" }));
   const [deepLinkMode, setDeepLinkMode] = useQueryState(
     ENTITY_DEEP_LINK_MODE_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
@@ -183,6 +184,9 @@ export function SupplierList() {
   const clearDeepLink = () => {
     void setFocusedSupplierId(null);
     void setDeepLinkMode(null);
+    // An unconsumed `location=` (archived suppliers open read-only) must not
+    // pop a dialog once the supplier is restored and edited.
+    void setLocationIntent(null);
   };
   const sideSheetLocationsQuery = useSupplierLocationsBySupplier(
     sideSheet?.entity?.id ?? "",
@@ -303,20 +307,28 @@ export function SupplierList() {
   };
 
   const handleArchive = async (supplier: SupplierWithRelations) => {
+    // Act on the list's current row: the snapshot a notice or sheet holds goes stale after a refused version.
+    const fresh = (suppliersData?.items ?? []).find((row) => row.id === supplier.id);
+    const target = fresh ?? supplier;
     setLifecycleError(null);
     try {
-      await archiveSupplier.mutateAsync({ supplierId: supplier.id, expectedVersion: supplier.version });
+      await archiveSupplier.mutateAsync({ supplierId: supplier.id, expectedVersion: target.version });
       setDeleteConflict(null);
       toast.success(`Supplier ${supplier.code} archived. Restore it from the archived view.`);
     } catch (error) {
+      // Without a fresh row the notice would keep the stale version, so drop it.
+      if (error instanceof StaleVersionError && !fresh) setDeleteConflict(null);
       setLifecycleError(toArchiveRestoreErrorMessage(error, `Supplier ${supplier.code}`, "archive", "The supplier was not archived. Try again."));
     }
   };
 
   const handleRestore = async (supplier: SupplierWithRelations) => {
+    // Act on the list's current row: the snapshot a notice or sheet holds goes stale after a refused version.
+    const fresh = (suppliersData?.items ?? []).find((row) => row.id === supplier.id);
+    const target = fresh ?? supplier;
     setLifecycleError(null);
     try {
-      await restoreSupplier.mutateAsync({ supplierId: supplier.id, expectedVersion: supplier.version });
+      await restoreSupplier.mutateAsync({ supplierId: supplier.id, expectedVersion: target.version });
       closeSideSheet();
       toast.success(`Supplier ${supplier.code} restored.`);
     } catch (error) {

@@ -1,4 +1,5 @@
 import { DomainError, type DomainErrorCode, type DomainIssue } from "@/lib/domain-errors";
+import { IN_USE_DELETE_MARKER } from "@/lib/delete-refusal";
 import { SafeError } from "@/lib/errors";
 
 type Party = "supplier" | "customer";
@@ -25,11 +26,11 @@ export function partyNameConflict(message: string, meta?: DomainIssue["meta"]): 
   return partyRefusal("conflict", message, ["name"], meta);
 }
 export function supplierHasIntakes(feedstockCodes: string[] = []): DomainError {
-  return partyRefusal("conflict", "Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier.", ["supplierId"], { feedstockCodes });
+  return partyRefusal("conflict", `Supplier ${IN_USE_DELETE_MARKER} feedstock intakes still use it. Review the linked intakes or keep this supplier.`, ["supplierId"], { feedstockCodes });
 }
 export function customerHasOrders(orderCodes: string[] = []): DomainError {
-  return partyRefusal("conflict", "Customer was not deleted because orders still use it. Open Orders and review them. Reassign them where appropriate, or keep this customer.", ["customerId"], { orderCodes });
+  return partyRefusal("conflict", `Customer ${IN_USE_DELETE_MARKER} orders still use it. Open Orders and review them. Reassign them where appropriate, or keep this customer.`, ["customerId"], { orderCodes });
 }
 export function customerHasStorageSites(locationIds: string[] = []): DomainError {
-  return partyRefusal("conflict", "Customer was not deleted because its locations are registered storage sites. Keep this customer.", ["customerId"], { locationIds });
+  return partyRefusal("conflict", `Customer ${IN_USE_DELETE_MARKER} its locations are registered storage sites. Keep this customer.`, ["customerId"], { locationIds });
 }

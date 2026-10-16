@@ -17,7 +17,7 @@ import type { FeedstockType } from "@/db/schema";
 import { ServerError } from "@/components/forms";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { DeleteConflictNotice } from "@/components/ui/lifecycle-notices";
+import { DeleteConflictNotice, isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
 import {
   EntitySideSheet,
   type SideSheetMode,
@@ -348,7 +348,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       toast.success("Feedstock type deleted.");
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Feedstock type ${deletingType.code}`, "Feedstock type was not deleted. Try again.");
-      if (message.toLowerCase().includes("archive it instead")) {
+      if (isInUseDeleteRefusal(message)) {
         setDeleteConflict(deletingType);
       } else {
         toast.error(message);
@@ -448,7 +448,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
 
       {deleteConflict && (
         <DeleteConflictNotice
-          label={deleteConflict.name}
+          label={deleteConflict.code}
           onArchive={() => handleArchive(deleteConflict)}
           isPending={archiveFeedstockType.isPending}
         />

@@ -22,6 +22,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, PackageIcon, StorefrontIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm, useWatch } from "react-hook-form";
 
+import { ServerError } from "@/components/forms/server-error";
+import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { CustomerLocationDetails } from "./customer-location-details";
 import { MatchingOutputBins } from "./matching-output-bins";
@@ -133,8 +135,12 @@ export function OrderForm({
   // An archived customer keeps the order's stored destination, but the order
   // cannot move to another one or edit the location, so the parent's archive
   // state is read explicitly rather than inferred from the picker.
-  const { data: selectedCustomer } = useCustomerWithRelations(selectedCustomerId ?? "", !!selectedCustomerId);
-  const isCustomerArchived = !!selectedCustomer?.archivedAt;
+  // The destination stays locked until the read confirms an active customer, so
+  // a slow or failed read cannot open a change the server would refuse.
+  const customerQuery = useCustomerWithRelations(selectedCustomerId ?? "", !!selectedCustomerId);
+  const isCustomerArchived = !!customerQuery.data?.archivedAt;
+  const isCustomerStatusUnknown = !!selectedCustomerId && !customerQuery.data;
+  const isDestinationLocked = isCustomerArchived || isCustomerStatusUnknown;
 
   // Details panel data for the selected location (issue #196). The facility
   // resolves from the form's own facilityId so edit mode shows the order's
@@ -218,8 +224,8 @@ export function OrderForm({
             required
             label="Customer location"
             entityType="customerLocation"
-            selectionLocked={isCustomerArchived}
-            onEditSelected={selectedLocation && selectedCustomerId && !isCustomerArchived
+            selectionLocked={isDestinationLocked}
+            onEditSelected={selectedLocation && selectedCustomerId && !isDestinationLocked
               ? () => setEditingLocation({ customerId: selectedCustomerId, location: selectedLocation })
               : undefined}
             placeholder={selectedCustomerId ? "Select location..." : "Select a customer first"}
@@ -233,8 +239,15 @@ export function OrderForm({
 
         {isCustomerArchived && (
           <Notice tone="info">
-            This customer is archived, so the delivery location stays as stored. Restore the customer to change it.
+            This customer is archived, so the customer location stays as stored. Restore the customer to change it.
           </Notice>
+        )}
+
+        {isCustomerStatusUnknown && customerQuery.isError && (
+          <ServerError
+            message="The customer could not be loaded, so the customer location is locked. Try again."
+            action={<Button size="small" onClick={() => void customerQuery.refetch()}>Try again</Button>}
+          />
         )}
 
         {selectedLocation && (

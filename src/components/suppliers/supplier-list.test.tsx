@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError } from "@/lib/stale-version";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
 import { SupplierList } from "./supplier-list";
@@ -59,8 +60,8 @@ vi.mock("@/components/ui/delete-confirm-dialog", () => ({
     isOpen ? <button type="button" onClick={onConfirm}>Confirm delete</button> : null,
 }));
 vi.mock("@/components/ui/entity-side-sheet", () => ({
-  EntitySideSheet: ({ open, mode, canEdit = true, viewModeNotice }: { open: boolean; mode: string; canEdit?: boolean; viewModeNotice?: ReactNode }) =>
-    open ? <aside aria-label="Sheet" data-mode={mode}>{viewModeNotice}{canEdit && <button type="button">Edit supplier</button>}</aside> : null,
+  EntitySideSheet: ({ open, mode, canEdit = true, viewModeNotice, onModeChange }: { open: boolean; mode: string; canEdit?: boolean; viewModeNotice?: ReactNode; onModeChange?: (mode: string) => void }) =>
+    open ? <aside aria-label="Sheet" data-mode={mode}>{viewModeNotice}<button type="button" onClick={() => onModeChange?.("edit")}>Request edit mode</button>{canEdit && <button type="button">Edit supplier</button>}</aside> : null,
 }));
 vi.mock("@/components/ui/stat-card", () => ({ StatCard: ({ title }: { title: string }) => <section>{title}</section> }));
 vi.mock("@/components/ui", () => ({
@@ -149,10 +150,10 @@ describe("SupplierList archive view", () => {
   });
 
   it("shows a stale archive refusal as a message", async () => {
-    state.archive.mockRejectedValue(new Error("Boom"));
+    state.archive.mockRejectedValue(new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "supplier", id: "id-SUP-0001", code: STALE_VERSION_CONFLICT_CODE }));
     render(<SupplierList />);
     fireEvent.click(within("Actions for SUP-0001", "Archive"));
-    expect((await screen.findByRole("alert")).textContent).toBe("Boom");
+    expect((await screen.findByRole("alert")).textContent).toBe("Supplier SUP-0001 was not archived. It changed since the list loaded. Review it before archiving.");
   });
 
   it("offers Archive instead when a delete is refused because records use the supplier", async () => {
@@ -164,6 +165,63 @@ describe("SupplierList archive view", () => {
     fireEvent.click(screen.getByRole("button", { name: "Archive instead" }));
     await waitFor(() => expect(state.archive).toHaveBeenCalledWith({ supplierId: "id-SUP-0001", expectedVersion: 4 }));
     await waitFor(() => expect(screen.queryByText("SUP-0001 is in use and cannot be deleted.")).toBeNull());
+  });
+
+  it("retries Archive instead with the refreshed version after a stale refusal", async () => {
+    state.remove.mockRejectedValue(new Error("Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier."));
+    state.archive.mockRejectedValueOnce(new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "supplier", id: "id-SUP-0001", code: STALE_VERSION_CONFLICT_CODE })).mockResolvedValue(undefined);
+    const view = render(<SupplierList />);
+    fireEvent.click(within("Actions for SUP-0001", "Delete"));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    await screen.findByText("SUP-0001 is in use and cannot be deleted.");
+    fireEvent.click(screen.getByRole("button", { name: "Archive instead" }));
+    await waitFor(() => expect(state.archive).toHaveBeenLastCalledWith({ supplierId: "id-SUP-0001", expectedVersion: 4 }));
+    await screen.findByRole("alert");
+
+    state.items = state.items.map((item) => ({ ...(item as object), version: 5 }));
+    view.rerender(<SupplierList />);
+    fireEvent.click(screen.getByRole("button", { name: "Archive instead" }));
+    await waitFor(() => expect(state.archive).toHaveBeenLastCalledWith({ supplierId: "id-SUP-0001", expectedVersion: 5 }));
+  });
+
+  it("retries Restore from the archived sheet with the refreshed version after a stale refusal", async () => {
+    state.restore.mockRejectedValueOnce(new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "supplier", id: "id-SUP-0002", code: STALE_VERSION_CONFLICT_CODE })).mockResolvedValue(undefined);
+    const view = render(<SupplierList />);
+    fireEvent.click(screen.getByRole("button", { name: "Archived" }));
+    fireEvent.click(within("Actions for SUP-0002", "Open details"));
+    fireEvent.click(buttonIn(screen.getByLabelText("Sheet"), "Restore"));
+    await waitFor(() => expect(state.restore).toHaveBeenLastCalledWith({ supplierId: "id-SUP-0002", expectedVersion: 4 }));
+    await screen.findByRole("alert");
+
+    state.items = state.items.map((item) => ({ ...(item as object), version: 5 }));
+    view.rerender(<SupplierList />);
+    fireEvent.click(buttonIn(screen.getByLabelText("Sheet"), "Restore"));
+    await waitFor(() => expect(state.restore).toHaveBeenLastCalledWith({ supplierId: "id-SUP-0002", expectedVersion: 5 }));
+  });
+
+  it("does not offer Archive instead when an already archived supplier is refused as in use", async () => {
+    state.remove.mockRejectedValue(new Error("Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier."));
+    render(<SupplierList />);
+    fireEvent.click(screen.getByRole("button", { name: "Archived" }));
+    fireEvent.click(within("Actions for SUP-0002", "Delete"));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    await waitFor(() => expect(state.remove).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: "Archive instead" })).toBeNull();
+    expect(screen.queryByText(/is in use and cannot be deleted/)).toBeNull();
+  });
+
+  it("refuses the edit mode request on an archived supplier and allows it on an active one", () => {
+    render(<SupplierList />);
+    fireEvent.click(within("Actions for SUP-0001", "Open details"));
+    fireEvent.click(screen.getByRole("button", { name: "Request edit mode" }));
+    expect(screen.getByLabelText("Sheet").getAttribute("data-mode")).toBe("edit");
+    cleanup();
+
+    render(<SupplierList />);
+    fireEvent.click(screen.getByRole("button", { name: "Archived" }));
+    fireEvent.click(within("Actions for SUP-0002", "Open details"));
+    fireEvent.click(screen.getByRole("button", { name: "Request edit mode" }));
+    expect(screen.getByLabelText("Sheet").getAttribute("data-mode")).toBe("view");
   });
 
   it("opens an archived supplier read-only with the notice and Restore", async () => {

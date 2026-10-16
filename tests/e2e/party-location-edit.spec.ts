@@ -225,25 +225,36 @@ test("an archived supplier or customer opens read-only from an edit link, with n
   const supplierId = crypto.randomUUID();
   const customerId = crypto.randomUUID();
   const locationName = `E2E Archived Location ${runId}`;
+  const supplierLocationId = crypto.randomUUID();
+  const customerLocationId = crypto.randomUUID();
   const archivedAt = new Date();
   let facilityId: string | undefined;
   try {
     const facility = await createTestFacility();
     facilityId = facility.id;
     await db.insert(schema.suppliers).values({ id: supplierId, organizationId: DEC_ORG_ID, code: `E2E-SUP-ARCH-${runId}`, name: `E2E Archived Supplier ${runId}`, archivedAt });
-    await db.insert(schema.supplierLocations).values({ organizationId: DEC_ORG_ID, supplierId, name: locationName, country: "Tanzania", gpsLatitude: LOCATION_GPS_LATITUDE, gpsLongitude: LOCATION_GPS_LONGITUDE, isDefault: true });
+    await db.insert(schema.supplierLocations).values({ id: supplierLocationId, organizationId: DEC_ORG_ID, supplierId, name: locationName, country: "Tanzania", gpsLatitude: LOCATION_GPS_LATITUDE, gpsLongitude: LOCATION_GPS_LONGITUDE, isDefault: true });
     await db.insert(schema.customers).values({ id: customerId, organizationId: DEC_ORG_ID, code: `E2E-CUST-ARCH-${runId}`, name: `E2E Archived Customer ${runId}`, archivedAt });
-    await db.insert(schema.customerLocations).values({ organizationId: DEC_ORG_ID, customerId, name: locationName, country: "Tanzania", gpsLatitude: LOCATION_GPS_LATITUDE, gpsLongitude: LOCATION_GPS_LONGITUDE, isDefault: true });
+    await db.insert(schema.customerLocations).values({ id: customerLocationId, organizationId: DEC_ORG_ID, customerId, name: locationName, country: "Tanzania", gpsLatitude: LOCATION_GPS_LATITUDE, gpsLongitude: LOCATION_GPS_LONGITUDE, isDefault: true });
 
     for (const target of [
-      { path: "suppliers", param: "supplier", id: supplierId, noun: "supplier" },
-      { path: "customers", param: "customer", id: customerId, noun: "customer" },
+      { path: "suppliers" as const, param: "supplier", id: supplierId, noun: "supplier", location: supplierLocationId, code: `E2E-SUP-ARCH-${runId}`, dialog: "supplier-location-edit-dialog" },
+      { path: "customers" as const, param: "customer", id: customerId, noun: "customer", location: customerLocationId, code: `E2E-CUST-ARCH-${runId}`, dialog: "customer-location-edit-dialog" },
     ]) {
-      await page.goto(`/${target.path}?facility=${facilityId}&${target.param}=${target.id}&mode=edit`);
+      await page.goto(`/${target.path}?facility=${facilityId}&${target.param}=${target.id}&mode=edit&location=${target.location}`);
       const sheet = page.getByRole("dialog");
       await expect(sheet.getByText(`This ${target.noun} is archived.`, { exact: false })).toBeVisible();
       await expect(sheet.getByRole("button", { name: `Edit ${target.noun}` })).toHaveCount(0);
-      await expect(sheet.getByRole("button", { name: `Edit ${locationName}` })).toHaveCount(0);
+      await expect(page.getByTestId(target.dialog)).toHaveCount(0);
+
+      // Restoring clears the unconsumed location link, so editing later does not pop its dialog.
+      await sheet.getByRole("button", { name: "Restore", exact: true }).click();
+      await expect(page.getByText(`${target.noun === "supplier" ? "Supplier" : "Customer"} ${target.code} restored.`)).toBeVisible();
+      await expect.poll(() => new URL(page.url()).searchParams.has("location")).toBe(false);
+
+      await openPartyEditSheet(page, `/${target.path}`, target.code, facilityId, facility.name);
+      await expect(page.getByRole("button", { name: `Edit ${locationName}` })).toBeVisible();
+      await expect(page.getByTestId(target.dialog)).toHaveCount(0);
     }
   } finally {
     try {

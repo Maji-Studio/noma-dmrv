@@ -23,6 +23,8 @@ const state = vi.hoisted(() => ({
   locations: [] as CustomerLocation[],
   /** The selected customer's detail read; archived when `archivedAt` is set. */
   customer: undefined as { archivedAt: Date | null } | undefined,
+  customerIsError: false,
+  refetchCustomer: vi.fn(),
   editLocation: vi.fn(),
   facilities: [{ id: "facility", name: "Facility", timezone: "UTC" }] as Facility[],
 }));
@@ -45,7 +47,7 @@ vi.mock("@/hooks/use-organization-settings", () => ({
 
 vi.mock("@/hooks/use-customers", () => ({
   useCustomerLocations: () => ({ data: state.locations }),
-  useCustomerWithRelations: () => ({ data: state.customer }),
+  useCustomerWithRelations: () => ({ data: state.customer, isError: state.customerIsError, refetch: state.refetchCustomer }),
 }));
 
 vi.mock("@/components/orders/matching-output-bins", () => ({
@@ -98,7 +100,9 @@ beforeEach(() => {
   state.customersById = {};
   state.locationOptions = [];
   state.locations = [];
-  state.customer = undefined;
+  state.customer = { archivedAt: null };
+  state.customerIsError = false;
+  state.refetchCustomer.mockClear();
   state.editLocation.mockClear();
   state.facilities = [{ id: "facility", name: "Facility", timezone: "UTC" } as Facility];
   Element.prototype.scrollIntoView = vi.fn();
@@ -303,7 +307,38 @@ describe("OrderForm customer field", () => {
       fireEvent.click(picker);
       expect(screen.queryByText("South field")).toBeNull();
       expect(screen.queryByTestId("entity-select-edit")).toBeNull();
-      expect(screen.getByText("This customer is archived, so the delivery location stays as stored. Restore the customer to change it.")).toBeTruthy();
+      expect(screen.getByText("This customer is archived, so the customer location stays as stored. Restore the customer to change it.")).toBeTruthy();
+      client.clear();
+    });
+
+    it("locks the destination and hides location editing while the customer is still loading", () => {
+      state.locations = [location];
+      state.locationOptions = [{ id: location.id, code: "", name: location.name! }, { id: "location-2", code: "", name: "South field" }];
+      state.customer = undefined;
+      const client = new QueryClient();
+      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>);
+      const picker = screen.getByRole("combobox", { name: /^Customer location/ });
+      expect(picker.getAttribute("aria-readonly")).toBe("true");
+      fireEvent.click(picker);
+      expect(screen.queryByText("South field")).toBeNull();
+      expect(screen.queryByTestId("entity-select-edit")).toBeNull();
+      expect(screen.queryByText(/could not be loaded/)).toBeNull();
+      client.clear();
+    });
+
+    it("keeps the destination locked and offers a retry when the customer read fails", () => {
+      state.locations = [location];
+      state.locationOptions = [{ id: location.id, code: "", name: location.name! }, { id: "location-2", code: "", name: "South field" }];
+      state.customer = undefined;
+      state.customerIsError = true;
+      const client = new QueryClient();
+      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>);
+      const picker = screen.getByRole("combobox", { name: /^Customer location/ });
+      expect(picker.getAttribute("aria-readonly")).toBe("true");
+      expect(screen.queryByTestId("entity-select-edit")).toBeNull();
+      expect(screen.getByText("The customer could not be loaded, so the customer location is locked. Try again.")).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+      expect(state.refetchCustomer).toHaveBeenCalledTimes(1);
       client.clear();
     });
 

@@ -40,7 +40,7 @@ import type { CustomerWithRelations } from "@/data-access/customers";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { toSaveErrorMessage, StaleVersionError, toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
-import { ENTITY_DEEP_LINK_EDIT_MODE, ENTITY_DEEP_LINK_MODE_PARAM } from "@/lib/entity-deep-link";
+import { ENTITY_DEEP_LINK_EDIT_MODE, ENTITY_DEEP_LINK_MODE_PARAM, LOCATION_DEEP_LINK_PARAM } from "@/lib/entity-deep-link";
 import { CUSTOMER_DEEP_LINK_PARAM } from "@/lib/customer-links";
 import { customerSheetSections } from "./customer-read-sections";
 import { Notice } from "@/components/ui/notice";
@@ -132,6 +132,7 @@ export function CustomerList() {
     ENTITY_DEEP_LINK_MODE_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
+  const [, setLocationIntent] = useQueryState(LOCATION_DEEP_LINK_PARAM, parseAsString.withOptions({ shallow: true, history: "replace" }));
   const handledInvalidCustomerIdRef = useRef<string | null>(null);
   const [sideSheet, setSideSheet] = useState<{
     entity: CustomerWithRelations | null;
@@ -200,6 +201,7 @@ export function CustomerList() {
   const openCreate = () => {
     void setFocusedCustomerId(null);
     void setDeepLinkMode(null);
+    void setLocationIntent(null);
     setCreateError(null);
     setUpdateError(null);
     setSideSheet({ entity: null, mode: "create" });
@@ -221,6 +223,9 @@ export function CustomerList() {
   const closeSideSheet = () => {
     void setFocusedCustomerId(null);
     void setDeepLinkMode(null);
+    // An unconsumed `location=` (archived customers open read-only) must not
+    // pop a dialog once the customer is restored and edited.
+    void setLocationIntent(null);
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
@@ -324,20 +329,28 @@ export function CustomerList() {
   };
 
   const handleArchive = async (customer: CustomerWithRelations) => {
+    // Act on the list's current row: the snapshot a notice or sheet holds goes stale after a refused version.
+    const fresh = (customersData?.items ?? []).find((row) => row.id === customer.id);
+    const target = fresh ?? customer;
     setLifecycleError(null);
     try {
-      await archiveCustomer.mutateAsync({ customerId: customer.id, expectedVersion: customer.version });
+      await archiveCustomer.mutateAsync({ customerId: customer.id, expectedVersion: target.version });
       setDeleteConflict(null);
       toast.success(`Customer ${customer.code} archived. Restore it from the archived view.`);
     } catch (error) {
+      // Without a fresh row the notice would keep the stale version, so drop it.
+      if (error instanceof StaleVersionError && !fresh) setDeleteConflict(null);
       setLifecycleError(toArchiveRestoreErrorMessage(error, `Customer ${customer.code}`, "archive", "The customer was not archived. Try again."));
     }
   };
 
   const handleRestore = async (customer: CustomerWithRelations) => {
+    // Act on the list's current row: the snapshot a notice or sheet holds goes stale after a refused version.
+    const fresh = (customersData?.items ?? []).find((row) => row.id === customer.id);
+    const target = fresh ?? customer;
     setLifecycleError(null);
     try {
-      await restoreCustomer.mutateAsync({ customerId: customer.id, expectedVersion: customer.version });
+      await restoreCustomer.mutateAsync({ customerId: customer.id, expectedVersion: target.version });
       closeSideSheet();
       toast.success(`Customer ${customer.code} restored.`);
     } catch (error) {

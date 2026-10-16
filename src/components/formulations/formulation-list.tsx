@@ -233,20 +233,28 @@ export function FormulationList() {
   };
 
   const handleArchive = async (formulation: FormulationWithIngredients) => {
+    // Act on the list's current row: the snapshot a notice or sheet holds goes stale after a refused version.
+    const fresh = (formulationsData?.items ?? []).find((row) => row.id === formulation.id);
+    const target = fresh ?? formulation;
     setLifecycleError(null);
     try {
-      await archiveFormulation.mutateAsync({ formulationId: formulation.id, expectedVersion: formulation.version });
+      await archiveFormulation.mutateAsync({ formulationId: formulation.id, expectedVersion: target.version });
       setDeleteConflict(null);
       toast.success(`Formulation ${formulation.code} archived. Restore it from the archived view.`);
     } catch (error) {
+      // Without a fresh row the notice would keep the stale version, so drop it.
+      if (error instanceof StaleVersionError && !fresh) setDeleteConflict(null);
       setLifecycleError(toArchiveRestoreErrorMessage(error, `Formulation ${formulation.code}`, "archive", "The formulation was not archived. Try again."));
     }
   };
 
   const handleRestore = async (formulation: FormulationWithIngredients) => {
+    // Act on the list's current row: the snapshot a notice or sheet holds goes stale after a refused version.
+    const fresh = (formulationsData?.items ?? []).find((row) => row.id === formulation.id);
+    const target = fresh ?? formulation;
     setLifecycleError(null);
     try {
-      await restoreFormulation.mutateAsync({ formulationId: formulation.id, expectedVersion: formulation.version });
+      await restoreFormulation.mutateAsync({ formulationId: formulation.id, expectedVersion: target.version });
       setSideSheet(null);
       toast.success(`Formulation ${formulation.code} restored.`);
     } catch (error) {

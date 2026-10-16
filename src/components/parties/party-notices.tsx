@@ -22,7 +22,7 @@ export function ArchivedSupplierNotice(props: ArchivedPartyNoticeProps) {
 export function ArchivedCustomerNotice(props: ArchivedPartyNoticeProps) {
   return (
     <ArchivedRecordNotice {...props}>
-      This customer is archived. Pickers hide it and new orders and deliveries cannot use it.
+      This customer is archived. Pickers hide it and new orders cannot use it. Existing orders keep it.
     </ArchivedRecordNotice>
   );
 }

@@ -9,13 +9,11 @@
 import { ArchiveIcon, ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
-
-/** The server's refusal for a delete that stored records still depend on. */
-const DELETE_IN_USE_MARKER = "was not deleted because";
+import { IN_USE_DELETE_MARKER } from "@/lib/delete-refusal";
 
 /** True when `message` is the typed "in use" delete refusal. */
 export function isInUseDeleteRefusal(message: string): boolean {
-  return message.includes(DELETE_IN_USE_MARKER);
+  return message.includes(IN_USE_DELETE_MARKER);
 }
 
 /** `label` names the row in the title: a code ("BCF-0003") or a name. */

@@ -107,6 +107,26 @@ test.describe("Supplier archive and restore", () => {
     await expect(page.getByText(`${supplier.code} is in use and cannot be deleted.`)).toHaveCount(0);
   });
 
+  test("a feedstock keeping an archived supplier shows it, and the picker opens a read-only View with Restore", async ({ adminPage: page, seededData }) => {
+    const { supplier, facility, feedstock } = seededData;
+    await setArchived("suppliers", supplier.id, true);
+    await page.goto(`/feedstocks?facility=${facility.id}&feedstock=${feedstock.id}&mode=edit`);
+    await waitForSideSheet(page);
+
+    const trigger = page.getByRole("dialog").locator('[data-testid="entity-select-trigger"]').filter({ hasText: supplier.name });
+    await expect(trigger).toContainText("(Archived)", { timeout: SEARCH_TIMEOUT_MS });
+    await trigger.click();
+    await expect(page.getByTestId("entity-select-edit")).toHaveText(`View ${supplier.name}`);
+    await page.getByTestId("entity-select-edit").click();
+
+    const view = page.getByTestId("supplier-edit-dialog");
+    await expect(view.getByText("This supplier is archived. Pickers hide it and new intakes cannot use it.")).toBeVisible();
+    await expect(view.getByRole("button", { name: "Save changes" })).toHaveCount(0);
+    await view.getByRole("button", { name: "Restore", exact: true }).click();
+    await expect(page.getByText(`Supplier ${supplier.code} restored.`)).toBeVisible();
+    await expect(view).toHaveCount(0);
+  });
+
   test("an archived supplier is hidden from the new feedstock picker", async ({ adminPage: page, seededData }) => {
     const { supplier, facility } = seededData;
     await setArchived("suppliers", supplier.id, true);
@@ -143,7 +163,7 @@ test.describe("Customer archive and restore", () => {
       await page.locator("table tbody tr", { hasText: customer.code }).first().click();
       await waitForSideSheet(page);
       const sheet = page.getByRole("dialog");
-      await expect(sheet.getByText("This customer is archived. Pickers hide it and new orders and deliveries cannot use it.")).toBeVisible();
+      await expect(sheet.getByText("This customer is archived. Pickers hide it and new orders cannot use it. Existing orders keep it.")).toBeVisible();
       await expect(sheet.getByRole("button", { name: "Edit customer" })).toHaveCount(0);
       await sheet.getByRole("button", { name: "Restore", exact: true }).click();
       await expect(page.getByText(`Customer ${customer.code} restored.`)).toBeVisible();
@@ -210,7 +230,7 @@ test.describe("An order under an archived customer", () => {
       const destination = sheet.getByRole("combobox", { name: /^Customer location/ });
       await expect(destination).toContainText(customerLocation.name);
       await expect(destination).toHaveAttribute("aria-readonly", "true");
-      await expect(sheet.getByText("This customer is archived, so the delivery location stays as stored. Restore the customer to change it.")).toBeVisible();
+      await expect(sheet.getByText("This customer is archived, so the customer location stays as stored. Restore the customer to change it.")).toBeVisible();
       await destination.click({ force: true });
       await expect(page.getByTestId("entity-select-listbox")).toHaveCount(0);
       await expect(page.getByTestId("entity-select-edit")).toHaveCount(0);

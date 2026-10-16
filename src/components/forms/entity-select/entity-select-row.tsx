@@ -1,4 +1,4 @@
-import { PencilSimpleIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
+import { EyeIcon, PencilSimpleIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { Combobox } from "@base-ui/react/combobox";
 import { cn } from "@/lib/utils";
 import type { EntityOption, EntitySelectProps } from "./types";
@@ -28,11 +28,13 @@ interface EntitySelectRowProps {
   highlightActions: boolean;
   noneOption: EntitySelectProps["noneOption"];
   editLabel: string;
+  /** The edit row only opens a read-only view (archived selection): show the view icon. */
+  isViewOnly?: boolean;
   createLabel: string;
 }
 
 export function EntitySelectRow({
-  row, value, noneOption, editLabel, createLabel, highlightActions,
+  row, value, noneOption, editLabel, isViewOnly, createLabel, highlightActions,
 }: EntitySelectRowProps) {
   const isAction = row.kind === "edit" || row.kind === "create";
   const disabled = row.kind === "option" && row.option.disabled;
@@ -73,7 +75,9 @@ export function EntitySelectRow({
       ) : (
         <>
           {row.kind === "edit"
-            ? <PencilSimpleIcon aria-hidden weight="bold" className="size-16" />
+            ? (isViewOnly
+              ? <EyeIcon aria-hidden weight="bold" className="size-16" />
+              : <PencilSimpleIcon aria-hidden weight="bold" className="size-16" />)
             : <PlusIcon aria-hidden weight="bold" className="size-16" />}
           <span className="text-[var(--text-s)]">
             {row.kind === "edit" ? editLabel : createLabel}
