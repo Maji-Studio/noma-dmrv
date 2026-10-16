@@ -13,7 +13,7 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDate } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { EMISSION_LINE_STATE_LABELS, type EmissionLineState } from "@/lib/certification/emission-lines";
-import { productionRunDeepLinkHref } from "@/lib/certification/links";
+import { certificationRemovalsHref, productionRunDeepLinkHref } from "@/lib/certification/links";
 import { useProto } from "./prototype-context";
 import { RemovalMassBar, SEGMENT_BY_KEY, Swatch, segmentOfRemoval, useBarTotal } from "./prototype-mass-bar";
 import { FocusRow, PANEL, Panel, RemovalChip, tonnes } from "./prototype-parts";
@@ -153,7 +153,7 @@ function MassSplit() {
 }
 
 export function RemovalsTab() {
-  const { model } = useProto();
+  const { model, batch } = useProto();
   const { masses } = model;
   const orderedSlices = [...model.slices].sort((a, b) => SEGMENT_BY_KEY[segmentOfRemoval(a.removal)].order - SEGMENT_BY_KEY[segmentOfRemoval(b.removal)].order);
   return (
@@ -171,7 +171,14 @@ export function RemovalsTab() {
                 </div>
                 <span className="body-medium tabular-nums">{tonnes(slice.tons)}</span>
                 <div className="col-start-2 col-end-4 flex flex-col gap-2 sm:col-auto">
-                  <RemovalChip removal={slice.removal} />
+                  {slice.removal ? (
+                    // PROTOTYPE: the real build links `/certification/removals/<id>`.
+                    <Link href={certificationRemovalsHref({ facility: batch.facilityId })} className="group self-start outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--ink)]">
+                      <RemovalChip removal={slice.removal} />
+                    </Link>
+                  ) : (
+                    <RemovalChip removal={slice.removal} />
+                  )}
                   {slice.removal && <span className={cn("body-caption", MUTED)}>{slice.removal.statusNote}</span>}
                 </div>
               </FocusRow>
