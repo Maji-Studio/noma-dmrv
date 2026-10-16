@@ -171,5 +171,3 @@ export function matchesStage(batch: StubBatch, stage: PipelineStage["key"] | nul
   }
 }
 
-/** Method B: at least one sampled batch in every ten per production process (GLOSSARY: Method A / Method B). */
-export const METHOD_B_EVERY = 10;

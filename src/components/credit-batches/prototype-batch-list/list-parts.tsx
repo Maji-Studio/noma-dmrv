@@ -3,7 +3,6 @@
 /** PROTOTYPE (throwaway): pieces shared by the credit batch overview variants. */
 import Link from "next/link";
 import { createContext, useContext, type ReactNode } from "react";
-import { FlaskIcon } from "@phosphor-icons/react/dist/ssr";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { CountBadge } from "../prototype-batch-page/prototype-parts";
@@ -83,16 +82,6 @@ export function StateNote({ batch }: { batch: StubBatch }) {
     );
   }
   return <span className={cn("body-small", batch.state === "ready" ? "font-medium" : MUTED)}>{batch.note}</span>;
-}
-
-export function SampledMark({ batch }: { batch: StubBatch }) {
-  if (!batch.sampled) return null;
-  return (
-    <span className={cn("inline-flex items-center gap-4 body-caption", MUTED)}>
-      <FlaskIcon size={14} aria-hidden />
-      Sampled
-    </span>
-  );
 }
 
 /**
