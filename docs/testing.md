@@ -75,6 +75,11 @@ for the `MINIO_TEST_*` suite and local configuration. Its stalled-body regressio
 uses a one-second injected read deadline; production keeps the 30-second default.
 Presigned policy cases cover Content-Type substitution and expired PUT URLs.
 
+Local Vitest runs default to two workers; override with `VITEST_MAX_WORKERS`.
+`55P03` lock timeouts during a wide local run mean contention on shared Postgres
+from other worktrees or sessions. Rerun failed files with `VITEST_MAX_WORKERS=1`
+before diagnosing; a failure that persists serially is real.
+
 ### Vitest only runs against a throwaway database
 
 Some root suites truncate organizations. `tests/setup.ts` therefore refuses to
@@ -95,6 +100,12 @@ echo "TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5433/noma_dmrv_
 
 Re-run the migrate line after pulling new migrations. A worktree made with
 `scripts/worktree.sh` gets its own test database.
+
+Vitest checks the test DB's migration count and latest timestamp before suites
+load and reports how to migrate a stale DB. A DB ahead of or diverged from this
+branch's journal must be reset or recreated. It never repairs the DB automatically.
+Set `VITEST_SKIP_MIGRATION_CHECK=1` for pure unit runs without a DB; the check
+also skips when no DB URL is configured.
 
 ## Agent evaluation
 
@@ -309,6 +320,8 @@ segment, claims a free port from 3101, writes both into
 copies of `.env.local` and `.env.test`, installs, resets the dev DB and migrates
 the test DB. It cuts the branch with `--no-track`, so a bare `git push` never
 targets `staging`. It does not seed; run `pnpm db:seed` there if you need data.
+
+See [the Vitest migration preflight](#vitest-only-runs-against-a-throwaway-database) for migration and reset guidance.
 
 - Start the dev server with the one-line command `new` prints, in your own
   terminal: background commands from an agent stop after two hours. Don't use

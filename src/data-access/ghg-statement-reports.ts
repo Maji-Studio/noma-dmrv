@@ -8,6 +8,7 @@ import {
   documents,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { PDF_MIME_TYPE } from "@/lib/storage/types";
 import { SafeError } from "@/lib/errors";
 import type {
   GhgStatementReportModel,
@@ -260,7 +261,7 @@ export async function insertPreparedGhgStatementReport(
         storageKey: args.storage.key,
         fileName: args.storage.fileName,
         fileSizeBytes: args.storage.fileSizeBytes,
-        mimeType: "application/pdf",
+        mimeType: PDF_MIME_TYPE,
         checksumSha256: args.contentChecksumSha256,
         visibility: "private",
         uploadStatus: "uploaded",

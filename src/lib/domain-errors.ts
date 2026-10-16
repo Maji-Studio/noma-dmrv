@@ -17,6 +17,9 @@ export type DomainErrorCode =
   | "registry_not_configured"
   | "registry_read_refused"
   | "registry_unavailable"
+  | "storage_not_configured"
+  | "storage_unavailable"
+  | "report_verification_failed"
   // Runner outcomes.
   | "concurrent_write_retry"
   | "deadline_exceeded"

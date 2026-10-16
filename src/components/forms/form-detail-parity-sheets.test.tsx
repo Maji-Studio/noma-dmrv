@@ -78,7 +78,7 @@ const noop = () => undefined;
 const as = <T,>(value: object) => value as unknown as T;
 type Arg<F extends (...args: never[]) => unknown, I extends number = 0> = Parameters<F>[I];
 
-const location = { name: "North field", ...TEST_SITE_POSITION, country: "TZ", stateRegion: "Iringa", city: "Mafinga", address: "Plot 4", distanceFromFacilityKm: 12, isDefault: true, defaultSoilTemperatureC: 22 };
+const location = { name: "North field", ...TEST_SITE_POSITION, country: "TZ", stateRegion: "Iringa", city: "Mafinga", address: "Plot 4", facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", facilityName: "Test facility", distanceKm: 12, distanceSource: "manual" as const }], isDefault: true, defaultSoilTemperatureC: 22 };
 
 const storageBin = (type: string, stockMode: string) => as<Arg<typeof storageLocationSheetSections>>({
   id: `${type}-bin`, facilityId: "facility", type, stockMode, drawOrder: "newest_first", name: `${type} bin`, capacityKg: 5000, storageMethod: "Covered heap", storageDescription: null,

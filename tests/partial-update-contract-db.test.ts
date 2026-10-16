@@ -1,3 +1,4 @@
+import { supplierLocationFacilityDistances } from "@/db/schema";
 import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { masterDataVersion } from "./helpers/master-data-version";
@@ -112,11 +113,11 @@ async function seedFixture(): Promise<Fixture> {
     })
     .returning({ id: suppliers.id });
 
-  await db.insert(supplierLocations).values({
+  const [sourceLocation] = await db.insert(supplierLocations).values({
     organizationId, supplierId: supplier.id, ...TEST_SITE_POSITION,
     isDefault: true,
-    distanceFromFacilityKm: SUPPLIER_DISTANCE_KM, distanceSource: "manual",
-  });
+  }).returning();
+  await db.insert(supplierLocationFacilityDistances).values({ organizationId, locationId: sourceLocation.id, facilityId: facility.id, distanceKm: SUPPLIER_DISTANCE_KM, distanceSource: "manual" });
 
   const [bin] = await db
     .insert(storageLocations)

@@ -47,7 +47,7 @@ describe("CERTIFY_FIELD_REGISTRY drift guard", () => {
   it("maps biochar transport to applied wet mass and customer distance, not delivered mass", () => {
     const applied = CERTIFY_FIELD_REGISTRY.application.find(field => field.key === "biocharAppliedTons")!;
     const delivered = CERTIFY_FIELD_REGISTRY.delivery.find(field => field.key === "deliveredWetMassKg")!;
-    const distance = CERTIFY_FIELD_REGISTRY.customerLocation.find(field => field.key === "distanceFromFacilityKm")!;
+    const distance = CERTIFY_FIELD_REGISTRY.customerLocation.find(field => field.key === "facilityDistances")!;
     expect(applied.mappings).toEqual([expect.objectContaining({ source: "biocharTransportMassDistanceTonneKm" })]);
     expect(resolveCertifyFieldInputTuples(applied)).not.toEqual([]);
     expect(resolveCertifyFieldInputTuples(applied)).toEqual(resolveCertifyFieldInputTuples(distance));

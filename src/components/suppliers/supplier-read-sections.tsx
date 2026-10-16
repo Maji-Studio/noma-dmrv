@@ -1,11 +1,9 @@
 /** Supplier side-sheet view mode: the sections config for EntitySideSheet. */
-import { buildSupplierDefaultLocationDistanceField } from "./supplier-detail-fields";
 import { partyLocationsSection, type PartyLocationsQueryState } from "@/components/party-locations-read-state";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
 
 export function supplierSheetSections(supplier: SupplierWithRelations, locationsQuery: PartyLocationsQueryState): DetailPanelSection[] {
-  const locations = locationsQuery.data ?? [];
   return [
     {
       title: "Supplier",
@@ -32,14 +30,6 @@ export function supplierSheetSections(supplier: SupplierWithRelations, locations
         { label: "Location", value: supplier.location },
         { label: "Source region", value: supplier.sourceRegion },
         { label: "Address", value: supplier.address },
-        buildSupplierDefaultLocationDistanceField({
-          defaultLocationDistanceKm:
-            locations.find((location) => location.isDefault)
-              ?.distanceFromFacilityKm ?? null,
-          locationsLoaded:
-            locationsQuery.data !== undefined,
-          locationsError: locationsQuery.isError,
-        }),
       ],
     },
   ];

@@ -4,6 +4,7 @@
  * Used in both create and edit views for customers
  */
 "use client";
+import { useLocationEditIntent } from "@/hooks/use-location-edit-intent";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 import { useToast } from "@/components/ui/toast";
 
@@ -421,6 +422,11 @@ function LocationsSection({ customerId }: { customerId: string }) {
 
   const { data: locations, isLoading, isError } = useCustomerLocations(customerId);
   const deleteLocation = useDeleteCustomerLocation(customerId);
+
+  useLocationEditIntent(locations, (location) => {
+    setEditingLocation(location);
+    setIsLocationDialogOpen(true);
+  });
 
   const handleDeleteConfirm = async () => {
     if (!deletingLocation) return;

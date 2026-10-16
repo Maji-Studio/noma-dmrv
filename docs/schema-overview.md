@@ -108,6 +108,27 @@ Orders and credit batches store no price or currency, organization operating
 defaults have no default currency, and credit batches store no third-party sale
 verification fields.
 
+## Location distances
+
+`supplier_location_facility_distances` and `customer_location_facility_distances`
+store one positive one-way `distance_km` and `distance_source` per location and
+facility. Both carry organization scope, integer versions and timestamps, unique
+location/facility pairs, composite organization-safe foreign keys, and cascade
+on location deletion. Locations and parties have no scalar distance columns.
+Delivery `recorded_distance_km` and `recorded_distance_source` snapshot the resolved
+pair independently of an optional override, preserving per-delivery accounting
+when the location's defaults change. Pair upserts fill null delivery snapshots
+and missing feedstock legs in the same transaction, skipping locked certification
+lineage and archived cargo. Saving a pair fills a missing distance; never changes a recorded one. Missing pairs permit entry and block
+certification readiness where transport is required.
+
+Migration 0153 contains Kenji's approved one-off copy: pair defaults are copied
+only for organizations with exactly one active facility. All existing deliveries,
+including archived and lineage-locked deliveries in multi-facility organizations,
+keep their old location scalar as a recorded snapshot before the scalar columns
+are dropped. Multi-facility organizations must enter new pair defaults. Existing
+feedstock legs retain their stamped distances. See [ADR 0034](./adr/0034-per-facility-location-distances-frozen-on-record.md).
+
 ## API bookkeeping
 
 All three tables live in `src/db/schema/api.ts`:

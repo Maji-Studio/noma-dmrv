@@ -26,3 +26,47 @@ it("never presigns a final key and carries verified checksums on server writes",
   expect(send).toHaveBeenCalledWith(expect.objectContaining({ input: expect.objectContaining({ Key: "test/final", ChecksumSHA256: Buffer.from("a".repeat(64), "hex").toString("base64") }) }), { abortSignal: undefined });
   expect(send.mock.calls[0][0]).toBeInstanceOf(PutObjectCommand);
 });
+
+it("classifies a missing bucket as misconfiguration", async () => {
+  const cause = Object.assign(new Error("missing bucket"), { name: "NoSuchBucket", $metadata: { httpStatusCode: 404 } });
+  vi.spyOn(S3Client.prototype, "send").mockRejectedValue(cause);
+  await expect(provider().readObjectBounded({ key: "key", maxBytes: 3 })).rejects.toMatchObject({ name: "StorageError", code: "storage_misconfigured" });
+});
+
+
+it.each([
+  ["InvalidAccessKeyId", "storage_misconfigured"],
+  ["SignatureDoesNotMatch", "storage_misconfigured"],
+  ["CredentialsProviderError", "storage_misconfigured"],
+  ["TimeoutError", "storage_unavailable"],
+  ["AbortError", "storage_unavailable"],
+  ["RequestTimeout", "storage_unavailable"],
+  ["ECONNRESET", "storage_unavailable"],
+  ["ERR_STREAM_PREMATURE_CLOSE", "storage_unavailable"],
+  ["UnknownError", "storage_unavailable"],
+])("normalizes bounded read error %s", async (code, expected) => {
+  vi.spyOn(S3Client.prototype, "send").mockRejectedValue(Object.assign(new Error("read failed"), { code }));
+  await expect(provider().readObjectBounded({ key: "key", maxBytes: 3 })).rejects.toMatchObject({ name: "StorageError", code: expected });
+});
+
+it.each([403, 500, 503, 599])("classifies HTTP %s from bounded reads", async (httpStatusCode) => {
+  vi.spyOn(S3Client.prototype, "send").mockRejectedValue({ $metadata: { httpStatusCode } });
+  await expect(provider().readObjectBounded({ key: "key", maxBytes: 3 })).rejects.toMatchObject({
+    code: httpStatusCode === 403 ? "object_access_denied" : "storage_unavailable",
+  });
+});
+
+it("treats AccessDenied for an unwritten key as an object failure", async () => {
+  vi.spyOn(S3Client.prototype, "send").mockRejectedValue({ name: "AccessDenied", $metadata: { httpStatusCode: 403 } });
+  await expect(provider().readObjectBounded({ key: "never-written", maxBytes: 3 })).rejects.toMatchObject({ code: "object_access_denied" });
+});
+
+it("normalizes stream failures after S3 starts returning a body", async () => {
+  const body = Readable.from((async function* () {
+    yield Buffer.from("a");
+    throw Object.assign(new Error("stream closed"), { code: "ERR_STREAM_PREMATURE_CLOSE" });
+  })());
+  vi.spyOn(S3Client.prototype, "send").mockResolvedValue({ Body: body } as never);
+  await expect(provider().readObjectBounded({ key: "key", maxBytes: 3 })).rejects.toMatchObject({ code: "storage_unavailable" });
+  expect(body.destroyed).toBe(true);
+});

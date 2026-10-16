@@ -374,8 +374,8 @@ export const CERTIFY_FIELD_REGISTRY: Record<
     {
       // Stored default distance for the auto-derived biochar distribution
       // leg (a per-delivery `distanceKmOverride` beats it when set).
-      key: "distanceFromFacilityKm",
-      label: "Distance from facility",
+      key: "facilityDistances",
+      label: "Facility distances",
       kind: "entered",
       mappings: [mapping("biocharTransportMassDistanceTonneKm")],
     },
@@ -385,8 +385,8 @@ export const CERTIFY_FIELD_REGISTRY: Record<
     {
       // Default-location distance — the preferred stored level for the
       // auto-derived feedstock leg.
-      key: "distanceFromFacilityKm",
-      label: "Distance from facility",
+      key: "facilityDistances",
+      label: "Facility distances",
       kind: "entered",
       mappings: [mapping("feedstockTransportMassDistanceTonneKm")],
     },

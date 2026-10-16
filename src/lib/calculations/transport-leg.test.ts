@@ -160,7 +160,7 @@ describe("deriveTransportLeg", () => {
 describe("resolveDeliveryTransportRoute", () => {
   const location = {
     name: "Plot A", gpsLatitude: -6.84, gpsLongitude: 39.31,
-    distanceFromFacilityKm: 40, distanceSource: "map_estimate" as const,
+    distanceKm: 40, distanceSource: "map_estimate" as const,
   };
 
   it("keeps document provenance without a delivery distance override", () => {

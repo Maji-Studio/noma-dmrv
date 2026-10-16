@@ -33,7 +33,6 @@ import {
   updateSupplierLocationSchema,
   deleteSupplierLocationSchema,
 } from "@/schemas/suppliers";
-import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
 
 const LOG_MESSAGE = "supplier action failed";
@@ -112,11 +111,7 @@ export async function createSupplierWithLocationsFn(
             gpsLatitude: location.gpsLatitude,
             gpsLongitude: location.gpsLongitude,
             address: location.address || null,
-            distanceFromFacilityKm: location.distanceFromFacilityKm ?? null,
-            distanceSource: resolveDistanceSource(
-              location.distanceFromFacilityKm ?? null,
-              location.distanceSource,
-            ),
+            facilityDistances: location.facilityDistances,
             isDefault: location.isDefault,
           })),
         })
@@ -216,11 +211,7 @@ export async function createSupplierLocationFn(
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
       address: validated.address || null,
-      distanceFromFacilityKm: validated.distanceFromFacilityKm,
-      distanceSource: resolveDistanceSource(
-        validated.distanceFromFacilityKm ?? null,
-        validated.distanceSource,
-      ),
+      facilityDistances: validated.facilityDistances,
       isDefault: validated.isDefault,
     });
 
@@ -247,11 +238,7 @@ export async function updateSupplierLocationFn(
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
       address: validated.address || null,
-      distanceFromFacilityKm: validated.distanceFromFacilityKm,
-      distanceSource: resolveDistanceSource(
-        validated.distanceFromFacilityKm,
-        validated.distanceSource,
-      ),
+      facilityDistances: validated.facilityDistances,
       isDefault: validated.isDefault,
     });
 

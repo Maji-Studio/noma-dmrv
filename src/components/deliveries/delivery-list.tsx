@@ -389,14 +389,14 @@ export function DeliveryList() {
     await createWithEvidence.handleCreate({ data, onError });
   };
 
-  const handleUpdate = async (data: DeliveryFormData, onError: (error: unknown) => boolean) => {
+  const handleUpdate = async (data: DeliveryFormData, onError: (error: unknown) => boolean, expectedVersion?: number) => {
     if (!displaySideSheet?.entity) return;
     setFormError(null);
     if (createWithEvidence.guardUpdate()) return;
     try {
       await updateDelivery.mutateAsync({
         deliveryId: displaySideSheet.entity.id,
-        expectedVersion: displaySideSheet.entity.version,
+        expectedVersion: expectedVersion ?? displaySideSheet.entity.version,
         ...data,
       });
       closeSideSheet();

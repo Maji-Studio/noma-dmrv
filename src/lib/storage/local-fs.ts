@@ -1,5 +1,6 @@
 import { createReadStream } from "node:fs";
 import { readBoundedStream } from "./bounded-read";
+import { boundedReadError } from "./bounded-read-error";
 import type { ReadObjectBoundedArgs, PutObjectOptions } from "./types";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "fs/promises";
@@ -166,13 +167,14 @@ export class LocalFsProvider implements StorageProvider {
   async readObjectBounded(args: ReadObjectBoundedArgs) {
     const abs = resolveLocalFsPath(this.root, args.key);
     if (!abs) throw new StorageError("Invalid storage key", "unsafe_key");
-    args.signal?.throwIfAborted();
     try {
+      args.signal?.throwIfAborted();
       const meta = await this.readMeta(abs);
       return await readBoundedStream(createReadStream(abs, { highWaterMark: args.maxBytes + 1 }), args.maxBytes, meta?.contentType ?? BINARY_CONTENT_TYPE, args.signal);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
-      throw error;
+      const failure = boundedReadError(error, "local-fs");
+      if (failure.code === "object_not_found") return null;
+      throw failure;
     }
   }
 

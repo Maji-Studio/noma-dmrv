@@ -24,8 +24,7 @@ const location: EditableCustomerLocation = {
   address: null,
   gpsLatitude: -3.4,
   gpsLongitude: 37.4,
-  distanceFromFacilityKm: null,
-  distanceSource: null,
+  facilityDistances: [],
   defaultSoilTemperatureC: null,
   isDefault: false,
   version: 1,
@@ -39,7 +38,7 @@ const orderFacility = {
 } as Facility;
 
 vi.mock("@/hooks/use-facility-context", () => ({
-  useFacilityContext: () => ({ selectedFacility: globalFacility }),
+  useFacilityContext: () => ({ selectedFacility: globalFacility, facilities: [globalFacility] }),
 }));
 vi.mock("@/hooks/use-organization-settings", () => ({
   useOrganizationDefaultValues: () => ({ defaults: { defaultCountry: "Tanzania" } }),
@@ -54,6 +53,10 @@ vi.mock("@/components/forms/entity-select/quick-add-dialog-shell", () => ({
 vi.mock("@/components/forms", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/components/forms")>(),
   PositionPicker: () => null,
+
+}));
+
+vi.mock("@/components/forms/distance-calc-field", () => ({
   DistanceCalcField: (props: ComponentProps<typeof DistanceCalcField>) => {
     state.distanceField(props);
     return null;
@@ -88,7 +91,7 @@ describe("CustomerLocationDialog distance origin", () => {
     renderDialog();
     expect(state.distanceField).toHaveBeenLastCalledWith(expect.objectContaining({
       origin: { lat: globalFacility.gpsLatitude, lng: globalFacility.gpsLongitude },
-      originLabel: "selected facility",
+      originLabel: "facility Global plant",
     }));
   });
 
