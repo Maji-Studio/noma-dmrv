@@ -4,6 +4,7 @@
  * Protected by requireAuth guard in the (app) layout
  */
 import { CreditBatchList } from "@/components/credit-batches";
+import { PrototypeBatchList } from "@/components/credit-batches/prototype-batch-list/prototype-batch-list";
 import {
   CREATE_INTENT_PARAM,
   isCreateIntentValue,
@@ -20,6 +21,9 @@ export default async function CreditBatchesPage({
   const canManage =
     !!ctx &&
     (ctx.isPlatformAdmin || ctx.orgRole === "owner" || ctx.orgRole === "admin");
+
+  // PROTOTYPE (throwaway): the overview variants; ?real=1 keeps today's list.
+  if (query.real !== "1") return <PrototypeBatchList />;
 
   return (
     <CreditBatchList
