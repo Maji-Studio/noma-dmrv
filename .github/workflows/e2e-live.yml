@@ -14,6 +14,11 @@ on:
     # 05:30 UTC daily — after the isometric-health.yml ping, before EU morning.
     - cron: "30 5 * * *"
   workflow_dispatch:
+    inputs:
+      force_failure:
+        description: "Fail a probe job to verify GitHub issue notifications (skips health checks)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -25,6 +30,7 @@ env:
 
 jobs:
   playwright-live:
+    if: ${{ !inputs.force_failure }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -151,3 +157,28 @@ jobs:
             test-results
           if-no-files-found: ignore
           retention-days: 14
+
+  notification-probe:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.force_failure }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - name: Force a health failure notification
+        run: exit 1
+
+  notify-failure:
+    needs: [playwright-live, notification-probe]
+    if: >-
+      ${{ always() &&
+          ((github.event_name == 'schedule' &&
+            (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))) ||
+           (github.event_name == 'workflow_dispatch' && inputs.force_failure &&
+            contains(needs.*.result, 'failure'))) }}
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/health-failure-notify.yml
+    with:
+      workflow-file: e2e-live.yml
+      environment: ephemeral CI / Isometric sandbox
