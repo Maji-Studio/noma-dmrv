@@ -129,6 +129,12 @@ describe("stored report checks", () => {
     expect(logger.warn).toHaveBeenCalledWith({ reportId: REPORT_ID, documentId: REPORT_DOCUMENT_ID, check: "stored object read", storageErrorCode: cause.code }, expect.any(String));
   });
 
+  it("treats an access-denied object as a stored file failure", async () => {
+    readObjectBounded.mockRejectedValue(new StorageError("denied", "object_access_denied"));
+    expect(await approve()).toMatchObject({ code: "report_verification_failed", error: "Version 1 of the GHG Statement report failed the stored file check. Generate and approve a new report." });
+    expect(approveRow).not.toHaveBeenCalled();
+  });
+
   it("treats a missing object as a stored file failure", async () => {
     readObjectBounded.mockResolvedValue(null);
     expect(await approve()).toMatchObject({ code: "report_verification_failed", error: "Version 1 of the GHG Statement report failed the stored file check. Generate and approve a new report." });

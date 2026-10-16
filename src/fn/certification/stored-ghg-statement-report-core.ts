@@ -22,36 +22,20 @@ const CHECK_LABELS = {
   bucket: "storage bucket",
 } as const;
 
-const STORAGE_CONFIGURATION_ERRORS = new Set([
-  "AccessDenied", "InvalidAccessKeyId", "NoSuchBucket", "SignatureDoesNotMatch",
-  "CredentialsProviderError", "ExpiredToken", "InvalidToken", "EACCES", "EPERM",
-]);
-const STORAGE_TRANSIENT_ERRORS = new Set([
-  "TimeoutError", "AbortError", "NetworkingError", "ECONNRESET", "ECONNREFUSED",
-  "ECONNABORTED", "ETIMEDOUT", "EPIPE", "ENOTFOUND", "EAI_AGAIN", "ENETUNREACH", "EHOSTUNREACH",
-]);
-const HTTP_FORBIDDEN = 403;
-const HTTP_SERVER_ERROR_MIN = 500;
-const HTTP_SERVER_ERROR_MAX = 599;
-
 function classifyReadError(cause: unknown): DomainErrorCode {
   if (cause instanceof StorageError) {
-    return cause.code === "get_object_timeout" ? "storage_unavailable" : "report_verification_failed";
+    switch (cause.code) {
+      case "storage_misconfigured":
+        return "storage_not_configured";
+      case "object_access_denied":
+      case "object_too_large":
+        return "report_verification_failed";
+      case "storage_unavailable":
+      default:
+        return "storage_unavailable";
+    }
   }
-  if (!cause || typeof cause !== "object") return "report_verification_failed";
-  const error = cause as { code?: string; name?: string; $metadata?: { httpStatusCode?: number } };
-  const status = error.$metadata?.httpStatusCode;
-  if (
-    status === HTTP_FORBIDDEN ||
-    STORAGE_CONFIGURATION_ERRORS.has(error.code ?? "") ||
-    STORAGE_CONFIGURATION_ERRORS.has(error.name ?? "")
-  ) return "storage_not_configured";
-  if (
-    (status !== undefined && status >= HTTP_SERVER_ERROR_MIN && status <= HTTP_SERVER_ERROR_MAX) ||
-    STORAGE_TRANSIENT_ERRORS.has(error.code ?? "") ||
-    STORAGE_TRANSIENT_ERRORS.has(error.name ?? "")
-  ) return "storage_unavailable";
-  return "report_verification_failed";
+  return "storage_unavailable";
 }
 
 export async function verifyStoredGhgStatementReport(

@@ -232,16 +232,14 @@ describe("stored report verification before registry submission", () => {
   });
 
   it.each([
-    [Object.assign(new Error("denied"), { name: "AccessDenied", $metadata: { httpStatusCode: 403 } }), "storage_not_configured"],
-    [Object.assign(new Error("forbidden"), { $metadata: { httpStatusCode: 403 } }), "storage_not_configured"],
-    ...["InvalidAccessKeyId", "NoSuchBucket", "CredentialsProviderError"].map((name) => [Object.assign(new Error("configuration"), { name }), "storage_not_configured"]),
-    [Object.assign(new Error("permission"), { code: "EACCES" }), "storage_not_configured"],
-    [new StorageError("unsafe", "unsafe_key"), "report_verification_failed"],
-    [new StorageError("failed", "get_object_failed"), "report_verification_failed"],
-    [new TypeError("invalid argument"), "report_verification_failed"],
-    [Object.assign(new Error("bad request"), { $metadata: { httpStatusCode: 400 } }), "report_verification_failed"],
-    [Object.assign(new Error("timeout"), { name: "TimeoutError" }), "storage_unavailable"],
-    [Object.assign(new Error("abort"), { name: "AbortError" }), "storage_unavailable"],
+    [new StorageError("denied", "object_access_denied"), "report_verification_failed"],
+    [new StorageError("configuration", "storage_misconfigured"), "storage_not_configured"],
+    [new StorageError("unavailable", "storage_unavailable"), "storage_unavailable"],
+    [new StorageError("unsafe", "unsafe_key"), "storage_unavailable"],
+    [new StorageError("failed", "get_object_failed"), "storage_unavailable"],
+    [new TypeError("invalid argument"), "storage_unavailable"],
+    [Object.assign(new Error("bad request"), { $metadata: { httpStatusCode: 400 } }), "storage_unavailable"],
+    [null, "storage_unavailable"],
   ])("classifies read errors before issuing a report URL: %s", async (cause, code) => {
     vi.mocked(getGhgStatement).mockResolvedValue(makeRemoteStatement({ status: "DRAFT" }));
     readObjectBounded.mockRejectedValue(cause);

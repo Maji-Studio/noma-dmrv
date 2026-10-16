@@ -88,8 +88,9 @@ org/{organizationId}/ghgStatementReport/{reportId}/pdf/{ulid}.pdf
 Transport and durability ledgers key by their semantic model hash so identical
 content reuses the current artifact/Source; changed content creates a new object
 before older local ledgers are retired. A GHG Statement report always allocates
-a new report version and object, so it uses the ordinary key builder under the
-`ghgStatementReport` entity namespace. These are logical keys: the
+a new report version and object. Its key is
+`ghgStatementReportKeyPrefix(organizationId, reportId)` plus a lowercase ULID
+and `.pdf`. Approval and submission reject any stored key outside that prefix. These are logical keys: the
 S3-compatible provider may still prepend `STORAGE_PREFIX` physically.
 
 ## Visibility and read authz
