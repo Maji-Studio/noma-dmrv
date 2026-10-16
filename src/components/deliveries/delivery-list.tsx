@@ -11,9 +11,9 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { RecordLockChip, RecordLockNotice, RecordUsedBy, recordLockColumn } from "@/components/record-locks";
+import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordEditable, recordLockSaveBlockedReason, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { DataTable } from "@/components/ui/data-table";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { MassPair } from "@/components/ui/mass-pair";
@@ -607,11 +607,7 @@ export function DeliveryList() {
         }}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        titleBadge={sheetLock && <RecordLockChip level={sheetLock.level} />}
-        viewModeNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
-        editNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
-        submitBlockedReason={recordLockSaveBlockedReason(sheetLock, sheetLockStatus)}
-        viewModeChildren={<RecordUsedBy lock={sheetLock} />}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, inUseLocksNothing: true })}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit delivery"
         sections={

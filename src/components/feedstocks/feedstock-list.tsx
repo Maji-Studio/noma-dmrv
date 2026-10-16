@@ -12,9 +12,9 @@ import { parseAsString, useQueryState } from "nuqs";
 import { FEEDSTOCK_DEEP_LINK_PARAM } from "@/lib/feedstock-links";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { RecordLockChip, RecordLockNotice, RecordUsedBy, recordLockColumn } from "@/components/record-locks";
+import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordDeletable, isRecordEditable, recordLockSaveBlockedReason, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -658,11 +658,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         }
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        titleBadge={sheetLock && <RecordLockChip level={sheetLock.level} />}
-        viewModeNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
-        editNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
-        submitBlockedReason={recordLockSaveBlockedReason(sheetLock, sheetLockStatus)}
-        viewModeChildren={<RecordUsedBy lock={sheetLock} />}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, inUseLocksNothing: true })}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit feedstock"
         sections={sideSheetEntity ? feedstockSheetSections(sideSheetEntity) : undefined}

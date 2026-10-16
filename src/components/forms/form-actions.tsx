@@ -15,6 +15,8 @@ import {
 } from "react-hook-form";
 import { Button } from "@/components/ui";
 import { FormDialogContext } from "@/components/ui/form-dialog-context";
+import { Notice } from "@/components/ui/notice";
+import { useSubmitBlockedReason } from "@/components/ui/submit-block-context";
 import { cn } from "@/lib/utils";
 import {
   useSideSheetActions,
@@ -107,7 +109,7 @@ export function FormActions<
   const sheetActions = useSideSheetActions();
   const dialogActions = React.useContext(FormDialogContext);
   const inSheet = sticky && sheetActions !== null;
-  const blockedReason = inSheet ? sheetActions.submitBlockedReason ?? null : null;
+  const blockedReason = useSubmitBlockedReason();
   const blockedReasonId = React.useId();
   const inDialog = guardDialogCancel && dialogActions !== null;
   const handleCancel = onCancel
@@ -157,7 +159,7 @@ export function FormActions<
         )}
       </div>
       {showSubmit && blockedReason && (
-        <p id={blockedReasonId} role="status" className="body-caption text-[var(--color-text-secondary)]">{blockedReason}</p>
+        <Notice tone="info" id={blockedReasonId}>{blockedReason}</Notice>
       )}
     </div>}
     </>

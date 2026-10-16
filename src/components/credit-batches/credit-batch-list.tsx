@@ -37,10 +37,10 @@ import {
 import { ServerError } from "@/components/forms";
 import { CreditBatchForm } from "./credit-batch-form";
 import { CreditBatchCard } from "./credit-batch-card";
-import { creditBatchUpdatePatch, isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
-import { RecordLockChip, RecordLockNotice, RecordUsedBy } from "@/components/record-locks";
+import { CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE, creditBatchUpdatePatch, isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
+import { RecordUsedBy, recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordEditable, recordLockSaveBlockedReason } from "@/lib/record-lock-view";
+import { isRecordEditable } from "@/lib/record-lock-view";
 import { CreditBatchHealthStrip } from "./credit-batch-health-strip";
 import { CreditBatchDurabilityPanel } from "./credit-batch-durability-panel";
 import { creditBatchSheetSections } from "./credit-batch-view";
@@ -302,12 +302,18 @@ export function CreditBatchList({
     try {
       const { sampling, ...mutableData } = data;
       void sampling;
+      // A held membership never reaches the server, so a notes-only save
+      // passes the slice guard; a free batch re-resolves on every save. A
+      // membership change made before the lock arrived is never dropped.
+      const patch = creditBatchUpdatePatch(mutableData, sideSheet.entity, membershipLocked);
+      if (!patch) {
+        setUpdateError(CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE);
+        return;
+      }
       const result = await updateCreditBatch.mutateAsync({
         creditBatchId: sideSheet.entity.id,
         expectedVersion: sideSheet.entity.version,
-        // A held membership never reaches the server, so a notes-only save
-        // passes the slice guard; a free batch re-resolves on every save.
-        ...creditBatchUpdatePatch(mutableData, membershipLocked),
+        ...patch,
       });
       if (result.success) {
         closeSideSheet();
@@ -537,12 +543,9 @@ export function CreditBatchList({
       ? undefined
       : formatDateRange(sideSheetEntity.startDate, sideSheetEntity.endDate);
 
-  // Interim certification lock (DR-003): a batch backing a submitted removal
-  // is frozen — no Edit from the sheet, with the reason stated in view mode.
-  const sideSheetHealth = sideSheetEntity
-    ? batchHealthSummaries[sideSheetEntity.id]
-    : undefined;
-  const sideSheetLocked = (sheetLock?.level ?? sideSheetHealth?.recordLock?.level) === "sent";
+  // Record lock (#1119): the sheet reads Sent from its own lock read alone;
+  // the lock line states the reason and Edit waits for the read.
+  const sideSheetLocked = sheetLock?.level === "sent";
 
   return (
     <div className="container-max page-shell">
@@ -725,10 +728,7 @@ export function CreditBatchList({
         subtitle={sideSheetSubtitle}
         editLabel="Edit credit batch"
         canEdit={isRecordEditable(sheetLock)}
-        titleBadge={sheetLock && <RecordLockChip level={sheetLock.level} />}
-        viewModeNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} inUseLocksNothing={!membershipLocked} />}
-        editNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} inUseLocksNothing={!membershipLocked} />}
-        submitBlockedReason={recordLockSaveBlockedReason(sheetLock, sheetLockStatus)}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, inUseLocksNothing: !membershipLocked })}
         size="wide"
         sections={
           sideSheetEntity

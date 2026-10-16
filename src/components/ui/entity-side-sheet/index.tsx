@@ -22,6 +22,7 @@ import {
   type DetailPanelSection,
 } from "@/components/ui/detail-panel";
 import { SideSheetActionsContext } from "./side-sheet-context";
+import { SubmitBlockContext } from "@/components/ui/submit-block-context";
 
 /* -------------------------------------------------------------------------------------------------
  * Back Arrow Icon
@@ -207,7 +208,6 @@ function EntitySideSheet({
     reportDirty: (dirty: boolean) => {
       reportedDirtyRef.current = dirty;
     },
-    submitBlockedReason: mode === "edit" ? submitBlockedReason : null,
   };
 
   // React propagates synthetic events from portaled children (nested dialogs)
@@ -278,10 +278,12 @@ function EntitySideSheet({
             </>
           ) : (
             <SideSheetActionsContext.Provider value={sheetActions}>
-              {mode === "edit" && editNotice ? (
-                <div className="flex flex-col gap-12 pb-20">{editNotice}</div>
-              ) : null}
-              {children}
+              <SubmitBlockContext.Provider value={mode === "edit" ? submitBlockedReason ?? null : null}>
+                {mode === "edit" && editNotice ? (
+                  <div className="flex flex-col gap-12 pb-20">{editNotice}</div>
+                ) : null}
+                {children}
+              </SubmitBlockContext.Provider>
             </SideSheetActionsContext.Provider>
           )}
         </SlideOverPanel.Body>

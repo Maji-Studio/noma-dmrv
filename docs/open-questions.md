@@ -21,6 +21,11 @@ Deferred work lives here, never as a `TODO` in code.
 
 ## Record-lock follow-ups
 
+- `src/components/biochar-products/biochar-product-list.tsx:PRODUCT_DELETE_ACCEPTED_WHILE_OPEN`:
+  product Delete stays hidden while the server refuses every posted product.
+  #1120 (PR #1135) turns it on with the reversal; Delete then shows for Open
+  products only.
+
 - `src/lib/record-lock.ts:recordLocks`: type and consume the free-field declarations
   when the field-edit and deletion-reversal contract is implemented (#1120).
 - `src/data-access/record-lock-lineage.ts:readRecordLockLineage`: Isometric exposes

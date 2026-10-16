@@ -25,11 +25,6 @@ interface SideSheetActions {
    * whichever says dirty.
    */
   reportDirty: (dirty: boolean) => void;
-  /**
-   * Why the sheet's Save is off, shown beside it (a record lock that has not
-   * answered or arrived as Sent). The form and its draft stay open.
-   */
-  submitBlockedReason?: string | null;
 }
 
 const SideSheetActionsContext = React.createContext<SideSheetActions | null>(

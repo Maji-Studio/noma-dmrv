@@ -24,9 +24,9 @@ import type { StorageLocationFormData } from "@/schemas/storage-locations";
 import { useState } from "react";
 import { StorageLocationForm } from "./storage-location-form";
 import { storageLocationSheetSections } from "./storage-location-read-sections";
-import { RecordLockChip, RecordLockNotice, RecordUsedBy } from "@/components/record-locks";
+import { recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock } from "@/hooks/use-record-locks";
-import { isRecordEditable, recordLockSaveBlockedReason } from "@/lib/record-lock-view";
+import { isRecordEditable } from "@/lib/record-lock-view";
 
 export type StorageBinSheetState =
   | { mode: "create"; entity: null }
@@ -113,11 +113,7 @@ export function StorageBinSheet({
       // small, on the line beneath.
       title={state?.mode === "create" ? "Create storage bin" : state?.entity?.name ?? ""}
       subtitle={state?.mode === "create" ? undefined : state?.entity?.code}
-      titleBadge={lock && <RecordLockChip level={lock.level} />}
-      viewModeNotice={<RecordLockNotice lock={lock} status={lockStatus} subject="storageBin" />}
-      editNotice={<RecordLockNotice lock={lock} status={lockStatus} subject="storageBin" />}
-      submitBlockedReason={recordLockSaveBlockedReason(lock, lockStatus)}
-      viewModeChildren={<RecordUsedBy lock={lock} />}
+      {...recordLockSheetProps({ lock: lock, status: lockStatus, subject: "storageBin" })}
       editLabel="Edit storage bin"
       canEdit={state?.entity?.archivedAt == null && isRecordEditable(lock)}
       sections={

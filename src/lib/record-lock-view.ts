@@ -99,3 +99,13 @@ export function recordLockSaveBlockedReason(view: RecordLockView | undefined, st
   if (status === "error") return RECORD_LOCK_ERROR_MESSAGE;
   return status === "pending" ? RECORD_LOCK_PENDING_MESSAGE : null;
 }
+
+/**
+ * A production run's output basis (status, times, reactor, biochar bin,
+ * output mass and moisture) is refused once a product, a stock entry or a
+ * count uses its stock (`assertProductionRunOutputBasisChange`), and once
+ * Sent. A credit batch alone does not fix it.
+ */
+export function isProductionRunOutputLocked(view: RecordLockView | undefined): boolean {
+  return !!view && (view.level === "sent" || view.usedBy.some((link) => link.kind !== "creditBatch"));
+}

@@ -39,9 +39,9 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { StatCard } from "@/components/ui/stat-card";
 import { MassPair } from "@/components/ui/mass-pair";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { RecordLockChip, RecordLockNotice, RecordUsedBy, recordLockColumn } from "@/components/record-locks";
+import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordDeletable, isRecordEditable, recordLockSaveBlockedReason, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
+import { isProductionRunOutputLocked, isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
@@ -622,11 +622,7 @@ export function ProductionRunList() {
         onModeChange={handleModeChange}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        titleBadge={sheetLock && <RecordLockChip level={sheetLock.level} />}
-        viewModeNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
-        editNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
-        submitBlockedReason={recordLockSaveBlockedReason(sheetLock, sheetLockStatus)}
-        viewModeChildren={<RecordUsedBy lock={sheetLock} />}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, inUseLocksNothing: !isProductionRunOutputLocked(sheetLock) })}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit production run"
         size="wide"
@@ -635,6 +631,7 @@ export function ProductionRunList() {
         <ProductionRunForm
           key={sideSheetEntity?.id ?? "create"}
           productionRun={sideSheetEntity ?? undefined}
+          lock={sheetLock}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={attemptCloseSideSheet}
           isSubmitting={createRun.isPending || updateRun.isPending || isFlushing}

@@ -21,14 +21,7 @@ vi.mock("@/hooks/use-biochar-products", () => ({
 }));
 vi.mock("@/hooks/use-credit-batches", () => ({ useCreditBatches: () => ({ data: [] }) }));
 vi.mock("@/hooks/use-debounce", () => ({ useDebounce: (value: string) => value }));
-vi.mock("@/hooks/use-record-locks", () => ({
-  // Every record answers Open, so Edit and Delete are offered as before.
-  useRecordLocks: () => ({
-    locks: new Proxy({}, { get: () => ({ level: "open", heldBy: [], usedBy: [], freeFields: [], howToFree: null, returnedBy: [] }) }),
-    statusOf: () => "ready",
-  }),
-  useRecordLock: () => ({ lock: { level: "open", heldBy: [], usedBy: [], freeFields: [], howToFree: null, returnedBy: [] }, status: "ready" }),
-}));
+vi.mock("@/hooks/use-record-locks", async () => (await import("../../../tests/helpers/record-lock-mocks")).openRecordLocksModule);
 vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => undefined }));
 vi.mock("@/hooks/use-list-pagination", () => ({
   useListPagination: () => ({ currentPage: 1, pageSize: 25, setCurrentPage: vi.fn(), onPaginationChange: vi.fn() }),

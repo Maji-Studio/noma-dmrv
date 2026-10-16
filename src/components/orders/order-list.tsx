@@ -39,9 +39,9 @@ import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useRef, useState } from "react";
 import { ORDER_DEEP_LINK_PARAM } from "@/lib/order-links";
 import { OrderForm } from "./order-form";
-import { RecordLockChip, RecordLockNotice, RecordUsedBy, recordLockColumn } from "@/components/record-locks";
+import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordDeletable, isRecordEditable, recordLockSaveBlockedReason, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { orderSheetSections } from "./order-read-sections";
 import { ILLUSTRATION_SIZE, OrderArt } from "@/components/ui/illustrations";
 
@@ -470,11 +470,7 @@ export function OrderList() {
         }}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        titleBadge={sheetLock && <RecordLockChip level={sheetLock.level} />}
-        viewModeNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
-        editNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
-        submitBlockedReason={recordLockSaveBlockedReason(sheetLock, sheetLockStatus)}
-        viewModeChildren={<RecordUsedBy lock={sheetLock} />}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus })}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit order"
         sections={sideSheetEntity ? orderSheetSections(sideSheetEntity) : undefined}

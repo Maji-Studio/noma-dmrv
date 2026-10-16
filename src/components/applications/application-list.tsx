@@ -12,9 +12,9 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { RecordLockChip, RecordLockNotice, RecordUsedBy, recordLockColumn } from "@/components/record-locks";
+import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordDeletable, isRecordEditable, recordLockSaveBlockedReason, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -753,11 +753,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         canEdit={fieldsEditable && isRecordEditable(sheetLock)}
-        titleBadge={sheetLock && <RecordLockChip level={sheetLock.level} />}
-        viewModeNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
-        editNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
-        submitBlockedReason={recordLockSaveBlockedReason(sheetLock, sheetLockStatus)}
-        viewModeChildren={<RecordUsedBy lock={sheetLock} />}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus })}
         editLabel="Edit application"
         size="wide"
         sections={sideSheetEntity ? applicationSheetSections(sideSheetEntity, { delivery: sideSheetDelivery, lock: applicationLock, durabilityOption }) : undefined}
@@ -765,6 +761,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         <ApplicationForm
           key={sideSheetEntity?.id ?? "create"}
           application={sideSheetEntity ?? undefined}
+          lock={sheetLock}
           deliveries={deliveryOptions}
           durabilityOption={durabilityOption}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}

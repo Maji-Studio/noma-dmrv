@@ -51,14 +51,26 @@ describe("EntitySideSheet record lock in edit mode", () => {
     expect(JSON.stringify(renderer.toJSON())).toContain("Sent with Removal Jan 1 to Mar 31, 2026, so every field is locked.");
     const save = saveButton();
     expect(save.props.disabled).toBe(true);
-    const reason = renderer.root.findByProps({ role: "status" });
-    expect(reason.props.children).toBe("This record was sent with its Removal, so it cannot be saved.");
-    expect(save.props["aria-describedby"]).toBe(reason.props.id);
+    // The reason is a Notice, linked to Save for screen readers.
+    const [reason] = renderer.root.findAll((node) => node.type === "div" && node.props.id === save.props["aria-describedby"]);
+    expect(reason.props.role).toBe("status");
+    expect(JSON.stringify(renderer.toJSON())).toContain("This record was sent with its Removal, so it cannot be saved.");
   });
 
   it("leaves Save on when nothing blocks it", () => {
     act(() => { renderer = renderSheet(null); });
     expect(saveButton().props.disabled).toBe(false);
     expect(renderer.root.findAllByProps({ role: "status" })).toHaveLength(0);
+  });
+});
+
+describe("RecordLockFormFrame (picker edit dialogs)", () => {
+  it("shows the lock line and turns Save off until the lock answers", async () => {
+    const { RecordLockFormFrame } = await import("@/components/record-locks/record-lock-sheet-props");
+    act(() => {
+      renderer = create(<RecordLockFormFrame lock={undefined} status="pending"><DraftForm /></RecordLockFormFrame>);
+    });
+    expect(saveButton().props.disabled).toBe(true);
+    expect(JSON.stringify(renderer.toJSON())).toContain("Checking whether this record can change.");
   });
 });

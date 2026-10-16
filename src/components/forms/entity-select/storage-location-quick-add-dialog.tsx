@@ -18,6 +18,8 @@ import { StorageLocationForm } from "@/components/storage-locations/storage-loca
 import type { StorageLocationFormData } from "@/schemas/storage-locations";
 import { useQuickAddSubmit } from "@/hooks/use-quick-add-submit";
 import { QuickAddDialogShell } from "./quick-add-dialog-shell";
+import { RecordLockFormFrame } from "@/components/record-locks/record-lock-sheet-props";
+import { useRecordLock } from "@/hooks/use-record-locks";
 import type { EntityOption } from "./types";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
@@ -75,6 +77,8 @@ export function StorageLocationQuickAddDialog({
   });
 
   const update = useUpdateStorageLocation();
+  // Editing a saved bin carries the same lock as its sheet.
+  const { lock, status: lockStatus } = useRecordLock("storageLocation", isOpen && storageLocation ? storageLocation.id : null);
   const toast = useToast();
   const [editError, setEditError] = useState<string>();
   const archived = storageLocation?.archivedAt != null;
@@ -118,15 +122,34 @@ export function StorageLocationQuickAddDialog({
         >
           {archived ? (
             <DetailSpine sections={readSections} />
+          ) : storageLocation ? (
+            <RecordLockFormFrame lock={lock} status={lockStatus} subject="storageBin">
+              <StorageLocationForm
+                key={storageLocation.id}
+                storageLocation={storageLocation}
+                onSubmit={handleUpdate}
+                onCancel={onClose}
+                isSubmitting={isSubmitting || update.isPending}
+                errorMessage={editError}
+                submitLabel="Save changes"
+                lock={lock}
+                defaultType={defaultBinType}
+                allowedTypes={allowedTypes}
+                defaultFeedstockTypeId={defaultFeedstockTypeId}
+                feedstockTypeUsage={feedstockTypeUsage}
+                lockFeedstockType={lockFeedstockType ?? Boolean(defaultFeedstockTypeId)}
+                defaultFormulationId={defaultFormulationId}
+                defaultFacilityId={facilityId}
+              />
+            </RecordLockFormFrame>
           ) : (
             <StorageLocationForm
-              key={storageLocation?.id ?? "create"}
-              storageLocation={storageLocation}
-              onSubmit={storageLocation ? handleUpdate : handleSubmit}
+              key="create"
+              onSubmit={handleSubmit}
               onCancel={onClose}
               isSubmitting={isSubmitting || update.isPending}
-              errorMessage={storageLocation ? editError : error ?? undefined}
-              submitLabel={storageLocation ? "Save changes" : "Create storage bin"}
+              errorMessage={error ?? undefined}
+              submitLabel="Create storage bin"
               defaultType={defaultBinType}
               allowedTypes={allowedTypes}
               defaultFeedstockTypeId={defaultFeedstockTypeId}

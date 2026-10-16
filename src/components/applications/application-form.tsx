@@ -11,6 +11,7 @@
  */
 "use client";
 
+import { isRecordFieldLocked, type RecordLockView } from "@/lib/record-lock-view";
 import { FACILITY_REFERENCE_TEMPERATURE_NOTICE } from "@/lib/application-guidance";
 import { nullableNumericValue, numericValue } from "@/lib/form-utils";
 import { formatUtcDate, toDateInputValue } from "@/lib/date-utils";
@@ -117,6 +118,8 @@ function AppliedMassSplit({
 // ============================================
 
 interface ApplicationFormProps {
+  /** The saved application's lock: a Removal slice fixes its delivery and applied mass. */
+  lock?: RecordLockView;
   /** Existing application data for editing (undefined for create mode) */
   application?: Application;
   /** Available deliveries for selection */
@@ -152,8 +155,11 @@ export function ApplicationForm({
   submitLabel,
   durabilityOption = "200_year",
   deferredAttachments,
+  lock,
 }: ApplicationFormProps) {
   const isEditMode = !!application;
+  // A Removal slice refuses delivery and applied mass changes (`assertMutableSlices`).
+  const locked = (field: string) => isEditMode && isRecordFieldLocked(lock, field);
   const { defaults: organizationDefaults } = useOrganizationDefaultValues();
   // Soil temperature feeds only the 200-year durable fraction; 1000-year
   // removals derive durability from petrographic reflectance + TGA.
@@ -440,7 +446,7 @@ export function ApplicationForm({
               id="deliveryId"
               optionLabel="delivery"
               placeholder="Select delivery..."
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("deliveryId")}
               error={!!errors.deliveryId}
               options={deliveryOptions}
               value={deliveryField.value}
@@ -474,7 +480,7 @@ export function ApplicationForm({
               type="number"
               step="any"
               placeholder="e.g., 5000"
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("appliedWetMassKg")}
               error={!!biocharAppliedError}
               {...register("biocharAppliedKg", {
                 setValueAs: numericValue,

@@ -35,9 +35,9 @@ import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
-import { RecordLockChip, RecordLockNotice, RecordUsedBy, recordLockColumn } from "@/components/record-locks";
+import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordEditable, recordLockSaveBlockedReason, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
@@ -315,13 +315,12 @@ export function SampleList({
   const createIntentSideSheet = createIntent.isOpen
     ? ({ mode: "create", entity: null } as const)
     : null;
-  const requestedSideSheet =
+  const displaySideSheet =
     sideSheet ?? createIntentSideSheet ?? deepLinkedSideSheet;
   const sampleLocks = useRecordLocks("sample", samples.map((sample) => sample.id));
-  const { lock: sheetLock, status: sheetLockStatus } = useRecordLock("sample", requestedSideSheet?.entity?.id);
-  // A lock that arrives as Sent keeps an open draft: Save turns off with
-  // the reason instead (`submitBlockedReason`).
-  const displaySideSheet = requestedSideSheet;
+  // A lock that arrives as Sent keeps an open draft: Save turns off with the
+  // reason instead (`submitBlockedReason`).
+  const { lock: sheetLock, status: sheetLockStatus } = useRecordLock("sample", displaySideSheet?.entity?.id);
   const activeFocusTarget = displaySideSheet?.entity?.id === focusedSampleId
     ? parseEntityFocusTarget(deepLinkFocus)
     : null;
@@ -703,11 +702,7 @@ export function SampleList({
         onModeChange={handleModeChange}
         title={displaySideSheet?.mode === "create" ? "Create Sample" : (displaySideSheet?.entity?.sampleCode ?? "")}
         subtitle={displaySideSheet?.mode === "create" ? undefined : viewSubtitle}
-        titleBadge={sheetLock && <RecordLockChip level={sheetLock.level} />}
-        viewModeNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} inUseLocksNothing />}
-        editNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} inUseLocksNothing />}
-        submitBlockedReason={recordLockSaveBlockedReason(sheetLock, sheetLockStatus)}
-        viewModeChildren={<RecordUsedBy lock={sheetLock} />}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, inUseLocksNothing: true })}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit Sample"
         sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity) : undefined}

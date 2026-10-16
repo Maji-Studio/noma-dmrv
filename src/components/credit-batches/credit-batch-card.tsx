@@ -45,10 +45,9 @@ export function CreditBatchCard({
   lock,
 }: CreditBatchCardProps) {
   const co2eStored = creditBatch.co2eStoredPreview?.co2eStoredTonnes ?? null;
-  // Interim certification lock (DR-003): once the batch backs a submitted
-  // removal its definition is frozen, so the menu offers no Edit or Delete.
-  // The view sheet explains the lock; the server guard enforces it.
-  // Fail closed: Edit and Delete wait for the lock read to answer.
+  // Record lock (#1119): Sent offers no Edit or Delete, and both wait for the
+  // lock read to answer. The sheet's lock line names the Removal; the server
+  // guard enforces it.
   const locked = !isRecordEditable(lock);
 
   return (

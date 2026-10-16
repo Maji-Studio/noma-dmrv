@@ -106,7 +106,9 @@ export function CreditBatchForm({
   lock,
 }: CreditBatchFormProps) {
   const isEditMode = !!creditBatch;
-  const membershipLocked = isEditMode && isCreditBatchMembershipLocked(lock);
+  // Fail closed: the definition stays fixed until the lock answers, so a
+  // lock that arrives Held can never meet an edited membership.
+  const membershipLocked = isEditMode && (!lock || isCreditBatchMembershipLocked(lock));
   const { facilityId: contextFacilityId } = useFacilityContext();
 
   const {

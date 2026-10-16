@@ -88,20 +88,8 @@ vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   FireIcon: () => null,
   CertificateIcon: () => null,
 }));
-vi.mock("@/hooks/use-record-locks", () => ({
-  // Every record answers Open, so Edit and Delete are offered as before.
-  useRecordLocks: () => ({
-    locks: new Proxy({}, { get: () => ({ level: "open", heldBy: [], usedBy: [], freeFields: [], howToFree: null, returnedBy: [] }) }),
-    statusOf: () => "ready",
-  }),
-  useRecordLock: () => ({ lock: { level: "open", heldBy: [], usedBy: [], freeFields: [], howToFree: null, returnedBy: [] }, status: "ready" }),
-}));
-vi.mock("@/components/record-locks", () => ({
-  RecordLockChip: () => null,
-  RecordLockNotice: () => null,
-  RecordUsedBy: () => null,
-  recordLockColumn: () => ({ id: "recordLock", header: "Lock", cell: () => null }),
-}));
+vi.mock("@/hooks/use-record-locks", async () => (await import("../../../tests/helpers/record-lock-mocks")).openRecordLocksModule);
+vi.mock("@/components/record-locks", async () => (await import("../../../tests/helpers/record-lock-mocks")).stubRecordLockComponentsModule);
 
 vi.mock("@/components/ui", () => ({
   Button: ({ children }: { children?: ReactNode }) => <button type="button">{children}</button>,

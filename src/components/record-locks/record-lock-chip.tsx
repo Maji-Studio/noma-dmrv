@@ -1,12 +1,12 @@
 import { LinkSimpleIcon, LockSimpleIcon, LockSimpleOpenIcon } from "@phosphor-icons/react/dist/ssr";
 import type { RecordLockStatus, RecordLockView } from "@/lib/record-lock-view";
+import { statusBadgeVariants } from "@/components/ui/status-badge";
 import { RECORD_LOCK_CHIP_CLASSES } from "@/lib/status-state";
 import { cn } from "@/lib/utils";
 import { RECORD_LOCK_LEVEL_LABELS } from "./record-lock-labels";
 
 const CHIP_ICON_SIZE = 14;
-/** StatusBadge's default anatomy; the colours come from RECORD_LOCK_CHIP_CLASSES alone. */
-const CHIP_BASE = "inline-flex h-[24px] items-center justify-center gap-4 whitespace-nowrap border px-8 py-4 body-caption-fit font-medium";
+
 
 /** Open lock, link, closed lock: the icon repeats the level for colour-blind readers. */
 function LevelIcon({ level }: { level: RecordLockView["level"] }) {
@@ -26,7 +26,8 @@ export function RecordLockChip({ level, className }: { level: RecordLockView["le
   return (
     <span
       data-record-lock={level}
-      className={cn(CHIP_BASE, RECORD_LOCK_CHIP_CLASSES[level], className)}
+      // StatusBadge's anatomy; the lock colours replace its status colours.
+      className={cn(statusBadgeVariants({ size: "default" }), "gap-4", RECORD_LOCK_CHIP_CLASSES[level], className)}
     >
       <LevelIcon level={level} />
       {RECORD_LOCK_LEVEL_LABELS[level]}

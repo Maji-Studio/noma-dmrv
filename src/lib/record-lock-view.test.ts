@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isBinFormulationLocked, isRecordDeletable, isRecordEditable, isRecordFieldLocked, recordLockSaveBlockedReason, type RecordLockView } from "./record-lock-view";
+import { isBinFormulationLocked, isProductionRunOutputLocked, isRecordDeletable, isRecordEditable, isRecordFieldLocked, recordLockSaveBlockedReason, type RecordLockView } from "./record-lock-view";
 
 const lock = (level: RecordLockView["level"]): RecordLockView => ({
   level, heldBy: [], usedBy: [], freeFields: level === "sent" ? [] : ["code", "quantityKg"], howToFree: null, returnedBy: [],
@@ -50,5 +50,22 @@ describe("record lock view helpers", () => {
     it("stays open only for the one formulation every stored product has", () => {
       expect(isBinFormulationLocked(bin(["f-1"]), null)).toBe(false);
     });
+  });
+});
+
+describe("production run output basis (assertProductionRunOutputBasisChange)", () => {
+  const run = (level: RecordLockView["level"], kinds: string[]): RecordLockView => ({
+    ...lock(level), usedBy: kinds.map((kind, index) => ({ kind, id: `${kind}-${index}`, label: null, facilityId: null })),
+  });
+  it("is fixed once a product, a stock entry or a count uses the run, and once Sent", () => {
+    expect(isProductionRunOutputLocked(run("inUse", ["biocharProduct"]))).toBe(true);
+    expect(isProductionRunOutputLocked(run("inUse", ["stockEntry"]))).toBe(true);
+    expect(isProductionRunOutputLocked(run("inUse", ["delivery"]))).toBe(true);
+    expect(isProductionRunOutputLocked(run("sent", []))).toBe(true);
+  });
+  it("stays free when only a credit batch uses the run, while Open, or before the lock answers", () => {
+    expect(isProductionRunOutputLocked(run("inUse", ["creditBatch"]))).toBe(false);
+    expect(isProductionRunOutputLocked(run("open", []))).toBe(false);
+    expect(isProductionRunOutputLocked(undefined)).toBe(false);
   });
 });
