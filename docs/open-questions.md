@@ -242,20 +242,18 @@ Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](.
 
 ### Feedstock wet-stock withdrawals check balances at different times (`feedstock-stock/draw-event-time`, opened 2026-10-16)
 
-- **Anchor:** `src/data-access/feedstock-wet-stock.ts:assertFeedstockWetDrawWithinStock`
-  (line 40).
+- **Anchor:** `src/data-access/feedstock-wet-stock.ts:assertFeedstockWetDrawWithinStock`.
 - Losses check the balance at their event time and after later movements in
-  `src/data-access/bin-movements.ts:createBinMovement` (lines 265-273).
-  Production-run draws in
+  `src/data-access/bin-movements.ts:createBinMovement`. Production-run draws in
   `src/data-access/production-runs/feedstock-draws.ts:replaceProductionRunFeedstockDraws`
-  (line 211) and Biochar product formulation draws in
+  and Biochar product formulation draws in
   `src/data-access/biochar-product-composition.ts:assertCompositionIngredientDrawsWithinStock`
-  (line 330) call `assertFeedstockWetDrawWithinStock`, which checks only the
-  current balance (lines 55-65). A backdated run draw can therefore leave a
-  negative balance in the bin's history while the current balance is fine.
+  call `assertFeedstockWetDrawWithinStock`, which checks only the current
+  balance. A backdated run draw can therefore leave a negative balance in the
+  bin's history while the current balance is fine.
 - **Resolve via:** decide whether draws should also check at event time, as
-  losses and output bins do (`src/lib/output-stock/planner.ts:planOutputStock`,
-  lines 116-150), or whether current-balance-only checking is intended.
+  losses and output bins do (`src/lib/output-stock/planner.ts:planOutputStock`),
+  or whether current-balance-only checking is intended.
 
 ### Output-bin FIFO and physical composition (`product-mass/dry-biochar-lineage`, opened 2026-08-04, `needs-registry-check`) — implemented in #759; split and mix bins agreed 2026-09-28
 
