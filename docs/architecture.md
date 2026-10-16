@@ -660,13 +660,18 @@ helpers and numeric/mass/ratio constants — see [forms.md](./forms.md)) ·
 `.github/workflows/`: `ci.yml` (lint/typecheck/build, Vitest in two shards) ·
 `migrate.yml`
 (auto-migrate on schema push to `main`/`staging`; manual reset/seed via
-`workflow_dispatch`) · `migration-gate.yml` (blocks schema drift) ·
+`workflow_dispatch`) · `migration-gate.yml` (validates migration, seed and bootstrap
+paths against empty databases and checks schema drift) ·
 `enforce-main-source.yml` (branch-protection: `main` only from `staging`) ·
 `e2e.yml` and `e2e-live.yml` (Playwright, see [testing.md](./testing.md)) ·
 `isometric-health.yml` and `storage-health.yml` (daily health checks; storage
 writes and deletes a probe object, and its opt-in `repair_cors` dispatch updates
 bucket CORS settings) ·
 `claude.yml` and `.coderabbit.yaml` (AI review).
+
+`ci.yml`, `e2e.yml` and `migration-gate.yml` also run on `merge_group`, so
+`staging` can use a GitHub merge queue that tests each PR on top of the current
+queue before it lands. `openapi-breaking` runs on PRs only.
 
 `ci.yml` restores ESLint's content cache (`.cache/eslint`) and TypeScript's
 incremental state (`.cache/typecheck.tsbuildinfo`). Cache keys include OS,
