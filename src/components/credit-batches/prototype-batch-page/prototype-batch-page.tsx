@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import { ProtoProvider, useProto } from "./prototype-context";
 import { BatchHeader, KeyNumbers } from "./prototype-header";
 import { buildBatchModel, SCENARIOS, TAB_LABELS, TABS, type Scenario } from "./prototype-model";
-import { DetailsPanel, OpenItemGroups, Panel, RemovalsPanel } from "./prototype-parts";
+import { CountBadge, DetailsPanel, OpenItemGroups, Panel, RemovalsPanel } from "./prototype-parts";
 import { TabBody } from "./prototype-tabs";
 
 const SCENARIO_NOTES: Record<Scenario, string> = {
@@ -55,9 +55,7 @@ function BatchTabs() {
           >
             {TAB_LABELS[key]}
             {key === "overview" && model.openCount > 0 && (
-              <span className={cn("inline-flex min-w-20 items-center justify-center rounded-full px-6 body-caption font-medium tabular-nums", model.blocking.length > 0 ? "bg-[var(--st-bad)] text-white" : "bg-[var(--sea)]")}>
-                {model.openCount}
-              </span>
+              <CountBadge count={model.openCount} blocking={model.blocking.length > 0} label={`${model.openCount} open items`} />
             )}
           </button>
         ))}
