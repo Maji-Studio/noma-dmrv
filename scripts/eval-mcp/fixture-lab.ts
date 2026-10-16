@@ -1,6 +1,6 @@
-import { apiActivityWhere } from "../../tests/helpers/api-activity";
+import { apiActivityWhere, apiAuditColumns, toApiAuditRow } from "../../tests/helpers/api-activity";
 import { randomUUID } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   activityEvents, creditBatches, facilities, feedstocks, members, productionProcesses, productionRunFeedstockDraws,
@@ -93,8 +93,8 @@ export async function readLabSnapshot(fixture: LabEvalFixture): Promise<LabDatab
     batches: await readBatches(org),
     facilities: await readFacilities(org),
     unrelated: { feedstocks: await count(feedstocks), productionRuns: await count(productionRuns), draws: await count(productionRunFeedstockDraws) },
-    audits: await db.select({ transport: activityEvents.source, operationId: sql<string>`${activityEvents.operationId}` })
-      .from(activityEvents).where(apiActivityWhere(org)),
+    audits: await db.select(apiAuditColumns)
+      .from(activityEvents).where(apiActivityWhere(org)).then((rows) => rows.map(toApiAuditRow)),
   };
 }
 

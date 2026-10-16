@@ -1,6 +1,6 @@
-import { apiActivityWhere } from "../../tests/helpers/api-activity";
+import { apiActivityWhere, apiAuditColumns, toApiAuditRow } from "../../tests/helpers/api-activity";
 import { randomUUID } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   activityEvents, binMovements, facilities, members, outputStockAllocations, outputStockMoistureReadings,
@@ -54,8 +54,8 @@ export async function readStockSnapshot(fixture: StockEvalFixture): Promise<Stoc
     db.select({ movementId: outputStockAllocations.movementId, binId: outputStockAllocations.sourceStorageLocationId,
       layerId: outputStockAllocations.productionRunId, wetMassKg: outputStockAllocations.wetMassKg })
       .from(outputStockAllocations).where(eq(outputStockAllocations.organizationId, org)),
-    db.select({ transport: activityEvents.source, operationId: sql<string>`${activityEvents.operationId}` })
-      .from(activityEvents).where(apiActivityWhere(org)),
+    db.select(apiAuditColumns)
+      .from(activityEvents).where(apiActivityWhere(org)).then((rows) => rows.map(toApiAuditRow)),
   ]);
   return { movements, allocations: allocations.map((row) => ({ ...row, wetMassKg: row.wetMassKg === null ? null : Number(row.wetMassKg) })), audits };
 }

@@ -193,12 +193,7 @@ Audited operations must implement `describe`.
 Committed runner writes with a non-null `describe` effect record value-free
 `activity_events` in the operation's transaction for form, script, REST and MCP
 calls. Every runner event carries `operationId`, `versionBefore` and
-`versionAfter`. An API audit row has
-`source in ('rest','mcp') and operation_id is not null`; it also carries
-`credentialId`, `requestId` and field names. Nested document, membership,
-transport-leg and document-retirement rows from the same API call carry only
-actor and source attribution, without operation, credential or request IDs.
-`oauthClientId` is reserved and null until OAuth grants ship.
+`versionAfter`. The API audit row contract is defined in [Activity events](./database.md#activity-events).
 Form writes have null credential IDs.
 Dry runs, idempotent replays and `activity.skip()` add no events.
 The runner records one event per entity and distinct batch/run scope supplied by

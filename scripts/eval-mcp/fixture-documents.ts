@@ -1,4 +1,5 @@
-import { eq, and, inArray, isNotNull, sql } from "drizzle-orm";
+import { apiActivityWhere, apiAuditColumns, toApiAuditRow } from "../../tests/helpers/api-activity";
+import { eq } from "drizzle-orm";
 import { rm } from "node:fs/promises";
 import { db } from "@/db";
 import { activityEvents, deliveries, documents, storageObjectDeletions } from "@/db/schema";
@@ -26,7 +27,7 @@ export async function seedDocumentFixture(fileDirectory: string): Promise<Docume
     }, { activitySource: "script" });
     const file = await writeBillOfLading(fileDirectory);
     const [audits, deliveryRows] = await Promise.all([
-      db.select({ id: activityEvents.id }).from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, fixture.ctx.organizationId))),
+      db.select({ id: activityEvents.id }).from(activityEvents).where(apiActivityWhere(fixture.ctx.organizationId)),
       db.select().from(deliveries).where(eq(deliveries.organizationId, fixture.ctx.organizationId)),
     ]);
     return { ...fixture, fileDirectory, documentTarget: { ...file, deliveryId: delivery.id, deliveryCode: delivery.code },
@@ -45,9 +46,9 @@ export async function readDocumentSnapshot(fixture: DocumentEvalFixture): Promis
     db.select({ id: documents.id, entityType: documents.entityType, entityId: documents.entityId,
       documentType: documents.documentType, uploadStatus: documents.uploadStatus, checksumSha256: documents.checksumSha256 })
       .from(documents).where(eq(documents.organizationId, org)),
-    db.select({ id: activityEvents.id, operationId: sql<string>`${activityEvents.operationId}`, transport: activityEvents.source,
+    db.select({ ...apiAuditColumns, id: activityEvents.id,
       entityType: activityEvents.entityType, entityId: activityEvents.entityId })
-      .from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, org))),
+      .from(activityEvents).where(apiActivityWhere(org)).then((rows) => rows.map(toApiAuditRow)),
     db.select().from(deliveries).where(eq(deliveries.organizationId, org)),
   ]);
   return { documents: rows, audits: audits.filter(({ id }) => !fixture.seededAuditIds.includes(id))

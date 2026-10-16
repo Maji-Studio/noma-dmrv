@@ -120,23 +120,7 @@ All three tables live in `src/db/schema/api.ts`:
 
 ## Activity history
 
-| Table | Purpose |
-|---|---|
-| `activity_events` | Shared audit store for entity changes and API writes. Nullable `operation_id`, `version_before`, `version_after` record runner effect metadata for every transport; `credential_id` and `request_id` attribute API audit rows (`source in ('rest','mcp') and operation_id is not null`). `oauth_client_id` is reserved and null until OAuth grants ship. `source` identifies form, script, REST or MCP writes. |
-
-`activity_events` stores org-scoped, value-free entity changes, status
-transitions and actor/source attribution. The caller's transaction owns each
-insert; reads order by `occurred_at` then unique `sequence`, newest first.
-The organization FK cascades on delete; the nullable facility reference deliberately
-has no FK to avoid deadlocks against facility archive/restore. `recordActivity`
-checks same-org facility ownership with a non-locking read in the caller's
-transaction, including archived facilities. Facilities are never hard-deleted;
-entity references survive deletes. Entity types
-use canonical snake_case names from
-`ACTIVITY_ENTITY_TYPES`; `bin_movement` identifies `bin_movements` rows.
-`src/lib/activity-entity-type.ts` maps existing runner/certification aliases to
-these names and rejects unknown values. See the full vocabulary and mapper
-contract in [database.md](./database.md#activity-events).
+`activity_events` stores entity changes and API writes under the [Activity events contract](./database.md#activity-events).
 
 ## Invariants and traps
 
