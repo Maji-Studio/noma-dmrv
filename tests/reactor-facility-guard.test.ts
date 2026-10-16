@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import type { Pool } from "pg";
 import { db } from "@/db";
@@ -11,20 +11,12 @@ import { makeTestOrgContext, TEST_SITE_POSITION } from "./helpers/test-org";
 import { createTestPool } from "./helpers/operation-fixture";
 import { openOperationBarrier, waitForBlockedOperations } from "./helpers/operation-barrier";
 
-// Give the bounded lock observer time to prove a writer is waiting.
-const originalLockTimeout = vi.hoisted(() => {
-  const original = process.env.DB_POOL_LOCK_TIMEOUT_MS;
-  process.env.DB_POOL_LOCK_TIMEOUT_MS = "5000";
-  return original;
-});
 const BARRIER_CONNECTIONS = 2;
 let barrierPool: Pool;
 
 beforeAll(() => { barrierPool = createTestPool(BARRIER_CONNECTIONS); });
 afterAll(async () => {
   await barrierPool.end();
-  if (originalLockTimeout === undefined) delete process.env.DB_POOL_LOCK_TIMEOUT_MS;
-  else process.env.DB_POOL_LOCK_TIMEOUT_MS = originalLockTimeout;
 });
 
 const fixtures: Awaited<ReturnType<typeof fixture>>[] = [];
