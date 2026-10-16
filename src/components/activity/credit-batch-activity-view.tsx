@@ -75,10 +75,16 @@ function FilterSelect({
 export function CreditBatchActivityView({
   creditBatchId,
   batchCode,
+  inline = false,
 }: {
   creditBatchId: string;
   /** Names the list for assistive tech; absent while the batch list loads. */
   batchCode?: string;
+  /**
+   * Render in page flow (a tab on the credit batch page) instead of filling the
+   * Traceability canvas. Drops the overlay, the container and the heading.
+   */
+  inline?: boolean;
 }) {
   const [filters, setFilters] = useState<ActivityFilters>({});
   // Index of the first row a "Show older activity" press added; that row takes focus once.
@@ -171,18 +177,21 @@ export function CreditBatchActivityView({
   })();
 
   const hasAnyActivity = (summary.data?.total ?? 0) > 0;
-  return (
-    <div className="absolute inset-0 overflow-auto bg-[var(--bg)]" data-testid="credit-batch-activity-view">
-      <div className="container-max flex flex-col gap-20 py-24">
+  const intro = (
+    <p className="body-small text-[var(--color-text-secondary)]">
+      {hasAnyActivity
+        ? `${activityChangeCount(summary.data!.total)} to this credit batch and its records since ${activityRecordingStartLabel()}. Newest first.`
+        : "Changes to this credit batch and its records, newest first."}
+    </p>
+  );
+  const content = (
         <div className="content-measure-preview flex flex-col gap-20">
-          <div className="flex flex-col gap-4">
-            <h2 className="title-heading-3">{ACTIVITY_TITLE}</h2>
-            <p className="body-small text-[var(--color-text-secondary)]">
-              {hasAnyActivity
-                ? `${activityChangeCount(summary.data!.total)} to this credit batch and its records since ${activityRecordingStartLabel()}. Newest first.`
-                : "Changes to this credit batch and its records, newest first."}
-            </p>
-          </div>
+          {inline ? intro : (
+            <div className="flex flex-col gap-4">
+              <h2 className="title-heading-3">{ACTIVITY_TITLE}</h2>
+              {intro}
+            </div>
+          )}
           {hasAnyActivity ? (
             <div className="flex flex-col gap-12 sm:flex-row sm:flex-wrap sm:items-end" role="group" aria-label="Filter activity">
               <FilterSelect
@@ -212,7 +221,13 @@ export function CreditBatchActivityView({
           {body}
           <p role="status" className="sr-only">{announcement}</p>
         </div>
-      </div>
+  );
+  if (inline) {
+    return <div data-testid="credit-batch-activity-view">{content}</div>;
+  }
+  return (
+    <div className="absolute inset-0 overflow-auto bg-[var(--bg)]" data-testid="credit-batch-activity-view">
+      <div className="container-max flex flex-col gap-20 py-24">{content}</div>
     </div>
   );
 }

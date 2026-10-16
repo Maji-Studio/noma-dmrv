@@ -139,15 +139,15 @@ export function KeyNumbers() {
   const { masses } = model;
   const cells = [
     {
-      label: "Biochar applied",
+      label: "Applied biochar",
       value: formatTonnes(model.appliedTons),
       sub: masses.notIn > 0 ? `${formatTonnes(masses.notIn)} not in a Removal` : "All in Removals",
     },
     { label: "Carbon estimate", value: `≈ ${formatTonnes(model.co2eTons ?? 0, { unit: "t CO₂e" })}`, sub: "Before project emissions" },
     {
-      label: "Lab samples",
+      label: "Samples",
       value: `${model.samples} of ${SAMPLES_REQUIRED}`,
-      sub: model.samples >= SAMPLES_REQUIRED ? "Enough for Method B" : "Method B needs three",
+      sub: model.samples >= SAMPLES_REQUIRED ? "Enough for a sampled credit batch" : "A sampled credit batch needs three",
     },
   ];
   return (
