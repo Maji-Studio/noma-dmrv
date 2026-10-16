@@ -25,9 +25,9 @@ const cases = [
     json: () => representFacility({ ...base, version: 7, timezone: "Africa/Dar_es_Salaam", durabilityOption: "200_year", createdAt: instant, updatedAt: instant }),
     expected: { ...expected, version: 7, timeZone: "Africa/Dar_es_Salaam", durabilityOption: "200_year" } },
   { name: "supplier", schema: supplierRepresentationSchema,
-    map: () => representSupplier({ ...base, ...privateFields, version: 7 }),
-    json: () => representSupplier({ ...base, version: 7, createdAt: instant, updatedAt: instant }),
-    expected: { ...expected, version: 7 } },
+    map: () => representSupplier({ ...base, sourceRegion: null, archivedAt: null, ...privateFields, version: 7 }),
+    json: () => representSupplier({ ...base, sourceRegion: null, archivedAt: null, version: 7, createdAt: instant, updatedAt: instant }),
+    expected: { ...expected, sourceRegion: null, version: 7 } },
   { name: "feedstock type", schema: feedstockTypeRepresentationSchema,
     map: () => representFeedstockType({ ...base, ...privateFields, version: 7, category: "forestry", usage: "pyrolysis" }),
     json: () => representFeedstockType({ ...base, version: 7, category: "forestry", usage: "pyrolysis", createdAt: instant, updatedAt: instant }),
@@ -45,9 +45,9 @@ const cases = [
     json: () => representDriver({ ...base, version: 7, createdAt: instant, updatedAt: instant }),
     expected: { ...expected, version: 7 } },
   { name: "supplier location", schema: supplierLocationRepresentationSchema,
-    map: () => representSupplierLocation({ ...base, ...privateFields, name: null, version: 7, supplierId: id, facilityDistances: [], gpsLatitude: 0, gpsLongitude: 0 }),
-    json: () => representSupplierLocation({ ...base, name: null, version: 7, supplierId: id, facilityDistances: [], gpsLatitude: 0, gpsLongitude: 0, createdAt: instant, updatedAt: instant }),
-    expected: { id, name: null, version: 7, supplierId: id, facilityDistances: [], gpsLatitude: 0, gpsLongitude: 0, archivedAt: null, createdAt: instant, updatedAt: instant } },
+    map: () => representSupplierLocation({ ...base, ...privateFields, name: null, version: 7, supplierId: id, country: "TZ", stateRegion: null, city: null, isDefault: true, facilityDistances: [], gpsLatitude: 0, gpsLongitude: 0 }),
+    json: () => representSupplierLocation({ ...base, name: null, version: 7, supplierId: id, country: "TZ", stateRegion: null, city: null, isDefault: true, facilityDistances: [], gpsLatitude: 0, gpsLongitude: 0, createdAt: instant, updatedAt: instant }),
+    expected: { id, name: null, version: 7, supplierId: id, country: "TZ", stateRegion: null, city: null, isDefault: true, facilityDistances: [], gpsLatitude: 0, gpsLongitude: 0, archivedAt: null, createdAt: instant, updatedAt: instant } },
 ];
 
 describe.each(cases)("$name representation", ({ schema, map, json, expected: output }) => {

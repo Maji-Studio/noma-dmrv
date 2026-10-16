@@ -4,7 +4,7 @@
  * Common UI interaction helpers for E2E tests.
  * Extracted from individual spec files to avoid duplication.
  */
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 export const ACTION_LABEL_PREFIX = "Actions for ";
 
@@ -229,4 +229,33 @@ export async function selectFirstCreditBatchProductionRun(
     .getByTestId("credit-batch-production-run-preview")
     .first();
   await firstRunPreview.waitFor({ state: "visible", timeout: 10000 });
+}
+
+/** Budget for one open-menu-then-click attempt; short so a detached menu retries fast. */
+const ROW_MENU_ATTEMPT_TIMEOUT_MS = 3_000;
+/** Total budget across retries when a list re-render closes the menu. */
+const ROW_MENU_TOTAL_TIMEOUT_MS = 20_000;
+
+/**
+ * Open a row's actions menu and click one item, retrying when the list
+ * re-renders (a debounced search query landing) detaches the open menu.
+ * Presses Escape between attempts so a stale menu never blocks the next one.
+ */
+export async function clickRowMenuItem(
+  page: Page,
+  trigger: Locator,
+  item: string,
+  options: { exact?: boolean } = {},
+) {
+  await expect(async () => {
+    try {
+      await trigger.click({ timeout: ROW_MENU_ATTEMPT_TIMEOUT_MS });
+      await page
+        .getByRole("menuitem", { name: item, exact: options.exact })
+        .click({ timeout: ROW_MENU_ATTEMPT_TIMEOUT_MS });
+    } catch (error) {
+      await page.keyboard.press("Escape");
+      throw error;
+    }
+  }).toPass({ timeout: ROW_MENU_TOTAL_TIMEOUT_MS });
 }

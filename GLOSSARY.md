@@ -48,6 +48,12 @@ unchanged as sensor-data evidence; the readings importer can also load its
 rows into structured readings within the run window.
 _Avoid_: sensor dump, log file, reactor-day file, channel mapping.
 
+**Emissions entry**:
+An operating-emissions measurement recorded on one credit batch and bound to a
+Removal-template line. Its typed values and evidence supplement automatic run
+figures where the line allows it.
+_Avoid_: activity (reserved for the history log).
+
 **Emission estimate**:
 A per-facility configured value (reference soil temperature) used to derive
 submission data noma does not measure directly. Distinct from a measured value.

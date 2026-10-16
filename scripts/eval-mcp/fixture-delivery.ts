@@ -10,7 +10,7 @@ import {
 } from "@/db/schema";
 import { createApiKey } from "@/data-access/api-keys";
 import { createBiocharProduct } from "@/data-access/biochar-product-create";
-import { createCustomer, createCustomerLocation } from "@/data-access/customers";
+import { createCustomerInTransaction } from "@/data-access/customer-writes";
 import { createFormulationInTransaction } from "@/data-access/formulation-writes";
 import { createOrderInTransaction } from "@/data-access/orders";
 import { createStorageLocation } from "@/data-access/storage-locations";
@@ -67,9 +67,8 @@ export async function seedDeliveryFixture(caseId: DeliveryCaseId, now = new Date
     await db.insert(members).values({ id: randomUUID(), organizationId: org, userId: fixture.ctx.userId, role: "owner" });
     await db.update(facilities).set({ timezone: timeZone, archivedAt: null })
       .where(and(eq(facilities.organizationId, org), eq(facilities.id, fixture.facilityId)));
-    const customer = await createCustomer(fixture.ctx, { code: CUSTOMER_CODE, name: "Evaluation customer" });
-    const location = await createCustomerLocation(fixture.ctx, { ...TEST_SITE_POSITION, customerId: customer.id, name: "Evaluation destination",
-      isDefault: true, facilityDistances: [{ facilityId: fixture.facilityId, distanceKm: LOCATION_DISTANCE_KM, distanceSource: "manual" }] });
+    const { customer, locations: [location] } = await db.transaction(tx => createCustomerInTransaction(fixture.ctx, tx, { code: CUSTOMER_CODE, name: "Evaluation customer", locations: [{ ...TEST_SITE_POSITION, name: "Evaluation destination",
+      isDefault: true, facilityDistances: [{ facilityId: fixture.facilityId, distanceKm: LOCATION_DISTANCE_KM, distanceSource: "manual" }] }] }));
     const formulation = await db.transaction(tx => createFormulationInTransaction(fixture.ctx, tx, { code: FORMULATION_CODE, name: "Evaluation pure biochar", biocharRatio: PURE_BIOCHAR_RATIO }));
     const source = await createStorageLocation(fixture.ctx, { code: SOURCE_BIN_CODE, name: SOURCE_BIN_CODE,
       facilityId: fixture.facilityId, type: "biochar_bin", stockMode: "mix" });

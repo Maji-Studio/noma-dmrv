@@ -9,7 +9,7 @@ import { GET as FEEDSTOCK_TYPES_GET } from "@/app/api/v1/feedstock-types/[idOrCo
 import { LOOKUP_ARCHIVE_INSTANT, LOOKUP_CODES, LOOKUP_IDS, lookupContract } from "./helpers/api-lookups";
 
 lookupContract({
-  resource: "suppliers", list: SUPPLIERS_LIST, get: SUPPLIERS_GET,
+  resource: "suppliers", revision: 2, list: SUPPLIERS_LIST, get: SUPPLIERS_GET,
   seed: async (fixture) => {
     const active = await db.insert(suppliers).values(LOOKUP_IDS.map((id, index) => ({
       id, organizationId: fixture.ctx.organizationId, code: LOOKUP_CODES[index], name: `Lookup name ${index}`,

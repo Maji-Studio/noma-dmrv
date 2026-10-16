@@ -76,3 +76,27 @@ it.each(["structured", "wrapped-text", "plain-text"])("retains the returned stoc
   const parsed = parseTranscript([use, event].map((value) => JSON.stringify(value)).join("\n"));
   expect(parsed.calls[0]).toMatchObject({ stockResult: body, resultAfterCalls: 1, isError: false });
 });
+
+it.each(["structured", "wrapped-text", "plain-text"])("retains party lookup rows from %s content", (shape) => {
+  const body = { data: [{ id: "supplier", code: "SUP-1", name: "Kilombero Sawmill", archivedAt: null }] };
+  const use = { type: "assistant", message: { content: [{ type: "tool_use", id: "find", name: "mcp__noma__find_suppliers", input: {} }] } };
+  const wrapped = { structuredContent: body, content: [{ type: "text", text: "Suppliers." }] };
+  const event = shape === "structured"
+    ? { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "find" }] }, tool_use_result: wrapped }
+    : { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "find",
+      content: [{ type: "text", text: JSON.stringify(shape === "wrapped-text" ? wrapped : body) }] }] } };
+  const parsed = parseTranscript([use, event].map(value => JSON.stringify(value)).join("\n"));
+  expect(parsed.calls[0]).toMatchObject({ partyRows: body.data, isError: false });
+});
+
+it.each(["structured", "wrapped-text", "plain-text"])("retains archived party conflicts from %s content", (shape) => {
+  const body = { code: "conflict", issues: [{ pointer: "/name", meta: { supplierId: "supplier", archived: true } }] };
+  const use = { type: "assistant", message: { content: [{ type: "tool_use", id: "create", name: "mcp__noma__create_supplier", input: {} }] } };
+  const wrapped = { isError: true, structuredContent: body, content: [{ type: "text", text: "Name reserved." }] };
+  const event = shape === "structured"
+    ? { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "create" }] }, tool_use_result: wrapped }
+    : { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "create", is_error: true,
+      content: [{ type: "text", text: JSON.stringify(shape === "wrapped-text" ? wrapped : body) }] }] } };
+  const parsed = parseTranscript([use, event].map(value => JSON.stringify(value)).join("\n"));
+  expect(parsed.calls[0]).toMatchObject({ partyResult: body, isError: true });
+});

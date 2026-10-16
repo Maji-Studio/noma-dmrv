@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import { customers } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -17,6 +17,7 @@ import {
 function customerFields(ctx: OrgContext) {
   requireOrgScope(ctx);
   return { id: customers.id, code: customers.code, name: customers.name, version: customers.version,
+    cropType: customers.cropType, archivedAt: customers.archivedAt,
     createdAt: customers.createdAt, updatedAt: customers.updatedAt };
 }
 
@@ -30,12 +31,13 @@ export async function findApiCustomer(ctx: OrgContext, identifier: ApiLookupIden
   return row;
 }
 
-export async function listApiCustomers(ctx: OrgContext, filters: ApiLookupFilters, limit: number, cursor?: ApiLookupPosition) {
+export async function listApiCustomers(ctx: OrgContext, filters: ApiLookupFilters & { archived?: boolean }, limit: number, cursor?: ApiLookupPosition) {
   requireOrgScope(ctx);
   return db.select({
     ...customerFields(ctx), cursorCreatedAt: lookupCursorCreatedAt(customers.createdAt),
   }).from(customers).where(and(
     eq(customers.organizationId, ctx.organizationId),
+    filters.archived ? isNotNull(customers.archivedAt) : isNull(customers.archivedAt),
     filters.code === undefined ? undefined : eq(customers.code, filters.code),
     lookupSearch(customers, filters.q), lookupPosition(customers, cursor),
   )).orderBy(desc(customers.createdAt), desc(customers.id)).limit(limit + 1);

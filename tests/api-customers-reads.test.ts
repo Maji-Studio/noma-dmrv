@@ -41,12 +41,12 @@ describe("customer and destination REST reads", { timeout: READ_TIMEOUT_MS }, ()
     for (const identifier of [a.customer.id, a.customer.id.toUpperCase(), a.customer.code]) {
       const response = await get(identifier);
       expect(response.status).toBe(200);
-      expect(response.headers.get("etag")).toBe(`"${a.customer.version}.1"`);
+      expect(response.headers.get("etag")).toBe(`"${a.customer.version}.2"`);
       expect(response.headers.get("cache-control")).toBe("private, no-store");
       const { data } = await response.json();
       expect(customerRepresentationSchema.parse(data)).toEqual(data);
-      expect(Object.keys(data).sort()).toEqual(["id", "code", "name", "version", "createdAt", "updatedAt"].sort());
-      expect(data).toMatchObject({ id: a.customer.id, code: a.customer.code, name: a.customer.name });
+      expect(Object.keys(data).sort()).toEqual(["id", "code", "name", "version", "createdAt", "updatedAt", "cropType", "archivedAt"].sort());
+      expect(data).toMatchObject({ id: a.customer.id, code: a.customer.code, name: a.customer.name, cropType: "hidden", archivedAt: null });
     }
   });
 
@@ -81,7 +81,7 @@ describe("customer and destination REST reads", { timeout: READ_TIMEOUT_MS }, ()
         expect(customerLocationRepresentationSchema.parse(row)).toEqual(row);
         expect(Object.keys(row).sort()).toEqual(Object.keys(customerLocationRepresentationSchema.shape).sort());
       }
-      expect(page.data[1]).toMatchObject({ customerId: a.customer.id, gpsLatitude: 0, gpsLongitude: 8.5, facilityDistances: [{ facilityId: a.facility.id, distanceKm: 20, distanceSource: "document" }], isDefault: true });
+      expect(page.data[1]).toMatchObject({ customerId: a.customer.id, gpsLatitude: 0, gpsLongitude: 8.5, facilityDistances: [{ facilityId: a.facility.id, distanceKm: 20, distanceSource: "document" }], isDefault: true, siteDescription: "hidden", defaultSoilTemperatureC: 25, country: expect.any(String), stateRegion: null, city: null });
       expect(page.data[0]).toMatchObject({ gpsLatitude: TEST_SITE_POSITION.gpsLatitude, gpsLongitude: TEST_SITE_POSITION.gpsLongitude, facilityDistances: [], isDefault: false });
     }
     expect(await ids(await locations(a.otherCustomer.id))).toEqual([]);

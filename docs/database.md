@@ -74,7 +74,7 @@ credential or request IDs. Nullable `operation_id`, `version_before` and
 `ACTIVITY_ENTITY_TYPES` in `src/db/schema/common.ts` allows only canonical
 snake_case names: `removal`, `ghg_statement`, `production_run`, `biochar_product`,
 `lab_sample`, `order`, `delivery`, `application`, `credit_batch`, `document`,
-`transport_leg`, `feedstock`, and `bin_movement`. The pure
+`transport_leg`, `feedstock`, `emission_entry`, and `bin_movement`. The pure
 `toActivityEntityType` mapper in `src/lib/activity-entity-type.ts` preserves these
 names and maps existing runner/certification spellings (`productionRun`,
 `biocharProduct`, `labSample`, `binMovement`, `ghgStatement`) to them; unknown
@@ -491,3 +491,19 @@ by a database trigger. See [ADR 0022](./adr/0022-method-b-is-computed-eligibilit
 
 1. Run `pnpm db:generate` and review the emitted SQL before committing.
 2. For certification changes, update `docs/isometric/changes.md`.
+
+## Emissions entries
+
+`emission_entries` binds one batch entry to a template observation and component.
+All domain references include `organization_id`. `version` changes on every write;
+`content_revision` changes for values, dates, template confirmation and uploaded
+evidence. Notes change only the version. Membership writers lock the batch before
+the entry; evidence writers lock the entry. Reserved or sent entries refuse edits.
+Deletion tombstones the entry and keeps its values and evidence.
+
+`emission_entry_values.magnitude` is an unconstrained PostgreSQL numeric read as
+decimal text. Values are non-negative and finite. Optional `mass_distance_detail`
+JSON stores the entered mass and distance as decimal strings with canonical units.
+The writer checks their exact product against the magnitude. Partial unique indexes
+enforce one active single-policy value per batch and one live zero per Removal,
+batch and component. Confirmed zeros are owned by their draft Removal.

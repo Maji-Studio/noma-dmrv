@@ -12,7 +12,7 @@ import {
   type GhgEntryTemplate, type LineContract, type TemplateEnrichment,
 } from "@/lib/isometric/template-observations";
 import { assertRowVersion, nextVersion, staleRowVersion } from "./row-version";
-import { requireOrgScope } from "./utils";
+import { requireOrgScope, type Executor } from "./utils";
 
 const OBSERVATION_ORDER_TICK_MS = 1;
 
@@ -22,18 +22,18 @@ async function acquireTemplateObservationLock(ctx: OrgContext, tx: DbTransaction
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
 }
 
-export async function getLatestTemplateObservation(ctx: OrgContext, provider: CertifierProvider, externalTemplateId: string): Promise<RemovalTemplateObservation | null> {
+export async function getLatestTemplateObservation(ctx: OrgContext, provider: CertifierProvider, externalTemplateId: string, executor: Executor = db): Promise<RemovalTemplateObservation | null> {
   requireOrgScope(ctx);
-  const [row] = await db.select().from(observations).where(and(
+  const [row] = await executor.select().from(observations).where(and(
     eq(observations.organizationId, ctx.organizationId), eq(observations.provider, provider),
     eq(observations.externalTemplateId, externalTemplateId),
   )).orderBy(desc(observations.lastObservedAt), desc(observations.id)).limit(1);
   return row ?? null;
 }
 
-export async function getTemplateObservationById(ctx: OrgContext, id: string): Promise<RemovalTemplateObservation | null> {
+export async function getTemplateObservationById(ctx: OrgContext, id: string, executor: Executor = db): Promise<RemovalTemplateObservation | null> {
   requireOrgScope(ctx);
-  const [row] = await db.select().from(observations).where(and(
+  const [row] = await executor.select().from(observations).where(and(
     eq(observations.organizationId, ctx.organizationId), eq(observations.id, id),
   )).limit(1);
   return row ?? null;
