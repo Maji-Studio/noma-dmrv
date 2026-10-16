@@ -4,7 +4,7 @@
  * PROTOTYPE (throwaway): routed, tabbed credit batch page ("Work queue", variant A
  * of round 1). Horizontal tabs; on Overview the work (Removals, open items) leads.
  *
- * URL keys: ?tab=overview|production|emissions|removals|activity
+ * URL keys: ?tab=overview|production|samples|emissions|removals|activities
  *           ?scenario=blocking|clear|partly-sent|issued  ?focus=<rowId>
  * Real: batch, member runs, lab samples, health checks, activity, Removal template.
  * Stub (PROTOTYPE): lock levels, Removal slices, progress, header button, Check and

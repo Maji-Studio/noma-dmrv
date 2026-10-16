@@ -22,14 +22,15 @@ export const SCENARIOS = ["blocking", "clear", "partly-sent", "issued"] as const
 export type Scenario = (typeof SCENARIOS)[number];
 
 // Traceability is a link out, not a tab: the Traceability page already opens on a credit batch (round 2).
-export const TABS = ["overview", "production", "emissions", "removals", "activity"] as const;
+export const TABS = ["overview", "production", "samples", "emissions", "removals", "activities"] as const;
 export type TabKey = (typeof TABS)[number];
 export const TAB_LABELS: Record<TabKey, string> = {
   overview: "Overview",
   production: "Production",
+  samples: "Samples",
   emissions: "Emissions",
   removals: "Removals",
-  activity: "Activity",
+  activities: "Activities",
 };
 
 export interface ProgressStep {
@@ -87,8 +88,10 @@ export interface LockInfo {
 export type LockableField = "startDate" | "endDate" | "appliedMass" | "feedstock" | "template" | "sampling";
 
 export interface PrimaryAction {
-  kind: "fix" | "start" | "ghg" | "none";
+  kind: "fix" | "start" | "draft" | "ghg" | "none";
   label: string;
+  /** Quieter button: a Removal is already submitted, so this is a follow-up, not the main step. */
+  secondary?: boolean;
   hint?: string;
 }
 
@@ -168,7 +171,7 @@ const BLOCKING_EMISSION_STATES: readonly EmissionLineState[] = ["empty", "missin
 const CHECK_TAB: Record<string, TabKey> = {
   emissions: "emissions",
   certificationEmissions: "emissions",
-  labSamples: "production",
+  labSamples: "samples",
   productionRuns: "production",
   sourceData: "production",
   creditBatchTemplate: "overview",
@@ -214,7 +217,7 @@ function realBlockingItems(health: BatchHealth | undefined, batch: CreditBatchWi
 }
 
 /** PROTOTYPE: the four lifecycle steps with stub captions per scenario. */
-function progressFor(scenario: Scenario, blockingCount: number): ProgressStep[] {
+function progressFor(scenario: Scenario, blockingCount: number, masses: Record<MassSegmentKey, number>): ProgressStep[] {
   // Milestones, each named for what has happened, so a current step never reads as reached.
   const steps = ["Data complete", "Removal submitted", "Verified", "Credits issued"];
   const plan: Record<Scenario, [ProgressStep["state"], string][]> = {
@@ -223,6 +226,11 @@ function progressFor(scenario: Scenario, blockingCount: number): ProgressStep[] 
     "partly-sent": [["done", "Oct 10, 2026"], ["done", "R-07, Oct 12, 2026"], ["current", "GHG Statement Q3 in verification"], ["todo", ""]],
     issued: [["done", "Oct 10, 2026"], ["done", "R-07 and R-09"], ["done", "Nov 1, 2026"], ["done", "Nov 3, 2026"]],
   };
+  // A partly sent batch says how much is in the submitted Removal.
+  if (scenario === "partly-sent") {
+    const submitted = masses.sent;
+    plan[scenario][1][1] = `R-07, ${submitted.toFixed(2)} of ${(masses.sent + masses.inRemoval + masses.notIn + masses.notApplied).toFixed(2)} t`;
+  }
   return steps.map((label, index) => ({
     label,
     state: plan[scenario][index][0],
@@ -282,7 +290,7 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
         group: "blocking",
         title: `Samples: ${samples} of ${SAMPLES_REQUIRED}`,
         detail: "A sampled credit batch needs at least three Samples.",
-        tab: "production",
+        tab: "samples",
         rowId: "samples",
         actionLabel: "Add Sample",
         stub: true,
@@ -295,7 +303,7 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
       group: "check",
       title: "SAM-26-002 H/Corg is well above the other Samples",
       detail: "It may be an outlier. Check the lab report before the next Removal.",
-      tab: "production",
+      tab: "samples",
       rowId: "samples",
       actionLabel: "Review sample",
       stub: true,
@@ -360,6 +368,7 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
     }
   }
 
+  const removals = [...new Map(slices.flatMap((slice) => (slice.removal ? [[slice.removal.code, slice.removal] as const] : []))).values()];
   let primary: PrimaryAction;
   if (blocking.length > 0) {
     primary = { kind: "fix", label: "Fix next item", hint: blocking[0].title };
@@ -367,13 +376,18 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
     // Design call: nothing left to start, so no primary button. The header shows the issued fact.
     primary = { kind: "none", label: "" };
   } else if (masses.notIn > 0) {
-    primary = { kind: "start", label: "Start Removal", hint: "Adds the applied biochar that is not in a Removal yet." };
+    const draft = removals.find((removal) => removal.status === "draft");
+    const hasSubmitted = removals.some((removal) => removal.status === "submitted");
+    if (draft) {
+      primary = { kind: "draft", label: `Open ${draft.code}`, hint: `Add the ${formatTonnes(masses.notIn)} not in a Removal to this draft`, secondary: hasSubmitted };
+    } else {
+      primary = { kind: "start", label: "Start Removal", hint: "Adds the applied biochar that is not in a Removal yet.", secondary: hasSubmitted };
+    }
   } else {
     primary = { kind: "ghg", label: "Open GHG Statement" };
   }
 
   const preview = batch.co2eStoredPreview?.co2eStoredTonnes ?? null;
-  const removals = [...new Map(slices.flatMap((slice) => (slice.removal ? [[slice.removal.code, slice.removal] as const] : []))).values()];
 
   return {
     scenario,
@@ -389,7 +403,7 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
     slices,
     masses,
     emissionLines,
-    progress: progressFor(scenario, blocking.length),
+    progress: progressFor(scenario, blocking.length, masses),
     removalMass: [
       ...removals.map((removal) => ({ removal, tons: slices.filter((slice) => slice.removal?.code === removal.code).reduce((sum, slice) => sum + slice.tons, 0) })),
       ...(masses.notIn > 0 ? [{ removal: null, tons: masses.notIn }] : []),
