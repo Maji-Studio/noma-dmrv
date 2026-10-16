@@ -28,14 +28,14 @@ export function ProductionTab() {
         {runsLoading ? (
           <p className={cn("body-small", MUTED)} aria-busy>Loading production runs...</p>
         ) : members.length === 0 ? (
-          <EmptyState padding="sm" icon={<FlaskIcon size={32} weight="thin" />} title="No production runs linked" description="Runs in the batch window join automatically once they are complete." />
+          <EmptyState padding="sm" icon={<FlaskIcon size={32} weight="thin" />} title="No production runs linked" description="Completed runs in this credit batch's window join automatically." />
         ) : (
           <ul className="flex flex-col">
             {members.map((run) => (
               <li key={run.id} className="flex items-center justify-between gap-12 border-t border-[var(--color-border-tertiary)] py-10 first:border-t-0">
                 <Link href={productionRunDeepLinkHref(run.id, batch.facilityId)} className="flex min-w-0 flex-col underline-offset-2 hover:underline">
                   <span className="body-medium font-medium">{run.code} on {formatDate(run.date)}</span>
-                  <span className={cn("body-caption", MUTED)}>{run.biocharStorageName ?? "No bin recorded"}</span>
+                  <span className={cn("body-caption", MUTED)}>{run.biocharStorageName ?? "Not recorded"}</span>
                 </Link>
                 <span className="body-small tabular-nums">{run.biocharDryMassKg != null ? `${tonnes(run.biocharDryMassKg / 1000)} dry` : "Not recorded"}</span>
               </li>
@@ -51,11 +51,11 @@ export function ProductionTab() {
       </Panel>
       <FocusRow rowId="samples">
         <Panel
-          title="Lab samples and durability"
+          title="Samples and durability"
           action={
-            <Button variant="weak" size="small" onClick={() => say("Prototype: opens the new Sample form for this batch.")}>
+            <Button variant="weak" size="small" onClick={() => say("Prototype: opens the new Sample form for this credit batch.")}>
               <PlusIcon size={14} aria-hidden />
-              Add lab sample
+              Add Sample
             </Button>
           }
         >
@@ -119,7 +119,7 @@ export function RemovalsTab() {
   const { masses } = model;
   return (
     <div className="flex flex-col gap-20">
-      <Panel title="Applied mass by delivery">
+      <Panel title="Applied biochar by delivery">
         <ul className="flex flex-col">
           {model.slices.map((slice) => (
             <li key={slice.id} className="border-t border-[var(--color-border-tertiary)] first:border-t-0">
@@ -140,20 +140,20 @@ export function RemovalsTab() {
         <FocusRow rowId="not-applied" className="flex items-center justify-between gap-12 border-t border-[var(--color-border-tertiary)] pt-12">
           <span className="flex flex-col">
             <span className="body-medium font-medium">Not applied yet</span>
-            <span className={cn("body-caption", MUTED)}>Produced in this batch, no application recorded</span>
+            <span className={cn("body-caption", MUTED)}>Produced in this credit batch, no application recorded</span>
           </span>
           <span className="body-medium tabular-nums">{tonnes(masses.notApplied)}</span>
         </FocusRow>
       </Panel>
       <Panel title="Not in a Removal">
         <p className="body-medium">
-          <span className="font-medium tabular-nums">{tonnes(masses.notIn)}</span> of applied mass is not in a Removal.
+          <span className="font-medium tabular-nums">{tonnes(masses.notIn)}</span> of applied biochar is not in a Removal.
         </p>
         <p className={cn("body-small", MUTED)}>
           {model.blocking.length > 0
-            ? `${model.blocking.length} blocking items hold it back.`
+            ? `${model.blocking.length} blocking ${model.blocking.length === 1 ? "item holds" : "items hold"} it back.`
             : masses.notIn > 0
-              ? "Nothing blocks it. Start a Removal from the header."
+              ? "Nothing blocks it. Select Start Removal."
               : "Every applied tonne is in a Removal."}
         </p>
         {model.blocking.length > 0 && (
@@ -163,14 +163,14 @@ export function RemovalsTab() {
       <FocusRow rowId="ghg">
         <Panel title="GHG Statement">
           {model.scenario === "blocking" || model.scenario === "clear" ? (
-            <p className={cn("body-small", MUTED)}>No Removal is sent, so no GHG Statement includes this batch yet.</p>
+            <p className={cn("body-small", MUTED)}>No Removal is submitted yet, so no GHG Statement includes this credit batch.</p>
           ) : (
             <div className="flex items-center justify-between gap-12">
               <div className="flex flex-col">
-                <span className="body-medium font-medium">Q3 reporting period</span>
-                <span className={cn("body-caption", MUTED)}>Rolls up {model.removals.map((r) => r.code).join(" and ")}</span>
+                <span className="body-medium font-medium">GHG Statement Q3</span>
+                <span className={cn("body-caption", MUTED)}>Includes {model.removals.filter((r) => r.status === "submitted").map((r) => r.code).join(" and ")}</span>
               </div>
-              <StatusBadge status={model.scenario === "issued" ? "verified" : "pending"} label={model.scenario === "issued" ? "Verified" : "With the verifier"} />
+              <StatusBadge status={model.scenario === "issued" ? "issued" : "pending"} label={model.scenario === "issued" ? "Issued" : "In verification"} />
             </div>
           )}
         </Panel>
@@ -210,7 +210,7 @@ export function TraceabilityTab() {
 
 export function ActivityTab() {
   const { batch } = useProto();
-  return <CreditBatchActivityView creditBatchId={batch.id} batchCode={batch.code} />;
+  return <CreditBatchActivityView creditBatchId={batch.id} batchCode={batch.code} inline />;
 }
 
 export function TabBody({ tab }: { tab: string }) {

@@ -69,7 +69,8 @@ export function RemovalChip({ removal }: { removal: RemovalRef | null }) {
   return (
     <span className="inline-flex flex-wrap items-center gap-8">
       <span className="body-small font-medium">{removal.code}</span>
-      <StatusBadge status={removal.status === "submitted" ? "pending" : removal.status} label={removal.status === "submitted" ? "Sent" : undefined} size="small" />
+      {/* Same labels as SubmissionStatusBadge: a Removal ends at Submitted. */}
+      <StatusBadge status={removal.status === "submitted" ? "issued" : "draft"} label={removal.status === "submitted" ? "Submitted" : undefined} size="small" />
     </span>
   );
 }
@@ -173,7 +174,7 @@ export function DetailsPanel({ className }: { className?: string }) {
     ["CO₂", batch.co2CompositionPercent],
     ["N₂O", batch.n2oCompositionPercent],
   ] as const;
-  const gasText = gas.every(([, v]) => v == null) ? "Not recorded" : gas.map(([name, v]) => `${name} ${v ?? "n/a"}%`).join(", ");
+  const gasText = gas.every(([, v]) => v == null) ? "Not recorded" : gas.map(([name, v]) => (v == null ? `${name} not recorded` : `${name} ${v}%`)).join(", ");
   const allLocked = model.lockLevel === "Fully sent";
   return (
     <FocusRow rowId="details">
@@ -203,7 +204,7 @@ export function DetailsPanel({ className }: { className?: string }) {
           <DetailRow field="appliedMass" label="Applied biochar" value={tonnes(model.appliedTons)} editing={false} />
           <DetailRow field="sampling" label="Sampling" value={batch.sampling === "sampled" ? "Sampled" : "Unsampled"} editing={false} />
           <DetailRow field={null} label="Gas composition" value={gasText} editing={editing} input={<Input defaultValue={gasText} aria-label="Gas composition" />} />
-          <DetailRow field={null} label="Notes" value={batch.siteManagementNotes || "No notes"} editing={editing} input={<Input defaultValue={batch.siteManagementNotes ?? ""} aria-label="Notes" />} />
+          <DetailRow field={null} label="Notes" value={batch.siteManagementNotes || "Not recorded"} editing={editing} input={<Input defaultValue={batch.siteManagementNotes ?? ""} aria-label="Notes" />} />
         </dl>
         <FocusRow rowId="template" className="border-t border-[var(--color-border-secondary)] pt-16">
           {model.scenario === "blocking" ? (
@@ -228,7 +229,7 @@ export function FedPanel({ className }: { className?: string }) {
     <Panel title="Removals" className={className}>
       {model.removals.length === 0 ? (
         <p className={cn("body-small", MUTED)}>
-          No Removal holds this batch yet. {model.blocking.length > 0 ? "Clear the blocking items first." : "Start one from the header."}
+          No Removal includes this credit batch yet. {model.blocking.length > 0 ? "Clear the blocking items first." : "Select Start Removal to add the applied biochar."}
         </p>
       ) : (
         <ul className="flex flex-col">
@@ -243,8 +244,8 @@ export function FedPanel({ className }: { className?: string }) {
           {hasStatement && (
             <li className={ROW_RULE}>
               <button type="button" onClick={() => go("removals", "ghg")} className="-mx-12 flex w-[calc(100%+24px)] flex-col gap-2 px-12 py-10 text-left hover:bg-[var(--color-surface-medium)]">
-                <span className="body-small font-medium">GHG Statement, Q3</span>
-                <span className={cn("body-caption", MUTED)}>{model.scenario === "issued" ? "Verified, credits issued" : "With the verifier"}</span>
+                <span className="body-small font-medium">GHG Statement Q3</span>
+                <span className={cn("body-caption", MUTED)}>{model.scenario === "issued" ? "Issued" : "In verification"}</span>
               </button>
             </li>
           )}

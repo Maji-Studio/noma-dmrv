@@ -7,6 +7,7 @@
  * items, and the emission lines (entries are not in HEAD yet).
  */
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
+import { formatTonnes } from "@/lib/format-utils";
 import type { BatchHealth, BatchHealthCheck } from "@/lib/certification/batch-health";
 import {
   batchHealthFixLinkFor,
@@ -51,7 +52,7 @@ export interface OpenItem {
   stub: boolean;
 }
 
-export type RemovalStatusKey = "draft" | "submitted" | "verified" | "issued";
+export type RemovalStatusKey = "draft" | "submitted";
 export interface RemovalRef {
   code: string;
   status: RemovalStatusKey;
@@ -112,16 +113,16 @@ const STUB_CO2E_PER_TON = 0.78;
 /** Shares of the applied mass per slice, in slice order. */
 const SLICE_SHARES = [0.35, 0.25, 0.15, 0.25] as const;
 const SLICE_LABELS = [
-  ["D-0031 to Kanyama field", "Applied 2 Sep"],
-  ["D-0031 to Kanyama field, second pass", "Applied 4 Sep"],
-  ["D-0034 to Mwenda field", "Applied 11 Sep"],
-  ["D-0034 to Mwenda field, east block", "Applied 12 Sep"],
+  ["DL-26-031 to Kanyama field", "Applied Sep 2, 2026"],
+  ["DL-26-031 to Kanyama field, second pass", "Applied Sep 4, 2026"],
+  ["DL-26-034 to Mwenda field", "Applied Sep 11, 2026"],
+  ["DL-26-034 to Mwenda field, east block", "Applied Sep 12, 2026"],
 ] as const;
 
-const R07: RemovalRef = { code: "R-07", status: "submitted", statusNote: "Sent 12 Oct, with the registry" };
-const R08: RemovalRef = { code: "R-08", status: "draft", statusNote: "Draft, not sent" };
-const R07_ISSUED: RemovalRef = { code: "R-07", status: "issued", statusNote: "Credits issued 3 Nov" };
-const R09_ISSUED: RemovalRef = { code: "R-09", status: "issued", statusNote: "Credits issued 3 Nov" };
+const R07: RemovalRef = { code: "R-07", status: "submitted", statusNote: "Submitted Oct 12, 2026" };
+const R08: RemovalRef = { code: "R-08", status: "draft", statusNote: "Created Oct 14, 2026" };
+const R07_ISSUED: RemovalRef = { code: "R-07", status: "submitted", statusNote: "Submitted Oct 12, 2026. In GHG Statement Q3" };
+const R09_ISSUED: RemovalRef = { code: "R-09", status: "submitted", statusNote: "Submitted Oct 20, 2026. In GHG Statement Q3" };
 
 function sliceRemovals(scenario: Scenario): (RemovalRef | null)[] {
   if (scenario === "partly-sent") return [R07, R07, R08, null];
@@ -250,11 +251,11 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
       items.push({
         id: "blk-samples",
         group: "blocking",
-        title: `Lab samples: ${samples} of ${SAMPLES_REQUIRED}`,
-        detail: "Method B needs at least three replicates.",
+        title: `Samples: ${samples} of ${SAMPLES_REQUIRED}`,
+        detail: "A sampled credit batch needs at least three Samples.",
         tab: "production",
         rowId: "samples",
-        actionLabel: "Add lab sample",
+        actionLabel: "Add Sample",
         stub: true,
       });
     }
@@ -263,8 +264,8 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
     items.push({
       id: "chk-sample-outlier",
       group: "check",
-      title: "Sample 2 H/Corg sits well above samples 1 and 3",
-      detail: "A possible outlier. Confirm it is a real measurement before submitting.",
+      title: "SAM-26-002 H/Corg is well above the other Samples",
+      detail: "It may be an outlier. Check the lab report before the next Removal.",
       tab: "production",
       rowId: "sample-2",
       actionLabel: "Review sample",
@@ -276,7 +277,7 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
     items.push({
       id: "chk-grid",
       group: "check",
-      title: `${gridLine.name} needs review`,
+      title: `${gridLine.name}: Needs review`,
       detail: "The figure changed after the last review.",
       tab: "emissions",
       rowId: gridLine.id,
@@ -287,20 +288,10 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
   if (scenario === "partly-sent") {
     items.push(
       {
-        id: "wait-r07",
-        group: "waiting",
-        title: "R-07 is with the registry",
-        detail: "Review started 14 Oct. Nothing to do until it is verified.",
-        tab: "removals",
-        rowId: "slice-1",
-        actionLabel: "See in Removals",
-        stub: true,
-      },
-      {
         id: "wait-ghg",
         group: "waiting",
-        title: "GHG Statement for Q3 is with the verifier",
-        detail: "Includes R-07. Submitted 15 Oct.",
+        title: "GHG Statement Q3: In verification",
+        detail: "It includes R-07. Submitted Oct 15, 2026.",
         tab: "removals",
         rowId: "ghg",
         actionLabel: "See in Removals",
@@ -312,8 +303,8 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
     items.push({
       id: "wait-unapplied",
       group: "waiting",
-      title: "Part of the biochar is not applied yet",
-      detail: "It joins a Removal once a delivery records its application.",
+      title: `${formatTonnes(masses.notApplied)} of biochar not applied yet`,
+      detail: "It can join a Removal once its application is recorded.",
       tab: "removals",
       rowId: "not-applied",
       actionLabel: "See in Removals",
@@ -327,14 +318,14 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
 
   const locks: BatchModel["locks"] = {};
   if (scenario === "partly-sent") {
-    const reason = "R-07 holds part of this mass.";
-    const howTo = "To change it, ask the registry to amend R-07, or withdraw R-07 while it is still unverified.";
+    const reason = "R-07 is submitted with part of this biochar.";
+    const howTo = "This field reopens only if Isometric returns R-07 to draft or the GHG Statement fails verification.";
     locks.endDate = { reason, howTo, focus: "slice-1" };
     locks.appliedMass = { reason, howTo, focus: "slice-1" };
   }
   if (scenario === "issued") {
-    const reason = "Credits are issued for all of this mass.";
-    const howTo = "Issued credits cannot be changed here. Ask the registry about a correction.";
+    const reason = "Credits are issued for all of this biochar.";
+    const howTo = "Issued credits cannot change in noma. Ask Isometric about a correction.";
     for (const field of ["startDate", "endDate", "appliedMass", "feedstock", "template", "sampling"] as const) {
       locks[field] = { reason, howTo, focus: "slice-1" };
     }
@@ -347,7 +338,7 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
     // Design call: nothing left to start, so no primary button. The header shows the issued fact.
     primary = { kind: "none", label: "" };
   } else if (masses.notIn > 0) {
-    primary = { kind: "start", label: "Start removal", hint: "Adds the mass that is not in a Removal yet." };
+    primary = { kind: "start", label: "Start Removal", hint: "Adds the applied biochar that is not in a Removal yet." };
   } else {
     primary = { kind: "ghg", label: "Open GHG Statement" };
   }
