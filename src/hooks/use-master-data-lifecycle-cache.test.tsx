@@ -11,12 +11,10 @@ const mocks = vi.hoisted(() => ({ save: vi.fn() }));
 vi.mock("@/fn/facilities", () => ({ archiveFacilityFn: mocks.save, restoreFacilityFn: mocks.save }));
 vi.mock("@/fn/storage-locations", () => ({ archiveStorageLocationFn: mocks.save, restoreStorageLocationFn: mocks.save }));
 vi.mock("@/fn/feedstock-types", () => ({ archiveFeedstockTypeFn: mocks.save, unarchiveFeedstockTypeFn: mocks.save }));
-vi.mock("@/fn/energy", () => ({ saveFacilityEmissionFactors: mocks.save }));
 
 import { facilityKeys, useArchiveFacility, useRestoreFacility } from "./use-facilities";
 import { storageLocationKeys, useArchiveStorageLocation, useRestoreStorageLocation } from "./use-storage-locations";
 import { useArchiveFeedstockType, useUnarchiveFeedstockType } from "./use-feedstock-types";
-import { energyKeys, useSaveFacilityEmissionFactors } from "./use-energy";
 
 const ID = "33333333-3333-4333-8333-333333333333";
 const VERSION = 3;
@@ -28,7 +26,6 @@ const cases = [
   { name: "restore bin", useWrite: useRestoreStorageLocation, key: storageLocationKeys.lists(), input: { storageLocationId: ID, expectedVersion: VERSION }, shape: "page" },
   { name: "archive feedstock type", useWrite: useArchiveFeedstockType, key: ["feedstock-types", "list"], input: { feedstockTypeId: ID, expectedVersion: VERSION }, shape: "array" },
   { name: "restore feedstock type", useWrite: useUnarchiveFeedstockType, key: ["feedstock-types", "list"], input: { feedstockTypeId: ID, expectedVersion: VERSION }, shape: "array" },
-  { name: "save emission factors", useWrite: useSaveFacilityEmissionFactors, key: energyKeys.emissionFactors(ID), input: { facilityId: ID, expectedVersion: VERSION }, shape: "factors" },
 ];
 
 describe.each(cases)("$name", ({ useWrite, key, input, shape }) => {
@@ -36,7 +33,7 @@ describe.each(cases)("$name", ({ useWrite, key, input, shape }) => {
     const client = new QueryClient();
     const envelope = (row: { id: string; version: number }) => shape === "page"
       ? { items: [row], total: 1 }
-      : shape === "array" ? [row] : { factors: row, viewerCanManage: true };
+      : [row];
     client.setQueryData(key, envelope({ id: ID, version: VERSION }));
     mocks.save.mockResolvedValue({ success: true, data: saved });
     vi.spyOn(client, "invalidateQueries").mockImplementation(async () => {

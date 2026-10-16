@@ -1,8 +1,9 @@
 /**
  * Client-side narrowing of an energy breakdown: the credit batch filter,
- * per-source totals for the activity panel, and the list ranking.
+ * per-source totals for the summary line, and the list ranking. Activity
+ * only; no CO2e.
  */
-import { creditBatchInPeriod } from "./period";
+import { creditBatchInPeriod, dayInPeriod } from "./period";
 import {
   DIESEL_SOURCE_KEYS,
   ENERGY_SOURCE_KEYS,
@@ -14,15 +15,13 @@ import type {
   EnergyFlow,
   EnergyGap,
   EnergyPeriod,
-  EnergyProduction,
   EnergyRecord,
 } from "./types";
 
 /**
  * The credit batch a selection resolves to. A batch counts when its dates
  * overlap the period or when energy in the period reaches it: a July batch's
- * delivery in September puts a July node on September's Sankey, and clicking
- * that node must filter by it.
+ * delivery in September is September energy, so that batch stays selectable.
  */
 export function resolveSelectedBatch(
   creditBatches: EnergyCreditBatchInput[],
@@ -32,26 +31,33 @@ export function resolveSelectedBatch(
 ): EnergyCreditBatchInput | null {
   if (requestedId == null) return null;
   const batch = creditBatches.find((candidate) => candidate.id === requestedId);
-  if (!batch) return null;
-  return creditBatchInPeriod(batch, period) || flows.some((flow) => flow.creditBatchId === requestedId)
-    ? batch
-    : null;
+  return batch && batchReachesPeriod(batch, period, flows) ? batch : null;
 }
 
 /**
- * Credit batch select options: the batches whose dates overlap the period,
- * plus the selected one when it reached the period only through its energy,
- * so the select can show what is selected.
+ * Whether a batch's dates overlap the period or a flow dated inside the period
+ * reaches it. Flows outside the period never count, so a selection held from a
+ * longer period is not kept by energy the new period does not contain.
+ */
+export function batchReachesPeriod(
+  batch: EnergyCreditBatchInput,
+  period: EnergyPeriod,
+  flows: EnergyFlow[],
+): boolean {
+  return creditBatchInPeriod(batch, period) || flows.some((flow) => flow.creditBatchId === batch.id && dayInPeriod(flow.day, period));
+}
+
+/**
+ * Credit batch select options: the batches whose dates overlap the period
+ * plus those the period's energy reaches (a July batch delivered in October),
+ * so every batch with figures in the period can be picked.
  */
 export function creditBatchOptions(
   creditBatches: EnergyCreditBatchInput[],
   period: EnergyPeriod,
-  selected: EnergyCreditBatchInput | null,
+  flows: EnergyFlow[],
 ): EnergyCreditBatchInput[] {
-  const options = creditBatches.filter((batch) => creditBatchInPeriod(batch, period));
-  return selected && !options.some((batch) => batch.id === selected.id)
-    ? [...options, selected]
-    : options;
+  return creditBatches.filter((batch) => batchReachesPeriod(batch, period, flows));
 }
 
 export function flowsForBatch(flows: EnergyFlow[], batchId: string | null): EnergyFlow[] {
@@ -68,16 +74,8 @@ export function recordsForBatch(records: EnergyRecord[], batchId: string | null)
     : records.filter((record) => record.creditBatchIds.includes(batchId));
 }
 
-export function producedDryKg(production: EnergyProduction[], batchId: string | null): number {
-  return production
-    .filter((entry) => batchId == null || entry.creditBatchId === batchId)
-    .reduce((total, entry) => total + entry.dryMassKg, 0);
-}
-
 export interface SourceTotal {
   activity: number;
-  /** Null when the facility has no factors. */
-  kg: number | null;
   /** False when no reading of this source was recorded in the selection. */
   recorded: boolean;
   missingReadings: number;
@@ -86,42 +84,26 @@ export interface SourceTotal {
 export function totalsBySource(
   flows: EnergyFlow[],
   gaps: EnergyGap[],
-  hasFactors: boolean,
 ): Record<EnergySourceKey, SourceTotal> {
   const totals = Object.fromEntries(
-    ENERGY_SOURCE_KEYS.map((key) => [
-      key,
-      { activity: 0, kg: hasFactors ? 0 : null, recorded: false, missingReadings: 0 },
-    ]),
+    ENERGY_SOURCE_KEYS.map((key) => [key, { activity: 0, recorded: false, missingReadings: 0 }]),
   ) as Record<EnergySourceKey, SourceTotal>;
   for (const flow of flows) {
     const total = totals[flow.source];
     total.activity += flow.activity;
     total.recorded = true;
-    if (total.kg != null) total.kg += flow.kg ?? 0;
   }
   for (const gap of gaps) totals[gap.source].missingReadings += 1;
   return totals;
-}
-
-export function totalKg(flows: EnergyFlow[]): number {
-  return flows.reduce((total, flow) => total + (flow.kg ?? 0), 0);
-}
-
-export function recordKg(record: EnergyRecord): number | null {
-  return record.footprint.kg ? sumSourceAmounts(record.footprint.kg) : null;
 }
 
 export function recordDieselLitres(record: EnergyRecord): number {
   return sumSourceAmounts(record.footprint.activity, DIESEL_SOURCE_KEYS);
 }
 
-/**
- * What the list ranks by: estimated kg CO2e, or litres of diesel when the
- * facility has no factors (one unit across the three diesel sources).
- */
+/** What the list ranks by: litres of diesel, one unit across the three diesel sources. */
 export function recordRankValue(record: EnergyRecord): number {
-  return recordKg(record) ?? recordDieselLitres(record);
+  return recordDieselLitres(record);
 }
 
 export function rankRecords(records: EnergyRecord[]): EnergyRecord[] {

@@ -1,17 +1,14 @@
 /**
- * Per-facility emission factors for the operator-facing energy estimates
- * (ADR 0031).
+ * Per-facility emission factors (ADR 0031). DORMANT since 2026-10-16: the
+ * Energy page no longer estimates CO2e and nothing reads or writes this table.
+ * It is kept for now, with no migration; see "Energy estimates paused" in
+ * docs/open-questions.md for the resume-or-drop decision.
  *
- * The energy page multiplies the activity operators record (litres of diesel,
- * kWh of grid electricity, tonne-km of road freight) by these factors to show
- * an estimated kg CO2e per record. They never reach a registry submission:
- * Isometric binds its own factors on the removal template and owns project
- * emissions (ADR 0018), so nothing here can change a submitted figure.
+ * They never reached a registry submission: Isometric binds its own factors on
+ * the removal template and owns project emissions (ADR 0018).
  *
- * One row per facility. No row means "not set", and the page then shows
- * activity units only. All three factors are required on save, so a row is
- * either complete or absent; grid electricity has no default because it is
- * country-specific.
+ * One row per facility; all three factors are required, so a row is either
+ * complete or absent.
  */
 import { sql } from "drizzle-orm";
 import { integer,

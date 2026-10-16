@@ -1,6 +1,6 @@
 /**
  * EnergyActivityPanel: the selection's recorded activity per source, in the
- * units operators enter, with the estimate beside it when factors are set.
+ * units operators enter. Includes feedstock transport no record shows.
  */
 import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
 import type { SourceTotal } from "@/lib/energy/selection";
@@ -8,7 +8,7 @@ import {
   ENERGY_SOURCE_BY_KEY,
   type EnergySourceKey,
 } from "@/lib/energy/sources";
-import { ENERGY_SOURCE_FILL, formatActivity, formatEstimate } from "./energy-display";
+import { ENERGY_SOURCE_FILL, formatActivity } from "./energy-display";
 
 const GROUPS: { title: string; keys: EnergySourceKey[] }[] = [
   { title: "Electricity", keys: ["grid"] },
@@ -20,19 +20,15 @@ interface EnergyActivityPanelProps {
   title: string;
   caption: string;
   totals: Record<EnergySourceKey, SourceTotal>;
-  hasFactors: boolean;
 }
 
 export function EnergyActivityPanel({
   title,
   caption,
   totals,
-  hasFactors,
 }: EnergyActivityPanelProps) {
   const values = Object.values(totals);
-  const totalKg = values.reduce((sum, total) => sum + (total.kg ?? 0), 0);
   const missing = values.reduce((sum, total) => sum + total.missingReadings, 0);
-  const anyRecorded = values.some((total) => total.recorded);
 
   return (
     <aside
@@ -44,9 +40,7 @@ export function EnergyActivityPanel({
         <p className="body-caption text-[var(--color-text-secondary)]">{caption}</p>
       </div>
       <p className="body-caption text-[var(--color-text-secondary)]">
-        {hasFactors
-          ? "Recorded activity in the units operators enter. CO₂e figures are estimates from this facility's emission factors."
-          : "Recorded activity in the units operators enter."}
+        Recorded activity in the units operators enter.
       </p>
       {GROUPS.map((group) => (
         <section key={group.title} className="flex flex-col gap-8">
@@ -75,11 +69,6 @@ export function EnergyActivityPanel({
                     <span className="body-small font-medium tabular-nums">
                       {notRecorded ? MISSING_VALUE.notRecorded : formatActivity(total.activity, meta.unit)}
                     </span>
-                    {total.kg != null && !notRecorded && (
-                      <span className="body-caption text-[var(--color-text-secondary)] tabular-nums">
-                        {formatEstimate(total.kg)}
-                      </span>
-                    )}
                   </dd>
                 </div>
               );
@@ -87,14 +76,6 @@ export function EnergyActivityPanel({
           </dl>
         </section>
       ))}
-      {hasFactors && (
-        <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-primary)] pt-12">
-          <span className="body-small font-medium">Total</span>
-          <span className="body-small font-medium tabular-nums">
-            {!anyRecorded && missing > 0 ? MISSING_VALUE.notRecorded : formatEstimate(totalKg)}
-          </span>
-        </div>
-      )}
       {missing > 0 && (
         <p className="body-caption text-[var(--color-text-secondary)]">
           {formatCount(missing, "reading")} not recorded in this selection, so the

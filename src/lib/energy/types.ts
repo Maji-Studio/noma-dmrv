@@ -1,19 +1,13 @@
 /**
- * Shapes for the energy estimate (ADR 0031): what the data-access read loads,
- * and the breakdown the attribution returns to the page.
+ * Shapes for the energy activity report (ADR 0031): what the data-access read
+ * loads, and the breakdown the attribution returns to the page. Activity only,
+ * in the units operators record; no CO2e is computed here.
  *
  * Every day is a facility-local `YYYY-MM-DD` string. Every activity reading is
  * nullable: null is a missing reading, never zero.
  */
 import type { TransportMethodValue } from "@/schemas/transport-legs";
 import type { EnergySourceKey, SourceAmounts } from "./sources";
-
-/** kg CO2e per activity unit, configured per facility. */
-export interface EnergyFactors {
-  dieselKgCo2ePerLitre: number;
-  gridKgCo2ePerKwh: number;
-  roadFreightKgCo2ePerTonneKm: number;
-}
 
 // ------------------------------------------------------------------ inputs
 
@@ -123,8 +117,6 @@ export interface ReadingGap {
 export interface EnergyFootprint {
   /** Recorded activity per source, scaled to the record's share. */
   activity: SourceAmounts;
-  /** Estimated kg CO2e per source; null when the facility has no factors. */
-  kg: SourceAmounts | null;
   gaps: Partial<Record<EnergySourceKey, ReadingGap>>;
 }
 
@@ -148,13 +140,12 @@ export interface EnergyRecord {
   dryMassKg: number | null;
 }
 
-/** One dated piece of the facility's energy, for the summary and the flow. */
+/** One dated piece of the facility's energy, for the summary line. */
 export interface EnergyFlow {
   source: EnergySourceKey;
   creditBatchId: string | null;
   day: string;
   activity: number;
-  kg: number | null;
 }
 
 /** One missing reading, dated like the flow it would have been. */
@@ -163,11 +154,6 @@ export interface EnergyGap {
   creditBatchIds: string[];
   day: string;
   recordId: string;
-}
-
-export interface EnergyProduction {
-  creditBatchId: string | null;
-  dryMassKg: number;
 }
 
 export interface EnergyPeriod {
@@ -180,13 +166,10 @@ export interface EnergyBreakdown {
   /** Resolved period start: the first record day for all time. */
   from: string;
   to: string;
-  factors: EnergyFactors | null;
   /** Every credit batch of the facility; the page filters by period. */
   creditBatches: EnergyCreditBatchInput[];
   /** Records in the period, every scope. */
   records: EnergyRecord[];
   flows: EnergyFlow[];
   gaps: EnergyGap[];
-  /** Dry biochar produced by runs in the period. */
-  production: EnergyProduction[];
 }

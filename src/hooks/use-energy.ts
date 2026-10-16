@@ -1,24 +1,16 @@
 /**
- * Energy page reads and the emission-factor save (ADR 0031).
+ * Energy page read (ADR 0031).
  */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  getEnergyBreakdown,
-  loadFacilityEmissionFactors,
-  saveFacilityEmissionFactors,
-} from "@/fn/energy";
+import { useQuery } from "@tanstack/react-query";
+import { getEnergyBreakdown } from "@/fn/energy";
 import { unwrap } from "@/hooks/types";
-import { throwActionError } from "@/lib/stale-version";
 import type { EnergyBreakdownInput } from "@/schemas/energy";
-import type { SaveFacilityEmissionFactorsData } from "@/schemas/emission-factors";
 
 export const energyKeys = {
   all: ["energy"] as const,
   breakdowns: () => [...energyKeys.all, "breakdown"] as const,
   breakdown: (input: EnergyBreakdownInput) =>
     [...energyKeys.breakdowns(), input.facilityId, input.from, input.to] as const,
-  emissionFactors: (facilityId: string) =>
-    [...energyKeys.all, "emission-factors", facilityId] as const,
 };
 
 export function useEnergyBreakdown(input: EnergyBreakdownInput | null) {
@@ -34,31 +26,5 @@ export function useEnergyBreakdown(input: EnergyBreakdownInput | null) {
     // screen meanwhile, never another facility's.
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[2] === input?.facilityId ? previous : undefined,
-  });
-}
-
-export function useFacilityEmissionFactors(facilityId: string | null) {
-  return useQuery({
-    queryKey: energyKeys.emissionFactors(facilityId ?? ""),
-    queryFn: async () => unwrap(await loadFacilityEmissionFactors(facilityId ?? "")),
-    enabled: !!facilityId,
-  });
-}
-
-export function useSaveFacilityEmissionFactors() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: SaveFacilityEmissionFactorsData) => {
-      const result = await saveFacilityEmissionFactors(input);
-      if (!result.success) throwActionError(result);
-      return result.data;
-    },
-    onSuccess: (factors, input) => {
-      queryClient.setQueryData(energyKeys.emissionFactors(input.facilityId), {
-        factors,
-        viewerCanManage: true,
-      });
-      void queryClient.invalidateQueries({ queryKey: energyKeys.breakdowns() });
-    },
   });
 }

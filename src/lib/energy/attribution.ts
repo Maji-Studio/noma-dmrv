@@ -1,15 +1,16 @@
 /**
  * Energy attribution (ADR 0031): turns what operators recorded into activity
- * and estimated kg CO2e per record, and into dated flows for the facility.
+ * per record (litres, kWh, tonne-km), and into dated flows for the facility.
+ * No CO2e is computed: Isometric derives the figures that count.
  *
  * Rules (docs/archive/plans/2026-10-01-energy-page.md, "Sources and attribution"):
  *
- * - kg CO2e = activity x factor. A null reading is a missing reading, never zero.
+ * - A null reading is a missing reading, never zero.
  * - Feedstock transport is 2 x one-way km x load tonnes per leg, and is split
  *   across the runs that drew the feedstock by wet mass drawn. What no run
- *   drew stays with the feedstock and reaches no credit batch. The factor is
- *   road freight, so a feedstock with a rail, ship, pipeline or air leg counts
- *   as a missing reading rather than an estimate at road intensity.
+ *   drew stays with the feedstock and reaches no credit batch. Only road legs
+ *   are counted, so a feedstock with a rail, ship, pipeline or air leg counts
+ *   as a missing reading rather than road tonne-km.
  * - Biochar delivery is 2 x effective km x delivered wet tonnes, split across
  *   the delivery's source runs by dry mass.
  * - A delivery or application carries the production energy of the biochar
@@ -32,14 +33,12 @@ import {
 import type {
   EnergyBreakdown,
   EnergyDeliveryInput,
-  EnergyFactors,
   EnergyFeedstockInput,
   EnergyFlow,
   EnergyFootprint,
   EnergyGap,
   EnergyInputs,
   EnergyPeriod,
-  EnergyProduction,
   EnergyRecord,
   EnergyRunInput,
   EnergyRunShareInput,
@@ -50,10 +49,9 @@ import type {
 /** Float residue below this is not a share worth a flow. */
 const SHARE_EPSILON = 1e-9;
 
-/** A recorded amount of one source, with its estimate when factors exist. */
+/** A recorded amount of one source, in the source's own unit. */
 interface Reading {
   activity: number;
-  kg: number | null;
 }
 
 interface RunCalc {
@@ -80,7 +78,6 @@ interface DeliveryCalc {
 }
 
 interface Model {
-  factors: EnergyFactors | null;
   runs: Map<string, RunCalc>;
   feedstocks: Map<string, FeedstockCalc>;
   deliveries: Map<string, DeliveryCalc>;
@@ -88,29 +85,20 @@ interface Model {
 
 // ------------------------------------------------------------- readings
 
-function estimate(activity: number, factor: number | undefined): Reading {
-  return { activity, kg: factor == null ? null : activity * factor };
-}
-
-function runReadings(
-  run: EnergyRunInput,
-  factors: EnergyFactors | null,
-): Record<RunSourceKey, Reading | null> {
-  const diesel = factors?.dieselKgCo2ePerLitre;
-  const grid = factors?.gridKgCo2ePerKwh;
-  const read = (value: number | null, factor: number | undefined) =>
-    value == null ? null : estimate(value, factor);
+function runReadings(run: EnergyRunInput): Record<RunSourceKey, Reading | null> {
+  const read = (value: number | null): Reading | null =>
+    value == null ? null : { activity: value };
   return {
-    startup: read(run.dieselOperationLiters, diesel),
-    genset: read(run.dieselGensetLiters, diesel),
-    preprocessing: read(run.preprocessingFuelLiters, diesel),
-    grid: read(run.electricityKwh, grid),
+    startup: read(run.dieselOperationLiters),
+    genset: read(run.dieselGensetLiters),
+    preprocessing: read(run.preprocessingFuelLiters),
+    grid: read(run.electricityKwh),
   };
 }
 
 /**
  * Round-trip tonne-km of a set of road legs; null when any load is unknown or
- * any leg is not by road, since only road freight has a factor.
+ * any leg is not by road, since only road tonne-km are counted.
  */
 function legsTonneKm(feedstock: EnergyFeedstockInput): number | null {
   if (feedstock.legs.length === 0) return null;
@@ -145,9 +133,8 @@ function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
   return out;
 }
 
-function buildModel(inputs: EnergyInputs, factors: EnergyFactors | null): Model {
+function buildModel(inputs: EnergyInputs): Model {
   const batchIds = new Set(inputs.creditBatches.map((batch) => batch.id));
-  const road = factors?.roadFreightKgCo2ePerTonneKm;
 
   const runs = new Map<string, RunCalc>();
   for (const run of inputs.runs) {
@@ -155,7 +142,7 @@ function buildModel(inputs: EnergyInputs, factors: EnergyFactors | null): Model 
       run,
       creditBatchId:
         run.creditBatchId && batchIds.has(run.creditBatchId) ? run.creditBatchId : null,
-      readings: runReadings(run, factors),
+      readings: runReadings(run),
       feedstockShares: [],
     });
   }
@@ -174,7 +161,7 @@ function buildModel(inputs: EnergyInputs, factors: EnergyFactors | null): Model 
     const tonneKm = legsTonneKm(feedstock);
     const calc: FeedstockCalc = {
       feedstock,
-      transport: tonneKm == null ? null : estimate(tonneKm, road),
+      transport: tonneKm == null ? null : { activity: tonneKm },
       draws:
         basisKg > 0
           ? draws.map((draw) => ({ runId: draw.runId, share: draw.wetMassKg / basisKg }))
@@ -200,13 +187,13 @@ function buildModel(inputs: EnergyInputs, factors: EnergyFactors | null): Model 
     const tonneKm = deliveryTonneKm(delivery);
     deliveries.set(delivery.id, {
       delivery,
-      transport: tonneKm == null ? null : estimate(tonneKm, road),
+      transport: tonneKm == null ? null : { activity: tonneKm },
       runShares,
       dryMassKg: sharedKg > 0 ? sharedKg : delivery.massDryKg,
     });
   }
 
-  return { factors, runs, feedstocks, deliveries };
+  return { runs, feedstocks, deliveries };
 }
 
 // ------------------------------------------------------------ footprints
@@ -220,7 +207,6 @@ interface GapTally {
 
 interface FootprintTally {
   activity: SourceAmounts;
-  kg: SourceAmounts;
   gaps: Partial<Record<EnergySourceKey, GapTally>>;
   runIds: Set<string>;
   deliveryIds: Set<string>;
@@ -229,7 +215,6 @@ interface FootprintTally {
 function newTally(): FootprintTally {
   return {
     activity: zeroSourceAmounts(),
-    kg: zeroSourceAmounts(),
     gaps: {},
     runIds: new Set(),
     deliveryIds: new Set(),
@@ -253,7 +238,6 @@ function count(
   }
   gap.recorded = true;
   tally.activity[source] += reading.activity * scale;
-  tally.kg[source] += (reading.kg ?? 0) * scale;
 }
 
 /**
@@ -307,7 +291,7 @@ function addDeliveryTransport(
   count(tally, "biocharTransport", "delivery", calc.delivery.id, calc.transport, scale);
 }
 
-function finish(tally: FootprintTally, factors: EnergyFactors | null): EnergyFootprint {
+function finish(tally: FootprintTally): EnergyFootprint {
   const gaps: Partial<Record<EnergySourceKey, ReadingGap>> = {};
   for (const source of ENERGY_SOURCE_KEYS) {
     const gap = tally.gaps[source];
@@ -320,7 +304,7 @@ function finish(tally: FootprintTally, factors: EnergyFactors | null): EnergyFoo
       };
     }
   }
-  return { activity: tally.activity, kg: factors ? tally.kg : null, gaps };
+  return { activity: tally.activity, gaps };
 }
 
 function batchIdsOf(model: Model, shares: EnergyRunShareInput[]): string[] {
@@ -346,7 +330,7 @@ function runRecords(model: Model): EnergyRecord[] {
       day: calc.run.day,
       endDay: null,
       creditBatchIds: calc.creditBatchId ? [calc.creditBatchId] : [],
-      footprint: finish(tally, model.factors),
+      footprint: finish(tally),
       runCount: 1,
       deliveryCount: 0,
       dryMassKg: calc.run.biocharDryMassKg,
@@ -367,7 +351,7 @@ function deliveryRecords(model: Model): EnergyRecord[] {
       day: calc.delivery.day,
       endDay: null,
       creditBatchIds: batchIdsOf(model, calc.runShares),
-      footprint: finish(tally, model.factors),
+      footprint: finish(tally),
       runCount: tally.runIds.size,
       deliveryCount: 1,
       dryMassKg: calc.dryMassKg,
@@ -427,7 +411,7 @@ function applicationRecords(model: Model, inputs: EnergyInputs): EnergyRecord[] 
       day: application.day,
       endDay: null,
       creditBatchIds: batchIdsOf(model, unscaledRuns.length > 0 ? unscaledRuns : shares),
-      footprint: finish(tally, model.factors),
+      footprint: finish(tally),
       runCount: tally.runIds.size,
       deliveryCount: tally.deliveryIds.size,
       dryMassKg: application.dryMassKg,
@@ -461,7 +445,7 @@ function creditBatchRecords(model: Model, inputs: EnergyInputs): EnergyRecord[] 
       day: batch.startDate,
       endDay: batch.endDate,
       creditBatchIds: [batch.id],
-      footprint: finish(tally, model.factors),
+      footprint: finish(tally),
       runCount: tally.runIds.size,
       deliveryCount: tally.deliveryIds.size,
       dryMassKg,
@@ -487,7 +471,6 @@ function facilityFlows(model: Model): { flows: EnergyFlow[]; gaps: EnergyGap[] }
       creditBatchId,
       day,
       activity: reading.activity * share,
-      kg: reading.kg == null ? null : reading.kg * share,
     });
   };
 
@@ -560,7 +543,6 @@ function mergeFlows(flows: EnergyFlow[]): EnergyFlow[] {
       continue;
     }
     existing.activity += flow.activity;
-    existing.kg = existing.kg == null || flow.kg == null ? null : existing.kg + flow.kg;
   }
   return [...merged.values()];
 }
@@ -578,16 +560,17 @@ function firstDay(inputs: EnergyInputs): string | null {
 }
 
 /**
- * The energy estimate for one facility and period. `inputs` must hold the
+ * The energy activity for one facility and period. Credit batch records
+ * (`scope: "batch"`) carry each batch's litres, kWh and tonne-km in
+ * `footprint.activity`; the monthly report reads them from here. `inputs` must hold the
  * facility's whole history: a delivery in the period carries biochar made by
  * runs before it, and a credit batch reaches back to its first run.
  */
 export function buildEnergyBreakdown(
   inputs: EnergyInputs,
-  factors: EnergyFactors | null,
   period: EnergyPeriod,
 ): EnergyBreakdown {
-  const model = buildModel(inputs, factors);
+  const model = buildModel(inputs);
   const from = period.from ?? firstDay(inputs) ?? period.to;
   const resolved: EnergyPeriod = { from, to: period.to };
   const inPeriod = (record: EnergyRecord) =>
@@ -603,21 +586,12 @@ export function buildEnergyBreakdown(
   ].filter(inPeriod);
 
   const { flows, gaps } = facilityFlows(model);
-  const production: EnergyProduction[] = [...model.runs.values()]
-    .filter((calc) => calc.run.biocharDryMassKg != null && dayInPeriod(calc.run.day, resolved))
-    .map((calc) => ({
-      creditBatchId: calc.creditBatchId,
-      dryMassKg: calc.run.biocharDryMassKg ?? 0,
-    }));
-
   return {
     from,
     to: period.to,
-    factors,
     creditBatches: inputs.creditBatches,
     records,
     flows: flows.filter((flow) => dayInPeriod(flow.day, resolved)),
     gaps: gaps.filter((gap) => dayInPeriod(gap.day, resolved)),
-    production,
   };
 }

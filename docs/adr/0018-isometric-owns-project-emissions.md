@@ -22,7 +22,8 @@ Status: accepted (2026-07-02)
 > (`facility_emission_factors`). They are display only and never submitted;
 > Isometric stays the system of record for project emissions and nothing
 > below changes for submission. See
-> [ADR 0031](./0031-operator-energy-estimates.md).
+> [ADR 0031](./0031-operator-energy-estimates.md). Estimates paused 2026-10-16,
+> see ADR 0031.
 
 > **Proposed supersession 2026-10-15**: [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
 > moves operating emissions (staff travel, lab electricity, sampling consumables,

@@ -1,9 +1,8 @@
 /**
- * Display vocabulary for the energy page: source fills and the two number
- * formats, activity in its own unit and estimated CO2e.
+ * Display vocabulary for the energy page: source fills and the activity
+ * number format.
  */
 import type { EnergyActivityUnit, EnergySourceKey } from "@/lib/energy/sources";
-import { formatCo2e } from "@/lib/format-utils";
 
 /** Chart fills per source; production warm, transport cool. */
 export const ENERGY_SOURCE_FILL: Record<EnergySourceKey, string> = {
@@ -21,9 +20,4 @@ const ONE_DECIMAL_BELOW = 10;
 export function formatActivity(value: number, unit: EnergyActivityUnit): string {
   const digits = Math.abs(value) < ONE_DECIMAL_BELOW ? 1 : 0;
   return `${value.toLocaleString(undefined, { maximumFractionDigits: digits })} ${unit}`;
-}
-
-/** Estimated CO2e, always marked as an estimate. */
-export function formatEstimate(kg: number): string {
-  return `est. ${formatCo2e(kg)}`;
 }

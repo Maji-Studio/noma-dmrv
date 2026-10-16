@@ -1,5 +1,12 @@
 # Isometric Docs Change Log
 
+## 2026-10-16: Energy page estimates and the Emission factors settings section removed (#1091)
+
+noma no longer shows estimated CO₂e on the Energy page or offers the "Emission
+factors" section in Certification settings ([ADR 0031](../adr/0031-operator-energy-estimates.md)).
+No registry binding and no submitted value changed: the factors never fed a
+submission.
+
 ## 2026-10-15: Correct reactor-monitoring citations and retain document-only gates (#627 slices 1, 2, 4)
 
 The passages were read through the Isometric MCP (`how_to`, then

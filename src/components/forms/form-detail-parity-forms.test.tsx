@@ -106,7 +106,6 @@ const NOT_SHEET_FORMS: Record<string, string> = {
   "components/organizations/invitation-bootstrap-form.tsx": "onboarding page, no detail toggle",
   "components/settings/organization-defaults-form.tsx": "settings page, no detail toggle",
   "components/admin/emission-estimates-form.tsx": "admin page, no detail toggle",
-  "components/certification/facility-emission-factors-form.tsx": "settings page, no detail toggle",
   "components/api-keys/api-key-form.tsx": "settings dialog, no detail toggle",
 };
 

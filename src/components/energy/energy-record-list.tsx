@@ -35,7 +35,7 @@ import {
   formatCreditBatchStatus,
   type CreditBatchStatus,
 } from "@/schemas/credit-batches";
-import { formatActivity, formatEstimate } from "./energy-display";
+import { formatActivity } from "./energy-display";
 import { EnergyRecordBreakdown, EnergySourceBar } from "./energy-record-breakdown";
 
 const TOP_ROWS = 20;
@@ -80,7 +80,6 @@ interface EnergyRecordListProps {
   records: EnergyRecord[];
   creditBatches: EnergyCreditBatchInput[];
   facilityId: string;
-  hasFactors: boolean;
   scope: EnergyRecordScope;
   onScopeChange: (scope: EnergyRecordScope) => void;
 }
@@ -89,7 +88,6 @@ export function EnergyRecordList({
   records,
   creditBatches,
   facilityId,
-  hasFactors,
   scope,
   onScopeChange,
 }: EnergyRecordListProps) {
@@ -150,10 +148,10 @@ export function EnergyRecordList({
                   <th scope="col" className="px-16 py-10 font-medium">Record</th>
                   <th scope="col" className="px-12 py-10 font-medium">Date</th>
                   <th scope="col" className="px-12 py-10 text-right font-medium">
-                    {hasFactors ? "Est. CO₂e" : "Diesel"}
+                    Diesel
                   </th>
                   <th scope="col" className={cn("px-16 py-10 font-medium", BAR_COLUMN_WIDTH_CLASS)}>
-                    {hasFactors ? "By source" : "Diesel by use"}
+                    Diesel by use
                   </th>
                 </tr>
               </thead>
@@ -220,7 +218,7 @@ export function EnergyRecordList({
                             : formatDayString(record.day)}
                         </td>
                         <td className="whitespace-nowrap px-12 py-10 text-right body-small tabular-nums">
-                          {hasFactors ? formatEstimate(value) : formatActivity(value, "L")}
+                          {formatActivity(value, "L")}
                         </td>
                         <td className={cn("px-16 py-10", BAR_COLUMN_WIDTH_CLASS)}>
                           <div

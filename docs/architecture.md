@@ -188,7 +188,7 @@ affected row too, including facility archive and restore. Ordinary UI updates
 and deletes must send the `expectedVersion` loaded when the operator opened
 the record. Feedstocks, facilities, reactors, storage bins, suppliers and their
 locations, customers and their locations, formulations, feedstock types,
-facility emission factors, production runs, production incidents, in-process
+production runs, production incidents, in-process
 measurements (`productionSamples`), biochar products, lab samples, orders,
 deliveries, transport legs, applications, and credit batches use integer row
 versions. Inserts start at version 1. Stock loss, count, and correction commands
@@ -209,10 +209,6 @@ reference to the edited record using the `stale-version` sentinel. The hook
 re-throws it as `StaleVersionError` through `src/lib/stale-version.ts`. The
 form shows `STALE_VERSION_MESSAGE` while keeping the operator's draft.
 
-The emission-factors upsert instead requires `expectedVersion: number | null`.
-Its form sends `null` when it loaded no row, so a row saved since (or a
-concurrent first save, serialized by the facility row lock) is refused as stale.
-A numeric version must match the locked factors row.
 
 Internal current-state commands bump without child preconditions: derived
 transport-leg sync, credit-batch auto-attachment, registry submission
