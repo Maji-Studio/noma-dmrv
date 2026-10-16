@@ -160,6 +160,7 @@ export interface GhgStatementListItem {
 // preview partitions these by `completedOn` against the chosen period end.
 export interface OpenRemovalView {
   removalId: string;
+  code: string;
   externalId: string;
   completedOn: string | null;
   startedOn: string | null;
@@ -831,6 +832,7 @@ export async function loadOpenRemovalsForFacility(
     );
     return open.map(({ removal, externalId }) => ({
       removalId: removal.id,
+      code: removal.code,
       externalId,
       completedOn: removal.completedOn,
       startedOn: removal.startedOn,

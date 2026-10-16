@@ -1,3 +1,4 @@
+import { withAutoCodes } from "./code-generator";
 import { recordActivityChange } from "./activity-events";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
@@ -36,6 +37,8 @@ export type CertifierRemovalRow = typeof certifierRemovals.$inferSelect;
 type CreditBatchRow = typeof creditBatches.$inferSelect;
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+const AUTO_CODE_COUNT = 1;
+const REMOVAL_CODE_PREFIX = "RM";
 const ISOMETRIC = "isometric" as const;
 const THOUSAND_YEAR_REMOVAL_BATCH_LIMIT = 1;
 const THOUSAND_YEAR_REMOVAL_ERROR =
@@ -508,10 +511,13 @@ export async function createRemovalWithCreditBatches(
       );
     }
 
-    const [removal] = await tx
-      .insert(certifierRemovals)
-      .values({ facilityId, organizationId: ctx.organizationId })
-      .returning({ id: certifierRemovals.id });
+    const [removal] = await withAutoCodes(
+      ctx, tx, REMOVAL_CODE_PREFIX, certifierRemovals, certifierRemovals.code, AUTO_CODE_COUNT,
+      ([code], savepoint) => savepoint
+        .insert(certifierRemovals)
+        .values({ code, facilityId, organizationId: ctx.organizationId })
+        .returning({ id: certifierRemovals.id }),
+    );
 
     const assigned = await tx
       .update(creditBatchApplications)

@@ -91,6 +91,7 @@ export interface CreditBatchHealthSummary {
 // and wizard submit step render).
 export interface RemovalPreflightSummary {
   removalId: string;
+  code: string;
   startedOn: string | null;
   completedOn: string | null;
   memberBatchCodes: string[];
@@ -142,6 +143,7 @@ async function buildRemovalPreflightSummary(
       limit: RECENT_SYNC_EVENTS_LIMIT,
     }),
   ]);
+  if (!scope.removal) throw new SafeError("Removal not found.");
   const facts = toRemovalReadinessFacts(ctx);
   const startedOn = scope.removal?.startedOn ?? null;
   const completedOn = scope.removal?.completedOn ?? null;
@@ -152,6 +154,7 @@ async function buildRemovalPreflightSummary(
     });
   return {
     removalId,
+    code: scope.removal.code,
     startedOn,
     completedOn,
     memberBatchCodes: ctx.memberBatches.map((batch) => batch.code),
