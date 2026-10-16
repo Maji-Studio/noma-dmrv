@@ -24,7 +24,7 @@ import {
 } from "@/data-access/credit-batches";
 import {
   createCreditBatchSchema,
-  createCreditBatchSchemaForCertifier,
+  creditBatchFormSchemaForCertifier,
   updateCreditBatchSchema,
   deleteCreditBatchSchema,
 } from "@/schemas/credit-batches";
@@ -118,7 +118,7 @@ export async function createCreditBatchFn(
   const result = await withAction(async (ctx) => {
     const { facilityId } = creditBatchFacilitySchema.parse(data);
     const certifier = await getCreditBatchCertifierForFacility(ctx, facilityId);
-    const validated = createCreditBatchSchemaForCertifier(certifier).parse(data);
+    const validated = creditBatchFormSchemaForCertifier(certifier).parse(data);
 
     const creditBatch = await withAutoCode(
       ctx,

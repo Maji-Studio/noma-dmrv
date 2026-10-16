@@ -425,6 +425,8 @@ export function useSaveFacilityCertifierMapping() {
         queryKey: certificationKeys.facilityMapping(variables.facilityId),
       });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.all });
+      queryClient.invalidateQueries({ queryKey: activityKeys.all });
       invalidateOnboardingProgress(queryClient, variables.facilityId);
     },
   });

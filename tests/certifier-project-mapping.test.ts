@@ -6,11 +6,13 @@ import {
 } from "@/data-access/certification";
 import { db } from "@/db";
 import { createCreditBatch, updateCreditBatch } from "@/data-access/credit-batches";
+import { archiveFacility, restoreFacility } from "@/data-access/facilities";
 import { creditBatches } from "@/db/schema/credits";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { activityEvents } from "@/db/schema/activity";
 import { SafeError } from "@/lib/errors";
+import { masterDataVersion } from "./helpers/master-data-version";
 import {
   certificationSubmissions,
   certifierProjects,
@@ -371,6 +373,29 @@ describe("upsertCertifierProject credit batch adoption", () => {
     for (const batch of [first, second]) {
       expect(await storedBatch(batch.id)).toMatchObject({ certifier: null, version: batch.version });
     }
+  });
+
+  it("refuses an archived facility link, then refuses its overlong batch after restore", async () => {
+    const facilityId = await createFacility();
+    const batch = await createBatch(facilityId, "2027-01-01", "2027-04-30");
+    const archived = await archiveFacility(ctx, facilityId, await masterDataVersion(ctx, "facilities", facilityId));
+    const archivedBatch = await storedBatch(batch.id);
+    expect(archivedBatch.archivedAt).not.toBeNull();
+
+    await expect(link(facilityId)).rejects.toThrow(new SafeError(
+      `Facility ${archived.code} is archived. Restore it before linking it to Isometric.`,
+    ));
+    expect(await getCertifierProjectByFacility(ctx, facilityId)).toBeNull();
+    expect(await storedBatch(batch.id)).toEqual(archivedBatch);
+
+    await restoreFacility(ctx, facilityId, archived.version);
+    const restoredBatch = await storedBatch(batch.id);
+    expect(restoredBatch).toMatchObject({ archivedAt: null, certifier: null });
+    await expect(link(facilityId)).rejects.toThrow(new SafeError(
+      `Credit batch ${batch.code} spans more than one calendar month. Shorten or archive it before linking this facility to Isometric.`,
+    ));
+    expect(await getCertifierProjectByFacility(ctx, facilityId)).toBeNull();
+    expect(await storedBatch(batch.id)).toEqual(restoredBatch);
   });
 
   it.each(["2027-02-27", "2027-02-28"])("links and stamps a period ending %s from January 31", async endDate => {

@@ -18,9 +18,12 @@ export async function adoptCreditBatchesForIsometric(
   requireOrgScope(ctx);
   // Batch writers take facility SHARE before writing. UPDATE prevents a batch
   // from appearing or changing between this check and the mapping commit.
-  await tx.select({ id: facilities.id }).from(facilities)
+  const [facility] = await tx.select({ code: facilities.code, archivedAt: facilities.archivedAt }).from(facilities)
     .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)))
     .for("update");
+  if (facility?.archivedAt) {
+    throw new SafeError(`Facility ${facility.code} is archived. Restore it before linking it to Isometric.`);
+  }
   const activeScope = and(
     eq(creditBatches.facilityId, facilityId),
     isNull(creditBatches.archivedAt),

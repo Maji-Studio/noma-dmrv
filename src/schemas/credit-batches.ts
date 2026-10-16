@@ -22,10 +22,6 @@ export type CreditBatchStatus = (typeof creditBatchStatuses)[number];
 export const creditBatchSamplingChoices = ["sampled", "unsampled"] as const;
 export type CreditBatchSampling = (typeof creditBatchSamplingChoices)[number];
 
-/**
- * Providers supported for credit-batch writes. Facility mappings may use others.
- */
-export const certifierProviders = ["isometric"] as const;
 export type CertifierProvider = (typeof certifierProvider.enumValues)[number];
 
 /**
@@ -100,14 +96,8 @@ export const creditBatchFormSchema = creditBatchFormSchemaForCertifier("isometri
 // Server Action Schemas
 // ============================================
 
-/**
- * Server-action schema factory. Keep server-only create fields here.
- */
-export const createCreditBatchSchemaForCertifier = (certifier: CertifierProvider | null) =>
-  creditBatchFormSchemaForCertifier(certifier);
-
 /** Isometric-default create shape for inferred types and Isometric demo seeds. */
-export const createCreditBatchSchema = createCreditBatchSchemaForCertifier("isometric");
+export const createCreditBatchSchema = creditBatchFormSchema;
 
 /**
  * Schema for updating a credit batch (server action)
