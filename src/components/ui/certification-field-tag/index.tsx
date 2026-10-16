@@ -30,8 +30,7 @@ const STATUS_STYLES: Record<CertFieldStatus, string> = {
 /**
  * The chip's own explanation. The same wording is the accessible name of the
  * chip and the tooltip on hover. Sheet and dialog headers also carry one requiredness
- * legend ⓘ on forms with CERT fields (Kenji, 2026-10-16, reversing the
- * 2026-09-30 "no legend" call); it reuses these strings.
+ * legend ⓘ on forms with CERT fields (Kenji, 2026-10-16); it reuses these strings.
  */
 export const CERT_FIELD_STATUS_DESCRIPTION: Record<CertFieldStatus, string> = {
   neutral: "Required for certification",
