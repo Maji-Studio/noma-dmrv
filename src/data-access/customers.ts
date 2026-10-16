@@ -259,6 +259,7 @@ export async function getCustomerLocations(
     createdAt: Date;
     version: number;
     updatedAt: Date;
+    archivedAt: Date | null;
   }>
 > {
   requireOrgScope(ctx);
@@ -288,6 +289,7 @@ export async function getCustomerLocations(
       createdAt: customerLocations.createdAt,
       version: customerLocations.version,
       updatedAt: customerLocations.updatedAt,
+      archivedAt: customerLocations.archivedAt,
     })
     .from(customerLocations)
     .where(and(eq(customerLocations.customerId, customerId), eq(customerLocations.organizationId, ctx.organizationId)))

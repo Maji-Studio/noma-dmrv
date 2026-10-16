@@ -1,5 +1,5 @@
 import { readApiCustomer } from "@/lib/read-models/api-customers";
-import { representCustomerLocation } from "@/lib/representations/customer-locations";
+import { readApiCustomerLocation } from "@/lib/read-models/api-customer-locations";
 import type { CustomerRepresentation } from "@/lib/representations/customers";
 import type { CustomerLocationRepresentation } from "@/lib/representations/customer-locations";
 import { createCustomerApiInput, updateCustomerApiInput, customerVersionInput } from "@/schemas/customer-input";
@@ -16,7 +16,11 @@ export const createCustomerApi: Operation<typeof createCustomerApiInput, Custome
   execute: async (scope, input) => {
     const result = await createCustomer.execute(scope, input);
     return { customer: await readApiCustomer(scope.ctx, { id: result.customer.id }, scope.tx),
-      locations: result.locations.map(row => representCustomerLocation({ ...row, siteDescription: row.address })) };
+      locations: await Promise.all(result.locations.map(async row => {
+        const location = await readApiCustomerLocation(scope.ctx, result.customer.id, row.id, scope.tx);
+        if (!location) throw new Error("Created customer location was not found.");
+        return location;
+      })) };
   },
 };
 export const updateCustomerApi: Operation<typeof updateInput, CustomerOutput> = {

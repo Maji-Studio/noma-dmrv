@@ -61,7 +61,9 @@ Lists hide archived rows by default. REST `archived=true` and MCP `archived: tru
 list only archived rows, including exact code searches. Cursors bind this filter;
 a mismatched cursor returns 400. Detail and nested location reads remain available
 under an archived party. Supplier locations publish `archivedAt: null`; customer
-locations currently omit it.
+locations carry `archivedAt`. API location bodies list every stored facility pair,
+including pairs for archived facilities; such a pair can be kept or cleared but
+cannot be set.
 
 Archive keeps existing references. Archived suppliers cannot be newly referenced
 by intakes; archived customers cannot be newly referenced by orders. A changed
@@ -109,4 +111,3 @@ Ratios are guidance only, from 0 to 1 in exact integer millionths (six decimals)
 more; sum refusals point at `/biocharRatio`. PATCH omission keeps, null clears,
 zero stays zero; supplied `lines` replace the full list. Unknown fields and
 invalid ratios return 422. REST pointers appear in `errors`; MCP uses `issues`.
-
