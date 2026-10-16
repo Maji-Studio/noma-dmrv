@@ -474,7 +474,7 @@ describe("feedstock REST guards and audit", { timeout: SUITE_TIMEOUT_MS }, () =>
         credentialId: credentialIdA, entityType: "feedstock", entityId: created.row.id,
       });
     }
-    expect(JSON.stringify(events)).not.toContain(privateNotes);
+    expect(JSON.stringify(events, (_key, value) => typeof value === "bigint" ? String(value) : value)).not.toContain(privateNotes);
   });
 
   it("adds no audit rows for dry runs or create, update and delete replays", async () => {

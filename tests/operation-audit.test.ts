@@ -32,7 +32,7 @@ it("commits one audit and replays its effect without another event", async () =>
     operationId: logFeedstockDelivery.id, action: "created", entityId: first.data.feedstocks[0].id,
     changedFields: first.effect!.changedFields, versionBefore: null, versionAfter: 1,
   });
-  expect(JSON.stringify(events)).not.toContain(input.notes);
+  expect(JSON.stringify(events, (_key, value) => typeof value === "bigint" ? String(value) : value)).not.toContain(input.notes);
   expect((await records())[0]).toMatchObject({ outcomeSchemaVersion: 2, outcome: { data: first.data, effect: first.effect } });
   const replay = await runOperation(logFeedstockDelivery, fixture.ctx, input, { ...options, audit: audit() });
   expect(replay).toEqual({ ...first, replayed: true });
