@@ -338,6 +338,14 @@ Generated SQL lives in `drizzle/`; metadata snapshots in `drizzle/meta/`. **Migr
 
 Flow: change schema → `pnpm db:generate` → review the emitted SQL → run targeted tests → `pnpm db:migrate` in shared environments.
 
+### Your migration number is taken after merging staging
+
+1. Merge `origin/staging`, then replace your metadata with its: `rm -rf drizzle/meta && git checkout origin/staging -- drizzle/meta`. A plain checkout keeps your branch-only snapshots, and `db:generate` would diff against them.
+2. Delete your own `NNNN_*.sql`, then rerun `pnpm db:generate --name <same name>`.
+3. Re-apply any hand-written SQL you added to the generated file.
+4. Reset your worktree DBs, then migrate. A plain migrate skips staging's migration when its `when` is older than the one you already applied. Before pushing, `git status --short drizzle/` should show only your new migration files and metadata changes.
+5. Never rename the file and edit the journal by hand: Drizzle skips migrations whose `when` is older than the last applied one. `pnpm check:migrations` catches this.
+
 ### Migration files are immutable once applied
 
 **Never edit a migration file after it has been applied to any database** (staging, production, or a teammate's). `drizzle-kit migrate` tracks applied migrations by journal order/timestamp, not file content, so an edited migration is silently skipped on databases that ran the original — CI reports success while the new DDL never executes, and the drift only surfaces in `db:verify-schema`. Need more changes? Generate a new migration. To repair drift that already happened, write a new migration with guarded DDL (`IF NOT EXISTS` / existence checks) so it no-ops where the objects exist.

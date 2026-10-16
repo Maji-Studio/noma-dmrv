@@ -585,9 +585,10 @@ then checks that file with the repository's TypeScript compiler using
 the generated client is not committed. CI runs this check in `quality-static`
 on every PR and push, including the first release without a base snapshot.
 
-The CI `openapi-breaking` job compares the PR base SHA snapshot with the head
-using checksum-verified oasdiff v1.32.1 and `breaking --fail-on ERR`. A base without
-the snapshot is the first release and passes with an explicit notice.
+The CI `openapi-breaking` job compares the snapshot at `git merge-base(base, head)`
+with the head, so breaks that landed on staging meanwhile are not blamed on the PR.
+It uses checksum-verified oasdiff v1.32.1 and `breaking --fail-on ERR`. A merge base
+without the snapshot is the first release and passes with an explicit notice.
 
 Prefer additive changes in v1; incompatible versions use v2 with Deprecation and
 Sunset headers. For an accepted deliberate break or contract correction, regenerate
