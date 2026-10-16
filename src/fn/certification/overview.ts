@@ -135,6 +135,7 @@ async function buildRemovalPreflightSummary(
   facilityFacts: Awaited<ReturnType<typeof loadFacilityCertifierFacts>>,
 ): Promise<RemovalPreflightSummary> {
   const scope = await resolveScopeForRemoval(orgCtx, removalId);
+  if (!scope.removal) throw new SafeError("Removal not found.");
   const [ctx, recentSyncEvents] = await Promise.all([
     buildRemovalContext(orgCtx, scope, facilityFacts),
     listRecentSyncEvents(orgCtx, {
@@ -143,10 +144,9 @@ async function buildRemovalPreflightSummary(
       limit: RECENT_SYNC_EVENTS_LIMIT,
     }),
   ]);
-  if (!scope.removal) throw new SafeError("Removal not found.");
   const facts = toRemovalReadinessFacts(ctx);
-  const startedOn = scope.removal?.startedOn ?? null;
-  const completedOn = scope.removal?.completedOn ?? null;
+  const startedOn = scope.removal.startedOn ?? null;
+  const completedOn = scope.removal.completedOn ?? null;
   const submissionInterrupted =
     isRemovalSubmissionInterruptedFromSubmission(ctx.latestSubmission, {
       startedOn,
@@ -170,7 +170,7 @@ async function buildRemovalPreflightSummary(
       submissionId: ctx.latestSubmission?.id ?? null,
       submissionVersion: ctx.latestSubmission?.version ?? null,
       submissionStatus: ctx.latestSubmission?.status ?? null,
-      removalMetadata: scope.removal?.metadata ?? null,
+      removalMetadata: scope.removal.metadata ?? null,
     }),
     submissionWarnings: ctx.submissionWarnings,
     recentSyncEvents,

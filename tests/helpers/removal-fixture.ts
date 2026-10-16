@@ -1,10 +1,10 @@
 import { db, type DbTransaction } from "@/db";
 import { certifierRemovals } from "@/db/schema/certification";
 import { withAutoCodes } from "@/data-access/code-generator";
+import { REMOVAL_CODE_PREFIX } from "@/data-access/certifier-removals";
 import { makeTestOrgContext } from "./test-org";
 
 type RemovalFixture = Omit<typeof certifierRemovals.$inferInsert, "code">;
-const REMOVAL_CODE_PREFIX = "RM";
 
 /** Fixture-only insert: the same org-scoped generator and savepoint retries as real creates. */
 export async function insertRemovalFixture(

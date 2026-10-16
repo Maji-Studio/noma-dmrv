@@ -1,4 +1,4 @@
-import { withAutoCodes } from "./code-generator";
+import { CODE_CONFLICT_MESSAGES, withAutoCodes } from "./code-generator";
 import { recordActivityChange } from "./activity-events";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
@@ -38,7 +38,7 @@ type CreditBatchRow = typeof creditBatches.$inferSelect;
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 const AUTO_CODE_COUNT = 1;
-const REMOVAL_CODE_PREFIX = "RM";
+export const REMOVAL_CODE_PREFIX = "RM";
 const ISOMETRIC = "isometric" as const;
 const THOUSAND_YEAR_REMOVAL_BATCH_LIMIT = 1;
 const THOUSAND_YEAR_REMOVAL_ERROR =
@@ -517,6 +517,7 @@ export async function createRemovalWithCreditBatches(
         .insert(certifierRemovals)
         .values({ code, facilityId, organizationId: ctx.organizationId })
         .returning({ id: certifierRemovals.id }),
+      CODE_CONFLICT_MESSAGES.removal,
     );
 
     const assigned = await tx

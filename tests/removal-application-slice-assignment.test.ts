@@ -28,6 +28,7 @@ import {
   storageLocations,
 } from "@/db/schema";
 import {
+  REMOVAL_CODE_PREFIX,
   createRemovalWithCreditBatches,
   discardLocalRemovalDraft,
   getCertifierRemovalById,
@@ -238,8 +239,8 @@ describe("Removal Application-slice assignment", () => {
       const firstRemoval = await getCertifierRemovalById(ctx, removalId);
       const secondRemoval = await getCertifierRemovalById(ctx, secondRemovalId);
       const year = String(new Date().getFullYear()).slice(-2);
-      expect(firstRemoval?.code).toMatch(new RegExp(`^RM-${year}-\\d{3,}$`));
-      expect(secondRemoval?.code).toMatch(new RegExp(`^RM-${year}-\\d{3,}$`));
+      expect(firstRemoval?.code).toMatch(new RegExp(`^${REMOVAL_CODE_PREFIX}-${year}-\\d{3,}$`));
+      expect(secondRemoval?.code).toMatch(new RegExp(`^${REMOVAL_CODE_PREFIX}-${year}-\\d{3,}$`));
       expect(Number(secondRemoval!.code.split("-").at(-1))).toBe(
         Number(firstRemoval!.code.split("-").at(-1)) + 1,
       );
