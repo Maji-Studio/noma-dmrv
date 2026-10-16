@@ -821,7 +821,7 @@ Earlier implementation notes are archived by date:
 
 ## 2026-10-16: operator zeros and stored-entry display facts
 
-ADR 0032 now permits operator-marked zeros with a required note and no Removal
+ADR 0032 now permits operator-marked zeros with an optional note and no Removal
 owner. Batch health uses batch-scoped stored entries and automatic figures.
 Facility Energy activity includes counting entries only on reviewed facility
 energy sources. These local changes remain behind `EMISSIONS_ENTRIES_ENABLED`;

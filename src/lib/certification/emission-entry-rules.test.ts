@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   normalizedEntryValues,
-  validateOperatorZero, NOTHING_TO_RECORD_NOTE_REQUIRED,
+  validateOperatorZero,
   emissionEntryCounts,
   validateEmissionEntry,
   multiplyEntryDecimals,
@@ -222,10 +222,15 @@ it("still allows confirmation for a fixed-factor change with unchanged entry uni
 });
 
 describe("operator-marked zeros", () => {
-  const zero = () => ({ ...args(), note: "  No lab work this batch.  ", activeOperatorZeroCount: 0, automaticFigure: null });
-  it("trims a required note without values or evidence", () => {
-    expect(validateOperatorZero(zero())).toMatchObject({ note: "No lab work this batch.", lineRule: "additive" });
-    expect(() => validateOperatorZero({ ...zero(), note: " \n\t" })).toThrow(NOTHING_TO_RECORD_NOTE_REQUIRED);
+  const zero = () => ({ ...args(), activeOperatorZeroCount: 0, automaticFigure: null });
+  it("trims an optional note without values or evidence", () => {
+    expect(validateOperatorZero({ ...zero(), note: "  No lab work this batch.  " })).toMatchObject({ note: "No lab work this batch.", lineRule: "additive" });
+  });
+  it.each([undefined, null, "", " \n\t"])("accepts an absent or blank note %j as null", note => {
+    expect(validateOperatorZero({ ...zero(), note })).toMatchObject({ note: null, lineRule: "additive" });
+  });
+  it("accepts marking a line with the note field omitted", () => {
+    expect(validateOperatorZero(zero()).note).toBeNull();
   });
   it("refuses counting values and duplicate operator zeros", () => {
     expect(() => validateOperatorZero({ ...zero(), activeValueCount: 1 })).toThrow("This line has entries. Delete them before marking nothing to record.");

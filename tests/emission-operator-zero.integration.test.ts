@@ -70,28 +70,34 @@ async function value(componentId = "lab") {
   entryIds.push(row.id);
   return row;
 }
-it("creates, edits and deletes an evidence-free operator zero using the facility day", async () => {
-  const row = await zero();
+it.each(["", " \t\n", null])("creates a zero without a note, adds and clears its note to %j, then deletes it", async note => {
+  const withoutNote = { facilityId: fixture.facilityId, creditBatchId: fixture.batchId, componentId: "lab" };
+  const row = await markNothingToRecord(ctx, withoutNote);
+  entryIds.push(row.id);
   const [facility] = await db.select().from(facilities).where(eq(facilities.id, fixture.facilityId));
-  expect(row).toMatchObject({ note: "No lab work.", confirmedForRemovalId: null, values: [], occurredOn: formatFacilityDate(new Date(), facility.timezone) });
+  expect(row).toMatchObject({ note: null, confirmedForRemovalId: null, values: [], occurredOn: formatFacilityDate(new Date(), facility.timezone) });
   const lines = await loadBatchEmissionLines(ctx, fixture.facilityId, fixture.batchId);
-  expect(lines.find(line => line.componentId === "lab")).toMatchObject({ state: "confirmedZero", entries: [expect.objectContaining({ note: "No lab work.", confirmedForRemovalId: null })] });
+  expect(lines.find(line => line.componentId === "lab")).toMatchObject({ state: "confirmedZero", entries: [expect.objectContaining({ note: null, confirmedForRemovalId: null })] });
   expect(lines.find(line => line.componentId === "lab")?.blocker).toBeUndefined();
-  await expect(updateEmissionEntry(ctx, { id: row.id, expectedVersion: row.version, note: "  " })).rejects.toThrow("Enter a note");
   const saved = await updateEmissionEntry(ctx, { id: row.id, expectedVersion: row.version, note: "  No samples. ", occurredOn: "2026-06-14" });
   expect(saved).toMatchObject({ note: "No samples.", occurredOn: "2026-06-14", version: 2, contentRevision: 2 });
+  const unchanged = await updateEmissionEntry(ctx, { id: row.id, expectedVersion: saved.version });
+  expect(unchanged).toMatchObject({ note: "No samples.", version: 3, contentRevision: 2 });
+  const cleared = await updateEmissionEntry(ctx, { id: row.id, expectedVersion: unchanged.version, note });
+  expect(cleared).toMatchObject({ note: null, version: 4, contentRevision: 2 });
   await expect(deleteEmissionEntry(ctx, row.id, 1)).rejects.toMatchObject({ code: "stale_version" });
-  await deleteEmissionEntry(ctx, row.id, saved.version);
+  await deleteEmissionEntry(ctx, row.id, cleared.version);
   expect((await loadBatchEmissionLines(ctx, fixture.facilityId, fixture.batchId)).find(line => line.componentId === "lab")?.state).toBe("empty");
 });
-it("refuses duplicates, blank notes and wrong-facility writes; the database enforces note and uniqueness", async () => {
-  await expect(markNothingToRecord(ctx, { ...input(), note: " \t\n" })).rejects.toThrow("Enter a note");
+it("refuses duplicates and wrong-facility writes; the database accepts ownerless zeros without notes but refuses owned values", async () => {
   await expect(markNothingToRecord(ctx, { ...input(), facilityId: crypto.randomUUID() })).rejects.toThrow();
   const row = await zero();
   await expect(markNothingToRecord(ctx, input())).rejects.toThrow("already marked");
   const [persisted] = await db.select().from(emissionEntries).where(eq(emissionEntries.id, row.id));
   await expect(db.insert(emissionEntries).values({ ...persisted, id: crypto.randomUUID() })).rejects.toThrow();
-  await expect(db.update(emissionEntries).set({ note: " \t\n" }).where(eq(emissionEntries.id, row.id))).rejects.toThrow();
+  const [withoutNote] = await db.update(emissionEntries).set({ note: null }).where(eq(emissionEntries.id, row.id)).returning();
+  expect(withoutNote).toMatchObject({ kind: "zero", confirmedForRemovalId: null, note: null });
+  await expect(db.update(emissionEntries).set({ kind: "value", confirmedForRemovalId: fixture.removalId }).where(eq(emissionEntries.id, row.id))).rejects.toThrow();
 });
 it("atomically replaces a zero with a value and captures its deletion without the note", async () => {
   const row = await zero();

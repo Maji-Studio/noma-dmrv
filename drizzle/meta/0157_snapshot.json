@@ -1,5 +1,5 @@
 {
-  "id": "bd4f392e-f2f7-49d0-8f46-6a57f24774a8",
+  "id": "54243601-543d-4af3-ac46-2124633738c1",
   "prevId": "3c851292-b820-4387-b1bf-1d6f62ca9093",
   "version": "7",
   "dialect": "postgresql",
@@ -6534,7 +6534,7 @@
         },
         "emission_entries_zero_owner": {
           "name": "emission_entries_zero_owner",
-          "value": "(\"emission_entries\".\"kind\" = 'value' and \"emission_entries\".\"confirmed_for_removal_id\" is null) or (\"emission_entries\".\"kind\" = 'zero' and (\"emission_entries\".\"confirmed_for_removal_id\" is not null or (\"emission_entries\".\"note\" is not null and \"emission_entries\".\"note\" ~ '[^[:space:]]')))"
+          "value": "(\"emission_entries\".\"kind\" = 'value' and \"emission_entries\".\"confirmed_for_removal_id\" is null) or \"emission_entries\".\"kind\" = 'zero'"
         },
         "emission_entries_revisions": {
           "name": "emission_entries_revisions",

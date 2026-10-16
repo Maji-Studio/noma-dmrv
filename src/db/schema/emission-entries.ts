@@ -86,7 +86,7 @@ export const emissionEntries = pgTable(
     check("emission_entries_rule", sql`${t.lineRule} in ('additive', 'single')`),
     check(
       "emission_entries_zero_owner",
-      sql`(${t.kind} = 'value' and ${t.confirmedForRemovalId} is null) or (${t.kind} = 'zero' and (${t.confirmedForRemovalId} is not null or (${t.note} is not null and ${t.note} ~ '[^[:space:]]')))`,
+      sql`(${t.kind} = 'value' and ${t.confirmedForRemovalId} is null) or ${t.kind} = 'zero'`,
     ),
     check("emission_entries_revisions", sql`${t.version} > 0 and ${t.contentRevision} > 0`),
   ],

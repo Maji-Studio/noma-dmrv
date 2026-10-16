@@ -1,7 +1,7 @@
 import { loadBatchAutomaticFigures } from "./batch-emission-automatic-figures";
 import { loadBatchEmissionEntryFacts } from "./emission-entry-facts";
 import { formatFacilityDate } from "@/lib/date-utils";
-import { entryLine, validateOperatorZero, validateEntryDate, requireNothingToRecordNote } from "@/lib/certification/emission-entry-rules";
+import { entryLine, validateOperatorZero, validateEntryDate, normalizeNothingToRecordNote } from "@/lib/certification/emission-entry-rules";
 import { markNothingToRecordSchema, type MarkNothingToRecordInput } from "@/schemas/emission-entries";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -268,7 +268,7 @@ export async function updateEmissionEntry(ctx: OrgContext, input: UpdateEmission
   return mutateEntry(ctx, data.id, data.expectedVersion, async (tx, entry, context) => {
     if (entry.kind === "zero") {
       if (data.values) throw new SafeError("Recorded zeros do not have values. Add an entry instead.");
-      data.note = requireNothingToRecordNote(data.note === undefined ? entry.note : data.note);
+      if (data.note !== undefined) data.note = normalizeNothingToRecordNote(data.note);
       validateEntryDate({ occurredOn: data.occurredOn ?? entry.occurredOn,
         batchStartDate: context.batch.startDate, timezone: context.facility.timezone });
     }

@@ -496,6 +496,6 @@ JSON stores the entered mass and distance as decimal strings with canonical unit
 The writer checks their exact product against the magnitude. Partial unique indexes
 enforce one active single-policy value per batch and one live zero per Removal,
 batch and component. Removal-confirmed zeros are owned by their draft Removal.
-Operator-marked zeros have no Removal owner and require a non-blank note; a
+Operator-marked zeros have no Removal owner and have an optional note; a
 partial unique index allows one active operator zero per organization, batch
 and component. Adding a value tombstones operator zeros with captured activity.

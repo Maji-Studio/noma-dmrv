@@ -187,11 +187,8 @@ export function normalizedEntryValues(values: Omit<EntryValueInput, "quantityKin
     .sort((a, b) => a.inputKey.localeCompare(b.inputKey));
 }
 
-export const NOTHING_TO_RECORD_NOTE_REQUIRED = "Enter a note that says why there is nothing to record.";
-export function requireNothingToRecordNote(note: string | null | undefined) {
-  const trimmed = note?.trim();
-  if (!trimmed) throw new SafeError(NOTHING_TO_RECORD_NOTE_REQUIRED);
-  return trimmed;
+export function normalizeNothingToRecordNote(note: string | null | undefined) {
+  return note?.trim() || null;
 }
 
 export function validateEntryDate(args: {
@@ -205,12 +202,12 @@ export function validateEntryDate(args: {
 }
 
 export function validateOperatorZero(args: {
-  observation: EntryObservation; componentId: string; note: string;
+  observation: EntryObservation; componentId: string; note?: string | null;
   occurredOn: string; batchStartDate: string; timezone: string; now?: Date;
   activeValueCount: number; activeOperatorZeroCount: number;
   automaticFigure: { magnitude: string } | null;
 }) {
-  const note = requireNothingToRecordNote(args.note);
+  const note = normalizeNothingToRecordNote(args.note);
   const line = entryLine(args.observation, args.componentId);
   if (!line) throw new SafeError("This template line is no longer available. Choose another line.");
   if (line.contract.scope !== "operating" || line.entryPolicy === "none" ||
