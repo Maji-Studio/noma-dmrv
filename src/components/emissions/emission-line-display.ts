@@ -215,10 +215,15 @@ export function nothingApplies(line: EmissionLine): boolean {
 /** null when Nothing to record is allowed, else why not. Mirrors the server rule. */
 export function nothingRefusal(line: EmissionLine): string | null {
   const values = valueEntries(line).length;
-  if (values) return `Has ${manualEntriesText(values)}`;
+  if (values) return `This line has ${manualEntriesText(values)}.`;
   const records = lineRecords(line);
-  if (hasRecordsFigure(records)) return `Has ${formatFigure(records.figure)} from ${SOURCE_WORDS[records.source].many}`;
+  if (hasRecordsFigure(records)) return `This line has ${formatFigure(records.figure)} from ${SOURCE_WORDS[records.source].many}.`;
   return null;
+}
+
+/** The refused Nothing to record sentence, shared by the row tooltip, the ⋯ menu and the drawer footer. */
+export function nothingRefusalText(refusal: string): string {
+  return `Nothing to record is not available. ${refusal}`;
 }
 
 /** Why Add manual entry is not offered, or null when it is. */

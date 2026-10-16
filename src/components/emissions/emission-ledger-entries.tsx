@@ -49,11 +49,13 @@ interface ManualEntryItemProps {
   line: EmissionLine;
   entry: EmissionEntry;
   scope: EmissionBatchScope;
+  /** False while manual entries are switched off: no entry menu or write buttons. */
+  canWrite: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-export function ManualEntryItem({ line, entry, scope, onEdit, onDelete }: ManualEntryItemProps) {
+export function ManualEntryItem({ line, entry, scope, canWrite, onEdit, onDelete }: ManualEntryItemProps) {
   const [addingFile, setAddingFile] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const dateText = entryDateText(line, entry);
@@ -86,14 +88,14 @@ export function ManualEntryItem({ line, entry, scope, onEdit, onDelete }: Manual
             </div>
           </div>
         ) : (
-          entry.documentCount === 0 && (
+          canWrite && entry.documentCount === 0 && (
             <div>
               <Button size="small" variant="weak" onClick={() => setAddingFile(true)}>Add file</Button>
             </div>
           )
         )}
       </div>
-      <EntryMenu label={`Actions for the manual entry, ${dateText}`} items={items} />
+      {canWrite && <EntryMenu label={`Actions for the manual entry, ${dateText}`} items={items} />}
     </li>
   );
 }
@@ -102,12 +104,13 @@ interface StoppedEntryItemProps {
   line: EmissionLine;
   entry: EmissionEntry;
   scope: EmissionBatchScope;
+  canWrite: boolean;
   onEnterAgain: () => void;
   onDelete: () => void;
 }
 
 /** An entry that stopped counting after a template change: struck through, with Confirm or Enter again. */
-export function StoppedEntryItem({ line, entry, scope, onEnterAgain, onDelete }: StoppedEntryItemProps) {
+export function StoppedEntryItem({ line, entry, scope, canWrite, onEnterAgain, onDelete }: StoppedEntryItemProps) {
   const toast = useToast();
   const confirm = useConfirmEmissionEntry(scope);
   const [error, setError] = useState<string | null>(null);
@@ -134,7 +137,7 @@ export function StoppedEntryItem({ line, entry, scope, onEnterAgain, onDelete }:
             : "Stopped counting after a template change. Enter the values again for the current line."}
         </p>
         <div className="flex flex-wrap gap-8">
-          {entry.canConfirm ? (
+          {!canWrite ? null : entry.canConfirm ? (
             <Button size="small" variant="primary" busy={confirm.isPending} onClick={() => void confirmEntry()}>Confirm</Button>
           ) : (
             <Button size="small" variant="primary" onClick={onEnterAgain}>Enter again</Button>
@@ -142,7 +145,7 @@ export function StoppedEntryItem({ line, entry, scope, onEnterAgain, onDelete }:
         </div>
         {error && <ServerError message={error} />}
       </div>
-      <EntryMenu label={`Actions for the stopped manual entry, ${dateText}`} items={[{ label: "Delete", onSelect: onDelete, destructive: true }]} />
+      {canWrite && <EntryMenu label={`Actions for the stopped manual entry, ${dateText}`} items={[{ label: "Delete", onSelect: onDelete, destructive: true }]} />}
     </li>
   );
 }

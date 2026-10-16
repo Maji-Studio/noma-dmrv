@@ -32,6 +32,7 @@ import {
   entriesFigure,
   formatFigure,
   groupLabel,
+  nothingRefusalText,
   hasRecordsFigure,
   lineRecords,
   lineTotalText,
@@ -158,6 +159,7 @@ function LedgerView({ line, batch, scope, focusNote, canWrite, onForm, onNothing
           line={line}
           entry={entry}
           scope={scope}
+          canWrite={canWrite}
           onEdit={() => onForm({ kind: "edit", entry })}
           onDelete={() => onDeleteEntry(line, entry)}
         />
@@ -168,6 +170,7 @@ function LedgerView({ line, batch, scope, focusNote, canWrite, onForm, onNothing
           line={line}
           entry={entry}
           scope={scope}
+          canWrite={canWrite}
           onEnterAgain={() => onForm({ kind: "again", entry })}
           onDelete={() => onDeleteEntry(line, entry)}
         />
@@ -253,7 +256,13 @@ function LedgerView({ line, batch, scope, focusNote, canWrite, onForm, onNothing
           <div className="flex min-w-0 flex-1 flex-col items-start">
             {nothingApplies(line) &&
               (refusal ? (
-                <span className="body-caption text-[var(--color-text-tertiary)]">{`Nothing to record is off. ${refusal}.`}</span>
+                <>
+                  <Button variant="noOutline" disabled aria-describedby="nothing-refusal" className="gap-6 px-0">
+                    <MinusCircleIcon size={20} aria-hidden="true" />
+                    Nothing to record
+                  </Button>
+                  <span id="nothing-refusal" className="body-caption text-[var(--color-text-tertiary)]">{nothingRefusalText(refusal)}</span>
+                </>
               ) : (
                 <Button variant="noOutline" onClick={() => onNothing(line)} className="gap-6 px-0">
                   <MinusCircleIcon size={20} aria-hidden="true" />

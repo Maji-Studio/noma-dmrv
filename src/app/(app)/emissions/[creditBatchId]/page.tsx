@@ -6,7 +6,7 @@
  */
 import { notFound } from "next/navigation";
 import { z } from "zod";
-import { BatchEmissionsPage } from "@/components/emissions/batch-emissions-page";
+import { BatchEmissionsPage } from "@/components/emissions";
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 
 interface BatchEmissionsRouteProps {

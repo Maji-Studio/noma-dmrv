@@ -21,6 +21,7 @@ import {
   addEntryRefusal,
   groupLabel,
   groupLines,
+  nothingRefusalText,
   isOpen,
   isRecordsGap,
   lineRecords,
@@ -179,11 +180,11 @@ function NothingButton({ line, onNothing }: { line: EmissionLine; onNothing: (li
   const base = cn("inline-flex items-center justify-center", ACTION_SIZE);
   if (refusal) {
     return (
-      <Tooltip content={`Nothing to record is off. ${refusal}.`}>
+      <Tooltip content={nothingRefusalText(refusal)}>
         <button
           type="button"
           aria-disabled="true"
-          aria-label={`Nothing to record, not available. ${refusal}`}
+          aria-label={nothingRefusalText(refusal)}
           onClick={(event) => event.preventDefault()}
           className={cn(
             base,
@@ -236,7 +237,7 @@ function RowMenu({ line, scope, actions, canWrite }: { line: EmissionLine; scope
   const refusal = nothingRefusal(line);
   const nothing = canWrite && nothingApplies(line) ? (
     <DropdownMenu.Item key="nothing" disabled={!!refusal} onClick={() => actions.nothing(line)}>
-      <MenuItemBody label="Nothing to record" reason={refusal} />
+      <MenuItemBody label="Nothing to record" reason={refusal ? nothingRefusalText(refusal) : null} />
     </DropdownMenu.Item>
   ) : null;
   const setup = line.state === "needsSetup" ? (

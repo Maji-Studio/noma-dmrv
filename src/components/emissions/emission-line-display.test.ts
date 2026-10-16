@@ -62,8 +62,8 @@ describe("units and totals", () => {
 describe("Nothing to record", () => {
   it("is refused with a reason when entries or records hold a figure", () => {
     expect(nothingRefusal(makeLine())).toBeNull();
-    expect(nothingRefusal(makeLine({ entries: [makeEntry(), makeEntry({ id: "entry-2" })] }))).toBe("Has 2 manual entries");
-    expect(nothingRefusal(makeLine({ records: RUNS }))).toBe("Has 120 L from production runs");
+    expect(nothingRefusal(makeLine({ entries: [makeEntry(), makeEntry({ id: "entry-2" })] }))).toBe("This line has 2 manual entries.");
+    expect(nothingRefusal(makeLine({ records: RUNS }))).toBe("This line has 120 L from production runs.");
     expect(nothingRefusal(makeLine({ records: { ...RUNS, figure: null } }))).toBeNull();
   });
 

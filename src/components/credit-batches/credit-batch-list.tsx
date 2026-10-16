@@ -39,7 +39,6 @@ import { CreditBatchForm } from "./credit-batch-form";
 import { CreditBatchCard } from "./credit-batch-card";
 import { CreditBatchHealthStrip } from "./credit-batch-health-strip";
 import { CreditBatchDurabilityPanel } from "./credit-batch-durability-panel";
-import { CreditBatchEmissionsPanel } from "./credit-batch-emissions-panel";
 import { creditBatchSheetSections } from "./credit-batch-view";
 import {
   CreditBatchFilters,
@@ -734,6 +733,7 @@ export function CreditBatchList({
                   : batchHealthSummaries[sideSheetEntity.id],
                 isHealthLoading: healthLoading && !healthError,
                 canManage,
+                emissionsEntriesEnabled,
                 locked: sideSheetLocked,
                 activeFocusTarget:
                   sideSheetEntity.id === focusedBatchId
@@ -760,11 +760,6 @@ export function CreditBatchList({
                 facilityId={sideSheetEntity.facilityId}
                 productionRuns={memberRuns}
                 feedstockName={sideSheetEntity.feedstockTypeName}
-              />
-              <CreditBatchEmissionsPanel
-                creditBatchId={sideSheetEntity.id}
-                facilityId={sideSheetEntity.facilityId}
-                enabled={emissionsEntriesEnabled}
               />
               <CreditBatchDurabilityPanel
                 creditBatchId={sideSheetEntity.id}

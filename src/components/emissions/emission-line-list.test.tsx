@@ -30,7 +30,7 @@ describe("EmissionLineList", () => {
 
   it("keeps a refused Nothing to record disabled with its reason", () => {
     const actions = renderList([makeLine({ state: "filled", entries: [makeEntry()] })]);
-    const refused = screen.getByRole("button", { name: "Nothing to record, not available. Has 1 manual entry" });
+    const refused = screen.getByRole("button", { name: "Nothing to record is not available. This line has 1 manual entry." });
     expect(refused.getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(refused);
     expect(actions.nothing).not.toHaveBeenCalled();
