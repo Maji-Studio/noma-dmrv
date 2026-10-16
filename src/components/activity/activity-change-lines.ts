@@ -5,7 +5,7 @@
  *
  * Values arrive as the server stored them: exact decimal strings, `YYYY-MM-DD`
  * days, ISO instants, enum strings, short labels and link ids (with current
- * names in `changeLabels`). A field named in `changedFields` but absent from
+ * names and record types in `changeLabels`). A field named in `changedFields` but absent from
  * `changes` is name-only and reads "changed". A raw id is never shown.
  */
 import { DOCUMENT_TYPE_LABELS } from "@/schemas/documents";
@@ -20,13 +20,12 @@ import {
   soilTemperatureSources,
 } from "@/schemas/applications";
 import { formatVehicleType } from "@/schemas/vehicles";
-import { documentOwnerActivityType, parseDocumentActivityReasonCode } from "@/lib/activity-entity-type";
+import { documentOwnerActivityType } from "@/lib/activity-entity-type";
 import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
 import { formatCalendarDate, formatDateTime, formatDayString } from "@/lib/format-utils";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
 // By file, not the barrel (the forms barrel pulls in the form components).
 import { ENTITY_TYPE_LABELS } from "@/components/forms/entity-select/entity-labels";
-import type { EntityType } from "@/components/forms/entity-select/types";
 import {
   ACTIVITY_RECORD_TYPE_LABELS,
   activityChangeSummary,
@@ -35,6 +34,7 @@ import {
   isHiddenActivityField,
   type ActivityItem,
 } from "./activity-display";
+import { ACTIVITY_DELETED_RECORD_LABEL } from "./activity-copy";
 import { isActivityEntityType } from "@/db/schema/common";
 
 type ActivityChanges = NonNullable<ActivityItem["changes"]>;
@@ -58,8 +58,6 @@ export type ActivityFieldLine =
 
 export const ACTIVITY_CHANGED_WORD = "changed";
 export const ACTIVITY_NOT_SET = MISSING_VALUE.notSet;
-const YES = "Yes";
-const NO = "No";
 
 // ─── GPS pairs ───────────────────────────────────────────────────────────────
 
@@ -159,7 +157,6 @@ const NOT_SET: ActivityValueText = { text: ACTIVITY_NOT_SET, tone: "missing" };
 /** One stored value as it reads on the line. */
 export function formatActivityValue(field: string, stored: ActivityValue): ActivityValueText {
   if (stored === null) return NOT_SET;
-  if (typeof stored === "boolean") return value(stored ? YES : NO);
   const text = String(stored);
   if (Object.hasOwn(ENUM_FORMATTERS, field)) return value(ENUM_FORMATTERS[field](text));
   if (VERBATIM_FIELDS.has(field)) return value(text);
@@ -185,12 +182,14 @@ const LINK_RECORD_NOUNS: Record<string, string> = {
 /** Record type names that keep their capitals mid-sentence (GLOSSARY.md). */
 const GLOSSARY_CAPITALISED = new Set(["Sample", "Removal", "GHG Statement"]);
 
-const camelCase = (snake: string) => snake.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+/** Entity-select names keyed by activity record type (`storage_location` → "storage bin"). */
+const ENTITY_NOUNS_BY_TYPE: Record<string, string> = Object.fromEntries(
+  Object.entries(ENTITY_TYPE_LABELS).map(([key, noun]) => [key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`), noun]),
+);
 
 /** The record type's name mid-sentence ("supplier", "storage bin"); glossary capitals stay. */
 export function activityLinkRecordNoun(type: string): string {
-  const entityKey = camelCase(type);
-  if (Object.hasOwn(ENTITY_TYPE_LABELS, entityKey)) return ENTITY_TYPE_LABELS[entityKey as EntityType];
+  if (Object.hasOwn(ENTITY_NOUNS_BY_TYPE, type)) return ENTITY_NOUNS_BY_TYPE[type];
   if (Object.hasOwn(LINK_RECORD_NOUNS, type)) return LINK_RECORD_NOUNS[type];
   if (isActivityEntityType(type)) {
     const label = ACTIVITY_RECORD_TYPE_LABELS[type];
@@ -199,48 +198,12 @@ export function activityLinkRecordNoun(type: string): string {
   return humanizeEnum(type).toLowerCase();
 }
 
-/** Every record type a link field can point at, longest first so `customer_location` beats `customer`. */
-const LINK_TARGET_TYPES = [
-  ...new Set([
-    ...Object.keys(ENTITY_TYPE_LABELS).map((key) => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)),
-    ...Object.keys(ACTIVITY_RECORD_TYPE_LABELS),
-    ...Object.keys(LINK_RECORD_NOUNS),
-  ]),
-].sort((a, b) => b.length - a.length);
-
-const OWNER_FIELD = "entityId";
-
-/**
- * The record type a link field points at, read from its name: `supplierId`
- * is a supplier, `biocharStorageLocationId` a storage bin. A polymorphic
- * owner (`entityId`) takes the captured owner type, or a document's owner.
- * Unit-tested against the field policy so the two cannot drift.
- */
-export function activityLinkTargetType(
-  item: Pick<ActivityItem, "entityType" | "reasonCode" | "changes">,
-  field: string,
-  side: ChangeSide,
-): string | null {
-  if (field === OWNER_FIELD) {
-    const owner = item.changes?.entityType?.[side] ?? parseDocumentActivityReasonCode(item.reasonCode)?.ownerType;
-    if (typeof owner !== "string") return null;
-    return documentOwnerActivityType(owner) ?? (owner === "biochar" ? "biochar_product" : owner);
-  }
-  const name = field.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase().replace(/_id$/, "");
-  return LINK_TARGET_TYPES.find((type) => name === type || name.endsWith(`_${type}`)) ?? null;
-}
-
-function linkSide(
-  item: Pick<ActivityItem, "entityType" | "reasonCode" | "changes">,
-  field: string,
-  side: ChangeSide,
-  label: ActivityChangeLabels[string][ChangeSide],
-): ActivityValueText | null {
+/** One side of a link: the record's current name, "Deleted <type>", or null when it cannot be named. */
+function linkSide(label: ActivityChangeLabels[string][ChangeSide]): ActivityValueText | null {
   if (!label) return NOT_SET;
   if (label.label) return value(label.label);
   if (!label.deleted) return null;
-  const type = activityLinkTargetType(item, field, side);
-  return { text: type ? `Deleted ${activityLinkRecordNoun(type)}` : "Deleted record", tone: "deleted" };
+  return { text: label.type ? `Deleted ${activityLinkRecordNoun(label.type)}` : ACTIVITY_DELETED_RECORD_LABEL, tone: "deleted" };
 }
 
 // ─── Lines ───────────────────────────────────────────────────────────────────
@@ -265,7 +228,8 @@ function gpsLine(item: Pick<ActivityItem, "entityType">, changes: ActivityChange
       to: coordinateText(latitude.to, longitude.to),
     };
   }
-  // One coordinate changed; the other was not captured, so it is not invented.
+  // The server sends both coordinates of a pair; older rows hold only the one
+  // that changed, so the other is not invented.
   const field = latitude ? pair.latitude : longitude ? pair.longitude : null;
   if (!field) return { kind: "changed", key: pair.label, label: pair.label };
   const change = changes[field];
@@ -277,7 +241,7 @@ function gpsLine(item: Pick<ActivityItem, "entityType">, changes: ActivityChange
 }
 
 function fieldLine(
-  item: Pick<ActivityItem, "entityType" | "reasonCode" | "changes" | "changeLabels">,
+  item: Pick<ActivityItem, "entityType" | "changes" | "changeLabels">,
   field: string,
 ): ActivityFieldLine {
   const label = activityFieldLabel(item.entityType, field);
@@ -290,8 +254,8 @@ function fieldLine(
   }
   const link = item.changeLabels?.[field];
   if (link) {
-    const from = linkSide(item, field, "from", link.from);
-    const to = linkSide(item, field, "to", link.to);
+    const from = linkSide(link.from);
+    const to = linkSide(link.to);
     return from && to ? { kind: "value", key: field, label, from, to } : changed;
   }
   if (isRawId(change.from) || isRawId(change.to)) return changed;

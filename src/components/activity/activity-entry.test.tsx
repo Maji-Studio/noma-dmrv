@@ -11,7 +11,7 @@ const item: ActivityItem = {
     status: { from: "draft", to: "complete" },
     supplierId: { from: "0b8f8a52-7a8c-4d71-9a3e-0d7c2f1f7e11", to: null },
   },
-  changeLabels: { supplierId: { from: { label: null, deleted: true }, to: null } },
+  changeLabels: { supplierId: { from: { label: null, deleted: true, type: "supplier" }, to: null } },
   fromStatus: null, toStatus: null, fromRemote: null, toRemote: null, source: "form",
   occurredAt: new Date("2026-10-15T21:00:00Z"), registryAt: null, reasonCode: null,
   actor: { id: "user-1", name: "Ada Operator" }, record: { label: "FS-001", deleted: false, facilityId: null },

@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { activityFieldPolicies } from "@/lib/activity-field-policy";
 import { formatDateTime } from "@/lib/format-utils";
 import {
   activityFieldLines,
   activityFieldNameLabels,
   activityLinkRecordNoun,
-  activityLinkTargetType,
   formatActivityValue,
   formatStoredDecimal,
 } from "./activity-change-lines";
@@ -14,6 +12,11 @@ import { activityFieldLabel, type ActivityItem } from "./activity-display";
 const live = { label: "AP-001", deleted: false, facilityId: "facility-1" };
 const SUPPLIER_ID = "0b8f8a52-7a8c-4d71-9a3e-0d7c2f1f7e11";
 const OTHER_ID = "5c1e6f0e-2a8b-4c4f-8d0a-6f9b1d2e3a44";
+
+type LinkSide = NonNullable<NonNullable<ActivityItem["changeLabels"]>[string]["from"]>;
+const named = (label: string, type = "supplier"): LinkSide => ({ label, deleted: false, type });
+const deleted = (type: string | null = "supplier"): LinkSide => ({ label: null, deleted: true, type });
+const unnamed: LinkSide = { label: null, deleted: false, type: "supplier" };
 
 function item(overrides: Partial<ActivityItem> = {}): ActivityItem {
   return {
@@ -58,7 +61,7 @@ describe("one line per changed field", () => {
     const lines = activityFieldLines(item({
       entityType: "production_run", reasonCode: "attached", changedFields: ["credit_batch"],
       changes: { credit_batch: { from: null, to: OTHER_ID } },
-      changeLabels: { credit_batch: { from: null, to: { label: "CB-1", deleted: false } } },
+      changeLabels: { credit_batch: { from: null, to: named("CB-1", "credit_batch") } },
     }));
     expect(lines).toEqual([]);
   });
@@ -94,14 +97,24 @@ describe("GPS points", () => {
     expect(lines[1]).toMatchObject({ from: { text: "3, 5" }, to: { text: "4, 6" } });
   });
 
-  it("shows only the coordinate that changed when the other was not captured", () => {
+  it("reads a point when only one coordinate changed, the partner sent unchanged", () => {
+    expect(activityFieldLines(item({
+      changedFields: ["gpsLongitude"],
+      changes: { gpsLatitude: { from: "-8.1234", to: "-8.1234" }, gpsLongitude: { from: "35.5", to: "35.51" } },
+    }))).toEqual([{
+      kind: "value", key: "GPS point", label: "GPS point",
+      from: { text: "-8.1234, 35.5", tone: "value" }, to: { text: "-8.1234, 35.51", tone: "value" },
+    }]);
+  });
+
+  it("shows only the coordinate that changed on older rows without the partner", () => {
     expect(activityFieldLines(item({ changedFields: ["gpsLatitude"], changes: { gpsLatitude: { from: "-8.1", to: "-8.2" } } })))
       .toEqual([{ kind: "value", key: "gpsLatitude", label: "GPS latitude", from: { text: "-8.1", tone: "value" }, to: { text: "-8.2", tone: "value" } }]);
   });
 });
 
 describe("links", () => {
-  const supplierChange = (from: { label: string | null; deleted: boolean } | null, to: { label: string | null; deleted: boolean } | null) =>
+  const supplierChange = (from: LinkSide | null, to: LinkSide | null) =>
     activityFieldLines(item({
       entityType: "feedstock", changedFields: ["supplierId"],
       changes: { supplierId: { from: from ? SUPPLIER_ID : null, to: to ? OTHER_ID : null } },
@@ -109,46 +122,24 @@ describe("links", () => {
     }));
 
   it("shows the record's current name, and Not set for no record", () => {
-    expect(supplierChange({ label: "Acme farms", deleted: false }, null)).toEqual([{
+    expect(supplierChange(named("Acme farms"), null)).toEqual([{
       kind: "value", key: "supplierId", label: "Supplier",
       from: { text: "Acme farms", tone: "value" }, to: { text: "Not set", tone: "missing" },
     }]);
   });
 
-  it("names a deleted record by its type", () => {
-    expect(supplierChange({ label: null, deleted: true }, { label: "Acme farms", deleted: false })[0])
+  it("names a deleted record by the type the server resolved", () => {
+    expect(supplierChange(deleted(), named("Acme farms"))[0])
       .toMatchObject({ from: { text: "Deleted supplier", tone: "deleted" }, to: { text: "Acme farms" } });
-    const bin = activityFieldLines(item({
-      entityType: "production_run", changedFields: ["biocharStorageLocationId"],
-      changes: { biocharStorageLocationId: { from: SUPPLIER_ID, to: OTHER_ID } },
-      changeLabels: { biocharStorageLocationId: { from: { label: null, deleted: true }, to: { label: "Bin A", deleted: false } } },
-    }));
-    expect(bin[0]).toMatchObject({ from: { text: "Deleted storage bin", tone: "deleted" } });
+    expect(supplierChange(deleted("storage_location"), named("Bin A"))[0])
+      .toMatchObject({ from: { text: "Deleted storage bin", tone: "deleted" } });
+    expect(supplierChange(deleted("lab_sample"), named("S-002"))[0]).toMatchObject({ from: { text: "Deleted Sample" } });
+    expect(supplierChange(deleted(null), named("Acme farms"))[0]).toMatchObject({ from: { text: "Deleted record", tone: "deleted" } });
   });
 
   it("reads a link with no name as changed", () => {
-    expect(supplierChange({ label: null, deleted: false }, { label: "Acme farms", deleted: false }))
+    expect(supplierChange(unnamed, named("Acme farms")))
       .toEqual([{ kind: "changed", key: "supplierId", label: "Supplier" }]);
-  });
-
-  it("names a deleted document owner by the captured owner type", () => {
-    const lines = activityFieldLines(item({
-      entityType: "document", changedFields: ["entityId"], reasonCode: "document:lab_report:sample:s-1",
-      changes: { entityId: { from: SUPPLIER_ID, to: OTHER_ID } },
-      changeLabels: { entityId: { from: { label: null, deleted: true }, to: { label: "S-002", deleted: false } } },
-    }));
-    expect(lines[0]).toMatchObject({ label: "Linked record", from: { text: "Deleted Sample" }, to: { text: "S-002" } });
-  });
-
-  it("derives every policy link target from the field name", () => {
-    for (const [entityType, policy] of Object.entries(activityFieldPolicies)) {
-      for (const [field, classification] of Object.entries(policy.fields)) {
-        if (typeof classification !== "object" || classification.link === "$entityType") continue;
-        expect(activityLinkTargetType(item({ entityType: entityType as ActivityItem["entityType"] }), field, "from"), `${entityType}.${field}`)
-          .toBe(classification.link);
-        expect(activityLinkRecordNoun(classification.link)).toMatch(/^[a-zA-Z]/);
-      }
-    }
   });
 
   it("names record types mid-sentence, keeping glossary capitals", () => {
@@ -190,7 +181,6 @@ describe("values", () => {
     expect(formatActivityValue("soilTemperatureSource", "global_database").text).toBe("Global Database");
     expect(formatActivityValue("sampling", "unsampled").text).toBe("Unsampled");
     expect(formatActivityValue("vehicleType", "truck").text).toBe("Truck");
-    expect(formatActivityValue("archivedAt", true).text).toBe("Yes");
   });
 });
 
