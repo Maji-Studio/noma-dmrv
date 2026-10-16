@@ -1,6 +1,18 @@
 # noma shows operator energy estimates from facility emission factors
 
-**Status: Accepted** (2026-10-01). [Plan](../archive/plans/2026-10-01-energy-page.md). Amends [ADR 0018](./0018-isometric-owns-project-emissions.md) for display only.
+**Status: Accepted** (2026-10-01); **estimates paused** (2026-10-16, see below). [Plan](../archive/plans/2026-10-01-energy-page.md). Amends [ADR 0018](./0018-isometric-owns-project-emissions.md) for display only.
+
+> **Amendment 2026-10-16: estimates paused.** Kenji removed estimated CO₂e from
+> the Energy page and the "Emission factors" settings section
+> ([#1091](https://github.com/Maji-Studio/noma-dmrv/issues/1091)): "its just a
+> hurdle that we have different numbers locally and in conjunction with
+> isometric its datapoints." The page shows recorded activity only (litres,
+> kWh, tonne-km), as the monthly report does, and the per-credit-batch activity
+> in `buildEnergyBreakdown` stays. The bullets below about factors, estimates
+> and the "est." label describe the paused design. The `facility_emission_factors`
+> table stays dormant (no reader, no writer; see
+> [open-questions.md](../open-questions.md#energy-estimates-paused-energyemission-factors---dormant));
+> resuming means rebuilding the settings form and the read.
 
 > **Proposed amendment 2026-10-15**: [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
 > moves operating emissions onto Removals as per-batch emissions entries.
@@ -20,5 +32,5 @@ Operators asked how much a credit batch, production run, delivery or application
 ## Consequences
 
 - noma and Isometric can show different CO₂e for the same records. The factors differ, and the estimate covers only the six recorded sources while the registry adds project-scope components. The page marks every figure "est." and the settings section says the factors are not sent.
-- `scripts/isometric-bootstrap-constants.ts` stays the registry template's source; the prefill constants live in `src/config/emission-factors.ts` and only seed the form.
+- `scripts/isometric-bootstrap-constants.ts` stays the registry template's source. The form prefill constants were deleted with the form on 2026-10-16.
 - The old submission preview on `/energy` is gone. The Removal flow shows what is submitted.
