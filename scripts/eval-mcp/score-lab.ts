@@ -61,9 +61,10 @@ export function labSampleDays(startedAt: Date, finishedAt: Date, timeZone: strin
 
 const REQUEST_CUE = /\?|\b(?:provide|enter|tell|needs?|needed|what|specify|supply|confirm|missing|requires?|required|share|send|give)\b/i;
 const NEGATED_CUE = /\b(?:no(?: longer)?|not|don't|do not)\s+(?:\w+\s+){0,2}(?:need|required)|\b(?:isn't|is not|not)\s+(?:needed|required)\b/i;
+const SENTENCE_BOUNDARY = /[!\n]|\.(?!\d)/;
 
 function asksForOrganicCarbon(text: string): boolean {
-  return text.split(/[.!\n]/).some((sentence) => /\borganic\s+carbon\b|\bC[_ ]?org\b/i.test(sentence)
+  return text.split(SENTENCE_BOUNDARY).some((sentence) => /\borganic\s+carbon\b|\bC[_ ]?org\b/i.test(sentence)
     && REQUEST_CUE.test(sentence) && !NEGATED_CUE.test(sentence));
 }
 

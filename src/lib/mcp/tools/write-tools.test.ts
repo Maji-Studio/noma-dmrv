@@ -155,7 +155,7 @@ it("includes delivery writes in the inventory", () => {
 });
 
 it("appends application writes after document writes with a separate delete scope", () => {
-  expect(allWriteTools.filter(tool => !tool.scope?.startsWith("formulations:")).slice(-5).map(tool => [tool.name, tool.scope])).toEqual([
+  expect(allWriteTools.slice(allWriteTools.findIndex(tool => tool.name === "request_document_upload"), allWriteTools.findIndex(tool => tool.name === "delete_application") + 1).map(tool => [tool.name, tool.scope])).toEqual([
     ["request_document_upload", undefined], ["confirm_document_upload", undefined],
     ["record_application", "applications:write"], ["update_application", "applications:write"], ["delete_application", "applications:delete"],
   ]);
@@ -166,5 +166,13 @@ it("registers the master-data formulation writes with separate deletion authoriz
   expect(allWriteTools.filter(tool => tool.scope?.startsWith("formulations:")).map(tool => [tool.name, tool.scope])).toEqual([
     ["create_formulation", "formulations:write"], ["update_formulation", "formulations:write"],
     ["delete_formulation", "formulations:delete"], ["archive_formulation", "formulations:write"], ["restore_formulation", "formulations:write"],
+  ]);
+});
+
+
+it.each(["supplier", "customer"] as const)("registers the master-data %s writes with separate deletion authorization", kind => {
+  expect(allWriteTools.filter(tool => tool.scope?.startsWith(`${kind}s:`)).map(tool => [tool.name, tool.scope])).toEqual([
+    [`create_${kind}`, `${kind}s:write`], [`update_${kind}`, `${kind}s:write`],
+    [`delete_${kind}`, `${kind}s:delete`], [`archive_${kind}`, `${kind}s:write`], [`restore_${kind}`, `${kind}s:write`],
   ]);
 });

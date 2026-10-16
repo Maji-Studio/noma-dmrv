@@ -1,11 +1,17 @@
+import { SafeError } from "@/lib/errors";
+import { runOperationInProcess } from "@/lib/operations/runner";
+import type { OrgContext } from "@/lib/auth/server";
+import { deleteSupplier as deleteSupplierOperation } from "@/lib/operations/suppliers";
+const deleteSupplier = (ctx: OrgContext, supplierId: string, expectedVersion: number) => runOperationInProcess(deleteSupplierOperation, ctx, { supplierId, expectedVersion });
+import { deleteCustomer as deleteCustomerOperation } from "@/lib/operations/customers";
+const deleteCustomer = (ctx: OrgContext, customerId: string, expectedVersion: number) => runOperationInProcess(deleteCustomerOperation, ctx, { customerId, expectedVersion });
 import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { customers, customerLocations, suppliers, supplierLocations, facilities, feedstockTypes, feedstocks } from "@/db/schema";
-import { createSupplierLocation, deleteSupplier, deleteSupplierLocation, updateSupplierLocation } from "@/data-access/suppliers";
-import { createCustomerLocation, deleteCustomer, deleteCustomerLocation, updateCustomerLocation } from "@/data-access/customers";
-import { SafeError } from "@/lib/errors";
+import { createSupplierLocation, deleteSupplierLocation, updateSupplierLocation } from "@/data-access/suppliers";
+import { createCustomerLocation, deleteCustomerLocation, updateCustomerLocation } from "@/data-access/customers";
 import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 const ctx = makeTestOrgContext();
@@ -88,24 +94,9 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
       });
       expect((await write)![0].status).toBe("fulfilled");
       const outcome = (await deletion)![0];
-      if (kind === "supplier") {
-        expect(outcome).toEqual({ status: "fulfilled", value: undefined });
-        expect(await f.readParent()).toEqual([]);
-        expect(await f.readChildren()).toEqual([]);
-      } else {
-        if (operation === "deleteLocation") {
-          // The writer removed the only location, so the guard no longer applies.
-          expect(outcome).toEqual({ status: "fulfilled", value: undefined });
-          expect(await f.readParent()).toEqual([]);
-          return;
-        }
-        expect(outcome.status).toBe("rejected");
-        if (outcome.status !== "rejected") throw new Error("Expected location guard");
-        expect(outcome.reason).toBeInstanceOf(SafeError);
-        expect(outcome.reason.message).toContain("still has locations");
-        expect((await f.readParent())[0].version).toBe(INITIAL_VERSION);
-        expect(await f.readChildren()).toHaveLength(operation === "create" ? 2 : 1);
-      }
+      expect(outcome).toEqual({ status: "fulfilled", value: undefined });
+      expect(await f.readParent()).toEqual([]);
+      expect(await f.readChildren()).toEqual([]);
     } finally {
       await Promise.all([write, deletion]);
       await f.cleanup();
@@ -191,23 +182,13 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
       });
       const removed = (await deletion)![0];
       const created = (await creation)![0];
-      if (kind === "supplier") {
-        expect(removed.status).toBe("fulfilled");
-        expect(created.status).toBe("rejected");
-        if (created.status !== "rejected") throw new Error("Expected missing parent");
-        expect(created.reason).toBeInstanceOf(SafeError);
-        expect(created.reason.message).toBe("Supplier was not found.");
-        expect(await f.readParent()).toEqual([]);
-        expect(await f.readChildren()).toEqual([]);
-      } else {
-        expect(removed.status).toBe("rejected");
-        if (removed.status !== "rejected") throw new Error("Expected location guard");
-        expect(removed.reason).toBeInstanceOf(SafeError);
-        expect(removed.reason.message).toContain("still has locations");
-        expect(created.status).toBe("fulfilled");
-        expect((await f.readParent())[0].version).toBe(INITIAL_VERSION);
-        expect(await f.readChildren()).toHaveLength(2);
-      }
+      expect(removed.status).toBe("fulfilled");
+      expect(created.status).toBe("rejected");
+      if (created.status !== "rejected") throw new Error("Expected missing parent");
+      expect(created.reason).toBeInstanceOf(SafeError);
+      expect(created.reason.message).toBe(kind === "supplier" ? "Supplier was not found." : "Customer was not found.");
+      expect(await f.readParent()).toEqual([]);
+      expect(await f.readChildren()).toEqual([]);
     } finally {
       await Promise.all([creation, deletion]);
       await f.cleanup();

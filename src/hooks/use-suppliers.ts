@@ -39,6 +39,8 @@ import {
   createSupplierWithLocationsFn,
   updateSupplierFn,
   deleteSupplierFn,
+  archiveSupplierFn,
+  restoreSupplierFn,
   getSupplierLocationsBySupplierFn,
   createSupplierLocationFn,
   updateSupplierLocationFn,
@@ -406,6 +408,54 @@ export function useDeleteSupplier(
       await callbacks?.onSettled?.(data, error, variables);
     },
   });
+}
+
+type SupplierVersionVariables = { supplierId: string; expectedVersion: number };
+
+/** Archive and restore share one shape: a version-checked flip of `archivedAt`. */
+function useSupplierLifecycle(
+  action: (variables: SupplierVersionVariables) => ReturnType<typeof archiveSupplierFn>,
+  callbacks?: MutationCallbacks<Supplier, SupplierVersionVariables>,
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (variables: SupplierVersionVariables) => {
+      const result = await action(variables);
+      if (!result.success) throwActionError(result);
+      return result.data;
+    },
+    onSuccess: async (data, variables) => {
+      // Merge the saved row (with its new version) into every list cache and
+      // the detail cache before the refetch, so an open sheet never saves
+      // against the version it read before this change.
+      patchListCachesWithSavedRow<SupplierWithRelations>(queryClient, supplierKeys.lists(), data);
+      queryClient.setQueryData<Supplier>(supplierKeys.detail(data.id), (old) => (old ? { ...old, ...data } : data));
+      invalidateEntityTypeQueries(queryClient, SUPPLIER_ENTITY_TYPE);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: supplierKeys.lists() }),
+        queryClient.invalidateQueries({ queryKey: supplierKeys.options() }),
+      ]);
+      await callbacks?.onSuccess?.(data, variables);
+    },
+    onError: async (error, variables) => {
+      if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: supplierKeys.all });
+      await callbacks?.onError?.(error, variables);
+    },
+    onSettled: async (data, error, variables) => {
+      await callbacks?.onSettled?.(data, error, variables);
+    },
+  });
+}
+
+/** Hook to archive a supplier: pickers hide it, stored records keep it. */
+export function useArchiveSupplier(callbacks?: MutationCallbacks<Supplier, SupplierVersionVariables>) {
+  return useSupplierLifecycle(archiveSupplierFn, callbacks);
+}
+
+/** Hook to restore an archived supplier. */
+export function useRestoreSupplier(callbacks?: MutationCallbacks<Supplier, SupplierVersionVariables>) {
+  return useSupplierLifecycle(restoreSupplierFn, callbacks);
 }
 
 // ============================================

@@ -40,7 +40,7 @@ const NEGATED_CUE = /\b(?:no(?: longer)?|not|don't|do not)\s+(?:\w+\s+){0,2}(?:n
 const MOISTURE_QUESTION_CUE = /\b(?:what|which|how|provide|enter|tell|specify|supply|confirm|share|send|give)\b/i;
 const MOISTURE_REQUEST_CUE = /\bplease\b.*\b(?:provide|enter|tell|specify|supply|confirm|share|send|give)\b|\b(?:tell|send|give)\s+(?:me|us)\b|\b(?:i|we)\s+need\b|^\s*(?:provide|enter|specify|supply|confirm|share)\b/i;
 const MOISTURE_FACT = /\bmoisture\s+(?:(?:percentage|percent|content|reading|value)\s+)?(?:is|was|=|:)\s*\d+(?:\.\d+)?\s*%/i;
-const SENTENCE_BOUNDARY = /(?<=[.!?;\n])/;
+const SENTENCE_BOUNDARY = /(?<=[!?;\n])|(?<=\.)(?!\d)/;
 const REQUEST_LIST = /([^\n]*:[ \t]*\r?\n(?:[ \t]*(?:[-*+]|\d+[.)])[ \t]+[^\n]*(?:\r?\n|$))+)/;
 
 function requestUnits(text: string): string[] {

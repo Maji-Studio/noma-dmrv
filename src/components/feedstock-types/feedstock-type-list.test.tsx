@@ -141,7 +141,6 @@ vi.mock("./isometric-feedstock-import-dialog", () => ({
 }));
 
 import {
-  FeedstockDeleteConflictNotice,
   FeedstockTypeList,
   shouldShowFeedstockTypeSampling,
 } from "./feedstock-type-list";
@@ -188,19 +187,6 @@ describe("FeedstockTypeList", () => {
     expect(html).not.toContain("More ways to add a feedstock type");
     expect(html).not.toContain("Import from Isometric");
     expect(html).not.toContain("New feedstock type");
-  });
-
-  it("offers archive as the actionable delete-conflict resolution", () => {
-    const html = renderToStaticMarkup(
-      <FeedstockDeleteConflictNotice
-        name="Coffee husks"
-        onArchive={vi.fn()}
-        isPending={false}
-      />,
-    );
-
-    expect(html).toContain("is in use and cannot be deleted");
-    expect(html).toContain("Archive instead");
   });
 
   it("gates sampling to connected pyrolysis types with an active facility", () => {

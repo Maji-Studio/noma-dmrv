@@ -60,3 +60,9 @@ it("recognizes independent formulation permissions", () => {
   expect(hasRoleAndScope({ orgRole: "admin", scopes: ["formulations:write"] }, "formulations:delete")).toBe(false);
   expect(hasRoleAndScope({ orgRole: "admin", scopes: ["formulations:delete"] }, "formulations:write")).toBe(false);
 });
+
+it.each(["suppliers", "customers"] as const)("keeps %s mutation scopes independent", entity => {
+  expect(scopesFromPermissions({ [entity]: ["read", "write", "delete"] })).toEqual([`${entity}:read`, `${entity}:write`, `${entity}:delete`]);
+  expect(hasRoleAndScope({ orgRole: "admin", scopes: [`${entity}:read`] }, `${entity}:write`)).toBe(false);
+  expect(hasRoleAndScope({ orgRole: "admin", scopes: [`${entity}:delete`] }, `${entity}:write`)).toBe(false);
+});

@@ -44,12 +44,12 @@ export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
   } },
   supplier: { table: suppliers, fields: {
     id: "ignore", organizationId: "ignore", version: "ignore", createdAt: "ignore", updatedAt: "ignore", userId: "ignore",
-    code: "value", name: "name", location: "value", sourceRegion: "value",
+    code: "value", name: "name", location: "value", sourceRegion: "value", archivedAt: "value",
     address: "name", contactName: "name", contactEmail: "name", contactPhone: "name",
   } },
   customer: { table: customers, fields: {
     id: "ignore", organizationId: "ignore", version: "ignore", createdAt: "ignore", updatedAt: "ignore",
-    code: "value", name: "name", cropType: "value",
+    code: "value", name: "name", cropType: "value", archivedAt: "value",
     address: "name", contactEmail: "name", contactPhone: "name",
   } },
   supplier_location: { table: supplierLocations, fields: {

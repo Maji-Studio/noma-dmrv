@@ -3,10 +3,10 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   CODE_CONFLICT_MESSAGES,
-  withAutoCode,
+  withAutoCodes,
 } from "@/data-access/code-generator";
-import { createCustomer } from "@/data-access/customers";
-import { customers } from "@/db/schema";
+import { createCustomerInTransaction } from "@/data-access/customer-writes";
+import { customerLocations, customers } from "@/db/schema";
 import {
   ensureTestOrg,
   makeTestOrgContext,
@@ -22,6 +22,8 @@ describe("customer code concurrency", () => {
 
   afterEach(async () => {
     for (const code of createdCodes.splice(0)) {
+      const parents = await db.select({ id: customers.id }).from(customers).where(and(eq(customers.organizationId, TEST_ORG_ID), eq(customers.code, code)));
+      for (const parent of parents) await db.delete(customerLocations).where(eq(customerLocations.customerId, parent.id));
       await db
         .delete(customers)
         .where(
@@ -43,27 +45,28 @@ describe("customer code concurrency", () => {
 
     const create = (name: string) => {
       let attempt = 0;
-      return withAutoCode(
-        ctx,
+      return db.transaction(tx => withAutoCodes(
+        ctx, tx,
         "CUS",
         customers,
         customers.code,
-        undefined,
-        async (resolvedCode) => {
+        1,
+        async ([resolvedCode], savepoint) => {
           if (attempt++ === 0) {
             firstAttemptsReady += 1;
             if (firstAttemptsReady === 2) releaseFirstAttempts();
             await firstAttemptBarrier;
           }
-          const customer = await createCustomer(ctx, {
+          const { customer } = await createCustomerInTransaction(ctx, savepoint, {
             code: resolvedCode,
             name,
+            locations: [{ name: "Field", country: "TZ", gpsLatitude: 0, gpsLongitude: 0 }],
           });
           createdCodes.push(customer.code);
           return customer;
         },
         CODE_CONFLICT_MESSAGES.customer,
-      );
+      ));
     };
 
     const results = await Promise.all([

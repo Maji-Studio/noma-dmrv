@@ -57,7 +57,7 @@ it("recognizes nested supplier locations, exact public docs, scopes and the v1 b
 });
 
 it("exposes only GET, HEAD and OPTIONS for balances and customer destinations", () => {
-  for (const path of ["/orders/OR-1/balance", "/customers", "/customers/CU-1", "/customers/CU-1/locations"]) {
+  for (const path of ["/orders/OR-1/balance", "/customers/CU-1/locations"]) {
     expect(getApiMethodEntry(`/api/v1${path}`)).toMatchObject({ public: false, methods: ["GET", "HEAD", "OPTIONS"], scopes: [path.startsWith("/orders") ? "orders:read" : "customers:read"] });
   }
 });
@@ -65,6 +65,16 @@ it("exposes only GET, HEAD and OPTIONS for balances and customer destinations", 
 it("exposes order writes with a separate delete scope", () => {
   expect(getApiMethodEntry("/api/v1/orders")).toMatchObject({ methods: ["GET", "HEAD", "OPTIONS", "POST"], scopes: ["orders:read", "orders:write"] });
   expect(getApiMethodEntry("/api/v1/orders/OR-1")).toMatchObject({ methods: ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH"], scopes: ["orders:read", "orders:write", "orders:delete"] });
+});
+
+it("exposes party writes with separate delete scopes and POST-only transitions", () => {
+  for (const [resource, code] of [["suppliers", "SU-1"], ["customers", "CU-1"]]) {
+    expect(getApiMethodEntry(`/api/v1/${resource}`)).toMatchObject({ methods: ["GET", "HEAD", "OPTIONS", "POST"], scopes: [`${resource}:read`, `${resource}:write`] });
+    expect(getApiMethodEntry(`/api/v1/${resource}/${code}`)).toMatchObject({ methods: ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH"], scopes: [`${resource}:read`, `${resource}:write`, `${resource}:delete`] });
+    for (const command of ["archive", "restore"]) {
+      expect(getApiMethodEntry(`/api/v1/${resource}/${code}/${command}`)).toMatchObject({ methods: ["OPTIONS", "POST"], scopes: [`${resource}:write`] });
+    }
+  }
 });
 
 it("exposes delivery creates and metadata patches without DELETE", async () => {

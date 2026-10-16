@@ -12,6 +12,7 @@
  */
 import { test, expect } from "./fixtures";
 import { waitForSideSheet, waitForSideSheetClose } from "./fixtures";
+import { clickRowMenuItem } from "./fixtures/page-helpers";
 
 test.describe("Feedstock Types navigation", () => {
   test("sidebar lists Feedstock Types under Infrastructure and has no Production Processes entry", async ({
@@ -72,16 +73,17 @@ test.describe("Feedstock Types UI CRUD", () => {
     await expect(row).toContainText("Agricultural");
     await expect(row).toContainText("Active");
 
-    const openRowActions = async (name: string) => {
-      await page
-        .locator("table tbody tr", { hasText: name })
-        .getByRole("button", { name: /Actions for/ })
-        .click();
-    };
+    const rowAction = (name: string, item: string) =>
+      clickRowMenuItem(
+        page,
+        page
+          .locator("table tbody tr", { hasText: name })
+          .getByRole("button", { name: /Actions for/ }),
+        item,
+      );
 
     // ── Edit ──────────────────────────────────────────────────────────────
-    await openRowActions(uniqueName);
-    await page.getByRole("menuitem", { name: "Edit" }).click();
+    await rowAction(uniqueName, "Edit");
     await waitForSideSheet(page);
     await page.fill("#name", editedName);
     await page
@@ -93,8 +95,7 @@ test.describe("Feedstock Types UI CRUD", () => {
     await expect(editedRow).toBeVisible({ timeout: 10000 });
 
     // ── Archive ───────────────────────────────────────────────────────────
-    await openRowActions(editedName);
-    await page.getByRole("menuitem", { name: "Archive" }).click();
+    await rowAction(editedName, "Archive");
     await expect(editedRow).toContainText("Archived", { timeout: 10000 });
     // Archived rows render muted values (opacity treatment via data-archived).
     await expect(
@@ -115,13 +116,11 @@ test.describe("Feedstock Types UI CRUD", () => {
     );
 
     // ── Restore ─────────────────────────────────────────────────────────
-    await openRowActions(editedName);
-    await page.getByRole("menuitem", { name: "Restore" }).click();
+    await rowAction(editedName, "Restore");
     await expect(editedRow).toContainText("Active", { timeout: 10000 });
 
     // ── Delete (unused → allowed, and cleans up this spec's row) ─────────
-    await openRowActions(editedName);
-    await page.getByRole("menuitem", { name: "Delete" }).click();
+    await rowAction(editedName, "Delete");
     await page
       .getByRole("button", { name: /^Delete/ })
       .last()

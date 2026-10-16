@@ -13,7 +13,8 @@ import { mcpInstructions } from "@/lib/mcp/instructions";
 import { biocharStockGuide, domainGuide, labSampleGuide, orderGuide, deliveryGuide, llmsGuide } from "@/lib/api/llms-guide";
 
 const MCP_INSTRUCTIONS_MAX_CHARS = 2000;
-const EXPECTED_TOOL_COUNT = 60;
+const EXPECTED_TOOL_COUNT = 70;
+const PARTY_WRITE_TOOLS = ["supplier", "customer"].flatMap(kind => ["create", "update", "delete", "archive", "restore"].map(command => `${command}_${kind}`));
 const FORMULATION_WRITE_TOOLS = ["create_formulation", "update_formulation", "delete_formulation", "archive_formulation", "restore_formulation"];
 vi.mock("@/db", () => ({ db: {} }));
 
@@ -140,7 +141,7 @@ describe("authenticated MCP read route", () => {
     const { result } = await body(response);
     expect(result.tools).toHaveLength(EXPECTED_TOOL_COUNT);
     expect(result.tools[0]).toMatchObject({ annotations: { readOnlyHint: true } });
-    expect(result.tools.filter((tool: { name: string }) => ![...FORMULATION_WRITE_TOOLS, "record_application", "update_application", "delete_application", "request_document_upload", "confirm_document_upload", "log_feedstock_delivery", "update_feedstock", "delete_feedstock", "start_production_run", "update_production_run", "delete_production_run", "make_biochar_product", "update_biochar_product", "record_output_stock_movement", "record_lab_sample", "update_lab_sample", "delete_lab_sample", "record_order", "update_order", "delete_order", "record_delivery", "update_delivery"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
+    expect(result.tools.filter((tool: { name: string }) => ![...PARTY_WRITE_TOOLS, ...FORMULATION_WRITE_TOOLS, "record_application", "update_application", "delete_application", "request_document_upload", "confirm_document_upload", "log_feedstock_delivery", "update_feedstock", "delete_feedstock", "start_production_run", "update_production_run", "delete_production_run", "make_biochar_product", "update_biochar_product", "record_output_stock_movement", "record_lab_sample", "update_lab_sample", "delete_lab_sample", "record_order", "update_order", "delete_order", "record_delivery", "update_delivery"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
     const find = result.tools.find((tool: { name: string }) => tool.name === "find_feedstocks");
     expect(find.inputSchema.additionalProperties).toBe(false);
     expect(find.inputSchema.properties.limit).toMatchObject({ type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT,
@@ -440,5 +441,25 @@ it.each([
     if ((expected as readonly string[]).includes(name)) continue;
     const hidden = await body(await call(name));
     expect(hidden.error).toEqual((await body(await call("unknown_tool"))).error);
+  }
+});
+
+
+it.each(["supplier", "customer"] as const)("exposes the master-data %s tools only with their matching scope", async kind => {
+  const commands = ["create", "update", "delete", "archive", "restore"];
+  for (const permission of ["read", "write", "delete"] as const) {
+    mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: [`${kind}s:${permission}`], organizationId: "org-1" } });
+    const listing = await body(await POST(rpc("tools/list")));
+    const names = listing.result.tools.map((tool: { name: string }) => tool.name);
+    for (const command of commands) {
+      const name = `${command}_${kind}`;
+      const allowed = permission === (command === "delete" ? "delete" : "write");
+      expect(names.includes(name)).toBe(allowed);
+      if (!allowed) {
+        const hidden = await body(await call(name));
+        const unknown = await body(await call("unknown_tool"));
+        expect(hidden.error).toEqual(unknown.error);
+      }
+    }
   }
 });

@@ -6,18 +6,15 @@ vi.mock("@/lib/auth/server", () => ({
     userId: "test-user", organizationId: "test-org", orgRole: "owner", isPlatformAdmin: false,
   }),
 }));
-vi.mock("@/data-access/customers", () => ({ createCustomerWithLocations: mocks.customer }));
-vi.mock("@/data-access/suppliers", () => ({ createSupplierWithLocations: mocks.supplier }));
-vi.mock("@/data-access/code-generator", () => ({
-  CODE_CONFLICT_MESSAGES: { customer: "Duplicate customer" },
-  withAutoCode: (_ctx: unknown, _prefix: unknown, _table: unknown, _column: unknown, _facility: unknown, write: (code: string) => unknown) => write("TEST-001"),
+vi.mock("@/lib/operations/runner", () => ({
+  runOperationInProcess: (operation: { id: string }, ctx: unknown, input: unknown) => operation.id === "create_customer" ? mocks.customer(ctx, input) : mocks.supplier(ctx, input),
 }));
 import { createCustomerWithLocationsFn } from "./customers";
 import { createSupplierWithLocationsFn } from "./suppliers";
 
 beforeEach(() => {
   mocks.customer.mockReset().mockResolvedValue({ customer: { id: "customer" }, locations: [{ id: "location" }] });
-  mocks.supplier.mockReset().mockResolvedValue({ id: "supplier" });
+  mocks.supplier.mockReset().mockResolvedValue({ supplier: { id: "supplier" }, locations: [{ id: "location" }] });
 });
 
 it.each([createCustomerWithLocationsFn, createSupplierWithLocationsFn])(

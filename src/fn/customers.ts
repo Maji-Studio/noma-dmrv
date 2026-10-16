@@ -5,19 +5,14 @@
  * Server-side functions for customer and customer location CRUD operations
  */
 
+import { createCustomer, updateCustomer, deleteCustomer, archiveCustomer, restoreCustomer } from "@/lib/operations/customers";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import { z } from "zod";
-import { type Customer, type CustomerLocation, customers } from "@/db/schema";
+import { type Customer, type CustomerLocation } from "@/db/schema";
 import {
-  CODE_CONFLICT_MESSAGES,
-  withAutoCode,
-} from "@/data-access/code-generator";
-import {
-  createCustomerWithLocations,
-  deleteCustomer,
   getCustomers as getCustomersData,
   getCustomerWithRelations as getCustomerWithRelationsData,
   getCustomerLocations as getCustomerLocationsData,
-  updateCustomer,
   createCustomerLocation,
   updateCustomerLocation,
   deleteCustomerLocation,
@@ -27,13 +22,13 @@ import {
 } from "@/data-access/customers";
 import {
   createCustomerWithLocationsSchema,
-  deleteCustomerSchema,
   updateCustomerSchema,
   customerFilterSchema,
   createCustomerLocationSchema,
   updateCustomerLocationSchema,
   deleteCustomerLocationSchema,
 } from "@/schemas/customers";
+import { customerVersionInput } from "@/schemas/customer-input";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
 
@@ -124,38 +119,26 @@ export async function createCustomerWithLocationsFn(
     async (ctx) => {
       const validated = createCustomerWithLocationsSchema.parse(data);
 
-      return withAutoCode(
-        ctx,
-        "CUS",
-        customers,
-        customers.code,
-        undefined,
-        (code) =>
-          createCustomerWithLocations(ctx, {
-            customer: {
-              code,
-              name: validated.customer.name,
-              cropType: validated.customer.cropType || null,
-              address: validated.customer.address || null,
-              contactEmail: validated.customer.contactEmail || null,
-              contactPhone: validated.customer.contactPhone || null,
-            },
-            locations: validated.locations.map((location) => ({
-              name: location.name,
-              country: location.country,
-              stateRegion: location.stateRegion || null,
-              city: location.city || null,
-              gpsLatitude: location.gpsLatitude,
-              gpsLongitude: location.gpsLongitude,
-              // An empty textarea submits "", which must land as NULL.
-              address: location.address || null,
-              facilityDistances: location.facilityDistances,
-              defaultSoilTemperatureC: location.defaultSoilTemperatureC,
-              isDefault: location.isDefault,
-            })),
-          }),
-        CODE_CONFLICT_MESSAGES.customer,
-      );
+      const result = await runOperationInProcess(createCustomer, ctx, {
+        name: validated.customer.name,
+        cropType: validated.customer.cropType || null,
+        address: validated.customer.address || null,
+        contactEmail: validated.customer.contactEmail || null,
+        contactPhone: validated.customer.contactPhone || null,
+        locations: validated.locations.map(location => ({
+          name: location.name,
+          country: location.country,
+          stateRegion: location.stateRegion || null,
+          city: location.city || null,
+          gpsLatitude: location.gpsLatitude,
+          gpsLongitude: location.gpsLongitude,
+          siteDescription: location.address || null,
+          facilityDistances: location.facilityDistances,
+          isDefault: location.isDefault,
+          defaultSoilTemperatureC: location.defaultSoilTemperatureC,
+        })),
+      });
+      return result;
     },
     {
       fallbackMessage:
@@ -182,7 +165,8 @@ export async function updateCustomerFn(
 
     const validated = updateCustomerSchema.parse(data);
 
-    const customer = await updateCustomer(ctx, validated.customerId, {
+    const customer = await runOperationInProcess(updateCustomer, ctx, {
+      customerId: validated.customerId,
       expectedVersion: validated.expectedVersion,
       code: validated.code,
       name: validated.name,
@@ -204,12 +188,12 @@ export async function updateCustomerFn(
  * Delete a customer
  */
 export async function deleteCustomerFn(
-  data: z.infer<typeof deleteCustomerSchema>
+  data: z.infer<typeof customerVersionInput>
 ): Promise<ActionResult<void>> {
   return withAction(async (ctx) => {
 
-    const validated = deleteCustomerSchema.parse(data);
-    await deleteCustomer(ctx, validated.customerId, validated.expectedVersion);
+    const validated = customerVersionInput.parse(data);
+    await runOperationInProcess(deleteCustomer, ctx, validated);
 
     return undefined;
   }, { fallbackMessage: "Failed to delete customer", log: { message: LOG_MESSAGE, context: { op: "customer:delete" } } });
@@ -296,4 +280,22 @@ export async function deleteCustomerLocationFn(
 
     return undefined;
   }, { fallbackMessage: "Failed to delete customer location", log: { message: LOG_MESSAGE, context: { op: "customer-location:delete" } } });
+}
+
+export async function archiveCustomerFn(
+  data: z.infer<typeof customerVersionInput>
+): Promise<ActionResult<Customer>> {
+  return withAction(async (ctx) => {
+    const validated = customerVersionInput.parse(data);
+    return runOperationInProcess(archiveCustomer, ctx, validated);
+  }, { fallbackMessage: "Failed to archive customer", log: { message: LOG_MESSAGE, context: { op: "customer:archive" } } });
+}
+
+export async function restoreCustomerFn(
+  data: z.infer<typeof customerVersionInput>
+): Promise<ActionResult<Customer>> {
+  return withAction(async (ctx) => {
+    const validated = customerVersionInput.parse(data);
+    return runOperationInProcess(restoreCustomer, ctx, validated);
+  }, { fallbackMessage: "Failed to restore customer", log: { message: LOG_MESSAGE, context: { op: "customer:restore" } } });
 }

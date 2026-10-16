@@ -77,7 +77,7 @@ export async function getEntities(
     case "supplier":
       return getSuppliers(ctx, { search, limit });
     case "customer":
-      return getCustomers(ctx, { search, limit });
+      return getCustomers(ctx, { search, limit, includeArchived: filterBy?.includeArchived === "true" });
     case "customerLocation":
       return getCustomerLocationsEntity(ctx, { search, customerId: filterBy?.customerId, limit });
     case "driver":

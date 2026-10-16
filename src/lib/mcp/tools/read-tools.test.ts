@@ -3,9 +3,10 @@ import type { ApiContext } from "@/lib/auth/api-context";
 import { resourceQueries } from "@/lib/api/query-schemas";
 import { readTools } from "./read-tools";
 
-const mocks = vi.hoisted(() => ({ customers: vi.fn(), locations: vi.fn(), orders: vi.fn(), order: vi.fn(), balance: vi.fn(), deliveries: vi.fn(), delivery: vi.fn() }));
+const mocks = vi.hoisted(() => ({ suppliers: vi.fn(), customers: vi.fn(), locations: vi.fn(), orders: vi.fn(), order: vi.fn(), balance: vi.fn(), deliveries: vi.fn(), delivery: vi.fn() }));
 // No reader can connect to the database in this contract suite.
 vi.mock("@/db", () => ({ db: {} }));
+vi.mock("@/lib/api/suppliers-queries", () => ({ readSupplierListFromInput: mocks.suppliers }));
 vi.mock("@/lib/api/customers-queries", () => ({ readCustomerListFromInput: mocks.customers }));
 vi.mock("@/lib/api/customer-locations-queries", () => ({ readCustomerLocationListFromInput: mocks.locations }));
 vi.mock("@/lib/api/orders-queries", () => ({ readOrderListFromInput: mocks.orders }));
@@ -25,6 +26,7 @@ const INVENTORY = [
 ] as const;
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.suppliers.mockResolvedValue({ data: [], nextCursor: null });
   mocks.customers.mockResolvedValue({ data: [], nextCursor: null });
   mocks.locations.mockResolvedValue({ data: [], nextCursor: null });
   mocks.orders.mockResolvedValue({ data: [], nextCursor: null });
@@ -42,7 +44,10 @@ it("uses the same list input schemas and passes all parsed filters to the REST r
   await named("find_orders").execute(ctx, filters);
   expect(mocks.orders).toHaveBeenCalledExactlyOnceWith(ctx, { ...filters, facilityId: ID });
   await named("find_customers").execute(ctx, { q: "C", code: "C-1", limit: 1, cursor: "cursor" });
-  expect(mocks.customers).toHaveBeenCalledExactlyOnceWith(ctx, { q: "C", code: "C-1", limit: 1, cursor: "cursor" });
+  expect(mocks.customers).toHaveBeenCalledExactlyOnceWith(ctx, { q: "C", code: "C-1", limit: 1, cursor: "cursor", archived: false });
+  expect(named("find_suppliers").input).toBe(resourceQueries.suppliers.list);
+  await named("find_suppliers").execute(ctx, { q: "S", limit: 1 });
+  expect(mocks.suppliers).toHaveBeenCalledExactlyOnceWith(ctx, { q: "S", limit: 1, archived: false });
 });
 it("accepts a customer UUID or code and sends the parent and pagination to REST's reader", async () => {
   for (const idOrCode of [ID, "C-1"]) {

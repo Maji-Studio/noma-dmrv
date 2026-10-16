@@ -9,7 +9,7 @@ import { getTableName, type Table } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
 
-const state = vi.hoisted(() => ({ locationCount: 0, orderCount: 0, deleted: false }));
+const state = vi.hoisted(() => ({ locationCount: 0, orderCount: 0, deleted: false, deleteCount: 0, failDeleteAt: 0 }));
 
 vi.mock("@/db", () => {
   // Minimal stand-in for the three reads deleteCustomer makes: the existence
@@ -19,9 +19,11 @@ vi.mock("@/db", () => {
       case "customers":
         return [{ id: "customer-1", version: 1 }];
       case "customer_locations":
-        return [{ value: state.locationCount }];
+        return Array.from({ length: state.locationCount }, (_, index) => ({ id: `location-${index}`, version: 1 }));
       case "orders":
-        return [{ value: state.orderCount }];
+        return Array.from({ length: state.orderCount }, (_, index) => ({ code: `ORD-${index}` }));
+      case "certifier_storage_locations":
+        return [];
       default:
         throw new Error(`Unexpected table read: ${getTableName(table)}`);
     }
@@ -29,11 +31,18 @@ vi.mock("@/db", () => {
   const executor = {
       select: () => ({
         from: (table: Table) => ({
-          where: () => Object.assign(Promise.resolve(tableRows(table)), { for: () => Promise.resolve(tableRows(table)) }),
+          where: () => {
+            const result = Object.assign(Promise.resolve(tableRows(table)), { for: () => result, orderBy: () => result, limit: () => result });
+            return result;
+          },
         }),
       }),
       delete: () => ({
         where: () => {
+          state.deleteCount++;
+          if (state.deleteCount === state.failDeleteAt) {
+            return Promise.reject({ code: "23503", constraint: "certifier_storage_locations_customer_location_id_organization_i" });
+          }
           state.deleted = true;
           return Promise.resolve();
         },
@@ -42,7 +51,9 @@ vi.mock("@/db", () => {
   return { db: { ...executor, transaction: (callback: (tx: typeof executor) => unknown) => callback(executor) } };
 });
 
-const { deleteCustomer } = await import("./customers");
+const { deleteCustomerInTransaction } = await import("./customer-writes");
+const { db } = await import("@/db");
+const deleteCustomer = (ctx: OrgContext, customerId: string, expectedVersion: number) => db.transaction(async tx => { await deleteCustomerInTransaction(ctx, tx, { customerId, expectedVersion }); });
 
 const ctx: OrgContext = { userId: "user-1", organizationId: "org-1" } as OrgContext;
 
@@ -50,6 +61,8 @@ beforeEach(() => {
   state.locationCount = 0;
   state.orderCount = 0;
   state.deleted = false;
+  state.deleteCount = 0;
+  state.failDeleteAt = 0;
 });
 
 describe("deleteCustomer", () => {
@@ -62,13 +75,18 @@ describe("deleteCustomer", () => {
     expect(state.deleted).toBe(false);
   });
 
-  it("points at the customer's own locations when locations block the delete", async () => {
-    state.locationCount = 1;
+  it("reports only the location identified by the storage-site FK backstop", async () => {
+    state.locationCount = 3;
+    state.failDeleteAt = 2;
+    await expect(deleteCustomer(ctx, "customer-1", 1)).rejects.toMatchObject({
+      code: "conflict", issues: [expect.objectContaining({ path: ["customerId"], meta: { locationIds: ["location-1"] } })],
+    });
+  });
 
-    await expect(deleteCustomer(ctx, "customer-1", 1)).rejects.toThrow(
-      "Customer was not deleted because it still has locations. Edit the customer and remove its locations first.",
-    );
-    expect(state.deleted).toBe(false);
+  it("deletes unused locations with the customer", async () => {
+    state.locationCount = 1;
+    await expect(deleteCustomer(ctx, "customer-1", 1)).resolves.toBeUndefined();
+    expect(state.deleted).toBe(true);
   });
 
   it("deletes when nothing references the customer", async () => {

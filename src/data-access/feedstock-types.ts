@@ -1,3 +1,4 @@
+import { IN_USE_DELETE_MARKER } from "@/lib/delete-refusal";
 import { formulationFreezesTypeUsage } from "@/lib/formulation-domain-errors";
 import { assertRowVersion, nextVersion } from "./row-version";
 import { and, asc, eq } from "drizzle-orm";
@@ -268,7 +269,7 @@ export async function deleteFeedstockType(
     const decision = getFeedstockTypeDeleteDecision(conflict ? [conflict] : []);
     if (decision.action === "conflict") {
       throw new ActionConflictError(
-        "This feedstock type is in use. Archive it instead.",
+        `Feedstock type ${IN_USE_DELETE_MARKER} records still use it. Archive it instead.`,
         decision.conflict,
       );
     }

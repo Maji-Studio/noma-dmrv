@@ -485,7 +485,7 @@ Confirmed without another question:
 Decided 2026-10-16 (Kenji, round 11, Phase 7).
 
 104. **Phase 7 ships in three PRs** (Q80). 7a `feat/api-formulations` starts now and merges after #1080; 7b `feat/api-parties` (supplier and customer create, update, delete) follows #1080; 7c `feat/api-party-locations` (location writes, the distance fill on older records, the storage-site fence) follows 7b.
-105. **Agents read and write places and site defaults, not contact details** (Q81). Country, region, city, site description, default soil temperature, facility distances, the customer's crop type and the supplier's source region join the API. Contact names, emails, phones and addresses stay in the app (Q68 stands for them).
+105. **Agents read and write places and site defaults, not contact details** (Q81). Country, region, city, site description, default soil temperature, facility distances, the customer's crop type and the supplier's source region join the API. Contact names, emails, phones and addresses stay in the app (Q68 stands for them); as Q81 option A stated, the customer location's site description (stored in the `address` column) is a place description published as `siteDescription`, while supplier location `address` and customer `address` stay in the app.
 106. **Supplier, customer, location and formulation changes show in Activity** (Q82). Supplier, Supplier location, Customer, Customer location and Formulation become Activity record types with their own filter, after the custody chain and before Removals. Every write leaves one entry, from the app or the API.
 107. **Suppliers, customers and formulations get archive and restore now** (Q83, against the recommendation). An archived record leaves the pickers and cannot be used for new intakes, orders, products or bin claims (decision 83 pattern); old records keep it. Archive and restore are their own operations.
 108. **Deleting a customer deletes its locations** (Q84), as for suppliers, in the app and the API. It is refused while an order uses the customer or any of its locations is a registered Isometric storage site; then nothing is deleted.
@@ -502,6 +502,8 @@ Confirmed without another question:
 116. **Nothing goes to Isometric over the API;** storage sites are registered only in the app.
 117. **One supplier or customer per request with 1 to 50 locations; one formulation per request.**
 118. **Bin saves lock the formulation:** bin create, update and quick-add take the formulation `FOR SHARE`, so a bin cannot point at a formulation being deleted (found in review, fixed in the app too).
+119. **Customer locations get their own archive and restore in 7c** (Q87). Archived locations leave the order destination picker and new order destinations return 404 at `/customerLocationId`; existing orders, deliveries, applications and storage-site registration keep them. Archiving the default moves it to another active location; archiving the last active location is refused. `archive_customer_location` and `restore_customer_location` use `POST /customers/{id}/locations/{locationId}/archive|restore`, `customers:write`, If-Match and Activity status changes, with a 7c migration. Supplier locations get no archive.
+120. **Deliveries and applications on an existing order still save when its customer or formulation is archived** (Q88). Keep the existing behavior and every lineage refusal.
 
 ## 14. What review changed
 
@@ -924,3 +926,79 @@ Evals and fuzz: `pnpm eval:mcp` 19/19 (five formulation cases; the first run fou
 Formulation UI and Playwright belong to Claude's commit 6.
 The restrictive bin/formulation FK remains `data/formulation-bin-fk-backstop`;
 new bin references take a formulation lock meanwhile. No 7b/7c work ships here.
+
+## 26. Phase 7b results (2026-10-16)
+
+**Shipped on `feat/api-parties`:** supplier and customer create with initial
+locations, update, delete, archive and restore on the runner, REST and MCP;
+revision 2 reads, scoped evals, fuzz fixtures and master-data documentation.
+
+**What shipped, by commit:**
+
+1. Writers (`dec77a6d5`, `a7973b326`, `5266a3956`): typed party refusals, generated codes, shared child-reference delete
+   guards and archive/restore. New intake and order references reject archived
+   parties, while kept references pass. Existing location add/update paths check
+   the parent's archive state under their existing locks. Party cascades queue
+   child Activity effects in the transaction; rollback and replay add no events.
+2. Registry (`a66e087f5`): ten party operations, separate read/write/delete scopes, revision 2
+   place fields and real `archivedAt`, archived-only lists with cursor binding.
+3. REST (`e626cb5a0`): create, PATCH, DELETE and archive/restore routes, UUID
+   mutations, If-Match, replay, dry runs and stale `current` representations.
+4. MCP (`74ad3f459`): ten tools from a shared party factory, real-key scope
+   hiding, location create inputs and action/REST/MCP parity coverage.
+5. Evals, fuzz and docs: supplier pickup and manual one-way distance, customer
+   field, active and archived duplicate supplier, archived intake refusal,
+   supplier restore and customer restore. Each case has its own scopes, DB
+   snapshot and tested scorer. Fuzz parties use operations and separate delete,
+   active archive and archived restore targets, with ids, codes and ETags.
+   Dry-run examples cover all party writes, distance bounds, 5e-324 and 50/51 locations;
+   eight party mutation ids join the 428 list. The master-data guide moves to
+   `docs/api-master-data.md`, linked from the API guide.
+6. App (`cf91d2ffe`, `40dc17714`): Archived toggle, archive and restore on both
+   lists, "Archive instead" on in-use delete refusals, read-only archived sheets,
+   archived kept selections in pickers, and an order destination locked under an
+   archived customer (also while the customer loads). Every in-use delete refusal
+   is built from `IN_USE_DELETE_MARKER` (`src/lib/delete-refusal.ts`).
+
+**Decisions made during implementation:**
+
+- The archived duplicate eval requires an explanation that the existing supplier
+  is archived, and either no saved changes or a restore of exactly that supplier.
+  A second supplier with the same name fails.
+- Create budgets are six calls; archived-intake is eight, active duplicate is
+  four, archived duplicate is six, and restore is five. Create scopes leave room
+  for one party lookup before writing.
+- Restore scorers require an earlier successful archived-only lookup and only
+  the targeted row's archive, version and update-time changes.
+- Fuzz hooks read the real OpenAPI path parameter name, currently `idOrCode`,
+  and load targets from the private JSON fixture. All positive seeded examples
+  require 2xx; out-of-range distance and location count examples require 422.
+- Decisions 119 and 120 record round 12: customer-location archive/restore in
+  7c, and existing-order delivery/application continuation after party archive.
+- Feedstock types share the in-use delete notice with formulations, suppliers and
+  customers (7a review round 2 asked for one pattern): the server refusal is now
+  "Feedstock type was not deleted because records still use it. Archive it
+  instead." and the notice is titled by code.
+
+**Validation and follow-ups:** lint passed with 16 existing warnings; typecheck,
+docs references and eval unit tests passed. OpenAPI generation left the snapshot
+unchanged. Offline hooks tests use CI's pinned Schemathesis 4.29.3 environment.
+
+Evals and fuzz (merged tree, staging `907c1d93c`): `pnpm eval:mcp` 27/27 after two
+scorer false fails were fixed in `012633b82`; local Schemathesis 9,727 cases, 0
+failures; related DB suites 264 files, 3,426 tests.
+
+Customer-stale-version is skipped: `runClaude` has no deterministic hook between
+an agent's read and write. Add that seam before enabling the case; no timer race
+stands in for it. See `api/eval-stale-version` in architectural open questions.
+Supplier-location-update and customer-field-missing-gps move to 7c because they
+need `add_*_location`. Supplier/customer UI and Playwright are Claude's commit 6.
+Customer-location archive/restore, default reassignment and last-active refusal
+ship in 7c with its migration and location write tools.
+Review round 2 on #1133 left two P2s for 7c: point the app party schemas
+(`src/schemas/customers.ts`, `suppliers.ts`, `facility-distances.ts`) at the
+`src/config/party-input.ts` bounds so app create and location saves refuse what
+the runner refuses; and refresh or close a deep-linked archived sheet after a
+stale Restore, so a retry uses the refreshed detail version.
+
+The plan file was 984 lines before this fix round; 7c must move Phase 7 results to `docs/archive/` first, as Phase 6a did.

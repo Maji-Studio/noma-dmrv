@@ -141,14 +141,6 @@ export const updateCustomerSchema = z.object({
   contactPhone: z.string().max(30).optional().nullable().or(z.literal("")),
 });
 
-/**
- * Schema for deleting a customer
- */
-export const deleteCustomerSchema = z.object({
-  expectedVersion: expectedVersionSchema,
-  customerId: z.string().uuid("Choose a valid customer."),
-});
-
 // ============================================
 // Server Action Schemas - Customer Location
 // ============================================
@@ -238,6 +230,8 @@ export const deleteCustomerLocationSchema = z.object({
  * Used for search, pagination, and filtering
  */
 export const customerFilterSchema = z.object({
+  // false = active only; true = archived only.
+  archived: z.boolean().default(false),
   // Text search across code, name, cropType
   search: z
     .string()

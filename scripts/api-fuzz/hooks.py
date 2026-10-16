@@ -59,6 +59,13 @@ DOCUMENT_TIMEOUT_SECONDS = 10
 DOCUMENT_FIXTURES = []
 APPLICATION_FIXTURE = {}
 FORMULATION_FIXTURE = {}
+PARTY_FIXTURE = {}
+# Mirrored from src/config/party-input.ts for the Python-only harness.
+LOCATION_DISTANCE_MIN_KM = 0.001
+LOCATION_DISTANCE_MAX_KM = 20_000
+LOCATION_DISTANCE_SUBNORMAL_KM = 5e-324
+PARTY_MAX_LOCATIONS = 50
+PARTY_BOUNDARY_REFUSAL_DESCRIPTION = "Party fixture boundary refusal"
 FORMULATION_RATIO_REFUSAL_DESCRIPTION = "Formulation fixture sub-millionth refusal"
 FORMULATION_MIN_RATIO = 0.000001
 FORMULATION_TOO_SMALL_RATIO = 0.0000001
@@ -121,11 +128,14 @@ def after_load_schema(ctx, schema):
     DOCUMENT_FIXTURES.clear()
     APPLICATION_FIXTURE.clear()
     FORMULATION_FIXTURE.clear()
+    PARTY_FIXTURE.clear()
     fixture_path = os.environ.get("API_FUZZ_FIXTURE")
     if fixture_path:
         with open(fixture_path, encoding="utf-8") as fixture_file:
             fixture = json.load(fixture_file)
             DOCUMENT_FIXTURES.extend(fixture["documents"])
+            if fixture.get("deleteSupplierId"):
+                PARTY_FIXTURE.update(fixture)
             if fixture.get("deleteFormulationId"):
                 FORMULATION_FIXTURE.update(fixture)
             if fixture.get("applicationId"):
@@ -233,6 +243,7 @@ def before_add_examples(ctx, examples):
     add_document_examples(operation, examples)
     add_application_examples(operation, examples)
     add_formulation_examples(operation, examples)
+    add_party_examples(operation, examples)
     target = SEEDED_TARGETS.get(operation.label)
     create_body = SEEDED_CREATE_BODIES.get(operation.label)
     is_create = create_body is not None
@@ -358,6 +369,58 @@ def document_metadata(description, negative=False):
             description=description, parameter=None, parameter_location=ParameterLocation.BODY, location=None,
         )),
     )
+
+
+def add_party_examples(operation, examples):
+    if not PARTY_FIXTURE:
+        return
+    fixture = PARTY_FIXTURE
+    operation_id = operation.definition.raw.get("operationId", "")
+    for party in ("supplier", "customer"):
+        kind = party.capitalize()
+        if operation_id == f"create_{party}":
+            location = {"name": "API fuzz place", "country": "TZ", "gpsLatitude": -8.12, "gpsLongitude": 36.45,
+                        "facilityDistances": [{"facilityId": fixture["facilityId"], "distanceKm": LOCATION_DISTANCE_MIN_KM, "distanceSource": "manual"}]}
+            for distance, count, negative in (
+                (LOCATION_DISTANCE_MIN_KM, 1, False), (LOCATION_DISTANCE_MAX_KM, 1, False),
+                (LOCATION_DISTANCE_MAX_KM + LOCATION_DISTANCE_MIN_KM, 1, True),
+                (LOCATION_DISTANCE_SUBNORMAL_KM, 1, True),
+                (LOCATION_DISTANCE_MIN_KM, PARTY_MAX_LOCATIONS, False),
+                (LOCATION_DISTANCE_MIN_KM, PARTY_MAX_LOCATIONS + 1, True),
+            ):
+                places = [deepcopy(location) for _ in range(count)]
+                for index, place in enumerate(places):
+                    place["name"] = f"API fuzz place {index}"
+                    place["facilityDistances"][0]["distanceKm"] = distance
+                examples.append(operation.Case(
+                    query={"dryRun": "true"}, headers={IDEMPOTENCY_HEADER: str(uuid4())}, media_type="application/json",
+                    body={"name": f"API fuzz example {party}", "locations": places},
+                    _meta=document_metadata(PARTY_BOUNDARY_REFUSAL_DESCRIPTION if negative else SEEDED_CREATE_DESCRIPTION, negative),
+                ))
+        targets = {f"update_{party}": party, f"delete_{party}": "delete" + kind,
+                   f"archive_{party}": "archive" + kind, f"restore_{party}": "restore" + kind}
+        if operation_id in targets:
+            prefix = targets[operation_id]
+            parameter, = operation.path_parameters
+            body = {"sourceRegion" if party == "supplier" else "cropType": "API fuzz patch"} if operation_id == f"update_{party}" else {}
+            examples.append(operation.Case(
+                path_parameters={parameter.name: fixture[prefix + "Id"]},
+                query={"dryRun": "true"}, headers={IF_MATCH_HEADER: fixture[prefix + "Etag"]},
+                body=body, media_type="application/json", _meta=document_metadata(SEEDED_TARGET_DESCRIPTION),
+            ))
+
+
+@schemathesis.check
+def seeded_party_boundary_rejection(ctx, response, case):
+    if case.meta is not None and case.meta.phase.name == TestPhase.EXAMPLES and case.meta.phase.data.description == PARTY_BOUNDARY_REFUSAL_DESCRIPTION:
+        if response.status_code != 422:
+            raise AssertionError("Out-of-range party distance or location count must return 422.")
+        problem = response.json()
+        if problem.get("code") != "validation_failed" or not any(
+            issue.get("pointer") == "/locations" or issue.get("pointer", "").startswith("/locations/")
+            for issue in problem.get("errors", [])
+        ):
+            raise AssertionError("Party boundary refusal must identify validation under /locations.")
 
 
 def add_formulation_examples(operation, examples):

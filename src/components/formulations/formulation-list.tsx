@@ -30,11 +30,8 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { FormulationForm } from "./formulation-form";
-import {
-  ArchivedFormulationNotice,
-  FormulationDeleteConflictNotice,
-  isFormulationInUseRefusal,
-} from "./formulation-notices";
+import { DeleteConflictNotice, isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { ArchivedFormulationNotice } from "./formulation-notices";
 import { formatRatio, formulationSheetSections } from "./formulation-read-sections";
 import type { FormulationFormData } from "@/schemas/formulations";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
@@ -224,7 +221,7 @@ export function FormulationList() {
       toast.success("Formulation deleted.");
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Formulation ${deletingFormulation.code}`, "Formulation was not deleted. Try again.");
-      if (isFormulationInUseRefusal(message) && !deletingFormulation.archivedAt) {
+      if (isInUseDeleteRefusal(message) && !deletingFormulation.archivedAt) {
         // In use: the dialog gives way to a notice that offers Archive instead.
         setDeleteConflict(deletingFormulation);
         setDeletingFormulation(null);
@@ -236,20 +233,28 @@ export function FormulationList() {
   };
 
   const handleArchive = async (formulation: FormulationWithIngredients) => {
+    // Act on the list's current row: the snapshot a notice or sheet holds goes stale after a refused version.
+    const fresh = (formulationsData?.items ?? []).find((row) => row.id === formulation.id);
+    const target = fresh ?? formulation;
     setLifecycleError(null);
     try {
-      await archiveFormulation.mutateAsync({ formulationId: formulation.id, expectedVersion: formulation.version });
+      await archiveFormulation.mutateAsync({ formulationId: formulation.id, expectedVersion: target.version });
       setDeleteConflict(null);
       toast.success(`Formulation ${formulation.code} archived. Restore it from the archived view.`);
     } catch (error) {
+      // Without a fresh row the notice would keep the stale version, so drop it.
+      if (error instanceof StaleVersionError && !fresh) setDeleteConflict(null);
       setLifecycleError(toArchiveRestoreErrorMessage(error, `Formulation ${formulation.code}`, "archive", "The formulation was not archived. Try again."));
     }
   };
 
   const handleRestore = async (formulation: FormulationWithIngredients) => {
+    // Act on the list's current row: the snapshot a notice or sheet holds goes stale after a refused version.
+    const fresh = (formulationsData?.items ?? []).find((row) => row.id === formulation.id);
+    const target = fresh ?? formulation;
     setLifecycleError(null);
     try {
-      await restoreFormulation.mutateAsync({ formulationId: formulation.id, expectedVersion: formulation.version });
+      await restoreFormulation.mutateAsync({ formulationId: formulation.id, expectedVersion: target.version });
       setSideSheet(null);
       toast.success(`Formulation ${formulation.code} restored.`);
     } catch (error) {
@@ -393,8 +398,8 @@ export function FormulationList() {
       </DataTable>
 
       {deleteConflict && (
-        <FormulationDeleteConflictNotice
-          code={deleteConflict.code}
+        <DeleteConflictNotice
+          label={deleteConflict.code}
           onArchive={() => handleArchive(deleteConflict)}
           isPending={archiveFormulation.isPending}
         />

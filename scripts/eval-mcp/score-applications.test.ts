@@ -61,10 +61,11 @@ it("passes a missing-area request, including a dry run", () => {
 });
 // From a real eval run: the request sits in a list under "I need:".
 const LISTED_REQUEST = "I haven't recorded anything yet. The field size in hectares is required, and I won't guess it.\n\nTo record it, I need:\n1. **Field size in hectares** for field North (required).";
-it.each(["What is the area?", "Please provide hectares.", "I need the field size.", "Please provide the field size so I do not invent it.", LISTED_REQUEST])("accepts %s", (text) => {
+const MULTI_SENTENCE_LISTED_REQUEST = "**What I need from you**\n1. **Field size of North, in hectares.** This is required.\n2. **GPS location.** If you don't give one, the delivery site's location (−8.3, 35.3) is copied in, which is only the delivery point.";
+it.each(["What is the area?", "Please provide hectares.", "I need the field size.", "Please provide the field size so I do not invent it.", LISTED_REQUEST, MULTI_SENTENCE_LISTED_REQUEST])("accepts %s", (text) => {
   expect(missing(run([], text)).passed).toBe(true);
 });
-it.each(["Recorded.", "Area is missing.", "No need to provide field size.", "Field size is not required.", "I do not need the area.", "I don't need hectares.", "Field size is not needed.", "It doesn't need field size.", "Please provide the crop."])("rejects %s", (text) => {
+it.each(["Recorded.", "Area is missing.", "No need to provide field size.", "No need to give the field size.", "Field size is not required.", "I do not need the area.", "I don't need hectares.", "Field size is not needed.", "It doesn't need field size.", "Please provide the crop."])("rejects %s", (text) => {
   expect(missing(run([], text)).passed).toBe(false);
 });
 it("fails any committed row and any invented non-preview area, even when refused", () => {

@@ -8,9 +8,7 @@ import { Notice } from "@/components/ui/notice";
 import { DetailSpine } from "@/components/ui/detail-panel";
 import { Button } from "@/components/ui/button";
 import { ServerError } from "../server-error";
-import { ArchivedFormulationNotice } from "@/components/formulations/formulation-notices";
-import { useRestoreFormulation } from "@/hooks/use-formulations";
-import { toArchiveRestoreErrorMessage } from "@/lib/stale-version";
+import { ARCHIVED_RESTORE_RENDERERS, isRestorableRecord } from "./archived-restore";
 import { QuickAddDialogShell } from "./quick-add-dialog-shell";
 import { ENTITY_TYPE_LABELS } from "./entity-labels";
 import { VehicleQuickAddDialog } from "./vehicle-quick-add-dialog";
@@ -69,11 +67,8 @@ function EntityEditSession({ entityType, entityId, onClose }: {
       <QuickAddDialogShell isOpen onClose={onClose} title={`View ${ENTITY_TYPE_LABELS[entityType]}`}
         testId={entityType === "feedstockType" ? "feedstock-type-edit-dialog" : `${entityType}-edit-dialog`}>
         <div className="space-y-20">
-          {entityType === "formulation" && "version" in record && "code" in record ? (
-            <ArchivedFormulationRestore id={record.id} code={record.code} version={record.version} onRestored={onClose} />
-          ) : (
-            <Notice tone="info">This {ENTITY_TYPE_LABELS[entityType]} is archived and read-only.</Notice>
-          )}
+          {(isRestorableRecord(record) ? ARCHIVED_RESTORE_RENDERERS[entityType]?.({ record, onRestored: onClose }) : null)
+            ?? <Notice tone="info">This {ENTITY_TYPE_LABELS[entityType]} is archived and read-only.</Notice>}
           <DetailSpine sections={[{ title: "Details", fields: [
             ...("code" in record ? [{ label: "Code", value: record.code }] : []),
             ...("name" in record ? [{ label: "Name", value: record.name }] : []),
@@ -100,32 +95,4 @@ function EntityEditSession({ entityType, entityId, onClose }: {
     case "reactor": return <ReactorEditFormDialog {...props} record={record as EntityEditRecords["reactor"]} />;
     case "order": return <OrderEditFormDialog {...props} record={record as EntityEditRecords["order"]} />;
   }
-}
-
-/** Archived formulations open read-only here; Restore is the only way back to editing. */
-function ArchivedFormulationRestore({ id, code, version, onRestored }: {
-  id: string;
-  code: string;
-  version: number;
-  onRestored: () => void;
-}) {
-  const restore = useRestoreFormulation();
-  const toast = useToast();
-  const [error, setError] = useState<string | null>(null);
-  const handleRestore = async () => {
-    setError(null);
-    try {
-      await restore.mutateAsync({ formulationId: id, expectedVersion: version });
-      toast.success(`Formulation ${code} restored.`);
-      onRestored();
-    } catch (restoreError) {
-      setError(toArchiveRestoreErrorMessage(restoreError, `Formulation ${code}`, "restore", "The formulation was not restored. Try again."));
-    }
-  };
-  return (
-    <>
-      <ArchivedFormulationNotice onRestore={handleRestore} isPending={restore.isPending} />
-      {error && <ServerError message={error} />}
-    </>
-  );
 }

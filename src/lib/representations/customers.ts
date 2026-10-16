@@ -4,9 +4,11 @@ import { lookupFields, lookupInstants, lookupVersion, type LookupRepresentationI
 export const customerRepresentationSchema = z.object({
   ...lookupFields,
   version: lookupVersion,
-}).omit({ archivedAt: true });
+  cropType: z.string().nullable().describe("Crop type, or null when unspecified."),
+  archivedAt: z.iso.datetime().nullable().describe("Archive event instant in UTC (RFC 3339), or null when active."),
+});
 export type CustomerRepresentation = z.infer<typeof customerRepresentationSchema>;
-export type CustomerRepresentationInput = LookupRepresentationInput<CustomerRepresentation>;
+export type CustomerRepresentationInput = LookupRepresentationInput<CustomerRepresentation> & { archivedAt: Date | string | null };
 
 /** Customer contact fields are private and never published. */
 export function representCustomer(row: CustomerRepresentationInput): CustomerRepresentation {

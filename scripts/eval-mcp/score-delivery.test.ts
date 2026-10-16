@@ -140,6 +140,7 @@ it.each([
   ["Please send either:\n- **one moisture reading** for the load, or\n- **a moisture reading for each product**.", true],
   ["Please provide:\n- the delivery time.\n- the measured moisture reading.", true],
   ["Could you share the moisture for each sub-bin?", true],
+  ["**What was the measured moisture (% of wet mass) of the 2.4 t delivered?**", true],
   ["Please send me the moisture readings for each sub-bin.", true],
   ["What moisture should I use? The distance is not needed.", true],
   ["Moisture is not needed.", false],

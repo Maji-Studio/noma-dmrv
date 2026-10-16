@@ -24,7 +24,7 @@ it("offers production permissions and defaults new workflow reads on and mutatio
 });
 
 it("defaults customer and order reads on and order mutations off", () => {
-  expect(API_PERMISSION_ROWS).toContainEqual({ entity: "customers", label: "Customers", scopes: ["customers:read"] });
+  expect(API_PERMISSION_ROWS).toContainEqual({ entity: "customers", label: "Customers", scopes: ["customers:read", "customers:write", "customers:delete"] });
   expect(API_PERMISSION_ROWS).toContainEqual({ entity: "orders", label: "Orders", scopes: ["orders:read", "orders:write", "orders:delete"] });
   expect(API_KEY_DEFAULT_SCOPES).toContain("customers:read");
   expect(API_KEY_DEFAULT_SCOPES).toContain("orders:read");
@@ -59,4 +59,11 @@ it("keeps formulation read enabled and both mutation permissions opt-in", () => 
   expect(API_KEY_DEFAULT_SCOPES).toContain("formulations:read");
   expect(API_KEY_DEFAULT_SCOPES).not.toContain("formulations:write");
   expect(API_KEY_DEFAULT_SCOPES).not.toContain("formulations:delete");
+});
+
+it.each(["suppliers", "customers"])("keeps %s reads on and mutations opt-in", entity => {
+  expect(API_PERMISSION_ROWS.find(row => row.entity === entity)?.scopes).toEqual([`${entity}:read`, `${entity}:write`, `${entity}:delete`]);
+  expect(API_KEY_DEFAULT_SCOPES).toContain(`${entity}:read`);
+  expect(API_KEY_DEFAULT_SCOPES).not.toContain(`${entity}:write`);
+  expect(API_KEY_DEFAULT_SCOPES).not.toContain(`${entity}:delete`);
 });

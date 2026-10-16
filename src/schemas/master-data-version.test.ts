@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import { updateFacilitySchema, archiveFacilitySchema, restoreFacilitySchema } from "./facilities";
 import { updateReactorSchema, deleteReactorSchema } from "./reactors";
 import { updateStorageLocationSchema, deleteStorageLocationSchema, archiveStorageLocationSchema, restoreStorageLocationSchema } from "./storage-locations";
-import { updateSupplierSchema, deleteSupplierSchema, updateSupplierLocationSchema, deleteSupplierLocationSchema } from "./suppliers";
-import { updateCustomerSchema, deleteCustomerSchema, updateCustomerLocationSchema, deleteCustomerLocationSchema } from "./customers";
+import { updateSupplierSchema, updateSupplierLocationSchema, deleteSupplierLocationSchema } from "./suppliers";
+import { updateCustomerSchema, updateCustomerLocationSchema, deleteCustomerLocationSchema } from "./customers";
+import { supplierVersionInput } from "./supplier-input";
+import { customerVersionInput } from "./customer-input";
 import { updateFormulationSchema, formulationVersionSchema } from "./formulations";
 import { updateFeedstockTypeSchema, deleteFeedstockTypeSchema } from "./feedstock-types";
 const ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
@@ -11,8 +13,8 @@ const contracts = [
   [updateFacilitySchema, { facilityId: ID }], [archiveFacilitySchema, { facilityId: ID }], [restoreFacilitySchema, { facilityId: ID }],
   [updateReactorSchema, { reactorId: ID }], [deleteReactorSchema, { reactorId: ID }],
   [updateStorageLocationSchema, { storageLocationId: ID }], [deleteStorageLocationSchema, { storageLocationId: ID }], [archiveStorageLocationSchema, { storageLocationId: ID }], [restoreStorageLocationSchema, { storageLocationId: ID }],
-  [updateSupplierSchema, { supplierId: ID }], [deleteSupplierSchema, { supplierId: ID }], [updateSupplierLocationSchema, { locationId: ID }], [deleteSupplierLocationSchema, { locationId: ID }],
-  [updateCustomerSchema, { customerId: ID }], [deleteCustomerSchema, { customerId: ID }], [updateCustomerLocationSchema, { locationId: ID }], [deleteCustomerLocationSchema, { locationId: ID }],
+  [updateSupplierSchema, { supplierId: ID }], [supplierVersionInput, { supplierId: ID }], [updateSupplierLocationSchema, { locationId: ID }], [deleteSupplierLocationSchema, { locationId: ID }],
+  [updateCustomerSchema, { customerId: ID }], [customerVersionInput, { customerId: ID }], [updateCustomerLocationSchema, { locationId: ID }], [deleteCustomerLocationSchema, { locationId: ID }],
   [updateFormulationSchema, { formulationId: ID }], [formulationVersionSchema, { formulationId: ID }],
   [updateFeedstockTypeSchema, { feedstockTypeId: ID }], [deleteFeedstockTypeSchema, { feedstockTypeId: ID }],
 ] as const;

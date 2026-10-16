@@ -1,8 +1,9 @@
 import { DomainError, type DomainErrorCode, type DomainIssue } from "@/lib/domain-errors";
+import { IN_USE_DELETE_MARKER } from "@/lib/delete-refusal";
 import { SafeError } from "@/lib/errors";
 import { RATIO_SUM_EXCEEDED_MESSAGE } from "./formulation-ratios";
 
-export const FORMULATION_IN_USE_PREFIX = "Formulation was not deleted because";
+export const FORMULATION_IN_USE_PREFIX = `Formulation ${IN_USE_DELETE_MARKER}`;
 
 function refusal(code: DomainErrorCode, message: string, path: DomainIssue["path"], meta?: DomainIssue["meta"]): DomainError {
   const detail = new SafeError(message).message;

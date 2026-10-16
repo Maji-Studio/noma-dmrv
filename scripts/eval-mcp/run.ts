@@ -3,7 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assertThrowawayTestDatabase, resolveTestDatabaseUrl } from "../../tests/helpers/throwaway-database";
-import { APPLICATION_CASES, CASES, DELIVERY_CASES, DOCUMENT_CASES, EVAL_PORT, FORMULATION_CASES, LAB_CASES, STOCK_CASES } from "./config";
+import { APPLICATION_CASES, CASES, DELIVERY_CASES, DOCUMENT_CASES, EVAL_PORT, FORMULATION_CASES, PARTY_CASES, LAB_CASES, STOCK_CASES } from "./config";
 import { runClaude } from "./claude";
 import type { ManagedProcess } from "./process";
 import { markdownReport, scoreCase, type CaseScore } from "./score";
@@ -23,6 +23,9 @@ import { scoreApplicationCase } from "./score-applications";
 
 import type { FormulationEvalFixture } from "./fixture-formulations";
 import { scoreFormulationCase } from "./score-formulations";
+
+import type { PartyEvalFixture } from "./fixture-parties";
+import { scorePartyCase } from "./score-parties";
 
 async function main(): Promise<void> {
   const keep = process.argv.includes("--keep");
@@ -66,6 +69,7 @@ async function main(): Promise<void> {
   const applicationFixtures: ApplicationEvalFixture[] = [];
   const documentFixtures: DocumentEvalFixture[] = [];
   const formulationFixtures: FormulationEvalFixture[] = [];
+  const partyFixtures: PartyEvalFixture[] = [];
   // Every seeded organization, so cleanup covers all case families.
   const organizations: { id: string; remove: () => Promise<void> }[] = [];
   const keys: string[] = [];
@@ -80,6 +84,8 @@ async function main(): Promise<void> {
     const applicationModule = await import("./fixture-applications");
     const documentModule = await import("./fixture-documents");
     const formulationModule = await import("./fixture-formulations");
+    const partyModule = await import("./fixture-parties");
+    console.log("Skipped customer-stale-version: no deterministic between-read-and-write hook in runClaude.");
     const { seedFixture, fixtureTarget, readSnapshot, evaluationExpectation, evaluationRunRequirements } = fixtureModule;
     const expectation = evaluationExpectation();
     console.log(`Case 2 expectation: ${expectation}.`);
@@ -134,6 +140,13 @@ async function main(): Promise<void> {
       formulationFixtures.push(fixture);
       keys.push(fixture.key);
       organizations.push({ id: fixture.ctx.organizationId, remove: () => formulationModule.cleanupFormulationFixture(fixture) });
+    }
+    for (const testCase of PARTY_CASES) {
+      controller.signal.throwIfAborted();
+      const fixture = await partyModule.seedPartyFixture(testCase.id);
+      partyFixtures.push(fixture);
+      keys.push(fixture.key);
+      organizations.push({ id: fixture.ctx.organizationId, remove: () => partyModule.cleanupPartyFixture(fixture) });
     }
     const server = startServer(process.cwd(), runDirectory, process.env, keys);
     children.add(server);
@@ -214,6 +227,17 @@ async function main(): Promise<void> {
         controller.signal, (child) => children.add(child), (child) => children.delete(child));
       const snapshot = await formulationModule.readFormulationSnapshot(fixture);
       const score = scoreFormulationCase(testCase.id, target, snapshot, run.transcript);
+      scores.push(score);
+      results.push({ ...score, organizationId: fixture.ctx.organizationId, target, snapshot, ...run });
+    }
+    for (const [index, testCase] of PARTY_CASES.entries()) {
+      controller.signal.throwIfAborted();
+      const fixture = partyFixtures[index];
+      const { target } = fixture;
+      const run = await runClaude(testCase.id, testCase.text(target), fixture.key, baseUrl, runDirectory,
+        controller.signal, (child) => children.add(child), (child) => children.delete(child));
+      const snapshot = await partyModule.readPartySnapshot(fixture);
+      const score = scorePartyCase(testCase.id, target, snapshot, run.transcript);
       scores.push(score);
       results.push({ ...score, organizationId: fixture.ctx.organizationId, target, snapshot, ...run });
     }
