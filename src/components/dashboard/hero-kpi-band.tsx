@@ -10,6 +10,7 @@
 "use client";
 
 import type { DashboardKpi } from "@/data-access/dashboard-overview";
+import { InfoHint } from "@/components/ui/tooltip";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 
 /** Pinned so server and client format the number identically (no hydration drift). */
@@ -64,8 +65,15 @@ export function HeroKpiBand({ kpis, isLoading }: HeroKpiBandProps) {
     >
       {cells.map((kpi, index) => (
         <div key={kpi.key} className={`px-20 py-16 ${CELL_BORDERS(index)}`}>
-          <div className="body-caption text-[var(--clr-dark-purple-60)]">
-            {kpi.label}
+          <div className="flex min-h-24 items-center gap-4">
+            <span className="body-caption text-[var(--clr-dark-purple-60)]">
+              {kpi.label}
+            </span>
+            {kpi.hint && (
+              <InfoHint label={`More about ${kpi.label}`}>
+                {kpi.hint}
+              </InfoHint>
+            )}
           </div>
           <div className="mt-6 text-[26px] font-bold leading-[1.15] text-[var(--ink)]">
             {formatValue(kpi)}

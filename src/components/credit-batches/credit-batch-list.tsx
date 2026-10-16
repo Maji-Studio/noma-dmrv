@@ -564,7 +564,7 @@ export function CreditBatchList({
         {hasCompleteCo2eSummary && totalCo2e != null && (
           <span className="inline-flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
             <LeafIcon size={16} weight="bold" aria-hidden />
-            {`${totalCo2e.toFixed(2)} t CO₂e stored`}
+            {`${totalCo2e.toFixed(2)} t estimated CO₂e stored`}
           </span>
         )}
       </div>

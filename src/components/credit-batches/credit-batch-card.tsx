@@ -137,7 +137,7 @@ export function CreditBatchCard({
           {co2eStored != null && (
             <div className="flex flex-col gap-4">
               <span className="body-caption text-[var(--color-text-tertiary)]">
-                CO₂e stored
+                Estimated CO₂e stored
               </span>
               <span className="title-heading-3 leading-none text-[var(--st-ok)]">
                 {co2eStored.toFixed(2)} t
