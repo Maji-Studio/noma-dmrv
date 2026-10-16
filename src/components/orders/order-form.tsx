@@ -9,7 +9,7 @@ import { toDateInputValue } from "@/lib/date-utils";
 import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import type { Order } from "@/db/schema";
-import { useCustomerLocations } from "@/hooks/use-customers";
+import { useCustomerLocations, useCustomerWithRelations } from "@/hooks/use-customers";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import {
@@ -22,6 +22,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, PackageIcon, StorefrontIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm, useWatch } from "react-hook-form";
 
+import { Notice } from "@/components/ui/notice";
 import { CustomerLocationDetails } from "./customer-location-details";
 import { MatchingOutputBins } from "./matching-output-bins";
 
@@ -129,6 +130,12 @@ export function OrderForm({
   // Get customer locations for selected customer
   const customerLocations = customerLocationsData ?? [];
 
+  // An archived customer keeps the order's stored destination, but the order
+  // cannot move to another one or edit the location, so the parent's archive
+  // state is read explicitly rather than inferred from the picker.
+  const { data: selectedCustomer } = useCustomerWithRelations(selectedCustomerId ?? "", !!selectedCustomerId);
+  const isCustomerArchived = !!selectedCustomer?.archivedAt;
+
   // Details panel data for the selected location (issue #196). The facility
   // resolves from the form's own facilityId so edit mode shows the order's
   // facility even when the global selector points elsewhere.
@@ -211,7 +218,8 @@ export function OrderForm({
             required
             label="Customer location"
             entityType="customerLocation"
-            onEditSelected={selectedLocation && selectedCustomerId
+            selectionLocked={isCustomerArchived}
+            onEditSelected={selectedLocation && selectedCustomerId && !isCustomerArchived
               ? () => setEditingLocation({ customerId: selectedCustomerId, location: selectedLocation })
               : undefined}
             placeholder={selectedCustomerId ? "Select location..." : "Select a customer first"}
@@ -222,6 +230,12 @@ export function OrderForm({
             autoSelectSingle
           />
         </div>
+
+        {isCustomerArchived && (
+          <Notice tone="info">
+            This customer is archived, so the delivery location stays as stored. Restore the customer to change it.
+          </Notice>
+        )}
 
         {selectedLocation && (
           <CustomerLocationDetails

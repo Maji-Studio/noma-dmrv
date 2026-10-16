@@ -278,10 +278,10 @@ describe("archived party locations and reads", { timeout: TIMEOUT_MS }, () => {
     await runOperation(customerOps.archiveCustomer, f.ctx, { customerId: f.customer.id, expectedVersion: 1 });
     for (const [entityType, row] of [["supplier", supplier], ["customer", f.customer]] as const) {
       expect(await getEntities(f.ctx, { entityType, search: row.code })).toEqual([]);
-      expect(await getEntityById(f.ctx, entityType, row.id)).toMatchObject({ id: row.id, subtitle: "Archived" });
+      expect(await getEntityById(f.ctx, entityType, row.id)).toMatchObject({ id: row.id, subtitle: "Archived", archived: true });
     }
     expect(await getEntities(f.ctx, { entityType: "customer", search: f.customer.code, filterBy: { includeArchived: "true" } }))
-      .toMatchObject([expect.objectContaining({ id: f.customer.id, subtitle: "Archived" })]);
+      .toMatchObject([expect.objectContaining({ id: f.customer.id, subtitle: "Archived", archived: true })]);
     expect(await getSuppliers(f.ctx, supplierFilterSchema.parse({ search: supplier.code }))).toMatchObject({ total: 0, items: [] });
     expect(await getSuppliers(f.ctx, supplierFilterSchema.parse({ archived: true }))).toMatchObject({ total: 1, items: [expect.objectContaining({ id: supplier.id })] });
     expect(await getCustomers(f.ctx)).toMatchObject({ total: 1, items: [expect.objectContaining({ id: f.otherCustomer.id })] });

@@ -21,6 +21,8 @@ const state = vi.hoisted(() => ({
   customersById: {} as Record<string, EntityOption>,
   locationOptions: [] as EntityOption[],
   locations: [] as CustomerLocation[],
+  /** The selected customer's detail read; archived when `archivedAt` is set. */
+  customer: undefined as { archivedAt: Date | null } | undefined,
   editLocation: vi.fn(),
   facilities: [{ id: "facility", name: "Facility", timezone: "UTC" }] as Facility[],
 }));
@@ -43,6 +45,7 @@ vi.mock("@/hooks/use-organization-settings", () => ({
 
 vi.mock("@/hooks/use-customers", () => ({
   useCustomerLocations: () => ({ data: state.locations }),
+  useCustomerWithRelations: () => ({ data: state.customer }),
 }));
 
 vi.mock("@/components/orders/matching-output-bins", () => ({
@@ -95,6 +98,7 @@ beforeEach(() => {
   state.customersById = {};
   state.locationOptions = [];
   state.locations = [];
+  state.customer = undefined;
   state.editLocation.mockClear();
   state.facilities = [{ id: "facility", name: "Facility", timezone: "UTC" } as Facility];
   Element.prototype.scrollIntoView = vi.fn();
@@ -272,5 +276,45 @@ describe("OrderForm customer field", () => {
       id: "customer-1",
     });
     expect(html).toContain("Kilimo Farms");
+  });
+  describe("under an archived customer", () => {
+    const location: CustomerLocation = {
+      id: "location-1", customerId: "customer-1", name: "North field", country: "TZ", version: 1,
+      facilityDistances: [], organizationId: "organization-1", gpsLatitude: -6.8, gpsLongitude: 39.2,
+      address: null, city: null, stateRegion: null, defaultSoilTemperatureC: null, isDefault: true,
+      createdAt: new Date("2026-09-12"), updatedAt: new Date("2026-09-12"),
+    };
+    const order = { customerId: "customer-1", customerLocationId: "location-1" } as Order;
+
+    function renderArchived(archivedAt: Date | null) {
+      state.locations = [location];
+      state.locationOptions = [{ id: location.id, code: "", name: location.name! }, { id: "location-2", code: "", name: "South field" }];
+      state.customer = { archivedAt };
+      const client = new QueryClient();
+      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>);
+      return client;
+    }
+
+    it("shows the stored destination, refuses another one and hides location editing", () => {
+      const client = renderArchived(new Date("2026-10-01"));
+      const picker = screen.getByRole("combobox", { name: /^Customer location/ });
+      expect(picker.textContent).toBe("North field");
+      expect(picker.getAttribute("aria-readonly")).toBe("true");
+      fireEvent.click(picker);
+      expect(screen.queryByText("South field")).toBeNull();
+      expect(screen.queryByTestId("entity-select-edit")).toBeNull();
+      expect(screen.getByText("This customer is archived, so the delivery location stays as stored. Restore the customer to change it.")).toBeTruthy();
+      client.clear();
+    });
+
+    it("keeps the destination picker and location editing for an active customer", () => {
+      const client = renderArchived(null);
+      const picker = screen.getByRole("combobox", { name: /^Customer location/ });
+      expect(picker.getAttribute("aria-readonly")).toBeNull();
+      fireEvent.click(picker);
+      expect(screen.getByTestId("entity-select-edit")).toBeTruthy();
+      expect(screen.queryByText(/This customer is archived/)).toBeNull();
+      client.clear();
+    });
   });
 });

@@ -17,6 +17,7 @@ import type { FeedstockType } from "@/db/schema";
 import { ServerError } from "@/components/forms";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { DeleteConflictNotice } from "@/components/ui/lifecycle-notices";
 import {
   EntitySideSheet,
   type SideSheetMode,
@@ -52,7 +53,6 @@ import {
 import { FeedstockTypeForm } from "./feedstock-type-form";
 import { feedstockTypeSheetSections, titleCase } from "./feedstock-type-read-sections";
 import { IsometricFeedstockImportDialog } from "./isometric-feedstock-import-dialog";
-import { Notice } from "@/components/ui/notice";
 
 type ArchiveFilter = "all" | "active" | "archived";
 
@@ -95,31 +95,6 @@ export function IsometricLinkedBadge() {
       <SealCheckIcon size={14} weight="fill" aria-hidden />
       Isometric
     </span>
-  );
-}
-
-export function FeedstockDeleteConflictNotice({
-  name,
-  onArchive,
-  isPending,
-}: {
-  name: string;
-  onArchive: () => void;
-  isPending: boolean;
-}) {
-  return (
-    <Notice
-      tone="warning"
-      title={`${name} is in use and cannot be deleted.`}
-      action={
-        <Button variant="default" onClick={onArchive} busy={isPending}>
-          <ArchiveIcon size={16} weight="bold" />
-          Archive instead
-        </Button>
-      }
-    >
-      Archive it instead. Historical records keep the type, while active pickers hide it.
-    </Notice>
   );
 }
 
@@ -472,8 +447,8 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       </div>
 
       {deleteConflict && (
-        <FeedstockDeleteConflictNotice
-          name={deleteConflict.name}
+        <DeleteConflictNotice
+          label={deleteConflict.name}
           onArchive={() => handleArchive(deleteConflict)}
           isPending={archiveFeedstockType.isPending}
         />

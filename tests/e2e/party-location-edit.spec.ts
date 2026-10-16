@@ -216,3 +216,44 @@ test("supplier and customer locations can be edited from their edit sheets", asy
     }
   }
 });
+
+test("an archived supplier or customer opens read-only from an edit link, with no location editing", async ({
+  adminPage: page,
+}) => {
+  const { db, pool } = createDbConnection();
+  const runId = crypto.randomUUID().slice(0, 8);
+  const supplierId = crypto.randomUUID();
+  const customerId = crypto.randomUUID();
+  const locationName = `E2E Archived Location ${runId}`;
+  const archivedAt = new Date();
+  let facilityId: string | undefined;
+  try {
+    const facility = await createTestFacility();
+    facilityId = facility.id;
+    await db.insert(schema.suppliers).values({ id: supplierId, organizationId: DEC_ORG_ID, code: `E2E-SUP-ARCH-${runId}`, name: `E2E Archived Supplier ${runId}`, archivedAt });
+    await db.insert(schema.supplierLocations).values({ organizationId: DEC_ORG_ID, supplierId, name: locationName, country: "Tanzania", gpsLatitude: LOCATION_GPS_LATITUDE, gpsLongitude: LOCATION_GPS_LONGITUDE, isDefault: true });
+    await db.insert(schema.customers).values({ id: customerId, organizationId: DEC_ORG_ID, code: `E2E-CUST-ARCH-${runId}`, name: `E2E Archived Customer ${runId}`, archivedAt });
+    await db.insert(schema.customerLocations).values({ organizationId: DEC_ORG_ID, customerId, name: locationName, country: "Tanzania", gpsLatitude: LOCATION_GPS_LATITUDE, gpsLongitude: LOCATION_GPS_LONGITUDE, isDefault: true });
+
+    for (const target of [
+      { path: "suppliers", param: "supplier", id: supplierId, noun: "supplier" },
+      { path: "customers", param: "customer", id: customerId, noun: "customer" },
+    ]) {
+      await page.goto(`/${target.path}?facility=${facilityId}&${target.param}=${target.id}&mode=edit`);
+      const sheet = page.getByRole("dialog");
+      await expect(sheet.getByText(`This ${target.noun} is archived.`, { exact: false })).toBeVisible();
+      await expect(sheet.getByRole("button", { name: `Edit ${target.noun}` })).toHaveCount(0);
+      await expect(sheet.getByRole("button", { name: `Edit ${locationName}` })).toHaveCount(0);
+    }
+  } finally {
+    try {
+      await db.delete(schema.customerLocations).where(eq(schema.customerLocations.customerId, customerId));
+      await db.delete(schema.customers).where(eq(schema.customers.id, customerId));
+      await db.delete(schema.supplierLocations).where(eq(schema.supplierLocations.supplierId, supplierId));
+      await db.delete(schema.suppliers).where(eq(schema.suppliers.id, supplierId));
+      if (facilityId) await deleteTestFacility(facilityId);
+    } finally {
+      await pool.end();
+    }
+  }
+});

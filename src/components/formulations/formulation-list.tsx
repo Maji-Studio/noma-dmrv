@@ -30,11 +30,8 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { FormulationForm } from "./formulation-form";
-import {
-  ArchivedFormulationNotice,
-  FormulationDeleteConflictNotice,
-  isFormulationInUseRefusal,
-} from "./formulation-notices";
+import { DeleteConflictNotice, isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { ArchivedFormulationNotice } from "./formulation-notices";
 import { formatRatio, formulationSheetSections } from "./formulation-read-sections";
 import type { FormulationFormData } from "@/schemas/formulations";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
@@ -224,7 +221,7 @@ export function FormulationList() {
       toast.success("Formulation deleted.");
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Formulation ${deletingFormulation.code}`, "Formulation was not deleted. Try again.");
-      if (isFormulationInUseRefusal(message) && !deletingFormulation.archivedAt) {
+      if (isInUseDeleteRefusal(message) && !deletingFormulation.archivedAt) {
         // In use: the dialog gives way to a notice that offers Archive instead.
         setDeleteConflict(deletingFormulation);
         setDeletingFormulation(null);
@@ -393,8 +390,8 @@ export function FormulationList() {
       </DataTable>
 
       {deleteConflict && (
-        <FormulationDeleteConflictNotice
-          code={deleteConflict.code}
+        <DeleteConflictNotice
+          label={deleteConflict.code}
           onArchive={() => handleArchive(deleteConflict)}
           isPending={archiveFormulation.isPending}
         />

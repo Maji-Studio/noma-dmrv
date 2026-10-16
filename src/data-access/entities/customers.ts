@@ -8,6 +8,7 @@ import { customers } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "../utils";
+import { ARCHIVED_OPTION_SUBTITLE } from "@/lib/archived-option";
 
 export async function getCustomers(ctx: OrgContext, params: {
   search?: string;
@@ -43,7 +44,8 @@ export async function getCustomers(ctx: OrgContext, params: {
     id: r.id,
     code: r.code,
     name: r.name,
-    subtitle: r.archivedAt ? "Archived" : r.cropType ?? undefined,
+    ...(r.archivedAt ? { archived: true } : {}),
+    subtitle: r.archivedAt ? ARCHIVED_OPTION_SUBTITLE : r.cropType ?? undefined,
   }));
 }
 
@@ -67,6 +69,7 @@ export async function getCustomerById(ctx: OrgContext, id: string): Promise<Enti
     id: result.id,
     code: result.code,
     name: result.name,
-    subtitle: result.archivedAt ? "Archived" : result.cropType ?? undefined,
+    ...(result.archivedAt ? { archived: true } : {}),
+    subtitle: result.archivedAt ? ARCHIVED_OPTION_SUBTITLE : result.cropType ?? undefined,
   };
 }

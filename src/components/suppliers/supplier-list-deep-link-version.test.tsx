@@ -37,7 +37,11 @@ vi.mock("@/hooks/use-suppliers", () => ({
   useCreateSupplierWithLocations: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useUpdateSupplier: () => ({ isPending: false, mutateAsync: harness.update }),
   useDeleteSupplier: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useArchiveSupplier: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useRestoreSupplier: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));
+vi.mock("@/components/ui/lifecycle-notices", () => ({ DeleteConflictNotice: () => null, isInUseDeleteRefusal: () => false }));
+vi.mock("@/components/parties/party-notices", () => ({ ArchivedSupplierNotice: () => null }));
 vi.mock("@/hooks/use-debounce", () => ({ useDebounce: (value: unknown) => value }));
 vi.mock("@/hooks/use-list-pagination", () => ({
   useListPagination: () => ({ currentPage: 1, pageSize: 10, setCurrentPage: vi.fn(), onPaginationChange: vi.fn() }),
@@ -45,7 +49,7 @@ vi.mock("@/hooks/use-list-pagination", () => ({
 }));
 vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => undefined }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
-vi.mock("@phosphor-icons/react/dist/ssr", () => ({ UsersIcon: () => null, PlusIcon: () => null }));
+vi.mock("@phosphor-icons/react/dist/ssr", () => ({ UsersIcon: () => null, PlusIcon: () => null, ArchiveIcon: () => null }));
 vi.mock("@/components/ui", () => ({
   Button: ({ children }: { children?: ReactNode }) => <button type="button">{children}</button>,
   EmptyState: () => null,

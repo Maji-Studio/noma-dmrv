@@ -8,6 +8,7 @@ import { suppliers } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "../utils";
+import { ARCHIVED_OPTION_SUBTITLE } from "@/lib/archived-option";
 
 export async function getSuppliers(ctx: OrgContext, params: {
   search?: string;
@@ -65,6 +66,7 @@ export async function getSupplierById(ctx: OrgContext, id: string): Promise<Enti
     id: result.id,
     code: result.code,
     name: result.name,
-    subtitle: result.archivedAt ? "Archived" : result.location ?? undefined,
+    ...(result.archivedAt ? { archived: true } : {}),
+    subtitle: result.archivedAt ? ARCHIVED_OPTION_SUBTITLE : result.location ?? undefined,
   };
 }

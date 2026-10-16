@@ -3,16 +3,18 @@
  * Main supplier listing with CRUD operations, stat cards, and DataTable
  */
 "use client";
-import { StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
+import { StaleVersionError, toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
 
 import { useEffect, useRef, useState } from "react";
 import { parseAsString, useQueryState } from "nuqs";
 import type { ColumnDef } from "@tanstack/react-table";
-import { UsersIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
+import { ArchiveIcon, UsersIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Supplier } from "@/db/schema";
 import {
+  useArchiveSupplier,
   useCreateSupplierWithLocations,
   useDeleteSupplier,
+  useRestoreSupplier,
   useSuppliers,
   useSupplier,
   useSupplierLocationsBySupplier,
@@ -30,7 +32,9 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
+import { DeleteConflictNotice, isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
+import { ArchivedSupplierNotice } from "@/components/parties/party-notices";
 import { SupplierForm, type PendingSupplierLocation } from "./supplier-form";
 import type { SupplierFormData } from "@/schemas/suppliers";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
@@ -49,6 +53,8 @@ import { ILLUSTRATION_SIZE, SupplierArt } from "@/components/ui/illustrations";
 function createColumns(
   onView: (supplier: SupplierWithRelations) => void,
   onEdit: (supplier: SupplierWithRelations) => void,
+  onArchive: (supplier: SupplierWithRelations) => void,
+  onRestore: (supplier: SupplierWithRelations) => void,
   onDelete: (supplierId: string) => void
 ): ColumnDef<SupplierWithRelations>[] {
   return [
@@ -102,7 +108,12 @@ function createColumns(
             label={`Actions for ${row.original.code}`}
             actions={[
               { label: "Open details", onSelect: () => onView(row.original) },
-              { label: "Edit", onSelect: () => onEdit(row.original) },
+              ...(row.original.archivedAt
+                ? [{ label: "Restore", onSelect: () => onRestore(row.original) }]
+                : [
+                    { label: "Edit", onSelect: () => onEdit(row.original) },
+                    { label: "Archive", onSelect: () => onArchive(row.original) },
+                  ]),
               { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
             ]}
           />
@@ -135,9 +146,12 @@ export function SupplierList() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteConflict, setDeleteConflict] = useState<SupplierWithRelations | null>(null);
+  const [lifecycleError, setLifecycleError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
-    useListPagination();
+    useListPagination(showArchived ? "archived" : "active");
   const normalizedSearch = searchInput.trim();
   const debouncedSearch = useDebounce(
     normalizedSearch,
@@ -146,6 +160,7 @@ export function SupplierList() {
 
   const { data: suppliersData, isLoading, error: fetchError } = useSuppliers({
     ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    archived: showArchived,
     page: currentPage,
     pageSize,
   });
@@ -157,9 +172,11 @@ export function SupplierList() {
   if (!focusedSupplierId && deepLinkSnapshotId) setDeepLinkSnapshotId(null);
   if (focusedSupplierId && deepLinkedSupplier.data && !sideSheetState && deepLinkSnapshotId !== focusedSupplierId) {
     setDeepLinkSnapshotId(focusedSupplierId);
+    const linked = deepLinkedSupplier.data as SupplierWithRelations;
     setSideSheet({
-      entity: deepLinkedSupplier.data as SupplierWithRelations,
-      mode: deepLinkMode === ENTITY_DEEP_LINK_EDIT_MODE ? "edit" : "view",
+      entity: linked,
+      // An archived supplier is read-only, whatever mode the link asks for.
+      mode: deepLinkMode === ENTITY_DEEP_LINK_EDIT_MODE && !linked.archivedAt ? "edit" : "view",
     });
   }
   const sideSheet = sideSheetState;
@@ -174,6 +191,8 @@ export function SupplierList() {
   const createSupplier = useCreateSupplierWithLocations();
   const updateSupplier = useUpdateSupplier();
   const deleteSupplier = useDeleteSupplier();
+  const archiveSupplier = useArchiveSupplier();
+  const restoreSupplier = useRestoreSupplier();
   const toast = useToast();
   const handledInvalidSupplierIdRef = useRef<string | null>(null);
 
@@ -258,6 +277,8 @@ export function SupplierList() {
   };
 
   const handleDelete = (supplierId: string) => {
+    setDeleteConflict(null);
+    setDeleteError(null);
     setDeletingSupplier((suppliersData?.items ?? []).find((row) => row.id === supplierId) ?? null);
   };
 
@@ -269,20 +290,55 @@ export function SupplierList() {
       setDeletingSupplier(null);
       toast.success("Supplier deleted.");
     } catch (error) {
+      const message = toDeleteErrorMessage(error, `Supplier ${deletingSupplier.code}`, "Supplier was not deleted. Try again.");
+      if (isInUseDeleteRefusal(message) && !deletingSupplier.archivedAt) {
+        // In use: the dialog gives way to a notice that offers Archive instead.
+        setDeleteConflict(deletingSupplier);
+        setDeletingSupplier(null);
+        return;
+      }
       if (error instanceof StaleVersionError) setDeletingSupplier(null);
-      setDeleteError(
-        toDeleteErrorMessage(error, `Supplier ${deletingSupplier.code}`, "Supplier was not deleted. Try again.")
-      );
+      setDeleteError(message);
     }
+  };
+
+  const handleArchive = async (supplier: SupplierWithRelations) => {
+    setLifecycleError(null);
+    try {
+      await archiveSupplier.mutateAsync({ supplierId: supplier.id, expectedVersion: supplier.version });
+      setDeleteConflict(null);
+      toast.success(`Supplier ${supplier.code} archived. Restore it from the archived view.`);
+    } catch (error) {
+      setLifecycleError(toArchiveRestoreErrorMessage(error, `Supplier ${supplier.code}`, "archive", "The supplier was not archived. Try again."));
+    }
+  };
+
+  const handleRestore = async (supplier: SupplierWithRelations) => {
+    setLifecycleError(null);
+    try {
+      await restoreSupplier.mutateAsync({ supplierId: supplier.id, expectedVersion: supplier.version });
+      closeSideSheet();
+      toast.success(`Supplier ${supplier.code} restored.`);
+    } catch (error) {
+      setLifecycleError(toArchiveRestoreErrorMessage(error, `Supplier ${supplier.code}`, "restore", "The supplier was not restored. Try again."));
+    }
+  };
+
+  const toggleShowArchived = () => {
+    setShowArchived((current) => !current);
+    setCurrentPage(1);
+    closeSideSheet();
+    setDeleteConflict(null);
+    setLifecycleError(null);
   };
 
   const openCreate = () => { clearDeepLink(); setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
   const openView = (supplier: SupplierWithRelations) => { clearDeepLink(); setSideSheet({ entity: supplier, mode: "view" }); };
   const openEdit = (supplier: SupplierWithRelations) => { clearDeepLink(); setCreateError(null); setUpdateError(null); setSideSheet({ entity: supplier, mode: "edit" }); };
-  const closeSideSheet = () => { clearDeepLink(); setSideSheet(null); setCreateError(null); setUpdateError(null); };
+  const closeSideSheet = () => { clearDeepLink(); setSideSheet(null); setCreateError(null); setUpdateError(null); setLifecycleError(null); };
   useOpenCreateIntent(openCreate);
 
-  const columns = createColumns(openView, openEdit, handleDelete);
+  const columns = createColumns(openView, openEdit, handleArchive, handleRestore, handleDelete);
 
   if (fetchError) {
     return (
@@ -299,6 +355,8 @@ export function SupplierList() {
 
   const sideSheetTitle =
     sideSheetMode === "create" ? "Create supplier" : sideSheetEntity?.code ?? "";
+
+  const viewedEntity = sideSheetMode === "view" ? sideSheetEntity : null;
 
   const sideSheetSubtitle =
     sideSheetMode === "create" ? undefined : sideSheetEntity?.name || undefined;
@@ -320,7 +378,7 @@ export function SupplierList() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
-          title="Total suppliers"
+          title={showArchived ? "Archived suppliers" : "Active suppliers"}
           value={totalSuppliers}
           icon={<UsersIcon size={24} weight="bold" />}
           description="Biomass feedstock providers"
@@ -352,14 +410,20 @@ export function SupplierList() {
           <EmptyState
             padding="md"
             icon={hasActiveSearch ? <UsersIcon size={48} /> : <SupplierArt size={ILLUSTRATION_SIZE.empty} />}
-            title={hasActiveSearch ? "No matching suppliers" : "No suppliers yet"}
+            title={
+              hasActiveSearch
+                ? showArchived ? "No archived suppliers match" : "No matching suppliers"
+                : showArchived ? "No archived suppliers" : "No suppliers yet"
+            }
             description={
               hasActiveSearch
                 ? "Try clearing your search."
-                : "Suppliers are where your feedstock deliveries come from."
+                : showArchived
+                  ? "Suppliers you archive will appear here and can be restored."
+                  : "Suppliers are where your feedstock deliveries come from."
             }
             action={
-              !hasActiveSearch ? (
+              !hasActiveSearch && !showArchived ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={20} weight="bold" />
                   Create your first supplier
@@ -375,14 +439,32 @@ export function SupplierList() {
             aria-label="Search suppliers"
           />
           <DataTable.Controls>
+            <Button
+              variant={showArchived ? "primary" : "default"}
+              size="small"
+              onClick={toggleShowArchived}
+              aria-pressed={showArchived}
+            >
+              <ArchiveIcon size={16} weight="bold" />
+              Archived
+            </Button>
             <DataTable.ColumnVisibility />
           </DataTable.Controls>
         </DataTable.Toolbar>
         <DataTable.Pagination />
       </DataTable>
 
-      {/* Delete Error */}
-      {deleteError && <ServerError message={deleteError} />}
+      {deleteConflict && (
+        <DeleteConflictNotice
+          label={deleteConflict.code}
+          onArchive={() => handleArchive(deleteConflict)}
+          isPending={archiveSupplier.isPending}
+        />
+      )}
+
+      {((lifecycleError && !viewedEntity) || (deleteError && !deletingSupplier)) && (
+        <ServerError message={(!viewedEntity ? lifecycleError : null) ?? deleteError ?? ""} />
+      )}
 
       {/* Delete Confirm Dialog */}
       <DeleteConfirmDialog
@@ -395,6 +477,7 @@ export function SupplierList() {
           setDeleteError(null);
         }}
         isPending={deleteSupplier.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
       {/* Unified Side Sheet */}
@@ -402,10 +485,23 @@ export function SupplierList() {
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheetMode}
-        onModeChange={(mode) => setSideSheet(sideSheet ? { ...sideSheet, mode } : null)}
+        // An archived supplier stays in view mode: Restore is the way back to editing.
+        onModeChange={(mode) => setSideSheet(sideSheet ? { ...sideSheet, mode: mode === "edit" && sideSheet.entity?.archivedAt ? "view" : mode } : null)}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit supplier"
+        canEdit={!viewedEntity?.archivedAt}
+        viewModeNotice={
+          viewedEntity?.archivedAt ? (
+            <>
+              <ArchivedSupplierNotice
+                onRestore={() => handleRestore(viewedEntity)}
+                isPending={restoreSupplier.isPending}
+              />
+              {lifecycleError && <ServerError message={lifecycleError} />}
+            </>
+          ) : undefined
+        }
         sections={sideSheetEntity ? supplierSheetSections(sideSheetEntity, sideSheetLocationsQuery) : undefined}
       >
         <SupplierForm

@@ -298,8 +298,8 @@ function EntitySelectView({
   const selectedOption =
     isLocal ? suppliedOptions.find((option) => option.id === value)
       : selectedEntity?.id === value ? selectedEntity : listedOption;
-  // An archived formulation opens a read-only view with Restore, not the edit form.
-  const isArchivedSelection = entityType === "formulation" && selectedOption?.archived === true;
+  // An archived record opens a read-only view with Restore, not the edit form.
+  const isArchivedSelection = selectedOption?.archived === true;
   const displayText = selectedOption
     ? (formatSelectedLabel
         ? formatSelectedLabel(selectedOption)
