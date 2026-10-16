@@ -59,3 +59,23 @@ it('a returned statement cannot release a version it does not cover', () => {
   ], statements: [{ id: 'statement', status: 'FAILED_VERIFICATION', fresh: true, submittedToVerifier: true,
     returnedAt: '2026-10-02', removalExternalIds: ['entry1'] }] }] }).level).toBe('sent');
 });
+
+it.each([
+  { submittedAt: null, createdAt: null },
+  { submittedAt: null, createdAt: "2026-10-01" },
+  { submittedAt: "invalid", createdAt: "2026-10-01" },
+])("keeps a remote attempt locked without a known submission time: %j", times => {
+  expect(recordLocks.removal({ dependents: [], removals: [{
+    id: "removal", submissions: [{ status: "submitted", externalId: "entry", ...times }],
+    statements: [{ id: "statement", status: "FAILED_VERIFICATION", fresh: true,
+      submittedToVerifier: true, returnedAt: "2026-10-02", removalExternalIds: ["entry"] }],
+  }] }).level).toBe("sent");
+});
+
+it.each([null, undefined, "invalid"])("keeps a remote attempt locked without a known return time: %s", returnedAt => {
+  expect(recordLocks.removal({ dependents: [], removals: [{
+    id: "removal", submissions: [{ status: "submitted", externalId: "entry", submittedAt: "2026-10-01" }],
+    statements: [{ id: "statement", status: "FAILED_VERIFICATION", fresh: true,
+      submittedToVerifier: true, returnedAt, removalExternalIds: ["entry"] }],
+  }] }).level).toBe("sent");
+});

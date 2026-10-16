@@ -12,7 +12,7 @@ export interface RecordLockSubmission {
   id?: string;
   externalId?: string | null;
   submittedAt?: string | null;
-  createdAt?: string;
+  createdAt?: string | null;
   inFlight?: boolean;
   hasRemoteMutation?: boolean;
 }
@@ -59,7 +59,8 @@ export function isSentRemoval(removal: RecordLockRemoval): boolean {
     submission.status === "submitted" || submission.status === "accepted" || submission.hasRemoteMutation);
   const allAttemptsReturned = remoteAttempts.every(submission => removal.statements.some(statement => {
     if (!returned(statement) || !submission.externalId || !statement.removalExternalIds?.includes(submission.externalId)) return false;
-    const attemptedAt = Date.parse(submission.submittedAt ?? submission.createdAt ?? "");
+    // Creation may predate the remote attempt, so it cannot prove a later return.
+    const attemptedAt = Date.parse(submission.submittedAt ?? "");
     const returnedAt = Date.parse(statement.returnedAt ?? "");
     return Number.isFinite(attemptedAt) && Number.isFinite(returnedAt) && attemptedAt < returnedAt;
   }));

@@ -7,7 +7,6 @@ import { getGhgStatement } from "@/lib/isometric/ghg-statements";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { REMOVAL_SCOPED_SUBMISSION_TYPES } from "@/lib/isometric/utils/constants";
 import { isSentRemoval, type RecordLockRemoval, type RecordLockStatement } from "@/lib/record-lock";
-import { resolveIsometricClient } from "./certifier-credentials";
 import { requireOrgScope } from "./utils";
 
 type Removal = { removalId: string; ghgStatementId: string | null };
@@ -76,6 +75,7 @@ async function readStatement(ctx: OrgContext, tx: Pick<DbTransaction, "select">,
   if (!fresh || !row.externalId || fact.inFlight ||
     !(fact.status === "FAILED_VERIFICATION" || (fact.status === "DRAFT" && fact.submittedToVerifier))) return fact;
   try {
+    const { resolveIsometricClient } = await import("./certifier-credentials");
     const remote = await getGhgStatement(await resolveIsometricClient(ctx, tx), row.externalId);
     return { ...fact, status: remote.status, fresh: true,
       // REST has no return timestamp. A verifier submission is a conservative
@@ -90,6 +90,6 @@ async function readStatement(ctx: OrgContext, tx: Pick<DbTransaction, "select">,
 }
 
 function submissionFact(row: Submission) {
-  return { id: row.id, externalId: row.externalId, submittedAt: row.submittedAt?.toISOString(), createdAt: row.createdAt.toISOString(), status: row.status, inFlight: isLockedInFlight(row),
+  return { id: row.id, externalId: row.externalId, submittedAt: row.submittedAt?.toISOString() ?? null, createdAt: row.createdAt?.toISOString() ?? null, status: row.status, inFlight: isLockedInFlight(row),
     hasRemoteMutation: Boolean(row.externalId) || ["possible", "confirmed"].includes(String(getMetadataValue(row.metadata, "externalMutation"))) };
 }
