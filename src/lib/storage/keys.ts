@@ -39,6 +39,11 @@ export function buildStorageKey({
     : `${entityType}/${entityId}/${documentType}/${id}`;
 }
 
+export function ghgStatementReportKeyPrefix(organizationId: string, reportId: string): string {
+  assertSegments([organizationId, reportId]);
+  return `org/${organizationId}/ghgStatementReport/${reportId}/pdf/`;
+}
+
 export function isSafeStorageKey(key: string): boolean {
   if (!SAFE_KEY_RE.test(key)) return false;
   if (key.startsWith("/") || key.includes("//") || key.includes("..")) return false;

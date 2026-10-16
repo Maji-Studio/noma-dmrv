@@ -40,6 +40,9 @@ vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-ghg-statements");
 vi.mock("@/data-access/ghg-statement-reports");
+vi.mock("@/fn/certification/stored-ghg-statement-report-core", () => ({
+  verifyStoredGhgStatementReport: vi.fn(),
+}));
 vi.mock("@/fn/certification/ghg-statement-report-core", () => ({
   assertGhgStatementReportFresh: vi.fn(),
   // Mints a fresh capability token and returns the link carrying it.

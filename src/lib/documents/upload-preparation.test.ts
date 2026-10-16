@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DOCUMENT_CONFIRM_DEADLINE_MS } from "@/config/documents";
 import { createHash } from "node:crypto";
 import type { DocumentRow } from "@/data-access/documents";
+import { StorageError } from "@/lib/storage/types";
 import type { StorageProvider } from "@/lib/storage/types";
 const mocks = vi.hoisted(() => ({ read: vi.fn(), owner: vi.fn(), candidate: vi.fn() }));
 vi.mock("@/db", () => ({ db: {} }));
@@ -67,5 +68,14 @@ it.each(["uploaded", "gone", "failed"] as const)("returns a terminal %s candidat
   const putObject = vi.fn();
   const provider = { name: "local-fs", bucket: "local", putObject, readObjectBounded: async () => ({ bytes, sizeBytes: bytes.length, contentType: "application/pdf", sha256: createHash("sha256").update(bytes).digest("hex") }) } as unknown as StorageProvider;
   expect(await preparePendingDocumentUpload(ctx, row, provider, Date.now() + DOCUMENT_CONFIRM_DEADLINE_MS)).toMatchObject(kind === "failed" ? { kind, reason: "expired" } : { kind });
+  expect(putObject).not.toHaveBeenCalled();
+});
+
+
+it.each(["storage_unavailable", "storage_misconfigured", "object_access_denied"])("fails confirmation on normalized %s without promoting the upload", async (code) => {
+  const putObject = vi.fn();
+  const provider = { name: "local-fs", bucket: "local", putObject, readObjectBounded: vi.fn().mockRejectedValue(new StorageError("read failed", code)) } as unknown as StorageProvider;
+  await expect(preparePendingDocumentUpload(ctx, row, provider, Date.now() + DOCUMENT_CONFIRM_DEADLINE_MS)).rejects.toMatchObject({ code: "document_storage_failed" });
+  expect(mocks.candidate).not.toHaveBeenCalled();
   expect(putObject).not.toHaveBeenCalled();
 });
