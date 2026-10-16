@@ -22,6 +22,7 @@ const harness = vi.hoisted(() => ({
   onModeChange: null as ModeChange | null,
   sheet: { open: false, mode: "view" as string },
   lock: undefined as RecordLockView | undefined,
+  lockStatus: "ready" as "pending" | "error" | "ready",
   sheetProps: null as Record<string, unknown> | null,
   columns: [] as Array<{ id?: string; cell?: unknown }>,
   rowActions: null as Array<{ label: string }> | null,
@@ -81,8 +82,8 @@ vi.mock("@/hooks/use-create-with-evidence", () => ({
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 
 vi.mock("@/hooks/use-record-locks", () => ({
-  useRecordLocks: () => ({ locks: harness.lock ? { [SAMPLE_ID]: harness.lock } : {} }),
-  useRecordLock: (_kind: string, id: string | null | undefined) => ({ lock: id ? harness.lock : undefined, isLoading: false }),
+  useRecordLocks: () => ({ locks: harness.lock ? { [SAMPLE_ID]: harness.lock } : {}, statusOf: () => harness.lockStatus }),
+  useRecordLock: (_kind: string, id: string | null | undefined) => ({ lock: id ? harness.lock : undefined, status: harness.lockStatus }),
 }));
 
 vi.mock("@/components/ui", () => ({
@@ -115,6 +116,7 @@ vi.mock("@/components/ui/entity-side-sheet", () => ({
     onModeChange: ModeChange;
     children?: ReactNode;
     canEdit?: boolean;
+    submitBlockedReason?: string | null;
     viewModeNotice?: ReactNode;
     titleBadge?: ReactNode;
   }) => {
@@ -183,6 +185,7 @@ describe("Sample sheet behind a Sent Removal", () => {
     harness.sample = SAMPLE;
     harness.query = {};
     harness.lock = undefined;
+    harness.lockStatus = "ready";
     harness.sheetProps = null;
   });
 
@@ -202,11 +205,32 @@ describe("Sample sheet behind a Sent Removal", () => {
     renderer?.unmount();
   });
 
-  it("opens an edit deep link in view mode while Sent", async () => {
+  it("keeps an open edit draft when Sent arrives, with Save off and the reason", async () => {
     harness.lock = SENT;
     harness.query = { sample: SAMPLE_ID, mode: "edit" };
     await act(async () => { renderer = create(<SampleList />); });
-    expect(harness.sheet).toEqual({ open: true, mode: "view" });
+    expect(harness.sheet).toEqual({ open: true, mode: "edit" });
+    expect(harness.sheetProps?.submitBlockedReason).toBe("This record was sent with its Removal, so it cannot be saved.");
+    renderer?.unmount();
+  });
+
+  it("offers neither Edit nor row actions until the lock answers, and says so", async () => {
+    harness.lockStatus = "pending";
+    harness.query = { sample: SAMPLE_ID };
+    await act(async () => { renderer = create(<SampleList />); });
+    expect(harness.sheetProps?.canEdit).toBe(false);
+    expect(textOf(renderer!)).toContain("Checking whether this record can change.");
+    const cell = renderActionsCell();
+    expect(harness.rowActions).toBeNull();
+    cell.unmount();
+    renderer?.unmount();
+  });
+
+  it("says it could not check the lock when the read fails", async () => {
+    harness.lockStatus = "error";
+    harness.query = { sample: SAMPLE_ID, mode: "edit" };
+    await act(async () => { renderer = create(<SampleList />); });
+    expect(harness.sheetProps?.submitBlockedReason).toBe("Couldn't check whether this record can change. Refresh the page and try again.");
     renderer?.unmount();
   });
 

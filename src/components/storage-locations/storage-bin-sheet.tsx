@@ -26,6 +26,7 @@ import { StorageLocationForm } from "./storage-location-form";
 import { storageLocationSheetSections } from "./storage-location-read-sections";
 import { RecordLockChip, RecordLockNotice, RecordUsedBy } from "@/components/record-locks";
 import { useRecordLock } from "@/hooks/use-record-locks";
+import { isRecordEditable, recordLockSaveBlockedReason } from "@/lib/record-lock-view";
 
 export type StorageBinSheetState =
   | { mode: "create"; entity: null }
@@ -49,7 +50,7 @@ export function StorageBinSheet({
   const createStorageLocation = useCreateStorageLocation();
   const updateStorageLocation = useUpdateStorageLocation();
   const toast = useToast();
-  const { lock } = useRecordLock("storageLocation", state?.entity?.id);
+  const { lock, status: lockStatus } = useRecordLock("storageLocation", state?.entity?.id);
 
   const close = () => {
     onStateChange(null);
@@ -113,10 +114,12 @@ export function StorageBinSheet({
       title={state?.mode === "create" ? "Create storage bin" : state?.entity?.name ?? ""}
       subtitle={state?.mode === "create" ? undefined : state?.entity?.code}
       titleBadge={lock && <RecordLockChip level={lock.level} />}
-      viewModeNotice={<RecordLockNotice lock={lock} subject="storageBin" />}
+      viewModeNotice={<RecordLockNotice lock={lock} status={lockStatus} subject="storageBin" />}
+      editNotice={<RecordLockNotice lock={lock} status={lockStatus} subject="storageBin" />}
+      submitBlockedReason={recordLockSaveBlockedReason(lock, lockStatus)}
       viewModeChildren={<RecordUsedBy lock={lock} />}
       editLabel="Edit storage bin"
-      canEdit={state?.entity?.archivedAt == null}
+      canEdit={state?.entity?.archivedAt == null && isRecordEditable(lock)}
       sections={
         state?.mode === "view" && state.entity
           ? storageLocationSheetSections(state.entity, onReconcile)

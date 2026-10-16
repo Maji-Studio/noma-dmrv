@@ -74,6 +74,7 @@ describe("CreditBatchCard", () => {
       onView,
       onEdit,
       onDelete,
+      lock: { level: "open", heldBy: [], usedBy: [], freeFields: [], howToFree: null, returnedBy: [] },
     });
     const menu = findRowActions(view);
 
@@ -253,5 +254,12 @@ describe("CreditBatchCard", () => {
 
     expect(text).toContain("Batch data ready");
     expect(text).not.toContain("Ready to certify");
+  });
+});
+
+describe("CreditBatchCard before its lock answers", () => {
+  it("offers only Open details", () => {
+    const view = CreditBatchCard({ creditBatch, onView: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn() });
+    expect(findRowActions(view)?.props.actions.map(({ label }) => label)).toEqual(["Open details"]);
   });
 });

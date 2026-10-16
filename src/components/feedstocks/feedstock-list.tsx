@@ -14,7 +14,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { RecordLockChip, RecordLockNotice, RecordUsedBy, recordLockColumn } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordDeletable, isRecordEditable, recordLockSaveBlockedReason, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -71,6 +71,7 @@ function createColumns(
   onEdit: (feedstock: FeedstockWithRelations) => void,
   onDelete: (feedstock: FeedstockWithRelations) => void,
   locks: RecordLockViews,
+  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<FeedstockWithRelations>[] {
   return [
     {
@@ -174,7 +175,7 @@ function createColumns(
         />
       ),
     },
-    recordLockColumn<FeedstockWithRelations>(locks),
+    recordLockColumn<FeedstockWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
@@ -423,7 +424,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
 
   const feedstockItems = feedstocksData?.items ?? [];
   const feedstockLocks = useRecordLocks("feedstock", feedstockItems.map((item) => item.id));
-  const columns = createColumns(openEdit, handleDelete, feedstockLocks.locks);
+  const columns = createColumns(openEdit, handleDelete, feedstockLocks.locks, feedstockLocks.statusOf);
   const totalPages = feedstocksData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -491,7 +492,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         ? ({ entity: focusedFeedstock.data, mode: "view" } as const)
         : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
-  const { lock: sheetLock } = useRecordLock("feedstock", displaySideSheet?.entity?.id);
+  const { lock: sheetLock, status: sheetLockStatus } = useRecordLock("feedstock", displaySideSheet?.entity?.id);
   const activeFocusTarget = sideSheet
     ? null
     : parseEntityFocusTarget(deepLinkFocus);
@@ -658,7 +659,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         titleBadge={sheetLock && <RecordLockChip level={sheetLock.level} />}
-        viewModeNotice={<RecordLockNotice lock={sheetLock} />}
+        viewModeNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
+        editNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
+        submitBlockedReason={recordLockSaveBlockedReason(sheetLock, sheetLockStatus)}
         viewModeChildren={<RecordUsedBy lock={sheetLock} />}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit feedstock"

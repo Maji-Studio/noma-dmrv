@@ -37,7 +37,7 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { RecordLockChip, RecordLockNotice, RecordUsedBy, recordLockColumn } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordEditable, recordLockSaveBlockedReason, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
@@ -104,6 +104,7 @@ function createColumns(
   onEdit: (sample: SampleWithRelations) => void,
   onDelete: (sampleId: string) => void,
   locks: RecordLockViews,
+  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<SampleWithRelations>[] {
   return [
     {
@@ -166,7 +167,7 @@ function createColumns(
         />
       ),
     },
-    recordLockColumn<SampleWithRelations>(locks),
+    recordLockColumn<SampleWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
@@ -317,11 +318,10 @@ export function SampleList({
   const requestedSideSheet =
     sideSheet ?? createIntentSideSheet ?? deepLinkedSideSheet;
   const sampleLocks = useRecordLocks("sample", samples.map((sample) => sample.id));
-  const { lock: sheetLock } = useRecordLock("sample", requestedSideSheet?.entity?.id);
-  // A Sent Sample never opens in edit, not even from an edit deep link.
-  const displaySideSheet = requestedSideSheet?.mode === "edit" && sheetLock?.level === "sent"
-    ? { ...requestedSideSheet, mode: "view" as const }
-    : requestedSideSheet;
+  const { lock: sheetLock, status: sheetLockStatus } = useRecordLock("sample", requestedSideSheet?.entity?.id);
+  // A lock that arrives as Sent keeps an open draft: Save turns off with
+  // the reason instead (`submitBlockedReason`).
+  const displaySideSheet = requestedSideSheet;
   const activeFocusTarget = displaySideSheet?.entity?.id === focusedSampleId
     ? parseEntityFocusTarget(deepLinkFocus)
     : null;
@@ -566,7 +566,7 @@ export function SampleList({
   const isSubmitting =
     createSample.isPending || updateSample.isPending || isFlushing;
 
-  const columns = createColumns(openEdit, handleDelete, sampleLocks.locks);
+  const columns = createColumns(openEdit, handleDelete, sampleLocks.locks, sampleLocks.statusOf);
 
   if (!contextFacilityId) {
     return (
@@ -704,7 +704,9 @@ export function SampleList({
         title={displaySideSheet?.mode === "create" ? "Create Sample" : (displaySideSheet?.entity?.sampleCode ?? "")}
         subtitle={displaySideSheet?.mode === "create" ? undefined : viewSubtitle}
         titleBadge={sheetLock && <RecordLockChip level={sheetLock.level} />}
-        viewModeNotice={<RecordLockNotice lock={sheetLock} inUseLocksNothing />}
+        viewModeNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} inUseLocksNothing />}
+        editNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} inUseLocksNothing />}
+        submitBlockedReason={recordLockSaveBlockedReason(sheetLock, sheetLockStatus)}
         viewModeChildren={<RecordUsedBy lock={sheetLock} />}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit Sample"

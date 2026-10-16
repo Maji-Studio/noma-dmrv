@@ -2,10 +2,10 @@
  * Screen lock reads (#1119): one batched call answers Open, In use or Sent per
  * record and resolves holders into links, without crossing organizations.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
-import { certificationSubmissions } from "@/db/schema";
+import { biocharProducts, certificationSubmissions, orders, storageLocations } from "@/db/schema";
 import { getRecordLockViews, getRemovalLockViews, getStorageBinLockViews } from "@/data-access/record-lock-views";
 import { withLineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
@@ -94,5 +94,56 @@ describe("record lock views", () => {
       const sent = await getRecordLockViews(makeTestOrgContext(), "productionRun", [fixture.productionRunId]);
       expect(sent[fixture.productionRunId]).toMatchObject({ level: "sent", returnedBy: [] });
     }, "ghgStatement");
+  });
+
+  it("reads a 50-record page in as many queries as a single record", async () => {
+    const PAGE = 50;
+    await withLineageFixture(async (fixture) => {
+      const ctx = makeTestOrgContext();
+      const [order] = await db.select().from(orders).where(and(eq(orders.organizationId, TEST_ORG_ID), eq(orders.id, fixture.orderId)));
+      const [bin] = await db.select().from(storageLocations).where(and(eq(storageLocations.organizationId, TEST_ORG_ID), eq(storageLocations.id, fixture.feedstockBinId)));
+      const orderIds = Array.from({ length: PAGE - 1 }, () => crypto.randomUUID());
+      const binIds = Array.from({ length: PAGE - 1 }, () => crypto.randomUUID());
+      await db.insert(orders).values(orderIds.map((id, index) => ({ ...order, id, code: `${order.code}-N${index}`, version: 1 })));
+      await db.insert(storageLocations).values(binIds.map((id, index) => ({ ...bin, id, code: `${bin.code}-N${index}`, name: `${bin.name} N${index}`, version: 1 })));
+      try {
+        const countQueries = async (read: () => Promise<unknown>) => {
+          const select = vi.spyOn(db, "select");
+          const distinct = vi.spyOn(db, "selectDistinct");
+          try {
+            await read();
+            return select.mock.calls.length + distinct.mock.calls.length;
+          } finally {
+            select.mockRestore();
+            distinct.mockRestore();
+          }
+        };
+        const oneOrder = await countQueries(() => getRecordLockViews(ctx, "order", [fixture.orderId]));
+        const pageOfOrders = await countQueries(() => getRecordLockViews(ctx, "order", [fixture.orderId, ...orderIds]));
+        expect(pageOfOrders).toBe(oneOrder);
+        const views = await getRecordLockViews(ctx, "order", [fixture.orderId, ...orderIds]);
+        expect(Object.keys(views)).toHaveLength(PAGE);
+
+        const oneBin = await countQueries(() => getStorageBinLockViews(ctx, [fixture.feedstockBinId]));
+        const pageOfBins = await countQueries(() => getStorageBinLockViews(ctx, [fixture.feedstockBinId, ...binIds]));
+        expect(pageOfBins).toBe(oneBin);
+        const bins = await getStorageBinLockViews(ctx, [fixture.feedstockBinId, ...binIds]);
+        expect(bins[fixture.feedstockBinId].level).toBe("inUse");
+        expect(bins[binIds[0]].level).toBe("open");
+      } finally {
+        await db.delete(orders).where(and(eq(orders.organizationId, TEST_ORG_ID), inArray(orders.id, orderIds)));
+        await db.delete(storageLocations).where(and(eq(storageLocations.organizationId, TEST_ORG_ID), inArray(storageLocations.id, binIds)));
+      }
+    }, "none");
+  });
+
+  it("lists the formulations a product bin stores, which fix its formulation", async () => {
+    await withLineageFixture(async (fixture) => {
+      const [product] = await db.select({ binId: biocharProducts.storageLocationId, formulationId: biocharProducts.formulationId }).from(biocharProducts)
+        .where(and(eq(biocharProducts.organizationId, TEST_ORG_ID), eq(biocharProducts.id, fixture.productId)));
+      const views = await getStorageBinLockViews(makeTestOrgContext(), [product.binId!, fixture.feedstockBinId]);
+      expect(views[product.binId!].productFormulationIds).toEqual([product.formulationId]);
+      expect(views[fixture.feedstockBinId].productFormulationIds).toEqual([]);
+    }, "none");
   });
 });

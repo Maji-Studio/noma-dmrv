@@ -107,6 +107,8 @@ export function FormActions<
   const sheetActions = useSideSheetActions();
   const dialogActions = React.useContext(FormDialogContext);
   const inSheet = sticky && sheetActions !== null;
+  const blockedReason = inSheet ? sheetActions.submitBlockedReason ?? null : null;
+  const blockedReasonId = React.useId();
   const inDialog = guardDialogCancel && dialogActions !== null;
   const handleCancel = onCancel
     ? inSheet
@@ -143,7 +145,8 @@ export function FormActions<
           variant={submitVariant}
           form={formId}
           onClick={onSubmitClick}
-          disabled={isSubmitting || submitDisabled}
+          disabled={isSubmitting || submitDisabled || !!blockedReason}
+          aria-describedby={blockedReason ? blockedReasonId : undefined}
         >
           {isSubmitting ? submittingLabel : submitLabel ?? defaultSubmitLabel}
         </Button>}
@@ -153,6 +156,9 @@ export function FormActions<
           </Button>
         )}
       </div>
+      {showSubmit && blockedReason && (
+        <p id={blockedReasonId} role="status" className="body-caption text-[var(--color-text-secondary)]">{blockedReason}</p>
+      )}
     </div>}
     </>
   );

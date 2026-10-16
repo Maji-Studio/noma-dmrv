@@ -1,4 +1,5 @@
 import { throwDeliveryActionError } from "@/lib/delivery-action-errors";
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { StaleVersionError } from "@/lib/stale-version";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { outputStockKeys } from "./use-output-stock";
@@ -131,6 +132,7 @@ export function useCreateDelivery(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.delivery),
     mutationFn: async (data: CreateDeliveryData) => {
       const result = await createDeliveryFn(data);
       if (!result.success) throwDeliveryActionError(result);
@@ -183,6 +185,7 @@ export function useUpdateDelivery(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.delivery),
     mutationFn: async (data: UpdateDeliveryData) => {
       const result = await updateDeliveryFn(data);
       if (!result.success) {
@@ -322,6 +325,7 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.delivery),
     mutationFn: async (variables: DeleteDeliveryData) => {
       const result = await deleteDeliveryFn(variables);
       if (!result.success) {

@@ -4,15 +4,15 @@ import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { useState } from "react";
 import { ToastProvider } from "@/components/ui/toast";
-import { invalidateRecordLocks } from "@/hooks/record-lock-query-keys";
+import { invalidateRecordLocksAfter } from "@/hooks/record-lock-query-keys";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => {
     const client: QueryClient = new QueryClient({
-      // Record locks depend on writes across the whole lineage and on registry
-      // refreshes, so every settled mutation refreshes the mounted lock reads.
+      // Mutation hooks declare which record kinds' locks a successful write
+      // can change (`recordLockMeta`); only those mounted reads refetch.
       mutationCache: new MutationCache({
-        onSettled: () => invalidateRecordLocks(client),
+        onSuccess: (data, _variables, _context, mutation) => invalidateRecordLocksAfter(client, data, mutation),
       }),
       defaultOptions: {
         queries: {

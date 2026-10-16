@@ -20,7 +20,7 @@ import type { StorageLocationLaneSummary } from "@/data-access/storage-location-
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordDeletable, type RecordLockView } from "@/lib/record-lock-view";
+import { isRecordDeletable, isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
 import { formatMass } from "@/lib/format-utils";
 import {
   ArchiveIcon,
@@ -163,11 +163,14 @@ function binRowActions(
       icon: <ArrowsClockwiseIcon size={16} />,
       onSelect: () => handlers.onReconcile(bin),
     },
-    {
-      label: "Edit",
-      icon: <PencilSimpleIcon size={16} />,
-      onSelect: () => handlers.onEdit(bin),
-    },
+    // Edit and Delete wait for the lock read to answer.
+    ...(isRecordEditable(lock)
+      ? [{
+          label: "Edit",
+          icon: <PencilSimpleIcon size={16} />,
+          onSelect: () => handlers.onEdit(bin),
+        }]
+      : []),
     {
       label: "Archive",
       icon: <ArchiveIcon size={16} />,

@@ -160,8 +160,12 @@ vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   XIcon: () => null,
 }));
 vi.mock("@/hooks/use-record-locks", () => ({
-  useRecordLocks: () => ({ locks: {} }),
-  useRecordLock: () => ({ lock: undefined, isLoading: false }),
+  // Every record answers Open, so Edit and Delete are offered as before.
+  useRecordLocks: () => ({
+    locks: new Proxy({}, { get: () => ({ level: "open", heldBy: [], usedBy: [], freeFields: [], howToFree: null, returnedBy: [] }) }),
+    statusOf: () => "ready",
+  }),
+  useRecordLock: () => ({ lock: { level: "open", heldBy: [], usedBy: [], freeFields: [], howToFree: null, returnedBy: [] }, status: "ready" }),
 }));
 vi.mock("@/components/record-locks", () => ({
   RecordLockChip: () => null,

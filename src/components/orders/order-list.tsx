@@ -41,7 +41,7 @@ import { ORDER_DEEP_LINK_PARAM } from "@/lib/order-links";
 import { OrderForm } from "./order-form";
 import { RecordLockChip, RecordLockNotice, RecordUsedBy, recordLockColumn } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordDeletable, isRecordEditable, recordLockSaveBlockedReason, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { orderSheetSections } from "./order-read-sections";
 import { ILLUSTRATION_SIZE, OrderArt } from "@/components/ui/illustrations";
 
@@ -53,6 +53,7 @@ function createColumns(
   onEdit: (order: OrderWithRelations) => void,
   onDelete: (orderId: string) => void,
   locks: RecordLockViews,
+  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<OrderWithRelations>[] {
   return [
     {
@@ -116,7 +117,7 @@ function createColumns(
         return <StatusBadge status={badgeStatus} label={label} />;
       },
     },
-    recordLockColumn<OrderWithRelations>(locks),
+    recordLockColumn<OrderWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
@@ -212,7 +213,7 @@ export function OrderList() {
 
   const orders = ordersData?.items ?? [];
   const orderLocks = useRecordLocks("order", orders.map((order) => order.id));
-  const { lock: sheetLock } = useRecordLock("order", displaySideSheet?.entity?.id);
+  const { lock: sheetLock, status: sheetLockStatus } = useRecordLock("order", displaySideSheet?.entity?.id);
   const totalOrders = ordersData?.total ?? 0;
   const totalPages = ordersData?.totalPages ?? 0;
   useReconcileListPage({
@@ -332,7 +333,7 @@ export function OrderList() {
   };
   const hasActiveFilters = !!searchQuery || !!statusFilter || !!customerFilter;
 
-  const columns = createColumns(openEdit, handleDelete, orderLocks.locks);
+  const columns = createColumns(openEdit, handleDelete, orderLocks.locks, orderLocks.statusOf);
 
   if (!facilityId) {
     return (
@@ -465,7 +466,9 @@ export function OrderList() {
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         titleBadge={sheetLock && <RecordLockChip level={sheetLock.level} />}
-        viewModeNotice={<RecordLockNotice lock={sheetLock} />}
+        viewModeNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
+        editNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
+        submitBlockedReason={recordLockSaveBlockedReason(sheetLock, sheetLockStatus)}
         viewModeChildren={<RecordUsedBy lock={sheetLock} />}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit order"

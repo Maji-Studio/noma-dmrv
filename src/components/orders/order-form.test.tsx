@@ -315,15 +315,11 @@ describe("OrderForm record lock (#1119)", () => {
     expect(screen.queryByText(/In use by/)).toBeNull();
   });
 
-  it("disables the fields a delivery holds while In use and names the delivery as a link", () => {
+  // The lock line itself renders once, from the sheet (`editNotice`).
+  it("disables the fields a delivery holds while In use", () => {
     const fields = renderLocked("inUse");
     expect([fields.customer, fields.location, fields.formulation].every(isDisabled)).toBe(true);
     expect([fields.date, fields.quantity, fields.packaging].some(isDisabled)).toBe(false);
-    const link = screen.getByRole("link", { name: "delivery DL-26-004" });
-    expect(link.getAttribute("href")).toBe("/deliveries?facility=22222222-2222-4222-8222-222222222222&delivery=55555555-5555-4555-8555-555555555555");
-    expect(link.closest("[role=status]")?.textContent).toBe(
-      "In use by delivery DL-26-004, so fields that feed its numbers are locked. Correct or remove the records that use it first.",
-    );
   });
 
   it("disables every field while Sent", () => {

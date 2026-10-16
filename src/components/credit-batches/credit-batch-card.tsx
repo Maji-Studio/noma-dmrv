@@ -13,7 +13,7 @@ import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { CreditBatchLifecycleRail } from "./credit-batch-lifecycle";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { RecordLockChip } from "@/components/record-locks/record-lock-chip";
-import type { RecordLockView } from "@/lib/record-lock-view";
+import { isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
 
 interface CreditBatchCardProps {
   creditBatch: CreditBatchWithRelations;
@@ -32,7 +32,7 @@ interface CreditBatchCardProps {
  * Removal alone does not stop it: deleting the batch releases its slices.
  */
 export function isCreditBatchDeletable(lock: RecordLockView | undefined): boolean {
-  return !lock || (lock.level !== "sent" && !lock.usedBy.some((link) => link.kind === "sample"));
+  return !!lock && lock.level !== "sent" && !lock.usedBy.some((link) => link.kind === "sample");
 }
 
 export function CreditBatchCard({
@@ -48,7 +48,8 @@ export function CreditBatchCard({
   // Interim certification lock (DR-003): once the batch backs a submitted
   // removal its definition is frozen, so the menu offers no Edit or Delete.
   // The view sheet explains the lock; the server guard enforces it.
-  const locked = (lock?.level ?? health?.recordLock?.level) === "sent";
+  // Fail closed: Edit and Delete wait for the lock read to answer.
+  const locked = !isRecordEditable(lock);
 
   return (
     <article

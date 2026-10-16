@@ -13,7 +13,7 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { RecordLockChip, RecordLockNotice, RecordUsedBy, recordLockColumn } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordEditable, recordLockSaveBlockedReason, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { MassPair } from "@/components/ui/mass-pair";
 import { StatCard } from "@/components/ui/stat-card";
 import { useToast } from "@/components/ui/toast";
@@ -121,6 +121,7 @@ function productEffectiveMoisturePercent(
 function createColumns(
   onEdit: (product: BiocharProductWithRelations) => void,
   locks: RecordLockViews,
+  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<BiocharProductWithRelations>[] {
   return [
     {
@@ -186,7 +187,7 @@ function createColumns(
       cell: ({ row }) =>
         row.original.storageLocation?.name || MISSING_VALUE.notSet,
     },
-    recordLockColumn<BiocharProductWithRelations>(locks),
+    recordLockColumn<BiocharProductWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
@@ -326,11 +327,10 @@ export function BiocharProductList() {
       : null;
   const requestedSideSheet = sideSheet ?? deepLinkedSideSheet;
   const productLocks = useRecordLocks("biocharProduct", products.map((product) => product.id));
-  const { lock: sheetLock } = useRecordLock("biocharProduct", requestedSideSheet?.entity?.id);
-  // A Sent product never opens in edit, not even from an edit deep link.
-  const displaySideSheet = requestedSideSheet?.mode === "edit" && sheetLock?.level === "sent"
-    ? { ...requestedSideSheet, mode: "view" as const }
-    : requestedSideSheet;
+  const { lock: sheetLock, status: sheetLockStatus } = useRecordLock("biocharProduct", requestedSideSheet?.entity?.id);
+  // A lock that arrives as Sent keeps an open draft: Save turns off with
+  // the reason instead (`submitBlockedReason`).
+  const displaySideSheet = requestedSideSheet;
   const activeFocusTarget = sideSheet
     ? null
     : parseEntityFocusTarget(deepLinkFocus);
@@ -457,7 +457,7 @@ export function BiocharProductList() {
     displaySideSheet?.mode === "view" ? displaySideSheet.entity : null;
   const isSubmitting = createProduct.isPending || updateProduct.isPending;
 
-  const columns = createColumns(openEdit, productLocks.locks);
+  const columns = createColumns(openEdit, productLocks.locks, productLocks.statusOf);
 
   if (!contextFacilityId) {
     return (
@@ -613,7 +613,9 @@ export function BiocharProductList() {
         title={displaySideSheet?.mode === "create" ? "Create biochar product" : (displaySideSheet?.entity?.code ?? "")}
         subtitle={displaySideSheet?.mode === "create" ? undefined : (displaySideSheet?.entity ? formatDayString(displaySideSheet.entity.productionDate) : undefined)}
         titleBadge={sheetLock && <RecordLockChip level={sheetLock.level} />}
-        viewModeNotice={<RecordLockNotice lock={sheetLock} />}
+        viewModeNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
+        editNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
+        submitBlockedReason={recordLockSaveBlockedReason(sheetLock, sheetLockStatus)}
         viewModeChildren={<RecordUsedBy lock={sheetLock} />}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit product"

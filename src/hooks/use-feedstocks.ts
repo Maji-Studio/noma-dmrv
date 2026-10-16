@@ -3,6 +3,7 @@
  * Client-side state management for the unified delivery + bin allocation workflow.
  */
 
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   FeedstockFilterData,
@@ -94,6 +95,7 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.feedstock),
     mutationFn: async (data: CreateFeedstockData) => unwrap(await createFeedstockFn(data)),
     onSuccess: async (data, variables) => {
       for (const feedstock of data.feedstocks) {
@@ -122,6 +124,7 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.feedstock),
     mutationFn: async (data: UpdateFeedstockData) => {
       const result = await updateFeedstockFn(data);
       // Keeps an expected-version refusal typed so the open edit form can show
@@ -152,6 +155,7 @@ export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, DeleteFee
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.feedstock),
     mutationFn: async (data: DeleteFeedstockData) => {
       const result = await deleteFeedstockFn(data);
       if (!result.success) throwActionError(result);

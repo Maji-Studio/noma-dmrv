@@ -37,8 +37,10 @@ import {
 import { ServerError } from "@/components/forms";
 import { CreditBatchForm } from "./credit-batch-form";
 import { CreditBatchCard } from "./credit-batch-card";
+import { creditBatchUpdatePatch, isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
 import { RecordLockChip, RecordLockNotice, RecordUsedBy } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { isRecordEditable, recordLockSaveBlockedReason } from "@/lib/record-lock-view";
 import { CreditBatchHealthStrip } from "./credit-batch-health-strip";
 import { CreditBatchDurabilityPanel } from "./credit-batch-durability-panel";
 import { creditBatchSheetSections } from "./credit-batch-view";
@@ -303,7 +305,9 @@ export function CreditBatchList({
       const result = await updateCreditBatch.mutateAsync({
         creditBatchId: sideSheet.entity.id,
         expectedVersion: sideSheet.entity.version,
-        ...mutableData,
+        // Unchanged or held membership never reaches the server, so a
+        // notes-only save passes the slice guard.
+        ...creditBatchUpdatePatch(mutableData, sideSheet.entity, membershipLocked),
       });
       if (result.success) {
         closeSideSheet();
@@ -446,7 +450,8 @@ export function CreditBatchList({
     co2eStoredPreviews,
   );
   const batchLocks = useRecordLocks("creditBatch", paginatedItems.map((batch) => batch.id));
-  const { lock: sheetLock } = useRecordLock("creditBatch", viewEntity?.id);
+  const { lock: sheetLock, status: sheetLockStatus } = useRecordLock("creditBatch", viewEntity?.id);
+  const membershipLocked = isCreditBatchMembershipLocked(sheetLock);
   const runOptionsQuery = useCreditBatchProductionRunOptions({
     facilityId: viewEntity?.facilityId,
     startDate: viewEntity?.startDate,
@@ -719,9 +724,11 @@ export function CreditBatchList({
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit credit batch"
-        canEdit={!sideSheetLocked}
+        canEdit={isRecordEditable(sheetLock)}
         titleBadge={sheetLock && <RecordLockChip level={sheetLock.level} />}
-        viewModeNotice={<RecordLockNotice lock={sheetLock} />}
+        viewModeNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} inUseLocksNothing={!membershipLocked} />}
+        editNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} inUseLocksNothing={!membershipLocked} />}
+        submitBlockedReason={recordLockSaveBlockedReason(sheetLock, sheetLockStatus)}
         size="wide"
         sections={
           sideSheetEntity
@@ -781,6 +788,7 @@ export function CreditBatchList({
           }
           errorMessage={createError || updateError || undefined}
           canManage={canManage}
+          lock={sheetLock}
         />
       </EntitySideSheet>
     </div>

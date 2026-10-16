@@ -1,5 +1,5 @@
 import { LinkSimpleIcon, LockSimpleIcon, LockSimpleOpenIcon } from "@phosphor-icons/react/dist/ssr";
-import type { RecordLockView } from "@/lib/record-lock-view";
+import type { RecordLockStatus, RecordLockView } from "@/lib/record-lock-view";
 import { RECORD_LOCK_CHIP_CLASSES } from "@/lib/status-state";
 import { cn } from "@/lib/utils";
 import { RECORD_LOCK_LEVEL_LABELS } from "./record-lock-labels";
@@ -34,7 +34,10 @@ export function RecordLockChip({ level, className }: { level: RecordLockView["le
   );
 }
 
-/** A list cell: the chip once the batched read has answered, nothing before. */
-export function RecordLockCell({ lock }: { lock: RecordLockView | undefined }) {
-  return lock ? <RecordLockChip level={lock.level} /> : null;
+/** A list cell: the chip once the batched read answered, a quiet word before. */
+export function RecordLockCell({ lock, status = "ready" }: { lock: RecordLockView | undefined; status?: RecordLockStatus }) {
+  if (lock) return <RecordLockChip level={lock.level} />;
+  if (status === "pending") return <span className="body-caption text-[var(--color-text-tertiary)]">Checking…</span>;
+  if (status === "error") return <span className="body-caption text-[var(--color-text-tertiary)]">{"Couldn't check"}</span>;
+  return null;
 }

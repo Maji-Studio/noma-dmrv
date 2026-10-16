@@ -75,6 +75,10 @@ interface EntitySideSheetProps {
   subtitle?: string;
   /** A chip beside the title in view and edit mode (the record lock chip). */
   titleBadge?: React.ReactNode;
+  /** Edit-mode banner above the form (the record lock line). */
+  editNotice?: React.ReactNode;
+  /** Edit mode: turns off the form's Save and says why, keeping the draft. */
+  submitBlockedReason?: string | null;
   /** View-mode section config — rendered as read-only detail fields */
   sections?: DetailPanelSection[];
   /** Mirror a paired edit form's FormSpine numbering in read mode. */
@@ -120,6 +124,8 @@ function EntitySideSheet({
   title,
   subtitle,
   titleBadge,
+  editNotice,
+  submitBlockedReason,
   sections,
   numberedSections = false,
   viewModeChildren,
@@ -201,6 +207,7 @@ function EntitySideSheet({
     reportDirty: (dirty: boolean) => {
       reportedDirtyRef.current = dirty;
     },
+    submitBlockedReason: mode === "edit" ? submitBlockedReason : null,
   };
 
   // React propagates synthetic events from portaled children (nested dialogs)
@@ -271,6 +278,9 @@ function EntitySideSheet({
             </>
           ) : (
             <SideSheetActionsContext.Provider value={sheetActions}>
+              {mode === "edit" && editNotice ? (
+                <div className="flex flex-col gap-12 pb-20">{editNotice}</div>
+              ) : null}
               {children}
             </SideSheetActionsContext.Provider>
           )}

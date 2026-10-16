@@ -23,7 +23,6 @@ import { CalendarIcon, PackageIcon, StorefrontIcon } from "@phosphor-icons/react
 import { useForm, useWatch } from "react-hook-form";
 
 import { CustomerLocationDetails } from "./customer-location-details";
-import { RecordLockNotice } from "@/components/record-locks/record-lock-notice";
 import { isRecordFieldLocked, type RecordLockView } from "@/lib/record-lock-view";
 import { MatchingOutputBins } from "./matching-output-bins";
 
@@ -162,7 +161,6 @@ export function OrderForm({
   return (
     <>
     <form onSubmit={handleFormSubmit} className="space-y-20">
-      {isEditMode && <RecordLockNotice lock={lock} />}
       <FormSpine control={control}>
       {/* Order Information */}
       <FormSection

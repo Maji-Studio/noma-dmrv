@@ -60,7 +60,6 @@ import { formProductComposition, type FormProductComposition } from "./form-prod
 import { IngredientBinRows } from "./ingredient-bin-rows";
 import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
 import { Notice } from "@/components/ui/notice";
-import { RecordLockNotice } from "@/components/record-locks/record-lock-notice";
 import { isRecordFieldLocked, type RecordLockView } from "@/lib/record-lock-view";
 
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
@@ -403,7 +402,6 @@ export function BiocharProductForm({
         return handleFormSubmit(event);
       }} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={form.trigger} />
-      {isEditMode && <RecordLockNotice lock={lock} />}
       <ZeroSourceBiocharWarning
         sourceBiocharMassKg={initialSourceBiocharMassKg}
       />

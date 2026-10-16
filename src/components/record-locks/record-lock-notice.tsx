@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 import { Notice } from "@/components/ui/notice";
-import type { RecordLockLink, RecordLockView } from "@/lib/record-lock-view";
+import {
+  RECORD_LOCK_ERROR_MESSAGE,
+  RECORD_LOCK_PENDING_MESSAGE,
+  type RecordLockLink,
+  type RecordLockStatus,
+  type RecordLockView,
+} from "@/lib/record-lock-view";
 import { recordLockLinkHref, recordLockLinkText } from "./record-lock-labels";
 
 /** Holders named inline; the rest are counted and listed under "Used by". */
@@ -62,10 +68,18 @@ export function RecordReturnedNotice({ lock }: { lock: RecordLockView | undefine
  */
 export function RecordLockNotice(props: {
   lock: RecordLockView | undefined;
+  /** Until the read answers, say so; a failed read says how to retry. */
+  status?: RecordLockStatus;
   subject?: "record" | "storageBin";
   /** The kind keeps every field free while In use (a Sample), so only Sent has a line. */
   inUseLocksNothing?: boolean;
 }) {
+  if (!props.lock && props.status === "pending") {
+    return <Notice tone="info" data-record-lock-notice="pending">{RECORD_LOCK_PENDING_MESSAGE}</Notice>;
+  }
+  if (!props.lock && props.status === "error") {
+    return <Notice tone="warning" data-record-lock-notice="error">{RECORD_LOCK_ERROR_MESSAGE}</Notice>;
+  }
   return (
     <>
       <RecordReturnedNotice lock={props.lock} />

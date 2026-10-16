@@ -15,9 +15,9 @@ import type { OrgContext } from "@/lib/auth/server";
 import { recordLocks, type RecordLock, type RecordLockHolder } from "@/lib/record-lock";
 import type { RecordLockLink, RecordLockView, RecordLockViews } from "@/lib/record-lock-view";
 import { getRecordLocks, type CertifiedLineageEntityType, type CertifiedLineageTarget } from "./certification-lineage-guards";
-import { readRecordDependents } from "./record-lock-dependents";
+import { readRecordDependentsBatch } from "./record-lock-dependents";
 import { readRecordLockLineage } from "./record-lock-lineage";
-import { countStorageLocationReferences } from "./storage-location-references";
+import { countStorageLocationReferencesForBins } from "./storage-location-references";
 import { requireOrgScope } from "./utils";
 
 const TARGET_TABLES = {
@@ -46,7 +46,8 @@ export async function getRecordLockViews(ctx: OrgContext, entityType: CertifiedL
   // Sent first, from every ledger row of the lineage; dependents separately so
   // "Used by" stays complete even when a Removal holds the record.
   const sent = await getRecordLocks(ctx, db, targets, { sentOnly: true });
-  const dependents = await Promise.all(targets.map(target => readRecordDependents(ctx, db, target)));
+  const dependentsById = await readRecordDependentsBatch(ctx, db, entityType, owned);
+  const dependents = owned.map(id => dependentsById.get(id) ?? []);
   // The Sent pass also names any returned Removal; keep it on the dependency lock.
   const locks: RecordLock[] = targets.map((target, index) => sent[index].level === "sent"
     ? sent[index]
@@ -89,16 +90,25 @@ export async function getStorageBinLockViews(ctx: OrgContext, ids: readonly stri
   if (!unique.length) return {};
   const rows = await db.select({ id: storageLocations.id, facilityId: storageLocations.facilityId }).from(storageLocations)
     .where(and(eq(storageLocations.organizationId, ctx.organizationId), inArray(storageLocations.id, unique)));
-  const views = await Promise.all(rows.map(async (bin) => {
-    const references = (await countStorageLocationReferences(ctx, db, bin.id)).filter(reference => reference.count > 0);
+  const binIds = rows.map(bin => bin.id);
+  if (!binIds.length) return {};
+  const [referencesByBin, storedFormulations] = await Promise.all([
+    countStorageLocationReferencesForBins(ctx, db, binIds),
+    // The formulation guard compares every product stored in the bin.
+    db.selectDistinct({ binId: biocharProducts.storageLocationId, formulationId: biocharProducts.formulationId }).from(biocharProducts)
+      .where(and(eq(biocharProducts.organizationId, ctx.organizationId), inArray(biocharProducts.storageLocationId, binIds))),
+  ]);
+  const views = rows.map((bin) => {
+    const references = (referencesByBin.get(bin.id) ?? []).filter(reference => reference.count > 0);
     const dependents: RecordLockHolder[] = references.map(reference => ({ kind: "binReference", id: reference.blocker, label: reference.blocker }));
     const lock = recordLocks.storageLocation({ dependents, removals: [] });
     const usedBy: RecordLockLink[] = references.map(reference => ({
       kind: "binReference", id: reference.blocker, label: reference.blocker, facilityId: bin.facilityId, count: reference.count,
     }));
-    const view: RecordLockView = { level: lock.level, heldBy: usedBy, usedBy, freeFields: [...lock.freeFields], howToFree: lock.howToFree, returnedBy: [] };
+    const view: RecordLockView = { level: lock.level, heldBy: usedBy, usedBy, freeFields: [...lock.freeFields], howToFree: lock.howToFree, returnedBy: [],
+      productFormulationIds: storedFormulations.filter(row => row.binId === bin.id).map(row => row.formulationId) };
     return [bin.id, view] as const;
-  }));
+  });
   return Object.fromEntries(views);
 }
 

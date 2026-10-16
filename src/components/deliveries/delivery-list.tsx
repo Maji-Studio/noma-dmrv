@@ -13,7 +13,7 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { RecordLockChip, RecordLockNotice, RecordUsedBy, recordLockColumn } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordEditable, recordLockSaveBlockedReason, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { DataTable } from "@/components/ui/data-table";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { MassPair } from "@/components/ui/mass-pair";
@@ -96,6 +96,7 @@ function createColumns(
   onEdit: (delivery: DeliverySheetRecord) => void,
   facilities: readonly { id: string; timezone: string }[],
   locks: RecordLockViews,
+  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<DeliveryWithRelations>[] {
   return [
     {
@@ -183,7 +184,7 @@ function createColumns(
         />
       ),
     },
-    recordLockColumn<DeliveryWithRelations>(locks),
+    recordLockColumn<DeliveryWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
@@ -417,8 +418,8 @@ export function DeliveryList() {
 
   const deliveries = deliveriesData?.items ?? [];
   const deliveryLocks = useRecordLocks("delivery", deliveries.map((delivery) => delivery.id));
-  const { lock: sheetLock } = useRecordLock("delivery", displaySideSheet?.entity?.id);
-  const columns = createColumns(openEdit, facilities, deliveryLocks.locks);
+  const { lock: sheetLock, status: sheetLockStatus } = useRecordLock("delivery", displaySideSheet?.entity?.id);
+  const columns = createColumns(openEdit, facilities, deliveryLocks.locks, deliveryLocks.statusOf);
   const totalPages = deliveriesData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -607,7 +608,9 @@ export function DeliveryList() {
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         titleBadge={sheetLock && <RecordLockChip level={sheetLock.level} />}
-        viewModeNotice={<RecordLockNotice lock={sheetLock} />}
+        viewModeNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
+        editNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
+        submitBlockedReason={recordLockSaveBlockedReason(sheetLock, sheetLockStatus)}
         viewModeChildren={<RecordUsedBy lock={sheetLock} />}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit delivery"

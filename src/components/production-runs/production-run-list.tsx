@@ -41,7 +41,7 @@ import { MassPair } from "@/components/ui/mass-pair";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { RecordLockChip, RecordLockNotice, RecordUsedBy, recordLockColumn } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordDeletable, isRecordEditable, recordLockSaveBlockedReason, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
@@ -84,6 +84,7 @@ function createColumns(
   onEdit: (run: ProductionRunWithRelations) => void,
   onDelete: (runId: string) => void,
   locks: RecordLockViews,
+  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<ProductionRunWithRelations>[] {
   return [
     {
@@ -148,7 +149,7 @@ function createColumns(
         />
       ),
     },
-    recordLockColumn<ProductionRunWithRelations>(locks),
+    recordLockColumn<ProductionRunWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
@@ -380,7 +381,7 @@ export function ProductionRunList() {
     creditBatchFilter ||
     affectedRunIds.length > 0;
 
-  const columns = createColumns(openEdit, handleDelete, runLocks.locks);
+  const columns = createColumns(openEdit, handleDelete, runLocks.locks, runLocks.statusOf);
 
   useEffect(() => {
     if (!focusedRunId) {
@@ -422,7 +423,7 @@ export function ProductionRunList() {
       ? ({ entity: focusedRun.data, mode: "view" } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
-  const { lock: sheetLock } = useRecordLock("productionRun", displaySideSheet?.entity?.id);
+  const { lock: sheetLock, status: sheetLockStatus } = useRecordLock("productionRun", displaySideSheet?.entity?.id);
 
   const confirmCreateClose = () =>
     createWithEvidence.confirmClose(displaySideSheet?.mode === "create");
@@ -622,7 +623,9 @@ export function ProductionRunList() {
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         titleBadge={sheetLock && <RecordLockChip level={sheetLock.level} />}
-        viewModeNotice={<RecordLockNotice lock={sheetLock} />}
+        viewModeNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
+        editNotice={<RecordLockNotice lock={sheetLock} status={sheetLockStatus} />}
+        submitBlockedReason={recordLockSaveBlockedReason(sheetLock, sheetLockStatus)}
         viewModeChildren={<RecordUsedBy lock={sheetLock} />}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit production run"

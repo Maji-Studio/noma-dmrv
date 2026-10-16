@@ -45,26 +45,57 @@ export interface RecordLockView {
   howToFree: string | null;
   /** Open or In use after Isometric returned a sent Removal; empty otherwise. */
   returnedBy: RecordLockReturnView[];
+  /** Storage bins only: the distinct formulations of the products stored in it (null is pure biochar). */
+  productFormulationIds?: (string | null)[];
+}
+
+/**
+ * The server refuses a product bin's formulation change while it stores a
+ * product of any other formulation (`updateStorageLocation`). So the field
+ * can only move to the one formulation every stored product already has.
+ */
+export function isBinFormulationLocked(view: RecordLockView | undefined, currentFormulationId: string | null): boolean {
+  const stored = view?.productFormulationIds ?? [];
+  if (stored.length === 0) return false;
+  return !(stored.length === 1 && stored[0] !== currentFormulationId);
 }
 
 export type RecordLockViews = Record<string, RecordLockView>;
 
 /**
  * A field the server refuses today: every field once Sent, and every field
- * outside `freeFields` while In use. An unknown lock (still loading, failed)
- * leaves the field to the server, which decides.
+ * outside `freeFields` while In use. An unknown lock leaves the field alone;
+ * Save stays off until it answers (`recordLockSaveBlockedReason`).
  */
 export function isRecordFieldLocked(view: RecordLockView | null | undefined, field: string): boolean {
   if (!view || view.level === "open") return false;
   return view.level === "sent" || !view.freeFields.includes(field);
 }
 
-/** Edit stays useful only while something is still free. */
+/** Whether a screen's lock read has answered: until then actions fail closed. */
+export type RecordLockStatus = "pending" | "error" | "ready";
+
+/** Edit is offered once the lock answered and something is still free. */
 export function isRecordEditable(view: RecordLockView | null | undefined): boolean {
-  return view?.level !== "sent";
+  return !!view && view.level !== "sent";
 }
 
-/** Delete is only ever accepted while nothing uses the record and it was never sent. */
+/** Delete is offered once the lock answered Open: nothing uses it and it was never sent. */
 export function isRecordDeletable(view: RecordLockView | null | undefined): boolean {
-  return !view || view.level === "open";
+  return view?.level === "open";
+}
+
+export const RECORD_LOCK_PENDING_MESSAGE = "Checking whether this record can change.";
+export const RECORD_LOCK_ERROR_MESSAGE = "Couldn't check whether this record can change. Refresh the page and try again.";
+export const RECORD_LOCK_SENT_SAVE_MESSAGE = "This record was sent with its Removal, so it cannot be saved.";
+
+/**
+ * Why Save is off in an open edit form: the lock has not answered, could not
+ * be read, or arrived as Sent while the form was open. The draft stays.
+ */
+export function recordLockSaveBlockedReason(view: RecordLockView | undefined, status: RecordLockStatus): string | null {
+  if (view?.level === "sent") return RECORD_LOCK_SENT_SAVE_MESSAGE;
+  if (view) return null;
+  if (status === "error") return RECORD_LOCK_ERROR_MESSAGE;
+  return status === "pending" ? RECORD_LOCK_PENDING_MESSAGE : null;
 }
