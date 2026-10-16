@@ -34,6 +34,7 @@ import {
   resolveDeliveryTransportRoute,
   type DerivedTransportLeg,
 } from "@/lib/calculations/transport-leg";
+import { DomainError } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
 import type { TransportEntityTypeValue } from "@/schemas/transport-legs";
 import { and, asc, eq, getTableColumns, inArray, isNull, sql } from "drizzle-orm";
@@ -536,28 +537,23 @@ async function replaceDerivedTransportLeg(
 // Auto-derived legs (feedstock)
 // ============================================
 
-export interface FeedstockTransportOverride {
-  distanceKm?: number | null;
-  distanceSource?: "map_estimate" | "manual" | "document" | null;
-  /** Route anchors changed, so the previous route's distance is not reusable. */
-  resetDistanceToRoute?: boolean;
-}
-
 /**
- * Recompute a feedstock's derived supplier-to-facility leg on the caller's
- * transaction. The form-only distance override is consumed here and persisted
- * only on the derived leg, so no duplicate feedstock column is required.
+ * Sync the supplier-to-facility leg from the persisted feedstock override.
+ * Derived distances stay frozen unless explicitly refreshed or still missing.
+ * The caller owns the transaction and certification guard.
  */
 export async function syncFeedstockTransportLeg(
   ctx: OrgContext,
   tx: DbTransaction,
   feedstockId: string,
-  distanceOverride?: FeedstockTransportOverride,
+  options?: { refreshFromLocation?: boolean; requireLocationDistance?: boolean },
 ): Promise<void> {
   requireOrgScope(ctx);
 
   const [row] = await tx
     .select({
+      distanceKmOverride: feedstocks.distanceKmOverride,
+      distanceSource: feedstocks.distanceSource,
       supplierName: suppliers.name,
       locationName: supplierLocations.name,
       locationGpsLatitude: supplierLocations.gpsLatitude,
@@ -605,17 +601,13 @@ export async function syncFeedstockTransportLeg(
     throw new SafeError("Feedstock not found");
   }
 
+  // Validate the same snapshot passed to derivation, before replacing any leg.
+  if (options?.requireLocationDistance && row.locationDistanceFromFacilityKm == null) {
+    throw new DomainError("validation_failed", "The distance was not refreshed because the location has no distance for this facility. Save a location distance first.");
+  }
   const storedDistanceKm = row.locationDistanceFromFacilityKm;
   const storedDistanceSource = row.locationDistanceSource;
-  const preserveExistingDistance =
-    distanceOverride?.distanceKm === undefined &&
-    distanceOverride?.resetDistanceToRoute !== true;
-  const distanceKmOverride = distanceOverride?.resetDistanceToRoute
-    ? undefined
-    : distanceOverride?.distanceKm;
-  const distanceSourceOverride = distanceOverride?.resetDistanceToRoute
-    ? undefined
-    : distanceOverride?.distanceSource;
+  const preserveExistingDistance = !options?.refreshFromLocation && row.existingDistanceKm != null;
 
   const derived = deriveTransportLeg({
     origin: {
@@ -632,15 +624,10 @@ export async function syncFeedstockTransportLeg(
     loadMassKg: row.loadMassKg,
     storedDistanceKm,
     storedDistanceSource,
-    distanceKmOverride: preserveExistingDistance
-      ? row.existingDistanceKm
-      : distanceKmOverride,
-    distanceSourceOverride:
-      distanceSourceOverride !== undefined
-        ? distanceSourceOverride
-        : preserveExistingDistance
-          ? row.existingDistanceSource
-          : undefined,
+    distanceKmOverride: row.distanceKmOverride ?? (preserveExistingDistance ? row.existingDistanceKm : undefined),
+    distanceSourceOverride: row.distanceKmOverride != null
+      ? row.distanceSource
+      : preserveExistingDistance ? row.existingDistanceSource : undefined,
   });
 
   await replaceDerivedTransportLeg(ctx, tx, "feedstock", feedstockId, derived);

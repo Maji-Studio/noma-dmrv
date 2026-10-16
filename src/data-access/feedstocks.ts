@@ -35,8 +35,8 @@ import {
 import {
   deleteTransportLegsForEntity,
   syncFeedstockTransportLeg,
-  type FeedstockTransportOverride,
 } from "./transport-legs";
+import { resolveDistanceSource, type DistanceSourceValue } from "@/schemas/distance-source";
 import { SafeError } from "@/lib/errors";
 import { DomainError } from "@/lib/domain-errors";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
@@ -117,6 +117,9 @@ async function validateFeedstockStorageLocations(
 
 export interface FeedstockWithRelations {
   version: number;
+  distanceKmOverride: number | null;
+  distanceSource: DistanceSourceValue | null;
+  distanceNote: string | null;
   id: string;
   code: string;
   facilityId: string;
@@ -184,8 +187,9 @@ export interface CreateFeedstockInput {
   allocations: CreateFeedstockAllocation[];
   overrideJustification?: string | null;
   notes?: string | null;
+  distanceNote?: string | null;
   transportDistanceKm?: number | null;
-  transportDistanceSource?: FeedstockTransportOverride["distanceSource"];
+  transportDistanceSource?: DistanceSourceValue | null;
 }
 
 export interface UpdateFeedstockInput {
@@ -199,8 +203,9 @@ export interface UpdateFeedstockInput {
   storageLocationId?: string;
   overrideJustification?: string | null;
   notes?: string | null;
+  distanceNote?: string | null;
   transportDistanceKm?: number | null;
-  transportDistanceSource?: FeedstockTransportOverride["distanceSource"];
+  transportDistanceSource?: DistanceSourceValue | null;
   /** Mandatory version the edit form loaded. */
   expectedVersion: number;
 }
@@ -215,6 +220,9 @@ export interface CreateFeedstockResult {
 // ============================================
 
 const feedstockSelectFields = {
+  distanceKmOverride: feedstocks.distanceKmOverride,
+  distanceSource: feedstocks.distanceSource,
+  distanceNote: feedstocks.distanceNote,
   version: feedstocks.version,
   id: feedstocks.id,
   code: feedstocks.code,
@@ -436,8 +444,8 @@ export async function getFeedstockStats(
 // Create Operations
 // ============================================
 
-/** Persisted distance belongs to the derived leg, rather than the feedstock row. */
-async function readFeedstockTransportSnapshot(ctx: OrgContext, tx: DbTransaction, feedstockId: string) {
+/** Capture the effective leg distance alongside the row’s override fields. */
+export async function readFeedstockTransportSnapshot(ctx: OrgContext, tx: DbTransaction, feedstockId: string) {
   requireOrgScope(ctx);
   const [leg] = await tx.select({
     transportDistanceKm: transportLegs.distanceKm,
@@ -543,6 +551,7 @@ export async function createFeedstockInTransaction(
             supplierId: data.supplierId,
             vehicleId: data.vehicleId ?? null,
             deliveryGroupId,
+            ...feedstockDistanceColumns(data),
             overrideJustification: data.overrideJustification || null,
             // Material fields
             feedstockTypeId: data.feedstockTypeId,
@@ -556,10 +565,7 @@ export async function createFeedstockInTransaction(
 
         results.push(feedstock.id);
 
-        await syncFeedstockTransportLeg(ctx, savepoint, feedstock.id, {
-          distanceKm: data.transportDistanceKm,
-          distanceSource: data.transportDistanceSource,
-        });
+        await syncFeedstockTransportLeg(ctx, savepoint, feedstock.id);
         if (capture) capture(feedstock.id, null, { ...feedstock, ...await readFeedstockTransportSnapshot(ctx, savepoint, feedstock.id) });
 
         // Lock feedstock type on bin (first-use lock)
@@ -592,6 +598,30 @@ export async function createFeedstockInTransaction(
   return { feedstocks: items, warning };
 }
 
+/** The sole input-to-column mapping for persisted feedstock distance overrides. */
+function feedstockDistanceColumns(
+  input: Pick<UpdateFeedstockInput, "transportDistanceKm" | "transportDistanceSource" | "distanceNote">,
+  previous?: Pick<FeedstockWithRelations, "distanceKmOverride" | "distanceSource">,
+  routeAnchorChanged = false,
+) {
+  if (previous && input.transportDistanceKm === undefined && input.transportDistanceSource != null
+    && (previous.distanceKmOverride == null || routeAnchorChanged)) {
+    throw new DomainError("validation_failed", "The feedstock distance source was not changed. Set transportDistanceKm to change its source.");
+  }
+  // The v1 input contract accepts zero; it means derived, never a stored override.
+  const distanceKmOverride = input.transportDistanceKm !== undefined
+    ? input.transportDistanceKm === 0 ? null : input.transportDistanceKm
+    : routeAnchorChanged ? null : previous?.distanceKmOverride ?? null;
+  const source = input.transportDistanceKm === undefined && input.transportDistanceSource === undefined && !routeAnchorChanged
+    ? previous?.distanceSource
+    : input.transportDistanceSource;
+  return {
+    distanceKmOverride,
+    distanceSource: resolveDistanceSource(distanceKmOverride, source),
+    distanceNote: distanceKmOverride === null || input.distanceNote === "" ? null : input.distanceNote,
+  };
+}
+
 // ============================================
 // Update Operations
 // ============================================
@@ -609,6 +639,7 @@ export async function updateFeedstockInTransaction(
     transportDistanceKm,
     transportDistanceSource,
     expectedVersion,
+    distanceNote,
     ...feedstockData
   } = data;
   if (feedstockData.supplierId) await withFeedstockErrors(() => assertSameOrg(ctx, suppliers, feedstockData.supplierId!, tx), "not_found", ["supplierId"]);
@@ -659,9 +690,7 @@ export async function updateFeedstockInTransaction(
       feedstockData.supplierId !== locked.supplierId) ||
     (feedstockData.facilityId !== undefined &&
       feedstockData.facilityId !== locked.facilityId);
-  const explicitDistanceSupplied = transportDistanceKm !== undefined;
-  const explicitDistanceSourceSupplied =
-    transportDistanceSource !== undefined;
+  const distanceColumns = feedstockDistanceColumns({ transportDistanceKm, transportDistanceSource, distanceNote }, locked, routeAnchorChanged);
   const effectiveStorageLocationId =
     feedstockData.storageLocationId !== undefined
       ? feedstockData.storageLocationId
@@ -706,6 +735,7 @@ export async function updateFeedstockInTransaction(
     .update(feedstocks)
     .set({
       ...effectiveChanges,
+      ...distanceColumns,
       status,
       version: nextVersion(feedstocks.version),
       updatedAt: new Date(),
@@ -725,12 +755,7 @@ export async function updateFeedstockInTransaction(
   }
 
   await syncFeedstockTransportLeg(ctx, tx, feedstockId, {
-    distanceKm: transportDistanceKm,
-    distanceSource: transportDistanceSource,
-    resetDistanceToRoute:
-      routeAnchorChanged &&
-      !explicitDistanceSupplied &&
-      !explicitDistanceSourceSupplied,
+    refreshFromLocation: (transportDistanceKm !== undefined && locked.distanceKmOverride != null && distanceColumns.distanceKmOverride === null) || routeAnchorChanged,
   });
   if (capture) capture(feedstockId, { ...locked, ...transportBefore }, { ...saved, ...await readFeedstockTransportSnapshot(ctx, tx, feedstockId) });
 

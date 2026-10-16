@@ -7,7 +7,7 @@ export const API_QUERY_MAX_LENGTH = 255;
 export const API_CURSOR_MAX_LENGTH = 4096;
 export const API_IDEMPOTENCY_KEY_MAX_LENGTH = 255;
 export const API_CURSOR_VERSION = 1;
-export const FEEDSTOCK_REPRESENTATION_REVISION = 2;
+export const FEEDSTOCK_REPRESENTATION_REVISION = 3;
 // Revision 2 adds durabilityOption (Phase 5a, round 7 Q8).
 export const FACILITY_REPRESENTATION_REVISION = 2;
 export const SUPPLIER_REPRESENTATION_REVISION = 1;

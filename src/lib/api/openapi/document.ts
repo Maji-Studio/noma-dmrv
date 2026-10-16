@@ -181,7 +181,7 @@ export function buildOpenApiDocument() {
   (createInput.properties as Record<string, JsonSchema>).allocations.maxItems = API_FEEDSTOCK_MAX_ALLOCATIONS;
   const patchInput = operationInput(updateFeedstockSchema.omit({ feedstockId: true, expectedVersion: true }));
   paths["/feedstocks"].post = {
-    ...privateOperation("log_feedstock_delivery", "feedstocks:write", "Record a wood-chip intake split across receiving bins. Positive wet masses and moisture at least 0 and below 100 are required; allocation overage requires justification. Dry runs roll back, skip external effects and return provisional ids, codes and stock additions. Location and ETag identify the first feedstock on committed responses and are absent on dry runs.",
+    ...privateOperation("log_feedstock_delivery", "feedstocks:write", "Record a wood-chip intake split across receiving bins. A positive transportDistanceKm persists a one-way distance override; omission derives the distance from the supplier location for this facility. Positive wet masses and moisture at least 0 and below 100 are required; allocation overage requires justification. Dry runs roll back, skip external effects and return provisional ids, codes and stock additions. Location and ETag identify the first feedstock on committed responses and are absent on dry runs.",
       { ...problemResponses([...WRITE_ERRORS, 413, 415]),
         "201": jsonResponse("Intake committed, or replayed.", publishOutput(feedstockCreateEnvelopeSchema), { ...etagHeader, ...locationHeader, ...writeHeaders }),
         "200": jsonResponse("Dry-run intake preview.", publishOutput(feedstockCreateEnvelopeSchema), writeHeaders) },
@@ -195,7 +195,7 @@ export function buildOpenApiDocument() {
     }),
   };
   paths["/feedstocks/{idOrCode}"].patch = {
-    ...privateOperation("update_feedstock", "feedstocks:write", "Update by UUID using a strong If-Match. Omitted fields stay unchanged, null clears clearable fields, zero stays zero. Wet/dry mass and moisture are validated against locked merged state. Dry runs roll back. Replays precede version rechecking.",
+    ...privateOperation("update_feedstock", "feedstocks:write", "Update by UUID using a strong If-Match. Omitted fields stay unchanged. A positive transportDistanceKm sets an override; null clears it and captures the current supplier-location facility distance. Legacy zero also clears. Other clearable fields accept null. Wet/dry mass and moisture are validated against locked merged state. Dry runs roll back. Replays precede version rechecking.",
       { ...problemResponses([...WRITE_ERRORS, 412, 413, 415, 428]), ...feedstockPreconditionResponse, "200": jsonResponse("Updated feedstock or dry-run representation. ETag is absent on dry runs.", publishOutput(stockWriteEnvelopeSchema(feedstockRepresentationSchema)), { ...etagHeader, ...writeHeaders }) },
       [targetParameter(true), ...queryParameters(mutationQuerySchema), ifMatchParameter, idempotencyParameter(false)]),
     requestBody: requestBody(patchInput, { massWetKg: 4250, notes: "Corrected weighbridge wet mass for bin B2." }),

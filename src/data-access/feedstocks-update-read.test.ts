@@ -61,6 +61,7 @@ function selectReturning(read: { rows: unknown[] } | { error: Error }) {
     leftJoin: () => query,
     where: () => query,
     for: () => query,
+    limit: () => query,
     orderBy: () => query,
     then: (resolve: (rows: unknown) => unknown, reject: (e: unknown) => unknown) =>
       "error" in read
@@ -95,6 +96,23 @@ afterEach(() => {
 });
 
 describe("updateFeedstockInTransaction", () => {
+  it("refuses a source-only patch without a saved override before writing", async () => {
+    const tx = makeTx({ rows: [ENRICHED_ROW] });
+    await expect(updateFeedstockInTransaction(ctx, tx, FEEDSTOCK_ID, {
+      expectedVersion: 1, transportDistanceSource: "document",
+    })).rejects.toMatchObject({ code: "validation_failed",
+      message: "The feedstock distance source was not changed. Set transportDistanceKm to change its source." });
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+
+  it("accepts a no-op null source on a derived record", async () => {
+    const tx = makeTx({ rows: [ENRICHED_ROW] });
+    await expect(updateFeedstockInTransaction(ctx, tx, FEEDSTOCK_ID, {
+      expectedVersion: 1, transportDistanceSource: null, notes: "checked",
+    })).resolves.toMatchObject({ id: FEEDSTOCK_ID });
+    expect(tx.update).toHaveBeenCalled();
+  });
+
   it("reads the updated feedstock back through its own transaction", async () => {
     const tx = makeTx({ rows: [ENRICHED_ROW] });
     const globalRead = watchGlobalReads();
@@ -116,4 +134,16 @@ describe("updateFeedstockInTransaction", () => {
     await expect(result).rejects.toThrow(READ_FAILURE);
     await expect(result).rejects.not.toThrow("Feedstock not found");
   });
+});
+
+it("clears the override note when the supplier route changes", async () => {
+  const reads = [
+    { rows: [{ id: "other-supplier" }] },
+    { rows: [{ ...STORED_ROW, distanceKmOverride: 25, distanceSource: "document", distanceNote: "Old route" }] },
+    { rows: [ENRICHED_ROW] },
+  ];
+  const set = vi.fn(() => ({ where: () => ({ returning: async () => [ENRICHED_ROW] }) }));
+  const tx = { select: () => selectReturning(reads.shift() ?? { rows: [] }), update: () => ({ set }) } as unknown as DbTransaction;
+  await updateFeedstockInTransaction(ctx, tx, FEEDSTOCK_ID, { expectedVersion: 1, supplierId: "other-supplier" });
+  expect(set).toHaveBeenCalledWith(expect.objectContaining({ distanceKmOverride: null, distanceSource: null, distanceNote: null }));
 });
