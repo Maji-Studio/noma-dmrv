@@ -6,7 +6,7 @@ import { labSampleRepresentationSchema } from "@/lib/representations/lab-samples
 import { recordLabSampleInput, updateLabSampleApiInput } from "@/schemas/lab-sample-input";
 import { canonicalUuid } from "./canonical-uuid";
 import { parseIfMatch } from "./etag";
-import { remainingDeadlineMs } from "./feedstock-write-checks";
+import { remainingDeadlineMs } from "./write-checks";
 import {
   labSampleBody, representationCheckedDelete, representationCheckedRecord, representationCheckedUpdate, withCurrentOnStale,
 } from "./lab-sample-write-checks";

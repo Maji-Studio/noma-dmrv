@@ -164,6 +164,7 @@ export function useDeleteDocument(
     onSuccess: () => {
       if (invalidateKey) qc.invalidateQueries({ queryKey: invalidateKey });
       if (owner) invalidateDeletedDocumentOwner(qc, owner);
+      void qc.invalidateQueries({ queryKey: activityKeys.all });
     },
   });
 }

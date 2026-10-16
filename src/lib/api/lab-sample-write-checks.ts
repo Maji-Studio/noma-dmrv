@@ -8,7 +8,7 @@ import type { Operation } from "@/lib/operations/runner";
 import { readApiLabSample } from "@/lib/read-models/api-lab-samples";
 import { labSampleRepresentationSchema, type LabSampleRepresentation } from "@/lib/representations/lab-samples";
 import { deleteLabSampleInput, recordLabSampleInput, updateLabSampleInput } from "@/schemas/lab-sample-input";
-import { ApiHttpError } from "./http-error";
+import { withCurrentOnStale as withCurrentOnStaleRepresentation } from "./write-checks";
 
 /** The saved row as published, with the guidance the write produced. Stored as the idempotent outcome. */
 export interface LabSampleWriteOutput {
@@ -72,13 +72,7 @@ export function representationCheckedDelete(id: string, revision: number): Opera
 }
 
 export async function withCurrentOnStale<T>(ctx: ApiContext, id: string, fn: () => Promise<T>): Promise<T> {
-  try { return await fn(); } catch (error) {
-    if (error instanceof DomainError && error.code === "stale_version") {
-      const current = await readApiLabSample(ctx, { id });
-      throw new ApiHttpError(412, "stale_version", "The lab sample has changed. Read the current representation before retrying.", current);
-    }
-    throw error;
-  }
+  return withCurrentOnStaleRepresentation(fn, { noun: "lab sample", readCurrent: () => readApiLabSample(ctx, { id }) });
 }
 
 /** Replays come back from JSON storage with keys reordered; the schema restores the published order. */

@@ -5,7 +5,7 @@ import { runWithStockBasisPreview } from "@/lib/operations/stock-basis-preview";
 import { recordDeliveryInput, updateDeliveryApiInput } from "@/schemas/delivery-input";
 import { canonicalUuid } from "./canonical-uuid";
 import { parseIfMatch } from "./etag";
-import { remainingDeadlineMs } from "./feedstock-write-checks";
+import { remainingDeadlineMs } from "./write-checks";
 import { deliveryBody, recordedDeliveryBody, representationCheckedRecord, representationCheckedUpdate, withCurrentOnStale } from "./delivery-write-checks";
 import { mutationQuerySchema, parseApiQuery } from "./query";
 import { readIdempotencyKey, readJsonBody } from "./request-body";
