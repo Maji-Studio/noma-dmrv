@@ -90,6 +90,8 @@ it("accepts adding an archived supplier by explaining it or restoring exactly th
   expect(score("supplier-already-exists-archived", before,
     transcript("Kilombero Sawmill is archived. I created nothing.", reads), fixture).passed).toBe(true);
   expect(score("supplier-already-exists-archived", snapshot, run, fixture).passed).toBe(true);
+  const pronounAnswer = "Kilombero Sawmill (**SUP-26-001**) is active again. It had been archived, so I restored that record rather than creating a new one. A second supplier with the same name isn't allowed.\n\n- **Location:** one default location, \"Existing pickup\", in Tanzania at -8.12, 36.45. No state/region or city is recorded.\n- **Facility distances:** none are set, including to Intake Facility 0e86b36a.\n- **Source region:** not set.\n\nIf you'd rather have a separate new supplier, or want to add a source region or facility distance to this one, tell me what to change.";
+  expect(score("supplier-already-exists-archived", snapshot, transcript(pronounAnswer, run.calls), fixture).passed).toBe(true);
   const duplicate = structuredClone(snapshot);
   duplicate.suppliers.push({ ...baseline.suppliers[0], id: "second", code: "SUP-2" });
   duplicate.activity.push({ entityType: "supplier", entityId: "second", action: "created",
@@ -137,6 +139,17 @@ it.each([
   ["The supplier is archived.", true],
   ["The supplier already exists and is not archived.", false],
   ["The supplier does not exist but is archived.", false],
+  ["Kilombero Sawmill is active again. It had been archived.", true],
+  ["SUP-1 is active again. That record had been archived.", true],
+  ["The supplier is active again. It had been archived.", true],
+  ["Kilombero Sawmill is active again.\n\nIt had been archived.", true],
+  ["No active match was found. It had been archived.", false],
+  ["No active match was found. That record had been archived.", false],
+  ["Kilombero Sawmill is active again. No active match was found. It had been archived.", false],
+  ["Kilombero Sawmill is active again. It had not been archived.", false],
+  ["Kilombero Sawmill is active again. It had been archived?", false],
+  ["Kilombero Sawmill is active again. It might have been archived.", false],
+  ["Kilombero Sawmill is active again. It does not exist but is archived.", false],
 ])("scores the archived duplicate explanation: %s", (text, expected) => {
   const before = structuredClone(baseline); before.suppliers[0].archivedAt = "2026-10-16T00:00:00Z";
   const fixture = { ...target, before };
@@ -212,7 +225,7 @@ it("gives each case only its party and required grounding scopes", () => {
     ["customer-and-field", ["customers:read", "customers:write"], 6],
     ["supplier-already-exists", ["suppliers:read", "suppliers:write"], 4],
     ["supplier-already-exists-archived", ["suppliers:read", "suppliers:write"], 6],
-    ["supplier-archived-intake", ["suppliers:read", "feedstocks:write", "feedstock-types:read", "facilities:read", "storage-locations:read"], 6],
+    ["supplier-archived-intake", ["suppliers:read", "feedstocks:write", "feedstock-types:read", "facilities:read", "storage-locations:read"], 8],
     ["supplier-restore", ["suppliers:read", "suppliers:write"], 5],
     ["customer-restore", ["customers:read", "customers:write"], 5],
   ]);

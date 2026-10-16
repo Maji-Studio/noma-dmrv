@@ -138,6 +138,8 @@ export type FormulationCaseId = typeof FORMULATION_CASES[number]["id"];
 const PARTY_CREATE_BUDGET = 6;
 const PARTY_LOOKUP_BUDGET = 4;
 const PARTY_ARCHIVED_ADD_BUDGET = 6;
+// Minimum path: whoami, active supplier, feedstock type, archived supplier, bin, dry-run intake (six calls).
+const PARTY_ARCHIVED_INTAKE_BUDGET = 8;
 const PARTY_RESTORE_BUDGET = 5;
 const SUPPLIER_COMMAND_SCOPES = ["suppliers:read", "suppliers:write"];
 export const PARTY_PICKUP = { gpsLatitude: -8.12, gpsLongitude: 36.45, distanceKm: 42 };
@@ -154,7 +156,7 @@ export const PARTY_CASES = [
     text: ({ name }: PartyPromptTarget) => `Add supplier ${name}.` },
   { id: "supplier-already-exists-archived", budget: PARTY_ARCHIVED_ADD_BUDGET, scopes: SUPPLIER_COMMAND_SCOPES,
     text: ({ name }: PartyPromptTarget) => `Add supplier ${name}.` },
-  { id: "supplier-archived-intake", budget: PARTY_CREATE_BUDGET, scopes: ["suppliers:read", "feedstocks:write", "feedstock-types:read", "facilities:read", "storage-locations:read"],
+  { id: "supplier-archived-intake", budget: PARTY_ARCHIVED_INTAKE_BUDGET, scopes: ["suppliers:read", "feedstocks:write", "feedstock-types:read", "facilities:read", "storage-locations:read"],
     text: ({ name }: PartyPromptTarget) => `Log 2 t of rice husk from ${name} today at 30% moisture.` },
   { id: "supplier-restore", budget: PARTY_RESTORE_BUDGET, scopes: SUPPLIER_COMMAND_SCOPES,
     text: () => `We buy from ${PARTY_SUPPLIER_NAME} again.` },

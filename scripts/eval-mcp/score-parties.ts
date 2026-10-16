@@ -25,6 +25,7 @@ const VERSION_INCREMENT = 1;
 const INITIAL_VERSION = 1;
 const PARTY_WRITE = /^mcp__noma__(?:create|update|delete|archive|restore)_(?:supplier|customer)(?:_|$)/;
 const SENTENCE_BOUNDARY = /(?<=[!?\n])|(?<=\.)(?!\d)/;
+const SUPPLIER_REFERENCE = /^(?:it|this supplier|the supplier|that record)\b/i;
 const event = (entityType: string, entityId: string, action: string, versionBefore: number | null,
   versionAfter: number, fromStatus: string | null = null, toStatus: string | null = null): PartyActivity =>
   ({ entityType, entityId, action, versionBefore, versionAfter, fromStatus, toStatus });
@@ -49,10 +50,13 @@ const normalized = (value: unknown) => typeof value === "string" ? value.trim().
 const inTanzania = (country: unknown) => ["tz", "tanzania", "united republic of tanzania"].includes(normalized(country));
 function explainsSupplierArchive(text: string, target: PartyTarget): boolean {
   const code = target.before.suppliers.find(row => row.id === target.partyId)?.code;
-  return text.split(SENTENCE_BOUNDARY).some(sentence => {
-    const namesSupplier = /\bsupplier\b/i.test(sentence) || [target.name, code].some(value =>
+  const namesSupplier = (sentence: string) => /\bsupplier\b/i.test(sentence) || [target.name, code].some(value =>
       value && normalized(sentence).includes(normalized(value)));
-    if (!namesSupplier || sentence.endsWith("?") || /\b(?:does not|doesn['’]t|do not|don['’]t)\s+exist\b/i.test(sentence) || /\b(?:if|whether|might|may|perhaps|confirm (?:its|the) status)\b/i.test(sentence)) return false;
+  const sentences = text.split(SENTENCE_BOUNDARY).map(sentence => sentence.trim()).filter(Boolean);
+  return sentences.some((sentence, index) => {
+    const refersToSupplier = namesSupplier(sentence) || (SUPPLIER_REFERENCE.test(sentence)
+      && namesSupplier(sentences[index - 1] ?? ""));
+    if (!refersToSupplier || sentence.endsWith("?") || /\b(?:does not|doesn['’]t|do not|don['’]t)\s+exist\b/i.test(sentence) || /\b(?:if|whether|might|may|perhaps|confirm (?:its|the) status)\b/i.test(sentence)) return false;
     // A contrast can negate an active lookup while affirming the archived match.
     return sentence.split(/\bbut\b/i).some(clause => /\barchived\b/i.test(clause)
       && !/\b(?:not|never|isn['’]t|aren['’]t|wasn['’]t|no longer|no)\s+(?:(?:currently|presently|actually|already|been|be|being|appear|appears|seem|seems|to|marked|as|recorded|an?|matching)\s+)*archived\b/i.test(clause)

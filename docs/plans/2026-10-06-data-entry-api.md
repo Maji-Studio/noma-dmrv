@@ -957,10 +957,12 @@ revision 2 reads, scoped evals, fuzz fixtures and master-data documentation.
 
 **Decisions made during implementation:**
 
-- The archived duplicate eval requires no saved changes and an explanation that
-  the existing supplier is archived. It does not accept an implicit restore.
-- Create and archived-intake budgets are six calls; duplicate and restore budgets
-  are four. Create scopes leave room for one party lookup before writing.
+- The archived duplicate eval requires an explanation that the existing supplier
+  is archived, and either no saved changes or a restore of exactly that supplier.
+  A second supplier with the same name fails.
+- Create budgets are six calls; archived-intake is eight, active duplicate is
+  four, archived duplicate is six, and restore is five. Create scopes leave room
+  for one party lookup before writing.
 - Restore scorers require an earlier successful archived-only lookup and only
   the targeted row's archive, version and update-time changes.
 - Fuzz hooks read the real OpenAPI path parameter name, currently `idOrCode`,
