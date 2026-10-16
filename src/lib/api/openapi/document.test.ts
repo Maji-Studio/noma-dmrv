@@ -376,7 +376,7 @@ it("publishes customer, destination, stored order and snapshot balance reads", (
   expect(document.paths["/orders"].get.responses).toHaveProperty("404");
   for (const [name, fields] of [
     ["customer", ["id", "code", "name", "version", "createdAt", "updatedAt"]],
-    ["customer_location", ["id", "customerId", "name", "gpsLatitude", "gpsLongitude", "distanceFromFacilityKm", "distanceSource", "isDefault", "version", "createdAt", "updatedAt"]],
+    ["customer_location", ["id", "customerId", "name", "gpsLatitude", "gpsLongitude", "facilityDistances", "isDefault", "version", "createdAt", "updatedAt"]],
     ["order", ["id", "code", "version", "facilityId", "customerId", "customerLocationId", "formulationId", "orderDate", "quantityKg", "packaging", "archivedAt", "createdAt", "updatedAt"]],
     ["order_balance", ["orderId", "quantityKg", "deliveredWetMassKg", "remainingWetMassKg", "fulfillmentStatus"]],
   ] as const) expect(Object.keys(document.components.schemas[name].properties!).sort()).toEqual([...fields].sort());

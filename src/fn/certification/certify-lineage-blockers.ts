@@ -45,7 +45,7 @@ export function buildSubmissionLineageBlockers(
       deliveryCode: delivery.code,
       deliveryStatus: delivery.status,
       distanceKmOverride: delivery.distanceKmOverride ?? null,
-      locationDistanceKm: delivery.locationDistanceKm ?? null,
+      recordedDistanceKm: delivery.recordedDistanceKm ?? null,
     }) : null;
     if (distance) blockers.push({ detail: distance, fixTarget: "deliveryDistances", record: { id: delivery.id, code: delivery.code } });
   }

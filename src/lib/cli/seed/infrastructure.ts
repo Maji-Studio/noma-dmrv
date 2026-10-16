@@ -26,14 +26,14 @@ export async function seedInfrastructure(counts: SeedCounts) {
     suppliers.push(await unwrap(`create supplier ${index + 1} with location`, createSupplierWithLocationsFn(
       createSupplierWithLocationsSchema.parse({
         supplier: { name: supplier.name, sourceRegion: FACILITY.location },
-        locations: [{ ...SUPPLIER_LOCATION, distanceFromFacilityKm: supplier.distanceKm }],
+        locations: [{ ...SUPPLIER_LOCATION, facilityDistances: [{ facilityId, distanceKm: supplier.distanceKm, distanceSource: "manual" }] }],
       }),
     )));
     counts.add("suppliers");
     counts.add("supplier locations");
   }
   const { customer, locations: [customerLocation] } = await unwrap("create customer with location", createCustomerWithLocationsFn(
-    createCustomerWithLocationsSchema.parse({ customer: CUSTOMER, locations: [CUSTOMER_LOCATION] }),
+    createCustomerWithLocationsSchema.parse({ customer: CUSTOMER, locations: [{ ...CUSTOMER_LOCATION, facilityDistances: [{ facilityId, distanceKm: CUSTOMER_LOCATION.distanceKm, distanceSource: "manual" }] }] }),
   ));
   counts.add("customers");
   counts.add("customer locations");

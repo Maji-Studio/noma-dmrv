@@ -531,7 +531,7 @@ describe("isCertifyFormField", () => {
   it("badges entered descriptors by their key", () => {
     expect(isCertifyFormField("delivery", "deliveredWetMassKg")).toBe(true);
     expect(isCertifyFormField("application", "soilTemperatureC")).toBe(false);
-    expect(isCertifyFormField("customerLocation", "distanceFromFacilityKm")).toBe(true);
+    expect(isCertifyFormField("customerLocation", "facilityDistances")).toBe(true);
   });
 
   it.each([

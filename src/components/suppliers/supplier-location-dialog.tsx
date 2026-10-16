@@ -13,6 +13,7 @@ import {
 } from "@/hooks/use-suppliers";
 import type { SupplierLocation } from "@/db/schema/parties";
 import { toSaveErrorMessage } from "@/lib/stale-version";
+import { facilityDistanceChanges } from "@/lib/facility-distance-changes";
 import type { SupplierLocationFormData } from "@/schemas/suppliers";
 import { SupplierLocationForm } from "./supplier-location-form";
 
@@ -64,9 +65,12 @@ export function SupplierLocationDialog({
           // instead of silently overwritten (#768).
           expectedVersion: location.version,
           ...data,
+          facilityDistances: facilityDistanceChanges(data.facilityDistances, location.facilityDistances),
         });
       } else {
-        await createLocation.mutateAsync({ supplierId, ...data });
+        await createLocation.mutateAsync({ supplierId, ...data,
+          facilityDistances: facilityDistanceChanges(data.facilityDistances),
+        });
       }
       handleClose();
     } catch (err) {

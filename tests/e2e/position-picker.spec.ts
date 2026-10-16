@@ -195,7 +195,8 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
       .locator("#pending-loc-gps-longitude")
       .fill(String(SEED_SUPPLIER_POINT.lng));
 
-    const calcButton = dialog.getByRole("button", {
+    const row = dialog.getByTestId(`facility-distance-${seededData.facility.id}`);
+    const calcButton = row.getByRole("button", {
       name: /Estimate road distance/i,
     });
     await expect(calcButton).toBeEnabled();
@@ -205,18 +206,18 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
       SEED_SUPPLIER_POINT,
       SEED_FACILITY_POINT
     );
-    const distanceInput = dialog.locator("#pending-loc-distance");
+    const distanceInput = row.locator(`#pending-loc-distance-${seededData.facility.id}`);
     await expect(distanceInput, STUB_PROVIDER_HINT).toHaveValue(
       String(expectedKm)
     );
     await expect(
-      dialog.getByTestId("pending-loc-distance-distance-source")
+      row.getByTestId(`pending-loc-distance-${seededData.facility.id}-distance-source`)
     ).toContainText("Route calculation");
 
     // Hand-editing the CALC'd value flips provenance to manual.
     await distanceInput.fill("123");
     await expect(
-      dialog.getByTestId("pending-loc-distance-distance-source")
+      row.getByTestId(`pending-loc-distance-${seededData.facility.id}-distance-source`)
     ).toContainText("Manual");
   });
 
@@ -230,7 +231,8 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     );
 
     // New location has no coordinates yet → CALC must be disabled.
-    const calcButton = dialog.getByRole("button", {
+    const row = dialog.getByTestId(`facility-distance-${seededData.facility.id}`);
+    const calcButton = row.getByRole("button", {
       name: /Estimate road distance/i,
     });
     await expect(calcButton).toBeDisabled();
@@ -277,11 +279,10 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     await expect(
       dialog.getByRole("spinbutton", { name: "Default soil temperature (°C)" })
     ).toBeVisible();
-    const distanceInput = dialog.getByRole("spinbutton", {
-      name: "Distance from facility",
-    });
-    const calcButton = dialog.getByRole("button", {
-      name: /Estimate road distance selected facility to application site position/i,
+    const row = dialog.getByTestId(`facility-distance-${seededData.facility.id}`);
+    const distanceInput = row.getByRole("spinbutton");
+    const calcButton = row.getByRole("button", {
+      name: /Estimate road distance/i,
     });
     await expect(distanceInput).toBeVisible();
     await expect(calcButton).toBeEnabled();
@@ -293,12 +294,12 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
       String(expectedKm)
     );
     await expect(
-      dialog.getByTestId("pending-loc-distance-distance-source")
+      row.getByTestId(`pending-loc-distance-${seededData.facility.id}-distance-source`)
     ).toContainText("Route calculation");
     await distanceInput.fill("123");
     await expect(distanceInput).toHaveValue("123");
     await expect(
-      dialog.getByTestId("pending-loc-distance-distance-source")
+      row.getByTestId(`pending-loc-distance-${seededData.facility.id}-distance-source`)
     ).toContainText("Manual");
     await expect(dialog.getByLabel("Set as default destination")).toBeVisible();
     await expect(page.getByText("Application error")).toBeHidden();
@@ -421,9 +422,13 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     });
     await expect(customerAddDialog).toBeVisible();
     await customerAddDialog.getByRole("button", { name: "Close" }).click();
-    await expect(customerAddDialog).not.toBeVisible();
+    await expect(page.getByTestId("location-quick-add-dialog")).not.toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Discard unsaved changes?", exact: true })).not.toBeVisible();
 
-    await page.getByRole("button", { name: /^Edit / }).first().click();
+    await page.getByRole("button", {
+      name: `Edit ${seededData.customerLocation.name}`,
+      exact: true,
+    }).click();
     const customerEditDialog = page.getByRole("dialog", {
       name: "Edit location",
     });

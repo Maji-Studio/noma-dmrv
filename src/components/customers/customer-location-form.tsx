@@ -5,9 +5,12 @@
  */
 "use client";
 
+import { facilityDistanceDefaults } from "@/lib/facility-distance-defaults";
+import { useFacilityContext } from "@/hooks/use-facility-context";
+import { Notice } from "@/components/ui/notice";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormActions, makeCertFieldStatus } from "@/components/forms";
+import { FormActions } from "@/components/forms";
 import {
   customerLocationFormSchema,
   type CustomerLocationFormData,
@@ -34,12 +37,10 @@ export type CustomerLocationInitialValues = Pick<CustomerLocation, "country"> &
       | "gpsLatitude"
       | "gpsLongitude"
       | "address"
-      | "distanceFromFacilityKm"
-      | "distanceSource"
       | "defaultSoilTemperatureC"
       | "isDefault"
     >
-  >;
+  > & { facilityDistances?: import("@/schemas/facility-distances").FacilityDistanceInput[] };
 
 export type EditableCustomerLocation = Pick<
   CustomerLocation,
@@ -50,8 +51,7 @@ export type EditableCustomerLocation = Pick<
   | "gpsLatitude"
   | "gpsLongitude"
   | "address"
-  | "distanceFromFacilityKm"
-  | "distanceSource"
+  | "facilityDistances"
   | "defaultSoilTemperatureC"
   | "isDefault"
 > &
@@ -95,6 +95,7 @@ export function CustomerLocationForm({
   submitLabel,
 }: CustomerLocationFormProps) {
   const isEditMode = !!location;
+  const { facilities } = useFacilityContext();
   const { defaults: organizationDefaults } = useOrganizationDefaultValues();
   const defaultValues = {
     name: location?.name ?? "",
@@ -107,9 +108,8 @@ export function CustomerLocationForm({
     gpsLatitude: location?.gpsLatitude ?? undefined,
     gpsLongitude: location?.gpsLongitude ?? undefined,
     address: location?.address ?? "",
-    distanceFromFacilityKm: location?.distanceFromFacilityKm ?? undefined,
-    distanceSource: location?.distanceSource ?? null,
-    defaultSoilTemperatureC: location?.defaultSoilTemperatureC ?? undefined,
+    facilityDistances: facilityDistanceDefaults(facility ? [facility] : facilities, location?.facilityDistances),
+    defaultSoilTemperatureC: location?.defaultSoilTemperatureC ?? "",
     isDefault: location?.isDefault ?? initialIsDefault,
   };
 
@@ -121,7 +121,6 @@ export function CustomerLocationForm({
     resolver: zodResolver(customerLocationFormSchema),
     defaultValues,
   });
-  const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
   const defaultSubmitLabel = isEditMode ? "Update location" : "Add location";
 
@@ -137,13 +136,15 @@ export function CustomerLocationForm({
       }}
       className="space-y-20"
     >
+      {isEditMode && <Notice tone="info">Saving fills a missing distance; never changes a recorded one.</Notice>}
       <CustomerLocationFields
         form={form}
         facility={facility}
         isSubmitting={isSubmitting}
         isCurrentDefault={location?.isDefault === true}
         idPrefix={idPrefix}
-        certStatus={certStatus}
+        isEditMode={isEditMode}
+        savedDistances={location?.facilityDistances}
       />
 
       <FormActions

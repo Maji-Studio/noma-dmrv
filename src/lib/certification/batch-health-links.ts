@@ -61,6 +61,11 @@ export function batchHealthFixLinkFor(
   creditBatchId?: string,
 ): BatchHealthFixLink {
   const target = resolveBatchHealthFixTarget(check);
+  const locationHref = check.affectedRecords?.[0]?.href;
+  if ((target === "deliveryDistances" || target === "feedstocks") && locationHref &&
+      check.affectedRecords?.every(record => record.href === locationHref)) {
+    return { label: "Edit location distances", href: locationHref };
+  }
   const affectedIds = check.affectedRecords?.map((record) => record.id) ?? [];
   const affectedCount = affectedIds.length;
   const query = (

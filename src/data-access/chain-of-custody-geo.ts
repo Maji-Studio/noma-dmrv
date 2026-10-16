@@ -534,8 +534,8 @@ async function getApplicationBiocharLeg(ctx: OrgContext, {
       loadMassKg: allocated.wetMassKg,
       deliveryDistanceKmOverride: deliveries.distanceKmOverride,
       deliveryDistanceSource: deliveries.distanceSource,
-      locationDistanceKm: customerLocations.distanceFromFacilityKm,
-      locationDistanceSource: customerLocations.distanceSource,
+      recordedDistanceKm: deliveries.recordedDistanceKm,
+      recordedDistanceSource: deliveries.recordedDistanceSource,
       locationName: customerLocations.name,
       locationGpsLatitude: customerLocations.gpsLatitude,
       locationGpsLongitude: customerLocations.gpsLongitude,
@@ -561,7 +561,7 @@ async function getApplicationBiocharLeg(ctx: OrgContext, {
   if (!row) return [];
 
   const override = positiveOrNull(row.deliveryDistanceKmOverride);
-  const distanceKm = override ?? positiveOrNull(row.locationDistanceKm);
+  const distanceKm = override ?? positiveOrNull(row.recordedDistanceKm);
   const loadMassKg = positiveOrNull(row.loadMassKg);
   if (distanceKm == null || loadMassKg == null) return [];
 
@@ -581,7 +581,7 @@ async function getApplicationBiocharLeg(ctx: OrgContext, {
       distanceSource:
         override != null
           ? (row.deliveryDistanceSource ?? "manual")
-          : row.locationDistanceSource,
+          : row.recordedDistanceSource,
       isDerived: true,
       loadMassKg,
       appliedWetMassKg,

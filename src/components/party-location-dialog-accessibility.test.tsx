@@ -62,7 +62,7 @@ vi.mock("@/hooks/use-organization-settings", () => ({
 }));
 
 vi.mock("@/hooks/use-facility-context", () => ({
-  useFacilityContext: () => ({ selectedFacility: null }),
+  useFacilityContext: () => ({ selectedFacility: null, facilities: [] }),
 }));
 
 const customerLocation: EditableCustomerLocation = {
@@ -74,8 +74,7 @@ const customerLocation: EditableCustomerLocation = {
   address: "Field A",
   gpsLatitude: -6.8,
   gpsLongitude: 39.28,
-  distanceFromFacilityKm: 12.5,
-  distanceSource: "manual",
+  facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: 12.5, distanceSource: "manual" }],
   defaultSoilTemperatureC: 25,
   isDefault: true,
   version: 1,
@@ -93,8 +92,7 @@ const supplierLocation: SupplierLocation = {
   address: null,
   gpsLatitude: -6.8,
   gpsLongitude: 39.28,
-  distanceFromFacilityKm: 12.5,
-  distanceSource: "manual",
+  facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: 12.5, distanceSource: "manual" }],
   isDefault: true,
   createdAt: new Date("2026-01-01T00:00:00Z"),
   version: 1,

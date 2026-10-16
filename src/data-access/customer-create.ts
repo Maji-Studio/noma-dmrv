@@ -1,3 +1,5 @@
+import { upsertLocationFacilityDistances, withLocationFacilityDistances } from "./location-facility-distances";
+import type { FacilityDistanceInput } from "@/schemas/facility-distances";
 import { nextVersion } from "./row-version";
 /**
  * Customer create writers.
@@ -19,7 +21,6 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
-import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { guardCustomerName } from "./unique-name-guards";
 import { requireOrgScope } from "./utils";
 
@@ -43,8 +44,7 @@ export interface CustomerLocationInsertInput {
   gpsLatitude: number;
   gpsLongitude: number;
   address?: string | null;
-  distanceFromFacilityKm?: number | null;
-  distanceSource?: DistanceSourceValue | null;
+  facilityDistances?: FacilityDistanceInput[];
   defaultSoilTemperatureC?: number | null;
   isDefault?: boolean;
 }
@@ -156,14 +156,13 @@ export async function createCustomerLocationInTransaction(
       gpsLatitude: data.gpsLatitude,
       gpsLongitude: data.gpsLongitude,
       address: data.address ?? null,
-      distanceFromFacilityKm: data.distanceFromFacilityKm ?? null,
-      distanceSource: data.distanceSource ?? null,
       defaultSoilTemperatureC: data.defaultSoilTemperatureC ?? null,
       isDefault: makeDefault,
     })
     .returning();
 
-  return location;
+  await upsertLocationFacilityDistances(ctx, tx, "customer", location.id, data.facilityDistances);
+  return (await withLocationFacilityDistances(ctx, "customer", [location], tx))[0];
 }
 
 /**
@@ -229,6 +228,7 @@ async function readBackInInsertOrder(
       ),
     );
 
-  const byId = new Map(rows.map((row) => [row.id, row]));
+  const enriched = await withLocationFacilityDistances(ctx, "customer", rows, tx);
+  const byId = new Map(enriched.map((row) => [row.id, row]));
   return inserted.map((row) => byId.get(row.id) ?? row);
 }
