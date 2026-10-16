@@ -10,7 +10,7 @@ import { updateReactor, deleteReactor } from "@/data-access/reactors";
 import { updateStorageLocation, archiveStorageLocation, restoreStorageLocation, deleteStorageLocation } from "@/data-access/storage-locations";
 import { updateSupplier, deleteSupplier, createSupplierLocation, updateSupplierLocation, deleteSupplierLocation } from "@/data-access/suppliers";
 import { updateCustomer, deleteCustomer, createCustomerLocation, updateCustomerLocation, deleteCustomerLocation } from "@/data-access/customers";
-import { updateFormulation, deleteFormulation } from "@/data-access/formulations";
+import { updateFormulationInTransaction, deleteFormulationInTransaction } from "@/data-access/formulation-writes";
 import { updateFeedstockType, archiveFeedstockType, unarchiveFeedstockType, deleteFeedstockType } from "@/data-access/feedstock-types";
 import { TEST_SITE_POSITION, makeTestOrgContext } from "./helpers/test-org";
 
@@ -60,7 +60,7 @@ const cases: VersionCase[] = [
   { name: "supplier location", update: (f, expectedVersion, address) => updateSupplierLocation(f.ctx, f.supplierLocation.id, { expectedVersion, address }), remove: (f, v) => deleteSupplierLocation(f.ctx, f.supplierLocation.id, v) },
   { name: "customer", update: (f, expectedVersion, address) => updateCustomer(f.ctx, f.customer.id, { expectedVersion, address }), remove: (f, v) => deleteCustomer(f.ctx, f.customer.id, v) },
   { name: "customer location", update: (f, expectedVersion, address) => updateCustomerLocation(f.ctx, f.customerLocation.id, { expectedVersion, address }), remove: (f, v) => deleteCustomerLocation(f.ctx, f.customerLocation.id, v) },
-  { name: "formulation", update: (f, expectedVersion, description) => updateFormulation(f.ctx, f.formulation.id, { expectedVersion, description }), remove: (f, v) => deleteFormulation(f.ctx, f.formulation.id, v) },
+  { name: "formulation", update: (f, expectedVersion, description) => db.transaction(tx => updateFormulationInTransaction(f.ctx, tx, { formulationId: f.formulation.id, ...{ expectedVersion, description } })), remove: (f, v) => db.transaction(tx => deleteFormulationInTransaction(f.ctx, tx, { formulationId: f.formulation.id, expectedVersion: v })) },
   { name: "feedstock type", update: (f, expectedVersion, description) => updateFeedstockType(f.ctx, { feedstockTypeId: f.feedstockType.id, expectedVersion, description }), remove: (f, v) => deleteFeedstockType(f.ctx, f.feedstockType.id, v) },
 ];
 

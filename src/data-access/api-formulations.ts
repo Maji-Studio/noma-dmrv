@@ -1,17 +1,19 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { formulationIngredients, formulations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
-import { requireOrgScope } from "./utils";
+import { requireOrgScope, type Executor } from "./utils";
 import { lookupCursorCreatedAt, lookupPosition, lookupSearch, type ApiLookupFilters, type ApiLookupIdentifier, type ApiLookupPosition } from "./api-lookup-filters";
 
-function formulationQuery(ctx: OrgContext) {
+function formulationQuery(ctx: OrgContext, executor: Executor) {
   requireOrgScope(ctx);
-  return db.select({
+  return executor.select({
     id: formulations.id,
     code: formulations.code,
     name: formulations.name,
+    description: formulations.description,
+    archivedAt: formulations.archivedAt,
     version: formulations.version,
     biocharRatio: formulations.biocharRatio,
     createdAt: formulations.createdAt,
@@ -37,9 +39,9 @@ const notFound = () => new DomainError("not_found", "Formulation was not found."
   issues: [{ path: ["formulationId"], code: "not_found", message: "Formulation was not found." }],
 });
 
-export async function findApiFormulation(ctx: OrgContext, identifier: ApiLookupIdentifier) {
+export async function findApiFormulation(ctx: OrgContext, identifier: ApiLookupIdentifier, executor: Executor = db) {
   requireOrgScope(ctx);
-  const [row] = await formulationQuery(ctx).where(and(
+  const [row] = await formulationQuery(ctx, executor).where(and(
     eq(formulations.organizationId, ctx.organizationId),
     "id" in identifier ? eq(formulations.id, identifier.id) : eq(formulations.code, identifier.code),
   )).limit(1);
@@ -47,11 +49,12 @@ export async function findApiFormulation(ctx: OrgContext, identifier: ApiLookupI
   return row;
 }
 
-/** Formulations are never archived, so every one is listed. */
-export async function listApiFormulations(ctx: OrgContext, filters: ApiLookupFilters, limit: number, cursor?: ApiLookupPosition) {
+export type ApiFormulationFilters = ApiLookupFilters & { archived?: boolean };
+export async function listApiFormulations(ctx: OrgContext, filters: ApiFormulationFilters, limit: number, cursor?: ApiLookupPosition, executor: Executor = db) {
   requireOrgScope(ctx);
-  return formulationQuery(ctx).where(and(
+  return formulationQuery(ctx, executor).where(and(
     eq(formulations.organizationId, ctx.organizationId),
+    filters.archived ? isNotNull(formulations.archivedAt) : isNull(formulations.archivedAt),
     filters.code === undefined ? undefined : eq(formulations.code, filters.code),
     lookupSearch(formulations, filters.q), lookupPosition(formulations, cursor),
   )).orderBy(desc(formulations.createdAt), desc(formulations.id)).limit(limit + 1);

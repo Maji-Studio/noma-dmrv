@@ -6,6 +6,29 @@ these areas; the entry rules and invariants live in
 
 ## Architecture
 
+### Formulation bin foreign-key backstop (`data/formulation-bin-fk-backstop`, opened 2026-10-16)
+
+- **Anchor:** `src/db/schema/facilities.ts:storageLocations`,
+  `src/db/schema/products.ts:formulations` and
+  `src/data-access/formulation-reference-guards.ts:lockFormulationReference`.
+- `storage_locations.formulation_id` has no restrictive foreign key. Bin create,
+  update and quick-add lock new formulation references FOR SHARE meanwhile;
+  formulation delete holds FOR UPDATE and checks bin claims before deleting.
+- **Follow-up:** add a restrictive composite foreign key to `(id, organization_id)`.
+  It needs a matching unique constraint on formulations and a lazy reference
+  across the facilities/products schema import cycle. Preserve the writer locks
+  and archived-reference checks; the foreign key only backs up deletion safety.
+
+### Runner effects for party cascades (`api/runner-extra-effects`, opened 2026-10-16)
+
+- **Anchor:** `src/lib/operations/runner.ts:runOperation` and
+  `src/lib/operation-effect.ts:OperationEffect`.
+- The runner records the initiating operation's described effect. Formulations
+  need no sibling or child events, so Phase 7a adds no extra-effect queue.
+- **Follow-up in 7b:** queue transaction-local effects for location default
+  changes and party cascades. Flush only on commit, with the initiating source;
+  dry runs and keyed replays must emit no additional events.
+
 ### Align the Applications page credit batch filter (`app/application-batch-lineage-filter`, opened 2026-10-15)
 
 - `src/data-access/applications.ts:getApplications` filters by delivery lineage

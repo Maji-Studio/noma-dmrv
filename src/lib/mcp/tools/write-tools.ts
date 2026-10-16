@@ -1,3 +1,4 @@
+import { formulationWriteTools } from "./formulation-tools";
 import { applicationWriteTools } from "./application-tools";
 import { documentWriteTools } from "./document-tools";
 import type { ToolAccess } from "./tool-access";
@@ -96,6 +97,7 @@ export const writeTools: WriteTool[] = [
   ...deliveryWriteTools,
   ...documentWriteTools,
   ...applicationWriteTools,
+  ...formulationWriteTools,
 ];
 
 async function mutate(context: ApiRouteContext, raw: unknown, kind: "update" | "delete") {

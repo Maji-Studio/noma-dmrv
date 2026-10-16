@@ -1,0 +1,1 @@
+export const API_FORMULATION_MAX_LINES = 50;

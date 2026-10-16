@@ -44,3 +44,24 @@ export async function readProductFormulationLines(ctx: OrgContext, tx: DbTransac
     .where(and(eq(formulationIngredients.organizationId, ctx.organizationId), eq(formulationIngredients.formulationId, formulationId)))
     .orderBy(asc(formulationIngredients.sortOrder), asc(formulationIngredients.id));
 }
+
+/** Enrich operator facts only after the product writer holds the formulation share lock. */
+export async function resolveProductComposition(ctx: OrgContext, tx: DbTransaction, formulationId: string, composition: Record<string, unknown> | undefined): Promise<Record<string, unknown>> {
+  requireOrgScope(ctx);
+  const lines = await readProductFormulationLines(ctx, tx, formulationId);
+  const ingredients = (composition?.ingredients ?? []) as Record<string, unknown>[];
+  const rows = ingredients.map((ingredient, index) => {
+    const line = lines.find(candidate => candidate.id === ingredient.formulationIngredientId);
+    if (!line) {
+      const message = "This ingredient is not part of the chosen formulation.";
+      throw new DomainError("validation_failed", message, { issues: [{ path: ["ingredients", index, "formulationIngredientId"], code: "validation_failed", message }] });
+    }
+    return { ...ingredient, formulationIngredientId: line.id, feedstockTypeId: line.feedstockTypeId, feedstockTypeName: line.feedstockTypeName, feedstockTypeCategory: line.feedstockTypeCategory, ratio: line.ratio };
+  });
+  if (lines.some(line => !ingredients.some(ingredient => ingredient.formulationIngredientId === line.id))) {
+    const message = "Enter a mass for every ingredient of the formulation, 0 kg for one not used.";
+    throw new DomainError("validation_failed", message, { issues: [{ path: ["ingredients"], code: "validation_failed", message }] });
+  }
+  rows.sort((a, b) => lines.findIndex(line => line.id === a.formulationIngredientId) - lines.findIndex(line => line.id === b.formulationIngredientId));
+  return rows.length ? { ...composition, ingredients: rows } : {};
+}

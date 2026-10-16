@@ -1,3 +1,5 @@
+import { deleteFormulation } from "./formulations";
+import { createFormulationApi, updateFormulationApi, archiveFormulationApi, restoreFormulationApi } from "./formulation-api";
 import { deleteApplication } from "./applications";
 import { recordApplicationApi, updateApplicationApi } from "./application-api";
 import { recordDelivery, updateDeliveryOperation } from "./deliveries";
@@ -11,6 +13,11 @@ import { requestDocumentUpload } from "./document-uploads";
 
 /** Explicit write allowlist. Existing read models become the read side later. */
 export const operationRegistry = {
+  create_formulation: createFormulationApi,
+  update_formulation: updateFormulationApi,
+  delete_formulation: deleteFormulation,
+  archive_formulation: archiveFormulationApi,
+  restore_formulation: restoreFormulationApi,
   // The exposed contracts take raw GeoJSON; app actions call the envelope operations directly.
   record_application: recordApplicationApi,
   update_application: updateApplicationApi,

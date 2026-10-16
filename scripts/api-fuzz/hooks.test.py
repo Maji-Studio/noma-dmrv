@@ -37,6 +37,18 @@ DELIVERY_ETAG = '"12.1"'
 DELETE_ORDER_ETAG = '"11.1"'
 DELETE_ORDER_ID = "44444444-4444-4444-8444-444444444444"
 CUSTOMER_LOCATION_ID = "55555555-5555-4555-8555-555555555555"
+DELETE_FORMULATION_ID = "66666666-6666-4666-8666-666666666666"
+ARCHIVE_FORMULATION_ID = "77777777-7777-4777-8777-777777777777"
+RESTORE_FORMULATION_ID = "88888888-8888-4888-8888-888888888888"
+FORMULATION_ETAG = '\"1.2\"'
+RESTORE_FORMULATION_ETAG = '\"2.2\"'
+FORMULATION_FIXTURE = {
+    "blendFeedstockTypeId": FIXTURE_ID,
+    "blendFormulationId": FIXTURE_ID, "blendFormulationEtag": FORMULATION_ETAG,
+    "deleteFormulationId": DELETE_FORMULATION_ID, "deleteFormulationEtag": FORMULATION_ETAG,
+    "archiveFormulationId": ARCHIVE_FORMULATION_ID, "archiveFormulationEtag": FORMULATION_ETAG,
+    "restoreFormulationId": RESTORE_FORMULATION_ID, "restoreFormulationEtag": RESTORE_FORMULATION_ETAG,
+}
 FLOAT_MULTIPLE_OF_ARTIFACT = 330796.723
 TARGET_KINDS = ("FACILITY", "SUPPLIER", "FEEDSTOCK_TYPE", "BIN", "DRIVER", "VEHICLE", "FEEDSTOCK", "REACTOR", "PRODUCTION_RUN", "BIOCHAR_BIN", "BIOCHAR_PRODUCT", "PURE_FORMULATION", "CREDIT_BATCH", "LAB_SAMPLE", "CUSTOMER", "ORDER", "DELIVERY")
 for kind in TARGET_KINDS:
@@ -58,7 +70,7 @@ document_fixtures = [
     for owner in ("delivery", "feedstock", "lab_sample", "application")
 ]
 document_fixture_path = Path(document_fixture_directory.name) / "fixture.json"
-document_fixture_path.write_text(json.dumps({"documents": document_fixtures, "applicationId": FIXTURE_ID, "applicationCode": "AP-FUZZ",
+document_fixture_path.write_text(json.dumps({**FORMULATION_FIXTURE, "documents": document_fixtures, "applicationId": FIXTURE_ID, "applicationCode": "AP-FUZZ",
     "applicationEtag": '"1.1"', "applicationDeliveryId": RUN_BIN_ID, "applicationDeliveryCode": "DL-FUZZ-APP",
     "applicationDate": "2026-10-09", "applicationGpsLatitude": -8.3, "applicationGpsLongitude": 35.3}))
 os.environ["API_FUZZ_FIXTURE"] = str(document_fixture_path)
@@ -143,6 +155,66 @@ class HarnessTests(unittest.TestCase):
                 self.assertIn("412", checks.negative_data_rejection.expected_statuses)
                 self.assertIn("428", checks.missing_required_header.expected_statuses)
 
+    def test_formulation_commands_are_distinct_successful_transitions(self):
+        for command, target, etag, archived in (
+            ("archive", ARCHIVE_FORMULATION_ID, FORMULATION_ETAG, False),
+            ("restore", RESTORE_FORMULATION_ID, RESTORE_FORMULATION_ETAG, True),
+        ):
+            operation = schema[f"/formulations/{{idOrCode}}/{command}"]["POST"]
+            examples = []
+            hook("before_add_examples")(HookContext(operation=operation), examples)
+            case, = examples
+            parameter, = operation.path_parameters
+            self.assertEqual(case.path_parameters, {parameter.name: target})
+            self.assertNotEqual(target, DELETE_FORMULATION_ID)
+            self.assertEqual(case.headers["If-Match"], etag)
+            self.assertEqual(case.query, {"dryRun": "true"})
+            self.assertEqual(case.body, {})
+            self.assertTrue(case.meta.generation.mode.is_positive)
+            # Model the two published state guards and version precondition.
+            # The supervisor runs these same examples against the real writers.
+            state = {"id": target, "version": 2 if archived else 1, "archived": archived}
+            version = int(case.headers["If-Match"].strip('"').split(".")[0])
+            status = 200 if state["version"] == version and state["archived"] == (command == "restore") else 409
+            check = hook("after_load_schema").__globals__["seeded_example_success"]
+            check(None, SimpleNamespace(status_code=status), case)
+            for refused in (404, 409, 412, 422):
+                with self.assertRaises(AssertionError):
+                    check(None, SimpleNamespace(status_code=refused), case)
+
+    def test_formulation_examples_cover_exact_millionths_and_refuse_smaller_shares(self):
+        operation = schema["/formulations"]["POST"]
+        examples = []
+        hook("before_add_examples")(HookContext(operation=operation), examples)
+        self.assertEqual(len(examples), 3)
+        positive = [case for case in examples if case.meta.generation.mode.is_positive]
+        self.assertEqual([case.body["biocharRatio"] for case in positive], [0.7, 0.000001])
+        for case in examples:
+            self.assertEqual(case.query, {"dryRun": "true"})
+            self.assertTrue(case.headers["Idempotency-Key"])
+            self.assertEqual(case.body["lines"][0]["feedstockTypeId"], FIXTURE_ID)
+        for case in positive:
+            self.assertTrue(case._validate_component(ParameterLocation.BODY, case.body, schema.adapter.jsonschema_validator_cls))
+            self.assertEqual(Decimal(str(case.body["biocharRatio"])) + Decimal(str(case.body["lines"][0]["ratio"])), Decimal("1"))
+        negative, = [case for case in examples if case.meta.generation.mode.is_negative]
+        self.assertEqual(negative.body["biocharRatio"], 0.0000001)
+        self.assertFalse(negative._validate_component(ParameterLocation.BODY, negative.body, schema.adapter.jsonschema_validator_cls))
+        hook("before_call")(HookContext(operation=operation), negative)
+        self.assertTrue(negative.meta.generation.mode.is_negative)
+        check = hook("after_load_schema").__globals__["seeded_formulation_ratio_rejection"]
+        response = SimpleNamespace(status_code=422, json=lambda: {"code": "validation_failed", "errors": [{"pointer": "/biocharRatio"}]})
+        check(None, response, negative)
+        with self.assertRaises(AssertionError):
+            check(None, SimpleNamespace(status_code=201), negative)
+        wrong_pointer = SimpleNamespace(status_code=422, json=lambda: {"code": "validation_failed", "errors": [{"pointer": "/lines"}]})
+        with self.assertRaises(AssertionError):
+            check(None, wrong_pointer, negative)
+        patch_examples = []
+        hook("before_add_examples")(HookContext(operation=schema["/formulations/{idOrCode}"]["PATCH"]), patch_examples)
+        patch_case, = patch_examples
+        self.assertEqual(patch_case.headers["If-Match"], FORMULATION_ETAG)
+        self.assertEqual(patch_case.body, {"biocharRatio": 0.000001, "lines": [{"feedstockTypeId": FIXTURE_ID, "ratio": 0.999999}]})
+
     def test_content_does_not_follow_capabilities_or_require_2xx(self):
         case, = self.document_examples(suffix="/{documentId}/content")
         kwargs = {}
@@ -178,10 +250,9 @@ class HarnessTests(unittest.TestCase):
             operation = result.ok()
             cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
             seeded.extend(case for case in cases if case.meta.phase.data.description.startswith("Seeded fixture"))
-        # 35 by-id targets, an application list and create, plus the feedstock
-        # create and its oversize twin, the run create, the product create, the
-        # lab sample create, order create and delivery create.
-        self.assertEqual(len(seeded), 44)
+        # Earlier phases contribute 44 cases. Formulations add two successful
+        # creates and four mutations; the ratio refusal is counted separately.
+        self.assertEqual(len(seeded), 50)
         stock = next(case for case in seeded if case.operation.label == "GET /storage-locations/{idOrCode}/stock")
         self.assertEqual(stock.path_parameters, {"idOrCode": FIXTURE_ID})
         self.assertTrue(stock.meta.generation.mode.is_positive)
@@ -403,8 +474,14 @@ class HarnessTests(unittest.TestCase):
                 continue
             self.assertEqual(len(examples), 1, operation.label)
             target = RUN_BIN_ID if operation.path.endswith("/application-balance") else DELETE_ORDER_ID if operation.label == "DELETE /orders/{idOrCode}" else FIXTURE_ID
+            if operation.label == "DELETE /formulations/{idOrCode}":
+                target = DELETE_FORMULATION_ID
+            elif operation.path.endswith("/archive"):
+                target = ARCHIVE_FORMULATION_ID
+            elif operation.path.endswith("/restore"):
+                target = RESTORE_FORMULATION_ID
             self.assertEqual(examples[0].path_parameters, {"idOrCode": target})
-            if operation.method.upper() == "POST":
+            if operation.method.upper() == "POST" and not operation.path.endswith(("/archive", "/restore")):
                 # The stock-movement create: a dry run with its own key.
                 self.assertEqual(examples[0].query, {"dryRun": "true"})
                 self.assertTrue(examples[0].headers["Idempotency-Key"])
@@ -414,33 +491,27 @@ class HarnessTests(unittest.TestCase):
             self.assertFalse("If-Match" in for_operation(schema.config, operation=operation).headers)
             if operation.method.upper() in {"PATCH", "DELETE"}:
                 self.assertEqual(examples[0].query, {"dryRun": "true"})
-                etags = {"/deliveries/": DELIVERY_ETAG, "/production-runs/": RUN_ETAG, "/biochar-products/": PRODUCT_ETAG, "/lab-samples/": LAB_SAMPLE_ETAG, "/orders/": DELETE_ORDER_ETAG if operation.method.upper() == "DELETE" else ORDER_ETAG}
+                etags = {"/deliveries/": DELIVERY_ETAG, "/production-runs/": RUN_ETAG, "/biochar-products/": PRODUCT_ETAG, "/lab-samples/": LAB_SAMPLE_ETAG, "/formulations/": FORMULATION_ETAG, "/orders/": DELETE_ORDER_ETAG if operation.method.upper() == "DELETE" else ORDER_ETAG}
                 etag = etags.get(next((prefix for prefix in etags if operation.path.startswith(prefix)), ""), FEEDSTOCK_ETAG)
                 self.assertEqual(examples[0].headers["If-Match"], etag)
             count += 1
-        self.assertEqual(count, 35)
+        self.assertEqual(count, 39)
 
     def test_seeded_positive_examples_must_return_2xx(self):
         check = hook("after_load_schema").__globals__["seeded_example_success"]
-        for label in ("GET /feedstocks/{idOrCode}", "GET /production-runs/{idOrCode}", "PATCH /production-runs/{idOrCode}", "GET /biochar-products/{idOrCode}", "PATCH /biochar-products/{idOrCode}", "GET /credit-batches/{idOrCode}", "GET /lab-samples/{idOrCode}", "PATCH /lab-samples/{idOrCode}", "DELETE /lab-samples/{idOrCode}", "GET /deliveries/{idOrCode}", "PATCH /deliveries/{idOrCode}", "GET /customers/{idOrCode}", "GET /customers/{idOrCode}/locations", "GET /orders/{idOrCode}", "GET /orders/{idOrCode}/balance", "PATCH /orders/{idOrCode}", "DELETE /orders/{idOrCode}"):
-            method, path = label.split(" ")
-            operation = schema[path][method]
+        for result in schema.get_all_operations():
+            operation = result.ok()
             examples = []
             hook("before_add_examples")(HookContext(operation=operation), examples)
-            case = examples[0]
-            for status in (200, 201, 204):
-                self.assertIsNone(check(None, SimpleNamespace(status_code=status), case))
-            for status in (301, 400, 401, 404, 409, 422, 428, 500):
-                with self.assertRaisesRegex(AssertionError, "must return 2xx"):
-                    check(None, SimpleNamespace(status_code=status), case)
-        for label in ("POST /feedstocks", "POST /production-runs", "POST /biochar-products", "POST /lab-samples", "POST /orders", "POST /deliveries", "POST /storage-locations/{idOrCode}/stock-movements"):
-            method, path = label.split(" ")
-            examples = []
-            hook("before_add_examples")(HookContext(operation=schema[path][method]), examples)
-            positive = next(case for case in examples if case.meta.generation.mode.is_positive)
-            self.assertIsNone(check(None, SimpleNamespace(status_code=200), positive))
-            with self.assertRaisesRegex(AssertionError, "must return 2xx"):
-                check(None, SimpleNamespace(status_code=409), positive)
+            for case in examples:
+                if not case.meta.generation.mode.is_positive or case.meta.phase.data.description == "Document fixture content redirect":
+                    continue
+                with self.subTest(operation=operation.label):
+                    for status in (200, 201, 204):
+                        self.assertIsNone(check(None, SimpleNamespace(status_code=status), case))
+                    for status in (301, 400, 401, 404, 409, 412, 422, 428, 500):
+                        with self.assertRaisesRegex(AssertionError, "must return 2xx"):
+                            check(None, SimpleNamespace(status_code=status), case)
         # Generated and non-example cases keep the ordinary status allowances.
         ordinary = schema["/facilities/{idOrCode}"]["GET"].Case(path_parameters={"idOrCode": FIXTURE_ID})
         self.assertIsNone(check(None, SimpleNamespace(status_code=404), ordinary))
@@ -684,7 +755,7 @@ class HarnessTests(unittest.TestCase):
         for result in schema.get_all_operations():
             operation = result.ok()
             checks = schema.config.checks_config_for(operation=operation, phase="coverage")
-            has_if_match = operation.method.upper() in {"PATCH", "DELETE"}
+            has_if_match = operation.method.upper() in {"PATCH", "DELETE"} or operation.path in {"/formulations/{idOrCode}/archive", "/formulations/{idOrCode}/restore"}
             self.assertEqual(has_if_match, any(parameter.name == "If-Match" for parameter in operation.headers))
             self.assertEqual("428" in checks.missing_required_header.expected_statuses, has_if_match)
             self.assertNotIn("400", checks.positive_data_acceptance.expected_statuses)

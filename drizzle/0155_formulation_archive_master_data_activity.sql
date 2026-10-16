@@ -1,0 +1,3 @@
+ALTER TABLE "activity_events" DROP CONSTRAINT "activity_events_entity_type";--> statement-breakpoint
+ALTER TABLE "formulations" ADD COLUMN "archived_at" timestamp;--> statement-breakpoint
+ALTER TABLE "activity_events" ADD CONSTRAINT "activity_events_entity_type" CHECK ("activity_events"."entity_type" in ('removal', 'ghg_statement', 'production_run', 'biochar_product', 'lab_sample', 'order', 'delivery', 'application', 'credit_batch', 'document', 'transport_leg', 'feedstock', 'bin_movement', 'supplier', 'supplier_location', 'customer', 'customer_location', 'formulation'));

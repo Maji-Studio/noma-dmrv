@@ -10,7 +10,7 @@ it("offers production permissions and defaults new workflow reads on and mutatio
     .toBe("Production runs: Read, Write; Reactors: Read");
 
   expect(API_PERMISSION_ROWS).toContainEqual({ entity: "biochar-products", label: "Biochar products and output stock", scopes: ["biochar-products:read", "biochar-products:write"] });
-  expect(API_PERMISSION_ROWS).toContainEqual({ entity: "formulations", label: "Formulations", scopes: ["formulations:read"] });
+  expect(API_PERMISSION_ROWS).toContainEqual({ entity: "formulations", label: "Formulations", scopes: ["formulations:read", "formulations:write", "formulations:delete"] });
   expect(API_KEY_DEFAULT_SCOPES).toEqual(expect.arrayContaining(["biochar-products:read", "formulations:read"]));
   expect(API_KEY_DEFAULT_SCOPES).not.toContain("biochar-products:write");
   expect(API_PERMISSION_ROWS.flatMap((row) => row.scopes).some((scope) => scope.startsWith("stock-corrections"))).toBe(false);
@@ -53,4 +53,10 @@ it("defaults application reads on and requires opting into mutations", () => {
   expect(API_KEY_DEFAULT_SCOPES).toContain("applications:read");
   expect(API_KEY_DEFAULT_SCOPES).not.toContain("applications:write");
   expect(API_KEY_DEFAULT_SCOPES).not.toContain("applications:delete");
+});
+
+it("keeps formulation read enabled and both mutation permissions opt-in", () => {
+  expect(API_KEY_DEFAULT_SCOPES).toContain("formulations:read");
+  expect(API_KEY_DEFAULT_SCOPES).not.toContain("formulations:write");
+  expect(API_KEY_DEFAULT_SCOPES).not.toContain("formulations:delete");
 });

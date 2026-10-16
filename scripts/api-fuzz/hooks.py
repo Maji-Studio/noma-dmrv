@@ -58,6 +58,13 @@ DOCUMENT_SUCCESS_DESCRIPTION = "Document fixture success"
 DOCUMENT_TIMEOUT_SECONDS = 10
 DOCUMENT_FIXTURES = []
 APPLICATION_FIXTURE = {}
+FORMULATION_FIXTURE = {}
+FORMULATION_RATIO_REFUSAL_DESCRIPTION = "Formulation fixture sub-millionth refusal"
+FORMULATION_MIN_RATIO = 0.000001
+FORMULATION_TOO_SMALL_RATIO = 0.0000001
+FORMULATION_COMPLEMENT_RATIO = 0.999999
+FORMULATION_BIOCHAR_RATIO = 0.7
+FORMULATION_COMPOST_RATIO = 0.3
 SEEDED_APPLICATION_WET_MASS_KG = 0.001
 SEEDED_APPLICATION_FIELD_SIZE_HA = 1
 DOCUMENT_PATHS = {"delivery": "deliveries", "feedstock": "feedstocks", "lab_sample": "lab-samples", "application": "applications"}
@@ -113,11 +120,14 @@ def after_load_schema(ctx, schema):
     SEEDED_PATCH_BODIES.clear()
     DOCUMENT_FIXTURES.clear()
     APPLICATION_FIXTURE.clear()
+    FORMULATION_FIXTURE.clear()
     fixture_path = os.environ.get("API_FUZZ_FIXTURE")
     if fixture_path:
         with open(fixture_path, encoding="utf-8") as fixture_file:
             fixture = json.load(fixture_file)
             DOCUMENT_FIXTURES.extend(fixture["documents"])
+            if fixture.get("deleteFormulationId"):
+                FORMULATION_FIXTURE.update(fixture)
             if fixture.get("applicationId"):
                 APPLICATION_FIXTURE.update(fixture)
     schema.config.parameters.pop("query.cursor", None)
@@ -222,6 +232,7 @@ def before_add_examples(ctx, examples):
     operation = ctx.operation
     add_document_examples(operation, examples)
     add_application_examples(operation, examples)
+    add_formulation_examples(operation, examples)
     target = SEEDED_TARGETS.get(operation.label)
     create_body = SEEDED_CREATE_BODIES.get(operation.label)
     is_create = create_body is not None
@@ -347,6 +358,51 @@ def document_metadata(description, negative=False):
             description=description, parameter=None, parameter_location=ParameterLocation.BODY, location=None,
         )),
     )
+
+
+def add_formulation_examples(operation, examples):
+    if not FORMULATION_FIXTURE:
+        return
+    fixture = FORMULATION_FIXTURE
+    command = operation.definition.raw.get("operationId")
+    targets = {"update_formulation": "blendFormulation", "delete_formulation": "deleteFormulation",
+               "archive_formulation": "archiveFormulation", "restore_formulation": "restoreFormulation"}
+    if command == "create_formulation":
+        for biochar, ingredient, negative in (
+            (FORMULATION_BIOCHAR_RATIO, FORMULATION_COMPOST_RATIO, False),
+            (FORMULATION_MIN_RATIO, FORMULATION_COMPLEMENT_RATIO, False),
+            (FORMULATION_TOO_SMALL_RATIO, FORMULATION_COMPLEMENT_RATIO, True),
+        ):
+            examples.append(operation.Case(
+                query={"dryRun": "true"}, headers={IDEMPOTENCY_HEADER: str(uuid4())}, media_type="application/json",
+                body={"name": "API fuzz example blend", "biocharRatio": biochar,
+                      "lines": [{"feedstockTypeId": fixture["blendFeedstockTypeId"], "ratio": ingredient}]},
+                _meta=document_metadata(FORMULATION_RATIO_REFUSAL_DESCRIPTION if negative else SEEDED_CREATE_DESCRIPTION, negative),
+            ))
+    elif command in targets:
+        prefix = targets[command]
+        # OpenAPI currently names this idOrCode even though writes accept UUIDs
+        # only. Read the parameter rather than inferring its name from the route.
+        parameter, = operation.path_parameters
+        body = {"biocharRatio": FORMULATION_MIN_RATIO, "lines": [
+            {"feedstockTypeId": fixture["blendFeedstockTypeId"], "ratio": FORMULATION_COMPLEMENT_RATIO},
+        ]} if command == "update_formulation" else {}
+        examples.append(operation.Case(
+            path_parameters={parameter.name: fixture[prefix + "Id"]},
+            query={"dryRun": "true"}, headers={IF_MATCH_HEADER: fixture[prefix + "Etag"]},
+            body=body, media_type="application/json", _meta=document_metadata(SEEDED_TARGET_DESCRIPTION),
+        ))
+
+
+@schemathesis.check
+def seeded_formulation_ratio_rejection(ctx, response, case):
+    if case.meta is None or case.meta.phase.name != TestPhase.EXAMPLES or case.meta.phase.data.description != FORMULATION_RATIO_REFUSAL_DESCRIPTION:
+        return
+    if response.status_code != 422:
+        raise AssertionError("Sub-millionth formulation ratio must return 422.")
+    problem = response.json()
+    if problem.get("code") != "validation_failed" or not any(issue.get("pointer") == "/biocharRatio" for issue in problem.get("errors", [])):
+        raise AssertionError("Sub-millionth refusal must identify /biocharRatio.")
 
 
 def add_application_examples(operation, examples):

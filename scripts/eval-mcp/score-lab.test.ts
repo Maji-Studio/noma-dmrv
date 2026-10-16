@@ -84,6 +84,8 @@ it("passes the missing-organic case on nothing saved and a question, and fails o
 it.each([
   ["Please provide the organic carbon percentage.", true],
   ["I need the C_org figure before I can save it.", true],
+  ["The system requires an organic carbon figure, and your message doesn't include one.", true],
+  ["Every lab sample needs both total and organic carbon.", true],
   ["Could you share the inorganic carbon?", false],
   ["Organic carbon is not needed.", false],
   ["Saved the sample without it.", false],

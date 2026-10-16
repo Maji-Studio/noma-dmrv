@@ -22,8 +22,6 @@ const PRODUCT_PLACED_HOURS_AGO = 4;
 const PRODUCT_BIOCHAR_WET_MASS_KG = 5;
 const LOSS_HOURS_AGO = 3.5;
 const LOSS_WET_MASS_KG = 1;
-const BLEND_BIOCHAR_RATIO = 0.8;
-const BLEND_INGREDIENT_RATIO = 0.2;
 // The credit batch covers the completed run's day and the day before, so a sample
 // taken shortly before now is inside its window whatever the clock reads.
 const BATCH_WINDOW_DAYS_BACK = 1;
@@ -69,7 +67,7 @@ async function main(): Promise<void> {
   const { startProductionRun, updateProductionRun } = await import("@/lib/operations/production-runs");
   const { productionRunEtag } = await import("@/lib/api/representation-etags");
   const { createStorageLocation } = await import("@/data-access/storage-locations");
-  const { createFormulation } = await import("@/data-access/formulations");
+  const { seedFormulations } = await import("./seed-formulations");
   const { readApiBiocharProduct } = await import("@/lib/read-models/api-biochar-products");
   const { makeBiocharProduct } = await import("@/lib/operations/biochar-products");
   const { recordOutputStockMovement } = await import("@/lib/operations/output-stock");
@@ -179,14 +177,7 @@ async function main(): Promise<void> {
     totalCarbonPercent: SAMPLE_TOTAL_CARBON_PERCENT, organicCarbonPercent: SAMPLE_ORGANIC_CARBON_PERCENT,
     inorganicCarbonPercent: SAMPLE_INORGANIC_CARBON_PERCENT, totalHydrogenPercent: SAMPLE_HYDROGEN_PERCENT,
   })).data.sample;
-  const pure = await createFormulation(ctx, { code: "FUZZ-PURE", name: `${FIXTURE_LABEL} pure biochar`, biocharRatio: 1 });
-  const blendType = await createFeedstockType(ctx, {
-    code: "FUZZ-BLEND", name: `${FIXTURE_LABEL} blend ingredient`, category: "compost", usage: "blend",
-  });
-  const blend = await createFormulation(ctx, {
-    code: "FUZZ-MIX", name: `${FIXTURE_LABEL} blend`, biocharRatio: BLEND_BIOCHAR_RATIO,
-    ingredients: [{ feedstockTypeId: blendType.id, ratio: BLEND_INGREDIENT_RATIO }],
-  });
+  const { pure, fields: formulationFields } = await seedFormulations(ctx);
   const product = (await runOperation(makeBiocharProduct, ctx, {
     facilityId: facility.id, formulationId: pure.id,
     placedAt: new Date(now - PRODUCT_PLACED_HOURS_AGO * MS_PER_HOUR).toISOString(),
@@ -228,6 +219,7 @@ async function main(): Promise<void> {
   const { seedDocuments } = await import("./seed-documents");
   const documents = await seedDocuments(ctx, { delivery: delivery.id, feedstock: feedstock.id, lab_sample: labSample.id, application: applicationFixture.applicationId }, { activitySource: "script" });
   const credential = await createApiKey(ctx, {
+    // All published scopes include formulations:write and formulations:delete.
     name: FIXTURE_LABEL, scopes: API_SCOPES.filter(scope => scope !== "applications:delete"), expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
   });
   // Mask before the workflow extracts the key into GITHUB_ENV. Outside Actions
@@ -248,7 +240,7 @@ async function main(): Promise<void> {
     // Supplier locations have no code column or by-id API route.
     supplierLocationId: supplierLocation.id,
     biocharBinId: biocharBin.id, biocharBinCode: biocharBin.code, productBinId: productBin.id,
-    pureFormulationId: pure.id, pureFormulationCode: pure.code, blendFormulationId: blend.id, blendFormulationCode: blend.code,
+    ...formulationFields,
     biocharProductId: product.id, biocharProductCode: product.code, biocharProductEtag: biocharProductEtag(currentProduct),
     customerId: customer.id, customerCode: customer.code,
     // Customer locations, like supplier locations, have no code column.

@@ -1,6 +1,7 @@
 import { apiScopeRepresentationSchema } from "@/lib/representations/me";
 import { documentOwnerTypeRepresentationSchema } from "@/lib/representations/documents";
 import { z } from "zod";
+import { publishedJsonSchemas } from "@/schemas/published-json-schema";
 import { API_CURSOR_MAX_LENGTH, API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT } from "@/config/api-rest";
 import { IDEMPOTENCY_RETENTION_DAYS } from "@/config/operations";
 import { readDescriptions } from "@/lib/operations/read-descriptions";
@@ -43,7 +44,16 @@ export function outputSchema(schema: z.ZodType, representations: Record<string, 
 }
 
 export function queryParameters(schema: z.ZodType) {
-  const generated = z.toJSONSchema(schema, { io: "input" });
+  const generated = z.toJSONSchema(schema, {
+    io: "input",
+    override: ({ zodSchema, jsonSchema }) => {
+      const published = publishedJsonSchemas.get(zodSchema);
+      if (!published) return;
+      const description = jsonSchema.description;
+      for (const key of Object.keys(jsonSchema)) delete (jsonSchema as JsonSchema)[key];
+      Object.assign(jsonSchema, published.jsonSchema, description ? { description } : {});
+    },
+  });
   return Object.entries(generated.properties ?? {}).map(([name, field]) => {
     if (typeof field === "boolean") throw new Error("Query parameters must have concrete schemas.");
     // Input conversion loses post-transform bounds; publish the canonical page size.

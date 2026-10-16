@@ -1,7 +1,6 @@
 import { updateOrder } from "@/lib/operations/orders";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
-import { masterDataVersion } from "./helpers/master-data-version";
 import { productionVersion } from "./helpers/production-version";
 import { afterEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
@@ -9,7 +8,7 @@ import { db } from "@/db";
 import { biocharProducts, outputStockAllocations, productionRuns, storageLocations } from "@/db/schema";
 
 import { updateBiocharProduct } from "@/data-access/biochar-products";
-import { updateFormulation } from "@/data-access/formulations";
+import { updateFormulationInTransaction } from "@/data-access/formulation-writes";
 import { updateProductionRun } from "@/data-access/production-runs";
 import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
 import { cleanupPostedStock, postedStockFixture, postDelivery, postMeasurement } from "./helpers/posted-output-stock-fixture";
@@ -46,7 +45,7 @@ describe("stock-reducing update guards", () => {
   it("does not recalculate source mass from a formulation volume share", async () => {
     const f = await fixture(); if (!f.product) throw new Error("Expected posted product");
     const before = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.targetBiocharProductId, f.product.id));
-    await expect(updateFormulation(f.ctx, f.pure.id, { expectedVersion: await masterDataVersion(f.ctx, "formulations", f.pure.id), biocharRatio: 0.9 })).resolves.toMatchObject({ biocharRatio: 0.9 });
+    await expect(db.transaction(async tx => updateFormulationInTransaction(f.ctx, tx, { formulationId: f.pure.id, expectedVersion: f.pure.version, biocharRatio: 0.9 }))).resolves.toMatchObject({ biocharRatio: 0.9 });
     expect(await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.targetBiocharProductId, f.product.id))).toEqual(before);
     expect((await db.select().from(biocharProducts).where(eq(biocharProducts.id, f.product.id)))[0].biocharRatio).toBe(1);
   });

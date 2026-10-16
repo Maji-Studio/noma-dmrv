@@ -149,3 +149,24 @@ it("normalizes nested JS numbers to exact decimal strings", () => {
   expect(diffActivityChanges("production_run", { feedstockDraws: [{ mass: 1e21 }] },
     { feedstockDraws: [{ mass: "1000000000000000000000" }] })).toEqual({ changedFields: [], changes: {} });
 });
+
+it("captures formulation scalars while comparing recipe lines without child bookkeeping", () => {
+  const before = { biocharRatio: "0.700000", description: "private old", version: 1,
+    lines: [{ id: "old", feedstockTypeId: "type", ratio: "0.300000", sortOrder: 0 }] };
+  const after = { biocharRatio: "0.600000", description: "private new", version: 2,
+    lines: [{ id: "new", feedstockTypeId: "type", ratio: "0.400000", sortOrder: 0 }] };
+  expect(diffActivityChanges("formulation", before, after)).toEqual({
+    changedFields: ["biocharRatio", "description", "lines"],
+    changes: { biocharRatio: { from: "0.7", to: "0.6" } },
+  });
+  expect(diffActivityChanges("formulation", before, { ...before, version: 2,
+    lines: [{ ...before.lines[0], id: "replacement" }] })).toEqual({ changedFields: [], changes: {} });
+});
+
+it.each(["supplier", "customer"])("never captures %s contact values", entityType => {
+  const result = diffActivityChanges(entityType, {}, {
+    contactName: "private person", contactEmail: "private email", contactPhone: "private phone", address: "private address",
+  });
+  expect(result.changedFields).toEqual(["address", "contactEmail", "contactName", "contactPhone"]);
+  expect(result.changes).toEqual({});
+});

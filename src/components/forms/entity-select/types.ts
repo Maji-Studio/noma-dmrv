@@ -9,6 +9,8 @@ export interface EntityOption {
   name: string;
   /** Optional subtitle for additional context (e.g., location, type) */
   subtitle?: string;
+  /** The stored record is archived: shown for context, read-only until restored. */
+  archived?: boolean;
   /** Visible for context, but cannot be selected. */
   disabled?: boolean;
   /** Structured mass data for forms that render a selected entity's mass. */

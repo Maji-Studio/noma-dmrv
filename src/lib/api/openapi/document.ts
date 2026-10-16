@@ -32,11 +32,13 @@ import { resources } from "./resources";
 import { operationInput, privateOperation, requestBody, type Paths } from "./operation-kit";
 import { addBiocharWritePaths } from "./biochar-writes";
 import { addOrderWritePaths } from "./order-writes";
+import { addFormulationWritePaths } from "./formulation-writes";
 import { addDeliveryWritePaths } from "./delivery-writes";
 import { addLabSampleWritePaths } from "./lab-sample-writes";
 import { outputSchema, queryParameters, targetParameter, idempotencyParameter, ifMatchParameter, privateHeaders, requestIdHeader, etagHeader, stockEtagHeader, orderBalanceEtagHeader, writeHeaders, locationHeader, problemResponses, jsonResponse, headerComponents, problemResponseComponents } from "./transport";
 
 const resourceReadDescriptions: Partial<Record<(typeof resources)[number]["path"], { list: string; get: string }>> = {
+  formulations: { list: `${readDescriptions.list} ${readDescriptions.formulations}`, get: readDescriptions.formulations },
   applications: { list: `${readDescriptions.list} ${readDescriptions.applications}`, get: readDescriptions.applications },
   deliveries: { list: `${readDescriptions.list} ${readDescriptions.deliveries}`, get: readDescriptions.deliveries },
   orders: { list: `${readDescriptions.list} ${readDescriptions.orders}`, get: readDescriptions.orders },
@@ -119,6 +121,14 @@ export function buildOpenApiDocument() {
   responses.DeliveryProblem412 = { ...responses.Problem412,
     content: { "application/problem+json": { schema: { $ref: "#/components/schemas/DeliveryPreconditionProblem" } } },
   };
+  schemas.FormulationPreconditionProblem = {
+    allOf: [{ $ref: "#/components/schemas/Problem" }, { type: "object", properties: {
+      current: { $ref: "#/components/schemas/formulation", description: "Current formulation after a failed version precondition." },
+    }, required: ["current"] }],
+  };
+  responses.FormulationProblem412 = { ...responses.Problem412,
+    content: { "application/problem+json": { schema: { $ref: "#/components/schemas/FormulationPreconditionProblem" } } },
+  };
   const runPreconditionResponse = { "412": { $ref: "#/components/responses/ProductionRunProblem412" } };
   const feedstockPreconditionResponse = { "412": { $ref: "#/components/responses/FeedstockProblem412" } };
   for (const resource of published) {
@@ -136,6 +146,7 @@ export function buildOpenApiDocument() {
     ) };
   }
   addApplicationReadPaths(paths, publishOutput);
+  addFormulationWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
   addApplicationWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
   addDocumentReadPaths(paths, publishOutput);
   paths["/customers/{idOrCode}/locations"] = { get: privateOperation(
@@ -249,7 +260,7 @@ export function buildOpenApiDocument() {
   }
   return {
     openapi: "3.1.0",
-    info: { title: "noma data-entry API", version: API_VERSION, description: "Organization-scoped feedstock intake, production runs, biochar products, lab samples, orders and balances, and read-only customer and destination lookups, including formulations and output bin stock movement history. Business dates are facility-local YYYY-MM-DD; event times are sent as RFC 3339 with an explicit offset or as facility-local { date, time }, and returned as UTC instants. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers. Unsupported methods on visible paths return Problem405 with Allow listing supported methods, including automatic HEAD and OPTIONS. Private refusals follow bearer authentication and path visibility checks; unknown or invisible paths return 404 without Allow. Public discovery paths need no credential. This response is a path-level refusal, not a response of a published operation." },
+    info: { title: "noma data-entry API", version: API_VERSION, description: "Organization-scoped feedstock intake, production runs, biochar products, lab samples, formulations, orders and balances, read-only customer and destination lookups, and output bin stock movement history. Use POST /formulations with Idempotency-Key; PATCH and DELETE /formulations/{id} and POST /formulations/{id}/archive and /restore use UUID paths with If-Match (formulations:write for create, update, archive and restore; formulations:delete for delete). Business dates are facility-local YYYY-MM-DD; event times are sent as RFC 3339 with an explicit offset or as facility-local { date, time }, and returned as UTC instants. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers. Unsupported methods on visible paths return Problem405 with Allow listing supported methods, including automatic HEAD and OPTIONS. Private refusals follow bearer authentication and path visibility checks; unknown or invisible paths return 404 without Allow. Public discovery paths need no credential. This response is a path-level refusal, not a response of a published operation." },
     servers: [{ url: "/api/v1" }], security: [{ bearerAuth: [] }], paths,
     components: { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "API key", description: `Authorization: Bearer <key> only. Keys use ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX} prefixes and bind exactly one organization; cookies and x-api-key cannot authorize requests.` } }, schemas, headers: headerComponents, responses },
   };

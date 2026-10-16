@@ -10,7 +10,7 @@ const cursorSchema = z.strictObject({
   v: z.literal(API_CURSOR_VERSION), binding: z.string(), position: positionSchema,
 });
 export type CursorPosition = z.infer<typeof positionSchema>;
-export type CursorBinding = { organizationId: string; resource: string; filters: Record<string, string | undefined> };
+export type CursorBinding = { organizationId: string; resource: string; filters: Record<string, string | boolean | undefined> };
 
 function fingerprint(binding: CursorBinding): string {
   return createHash("sha256").update(JSON.stringify({

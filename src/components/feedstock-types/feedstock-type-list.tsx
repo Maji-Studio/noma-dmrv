@@ -127,10 +127,10 @@ function createColumns(params: {
   canManage: boolean;
   onEdit: (feedstockType: FeedstockType) => void;
   onArchive: (feedstockType: FeedstockType) => void;
-  onUnarchive: (feedstockType: FeedstockType) => void;
+  onRestore: (feedstockType: FeedstockType) => void;
   onDelete: (feedstockType: FeedstockType) => void;
 }): ColumnDef<FeedstockType>[] {
-  const { canManage, onEdit, onArchive, onUnarchive, onDelete } = params;
+  const { canManage, onEdit, onArchive, onRestore, onDelete } = params;
   const columns: ColumnDef<FeedstockType>[] = [
     {
       accessorKey: "name",
@@ -208,7 +208,7 @@ function createColumns(params: {
             actions={[
               { label: "Edit", onSelect: () => onEdit(row.original) },
               row.original.archivedAt
-                ? { label: "Unarchive", onSelect: () => onUnarchive(row.original) }
+                ? { label: "Restore", onSelect: () => onRestore(row.original) }
                 : { label: "Archive", onSelect: () => onArchive(row.original) },
               {
                 label: "Delete",
@@ -357,10 +357,10 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     }
   };
 
-  const handleUnarchive = async (entity: FeedstockType) => {
+  const handleRestore = async (entity: FeedstockType) => {
     try {
       await unarchiveFeedstockType.mutateAsync({ feedstockTypeId: entity.id, expectedVersion: entity.version });
-      toast.success("Feedstock type unarchived");
+      toast.success("Feedstock type restored");
     } catch (error) {
       toast.error(toArchiveRestoreErrorMessage(error, `Feedstock type ${entity.code}`, "restore", "The feedstock type was not restored. Try again."));
     }
@@ -387,7 +387,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     canManage,
     onEdit: openEdit,
     onArchive: handleArchive,
-    onUnarchive: handleUnarchive,
+    onRestore: handleRestore,
     onDelete: setDeletingType,
   });
 

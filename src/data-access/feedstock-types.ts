@@ -1,3 +1,4 @@
+import { formulationFreezesTypeUsage } from "@/lib/formulation-domain-errors";
 import { assertRowVersion, nextVersion } from "./row-version";
 import { and, asc, eq } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -98,6 +99,14 @@ export async function updateFeedstockType(
 
     if (!locked) throw new SafeError("Feedstock type not found.");
     assertRowVersion({ entity: FEEDSTOCK_TYPE_CONFLICT_ENTITY, id: feedstockTypeId, expectedVersion, actualVersion: locked.version });
+
+    if (changes.usage !== undefined && changes.usage !== "blend" && changes.usage !== locked.usage) {
+      const [used] = await tx.select({ name: formulations.name }).from(formulationIngredients)
+        .innerJoin(formulations, and(eq(formulations.id, formulationIngredients.formulationId), eq(formulations.organizationId, ctx.organizationId)))
+        .where(and(eq(formulationIngredients.organizationId, ctx.organizationId), eq(formulationIngredients.feedstockTypeId, feedstockTypeId)))
+        .orderBy(formulations.id).limit(1);
+      if (used) throw formulationFreezesTypeUsage(used.name);
+    }
 
     // The form refine only fires when a payload carries both halves of the
     // pair. A patch naming one of them has to be judged against the stored

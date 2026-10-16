@@ -23,6 +23,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { Combobox } from "@base-ui/react/combobox";
 import dynamic from "next/dynamic";
+import { ARCHIVED_OPTION_SUBTITLE } from "@/lib/archived-option";
 import { isEditableEntityType, useCanManageFeedstockTypes } from "@/hooks/use-entity-edit-record";
 import { ENTITY_SEARCH_LIMIT, SELECT_SEARCH_MIN_OPTIONS } from "@/config/forms";
 import { cn } from "@/lib/utils";
@@ -297,8 +298,12 @@ function EntitySelectView({
   const selectedOption =
     isLocal ? suppliedOptions.find((option) => option.id === value)
       : selectedEntity?.id === value ? selectedEntity : listedOption;
+  // An archived formulation opens a read-only view with Restore, not the edit form.
+  const isArchivedSelection = entityType === "formulation" && selectedOption?.archived === true;
   const displayText = selectedOption
-    ? (formatSelectedLabel ? formatSelectedLabel(selectedOption) : selectedOption.name)
+    ? (formatSelectedLabel
+        ? formatSelectedLabel(selectedOption)
+        : isArchivedSelection ? `${selectedOption.name} (${ARCHIVED_OPTION_SUBTITLE})` : selectedOption.name)
     : isLocal && value ? selectedLabel || value : "";
   // Identity remains detail-first, but stock is derived data: use whichever
   // query most recently succeeded. dataUpdatedAt intentionally survives a
@@ -785,7 +790,7 @@ function EntitySelectView({
                       highlightActions={actionRowsArmed}
                       value={value}
                       noneOption={noneOption}
-                      editLabel={editLabel ?? `Edit ${selectedOption?.name}`}
+                      editLabel={editLabel ?? `${isArchivedSelection ? "View" : "Edit"} ${selectedOption?.name}`}
                       createLabel={createLabel || defaultCreateLabel}
                     />
                   ))}

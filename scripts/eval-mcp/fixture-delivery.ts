@@ -11,7 +11,7 @@ import {
 import { createApiKey } from "@/data-access/api-keys";
 import { createBiocharProduct } from "@/data-access/biochar-product-create";
 import { createCustomer, createCustomerLocation } from "@/data-access/customers";
-import { createFormulation } from "@/data-access/formulations";
+import { createFormulationInTransaction } from "@/data-access/formulation-writes";
 import { createOrderInTransaction } from "@/data-access/orders";
 import { createStorageLocation } from "@/data-access/storage-locations";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
@@ -70,7 +70,7 @@ export async function seedDeliveryFixture(caseId: DeliveryCaseId, now = new Date
     const customer = await createCustomer(fixture.ctx, { code: CUSTOMER_CODE, name: "Evaluation customer" });
     const location = await createCustomerLocation(fixture.ctx, { ...TEST_SITE_POSITION, customerId: customer.id, name: "Evaluation destination",
       isDefault: true, facilityDistances: [{ facilityId: fixture.facilityId, distanceKm: LOCATION_DISTANCE_KM, distanceSource: "manual" }] });
-    const formulation = await createFormulation(fixture.ctx, { code: FORMULATION_CODE, name: "Evaluation pure biochar", biocharRatio: PURE_BIOCHAR_RATIO });
+    const formulation = await db.transaction(tx => createFormulationInTransaction(fixture.ctx, tx, { code: FORMULATION_CODE, name: "Evaluation pure biochar", biocharRatio: PURE_BIOCHAR_RATIO }));
     const source = await createStorageLocation(fixture.ctx, { code: SOURCE_BIN_CODE, name: SOURCE_BIN_CODE,
       facilityId: fixture.facilityId, type: "biochar_bin", stockMode: "mix" });
     const mixBin = await createStorageLocation(fixture.ctx, { code: DELIVERY_BIN_CODE, name: DELIVERY_BIN_CODE,

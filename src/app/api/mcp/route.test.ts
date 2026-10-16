@@ -13,6 +13,8 @@ import { mcpInstructions } from "@/lib/mcp/instructions";
 import { biocharStockGuide, domainGuide, labSampleGuide, orderGuide, deliveryGuide, llmsGuide } from "@/lib/api/llms-guide";
 
 const MCP_INSTRUCTIONS_MAX_CHARS = 2000;
+const EXPECTED_TOOL_COUNT = 60;
+const FORMULATION_WRITE_TOOLS = ["create_formulation", "update_formulation", "delete_formulation", "archive_formulation", "restore_formulation"];
 vi.mock("@/db", () => ({ db: {} }));
 
 const mocks = vi.hoisted(() => ({ resolve: vi.fn(), pre: vi.fn(), post: vi.fn(), me: vi.fn(), stock: vi.fn(), log: vi.fn(), env: { NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "https://noma.example", API_WRITES_DISABLED: false } }));
@@ -136,9 +138,9 @@ describe("authenticated MCP read route", () => {
     for (const [key, value] of Object.entries(rateHeaders)) expect(response.headers.get(key)).toBe(value);
     expect(response.headers.get("x-request-id")).toBeTruthy();
     const { result } = await body(response);
-    expect(result.tools).toHaveLength(55);
+    expect(result.tools).toHaveLength(EXPECTED_TOOL_COUNT);
     expect(result.tools[0]).toMatchObject({ annotations: { readOnlyHint: true } });
-    expect(result.tools.filter((tool: { name: string }) => !["record_application", "update_application", "delete_application", "request_document_upload", "confirm_document_upload", "log_feedstock_delivery", "update_feedstock", "delete_feedstock", "start_production_run", "update_production_run", "delete_production_run", "make_biochar_product", "update_biochar_product", "record_output_stock_movement", "record_lab_sample", "update_lab_sample", "delete_lab_sample", "record_order", "update_order", "delete_order", "record_delivery", "update_delivery"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
+    expect(result.tools.filter((tool: { name: string }) => ![...FORMULATION_WRITE_TOOLS, "record_application", "update_application", "delete_application", "request_document_upload", "confirm_document_upload", "log_feedstock_delivery", "update_feedstock", "delete_feedstock", "start_production_run", "update_production_run", "delete_production_run", "make_biochar_product", "update_biochar_product", "record_output_stock_movement", "record_lab_sample", "update_lab_sample", "delete_lab_sample", "record_order", "update_order", "delete_order", "record_delivery", "update_delivery"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
     const find = result.tools.find((tool: { name: string }) => tool.name === "find_feedstocks");
     expect(find.inputSchema.additionalProperties).toBe(false);
     expect(find.inputSchema.properties.limit).toMatchObject({ type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT,
@@ -422,4 +424,21 @@ it("authorizes the selected document owner before executing a visible tool", asy
   mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: ["deliveries:read"], organizationId: "org-1" } });
   const response = await body(await call("find_documents", { ownerType: "feedstock", ownerId: "FS-1" }));
   expect(response.result).toMatchObject({ isError: true, structuredContent: { code: "missing_scope", issues: [] } });
+});
+
+
+it.each([
+  ["formulations:read", []],
+  ["formulations:write", ["create_formulation", "update_formulation", "archive_formulation", "restore_formulation"]],
+  ["formulations:delete", ["delete_formulation"]],
+] as const)("exposes the master-data formulation tools by %s scope", async (scope, expected) => {
+  mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: [scope], organizationId: "org-1" } });
+  const { result } = await body(await POST(rpc("tools/list")));
+  expect(result.tools.filter((tool: { name: string }) => FORMULATION_WRITE_TOOLS.includes(tool.name))
+    .map((tool: { name: string }) => tool.name)).toEqual(expected);
+  for (const name of FORMULATION_WRITE_TOOLS) {
+    if ((expected as readonly string[]).includes(name)) continue;
+    const hidden = await body(await call(name));
+    expect(hidden.error).toEqual((await body(await call("unknown_tool"))).error);
+  }
 });
