@@ -1,8 +1,7 @@
-import { certifierProjects } from "@/db/schema";
+import type { CertifierProvider } from "@/schemas/credit-batches";
 import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
 
-export type CertifierProvider =
-  (typeof certifierProjects.$inferSelect)["provider"];
+export type { CertifierProvider } from "@/schemas/credit-batches";
 
 export interface CreditBatchFeedstockTypeFact {
   id: string;

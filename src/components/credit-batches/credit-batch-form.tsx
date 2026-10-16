@@ -108,7 +108,7 @@ export function CreditBatchForm({
     handleSubmit,
     control,
     trigger,
-    formState: { errors },
+    formState: { errors, isSubmitted },
     setValue,
   } = useForm<CreditBatchFormInput, unknown, CreditBatchFormData>({
     resolver: resolveBatch,
@@ -140,7 +140,7 @@ export function CreditBatchForm({
   const effectiveFacilityId = watchedFacilityId || contextFacilityId || "";
   const certifierSummary = useFacilityCertifierSummary(effectiveFacilityId, !!effectiveFacilityId);
   const certifier = certifierSummary.data === undefined
-    ? (effectiveFacilityId === creditBatch?.facilityId ? creditBatch?.certifier : null) ?? "isometric"
+    ? "isometric"
     : certifierSummary.data.mapping?.provider ?? null;
 
   // RHF replaces its resolver option each render. Resolve only when RHF calls
@@ -176,11 +176,12 @@ export function CreditBatchForm({
   const endDate = parseWatchedDate(watchedEndDate);
   const hasBothDates = startDate != null && endDate != null && endDate >= startDate;
 
-  // A query result can change the policy without changing any form value.
-  // RHF does not revalidate automatically when its resolver changes.
+  // ResolvedErrorRevalidator covers value changes, but not policy query updates.
+  // Recheck only surfaced errors or a submitted form when the policy changes.
+  const shouldRevalidateEndDate = isSubmitted || Boolean(errors.endDate);
   useEffect(() => {
-    if (hasBothDates) void trigger("endDate");
-  }, [certifier, effectiveFacilityId, hasBothDates, trigger]);
+    if (hasBothDates && shouldRevalidateEndDate) void trigger("endDate");
+  }, [certifier, effectiveFacilityId, hasBothDates, shouldRevalidateEndDate, trigger]);
 
   // The cohort is scoped by BOTH the window and the declared feedstock type
   // (ADR 0016 amendment): runs load only once both are set.

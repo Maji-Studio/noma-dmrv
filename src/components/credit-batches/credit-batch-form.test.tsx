@@ -134,6 +134,9 @@ describe("CreditBatchForm certifier period policy", () => {
   it("revalidates when the selected facility's certifier summary changes without a field edit", async () => {
     const onSubmit = vi.fn();
     const { container, rerender } = render(<CreditBatchForm creditBatch={creditBatch} onSubmit={onSubmit} />);
+    await act(async () => {});
+    expect(screen.queryByText(MONTH_REFUSAL)).toBeNull();
+    fireEvent.submit(container.querySelector("form")!);
     await screen.findByText(MONTH_REFUSAL);
 
     mocks.certifierSummary.mockReturnValue({ data: { mapping: null } });

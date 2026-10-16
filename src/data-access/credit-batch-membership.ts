@@ -1,3 +1,4 @@
+import type { CertifierProvider } from "@/schemas/credit-batches";
 import { recordMembershipActivity } from "./write-activity";
 /**
  * Explicit credit-batch create, update and delete lock sequence:
@@ -119,7 +120,7 @@ export async function lockCreditBatchDeclarationRuns(
   params: {
     facilityId: string;
     feedstockTypeId: string;
-    certifier: string | null;
+    certifier: CertifierProvider | null;
     startDate: string | Date;
     endDate: string | Date;
     requestedProductionRunIds: string[];
@@ -245,7 +246,7 @@ export async function assertNoOverlappingCreditBatchCohort(
   params: {
     facilityId: string;
     feedstockTypeId: string;
-    certifier: string | null;
+    certifier: CertifierProvider | null;
     startDate: string | Date;
     endDate: string | Date;
     excludeCreditBatchId?: string;
@@ -339,7 +340,7 @@ export async function validateProductionRunIds(
   tx: DbTransaction,
   productionRunIds: string[],
   facilityId: string,
-  certifier: string | null,
+  certifier: CertifierProvider | null,
   startDate?: string | Date,
   endDate?: string | Date,
   excludeCreditBatchId?: string,
@@ -582,7 +583,7 @@ export async function findMatchingUnassignedProductionRunIds(
   params: {
     facilityId: string;
     feedstockTypeId: string;
-    certifier: string | null;
+    certifier: CertifierProvider | null;
     startDate: string | Date;
     endDate: string | Date;
   },

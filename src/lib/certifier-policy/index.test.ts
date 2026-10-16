@@ -10,7 +10,7 @@ describe("validateBatchPeriod", () => {
     })).toBe("A credit batch may span at most one month (one calendar month; noma rule).");
   });
 
-  it.each(["puro_earth", null])("exempts batches with certifier %s from the Isometric cap", (certifier) => {
+  it.each(["puro_earth", "verra", null] as const)("exempts batches with certifier %s from the Isometric cap", (certifier) => {
     expect(validateBatchPeriod({
       certifier,
       startDate: "2026-01-01",
@@ -18,7 +18,7 @@ describe("validateBatchPeriod", () => {
     })).toBeNull();
   });
 
-  it.each(["isometric", "puro_earth", null])("preserves calendar-date validation for %s", (certifier) => {
+  it.each(["isometric", "puro_earth", "verra", null] as const)("preserves calendar-date validation for %s", (certifier) => {
     expect(validateBatchPeriod({ certifier, startDate: "2026-02-30", endDate: "2026-04-30" }))
       .toBe("Enter a valid date.");
     expect(validateBatchPeriod({ certifier, startDate: "2026-04-30", endDate: "2026-01-01" }))
@@ -39,7 +39,7 @@ describe("isBatchEligible", () => {
   };
   const unsampledBatch = {
     sampling: "unsampled" as const,
-    certifier: "isometric",
+    certifier: "isometric" as const,
     hasIsometricCredentials: true,
     methodBEligibility,
   };
@@ -50,7 +50,7 @@ describe("isBatchEligible", () => {
       .toEqual({ eligible: false, message: connectionMessage });
   });
 
-  it.each(["puro_earth", null])("refuses unsampled creation for certifier %s", (certifier) => {
+  it.each(["puro_earth", "verra", null] as const)("refuses unsampled creation for certifier %s", (certifier) => {
     expect(isBatchEligible({ ...unsampledBatch, certifier }))
       .toEqual({ eligible: false, message: connectionMessage });
   });

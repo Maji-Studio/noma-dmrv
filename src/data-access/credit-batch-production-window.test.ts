@@ -10,7 +10,7 @@ describe("assertCreditBatchProductionWindow", () => {
     });
   });
 
-  it.each(["isometric", "puro_earth", null])("keeps date validity and ordering guards for %s", (certifier) => {
+  it.each(["isometric", "puro_earth", "verra", null] as const)("keeps date validity and ordering guards for %s", (certifier) => {
     expect(() => assertCreditBatchProductionWindow("2026-02-30", "2026-04-30", certifier))
       .toThrow(new SafeError("Enter a valid date."));
     expect(() => assertCreditBatchProductionWindow("2026-04-30", "2026-01-01", certifier))

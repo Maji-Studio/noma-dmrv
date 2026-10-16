@@ -361,6 +361,11 @@ export async function createCreditBatch(
   const { productionRunIds, ...batchData } = data;
   const sampling = data.sampling ?? "sampled";
   const created = await retryTransaction(() => db.transaction(async (tx) => {
+    // Mapping adoption takes UPDATE on the facility before checking its batches.
+    // Hold SHARE before resolving the provider so a concurrent link cannot be missed.
+    await tx.select({ id: facilities.id }).from(facilities)
+      .where(and(eq(facilities.id, batchData.facilityId), eq(facilities.organizationId, ctx.organizationId)))
+      .for("share");
     const { provider: certifier, removalTemplateId } = await resolveCreditBatchCertifier(ctx, tx, batchData.facilityId);
     assertCreditBatchProductionWindow(batchData.startDate, batchData.endDate, certifier);
 
@@ -622,6 +627,8 @@ export async function updateCreditBatch(
       ? formatUtcDate(updateFields.endDate)
       : existingBatch.endDate;
 
+    // Preparation reads the provider before facility locks to discover runs.
+    // Re-resolve after those locks: a concurrent mapping change may have won.
     const targetCertifier = await resolveCreditBatchCertifier(ctx, tx, targetFacilityId);
     assertCreditBatchProductionWindow(effectiveStartDate, effectiveEndDate, targetCertifier.provider);
 

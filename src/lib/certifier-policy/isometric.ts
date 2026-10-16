@@ -1,8 +1,9 @@
+import type { CertifierProvider } from "@/schemas/credit-batches";
 import { getUnsampledBatchEligibilityIssue } from "@/lib/certification/credit-batch-sampling";
 
 type BatchEligibilityInput = { sampling: "sampled" } | {
   sampling: "unsampled";
-  certifier: string | null;
+  certifier: CertifierProvider | null;
   hasIsometricCredentials: boolean;
   methodBEligibility: Parameters<typeof getUnsampledBatchEligibilityIssue>[0];
 };

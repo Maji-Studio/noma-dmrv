@@ -16,8 +16,11 @@ Isometric batches (D14, [#368](https://github.com/Maji-Studio/noma-dmrv/issues/3
 The shared date helper owns date validity and ordering for every certifier.
 Create, update, membership, run options, and the certifier-aware form check use
 this split. The Isometric-conditional DB constraint
-`credit_batches_isometric_max_one_month` remains the backstop. This app decision
-does not change the protocol pin or claim a pinned v1.1 requirement; see
+`credit_batches_isometric_max_one_month` remains the backstop. Linking a facility
+to Isometric checks its active credit batches under mapping and facility locks,
+refuses overlong periods, and stamps null certifiers in the same transaction.
+Archived batches stay unchanged. This app decision does not change the protocol
+pin or claim a pinned v1.1 requirement; see
 [ADR 0016](../adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md).
 
 To move a rule between noma-wide and Isometric-only, record the decision here or

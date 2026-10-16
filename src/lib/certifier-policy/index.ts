@@ -1,9 +1,10 @@
+import type { CertifierProvider } from "@/schemas/credit-batches";
 import { getCreditBatchProductionWindowIssue } from "@/lib/credit-batch-production-window";
 
 export { isBatchEligible } from "./isometric";
 
 type BatchPeriod = {
-  certifier: string | null;
+  certifier: CertifierProvider | null;
   startDate: string | Date;
   endDate: string | Date;
 };

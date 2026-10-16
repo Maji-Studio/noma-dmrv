@@ -563,7 +563,7 @@ describe("Credit Batch Production-Run Validation", () => {
     expect(options.map((run) => run.id)).toContain(runInFacilityA.id);
   });
 
-  it.each([null, "isometric"])("applies the month cap consistently in membership helpers for %s", async (certifier) => {
+  it.each([null, "isometric"] as const)("applies the month cap consistently in membership helpers for %s", async (certifier) => {
     const ctx = makeTestOrgContext(TEST_USER_ID);
     const period = {
       facilityId: facilityA.id,

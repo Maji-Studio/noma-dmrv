@@ -1,4 +1,5 @@
 import { expectedVersionSchema } from "./helpers";
+import type { certifierProvider } from "@/db/schema/common";
 import { z } from "zod";
 import { validateBatchPeriod } from "@/lib/certifier-policy";
 
@@ -22,10 +23,10 @@ export const creditBatchSamplingChoices = ["sampled", "unsampled"] as const;
 export type CreditBatchSampling = (typeof creditBatchSamplingChoices)[number];
 
 /**
- * Certifier provider options
+ * Providers supported for credit-batch writes. Facility mappings may use others.
  */
 export const certifierProviders = ["isometric"] as const;
-export type CertifierProvider = (typeof certifierProviders)[number];
+export type CertifierProvider = (typeof certifierProvider.enumValues)[number];
 
 /**
  * Durability options (Isometric Protocol)
@@ -53,7 +54,7 @@ export const DURABILITY_TIER_FALLBACK: DurabilityOption = "1000_year";
  * 2. Production cohort — productionRunIds (membership via credit_batch_production_runs)
  * 3. Site management — siteManagementNotes
  */
-export const creditBatchFormSchemaForCertifier = (certifier: string | null) => z
+export const creditBatchFormSchemaForCertifier = (certifier: CertifierProvider | null) => z
   .object({
     // === Section 1: Overview ===
     facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
@@ -100,9 +101,13 @@ export const creditBatchFormSchema = creditBatchFormSchemaForCertifier("isometri
 // ============================================
 
 /**
- * Schema for creating a credit batch (server action)
+ * Server-action schema factory. Keep server-only create fields here.
  */
-export const createCreditBatchSchema = creditBatchFormSchema;
+export const createCreditBatchSchemaForCertifier = (certifier: CertifierProvider | null) =>
+  creditBatchFormSchemaForCertifier(certifier);
+
+/** Isometric-default create shape for inferred types and Isometric demo seeds. */
+export const createCreditBatchSchema = createCreditBatchSchemaForCertifier("isometric");
 
 /**
  * Schema for updating a credit batch (server action)

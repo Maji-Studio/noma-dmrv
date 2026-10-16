@@ -20,7 +20,7 @@ const validBase = {
 };
 
 describe("creditBatchFormSchema — production window", () => {
-  it.each(["puro_earth", null])("exempts %s from the Isometric month cap", (certifier) => {
+  it.each(["puro_earth", "verra", null] as const)("exempts %s from the Isometric month cap", (certifier) => {
     expect(creditBatchFormSchemaForCertifier(certifier).safeParse({
       ...validBase,
       startDate: "2026-01-01",
