@@ -5,19 +5,15 @@
  *
  * A database is throwaway when it is on this machine and its name carries a
  * `test` or `e2e` segment: CI's `noma_dmrv_test`, the fallback
- * `app_template_test`, or a worktree's `noma_dmrv_wt_<name>_test`. Never
- * `noma_dmrv_dev`.
+ * `app_template_test`, or a worktree's `noma_dmrv_wt_<name>_test`. Connection
+ * target overrides are refused. `noma_dmrv_dev` is never allowed.
  */
 
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+import { isLocalHost } from "./local-host";
+
 const THROWAWAY_NAME = /(^|_)(test|e2e)(_|$)/;
 /** pg lets these query parameters override the URL's host and database. */
 const TARGET_OVERRIDE_PARAMS = ["host", "hostaddr", "database", "dbname"];
-
-/** Shared with tests/e2e/global-teardown.ts so both guards agree on "local". */
-export function isLocalDatabaseHost(hostname: string): boolean {
-  return LOCAL_HOSTS.has(hostname);
-}
 
 /**
  * Vitest reads TEST_DATABASE_URL first. Playwright reads only DATABASE_URL
@@ -43,7 +39,7 @@ export function assertThrowawayTestDatabase(databaseUrl: string): void {
     // Fall through: an unparseable URL is not a throwaway database.
   }
 
-  if (isLocalDatabaseHost(host) && THROWAWAY_NAME.test(dbName) && !overridesTarget) return;
+  if (isLocalHost(host) && THROWAWAY_NAME.test(dbName) && !overridesTarget) return;
 
   throw new Error(
     `Vitest refuses database "${dbName || "(unparseable URL)"}" on host "${host || "?"}"` +
