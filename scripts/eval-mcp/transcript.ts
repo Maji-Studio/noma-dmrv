@@ -71,6 +71,7 @@ function partyRows(value: unknown): Record<string, unknown>[] | undefined {
   }
   const result = object(value);
   if (Array.isArray(result.data)) return result.data.map(object);
+  if (typeof object(result.data).id === "string") return [object(result.data)];
   return partyRows(result.structuredContent) ?? partyRows(result.content) ?? partyRows(result.text);
 }
 
@@ -119,7 +120,7 @@ export function parseTranscript(raw: string, allowIncomplete = false): Transcrip
           if (call.name === "mcp__noma__record_application") {
             call.applicationResult = applicationBody(event.tool_use_result) ?? applicationBody(block.content);
           }
-          if (call.name === "mcp__noma__find_suppliers" || call.name === "mcp__noma__find_customers") {
+          if (["find_suppliers", "find_customers", "find_supplier_locations", "find_customer_locations", "get_supplier_location", "get_customer_location", "get_order", "find_orders"].some(name => call.name === `mcp__noma__${name}`)) {
             call.partyRows = partyRows(event.tool_use_result) ?? partyRows(block.content);
           }
           if (call.name === "mcp__noma__create_supplier") {

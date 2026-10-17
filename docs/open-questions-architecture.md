@@ -6,6 +6,19 @@ these areas; the entry rules and invariants live in
 
 ## Architecture
 
+### Party write adapters per kind (`api/party-write-adapters`, opened 2026-10-17)
+
+- **Anchor:** `src/lib/mcp/tools/party-tools.ts:partyWriteTools`,
+  `src/lib/api/customer-locations-mutations.ts` and
+  `src/lib/api/supplier-locations-mutations.ts`.
+- `partyWriteTools` branches on `kind` for the customer delete cascade and the
+  location tools (`checkedDelete` is optional and asserted). The two location
+  mutation modules and their write-operation files match line for line apart
+  from schema, operation, ETag and noun. A transport change has to land twice.
+- **Follow-up:** inject the delete runner, its output schema and the location
+  tools through `deps`; extract one `partyLocationMutationResponse` helper with
+  per-kind configuration. Keep replay-before-revision and empty-body rules.
+
 ### Formulation bin foreign-key backstop (`data/formulation-bin-fk-backstop`, opened 2026-10-16)
 
 - **Anchor:** `src/db/schema/facilities.ts:storageLocations`,
@@ -30,6 +43,8 @@ these areas; the entry rules and invariants live in
 - **Follow-up:** add a test-only interception seam, bump the customer once through
   its operation, then release the agent. Score one stale write, a new read and
   one retry with the requested final change. Keep the case skipped until then.
+- Phase 7c adds the location-update, missing-GPS, archive, in-use refusal and
+  archived-order-destination cases; none provides the interception seam above.
 
 ### Align the Applications page credit batch filter (`app/application-batch-lineage-filter`, opened 2026-10-15)
 
@@ -216,6 +231,17 @@ these areas; the entry rules and invariants live in
   **To resolve:** if an operation ever needs external work inside its
   transaction, race the callback against the deadline and keep the client out
   of the pool until the callback settles; until then keep `execute` database-only.
+
+### Location distance fill runs inside the pair save (`data/location-distance-fill-cost`, opened 2026-10-16)
+
+- **Anchor:** `src/data-access/location-distance-fill.ts:fillMissingLocationDistances`.
+- A supplier pair save locks the supplier FOR UPDATE and every unfilled intake of
+  that supplier, then fills their legs in the same transaction. On a large
+  supplier this is a long transaction under the 10 s operation budget.
+- The fill stays synchronous and atomic: past the deadline the whole write fails
+  with retryable `deadline_exceeded`, never a partial fill. No batch cap.
+- **Follow-up:** measure the p99 on the Mafinga seed. If it does not fit, design a
+  durable queued continuation with changed response semantics.
 
 ### Production run row precedes delivery lineage artifacts (`data/production-run-artifact-order`, opened 2026-10-14)
 

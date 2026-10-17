@@ -153,13 +153,16 @@ describe("party refusals and atomic effects", () => {
     expect(result.locations).toHaveLength(1);
     expect(await db.select().from(suppliers).where(and(eq(suppliers.organizationId, f.ctx.organizationId), eq(suppliers.name, "Rolled back collision")))).toEqual([]);
   });
-  it("refuses customer deletion with an archived order and deletes nothing", async () => {
+  it("deletes an archived order without deliveries together with the customer", async () => {
     const f = await fixture();
     const order = (await runOperation(recordOrder, f.ctx, orderInput(f))).data;
     await db.update(orders).set({ archivedAt: new Date() }).where(eq(orders.id, order.id));
-    await expect(runOperation(deleteCustomer, f.ctx, { customerId: f.customer.id, expectedVersion: 1 })).rejects.toMatchObject({ code: "conflict", issues: [expect.objectContaining({ meta: { orderCodes: [order.code] } })] });
-    expect(await db.select().from(customerLocations).where(eq(customerLocations.customerId, f.customer.id))).toHaveLength(1);
-    expect(await db.select().from(customers).where(eq(customers.id, f.customer.id))).toHaveLength(1);
+    const deleted = await runOperation(deleteCustomer, f.ctx, { customerId: f.customer.id, expectedVersion: 1 });
+    expect(deleted.data).toMatchObject({ cascade: { orders: [{ id: order.id, code: order.code }] },
+      warnings: [`Also deleted 1 order without deliveries: ${order.code}.`] });
+    expect(await db.select().from(orders).where(eq(orders.id, order.id))).toHaveLength(0);
+    expect(await db.select().from(customerLocations).where(eq(customerLocations.customerId, f.customer.id))).toHaveLength(0);
+    expect(await db.select().from(customers).where(eq(customers.id, f.customer.id))).toHaveLength(0);
   });
   it("refuses a registered site without an order on the second location and preserves every child", async () => {
     const f = await fixture();

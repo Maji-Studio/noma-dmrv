@@ -9,7 +9,7 @@ import type { ApiHttpError } from "./http-error";
 
 export const ACTION_STATUS = {
   validation_failed: 422, not_found: 404, stale_version: 412,
-  concurrent_write_retry: 409, conflict: 409, certification_locked: 409, insufficient_stock: 409, stock_basis_changed: 409,
+  concurrent_write_retry: 409, conflict: 409, certification_locked: 409, insufficient_stock: 409, stock_basis_changed: 409, cascade_changed: 409,
   forbidden: 403, reference_not_found: 422, reference_ambiguous: 422,
   registry_not_configured: 409, registry_read_refused: 422, registry_unavailable: 503,
   storage_not_configured: 409, storage_unavailable: 503,
@@ -61,7 +61,7 @@ export function problemResponse(options: ProblemOptions): Response {
     ...(!internal && options.blockers ? { blockers: options.blockers } : {}),
     ...(!internal && options.current !== undefined ? { current: options.current } : {}),
     ...(!internal && options.preview ? { preview: options.preview } : {}),
-  } satisfies z.infer<typeof problemSchema>, { status, headers });
+  } satisfies Omit<z.infer<typeof problemSchema>, "preview"> & Pick<ProblemOptions, "preview">, { status, headers });
 }
 
 export function apiHttpErrorResponse(error: ApiHttpError, instance: string, requestId: string): Response {

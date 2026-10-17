@@ -128,6 +128,12 @@ export function useSupplier(supplierId: string, enabled = true) {
   });
 }
 
+/** Read one supplier from the server now, bypassing the cache, for a sheet that needs its current row. */
+export function useFetchSupplier() {
+  const queryClient = useQueryClient();
+  return (supplierId: string) => queryClient.fetchQuery({ ...supplierQueryOptions(supplierId), staleTime: 0 });
+}
+
 // ============================================
 // Supplier Mutation Hooks
 // ============================================

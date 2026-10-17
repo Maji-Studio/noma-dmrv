@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { createDeliveryInTransaction, updateDeliveryInTransaction } from "@/data-access/delivery-output-writes";
 import { getDeliveryWithRelations, getDeliveries } from "@/data-access/deliveries";
-import { updateCustomerLocation } from "@/data-access/customers";
+import { updateCustomerLocation } from "./helpers/customer-location-operations";
 import { archiveFacility } from "@/data-access/facilities";
 import { customerLocations, orders, transportLegs } from "@/db/schema";
 import { countedRoundTripKm } from "@/lib/calculations/round-trip";
