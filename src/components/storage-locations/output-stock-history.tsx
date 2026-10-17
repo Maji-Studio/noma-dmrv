@@ -21,6 +21,10 @@ import { CalculationDisclosure } from "./stock-figures";
 import { OutputStockForm } from "./output-stock-form";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { Notice } from "@/components/ui/notice";
+// PROTOTYPE (issue #1004): variants behind ?variant=A|B|C, fixture entries, throwaway branch only.
+import { PROTO_ENTRIES, PROTO_PARTS, formatWet } from "./bin-history-proto/parts";
+import { PrototypeSwitcher, useProtoVariant, type VariantKey } from "./bin-history-proto/switcher";
+import { BinHistoryBreakdown } from "./bin-history-proto/variants";
 
 const ICON_PX = 16;
 const TIME_FORMAT = "HH:mm";
@@ -58,6 +62,7 @@ interface LedgerRowProps {
   moistureEntry?: OutputStockHistoryEntry;
   reversed: boolean;
   defaultOpen: boolean;
+  variant: VariantKey | null;
   timeZone: string;
   facilityId: string;
   onEdit: (entry: OutputStockHistoryEntry) => void;
@@ -68,7 +73,8 @@ interface LedgerRowProps {
  * and the dry biochar left after. Under the line: whether it still counts, the
  * bin before and after, what a correction changed, then who recorded it.
  */
-function LedgerRow({ entry, kind, reversedEntry, replacedBy, moistureEntry, reversed, defaultOpen, timeZone, facilityId, onEdit }: LedgerRowProps) {
+function LedgerRow({ entry, kind, reversedEntry, replacedBy, moistureEntry, reversed, defaultOpen, variant, timeZone, facilityId, onEdit }: LedgerRowProps) {
+  const protoParts = variant ? PROTO_PARTS[entry.id] : undefined;
   const label = outputStockEventLabel(kind);
   const subject = `${label.toLowerCase()} on ${formatFacilityDateTime(entry.occurredAt, timeZone)}`;
   const recordedLater = entry.recordedAt.slice(0, 16) !== entry.occurredAt.slice(0, 16);
@@ -77,13 +83,15 @@ function LedgerRow({ entry, kind, reversedEntry, replacedBy, moistureEntry, reve
   return (
     <LedgerLine id={`output-movement-${entry.id}`} time={formatFacilityTime(new Date(entry.occurredAt), timeZone, TIME_FORMAT)}
       iconKind={entry.correctsMovementId && entry.kind !== "reversal" ? kind : entry.kind} label={label} chips={chips} note={note}
-      amount={entryAmount(entry, kind)} after={formatMassKg(entry.afterDryKg)} struck={reversed} defaultOpen={defaultOpen}>
+      amount={entryAmount(entry, kind)} after={protoParts ? formatWet(protoParts.after.wetKg) : formatMassKg(entry.afterDryKg)} struck={reversed} defaultOpen={defaultOpen}>
       {reversed && (
         <p className="body-caption text-[var(--color-text-secondary)]">
           {replacedBy ? `Replaced by the correction recorded ${formatFacilityDateTime(replacedBy.recordedAt, timeZone)}.` : "Reversed."} It no longer counts toward the stock.
         </p>
       )}
-      <LedgerBeforeAfter title="Dry biochar in the bin" before={`${formatMassKg(entry.beforeDryKg)} dry`} after={`${formatMassKg(entry.afterDryKg)} dry`} />
+      {protoParts && variant
+        ? <BinHistoryBreakdown variant={variant} parts={protoParts} />
+        : <LedgerBeforeAfter title="Dry biochar in the bin" before={`${formatMassKg(entry.beforeDryKg)} dry`} after={`${formatMassKg(entry.afterDryKg)} dry`} />}
       {reversedEntry && (
         <LedgerBeforeAfter title={`Corrects the ${label.toLowerCase()} from ${formatFacilityDateTime(reversedEntry.occurredAt, timeZone)}`} labels={["Original", "Corrected"]}
           before={{ value: entryFigure(reversedEntry, kind), caption: `${formatMassKg(reversedEntry.afterDryKg)} dry after` }}
@@ -127,7 +135,9 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<OutputStockHistoryEntry | null>(null);
   const history = useOutputStockHistory(storageLocationId, open);
-  const entries = history.data ?? [];
+  const variant = useProtoVariant();
+  const data = variant ? PROTO_ENTRIES : history.data;
+  const entries = data ?? [];
   const correctedIds = new Set(entries.filter(entry => entry.kind === "reversal").map(entry => entry.correctsMovementId));
   // A reading stops counting once the entry that measured it is corrected.
   const isReversed = (entry: OutputStockHistoryEntry) => correctedIds.has(entry.measuredByMovementId ?? entry.id);
@@ -161,14 +171,14 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
             <InfoHint label="About stock history">{HISTORY_HINT}</InfoHint>
           </h3>
         </div>
-          {history.isLoading && <p role="status" className="body-caption text-[var(--color-text-secondary)]">Loading the stock history</p>}
-          {history.error && <Notice tone="error">{history.error.message}</Notice>}
-          {history.data?.length === 0 && <EmptyState icon={<ClockCounterClockwiseIcon size={32} />} title="No stock history" description="Recorded movements will appear here." padding="sm" />}
+          {!variant && history.isLoading && <p role="status" className="body-caption text-[var(--color-text-secondary)]">Loading the stock history</p>}
+          {!variant && history.error && <Notice tone="error">{history.error.message}</Notice>}
+          {data?.length === 0 && <EmptyState icon={<ClockCounterClockwiseIcon size={32} />} title="No stock history" description="Recorded movements will appear here." padding="sm" />}
           {timeline.length > 0 && <div className="tabular-nums">
             {timeline.map((entry, index) => {
               const day = formatFacilityDay(entry.occurredAt, clock.timeZone);
               const dayHeader = index === 0 || day !== formatFacilityDay(timeline[index - 1].occurredAt, clock.timeZone)
-                ? <LedgerDayHeader day={day} afterLabel={index === 0 ? "Dry biochar after" : undefined} /> : null;
+                ? <LedgerDayHeader day={day} afterLabel={index === 0 ? (variant ? "Wet stock after" : "Dry biochar after") : undefined} /> : null;
               const kind = entry.correctsMovementId && entry.kind !== "reversal" ? originalKind(entry) : entry.kind;
               return <div key={entry.id}>
                 {dayHeader}
@@ -184,6 +194,7 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
                     moistureEntry={moistureFor(entry)}
                     reversed={isReversed(entry)}
                     defaultOpen={!!movementId}
+                    variant={variant}
                     facilityId={facilityId}
                     onEdit={setEditing}
                   />
@@ -193,6 +204,7 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
           </div>}
       </div>
     </Modal>
+    {variant && <PrototypeSwitcher current={variant} />}
     <FormDialog isOpen={editing !== null} onClose={() => setEditing(null)} ariaLabel="Edit lost mass" width="md">
       <h3 className="title-heading-3 mb-20">{LOST_MASS_LABEL}</h3>
       {editing && <OutputStockForm key={editing.id} storageLocationId={storageLocationId} facilityId={facilityId} correction={editing}
