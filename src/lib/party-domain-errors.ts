@@ -65,3 +65,10 @@ export function customerLocationArchiveConflict(name: string, archived: boolean)
 export function customerLocationLastActive(name: string): DomainError {
   return partyRefusal("conflict", `${name} is this customer's only active location, so it cannot be archived. Add or restore another location first.`, ["locationId"]);
 }
+
+export function customerHasDeliveries(deliveryCodes: string[] = []): DomainError {
+  return partyRefusal("conflict", `Customer ${IN_USE_DELETE_MARKER} deliveries were recorded on its orders. Archive it instead.`, ["customerId"], { deliveryCodes });
+}
+export function cascadeChanged(): DomainError {
+  return partyRefusal("cascade_changed", "The orders this delete would remove changed since the preview. Review them and confirm again.", ["cascadeFingerprint"]);
+}

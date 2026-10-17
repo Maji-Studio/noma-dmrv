@@ -7,7 +7,8 @@
 
 import { createCustomer, updateCustomer, deleteCustomer, archiveCustomer, restoreCustomer } from "@/lib/operations/customers";
 import { archiveCustomerLocation, restoreCustomerLocation, addCustomerLocation, updateCustomerLocation, deleteCustomerLocation } from "@/lib/operations/customer-locations";
-import { runOperationInProcess } from "@/lib/operations/runner";
+import { runWithCascadePreview } from "@/lib/operations/cascade-preview";
+import { keylessOutcomeUnknown, runOperation, runOperationInProcess } from "@/lib/operations/runner";
 import { z } from "zod";
 import { type Customer, type CustomerLocation } from "@/db/schema";
 import {
@@ -27,7 +28,7 @@ import {
   deleteCustomerLocationSchema,
 } from "@/schemas/customers";
 import { customerLocationVersionInput } from "@/schemas/customer-location-input";
-import { customerVersionInput } from "@/schemas/customer-input";
+import { customerVersionInput, deleteCustomerInput } from "@/schemas/customer-input";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
 
@@ -187,15 +188,25 @@ export async function updateCustomerFn(
  * Delete a customer
  */
 export async function deleteCustomerFn(
-  data: z.infer<typeof customerVersionInput>
-): Promise<ActionResult<void>> {
+  data: z.infer<typeof deleteCustomerInput>
+) {
   return withAction(async (ctx) => {
 
-    const validated = customerVersionInput.parse(data);
-    await runOperationInProcess(deleteCustomer, ctx, validated);
-
-    return undefined;
+    const validated = deleteCustomerInput.parse(data);
+    try {
+      return (await runWithCascadePreview(deleteCustomer, ctx, validated)).data;
+    } catch (error) {
+      throw keylessOutcomeUnknown(error);
+    }
   }, { fallbackMessage: "Failed to delete customer", log: { message: LOG_MESSAGE, context: { op: "customer:delete" } } });
+}
+
+/** Run the same locked delete and roll it back for the confirmation. */
+export async function previewDeleteCustomerFn(data: z.infer<typeof deleteCustomerInput>) {
+  return withAction(async ctx => {
+    const result = await runOperation(deleteCustomer, ctx, deleteCustomerInput.parse(data), { dryRun: true });
+    return result.data;
+  }, { fallbackMessage: "Failed to preview customer deletion", log: { message: LOG_MESSAGE, context: { op: "customer:delete-preview" } } });
 }
 
 // ============================================

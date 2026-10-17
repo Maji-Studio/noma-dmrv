@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { deadlineExceeded, DomainError } from "@/lib/domain-errors";
+import { deadlineExceeded, DomainError, type StockPreview } from "@/lib/domain-errors";
 import type { OrgContext } from "@/lib/auth/server";
 import { logApiError, shouldLogDomainError } from "@/lib/api/route-error";
 import type { Jsonified } from "./jsonified";
@@ -49,7 +49,7 @@ export async function runWithStockBasisPreview<Input extends z.ZodType, Output>(
   input: unknown,
   options: StockBasisPreviewOptions,
   basisOf: (data: Jsonified<Output>) => string | undefined,
-  allocationsOf?: (data: Jsonified<Output>) => NonNullable<DomainError["preview"]>["allocations"],
+  allocationsOf?: (data: Jsonified<Output>) => StockPreview["allocations"],
 ): Promise<OperationResult<Output>> {
   const { deadlineAt, ...runOptions } = options;
   if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("before starting");

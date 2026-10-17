@@ -1,5 +1,4 @@
-import { deleteCustomer } from "./customers";
-import { createCustomerApi, updateCustomerApi, archiveCustomerApi, restoreCustomerApi } from "./customer-api";
+import { createCustomerApi, updateCustomerApi, deleteCustomerApi, archiveCustomerApi, restoreCustomerApi } from "./customer-api";
 import { deleteSupplier } from "./suppliers";
 import { createSupplierApi, updateSupplierApi, archiveSupplierApi, restoreSupplierApi } from "./supplier-api";
 import { deleteFormulation } from "./formulations";
@@ -19,7 +18,7 @@ import { requestDocumentUpload } from "./document-uploads";
 export const operationRegistry = {
   create_customer: createCustomerApi,
   update_customer: updateCustomerApi,
-  delete_customer: deleteCustomer,
+  delete_customer: deleteCustomerApi,
   archive_customer: archiveCustomerApi,
   restore_customer: restoreCustomerApi,
 

@@ -3,7 +3,7 @@ import { readApiCustomerLocation } from "@/lib/read-models/api-customer-location
 import type { CustomerRepresentation } from "@/lib/representations/customers";
 import type { CustomerLocationRepresentation } from "@/lib/representations/customer-locations";
 import { createCustomerApiInput, updateCustomerApiInput, customerVersionInput } from "@/schemas/customer-input";
-import { createCustomer, updateCustomer, archiveCustomer, restoreCustomer } from "./customers";
+import { createCustomer, updateCustomer, archiveCustomer, restoreCustomer, deleteCustomer } from "./customers";
 import type { Operation } from "./runner";
 
 type CustomerOutput = { customer: CustomerRepresentation };
@@ -45,5 +45,16 @@ export const restoreCustomerApi: Operation<typeof customerVersionInput, Customer
   execute: async (scope, input) => {
     const row = await restoreCustomer.execute(scope, input);
     return { customer: await readApiCustomer(scope.ctx, { id: row.id }, scope.tx) };
+  },
+};
+
+/** Preserve the pre-delete customer alongside the cascade for preview and replay. */
+export const deleteCustomerApi: Operation<typeof deleteCustomer.input, CustomerOutput & Pick<Awaited<ReturnType<typeof deleteCustomer.execute>>, "cascade" | "warnings">> = {
+  ...deleteCustomer,
+  describe: input => ({ outcome: "deleted", entityType: "customer", entityIds: [input.customerId], versionBefore: input.expectedVersion, versionAfter: null }),
+  execute: async (scope, input) => {
+    const customer = await readApiCustomer(scope.ctx, { id: input.customerId }, scope.tx);
+    const { cascade, warnings } = await deleteCustomer.execute(scope, input);
+    return { customer, cascade, warnings };
   },
 };

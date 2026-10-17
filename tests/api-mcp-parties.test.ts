@@ -21,7 +21,7 @@ import { supplierRepresentationSchema } from "@/lib/representations/suppliers";
 import { customerRepresentationSchema } from "@/lib/representations/customers";
 import { createSupplierWithLocationsFn, updateSupplierFn, deleteSupplierFn, archiveSupplierFn, restoreSupplierFn } from "@/fn/suppliers";
 import { createCustomerWithLocationsFn, updateCustomerFn, deleteCustomerFn, archiveCustomerFn, restoreCustomerFn } from "@/fn/customers";
-import { createApiOrderReadFixture, insertReadOrder, removeApiOrderReadFixture, readParams, readRequest } from "./helpers/api-order-read-fixture";
+import { createApiOrderReadFixture, insertReadDelivery, insertReadOrder, removeApiOrderReadFixture, readParams, readRequest } from "./helpers/api-order-read-fixture";
 
 const auth = vi.hoisted(() => ({ session: vi.fn() }));
 vi.mock("@/lib/auth/providers/better-auth-server", async original => ({
@@ -337,8 +337,9 @@ describe.each(["supplier", "customer"] as const)("%s refusal parity and isolatio
     } else {
       const savedCustomer = await saved(kind);
       const order = await insertReadOrder(a, "PARTY-PARITY-ORDER", { customerId: savedCustomer.data.id, customerLocationId: savedCustomer.locations[0].id });
+      const delivery = await insertReadDelivery(a, order.id, order.quantityKg);
       const problem = await refusal(kind, "delete", {}, savedCustomer.data, "conflict", "/customerId");
-      expect(problem.errors[0].meta).toEqual({ orderCodes: [order.code] });
+      expect(problem.errors[0].meta).toEqual({ deliveryCodes: [delivery.code] });
     }
   }, TIMEOUT_MS);
 

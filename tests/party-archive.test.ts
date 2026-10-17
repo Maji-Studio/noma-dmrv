@@ -7,11 +7,12 @@ import * as supplierActions from "@/fn/suppliers";
 import * as customerActions from "@/fn/customers";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { activityEvents, customers, suppliers, orders, feedstocks, storageLocations, certifierProjects, certifierStorageLocations } from "@/db/schema";
+import { activityEvents, customers, suppliers, orders, deliveries, feedstocks, storageLocations, certifierProjects, certifierStorageLocations } from "@/db/schema";
 import * as supplierOps from "@/lib/operations/suppliers";
 import * as customerOps from "@/lib/operations/customers";
 import { recordOrder, updateOrder } from "@/lib/operations/orders";
 import { runOperation, runOperationInProcess, type RunOptions } from "@/lib/operations/runner";
+import { insertReadDelivery } from "./helpers/api-order-read-fixture";
 import { orderInput, createOrderDestination } from "./helpers/order-operation-fixture";
 import { createPartyArchiveFixture, cleanupPartyArchiveFixture, partyIntakeInput, type PartyArchiveFixture as OrderFixture } from "./helpers/party-archive-fixture";
 
@@ -125,10 +126,14 @@ for (const kind of ["supplier", "customer"] as const) {
       expect(await db.select().from(activityEvents).where(eq(activityEvents.entityId, row.id))).toHaveLength(1);
     });
 
-    it("refuses archived PATCH before stale versions and permits only unused archived deletes", async () => {
+    it("refuses archived PATCH before stale versions and permits archived deletes without blockers", async () => {
       const f = await fixture(); const row = await target(f);
+      let customerOrder: { id: string; code: string } | undefined;
+      let deliveryId: string | undefined;
       if (kind === "customer") {
         const order = (await runOperation(recordOrder, f.ctx, orderInput(f))).data;
+        customerOrder = { id: order.id, code: order.code };
+        deliveryId = (await insertReadDelivery(f, order.id, order.quantityKg, true)).id;
         await db.update(orders).set({ archivedAt: new Date() }).where(eq(orders.id, order.id));
       } else {
         await db.update(feedstocks).set({ archivedAt: new Date() }).where(eq(feedstocks.id, f.intake.id));
@@ -144,11 +149,17 @@ for (const kind of ["supplier", "customer"] as const) {
         ? runOperation(supplierOps.deleteSupplier, f.ctx, { supplierId: id, expectedVersion })
         : runOperation(customerOps.deleteCustomer, f.ctx, { customerId: id, expectedVersion });
       await expect(remove(row.id, 2)).rejects.toMatchObject(issue("conflict", kind));
+      if (kind === "customer") {
+        await db.delete(deliveries).where(eq(deliveries.id, deliveryId!));
+        expect(await remove(row.id, 2)).toMatchObject({ data: { customer: { id: row.id }, cascade: { orders: [customerOrder] } } });
+        expect(await db.select().from(orders).where(eq(orders.id, customerOrder!.id))).toEqual([]);
+        expect(await db.select().from(customers).where(eq(customers.id, row.id))).toEqual([]);
+      }
       const spare = kind === "supplier"
         ? (await runOperationInProcess(supplierOps.createSupplier, f.ctx, { name: "E2E Unused supplier", locations: [site] })).supplier
         : (await runOperationInProcess(customerOps.createCustomer, f.ctx, { name: "E2E Unused customer", locations: [site] })).customer;
       await archive(f, spare.id, 1);
-      expect(await remove(spare.id, 2)).toMatchObject({ data: null });
+      expect(await remove(spare.id, 2)).toMatchObject({ data: kind === "supplier" ? null : { customer: { id: spare.id }, cascade: { orders: [] }, warnings: [] } });
     });
 
     it("refuses missing and foreign command targets without touching foreign rows", async () => {

@@ -33,7 +33,7 @@ export function representationCheckedUpdate(id: string, revision: number): typeo
 export function representationCheckedDelete(id: string, revision: number): Operation<typeof deleteCustomer.input, CustomerRepresentation> {
   return {
     ...deleteCustomer,
-    describe: input => deleteCustomer.describe!(input, undefined),
+    describe: input => ({ outcome: "deleted", entityType: "customer", entityIds: [input.customerId], versionBefore: input.expectedVersion, versionAfter: null }),
     execute: async (scope, input) => {
       const row = await checkRevision(scope, id, revision);
       await deleteCustomer.execute(scope, input);

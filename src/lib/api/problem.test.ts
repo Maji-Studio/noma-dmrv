@@ -14,7 +14,7 @@ const expectedActionStatuses = {
   conflict: 409,
   certification_locked: 409,
   insufficient_stock: 409,
-  stock_basis_changed: 409,
+  stock_basis_changed: 409, cascade_changed: 409,
   forbidden: 403,
   reference_not_found: 422,
   reference_ambiguous: 422,

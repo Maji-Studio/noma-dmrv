@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, notExists } from "drizzle-orm";
 import { db } from "@/db";
-import { activityEvents, apiIdempotencyRecords, suppliers, customers, supplierLocations, customerLocations, supplierLocationFacilityDistances, customerLocationFacilityDistances, certifierProjects, certifierStorageLocations, feedstocks } from "@/db/schema";
+import { activityEvents, apiIdempotencyRecords, suppliers, customers, supplierLocations, customerLocations, supplierLocationFacilityDistances, customerLocationFacilityDistances, certifierProjects, certifierStorageLocations, feedstocks, orders } from "@/db/schema";
 import type { ApiScope } from "@/lib/auth/api-scopes";
 import { buildCreateStorageLocationRequest } from "@/lib/isometric/storage-locations";
 import { createApiKey } from "@/data-access/api-keys";
@@ -20,7 +20,7 @@ import { supplierRepresentationSchema } from "@/lib/representations/suppliers";
 import { customerRepresentationSchema } from "@/lib/representations/customers";
 import { createSupplierWithLocationsFn, updateSupplierFn } from "@/fn/suppliers";
 import { createCustomerWithLocationsFn, updateCustomerFn } from "@/fn/customers";
-import { createApiOrderReadFixture, insertReadOrder, removeApiOrderReadFixture, readParams, readRequest } from "./helpers/api-order-read-fixture";
+import { createApiOrderReadFixture, insertReadDelivery, insertReadOrder, removeApiOrderReadFixture, readParams, readRequest } from "./helpers/api-order-read-fixture";
 
 const auth = vi.hoisted(() => ({ session: vi.fn() }));
 vi.mock("@/lib/auth/providers/better-auth-server", async original => ({
@@ -467,7 +467,8 @@ describe.each(["supplier", "customer"] as const)("%s REST writes", kind => {
       meta = { feedstockCodes: [intake.code] };
     } else {
       const order = await insertReadOrder(a, "PARTY-ORDER", { customerId: row.data.id, customerLocationId: row.locations[0].id, archivedAt: archived ? new Date() : null });
-      meta = { orderCodes: [order.code] };
+      const delivery = await insertReadDelivery(a, order.id, order.quantityKg, archived);
+      meta = { deliveryCodes: [delivery.code] };
     }
     const before = await snapshot();
     const refusal = await problem(await mutate(kind, "delete", row.data.id), 409, "conflict", `/${kind}Id`);
@@ -513,6 +514,15 @@ describe.each(["supplier", "customer"] as const)("%s REST writes", kind => {
       .toContainEqual(expect.objectContaining({ name: site.name, country: site.country, gpsLatitude: site.gpsLatitude, gpsLongitude: site.gpsLongitude, isDefault: true, version: 1 }));
   });
 });
+
+it("deletes a customer and its order without deliveries", async () => {
+  const row = await saved("customer");
+  const order = await insertReadOrder(a, "PARTY-CASCADE-ORDER", { customerId: row.data.id, customerLocationId: row.locations[0].id });
+  const response = await mutate("customer", "delete", row.data.id);
+  expect(response.status).toBe(204);
+  expect(await db.select().from(customers).where(eq(customers.id, row.data.id))).toEqual([]);
+  expect(await db.select().from(orders).where(eq(orders.id, order.id))).toEqual([]);
+}, TIMEOUT_MS);
 
 it("returns customer site defaults on create and the location list", async () => {
   const defaults = { siteDescription: "Field beside the river", defaultSoilTemperatureC: 24.5 };

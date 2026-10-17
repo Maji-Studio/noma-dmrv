@@ -1,7 +1,20 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { ensureStorageLocation } from "@/fn/certification/storage-locations";
+import { deleteCustomer } from "@/lib/operations/customers";
+import { deleteApplication } from "@/lib/operations/applications";
+import { recordOrder, deleteOrder } from "@/lib/operations/orders";
+import { orderInput } from "./helpers/order-operation-fixture";
+import { logger } from "@/lib/log";
+import { installFakeRegistry } from "./fixtures/fake-registry";
+vi.mock("@/data-access/certifier-credentials", async importOriginal =>
+  (await import("./fixtures/fake-registry")).fakeCredentialsModule(importOriginal));
+vi.mock("@/lib/isometric/client", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/lib/isometric/client")>();
+  return (await import("./fixtures/fake-registry")).createFakeClientModule(actual);
+});
+import { afterEach, describe, vi, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { db, withDedicatedSessionAdvisoryLock } from "@/db";
-import { certifierProjects, certifierStorageLocations, customerLocations } from "@/db/schema";
+import { applications, deliveries, certifierSyncEvents, certifierProjects, certifierStorageLocations, customerLocations } from "@/db/schema";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import { withStorageLocationRegistrationLocks } from "@/data-access/certifier-storage-locations";
 import { getCustomerLocations } from "@/data-access/customers";
@@ -13,7 +26,7 @@ import { createPartyArchiveFixture, cleanupPartyArchiveFixture, type PartyArchiv
 
 const fixtures: PartyArchiveFixture[] = [];
 const BARRIER_TIMEOUT_MS = 5_000;
-afterEach(async () => { for (const f of fixtures.splice(0)) await cleanupPartyArchiveFixture(f); });
+afterEach(async () => { for (const f of fixtures.splice(0)) { await db.delete(certifierSyncEvents).where(eq(certifierSyncEvents.organizationId, f.ctx.organizationId)); await cleanupPartyArchiveFixture(f); } });
 async function fixture() { const f = await createPartyArchiveFixture(); fixtures.push(f); return f; }
 const version = (f: PartyArchiveFixture) => ({ locationId: f.location.id, expectedVersion: f.location.version });
 const key = (f: PartyArchiveFixture) => certifierStorageSiteLockKey(f.ctx.organizationId, f.location.id);
@@ -116,6 +129,7 @@ describe("customer storage-site registration fence", () => {
     const f = await fixture();
     await withDedicatedSessionAdvisoryLock(key(f), async () => {
       await expect(runOperationInProcess(deleteCustomerLocation, f.ctx, version(f))).rejects.toMatchObject(busy);
+      await expect(runOperationInProcess(deleteCustomer, f.ctx, { customerId: f.customer.id, expectedVersion: 1 })).rejects.toMatchObject(busy);
     });
     expect((await runOperationInProcess(deleteCustomerLocation, f.ctx, version(f))).id).toBe(f.location.id);
   });
@@ -123,9 +137,66 @@ describe("customer storage-site registration fence", () => {
   it("refuses delete for a completed mapping without an application, delivery or order", async () => {
     const f = await fixture();
     await mapping(f);
+    await expect(runOperationInProcess(deleteCustomer, f.ctx, { customerId: f.customer.id, expectedVersion: 1 })).rejects.toMatchObject({ code: "conflict", retryable: false, issues: [{ path: ["customerId"], meta: { locationIds: [f.location.id] } }] });
     await expect(runOperationInProcess(deleteCustomerLocation, f.ctx, version(f))).rejects.toMatchObject({
       code: "conflict", retryable: false, issues: [{ path: ["locationId"] }],
       message: "Customer location was not deleted because it is registered with Isometric as a storage site. Archive it instead.",
     });
   });
+});
+
+async function registrationFixture() {
+  const f = await fixture();
+  const externalProjectId = `prj_${crypto.randomUUID()}`;
+  await db.insert(certifierProjects).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id,
+    provider: "isometric", externalProjectId, externalFacilityId: `fcl_${crypto.randomUUID()}` });
+  const order = await runOperationInProcess(recordOrder, f.ctx, orderInput(f));
+  const [delivery] = await db.insert(deliveries).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id,
+    orderId: order.id, storageLocationId: f.bin.id, code: "E2E-FENCE-DEL", deliveryDate: new Date("2026-09-14"), deliveredWetMassKg: 100, massDryKg: 100 }).returning();
+  const [application] = await db.insert(applications).values({ organizationId: f.ctx.organizationId,
+    code: "E2E-FENCE-APP", deliveryId: delivery.id, applicationDate: new Date("2026-09-15"), fieldSizeHa: 1,
+    biocharAppliedTons: 0.1, biocharAppliedDryTons: 0.1 }).returning();
+  return { ...f, order, delivery, application, externalProjectId };
+}
+async function removeRegistrationDependencies(f: Awaited<ReturnType<typeof registrationFixture>>) {
+  await runOperationInProcess(deleteApplication, f.ctx, { applicationId: f.application.id, expectedVersion: f.application.version });
+  // This branch has no delivery-delete operation and retains posted deliveries.
+  // Direct fixture deletion models the peer's Open-delivery deletion here.
+  await db.delete(deliveries).where(eq(deliveries.id, f.delivery.id));
+  await runOperationInProcess(deleteOrder, f.ctx, { orderId: f.order.id, expectedVersion: f.order.version });
+}
+async function expectMappedRefusals(f: PartyArchiveFixture) {
+  await expect(runOperationInProcess(deleteCustomerLocation, f.ctx, version(f)))
+    .rejects.toMatchObject({ code: "conflict", retryable: false, issues: [{ path: ["locationId"] }], message: expect.stringContaining("registered with Isometric") });
+  await expect(runOperationInProcess(deleteCustomer, f.ctx, { customerId: f.customer.id, expectedVersion: 1 }))
+    .rejects.toMatchObject({ code: "conflict", retryable: false, issues: [{ path: ["customerId"] }], message: expect.stringContaining("registered storage sites") });
+}
+
+it("fences both deletes during a real registration POST after application and delivery deletion", async () => {
+  const f = await registrationFixture(); const registry = installFakeRegistry();
+  const paused = registry.deferNextResponse(`POST /projects/${f.externalProjectId}/storage_locations`);
+  const registration = ensureStorageLocation({ orgCtx: f.ctx, applicationId: f.application.id, log: logger });
+  try {
+    await Promise.race([paused.started, registration.then(() => { throw new Error("Registration completed before the POST barrier"); })]);
+    await removeRegistrationDependencies(f);
+    await expect(runOperationInProcess(deleteCustomerLocation, f.ctx, version(f))).rejects.toMatchObject(busy);
+    await expect(runOperationInProcess(deleteCustomer, f.ctx, { customerId: f.customer.id, expectedVersion: 1 })).rejects.toMatchObject(busy);
+  } finally { paused.release(); await registration; }
+  await expectMappedRefusals(f);
+});
+
+it("resumes a lost POST response by reference and keeps the mapping after its dependencies are gone", async () => {
+  const f = await registrationFixture(); const registry = installFakeRegistry();
+  const path = `/projects/${f.externalProjectId}/storage_locations` as const;
+  registry.passNext(`GET ${path}`);
+  registry.failNext(`POST ${path}`, "drop-after-commit");
+  registry.failNext(`GET ${path}`, "reject-before-commit");
+  const args = { orgCtx: f.ctx, applicationId: f.application.id, log: logger };
+  await expect(ensureStorageLocation(args)).rejects.toThrow();
+  expect(registry.storageLocations).toHaveLength(1);
+  const resumed = await ensureStorageLocation(args);
+  expect(resumed.source).toBe("reconciliation");
+  expect(registry.requestCount("POST", path)).toBe(1);
+  await removeRegistrationDependencies(f);
+  await expectMappedRefusals(f);
 });
