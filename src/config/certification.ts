@@ -16,8 +16,7 @@ export const METHOD_B_MINIMUM_METHOD_A_SAMPLES = 30;
 
 /**
  * Protocol assigned when a facility ↔ registry project mapping is created
- * without an explicit choice. Changeable afterwards in Certification →
- * Settings. One source of truth for the connector UI, the certifier dialog,
+ * without an explicit choice. Not changeable in the UI. One source of truth for the connector UI, the certifier dialog,
  * and the data-access default.
  */
 export const DEFAULT_PROTOCOL_SLUG = "biochar";
