@@ -13,6 +13,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui";
 import {
+  FormActions,
   FormField,
   FormInput,
   SectionLabel,
@@ -50,7 +51,9 @@ export function EmissionEstimatesForm({
 
   const {
     register,
+    control,
     handleSubmit,
+    reset,
     setError,
     formState: { errors, isSubmitting },
   } = useForm({
@@ -88,7 +91,10 @@ export function EmissionEstimatesForm({
 
   const onSubmit = async (raw: unknown) => {
     try {
-      await saveMutation.mutateAsync(raw as FacilityEmissionConfigFormData);
+      const values = raw as FacilityEmissionConfigFormData;
+      await saveMutation.mutateAsync(values);
+      // Saved values are the new baseline, so the form is no longer unsaved.
+      reset(values);
       toast.success("Emission estimates saved");
     } catch (error) {
       setError("root.serverError", {
@@ -105,6 +111,10 @@ export function EmissionEstimatesForm({
       className="content-measure-form flex flex-col gap-32"
     >
       <input type="hidden" {...register("facilityId")} />
+      {/* Renders no footer here (the Save button below is this form's own);
+          it only reports this form's dirty state to a surrounding unsaved-
+          changes guard such as the settings rail. */}
+      <FormActions control={control} showSubmit={false} />
 
       <div className="flex flex-col gap-16">
         <SectionLabel>Soil durability reference</SectionLabel>
