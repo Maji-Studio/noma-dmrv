@@ -194,13 +194,23 @@ describe("assertRegisteredProductionBatchesMatch", () => {
 
   it.each([
     { externalProjectId: "prj_other" },
-    { externalFacilityId: "fcl_other" },
     { isometricFeedstockTypeId: null },
   ])("silently leaves mapping mismatches and unbuildable payloads to the loop: %j", async (patch) => {
     mocks.getProductionBatchRegistryInputs.mockResolvedValue([registryInput(patch)]);
     await expect(precheck()).resolves.toBeUndefined();
     expect(mocks.appendSyncEventBestEffort).not.toHaveBeenCalled();
     expect(log.warn).not.toHaveBeenCalled();
+    expectNoWrites();
+  });
+
+  it("stops on a changed local facility before any write", async () => {
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([registryInput({ externalFacilityId: "fcl_new" })]);
+    await expect(precheck()).rejects.toThrow("Facility: Isometric fcl_1G8QT5ZAB1S0XSDW, noma fcl_new.");
+    expect(mocks.appendSyncEventBestEffort).toHaveBeenCalledExactlyOnceWith(
+      orgCtx,
+      expect.objectContaining({ operation: `production-batch:drift:${CREDIT_BATCH_ID}`, status: "failed" }),
+      { submissionId: undefined },
+    );
     expectNoWrites();
   });
 

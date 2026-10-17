@@ -45,9 +45,7 @@ export async function assertRegisteredProductionBatchesMatch(args: {
       remote.id !== existing.externalProductionBatchId ||
       remote.supplier_reference_id !== existing.supplierReference ||
       existing.supplierReference !== buildProductionBatchReference({ creditBatchId: input.creditBatchId }) ||
-      remote.facility_id !== existing.externalFacilityId ||
-      input.externalProjectId !== existing.externalProjectId ||
-      input.externalFacilityId !== existing.externalFacilityId
+      remote.facility_id !== existing.externalFacilityId
     ) continue;
     let current: ProductionBatchSubmission;
     try {
