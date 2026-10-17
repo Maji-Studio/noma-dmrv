@@ -1,15 +1,18 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   applications,
   certifierGhgStatements,
   creditBatchApplications,
+  creditBatchProductionRuns,
   certifierRemovals,
   certificationSubmissions,
   productionRuns,
 } from "@/db/schema";
+import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
 import { getCreditBatchPageModel } from "@/data-access/credit-batch-page-model";
+import { markSubmissionSubmitted } from "@/data-access/certification";
 import {
   REMOTE_PERIOD_END_ON_METADATA_KEY,
   REMOTE_PERIOD_MISSING_METADATA_KEY,
@@ -30,6 +33,7 @@ describe("credit batch page model", () => {
     const extraIds: string[] = [];
     let submittedId: string | undefined;
     let statementId: string | undefined;
+    let extraRunId: string | undefined;
     try {
       const [submitted] = await insertRemovalFixture(db, {
         organizationId: TEST_ORG_ID,
@@ -64,7 +68,7 @@ describe("credit batch page model", () => {
         removalId: index ? submitted.id : null,
       })));
       const submittedAt = new Date("2026-06-18T12:00:00Z");
-      await db.insert(certificationSubmissions).values({
+      const [firstSubmission] = await db.insert(certificationSubmissions).values({
         organizationId: TEST_ORG_ID,
         provider: "isometric",
         submissionType: "removal",
@@ -76,7 +80,7 @@ describe("credit batch page model", () => {
         payloadHash: "fixture",
         payloadSnapshot: {},
         submittedAt,
-      });
+      }).returning({ id: certificationSubmissions.id });
 
       const model = await getCreditBatchPageModel(makeTestOrgContext(), fixture.batchId);
       expect(model.slices).toHaveLength(3);
@@ -119,6 +123,51 @@ describe("credit batch page model", () => {
         firstRemovalSubmittedCode: submitted.code,
         ghgStatement: null,
       });
+
+      const [resubmission] = await db.insert(certificationSubmissions).values({
+        organizationId: TEST_ORG_ID, provider: "isometric", submissionType: "removal",
+        localEntityType: "removal", localEntityId: submitted.id, version: 2,
+        status: "draft", payloadHash: "pending-v2", payloadSnapshot: {},
+      }).returning({ id: certificationSubmissions.id });
+      const pendingModel = await getCreditBatchPageModel(makeTestOrgContext(), fixture.batchId);
+      expect(pendingModel.removals.find(row => row.id === submitted.id)).toMatchObject({
+        phase: "submitted", submittedAt, status: { kind: "not-submitted" },
+      });
+      expect(pendingModel.mass.inSubmittedDryKg).toBe(50);
+      expect(pendingModel.milestones).toMatchObject({
+        firstRemovalSubmittedAt: submittedAt, firstRemovalSubmittedCode: submitted.code,
+      });
+
+      await markSubmissionSubmitted(makeTestOrgContext(), resubmission.id, {
+        externalId: `page-v2-${submitted.id}`,
+        supersedePreviousId: firstSubmission.id,
+      });
+      const [superseded] = await db.select().from(certificationSubmissions)
+        .where(and(eq(certificationSubmissions.organizationId, TEST_ORG_ID),
+          eq(certificationSubmissions.id, firstSubmission.id)));
+      expect(superseded).toMatchObject({ status: "superseded", submittedAt });
+      const finalizedModel = await getCreditBatchPageModel(makeTestOrgContext(), fixture.batchId);
+      expect(finalizedModel.removals.find(row => row.id === submitted.id)).toMatchObject({
+        phase: "submitted", submittedAt, status: { kind: "submitted" },
+      });
+      expect(finalizedModel.milestones).toMatchObject({
+        firstRemovalSubmittedAt: submittedAt, firstRemovalSubmittedCode: submitted.code,
+      });
+
+      const decimalSlices = [0.1, 0.7, 0.1];
+      const applicationIds = [fixture.applicationId, ...extraIds];
+      for (const [index, applicationId] of applicationIds.entries()) {
+        await db.update(creditBatchApplications).set({ allocatedDryMassKg: decimalSlices[index] })
+          .where(and(eq(creditBatchApplications.organizationId, TEST_ORG_ID),
+            eq(creditBatchApplications.creditBatchId, fixture.batchId),
+            eq(creditBatchApplications.applicationId, applicationId)));
+      }
+      await db.update(productionRuns).set({ biocharDryMassKg: 0.9 })
+        .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, fixture.productionRunId)));
+      const decimalModel = await getCreditBatchPageModel(makeTestOrgContext(), fixture.batchId);
+      expect(decimalModel.mass).toEqual({ producedDryKg: 0.9, appliedDryKg: 0.9,
+        inSubmittedDryKg: 0.1, inDraftDryKg: 0.1, notInRemovalDryKg: 0.7, notAppliedDryKg: 0 });
+      expect(buildCreditBatchOpenItems({ pageModel: decimalModel }).waiting).toEqual([]);
 
       const [statement] = await db.insert(certifierGhgStatements).values({
         organizationId: TEST_ORG_ID,
@@ -171,6 +220,14 @@ describe("credit batch page model", () => {
         ...makeTestOrgContext(),
         organizationId: "another-org",
       }, fixture.batchId)).rejects.toMatchObject({ code: "not_found" });
+      const [extraRun] = await db.insert(productionRuns).values({
+        organizationId: TEST_ORG_ID, code: `PR-PAGE-${fixture.batchId}`,
+        facilityId: fixture.facilityId, reactorId: fixture.reactorId,
+        startTime: new Date("2026-06-14T08:00:00Z"), status: "running", biocharDryMassKg: 1,
+      }).returning({ id: productionRuns.id });
+      extraRunId = extraRun.id;
+      await db.insert(creditBatchProductionRuns).values({ organizationId: TEST_ORG_ID,
+        creditBatchId: fixture.batchId, productionRunId: extraRun.id });
       await db.update(productionRuns)
         .set({ biocharDryMassKg: null })
         .where(eq(productionRuns.id, fixture.productionRunId));
@@ -194,6 +251,13 @@ describe("credit batch page model", () => {
         await db.delete(certificationSubmissions)
           .where(eq(certificationSubmissions.localEntityId, statementId));
         await db.delete(certifierGhgStatements).where(eq(certifierGhgStatements.id, statementId));
+      }
+      if (extraRunId) {
+        await db.delete(creditBatchProductionRuns).where(and(
+          eq(creditBatchProductionRuns.organizationId, TEST_ORG_ID),
+          eq(creditBatchProductionRuns.productionRunId, extraRunId)));
+        await db.delete(productionRuns).where(and(
+          eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, extraRunId)));
       }
       await cleanupLineageFixture(fixture);
     }

@@ -63,9 +63,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     } else if (fix === "emissions") {
       target = { tab: "emissions" };
     } else if ([
-      "certificationTemplates",
       "creditBatchTemplate",
-      "templateLineReview",
       "batchDetails",
     ].includes(fix)) {
       target = { tab: "overview" };
@@ -80,7 +78,6 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     }
     blocking.push({
       id: `health:${healthCheck.key}:${healthCheck.issueKey ?? fix}`,
-      // OPEN(#1136): use shared problem wording once the owner decides it.
       title: healthCheck.requirementLabel,
       detail: healthCheck.detail,
       target,
@@ -107,11 +104,21 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
   }
   for (const line of input.emissionLines ?? []) {
     if (line.state === "needsReview") {
+      const fixTarget = line.blocker?.fixTarget;
+      const settingsFix = fixTarget === "templateLineReview" ||
+        fixTarget === "certificationTemplates" || fixTarget === "certificationEmissions";
+      const target: CreditBatchOpenItem["target"] = settingsFix
+        ? { href: batchHealthFixLinkFor(
+            { key: "emissions", fixTarget },
+            input.pageModel?.facilityId ?? "",
+            input.pageModel?.creditBatchId,
+          ).href }
+        : { tab: "emissions", rowId: line.componentId };
       check.push({
         id: `emission:${line.componentId}`,
         title: `${line.displayName} needs review`,
         detail: line.blocker?.message,
-        target: { tab: "emissions", rowId: line.componentId },
+        target,
       });
     }
   }

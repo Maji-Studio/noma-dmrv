@@ -8,6 +8,8 @@ import {
   buildDurabilityBatchSummaries,
   type DurabilitySummaryReplicate,
 } from "@/lib/certification/durability-batch-summary";
+import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
+import type { BatchHealthFixTarget } from "@/lib/certification/batch-health";
 import { buildCreditBatchOpenItems } from "./open-items";
 
 function fixture() {
@@ -125,9 +127,38 @@ describe("buildCreditBatchOpenItems", () => {
     expect(result.blocking.map(row => [row.title, row.target])).toEqual([
       ["Sample data complete", { tab: "samples" }],
       ["Emissions recorded", { tab: "emissions" }],
-      ["Template resolved", { tab: "overview" }],
+      ["Template resolved", { href: "/certification/settings?section=removal-templates&facility=" }],
       ["Distances recorded", { href: "/customers?location=location" }],
     ]);
+  });
+
+  it.each<BatchHealthFixTarget>([
+    "creditBatchTemplate", "batchDetails", "labSamples", "emissions",
+    "templateLineReview", "certificationTemplates", "certificationEmissions", "productionRuns",
+  ])("preserves the repair destination for %s", fixTarget => {
+    const check = { key: "template" as const, label: "Template", requirementLabel: "Template ready",
+      status: "unmet" as const, fixTarget };
+    const localTabs = { creditBatchTemplate: "overview", batchDetails: "overview",
+      labSamples: "samples", emissions: "emissions" };
+    const tab = localTabs[fixTarget as keyof typeof localTabs];
+    const result = buildCreditBatchOpenItems({ pageModel: pageModel(),
+      health: { state: "incomplete", issueCount: 1, checks: [check] } });
+    expect(result.blocking[0].target).toEqual(tab ? { tab } : {
+      href: batchHealthFixLinkFor(check, "facility", "batch").href,
+    });
+  });
+
+  it.each<BatchHealthFixTarget>([
+    "templateLineReview", "certificationTemplates", "certificationEmissions", "emissions",
+  ])("routes emission review to %s", fixTarget => {
+    const result = buildCreditBatchOpenItems({ pageModel: pageModel(), emissionLines: [{
+      componentId: "diesel", displayName: "Diesel", state: "needsReview", groupKey: "production",
+      blueprintKey: "production", contract: undefined, automaticFigure: null, entries: [], total: null,
+      blocker: { code: "lineNeedsReview", message: "Review this line", fixTarget },
+    }] });
+    expect(result.check[0].target).toEqual(fixTarget === "emissions"
+      ? { tab: "emissions", rowId: "diesel" }
+      : { href: batchHealthFixLinkFor({ key: "emissions", fixTarget }, "facility", "batch").href });
   });
 
   it("groups threshold, pairing, emission review and waiting items", () => {

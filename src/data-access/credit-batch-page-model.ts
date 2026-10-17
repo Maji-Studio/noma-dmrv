@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   applications,
@@ -7,10 +7,12 @@ import {
   customerLocations,
   creditBatchApplications,
   certifierRemovals,
+  certificationSubmissions,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
-import { buildMassAccounting } from "@/lib/certification/mass-accounting";
+import { GRAMS_PER_KG, massGrams } from "@/lib/calculations/gram-allocation";
+import { getMetadataValue } from "@/lib/certification/submission-metadata";
 import {
   deriveSubmissionStatus,
   isRemovalSubmissionInterruptedFromSubmission,
@@ -39,8 +41,8 @@ export interface CreditBatchPageGhgStatement {
   creditsIssuedAt: string | null;
 }
 
-function sumDryKg(rows: readonly { dryKg: number }[]): number {
-  return rows.reduce((sum, row) => sum + row.dryKg, 0);
+function sumDryGrams(rows: readonly { dryKg: number }[]): number {
+  return rows.reduce((sum, row) => sum + massGrams(row.dryKg), 0);
 }
 
 export async function getCreditBatchPageModel(ctx: OrgContext, creditBatchId: string) {
@@ -105,15 +107,38 @@ export async function getCreditBatchPageModel(ctx: OrgContext, creditBatchId: st
           ))
           .orderBy(asc(certifierRemovals.createdAt), asc(certifierRemovals.id))
       : [],
-    getLatestSubmissionsForEntities(ctx, {
-      provider: "isometric",
-      submissionType: "removal",
-      localEntityType: "removal",
-      localEntityIds: removalIds,
-    }, rollup.batch.facilityId),
+    removalIds.length
+      ? db.select().from(certificationSubmissions)
+          .innerJoin(certifierRemovals, and(
+            eq(certifierRemovals.id, certificationSubmissions.localEntityId),
+            eq(certifierRemovals.organizationId, ctx.organizationId),
+            eq(certifierRemovals.facilityId, rollup.batch.facilityId),
+          ))
+          .where(and(
+            eq(certificationSubmissions.organizationId, ctx.organizationId),
+            eq(certificationSubmissions.provider, "isometric"),
+            eq(certificationSubmissions.submissionType, "removal"),
+            eq(certificationSubmissions.localEntityType, "removal"),
+            inArray(certificationSubmissions.localEntityId, removalIds),
+          ))
+          .orderBy(desc(certificationSubmissions.version))
+      : [],
   ]);
   const removals = rows.map(row => {
-    const submission = submissions.get(row.id) ?? null;
+    const versions = submissions
+      .map(result => result.certification_submissions)
+      .filter(version => version.localEntityId === row.id);
+    const submission = versions[0] ?? null;
+    const submittedVersions = versions.filter(version =>
+      version.status === "submitted" || version.status === "accepted",
+    );
+    // Superseding a submitted version preserves its original registry timestamp.
+    const submittedAt = versions.flatMap(version =>
+      (version.status === "submitted" || version.status === "accepted" || version.status === "superseded") && version.submittedAt
+        ? [version.submittedAt]
+        : [],
+    )
+      .sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
     const window = { startedOn: row.startedOn, completedOn: row.completedOn };
     const status = deriveSubmissionStatus(
       submission,
@@ -121,12 +146,10 @@ export async function getCreditBatchPageModel(ctx: OrgContext, creditBatchId: st
       "removal",
       window,
     );
-    // Mass is submitted only for a submitted/accepted ledger row with no
-    // interrupted reporting window. Rejected, superseded and in-flight drafts
-    // stay draft; a lock alone does not undo an already submitted ledger row.
-    const isSubmitted =
-      (submission?.status === "submitted" || submission?.status === "accepted") &&
-      !isRemovalSubmissionInterruptedFromSubmission(submission, window);
+    // A newer draft does not undo an earlier submitted version.
+    const isSubmitted = submittedVersions.some(version =>
+      !isRemovalSubmissionInterruptedFromSubmission(version, window),
+    );
     const phase: "draft" | "submitted" = isSubmitted ? "submitted" : "draft";
     return {
       id: row.id,
@@ -134,20 +157,20 @@ export async function getCreditBatchPageModel(ctx: OrgContext, creditBatchId: st
       status,
       phase,
       createdAt: row.createdAt,
-      submittedAt: submission?.submittedAt ?? null,
+      submittedAt,
       ghgStatementId: row.ghgStatementId,
-      dryKg: sumDryKg(slices.filter(slice => slice.removalId === row.id)),
+      dryKg: sumDryGrams(slices.filter(slice => slice.removalId === row.id)) / GRAMS_PER_KG,
     };
   });
-  const { runSummary } = buildMassAccounting([], rollup.lineageFacts.runs);
-  const producedDryKg = rollup.lineageFacts.runs.some(run => run.biocharDryMassKg !== null)
-    ? runSummary.totalBiocharOutputKg
+  const runs = rollup.lineageFacts.runs;
+  const producedDryGrams = runs.length > 0 && runs.every(run => run.biocharDryMassKg !== null)
+    ? sumDryGrams(runs.map(run => ({ dryKg: run.biocharDryMassKg! })))
     : null;
   // Persisted slices are the frozen allocation authority, including when an
   // application spans batches. Never use the list's wet appliedWeightTons.
-  const appliedDryKg = sumDryKg(slices);
+  const appliedDryGrams = sumDryGrams(slices);
   const firstSubmitted = removals
-    .filter(row => row.phase === "submitted" && row.submittedAt)
+    .filter(row => row.submittedAt)
     .sort((a, b) => a.submittedAt!.getTime() - b.submittedAt!.getTime())
     .at(0);
   // Match CreditBatchHealthSummary: the newest holding Removal (createdAt,
@@ -163,7 +186,8 @@ export async function getCreditBatchPageModel(ctx: OrgContext, creditBatchId: st
       localEntityIds: [statement.id],
     }, rollup.batch.facilityId);
     const latest = statementSubmissions.get(statement.id) ?? null;
-    const metadata = latest?.metadata as Record<string, unknown> | null;
+    const submittedToVerifierAt = getMetadataValue(latest?.metadata, "submittedToVerifierAt");
+    const creditsIssuedAt = getMetadataValue(latest?.metadata, "creditsIssuedAt");
     ghgStatement = {
       id: statement.id,
       reportingPeriodStartOn: statement.reportingPeriodStartOn,
@@ -175,11 +199,11 @@ export async function getCreditBatchPageModel(ctx: OrgContext, creditBatchId: st
         "ghgStatement",
         "unknown",
       ).kind,
-      submittedToVerifierAt: typeof metadata?.submittedToVerifierAt === "string"
-        ? metadata.submittedToVerifierAt
+      submittedToVerifierAt: typeof submittedToVerifierAt === "string"
+        ? submittedToVerifierAt
         : null,
-      creditsIssuedAt: typeof metadata?.creditsIssuedAt === "string"
-        ? metadata.creditsIssuedAt
+      creditsIssuedAt: typeof creditsIssuedAt === "string"
+        ? creditsIssuedAt
         : null,
     };
   }
@@ -189,12 +213,12 @@ export async function getCreditBatchPageModel(ctx: OrgContext, creditBatchId: st
     slices,
     removals,
     mass: {
-      producedDryKg,
-      appliedDryKg,
-      inSubmittedDryKg: sumDryKg(removals.filter(row => row.phase === "submitted")),
-      inDraftDryKg: sumDryKg(removals.filter(row => row.phase === "draft")),
-      notInRemovalDryKg: sumDryKg(slices.filter(slice => slice.removalId === null)),
-      notAppliedDryKg: producedDryKg === null ? null : Math.max(0, producedDryKg - appliedDryKg),
+      producedDryKg: producedDryGrams === null ? null : producedDryGrams / GRAMS_PER_KG,
+      appliedDryKg: appliedDryGrams / GRAMS_PER_KG,
+      inSubmittedDryKg: sumDryGrams(removals.filter(row => row.phase === "submitted")) / GRAMS_PER_KG,
+      inDraftDryKg: sumDryGrams(removals.filter(row => row.phase === "draft")) / GRAMS_PER_KG,
+      notInRemovalDryKg: sumDryGrams(slices.filter(slice => slice.removalId === null)) / GRAMS_PER_KG,
+      notAppliedDryKg: producedDryGrams === null ? null : Math.max(0, producedDryGrams - appliedDryGrams) / GRAMS_PER_KG,
     },
     milestones: {
       firstRemovalSubmittedAt: firstSubmitted?.submittedAt ?? null,

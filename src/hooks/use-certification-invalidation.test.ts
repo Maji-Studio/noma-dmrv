@@ -91,6 +91,9 @@ describe("useSubmitGhgStatementToVerifier", () => {
       onError: (error: Error) => void;
     }];
     await onError(error);
+    expect(invalidateQueries).toHaveBeenCalledTimes(3);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.details() });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: activityKeys.all });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
     });
