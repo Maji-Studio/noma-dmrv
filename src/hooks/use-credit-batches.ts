@@ -1,4 +1,5 @@
 import type { ActionResult } from "@/types/actions";
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import type { DeleteCreditBatchData } from "@/schemas/credit-batches";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { patchArrayListCachesByPrefixWithSavedRow } from "./list-cache-utils";
@@ -147,6 +148,7 @@ export function useCreateCreditBatch() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.creditBatch),
     // The batch and the warning are two facts about one committed write: the
     // batch is saved either way, and `warning` says its accounting roll-up did
     // not load with it (issue #769).
@@ -182,6 +184,7 @@ export function useUpdateCreditBatch() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.creditBatch),
     mutationFn: async (data: UpdateCreditBatchData): Promise<Awaited<ReturnType<typeof updateCreditBatchFn>>> => {
       const result = await updateCreditBatchFn(data);
       if (!result.success) throwActionError(result);
@@ -213,6 +216,7 @@ export function useDeleteCreditBatch() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.creditBatch),
     mutationFn: async (data: DeleteCreditBatchData): Promise<ActionResult<void>> => {
       const result = await deleteCreditBatchFn(data);
       if (!result.success) throwActionError(result);

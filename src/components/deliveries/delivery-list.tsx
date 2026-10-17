@@ -11,6 +11,9 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
+import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { DataTable } from "@/components/ui/data-table";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { MassPair } from "@/components/ui/mass-pair";
@@ -92,6 +95,8 @@ function deliveryDetailToRelations(
 function createColumns(
   onEdit: (delivery: DeliverySheetRecord) => void,
   facilities: readonly { id: string; timezone: string }[],
+  locks: RecordLockViews,
+  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<DeliveryWithRelations>[] {
   return [
     {
@@ -179,18 +184,21 @@ function createColumns(
         />
       ),
     },
+    recordLockColumn<DeliveryWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
       cell: ({ row }) => (
         <div className="flex items-center justify-end">
-          <RowActionsMenu
-            label={`Actions for ${row.original.code}`}
-            actions={[
-              { label: "Edit", onSelect: () => onEdit(row.original) },
-            ]}
-          />
+          {isRecordEditable(locks[row.original.id]) && (
+            <RowActionsMenu
+              label={`Actions for ${row.original.code}`}
+              actions={[
+                { label: "Edit", onSelect: () => onEdit(row.original) },
+              ]}
+            />
+          )}
         </div>
       ),
       enableSorting: false,
@@ -408,9 +416,10 @@ export function DeliveryList() {
     }
   };
 
-  const columns = createColumns(openEdit, facilities);
-
   const deliveries = deliveriesData?.items ?? [];
+  const deliveryLocks = useRecordLocks("delivery", deliveries.map((delivery) => delivery.id));
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("delivery", displaySideSheet?.entity?.id);
+  const columns = createColumns(openEdit, facilities, deliveryLocks.locks, deliveryLocks.statusOf);
   const totalPages = deliveriesData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -598,6 +607,8 @@ export function DeliveryList() {
         }}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
+        canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit delivery"
         sections={
           sideSheetEntity

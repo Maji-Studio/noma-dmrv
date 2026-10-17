@@ -56,7 +56,7 @@ test.describe("Storage-bin archive", () => {
     if (connection?.pool) await connection.pool.end();
   });
 
-  test("explains blocked deletion, then archives and restores the used bin", async ({
+  test("offers no delete for a used bin, then archives and restores it", async ({
     adminPage,
   }) => {
     const page = adminPage;
@@ -75,28 +75,17 @@ test.describe("Storage-bin archive", () => {
       binCard.getByText(bin.name, { exact: true }),
     ).toBeVisible();
 
-    // A list refetch can replace the card between opening its overflow menu
-    // and selecting an item. Retry the complete interaction so Playwright
-    // reacquires both elements from the current render.
+    // A bin with movement history is In use (#1119), so the menu never
+    // offers the delete the server would refuse; Archive is the way out.
+    await expect(binCard.locator('[data-record-lock="inUse"]')).toHaveText("In use");
     await expect(async () => {
       await binCard
         .getByRole("button", { name: `Actions for ${bin.code}` })
         .click({ timeout: 5_000 });
-      await page
-        .getByRole("menuitem", { name: "Delete permanently" })
-        .click({ timeout: 5_000 });
+      await expect(page.getByRole("menuitem", { name: "Archive" })).toBeVisible({ timeout: 5_000 });
     }).toPass({ timeout: 30_000 });
-
-    const deleteDialog = page.getByRole("dialog", {
-      name: "Delete storage bin",
-    });
-    await deleteDialog
-      .getByRole("button", { name: "Delete", exact: true })
-      .click();
-    await expect(deleteDialog.getByRole("alert")).toContainText(
-      "movement history",
-    );
-    await deleteDialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByRole("menuitem", { name: "Delete permanently" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
 
     await binCard
       .getByRole("button", { name: `Actions for ${bin.code}` })

@@ -72,6 +72,9 @@ vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   PlusIcon: () => null,
   XIcon: () => null,
 }));
+vi.mock("@/hooks/use-record-locks", async () => (await import("../../../tests/helpers/record-lock-mocks")).openRecordLocksModule);
+vi.mock("@/components/record-locks", async () => (await import("../../../tests/helpers/record-lock-mocks")).stubRecordLockComponentsModule);
+
 vi.mock("@/components/ui", () => ({
   Button: ({ children }: { children?: ReactNode }) => <button type="button">{children}</button>,
   EmptyState: () => null,
