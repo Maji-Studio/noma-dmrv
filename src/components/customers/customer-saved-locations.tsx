@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   ArchiveIcon,
   ArrowCounterClockwiseIcon,
@@ -67,7 +67,7 @@ function formatSavedLocationSummary({
   return parts.length > 0 ? parts.join(", ") : MISSING_VALUE.notRecorded;
 }
 
-function LocationIdentity({ location }: { location: SavedLocation }) {
+function LocationIdentity({ location, hint }: { location: SavedLocation; hint?: ReactNode }) {
   return (
     <div className="flex items-center gap-10 min-w-0">
       <MapPinIcon size={ICON_SIZE} className="shrink-0 text-[var(--color-text-tertiary)]" />
@@ -75,6 +75,7 @@ function LocationIdentity({ location }: { location: SavedLocation }) {
         <p className="body-small font-medium flex items-center gap-8 min-w-0">
           <span className="truncate">{location.name}</span>
           {location.isDefault ? <DefaultLocationBadge /> : null}
+          {hint}
         </p>
         <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
           {formatSavedLocationSummary(location)}
@@ -204,7 +205,10 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
           <div className="flex flex-col gap-8">
             {activeLocations.map((loc) => (
               <div key={loc.id} className={`${ROW_CLASS} bg-[var(--color-surface-light)]`}>
-                <LocationIdentity location={loc} />
+                <LocationIdentity
+                  location={loc}
+                  hint={isOnlyActive ? <InfoHint label="Why Archive is unavailable">{ONLY_ACTIVE_REASON}</InfoHint> : null}
+                />
                 <div className="flex shrink-0 items-center gap-8">
                   <Button
                     variant="noOutline"
@@ -217,7 +221,6 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                   >
                     <PencilIcon size={ICON_SIZE} />
                   </Button>
-                  {isOnlyActive ? <InfoHint label="Why Archive is unavailable">{ONLY_ACTIVE_REASON}</InfoHint> : null}
                   <Button
                     variant="noOutline"
                     size="icon"
