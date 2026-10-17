@@ -21,7 +21,6 @@ function renderBadge() {
   return screen.getByRole("button", { name: "Submitted, status history" });
 }
 
-
 describe("CertificationStatusBadge", () => {
   afterEach(cleanup);
 
@@ -46,6 +45,7 @@ describe("CertificationStatusBadge", () => {
     fireEvent.pointerDown(badge, { pointerType: "touch" });
     fireEvent.pointerEnter(badge, { pointerType: "touch" });
     fireEvent.mouseEnter(badge);
+    fireEvent.mouseMove(badge);
     await new Promise((resolve) => setTimeout(resolve, HOVER_WAIT_MS / 2));
     expect(screen.queryByRole("dialog")).toBeNull();
   });

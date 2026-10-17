@@ -8,10 +8,11 @@
  * on press by default, so Base UI's own trigger handling covers click, tap,
  * Enter and Space. `openOnHover` adds mouse hover on top: Base UI ignores touch
  * pointers for hover, so a tap still toggles by press, and a press on a
- * hover-opened popover keeps it open. No open state is kept here, and there is no manual toggle that a
- * "trigger-press" close request could undo. Escape, an outside press, the
- * close button or a second press on the trigger closes it. The body mounts
- * only while open, so a query inside it fetches on open.
+ * hover-opened popover keeps it open. No open state is kept here, and there
+ * is no manual toggle that a "trigger-press" close request could undo.
+ * Escape, an outside press, the close button or a second press on the trigger
+ * closes it. The body mounts only while open, so a query inside it fetches on
+ * open.
  *
  * Self-contained: the popup is portaled above sheets and dialogs. A clickable
  * table row or card it sits in ignores presses inside the portal
