@@ -3,7 +3,7 @@
  * #630) so its MeasurementSamples can carry a real `production_batch_id`
  * instead of `null`.
  *
- * Server-internal core (no "use server" — it takes an explicit `orgCtx` and runs
+ * Server-internal core (no "use server", it takes an explicit `orgCtx` and runs
  * inside the removal submit pipeline, which already resolved the caller). It
  * runs BEFORE the measurement-sample step: the registry needs the batch to exist
  * before a sample can point at it.
@@ -15,7 +15,7 @@
  * confirmation that mints `ptb_…`, read first on every later attempt. When the
  * row is missing but the remote record exists (a crash between POST and INSERT,
  * a sandbox reset, a manual delete), `performRegistryCreate` reconciles by
- * supplier reference and claims the orphan instead of minting a duplicate —
+ * supplier reference and claims the orphan instead of minting a duplicate:
  * `POST /production_batches` is not idempotent, so a blind re-POST would create
  * a second batch with the same reference.
  *
@@ -24,13 +24,11 @@
  *  - a persisted registration whose external id differs from the one just
  *    confirmed (a concurrent registration won the race).
  *
- * Payload drift (mass or window changed after registration) is recorded as a
- * sync event and logged, not applied: the registry exposes no PATCH for a
- * production batch, so the registered figures stay authoritative until someone
- * resolves it in Isometric. Consistently with that, payload validation gates
- * only the batches that still need a POST — a registered batch whose local
- * facts have gone invalid can be reused after remote identity and mapping
- * verification.
+ * When a changed payload hash reveals different registered figures, record a
+ * failed sync event and stop submission. Display-only changes remain logged
+ * and audited without changing the registry. Legacy day-bound window hashes
+ * still migrate. Payload validation gates new registrations; an existing batch
+ * whose local facts cannot be rebuilt retains the existing reuse behavior.
  */
 
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
@@ -43,7 +41,6 @@ import {
   type ProductionBatchRegistryInput,
 } from "@/data-access/certifier-production-batches";
 import type { OrgContext } from "@/lib/auth/server";
-import { MASS_COMPARISON_EPSILON_KG } from "@/lib/calculations/mass-dry";
 import { SafeError } from "@/lib/errors";
 import {
   buildCreateProductionBatchRequest,
@@ -52,7 +49,6 @@ import {
   createProductionBatch,
   findProductionBatchBySupplierRef,
   getProductionBatch,
-  productionBatchMassUnitsMatch,
   type CreateProductionBatchRequest,
   type IsometricProductionBatch,
 } from "@/lib/isometric/production-batches";
@@ -74,8 +70,13 @@ import {
   REMOVAL_ENTITY_TYPE,
 } from "./shared";
 
-const LEGACY_DAY_START_SUFFIX = "T00:00:00.000Z";
-const LEGACY_DAY_END_SUFFIX = "T23:59:59.999Z";
+import {
+  LEGACY_DAY_START_SUFFIX,
+  LEGACY_DAY_END_SUFFIX,
+  productionBatchMismatchMessage,
+  productionBatchWindowKind,
+} from "./production-batch-comparison";
+import { assertRegisteredProductionBatchMatches } from "./production-batch-drift";
 
 /** One credit batch's production-batch POST: its supplier ref + request body. */
 export interface ProductionBatchSubmission {
@@ -202,7 +203,7 @@ export async function ensureProductionBatchesForCreditBatches(
 
   const client = await resolveIsometricClient(args.orgCtx);
 
-  // Live identities retain their registered payload; missing identities require
+  // Live identities must match current figures; missing identities require
   // current validated facts and supplier-reference reconciliation before POST.
   for (const input of sortByCreditBatchId(inputs)) {
     const existing = existingByCreditBatchId.get(input.creditBatchId);
@@ -221,14 +222,6 @@ export async function ensureProductionBatchesForCreditBatches(
           "The registered production batch does not match its saved identity. Ask support to check the registry record.",
         );
       }
-      if (
-        input.externalProjectId !== existing.externalProjectId ||
-        input.externalFacilityId !== existing.externalFacilityId
-      ) {
-        throw new SafeError(
-          "The project or facility mapping changed for an existing Isometric production batch. Restore the mapping or ask support to resolve the registry record before submitting.",
-        );
-      }
       const current = tryBuildProductionBatchSubmission(input, args.log);
       if (current && current.payloadHash !== existing.payloadHash) {
         if (
@@ -244,15 +237,26 @@ export async function ensureProductionBatchesForCreditBatches(
             nextPayloadHash: current.payloadHash,
           });
         } else {
-          await recordProductionBatchDrift({
+          await assertRegisteredProductionBatchMatches({
             orgCtx: args.orgCtx,
             removalId: args.removalId,
             submissionRowId: args.submissionRow.id,
             submission: current,
-            registeredExternalId: existing.externalProductionBatchId,
+            remote,
+            legacyWindow: input,
+            expectedLockedAt: args.expectedLockedAt,
+            deferRejectionToAttempt: args.deferRejectionToAttempt,
             log: args.log,
           });
         }
+      }
+      if (
+        input.externalProjectId !== existing.externalProjectId ||
+        input.externalFacilityId !== existing.externalFacilityId
+      ) {
+        throw new SafeError(
+          "The project or facility mapping changed for an existing Isometric production batch. Restore the mapping or ask support to resolve the registry record before submitting.",
+        );
       }
       registeredByCreditBatchId.set(
         input.creditBatchId,
@@ -402,8 +406,7 @@ export async function bindProductionBatchesToMeasurementSamples(args: {
 /**
  * Rebuild an already-registered batch's payload for the drift comparison only.
  * A build failure here is data the registry never sees, so it is logged and the
- * registered record is reused — consistent with drift itself being recorded,
- * not applied.
+ * registered record is reused. Comparisons require a valid current payload.
  */
 function tryBuildProductionBatchSubmission(
   input: ProductionBatchRegistryInput,
@@ -454,76 +457,6 @@ function matchesLegacyDateBoundPayloadHash(
     (payloadHash(legacyBody) === storedHash || payloadHash(previousWindowBody) === storedHash));
 }
 
-type LegacyProductionBatchWindow = Pick<
-  ProductionBatchRegistryInput,
-  "startDate" | "endDate"
->;
-
-function timestampMatches(actual: string, expected: string): boolean {
-  const actualMs = Date.parse(actual);
-  return (
-    Number.isFinite(actualMs) && actualMs === Date.parse(expected)
-  );
-}
-
-function productionBatchMismatchMessage(
-  batch: IsometricProductionBatch,
-  expected: CreateProductionBatchRequest,
-  legacyWindow?: LegacyProductionBatchWindow,
-): string | null {
-  const windowKind = productionBatchWindowKind(
-    batch,
-    expected,
-    legacyWindow,
-  );
-  const sameFeedstocks =
-    [...batch.feedstock_type_ids].sort().join("\u0000") ===
-    [...expected.feedstock_type_ids].sort().join("\u0000");
-  const massDifferenceKg = Math.abs(
-    batch.mass.magnitude - expected.mass.magnitude,
-  );
-  const floatingPointSlackKg =
-    Number.EPSILON *
-    (Math.abs(batch.mass.magnitude) + Math.abs(expected.mass.magnitude));
-  const massMagnitudeMatches =
-    massDifferenceKg <=
-    MASS_COMPARISON_EPSILON_KG + floatingPointSlackKg;
-  if (
-    batch.supplier_reference_id === expected.supplier_reference_id &&
-    batch.facility_id === expected.facility_id &&
-    sameFeedstocks &&
-    batch.kind === expected.kind &&
-    massMagnitudeMatches &&
-    productionBatchMassUnitsMatch(batch.mass.unit, expected.mass.unit) &&
-    windowKind !== "mismatch"
-  ) {
-    return null;
-  }
-  return `Registry production batch ${batch.id} does not match this credit batch's facility, feedstock, kind, mass, or production window. Ask support to check the registry record.`;
-}
-
-function productionBatchWindowKind(
-  batch: IsometricProductionBatch,
-  expected: CreateProductionBatchRequest,
-  legacyWindow?: LegacyProductionBatchWindow,
-): "physical" | "legacy" | "mismatch" {
-  const physicalWindowMatches =
-    timestampMatches(batch.started_at, expected.started_at) &&
-    timestampMatches(batch.ended_at, expected.ended_at);
-  if (physicalWindowMatches) return "physical";
-  const legacyWindowMatches =
-    legacyWindow !== undefined &&
-    timestampMatches(
-      batch.started_at,
-      `${legacyWindow.startDate}${LEGACY_DAY_START_SUFFIX}`,
-    ) &&
-    timestampMatches(
-      batch.ended_at,
-      `${legacyWindow.endDate}${LEGACY_DAY_END_SUFFIX}`,
-    );
-  return legacyWindowMatches ? "legacy" : "mismatch";
-}
-
 async function recordLegacyProductionBatchClaim(args: {
   orgCtx: OrgContext;
   removalId: string;
@@ -545,40 +478,6 @@ async function recordLegacyProductionBatchClaim(args: {
         supplier_reference_id: args.batch.supplier_reference_id,
         started_at: args.batch.started_at,
         ended_at: args.batch.ended_at,
-      },
-    },
-    { submissionId: args.submissionRowId },
-  );
-}
-
-async function recordProductionBatchDrift(args: {
-  orgCtx: OrgContext;
-  removalId: string;
-  submissionRowId: string;
-  submission: ProductionBatchSubmission;
-  registeredExternalId: string;
-  log: Logger;
-}): Promise<void> {
-  args.log.warn(
-    {
-      creditBatchId: args.submission.creditBatchId,
-      productionBatchId: args.registeredExternalId,
-    },
-    "registered production batch differs from current batch data; reusing the registered record",
-  );
-  await appendSyncEventBestEffort(
-    args.orgCtx,
-    {
-      provider: ISOMETRIC_PROVIDER,
-      entityType: REMOVAL_ENTITY_TYPE,
-      entityId: args.removalId,
-      operation: `production-batch:drift:${args.submission.creditBatchId}`,
-      status: "succeeded",
-      requestPayload: args.submission.body,
-      responsePayload: {
-        id: args.registeredExternalId,
-        supplier_reference_id: args.submission.supplierRefId,
-        reused: true,
       },
     },
     { submissionId: args.submissionRowId },
