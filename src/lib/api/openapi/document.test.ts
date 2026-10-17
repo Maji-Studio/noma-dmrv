@@ -553,3 +553,18 @@ it("publishes party archive filters alongside party write paths", () => {
     expect(path.post).toMatchObject({ operationId: resource === "suppliers" ? "create_supplier" : "create_customer", "x-required-scope": `${resource}:write` });
   }
 });
+
+it("publishes child detail reads and the customer destination archive filter", () => {
+  for (const kind of ["customer", "supplier"]) {
+    const op = document.paths[`/${kind}s/{idOrCode}/locations/{locationId}`].get;
+    expect(op).toMatchObject({ operationId: `get_${kind}_location`, "x-required-scope": `${kind}s:read` });
+    expect(op.parameters).toContainEqual(expect.objectContaining({ name: "locationId", in: "path", required: true, schema: { type: "string", format: "uuid" } }));
+    expect(op.responses["200"]).toMatchObject({ headers: { ETag: { $ref: "#/components/headers/ETag" } } });
+    expect(op.responses).toHaveProperty("404");
+  }
+  const list = document.paths["/customers/{idOrCode}/locations"].get;
+  expect(list.parameters).toContainEqual(expect.objectContaining({ name: "archived", schema: expect.objectContaining({ type: "boolean", default: false }) }));
+  expect(list.description).toContain("archived=true");
+  expect(list.description).toContain("detail read");
+  expect(document.paths["/suppliers/{idOrCode}/locations"].get.parameters).not.toContainEqual(expect.objectContaining({ name: "archived" }));
+});

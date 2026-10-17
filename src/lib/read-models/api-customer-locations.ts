@@ -5,8 +5,8 @@ import type { OrgContext } from "@/lib/auth/server";
 import { representCustomerLocation } from "@/lib/representations/customer-locations";
 import { readListPage, type ReadListQuery } from "./api-list";
 
-export function readApiCustomerLocationList(ctx: OrgContext, query: ReadListQuery<{ customerId: string; q?: string }>, executor?: Executor) {
-  const list = (ctx: OrgContext, filters: { customerId: string; q?: string }, limit: number, cursor?: ApiLookupPosition) =>
+export function readApiCustomerLocationList(ctx: OrgContext, query: ReadListQuery<{ customerId: string; q?: string; archived?: boolean }>, executor?: Executor) {
+  const list = (ctx: OrgContext, filters: { customerId: string; q?: string; archived?: boolean }, limit: number, cursor?: ApiLookupPosition) =>
     listApiCustomerLocations(ctx, filters, limit, cursor, executor);
   return readListPage(ctx, query, list, representCustomerLocation);
 }

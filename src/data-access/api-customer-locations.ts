@@ -1,5 +1,5 @@
 import { apiLocationFacilityDistances } from "./api-location-facility-distances";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import { customerLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -38,12 +38,13 @@ export async function findApiCustomerLocation(
 }
 
 export async function listApiCustomerLocations(
-  ctx: OrgContext, filters: { customerId: string; q?: string }, limit: number, cursor?: ApiLookupPosition, executor: Executor = db,
+  ctx: OrgContext, filters: { customerId: string; q?: string; archived?: boolean }, limit: number, cursor?: ApiLookupPosition, executor: Executor = db,
 ) {
   requireOrgScope(ctx);
   await findApiCustomer(ctx, { id: filters.customerId }, executor);
   return executor.select(customerLocationFields(ctx)).from(customerLocations).where(and(
     eq(customerLocations.organizationId, ctx.organizationId), eq(customerLocations.customerId, filters.customerId),
+    filters.archived ? isNotNull(customerLocations.archivedAt) : isNull(customerLocations.archivedAt),
     lookupSearch({ name: customerLocations.name }, filters.q), lookupPosition(customerLocations, cursor),
   )).orderBy(desc(customerLocations.createdAt), desc(customerLocations.id)).limit(limit + 1);
 }

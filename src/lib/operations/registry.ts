@@ -1,3 +1,4 @@
+import { addSupplierLocationApi, updateSupplierLocationApi, deleteSupplierLocationApi, addCustomerLocationApi, updateCustomerLocationApi, deleteCustomerLocationApi, archiveCustomerLocationApi, restoreCustomerLocationApi } from "./party-location-api";
 import { createCustomerApi, updateCustomerApi, deleteCustomerApi, archiveCustomerApi, restoreCustomerApi } from "./customer-api";
 import { deleteSupplier } from "./suppliers";
 import { createSupplierApi, updateSupplierApi, archiveSupplierApi, restoreSupplierApi } from "./supplier-api";
@@ -16,6 +17,15 @@ import { requestDocumentUpload } from "./document-uploads";
 
 /** Explicit write allowlist. Existing read models become the read side later. */
 export const operationRegistry = {
+  add_supplier_location: addSupplierLocationApi,
+  update_supplier_location: updateSupplierLocationApi,
+  delete_supplier_location: deleteSupplierLocationApi,
+  add_customer_location: addCustomerLocationApi,
+  update_customer_location: updateCustomerLocationApi,
+  delete_customer_location: deleteCustomerLocationApi,
+  archive_customer_location: archiveCustomerLocationApi,
+  restore_customer_location: restoreCustomerLocationApi,
+
   create_customer: createCustomerApi,
   update_customer: updateCustomerApi,
   delete_customer: deleteCustomerApi,

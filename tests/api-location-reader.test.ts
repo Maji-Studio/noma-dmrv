@@ -159,12 +159,13 @@ describe.each(["customer", "supplier"] as const)("API %s location reader", kind 
   }, TIMEOUT_MS);
 });
 
-it("publishes customer location archive state without filtering it and keeps archived-facility pairs hidden in app readers", async () => {
+it("publishes customer location archive state, lists it only with archived=true, and keeps archived-facility pairs hidden in app readers", async () => {
   const f = await fixture();
   await db.update(customerLocations).set({ archivedAt: ARCHIVED_AT, isDefault: false })
     .where(and(eq(customerLocations.organizationId, f.ctx.organizationId), eq(customerLocations.id, f.location.id)));
   expect(await readApiCustomerLocation(f.ctx, f.customer.id, f.location.id)).toMatchObject({ archivedAt: ARCHIVED_AT.toISOString() });
-  expect((await listApiCustomerLocations(f.ctx, { customerId: f.customer.id }, LIST_LIMIT)).map(representCustomerLocation))
+  expect((await listApiCustomerLocations(f.ctx, { customerId: f.customer.id }, LIST_LIMIT)).map(row => row.id)).not.toContain(f.location.id);
+  expect((await listApiCustomerLocations(f.ctx, { customerId: f.customer.id, archived: true }, LIST_LIMIT)).map(representCustomerLocation))
     .toContainEqual(expect.objectContaining({ id: f.location.id, archivedAt: ARCHIVED_AT.toISOString() }));
   await archiveFacility(f.ctx, f.facility.id, f.facility.version);
   for (const locations of [await getCustomerLocations(f.ctx, f.customer.id), (await findCustomerWithRelations(f.ctx, f.customer.id))!.locations]) {

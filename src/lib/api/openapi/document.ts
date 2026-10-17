@@ -183,6 +183,16 @@ export function buildOpenApiDocument() {
     { ...problemResponses([...READ_ERRORS, 404]), "200": jsonResponse("Supplier location page.", publishOutput(listEnvelopeSchema(supplierLocationRepresentationSchema))) },
     [targetParameter(true), ...queryParameters(supplierLocationListSchema)],
   ) };
+  for (const kind of ["customer", "supplier"] as const) {
+    const schema = kind === "customer" ? customerLocationRepresentationSchema : supplierLocationRepresentationSchema;
+    paths[`/${kind}s/{idOrCode}/locations/{locationId}`] = { get: privateOperation(
+      `get_${kind}_location`, `${kind}s:read`,
+      "Read one location under its parent, including archived parties and locations. Returns a strong version.revision ETag. Missing, foreign or wrong-parent locations answer 404 at /locationId.",
+      { ...problemResponses([...READ_ERRORS, 404]), "200": jsonResponse("Location representation.", publishOutput(itemEnvelopeSchema(schema)), etagHeader) },
+      [targetParameter(kind === "supplier"), { name: "locationId", in: "path", required: true,
+        description: "Location identifier under this parent, UUID.", schema: { type: "string", format: "uuid" } }],
+    ) };
+  }
   paths["/storage-locations/{idOrCode}/stock-movements"] = { get: privateOperation(
     "find_output_stock_movements", "biochar-products:read", readDescriptions.outputStockMovements,
     { ...problemResponses([...READ_ERRORS, 404, 422]), "200": jsonResponse("Movement page.", publishOutput(listEnvelopeSchema(outputStockMovementRepresentationSchema, "newest posting first"))) },

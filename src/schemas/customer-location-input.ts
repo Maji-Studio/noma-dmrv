@@ -22,3 +22,14 @@ export const updateCustomerLocationInput = z.strictObject({
 export type AddCustomerLocationInput = z.infer<typeof addCustomerLocationInput>;
 export type UpdateCustomerLocationInput = z.infer<typeof updateCustomerLocationInput>;
 export type CustomerLocationVersionInput = z.infer<typeof customerLocationVersionInput>;
+
+export const addCustomerLocationApiInput = z.strictObject({
+  ...sharedCustomerLocationInput.shape, customerId: uuidSchema(),
+}).superRefine(gpsPairSuperRefine);
+export const customerLocationApiVersionInput = customerLocationVersionInput.required({ customerId: true });
+export const updateCustomerLocationApiInput = z.strictObject({
+  ...z.object(sharedCustomerLocationInput.shape).partial().shape, ...customerLocationApiVersionInput.shape,
+}).superRefine(gpsPairSuperRefine).refine(
+  input => Object.entries(input).some(([key, value]) => !["customerId", "locationId", "expectedVersion"].includes(key) && value !== undefined),
+  "Supply at least one field to update.",
+);

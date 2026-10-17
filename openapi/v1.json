@@ -1556,13 +1556,14 @@
     },
     "/customers/{idOrCode}/locations": {
       "get": {
-        "description": "List customer destinations by parent UUID or exact code. Search matches a literal name prefix; the cursor binds the parent. facilityDistances lists one-way kilometres by facility with distanceSource; missing pairs are absent. Location edits leave existing transport legs frozen; the server counts the round trip. Includes country, stateRegion, city, siteDescription and defaultSoilTemperatureC. Contact details stay private. Required scope: customers:read.",
+        "description": "List customer destinations by parent UUID or exact code. Lists hide archived locations by default; archived=true lists only archived locations. Find an existing order's archived destination with archived=true or the detail read. Search matches a literal name prefix; the cursor binds the parent and archive filter. facilityDistances lists one-way kilometres by facility with distanceSource; missing pairs are absent. Location edits leave existing transport legs frozen; the server counts the round trip. Includes country, stateRegion, city, siteDescription and defaultSoilTemperatureC. Contact details stay private. Required scope: customers:read.",
         "operationId": "find_customer_locations",
         "parameters": [
           {"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}},
           {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
           {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
-          {"description": "Case-insensitive literal prefix search on customer location name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on customer location name.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}}
+          {"description": "Case-insensitive literal prefix search on customer location name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on customer location name.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "false lists active records (default); true lists only archived records. Exact code lookups use the selected set.", "in": "query", "name": "archived", "required": false, "schema": {"default": false, "description": "false lists active records (default); true lists only archived records. Exact code lookups use the selected set.", "type": "boolean"}}
         ],
         "responses": {
           "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"description": "Page of resources, newest first by (createdAt, id).", "items": {"$ref": "#/components/schemas/customer_location"}, "type": "array"}, "nextCursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Opaque cursor for the next page, or null at the end; keep filters unchanged."}}, "required": ["data", "nextCursor"], "type": "object"}}}, "description": "Customer location page.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
@@ -1573,6 +1574,15 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "x-required-scope": "customers:read"
+      }
+    },
+    "/customers/{idOrCode}/locations/{locationId}": {
+      "get": {
+        "description": "Read one location under its parent, including archived parties and locations. Returns a strong version.revision ETag. Missing, foreign or wrong-parent locations answer 404 at /locationId. Required scope: customers:read.",
+        "operationId": "get_customer_location",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Location identifier under this parent, UUID.", "in": "path", "name": "locationId", "required": true, "schema": {"format": "uuid", "type": "string"}}],
+        "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/customer_location", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Location representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
         "x-required-scope": "customers:read"
       }
     },
@@ -3794,6 +3804,15 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "x-required-scope": "suppliers:read"
+      }
+    },
+    "/suppliers/{idOrCode}/locations/{locationId}": {
+      "get": {
+        "description": "Read one location under its parent, including archived parties and locations. Returns a strong version.revision ETag. Missing, foreign or wrong-parent locations answer 404 at /locationId. Required scope: suppliers:read.",
+        "operationId": "get_supplier_location",
+        "parameters": [{"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}}, {"description": "Location identifier under this parent, UUID.", "in": "path", "name": "locationId", "required": true, "schema": {"format": "uuid", "type": "string"}}],
+        "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/supplier_location", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Location representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
         "x-required-scope": "suppliers:read"
       }
     },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addSupplierLocationInput, updateSupplierLocationInput, supplierLocationVersionInput } from "./supplier-location-input";
+import { addSupplierLocationApiInput, updateSupplierLocationApiInput, supplierLocationApiVersionInput, addSupplierLocationInput, updateSupplierLocationInput, supplierLocationVersionInput } from "./supplier-location-input";
 const id = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const version = { locationId: id, expectedVersion: 1 };
 describe("supplier location operation inputs", () => {
@@ -17,5 +17,25 @@ describe("supplier location operation inputs", () => {
   it("allows app parent discovery and an explicit parent for restricted callers", () => {
     expect(supplierLocationVersionInput.parse(version)).toEqual(version);
     expect(supplierLocationVersionInput.parse({ ...version, supplierId: id })).toEqual({ ...version, supplierId: id });
+  });
+});
+
+describe("restricted supplier location API inputs", () => {
+  const parent = { supplierId: id };
+  const target = { ...parent, ...version };
+  it("requires the parent on every mutation and canonicalizes UUIDs", () => {
+    expect(supplierLocationApiVersionInput.safeParse(version).success).toBe(false);
+    expect(updateSupplierLocationApiInput.safeParse({ ...version, city: "Site" }).success).toBe(false);
+    expect(addSupplierLocationApiInput.parse({ supplierId: id.toUpperCase(), name: "Field", country: "TZ", gpsLatitude: 0, gpsLongitude: 0 }).supplierId).toBe(id);
+    expect(supplierLocationApiVersionInput.parse({ ...target, locationId: id.toUpperCase() }).locationId).toBe(id);
+  });
+  it("rejects app-only address, unknown fields, empty PATCH and half GPS", () => {
+    for (const patch of [{ address: "Private" }, { unknown: true }, {}, { gpsLatitude: 0 }]) {
+      expect(updateSupplierLocationApiInput.safeParse({ ...target, ...patch }).success).toBe(false);
+    }
+    expect(addSupplierLocationApiInput.safeParse({ ...parent, name: "Field", country: "TZ", gpsLatitude: 0, gpsLongitude: 0, address: "Private" }).success).toBe(false);
+  });
+  it("permits clearing optional location names and places", () => {
+    expect(updateSupplierLocationApiInput.parse({ ...target, name: null, city: null })).toEqual({ ...target, name: null, city: null });
   });
 });
