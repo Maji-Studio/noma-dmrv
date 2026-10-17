@@ -79,7 +79,7 @@ export function RecordLockNotice(props: {
   inUseLocksNothing?: boolean;
 }) {
   if (!props.lock && props.status === "pending") {
-    return <Notice tone="info" data-record-lock-notice="pending">{RECORD_LOCK_PENDING_MESSAGE}</Notice>;
+    return <Notice tone="info" boxed data-record-lock-notice="pending">{RECORD_LOCK_PENDING_MESSAGE}</Notice>;
   }
   if (!props.lock && props.status === "error") {
     return (
@@ -108,7 +108,7 @@ function LockLine({ lock, subject = "record", inUseLocksNothing = false }: {
   if (lock.level === "inUse" && inUseLocksNothing) return null;
   if (subject === "storageBin") {
     return (
-      <Notice tone="info" data-record-lock-notice={lock.level}>
+      <Notice tone="info" boxed data-record-lock-notice={lock.level}>
         {lock.heldBy[0] ? (
           <>In use by its stock history, most recently <HolderLink link={lock.heldBy[0]} />, so the storage type and feedstock type are locked.</>
         ) : "In use by its stock history, so the storage type and feedstock type are locked."}
@@ -117,14 +117,14 @@ function LockLine({ lock, subject = "record", inUseLocksNothing = false }: {
   }
   if (lock.level === "sent") {
     return (
-      <Notice tone="info" data-record-lock-notice="sent">
+      <Notice tone="info" boxed data-record-lock-notice="sent">
         Sent with <HolderList holders={lock.heldBy} />, so every field is locked. {lock.howToFree}
       </Notice>
     );
   }
   const plural = lock.heldBy.length > 1;
   return (
-    <Notice tone="info" data-record-lock-notice="inUse">
+    <Notice tone="info" boxed data-record-lock-notice="inUse">
       In use by <HolderList holders={lock.heldBy} />, so fields that feed {plural ? "their" : "its"} numbers are locked. {lock.howToFree}
     </Notice>
   );
