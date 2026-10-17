@@ -359,6 +359,7 @@ export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
     createdAt: "ignore",
   } },
   removal: { table: certifierRemovals, fields: {
+    code: "value",
     id: "ignore",
     organizationId: "ignore",
     facilityId: { link: "facility" },
