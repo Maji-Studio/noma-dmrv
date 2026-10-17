@@ -48,6 +48,7 @@ noma records none of these numbers, so the template cannot be filled. The #291 d
 
 ## Consequences
 
+- One editable line comment per credit batch and component ID stays in noma; it is never sent to Isometric and never changes line state, batch health or Removal blockers. Earlier wording stays in activity; entry notes remain separate.
 - noma becomes the system of record for these numbers and their evidence, as it already is for runs and samples.
 - `MAPPING_REVISION` changes, which supersedes earlier Removal versions. This is acceptable before production.
 - Sample transport legs stop feeding Removals. Sample shipping is entered per line instead, so two lab lines can no longer receive the same total.

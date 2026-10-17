@@ -56,6 +56,11 @@ _On screen_: manual entry; the screen calls the part that comes from forms and
 routes "From records".
 _Avoid_: activity (reserved for the history log).
 
+**Line comment**:
+One editable comment on a credit batch's Removal-template line, identified by
+component ID. It stays in noma and never changes line state or blocks a Removal.
+Earlier wording stays in the activity log. Each emissions entry keeps its own note.
+
 **Emission estimate**:
 A per-facility configured value (reference soil temperature) used to derive
 submission data noma does not measure directly. Distinct from a measured value.

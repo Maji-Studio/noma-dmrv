@@ -1,4 +1,5 @@
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntries: vi.fn() }));
+vi.mock("@/data-access/emission-line-comments", () => ({ listEmissionLineComments: vi.fn() }));
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => true }));
 vi.mock("@/data-access/emission-automatic-masses", () => ({ getEmissionAutomaticMasses: vi.fn() }));
@@ -25,6 +26,7 @@ import { getSamplesByCreditBatchIds } from "@/data-access/credit-batch-samples";
 import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
 import { listEmissionEntries } from "@/data-access/emission-entries";
+import { listEmissionLineComments } from "@/data-access/emission-line-comments";
 import { getEmissionAutomaticMasses } from "@/data-access/emission-automatic-masses";
 import { getTemplateObservationById } from "@/data-access/removal-template-observations";
 import { getLatestTemplateObservation } from "@/data-access/removal-template-observations";
@@ -35,6 +37,7 @@ import { withTemplateOrder } from "@/lib/isometric/template-observations/templat
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(listEmissionLineComments).mockResolvedValue([]);
   vi.mocked(getCreditBatchById).mockResolvedValue({
     removalTemplateId: "template",
     facilityId: "facility",
@@ -144,6 +147,8 @@ it("returns typed entry details and retains removed lines for re-entry", async (
       values: [{ inputKey: "electricity_use", magnitude: "0.1", unit: "kWh", massDistanceDetail: null }],
     },
   ] as never);
+  const comment = { id: "comment", componentId: "line", body: "Line context", version: 2, updatedAt: new Date(), updatedBy: "user-id" };
+  vi.mocked(listEmissionLineComments).mockResolvedValue([comment] as never);
   const [line] = await loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch");
   expect(line).toMatchObject({
     label: "Lab electricity",
@@ -154,6 +159,7 @@ it("returns typed entry details and retains removed lines for re-entry", async (
     blocker: { code: "entryMissingEvidence" },
     total: { magnitude: "0.1", unit: "kWh" },
     entries: [{ id: "entry", version: 2, counts: true, documentCount: 0 }],
+    comment: { id: comment.id, body: comment.body, version: comment.version, updatedAt: comment.updatedAt, updatedBy: comment.updatedBy },
   });
   vi.mocked(getLatestTemplateObservation).mockResolvedValue({
     ...current,
@@ -165,6 +171,7 @@ it("returns typed entry details and retains removed lines for re-entry", async (
   expect(removed).toMatchObject({
     label: "Lab electricity",
     entries: [{ id: "entry", counts: false, canConfirm: false }],
+    comment: null,
   });
 });
 
@@ -222,4 +229,13 @@ it("shows re-entry for unit changes and keeps other lines healthy", async () => 
   const lines = await loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch");
   expect(lines[0]).toMatchObject({ state: "needsReview", total: null, blocker: { code: "lineNeedsReview", message: "Enter the values again for the current template line." }, entries: [expect.objectContaining({ counts: false, canConfirm: false })] });
   expect(lines[1]).toMatchObject({ state: "filled", total: { magnitude: "1", unit: "kWh" } });
+  expect(lines.every((line) => line.comment === null)).toBe(true);
+  vi.mocked(listEmissionLineComments).mockResolvedValue([
+    { id: "comment", componentId: "healthy", body: "Context", version: 1, updatedAt: new Date(), updatedBy: "user-id" },
+    { id: "orphan", componentId: "removed", body: "Old context", version: 1 },
+  ] as never);
+  const withComments = await loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch");
+  expect(withComments[0].comment).toBeNull();
+  expect(withComments[1].comment).toMatchObject({ id: "comment", body: "Context" });
+  expect(withComments.map((line) => ({ ...line, comment: null }))).toEqual(lines);
 });

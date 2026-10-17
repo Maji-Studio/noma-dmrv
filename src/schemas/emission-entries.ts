@@ -3,7 +3,7 @@ import { uuidSchema, expectedVersionSchema } from "@/schemas/helpers";
 import { ENTRY_DECIMAL_PATTERN } from "@/lib/certification/emission-entry-rules";
 import type { QuantityKind } from "@/lib/isometric/template-observations/types";
 
-const MAX_ENTRY_TEXT_LENGTH = 4000;
+export const MAX_ENTRY_TEXT_LENGTH = 4000;
 const MAX_ENTRY_INPUTS = 2;
 const MAX_MAGNITUDE_LENGTH = 100;
 const magnitude = z

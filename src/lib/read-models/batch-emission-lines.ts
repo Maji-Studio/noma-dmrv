@@ -1,5 +1,6 @@
 import { loadBatchEmissionAutomaticFacts } from "@/data-access/batch-emission-automatic-figures";
 import { loadBatchEmissionEntryFacts } from "@/data-access/emission-entry-facts";
+import { listEmissionLineComments } from "@/data-access/emission-line-comments";
 import { requireOrgFacility } from "@/data-access/utils";
 import { canonicalUnit } from "@/lib/isometric/template-observations/units";
 import type { OrgContext } from "@/lib/auth/server";
@@ -25,7 +26,8 @@ export async function loadBatchEmissionLines(ctx: OrgContext, facilityId: string
   if (!observation) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
   const automaticFacts = await loadBatchEmissionAutomaticFacts(ctx, facilityId, creditBatchId, { requireDeliveryMass: true });
   const { entries, previousObservations } = await loadBatchEmissionEntryFacts(ctx, creditBatchId, observation);
-  return buildBatchEmissionLines(observation, entries, previousObservations, automaticFacts);
+  const comments = await listEmissionLineComments(ctx, creditBatchId);
+  return buildBatchEmissionLines(observation, entries, previousObservations, automaticFacts, comments);
 }
 
 /** The same display derivation is used by the detail page and facility overview. */
@@ -34,7 +36,10 @@ export function buildBatchEmissionLines(
   entries: Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>>["entries"],
   previousObservations: ReadonlyMap<string, EntryObservation | null>,
   automaticFacts: Pick<BatchEmissionLineFacts, "automaticFigures" | "automaticRecordCounts">,
+  comments: Awaited<ReturnType<typeof listEmissionLineComments>> = [],
 ) {
+  const currentComponents = new Set(observation.definition.groups.flatMap((group) => group.components.map((component) => component.id)));
+  const commentsByComponent = new Map(comments.map((comment) => [comment.componentId, comment]));
   const definition = withRemovedEntryComponents(observation.definition, entries, previousObservations);
   return deriveBatchEmissionLines({
     definition,
@@ -59,6 +64,8 @@ export function buildBatchEmissionLines(
               : null,
         };
       });
+    // Retired entry components remain visible for re-entry, but their comments do not.
+    const comment = currentComponents.has(line.componentId) ? commentsByComponent.get(line.componentId) : undefined;
     return {
       ...line,
       label: line.displayName,
@@ -67,6 +74,10 @@ export function buildBatchEmissionLines(
       unit: inputShape.length === 1 ? inputShape[0].unit : null,
       entryPolicy: line.contract?.entryPolicy ?? "none",
       entries: entries.filter((entry) => entry.componentId === line.componentId),
+      comment: comment ? {
+        id: comment.id, body: comment.body, version: comment.version,
+        updatedAt: comment.updatedAt, updatedBy: comment.updatedBy,
+      } : null,
     };
   });
 }
