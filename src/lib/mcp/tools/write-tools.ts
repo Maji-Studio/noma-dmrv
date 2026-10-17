@@ -1,3 +1,5 @@
+import { supplierWriteTools } from "./supplier-tools";
+import { customerWriteTools } from "./customer-tools";
 import { formulationWriteTools } from "./formulation-tools";
 import { applicationWriteTools } from "./application-tools";
 import { documentWriteTools } from "./document-tools";
@@ -98,6 +100,8 @@ export const writeTools: WriteTool[] = [
   ...documentWriteTools,
   ...applicationWriteTools,
   ...formulationWriteTools,
+  ...supplierWriteTools,
+  ...customerWriteTools,
 ];
 
 async function mutate(context: ApiRouteContext, raw: unknown, kind: "update" | "delete") {

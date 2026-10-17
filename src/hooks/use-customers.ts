@@ -39,6 +39,8 @@ import {
   createCustomerWithLocationsFn,
   updateCustomerFn,
   deleteCustomerFn,
+  archiveCustomerFn,
+  restoreCustomerFn,
   createCustomerLocationFn,
   updateCustomerLocationFn,
   deleteCustomerLocationFn,
@@ -463,6 +465,56 @@ export function useDeleteCustomer(
 // ============================================
 // Customer Location Mutation Hooks
 // ============================================
+
+type CustomerVersionVariables = { customerId: string; expectedVersion: number };
+
+/** Archive and restore share one shape: a version-checked flip of `archivedAt`. */
+function useCustomerLifecycle(
+  action: (variables: CustomerVersionVariables) => ReturnType<typeof archiveCustomerFn>,
+  callbacks?: MutationCallbacks<Customer, CustomerVersionVariables>,
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (variables: CustomerVersionVariables) => {
+      const result = await action(variables);
+      if (!result.success) throwActionError(result);
+      return result.data;
+    },
+    onSuccess: async (data, variables) => {
+      // Merge the saved row (with its new version) into every list and detail
+      // cache before the refetch, so an open sheet or order form never reads
+      // the archive state or version from before this change.
+      patchListCachesWithSavedRow<CustomerWithRelations>(queryClient, customerKeys.lists(), data);
+      queryClient.setQueryData<Customer>(customerKeys.detail(data.id), (old) => (old ? { ...old, ...data } : data));
+      queryClient.setQueryData<Customer>(customerKeys.detailWithRelations(data.id), (old) => (old ? { ...old, ...data } : old));
+      invalidateEntityTypeQueries(queryClient, CUSTOMER_ENTITY_TYPE);
+      invalidateEntityTypeQueries(queryClient, "order");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: customerKeys.lists() }),
+        queryClient.invalidateQueries({ queryKey: customerKeys.detailWithRelations(data.id) }),
+      ]);
+      await callbacks?.onSuccess?.(data, variables);
+    },
+    onError: async (error, variables) => {
+      if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: customerKeys.all });
+      await callbacks?.onError?.(error, variables);
+    },
+    onSettled: async (data, error, variables) => {
+      await callbacks?.onSettled?.(data, error, variables);
+    },
+  });
+}
+
+/** Hook to archive a customer: pickers hide it, stored orders keep it. */
+export function useArchiveCustomer(callbacks?: MutationCallbacks<Customer, CustomerVersionVariables>) {
+  return useCustomerLifecycle(archiveCustomerFn, callbacks);
+}
+
+/** Hook to restore an archived customer. */
+export function useRestoreCustomer(callbacks?: MutationCallbacks<Customer, CustomerVersionVariables>) {
+  return useCustomerLifecycle(restoreCustomerFn, callbacks);
+}
 
 /**
  * Hook to create a new customer location

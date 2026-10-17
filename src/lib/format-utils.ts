@@ -19,7 +19,8 @@ import { formatFacilityTime, formatUtcDate, parseLocalDateString, SHORT_MONTH_NA
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_FORMAT = "MMM d, yyyy";
-const DATE_TIME_FORMAT = "MMM d, yyyy, HH:mm";
+const TIME_FORMAT = "HH:mm";
+const DATE_TIME_FORMAT = `MMM d, yyyy, ${TIME_FORMAT}`;
 const FACILITY_DATE_TIME_WITH_OFFSET_FORMAT = "yyyy-MM-dd HH:mm xxx";
 const SAME_YEAR_RANGE_START_FORMAT = "MMM d";
 const KG_PER_TONNE = 1000;
@@ -92,6 +93,17 @@ export function formatDateTime(value: DateValue): string {
   if (!value) return MISSING_VALUE.notRecorded;
   const date = parseDateValue(value);
   return date ? format(date, DATE_TIME_FORMAT) : MISSING_VALUE.notAvailable;
+}
+
+/**
+ * Format the time of day on a 24-hour clock ("14:30"), on the viewer's clock.
+ * Returns "Not recorded" for null or undefined and "Not available" for a value
+ * it cannot parse.
+ */
+export function formatTime(value: DateValue): string {
+  if (!value) return MISSING_VALUE.notRecorded;
+  const date = parseDateValue(value);
+  return date ? format(date, TIME_FORMAT) : MISSING_VALUE.notAvailable;
 }
 
 /**

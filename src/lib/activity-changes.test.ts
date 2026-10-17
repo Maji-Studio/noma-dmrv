@@ -150,6 +150,39 @@ it("normalizes nested JS numbers to exact decimal strings", () => {
     { feedstockDraws: [{ mass: "1000000000000000000000" }] })).toEqual({ changedFields: [], changes: {} });
 });
 
+it("compares emissions values by content without capturing magnitudes or notes", () => {
+  const before = { note: "private before", contentRevision: 1, values: [
+    { id: "old-id", entryId: "entry", inputKey: "fuel", magnitude: "123.456", unit: "L" },
+    { id: "other-id", entryId: "entry", inputKey: "power", magnitude: "2", unit: "kWh" },
+  ] };
+  const reordered = { ...before, contentRevision: 2, values: [
+    { ...before.values[1], id: "replacement-1" }, { ...before.values[0], id: "replacement-2" },
+  ] };
+  expect(diffActivityChanges("emission_entry", before, reordered)).toEqual({ changedFields: [], changes: {} });
+  const changed = { ...reordered, note: "private after",
+    values: reordered.values.map(value => ({ ...value, magnitude: "9007199254740993.123" })) };
+  expect(diffActivityChanges("emission_entry", before, changed)).toEqual({
+    changedFields: ["note", "values"], changes: {},
+  });
+});
+
+it("captures emissions dates and claim links while ignoring revisions", () => {
+  expect(diffActivityChanges("emission_entry",
+    { occurredOn: "2026-01-01", sentByRemovalId: null, version: 1, contentRevision: 1 },
+    { occurredOn: "2026-01-02", sentByRemovalId: "removal-id", version: 2, contentRevision: 2 }))
+    .toEqual({ changedFields: ["occurredOn", "sentByRemovalId"], changes: {
+      occurredOn: { from: "2026-01-01", to: "2026-01-02" },
+      sentByRemovalId: { from: null, to: "removal-id" },
+    } });
+});
+
+it("names emission observation changes without capturing IDs and ignores the creator", () => {
+  expect(diffActivityChanges("emission_entry",
+    { observationId: "previous-observation", createdBy: "previous-user" },
+    { observationId: "current-observation", createdBy: "current-user" }))
+    .toEqual({ changedFields: ["observationId"], changes: {} });
+});
+
 it("captures formulation scalars while comparing recipe lines without child bookkeeping", () => {
   const before = { biocharRatio: "0.700000", description: "private old", version: 1,
     lines: [{ id: "old", feedstockTypeId: "type", ratio: "0.300000", sortOrder: 0 }] };

@@ -20,6 +20,8 @@ export async function listApiCustomerLocations(
   const locations = await db.select({
     id: customerLocations.id, customerId: customerLocations.customerId, name: customerLocations.name,
     gpsLatitude: customerLocations.gpsLatitude, gpsLongitude: customerLocations.gpsLongitude,
+    country: customerLocations.country, stateRegion: customerLocations.stateRegion, city: customerLocations.city,
+    siteDescription: customerLocations.address, defaultSoilTemperatureC: customerLocations.defaultSoilTemperatureC,
     isDefault: customerLocations.isDefault, version: customerLocations.version,
     createdAt: customerLocations.createdAt, updatedAt: customerLocations.updatedAt,
     cursorCreatedAt: lookupCursorCreatedAt(customerLocations.createdAt),

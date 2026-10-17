@@ -8,7 +8,6 @@ import {
   TrashIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { RowActionsMenu } from "@/components/ui";
-import { isRemovalStatusLocked } from "@/lib/certification/status";
 import type { CreditBatchHealthSummary } from "@/fn/certification";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { CreditBatchLifecycleRail } from "./credit-batch-lifecycle";
@@ -36,7 +35,7 @@ export function CreditBatchCard({
   // Interim certification lock (DR-003): once the batch backs a submitted
   // removal its definition is frozen, so the menu offers no Edit or Delete.
   // The view sheet explains the lock; the server guard enforces it.
-  const locked = isRemovalStatusLocked(health?.removalStatus);
+  const locked = health?.recordLock?.level === "sent";
 
   return (
     <article

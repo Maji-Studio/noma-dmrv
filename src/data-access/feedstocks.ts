@@ -1,3 +1,8 @@
+import { readRecordDependents } from "./record-lock-dependents";
+import { assertRecordLockFields } from "@/lib/record-lock-fields";
+import { recordLocks } from "@/lib/record-lock";
+import { partyArchived } from "@/lib/party-domain-errors";
+import { lockSupplierReference } from "./party-reference-guards";
 import type { CaptureActivity } from "@/lib/activity-changes";
 import type { ActivityEventInput } from "./activity-events";
 import { withFeedstockTransportReadiness } from "./feedstock-transport-readiness";
@@ -474,7 +479,6 @@ export async function createFeedstockInTransaction(
 ): Promise<CreateFeedstockResult> {
   requireOrgScope(ctx);
   await withFeedstockErrors(() => assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId, tx), "not_found", ["feedstockTypeId"]);
-  await withFeedstockErrors(() => assertSameOrg(ctx, suppliers, data.supplierId, tx), "not_found", ["supplierId"]);
   if (data.vehicleId) await withFeedstockErrors(() => assertSameOrg(ctx, vehicles, data.vehicleId!, tx), "not_found", ["vehicleId"]);
   for (const [index, allocation] of data.allocations.entries()) {
     await withFeedstockErrors(
@@ -507,6 +511,7 @@ export async function createFeedstockInTransaction(
 
   const binIds = data.allocations.map((a) => a.storageLocationId);
   await withFeedstockErrors(() => lockActiveFacilityReference(ctx, tx, data.facilityId), "not_found", ["facilityId"]);
+  await lockSupplierReference(ctx, tx, data.supplierId);
   await lockBinStocks(ctx, tx, binIds);
   await validateFeedstockStorageLocations(
     ctx,
@@ -642,7 +647,6 @@ export async function updateFeedstockInTransaction(
     distanceNote,
     ...feedstockData
   } = data;
-  if (feedstockData.supplierId) await withFeedstockErrors(() => assertSameOrg(ctx, suppliers, feedstockData.supplierId!, tx), "not_found", ["supplierId"]);
   if (feedstockData.vehicleId) await withFeedstockErrors(() => assertSameOrg(ctx, vehicles, feedstockData.vehicleId!, tx), "not_found", ["vehicleId"]);
   if (feedstockData.feedstockTypeId) await withFeedstockErrors(() => assertSameOrg(ctx, feedstockTypes, feedstockData.feedstockTypeId!, tx), "not_found", ["feedstockTypeId"]);
   if (feedstockData.storageLocationId) await withFeedstockErrors(() => assertSameOrg(ctx, storageLocations, feedstockData.storageLocationId!, tx), "not_found", ["storageLocationId"]);
@@ -650,6 +654,9 @@ export async function updateFeedstockInTransaction(
   if (feedstockData.facilityId !== undefined) {
     await withFeedstockErrors(() => lockActiveFacilityReference(ctx, tx, feedstockData.facilityId!), "not_found", ["facilityId"]);
   }
+  const supplier = feedstockData.supplierId !== undefined
+    ? await lockSupplierReference(ctx, tx, feedstockData.supplierId, { allowArchived: true })
+    : undefined;
 
   const [locked] = await tx
     .select()
@@ -670,6 +677,9 @@ export async function updateFeedstockInTransaction(
     expectedVersion,
     actualVersion: locked.version,
   });
+  if (feedstockData.supplierId !== undefined && feedstockData.supplierId !== locked.supplierId && supplier?.archivedAt) {
+    throw partyArchived("supplier", supplier.code);
+  }
   const transportBefore = capture ? await readFeedstockTransportSnapshot(ctx, tx, feedstockId) : undefined;
 
   await withFeedstockErrors(() => assertCanMutateCertifiedLineage(
@@ -679,6 +689,7 @@ export async function updateFeedstockInTransaction(
     "update",
   ), "certification_locked");
 
+  assertRecordLockFields(recordLocks.feedstock({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "feedstock", entityId: feedstockId }) }), locked, feedstockData);
   // Derive before anything reads the new masses: the status, the stock-lane
   // check, and the write below must all see the same dry figure.
   const derivedMassDryKg = resolveFeedstockDryMass(locked, feedstockData);
@@ -820,7 +831,7 @@ export async function deleteFeedstockInTransaction(
     .where(and(eq(productionRunFeedstocks.feedstockId, feedstockId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
 
   if (Number(usageCount.count) > 0) {
-    throw new DomainError("conflict",
+    throw new DomainError("certification_locked",
       "Cannot delete feedstock that is used in production runs. Remove production run associations first."
     );
   }

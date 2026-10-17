@@ -1,3 +1,4 @@
+import { deletedProductReversals } from './output-stock-active-movements';
 import { db, type DbTransaction } from '@/db';
 import { applications, binMovements, biocharProducts, biocharProductSourceAllocations, productionRuns, productIngredientSnapshots, storageLocations, users } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
@@ -5,17 +6,16 @@ import { SafeError } from '@/lib/errors';
 import { orderedSourcesSchema } from '@/schemas/output-stock';
 import type { OutputMoistureReset, OutputStockHistoryEntry, OutputStockPreview } from '@/types/output-stock';
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import { getOutputStockAllocationProjection } from './output-stock';
-import { outputBinReceipts } from './output-stock-edit-lock';
+import { getOutputStockAllocationProjection, readOutputBinAllLayers, UnresolvedOutputStockError } from './output-stock';
+import { getOutputMovementCertificationLocks, outputMovementLockReason } from './output-stock-edit-lock';
 import { requireOrgScope } from './utils';
-import { stockEntryLockReason } from '@/lib/output-stock/edit-lock';
 import { deliveryAppliedLockedReason } from '@/lib/output-stock/labels';
 
 /**
  * Intake facts retain their recorded wet mass; movement facts remain immutable.
  * A snapshot read passes its transaction as `reader`, so history and stock agree.
  */
-export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: string, reader: Pick<DbTransaction, 'select'> = db): Promise<OutputStockHistoryEntry[]> {
+export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: string, reader: Pick<DbTransaction, 'select' | 'selectDistinct'> = db): Promise<OutputStockHistoryEntry[]> {
   requireOrgScope(ctx);
   const [bin] = await reader.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
   if (!bin) throw new SafeError('Storage bin not found');
@@ -28,6 +28,7 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   const sources = await reader.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId));
   const ingredients = products.length === 0 ? [] : await reader.select().from(productIngredientSnapshots)
     .where(and(eq(productIngredientSnapshots.organizationId, ctx.organizationId), inArray(productIngredientSnapshots.biocharProductId, products.map(product => product.id))));
+  const deletedPlacements = products.length === 0 ? [] : await deletedProductReversals(ctx, reader, products.map(product => product.id));
   const runCode = new Map(runs.map(r => [r.id, r.code]));
   const productCode = new Map(products.map(p => [p.id, p.code]));
   const history: OutputStockHistoryEntry[] = movements.filter(({ movement: m }) => m.outputKind).flatMap(({ movement: m, actorName }) => {
@@ -93,24 +94,37 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
     reason: `Intake ${r.code}`, wetMassKg: r.wet, moisturePercent: r.moisture, dryMassKg: -r.dry, beforeDryKg: 0, afterDryKg: 0,
     correctsMovementId: null, deliveryId: null, source: { entity: bin.type === 'product_bin' ? 'biocharProduct' : 'productionRun', id: r.id },
     wetDeltaKg: r.wet, solidsDeltaKg: r.solids, allocations: [{ layerId: r.id, code: r.code, wetMassKg: r.wet, dryMassKg: r.dry, runs: r.runs }] });
+  for (const [productId, movement] of new Map(deletedPlacements.map(row => [row.id, row.movement]))) {
+    const intake = history.find(entry => entry.kind === 'intake' && entry.id === productId);
+    if (!intake) continue;
+    history.push({ ...intake, id: `${movement.id}:placement`, kind: 'reversal', correctsMovementId: intake.id,
+      recordedAt: movement.createdAt.toISOString(), reason: movement.reason,
+      dryMassKg: -intake.dryMassKg, wetDeltaKg: -(intake.wetDeltaKg ?? 0), solidsDeltaKg: intake.solidsDeltaKg == null ? null : -intake.solidsDeltaKg });
+  }
   history.sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
   let balance = 0;
   for (const entry of history) {
-    if (entry.kind === 'intake') { entry.beforeDryKg = balance; entry.afterDryKg = balance - entry.dryMassKg; }
+    if (entry.kind === 'intake' || entry.id.endsWith(':placement')) { entry.beforeDryKg = balance; entry.afterDryKg = balance - entry.dryMassKg; }
     balance -= entry.dryMassKg;
   }
-  const latestSequence = movements.at(-1)?.movement.postingSequence ?? BigInt(0);
-  const receiptFacts = await outputBinReceipts(ctx, storageLocationId, reader);
   // The correction path refuses an applied delivery too; locking it here keeps the delivery's other fields saveable.
   const deliveryIds = [...new Set(history.flatMap(entry => entry.deliveryId ? [entry.deliveryId] : []))];
   const applied = deliveryIds.length === 0 ? [] : await reader.select({ deliveryId: applications.deliveryId, code: applications.code }).from(applications)
     .where(and(eq(applications.organizationId, ctx.organizationId), inArray(applications.deliveryId, deliveryIds)));
   const applicationCode = new Map(applied.map(row => [row.deliveryId, row.code]));
+  let layers: Awaited<ReturnType<typeof readOutputBinAllLayers>>['layers'] | null = null;
+  try {
+    ({ layers } = await readOutputBinAllLayers(ctx, storageLocationId, reader, { includeArchived: true }));
+  } catch (error) {
+    if (!(error instanceof UnresolvedOutputStockError)) throw error;
+  }
+  const editableIds = history.filter(entry => entry.kind !== 'reversal' && ['loss', 'delivery'].includes(entry.eventKind ?? entry.kind)).map(entry => entry.id);
+  const certificationLocks = await getOutputMovementCertificationLocks(ctx, reader, editableIds, rows);
   for (const entry of history) {
     if (entry.kind === 'reversal' || !['loss', 'delivery'].includes(entry.eventKind ?? entry.kind)) continue;
     const original = movements.find(row => row.movement.id === entry.id)?.movement;
     const code = entry.deliveryId ? applicationCode.get(entry.deliveryId) : undefined;
-    if (original) entry.editLockedReason = code ? deliveryAppliedLockedReason(code) : stockEntryLockReason(original, latestSequence, receiptFacts);
+    if (original) entry.editLockedReason = code ? deliveryAppliedLockedReason(code) : await outputMovementLockReason(ctx, storageLocationId, original.id, reader, { original, facilityId: bin.facilityId, all: rows, layers, certificationLocks: certificationLocks.get(original.id) ?? [] });
   }
   return history;
 }

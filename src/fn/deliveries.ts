@@ -7,7 +7,6 @@
 
 import { DomainError } from "@/lib/domain-errors";
 import {
-  deleteDelivery,
   getDeliveries as getDeliveriesData,
   getDeliveryWithRelations as getDeliveryWithRelationsData,
   type CreatedDelivery,
@@ -15,7 +14,7 @@ import {
   type PaginatedDeliveries,
   type UpdatedDelivery,
 } from "@/data-access/deliveries";
-import { recordDeliveryForUi, updateDelivery } from "@/lib/operations/deliveries";
+import { recordDeliveryForUi, updateDelivery, deletePostedDelivery } from "@/lib/operations/deliveries";
 import {
   getDeliveryStats as getDeliveryStatsData,
   type DeliveryStats,
@@ -194,7 +193,7 @@ export async function deleteDeliveryFn(
   return withAction(async (ctx) => {
 
     const validated = deleteDeliverySchema.parse(data);
-    await deleteDelivery(ctx, validated.deliveryId, validated.expectedVersion);
+    await runOperationInProcess(deletePostedDelivery, ctx, validated);
 
     return;
   }, { fallbackMessage: "Failed to delete delivery", log: { message: "delivery action failed", context: { op: "delivery:delete" } } });

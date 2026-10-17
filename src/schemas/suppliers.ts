@@ -102,14 +102,6 @@ export const updateSupplierSchema = z.object({
   sourceRegion: z.string().max(255).optional().nullable().or(z.literal("")),
 });
 
-/**
- * Schema for deleting a supplier
- */
-export const deleteSupplierSchema = z.object({
-  expectedVersion: expectedVersionSchema,
-  supplierId: z.string().uuid("Choose a valid supplier."),
-});
-
 // ============================================
 // Filter/Query Schemas
 // ============================================
@@ -119,6 +111,8 @@ export const deleteSupplierSchema = z.object({
  * Used for search, pagination, and filtering
  */
 export const supplierFilterSchema = z.object({
+  // false = active only; true = archived only.
+  archived: z.boolean().default(false),
   // Text search across code, name, location
   search: z
     .string()

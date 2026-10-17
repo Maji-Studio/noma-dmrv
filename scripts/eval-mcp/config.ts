@@ -134,3 +134,34 @@ export const FORMULATION_CASES = [
     text: ({ code }: { code: string }) => `We use ${code} again.` },
 ] as const;
 export type FormulationCaseId = typeof FORMULATION_CASES[number]["id"];
+
+const PARTY_CREATE_BUDGET = 6;
+const PARTY_LOOKUP_BUDGET = 4;
+const PARTY_ARCHIVED_ADD_BUDGET = 6;
+// Minimum path: whoami, active supplier, feedstock type, archived supplier, bin, dry-run intake (six calls).
+const PARTY_ARCHIVED_INTAKE_BUDGET = 8;
+const PARTY_RESTORE_BUDGET = 5;
+const SUPPLIER_COMMAND_SCOPES = ["suppliers:read", "suppliers:write"];
+export const PARTY_PICKUP = { gpsLatitude: -8.12, gpsLongitude: 36.45, distanceKm: 42 };
+export const PARTY_FIELD = { gpsLatitude: -8.90, gpsLongitude: 33.40, name: "North Block" };
+export const PARTY_SUPPLIER_NAME = "Kilombero Sawmill";
+export const PARTY_CUSTOMER_NAME = "Mbeya Coffee Estate";
+interface PartyPromptTarget { name: string; facilityName: string }
+export const PARTY_CASES = [
+  { id: "supplier-with-pickup", budget: PARTY_CREATE_BUDGET, scopes: ["suppliers:read", "suppliers:write", "facilities:read"],
+    text: ({ facilityName }: PartyPromptTarget) => `Add supplier ${PARTY_SUPPLIER_NAME} with a pickup location at -8.12, 36.45 in Tanzania, 42 km by road from ${facilityName}.` },
+  { id: "customer-and-field", budget: PARTY_CREATE_BUDGET, scopes: ["customers:read", "customers:write"],
+    text: () => `Record a new customer, ${PARTY_CUSTOMER_NAME}, with a field called North Block at -8.90, 33.40 in Tanzania.` },
+  { id: "supplier-already-exists", budget: PARTY_LOOKUP_BUDGET, scopes: ["suppliers:read", "suppliers:write"],
+    text: ({ name }: PartyPromptTarget) => `Add supplier ${name}.` },
+  { id: "supplier-already-exists-archived", budget: PARTY_ARCHIVED_ADD_BUDGET, scopes: SUPPLIER_COMMAND_SCOPES,
+    text: ({ name }: PartyPromptTarget) => `Add supplier ${name}.` },
+  { id: "supplier-archived-intake", budget: PARTY_ARCHIVED_INTAKE_BUDGET, scopes: ["suppliers:read", "feedstocks:write", "feedstock-types:read", "facilities:read", "storage-locations:read"],
+    text: ({ name }: PartyPromptTarget) => `Log 2 t of rice husk from ${name} today at 30% moisture.` },
+  { id: "supplier-restore", budget: PARTY_RESTORE_BUDGET, scopes: SUPPLIER_COMMAND_SCOPES,
+    text: () => `We buy from ${PARTY_SUPPLIER_NAME} again.` },
+  { id: "customer-restore", budget: PARTY_RESTORE_BUDGET, scopes: ["customers:read", "customers:write"],
+    text: () => `We sell to ${PARTY_CUSTOMER_NAME} again.` },
+] as const;
+export type PartyCaseId = typeof PARTY_CASES[number]["id"];
+// customer-stale-version is deferred: runClaude has no between-read-and-write hook.

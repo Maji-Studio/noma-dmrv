@@ -1,3 +1,4 @@
+import { assertTransportEntryType } from "@/lib/certification/emissions-entry-gate";
 import { diffActivityChanges } from "@/lib/activity-changes";
 import { supplierLocationFacilityDistances } from "@/db/schema";
 import { recordScopedActivityChange, resolveWriteActivityScopes } from "./write-activity";
@@ -246,6 +247,7 @@ export async function createTransportLeg(
   input: CreateTransportLegInput,
 ): Promise<TransportLeg> {
   requireOrgScope(ctx);
+  assertTransportEntryType(input.entityType);
 
   await resolveEntityFacility(ctx, input.entityType, input.entityId);
 

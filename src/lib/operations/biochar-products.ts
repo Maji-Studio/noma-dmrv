@@ -1,3 +1,6 @@
+import { deleteBiocharProductInTransaction } from '@/data-access/biochar-product-delete';
+import { processPendingStorageObjectDeletions } from '@/data-access/storage-object-deletions';
+import { deleteBiocharProductSchema } from '@/schemas/biochar-products';
 import { randomUUID } from "node:crypto";
 import { createBiocharProductInTransaction, findCommittedBiocharProduct, type BiocharProductRequest, type CreatedBiocharProduct } from "@/data-access/biochar-product-create";
 import { readProductFacility, resolveProductComposition } from "@/data-access/biochar-product-input";
@@ -117,4 +120,15 @@ export const updateBiocharProduct: Operation<typeof updateBiocharProductInput, B
     activity.link({ facilityId: product.facilityId, productionRunId: product.linkedProductionRunId ?? undefined });
     return product;
   }),
+};
+
+export const deletePostedBiocharProduct: Operation<typeof deleteBiocharProductSchema, void> = {
+  id: "delete_posted_biochar_product", input: deleteBiocharProductSchema, supportsDryRun: false,
+  describe: input => ({ outcome: "deleted", entityType: "biocharProduct", entityIds: [input.productId], versionBefore: input.expectedVersion, versionAfter: null }),
+  execute: async ({ ctx, tx, source, afterCommit, activity }, input) => {
+    const { product, activityScopes } = await deleteBiocharProductInTransaction(ctx, tx, input.productId, input.expectedVersion, source, activity.capture);
+    activity.link({ facilityId: product.facilityId });
+    activity.scope(product.id, activityScopes);
+    afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
+  },
 };

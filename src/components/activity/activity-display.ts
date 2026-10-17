@@ -41,6 +41,7 @@ export const ACTIVITY_KIND_LABELS: Record<ActivityAction, string> = {
 
 /** Glossary names (GLOSSARY.md): Sample, Removal and GHG Statement keep their capitals. */
 export const ACTIVITY_RECORD_TYPE_LABELS: Record<ActivityEntityType, string> = {
+  emission_entry: "Emissions entry",
   credit_batch: "Credit batch",
   production_run: "Production run",
   feedstock: "Feedstock",
@@ -63,7 +64,7 @@ export const ACTIVITY_RECORD_TYPE_LABELS: Record<ActivityEntityType, string> = {
 
 /** Record types in custody order, then master data, for the record type filter. */
 export const ACTIVITY_RECORD_TYPE_ORDER: readonly ActivityEntityType[] = [
-  "credit_batch", "feedstock", "production_run", "biochar_product", "bin_movement", "lab_sample",
+  "credit_batch", "emission_entry", "feedstock", "production_run", "biochar_product", "bin_movement", "lab_sample",
   "order", "delivery", "transport_leg", "application", "document",
   "supplier", "supplier_location", "customer", "customer_location", "formulation",
   "removal", "ghg_statement",
@@ -110,9 +111,15 @@ export function activityActorDisplay(item: Pick<ActivityItem, "actor" | "source"
   };
 }
 
+/** The actor as one phrase: the name, then "via API" and the like when the change came through a channel. */
+export function activityActorText(actor: ActivityActorDisplay): string {
+  return actor.channel ? `${actor.name} ${actor.channel}` : actor.name;
+}
+
 /** Field names the activity writers use that no form owns. */
 const ACTIVITY_FIELD_LABELS: Record<string, string> = {
   production_runs: "Production runs",
+  emission_entry: "Emissions entry",
   credit_batch: "Credit batch",
   removalAssignment: "Removal assignment",
   productionClaimReservation: "Production claim reservation",

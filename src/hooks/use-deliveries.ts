@@ -388,6 +388,9 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       void invalidateRecordedTransport(queryClient);
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.details() });
+      void queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       // Deleting a delivery shrinks the derived biochar leg's evidence set.
       void invalidateCertificationReadiness(queryClient);
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });

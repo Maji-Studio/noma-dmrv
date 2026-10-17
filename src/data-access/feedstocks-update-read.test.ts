@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { db, type DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 
+vi.mock("./record-lock-dependents", () => ({ readRecordDependents: async () => [] }));
 vi.mock("./certification-lineage-guards", () => ({
   assertCanMutateCertifiedLineage: vi.fn(),
 }));

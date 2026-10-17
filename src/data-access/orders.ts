@@ -1,3 +1,6 @@
+import { readRecordDependents } from "./record-lock-dependents";
+import { assertRecordLockFields } from "@/lib/record-lock-fields";
+import { recordLocks } from "@/lib/record-lock";
 import type { CaptureActivity } from "@/lib/activity-changes";
 import { customerLocationFacilityDistances } from "@/db/schema";
 import type { ActivityEventInput } from "./activity-events";
@@ -59,6 +62,7 @@ import { SafeError } from "@/lib/errors";
 import { orderArchived, orderCustomerLocationMismatch, orderHasDeliveries, orderReferenceNotFound, orderRelationshipFrozen, type OrderRelationshipField } from "@/lib/order-domain-errors";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 import { formulationArchived } from "@/lib/formulation-domain-errors";
+import { lockCustomerReference } from "./party-reference-guards";
 import { lockFormulationReference } from "./formulation-reference-guards";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
 import { CODE_CONFLICT_MESSAGES, withUniqueCodeGuard } from "./code-generator";
@@ -326,11 +330,9 @@ const RELATIONSHIP_FIELDS: readonly OrderRelationshipField[] = ["formulationId",
 
 async function validateOrderReferences(ctx: OrgContext, tx: DbTransaction, data: {
   customerId: string; customerLocationId: string; formulationId: string;
-}): Promise<string> {
+}, allowArchived = false): Promise<string> {
   requireOrgScope(ctx);
-  const [customer] = await tx.select({ id: customers.id }).from(customers)
-    .where(and(eq(customers.id, data.customerId), eq(customers.organizationId, ctx.organizationId))).for("key share");
-  if (!customer) throw orderReferenceNotFound("customerId");
+  await lockCustomerReference(ctx, tx, data.customerId, { allowArchived });
   const [location] = await tx.select({ customerId: customerLocations.customerId }).from(customerLocations)
     .where(and(eq(customerLocations.id, data.customerLocationId), eq(customerLocations.organizationId, ctx.organizationId))).for("key share");
   if (!location) throw orderReferenceNotFound("customerLocationId");
@@ -384,7 +386,8 @@ export async function updateOrderInTransaction(ctx: OrgContext, tx: DbTransactio
   }
   await withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: "order", entityId: orderId }, "update"), "certification_locked", ["orderId"]);
   const merged = { ...existing, ...data };
-  const locationCustomerId = await validateOrderReferences(ctx, tx, merged);
+  const locationCustomerId = await validateOrderReferences(ctx, tx, merged,
+    merged.customerId === existing.customerId && merged.customerLocationId === existing.customerLocationId);
   const [delivery] = await tx.select({ code: deliveries.code }).from(deliveries)
     .where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.orderId, orderId)));
   if (delivery) {
@@ -392,6 +395,7 @@ export async function updateOrderInTransaction(ctx: OrgContext, tx: DbTransactio
       if (data[field] !== undefined && data[field] !== existing[field]) throw orderRelationshipFrozen(field, delivery.code);
     }
   }
+  assertRecordLockFields(recordLocks.order({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "order", entityId: orderId }) }), existing, data);
   if (locationCustomerId !== merged.customerId) throw orderCustomerLocationMismatch();
   if (data.quantityKg !== undefined) await assertOrderQuantityCoversAllocations(ctx, tx, { orderId, orderQuantityKg: data.quantityKg });
   return withUniqueCodeGuard(ctx, orders, orders.code, CODE_CONFLICT_MESSAGES.order, async () => {
@@ -411,9 +415,9 @@ export async function deleteOrderInTransaction(ctx: OrgContext, tx: DbTransactio
   if (!existing) throw orderReferenceNotFound("orderId");
   assertRowVersion({ entity: "order", id: orderId, expectedVersion, actualVersion: existing.version });
   await withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: "order", entityId: orderId }, "delete"), "certification_locked", ["orderId"]);
-  const [delivery] = await tx.select({ id: deliveries.id }).from(deliveries)
+  const [delivery] = await tx.select({ id: deliveries.id, code: deliveries.code }).from(deliveries)
     .where(and(eq(deliveries.orderId, orderId), eq(deliveries.organizationId, ctx.organizationId)));
-  if (delivery) throw orderHasDeliveries();
+  if (delivery) throw orderHasDeliveries(delivery);
   await tx.delete(orders).where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
   await retireDocumentsForEntities(ctx, tx, [{ entityType: "order", entityId: orderId }], source);
   return existing;

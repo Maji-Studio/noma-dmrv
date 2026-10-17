@@ -203,8 +203,12 @@ changed field names and, for allowlisted fields, old and new values per
 `operationId`, `versionBefore` and `versionAfter`. API responses and idempotency
 outcomes stay value-free.
 Form writes have null credential IDs.
-No-op descriptions, dry runs, idempotent replays and `activity.skip()` add no
-events. An audited write whose effect yields no activity rows throws and rolls
+Operations can queue child effects with `activity.extra(effect)`. The runner
+records them alongside the parent with the same audit fields and scoped-link
+resolution, and includes them in the audited activity count. Extra effects stay
+private to the attempt; the response and stored outcome retain the parent effect.
+Descriptions with no effect and no queued extras, dry runs, idempotent replays
+and `activity.skip()` add no events. An audited write whose effect yields no activity rows throws and rolls
 back.
 The runner records one event per entity and distinct batch/run scope supplied by
 `activity.scope(entityId, scopes)` in `src/lib/operations/activity-links.ts`.
@@ -301,7 +305,9 @@ negative net movements. The operator message remains unchanged.
 
 ### Intake lookup REST adapters
 
-Facilities, suppliers, feedstock types, storage locations, vehicles and drivers
+Supplier and customer lists hide archived rows by default; `archived=true` lists only archived rows, cursors bind this filter, and detail reads retain archived rows.
+
+Facilities, feedstock types, storage locations, vehicles and drivers
 expose read-only list and id-or-code routes through `lib/api/route.ts` and their
 resource scopes. `lib/api/*-queries.ts` validates strict query schemas and calls
 `lib/read-models/api-*.ts`, including the supplier-location list. The read models
@@ -331,46 +337,13 @@ no locations. Supplier locations have no code or archive column.
 
 ### Master data on REST and MCP
 
-Formulations use revision 2 with `description`, `archivedAt` and ordered `lines`.
-Reads need `formulations:read`: REST list/detail and MCP `find_formulations`.
-Lists hide archived rows by default. `archived=true` (MCP `archived: true`)
-returns only archived rows, including exact code searches. Cursors bind that
-filter; a mismatched cursor returns 400. Detail reads still return archived rows.
-
-| REST method and path | MCP tool | Scope |
-|---|---|---|
-| POST `/formulations` | `create_formulation` | `formulations:write` |
-| PATCH `/formulations/{id}` | `update_formulation` | `formulations:write` |
-| DELETE `/formulations/{id}` | `delete_formulation` | `formulations:delete` |
-| POST `/formulations/{id}/archive` | `archive_formulation` | `formulations:write` |
-| POST `/formulations/{id}/restore` | `restore_formulation` | `formulations:write` |
-
-Creates generate codes. REST creates require `Idempotency-Key` even on dry runs;
-MCP `requestKey` is optional only on dry runs. REST returns 201 with ETag and
-Location; PATCH and commands return 200 with ETag; DELETE returns 204.
-Writes accept UUIDs only. REST mutations require strong `If-Match` (missing 428,
-stale 412 with `current`); MCP uses `expectedVersion` from `find_formulations`.
-Optional mutation keys replay before domain preconditions. Every write supports
-dry runs, rolling back rows, lines and Activity; REST returns 200 without ETag
-or Location. Archive/restore accept an empty object or no body and bump version.
-
-Archive keeps existing references and reserves codes. New references and edits
-of archived formulations return 404 at `/formulationId`; archived PATCH checks
-this before stale versions. Repeated transitions with a current version return
-409 at `/formulationId`. Restore before editing or adding a new reference.
-Products, bins and orders (including archived references) block deletion with
-409 at `/formulationId` and reference codes in metadata. Used line removal is
-409 at `/lines`. Unknown or newly referenced archived types return 404; retained
-archived types remain allowed. Type refusals point at `/lines/{index}/feedstockTypeId`;
-non-blend types return 422. Add missing types in the app first.
-
-Ratios are guidance only, from 0 to 1 in exact integer millionths (six decimals):
-`0.000001` passes, `0.0000001` fails. Known shares may sum to exactly 1, never
-more; sum refusals point at `/biocharRatio`. PATCH omission keeps, null clears,
-zero stays zero; supplied `lines` replace the full list. Unknown fields and
-invalid ratios return 422. REST pointers appear in `errors`; MCP uses `issues`.
+[Master data writes](./api-master-data.md) owns supplier, customer and formulation
+operations on REST and MCP: scopes, locations on create, name uniqueness,
+archive/restore, archived list filters, delete blockers and write preconditions.
 
 ### Customers and orders on REST and MCP
+
+See [master-data read fields and archived filters](./api-master-data.md#suppliers-and-customers) for supplier, customer and location projections.
 
 `GET /api/v1/customers`, `/{idOrCode}` and `/{idOrCode}/locations` use
 `customers:read`. Customer representations exclude email, phone and address;
@@ -510,7 +483,7 @@ Drawn products are available through stock movements under `biochar-products:rea
 
 `src/lib/operations/deliveries.ts` registers `record_delivery` and
 `update_delivery`. App create runs on the runner as `record_posted_delivery`;
-app edit uses `update_posted_delivery` for metadata and latest-entry corrections.
+app edit uses `update_posted_delivery` for metadata and dependency-checked corrections.
 Both app operations remain unregistered. Public outcomes strip native product
 rows with bigint posting sequences before JSON serialization. The app create
 shares the runner's retries, deadline and statement timeout.
@@ -578,7 +551,7 @@ representation that would be removed. Create and PATCH dry runs return 200
 without Location or ETag and commit no application or activity event.
 Deletion retires documents in the same transaction and drains storage after
 commit. Submitted lineage refuses every edit; Removal-owned slices refuse mass,
-delivery and delete changes. Verified or issued linked batches refuse deletion.
+delivery and delete changes. Removal-owned applied mass refuses deletion through the record-lock guard.
 
 Lists hide applications on archived deliveries. Detail, boundary and document
 reads remain available. Archived deliveries or facilities refuse create and
@@ -722,3 +695,13 @@ request deadline before each tool. `API_WRITES_DISABLED` returns an in-MCP
 `isError` result with code `api_writes_disabled`; reads keep working. No sessions
 are exposed. Initialize returns short server instructions built from the domain
 section shared with `llms.txt`, plus MCP grounding and retry guidance.
+
+### Record-lock refusals
+
+Record dependencies and Sent certification lineage use `certification_locked`
+(HTTP 409), preserving the existing problem type and MCP error code. The message
+names what holds the record and how to free it; available conflict and blocker
+references remain in the structured error. REST and MCP execute the same
+org-scoped data-access guards as Server Actions. See [Record locks](./database.md#record-locks)
+for all-version ledger and fresh reopening rules. Stock insufficiency,
+validation failures and stale versions retain their distinct error codes.

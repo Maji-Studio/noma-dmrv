@@ -11,6 +11,16 @@ const ACTIVITY_COVERAGE = {
     refreshFeedstockDistanceInTransaction: { status: "runner", operations: ["refresh_feedstock_distance"] },
     refreshDeliveryDistanceInTransaction: { status: "runner", operations: ["refresh_delivery_distance"] },
   },
+  "emission-entries.ts": {
+    createEmissionEntry: { status: "direct" },
+    updateEmissionEntry: { status: "direct" },
+    confirmEmissionEntry: { status: "direct" },
+    deleteEmissionEntry: { status: "direct" },
+    tombstoneEmissionZeros: { status: "exempt", reason: "No zero rows are written before PR 4; PR 4 must record zero tombstoning activity (docs/open-questions.md)." },
+  },
+  "emission-entry-lock.ts": {
+    bumpEmissionEntryEvidence: { status: "exempt", reason: "The document writer records the activity." },
+  },
   "credit-batch-application-slices.ts": {
     reconcileUnassignedCreditBatchApplicationSlices: { status: "exempt", reason: "Derived unassigned slices; the initiating application or batch membership writer owns activity (ADR 0019)." },
   },
@@ -75,6 +85,7 @@ const ACTIVITY_COVERAGE = {
     insertDocument: { status: "direct" },
     deleteDocumentRow: { status: "direct" },
     retireDocumentsForEntities: { status: "direct" },
+    retireTombstonedEmissionEntryDocuments: { status: "direct" },
   },
   "document-writes.ts": {
     requestDocumentUploadInTransaction: { status: "runner", operations: ["request_document_upload", "request_document_upload_app"] },
@@ -156,7 +167,8 @@ const ACTIVITY_COVERAGE = {
 
 const COVERED_TABLES = new Set([
   "creditBatches", "creditBatchProductionRuns", "creditBatchApplications",
-  "applications", "documents", "transportLegs", "formulations", "formulationIngredients",
+  "applications", "documents", "transportLegs", "emissionEntries", "emissionEntryValues",
+  "formulations", "formulationIngredients",
 ]);
 const WRITE_PREFIX = /^(create|update|delete|attach|detach|archive|insert|upsert|sync|replace|retire|remove|set|mark)/;
 type Inventory = Record<string, Record<string, Coverage>>;
