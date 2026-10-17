@@ -556,7 +556,7 @@ it.each([false, true])("deletes with a matching cascade fingerprint, omitted: %s
   expect(preview.status).toBe(200);
   const body = await preview.json();
   expect(body.data).toEqual(row.data);
-  expect(body.cascade).toEqual({ orders: [{ id: order.id, code: order.code }], cascadeFingerprint: expect.stringMatching(/^v1:[a-f0-9]{64}$/) });
+  expect(body.cascade).toEqual({ orders: [{ id: order.id, code: order.code, facilityId: order.facilityId }], cascadeFingerprint: expect.stringMatching(/^v1:[a-f0-9]{64}$/) });
   expect(body.warnings).toEqual([expect.stringContaining(order.code)]);
   const query = omitted ? "" : `?cascadeFingerprint=${encodeURIComponent(body.cascade.cascadeFingerprint)}`;
   const key = randomUUID();
@@ -579,7 +579,7 @@ it("returns a fresh cascade preview when an order arrives after the delete dry r
   const before = await snapshot();
   const key = randomUUID();
   const refusal = await problem(await mutate("customer", "delete", row.data.id, undefined, INITIAL_ETAG, key, query), 409, "cascade_changed", "/cascadeFingerprint");
-  expect(refusal.preview).toEqual({ orders: [{ id: order.id, code: order.code }], cascadeFingerprint: expect.stringMatching(/^v1:[a-f0-9]{64}$/) });
+  expect(refusal.preview).toEqual({ orders: [{ id: order.id, code: order.code, facilityId: order.facilityId }], cascadeFingerprint: expect.stringMatching(/^v1:[a-f0-9]{64}$/) });
   expect(refusal.preview.cascadeFingerprint).not.toBe(cascade.cascadeFingerprint);
   expect(await snapshot()).toEqual(before);
   expect((await mutate("customer", "delete", row.data.id, undefined, INITIAL_ETAG, key, `?cascadeFingerprint=${encodeURIComponent(refusal.preview.cascadeFingerprint)}`)).status).toBe(204);

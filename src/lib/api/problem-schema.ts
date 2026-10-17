@@ -13,7 +13,7 @@ export const stockPreviewSchema = z.object({
 });
 
 export const cascadePreviewSchema = z.object({
-  orders: z.array(z.object({ id: z.uuid().describe("Order identifier, UUID."), code: z.string().describe("Order code.") })).describe("Orders that this customer delete would remove."),
+  orders: z.array(z.object({ id: z.uuid().describe("Order identifier, UUID."), code: z.string().describe("Order code."), facilityId: z.uuid().describe("Facility the order belongs to, UUID.") })).describe("Orders that this customer delete would remove."),
   cascadeFingerprint: z.string().describe("Opaque fingerprint of the order set; send it back to confirm this cascade."),
 });
 

@@ -54,7 +54,7 @@ describe("customer delete orders", { timeout: TIMEOUT_MS }, () => {
     __setStorageProviderForTests(storage);
     const document = await insertManagedDocument(storage, "order", first.id, `test/${randomUUID()}`, f.ctx.organizationId);
     const preview = await runOperation(deleteCustomer, f.ctx, input(f), { dryRun: true });
-    expect(preview.data.cascade.orders).toEqual([first, second].sort((a, b) => a.id.localeCompare(b.id)).map(({ id, code }) => ({ id, code })));
+    expect(preview.data.cascade.orders).toEqual([first, second].sort((a, b) => a.id.localeCompare(b.id)).map(({ id, code, facilityId }) => ({ id, code, facilityId })));
     expect(preview.data.warnings).toEqual([`Also deleted 2 orders without deliveries: ${preview.data.cascade.orders.map(row => row.code).join(", ")}.`]);
     expect(storage.deleteCalls).toHaveLength(0);
     expect(await db.select().from(storageObjectDeletions).where(eq(storageObjectDeletions.organizationId, f.ctx.organizationId))).toEqual([]);

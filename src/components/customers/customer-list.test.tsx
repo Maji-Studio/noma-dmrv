@@ -20,7 +20,7 @@ const state = vi.hoisted(() => ({
   removeVariables: [] as unknown[],
 }));
 
-const OPEN_CASCADE = { orders: [{ id: "o1", code: "ORD-0001" }], cascadeFingerprint: "v1:open" };
+const OPEN_CASCADE = { orders: [{ id: "o1", code: "ORD-0001", facilityId: "f1" }], cascadeFingerprint: "v1:open" };
 
 function customer(code: string, archivedAt: Date | null): CustomerWithRelations {
   return {
@@ -207,7 +207,7 @@ describe("CustomerList archive view", () => {
   });
 
   it("lists the orders that go with the customer and sends the fingerprint with the delete", async () => {
-    state.preview = { ...state.preview, data: { cascade: { orders: Array.from({ length: 7 }, (_, index) => ({ id: `o${index}`, code: `ORD-000${index + 1}` })), cascadeFingerprint: "v1:seven" } } };
+    state.preview = { ...state.preview, data: { cascade: { orders: Array.from({ length: 7 }, (_, index) => ({ id: `o${index}`, code: `ORD-000${index + 1}`, facilityId: "f1" })), cascadeFingerprint: "v1:seven" } } };
     render(<CustomerList />);
     fireEvent.click(within("Actions for CUST-0001", "Delete"));
     expect(screen.getByText("These 7 orders have no deliveries and are deleted too:")).toBeTruthy();
@@ -231,7 +231,7 @@ describe("CustomerList archive view", () => {
   });
 
   it("shows the changed order list and asks again instead of deleting silently", async () => {
-    const fresh = { orders: [{ id: "o1", code: "ORD-0001" }, { id: "o2", code: "ORD-0002" }], cascadeFingerprint: "v1:fresh" };
+    const fresh = { orders: [{ id: "o1", code: "ORD-0001", facilityId: "f1" }, { id: "o2", code: "ORD-0002", facilityId: "f1" }], cascadeFingerprint: "v1:fresh" };
     state.remove.mockRejectedValueOnce(new CascadeChangedError("The orders this delete would remove changed since the preview. Review them and confirm again.", fresh)).mockResolvedValue({ cascade: fresh, warnings: [] });
     render(<CustomerList />);
     fireEvent.click(within("Actions for CUST-0001", "Delete"));

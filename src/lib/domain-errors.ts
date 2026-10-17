@@ -46,7 +46,7 @@ export interface StockPreview {
 }
 
 export interface CascadePreview {
-  orders: { id: string; code: string }[];
+  orders: { id: string; code: string; facilityId: string }[];
   cascadeFingerprint: string;
 }
 export type OperationPreview = StockPreview | CascadePreview;

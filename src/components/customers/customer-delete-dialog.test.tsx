@@ -26,14 +26,14 @@ describe("CustomerDeleteDialog", () => {
   });
 
   it("names a single order without deliveries", () => {
-    render(<CustomerDeleteDialog {...baseProps} cascade={{ orders: [{ id: "o1", code: "E2E-OR-1" }], cascadeFingerprint: "v1:a" }} isLoading={false} />);
+    render(<CustomerDeleteDialog {...baseProps} cascade={{ orders: [{ id: "o1", code: "E2E-OR-1", facilityId: "f1" }], cascadeFingerprint: "v1:a" }} isLoading={false} />);
     expect(screen.getByText("This order has no deliveries and is deleted too:")).toBeTruthy();
     expect(screen.getByText("E2E-OR-1")).toBeTruthy();
     expect(deleteButton().disabled).toBe(false);
   });
 
   it("lists five codes and counts the rest", () => {
-    const orders = Array.from({ length: 6 }, (_, index) => ({ id: `o${index}`, code: `E2E-OR-${index + 1}` }));
+    const orders = Array.from({ length: 6 }, (_, index) => ({ id: `o${index}`, code: `E2E-OR-${index + 1}`, facilityId: "f1" }));
     render(<CustomerDeleteDialog {...baseProps} cascade={{ orders, cascadeFingerprint: "v1:b" }} isLoading={false} />);
     expect(screen.getByText("These 6 orders have no deliveries and are deleted too:")).toBeTruthy();
     expect(screen.getByText("E2E-OR-5")).toBeTruthy();
@@ -48,7 +48,7 @@ describe("CustomerDeleteDialog", () => {
 
   it("shows why the list changed and confirms only when asked again", () => {
     const onConfirm = vi.fn();
-    render(<CustomerDeleteDialog {...baseProps} onConfirm={onConfirm} changedMessage="The orders deleted with this customer changed. Review the list and delete again." cascade={{ orders: [{ id: "o1", code: "E2E-OR-1" }], cascadeFingerprint: "v1:d" }} isLoading={false} />);
+    render(<CustomerDeleteDialog {...baseProps} onConfirm={onConfirm} changedMessage="The orders deleted with this customer changed. Review the list and delete again." cascade={{ orders: [{ id: "o1", code: "E2E-OR-1", facilityId: "f1" }], cascadeFingerprint: "v1:d" }} isLoading={false} />);
     expect(screen.getByText("The orders deleted with this customer changed. Review the list and delete again.")).toBeTruthy();
     fireEvent.click(deleteButton());
     expect(onConfirm).toHaveBeenCalledOnce();

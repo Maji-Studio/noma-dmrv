@@ -41,6 +41,9 @@ import { createCustomerLocationInTransaction } from "./customer-create";
 
 import { BLOCKER_LIMIT } from "@/config/party-input";
 
+/** Prefix of the cascade fingerprint; bump it whenever the hashed input changes. */
+const CASCADE_FINGERPRINT_VERSION = "v1";
+
 export interface CreatedCustomerWithLocations {
   customer: Customer;
   locations: CustomerLocation[];
@@ -95,7 +98,7 @@ export interface DeletedCustomer {
   customer: Customer;
   locations: (typeof customerLocations.$inferSelect)[];
   orders: (typeof orders.$inferSelect)[];
-  cascade: { orders: { id: string; code: string }[]; cascadeFingerprint: string };
+  cascade: { orders: { id: string; code: string; facilityId: string }[]; cascadeFingerprint: string };
   warnings: string[];
 }
 
@@ -140,8 +143,8 @@ export async function deleteCustomerInTransaction(ctx: OrgContext, tx: DbTransac
     if (!fenced.has(child.id)) await tryLockStorageSiteRegistration(ctx, tx, child.id);
   }
   const cascade = {
-    orders: lockedOrders.map(({ id, code }) => ({ id, code })),
-    cascadeFingerprint: "v1:" + createHash("sha256").update(lockedOrders.map(row => row.id).sort().join(",")).digest("hex"),
+    orders: lockedOrders.map(({ id, code, facilityId }) => ({ id, code, facilityId })),
+    cascadeFingerprint: `${CASCADE_FINGERPRINT_VERSION}:` + createHash("sha256").update(lockedOrders.map(row => row.id).sort().join(",")).digest("hex"),
   };
   if (input.cascadeFingerprint !== undefined && input.cascadeFingerprint !== cascade.cascadeFingerprint) throw cascadeChanged();
   for (const order of lockedOrders) {

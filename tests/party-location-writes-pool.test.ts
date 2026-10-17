@@ -93,7 +93,7 @@ describe("party location writes with one pooled connection", { timeout: SUITE_TI
     const started = Date.now();
     const preview = await runOperation(deleteCustomer, f.ctx, input, { dryRun: true });
     expect(preview.dryRun).toBe(true);
-    expect(preview.data.cascade.orders).toEqual([{ id: order.id, code: order.code }]);
+    expect(preview.data.cascade.orders).toEqual([{ id: order.id, code: order.code, facilityId: order.facilityId }]);
     expect(preview.data.cascade.cascadeFingerprint).toMatch(/^v1:/);
     expect(await customerRows()).toMatchObject([{ id: f.customer.id, version: f.customer.version }]);
     expect(await orderRows()).toMatchObject([{ id: order.id, version: order.version }]);

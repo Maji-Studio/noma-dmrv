@@ -191,7 +191,7 @@ it.each([
 });
 
 it("publishes a cascade_changed preview through its conflict schema", async () => {
-  const preview = { orders: [{ id: "a3bc93e8-c504-426d-b159-c69d4a1fe83a", code: "ORD-0007" }], cascadeFingerprint: "v1:fresh" };
+  const preview = { orders: [{ id: "a3bc93e8-c504-426d-b159-c69d4a1fe83a", code: "ORD-0007", facilityId: "5f0c2a8e-6d1b-4f3a-9c7e-2b8d4e6f1a90" }], cascadeFingerprint: "v1:fresh" };
   const response = actionFailureResponse({ success: false, code: "cascade_changed", error: "Review the changed orders.", preview }, "/api/v1/customers/id", "request-id");
   expect(response.status).toBe(409);
   const body = await response.json();

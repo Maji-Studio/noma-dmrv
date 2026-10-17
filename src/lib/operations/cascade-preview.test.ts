@@ -8,7 +8,7 @@ const run = vi.hoisted(() => vi.fn());
 vi.mock("./runner", () => ({ runOperation: run }));
 import { runWithCascadePreview } from "./cascade-preview";
 const ctx = { organizationId: "org" } as OrgContext;
-const cascade = { orders: [{ id: "order", code: "ORD-0001" }], cascadeFingerprint: "fresh" };
+const cascade = { orders: [{ id: "order", code: "ORD-0001", facilityId: "f1" }], cascadeFingerprint: "fresh" };
 const operation: Operation<z.ZodType, { cascade: typeof cascade }> = { id: "delete_customer", input: z.object({}), supportsDryRun: true, execute: vi.fn() };
 beforeEach(() => run.mockReset());
 it("returns a fresh dry run without a key, audit or stale fingerprint, preserving the issue", async () => {
