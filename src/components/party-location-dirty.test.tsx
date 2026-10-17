@@ -11,6 +11,7 @@ import { SupplierQuickAddDialog } from "./forms/entity-select/supplier-quick-add
 import { QuickAddDialogShell } from "./forms/entity-select/quick-add-dialog-shell";
 
 const observed = vi.hoisted(() => ({ form: null as Pick<import("react-hook-form").UseFormReturn, "getValues" | "formState"> | null }));
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }) }));
 vi.mock("react-hook-form", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-hook-form")>();
   return { ...actual, useForm: (...args: Parameters<typeof actual.useForm>) => {

@@ -355,7 +355,14 @@ the stamps. `NULL` = active.
 - **Lab sample writes** reject an archived credit batch (create, update, move; reads and delete still work). They read the batch after locking it, in the order certification artifacts, credit batches by id, sample (`src/data-access/samples/write-scope.ts`). `archiveFacility` locks the facility's credit batches in id order before its bulk update so it cannot deadlock against a sample move.
 - **Codes stay reserved** while archived (uniqueness checks ignore archive state) so restore can't collide.
 
-Stamped tables: `facilities`, `reactors`, `storage_locations`, `feedstocks`, `production_runs`, `biochar_products`, `orders`, `deliveries`, `credit_batches`, `stockpile_events`, `power_procurement_evidence` (archive stamps introduced in `drizzle/0041_outgoing_paper_doll.sql`).
+Party archive stamps also cover `suppliers`, `customers`, `formulations` and
+`customer_locations`. Customer locations archive independently of their parent;
+`customer_locations_default_active` requires an archived location to have
+`is_default = false`. Writers retain one active default, refuse archiving the
+last active location and promote an active sibling when archiving the default.
+Detail reads keep archived destinations for existing orders.
+
+Stamped facility-cascade tables: `facilities`, `reactors`, `storage_locations`, `feedstocks`, `production_runs`, `biochar_products`, `orders`, `deliveries`, `credit_batches`, `stockpile_events`, `power_procurement_evidence` (archive stamps introduced in `drizzle/0041_outgoing_paper_doll.sql`).
 
 ## Migrations
 

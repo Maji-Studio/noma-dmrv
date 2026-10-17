@@ -1,3 +1,5 @@
+import { deleteCustomerLocation, updateCustomerLocation } from "./helpers/customer-location-operations";
+import { findCustomerLocationRegistrations } from "@/data-access/certifier-storage-locations";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
 import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
@@ -591,4 +593,33 @@ describe("certifier sync events with supplier-reference keys", () => {
         .where(eq(certifierSyncEvents.entityId, entityId));
     }
   });
+});
+
+it("keeps a completed mapping as a delete blocker after its application and delivery are removed", async () => {
+  const fixture = await createFixture();
+  const ctx = makeTestOrgContext();
+  try {
+    const input = await getStorageLocationRegistryInput(ctx, fixture.applicationId);
+    if (!input?.externalProjectId || !input.name) throw new Error("Missing fixture site");
+    const supplierReference = `nm-slc-retained-${fixture.customerLocationId}`;
+    const body = buildCreateStorageLocationRequest({ externalProjectId: input.externalProjectId, name: input.name,
+      latitude: input.latitude, longitude: input.longitude, supplierReferenceId: supplierReference });
+    await persistStorageLocationRegistration(ctx, { customerLocationId: fixture.customerLocationId,
+      certifierProjectId: fixture.certifierProjectId, externalProjectId: input.externalProjectId,
+      externalStorageLocationId: `slc-retained-${fixture.customerLocationId}`, supplierReference,
+      submittedPayload: body, payloadHash: "retained" });
+    await db.transaction(async tx => {
+      expect(await findCustomerLocationRegistrations(ctx, tx, fixture.customerLocationId)).toEqual([{ submittedPayload: body, payloadHash: "retained" }]);
+      expect(await findCustomerLocationRegistrations(FOREIGN_CONTEXT, tx, fixture.customerLocationId)).toEqual([]);
+      await deleteOutputApplicationFixtures(tx, eq(applications.id, fixture.applicationId));
+      await deleteOutputDeliveryFixtures(tx, eq(deliveries.id, fixture.deliveryId));
+      await tx.delete(orders).where(eq(orders.id, fixture.orderId));
+    });
+    await expect(deleteCustomerLocation(ctx, fixture.customerLocationId, 1)).rejects.toMatchObject({
+      code: "conflict", issues: [{ path: ["locationId"] }],
+      message: "Customer location was not deleted because it is registered with Isometric as a storage site. Archive it instead.",
+    });
+    await expect(updateCustomerLocation(ctx, fixture.customerLocationId, { expectedVersion: 1, name: "Moved field" }))
+      .rejects.toMatchObject({ code: "certification_locked", issues: [{ path: ["name"] }] });
+  } finally { await cleanupFixture(fixture); }
 });

@@ -13,6 +13,8 @@ export interface PartyLocationDetail {
   facilityDistances: import("@/schemas/facility-distances").FacilityDistance[];
   isDefault: boolean;
   defaultSoilTemperatureC?: number | null;
+  /** Set on an archived customer location; suppliers do not carry it. */
+  archivedAt?: Date | null;
 }
 
 interface BuildPartyLocationDetailFieldsOptions {
@@ -32,10 +34,13 @@ export function buildPartyLocationDetailFields(
   locations: PartyLocationDetail[],
   options: BuildPartyLocationDetailFieldsOptions,
 ): DetailPanelField[] {
-  const rows = locations.length > 0 ? locations : [null];
+  // Archived locations follow the active ones, so the numbering matches the edit sheet.
+  const ordered = [...locations.filter((row) => !row.archivedAt), ...locations.filter((row) => row.archivedAt)];
+  const rows = ordered.length > 0 ? ordered : [null];
 
   return rows.flatMap((location, index) => {
-    const prefix = locations.length > 1 ? `Location ${index + 1} · ` : "";
+    const archivedMark = location?.archivedAt ? " (archived)" : "";
+    const prefix = locations.length > 1 ? `Location ${index + 1}${archivedMark} · ` : "";
     const fields: DetailPanelField[] = [
       { label: `${prefix}Location name`, value: location?.name ?? null },
       { label: `${prefix}Country`, value: location?.country ?? null },
