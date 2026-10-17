@@ -248,11 +248,13 @@ describe.each(["supplier", "customer"] as const)("%s three-way parity", kind => 
       const key = randomUUID();
       const args = { ...body, ...(row ? target(kind, row.id, version) : {}), requestKey: key };
       const restCall = () => command === "create" ? post(kind, body, key) : mutate(kind, command, row!.id, body, `"${version}.2"`, key);
+      const customerDeleteBody = command === "delete" && kind === "customer"
+        ? await (await mutate(kind, command, row!.id, body, `"${version}.2"`, undefined, "?dryRun=true")).json() : undefined;
       let original: Record<string, unknown>;
       if (first === "rest") {
         const response = await restCall();
         expect(response.status).toBe(command === "create" ? 201 : command === "delete" ? 204 : 200);
-        original = command === "delete" ? { deleted: { id: row!.id, code: row!.code } } : await response.json();
+        original = command === "delete" ? customerDeleteBody ?? { deleted: { id: row!.id, code: row!.code } } : await response.json();
       } else {
         const result = await call(toolName(kind, command), args);
         expect(result.isError).toBeUndefined(); original = result.structuredContent;

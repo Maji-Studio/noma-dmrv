@@ -239,7 +239,7 @@ it("types current as a feedstock only on feedstock precondition responses", () =
     expect.objectContaining({ properties: { current: expect.objectContaining({ $ref: "#/components/schemas/feedstock" }) }, required: ["current"] }),
   ]);
   for (const [name, response] of Object.entries(document.components.responses)) {
-    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412" || name === "BiocharProductProblem412" || name === "LabSampleProblem412" || name === "OrderProblem412" || name === "DeliveryProblem412" || name === "FormulationProblem412" || name === "SupplierProblem412" || name === "CustomerProblem412") continue;
+    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412" || name === "BiocharProductProblem412" || name === "LabSampleProblem412" || name === "OrderProblem412" || name === "DeliveryProblem412" || name === "FormulationProblem412" || name === "SupplierProblem412" || name === "CustomerProblem412" || name === "SupplierLocationProblem412" || name === "CustomerLocationProblem412") continue;
     expect(response.content["application/problem+json"].schema).toEqual({ $ref: "#/components/schemas/Problem" });
   }
 });
@@ -371,7 +371,7 @@ it("publishes customer, destination, stored order and snapshot balance reads", (
     ["/customers/{idOrCode}/locations", "find_customer_locations", "customers:read"],
     ["/orders", "find_orders", "orders:read"], ["/orders/{idOrCode}", "get_order", "orders:read"], ["/orders/{idOrCode}/balance", "get_order_balance", "orders:read"],
   ]) {
-    if (path === "/customers/{idOrCode}/locations") expect(Object.keys(document.paths[path])).toEqual(["get"]);
+    if (path === "/customers/{idOrCode}/locations") expect(Object.keys(document.paths[path])).toEqual(["get", "post"]);
     expect(document.paths[path].get).toMatchObject({ operationId, "x-required-scope": scope });
     for (const status of ["400", "401", "403", "429", "500"]) expect(document.paths[path].get.responses).toHaveProperty(status);
   }
@@ -567,4 +567,19 @@ it("publishes child detail reads and the customer destination archive filter", (
   expect(list.description).toContain("archived=true");
   expect(list.description).toContain("detail read");
   expect(document.paths["/suppliers/{idOrCode}/locations"].get.parameters).not.toContainEqual(expect.objectContaining({ name: "archived" }));
+});
+
+
+it("publishes all eight location writes with child-specific precondition problems", () => {
+  for (const kind of ["supplier", "customer"]) {
+    const path = `/${kind}s/{idOrCode}/locations`;
+    expect(document.paths[path].post.operationId).toBe(`add_${kind}_location`);
+    expect(document.paths[`${path}/{locationId}`].patch.operationId).toBe(`update_${kind}_location`);
+    expect(document.paths[`${path}/{locationId}`].delete.operationId).toBe(`delete_${kind}_location`);
+    const cap = kind === "supplier" ? "Supplier" : "Customer";
+    expect(document.components.schemas[`${cap}LocationPreconditionProblem`]).toMatchObject({ allOf: [
+      { $ref: "#/components/schemas/Problem" }, { required: ["current"], properties: { current: { $ref: `#/components/schemas/${kind}_location` } } },
+    ] });
+  }
+  for (const command of ["archive", "restore"]) expect(document.paths[`/customers/{idOrCode}/locations/{locationId}/${command}`].post.operationId).toBe(`${command}_customer_location`);
 });

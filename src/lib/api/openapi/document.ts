@@ -32,6 +32,7 @@ import { resources } from "./resources";
 import { operationInput, privateOperation, requestBody, type Paths } from "./operation-kit";
 import { addBiocharWritePaths } from "./biochar-writes";
 import { addOrderWritePaths } from "./order-writes";
+import { addPartyLocationWritePaths } from "./party-location-writes";
 import { addPartyWritePaths } from "./party-writes";
 import { addFormulationWritePaths } from "./formulation-writes";
 import { addDeliveryWritePaths } from "./delivery-writes";
@@ -147,6 +148,16 @@ export function buildOpenApiDocument() {
   responses.CustomerProblem412 = { ...responses.Problem412,
     content: { "application/problem+json": { schema: { $ref: "#/components/schemas/CustomerPreconditionProblem" } } },
   };
+  for (const kind of ["Supplier", "Customer"]) {
+    schemas[`${kind}LocationPreconditionProblem`] = {
+      allOf: [{ $ref: "#/components/schemas/Problem" }, { type: "object", properties: {
+        current: { $ref: `#/components/schemas/${kind.toLowerCase()}_location`, description: "Current location after a failed version precondition." },
+      }, required: ["current"] }],
+    };
+    responses[`${kind}LocationProblem412`] = { ...responses.Problem412,
+      content: { "application/problem+json": { schema: { $ref: `#/components/schemas/${kind}LocationPreconditionProblem` } } },
+    };
+  }
   const runPreconditionResponse = { "412": { $ref: "#/components/responses/ProductionRunProblem412" } };
   const feedstockPreconditionResponse = { "412": { $ref: "#/components/responses/FeedstockProblem412" } };
   for (const resource of published) {
@@ -193,6 +204,7 @@ export function buildOpenApiDocument() {
         description: "Location identifier under this parent, UUID.", schema: { type: "string", format: "uuid" } }],
     ) };
   }
+  addPartyLocationWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
   paths["/storage-locations/{idOrCode}/stock-movements"] = { get: privateOperation(
     "find_output_stock_movements", "biochar-products:read", readDescriptions.outputStockMovements,
     { ...problemResponses([...READ_ERRORS, 404, 422]), "200": jsonResponse("Movement page.", publishOutput(listEnvelopeSchema(outputStockMovementRepresentationSchema, "newest posting first"))) },

@@ -9,7 +9,7 @@ export function partyToolDescription(kind: Party, command: Command): string {
   const descriptions = {
     create: `Create one ${kind} with a generated code and 1 to ${PARTY_MAX_LOCATIONS} locations. Coordinates are required for each location; ask for missing coordinates.`,
     update: `Update a ${kind} by UUID. Send only what changes; omitted fields stay unchanged and null clears optional fields. Locations stay unchanged.`,
-    delete: `Delete a ${kind} by UUID and its locations. ${kind === "supplier" ? "Feedstock intakes" : "Orders or registered storage sites"} prevent deletion. An unused archived ${kind} can be deleted. Returns deleted id and code, or data on a dry run.`,
+    delete: `Delete a ${kind} by UUID and its locations. ${kind === "supplier" ? "Feedstock intakes" : "Orders or registered storage sites"} prevent deletion. An unused archived ${kind} can be deleted. ${kind === "supplier" ? "Returns deleted id and code, or data on a dry run." : "Returns customer data, cascade details and any warnings on success and dry run. Pass cascadeFingerprint from the preview to confirm the order cascade."}`,
     archive: `Archive a ${kind} by UUID. Existing records keep it; new references cannot use it.`,
     restore: `Restore an archived ${kind} by UUID so it can be selected and edited again.`,
   };

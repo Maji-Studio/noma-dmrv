@@ -548,3 +548,39 @@ it("refuses customer deletion for a registered storage-site location without rem
   expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/customerId", meta: { locationIds: [id] } }));
   expect(await snapshot()).toEqual(before);
 }, TIMEOUT_MS);
+
+it.each([false, true])("deletes with a matching cascade fingerprint, omitted: %s", async omitted => {
+  const row = await saved("customer");
+  const order = await insertReadOrder(a, "PARTY-FINGERPRINT", { customerId: row.data.id, customerLocationId: row.locations[0].id });
+  const preview = await mutate("customer", "delete", row.data.id, undefined, INITIAL_ETAG, undefined, "?dryRun=true");
+  expect(preview.status).toBe(200);
+  const body = await preview.json();
+  expect(body.data).toEqual(row.data);
+  expect(body.cascade).toEqual({ orders: [{ id: order.id, code: order.code }], cascadeFingerprint: expect.stringMatching(/^v1:[a-f0-9]{64}$/) });
+  expect(body.warnings).toEqual([expect.stringContaining(order.code)]);
+  const query = omitted ? "" : `?cascadeFingerprint=${encodeURIComponent(body.cascade.cascadeFingerprint)}`;
+  const key = randomUUID();
+  expect((await mutate("customer", "delete", row.data.id, undefined, INITIAL_ETAG, key, query)).status).toBe(204);
+  const replay = await mutate("customer", "delete", row.data.id, undefined, INITIAL_ETAG, key, query);
+  expect(replay.status).toBe(204);
+  expect(replay.headers.get("idempotent-replayed")).toBe("true");
+}, TIMEOUT_MS);
+
+it("returns a fresh cascade preview when an order arrives after the delete dry run", async () => {
+  const row = await saved("customer");
+  const preview = await mutate("customer", "delete", row.data.id, undefined, INITIAL_ETAG, undefined, "?dryRun=true");
+  expect(preview.status).toBe(200);
+  const { cascade } = await preview.json();
+  expect(cascade.orders).toEqual([]);
+  const order = await insertReadOrder(a, "PARTY-LATE-ORDER", { customerId: row.data.id, customerLocationId: row.locations[0].id });
+  const query = `?cascadeFingerprint=${encodeURIComponent(cascade.cascadeFingerprint)}`;
+  await problem(await mutate("customer", "delete", row.data.id, undefined, null, undefined, query), 428, "precondition_required");
+  await problem(await mutate("customer", "delete", row.data.id, undefined, '"99.2"', undefined, query), 412, "stale_version");
+  const before = await snapshot();
+  const key = randomUUID();
+  const refusal = await problem(await mutate("customer", "delete", row.data.id, undefined, INITIAL_ETAG, key, query), 409, "cascade_changed", "/cascadeFingerprint");
+  expect(refusal.preview).toEqual({ orders: [{ id: order.id, code: order.code }], cascadeFingerprint: expect.stringMatching(/^v1:[a-f0-9]{64}$/) });
+  expect(refusal.preview.cascadeFingerprint).not.toBe(cascade.cascadeFingerprint);
+  expect(await snapshot()).toEqual(before);
+  expect((await mutate("customer", "delete", row.data.id, undefined, INITIAL_ETAG, key, `?cascadeFingerprint=${encodeURIComponent(refusal.preview.cascadeFingerprint)}`)).status).toBe(204);
+}, TIMEOUT_MS);

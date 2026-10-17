@@ -7,6 +7,11 @@ import { controls, parseControls, writeOptions } from "./write-controls";
 import type { WriteTool } from "./write-tools";
 import { partyToolDescription, partyToolSummary } from "./party-tool-guidance";
 
+import { deleteCustomerApi } from "@/lib/operations/customer-api";
+import { representationCheckedCascadeDelete } from "@/lib/api/customer-write-operations";
+import { runWithCascadePreview } from "@/lib/operations/cascade-preview";
+import { cascadePreviewSchema } from "@/lib/api/problem-schema";
+
 type PartyRow = { id: string; code: string; version: number };
 const commands = ["create", "update", "delete", "archive", "restore"] as const;
 
@@ -28,16 +33,18 @@ export function partyWriteTools<
   representation: z.ZodType<Row>;
   locationRepresentation: z.ZodType<Location>;
   checkedUpdate: (id: string, revision: number) => Operation<Update, Record<Kind, NoInfer<Row>>>;
-  checkedDelete: (id: string, revision: number) => Operation<Version, NoInfer<Row>>;
+  checkedDelete?: (id: string, revision: number) => Operation<Version, NoInfer<Row>>;
   checkedTransition: (id: string, revision: number, command: "archive" | "restore") => Operation<Version, Record<Kind, NoInfer<Row>>>;
   withCurrentOnStale: <T>(ctx: ApiContext, id: string, fn: () => Promise<T>) => Promise<T>;
 }): WriteTool[] {
   const createOutput = z.object({ data: deps.representation, locations: z.array(deps.locationRepresentation) });
   const itemOutput = z.object({ data: deps.representation });
-  const deleteOutput = z.union([itemOutput, z.object({ deleted: z.object({ id: z.uuid(), code: z.string() }) })]);
+  const deleteOutput = kind === "customer"
+    ? itemOutput.extend({ cascade: cascadePreviewSchema, warnings: z.array(z.string()).optional() })
+    : z.union([itemOutput, z.object({ deleted: z.object({ id: z.uuid(), code: z.string() }) })]);
 
   return commands.map(command => {
-    const schema = command === "create" ? deps.create.input : command === "update" ? deps.updateInput : deps.versionInput;
+    const schema = command === "delete" && kind === "customer" ? deleteCustomerApi.input : command === "create" ? deps.create.input : command === "update" ? deps.updateInput : deps.versionInput;
     const inputSchema = schema.safeExtend(controls.shape);
     const contract = toOperationJsonSchema(inputSchema);
     return {
@@ -52,15 +59,20 @@ export function partyWriteTools<
           const data = z.object({ [kind]: deps.representation, locations: z.array(deps.locationRepresentation) }).parse(result.data);
           return { ...result, body: createOutput.parse({ data: data[kind], locations: data.locations }) };
         }
-        const parsed = (command === "update" ? deps.updateInput : deps.versionInput).safeParse(input);
+        const parsed = schema.safeParse(input);
         if (!parsed.success) throw validationFailed(parsed.error);
-        const version = deps.versionInput.parse({ [deps.idKey]: parsed.data[deps.idKey], expectedVersion: parsed.data.expectedVersion });
+        const version = deps.versionInput.parse({ [deps.idKey]: (parsed.data as Record<string, unknown>)[deps.idKey], expectedVersion: parsed.data.expectedVersion });
         const id = version[deps.idKey];
         const { expectedVersion } = version;
         const options = writeOptions(context, dryRun, requestKey, id, expectedVersion, deps.revision);
         return deps.withCurrentOnStale(context.ctx, id, async () => {
           if (command === "delete") {
-            const result = await runOperation(deps.checkedDelete(id, deps.revision), context.ctx, input, options);
+            if (kind === "customer") {
+              const result = await runWithCascadePreview(representationCheckedCascadeDelete(id, deps.revision), context.ctx, input, options);
+              const { customer, cascade, warnings } = result.data;
+              return { ...result, body: deleteOutput.parse({ data: customer, cascade, ...(warnings.length ? { warnings } : {}) }) };
+            }
+            const result = await runOperation(deps.checkedDelete!(id, deps.revision), context.ctx, input, options);
             return { ...result, body: dryRun ? { data: deps.representation.parse(result.data) } : { deleted: { id: result.data.id, code: result.data.code } } };
           }
           const result = command === "update"
