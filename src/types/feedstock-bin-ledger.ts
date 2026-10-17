@@ -2,6 +2,7 @@
 export interface FeedstockLedgerEntry {
   id: string;
   sourceId: string | null;
+  reversed?: boolean;
   kind: 'intake' | 'run_draw' | 'ingredient_draw' | 'loss' | 'count';
   /** ISO 8601 UTC instant the event physically happened. */
   occurredAt: string;

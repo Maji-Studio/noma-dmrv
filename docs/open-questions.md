@@ -26,8 +26,6 @@ Deferred work lives here, never as a `TODO` in code.
 
 ## Record-lock follow-ups
 
-- `src/lib/record-lock.ts:recordLocks`: type and consume the free-field declarations
-  when the field-edit and deletion-reversal contract is implemented (#1120).
 - `src/data-access/record-lock-lineage.ts:readRecordLockLineage`: Isometric exposes
   submission times but no return timestamp. Keep the conservative submission-time
   lower bound until authoritative return evidence is available (`needs-registry-check`).

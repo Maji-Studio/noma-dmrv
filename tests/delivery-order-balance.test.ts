@@ -176,6 +176,6 @@ describe("completed delivery order balance", () => {
     await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), code: `E2E-D-${randomUUID().toUpperCase()}`, orderId: f.order.id, facilityId: f.facility.id,
       storageLocationId: f.bin.id, deliveryDate: new Date(STOCK_TIME), deliveredWetMassKg: 60, moistureContentPercent: 0 })).resolves.toMatchObject({ massDryKg: 60 });
     await expect(runOperationInProcess(updateOrder, f.ctx, { orderId: f.order.id, expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 100, formulationId: f.pure.id })).resolves.toMatchObject({ quantityKg: 100 });
-    await expect(deleteDelivery(f.ctx, delivery.id, await labLogisticsVersion(f.ctx, "deliveries", delivery.id))).rejects.toThrow("history");
+    await expect(deleteDelivery(f.ctx, delivery.id, await labLogisticsVersion(f.ctx, "deliveries", delivery.id))).resolves.toBeUndefined();
   });
 });

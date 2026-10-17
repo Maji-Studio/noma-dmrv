@@ -1,3 +1,4 @@
+import { deletedProductIds } from './output-stock-active-movements';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import { db } from '@/db';
 import { binMovements, biocharProducts, feedstocks, productionRunFeedstockDraws, productionRunFeedstocks, productionRuns, storageLocations, users } from '@/db/schema';
@@ -59,6 +60,7 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
       .where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId), eq(feedstocks.storageLocationId, storageLocationId), ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS))),
   ]);
 
+  const deleted = new Set((await deletedProductIds(ctx, reader)).map(row => row.id));
   const ingredientDraws = products.map(product => {
     const composition = product.composition as { ingredients?: { storageLocationId?: string; massKg?: number }[] };
     const ingredients = Array.isArray(composition?.ingredients) ? composition.ingredients : [];
@@ -74,7 +76,7 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
       moisturePercent: b.moisturePercent === null ? null : Number(b.moisturePercent) })),
     ...runDraws.map((d): Draft => ({ id: d.id, sourceId: d.sourceId, kind: 'run_draw', occurredAt: d.startTime.toISOString(), recordedAt: d.createdAt.toISOString(),
       actorName: null, code: d.code, reason: '', wetDeltaKg: -Number(d.wetKg), countedWetKg: null, moisturePercent: null })),
-    ...ingredientDraws.filter(p => Number(p.ingredientWetKg ?? 0) > 0).map((p): Draft => ({ id: p.id, sourceId: p.id, kind: 'ingredient_draw', occurredAt: p.placedAt.toISOString(),
+    ...ingredientDraws.filter(p => Number(p.ingredientWetKg ?? 0) > 0).map((p): Draft => ({ id: p.id, sourceId: p.id, kind: 'ingredient_draw', reversed: deleted.has(p.id), occurredAt: p.placedAt.toISOString(),
       recordedAt: p.createdAt.toISOString(), actorName: null, code: p.code, reason: '', wetDeltaKg: -Number(p.ingredientWetKg), countedWetKg: null,
       moisturePercent: null })),
     ...movements.map(({ movement: m, actorName }): Draft => ({ id: m.id, sourceId: null, kind: m.movementType === 'loss' ? 'loss' : 'count',
@@ -90,14 +92,14 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
     shares.push({ feedstockId: draw.feedstockId, wetKg: Number(draw.wetKg) });
     drawsByRun.set(draw.productionRunId, shares);
   }
-  const replay = feedstockPileTimeline(drafts.map(draft => ({ wetDeltaKg: draft.wetDeltaKg,
+  const replay = feedstockPileTimeline(drafts.map(draft => ({ wetDeltaKg: draft.reversed ? 0 : draft.wetDeltaKg,
     intake: draft.kind === 'intake' ? intakeById.get(draft.id) : undefined,
     draws: draft.kind === 'run_draw' && draft.sourceId ? drawsByRun.get(draft.sourceId) : undefined,
   })));
   let wetKg = 0;
   const entries = drafts.map((draft, index): FeedstockLedgerEntry => {
     const beforeWetKg = round(wetKg);
-    wetKg += draft.wetDeltaKg ?? 0;
+    wetKg += draft.reversed ? 0 : draft.wetDeltaKg ?? 0;
     return { ...draft, beforeWetKg, afterWetKg: round(wetKg), estimatedDryKg: replay.points[index].dryKg };
   });
 
