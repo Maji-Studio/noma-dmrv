@@ -184,6 +184,8 @@ export function useCustomerDeletePreview(customer: { id: string; version: number
     staleTime: 0,
     gcTime: 0,
     retry: false,
+    // Each run is a locked dry-run delete; refetching on focus would repeat it for nothing.
+    refetchOnWindowFocus: false,
   });
 }
 

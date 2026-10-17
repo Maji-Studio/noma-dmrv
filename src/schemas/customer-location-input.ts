@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { customerLocationInput as sharedCustomerLocationInput, partyAddress } from "./party-location-input";
+import { customerLocationInput as sharedCustomerLocationInput, partyAddress, requireLocationUpdateField } from "./party-location-input";
 import { expectedVersionSchema, gpsPairSuperRefine, uuidSchema } from "./helpers";
 
 const customerLocationInput = z.object(sharedCustomerLocationInput.shape)
@@ -15,10 +15,7 @@ export const customerLocationVersionInput = z.strictObject({
 });
 export const updateCustomerLocationInput = z.strictObject({
   ...z.object(customerLocationInput.shape).partial().shape, ...customerLocationVersionInput.shape,
-}).superRefine(gpsPairSuperRefine).refine(
-  input => Object.entries(input).some(([key, value]) => !["customerId", "locationId", "expectedVersion"].includes(key) && value !== undefined),
-  "Supply at least one field to update.",
-);
+}).superRefine(gpsPairSuperRefine).refine(...requireLocationUpdateField("customerId"));
 export type AddCustomerLocationInput = z.infer<typeof addCustomerLocationInput>;
 export type UpdateCustomerLocationInput = z.infer<typeof updateCustomerLocationInput>;
 export type CustomerLocationVersionInput = z.infer<typeof customerLocationVersionInput>;
@@ -29,7 +26,4 @@ export const addCustomerLocationApiInput = z.strictObject({
 export const customerLocationApiVersionInput = customerLocationVersionInput.required({ customerId: true });
 export const updateCustomerLocationApiInput = z.strictObject({
   ...z.object(sharedCustomerLocationInput.shape).partial().shape, ...customerLocationApiVersionInput.shape,
-}).superRefine(gpsPairSuperRefine).refine(
-  input => Object.entries(input).some(([key, value]) => !["customerId", "locationId", "expectedVersion"].includes(key) && value !== undefined),
-  "Supply at least one field to update.",
-);
+}).superRefine(gpsPairSuperRefine).refine(...requireLocationUpdateField("customerId"));

@@ -17,13 +17,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, customerLocations } from "@/db/schema";
-import { archiveCustomerLocation, restoreCustomerLocation, updateCustomerLocation, deleteCustomerLocation } from "@/lib/operations/customer-locations";
+import { addCustomerLocation, archiveCustomerLocation, restoreCustomerLocation, updateCustomerLocation, deleteCustomerLocation } from "@/lib/operations/customer-locations";
 import { runOperation } from "@/lib/operations/runner";
 import { recordOrder, updateOrder } from "@/lib/operations/orders";
 import { getCustomerLocations, getCustomers } from "@/data-access/customers";
 import { getCustomerLocationsEntity, getCustomerLocationEntityById } from "@/data-access/entities/customer-locations";
 import { createPartyArchiveFixture, cleanupPartyArchiveFixture, type PartyArchiveFixture } from "./helpers/party-archive-fixture";
 import { createOrderDestination, orderInput } from "./helpers/order-operation-fixture";
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 
 const TIMEOUT_MS = 60_000;
 const fixtures: PartyArchiveFixture[] = [];
@@ -116,6 +117,16 @@ describe("customer location archive", { timeout: TIMEOUT_MS }, () => {
     ]));
     await runOperation(deleteCustomerLocation, f.ctx, input(retired.id, 2));
     expect(await getCustomerLocationEntityById(f.ctx, retired.id)).toBeNull();
+  });
+
+  it("makes an added location the default when only archived locations remain", async () => {
+    const f = await fixture(); const retired = await createOrderDestination(f);
+    await runOperation(archiveCustomerLocation, f.ctx, input(retired.id));
+    await runOperation(deleteCustomerLocation, f.ctx, input(f.location.id));
+    const added = await runOperation(addCustomerLocation, f.ctx, {
+      ...TEST_SITE_POSITION, customerId: f.customer.id, name: `E2E Fresh Field ${crypto.randomUUID().slice(0, 8)}`,
+    });
+    expect(added).toMatchObject({ data: { isDefault: true } });
   });
 
   it("refuses new and changed destinations but keeps omitted and echoed references", async () => {

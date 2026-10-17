@@ -294,7 +294,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
         onClose={() => setIsLocationDialogOpen(false)}
         customerId={customerId}
         location={editingLocation ?? undefined}
-        isFirstLocation={!isLoading && !isError && locations?.length === 0}
+        isFirstLocation={!isLoading && !isError && activeLocations.length === 0}
       />
 
       <DeleteConfirmDialog

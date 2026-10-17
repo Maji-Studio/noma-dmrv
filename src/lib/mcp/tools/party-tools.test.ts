@@ -107,6 +107,15 @@ describe.each(["supplier", "customer"] as const)("%s write tools", kind => {
       expect(candidate.description).not.toMatch(/[–—]/);
     }
     expect(tool.description).toContain("Coordinates are required for each location");
+    const remove = tools.find((candidate) => candidate.name === `delete_${kind}`)!;
+    if (kind === "customer") {
+      // Decision 121: orders without deliveries go with the customer, so agents must list them first.
+      expect(remove.description).toContain("Orders without deliveries, archived orders included, are deleted with it");
+      expect(remove.description).toContain("cascadeFingerprint");
+      expect(remove.description).not.toContain("Orders or registered storage sites prevent deletion");
+    } else {
+      expect(remove.description).toContain("Feedstock intakes prevent deletion");
+    }
   });
 
 });

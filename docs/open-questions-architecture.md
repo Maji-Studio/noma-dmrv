@@ -6,6 +6,19 @@ these areas; the entry rules and invariants live in
 
 ## Architecture
 
+### Party write adapters per kind (`api/party-write-adapters`, opened 2026-10-17)
+
+- **Anchor:** `src/lib/mcp/tools/party-tools.ts:partyWriteTools`,
+  `src/lib/api/customer-locations-mutations.ts` and
+  `src/lib/api/supplier-locations-mutations.ts`.
+- `partyWriteTools` branches on `kind` for the customer delete cascade and the
+  location tools (`checkedDelete` is optional and asserted). The two location
+  mutation modules and their write-operation files match line for line apart
+  from schema, operation, ETag and noun. A transport change has to land twice.
+- **Follow-up:** inject the delete runner, its output schema and the location
+  tools through `deps`; extract one `partyLocationMutationResponse` helper with
+  per-kind configuration. Keep replay-before-revision and empty-body rules.
+
 ### Formulation bin foreign-key backstop (`data/formulation-bin-fk-backstop`, opened 2026-10-16)
 
 - **Anchor:** `src/db/schema/facilities.ts:storageLocations`,

@@ -11,6 +11,10 @@ export function locationDistanceFillWarnings(kind: "supplier" | "customer", { fi
   return warnings;
 }
 
+export function supplierLocationDefaultMovedWarning(name: string): string {
+  return `${name} is now the default location. New intakes use its distances.`;
+}
+
 export function customerLocationDefaultMovedWarning(name: string): string {
   return `${name} is now the default location.`;
 }

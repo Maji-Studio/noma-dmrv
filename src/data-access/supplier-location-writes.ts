@@ -3,7 +3,7 @@ import type { DbTransaction } from "@/db";
 import { suppliers, supplierLocations, type SupplierLocation } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { CaptureActivity } from "@/lib/activity-changes";
-import { locationDistanceFillWarnings } from "@/lib/location-write-warnings";
+import { locationDistanceFillWarnings, supplierLocationDefaultMovedWarning } from "@/lib/location-write-warnings";
 import { partyNotFound, partyLocationNotFound, partyArchived, partyArchivedForEdit } from "@/lib/party-domain-errors";
 import { validationFailed } from "@/lib/operations/errors";
 import { addSupplierLocationInput, updateSupplierLocationInput, supplierLocationVersionInput, type AddSupplierLocationInput, type UpdateSupplierLocationInput, type SupplierLocationVersionInput } from "@/schemas/supplier-location-input";
@@ -329,7 +329,7 @@ export async function deleteSupplierLocationInTransaction(ctx: OrgContext, tx: D
         .set({ version: nextVersion(supplierLocations.version), isDefault: true, updatedAt: new Date() })
         .where(and(eq(supplierLocations.id, next.id), eq(supplierLocations.organizationId, ctx.organizationId))).returning();
       captureLocation?.(next.id, next, promoted);
-      warnings.push(`${promoted.name || promoted.country} is now the default location. New intakes use its distances.`);
+      warnings.push(supplierLocationDefaultMovedWarning(promoted.name || promoted.country));
     }
   }
 

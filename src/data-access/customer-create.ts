@@ -59,17 +59,20 @@ export async function createCustomerLocationInTransaction(
 
   if (customer.archivedAt) throw partyArchived("customer", customer.code);
 
-  // The customer's first location is always its default.
-  const [{ value: existingCount }] = await tx
+  // A customer without a default takes the new location as its default. Archived
+  // rows never hold the default (customer_locations_default_active), so a customer
+  // left with only archived locations gets one here.
+  const [{ value: defaultCount }] = await tx
     .select({ value: count() })
     .from(customerLocations)
     .where(
       and(
         eq(customerLocations.customerId, customerId),
         eq(customerLocations.organizationId, ctx.organizationId),
+        eq(customerLocations.isDefault, true),
       ),
     );
-  const makeDefault = data.isDefault === true || existingCount === 0;
+  const makeDefault = data.isDefault === true || defaultCount === 0;
 
   // Clear the prior default first so the partial unique index never sees two.
   if (makeDefault) {

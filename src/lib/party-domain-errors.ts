@@ -28,9 +28,6 @@ export function partyNameConflict(message: string, meta?: DomainIssue["meta"]): 
 export function supplierHasIntakes(feedstockCodes: string[] = []): DomainError {
   return partyRefusal("conflict", `Supplier ${IN_USE_DELETE_MARKER} feedstock intakes still use it. Review the linked intakes or keep this supplier.`, ["supplierId"], { feedstockCodes });
 }
-export function customerHasOrders(orderCodes: string[] = []): DomainError {
-  return partyRefusal("conflict", `Customer ${IN_USE_DELETE_MARKER} orders still use it. Open Orders and review them. Reassign them where appropriate, or keep this customer.`, ["customerId"], { orderCodes });
-}
 export function customerHasStorageSites(locationIds: string[] = []): DomainError {
   return partyRefusal("conflict", `Customer ${IN_USE_DELETE_MARKER} its locations are registered storage sites. Keep this customer.`, ["customerId"], { locationIds });
 }
