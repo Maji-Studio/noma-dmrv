@@ -104,9 +104,16 @@ export const PROTO_ENTRIES: OutputStockHistoryEntry[] = [
   entry("t1", "intake", "2026-10-14T09:10", 300, -246, 18, "", [["PRD-021", 246]]),
 ];
 
-/** What the three variants have in common: the wet headline. */
-export function formatWet(wetKg: number | null): string {
-  return wetKg === null ? "Not available" : `≈ ${wetKg.toLocaleString()} kg wet`;
+/** No honest wet figure: no basis at all, or wet at zero while solids remain. */
+export function wetUnknown(side: Side): boolean {
+  const solids = side.parts.reduce((total, part) => total + (part.kind === "water" ? 0 : part.kg ?? 0), 0);
+  return side.wetKg === null || (side.wetKg <= 0 && solids > 0);
+}
+
+/** The wet headline. `short` is the entry line's right-hand figure. */
+export function formatWet(side: Side, short = false): string {
+  if (wetUnknown(side)) return short ? "Not available" : "Unknown until the next count";
+  return `≈ ${(side.wetKg ?? 0).toLocaleString()} kg wet`;
 }
 
 export function formatKg(kg: number): string {

@@ -83,7 +83,7 @@ function LedgerRow({ entry, kind, reversedEntry, replacedBy, moistureEntry, reve
   return (
     <LedgerLine id={`output-movement-${entry.id}`} time={formatFacilityTime(new Date(entry.occurredAt), timeZone, TIME_FORMAT)}
       iconKind={entry.correctsMovementId && entry.kind !== "reversal" ? kind : entry.kind} label={label} chips={chips} note={note}
-      amount={entryAmount(entry, kind)} after={protoParts ? formatWet(protoParts.after.wetKg) : formatMassKg(entry.afterDryKg)} struck={reversed} defaultOpen={defaultOpen}>
+      amount={entryAmount(entry, kind)} after={protoParts ? formatWet(protoParts.after, true) : formatMassKg(entry.afterDryKg)} struck={reversed} defaultOpen={defaultOpen}>
       {reversed && (
         <p className="body-caption text-[var(--color-text-secondary)]">
           {replacedBy ? `Replaced by the correction recorded ${formatFacilityDateTime(replacedBy.recordedAt, timeZone)}.` : "Reversed."} It no longer counts toward the stock.
