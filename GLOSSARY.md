@@ -48,16 +48,21 @@ unchanged as sensor-data evidence; the readings importer can also load its
 rows into structured readings within the run window.
 _Avoid_: sensor dump, log file, reactor-day file, channel mapping.
 
+**Emissions entry**:
+An operating-emissions measurement recorded on one credit batch and bound to a
+Removal-template line. Its typed values and evidence supplement automatic run
+figures where the line allows it.
+_Avoid_: activity (reserved for the history log).
+
 **Emission estimate**:
 A per-facility configured value (reference soil temperature) used to derive
 submission data noma does not measure directly. Distinct from a measured value.
 
 **Emission factor**:
 kg CO₂e per unit of recorded activity (litre of diesel, kWh of grid
-electricity, tonne-km of road freight), set per facility by an Owner or
-Admin. Activity times factor is the estimated CO₂e the Energy page shows.
-Display only: it never reaches a submission, where Isometric applies the
-**fixed constants** on its template (ADR 0031).
+electricity, tonne-km of road freight). Isometric applies its own **fixed
+constants** on the template to what is submitted; noma shows recorded
+activity only (ADR 0031).
 _Avoid_: carbon intensity (the registry's word for its template factor),
 emission estimate (a submission input, above).
 
@@ -329,7 +334,7 @@ The Isometric removal-template **component** (group `co2-stored`) that
 turns applied biochar into the registry's stored-CO₂e figure. noma feeds
 it from aggregated **Sample** chemistry and applied biochar mass; the
 durable fraction (**durability tier**) scales the result. _Avoid_:
-equating it with noma's local CO₂e estimate; "carbon component".
+equating it with a CO₂e figure noma computes locally; "carbon component".
 
 ### External parties
 
@@ -497,6 +502,16 @@ cannot yet source. A template carrying any zero stub must not be used
 against a production registry project.
 
 ### Provenance & lineage
+
+**Record lock**:
+Whether a record can change because of what uses it. **Open** means nothing
+uses it. **In use** means a later record took a number from it; numeric facts
+stay protected until that dependency is corrected or removed, while reference
+codes and notes may remain free. **Sent** means registry creation has started
+for its Removal and every field locks. A fresh return of the covering statement
+from Isometric can remove Sent, but does not remove existing dependencies.
+_Avoid_: treating a failed submission attempt as a verifier rejection, or a
+latest failed attempt as proof that earlier submissions no longer hold the record.
 
 **Rollback**:
 The upstream trace from one **application** to its originating feedstock

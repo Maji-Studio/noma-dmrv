@@ -14,6 +14,7 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 | Auth, orgs, members, invitations | `src/db/schema/auth.ts` |
 | API credentials (`api_keys`) and management records (`api_key_owners`) | `src/db/schema/api-keys.ts` |
 | API bookkeeping (`api_idempotency_records`, `api_rate_limit_buckets`, `organization_api_access`) | `src/db/schema/api.ts` |
+| Emissions entries and input values | `src/db/schema/emission-entries.ts`. Organization-consistent references, versioned tombstones, entry claims, and exact decimal values. |
 | Activity history (`activity_events`) | `src/db/schema/activity.ts` |
 | Facilities, reactors, storage locations | `src/db/schema/facilities.ts` |
 | Suppliers, customers, their locations, drivers, operators | `src/db/schema/parties.ts` |
@@ -33,7 +34,7 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 | Bin movements (ledger) | `src/db/schema/bin-movements.ts` |
 | Documents (polymorphic evidence store) | `src/db/schema/documentation.ts` |
 | Organization operating defaults | `src/db/schema/settings.ts` |
-| Facility emission factors (Energy page estimates) | `src/db/schema/emission-factors.ts` |
+| Facility emission factors (dormant, ADR 0031) | `src/db/schema/emission-factors.ts` |
 | Route cache | `src/db/schema/geo.ts` |
 | Shared enums / shared numeric column types | `src/db/schema/common.ts` · `src/db/schema/numeric-families.ts` |
 
@@ -183,8 +184,8 @@ All three tables live in `src/db/schema/api.ts`:
   all management paths remain org-scoped.
 - **`certifier_organization_settings` holds provider policy above the facility scope.** Its Source visibility value is unique per `(organization_id, provider)`, defaults to private when the row is absent, and applies only to newly mirrored registry Sources.
 - **`organization_settings` holds operating defaults that seed forms, never protocol constants.** One row per organization (unique on `organization_id`); every column except `default_timezone` is NOT NULL with a default mirroring the literal it replaced, and the read falls back to `DEFAULT_ORGANIZATION_SETTINGS` (`src/config/organization-settings.ts`) when no row exists. `default_timezone` is nullable with no default: null means the organization has not chosen a zone, and the facility form then starts empty. Changing a default never rewrites a saved record. Protocol-derived thresholds stay constants — a settings row that could move the H:C eligibility ceiling or the Method-B sample floor would let an operator weaken a certification gate from a form.
-- **`facility_emission_factors` holds display-only estimate factors**, one row per facility (unique on `facility_id`, composite FK to `facilities(id, organization_id)`): kg CO₂e per litre of diesel, per kWh of grid electricity and per tonne-km of road freight, plus a source note. All three are NOT NULL, so a row is complete or absent; no row means the Energy page shows activity only. They feed no submission; Isometric applies its own template factors ([ADR 0031](./adr/0031-operator-energy-estimates.md), [ADR 0018](./adr/0018-isometric-owns-project-emissions.md)).
-- **Integer row versions** start at 1 on feedstocks and editable master data: facilities, reactors, storage locations, suppliers and supplier locations, customers and customer locations, formulations, feedstock types, vehicles, drivers, operators, and facility emission factors. Every writer increments the affected row; edit and delete payloads carry the loaded version ([architecture.md](./architecture.md#expected-version-checks-on-edit-forms)).
+- **`facility_emission_factors` is dormant**: one row per facility (unique on `facility_id`, composite FK to `facilities(id, organization_id)`) of kg CO₂e per litre of diesel, per kWh of grid electricity and per tonne-km of road freight, plus a source note. Nothing reads or writes it; see [open-questions.md](./open-questions.md). It never fed a submission; Isometric applies its own template factors ([ADR 0031](./adr/0031-operator-energy-estimates.md), [ADR 0018](./adr/0018-isometric-owns-project-emissions.md)).
+- **Integer row versions** start at 1 on feedstocks and editable master data: facilities, reactors, storage locations, suppliers and supplier locations, customers and customer locations, formulations, feedstock types, vehicles, drivers and operators. Every writer increments the affected row; edit and delete payloads carry the loaded version ([architecture.md](./architecture.md#expected-version-checks-on-edit-forms)).
 - **Soft delete** via nullable `archived_at` on `facilities` and its operational descendants — see [`database.md`](./database.md) → "Soft Delete — Facility Archive".
 - **All domain enums** are in `src/db/schema/common.ts` — read the file, not a sample.
 

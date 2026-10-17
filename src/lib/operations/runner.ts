@@ -284,24 +284,29 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
           effect = { ...description, changedFields: [...new Set(description.entityIds.flatMap(id => activity.diff(entityType, id).changedFields))].sort() };
         }
         const result = represent(output);
-        if (!dryRun && effect) {
-          const entityType = toActivityEntityType(effect.entityType);
+        const effects = activity.skipped ? [] : [...(effect ? [{ ...effect, diff: activity.diff }] : []), ...activity.extraEffects];
+        if (!dryRun && effects.length) {
           let activityCount = 0;
-          for (const entityId of effect.entityIds) {
-            for (const links of activity.scopedLinks(entityType, entityId)) {
-              await recordActivity(ctx, tx, {
-                action: effect.outcome, entityType, entityId,
-                ...activity.diff(entityType, entityId),
-                operationId: operation.id,
-                versionBefore: effect.versionBefore,
-                versionAfter: effect.versionAfter,
-                oauthClientId: options.audit?.oauthClientId ?? null,
-                source,
-                credentialId: options.audit?.credentialId,
-                requestId: options.audit?.requestId,
-                ...links,
-              });
-              activityCount++;
+          for (const recordedEffect of effects) {
+            const entityType = toActivityEntityType(recordedEffect.entityType);
+            for (const entityId of recordedEffect.entityIds) {
+              for (const links of activity.scopedLinks(entityType, entityId)) {
+                await recordActivity(ctx, tx, {
+                  action: recordedEffect.outcome, entityType, entityId,
+                  ...(recordedEffect.fromStatus !== undefined ? { fromStatus: recordedEffect.fromStatus } : {}),
+                  ...(recordedEffect.toStatus !== undefined ? { toStatus: recordedEffect.toStatus } : {}),
+                  ...recordedEffect.diff(entityType, entityId),
+                  operationId: operation.id,
+                  versionBefore: recordedEffect.versionBefore,
+                  versionAfter: recordedEffect.versionAfter,
+                  oauthClientId: options.audit?.oauthClientId ?? null,
+                  source,
+                  credentialId: options.audit?.credentialId,
+                  requestId: options.audit?.requestId,
+                  ...links,
+                });
+                activityCount++;
+              }
             }
           }
           if (options.audit && activityCount === 0) throw new Error("Audited operation recorded no activity");

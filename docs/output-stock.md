@@ -130,23 +130,20 @@ Delivery mass, moisture and split-bin draw readings can be edited in the deliver
 form. Both saves append a reversal and replacement, shown as Original and Corrected.
 The delivery row stays in agreement with its replacement movement.
 
-These two edits are allowed only while the entry is the bin's latest recorded
-movement. Any newer entry locks it, including a backdated entry, an addition,
-a draw from another sub-bin, a count, a mode change or a correction. History
-replaces Lost mass Edit with the lock reason; the delivery form makes its mass
-fields read-only and gives the same reason. Later draws have already saved their
-batch shares against the stock this entry left, so changing it afterwards would
-make those shares wrong. The server checks this inside the write transaction
-under the posting path's bin-stock lock. Application and certification guards
-still apply. Delivery source, order, date/time and deletion stay locked.
-Old counts remain readable without an edit action.
-Feedstock Lost mass currently supports creation only: its writer has no linked
-reversal and replacement command, so feedstock history does not yet offer Edit.
+These edits use the same dependency predicate as the server correction path
+([Record locks](./database.md#record-locks)). Later draws that use the affected
+stock, balance-dependent counts, applications and certification lineage lock
+protected values. Unrelated intake alone does not lock an entry. An explicitly
+ordered draw from another sub-bin does not lock stock it did not use. History
+and the delivery form show the same dependency reason as the server, which
+rechecks under the posting path's bin-stock lock. Delivery source, order,
+and date/time retain their existing posting restrictions.
+Old counts remain readable without an edit action. Feedstock Lost mass supports
+creation only; feedstock intake changes retain ADR 0027's wet-lane guard.
 
-New output postings freeze a constant-size receipt count and identity hash under
-the bin lock. A changed receipt set locks the edit, even when a newly added
-receipt is physically backdated. Metadata edits alone leave the marker unchanged.
-The lock predicate also reads older development entries with `receiptIds`.
+Output postings retain their receipt marker as historical snapshot metadata.
+A changed stock basis requires a fresh preview; a new receipt alone does not
+permanently lock an otherwise independent correction.
 
 The chart uses steps: dry biochar (output) or estimated solids (feedstock), plus
 hatched estimated water. Product ingredient solids are a separate solid band,
@@ -182,16 +179,24 @@ moisture reading.
 Corrections append a reversal of the original effects and a replacement. They
 retain actor, reason, physical and recorded times, input basis, and before/after
 balances. A reduced loss restores its original source provenance even after a
-late older intake through the existing server correction contract. REST/MCP keep
-that dependency-based contract; the Lost mass form and delivery update use the
-stricter latest-entry rule above. Later dependent draws, counts, applications,
+late older intake through the existing server correction contract. The Lost mass form and delivery update use
+that same dependency-based contract. Later dependent draws, counts, applications,
 and certification artifacts continue to block server corrections with a named reason.
 
 Preview fingerprints are checked again while holding bin and request locks.
 Repeated request keys return the saved result; changing the payload for a reused
 key fails. Delivery corrections also lock the delivery before checking for
 applications. Posted product measurements stay immutable. Delivery mass edits append corrections;
-posted products and deliveries cannot be deleted through ordinary CRUD forms.
+Open products and deliveries can be deleted through app operations. The writer
+appends an exact inverse of the frozen source allocations under the bin stock
+lock before removing the live record. History retains the original and its
+linked reversal. Later active draws, counts, applications and Sent lineage
+refuse deletion with `certification_locked` and record-lock guidance. Reversed
+draws no longer block earlier delivery corrections or deletion. Product layers
+referenced by historical allocations remain protected. Orders, including archived
+orders and orders that never had deliveries, can be deleted when no delivery
+remains; archived deliveries still count. These product and delivery deletes
+are not exposed in REST or MCP.
 
 ## API stock read
 

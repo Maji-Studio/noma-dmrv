@@ -1,5 +1,4 @@
 import { feedstockFixtureValues } from "./helpers/feedstock-fixture";
-import { masterDataVersion } from "./helpers/master-data-version";
 import { productionVersion } from "./helpers/production-version";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
@@ -8,7 +7,7 @@ import { db } from "@/db";
 import { ActionConflictError } from "@/lib/errors";
 import { biocharProducts, biocharProductSourceAllocations, feedstocks, feedstockTypes, productIngredientSnapshots, storageLocations } from "@/db/schema";
 import { createBiocharProduct, updateBiocharProduct } from "@/data-access/biochar-products";
-import { updateFormulation } from "@/data-access/formulations";
+import { updateFormulationInTransaction } from "@/data-access/formulation-writes";
 import { getStorageLocationWithFacility } from "@/data-access/storage-locations";
 import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
 import { cleanupPostedStock, postedStockFixture, postProduct, productInput } from "./helpers/posted-output-stock-fixture";
@@ -142,7 +141,7 @@ describe("posted product bin and formulation contract", () => {
     const shares = await db.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.biocharProductId, product.id));
     expect(shares.reduce((sum, row) => sum + row.allocatedDryMassKg, 0)).toBe(1500);
     expect(await getOutputBinAllLayersDryKg(f.ctx, f.source.id)).toBe(0);
-    await updateFormulation(f.ctx, f.recipe.id, { expectedVersion: await masterDataVersion(f.ctx, "formulations", f.recipe.id), biocharRatio: 0.7 });
+    await db.transaction(async tx => updateFormulationInTransaction(f.ctx, tx, { formulationId: f.recipe.id, expectedVersion: f.recipe.version, biocharRatio: 0.7 }));
     await expect(updateBiocharProduct(f.ctx, product.id, { expectedVersion: await productionVersion(f.ctx, "biocharProducts", product.id), composition: composition(f, 105, null, { moistureContentPercent: 0 }) })).rejects.toThrow("immutable");
     expect(await db.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.biocharProductId, product.id))).toEqual(shares);
     await expect(blend(f, { massKg: 1 })).rejects.toThrow(/Not enough dry biochar/);
@@ -157,7 +156,7 @@ describe("posted product bin and formulation contract", () => {
     await expect(updateBiocharProduct(f.ctx, product.id, { expectedVersion: await productionVersion(f.ctx, "biocharProducts", product.id), massKg: 110 })).rejects.toThrow("immutable");
   });
   it("retains its ratio snapshot when the live formulation and metadata change", async () => {
-    const f = await fixture(); const product = await blend(f); await updateFormulation(f.ctx, f.recipe.id, { expectedVersion: await masterDataVersion(f.ctx, "formulations", f.recipe.id), biocharRatio: 0.7 });
+    const f = await fixture(); const product = await blend(f); await db.transaction(async tx => updateFormulationInTransaction(f.ctx, tx, { formulationId: f.recipe.id, expectedVersion: f.recipe.version, biocharRatio: 0.7 }));
     const updated = await updateBiocharProduct(f.ctx, product.id, { expectedVersion: await productionVersion(f.ctx, "biocharProducts", product.id), code: `E2E-RATIO-${f.tag}` }); expect(updated.biocharRatio).toBe(0.8);
   });
   it("prevents a posted product from being reassigned to another formulation", async () => {

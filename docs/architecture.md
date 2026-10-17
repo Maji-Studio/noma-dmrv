@@ -37,14 +37,13 @@ components (UI)
   `update_biochar_product`, `record_output_stock_movement`, `record_lab_sample`,
   `update_lab_sample`, `delete_lab_sample`, `record_order`, `update_order`,
   `delete_order`). Application writes use the registered `record_application`,
-  `update_application` and `delete_application` operations. UI product deletes
-  stay off the runner. Lost mass form edits run `record_output_stock_movement`
-  with the unpublished `requireLatestCorrection` option. Delivery updates run
+  `update_application` and `delete_application` operations. Product and delivery deletes use the app-only `delete_posted_biochar_product`
+  and `delete_posted_delivery` operations, with activity capture and document cleanup. Lost mass form edits run `record_output_stock_movement`
+  with the unpublished `checkFormEditLock` option. Delivery updates run
   the UI-only `update_posted_delivery` operation: the delivery row, stock
   correction and transport legs share its transaction. Both use the shared
-  stock writer with a strict latest-entry check. These UI options and the
-  delivery operation are not published in REST/MCP. The native correction
-  contract stays dependency-based.
+  stock writer with the same dependency check as native corrections (ADR 0035).
+  These UI options and the delivery operation are not published in REST/MCP.
 - The runner owns the transaction. Data-access ...InTransaction(ctx, tx, ...)
   functions and the helpers they call read and write only through `tx`,
   including reference checks and result enrichment. After-commit hooks run
@@ -188,7 +187,7 @@ affected row too, including facility archive and restore. Ordinary UI updates
 and deletes must send the `expectedVersion` loaded when the operator opened
 the record. Feedstocks, facilities, reactors, storage bins, suppliers and their
 locations, customers and their locations, formulations, feedstock types,
-facility emission factors, production runs, production incidents, in-process
+production runs, production incidents, in-process
 measurements (`productionSamples`), biochar products, lab samples, orders,
 deliveries, transport legs, applications, and credit batches use integer row
 versions. Inserts start at version 1. Stock loss, count, and correction commands
@@ -209,10 +208,6 @@ reference to the edited record using the `stale-version` sentinel. The hook
 re-throws it as `StaleVersionError` through `src/lib/stale-version.ts`. The
 form shows `STALE_VERSION_MESSAGE` while keeping the operator's draft.
 
-The emission-factors upsert instead requires `expectedVersion: number | null`.
-Its form sends `null` when it loaded no row, so a row saved since (or a
-concurrent first save, serialized by the facility row lock) is refused as stale.
-A numeric version must match the locked factors row.
 
 Internal current-state commands bump without child preconditions: derived
 transport-leg sync, credit-batch auto-attachment, registry submission
@@ -408,6 +403,37 @@ local, and deployed builds remain on the stable default.
 
 ## Database Boundaries
 
+Supplier and customer creates lock all named facilities `FOR SHARE` in id order,
+then insert the party, ordered locations and pairs inside the `withAutoCodes`
+savepoint and read back through `tx`. Last explicit default wins, otherwise the
+first location wins; pair filling on a new party has no references to fill.
+Metadata edits take `NO KEY UPDATE`, code edits take `UPDATE`, then check the
+version and code/name constraints. Deletes take the party `UPDATE`, check all
+intakes/orders including archived rows, lock children in id order, check each
+customer location's orders and storage-site mappings, then delete children and
+the party atomically. Intake writes take facility `SHARE`, then supplier `KEY SHARE`, before their row;
+orders take customer then location `KEY SHARE`. Deletes never lock references,
+facilities, formulations or certification artifacts. Pair saves can take facility
+and downstream locks; creates only fill new, unreferenced parents, while party
+updates/deletes never request those locks. Registration takes the location FK
+lock without a later parent lock. These paths introduce no reverse edge against
+facility archive or formulation writes.
+
+Formulation creates lock referenced feedstock types `FOR SHARE` in id order,
+then insert the parent and lines inside the `withAutoCodes` BCF savepoint and
+read back through `tx`. Updates lock the formulation `FOR UPDATE`, check its
+version, lock incoming types `FOR SHARE` in id order (retained archived types
+pass), then existing lines `FOR UPDATE` in id order; plain snapshot/product
+reference reads and the merged integer-millionths total precede the
+`withUniqueCodeGuard` write. Deletes lock the formulation `FOR UPDATE`, check
+its version and read product, bin and order references (archived included)
+without locks before cascading deletion. Bin create, update and quick-add hold
+the formulation `FOR SHARE` after their facility/bin locks; product creation
+reads recipe lines after its formulation share lock. Feedstock-type usage edits
+hold the type `FOR UPDATE` and read formulation usage without locking parents.
+Formulation writers request no facility, bin, product or order locks, so these
+paths do not reverse product/order writers or the facility archive cascade.
+
 Application writers share `src/data-access/application-write-scope.ts`: unlocked
 discovery, sorted lineage artifacts, facilities `FOR SHARE`, production runs `FOR SHARE`, credit batches `FOR SHARE`, deliveries
 `FOR UPDATE`, then the application `FOR UPDATE` and its version check. They
@@ -465,6 +491,12 @@ retry. Application writers now use the runner and the artifacts-first sequence
 above, closing their document-write inversion. Membership refresh also takes
 artifacts before runs. The remaining production-run and membership cycles are
 tracked in the [lock-order follow-up](./open-questions-architecture.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
+
+Emission entry writers discover ancestors unlocked, then lock the facility
+`FOR SHARE`, credit batch `FOR UPDATE`, entry `FOR UPDATE`, and documents last.
+They revalidate the batch's facility and the entry's batch after locking; changed
+parents return retryable `conflict` without taking a new ancestor lock.
+This order matches facility archive and applies to confirmation and deletion too.
 
 Upload promotion, leases and the privileged expiry sweep are described in
 [Object storage](./storage.md#abandoned-uploads-and-cleanup).
@@ -544,15 +576,16 @@ Statement). Every submission HTTP attempt appends to `certifier_sync_events`
 [0008](./adr/0008-submission-ledger-internal-seam.md). Source
 creation POST directly and reconcile through separate state.
 
-**Source-data immutability:** once a Removal or GHG Statement
-has a blocking ledger row (`draft`, `submitted`, `accepted`), its upstream
-operational records are locked at the data-access boundary. The guard validates
-the Removal's captured application-slice set against the reachable source
-records before every mutation; it does not recompute submitted membership from
-mutable current lineage. It blocks edits/deletes to production runs, samples,
-applications, deliveries, orders, biochar products, feedstocks, and credit-batch
-grouping records. Corrections are new submission versions or
-correction-workflow records, never in-place edits.
+**Source-data immutability:** the converted source-data guards resolve every
+Removal ledger version and covering statement through `record-lock-lineage.ts`.
+Draft, unknown, in-flight and remotely effective attempts hold Sent. A fresh
+returned statement can reopen only the covered attempts that predate its return
+evidence; missing evidence or a failed registry read keeps Sent. REST's verifier
+submission timestamp is a conservative lower bound for return, not an exact
+return time. Mutations re-resolve under artifact locks and refuse lineage drift.
+Numeric dependencies still apply after reopening. Independent master-data,
+document and Removal lifecycle guards remain outside this policy; see
+[Record locks](./database.md#record-locks).
 
 **Workspace:** `/certification` (ADR
 [0007](./adr/0007-certification-workspace-consolidation.md)) is a first-class

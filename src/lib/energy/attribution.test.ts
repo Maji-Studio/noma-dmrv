@@ -1,18 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildEnergyBreakdown } from "./attribution";
-import { sumSourceAmounts } from "./sources";
-import type {
-  EnergyFactors,
-  EnergyInputs,
-  EnergyRecord,
-  EnergyRunInput,
-} from "./types";
+import type { EnergyInputs, EnergyRecord, EnergyRunInput } from "./types";
 
-const FACTORS: EnergyFactors = {
-  dieselKgCo2ePerLitre: 2.68,
-  gridKgCo2ePerKwh: 0.5,
-  roadFreightKgCo2ePerTonneKm: 0.1,
-};
 const ALL_TIME = { from: null, to: "2026-09-30" };
 
 function run(overrides: Partial<EnergyRunInput> & { id: string }): EnergyRunInput {
@@ -59,7 +48,6 @@ describe("buildEnergyBreakdown", () => {
   it("keeps a null reading as a missing reading, never zero", () => {
     const breakdown = buildEnergyBreakdown(
       inputs({ runs: [run({ id: "a", electricityKwh: null })] }),
-      FACTORS,
       ALL_TIME,
     );
     const a = record(breakdown.records, "a");
@@ -71,18 +59,17 @@ describe("buildEnergyBreakdown", () => {
     ]);
   });
 
-  it("estimates diesel and grid electricity from their configured factors", () => {
-    const breakdown = buildEnergyBreakdown(
-      inputs({ runs: [run({ id: "a" })] }),
-      FACTORS,
-      ALL_TIME,
-    );
-    const { kg, activity } = record(breakdown.records, "a").footprint;
-    expect(activity.grid).toBe(100);
-    expect(kg?.grid).toBeCloseTo(100 * 0.5);
-    expect(kg?.startup).toBeCloseTo(10 * 2.68);
-    expect(kg?.genset).toBeCloseTo(20 * 2.68);
-    expect(kg?.preprocessing).toBeCloseTo(5 * 2.68);
+  it("reports recorded diesel and grid electricity in their own units, with no CO2e", () => {
+    const breakdown = buildEnergyBreakdown(inputs({ runs: [run({ id: "a" })] }), ALL_TIME);
+    const { footprint } = record(breakdown.records, "a");
+    expect(footprint.activity).toMatchObject({
+      startup: 10,
+      genset: 20,
+      preprocessing: 5,
+      grid: 100,
+    });
+    expect(footprint).not.toHaveProperty("kg");
+    expect(breakdown.flows.every((flow) => !("kg" in flow))).toBe(true);
   });
 
   it("counts every transport leg as a round trip", () => {
@@ -97,15 +84,13 @@ describe("buildEnergyBreakdown", () => {
           { id: "d", code: "DL-1", day: "2026-09-20", customerName: "Farm", effectiveDistanceKm: 25, deliveredWetMassKg: 1000, massDryKg: 450 },
         ],
       }),
-      FACTORS,
       ALL_TIME,
     );
     expect(record(breakdown.records, "a").footprint.activity.feedstockTransport).toBeCloseTo(40);
     expect(record(breakdown.records, "d").footprint.activity.biocharTransport).toBeCloseTo(50);
-    expect(record(breakdown.records, "d").footprint.kg?.biocharTransport).toBeCloseTo(5);
   });
 
-  it("counts a feedstock with a non-road leg as missing instead of pricing it as road freight", () => {
+  it("counts a feedstock with a non-road leg as missing instead of counting it as road tonne-km", () => {
     const breakdown = buildEnergyBreakdown(
       inputs({
         runs: [run({ id: "a" })],
@@ -123,12 +108,10 @@ describe("buildEnergyBreakdown", () => {
         ],
         feedstockDraws: [{ runId: "a", feedstockId: "f", wetMassKg: 2000 }],
       }),
-      FACTORS,
       ALL_TIME,
     );
     const a = record(breakdown.records, "a").footprint;
     expect(a.activity.feedstockTransport).toBe(0);
-    expect(a.kg?.feedstockTransport).toBe(0);
     expect(a.gaps.feedstockTransport).toMatchObject({ missing: 1, of: 1, unit: "feedstock" });
     expect(breakdown.flows.some((flow) => flow.source === "feedstockTransport")).toBe(false);
   });
@@ -157,7 +140,6 @@ describe("buildEnergyBreakdown", () => {
           { ownerId: "d", runId: "b", dryMassKg: 450 },
         ],
       }),
-      FACTORS,
       ALL_TIME,
     );
     const feedstockTonneKm = 2 * 15 * 3;
@@ -184,7 +166,6 @@ describe("buildEnergyBreakdown", () => {
         ],
         deliveryRunShares: [{ ownerId: "d", runId: "a", dryMassKg: 450 }],
       }),
-      FACTORS,
       ALL_TIME,
     );
     const d = record(breakdown.records, "d");
@@ -203,7 +184,6 @@ describe("buildEnergyBreakdown", () => {
         ],
         deliveryRunShares: [{ ownerId: "d", runId: "a", dryMassKg: 450 }],
       }),
-      FACTORS,
       ALL_TIME,
     );
     const d = record(breakdown.records, "d");
@@ -224,10 +204,9 @@ describe("buildEnergyBreakdown", () => {
 
     const withShares = buildEnergyBreakdown(
       { ...base, applicationRunShares: [{ ownerId: "p", runId: "a", dryMassKg: 300 }] },
-      FACTORS,
       ALL_TIME,
     );
-    const fromDelivery = buildEnergyBreakdown(base, FACTORS, ALL_TIME);
+    const fromDelivery = buildEnergyBreakdown(base, ALL_TIME);
     for (const breakdown of [withShares, fromDelivery]) {
       const p = record(breakdown.records, "p");
       expect(p.footprint.activity.genset).toBeCloseTo(20 / 3);
@@ -256,7 +235,6 @@ describe("buildEnergyBreakdown", () => {
           { ownerId: "d", runId: "b", dryMassKg: 450 },
         ],
       }),
-      FACTORS,
       ALL_TIME,
     );
     const d = record(breakdown.records, "d");
@@ -275,7 +253,6 @@ describe("buildEnergyBreakdown", () => {
         deliveryRunShares: [{ ownerId: "d", runId: "a", dryMassKg: 900 }],
         applications: [{ id: "p", code: "AP-1", day: "2026-09-25", deliveryId: "d", dryMassKg: null, fieldName: null }],
       }),
-      FACTORS,
       ALL_TIME,
     );
     const p = record(breakdown.records, "p");
@@ -287,16 +264,40 @@ describe("buildEnergyBreakdown", () => {
     expect(p.runCount).toBe(1);
   });
 
-  it("returns activity without estimates when the facility has no factors", () => {
-    const breakdown = buildEnergyBreakdown(inputs({ runs: [run({ id: "a" })] }), null, ALL_TIME);
-    const a = record(breakdown.records, "a");
-    expect(a.footprint.kg).toBeNull();
-    expect(sumSourceAmounts(a.footprint.activity)).toBeCloseTo(135);
-    expect(breakdown.flows.every((flow) => flow.kg == null)).toBe(true);
-    expect(breakdown.factors).toBeNull();
+  it("reports each credit batch's litres, kWh and tonne-km as its own record", () => {
+    const breakdown = buildEnergyBreakdown(
+      inputs({
+        creditBatches: [
+          { id: "b1", code: "CB-1", startDate: "2026-09-01", endDate: "2026-09-30", status: "pending" },
+        ],
+        runs: [run({ id: "a", creditBatchId: "b1" }), run({ id: "b", creditBatchId: "b1", electricityKwh: 50 })],
+        feedstocks: [
+          { id: "f", code: "FS-1", day: "2026-09-01", wetMassKg: 2000, legs: [{ distanceKm: 10, loadMassKg: 2000, method: "road" }] },
+        ],
+        feedstockDraws: [{ runId: "a", feedstockId: "f", wetMassKg: 2000 }],
+        deliveries: [
+          { id: "d", code: "DL-1", day: "2026-09-20", customerName: "Farm", effectiveDistanceKm: 25, deliveredWetMassKg: 1000, massDryKg: 450 },
+        ],
+        deliveryRunShares: [{ ownerId: "d", runId: "a", dryMassKg: 450 }],
+      }),
+      ALL_TIME,
+    );
+    const batch = record(breakdown.records, "b1");
+    expect(batch.scope).toBe("batch");
+    expect(batch.footprint.activity).toEqual({
+      startup: 20,
+      genset: 40,
+      preprocessing: 10,
+      grid: 150,
+      feedstockTransport: 40,
+      biocharTransport: 50,
+    });
+    expect(batch.runCount).toBe(2);
+    expect(batch.deliveryCount).toBe(1);
+    expect(batch.footprint).not.toHaveProperty("kg");
   });
 
-  it("keeps records, flows and production inside the period", () => {
+  it("keeps records and flows inside the period", () => {
     const breakdown = buildEnergyBreakdown(
       inputs({
         creditBatches: [
@@ -308,19 +309,16 @@ describe("buildEnergyBreakdown", () => {
           run({ id: "b", day: "2026-09-10", creditBatchId: "now" }),
         ],
       }),
-      FACTORS,
       { from: "2026-09-01", to: "2026-09-30" },
     );
     expect(breakdown.records.map((r) => r.id).sort()).toEqual(["b", "now"]);
     expect(new Set(breakdown.flows.map((flow) => flow.day))).toEqual(new Set(["2026-09-10"]));
-    expect(breakdown.production).toEqual([{ creditBatchId: "now", dryMassKg: 900 }]);
     expect(breakdown.from).toBe("2026-09-01");
   });
 
   it("starts all time at the first recorded day", () => {
     const breakdown = buildEnergyBreakdown(
       inputs({ runs: [run({ id: "a", day: "2025-03-02" }), run({ id: "b", day: "2026-01-01" })] }),
-      FACTORS,
       ALL_TIME,
     );
     expect(breakdown.from).toBe("2025-03-02");

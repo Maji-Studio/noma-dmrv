@@ -20,6 +20,9 @@ import { recordDeliveryForUi } from "./deliveries";
 const FEEDSTOCK_ID = "11111111-1111-4111-8111-111111111111";
 const INITIAL_VERSION = 1;
 const UPDATE_INPUTS: Record<string, unknown> = {
+  update_supplier: { supplierId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
+  update_customer: { customerId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
+  update_formulation: { formulationId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_application: { applicationId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_delivery: { deliveryId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_order: { orderId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
@@ -77,4 +80,24 @@ it("registers application writes with dry run support", () => {
   for (const id of ["record_application", "update_application", "delete_application"]) {
     expect(getOperation(id)?.supportsDryRun).toBe(true);
   }
+});
+
+it("registers all formulation commands with dry run support", () => {
+  for (const id of ["create_formulation", "update_formulation", "delete_formulation", "archive_formulation", "restore_formulation"]) {
+    expect(getOperation(id)?.supportsDryRun).toBe(true);
+  }
+});
+
+it.each(["supplier", "customer"])("registers restricted %s commands", (party) => {
+  const location = { name: "Place", country: "TZ", gpsLatitude: -8, gpsLongitude: 34 };
+  for (const verb of ["create", "update", "delete", "archive", "restore"]) {
+    expect(getOperation(`${verb}_${party}`)?.supportsDryRun).toBe(true);
+  }
+  const create = getOperation(`create_${party}`)!;
+  expect(create.input.safeParse({ name: "Party", locations: [location] }).success).toBe(true);
+  for (const field of ["contactName", "contactEmail", "contactPhone", "email", "phone", "address", "location"]) {
+    expect(create.input.safeParse({ name: "Party", locations: [location], [field]: "Private" }).success).toBe(false);
+    expect(getOperation(`update_${party}`)!.input.safeParse({ [`${party}Id`]: FEEDSTOCK_ID, expectedVersion: 1, [field]: "Private" }).success).toBe(false);
+  }
+  expect(create.input.safeParse({ name: "Party", locations: [{ ...location, address: "Private" }] }).success).toBe(false);
 });

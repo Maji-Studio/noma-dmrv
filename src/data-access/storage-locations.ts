@@ -1,7 +1,12 @@
+import { assertProtectedChangesLocked, changesProtectedStorageLocationField, lockStorageLocationRecordsWithoutWaiting, readStorageLocationRecordLock } from './storage-location-record-lock';
+import { assertRecordLockFields } from '@/lib/record-lock-fields';
 /**
  * Storage Locations Data Access Layer
  * CRUD operations for storage locations with auth guards, pagination, and filtering
  */
+
+import { lockFormulationReference } from "./formulation-reference-guards";
+import { lockActiveFacilityReference } from "./facility-reference-guards";
 
 import { and, asc, desc, eq, ilike, isNotNull, isNull, or, sql, SQL, count } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -339,73 +344,60 @@ export async function createStorageLocation(
 ): Promise<StorageLocation> {
   requireOrgScope(ctx);
 
-  // Verify facility exists and is active (no new children under an archived parent)
-  const [facility] = await db
-    .select({ id: facilities.id })
-    .from(facilities)
-    .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)));
+  return db.transaction(async (tx) => {
+    await lockActiveFacilityReference(ctx, tx, data.facilityId);
 
-  if (!facility) {
-    throw new SafeError("Facility not found or archived");
-  }
+    if (data.feedstockTypeId) {
+      const [feedstockType] = await tx
+        .select({ id: feedstockTypes.id })
+        .from(feedstockTypes)
+        .where(and(eq(feedstockTypes.id, data.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
 
-  if (data.feedstockTypeId) {
-    const [feedstockType] = await db
-      .select({ id: feedstockTypes.id })
-      .from(feedstockTypes)
-      .where(and(eq(feedstockTypes.id, data.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
-
-    if (!feedstockType) {
-      throw new SafeError("Feedstock type not found");
+      if (!feedstockType) {
+        throw new SafeError("Feedstock type not found");
+      }
     }
-  }
 
-  // The Zod create schema enforces this for form/fn flows; repeat it here so
-  // direct data-access callers (seeds, scripts) can't create a bin the update
-  // path's invariant check would then refuse to touch.
-  if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
-    throw new SafeError(
-      "Feedstock bins must be restricted to one feedstock type"
+    // The Zod create schema enforces this for form/fn flows; repeat it here so
+    // direct data-access callers (seeds, scripts) can't create a bin the update
+    // path's invariant check would then refuse to touch.
+    if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
+      throw new SafeError(
+        "Feedstock bins must be restricted to one feedstock type"
+      );
+    }
+
+    // A formulation only makes sense on a product bin; ignore it for other types.
+    const formulationId = data.type === "product_bin" ? data.formulationId ?? null : null;
+    if (formulationId) {
+      await lockFormulationReference(ctx, tx, formulationId);
+    }
+
+    const [storageLocation] = await guardStorageLocationName(ctx, data.name, () =>
+      tx
+        .insert(storageLocations)
+        .values({
+          organizationId: ctx.organizationId,
+          code: data.code,
+          name: data.name,
+          type: data.type,
+          facilityId: data.facilityId,
+          capacityKg: data.capacityKg ?? null,
+          // Only meaningful on feedstock bins, like formulationId below.
+          feedstockTypeId: isFeedstockBinType(data.type)
+            ? data.feedstockTypeId ?? null
+            : null,
+          formulationId,
+          stockMode: initialStockMode(data.type, data.stockMode),
+          drawOrder: data.drawOrder ?? "oldest_first",
+          storageMethod: data.storageMethod ?? null,
+          storageDescription: data.storageDescription ?? null,
+        })
+        .returning()
     );
-  }
 
-  // A formulation only makes sense on a product bin; ignore it for other types.
-  const formulationId = data.type === "product_bin" ? data.formulationId ?? null : null;
-  if (formulationId) {
-    const [formulation] = await db
-      .select({ id: formulations.id })
-      .from(formulations)
-      .where(and(eq(formulations.id, formulationId), eq(formulations.organizationId, ctx.organizationId)));
-
-    if (!formulation) {
-      throw new SafeError("Formulation not found");
-    }
-  }
-
-  const [storageLocation] = await guardStorageLocationName(ctx, data.name, () =>
-    db
-      .insert(storageLocations)
-      .values({
-        organizationId: ctx.organizationId,
-        code: data.code,
-        name: data.name,
-        type: data.type,
-        facilityId: data.facilityId,
-        capacityKg: data.capacityKg ?? null,
-        // Only meaningful on feedstock bins, like formulationId below.
-        feedstockTypeId: isFeedstockBinType(data.type)
-          ? data.feedstockTypeId ?? null
-          : null,
-        formulationId,
-        stockMode: initialStockMode(data.type, data.stockMode),
-        drawOrder: data.drawOrder ?? "oldest_first",
-        storageMethod: data.storageMethod ?? null,
-        storageDescription: data.storageDescription ?? null,
-      })
-      .returning()
-  );
-
-  return storageLocation;
+    return storageLocation;
+  });
 }
 
 // ============================================
@@ -474,8 +466,15 @@ export async function updateStorageLocation(
   return db.transaction(async (tx) => {
     // Read before locking: `lockBinStock` reports an archived bin in stock
     // vocabulary, and an edit needs the restore instruction instead.
-    await readEditableStorageLocation(ctx, tx, storageLocationId);
+    const preview = await readEditableStorageLocation(ctx, tx, storageLocationId);
     await lockBinStock(ctx, tx, storageLocationId);
+    // Lane or scope changes must not land under a Sent lineage, so they hold
+    // its artifacts (taken without waiting) to commit. Free-field saves take
+    // no artifact locks and keep the advisory Sent refusal.
+    const lineageLocked = changesProtectedStorageLocationField(preview, data);
+    const recordLock = lineageLocked
+      ? await lockStorageLocationRecordsWithoutWaiting(ctx, tx, storageLocationId)
+      : await readStorageLocationRecordLock(ctx, tx, storageLocationId);
     // `FOR UPDATE` on the bin row itself: the advisory lock above serializes
     // stock writes, but archive and restore change `updatedAt` without taking
     // it, so only the row lock makes the version check below race-free.
@@ -491,6 +490,9 @@ export async function updateStorageLocation(
       expectedVersion: data.expectedVersion,
       actualVersion: existing.version,
     });
+    assertProtectedChangesLocked(lineageLocked, existing, data);
+
+    if (recordLock.level === 'sent') assertRecordLockFields(recordLock, existing, data);
 
     // If code is being changed, check for duplicates
     if (data.code && data.code !== existing.code) {
@@ -581,15 +583,8 @@ export async function updateStorageLocation(
             : existing.formulationId) ?? null
         : null;
 
-    if (normalizedFormulationId) {
-      const [formulation] = await tx
-        .select({ id: formulations.id })
-        .from(formulations)
-        .where(and(eq(formulations.id, normalizedFormulationId), eq(formulations.organizationId, ctx.organizationId)));
-
-      if (!formulation) {
-        throw new SafeError("Formulation not found");
-      }
+    if (normalizedFormulationId && normalizedFormulationId !== existing.formulationId) {
+      await lockFormulationReference(ctx, tx, normalizedFormulationId);
     }
 
     // Don't let a product bin's formulation be re-pointed while it still holds
@@ -616,6 +611,7 @@ export async function updateStorageLocation(
       }
     }
 
+    assertRecordLockFields(recordLock, existing, data);
     const stockMode = await applyStockModeChange(ctx, tx, existing, { type: effectiveType as StorageLocationType, stockMode: data.stockMode, mergedAt: data.mergedAt });
 
     const dataWithoutNormalized: Partial<typeof data> = { ...data };

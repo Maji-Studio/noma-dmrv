@@ -59,7 +59,8 @@ it("parses credit batch filters against the status and sampling vocabularies", (
 });
 
 it("parses customer and destination searches and refuses unknown keys", () => {
-  expect(parseApiQuery(request("?q=customer&code=CU-1"), resourceQueries.customers.list)).toEqual({ limit: API_LIST_DEFAULT_LIMIT, q: "customer", code: "CU-1" });
+  expect(parseApiQuery(request("?q=customer&code=CU-1"), resourceQueries.customers.list)).toEqual({ limit: API_LIST_DEFAULT_LIMIT, q: "customer", code: "CU-1", archived: false });
+  expect(parseApiQuery(request("?q=supplier&code=SU-1"), resourceQueries.suppliers.list)).toEqual({ limit: API_LIST_DEFAULT_LIMIT, q: "supplier", code: "SU-1", archived: false });
   expect(parseApiQuery(request("?q=field"), customerLocationListSchema)).toEqual({ limit: API_LIST_DEFAULT_LIMIT, q: "field" });
   for (const schema of [resourceQueries.customers.list, customerLocationListSchema]) {
     for (const query of ["?address=x", "?q=a&q=b", "?facilityId=bad"]) expect(() => parseApiQuery(request(query), schema)).toThrow(expect.objectContaining({ code: "invalid_query" }));
@@ -90,5 +91,16 @@ it("parses storage-location lane and formulation filters", () => {
     .toEqual({ limit: API_LIST_DEFAULT_LIMIT, type: "product_bin", formulationId: id });
   for (const query of ["?type=product", "?formulationId=bad", "?status=active", "?type=biochar_bin&type=product_bin"]) {
     expect(() => parseApiQuery(request(query), storageLocationListSchema)).toThrow(expect.objectContaining({ code: "invalid_query" }));
+  }
+});
+
+it("defaults formulations to active and accepts only explicit archive booleans", () => {
+  expect(parseApiQuery(request(""), resourceQueries.formulations.list)).toEqual({ limit: API_LIST_DEFAULT_LIMIT, archived: false });
+  for (const archived of [true, false]) {
+    expect(parseApiQuery(request(`?archived=${archived}`), resourceQueries.formulations.list)).toMatchObject({ archived });
+    expect(resourceQueries.formulations.list.parse({ archived })).toMatchObject({ archived });
+  }
+  for (const query of ["?archived=1", "?archived=", "?archived=yes", "?archived=true&archived=false"]) {
+    expect(() => parseApiQuery(request(query), resourceQueries.formulations.list)).toThrow();
   }
 });

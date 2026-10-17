@@ -1,16 +1,16 @@
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import {
-  certificationSubmissions,
   certifierRemovals,
 } from "@/db/schema/certification";
 import { creditBatchApplications } from "@/db/schema/credits";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { formatCertificationLineageLockMessage } from "@/lib/certification/lineage-lock-message";
-import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
+import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
+import { DomainError } from "@/lib/domain-errors";
+import { readRecordLockLineage } from "./record-lock-lineage";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
-import { REMOVAL_SCOPED_SUBMISSION_TYPES } from "@/lib/isometric/utils/constants";
 import { requireOrgScope } from "./utils";
 
 const CERTIFIER_PROVIDER = "isometric" as const;
@@ -56,7 +56,11 @@ async function readCreditBatchRemovals(
   const removals = [
     ...new Map(removalRows.map((removal) => [removal.id, removal])).values(),
   ];
-  return removals;
+  const facts = await readRecordLockLineage(ctx, tx, removals.map(row => ({ removalId: row.id, ghgStatementId: row.ghgStatementId })));
+  return removals.map(row => ({ ...row, statementIds: [...new Set([
+    ...(row.ghgStatementId ? [row.ghgStatementId] : []),
+    ...facts.find(fact => fact.id === row.id)!.statements.map(statement => statement.id),
+  ])].sort() }));
 }
 
 type CreditBatchRemovals = Awaited<ReturnType<typeof readCreditBatchRemovals>>;
@@ -74,92 +78,39 @@ export async function lockCreditBatchArtifacts(
       localEntityType: "removal",
       localEntityId: removal.id,
     } as const)),
-    ...removals
-      .filter((removal) => removal.ghgStatementId)
-      .map((removal) => ({
-        provider: CERTIFIER_PROVIDER,
-        localEntityType: "ghgStatement",
-        localEntityId: removal.ghgStatementId!,
-      } as const)),
+    ...removals.flatMap(removal => removal.statementIds.map(id => ({
+      provider: CERTIFIER_PROVIDER, localEntityType: "ghgStatement", localEntityId: id,
+    }))),
   ]);
 
   return removals;
 }
 
 /** Re-resolve under the batch lock; never acquire newly discovered artifacts here. */
-export async function isCreditBatchMembershipLockedBySubmission(
+async function creditBatchMembershipLock(
   ctx: OrgContext,
   tx: DbTransaction,
   creditBatchId: string,
   lockedRemovals: CreditBatchRemovals,
-): Promise<boolean> {
+) {
   const removals = await readCreditBatchRemovals(ctx, tx, creditBatchId, true);
   if (
     removals.length !== lockedRemovals.length ||
     removals.some((removal, index) =>
       removal.id !== lockedRemovals[index].id ||
-      removal.ghgStatementId !== lockedRemovals[index].ghgStatementId,
+      removal.ghgStatementId !== lockedRemovals[index].ghgStatementId ||
+      JSON.stringify(removal.statementIds) !== JSON.stringify(lockedRemovals[index].statementIds),
     )
   ) {
     throw new CreditBatchLineageChangedError();
   }
-  if (removals.length === 0) return false;
-  const removalIds = removals.map((removal) => removal.id);
 
-  const [removalSubmission] = await tx
-    .select({ id: certificationSubmissions.id })
-    .from(certificationSubmissions)
-    .where(
-      and(
-        eq(certificationSubmissions.provider, CERTIFIER_PROVIDER),
-        eq(certificationSubmissions.localEntityType, "removal"),
-        inArray(certificationSubmissions.localEntityId, removalIds),
-        inArray(
-          certificationSubmissions.submissionType,
-          REMOVAL_SCOPED_SUBMISSION_TYPES,
-        ),
-        inArray(
-          certificationSubmissions.status,
-          BLOCKING_SUBMISSION_STATUSES,
-        ),
-        eq(
-          certificationSubmissions.organizationId,
-          ctx.organizationId,
-        ),
-      ),
-    )
-    .limit(1);
+  const facts = await readRecordLockLineage(ctx, tx, removals.map(row => ({ removalId: row.id, ghgStatementId: row.ghgStatementId })), true);
+  return recordLocks.creditBatch({ removals: facts, dependents: [] });
+}
 
-  const ghgStatementIds = removals
-    .map((removal) => removal.ghgStatementId)
-    .filter((id): id is string => Boolean(id));
-  let ghgStatementSubmission:
-    | { id: (typeof certificationSubmissions.$inferSelect)["id"] }
-    | undefined;
-  if (ghgStatementIds.length > 0) {
-    [ghgStatementSubmission] = await tx
-      .select({ id: certificationSubmissions.id })
-      .from(certificationSubmissions)
-      .where(
-        and(
-          eq(certificationSubmissions.provider, CERTIFIER_PROVIDER),
-          eq(certificationSubmissions.localEntityType, "ghgStatement"),
-          eq(certificationSubmissions.submissionType, "ghg_statement"),
-          inArray(certificationSubmissions.localEntityId, ghgStatementIds),
-          inArray(
-            certificationSubmissions.status,
-            BLOCKING_SUBMISSION_STATUSES,
-          ),
-          eq(
-            certificationSubmissions.organizationId,
-            ctx.organizationId,
-          ),
-        ),
-      )
-      .limit(1);
-  }
-
-  return Boolean(removalSubmission || ghgStatementSubmission);
+export async function isCreditBatchMembershipLockedBySubmission(ctx: OrgContext, tx: DbTransaction, creditBatchId: string, lockedRemovals: CreditBatchRemovals): Promise<boolean> {
+  return (await creditBatchMembershipLock(ctx, tx, creditBatchId, lockedRemovals)).level === "sent";
 }
 
 export async function assertRemovalAllowsCreditBatchMutation(
@@ -169,19 +120,13 @@ export async function assertRemovalAllowsCreditBatchMutation(
   mutation: "update" | "delete",
   lockedRemovals: CreditBatchRemovals,
 ): Promise<void> {
-  if (
-    !(await isCreditBatchMembershipLockedBySubmission(
-      ctx,
-      tx,
-      creditBatchId,
-      lockedRemovals,
-    ))
-  ) {
-    return;
-  }
+  const lock = await creditBatchMembershipLock(ctx, tx, creditBatchId, lockedRemovals);
+  if (lock.level !== "sent") return;
 
-  throw new SafeError(
+  throw new DomainError(
+    "certification_locked",
     formatCertificationLineageLockMessage({
+      lock,
       mutation,
       subjectEntityType: "creditBatch",
       lineageEntityType: "creditBatch",
@@ -195,7 +140,7 @@ export async function assertCreditBatchSlicesAreUnassigned(
   creditBatchId: string,
 ): Promise<void> {
   const [assignedSlice] = await tx
-    .select({ applicationId: creditBatchApplications.applicationId })
+    .select({ removalId: creditBatchApplications.removalId })
     .from(creditBatchApplications)
     .where(
       and(
@@ -208,7 +153,7 @@ export async function assertCreditBatchSlicesAreUnassigned(
     .limit(1);
   if (!assignedSlice) return;
 
-  throw new SafeError(
-    "Cannot change this credit batch's production membership because its applied mass belongs to a Removal.",
-  );
+  const lock = recordLocks.creditBatch({ removals: [], dependents: [{ kind: "removal", id: assignedSlice.removalId! }] });
+  throw new DomainError("certification_locked", withRecordLockGuidance(
+    "Cannot change this credit batch's production membership because its applied mass belongs to a Removal.", lock));
 }

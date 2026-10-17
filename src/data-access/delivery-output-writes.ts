@@ -1,3 +1,7 @@
+import { liveOutputMovementPredicate } from './output-stock-active-movements';
+import { readRecordDependents } from './record-lock-dependents';
+import { assertRecordLockFields, recordFieldEqual } from '@/lib/record-lock-fields';
+import { recordLocks } from '@/lib/record-lock';
 import type { CaptureActivity } from "@/lib/activity-changes";
 import { deliveryDistanceSnapshot } from "./delivery-distance-snapshot";
 /**
@@ -18,7 +22,7 @@ import { deliveryDistanceSnapshot } from "./delivery-distance-snapshot";
  */
 import { assertRowVersion, nextVersion } from "./row-version";
 import { randomUUID } from 'node:crypto';
-import { db, type DbTransaction } from '@/db';
+import { type DbTransaction } from '@/db';
 import { biocharProducts, outputStockAllocations, deliveries, drivers, facilities, orders, storageLocations, vehicles, type BiocharProduct, type BiocharProductRecord, type Delivery } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
@@ -32,7 +36,7 @@ import { lockBinStock } from './lock-bin-stocks';
 import { getOutputStockAllocationProjection } from './output-stock';
 import { withOutputStockPostingInTransaction, findPostedOutputRequest, OUTPUT_STOCK_FUTURE_TIME_MESSAGE, type PostedOutputRequest, type OutputStockPostingOptions, recordOutputStockMovementInTransaction } from './output-stock-post';
 import { lockMovementRequest } from './bin-movement-requests';
-import { assertLatestOutputMovement } from './output-stock-edit-lock';
+import { assertOutputMovementEditable } from './output-stock-edit-lock';
 import { lockBiocharTransportRouteTopology, syncBiocharProductTransportLegs } from './transport-legs';
 import { requireOrgScope } from './utils';
 
@@ -190,15 +194,21 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
     const [existing] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId))).for('update');
     if (!existing || existing.archivedAt) throw deliveryReferenceNotFound(['deliveryId'], 'Delivery');
     assertRowVersion({ entity: "delivery", id: deliveryId, expectedVersion: data.expectedVersion, actualVersion: existing.version });
+    const fields = { ...data, deliveryId: undefined };
+    const lock = recordLocks.delivery({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: 'delivery', entityId: deliveryId }) });
     for (const key of ['orderId', 'facilityId', 'storageLocationId'] as const) {
-      if (data[key] !== undefined && data[key] !== existing[key]) throw new SafeError('The order, facility and source bin of a posted delivery cannot be changed.');
+      if (data[key] !== undefined && data[key] !== existing[key]) {
+        assertRecordLockFields(lock, existing, fields, 'The order, facility and source bin of a posted delivery cannot be changed.');
+        throw new SafeError('The order, facility and source bin of a posted delivery cannot be changed.');
+      }
     }
-    if (data.deliveryDate && data.deliveryDate.getTime() !== existing.deliveryDate.getTime()) throw new SafeError('The date and time of a posted delivery cannot be changed. Edit its mass and moisture while it is the latest stock entry.');
+    if (data.deliveryDate && data.deliveryDate.getTime() !== existing.deliveryDate.getTime()) throw new SafeError('The date and time of a posted delivery cannot be changed. Edit its mass and moisture while no later stock entry depends on it.');
+    assertRecordLockFields(lock, existing, fields);
     const rows = await getOutputStockAllocationProjection(ctx, { deliveryId }, tx);
-    const reversedIds = new Set(rows.filter(r => r.movement.outputKind === 'reversal').map(r => r.movement.correctsMovementId));
-    const current = rows.filter(r => r.movement.outputKind !== 'reversal' && !reversedIds.has(r.movement.id))
+    const isLive = liveOutputMovementPredicate(rows.map(row => row.movement));
+    const current = rows.filter(r => isLive(r.movement))
       .sort((a, b) => a.movement.postingSequence > b.movement.postingSequence ? -1 : 1)[0]?.movement;
-    const massChanged = data.deliveredWetMassKg !== undefined && data.deliveredWetMassKg !== existing.deliveredWetMassKg;
+    const massChanged = data.deliveredWetMassKg !== undefined && !recordFieldEqual('deliveredWetMassKg', existing.deliveredWetMassKg, data.deliveredWetMassKg);
     const moistureChanged = data.moistureContentPercent !== undefined && data.moistureContentPercent !== existing.moistureContentPercent;
     let savedProducts: BiocharProductRecord[] = [];
     const sourcesChanged = data.sources !== undefined && JSON.stringify(data.sources) !== JSON.stringify(current?.inputSnapshot?.sources);
@@ -207,7 +217,7 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
         .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, existing.storageLocationId)));
       if (bin?.archivedAt) throw deliveryValidationFailed(['storageLocationId'], 'Source bin is archived. Unarchive it before editing delivery stock.');
       if (!current) throw new SafeError('Posted delivery stock entry not found.');
-      await assertLatestOutputMovement(ctx, existing.storageLocationId, current.id, tx);
+      await assertOutputMovementEditable(ctx, existing.storageLocationId, current.id, tx);
       if (data.correctsMovementId && data.correctsMovementId !== current.id) throw new SafeError('This delivery was corrected. Reload it before editing its mass.');
       const savedSources = current.inputSnapshot?.sources;
       if (moistureChanged && data.sources === undefined && Array.isArray(savedSources)) throw new SafeError('Edit the moisture reading for each sub-bin in this delivery.');
@@ -217,7 +227,7 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
         moisturePercent: data.moistureContentPercent ?? existing.moistureContentPercent, sources: data.sources,
         correctsMovementId: current.id, idempotencyKey: requestKey, basisFingerprint: data.basisFingerprint,
         reason: `Delivery ${data.code ?? existing.code}: mass or moisture edited`,
-      }, { requireLatestCorrection: true }));
+      }, { checkFormEditLock: true }));
     }
     const distanceSnapshot = existing.recordedDistanceKm == null
       ? await deliveryDistanceSnapshot(ctx, tx, existing) : {};
@@ -229,15 +239,4 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
     return { ...saved, savedProducts };
   });
 }
-export async function deleteDelivery(ctx: OrgContext, deliveryId: string, expectedVersion: number): Promise<void> {
-  requireOrgScope(ctx);
-  await db.transaction(async tx => {
-    await lockBiocharTransportRouteTopology(ctx, tx);
-    await assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'delivery', entityId: deliveryId }, 'delete');
-    const [versionRow] = await tx.select().from(deliveries).where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId))).for("update");
-    if (!versionRow) throw new SafeError("Delivery not found");
-    assertRowVersion({ entity: "delivery", id: deliveryId, expectedVersion: expectedVersion, actualVersion: versionRow.version });
-
-    throw new SafeError("Posted deliveries retain their history and cannot be deleted. Edit mass and moisture while the delivery is the bin's latest stock entry.");
-  });
-}
+export { deleteDelivery, deleteDeliveryInTransaction } from './delivery-delete';

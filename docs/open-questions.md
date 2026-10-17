@@ -13,7 +13,37 @@ Deferred work lives here, never as a `TODO` in code.
 
 **`needs-registry-check`** marks a question that must be answered by the Isometric MCP server (`how_to`, then the protocol/OpenAPI tools) or a sandbox probe, **never** from `docs/isometric/*`, which are non-authoritative local summaries. Do not close one of these from a local doc.
 
+## Emissions entry dates (2026-10-16) - **deferred**
+
+- `src/lib/read-models/batch-emission-lines.ts:loadBatchEmissionLines` does not
+  recheck entry dates when a batch start date moves. Decide whether to refuse
+  the batch edit or stop counting entries dated before the new start date.
+
+## Record-lock follow-ups
+
+- `src/data-access/record-lock-lineage.ts:readRecordLockLineage`: Isometric exposes
+  submission times but no return timestamp. Keep the conservative submission-time
+  lower bound until authoritative return evidence is available (`needs-registry-check`).
+- Independent guards in `src/data-access/reactors.ts:updateReactor`,
+  `src/data-access/formulations.ts:updateFormulation`,
+  `src/data-access/vehicles.ts:updateVehicle`, `src/data-access/drivers.ts:updateDriver`,
+  `src/data-access/document-write-scope.ts:ownerHasSubmittedLineage` and
+  `src/data-access/certifier-removal-deletion.ts:claimRemovalDeletion` retain their own rules. Review conversion separately
+  from the operational record-lock predicate.
+
+- `src/data-access/record-lock-lineage.ts:readStatement`: read Certify GraphQL
+  `GhgStatement.submissions` when a client is available (#737,
+  `needs-registry-check`). Certify-only submissions returned to DRAFT without a
+  REST or saved submission timestamp stay Sent until that history can be proved.
+- `src/data-access/output-stock-history.ts:getOutputStockHistory`: batch the
+  per-entry correction-dependency reads so opening history does not repeatedly
+  fetch later movements from the same bin.
+
 ## Activity recording gaps (`activity/deferred-writers`) - **deferred**
+
+- 2026-10-16: `src/data-access/emission-entries.ts:tombstoneEmissionZeros` must
+  record activity in PR 4, before zero rows can be written. Its coverage
+  exemption is temporary until that writer is enabled.
 
 - `src/data-access/certifier-removals.ts:updateRemovalDates` changes Removal dates
   without an event. Define value-free lifecycle events alongside the existing
@@ -21,6 +51,15 @@ Deferred work lives here, never as a `TODO` in code.
 - `src/data-access/production-runs/delete.ts:deleteProductionRun` still uses the
   legacy deletion path without a run event. Route it through the operation runner
   or record on its own transaction; preserve document retirement events.
+
+## Energy estimates paused (`energy/emission-factors`) - **dormant**
+
+- `src/db/schema/emission-factors.ts:facilityEmissionFactors` has no reader and
+  no writer since 2026-10-16: Kenji removed estimated CO₂e from the Energy page
+  and the settings form (#1091, [ADR 0031](./adr/0031-operator-energy-estimates.md)),
+  "for now". Decide whether to resume estimates (rebuild the settings form and
+  the read) or drop the table with a migration. Until then the table, its test
+  cleanup in `tests/e2e/global-teardown.ts` and the dev-seed delete stay.
 
 ## Activity reads
 
@@ -538,3 +577,18 @@ operational tradeoff, and this is not a registry requirement we verified.
   Production; the site deployment answers 404 to both. If growth matters, add
   scheduled GitHub Actions calls to the secret-authenticated
   `/api/cron/purge-api-records` and `/api/cron/sweep-document-uploads` routes.
+
+## Exact unit conversion for entries after a template unit change (2026-10-16)
+
+`src/lib/certification/emission-entry-rules.ts:emissionEntryCounts` requires re-entry
+when a monitored input changes unit. Define an exact decimal unit-conversion table
+before allowing confirmation to convert stored entry values to the new unit.
+
+## Refusal UIs match server copy (`errors/action-error-code`) - **deferred**
+
+- `src/lib/stale-version.ts:throwActionError` rethrows a failed action as a plain
+  `Error` carrying only the message, so the server's refusal `code` and meta are
+  lost. `src/components/ui/lifecycle-notices.tsx:isInUseDeleteRefusal` (marker in `src/lib/delete-refusal.ts`)
+  therefore matches the message text to offer "Archive instead". Carry the action
+  error code and meta to the client (for example on a typed error subclass) so
+  refusal UIs branch on the code, not on copy.

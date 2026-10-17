@@ -13,7 +13,7 @@ export function lookupIdentifier(idOrCode: string) {
   return id ? { id } : { code: idOrCode };
 }
 
-export async function readLookupPage<Filters extends Record<string, string | undefined>, Output>(
+export async function readLookupPage<Filters extends Record<string, string | boolean | undefined>, Output>(
   ctx: ApiContext, resource: string, query: { filters: Filters; limit: number; cursor?: string },
   read: (ctx: ApiContext, query: { filters: Filters; limit: number; cursor?: CursorPosition }) => Promise<{ data: Output[]; nextPosition: CursorPosition | null }>,
 ) {

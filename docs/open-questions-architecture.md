@@ -6,6 +6,31 @@ these areas; the entry rules and invariants live in
 
 ## Architecture
 
+### Formulation bin foreign-key backstop (`data/formulation-bin-fk-backstop`, opened 2026-10-16)
+
+- **Anchor:** `src/db/schema/facilities.ts:storageLocations`,
+  `src/db/schema/products.ts:formulations` and
+  `src/data-access/formulation-reference-guards.ts:lockFormulationReference`.
+- `storage_locations.formulation_id` has no restrictive foreign key. Bin create,
+  update and quick-add lock new formulation references FOR SHARE meanwhile;
+  formulation delete holds FOR UPDATE and checks bin claims before deleting.
+- **Follow-up:** add a restrictive composite foreign key to `(id, organization_id)`.
+  It needs a matching unique constraint on formulations and a lazy reference
+  across the facilities/products schema import cycle. Preserve the writer locks
+  and archived-reference checks; the foreign key only backs up deletion safety.
+
+### Deterministic stale-version agent eval (`api/eval-stale-version`, opened 2026-10-16)
+
+- **Anchor:** `scripts/eval-mcp/claude.ts:runClaude` and
+  `scripts/eval-mcp/run.ts`.
+- `customer-stale-version` needs one concurrent customer update after the agent
+  receives its read and before its write. The harness consumes subprocess
+  output but has no deterministic tool-result barrier; a scheduled timer can
+  run before the read or after the write and cannot test this behavior reliably.
+- **Follow-up:** add a test-only interception seam, bump the customer once through
+  its operation, then release the agent. Score one stale write, a new read and
+  one retry with the requested final change. Keep the case skipped until then.
+
 ### Align the Applications page credit batch filter (`app/application-batch-lineage-filter`, opened 2026-10-15)
 
 - `src/data-access/applications.ts:getApplications` filters by delivery lineage

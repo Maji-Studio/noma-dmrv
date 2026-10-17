@@ -22,8 +22,6 @@ const PRODUCT_PLACED_HOURS_AGO = 4;
 const PRODUCT_BIOCHAR_WET_MASS_KG = 5;
 const LOSS_HOURS_AGO = 3.5;
 const LOSS_WET_MASS_KG = 1;
-const BLEND_BIOCHAR_RATIO = 0.8;
-const BLEND_INGREDIENT_RATIO = 0.2;
 // The credit batch covers the completed run's day and the day before, so a sample
 // taken shortly before now is inside its window whatever the clock reads.
 const BATCH_WINDOW_DAYS_BACK = 1;
@@ -35,7 +33,6 @@ const SAMPLE_HYDROGEN_PERCENT = 2.5;
 const ORDER_QUANTITY_KG = 10_000;
 const DELIVERY_WET_MASS_KG = 0.1;
 const DELIVERY_HOURS_AGO = 1;
-const CUSTOMER_DISTANCE_KM = 25;
 const MS_PER_HOUR = 3_600_000;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
 const PRIVATE_FILE_MODE = 0o600;
@@ -62,21 +59,19 @@ async function main(): Promise<void> {
   const runOperation: typeof runWithOptions = (operation, ctx, input, options) => runWithOptions(operation, ctx, input, { ...options, activitySource: "script" });
   const { logFeedstockDelivery } = await import("@/lib/operations/feedstocks");
   const { formatFacilityDate } = await import("@/lib/date-utils");
-  const { createSupplierLocation } = await import("@/data-access/suppliers");
-  const { createSupplier } = await import("@/data-access/suppliers");
+  const { seedParties } = await import("./seed-parties");
   const { createFeedstockType } = await import("@/data-access/feedstock-types");
   const { createReactor } = await import("@/data-access/reactors");
   const { startProductionRun, updateProductionRun } = await import("@/lib/operations/production-runs");
   const { productionRunEtag } = await import("@/lib/api/representation-etags");
   const { createStorageLocation } = await import("@/data-access/storage-locations");
-  const { createFormulation } = await import("@/data-access/formulations");
+  const { seedFormulations } = await import("./seed-formulations");
   const { readApiBiocharProduct } = await import("@/lib/read-models/api-biochar-products");
   const { makeBiocharProduct } = await import("@/lib/operations/biochar-products");
   const { recordOutputStockMovement } = await import("@/lib/operations/output-stock");
   const { biocharProductEtag, creditBatchEtag, labSampleEtag, orderEtag, deliveryEtag } = await import("@/lib/api/representation-etags");
   const { createCreditBatch } = await import("@/data-access/credit-batches");
   const { recordLabSample } = await import("@/lib/operations/lab-samples");
-  const { createCustomer, createCustomerLocation } = await import("@/data-access/customers");
   const { recordDelivery } = await import("@/lib/operations/deliveries");
   const { recordOrder } = await import("@/lib/operations/orders");
   const { createApiKey } = await import("@/data-access/api-keys");
@@ -103,7 +98,7 @@ async function main(): Promise<void> {
     ...TEST_SITE_POSITION, code: "FUZZ-FAC", name: FIXTURE_LABEL, country: "FR", timezone: FACILITY_TIME_ZONE,
     durabilityOption: "200_year",
   });
-  const supplier = await createSupplier(ctx, { code: "FUZZ-SUP", name: FIXTURE_LABEL });
+  const { supplier, supplierLocation, customer, customerLocation, fields: partyFields } = await seedParties(ctx, facility.id);
   const feedstockType = await createFeedstockType(ctx, {
     code: "FUZZ-WOOD", name: FIXTURE_LABEL, category: "forestry", usage: "pyrolysis",
   });
@@ -121,7 +116,6 @@ async function main(): Promise<void> {
   });
   const driver = await createDriver(ctx, { code: "FUZZ-DRV", name: FIXTURE_LABEL });
   const vehicle = await createVehicle(ctx, { code: "FUZZ-VEH", name: FIXTURE_LABEL, vehicleType: "truck" });
-  const supplierLocation = await createSupplierLocation(ctx, { ...TEST_SITE_POSITION, supplierId: supplier.id, name: FIXTURE_LABEL, country: "FR" });
   const intake = await runOperation(logFeedstockDelivery, ctx, {
     facilityId: facility.id, supplierId: supplier.id, feedstockTypeId: feedstockType.id,
     deliveryDate: formatFacilityDate(new Date(), FACILITY_TIME_ZONE),
@@ -179,14 +173,7 @@ async function main(): Promise<void> {
     totalCarbonPercent: SAMPLE_TOTAL_CARBON_PERCENT, organicCarbonPercent: SAMPLE_ORGANIC_CARBON_PERCENT,
     inorganicCarbonPercent: SAMPLE_INORGANIC_CARBON_PERCENT, totalHydrogenPercent: SAMPLE_HYDROGEN_PERCENT,
   })).data.sample;
-  const pure = await createFormulation(ctx, { code: "FUZZ-PURE", name: `${FIXTURE_LABEL} pure biochar`, biocharRatio: 1 });
-  const blendType = await createFeedstockType(ctx, {
-    code: "FUZZ-BLEND", name: `${FIXTURE_LABEL} blend ingredient`, category: "compost", usage: "blend",
-  });
-  const blend = await createFormulation(ctx, {
-    code: "FUZZ-MIX", name: `${FIXTURE_LABEL} blend`, biocharRatio: BLEND_BIOCHAR_RATIO,
-    ingredients: [{ feedstockTypeId: blendType.id, ratio: BLEND_INGREDIENT_RATIO }],
-  });
+  const { pure, fields: formulationFields } = await seedFormulations(ctx);
   const product = (await runOperation(makeBiocharProduct, ctx, {
     facilityId: facility.id, formulationId: pure.id,
     placedAt: new Date(now - PRODUCT_PLACED_HOURS_AGO * MS_PER_HOUR).toISOString(),
@@ -198,11 +185,6 @@ async function main(): Promise<void> {
     occurredAt: new Date(now - LOSS_HOURS_AGO * MS_PER_HOUR).toISOString(),
     wetMassKg: LOSS_WET_MASS_KG, moisturePercent: BIOCHAR_MOISTURE_PERCENT, reason: "API fuzz fixture loss",
   })).data;
-  const customer = await createCustomer(ctx, { code: "FUZZ-CUS", name: FIXTURE_LABEL });
-  const customerLocation = await createCustomerLocation(ctx, {
-    ...TEST_SITE_POSITION, customerId: customer.id, name: FIXTURE_LABEL, country: "FR",
-    facilityDistances: [{ facilityId: facility.id, distanceKm: CUSTOMER_DISTANCE_KM, distanceSource: "manual" }], isDefault: true,
-  });
   const orderInput = {
     facilityId: facility.id, customerId: customer.id, customerLocationId: customerLocation.id,
     formulationId: pure.id, orderDate: formatFacilityDate(new Date(now), FACILITY_TIME_ZONE),
@@ -228,6 +210,7 @@ async function main(): Promise<void> {
   const { seedDocuments } = await import("./seed-documents");
   const documents = await seedDocuments(ctx, { delivery: delivery.id, feedstock: feedstock.id, lab_sample: labSample.id, application: applicationFixture.applicationId }, { activitySource: "script" });
   const credential = await createApiKey(ctx, {
+    // Deliberately includes suppliers/customers write and delete, plus formulation writes/deletes.
     name: FIXTURE_LABEL, scopes: API_SCOPES.filter(scope => scope !== "applications:delete"), expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
   });
   // Mask before the workflow extracts the key into GITHUB_ENV. Outside Actions
@@ -248,7 +231,8 @@ async function main(): Promise<void> {
     // Supplier locations have no code column or by-id API route.
     supplierLocationId: supplierLocation.id,
     biocharBinId: biocharBin.id, biocharBinCode: biocharBin.code, productBinId: productBin.id,
-    pureFormulationId: pure.id, pureFormulationCode: pure.code, blendFormulationId: blend.id, blendFormulationCode: blend.code,
+    ...formulationFields,
+    ...partyFields,
     biocharProductId: product.id, biocharProductCode: product.code, biocharProductEtag: biocharProductEtag(currentProduct),
     customerId: customer.id, customerCode: customer.code,
     // Customer locations, like supplier locations, have no code column.

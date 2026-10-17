@@ -1,3 +1,6 @@
+import type { OrgContext } from "@/lib/auth/server";
+import { deleteSupplierInTransaction } from "@/data-access/supplier-writes";
+const deleteSupplier = (ctx: OrgContext, supplierId: string, expectedVersion: number) => db.transaction(async tx => { await deleteSupplierInTransaction(ctx, tx, { supplierId, expectedVersion }); });
 import { cleanupFeedstockFixtureParents, feedstockFixtureValues } from "./helpers/feedstock-fixture";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -5,7 +8,7 @@ import { eq, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { pgErrorCode } from "@/db/errors";
 import { facilities, feedstocks, feedstockTypes, organizations, supplierLocations, suppliers } from "@/db/schema";
-import { deleteSupplier } from "@/data-access/suppliers";
+
 import { SafeError } from "@/lib/errors";
 import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 

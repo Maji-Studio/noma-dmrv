@@ -218,7 +218,7 @@ describe("order PATCH", { timeout: TIMEOUT_MS }, () => {
     const order = await saved();
     await insertReadDelivery(a, order.id, ALLOCATED_KG, archived);
     for (const [field, value] of Object.entries({ facilityId: a.otherFacility.id, customerId: a.otherCustomer.id, customerLocationId: a.otherLocation.id, formulationId: a.pure.id })) {
-      await problem(await patch(a, order.id, { [field]: value }, INITIAL_ETAG, null), 409, "conflict", `/${field}`);
+      await problem(await patch(a, order.id, { [field]: value }, INITIAL_ETAG, null), 409, "certification_locked", `/${field}`);
     }
     expect((await read(a, order.id)).row).toEqual(order);
   });
@@ -299,7 +299,7 @@ describe("order DELETE", { timeout: TIMEOUT_MS }, () => {
   it.each([false, true])("refuses orders with a delivery (archived: %s)", async (archived) => {
     const order = await saved();
     await insertReadDelivery(a, order.id, ALLOCATED_KG, archived);
-    await problem(await remove(a, order.id, INITIAL_ETAG, null), 409, "conflict");
+    await problem(await remove(a, order.id, INITIAL_ETAG, null), 409, "certification_locked");
     expect(await rows(a)).toHaveLength(1);
   });
   it("previews an archived order without deleting it, then allows a committed deletion", async () => {

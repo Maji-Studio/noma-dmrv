@@ -6,7 +6,12 @@ export async function withFeedstockErrors<T>(work: () => Promise<T>, code: Domai
   try {
     return await work();
   } catch (error) {
-    if (error instanceof DomainError) throw error;
+    if (error instanceof DomainError) {
+      if (path && error.code === code && error.issues.length === 0) {
+        error.issues.push({ path, code, message: error.message });
+      }
+      throw error;
+    }
     if (error instanceof ActionConflictError) {
       throw new DomainError("conflict", error.message, { conflict: error.conflict, blockers: error.blockers });
     }

@@ -1,10 +1,13 @@
+import { liveOutputMovementPredicate } from './output-stock-active-movements';
 import type { DbTransaction } from '@/db';
 import { applications, binMovements, storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { outputStockEventLabel } from '@/lib/output-stock/labels';
 import { conflictCode } from '@/lib/conflict-ref';
 import { STOCK_CONFLICT_ENTITY } from '@/lib/stock-conflict-entities';
-import { ActionConflictError, SafeError } from '@/lib/errors';
+import { SafeError } from '@/lib/errors';
+import { DomainError } from '@/lib/domain-errors';
+import { recordLocks, withRecordLockGuidance } from '@/lib/record-lock';
 import { formatFacilityDateTime } from '@/lib/format-utils';
 import { add, grams, kilograms, readRational, type OutputStockLayer } from '@/lib/output-stock';
 import type { OutputStockPreviewInput } from '@/types/output-stock';
@@ -26,41 +29,8 @@ export async function prepareOutputCorrection(ctx: OrgContext, input: OutputStoc
   const all = await getOutputStockAllocationProjection(ctx, { sourceStorageLocationId: input.storageLocationId }, reader);
   const rows = all.filter(r => r.movement.id === original.id);
   const allocations = [...new Map(rows.map(r => [r.allocation.id, r.allocation])).values()];
-  const observedLayers = originalKind === 'count' ? ((original.inputSnapshot?.preview as { beforeAllocations?: { layerId: string }[] } | undefined)?.beforeAllocations ?? []).map(l => l.layerId) : [];
-  const affected = new Set([...allocations.map(a => a.biocharProductId ?? a.productionRunId), ...replacementLayerIds, ...observedLayers]);
-  const affectedLayers = layers.filter(l => affected.has(l.id));
-  // A later oldest-first or pro-rata draw would have split differently had the
-  // affected layers held other stock; an operator-ordered draw took only the
-  // sub-bins it names, so it depends on the correction only if it touched one.
-  const later = all.find(r => r.movement.postingSequence > original.postingSequence &&
-    (affected.has(r.allocation.biocharProductId ?? r.allocation.productionRunId) ||
-      (r.allocation.basisSnapshot.policy !== 'operator_order' &&
-        affectedLayers.some(l => l.placedAt <= r.movement.occurredAt!.toISOString()))));
-
-  // The bin is the record the operator opens to clear the way; the later
-  // movement rides along as a blocker under the label its history row shows.
-  const [bin] = await reader.select({ code: storageLocations.code }).from(storageLocations)
-    .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, input.storageLocationId)));
-  if (!bin) throw new SafeError('Storage location not found');
-  const binConflict = { entity: STOCK_CONFLICT_ENTITY.storageLocation, id: input.storageLocationId, code: conflictCode(bin.code) };
-  // Blockers name the movement by its facility time; the zone is read only when one is found.
-  const blockedBy = async (movement: { id: string; reason: string; outputKind: string | null; occurredAt: Date | null }, message: (at: string) => string) => {
-    const at = formatFacilityDateTime(movement.occurredAt!, await getOutputStockFacilityTimezone(ctx, input.facilityId, reader));
-    return new ActionConflictError(message(at), binConflict, { blockers: [{ entity: STOCK_CONFLICT_ENTITY.binMovement, id: movement.id,
-      code: conflictCode(`${movement.reason || outputStockEventLabel(movement.outputKind!)} (${at})`) }] });
-  };
-  if (later) throw await blockedBy(later.movement, at => `Correction blocked by a later ${outputStockEventLabel(later.movement.outputKind!).toLowerCase()}: ${later.movement.reason} (${at}).`);
-  const counts = await reader.select().from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, input.storageLocationId), gt(binMovements.postingSequence, original.postingSequence)));
-  const count = counts.find(m => isCountMovement(m) && layers.some(l => affected.has(l.id) && l.placedAt <= m.occurredAt!.toISOString()));
-  if (count) throw await blockedBy({ ...count, reason: 'Count' }, () => 'Correction blocked by a later count.');
-  // A bin switched back to split held nothing then; restoring stock across the switch would put a mixed pile back as sub-bins.
-  const split = counts.find(m => m.outputKind === 'split');
-  if (split) throw await blockedBy(split, at => `Correction blocked by the switch to split at ${at}. Stock from before it cannot return to the bin.`);
   const deliveryId = allocations.find(a => a.deliveryId)?.deliveryId ?? null;
-  if (deliveryId) {
-    const [application] = await reader.select({ id: applications.id, code: applications.code }).from(applications).where(and(eq(applications.organizationId, ctx.organizationId), eq(applications.deliveryId, deliveryId)));
-    if (application) throw new ActionConflictError(`Correction blocked by application ${application.code}.`, { entity: "application", id: application.id, code: conflictCode(application.code) });
-  }
+  await assertOutputCorrectionDependencies(ctx, input, original, allocations, all, layers, reader, replacementLayerIds);
   const restored = layers.map(layer => {
     const effects = allocations.filter(a => (a.biocharProductId ?? a.productionRunId) === layer.id);
     if (!effects.length) return layer;
@@ -75,4 +45,60 @@ export async function prepareOutputCorrection(ctx: OrgContext, input: OutputStoc
       }) };
   });
   return { original, allocations, rows, layers: restored, deliveryId };
+}
+
+/** The browser advisory and locked writer resolve the same dependency facts. */
+export async function assertOutputCorrectionDependencies(
+  ctx: OrgContext,
+  input: Pick<OutputStockPreviewInput, 'facilityId' | 'storageLocationId'>,
+  original: typeof import('@/db/schema').binMovements.$inferSelect,
+  allocations: Awaited<ReturnType<typeof getOutputStockAllocationProjection>>[number]['allocation'][],
+  all: Awaited<ReturnType<typeof getOutputStockAllocationProjection>>,
+  layers: OutputStockLayer[],
+  reader: Pick<DbTransaction, 'select'>,
+  replacementLayerIds: string[] = [],
+): Promise<void> {
+  requireOrgScope(ctx);
+  const originalKind = original.outputKind === 'replacement' ? original.inputSnapshot?.kind : original.outputKind;
+  const observedLayers = originalKind === 'count' ? ((original.inputSnapshot?.preview as { beforeAllocations?: { layerId: string }[] } | undefined)?.beforeAllocations ?? []).map(l => l.layerId) : [];
+  const affected = new Set([...allocations.map(a => a.biocharProductId ?? a.productionRunId), ...replacementLayerIds, ...observedLayers]);
+  const affectedLayers = layers.filter(l => affected.has(l.id));
+  // A later oldest-first or pro-rata draw would have split differently had the
+  // affected layers held other stock; an operator-ordered draw took only the
+  // sub-bins it names, so it depends on the correction only if it touched one.
+  const isLive = liveOutputMovementPredicate(all.map(row => row.movement));
+  const later = all.find(r => isLive(r.movement) && r.movement.postingSequence > original.postingSequence &&
+    (affected.has(r.allocation.biocharProductId ?? r.allocation.productionRunId) ||
+      (r.allocation.basisSnapshot.policy !== 'operator_order' &&
+        affectedLayers.some(l => l.placedAt <= r.movement.occurredAt!.toISOString()))));
+
+  // The bin is the record the operator opens to clear the way; the later
+  // movement rides along as a blocker under the label its history row shows.
+  const [bin] = await reader.select({ code: storageLocations.code }).from(storageLocations)
+    .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, input.storageLocationId)));
+  if (!bin) throw new SafeError('Storage location not found');
+  const binConflict = { entity: STOCK_CONFLICT_ENTITY.storageLocation, id: input.storageLocationId, code: conflictCode(bin.code) };
+  // Blockers name the movement by its facility time; the zone is read only when one is found.
+  const blockedBy = async (movement: { id: string; reason: string; outputKind: string | null; occurredAt: Date | null }, message: (at: string) => string) => {
+    const at = formatFacilityDateTime(movement.occurredAt!, await getOutputStockFacilityTimezone(ctx, input.facilityId, reader));
+    const lock = recordLocks.stockEntry({ removals: [], dependents: [{ kind: 'stockEntry', id: movement.id }] });
+    return new DomainError('certification_locked', withRecordLockGuidance(message(at), lock), { conflict: binConflict, blockers: [{ entity: STOCK_CONFLICT_ENTITY.binMovement, id: movement.id,
+      code: conflictCode(`${movement.reason || outputStockEventLabel(movement.outputKind!)} (${at})`) }] });
+  };
+  if (later) throw await blockedBy(later.movement, at => `Correction blocked by a later ${outputStockEventLabel(later.movement.outputKind!).toLowerCase()}: ${later.movement.reason} (${at}).`);
+  const counts = await reader.select().from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, input.storageLocationId), gt(binMovements.postingSequence, original.postingSequence)));
+  const isLiveCount = liveOutputMovementPredicate([...all.map(row => row.movement), ...counts]);
+  const count = counts.find(m => isLiveCount(m) && isCountMovement(m) && layers.some(l => affected.has(l.id) && l.placedAt <= m.occurredAt!.toISOString()));
+  if (count) throw await blockedBy({ ...count, reason: 'Count' }, () => 'Correction blocked by a later count.');
+  // A bin switched back to split held nothing then; restoring stock across the switch would put a mixed pile back as sub-bins.
+  const split = counts.find(m => m.outputKind === 'split');
+  if (split) throw await blockedBy(split, at => `Correction blocked by the switch to split at ${at}. Stock from before it cannot return to the bin.`);
+  const deliveryId = allocations.find(a => a.deliveryId)?.deliveryId ?? null;
+  if (deliveryId) {
+    const [application] = await reader.select({ id: applications.id, code: applications.code }).from(applications).where(and(eq(applications.organizationId, ctx.organizationId), eq(applications.deliveryId, deliveryId)));
+    if (application) {
+      const lock = recordLocks.stockEntry({ removals: [], dependents: [{ kind: 'application', id: application.id, label: application.code }] });
+      throw new DomainError('certification_locked', withRecordLockGuidance(`Correction blocked by application ${application.code}.`, lock), { conflict: { entity: "application", id: application.id, code: conflictCode(application.code) } });
+    }
+  }
 }

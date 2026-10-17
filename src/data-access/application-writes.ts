@@ -1,3 +1,5 @@
+import { assertRecordLockFields } from '@/lib/record-lock-fields';
+import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
 import type { CaptureActivity } from "@/lib/activity-changes";
 /**
  * One sequence for create/update/delete: discover application, deliveries,
@@ -33,7 +35,6 @@ import { requireOrgScope } from "./utils";
 import { resolveWriteActivityScopes, type ActivityScope } from "./write-activity";
 import type { ActivityEventInput } from "./activity-events";
 
-const IMMUTABLE_CREDIT_BATCH_STATUSES = new Set<string>(["verified", "issued"]);
 type Scope = Awaited<ReturnType<typeof lockApplicationWriteScope>>;
 function optionalText(value: string | null | undefined) { return value?.trim() || null; }
 function validateFieldSize(fieldSizeHa: number, code: string) {
@@ -61,7 +62,8 @@ function writableDelivery(scope: Scope, deliveryId: string, date: Date, checkFut
   return delivery;
 }
 function assertMutableSlices(scope: Scope, mutation: "update" | "delete") {
-  if (scope.slices.some(slice => slice.removalId)) throw applicationRefusal("certification_locked", "applicationId", `Cannot ${mutation} this Application because its applied mass belongs to a Removal.`);
+  const lock = recordLocks.application({ removals: [], dependents: scope.slices.flatMap(slice => slice.removalId ? [{ kind: "removal", id: slice.removalId }] : []) });
+  if (lock.level === "inUse") throw applicationRefusal("certification_locked", "applicationId", withRecordLockGuidance(`Cannot ${mutation} this Application because its applied mass belongs to a Removal.`, lock));
 }
 async function dryMass(ctx: OrgContext, tx: DbTransaction, delivery: Scope["deliveries"][number], wetKg: number, excludeId?: string) {
   requireOrgScope(ctx);
@@ -117,7 +119,9 @@ export async function updateApplicationInTransaction(ctx: OrgContext, tx: DbTran
   if (merged.evidenceMethod === "visual" && existing.evidenceMethod !== "visual") throw applicationRefusal("validation_failed", "evidenceMethod", "This evidence method is not available yet.");
   validateEvidence(merged, merged.fieldSizeHa, existing.code);
   const massChanged = (input.deliveryId !== undefined && input.deliveryId !== existing.deliveryId) || (input.appliedWetMassKg !== undefined && massGrams(input.appliedWetMassKg) !== massGrams(tonnesToKg(existing.biocharAppliedTons)));
-  if (massChanged) assertMutableSlices(scope, "update");
+  assertRecordLockFields(recordLocks.application({ removals: [], dependents: scope.slices.flatMap(slice => slice.removalId ? [{ kind: "removal", id: slice.removalId }] : []) }),
+    { ...existing, appliedWetMassKg: tonnesToKg(existing.biocharAppliedTons), applicationMethod: existing.applicationMethodType },
+    { ...fields, appliedWetMassKg, applicationMethod });
   const remainingBefore = await getApplicationRemainingWetMassKg(ctx, tx, delivery.id);
   const data = { ...fields, updatedAt: new Date(), version: nextVersion(applications.version),
     ...(input.fieldIdentifier !== undefined ? { fieldIdentifier: optionalText(input.fieldIdentifier) } : {}),
@@ -140,8 +144,6 @@ export async function deleteApplicationInTransaction(ctx: OrgContext, tx: DbTran
   requireOrgScope(ctx);
   const scope = await lockApplicationWriteScope(ctx, tx, { ...input, mutation: "delete" });
   assertMutableSlices(scope, "delete");
-  const blocking = scope.batches.filter(batch => IMMUTABLE_CREDIT_BATCH_STATUSES.has(batch.status));
-  if (blocking.length) throw applicationRefusal("certification_locked", "applicationId", `Cannot delete application linked to verified or issued credit batches: ${blocking.map(batch => batch.code).join(", ")}`);
   const id = input.applicationId;
   const activityScopes = await resolveWriteActivityScopes(ctx, tx, "application", id);
   await tx.delete(creditBatchApplications).where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.applicationId, id)));

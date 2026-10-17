@@ -13,7 +13,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { STRICT_FORMULATION_MATCH } from "@/schemas/biochar-products";
 
-const state = vi.hoisted(() => ({ permissionChecks: 0, dialogMounts: [] as string[], listEnabled: [] as boolean[], detailIds: [] as (string | undefined)[], options: [] as EntityOption[], loading: false, canManage: false, error: null as Error | null }));
+const state = vi.hoisted(() => ({ permissionChecks: 0, dialogMounts: [] as string[], listEnabled: [] as boolean[], detailIds: [] as (string | undefined)[], options: [] as EntityOption[], loading: false, canManage: false, error: null as Error | null, selected: undefined as EntityOption | undefined }));
 vi.mock("@/hooks/use-entities", () => ({
   useEntityOptions: ({ search, enabled }: { search: string; enabled: boolean }) => {
     state.listEnabled.push(enabled);
@@ -25,7 +25,7 @@ vi.mock("@/hooks/use-entities", () => ({
   },
   useEntityById: (_type: string, id: string | undefined) => {
     state.detailIds.push(id);
-    return { data: { id: "one", code: "1", name: "North bin" }, isPending: false };
+    return { data: state.selected ?? { id: "one", code: "1", name: "North bin" }, isPending: false };
   },
 }));
 vi.mock("./driver-quick-add-dialog", () => ({ DriverQuickAddDialog: (props: TestQuickAddDialogProps) => { state.dialogMounts.push("Driver"); return <TestQuickAddDialog {...props} />; } }));
@@ -53,6 +53,7 @@ beforeEach(() => {
   state.loading = false;
   state.canManage = false;
   state.error = null;
+  state.selected = undefined;
   finePointer = true;
   scroll.mockClear();
   Element.prototype.scrollIntoView = scroll;
@@ -405,6 +406,41 @@ describe("EntitySelect menu interactions", () => {
     expect(edit).toHaveBeenCalledOnce();
     expect(change).not.toHaveBeenCalled();
     expect(trigger().getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it.each([["formulation", "Archived blend"], ["supplier", "Archived sawmill"], ["customer", "Archived farm"]] as const)(
+    "offers a View row and an (Archived) label for an archived %s selection", (entityType, name) => {
+      const edit = vi.fn();
+      state.selected = { id: "one", code: "X-1", name, subtitle: "Archived", archived: true };
+      render(<EntitySelect entityType={entityType} value="one" onChange={vi.fn()} onEditSelected={edit} />);
+      expect(trigger().textContent).toContain(`${name} (Archived)`);
+      open();
+      expect(screen.getByTestId("entity-select-edit").textContent).toBe(`View ${name}`);
+      fireEvent.click(screen.getByTestId("entity-select-edit"));
+      expect(edit).toHaveBeenCalledOnce();
+    });
+
+  it("shows a different icon on the View row than on the Edit row", () => {
+    state.selected = { id: "one", code: "X-1", name: "Archived blend", archived: true };
+    const view = render(<EntitySelect entityType="formulation" value="one" onChange={vi.fn()} onEditSelected={vi.fn()} />);
+    open();
+    const viewIcon = screen.getByTestId("entity-select-edit").querySelector("svg")?.innerHTML;
+    view.unmount();
+    state.selected = { id: "one", code: "X-1", name: "Active blend" };
+    render(<EntitySelect entityType="formulation" value="one" onChange={vi.fn()} onEditSelected={vi.fn()} />);
+    open();
+    const editIcon = screen.getByTestId("entity-select-edit").querySelector("svg")?.innerHTML;
+    expect(viewIcon).toBeTruthy();
+    expect(viewIcon).not.toBe(editIcon);
+  });
+
+  it("keeps Edit and the plain label for a selection that is not archived", () => {
+    state.selected = { id: "one", code: "X-1", name: "Active sawmill" };
+    render(<EntitySelect entityType="supplier" value="one" onChange={vi.fn()} onEditSelected={vi.fn()} />);
+    expect(trigger().textContent).toContain("Active sawmill");
+    expect(trigger().textContent).not.toContain("(Archived)");
+    open();
+    expect(screen.getByTestId("entity-select-edit").textContent).toBe("Edit Active sawmill");
   });
 
   it("supports a custom Edit label", () => {

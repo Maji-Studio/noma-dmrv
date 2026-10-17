@@ -8,6 +8,7 @@ import { Notice } from "@/components/ui/notice";
 import { DetailSpine } from "@/components/ui/detail-panel";
 import { Button } from "@/components/ui/button";
 import { ServerError } from "../server-error";
+import { ARCHIVED_RESTORE_RENDERERS, isRestorableRecord } from "./archived-restore";
 import { QuickAddDialogShell } from "./quick-add-dialog-shell";
 import { ENTITY_TYPE_LABELS } from "./entity-labels";
 import { VehicleQuickAddDialog } from "./vehicle-quick-add-dialog";
@@ -66,7 +67,8 @@ function EntityEditSession({ entityType, entityId, onClose }: {
       <QuickAddDialogShell isOpen onClose={onClose} title={`View ${ENTITY_TYPE_LABELS[entityType]}`}
         testId={entityType === "feedstockType" ? "feedstock-type-edit-dialog" : `${entityType}-edit-dialog`}>
         <div className="space-y-20">
-          <Notice tone="info">This {ENTITY_TYPE_LABELS[entityType]} is archived and read-only.</Notice>
+          {(isRestorableRecord(record) ? ARCHIVED_RESTORE_RENDERERS[entityType]?.({ record, onRestored: onClose }) : null)
+            ?? <Notice tone="info">This {ENTITY_TYPE_LABELS[entityType]} is archived and read-only.</Notice>}
           <DetailSpine sections={[{ title: "Details", fields: [
             ...("code" in record ? [{ label: "Code", value: record.code }] : []),
             ...("name" in record ? [{ label: "Name", value: record.name }] : []),

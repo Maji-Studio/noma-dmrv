@@ -7,6 +7,8 @@ import { recordOrderInput, updateOrderApiInput } from "@/schemas/order-input";
 import { recordDeliveryInput, updateDeliveryApiInput } from "@/schemas/delivery-input";
 import { createFeedstockSchema, updateFeedstockSchema } from "@/schemas/feedstocks";
 import { toOperationJsonSchema, type JsonSchema } from "@/lib/operations/json-schema";
+import { queryParameters } from "./transport";
+import { resourceQueries } from "../query-schemas";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "./document";
 import { BODY_HASH_ETAG_PATTERN, parseIfMatch, representationEtag, STRONG_ETAG_PATTERN } from "../etag";
 import { IDEMPOTENCY_KEY_PATTERN, readIdempotencyKey } from "../request-body";
@@ -237,7 +239,7 @@ it("types current as a feedstock only on feedstock precondition responses", () =
     expect.objectContaining({ properties: { current: expect.objectContaining({ $ref: "#/components/schemas/feedstock" }) }, required: ["current"] }),
   ]);
   for (const [name, response] of Object.entries(document.components.responses)) {
-    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412" || name === "BiocharProductProblem412" || name === "LabSampleProblem412" || name === "OrderProblem412" || name === "DeliveryProblem412") continue;
+    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412" || name === "BiocharProductProblem412" || name === "LabSampleProblem412" || name === "OrderProblem412" || name === "DeliveryProblem412" || name === "FormulationProblem412" || name === "SupplierProblem412" || name === "CustomerProblem412") continue;
     expect(response.content["application/problem+json"].schema).toEqual({ $ref: "#/components/schemas/Problem" });
   }
 });
@@ -369,14 +371,14 @@ it("publishes customer, destination, stored order and snapshot balance reads", (
     ["/customers/{idOrCode}/locations", "find_customer_locations", "customers:read"],
     ["/orders", "find_orders", "orders:read"], ["/orders/{idOrCode}", "get_order", "orders:read"], ["/orders/{idOrCode}/balance", "get_order_balance", "orders:read"],
   ]) {
-    if (path !== "/orders" && path !== "/orders/{idOrCode}") expect(Object.keys(document.paths[path])).toEqual(["get"]);
+    if (path === "/customers/{idOrCode}/locations") expect(Object.keys(document.paths[path])).toEqual(["get"]);
     expect(document.paths[path].get).toMatchObject({ operationId, "x-required-scope": scope });
     for (const status of ["400", "401", "403", "429", "500"]) expect(document.paths[path].get.responses).toHaveProperty(status);
   }
   expect(document.paths["/orders"].get.responses).toHaveProperty("404");
   for (const [name, fields] of [
-    ["customer", ["id", "code", "name", "version", "createdAt", "updatedAt"]],
-    ["customer_location", ["id", "customerId", "name", "gpsLatitude", "gpsLongitude", "facilityDistances", "isDefault", "version", "createdAt", "updatedAt"]],
+    ["customer", ["id", "code", "name", "version", "createdAt", "updatedAt", "cropType", "archivedAt"]],
+    ["customer_location", ["country", "stateRegion", "city", "siteDescription", "defaultSoilTemperatureC", "id", "customerId", "name", "gpsLatitude", "gpsLongitude", "facilityDistances", "isDefault", "version", "createdAt", "updatedAt"]],
     ["order", ["id", "code", "version", "facilityId", "customerId", "customerLocationId", "formulationId", "orderDate", "quantityKg", "packaging", "archivedAt", "createdAt", "updatedAt"]],
     ["order_balance", ["orderId", "quantityKg", "deliveredWetMassKg", "remainingWetMassKg", "fulfillmentStatus"]],
   ] as const) expect(Object.keys(document.components.schemas[name].properties!).sort()).toEqual([...fields].sort());
@@ -517,5 +519,37 @@ it("publishes upload capabilities, keyless confirm and every document write refu
     for (const suffix of ["", "/{documentId}", "/{documentId}/content", "/{documentId}/confirm"]) {
       for (const method of ["delete", "patch", "put"]) expect(document.paths[base + suffix]).not.toHaveProperty(method);
     }
+  }
+});
+
+it("publishes formulation revision 2 fields and the archive-only list filter", () => {
+  const formulation = document.components.schemas.formulation;
+  expect(formulation.required).toContain("description");
+  expect(formulation).toMatchObject({ properties: { description: { anyOf: [{ type: "string" }, { type: "null" }] } } });
+  const list = document.paths["/formulations"].get;
+  expect(list.parameters).toContainEqual(expect.objectContaining({ name: "archived", schema: expect.objectContaining({ type: "boolean", default: false }) }));
+  expect(list.responses).toHaveProperty("400");
+  expect(list.responses).not.toHaveProperty("422");
+  expect(list.description).toContain("archived=true");
+});
+
+it("publishes registered query schemas independently of parameter names", () => {
+  const parameters = queryParameters(z.object({
+    archiveFilter: resourceQueries.formulations.list.shape.archived,
+    archived: z.string().optional(),
+  }));
+  expect(parameters).toContainEqual(expect.objectContaining({
+    name: "archiveFilter", schema: expect.objectContaining({ type: "boolean", default: false }),
+  }));
+  expect(parameters).toContainEqual(expect.objectContaining({
+    name: "archived", schema: { type: "string" },
+  }));
+});
+
+it("publishes party archive filters alongside party write paths", () => {
+  for (const resource of ["suppliers", "customers"]) {
+    const path = document.paths[`/${resource}`];
+    expect(path.get?.parameters).toEqual(expect.arrayContaining([expect.objectContaining({ name: "archived", in: "query" })]));
+    expect(path.post).toMatchObject({ operationId: resource === "suppliers" ? "create_supplier" : "create_customer", "x-required-scope": `${resource}:write` });
   }
 });

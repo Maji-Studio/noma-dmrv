@@ -1,4 +1,3 @@
-import { masterDataVersion } from "./helpers/master-data-version";
 import { deleteOutputProductFixtures, deleteOutputFacilityFixtures, outputProductFixtureValues } from "./helpers/output-contract-fixtures";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
@@ -11,9 +10,9 @@ import {
   formulationIngredients,
 } from "@/db/schema";
 import {
-  createFormulation,
-  updateFormulation,
-} from "@/data-access/formulations";
+  createFormulationInTransaction,
+  updateFormulationInTransaction,
+} from "@/data-access/formulation-writes";
 import {
   createFormulationSchema,
   updateFormulationSchema,
@@ -29,7 +28,7 @@ import { TEST_SITE_POSITION,
   TEST_ORG_ID,
 } from "./helpers/test-org";
 
-describe("updateFormulation ingredient identity", () => {
+describe("updateFormulationInTransaction ingredient identity", () => {
   const createdProductIds: string[] = [];
   const createdFormulationIds: string[] = [];
   const createdFeedstockTypeIds: string[] = [];
@@ -87,15 +86,15 @@ describe("updateFormulation ingredient identity", () => {
       .returning({ id: feedstockTypes.id });
     createdFeedstockTypeIds.push(...ingredientTypes.map(({ id }) => id));
 
-    const formulation = await createFormulation(makeTestOrgContext(), {
+    const formulation = await db.transaction(async tx => createFormulationInTransaction(makeTestOrgContext(), tx, {
       code: `FM-STABLE-${tag}`,
       name: `Stable formulation ${tag}`,
       biocharRatio: 0.6,
-      ingredients: [
+      lines: [
         { feedstockTypeId: ingredientTypes[0].id, ratio: 0.25 },
         { feedstockTypeId: ingredientTypes[1].id, ratio: 0.15 },
       ],
-    });
+    }));
     createdFormulationIds.push(formulation.id);
 
     const savedMassByIngredientId = new Map(
@@ -128,12 +127,12 @@ describe("updateFormulation ingredient identity", () => {
       .returning({ id: biocharProducts.id });
     createdProductIds.push(product.id);
 
-    const updated = await updateFormulation(makeTestOrgContext(), formulation.id, { expectedVersion: await masterDataVersion(makeTestOrgContext(), "formulations", formulation.id),
-      ingredients: [
+    const updated = await db.transaction(async tx => updateFormulationInTransaction(makeTestOrgContext(), tx, { formulationId: formulation.id, expectedVersion: formulation.version,
+      lines: [
         { feedstockTypeId: ingredientTypes[0].id, ratio: 0.2 },
         { feedstockTypeId: ingredientTypes[1].id, ratio: 0.2 },
       ],
-    });
+    }));
 
     expect(updated.ingredients.map(({ id }) => id)).toEqual(
       formulation.ingredients.map(({ id }) => id),
@@ -184,16 +183,16 @@ describe("formulation unique blend material constraint", () => {
       .returning({ id: feedstockTypes.id });
     createdFeedstockTypeIds.push(feedstockType.id);
 
-    const formulation = await createFormulation(makeTestOrgContext(), {
+    const formulation = await db.transaction(async tx => createFormulationInTransaction(makeTestOrgContext(), tx, {
       code: `FM-DUP-${tag}`,
       name: `Dup formulation ${tag}`,
       biocharRatio: 0.6,
-      ingredients: [{ feedstockTypeId: feedstockType.id, ratio: 0.2 }],
-    });
+      lines: [{ feedstockTypeId: feedstockType.id, ratio: 0.2 }],
+    }));
     createdFormulationIds.push(formulation.id);
 
     // A second line for the same blend material violates the composite unique
-    // constraint that keeps updateFormulation reconciliation deterministic.
+    // constraint that keeps updateFormulationInTransaction reconciliation deterministic.
     // Drizzle wraps the pg error; the constraint name lives on `.cause`.
     let caught: unknown;
     try {

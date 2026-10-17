@@ -290,6 +290,7 @@ export const certificationSubmissionStatus = pgEnum(
 // ============================================
 
 export const ACTIVITY_ENTITY_TYPES = [
+  "emission_entry",
   "removal",
   "ghg_statement",
   "production_run",
@@ -303,6 +304,11 @@ export const ACTIVITY_ENTITY_TYPES = [
   "transport_leg",
   "feedstock",
   "bin_movement",
+  "supplier",
+  "supplier_location",
+  "customer",
+  "customer_location",
+  "formulation",
 ] as const;
 
 export const ACTIVITY_ACTIONS = ["created", "updated", "deleted", "status_changed"] as const;

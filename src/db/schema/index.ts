@@ -36,3 +36,5 @@ export * from './application-output-allocations';
 
 export * from "./supplier-location-facility-distances";
 export * from "./customer-location-facility-distances";
+
+export * from "./emission-entries";

@@ -4,7 +4,7 @@ import type { Pool } from "pg";
 import { db } from "@/db";
 import { orders, facilities, deliveries, formulations } from "@/db/schema";
 import { generateNextCodes } from "@/data-access/code-generator";
-import { deleteFormulation } from "@/data-access/formulations";
+import { deleteFormulationInTransaction } from "@/data-access/formulation-writes";
 import { SafeError } from "@/lib/errors";
 import { orderHasDeliveries } from "@/lib/order-domain-errors";
 import { archiveFacility } from "@/data-access/facilities";
@@ -87,7 +87,7 @@ describe("order writer races", { timeout: SUITE_TIMEOUT_MS }, () => {
       orderId: order.id, expectedVersion: 1, formulationId: f.recipe.id,
     }, { pool: writerPool });
     // The recipe's bin makes deletion a safe refusal after taking its row lock.
-    const remove = () => deleteFormulation(f.ctx, f.recipe.id, f.recipe.version);
+    const remove = () => db.transaction(tx => deleteFormulationInTransaction(f.ctx, tx, { formulationId: f.recipe.id, expectedVersion: f.recipe.version }));
     const results = await queue(f.ctx, patchFirst ? [patch, remove] : [remove, patch], undefined, f.recipe.id, order.id);
     const patched = results[patchFirst ? 0 : 1];
     const deleted = results[patchFirst ? 1 : 0];
@@ -95,7 +95,7 @@ describe("order writer races", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect(deleted.ok).toBe(false);
     if (!deleted.ok) {
       expect(deleted.error).toBeInstanceOf(SafeError);
-      expect(deleted.error).toMatchObject({ message: "Cannot delete formulation used by product bins. Clear those bins first." });
+      expect(deleted.error).toMatchObject({ message: "Formulation was not deleted because product bins use it. Keep this formulation." });
     }
     expect(await db.select().from(orders).where(eq(orders.id, order.id)))
       .toMatchObject([{ version: 2, formulationId: f.recipe.id }]);
@@ -115,7 +115,7 @@ describe("order writer races", { timeout: SUITE_TIMEOUT_MS }, () => {
         expect(second.error).toBeInstanceOf(SafeError);
         expect(second.error).toMatchObject({ message: new SafeError("Order not found").message });
       } else {
-        expect(second.error).toMatchObject({ code: "conflict", issues: orderHasDeliveries().issues });
+        expect(second.error).toMatchObject({ code: "certification_locked", issues: orderHasDeliveries((await db.select().from(deliveries).where(eq(deliveries.orderId, f.order.id)))[0]).issues });
       }
     }
     expect(await db.select().from(orders).where(eq(orders.id, f.order.id))).toHaveLength(deleteFirst ? 0 : 1);

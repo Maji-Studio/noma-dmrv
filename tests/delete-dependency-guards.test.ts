@@ -1,3 +1,7 @@
+import { runOperationInProcess } from "@/lib/operations/runner";
+import type { OrgContext } from "@/lib/auth/server";
+import { deleteCustomer as deleteCustomerOperation } from "@/lib/operations/customers";
+const deleteCustomer = (ctx: OrgContext, customerId: string, expectedVersion: number) => runOperationInProcess(deleteCustomerOperation, ctx, { customerId, expectedVersion });
 import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { masterDataVersion } from "./helpers/master-data-version";
@@ -7,7 +11,7 @@ import { deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFi
 import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { deleteCustomer } from "@/data-access/customers";
+
 import { deleteDelivery } from "@/data-access/deliveries";
 import { deleteStorageLocation } from "@/data-access/storage-locations";
 import { db } from "@/db";
@@ -216,7 +220,7 @@ describe("delete dependency guards", () => {
 
     try {
       await expect(deleteDelivery(makeTestOrgContext(TEST_USER_ID), fixture.deliveryId, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "deliveries", fixture.deliveryId))).rejects.toThrow(
-        /Posted deliveries retain their history/,
+        /application/i,
       );
     } finally {
       await db.transaction(async (tx) => {

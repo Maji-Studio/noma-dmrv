@@ -15,8 +15,10 @@
     },
     "responses": {
       "BiocharProductProblem412": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/BiocharProductPreconditionProblem"}}}, "description": "Stale row version or representation revision; current contains the latest representation.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+      "CustomerProblem412": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/CustomerPreconditionProblem"}}}, "description": "Stale row version or representation revision; current contains the latest representation.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
       "DeliveryProblem412": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/DeliveryPreconditionProblem"}}}, "description": "Stale row version or representation revision; current contains the latest representation.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
       "FeedstockProblem412": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/FeedstockPreconditionProblem"}}}, "description": "Stale row version or representation revision; current contains the latest representation.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+      "FormulationProblem412": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/FormulationPreconditionProblem"}}}, "description": "Stale row version or representation revision; current contains the latest representation.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
       "LabSampleProblem412": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/LabSamplePreconditionProblem"}}}, "description": "Stale row version or representation revision; current contains the latest representation.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
       "OrderProblem412": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/OrderPreconditionProblem"}}}, "description": "Stale row version or representation revision; current contains the latest representation.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
       "Problem400": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}, "description": "Malformed JSON, invalid query/header syntax, or missing create idempotency key, as applicable.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
@@ -33,12 +35,15 @@
       "Problem429": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}, "description": "Rate limited; retry after Retry-After seconds.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "Retry-After": {"$ref": "#/components/headers/Retry-After"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
       "Problem500": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}, "description": "Sanitized server failure. Retryable deadline or unknown outcomes require retrying with the same idempotency key.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
       "Problem503": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}, "description": "API writes temporarily disabled; retryable.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
-      "ProductionRunProblem412": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ProductionRunPreconditionProblem"}}}, "description": "Stale row version or representation revision; current contains the latest representation.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}
+      "ProductionRunProblem412": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ProductionRunPreconditionProblem"}}}, "description": "Stale row version or representation revision; current contains the latest representation.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+      "SupplierProblem412": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/SupplierPreconditionProblem"}}}, "description": "Stale row version or representation revision; current contains the latest representation.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}
     },
     "schemas": {
       "BiocharProductPreconditionProblem": {"allOf": [{"$ref": "#/components/schemas/Problem"}, {"properties": {"current": {"$ref": "#/components/schemas/biochar_product", "description": "Current biochar product after a failed version precondition."}}, "required": ["current"], "type": "object"}]},
+      "CustomerPreconditionProblem": {"allOf": [{"$ref": "#/components/schemas/Problem"}, {"properties": {"current": {"$ref": "#/components/schemas/customer", "description": "Current customer after a failed version precondition."}}, "required": ["current"], "type": "object"}]},
       "DeliveryPreconditionProblem": {"allOf": [{"$ref": "#/components/schemas/Problem"}, {"properties": {"current": {"$ref": "#/components/schemas/delivery", "description": "Current delivery after a failed version precondition."}}, "required": ["current"], "type": "object"}]},
       "FeedstockPreconditionProblem": {"allOf": [{"$ref": "#/components/schemas/Problem"}, {"properties": {"current": {"$ref": "#/components/schemas/feedstock", "description": "Current feedstock representation after a failed version precondition."}}, "required": ["current"], "type": "object"}]},
+      "FormulationPreconditionProblem": {"allOf": [{"$ref": "#/components/schemas/Problem"}, {"properties": {"current": {"$ref": "#/components/schemas/formulation", "description": "Current formulation after a failed version precondition."}}, "required": ["current"], "type": "object"}]},
       "LabSamplePreconditionProblem": {"allOf": [{"$ref": "#/components/schemas/Problem"}, {"properties": {"current": {"$ref": "#/components/schemas/lab_sample", "description": "Current lab sample after a failed version precondition."}}, "required": ["current"], "type": "object"}]},
       "OrderPreconditionProblem": {"allOf": [{"$ref": "#/components/schemas/Problem"}, {"properties": {"current": {"$ref": "#/components/schemas/order", "description": "Current order after a failed version precondition."}}, "required": ["current"], "type": "object"}]},
       "Problem": {
@@ -61,6 +66,7 @@
         "type": "object"
       },
       "ProductionRunPreconditionProblem": {"allOf": [{"$ref": "#/components/schemas/Problem"}, {"properties": {"current": {"$ref": "#/components/schemas/production_run", "description": "Current production run after a failed version precondition."}}, "required": ["current"], "type": "object"}]},
+      "SupplierPreconditionProblem": {"allOf": [{"$ref": "#/components/schemas/Problem"}, {"properties": {"current": {"$ref": "#/components/schemas/supplier", "description": "Current supplier after a failed version precondition."}}, "required": ["current"], "type": "object"}]},
       "application": {
         "additionalProperties": false,
         "properties": {
@@ -194,31 +200,38 @@
       "customer": {
         "additionalProperties": false,
         "properties": {
+          "archivedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Archive event instant in UTC (RFC 3339), or null when active."},
           "code": {"description": "Exact human-readable code, unique within the organization.", "type": "string"},
           "createdAt": {"description": "Creation event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "cropType": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Crop type, or null when unspecified."},
           "id": {"description": "Resource identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
           "name": {"description": "Human-readable display name, plain text.", "type": "string"},
           "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "version": {"description": "Positive integer row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
         },
-        "required": ["id", "code", "name", "createdAt", "updatedAt", "version"],
+        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version", "cropType"],
         "type": "object"
       },
       "customer_location": {
         "additionalProperties": false,
         "properties": {
+          "city": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "City, or null when unspecified."},
+          "country": {"description": "Country of the location.", "type": "string"},
           "createdAt": {"description": "Creation event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "customerId": {"description": "Owning customer identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "defaultSoilTemperatureC": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Default soil temperature in degrees Celsius, or null when unspecified."},
           "facilityDistances": {"description": "One-way road distances by facility, in kilometres. Missing pairs have no recorded default. GPS-derived values are estimates. The server counts the round trip.", "items": {"additionalProperties": false, "properties": {"distanceKm": {"description": "Positive one-way road distance in kilometres.", "exclusiveMinimum": 0, "type": "number"}, "distanceSource": {"description": "Distance provenance: manual entry, GPS route estimate, or supporting document.", "enum": ["map_estimate", "manual", "document"], "type": "string"}, "facilityId": {"description": "Organization facility identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}, "required": ["facilityId", "distanceKm", "distanceSource"], "type": "object"}, "type": "array"},
           "gpsLatitude": {"description": "WGS 84 latitude in decimal degrees.", "type": "number"},
           "gpsLongitude": {"description": "WGS 84 longitude in decimal degrees.", "type": "number"},
           "id": {"description": "Resource identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
           "isDefault": {"description": "Whether this is the customer's default destination.", "type": "boolean"},
           "name": {"description": "Customer location display name, plain text.", "type": "string"},
+          "siteDescription": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Site description, or null when unspecified."},
+          "stateRegion": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "State or region, or null when unspecified."},
           "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "version": {"description": "Positive integer row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
         },
-        "required": ["id", "name", "createdAt", "updatedAt", "customerId", "facilityDistances", "gpsLatitude", "gpsLongitude", "isDefault", "version"],
+        "required": ["id", "name", "createdAt", "updatedAt", "siteDescription", "defaultSoilTemperatureC", "customerId", "facilityDistances", "gpsLatitude", "gpsLongitude", "isDefault", "country", "stateRegion", "city", "version"],
         "type": "object"
       },
       "delivery": {
@@ -371,21 +384,22 @@
       "formulation": {
         "additionalProperties": false,
         "properties": {
-          "archivedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Archive event instant in UTC (RFC 3339), or null when active or archiving is unsupported."},
+          "archivedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Archive event instant in UTC (RFC 3339), or null when active."},
           "biocharRatio": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Biochar share of the blend as a fraction from 0 to 1, or null when not set."},
           "code": {"description": "Exact human-readable code, unique within the organization.", "type": "string"},
           "createdAt": {"description": "Creation event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "description": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Formulation description, or null when not set."},
           "id": {"description": "Resource identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
           "lines": {
             "description": "Ingredient lines in recipe order; empty for Pure biochar.",
-            "items": {"additionalProperties": false, "properties": {"feedstockTypeId": {"description": "Feedstock type of the ingredient, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, "id": {"description": "Formulation line UUID; pass it as formulationIngredientId when making a biochar product.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, "ratio": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Volume share of the blend as a fraction from 0 to 1, or null. Guidance only: it never sets a mass."}}, "required": ["id", "feedstockTypeId", "ratio"], "type": "object"},
+            "items": {"additionalProperties": false, "properties": {"feedstockTypeId": {"description": "Feedstock type of the ingredient, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, "id": {"description": "Formulation line UUID; pass it as formulationIngredientId when making a biochar product.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, "ratio": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Share of the solid blend as a fraction from 0 to 1, or null. Guidance only: it never sets a mass."}}, "required": ["id", "feedstockTypeId", "ratio"], "type": "object"},
             "type": "array"
           },
           "name": {"description": "Human-readable display name, plain text.", "type": "string"},
           "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "version": {"description": "Positive integer row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
         },
-        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version", "biocharRatio", "lines"],
+        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version", "description", "biocharRatio", "lines"],
         "type": "object"
       },
       "lab_sample": {
@@ -456,7 +470,11 @@
           },
           "organization": {"additionalProperties": false, "description": "Organization bound to the authenticated credential.", "properties": {"id": {"description": "Credential-bound organization identifier, opaque string.", "type": "string"}, "name": {"description": "Organization display name, plain text.", "type": "string"}}, "required": ["id", "name"], "type": "object"},
           "role": {"description": "Live organization role: owner owns the organization; admin administers it.", "enum": ["owner", "admin"], "type": "string"},
-          "scopes": {"description": "Credential scopes intersected with the live membership role.", "items": {"description": "Per-resource permission: read lists and retrieves, write creates and updates, delete removes; no wildcards. Additional resource scopes may be introduced in v1.", "type": "string", "x-extensible-enum": ["applications:read", "applications:write", "applications:delete", "production-runs:read", "production-runs:write", "production-runs:delete", "reactors:read", "biochar-products:read", "biochar-products:write", "formulations:read", "feedstocks:read", "feedstocks:write", "feedstocks:delete", "facilities:read", "suppliers:read", "feedstock-types:read", "storage-locations:read", "vehicles:read", "drivers:read", "deliveries:read", "deliveries:write", "customers:read", "orders:read", "orders:write", "orders:delete", "lab-samples:read", "lab-samples:write", "lab-samples:delete", "credit-batches:read"]}, "type": "array"}
+          "scopes": {
+            "description": "Credential scopes intersected with the live membership role.",
+            "items": {"description": "Per-resource permission: read lists and retrieves, write creates and updates, delete removes; no wildcards. Additional resource scopes may be introduced in v1.", "type": "string", "x-extensible-enum": ["applications:read", "applications:write", "applications:delete", "production-runs:read", "production-runs:write", "production-runs:delete", "reactors:read", "biochar-products:read", "biochar-products:write", "formulations:read", "formulations:write", "formulations:delete", "feedstocks:read", "feedstocks:write", "feedstocks:delete", "facilities:read", "suppliers:read", "suppliers:write", "suppliers:delete", "feedstock-types:read", "storage-locations:read", "vehicles:read", "drivers:read", "deliveries:read", "deliveries:write", "customers:read", "customers:write", "customers:delete", "orders:read", "orders:write", "orders:delete", "lab-samples:read", "lab-samples:write", "lab-samples:delete", "credit-batches:read"]},
+            "type": "array"
+          }
         },
         "required": ["organization", "facilities", "role", "scopes", "credential"],
         "type": "object"
@@ -657,32 +675,37 @@
       "supplier": {
         "additionalProperties": false,
         "properties": {
-          "archivedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Archive event instant in UTC (RFC 3339), or null when active or archiving is unsupported."},
+          "archivedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Archive event instant in UTC (RFC 3339), or null when active."},
           "code": {"description": "Exact human-readable code, unique within the organization.", "type": "string"},
           "createdAt": {"description": "Creation event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "id": {"description": "Resource identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
           "name": {"description": "Human-readable display name, plain text.", "type": "string"},
+          "sourceRegion": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Source region, or null when unspecified."},
           "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "version": {"description": "Positive integer row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
         },
-        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version"],
+        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version", "sourceRegion"],
         "type": "object"
       },
       "supplier_location": {
         "additionalProperties": false,
         "properties": {
-          "archivedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Archive event instant in UTC (RFC 3339), or null when active or archiving is unsupported."},
+          "archivedAt": {"description": "Always null; a location follows its supplier archive state.", "type": "null"},
+          "city": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "City, or null when unspecified."},
+          "country": {"description": "Country of the location.", "type": "string"},
           "createdAt": {"description": "Creation event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "facilityDistances": {"description": "One-way road distances by facility, in kilometres. Missing pairs have no recorded default. GPS-derived values are estimates. The server counts the round trip.", "items": {"additionalProperties": false, "properties": {"distanceKm": {"description": "Positive one-way road distance in kilometres.", "exclusiveMinimum": 0, "type": "number"}, "distanceSource": {"description": "Distance provenance: manual entry, GPS route estimate, or supporting document.", "enum": ["map_estimate", "manual", "document"], "type": "string"}, "facilityId": {"description": "Organization facility identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}, "required": ["facilityId", "distanceKm", "distanceSource"], "type": "object"}, "type": "array"},
           "gpsLatitude": {"description": "WGS 84 latitude in decimal degrees.", "type": "number"},
           "gpsLongitude": {"description": "WGS 84 longitude in decimal degrees.", "type": "number"},
           "id": {"description": "Resource identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "isDefault": {"description": "Whether this is the supplier default source.", "type": "boolean"},
           "name": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Source location display name, plain text, or null when unspecified."},
+          "stateRegion": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "State or region, or null when unspecified."},
           "supplierId": {"description": "Owning supplier identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
           "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "version": {"description": "Positive integer row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
         },
-        "required": ["id", "name", "archivedAt", "createdAt", "updatedAt", "version", "supplierId", "facilityDistances", "gpsLatitude", "gpsLongitude"],
+        "required": ["id", "name", "archivedAt", "createdAt", "updatedAt", "country", "stateRegion", "city", "version", "isDefault", "supplierId", "facilityDistances", "gpsLatitude", "gpsLongitude"],
         "type": "object"
       },
       "vehicle": {
@@ -704,7 +727,11 @@
     },
     "securitySchemes": {"bearerAuth": {"bearerFormat": "API key", "description": "Authorization: Bearer <key> only. Keys use noma_live_ or noma_test_ prefixes and bind exactly one organization; cookies and x-api-key cannot authorize requests.", "scheme": "bearer", "type": "http"}}
   },
-  "info": {"description": "Organization-scoped feedstock intake, production runs, biochar products, lab samples, orders and balances, and read-only customer and destination lookups, including formulations and output bin stock movement history. Business dates are facility-local YYYY-MM-DD; event times are sent as RFC 3339 with an explicit offset or as facility-local { date, time }, and returned as UTC instants. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers. Unsupported methods on visible paths return Problem405 with Allow listing supported methods, including automatic HEAD and OPTIONS. Private refusals follow bearer authentication and path visibility checks; unknown or invisible paths return 404 without Allow. Public discovery paths need no credential. This response is a path-level refusal, not a response of a published operation.", "title": "noma data-entry API", "version": "1.0.0"},
+  "info": {
+    "description": "Organization-scoped feedstock intake, production runs, biochar products, lab samples, formulations, orders and balances, suppliers, customers and destination lookups, and output bin stock movement history. Use POST /formulations with Idempotency-Key; PATCH and DELETE /formulations/{id} and POST /formulations/{id}/archive and /restore use UUID paths with If-Match (formulations:write for create, update, archive and restore; formulations:delete for delete). Use POST /suppliers with Idempotency-Key; PATCH and DELETE /suppliers/{id} and POST /suppliers/{id}/archive and /restore use UUID paths with If-Match (suppliers:write for create, update, archive and restore; suppliers:delete for delete). Use POST /customers with Idempotency-Key; PATCH and DELETE /customers/{id} and POST /customers/{id}/archive and /restore use UUID paths with If-Match (customers:write for create, update, archive and restore; customers:delete for delete). Business dates are facility-local YYYY-MM-DD; event times are sent as RFC 3339 with an explicit offset or as facility-local { date, time }, and returned as UTC instants. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers. Unsupported methods on visible paths return Problem405 with Allow listing supported methods, including automatic HEAD and OPTIONS. Private refusals follow bearer authentication and path visibility checks; unknown or invisible paths return 404 without Allow. Public discovery paths need no credential. This response is a path-level refusal, not a response of a published operation.",
+    "title": "noma data-entry API",
+    "version": "1.0.0"
+  },
   "openapi": "3.1.0",
   "paths": {
     "/applications": {
@@ -736,7 +763,7 @@
         "x-required-scope": "applications:read"
       },
       "post": {
-        "description": "Record one field application with a generated code. Mass is applied wet kg of delivered product, in steps of 0.001 kg. Dry biochar is derived and cannot be supplied. Field size is hectares. applicationDate is a YYYY-MM-DD calendar date on the delivery facility's clock, not before delivery or in the future. Never invent field size or GPS. Raw GeoJSON must be WGS 84. Boundary evidence requires a boundary on create and after merging a PATCH. Capacity is checked under the delivery lock; committed allocations are authoritative. Unknown fields answer 422 validation_failed. Missing, foreign or archived deliveries or facilities answer 404 not_found at /deliveryId. A delivery that is not delivered answers 422 at /deliveryId. Invalid dates answer 422 at /applicationDate, geometry at /gisBoundary, GPS at /gpsLatitude and field size at /fieldSizeHa. Capacity answers 409 conflict at /appliedWetMassKg with issue meta { measure: delivery_remaining_wet, availableWetKg, requestedWetKg, unit: kg }. Missing provenance and duplicate codes answer 409 conflict. Submitted lineage, Removal-owned slices and verified or issued batches refuse protected changes with 409 certification_locked. The visual evidence method is not available yet. First find a delivery with hasRemainingMass=true and read its application-balance. Omitted location GPS and soil temperature copy site defaults with warnings; explicit null on soil temperature or its source means no site default is copied. Idempotency-Key is required, including dry runs. A replay returns the stored outcome. Dry runs return 200 with Dry-Run: true and save no application, activity or audit event. Committed creates return 201, Location and ETag. Required scope: applications:write.",
+        "description": "Record one field application with a generated code. Mass is applied wet kg of delivered product, in steps of 0.001 kg. Dry biochar is derived and cannot be supplied. Field size is hectares. applicationDate is a YYYY-MM-DD calendar date on the delivery facility's clock, not before delivery or in the future. Never invent field size or GPS. Raw GeoJSON must be WGS 84. Boundary evidence requires a boundary on create and after merging a PATCH. Capacity is checked under the delivery lock; committed allocations are authoritative. Unknown fields answer 422 validation_failed. Missing, foreign or archived deliveries or facilities answer 404 not_found at /deliveryId. A delivery that is not delivered answers 422 at /deliveryId. Invalid dates answer 422 at /applicationDate, geometry at /gisBoundary, GPS at /gpsLatitude and field size at /fieldSizeHa. Capacity answers 409 conflict at /appliedWetMassKg with issue meta { measure: delivery_remaining_wet, availableWetKg, requestedWetKg, unit: kg }. Missing provenance and duplicate codes answer 409 conflict. Sent lineage and Removal-owned slices refuse protected changes with 409 certification_locked. The visual evidence method is not available yet. First find a delivery with hasRemainingMass=true and read its application-balance. Omitted location GPS and soil temperature copy site defaults with warnings; explicit null on soil temperature or its source means no site default is copied. Idempotency-Key is required, including dry runs. A replay returns the stored outcome. Dry runs return 200 with Dry-Run: true and save no application, activity or audit event. Committed creates return 201, Location and ETag. Required scope: applications:write.",
         "operationId": "record_application",
         "parameters": [{"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}}, {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required on every create, including dry runs; a dry run never consumes it. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": true, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}],
         "requestBody": {
@@ -842,7 +869,7 @@
     },
     "/applications/{idOrCode}": {
       "delete": {
-        "description": "Delete by UUID with a strong If-Match. The separate applications:delete scope is off by default. Missing If-Match answers 428; stale tags answer 412 with the current representation. Submitted lineage, Removal-owned slices and verified or issued batches answer 409 certification_locked. Archived applications can be deleted. Documents retire in the transaction; storage cleanup runs after commit. Dry runs roll back and return the representation that would be deleted. Optional idempotency keys bind to the target and If-Match and replay before precondition checks. A supplied body must be an empty JSON object. Required scope: applications:delete.",
+        "description": "Delete by UUID with a strong If-Match. The separate applications:delete scope is off by default. Missing If-Match answers 428; stale tags answer 412 with the current representation. Sent lineage and Removal-owned slices answer 409 certification_locked. Archived applications can be deleted. Documents retire in the transaction; storage cleanup runs after commit. Dry runs roll back and return the representation that would be deleted. Optional idempotency keys bind to the target and If-Match and replay before precondition checks. A supplied body must be an empty JSON object. Required scope: applications:delete.",
         "operationId": "delete_application",
         "parameters": [
           {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
@@ -904,7 +931,7 @@
         "x-required-scope": "applications:read"
       },
       "patch": {
-        "description": "Update by UUID with a strong If-Match; code paths answer 404. Missing If-Match answers 428; stale tags answer 412 with the current representation. Omitted fields stay unchanged; null clears optional fields. PATCH never copies site defaults. Repointing to another delivery is allowed. Mass is applied wet kg of delivered product, in steps of 0.001 kg. Dry biochar is derived and cannot be supplied. Field size is hectares. applicationDate is a YYYY-MM-DD calendar date on the delivery facility's clock, not before delivery or in the future. Never invent field size or GPS. Raw GeoJSON must be WGS 84. Boundary evidence requires a boundary on create and after merging a PATCH. Capacity is checked under the delivery lock; committed allocations are authoritative. Unknown fields answer 422 validation_failed. Missing, foreign or archived deliveries or facilities answer 404 not_found at /deliveryId. A delivery that is not delivered answers 422 at /deliveryId. Invalid dates answer 422 at /applicationDate, geometry at /gisBoundary, GPS at /gpsLatitude and field size at /fieldSizeHa. Capacity answers 409 conflict at /appliedWetMassKg with issue meta { measure: delivery_remaining_wet, availableWetKg, requestedWetKg, unit: kg }. Missing provenance and duplicate codes answer 409 conflict. Submitted lineage, Removal-owned slices and verified or issued batches refuse protected changes with 409 certification_locked. The visual evidence method is not available yet. Dry runs roll back and return 200 without ETag. Optional idempotency keys bind to the target and If-Match and replay before precondition checks. Required scope: applications:write.",
+        "description": "Update by UUID with a strong If-Match; code paths answer 404. Missing If-Match answers 428; stale tags answer 412 with the current representation. Omitted fields stay unchanged; null clears optional fields. PATCH never copies site defaults. Repointing to another delivery is allowed. Mass is applied wet kg of delivered product, in steps of 0.001 kg. Dry biochar is derived and cannot be supplied. Field size is hectares. applicationDate is a YYYY-MM-DD calendar date on the delivery facility's clock, not before delivery or in the future. Never invent field size or GPS. Raw GeoJSON must be WGS 84. Boundary evidence requires a boundary on create and after merging a PATCH. Capacity is checked under the delivery lock; committed allocations are authoritative. Unknown fields answer 422 validation_failed. Missing, foreign or archived deliveries or facilities answer 404 not_found at /deliveryId. A delivery that is not delivered answers 422 at /deliveryId. Invalid dates answer 422 at /applicationDate, geometry at /gisBoundary, GPS at /gpsLatitude and field size at /fieldSizeHa. Capacity answers 409 conflict at /appliedWetMassKg with issue meta { measure: delivery_remaining_wet, availableWetKg, requestedWetKg, unit: kg }. Missing provenance and duplicate codes answer 409 conflict. Sent lineage and Removal-owned slices refuse protected changes with 409 certification_locked. The visual evidence method is not available yet. Dry runs roll back and return 200 without ETag. Optional idempotency keys bind to the target and If-Match and replay before precondition checks. Required scope: applications:write.",
         "operationId": "update_application",
         "parameters": [
           {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
@@ -1340,13 +1367,14 @@
     },
     "/customers": {
       "get": {
-        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Read customer ids, codes and names without contact details. Customers do not support archiving. Required scope: customers:read.",
+        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Read customer ids, codes, names and crop types without contact details. Lists hide archived customers by default; archived=true lists only archived customers. Cursors bind the archive filter. Detail reads retain archived customers with archivedAt. Required scope: customers:read.",
         "operationId": "find_customers",
         "parameters": [
           {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
           {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
           {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
-          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}}
+          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "false lists active records (default); true lists only archived records. Exact code lookups use the selected set.", "in": "query", "name": "archived", "required": false, "schema": {"default": false, "description": "false lists active records (default); true lists only archived records. Exact code lookups use the selected set.", "type": "boolean"}}
         ],
         "responses": {
           "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"description": "Page of resources, newest first by (createdAt, id).", "items": {"$ref": "#/components/schemas/customer"}, "type": "array"}, "nextCursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Opaque cursor for the next page, or null at the end; keep filters unchanged."}}, "required": ["data", "nextCursor"], "type": "object"}}}, "description": "Resource page.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
@@ -1357,20 +1385,177 @@
           "500": {"$ref": "#/components/responses/Problem500"}
         },
         "x-required-scope": "customers:read"
+      },
+      "post": {
+        "description": "Create one customer with a generated code. Idempotency-Key is required even for dry runs (400 idempotency_key_required). A key reused with a different input answers 422 idempotency_key_reused. Create requires 1 to 50 locations with country and GPS; the last isDefault wins, otherwise the first location is default. Facility distances are one-way km from 0.001 to 20000; null removes a pair. Missing, foreign or archived facilities answer 404 not_found at /locations/{index}/facilityDistances/{index}/facilityId. Unknown keys, including contacts and nested fields, answer 422 validation_failed with JSON Pointers. Duplicate names answer 409 conflict at /name; an archived-name conflict includes the scoped party id and archived: true in error metadata. Dry runs roll back every write and Activity event, return 200 and Dry-Run, and omit ETag and Location. Deadline exhaustion answers retryable 500 deadline_exceeded. Required scope: customers:write.",
+        "operationId": "create_customer",
+        "parameters": [{"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}}, {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required on every create, including dry runs; a dry run never consumes it. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": true, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {"locations": [{"country": "Tanzania", "gpsLatitude": -8, "gpsLongitude": 34, "name": "Main site"}], "name": "New customer"},
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "cropType": {"anyOf": [{"maxLength": 100, "type": "string"}, {"type": "null"}], "description": "Crop type; null clears it."},
+                  "locations": {
+                    "description": "Initial locations in input order, from 1 to 50.",
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "city": {"anyOf": [{"maxLength": 100, "type": "string"}, {"type": "null"}], "description": "City; null clears it."},
+                        "country": {"description": "Country of the location, required on create.", "maxLength": 100, "minLength": 1, "type": "string"},
+                        "defaultSoilTemperatureC": {"anyOf": [{"maximum": 60, "minimum": -50, "type": "number"}, {"type": "null"}], "description": "Default soil temperature in degrees Celsius, from -50 to 60; null clears it."},
+                        "facilityDistances": {
+                          "description": "One-way facility distance pairs; each facility appears at most once.",
+                          "items": {"additionalProperties": false, "properties": {"distanceKm": {"anyOf": [{"maximum": 20000, "minimum": 0.001, "type": "number"}, {"type": "null"}], "description": "One-way distance in km from 0.001 to 20000; null removes the pair. The server counts the round trip."}, "distanceSource": {"description": "Distance evidence: map_estimate is a mapped route, manual is operator-entered, document is documented evidence.", "enum": ["map_estimate", "manual", "document"], "type": "string"}, "facilityId": {"description": "Facility identifier in this Organization, UUID; archived facilities cannot be newly referenced.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}, "required": ["facilityId", "distanceKm", "distanceSource"], "type": "object"},
+                          "type": "array"
+                        },
+                        "gpsLatitude": {"description": "WGS 84 latitude in decimal degrees.", "maximum": 90, "minimum": -90, "type": "number"},
+                        "gpsLongitude": {"description": "WGS 84 longitude in decimal degrees.", "maximum": 180, "minimum": -180, "type": "number"},
+                        "isDefault": {"description": "Whether to make this the default location; the last true value wins, otherwise the first location is default.", "type": "boolean"},
+                        "name": {"description": "Display name, trimmed, from 1 to 255 characters.", "maxLength": 255, "minLength": 1, "type": "string"},
+                        "siteDescription": {"anyOf": [{"maxLength": 500, "type": "string"}, {"type": "null"}], "description": "Site description, at most 500 characters; null clears it."},
+                        "stateRegion": {"anyOf": [{"maxLength": 100, "type": "string"}, {"type": "null"}], "description": "State or region; null clears it."}
+                      },
+                      "required": ["country", "gpsLatitude", "gpsLongitude", "name"],
+                      "type": "object"
+                    },
+                    "maxItems": 50,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "name": {"description": "Display name, trimmed, from 1 to 255 characters.", "maxLength": 255, "minLength": 1, "type": "string"}
+                },
+                "required": ["name", "locations"],
+                "type": "object"
+              }
+            }
+          },
+          "description": "JSON body, maximum 262144 bytes. Unknown properties are rejected.",
+          "required": true
+        },
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/customer", "description": "Created customer representation."}, "locations": {"description": "Created locations in input order, including ids, final versions and facility distance pairs.", "items": {"$ref": "#/components/schemas/customer_location"}, "type": "array"}}, "required": ["data", "locations"], "type": "object"}}}, "description": "Dry-run customer preview; provisional ids and instants.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "201": {
+            "content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/customer", "description": "Created customer representation."}, "locations": {"description": "Created locations in input order, including ids, final versions and facility distance pairs.", "items": {"$ref": "#/components/schemas/customer_location"}, "type": "array"}}, "required": ["data", "locations"], "type": "object"}}},
+            "description": "Customer committed, or replayed, at representation revision 2.",
+            "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "Location": {"$ref": "#/components/headers/Location"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
+          },
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "customers:write"
       }
     },
     "/customers/{idOrCode}": {
+      "delete": {
+        "description": "Delete by UUID, including archived rows; deletes its locations and facility pairs. Orders, including archived orders, answer 409 conflict with orderCodes metadata; registered storage-site locations answer 409 with locationIds metadata. Blockers point at /customerId. If-Match is required (428 precondition_required); a stale row version or representation revision answers 412 stale_version with current. Optional keyed replays precede domain preconditions. Dry runs roll back every write and Activity event, return 200 and Dry-Run, and omit ETag and Location. Deadline exhaustion answers retryable 500 deadline_exceeded. Required scope: customers:delete.",
+        "operationId": "delete_customer",
+        "parameters": [
+          {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
+          {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
+          {"description": "One strong ETag from the resource read: \"version.revision\", each a positive decimal safe integer (1 to 9007199254740991), without leading zeros, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\\.((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\"$", "type": "string"}},
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Optional on this method. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+        ],
+        "requestBody": {"content": {"application/json": {"example": {}, "schema": {"additionalProperties": false, "properties": {}, "type": "object"}}}, "description": "An empty object or no body; non-empty bodies require application/json, maximum 262144 bytes.", "required": false},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/customer", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Dry-run representation that would be deleted.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "204": {"description": "Deleted, or replayed; no body or ETag.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "412": {"$ref": "#/components/responses/CustomerProblem412"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "428": {"$ref": "#/components/responses/Problem428"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "customers:delete"
+      },
       "get": {
-        "description": "Read customer ids, codes and names without contact details. Customers do not support archiving. Required scope: customers:read.",
+        "description": "Read customer ids, codes, names and crop types without contact details. Lists hide archived customers by default; archived=true lists only archived customers. Cursors bind the archive filter. Detail reads retain archived customers with archivedAt. Required scope: customers:read.",
         "operationId": "get_customer",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/customer", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
         "x-required-scope": "customers:read"
+      },
+      "patch": {
+        "description": "Update by UUID only. Omission keeps and null clears nullable fields. Archived customers answer 404 not_found at /customerId before either stale precondition. Duplicate codes answer 409 conflict at /code. Locations cannot be changed here. Duplicate names answer 409 conflict at /name; an archived-name conflict includes the scoped party id and archived: true in error metadata. If-Match is required (428 precondition_required); a stale row version or representation revision answers 412 stale_version with current. Optional keyed replays precede domain preconditions. Dry runs roll back every write and Activity event, return 200 and Dry-Run, and omit ETag and Location. Deadline exhaustion answers retryable 500 deadline_exceeded. Required scope: customers:write.",
+        "operationId": "update_customer",
+        "parameters": [
+          {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
+          {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
+          {"description": "One strong ETag from the resource read: \"version.revision\", each a positive decimal safe integer (1 to 9007199254740991), without leading zeros, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\\.((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\"$", "type": "string"}},
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Optional on this method. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+        ],
+        "requestBody": {"content": {"application/json": {"example": {"name": "Renamed customer"}, "schema": {"additionalProperties": false, "properties": {"code": {"description": "Organization-unique code; omitted keeps the current code.", "maxLength": 50, "minLength": 1, "pattern": "^[A-Z0-9-]+$", "type": "string"}, "cropType": {"anyOf": [{"maxLength": 100, "type": "string"}, {"type": "null"}], "description": "Crop type; null clears it."}, "name": {"description": "Display name, trimmed, from 1 to 255 characters.", "maxLength": 255, "minLength": 1, "type": "string"}}, "type": "object"}}}, "description": "JSON body, maximum 262144 bytes. Unknown properties are rejected.", "required": true},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/customer", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Updated or dry-run representation; ETag only on commit or replay.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "412": {"$ref": "#/components/responses/CustomerProblem412"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "428": {"$ref": "#/components/responses/Problem428"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "customers:write"
+      }
+    },
+    "/customers/{idOrCode}/archive": {
+      "post": {
+        "description": "Archive a customer by UUID. Missing or foreign targets answer 404 not_found at /customerId. Already archived answers 409 conflict at /customerId after version checks. Each transition increments the version. Archive keeps existing references; restore makes the party available for new references. If-Match is required (428 precondition_required); a stale row version or representation revision answers 412 stale_version with current. Optional keyed replays precede domain preconditions. Dry runs roll back every write and Activity event, return 200 and Dry-Run, and omit ETag and Location. Deadline exhaustion answers retryable 500 deadline_exceeded. Required scope: customers:write.",
+        "operationId": "archive_customer",
+        "parameters": [
+          {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
+          {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
+          {"description": "One strong ETag from the resource read: \"version.revision\", each a positive decimal safe integer (1 to 9007199254740991), without leading zeros, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\\.((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\"$", "type": "string"}},
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Optional on this method. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+        ],
+        "requestBody": {"content": {"application/json": {"example": {}, "schema": {"additionalProperties": false, "properties": {}, "type": "object"}}}, "description": "An empty object or no body; non-empty bodies require application/json, maximum 262144 bytes.", "required": false},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/customer", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Transitioned or dry-run customer at revision 2; ETag only on commit or replay.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "412": {"$ref": "#/components/responses/CustomerProblem412"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "428": {"$ref": "#/components/responses/Problem428"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "customers:write"
       }
     },
     "/customers/{idOrCode}/locations": {
       "get": {
-        "description": "List customer destinations by parent UUID or exact code. Search matches a literal name prefix; the cursor binds the parent. facilityDistances lists one-way kilometres by facility with distanceSource; missing pairs are absent. Location edits leave existing transport legs frozen; the server counts the round trip. No contact details, address or soil temperature. Required scope: customers:read.",
+        "description": "List customer destinations by parent UUID or exact code. Search matches a literal name prefix; the cursor binds the parent. facilityDistances lists one-way kilometres by facility with distanceSource; missing pairs are absent. Location edits leave existing transport legs frozen; the server counts the round trip. Includes country, stateRegion, city, siteDescription and defaultSoilTemperatureC. Contact details stay private. Required scope: customers:read.",
         "operationId": "find_customer_locations",
         "parameters": [
           {"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}},
@@ -1388,6 +1573,36 @@
           "500": {"$ref": "#/components/responses/Problem500"}
         },
         "x-required-scope": "customers:read"
+      }
+    },
+    "/customers/{idOrCode}/restore": {
+      "post": {
+        "description": "Restore a customer by UUID. Missing or foreign targets answer 404 not_found at /customerId. Not archived answers 409 conflict at /customerId after version checks. Each transition increments the version. Archive keeps existing references; restore makes the party available for new references. If-Match is required (428 precondition_required); a stale row version or representation revision answers 412 stale_version with current. Optional keyed replays precede domain preconditions. Dry runs roll back every write and Activity event, return 200 and Dry-Run, and omit ETag and Location. Deadline exhaustion answers retryable 500 deadline_exceeded. Required scope: customers:write.",
+        "operationId": "restore_customer",
+        "parameters": [
+          {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
+          {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
+          {"description": "One strong ETag from the resource read: \"version.revision\", each a positive decimal safe integer (1 to 9007199254740991), without leading zeros, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\\.((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\"$", "type": "string"}},
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Optional on this method. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+        ],
+        "requestBody": {"content": {"application/json": {"example": {}, "schema": {"additionalProperties": false, "properties": {}, "type": "object"}}}, "description": "An empty object or no body; non-empty bodies require application/json, maximum 262144 bytes.", "required": false},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/customer", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Transitioned or dry-run customer at revision 2; ETag only on commit or replay.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "412": {"$ref": "#/components/responses/CustomerProblem412"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "428": {"$ref": "#/components/responses/Problem428"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "customers:write"
       }
     },
     "/deliveries": {
@@ -2215,13 +2430,14 @@
     },
     "/formulations": {
       "get": {
-        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: formulations:read.",
+        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Read formulation ids, codes, descriptions and recipe lines. Line ratios are shares of the solid blend. Lists hide archived formulations by default; archived=true lists only archived formulations, including exact code lookups. Cursors bind the archive filter. Detail reads retain archived formulations with archivedAt and a strong version.revision ETag. Required scope: formulations:read.",
         "operationId": "find_formulations",
         "parameters": [
           {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
           {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
           {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
-          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}}
+          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "false lists active records (default); true lists only archived records. Exact code lookups use the selected set.", "in": "query", "name": "archived", "required": false, "schema": {"default": false, "description": "false lists active records (default); true lists only archived records. Exact code lookups use the selected set.", "type": "boolean"}}
         ],
         "responses": {
           "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"description": "Page of resources, newest first by (createdAt, id).", "items": {"$ref": "#/components/schemas/formulation"}, "type": "array"}, "nextCursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Opaque cursor for the next page, or null at the end; keep filters unchanged."}}, "required": ["data", "nextCursor"], "type": "object"}}}, "description": "Resource page.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
@@ -2232,15 +2448,192 @@
           "500": {"$ref": "#/components/responses/Problem500"}
         },
         "x-required-scope": "formulations:read"
+      },
+      "post": {
+        "description": "Create one formulation with a generated code. Idempotency-Key is required even for dry runs (400 idempotency_key_required). A key reused with a different input answers 422 idempotency_key_reused. Ratios are fractions from 0 to 1 in millionth steps; known shares must sum to at most 1. Ratios guide mixing and never set masses. At most 50 lines, each with a distinct blend-usage feedstock type. Unknown properties, including nested ones, answer 422 validation_failed with JSON Pointers. Missing, foreign or newly referenced archived feedstock types answer 404 not_found at /lines/{index}/feedstockTypeId. Non-blend types answer 422 validation_failed at the same pointer. Dry runs roll back every write and Activity event, return 200 and Dry-Run, and omit ETag and Location. Deadline exhaustion answers retryable 500 deadline_exceeded. Required scope: formulations:write.",
+        "operationId": "create_formulation",
+        "parameters": [{"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}}, {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required on every create, including dry runs; a dry run never consumes it. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": true, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {"biocharRatio": 1, "lines": [], "name": "Pure biochar"},
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "biocharRatio": {"anyOf": [{"maximum": 1, "minimum": 0, "multipleOf": 0.000001, "type": "number"}, {"type": "null"}], "description": "Share of the solid blend from 0 to 1 in millionth steps, or null when unset. Guidance only; it never sets a mass."},
+                  "description": {"anyOf": [{"maxLength": 1000, "type": "string"}, {"type": "null"}], "description": "Recipe guidance, at most 1000 characters; null clears it."},
+                  "lines": {"description": "Ingredient lines in recipe order. PATCH replaces the full list when supplied; omission keeps it.", "items": {"additionalProperties": false, "properties": {"feedstockTypeId": {"description": "Organization-owned blend-usage feedstock type UUID. A newly referenced type must be active.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, "ratio": {"anyOf": [{"maximum": 1, "minimum": 0, "multipleOf": 0.000001, "type": "number"}, {"type": "null"}], "description": "Share of the solid blend from 0 to 1 in millionth steps, or null when unset. Guidance only; it never sets a mass."}}, "required": ["feedstockTypeId"], "type": "object"}, "maxItems": 50, "type": "array"},
+                  "name": {"description": "Formulation name, trimmed, from 1 to 255 characters.", "maxLength": 255, "minLength": 1, "type": "string"}
+                },
+                "required": ["name"],
+                "type": "object"
+              }
+            }
+          },
+          "description": "JSON body, maximum 262144 bytes. Unknown properties are rejected.",
+          "required": true
+        },
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/formulation", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Dry-run formulation preview; provisional ids and instants.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "201": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/formulation", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Formulation committed, or replayed, at representation revision 2.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "Location": {"$ref": "#/components/headers/Location"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "formulations:write"
       }
     },
     "/formulations/{idOrCode}": {
+      "delete": {
+        "description": "Delete an unused formulation by UUID, including an archived one. Products, product bins or orders, including archived references, answer 409 conflict at /formulationId with productCodes, binCodes or orderCodes metadata. If-Match is required (428 precondition_required); a stale row version or representation revision answers 412 stale_version with current. Optional keyed replays precede domain preconditions. Dry runs roll back every write and Activity event, return 200 and Dry-Run, and omit ETag and Location. Deadline exhaustion answers retryable 500 deadline_exceeded. Required scope: formulations:delete.",
+        "operationId": "delete_formulation",
+        "parameters": [
+          {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
+          {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
+          {"description": "One strong ETag from the resource read: \"version.revision\", each a positive decimal safe integer (1 to 9007199254740991), without leading zeros, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\\.((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\"$", "type": "string"}},
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Optional on this method. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+        ],
+        "requestBody": {"content": {"application/json": {"example": {}, "schema": {"additionalProperties": false, "properties": {}, "type": "object"}}}, "description": "An empty object or no body; non-empty bodies require application/json, maximum 262144 bytes.", "required": false},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/formulation", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Dry-run representation that would be deleted.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "204": {"description": "Deleted, or replayed; no body or ETag.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "412": {"$ref": "#/components/responses/FormulationProblem412"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "428": {"$ref": "#/components/responses/Problem428"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "formulations:delete"
+      },
       "get": {
-        "description": "Read a stable resource representation by UUID or exact code; archived lookups remain readable. Required scope: formulations:read.",
+        "description": "Read formulation ids, codes, descriptions and recipe lines. Line ratios are shares of the solid blend. Lists hide archived formulations by default; archived=true lists only archived formulations, including exact code lookups. Cursors bind the archive filter. Detail reads retain archived formulations with archivedAt and a strong version.revision ETag. Required scope: formulations:read.",
         "operationId": "get_formulation",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/formulation", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
         "x-required-scope": "formulations:read"
+      },
+      "patch": {
+        "description": "Update by UUID only. Omission keeps, null clears nullable fields, and zero stays zero. Lines replace the whole list; retained types may be archived. Archived formulations answer 404 not_found at /formulationId before either stale precondition. Duplicate codes answer 409 conflict at /code. Removing a line used by products answers 409 conflict at /lines with formulationIngredientId, feedstockTypeId and productCodes metadata. Existing products keep their snapshots. Ratios are fractions from 0 to 1 in millionth steps; known shares must sum to at most 1. Ratios guide mixing and never set masses. At most 50 lines, each with a distinct blend-usage feedstock type. Unknown properties, including nested ones, answer 422 validation_failed with JSON Pointers. Missing, foreign or newly referenced archived feedstock types answer 404 not_found at /lines/{index}/feedstockTypeId. Non-blend types answer 422 validation_failed at the same pointer. If-Match is required (428 precondition_required); a stale row version or representation revision answers 412 stale_version with current. Optional keyed replays precede domain preconditions. Dry runs roll back every write and Activity event, return 200 and Dry-Run, and omit ETag and Location. Deadline exhaustion answers retryable 500 deadline_exceeded. Required scope: formulations:write.",
+        "operationId": "update_formulation",
+        "parameters": [
+          {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
+          {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
+          {"description": "One strong ETag from the resource read: \"version.revision\", each a positive decimal safe integer (1 to 9007199254740991), without leading zeros, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\\.((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\"$", "type": "string"}},
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Optional on this method. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {"description": "Mix to the recorded shares."},
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "biocharRatio": {"anyOf": [{"maximum": 1, "minimum": 0, "multipleOf": 0.000001, "type": "number"}, {"type": "null"}], "description": "Share of the solid blend from 0 to 1 in millionth steps, or null when unset. Guidance only; it never sets a mass."},
+                  "code": {"description": "Unique formulation code. Omission keeps it; creates generate their own code.", "maxLength": 50, "minLength": 1, "pattern": "^[A-Z0-9-]+$", "type": "string"},
+                  "description": {"anyOf": [{"maxLength": 1000, "type": "string"}, {"type": "null"}], "description": "Recipe guidance, at most 1000 characters; null clears it."},
+                  "lines": {"description": "Ingredient lines in recipe order. PATCH replaces the full list when supplied; omission keeps it.", "items": {"additionalProperties": false, "properties": {"feedstockTypeId": {"description": "Organization-owned blend-usage feedstock type UUID. A newly referenced type must be active.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, "ratio": {"anyOf": [{"maximum": 1, "minimum": 0, "multipleOf": 0.000001, "type": "number"}, {"type": "null"}], "description": "Share of the solid blend from 0 to 1 in millionth steps, or null when unset. Guidance only; it never sets a mass."}}, "required": ["feedstockTypeId"], "type": "object"}, "maxItems": 50, "type": "array"},
+                  "name": {"description": "Formulation name, trimmed, from 1 to 255 characters.", "maxLength": 255, "minLength": 1, "type": "string"}
+                },
+                "type": "object"
+              }
+            }
+          },
+          "description": "JSON body, maximum 262144 bytes. Unknown properties are rejected.",
+          "required": true
+        },
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/formulation", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Updated or dry-run representation; ETag only on commit or replay.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "412": {"$ref": "#/components/responses/FormulationProblem412"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "428": {"$ref": "#/components/responses/Problem428"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "formulations:write"
+      }
+    },
+    "/formulations/{idOrCode}/archive": {
+      "post": {
+        "description": "Archive a formulation by UUID. Missing or foreign targets answer 404 not_found at /formulationId. Already archived answers 409 conflict at /formulationId after version checks. Each transition increments the version. Archive keeps existing references; restore keeps retained lines even on archived feedstock types. If-Match is required (428 precondition_required); a stale row version or representation revision answers 412 stale_version with current. Optional keyed replays precede domain preconditions. Dry runs roll back every write and Activity event, return 200 and Dry-Run, and omit ETag and Location. Deadline exhaustion answers retryable 500 deadline_exceeded. Required scope: formulations:write.",
+        "operationId": "archive_formulation",
+        "parameters": [
+          {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
+          {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
+          {"description": "One strong ETag from the resource read: \"version.revision\", each a positive decimal safe integer (1 to 9007199254740991), without leading zeros, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\\.((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\"$", "type": "string"}},
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Optional on this method. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+        ],
+        "requestBody": {"content": {"application/json": {"example": {}, "schema": {"additionalProperties": false, "properties": {}, "type": "object"}}}, "description": "An empty object or no body; non-empty bodies require application/json, maximum 262144 bytes.", "required": false},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/formulation", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Transitioned or dry-run formulation at revision 2; ETag only on commit or replay.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "412": {"$ref": "#/components/responses/FormulationProblem412"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "428": {"$ref": "#/components/responses/Problem428"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "formulations:write"
+      }
+    },
+    "/formulations/{idOrCode}/restore": {
+      "post": {
+        "description": "Restore a formulation by UUID. Missing or foreign targets answer 404 not_found at /formulationId. Not archived answers 409 conflict at /formulationId after version checks. Each transition increments the version. Archive keeps existing references; restore keeps retained lines even on archived feedstock types. If-Match is required (428 precondition_required); a stale row version or representation revision answers 412 stale_version with current. Optional keyed replays precede domain preconditions. Dry runs roll back every write and Activity event, return 200 and Dry-Run, and omit ETag and Location. Deadline exhaustion answers retryable 500 deadline_exceeded. Required scope: formulations:write.",
+        "operationId": "restore_formulation",
+        "parameters": [
+          {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
+          {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
+          {"description": "One strong ETag from the resource read: \"version.revision\", each a positive decimal safe integer (1 to 9007199254740991), without leading zeros, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\\.((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\"$", "type": "string"}},
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Optional on this method. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+        ],
+        "requestBody": {"content": {"application/json": {"example": {}, "schema": {"additionalProperties": false, "properties": {}, "type": "object"}}}, "description": "An empty object or no body; non-empty bodies require application/json, maximum 262144 bytes.", "required": false},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/formulation", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Transitioned or dry-run formulation at revision 2; ETag only on commit or replay.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "412": {"$ref": "#/components/responses/FormulationProblem412"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "428": {"$ref": "#/components/responses/Problem428"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "formulations:write"
       }
     },
     "/lab-samples": {
@@ -2690,7 +3083,7 @@
     },
     "/orders/{idOrCode}": {
       "delete": {
-        "description": "Delete by UUID with a strong If-Match. Requires orders:delete, a separate scope that is off by default. Only orders with no deliveries, including archived deliveries, can be deleted; otherwise the response is 409 conflict. An archived order without deliveries can be deleted. Certified lineage answers 409 certification_locked. The deletion retires order documents; storage cleanup runs after commit. Dry runs roll back and return the representation that would be deleted. A supplied body must be an empty JSON object. Required scope: orders:delete.",
+        "description": "Delete by UUID with a strong If-Match. Requires orders:delete, a separate scope that is off by default. Only orders with no deliveries, including archived deliveries, can be deleted; otherwise the response is 409 certification_locked. An archived order without deliveries can be deleted. Certified lineage answers 409 certification_locked. The deletion retires order documents; storage cleanup runs after commit. Dry runs roll back and return the representation that would be deleted. A supplied body must be an empty JSON object. Required scope: orders:delete.",
         "operationId": "delete_order",
         "parameters": [
           {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
@@ -2726,7 +3119,7 @@
         "x-required-scope": "orders:read"
       },
       "patch": {
-        "description": "Update by UUID with a strong If-Match; codes are not accepted in the path. Omitted fields stay unchanged; customerLocationId cannot be null or empty. Changing customerId requires a customerLocationId belonging to the new customer; otherwise the response is 422 validation_failed (Delivery location belongs to a different customer). Facility, customer, customer location and formulation freeze once any delivery exists, including archived deliveries. Archived orders cannot be updated. Quantity is requested wet product kg. On create, omitted packaging defaults to the organization setting. On update, omission keeps the stored packaging. orderDate is a calendar date (YYYY-MM-DD), not an event instant. An order does not reserve stock. Missing, foreign or archived references answer 404 not_found with a pointer. Duplicate codes and relationships frozen by deliveries answer 409 conflict. Certified lineage answers 409 certification_locked. Invalid input answers 422 validation_failed; a quantity below allocations includes allocatedWetKg and unit kg in issue metadata. Dry runs roll back; keyed replays precede precondition checks. Required scope: orders:write.",
+        "description": "Update by UUID with a strong If-Match; codes are not accepted in the path. Omitted fields stay unchanged; customerLocationId cannot be null or empty. Changing customerId requires a customerLocationId belonging to the new customer; otherwise the response is 422 validation_failed (Delivery location belongs to a different customer). Facility, customer, customer location and formulation freeze once any delivery exists, including archived deliveries. Archived orders cannot be updated. Quantity is requested wet product kg. On create, omitted packaging defaults to the organization setting. On update, omission keeps the stored packaging. orderDate is a calendar date (YYYY-MM-DD), not an event instant. An order does not reserve stock. Missing, foreign or archived references answer 404 not_found with a pointer. Duplicate codes answer 409 conflict. Relationships frozen by deliveries and Sent lineage answer 409 certification_locked. Invalid input answers 422 validation_failed; a quantity below allocations includes allocatedWetKg and unit kg in issue metadata. Dry runs roll back; keyed replays precede precondition checks. Required scope: orders:write.",
         "operationId": "update_order",
         "parameters": [
           {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
@@ -3197,13 +3590,14 @@
     },
     "/suppliers": {
       "get": {
-        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: suppliers:read.",
+        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Read supplier ids, codes, names and sourceRegion without contact details. Lists hide archived suppliers by default; archived=true lists only archived suppliers. Cursors bind the archive filter. Detail reads retain archived suppliers with archivedAt. Required scope: suppliers:read.",
         "operationId": "find_suppliers",
         "parameters": [
           {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
           {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
           {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
-          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}}
+          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "false lists active records (default); true lists only archived records. Exact code lookups use the selected set.", "in": "query", "name": "archived", "required": false, "schema": {"default": false, "description": "false lists active records (default); true lists only archived records. Exact code lookups use the selected set.", "type": "boolean"}}
         ],
         "responses": {
           "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"description": "Page of resources, newest first by (createdAt, id).", "items": {"$ref": "#/components/schemas/supplier"}, "type": "array"}, "nextCursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Opaque cursor for the next page, or null at the end; keep filters unchanged."}}, "required": ["data", "nextCursor"], "type": "object"}}}, "description": "Resource page.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
@@ -3214,20 +3608,175 @@
           "500": {"$ref": "#/components/responses/Problem500"}
         },
         "x-required-scope": "suppliers:read"
+      },
+      "post": {
+        "description": "Create one supplier with a generated code. Idempotency-Key is required even for dry runs (400 idempotency_key_required). A key reused with a different input answers 422 idempotency_key_reused. Create requires 1 to 50 locations with country and GPS; the last isDefault wins, otherwise the first location is default. Facility distances are one-way km from 0.001 to 20000; null removes a pair. Missing, foreign or archived facilities answer 404 not_found at /locations/{index}/facilityDistances/{index}/facilityId. Unknown keys, including contacts and nested fields, answer 422 validation_failed with JSON Pointers. Duplicate names answer 409 conflict at /name; an archived-name conflict includes the scoped party id and archived: true in error metadata. Dry runs roll back every write and Activity event, return 200 and Dry-Run, and omit ETag and Location. Deadline exhaustion answers retryable 500 deadline_exceeded. Required scope: suppliers:write.",
+        "operationId": "create_supplier",
+        "parameters": [{"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}}, {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required on every create, including dry runs; a dry run never consumes it. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": true, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {"locations": [{"country": "Tanzania", "gpsLatitude": -8, "gpsLongitude": 34, "name": "Main site"}], "name": "New supplier"},
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "locations": {
+                    "description": "Initial locations in input order, from 1 to 50.",
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "city": {"anyOf": [{"maxLength": 100, "type": "string"}, {"type": "null"}], "description": "City; null clears it."},
+                        "country": {"description": "Country of the location, required on create.", "maxLength": 100, "minLength": 1, "type": "string"},
+                        "facilityDistances": {
+                          "description": "One-way facility distance pairs; each facility appears at most once.",
+                          "items": {"additionalProperties": false, "properties": {"distanceKm": {"anyOf": [{"maximum": 20000, "minimum": 0.001, "type": "number"}, {"type": "null"}], "description": "One-way distance in km from 0.001 to 20000; null removes the pair. The server counts the round trip."}, "distanceSource": {"description": "Distance evidence: map_estimate is a mapped route, manual is operator-entered, document is documented evidence.", "enum": ["map_estimate", "manual", "document"], "type": "string"}, "facilityId": {"description": "Facility identifier in this Organization, UUID; archived facilities cannot be newly referenced.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}, "required": ["facilityId", "distanceKm", "distanceSource"], "type": "object"},
+                          "type": "array"
+                        },
+                        "gpsLatitude": {"description": "WGS 84 latitude in decimal degrees.", "maximum": 90, "minimum": -90, "type": "number"},
+                        "gpsLongitude": {"description": "WGS 84 longitude in decimal degrees.", "maximum": 180, "minimum": -180, "type": "number"},
+                        "isDefault": {"description": "Whether to make this the default location; the last true value wins, otherwise the first location is default.", "type": "boolean"},
+                        "name": {"anyOf": [{"maxLength": 255, "type": "string"}, {"type": "null"}], "description": "Source location display name; null clears it."},
+                        "stateRegion": {"anyOf": [{"maxLength": 100, "type": "string"}, {"type": "null"}], "description": "State or region; null clears it."}
+                      },
+                      "required": ["country", "gpsLatitude", "gpsLongitude"],
+                      "type": "object"
+                    },
+                    "maxItems": 50,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "name": {"description": "Display name, trimmed, from 1 to 255 characters.", "maxLength": 255, "minLength": 1, "type": "string"},
+                  "sourceRegion": {"anyOf": [{"maxLength": 255, "type": "string"}, {"type": "null"}], "description": "Source region; null clears it."}
+                },
+                "required": ["name", "locations"],
+                "type": "object"
+              }
+            }
+          },
+          "description": "JSON body, maximum 262144 bytes. Unknown properties are rejected.",
+          "required": true
+        },
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/supplier", "description": "Created supplier representation."}, "locations": {"description": "Created locations in input order, including ids, final versions and facility distance pairs.", "items": {"$ref": "#/components/schemas/supplier_location"}, "type": "array"}}, "required": ["data", "locations"], "type": "object"}}}, "description": "Dry-run supplier preview; provisional ids and instants.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "201": {
+            "content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/supplier", "description": "Created supplier representation."}, "locations": {"description": "Created locations in input order, including ids, final versions and facility distance pairs.", "items": {"$ref": "#/components/schemas/supplier_location"}, "type": "array"}}, "required": ["data", "locations"], "type": "object"}}},
+            "description": "Supplier committed, or replayed, at representation revision 2.",
+            "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "Location": {"$ref": "#/components/headers/Location"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
+          },
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "suppliers:write"
       }
     },
     "/suppliers/{idOrCode}": {
+      "delete": {
+        "description": "Delete by UUID, including archived rows; deletes its locations and facility pairs. Intakes, including archived intakes, answer 409 conflict with feedstockCodes metadata. Blockers point at /supplierId. If-Match is required (428 precondition_required); a stale row version or representation revision answers 412 stale_version with current. Optional keyed replays precede domain preconditions. Dry runs roll back every write and Activity event, return 200 and Dry-Run, and omit ETag and Location. Deadline exhaustion answers retryable 500 deadline_exceeded. Required scope: suppliers:delete.",
+        "operationId": "delete_supplier",
+        "parameters": [
+          {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
+          {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
+          {"description": "One strong ETag from the resource read: \"version.revision\", each a positive decimal safe integer (1 to 9007199254740991), without leading zeros, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\\.((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\"$", "type": "string"}},
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Optional on this method. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+        ],
+        "requestBody": {"content": {"application/json": {"example": {}, "schema": {"additionalProperties": false, "properties": {}, "type": "object"}}}, "description": "An empty object or no body; non-empty bodies require application/json, maximum 262144 bytes.", "required": false},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/supplier", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Dry-run representation that would be deleted.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "204": {"description": "Deleted, or replayed; no body or ETag.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "412": {"$ref": "#/components/responses/SupplierProblem412"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "428": {"$ref": "#/components/responses/Problem428"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "suppliers:delete"
+      },
       "get": {
-        "description": "Read a stable resource representation by UUID or exact code; archived lookups remain readable. Required scope: suppliers:read.",
+        "description": "Read supplier ids, codes, names and sourceRegion without contact details. Lists hide archived suppliers by default; archived=true lists only archived suppliers. Cursors bind the archive filter. Detail reads retain archived suppliers with archivedAt. Required scope: suppliers:read.",
         "operationId": "get_supplier",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/supplier", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
         "x-required-scope": "suppliers:read"
+      },
+      "patch": {
+        "description": "Update by UUID only. Omission keeps and null clears nullable fields. Archived suppliers answer 404 not_found at /supplierId before either stale precondition. Duplicate codes answer 409 conflict at /code. Locations cannot be changed here. Duplicate names answer 409 conflict at /name; an archived-name conflict includes the scoped party id and archived: true in error metadata. If-Match is required (428 precondition_required); a stale row version or representation revision answers 412 stale_version with current. Optional keyed replays precede domain preconditions. Dry runs roll back every write and Activity event, return 200 and Dry-Run, and omit ETag and Location. Deadline exhaustion answers retryable 500 deadline_exceeded. Required scope: suppliers:write.",
+        "operationId": "update_supplier",
+        "parameters": [
+          {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
+          {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
+          {"description": "One strong ETag from the resource read: \"version.revision\", each a positive decimal safe integer (1 to 9007199254740991), without leading zeros, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\\.((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\"$", "type": "string"}},
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Optional on this method. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+        ],
+        "requestBody": {"content": {"application/json": {"example": {"name": "Renamed supplier"}, "schema": {"additionalProperties": false, "properties": {"code": {"description": "Organization-unique code; omitted keeps the current code.", "maxLength": 50, "minLength": 1, "pattern": "^[A-Z0-9-]+$", "type": "string"}, "name": {"description": "Display name, trimmed, from 1 to 255 characters.", "maxLength": 255, "minLength": 1, "type": "string"}, "sourceRegion": {"anyOf": [{"maxLength": 255, "type": "string"}, {"type": "null"}], "description": "Source region; null clears it."}}, "type": "object"}}}, "description": "JSON body, maximum 262144 bytes. Unknown properties are rejected.", "required": true},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/supplier", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Updated or dry-run representation; ETag only on commit or replay.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "412": {"$ref": "#/components/responses/SupplierProblem412"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "428": {"$ref": "#/components/responses/Problem428"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "suppliers:write"
+      }
+    },
+    "/suppliers/{idOrCode}/archive": {
+      "post": {
+        "description": "Archive a supplier by UUID. Missing or foreign targets answer 404 not_found at /supplierId. Already archived answers 409 conflict at /supplierId after version checks. Each transition increments the version. Archive keeps existing references; restore makes the party available for new references. If-Match is required (428 precondition_required); a stale row version or representation revision answers 412 stale_version with current. Optional keyed replays precede domain preconditions. Dry runs roll back every write and Activity event, return 200 and Dry-Run, and omit ETag and Location. Deadline exhaustion answers retryable 500 deadline_exceeded. Required scope: suppliers:write.",
+        "operationId": "archive_supplier",
+        "parameters": [
+          {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
+          {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
+          {"description": "One strong ETag from the resource read: \"version.revision\", each a positive decimal safe integer (1 to 9007199254740991), without leading zeros, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\\.((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\"$", "type": "string"}},
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Optional on this method. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+        ],
+        "requestBody": {"content": {"application/json": {"example": {}, "schema": {"additionalProperties": false, "properties": {}, "type": "object"}}}, "description": "An empty object or no body; non-empty bodies require application/json, maximum 262144 bytes.", "required": false},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/supplier", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Transitioned or dry-run supplier at revision 2; ETag only on commit or replay.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "412": {"$ref": "#/components/responses/SupplierProblem412"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "428": {"$ref": "#/components/responses/Problem428"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "suppliers:write"
       }
     },
     "/suppliers/{idOrCode}/locations": {
       "get": {
-        "description": "List supplier source locations by parent UUID only. Search matches a literal name prefix; the cursor also binds the parent. facilityDistances lists one-way kilometres by facility with distanceSource; missing pairs are absent. GPS-derived distances are estimates. Location edits leave existing transport legs frozen. Required scope: suppliers:read.",
+        "description": "List supplier source locations by parent UUID only. Search matches a literal name prefix; the cursor also binds the parent. facilityDistances lists one-way kilometres by facility with distanceSource; missing pairs are absent. GPS-derived distances are estimates. Location edits leave existing transport legs frozen. Includes country, stateRegion, city and isDefault. Required scope: suppliers:read.",
         "operationId": "find_supplier_locations",
         "parameters": [
           {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
@@ -3245,6 +3794,36 @@
           "500": {"$ref": "#/components/responses/Problem500"}
         },
         "x-required-scope": "suppliers:read"
+      }
+    },
+    "/suppliers/{idOrCode}/restore": {
+      "post": {
+        "description": "Restore a supplier by UUID. Missing or foreign targets answer 404 not_found at /supplierId. Not archived answers 409 conflict at /supplierId after version checks. Each transition increments the version. Archive keeps existing references; restore makes the party available for new references. If-Match is required (428 precondition_required); a stale row version or representation revision answers 412 stale_version with current. Optional keyed replays precede domain preconditions. Dry runs roll back every write and Activity event, return 200 and Dry-Run, and omit ETag and Location. Deadline exhaustion answers retryable 500 deadline_exceeded. Required scope: suppliers:write.",
+        "operationId": "restore_supplier",
+        "parameters": [
+          {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
+          {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
+          {"description": "One strong ETag from the resource read: \"version.revision\", each a positive decimal safe integer (1 to 9007199254740991), without leading zeros, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\\.((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\"$", "type": "string"}},
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Optional on this method. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+        ],
+        "requestBody": {"content": {"application/json": {"example": {}, "schema": {"additionalProperties": false, "properties": {}, "type": "object"}}}, "description": "An empty object or no body; non-empty bodies require application/json, maximum 262144 bytes.", "required": false},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/supplier", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Transitioned or dry-run supplier at revision 2; ETag only on commit or replay.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "412": {"$ref": "#/components/responses/SupplierProblem412"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "428": {"$ref": "#/components/responses/Problem428"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "suppliers:write"
       }
     },
     "/vehicles": {

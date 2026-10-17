@@ -18,6 +18,7 @@ import type { FeedstockType } from "@/db/schema";
 import { ServerError } from "@/components/forms";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { DeleteConflictNotice, isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
 import {
   EntitySideSheet,
   type SideSheetMode,
@@ -53,7 +54,6 @@ import {
 import { FeedstockTypeForm } from "./feedstock-type-form";
 import { feedstockTypeSheetSections, titleCase } from "./feedstock-type-read-sections";
 import { IsometricFeedstockImportDialog } from "./isometric-feedstock-import-dialog";
-import { Notice } from "@/components/ui/notice";
 
 type ArchiveFilter = "all" | "active" | "archived";
 
@@ -99,39 +99,14 @@ export function IsometricLinkedBadge() {
   );
 }
 
-export function FeedstockDeleteConflictNotice({
-  name,
-  onArchive,
-  isPending,
-}: {
-  name: string;
-  onArchive: () => void;
-  isPending: boolean;
-}) {
-  return (
-    <Notice
-      tone="warning"
-      title={`${name} is in use and cannot be deleted.`}
-      action={
-        <Button variant="default" onClick={onArchive} busy={isPending}>
-          <ArchiveIcon size={16} weight="bold" />
-          Archive instead
-        </Button>
-      }
-    >
-      Archive it instead. Historical records keep the type, while active pickers hide it.
-    </Notice>
-  );
-}
-
 function createColumns(params: {
   canManage: boolean;
   onEdit: (feedstockType: FeedstockType) => void;
   onArchive: (feedstockType: FeedstockType) => void;
-  onUnarchive: (feedstockType: FeedstockType) => void;
+  onRestore: (feedstockType: FeedstockType) => void;
   onDelete: (feedstockType: FeedstockType) => void;
 }): ColumnDef<FeedstockType>[] {
-  const { canManage, onEdit, onArchive, onUnarchive, onDelete } = params;
+  const { canManage, onEdit, onArchive, onRestore, onDelete } = params;
   const columns: ColumnDef<FeedstockType>[] = [
     {
       accessorKey: "name",
@@ -210,7 +185,7 @@ function createColumns(params: {
             actions={[
               { label: "Edit", onSelect: () => onEdit(row.original) },
               row.original.archivedAt
-                ? { label: "Unarchive", onSelect: () => onUnarchive(row.original) }
+                ? { label: "Restore", onSelect: () => onRestore(row.original) }
                 : { label: "Archive", onSelect: () => onArchive(row.original) },
               {
                 label: "Delete",
@@ -359,10 +334,10 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     }
   };
 
-  const handleUnarchive = async (entity: FeedstockType) => {
+  const handleRestore = async (entity: FeedstockType) => {
     try {
       await unarchiveFeedstockType.mutateAsync({ feedstockTypeId: entity.id, expectedVersion: entity.version });
-      toast.success("Feedstock type unarchived");
+      toast.success("Feedstock type restored");
     } catch (error) {
       toast.error(toArchiveRestoreErrorMessage(error, `Feedstock type ${entity.code}`, "restore", "The feedstock type was not restored. Try again."));
     }
@@ -375,7 +350,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       toast.success("Feedstock type deleted.");
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Feedstock type ${deletingType.code}`, "Feedstock type was not deleted. Try again.");
-      if (message.toLowerCase().includes("archive it instead")) {
+      if (isInUseDeleteRefusal(message)) {
         setDeleteConflict(deletingType);
       } else {
         toast.error(message);
@@ -389,7 +364,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     canManage,
     onEdit: openEdit,
     onArchive: handleArchive,
-    onUnarchive: handleUnarchive,
+    onRestore: handleRestore,
     onDelete: setDeletingType,
   });
 
@@ -474,8 +449,8 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       </div>
 
       {deleteConflict && (
-        <FeedstockDeleteConflictNotice
-          name={deleteConflict.name}
+        <DeleteConflictNotice
+          label={deleteConflict.code}
           onArchive={() => handleArchive(deleteConflict)}
           isPending={archiveFeedstockType.isPending}
         />
