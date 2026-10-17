@@ -114,9 +114,12 @@ export function hydrateCo2ePreview(
 export function CreditBatchList({
   canManage = false,
   initialCreate = false,
+  emissionsEntriesEnabled = false,
 }: {
   canManage?: boolean;
   initialCreate?: boolean;
+  /** Server flag EMISSIONS_ENTRIES_ENABLED; mounts the Emissions panel. */
+  emissionsEntriesEnabled?: boolean;
 }) {
   // Filter & pagination state
   const [searchQuery, setSearchQuery] = useState("");
@@ -730,6 +733,7 @@ export function CreditBatchList({
                   : batchHealthSummaries[sideSheetEntity.id],
                 isHealthLoading: healthLoading && !healthError,
                 canManage,
+                emissionsEntriesEnabled,
                 locked: sideSheetLocked,
                 activeFocusTarget:
                   sideSheetEntity.id === focusedBatchId

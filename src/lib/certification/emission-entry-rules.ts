@@ -65,6 +65,7 @@ export function validateEmissionEntry(args: {
   timezone: string;
   now?: Date;
   activeValueCount: number;
+  dateDefaulted?: boolean;
 }) {
   const line = entryLine(args.observation, args.componentId);
   if (!line) throw new SafeError("This template line is no longer available. Choose another line.");
@@ -122,11 +123,7 @@ export function validateEmissionEntry(args: {
     } else if (detail)
       throw new SafeError("Mass and distance detail is only supported for mass-distance inputs.");
   }
-  if (!z.iso.date().safeParse(args.occurredOn).success) throw new SafeError("Enter a valid entry date.");
-  if (args.occurredOn < args.batchStartDate)
-    throw new SafeError("Entry date cannot be before the credit batch start date.");
-  if (args.occurredOn > formatFacilityDate(args.now ?? new Date(), args.timezone))
-    throw new SafeError("Entry date cannot be in the future at this facility.");
+  validateEntryDate(args);
   return { inputShape: shape, lineRule: line.entryPolicy as "additive" | "single" };
 }
 export function emissionEntryCounts(
@@ -161,8 +158,8 @@ export function emissionEntryCounts(
     return incompatible;
   const change = compareTemplateObservations(previous, current)[componentId];
   const contractsMatch =
-    canonicalJson({ ...before.contract, origin: undefined }) ===
-    canonicalJson({ ...after.contract, origin: undefined });
+    canonicalJson({ ...before.contract, origin: undefined, templateOrder: undefined }) ===
+    canonicalJson({ ...after.contract, origin: undefined, templateOrder: undefined });
   if ((change === "unchanged" || change === "cosmetic") && contractsMatch)
     return { counts: true, reason: null, canConfirm: true };
   return { counts: false, reason: "Confirm this entry for the changed template line.", canConfirm: true };
@@ -189,4 +186,32 @@ export function normalizedEntryValues(values: Omit<EntryValueInput, "quantityKin
         : null,
     }))
     .sort((a, b) => a.inputKey.localeCompare(b.inputKey));
+}
+
+/** Single lines cover the batch. Other omitted dates use the facility clock within its window. */
+export function resolveEmissionEntryDate(args: {
+  entryPolicy: "additive" | "single" | "none";
+  occurredOn?: string;
+  batchStartDate: string;
+  batchEndDate: string | null;
+  timezone: string;
+  now?: Date;
+}): string {
+  if (args.entryPolicy === "single") return args.batchStartDate;
+  if (args.occurredOn !== undefined) return args.occurredOn;
+  const today = formatFacilityDate(args.now ?? new Date(), args.timezone);
+  const capped = args.batchEndDate && today > args.batchEndDate ? args.batchEndDate : today;
+  return capped < args.batchStartDate ? args.batchStartDate : capped;
+}
+
+export function validateEntryDate(args: {
+  occurredOn: string; batchStartDate: string; timezone: string; now?: Date;
+  dateDefaulted?: boolean;
+}) {
+  if (!z.iso.date().safeParse(args.occurredOn).success) throw new SafeError("Enter a valid entry date.");
+  if (args.occurredOn < args.batchStartDate)
+    throw new SafeError("Entry date cannot be before the credit batch start date.");
+  if (args.occurredOn > formatFacilityDate(args.now ?? new Date(), args.timezone) &&
+      !(args.dateDefaulted && args.occurredOn === args.batchStartDate))
+    throw new SafeError("Entry date cannot be in the future at this facility.");
 }

@@ -33,10 +33,11 @@ Operators can fill every line of the target Removal template ("LCA based templat
 |---|---|
 | Operating lines | Stay on each Removal and are entered per batch. #1020 drops the move to project level. |
 | Pyrolyzer CO, CH₄ | Ordinary entries per batch, typed by the operator. The form shows Cula's line description (with the 36,792 / 17,520 formula) and the batch's dry feedstock beside the gas-mass field. Nothing is computed for the operator. |
+| Entry dates (2026-10-16) | Single lines cover the whole batch and store its start date; other create dates are optional and default to facility today clamped to the batch window. Explicit dates keep their validation; updates never move single-line dates. |
 | Sample shipping | Entered per line. Sample transport legs are hidden in the app, API and MCP, and stop feeding Removals. There is no production data to keep. Sample labs are deferred. |
 | Lab electricity, consumables | Typed per batch with evidence. |
 | Project-wide flight | Goes on one batch the operator picks. |
-| Empty lines | Shown as "Not recorded" on the batch sheet (`docs/ux-writing.md`, missing values; Kenji, 2026-10-15, replacing "0 so far"). They show 0 only once confirmed. In the Removal flow, one confirmation covers all empty lines and records a zero per line. |
+| Empty lines | Shown as "Not recorded" on the batch sheet (`docs/ux-writing.md`, missing values; Kenji, 2026-10-15, replacing "0 so far"). They show 0 only once confirmed. In the Removal flow, one confirmation covers the empty lines and records a zero per line. |
 | Extra fuel or electricity | Added on top of the run figures. The form shows the run total and the earlier entries, and the sum is sent. |
 | Meter readings | While a template asks for readings, the operator enters both. The form follows the template: two fields if it has two inputs, one if it has one. |
 | Late entries | Go on the next Removal from the same batch. If none is left, they go on the facility's next Removal covering their date (§7, deferred to #1059). |
@@ -136,7 +137,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 | `removalTemplateId`, `componentId`, `inputShape`, `lineRule` | The binding. `lineRule` is `additive` or `single`. |
 | `observationId` | The template observation the entry was written against |
 | `kind` | `value` or `zero`. `zero` is written only by the Removal-flow confirmation. |
-| `confirmedForRemovalId` | Set only on `zero` rows: the draft Removal whose confirmation wrote it. Separate from the sent claim. |
+| `confirmedForRemovalId` | Required on `zero` rows: the draft Removal whose confirmation wrote it. Null on value rows. Separate from the sent claim. |
 | `occurredOn` | Date in the facility time zone. Not before the batch start date, not in the future. The entry window (§4.5) starts at the same date, so every accepted date has a Removal that can carry it. |
 | `note`, `createdBy`, timestamps | |
 | `version` | Concurrency only: bumped by every write, claims included |
@@ -145,11 +146,12 @@ Operators can fill every line of the target Removal template ("LCA based templat
 | `sentByRemovalId`, `sendReservedBySubmissionId` | Entry claim |
 
 - Partial unique index on `(creditBatchId, removalTemplateId, componentId)` where `lineRule = 'single'`, `kind = 'value'` and `deletedAt` is null.
-- **Confirmed zeros** belong to the draft Removal that confirmed them, through `confirmedForRemovalId`, never through the pool of eligible entries:
+- **Removal-confirmed zeros** belong to the draft Removal that confirmed them, through `confirmedForRemovalId`, never through the pool of eligible entries:
   - unique per `(confirmedForRemovalId, creditBatchId, componentId)` where `deletedAt` is null; a multi-batch Removal writes one zero per member batch and line;
   - reservation, stamping and retries carry them like that Removal's other entries;
   - releasing an attempt keeps them on the draft; deleting the draft, or superseding it, tombstones them; they never return to the pool, so no other Removal can send them;
   - adding a value entry to a line tombstones that line's zeros on every unsubmitted draft that owns one.
+- Isometric receives 0 for the line with no file; the note stays in noma.
 - On a follow-up Removal of the same batch, a `single` line whose value an earlier Removal already sent counts as sent, not empty. It is omitted like a production component (ADR 0020) and needs no zero confirmation.
 
 **`emission_entry_values`**
@@ -240,9 +242,12 @@ Operators can fill every line of the target Removal template ("LCA based templat
 **Per-batch view**
 - The batch filter and period preset move into the URL (#841).
 - A selected batch shows every line of its template, with its state from §4.3, the automatic figure, the entries and the total.
+- Kenji dropped the per-line zero action on 2026-10-17 in the #1140 review; empty lines read "Not recorded" and each row offers "Add manual entry".
+- Facility activity totals include counting value entries only on lines with a facility energy automatic source, never manual-only lab or travel lines.
 - "Add entry" opens the form for that line's shape. Estimates (ADR 0031) keep their "est." treatment.
 
 **Forms**
+- Single lines take no operator date and store the batch start; other create dates are optional, defaulting to facility today clamped to the batch window (Kenji, 2026-10-16).
 - Each form shows the line name and description, the unit, the existing figures and an evidence drop zone.
 - Forms follow `docs/forms.md` and `docs/ux-writing.md`.
 - An additive form says "Adds to 120 L from runs" before save.
