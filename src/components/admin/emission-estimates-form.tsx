@@ -13,6 +13,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui";
 import {
+  FormActions,
   FormField,
   FormInput,
   SectionLabel,
@@ -39,6 +40,19 @@ interface EmissionEstimatesFormProps {
   durabilityOption: "200_year" | "1000_year";
 }
 
+/** Inputs hold strings, so a baseline must too or retyping a saved value reads dirty. */
+function toInputValues(
+  facilityId: string,
+  temperature: number | null | undefined,
+  source: string | null | undefined,
+) {
+  return {
+    facilityId,
+    defaultSoilTemperatureC: temperature == null ? "" : String(temperature),
+    defaultSoilTemperatureSource: source ?? "",
+  };
+}
+
 export function EmissionEstimatesForm({
   facilityId,
   mapping,
@@ -50,17 +64,18 @@ export function EmissionEstimatesForm({
 
   const {
     register,
+    control,
     handleSubmit,
+    reset,
     setError,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(facilityEmissionConfigSchema),
-    defaultValues: {
+    defaultValues: toInputValues(
       facilityId,
-      defaultSoilTemperatureC: mapping?.defaultSoilTemperatureC ?? undefined,
-      defaultSoilTemperatureSource:
-        mapping?.defaultSoilTemperatureSource ?? undefined,
-    },
+      mapping?.defaultSoilTemperatureC,
+      mapping?.defaultSoilTemperatureSource,
+    ),
   });
 
   if (!mapping) {
@@ -88,7 +103,16 @@ export function EmissionEstimatesForm({
 
   const onSubmit = async (raw: unknown) => {
     try {
-      await saveMutation.mutateAsync(raw as FacilityEmissionConfigFormData);
+      const values = raw as FacilityEmissionConfigFormData;
+      await saveMutation.mutateAsync(values);
+      // Saved values are the new baseline, so the form is no longer unsaved.
+      reset(
+        toInputValues(
+          facilityId,
+          values.defaultSoilTemperatureC,
+          values.defaultSoilTemperatureSource,
+        ),
+      );
       toast.success("Emission estimates saved");
     } catch (error) {
       setError("root.serverError", {
@@ -105,6 +129,10 @@ export function EmissionEstimatesForm({
       className="content-measure-form flex flex-col gap-32"
     >
       <input type="hidden" {...register("facilityId")} />
+      {/* Renders no footer here (the Save button below is this form's own);
+          it only reports this form's dirty state to a surrounding unsaved-
+          changes guard such as the settings rail. */}
+      <FormActions control={control} showSubmit={false} />
 
       <div className="flex flex-col gap-16">
         <SectionLabel>Soil durability reference</SectionLabel>
@@ -122,6 +150,7 @@ export function EmissionEstimatesForm({
             id="defaultSoilTemperatureC"
             type="number"
             step="any"
+            readOnly={isSubmitting}
             error={!!errors.defaultSoilTemperatureC}
             {...register("defaultSoilTemperatureC")}
           />
@@ -136,6 +165,7 @@ export function EmissionEstimatesForm({
             id="defaultSoilTemperatureSource"
             type="text"
             maxLength={SOIL_TEMPERATURE_SOURCE_MAX_LENGTH}
+            readOnly={isSubmitting}
             error={!!errors.defaultSoilTemperatureSource}
             {...register("defaultSoilTemperatureSource")}
           />
