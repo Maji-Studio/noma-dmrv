@@ -19,6 +19,6 @@ describe("assertCreditBatchProductionWindow", () => {
 
   it("retains the Isometric refusal as a SafeError with the same message", () => {
     expect(() => assertCreditBatchProductionWindow("2026-01-01", "2026-04-30", "isometric"))
-      .toThrow(new SafeError("Choose an end date on or before 2026-01-31. Isometric credit batches must cover less than one month."));
+      .toThrow(new SafeError("Choose an end date on or before Jan 31, 2026. Isometric credit batches must cover less than one month."));
   });
 });

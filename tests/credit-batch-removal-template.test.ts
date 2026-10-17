@@ -127,7 +127,7 @@ describe("credit batch Removal template pins", () => {
 
       await expect(updateCreditBatch(ctx, batch.id, {
         facilityId, expectedVersion: moved.version,
-      })).rejects.toThrow("Choose an end date on or before 2027-01-31. Isometric credit batches must cover less than one month.");
+      })).rejects.toThrow("Choose an end date on or before Jan 31, 2027. Isometric credit batches must cover less than one month.");
       expect(await pinOf(batch.id)).toMatchObject({ facilityId: target, certifier: null, version: moved.version });
 
       const restored = await updateCreditBatch(ctx, batch.id, {
@@ -140,7 +140,7 @@ describe("credit batch Removal template pins", () => {
   it("keeps the Isometric month cap on create, update, and run options", async () => {
     const batch = await create("08");
     const period = { startDate: new Date("2026-09-01"), endDate: new Date("2026-12-31") };
-    const message = "Choose an end date on or before 2026-09-30. Isometric credit batches must cover less than one month.";
+    const message = "Choose an end date on or before Sep 30, 2026. Isometric credit batches must cover less than one month.";
     await expect(createCreditBatch(ctx, {
       facilityId, feedstockTypeId, code: `CB-PIN-POLICY-${tag}`, productionRunIds: [], ...period,
     })).rejects.toThrow(message);

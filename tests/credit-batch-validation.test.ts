@@ -572,7 +572,7 @@ describe("Credit Batch Production-Run Validation", () => {
       startDate: "2025-06-01",
       endDate: "2025-09-30",
     };
-    const message = "Choose an end date on or before 2025-06-30. Isometric credit batches must cover less than one month.";
+    const message = "Choose an end date on or before Jun 30, 2025. Isometric credit batches must cover less than one month.";
     const calls = [
       () => db.transaction((tx) => assertNoOverlappingCreditBatchCohort(ctx, tx, period)),
       () => db.transaction((tx) => findMatchingUnassignedProductionRunIds(ctx, tx, period)),

@@ -42,7 +42,7 @@ describe("creditBatchFormSchema — production window", () => {
 
   it("states the last allowed end date", () => {
     expect(getCreditBatchProductionWindowIssue("2026-01-01", "2026-02-02"))
-      .toBe("Choose an end date on or before 2026-01-31. Isometric credit batches must cover less than one month.");
+      .toBe("Choose an end date on or before Jan 31, 2026. Isometric credit batches must cover less than one month.");
   });
 
   it("accepts a window under one month", () => {

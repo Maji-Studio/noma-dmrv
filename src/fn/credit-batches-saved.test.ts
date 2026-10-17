@@ -109,7 +109,7 @@ describe("createCreditBatchFn", () => {
       .toMatchObject({
         success: false,
         code: "validation_failed",
-        issues: [{ path: ["endDate"], message: "Choose an end date on or before 2026-01-31. Isometric credit batches must cover less than one month." }],
+        issues: [{ path: ["endDate"], message: "Choose an end date on or before Jan 31, 2026. Isometric credit batches must cover less than one month." }],
       });
     expect(mocks.createCreditBatch).not.toHaveBeenCalled();
   });

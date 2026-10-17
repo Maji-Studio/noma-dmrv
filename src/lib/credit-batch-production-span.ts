@@ -1,5 +1,6 @@
 import { SafeError } from "@/lib/errors";
 import { formatUtcDate } from "@/lib/date-utils";
+import { formatDayString } from "@/lib/format-utils";
 import { getCreditBatchMonthBoundary, isCreditBatchUnderOneMonth } from "./credit-batch-production-window";
 
 function formatUtcTime(date: Date): string {
@@ -20,7 +21,7 @@ export function getCreditBatchProductionSpanIssue(input: ProductionSpan): string
   const end = new Date(input.endedAt);
   if (isCreditBatchUnderOneMonth(start, end)) return null;
   const boundary = getCreditBatchMonthBoundary(start);
-  return `Production run ${input.latestEndingRunCode} ends on or after ${formatUtcDate(boundary)} ${formatUtcTime(boundary)} UTC, so credit batch ${input.creditBatchCode} would cover one month or more. Move the run to another credit batch.`;
+  return `Production run ${input.latestEndingRunCode} ends on or after ${formatDayString(formatUtcDate(boundary))}, ${formatUtcTime(boundary)} UTC, so credit batch ${input.creditBatchCode} would cover one month or more. Move the run to another credit batch.`;
 }
 
 /** Throws a SafeError naming the run that pushes any credit batch to a one month span or more. */

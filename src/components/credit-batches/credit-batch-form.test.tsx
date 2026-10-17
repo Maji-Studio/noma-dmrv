@@ -17,7 +17,7 @@ const UNMAPPED_FACILITY_ID = "00000000-0000-4000-8000-000000000004";
 const FEEDSTOCK_TYPE_ID = "00000000-0000-4000-8000-000000000003";
 const EARLIER_PROCESS_ID = "00000000-0000-4000-8000-000000000005";
 const LATER_PROCESS_ID = "00000000-0000-4000-8000-000000000006";
-const MONTH_REFUSAL = "Choose an end date on or before 2026-01-31. Isometric credit batches must cover less than one month.";
+const MONTH_REFUSAL = "Choose an end date on or before Jan 31, 2026. Isometric credit batches must cover less than one month.";
 
 type SelectFields = { facilityId: string; feedstockTypeId: string };
 
@@ -177,7 +177,7 @@ describe("CreditBatchForm certifier period policy", () => {
     const onSubmit = vi.fn();
     const { container } = render(<CreditBatchForm creditBatch={creditBatch} onSubmit={onSubmit} />);
     fireEvent.submit(container.querySelector("form")!);
-    await waitFor(() => expect(screen.getByText("Choose an end date on or before 2026-01-31. Isometric credit batches must cover less than one month.")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Choose an end date on or before Jan 31, 2026. Isometric credit batches must cover less than one month.")).toBeTruthy());
     expect(onSubmit).not.toHaveBeenCalled();
   });
 

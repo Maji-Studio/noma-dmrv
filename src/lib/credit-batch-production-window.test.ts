@@ -31,7 +31,7 @@ describe("strict Isometric calendar month", () => {
 
   it("states the last allowed date after clamping", () => {
     expect(getCreditBatchProductionWindowIssue("2024-01-31", "2024-02-29"))
-      .toBe("Choose an end date on or before 2024-02-28. Isometric credit batches must cover less than one month.");
+      .toBe("Choose an end date on or before Feb 28, 2024. Isometric credit batches must cover less than one month.");
   });
 
   it("preserves instants for member-run spans", () => {

@@ -1,5 +1,6 @@
 import { isAfter } from "date-fns/isAfter";
 import { formatUtcDate } from "@/lib/date-utils";
+import { formatDayString } from "@/lib/format-utils";
 
 // noma conservative Isometric production-window rule; see docs/adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md.
 const MONTH_CAP = 1;
@@ -65,7 +66,7 @@ export function getCreditBatchProductionWindowIssue(
   if (options.enforceMonthCap && !isCreditBatchUnderOneMonth(start, end)) {
     const lastAllowed = getCreditBatchMonthBoundary(start);
     lastAllowed.setUTCDate(lastAllowed.getUTCDate() - PREVIOUS_DAY);
-    return `Choose an end date on or before ${formatUtcDate(lastAllowed)}. Isometric credit batches must cover less than one month.`;
+    return `Choose an end date on or before ${formatDayString(formatUtcDate(lastAllowed))}. Isometric credit batches must cover less than one month.`;
   }
 
   return null;
