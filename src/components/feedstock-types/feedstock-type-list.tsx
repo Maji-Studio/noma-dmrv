@@ -216,6 +216,8 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>("all");
   const [deletingType, setDeletingType] = useState<FeedstockType | null>(null);
   const [deleteConflict, setDeleteConflict] = useState<FeedstockType | null>(null);
+  // An archive refused from the in-use dialog shows inside it, where the operator is looking.
+  const [conflictArchiveError, setConflictArchiveError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
@@ -327,9 +329,12 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     try {
       await archiveFeedstockType.mutateAsync({ feedstockTypeId: entity.id, expectedVersion: entity.version });
       setDeleteConflict(null);
+      setConflictArchiveError(null);
       toast.success("Feedstock type archived");
     } catch (error) {
-      toast.error(toArchiveRestoreErrorMessage(error, `Feedstock type ${entity.code}`, "archive", "The feedstock type was not archived. Try again."));
+      const message = toArchiveRestoreErrorMessage(error, `Feedstock type ${entity.code}`, "archive", "The feedstock type was not archived. Try again.");
+      if (deleteConflict?.id === entity.id) setConflictArchiveError(message);
+      else toast.error(message);
     }
   };
 
@@ -450,9 +455,16 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       {deleteConflict && (
         <InUseDeleteDialog
           label={deleteConflict.code}
-          onArchive={() => handleArchive(deleteConflict)}
-          onClose={() => setDeleteConflict(null)}
+          onArchive={() => {
+            setConflictArchiveError(null);
+            void handleArchive(deleteConflict);
+          }}
+          onClose={() => {
+            setDeleteConflict(null);
+            setConflictArchiveError(null);
+          }}
           isPending={archiveFeedstockType.isPending}
+          errorMessage={conflictArchiveError}
         />
       )}
 

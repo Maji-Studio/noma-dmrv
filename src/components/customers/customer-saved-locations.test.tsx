@@ -152,6 +152,13 @@ describe("CustomerSavedLocations", () => {
     state.locations = [location("l2", "E2E South Block", { isDefault: true })];
     view.rerender(<CustomerSavedLocations customerId="c1" />);
     expect(screen.queryByRole("button", { name: "Archive instead" })).toBeNull();
+    expect(screen.getByText(/it cannot be archived because it is the only active location/)).toBeTruthy();
+
+    // Closed means closed: a later second active location does not bring the refusal back.
+    fireEvent.click(screen.getAllByRole("button", { name: "Close" }).find((button) => button.textContent === "Close")!);
+    state.locations = [location("l1", "E2E North Block"), location("l2", "E2E South Block", { isDefault: true })];
+    view.rerender(<CustomerSavedLocations customerId="c1" />);
+    expect(screen.queryByText(/is in use/)).toBeNull();
   });
 
   it("does not offer Archive instead for the only active location refused as in use", async () => {
