@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { reviewedTemplateSources } from "./helpers/template-line-sources";
 import { TEST_SITE_POSITION,
   ensureTestOrg,
@@ -220,10 +221,7 @@ async function createFixture(): Promise<Fixture> {
     externalProjectId,
     defaultRemovalTemplateId: TEMPLATE_ID,
   });
-  const [removal] = await db
-    .insert(certifierRemovals)
-    .values({ organizationId: TEST_ORG_ID, facilityId: facility.id, provider: "isometric" })
-    .returning({ id: certifierRemovals.id });
+  const [removal] = await insertRemovalFixture(db, { organizationId: TEST_ORG_ID, facilityId: facility.id, provider: "isometric" });
   createdRemovalIds.push(removal.id);
   // A real member credit batch (with its FK chain): the §8.6.2 claim stamp
   // inside the REAL markSubmissionSubmitted is rowcount-backstopped, so the

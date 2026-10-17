@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -88,14 +89,11 @@ async function createFixture(tag: string) {
       name: `Document source deletion facility ${tag}`,
     })
     .returning({ id: facilities.id });
-  const [removal] = await db
-    .insert(certifierRemovals)
-    .values({
+  const [removal] = await insertRemovalFixture(db, {
       organizationId: TEST_ORG_ID,
       facilityId: facility.id,
       provider: "isometric",
-    })
-    .returning({ id: certifierRemovals.id });
+    });
   const storageKey = `facility/${facility.id}/pdf/${tag}.pdf`;
   provider.objects.add(storageKey);
   const [document] = await db

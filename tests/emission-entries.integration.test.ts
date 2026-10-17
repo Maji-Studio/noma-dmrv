@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -347,10 +348,7 @@ it("tombstones unsubmitted draft zeros on value creation", async () => {
     .returning();
   entryIds.push(zero.id);
   await expect(db.insert(emissionEntries).values({ ...zero, id: crypto.randomUUID() })).rejects.toThrow();
-  const [otherDraft] = await db
-    .insert(certifierRemovals)
-    .values({ organizationId: TEST_ORG_ID, facilityId: lineage.facilityId })
-    .returning();
+  const [otherDraft] = await insertRemovalFixture(db, { organizationId: TEST_ORG_ID, facilityId: lineage.facilityId });
   extraRemovalIds.push(otherDraft.id);
   const [otherZero] = await db
     .insert(emissionEntries)
@@ -502,10 +500,7 @@ it("enforces organization consistency independently for observation and claim re
       timezone: "UTC",
     })
     .returning();
-  const [removal] = await db
-    .insert(certifierRemovals)
-    .values({ organizationId: otherOrg, facilityId: facility.id })
-    .returning();
+  const [removal] = await insertRemovalFixture(db, { organizationId: otherOrg, facilityId: facility.id });
   const [submission] = await db
     .insert(certificationSubmissions)
     .values({

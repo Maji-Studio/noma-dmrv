@@ -669,7 +669,8 @@ function StepPreview({
             facilityId={facilityId}
             entries={inPeriod.map((removal) => ({
               removalId: removal.removalId,
-              label: removal.externalId,
+              label: removal.code,
+              registryId: removal.externalId,
               completedOn: removal.completedOn,
               creditBatches: removal.creditBatches,
             }))}
@@ -701,7 +702,8 @@ function StepPreview({
                 facilityId={facilityId}
                 entries={outside.map((removal) => ({
                   removalId: removal.removalId,
-                  label: removal.externalId,
+                  label: removal.code,
+              registryId: removal.externalId,
                   completedOn: removal.completedOn,
                   creditBatches: removal.creditBatches,
                 }))}

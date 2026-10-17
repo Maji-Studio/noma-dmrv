@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Real-Postgres lock-order regressions for GHG Statement remote-state writes.
@@ -166,16 +167,11 @@ async function createFixture(): Promise<Fixture> {
     `rmv_ggs_lock_a_${runId}`,
     `rmv_ggs_lock_b_${runId}`,
   ];
-  const removalRows = await db
-    .insert(certifierRemovals)
-    .values(
-      externalRemovalIds.map(() => ({
+  const removalRows = await insertRemovalFixture(db, externalRemovalIds.map(() => ({
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         completedOn: "2026-03-15",
-      })),
-    )
-    .returning({ id: certifierRemovals.id });
+      })));
   await db.insert(certificationSubmissions).values(
     removalRows.map((removal, index) => ({
       organizationId: TEST_ORG_ID,

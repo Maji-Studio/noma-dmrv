@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./removal-fixture";
 import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./feedstock-fixture";
 /**
  * A full certification lineage for one feedstock: production run, credit
@@ -234,10 +235,7 @@ export async function createLineageFixture(
       ghgStatementId = ghgStatement.id;
     }
 
-    const [removal] = await tx
-      .insert(certifierRemovals)
-      .values({ organizationId: TEST_ORG_ID, facilityId: facility.id, ghgStatementId })
-      .returning({ id: certifierRemovals.id });
+    const [removal] = await insertRemovalFixture(tx, { organizationId: TEST_ORG_ID, facilityId: facility.id, ghgStatementId });
 
     const [batch] = await tx
       .insert(creditBatches)

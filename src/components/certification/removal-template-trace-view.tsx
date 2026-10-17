@@ -20,10 +20,8 @@ import {
 } from "./new-removal-dialog/compilation-notices";
 import { RemovalTemplateDiagnosticStatusBadge } from "./removal-template-diagnostic-status";
 
-const SHORT_ID_LENGTH = 8;
-
 function removalLabel(entry: {
-  removal: { id: string; startedOn: string | null; completedOn: string | null };
+  removal: { id: string; code: string; startedOn: string | null; completedOn: string | null };
   memberBatches: Array<{ code: string }>;
 }): string {
   const batches = entry.memberBatches.map((batch) => batch.code).join(", ");
@@ -31,7 +29,7 @@ function removalLabel(entry: {
     entry.removal.startedOn && entry.removal.completedOn
       ? formatDateRange(entry.removal.startedOn, entry.removal.completedOn)
       : "Reporting window not compiled";
-  return `${batches || `Removal ${entry.removal.id.slice(0, SHORT_ID_LENGTH)}`} (${window})`;
+  return `${entry.removal.code}${batches ? `, ${batches}` : ""} (${window})`;
 }
 
 function formatMagnitude(value: number): string {

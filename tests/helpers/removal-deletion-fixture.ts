@@ -1,6 +1,7 @@
+import { insertRemovalFixture } from "./removal-fixture";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { certificationSubmissions, certifierProjects, certifierRemovals } from "@/db/schema/certification";
+import { certificationSubmissions, certifierProjects } from "@/db/schema/certification";
 import { creditBatches } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
@@ -47,14 +48,11 @@ export async function createRemovalDeletionFixture(tracked: {
       externalProjectId,
     })
     .returning({ id: certifierProjects.id });
-  const [removal] = await db
-    .insert(certifierRemovals)
-    .values({
+  const [removal] = await insertRemovalFixture(db, {
       organizationId: TEST_ORG_ID,
       facilityId: facility.id,
       provider: "isometric",
-    })
-    .returning({ id: certifierRemovals.id });
+    });
   createdRemovalIds.push(removal.id);
   const [feedstockType] = await db
     .insert(feedstockTypes)

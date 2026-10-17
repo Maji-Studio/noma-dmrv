@@ -1,7 +1,8 @@
+import { insertRemovalFixture } from "./removal-fixture";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  applicationOutputAllocations, applications, certificationSubmissions, certifierRemovals, creditBatchApplications, creditBatchProductionRuns,
+  applicationOutputAllocations, applications, certificationSubmissions, creditBatchApplications, creditBatchProductionRuns,
   creditBatches, deliveries, feedstocks, productionProcesses,
 } from "@/db/schema";
 import { createOrderInTransaction } from "@/data-access/orders";
@@ -51,7 +52,7 @@ export async function certifyOutputLineage(f: Parents, lineage: CertifiedOutputL
   const [process] = await db.insert(productionProcesses).values({ organizationId, facilityId: f.facility.id, feedstockTypeId: intake.feedstockTypeId }).returning();
   const [batch] = await db.insert(creditBatches).values({ organizationId, code: `E2E-OSL-CB-${suffix}`, facilityId: f.facility.id, feedstockTypeId: intake.feedstockTypeId,
     productionProcessId: process.id, status: "pending", startDate: "2026-09-01", endDate: "2026-09-30", certifier: "isometric" }).returning();
-  const [removal] = await db.insert(certifierRemovals).values({ organizationId, facilityId: f.facility.id }).returning();
+  const [removal] = await insertRemovalFixture(db, { organizationId, facilityId: f.facility.id });
   await db.insert(creditBatchProductionRuns).values({ organizationId, creditBatchId: batch.id, productionRunId: lineage.runId });
   await db.insert(creditBatchApplications).values({ organizationId, creditBatchId: batch.id, applicationId: application.id,
     allocatedWetMassKg: DELIVERED_KG, allocatedDryMassKg: DELIVERED_KG, removalId: removal.id });

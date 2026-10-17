@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { activityEvents } from "@/db/schema/activity";
 import { listEntityActivity } from "@/data-access/activity-events";
 import { deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
@@ -753,9 +754,9 @@ it.each([false, true])("rechecks the lease after the optimistic submission read 
 
 it("serializes concurrent retained-batch finalizers and preserves the last Removal for retry", async () => {
   const first = await createFixture();
-  const [other] = await db.insert(certifierRemovals).values({
+  const [other] = await insertRemovalFixture(db, {
     organizationId: TEST_ORG_ID, facilityId: first.facilityId, provider: "isometric",
-  }).returning({ id: certifierRemovals.id });
+  });
   createdRemovalIds.push(other.id);
   const fixtures = [first, { ...first, removalId: other.id }];
   const chain = await createBiocharApplicationChain({ ...first, tag: first.runId });

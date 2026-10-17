@@ -46,7 +46,6 @@ import {
 import { Notice } from "@/components/ui/notice";
 
 const ICON_SIZE = 14;
-const SHORT_ID = 8;
 const STALE_DETAIL_WARNING =
   "Statement details could not be refreshed. Showing the last loaded details. Use Refresh before generating or submitting.";
 
@@ -304,9 +303,8 @@ function DetailState({
                   entries={linkedRemovals.map(
                     ({ removal, submission, creditBatches }) => ({
                       removalId: removal.id,
-                      label:
-                        submission?.externalId ??
-                        `${removal.id.slice(0, SHORT_ID)}…`,
+                      label: removal.code,
+                      registryId: submission?.externalId ?? null,
                       completedOn: removal.completedOn,
                       creditBatches,
                       badge: (
