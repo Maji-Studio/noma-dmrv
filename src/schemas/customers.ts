@@ -11,6 +11,7 @@ import {
   gpsPairSuperRefine,
   defaultSoilTemperatureSchema,
   expectedVersionSchema,
+  uuidSchema,
   requiredLatitudeSchema as requiredLat,
   requiredLongitudeSchema as requiredLng,
   toNumberOrUndefined,
@@ -194,6 +195,7 @@ export const createCustomerWithLocationsSchema = z.object({
  * Schema for updating a customer location (server action)
  */
 export const updateCustomerLocationSchema = z.object({
+  customerId: uuidSchema().optional(),
   locationId: z.string().uuid("Choose a valid location."),
   expectedVersion: expectedVersionSchema,
   name: z.string().trim().min(1).max(PARTY_NAME_MAX).optional(),
@@ -212,6 +214,7 @@ export const updateCustomerLocationSchema = z.object({
  * Schema for deleting a customer location
  */
 export const deleteCustomerLocationSchema = z.object({
+  customerId: uuidSchema().optional(),
   expectedVersion: expectedVersionSchema,
   locationId: z.string().uuid("Choose a valid location."),
 });

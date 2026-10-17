@@ -255,6 +255,7 @@ export async function updateCustomerLocationFn(
     const validated = updateCustomerLocationSchema.parse(data);
 
     const location = await runOperationInProcess(updateCustomerLocation, ctx, {
+      customerId: validated.customerId,
       locationId: validated.locationId,
       expectedVersion: validated.expectedVersion,
       name: validated.name,

@@ -217,6 +217,7 @@ export async function updateSupplierLocationFn(
     const validated = updateSupplierLocationSchema.parse(data);
 
     const location = await runOperationInProcess(updateSupplierLocation, ctx, {
+      supplierId: validated.supplierId,
       locationId: validated.locationId,
       expectedVersion: validated.expectedVersion,
       name: validated.name === undefined ? undefined : validated.name || null,

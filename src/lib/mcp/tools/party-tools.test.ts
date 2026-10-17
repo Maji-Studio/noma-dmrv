@@ -17,7 +17,7 @@ const cascade = { orders: [], cascadeFingerprint: "cascade" };
 const CLOCK = "2026-10-06T10:00:00.000Z";
 const DEADLINE_MS = 10_000;
 describe.each(["supplier", "customer"] as const)("%s write tools", kind => {
-  const tools = kind === "supplier" ? supplierWriteTools : customerWriteTools;
+  const tools = (kind === "supplier" ? supplierWriteTools : customerWriteTools).filter(tool => !tool.name.endsWith("_location"));
   const idKey = `${kind}Id`;
   const row = { id: ID, code: kind === "supplier" ? "SUP-0001" : "CUS-0001", name: "Party", version: 1, ...(kind === "supplier" ? { sourceRegion: null } : { cropType: null }), archivedAt: null, createdAt: CLOCK, updatedAt: CLOCK };
   const context = { ctx: { credentialId: "credential", organizationId: "org", userId: "user" }, deadlineAt: 0,

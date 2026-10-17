@@ -5,7 +5,17 @@ import { toOperationJsonSchema } from "@/lib/operations/json-schema";
 import { runOperation, type Operation } from "@/lib/operations/runner";
 import { controls, parseControls, writeOptions } from "./write-controls";
 import type { WriteTool } from "./write-tools";
-import { partyToolDescription, partyToolSummary } from "./party-tool-guidance";
+import { partyToolDescription, partyToolSummary, locationToolDescription, locationToolSummary, type LocationCommand } from "./party-tool-guidance";
+import { CUSTOMER_LOCATION_REPRESENTATION_REVISION, SUPPLIER_LOCATION_REPRESENTATION_REVISION } from "@/config/api-rest";
+import * as customerLocationWrites from "@/lib/api/customer-location-write-operations";
+import * as supplierLocationWrites from "@/lib/api/supplier-location-write-operations";
+import { withCurrentOnStale } from "@/lib/api/write-checks";
+import { partyLocationNotFound } from "@/lib/party-domain-errors";
+import { readApiCustomerLocation } from "@/lib/read-models/api-customer-locations";
+import { readApiSupplierLocation } from "@/lib/read-models/api-supplier-locations";
+import { customerLocationRepresentationSchema } from "@/lib/representations/customer-locations";
+import { supplierLocationRepresentationSchema } from "@/lib/representations/supplier-locations";
+import * as locationOperations from "@/lib/operations/party-location-api";
 
 import { deleteCustomerApi } from "@/lib/operations/customer-api";
 import { representationCheckedCascadeDelete } from "@/lib/api/customer-write-operations";
@@ -43,7 +53,7 @@ export function partyWriteTools<
     ? itemOutput.extend({ cascade: cascadePreviewSchema, warnings: z.array(z.string()).optional() })
     : z.union([itemOutput, z.object({ deleted: z.object({ id: z.uuid(), code: z.string() }) })]);
 
-  return commands.map(command => {
+  const tools: WriteTool[] = commands.map(command => {
     const schema = command === "delete" && kind === "customer" ? deleteCustomerApi.input : command === "create" ? deps.create.input : command === "update" ? deps.updateInput : deps.versionInput;
     const inputSchema = schema.safeExtend(controls.shape);
     const contract = toOperationJsonSchema(inputSchema);
@@ -88,4 +98,68 @@ export function partyWriteTools<
       },
     };
   });
+  if (kind === "supplier") {
+    const revision = SUPPLIER_LOCATION_REPRESENTATION_REVISION;
+    const schema = supplierLocationRepresentationSchema;
+    tools.push(
+      locationCommand(kind, "add", locationOperations.addSupplierLocationApi, schema, revision),
+      locationCommand(kind, "update", locationOperations.updateSupplierLocationApi, schema, revision,
+        (parentId, id) => supplierLocationWrites.representationCheckedUpdate(parentId, id, revision)),
+      locationCommand(kind, "delete", locationOperations.deleteSupplierLocationApi, schema, revision,
+        (parentId, id) => supplierLocationWrites.representationCheckedDelete(parentId, id, revision)),
+    );
+  } else {
+    const revision = CUSTOMER_LOCATION_REPRESENTATION_REVISION;
+    const schema = customerLocationRepresentationSchema;
+    tools.push(
+      locationCommand(kind, "add", locationOperations.addCustomerLocationApi, schema, revision),
+      locationCommand(kind, "update", locationOperations.updateCustomerLocationApi, schema, revision,
+        (parentId, id) => customerLocationWrites.representationCheckedUpdate(parentId, id, revision)),
+      locationCommand(kind, "delete", locationOperations.deleteCustomerLocationApi, schema, revision,
+        (parentId, id) => customerLocationWrites.representationCheckedDelete(parentId, id, revision)),
+      locationCommand(kind, "archive", locationOperations.archiveCustomerLocationApi, schema, revision,
+        (parentId, id) => customerLocationWrites.representationCheckedTransition(parentId, id, revision, "archive")),
+      locationCommand(kind, "restore", locationOperations.restoreCustomerLocationApi, schema, revision,
+        (parentId, id) => customerLocationWrites.representationCheckedTransition(parentId, id, revision, "restore")),
+    );
+  }
+  return tools;
+}
+
+function locationCommand<Input extends z.ZodObject, Row extends { id: string; version: number }>(
+  kind: "supplier" | "customer", command: LocationCommand,
+  operation: Operation<Input, { data: Row; warnings: string[] }>, representation: z.ZodType<Row>, revision: number,
+  checked?: (parentId: string, locationId: string) => Operation<Input, { data: Row; warnings: string[] }>,
+): WriteTool {
+  const inputSchema = operation.input.safeExtend(controls.shape);
+  const contract = toOperationJsonSchema(inputSchema);
+  const output = z.object({ data: representation, warnings: z.array(z.string()).optional() });
+  return {
+    kind: "write", name: operation.id, scope: command === "delete" ? `${kind}s:delete` : `${kind}s:write`,
+    input: inputSchema, output,
+    annotations: { readOnlyHint: false, openWorldHint: false, idempotentHint: true, destructiveHint: command !== "add" },
+    description: locationToolDescription(kind, command),
+    async execute(context, raw) {
+      const { input, dryRun, requestKey } = parseControls(raw, contract);
+      const parsed = operation.input.safeParse(input);
+      if (!parsed.success) throw validationFailed(parsed.error);
+      const fields = parsed.data as Record<string, unknown>;
+      const parentId = fields[`${kind}Id`] as string;
+      const locationId = fields.locationId as string | undefined;
+      const options = writeOptions(context, dryRun, requestKey, locationId, fields.expectedVersion as number | undefined, revision);
+      return withCurrentOnStale(async () => {
+        const result = await runOperation(checked ? checked(parentId, locationId!) : operation, context.ctx, input, options);
+        const saved = z.object({ data: representation, warnings: z.array(z.string()) }).parse(result.data);
+        return { ...result, body: output.parse({ data: saved.data,
+          ...(saved.warnings.length ? { warnings: saved.warnings } : {}) }) };
+      }, { noun: `${kind} location`, readCurrent: async () => {
+        const current = kind === "supplier"
+          ? await readApiSupplierLocation(context.ctx, parentId, locationId!)
+          : await readApiCustomerLocation(context.ctx, parentId, locationId!);
+        if (!current) throw partyLocationNotFound(kind);
+        return current;
+      } });
+    },
+    summarize: (body, dryRun) => locationToolSummary(kind, command, body.data as Row, dryRun),
+  };
 }

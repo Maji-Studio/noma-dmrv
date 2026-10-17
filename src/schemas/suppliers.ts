@@ -8,6 +8,7 @@ import { PARTY_MAX_LOCATIONS, PARTY_NAME_MAX, LOCATION_PLACE_MAX, PARTY_ADDRESS_
 import { facilityDistancesInputSchema } from "./facility-distances";
 import {
   expectedVersionSchema,
+  uuidSchema,
   gpsPairSuperRefine,
   requiredLatitudeSchema,
   requiredLongitudeSchema,
@@ -186,6 +187,7 @@ export const createSupplierWithLocationsSchema = z.object({
  * Schema for updating a supplier location (server action)
  */
 export const updateSupplierLocationSchema = z.object({
+  supplierId: uuidSchema().optional(),
   locationId: z.string().uuid("Choose a valid location."),
   expectedVersion: expectedVersionSchema,
   name: z.string().max(PARTY_NAME_MAX).optional().nullable().or(z.literal("")),
@@ -203,6 +205,7 @@ export const updateSupplierLocationSchema = z.object({
  * Schema for deleting a supplier location
  */
 export const deleteSupplierLocationSchema = z.object({
+  supplierId: uuidSchema().optional(),
   expectedVersion: expectedVersionSchema,
   locationId: z.string().uuid("Choose a valid location."),
 });
