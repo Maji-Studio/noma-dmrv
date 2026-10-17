@@ -33,6 +33,7 @@ import * as productionBatchesDA from "@/data-access/certifier-production-batches
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as durabilitySamples from "@/fn/certification/durability-measurement-samples";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
+import * as sourcesMirror from "@/fn/certification/sources-mirror-core";
 import * as protocolPreflight from "@/fn/certification/protocol-version-preflight";
 import { SafeError } from "@/lib/errors";
 import { buildProductionBatchSubmission } from "@/fn/certification/production-batches";
@@ -126,7 +127,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
     });
   }
 
-  it("rejects registered drift before Datapoints or MeasurementSamples and records the message", async () => {
+  it("rejects registered drift before Sources, Datapoints or MeasurementSamples and records the message", async () => {
     prepareDurabilitySubmission();
     await registeredBatch(ORIGINAL_BIOCHAR_MASS_KG + 50);
     const error = await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID })
@@ -138,8 +139,11 @@ describe("submitRemoval — reporting window anchored to application date (issue
     expect(durabilitySamples.submitDurabilityMeasurementSamples).not.toHaveBeenCalled();
     expect(isometric.createGhgEntry).not.toHaveBeenCalled();
     expect(isometricClientFake.post).not.toHaveBeenCalled();
-    expect(storedRows[0]).toMatchObject({ status: "rejected", lockedAt: null });
-    expect(ledger.markSubmissionRejected).toHaveBeenCalledOnce();
+    expect(evidenceLedgers.ensureEvidenceLedgersFromContext).not.toHaveBeenCalled();
+    expect(sourcesMirror.mirrorCandidateSourcesForSubmission).not.toHaveBeenCalled();
+    expect(removalsDA.markRemovalSubmissionExternalMutationPossible).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
+    expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
     expect(ledgerClaim.markSubmissionInterrupted).not.toHaveBeenCalled();
     expect(ledger.appendSyncEvent).toHaveBeenCalledWith(makeTestOrgContext(USER_ID),
       expect.objectContaining({ entityType: "removal", entityId: REMOVAL_ID,
@@ -149,7 +153,12 @@ describe("submitRemoval — reporting window anchored to application date (issue
   it("rejects the draft when production-batch binding fails before any POST", async () => {
     prepareDurabilitySubmission();
     const originalError = new Error("production batch binding unavailable");
-    vi.mocked(productionBatchesDA.getProductionBatchRegistryInputs).mockRejectedValue(originalError);
+    const inputs = await productionBatchesDA.getProductionBatchRegistryInputs(
+      makeTestOrgContext(USER_ID), [CREDIT_BATCH_ID],
+    );
+    vi.mocked(productionBatchesDA.getProductionBatchRegistryInputs)
+      .mockResolvedValueOnce(inputs)
+      .mockRejectedValue(originalError);
     await expect(submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }))
       .rejects.toBe(originalError);
     expect(storedRows).toHaveLength(1);

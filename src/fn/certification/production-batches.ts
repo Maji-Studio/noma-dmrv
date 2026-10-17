@@ -434,7 +434,7 @@ function tryBuildProductionBatchSubmission(
  * than permanent business-data drift. Any mass, facility, feedstock, kind or
  * supplier-reference change still produces a different hash and is reported.
  */
-function matchesLegacyDateBoundPayloadHash(
+export function matchesLegacyDateBoundPayloadHash(
   input: ProductionBatchRegistryInput,
   current: ProductionBatchSubmission,
   storedHash: string,

@@ -30,9 +30,10 @@ const DRIFT_TIME_ZONE = "UTC";
 export async function assertRegisteredProductionBatchMatches(args: {
   orgCtx: OrgContext;
   removalId: string;
-  submissionRowId: string;
+  submissionRowId?: string;
   expectedLockedAt?: Date;
   deferRejectionToAttempt?: boolean;
+  recordSucceededEvent?: boolean;
   submission: ProductionBatchSubmission;
   remote: IsometricProductionBatch;
   legacyWindow: LegacyProductionBatchWindow;
@@ -70,6 +71,7 @@ export async function assertRegisteredProductionBatchMatches(args: {
   const message = differences.length > 0
     ? `Credit batch ${submission.creditBatchCode} is registered in Isometric with different figures than noma has now. ${differences.join(" ")} Check the production runs in this credit batch for edits made after the first submission. ${resolution} Nothing is changed in Isometric automatically.`
     : null;
+  if (!message && args.recordSucceededEvent === false) return;
   args.log.warn(
     { creditBatchId: submission.creditBatchId, productionBatchId: remote.id },
     message

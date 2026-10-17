@@ -37,6 +37,7 @@ import {
   bindProductionBatchesToMeasurementSamples,
   ensureProductionBatchesForCreditBatches,
 } from "./production-batches";
+import { assertRegisteredProductionBatchesMatch } from "./production-batch-precheck";
 import { readRemovalDurabilityMeasurementSamples } from "./durability-measurement-sample-snapshot";
 import {
   assertProductionClaimGateFresh,
@@ -285,6 +286,13 @@ async function submitRemovalCore(
     log,
   });
   const client = await resolveIsometricClient(orgCtx);
+
+  await assertRegisteredProductionBatchesMatch({
+    orgCtx,
+    removalId,
+    creditBatchIds: ctx.memberBatches.map((batch) => batch.id),
+    log,
+  });
 
   // Everything below may create or update Isometric Sources before the
   // submission ledger draft exists. Persist that the registry boundary is
