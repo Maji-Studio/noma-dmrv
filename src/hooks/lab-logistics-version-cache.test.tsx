@@ -1,3 +1,7 @@
+import { biocharProductKeys } from "./use-biochar-products";
+import { outputStockKeys } from "./use-output-stock";
+import { storageLocationKeys } from "./use-storage-locations";
+import { certificationKeys } from "./use-certification";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
@@ -125,5 +129,21 @@ it("sends cleared application defaults explicitly so the operation cannot refill
   await harness(useUpdateApplication, new QueryClient(), { applicationId: ID, expectedVersion: 1, biocharAppliedKg: 1000 }, async invoke => {
     await act(async () => { await invoke(); });
     expect(mocks.update).toHaveBeenLastCalledWith(expect.objectContaining({ appliedWetMassKg: 1000, gpsLatitude: null, gpsLongitude: null, soilTemperatureC: null, soilTemperatureSource: null }));
+  });
+});
+
+
+it("invalidates product versions, stock and record locks after deleting a delivery", async () => {
+  mocks.remove.mockResolvedValueOnce({ success: true });
+  const client = new QueryClient();
+  const keys = [
+    biocharProductKeys.list({}), biocharProductKeys.detail(ID),
+    outputStockKeys.all, storageLocationKeys.all,
+    certificationKeys.recordLock("biocharProduct", ID),
+  ];
+  for (const key of keys) client.setQueryData(key, { version: INITIAL_VERSION });
+  await harness(useDeleteDelivery, client, { deliveryId: ID, expectedVersion: INITIAL_VERSION }, async invoke => {
+    await act(async () => { await invoke(); });
+    for (const key of keys) expect(client.getQueryState(key)?.isInvalidated).toBe(true);
   });
 });

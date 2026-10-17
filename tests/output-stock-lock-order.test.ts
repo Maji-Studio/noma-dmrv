@@ -1,4 +1,8 @@
 import { insertRemovalFixture } from "./helpers/removal-fixture";
+import { lockBinStock } from "@/data-access/lock-bin-stocks";
+import { updateStorageLocation } from "@/data-access/storage-locations";
+import { withLineageFixture } from "./helpers/certification-lineage-fixture";
+import { ensureTestOrg, makeTestOrgContext } from "./helpers/test-org";
 import { createTestApplication } from "./helpers/application-writers";
 import { masterDataVersion } from "./helpers/master-data-version";
 /** PostgreSQL regressions. Written for the DB runner; never uses timing sleeps. */
@@ -377,7 +381,7 @@ it.each(["update", "delete"] as const)("delivery %s waits for application creati
     expect(await creating).toMatchObject({ ok: true });
     expect(await mutating).toMatchObject(operation === "update"
       ? { ok: true, value: { version: delivery.version + 1, distanceNote: "E2E edited route" } }
-      : { ok: false, error: { message: "Posted deliveries retain their history and cannot be deleted. Edit mass and moisture while no later stock entry depends on it." } });
+      : { ok: false, error: { code: "certification_locked" } });
   } finally {
     resume.release();
     await Promise.all([creating, mutating]);
@@ -438,6 +442,136 @@ it.each(["update", "delete"] as const)("sample %s holds artifacts before a batch
     resume.release();
     await Promise.all([sampleWriter, batchWriter]);
     transactionGate?.mockRestore();
+    await cleanup(f);
+  }
+}, TEST_TIMEOUT_MS);
+
+
+it("bin metadata does not wait for feedstock artifacts while holding its stock lock", async () => {
+  await ensureTestOrg();
+  await withLineageFixture(async f => {
+    const ctx = makeTestOrgContext();
+    const resume = gate();
+    let feedstockWriter: ReturnType<typeof outcome> | undefined;
+    let binWriter: ReturnType<typeof outcome> | undefined;
+    let binFinished = false;
+    let pid = 0;
+    try {
+      const version = await masterDataVersion(ctx, "storageLocations", f.feedstockBinId);
+      feedstockWriter = outcome(db.transaction(async tx => {
+        // Reproduce the feedstock update/delete prefix with a real shared artifact.
+        const lineage = await getLockedCertifiedLineage(ctx, tx, { entityType: "feedstock", entityId: f.feedstockId });
+        expect(lineage.length).toBeGreaterThan(0);
+        pid = await backendPid(tx);
+        await resume.promise;
+        await lockBinStock(ctx, tx, f.feedstockBinId);
+      }));
+      await expect.poll(() => pid, { timeout: BARRIER_TIMEOUT_MS }).not.toBe(0);
+      binWriter = outcome(updateStorageLocation(ctx, f.feedstockBinId, {
+        expectedVersion: version, name: "E2E renamed feedstock bin",
+      }).finally(() => { binFinished = true; }));
+      // Metadata can finish while the feedstock writer holds its artifact.
+      // Taking an exclusive artifact lock here would stall behind the feedstock writer.
+      await expect.poll(() => binFinished, { timeout: BARRIER_TIMEOUT_MS }).toBe(true);
+      expect(await binWriter).toMatchObject({ ok: true, value: { version: version + 1 } });
+      resume.release();
+      expect(await feedstockWriter).toMatchObject({ ok: true });
+    } finally {
+      resume.release();
+      await Promise.all([feedstockWriter, binWriter]);
+    }
+  }, "none");
+}, TEST_TIMEOUT_MS);
+
+
+it("a protected bin change answers a retryable conflict instead of waiting on a held artifact", async () => {
+  await ensureTestOrg();
+  await withLineageFixture(async f => {
+    const ctx = makeTestOrgContext();
+    const resume = gate();
+    let feedstockWriter: ReturnType<typeof outcome> | undefined;
+    let binWriter: ReturnType<typeof outcome> | undefined;
+    let binFinished = false;
+    let pid = 0;
+    try {
+      const version = await masterDataVersion(ctx, "storageLocations", f.feedstockBinId);
+      feedstockWriter = outcome(db.transaction(async tx => {
+        const lineage = await getLockedCertifiedLineage(ctx, tx, { entityType: "feedstock", entityId: f.feedstockId });
+        expect(lineage.length).toBeGreaterThan(0);
+        pid = await backendPid(tx);
+        await resume.promise;
+      }));
+      await expect.poll(() => pid, { timeout: BARRIER_TIMEOUT_MS }).not.toBe(0);
+      binWriter = outcome(updateStorageLocation(ctx, f.feedstockBinId, {
+        expectedVersion: version, type: "biochar_bin",
+      }).finally(() => { binFinished = true; }));
+      // The try-lock refuses while the feedstock writer still holds its artifact.
+      await expect.poll(() => binFinished, { timeout: BARRIER_TIMEOUT_MS }).toBe(true);
+      expect(await binWriter).toMatchObject({ ok: false, error: { code: "concurrent_write_retry", retryable: true } });
+      resume.release();
+      expect(await feedstockWriter).toMatchObject({ ok: true });
+      expect(await masterDataVersion(ctx, "storageLocations", f.feedstockBinId)).toBe(version);
+    } finally {
+      resume.release();
+      await Promise.all([feedstockWriter, binWriter]);
+    }
+  }, "none");
+}, TEST_TIMEOUT_MS);
+
+
+it("a protected bin change takes the lineage locks and refuses a Sent lineage", async () => {
+  await ensureTestOrg();
+  await withLineageFixture(async f => {
+    const ctx = makeTestOrgContext();
+    const version = await masterDataVersion(ctx, "storageLocations", f.feedstockBinId);
+    await expect(updateStorageLocation(ctx, f.feedstockBinId, { expectedVersion: version, type: "biochar_bin" }))
+      .rejects.toMatchObject({ code: "certification_locked" });
+    expect(await masterDataVersion(ctx, "storageLocations", f.feedstockBinId)).toBe(version);
+  });
+}, TEST_TIMEOUT_MS);
+
+
+it("a free-field bin change saves on an unsent lineage", async () => {
+  await ensureTestOrg();
+  await withLineageFixture(async f => {
+    const ctx = makeTestOrgContext();
+    const version = await masterDataVersion(ctx, "storageLocations", f.feedstockBinId);
+    await expect(updateStorageLocation(ctx, f.feedstockBinId, { expectedVersion: version, storageDescription: "Covered bay" }))
+      .resolves.toMatchObject({ version: version + 1, storageDescription: "Covered bay" });
+  }, "none");
+}, TEST_TIMEOUT_MS);
+
+
+it("bin metadata waits for output posting without holding its artifacts", async () => {
+  const f = await postedStockFixture();
+  const resume = gate();
+  let posting: ReturnType<typeof outcome> | undefined;
+  let editing: ReturnType<typeof outcome> | undefined;
+  let pid = 0;
+  try {
+    await addRemoval(f);
+    const input = await lossCommand(f);
+    posting = outcome(withOutputStockPosting(f.ctx, {
+      input, locksTransportRoutes: true,
+      replay: async () => { throw new Error("Unexpected replay"); },
+      write: async (tx, post) => {
+        // Posting already owns the bin, but has not acquired its artifacts yet.
+        pid = await backendPid(tx);
+        await resume.promise;
+        return post();
+      },
+    }));
+    await expect.poll(() => pid, { timeout: BARRIER_TIMEOUT_MS }).not.toBe(0);
+    editing = outcome(updateStorageLocation(f.ctx, f.bin.id, {
+      expectedVersion: f.bin.version, name: "E2E renamed product bin",
+    }));
+    await expect.poll(() => blockedQuery(pid), { timeout: BARRIER_TIMEOUT_MS }).toContain("pg_advisory_xact_lock");
+    resume.release();
+    expect(await posting).toMatchObject({ ok: true });
+    expect(await editing).toMatchObject({ ok: true });
+  } finally {
+    resume.release();
+    await Promise.all([posting, editing]);
     await cleanup(f);
   }
 }, TEST_TIMEOUT_MS);

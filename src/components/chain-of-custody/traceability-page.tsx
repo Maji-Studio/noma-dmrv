@@ -91,7 +91,7 @@ const BATCH_VIEW_MODES: Array<{ value: BatchViewMode; label: string }> = [
   { value: "dag", label: "DAG" },
   { value: "map", label: "Map" },
   { value: "sankey", label: "Sankey" },
-  { value: TRACEABILITY_ACTIVITY_VIEW, label: "Activity" },
+  { value: TRACEABILITY_ACTIVITY_VIEW, label: "Activities" },
 ];
 
 const DEFAULT_APPLICATION_VIEW: ApplicationViewMode = "lineage";
