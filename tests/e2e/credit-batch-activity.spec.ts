@@ -157,7 +157,7 @@ test.describe("credit batch activity", () => {
     const view = page.getByTestId("credit-batch-activity-view");
     await expect(view.getByRole("heading", { name: "No activity recorded yet" })).toBeVisible();
     await expect(view.getByText(/Activity is recorded from [A-Z][a-z]{2} \d{1,2}, 2026\./)).toBeVisible();
-    await expect(page.getByTestId("chain-view-segment").getByRole("button", { name: "Activity" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("chain-view-segment").getByRole("button", { name: "Activities" })).toHaveAttribute("aria-pressed", "true");
   });
 
   test("loads older activity a page at a time, moves focus, and restarts at the first page on a filter change", async ({

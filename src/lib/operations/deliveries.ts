@@ -1,7 +1,7 @@
-import { createDeliveryInTransaction, updateDeliveryInTransaction, type UpdatedDelivery } from "@/data-access/delivery-output-writes";
+import { createDeliveryInTransaction, updateDeliveryInTransaction, deleteDeliveryInTransaction, type UpdatedDelivery } from "@/data-access/delivery-output-writes";
 import { processPendingStorageObjectDeletions } from "@/data-access/storage-object-deletions";
 import type { OrgContext } from "@/lib/auth/server";
-import { updateDeliverySchema } from "@/schemas/deliveries";
+import { updateDeliverySchema, deleteDeliverySchema } from "@/schemas/deliveries";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { recordDeliveryInput, updateDeliveryApiInput } from "@/schemas/delivery-input";
@@ -87,3 +87,15 @@ export const updatePostedDelivery: Operation<typeof updateDeliverySchema, Update
 export async function updateDelivery(ctx: OrgContext, deliveryId: string, changes: Omit<z.input<typeof updateDeliverySchema>, "deliveryId">): Promise<UpdatedDelivery> {
   return runOperationInProcess(updatePostedDelivery, ctx, { ...changes, deliveryId });
 }
+
+/** App deletion shares the runner transaction and audit capture with sibling writes. */
+export const deletePostedDelivery: Operation<typeof deleteDeliverySchema, void> = {
+  id: "delete_posted_delivery", input: deleteDeliverySchema, supportsDryRun: false,
+  describe: input => ({ outcome: "deleted", entityType: "delivery", entityIds: [input.deliveryId], versionBefore: input.expectedVersion, versionAfter: null }),
+  execute: async ({ ctx, tx, source, afterCommit, activity }, input) => {
+    const { delivery, activityScopes } = await deleteDeliveryInTransaction(ctx, tx, input.deliveryId, input.expectedVersion, source, activity.capture);
+    activity.link({ facilityId: delivery.facilityId });
+    activity.scope(delivery.id, activityScopes);
+    afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
+  },
+};

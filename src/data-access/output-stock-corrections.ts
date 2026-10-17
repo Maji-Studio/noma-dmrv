@@ -1,3 +1,4 @@
+import { liveOutputMovementPredicate } from './output-stock-active-movements';
 import type { DbTransaction } from '@/db';
 import { applications, binMovements, storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
@@ -65,7 +66,8 @@ export async function assertOutputCorrectionDependencies(
   // A later oldest-first or pro-rata draw would have split differently had the
   // affected layers held other stock; an operator-ordered draw took only the
   // sub-bins it names, so it depends on the correction only if it touched one.
-  const later = all.find(r => r.movement.postingSequence > original.postingSequence &&
+  const isLive = liveOutputMovementPredicate(all.map(row => row.movement));
+  const later = all.find(r => isLive(r.movement) && r.movement.postingSequence > original.postingSequence &&
     (affected.has(r.allocation.biocharProductId ?? r.allocation.productionRunId) ||
       (r.allocation.basisSnapshot.policy !== 'operator_order' &&
         affectedLayers.some(l => l.placedAt <= r.movement.occurredAt!.toISOString()))));
@@ -85,7 +87,8 @@ export async function assertOutputCorrectionDependencies(
   };
   if (later) throw await blockedBy(later.movement, at => `Correction blocked by a later ${outputStockEventLabel(later.movement.outputKind!).toLowerCase()}: ${later.movement.reason} (${at}).`);
   const counts = await reader.select().from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, input.storageLocationId), gt(binMovements.postingSequence, original.postingSequence)));
-  const count = counts.find(m => isCountMovement(m) && layers.some(l => affected.has(l.id) && l.placedAt <= m.occurredAt!.toISOString()));
+  const isLiveCount = liveOutputMovementPredicate([...all.map(row => row.movement), ...counts]);
+  const count = counts.find(m => isLiveCount(m) && isCountMovement(m) && layers.some(l => affected.has(l.id) && l.placedAt <= m.occurredAt!.toISOString()));
   if (count) throw await blockedBy({ ...count, reason: 'Count' }, () => 'Correction blocked by a later count.');
   // A bin switched back to split held nothing then; restoring stock across the switch would put a mixed pile back as sub-bins.
   const split = counts.find(m => m.outputKind === 'split');

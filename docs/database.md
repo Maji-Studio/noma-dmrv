@@ -462,11 +462,22 @@ private-document state. It must not be copied into ordinary data access.
 
 The converted certification-lineage and dependency guards use the record-lock policy in [ADR 0035](./adr/0035-record-locks-follow-dependencies-and-registry-lineage.md). `src/lib/record-lock.ts` contains the client-safe per-kind predicates returning `level`, `heldBy`, `freeFields` and `howToFree`. Open has no consumers; In use has numeric consumers; Sent takes precedence and has no free fields. Data-access resolves organization-scoped facts rather than trusting screen membership.
 
+`freeFields` is typed against each record kind's update input and enforced on changed
+fields by the server. Sent refuses all changes. Existing broader acceptance remains:
+feedstock updates keep ADR 0027's guards; orders allow quantity, date and packaging;
+samples retain their update fields; products allow status and density; deliveries
+allow transport metadata; applications retain descriptive and location fields.
+Production input and operating fields remain editable before Sent, and cohort-only
+run membership does not freeze output fields. Sample-only batch dependencies retain
+membership/window edits under their existing checks. Bin metadata and stock-mode
+transitions retain their existing stock guards. Free fields do not bypass validation,
+row versions, stock limits or relationship restrictions.
+
 `record-lock-lineage.ts` reads every relevant `certification_submissions` row, including older versions and historical statement membership. Registry creation (`draft`), submitted or accepted rows, possible remote effects, unknown statuses and in-flight work hold Sent. A known failed attempt with no remote effects does not. A failed v2 cannot release a submitted v1.
 
 A covering statement must be read fresh from Certify to reopen: FAILED_VERIFICATION, or DRAFT with earlier verifier-submission evidence (`submitted_at`, retained in metadata). This includes submissions made in Certify itself when REST or saved metadata retains a submission timestamp. Historical Certify submissions with a null REST timestamp and no saved evidence remain locked: this integration has no GraphQL history reader. Every other covering statement must also be known and safe, and nothing may be in flight. Failed reads keep the lock. Writers re-read under sorted certification artifact locks and refuse lineage expansion after locking; advisory reads cannot authorize a write. Every attempt with remote effects must have a known external identity covered by the fresh statement and predate its return evidence. REST exposes no return timestamp, so its verifier-submission time is used as a conservative lower bound; attempts after that bound remain locked. Resubmission therefore locks the lineage again.
 
-Numeric consumers remain In use after reopening. Output entries share the correction dependency resolver between browser and server; unrelated intake does not lock them. Feedstock retains ADR 0027 wet-lane checks, so an intake edit may still proceed if all withdrawals fit. These rules need no schema migration. Free-field declarations describe current accepted updates, subject to field validation, membership and stock-sufficiency checks. They do not authorize bypassing those guards. Independent master-data, document, Removal lifecycle and deletion guards remain; see [record-lock follow-ups](./open-questions.md#record-lock-follow-ups) for free-field and deletion changes.
+Numeric consumers remain In use after reopening. Output entries share the correction dependency resolver between browser and server; unrelated intake does not lock them. Feedstock retains ADR 0027 wet-lane checks, so an intake edit may still proceed if all withdrawals fit. These rules need no schema migration. Free-field declarations describe current accepted updates, subject to field validation, membership and stock-sufficiency checks. They do not authorize bypassing those guards. Independent master-data, document, Removal lifecycle and deletion guards remain; see [record-lock follow-ups](./open-questions.md#record-lock-follow-ups) for independent guards and registry return evidence.
 
 ## Method-B storage boundary
 

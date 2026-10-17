@@ -1,3 +1,28 @@
+import type { UpdateFeedstockInput } from '@/data-access/feedstocks';
+import type { UpdateBiocharProductInput } from '@/data-access/biochar-product-update';
+import type { UpdateProductionRunData } from '@/schemas/production-runs';
+import type { UpdateSampleRequest } from '@/data-access/samples/write-values';
+import type { UpdateOrderInput } from '@/schemas/order-input';
+import type { UpdateApplicationInput } from '@/schemas/application-input';
+import type { UpdateCreditBatchData } from '@/schemas/credit-batches';
+import type { UpdateStorageLocationData } from '@/schemas/storage-locations';
+import type { updateDeliverySchema } from '@/schemas/deliveries';
+import type { z } from 'zod';
+
+interface RecordUpdateInputs {
+  feedstock: UpdateFeedstockInput;
+  productionRun: UpdateProductionRunData;
+  sample: UpdateSampleRequest;
+  biocharProduct: UpdateBiocharProductInput;
+  order: UpdateOrderInput;
+  delivery: z.output<typeof updateDeliverySchema>;
+  application: UpdateApplicationInput;
+  creditBatch: UpdateCreditBatchData;
+  storageLocation: UpdateStorageLocationData;
+  removal: Record<never, never>;
+  stockEntry: Record<never, never>;
+}
+
 import type { LocalSubmissionStatus } from "@/lib/certification/status";
 import { getMetadataValue } from "@/lib/certification/submission-metadata";
 
@@ -62,11 +87,11 @@ export interface RecordLockFacts {
   removals: readonly RecordLockRemoval[];
 }
 
-export interface RecordLock {
+export interface RecordLock<Field extends string = string> {
   level: "open" | "inUse" | "sent";
   heldBy: readonly RecordLockHolder[];
   /** Fields accepted while In use, subject to ordinary validation and stock sufficiency. */
-  freeFields: readonly string[];
+  freeFields: readonly Field[];
   howToFree: string | null;
 }
 
@@ -88,7 +113,7 @@ export function isSentRemoval(removal: RecordLockRemoval): boolean {
   return removal.statements.length > 0 || removal.submissions.some(isRemoteSubmission);
 }
 
-function recordLock(facts: RecordLockFacts, freeFields: readonly string[]): RecordLock {
+function recordLock<Kind extends keyof RecordUpdateInputs>(facts: RecordLockFacts, freeFields: readonly (keyof RecordUpdateInputs[Kind] & string)[]): RecordLock<keyof RecordUpdateInputs[Kind] & string> {
   const heldBy = [...new Map(facts.removals.filter(isSentRemoval).map(removal => [removal.id, { kind: "removal", id: removal.id, ...(removal.label ? { label: removal.label } : {}) }])).values()];
   if (heldBy.length) {
     const interrupted = facts.removals.some(removal => isSentRemoval(removal) && !removal.statements.length &&
@@ -103,21 +128,21 @@ function recordLock(facts: RecordLockFacts, freeFields: readonly string[]): Reco
 }
 
 export const recordLocks = {
-  feedstock: (facts: RecordLockFacts) => recordLock(facts, ["notes", "massWetKg", "moistureContentPercent", "facilityId", "deliveryDate", "supplierId", "vehicleId", "feedstockTypeId", "storageLocationId", "overrideJustification", "transportDistanceKm", "transportDistanceSource"]),
-  productionRun: (facts: RecordLockFacts) => recordLock(facts, ["code", "operatorId", "cancellationReason", "feedstockDraws", "feedstockMoisturePercent", "feedingRateKgHr", "residenceTimeMinutes", "dieselOperationLiters", "dieselGensetLiters", "preprocessingFuelLiters", "electricityKwh"]),
-  sample: (facts: RecordLockFacts) => recordLock(facts, ["sampleCode", "creditBatchId", "samplingTime", "totalCarbonPercent", "organicCarbonPercent",
+  feedstock: (facts: RecordLockFacts) => recordLock<"feedstock">(facts, ["notes", "massWetKg", "moistureContentPercent", "facilityId", "deliveryDate", "supplierId", "vehicleId", "feedstockTypeId", "storageLocationId", "overrideJustification", "transportDistanceKm", "transportDistanceSource"]),
+  productionRun: (facts: RecordLockFacts) => recordLock<"productionRun">(facts, ["code", "operatorId", "cancellationReason", "feedstockDraws", "feedstockMoisturePercent", "feedingRateKgHr", "residenceTimeMinutes", "dieselOperationLiters", "dieselGensetLiters", "preprocessingFuelLiters", "electricityKwh", ...(facts.dependents.every(holder => holder.kind === "creditBatch") ? ["status", "startTime", "endTime", "facilityId", "reactorId", "biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"] as const : [])]),
+  sample: (facts: RecordLockFacts) => recordLock<"sample">(facts, ["sampleCode", "creditBatchId", "samplingTime", "totalCarbonPercent", "organicCarbonPercent",
     "labName", "labAccreditation", "analysisDate", "weightGrams", "volumeMl", "inorganicCarbonPercent", "totalHydrogenPercent", "totalNitrogenPercent",
     "totalOxygenPercent", "totalSulfurPercent", "ashContentPercent", "moistureContentPercent", "bulkDensityKgPerM3", "ph", "saltContentGPerKg",
     "oToCOrgRatio", "randomReflectanceR0Percent", "sReflectanceFraction", "r0MeasurementCount", "r0AnalysisDate", "reactiveCarbonPercent",
     "residualCarbonPercent", "tgaAnalysisDate", "phosphorusPercent", "potassiumPercent", "magnesiumPercent", "calciumPercent", "ironPercent"]),
-  biocharProduct: (facts: RecordLockFacts) => recordLock(facts, ["code", "status", "densityKgM3"]),
-  order: (facts: RecordLockFacts) => recordLock(facts, ["code", "quantityKg", "orderDate", "packaging"]),
-  delivery: (facts: RecordLockFacts) => recordLock(facts, ["code", "driverId", "vehicleId", "distanceKmOverride", "distanceSource", "distanceNote"]),
-  application: (facts: RecordLockFacts) => recordLock(facts, ["code", "applicationDate", "fieldSizeHa", "fieldIdentifier", "cropType", "applicationMethod", "evidenceMethod", "gpsLatitude", "gpsLongitude", "gisBoundary", "soilTemperatureSource", "soilTemperatureC"]),
-  creditBatch: (facts: RecordLockFacts) => recordLock(facts, ["code", "siteManagementNotes"]),
-  removal: (facts: RecordLockFacts) => recordLock(facts, []),
-  stockEntry: (facts: RecordLockFacts) => recordLock(facts, []),
-  storageLocation: (facts: RecordLockFacts) => recordLock(facts, ["code", "name", "capacityKg", "storageDescription", "storageMethod", "drawOrder"]),
+  biocharProduct: (facts: RecordLockFacts) => recordLock<"biocharProduct">(facts, ["code", "status", "densityKgM3"]),
+  order: (facts: RecordLockFacts) => recordLock<"order">(facts, ["code", "quantityKg", "orderDate", "packaging"]),
+  delivery: (facts: RecordLockFacts) => recordLock<"delivery">(facts, ["code", "driverId", "vehicleId", "distanceKmOverride", "distanceSource", "distanceNote"]),
+  application: (facts: RecordLockFacts) => recordLock<"application">(facts, ["code", "applicationDate", "fieldSizeHa", "fieldIdentifier", "cropType", "applicationMethod", "evidenceMethod", "gpsLatitude", "gpsLongitude", "gisBoundary", "soilTemperatureSource", "soilTemperatureC"]),
+  creditBatch: (facts: RecordLockFacts) => recordLock<"creditBatch">(facts, ["code", "siteManagementNotes", ...(facts.dependents.every(holder => holder.kind === "sample") ? ["startDate", "endDate", "facilityId", "feedstockTypeId", "productionRunIds"] as const : [])]),
+  removal: (facts: RecordLockFacts) => recordLock<"removal">(facts, []),
+  stockEntry: (facts: RecordLockFacts) => recordLock<"stockEntry">(facts, []),
+  storageLocation: (facts: RecordLockFacts) => recordLock<"storageLocation">(facts, ["code", "name", "capacityKg", "storageDescription", "storageMethod", "drawOrder", "stockMode", "mergedAt", "formulationId"]),
 } as const;
 
 export type RecordLockKind = keyof typeof recordLocks;
