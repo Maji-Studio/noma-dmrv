@@ -105,11 +105,11 @@ test.describe("Supplier archive and restore", () => {
     await rowAction(page, supplier.code, "Delete");
     await page.getByRole("dialog").getByRole("button", { name: /^Delete/ }).last().click();
 
-    await expect(page.getByText(`${supplier.code} is in use and cannot be deleted.`)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+    await expect(page.getByRole("dialog").getByText(`${supplier.code} is in use`)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
     await expect(page.getByText("Archive it instead. Existing records keep it, while pickers hide it.")).toBeVisible();
-    await page.getByRole("button", { name: "Archive instead" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Archive instead" }).click();
     await expect(page.getByText(`Supplier ${supplier.code} archived. Restore it from the archived view.`)).toBeVisible();
-    await expect(page.getByText(`${supplier.code} is in use and cannot be deleted.`)).toHaveCount(0);
+    await expect(page.getByRole("dialog").getByText(`${supplier.code} is in use`)).toHaveCount(0);
   });
 
   test("a feedstock keeping an archived supplier shows it, and the picker opens a read-only View with Restore", async ({ adminPage: page, seededData }) => {
@@ -197,9 +197,9 @@ test.describe("Customer archive and restore", () => {
     await rowAction(page, customer.code, "Delete");
 
     // The dry run refuses while the dialog opens, so the operator never sees a Delete button that cannot work.
-    await expect(page.getByText(`${customer.code} is in use and cannot be deleted.`)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
-    await expect(page.getByRole("dialog")).toHaveCount(0);
-    await page.getByRole("button", { name: "Archive instead" }).click();
+    await expect(page.getByRole("dialog").getByText(`${customer.code} is in use`)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+    await expect(page.getByRole("dialog").getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
+    await page.getByRole("dialog").getByRole("button", { name: "Archive instead" }).click();
     await expect(page.getByText(`Customer ${customer.code} archived. Restore it from the archived view.`)).toBeVisible();
   });
 
@@ -217,8 +217,8 @@ test.describe("Customer archive and restore", () => {
       await rowAction(page, customer.code, "Delete");
 
       const dialog = page.getByRole("dialog");
-      await expect(dialog.getByText("This order has no deliveries and is deleted too:")).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
-      await expect(dialog.getByText(orderCode)).toBeVisible();
+      await expect(dialog.getByText("This order is deleted too")).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+      await expect(dialog.getByRole("link", { name: `Open order ${orderCode}` })).toHaveAttribute("href", new RegExp(`^/orders\\?facility=${facility.id}&order=`));
       await dialog.getByRole("button", { name: "Delete", exact: true }).click();
 
       await expect(page.getByText(`Customer deleted. Also deleted 1 order without deliveries: ${orderCode}.`)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });

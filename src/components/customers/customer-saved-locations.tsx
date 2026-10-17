@@ -18,7 +18,9 @@ import { FormSection, ServerError } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { DefaultLocationBadge } from "@/components/ui/default-location-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { DeleteConflictNotice, isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { Notice } from "@/components/ui/notice";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -92,6 +94,8 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
   const [editingLocation, setEditingLocation] = useState<SavedLocation | null>(null);
   const [deletingLocation, setDeletingLocation] = useState<SavedLocation | null>(null);
   const [deleteConflict, setDeleteConflict] = useState<SavedLocation | null>(null);
+  // The only active location, refused as in use: the dialog explains and offers no Archive.
+  const [onlyActiveConflict, setOnlyActiveConflict] = useState<SavedLocation | null>(null);
   const [lifecycleError, setLifecycleError] = useState<string | null>(null);
 
   const { data: locations, isLoading, isError } = useCustomerLocations(customerId);
@@ -104,7 +108,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
   // The last active location cannot be archived: a customer always keeps one
   // destination for new orders. The reason shows before anyone clicks.
   const isOnlyActive = activeLocations.length === 1;
-  // A later delete or archive can leave the refused location the only active one; the notice then gives way to the row's reason.
+  // A later delete or archive can leave the refused location the only active one; the Archive action then gives way to the row's reason.
   const canArchiveConflict = !!deleteConflict && !isOnlyActive && activeLocations.some((location) => location.id === deleteConflict.id);
 
   useLocationEditIntent(locations, (location) => {
@@ -161,10 +165,10 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
       if (isInUseDeleteRefusal(message) && !target.archivedAt) {
         // The only active location cannot be archived either, so "Archive instead" would be refused too.
         if (isOnlyActive) {
-          toast.error(onlyActiveInUseMessage(target.name));
+          setOnlyActiveConflict(target);
           return;
         }
-        // In use: the dialog gives way to a notice that offers Archive instead.
+        // In use: the dialog gives way to the in-use dialog that offers Archive instead.
         setDeleteConflict(target);
         return;
       }
@@ -239,17 +243,17 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
           </div>
 
           {isOnlyActive && (
-            <p id={onlyActiveHintId} className="body-small text-[var(--color-text-tertiary)]">
+            <Notice id={onlyActiveHintId} tone="info">
               This is the only active location, so it cannot be archived. Add or restore another location first.
-            </p>
+            </Notice>
           )}
 
           {archivedLocations.length > 0 && (
             <div className="flex flex-col gap-8" role="group" aria-label="Archived locations">
               <p className="body-small font-medium text-[var(--color-text-secondary)]">Archived locations</p>
-              <p className="body-small text-[var(--color-text-tertiary)]">
+              <Notice tone="info">
                 Pickers hide these. Existing orders keep them. Restore a location to edit it.
-              </p>
+              </Notice>
               {archivedLocations.map((loc) => (
                 <div key={loc.id} className={`${ROW_CLASS} text-[var(--color-text-tertiary)]`}>
                   <LocationIdentity location={loc} archived />
@@ -280,14 +284,25 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
       )}
 
       {canArchiveConflict && deleteConflict && (
-        <DeleteConflictNotice
+        <InUseDeleteDialog
           label={deleteConflict.name}
           onArchive={() => handleArchive(deleteConflict)}
+          onClose={() => {
+            setDeleteConflict(null);
+            setLifecycleError(null);
+          }}
           isPending={archiveLocation.isPending}
+          errorMessage={lifecycleError}
         />
       )}
 
-      {lifecycleError && <ServerError message={lifecycleError} />}
+      {onlyActiveConflict && (
+        <InUseDeleteDialog label={onlyActiveConflict.name} onClose={() => setOnlyActiveConflict(null)}>
+          <p>{onlyActiveInUseMessage(onlyActiveConflict.name)}</p>
+        </InUseDeleteDialog>
+      )}
+
+      {lifecycleError && !canArchiveConflict && <ServerError message={lifecycleError} />}
 
       <CustomerLocationDialog
         isOpen={isLocationDialogOpen}

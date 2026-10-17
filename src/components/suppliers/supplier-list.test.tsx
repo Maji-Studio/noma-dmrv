@@ -167,10 +167,10 @@ describe("SupplierList archive view", () => {
     render(<SupplierList />);
     fireEvent.click(within("Actions for SUP-0001", "Delete"));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
-    expect(await screen.findByText("SUP-0001 is in use and cannot be deleted.")).toBeTruthy();
+    expect(await screen.findByText("SUP-0001 is in use")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Archive instead" }));
     await waitFor(() => expect(state.archive).toHaveBeenCalledWith({ supplierId: "id-SUP-0001", expectedVersion: 4 }));
-    await waitFor(() => expect(screen.queryByText("SUP-0001 is in use and cannot be deleted.")).toBeNull());
+    await waitFor(() => expect(screen.queryByText("SUP-0001 is in use")).toBeNull());
   });
 
   it("retries Archive instead with the refreshed version after a stale refusal", async () => {
@@ -179,7 +179,7 @@ describe("SupplierList archive view", () => {
     const view = render(<SupplierList />);
     fireEvent.click(within("Actions for SUP-0001", "Delete"));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
-    await screen.findByText("SUP-0001 is in use and cannot be deleted.");
+    await screen.findByText("SUP-0001 is in use");
     fireEvent.click(screen.getByRole("button", { name: "Archive instead" }));
     await waitFor(() => expect(state.archive).toHaveBeenLastCalledWith({ supplierId: "id-SUP-0001", expectedVersion: 4 }));
     await screen.findByRole("alert");
@@ -258,7 +258,7 @@ describe("SupplierList archive view", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
     await waitFor(() => expect(state.remove).toHaveBeenCalled());
     expect(screen.queryByRole("button", { name: "Archive instead" })).toBeNull();
-    expect(screen.queryByText(/is in use and cannot be deleted/)).toBeNull();
+    expect(screen.queryByText(/ is in use/)).toBeNull();
   });
 
   it("refuses the edit mode request on an archived supplier and allows it on an active one", () => {

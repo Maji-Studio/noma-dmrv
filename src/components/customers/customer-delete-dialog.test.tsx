@@ -27,17 +27,23 @@ describe("CustomerDeleteDialog", () => {
 
   it("names a single order without deliveries", () => {
     render(<CustomerDeleteDialog {...baseProps} cascade={{ orders: [{ id: "o1", code: "E2E-OR-1", facilityId: "f1" }], cascadeFingerprint: "v1:a" }} isLoading={false} />);
-    expect(screen.getByText("This order has no deliveries and is deleted too:")).toBeTruthy();
-    expect(screen.getByText("E2E-OR-1")).toBeTruthy();
+    expect(screen.getByText("This order is deleted too")).toBeTruthy();
+    const link = screen.getByRole("link", { name: "Open order E2E-OR-1" });
+    expect(link.getAttribute("href")).toBe("/orders?facility=f1&order=o1");
     expect(deleteButton().disabled).toBe(false);
+    expect(screen.getByText("Delete customer E2E-CUST-1 and its locations?")).toBeTruthy();
+    expect(screen.getByText("This cannot be undone.")).toBeTruthy();
+    // Primary first, Cancel after.
+    const labels = screen.getAllByRole("button").map((b) => b.textContent).filter((t) => t === "Delete" || t === "Cancel");
+    expect(labels).toEqual(["Delete", "Cancel"]);
   });
 
   it("lists five codes and counts the rest", () => {
     const orders = Array.from({ length: 6 }, (_, index) => ({ id: `o${index}`, code: `E2E-OR-${index + 1}`, facilityId: "f1" }));
     render(<CustomerDeleteDialog {...baseProps} cascade={{ orders, cascadeFingerprint: "v1:b" }} isLoading={false} />);
-    expect(screen.getByText("These 6 orders have no deliveries and are deleted too:")).toBeTruthy();
-    expect(screen.getByText("E2E-OR-5")).toBeTruthy();
-    expect(screen.queryByText("E2E-OR-6")).toBeNull();
+    expect(screen.getByText("These 6 orders are deleted too")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open order E2E-OR-5" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Open order E2E-OR-6" })).toBeNull();
     expect(screen.getByText("and 1 more")).toBeTruthy();
   });
 

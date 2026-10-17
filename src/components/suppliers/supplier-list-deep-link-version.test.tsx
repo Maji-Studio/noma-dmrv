@@ -50,7 +50,7 @@ vi.mock("@/hooks/use-list-pagination", () => ({
 }));
 vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => undefined }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
-vi.mock("@phosphor-icons/react/dist/ssr", () => ({ UsersIcon: () => null, PlusIcon: () => null, ArchiveIcon: () => null }));
+vi.mock("@phosphor-icons/react/dist/ssr", () => ({ UsersIcon: () => null, PlusIcon: () => null, ArchiveIcon: () => null, InfoIcon: () => null, WarningIcon: () => null, WarningCircleIcon: () => null, CheckCircleIcon: () => null }));
 vi.mock("@/components/ui", () => ({
   Button: ({ children }: { children?: ReactNode }) => <button type="button">{children}</button>,
   EmptyState: () => null,

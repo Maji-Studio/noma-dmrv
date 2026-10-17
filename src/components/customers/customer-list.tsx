@@ -32,7 +32,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { useToast } from "@/components/ui/toast";
-import { DeleteConflictNotice, isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
 import { ArchivedCustomerNotice } from "@/components/parties";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { CustomerForm, type PendingLocation } from "./customer-form";
@@ -341,7 +342,7 @@ export function CustomerList() {
       }
       const message = toDeleteErrorMessage(error, `Customer ${deletingCustomer.code}`, "Customer was not deleted. Try again.");
       if (isInUseDeleteRefusal(message) && !deletingCustomer.archivedAt) {
-        // In use: the dialog gives way to a notice that offers Archive instead.
+        // In use: the dialog gives way to the in-use dialog that offers Archive instead.
         setDeleteConflict(deletingCustomer);
         setDeletingCustomer(null);
         return;
@@ -520,14 +521,20 @@ export function CustomerList() {
       </DataTable>
 
       {conflictCustomer && (
-        <DeleteConflictNotice
+        <InUseDeleteDialog
           label={conflictCustomer.code}
           onArchive={() => handleArchive(conflictCustomer)}
+          onClose={() => {
+            setDeleteConflict(null);
+            setDeletingCustomer(null);
+            setLifecycleError(null);
+          }}
           isPending={archiveCustomer.isPending}
+          errorMessage={lifecycleError}
         />
       )}
 
-      {((lifecycleError && !viewedEntity) || (deleteError && !deletingCustomer)) && (
+      {((lifecycleError && !viewedEntity && !conflictCustomer) || (deleteError && !deletingCustomer)) && (
         <ServerError message={(!viewedEntity ? lifecycleError : null) ?? deleteError ?? ""} />
       )}
 

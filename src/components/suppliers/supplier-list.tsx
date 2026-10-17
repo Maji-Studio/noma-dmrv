@@ -33,7 +33,8 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
-import { DeleteConflictNotice, isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { ArchivedSupplierNotice } from "@/components/parties";
 import { SupplierForm, type PendingSupplierLocation } from "./supplier-form";
@@ -298,7 +299,7 @@ export function SupplierList() {
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Supplier ${deletingSupplier.code}`, "Supplier was not deleted. Try again.");
       if (isInUseDeleteRefusal(message) && !deletingSupplier.archivedAt) {
-        // In use: the dialog gives way to a notice that offers Archive instead.
+        // In use: the dialog gives way to the in-use dialog that offers Archive instead.
         setDeleteConflict(deletingSupplier);
         setDeletingSupplier(null);
         return;
@@ -489,14 +490,19 @@ export function SupplierList() {
       </DataTable>
 
       {deleteConflict && (
-        <DeleteConflictNotice
+        <InUseDeleteDialog
           label={deleteConflict.code}
           onArchive={() => handleArchive(deleteConflict)}
+          onClose={() => {
+            setDeleteConflict(null);
+            setLifecycleError(null);
+          }}
           isPending={archiveSupplier.isPending}
+          errorMessage={lifecycleError}
         />
       )}
 
-      {((lifecycleError && !viewedEntity) || (deleteError && !deletingSupplier)) && (
+      {((lifecycleError && !viewedEntity && !deleteConflict) || (deleteError && !deletingSupplier)) && (
         <ServerError message={(!viewedEntity ? lifecycleError : null) ?? deleteError ?? ""} />
       )}
 

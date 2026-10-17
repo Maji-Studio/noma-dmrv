@@ -17,7 +17,8 @@ import type { FeedstockType } from "@/db/schema";
 import { ServerError } from "@/components/forms";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { DeleteConflictNotice, isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
 import {
   EntitySideSheet,
   type SideSheetMode,
@@ -447,9 +448,10 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       </div>
 
       {deleteConflict && (
-        <DeleteConflictNotice
+        <InUseDeleteDialog
           label={deleteConflict.code}
           onArchive={() => handleArchive(deleteConflict)}
+          onClose={() => setDeleteConflict(null)}
           isPending={archiveFeedstockType.isPending}
         />
       )}

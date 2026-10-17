@@ -7,6 +7,8 @@
 
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Notice } from "@/components/ui/notice";
+import { SheetLinkRow, SheetLinkRows } from "@/components/ui/sheet-link-row";
+import { orderDeepLinkHref } from "@/lib/order-links";
 import type { CascadePreview } from "@/lib/domain-errors";
 
 /** Order codes named in the dialog; the rest are counted. */
@@ -30,15 +32,18 @@ function OrdersWithoutDeliveries({ orders }: { orders: CascadePreview["orders"] 
   const more = orders.length - shown.length;
   return (
     <div className="flex flex-col gap-8">
-      <p className="body-small font-medium">
-        {orders.length === 1 ? "This order has no deliveries and is deleted too:" : `These ${orders.length} orders have no deliveries and are deleted too:`}
+      <p className="body-small font-medium text-[var(--color-text-primary)]">
+        {orders.length === 1 ? "This order is deleted too" : `These ${orders.length} orders are deleted too`}
       </p>
-      <ul className="flex flex-col gap-4 body-small text-[var(--color-text-secondary)]" aria-label="Orders deleted with this customer">
-        {shown.map((order) => (
-          <li key={order.id}>{order.code}</li>
-        ))}
-        {more > 0 && <li>{`and ${more} more`}</li>}
-      </ul>
+      <p className="body-small text-[var(--color-text-tertiary)]">They have no deliveries. Select one to open it.</p>
+      <div aria-label="Orders deleted with this customer" role="group">
+        <SheetLinkRows>
+          {shown.map((order) => (
+            <SheetLinkRow key={order.id} href={orderDeepLinkHref(order.id, order.facilityId)} primary={order.code} ariaLabel={`Open order ${order.code}`} />
+          ))}
+        </SheetLinkRows>
+      </div>
+      {more > 0 && <p className="body-small text-[var(--color-text-tertiary)]">{`and ${more} more`}</p>}
     </div>
   );
 }
@@ -57,7 +62,13 @@ export function CustomerDeleteDialog({
     <DeleteConfirmDialog
       isOpen
       title="Delete customer"
-      message={`Delete customer ${customerCode} and its locations? This action cannot be undone. A customer with deliveries on its orders, or with a location registered with Isometric as a storage site, cannot be deleted.`}
+      width="md"
+      message={
+        <>
+          <p className="font-medium text-[var(--color-text-primary)]">{`Delete customer ${customerCode} and its locations?`}</p>
+          <p>This cannot be undone.</p>
+        </>
+      }
       onConfirm={onConfirm}
       onCancel={onCancel}
       isPending={isPending}

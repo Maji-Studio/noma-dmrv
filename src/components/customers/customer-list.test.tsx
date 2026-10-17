@@ -168,10 +168,10 @@ describe("CustomerList archive view", () => {
     render(<CustomerList />);
     fireEvent.click(within("Actions for CUST-0001", "Delete"));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
-    expect(await screen.findByText("CUST-0001 is in use and cannot be deleted.")).toBeTruthy();
+    expect(await screen.findByText("CUST-0001 is in use")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Archive instead" }));
     await waitFor(() => expect(state.archive).toHaveBeenCalledWith({ customerId: "id-CUST-0001", expectedVersion: 4 }));
-    await waitFor(() => expect(screen.queryByText("CUST-0001 is in use and cannot be deleted.")).toBeNull());
+    await waitFor(() => expect(screen.queryByText("CUST-0001 is in use")).toBeNull());
   });
 
   it("retries Archive instead with the refreshed version after a stale refusal", async () => {
@@ -180,7 +180,7 @@ describe("CustomerList archive view", () => {
     const view = render(<CustomerList />);
     fireEvent.click(within("Actions for CUST-0001", "Delete"));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
-    await screen.findByText("CUST-0001 is in use and cannot be deleted.");
+    await screen.findByText("CUST-0001 is in use");
     fireEvent.click(screen.getByRole("button", { name: "Archive instead" }));
     await waitFor(() => expect(state.archive).toHaveBeenLastCalledWith({ customerId: "id-CUST-0001", expectedVersion: 4 }));
     await screen.findByRole("alert");
@@ -210,11 +210,12 @@ describe("CustomerList archive view", () => {
     state.preview = { ...state.preview, data: { cascade: { orders: Array.from({ length: 7 }, (_, index) => ({ id: `o${index}`, code: `ORD-000${index + 1}`, facilityId: "f1" })), cascadeFingerprint: "v1:seven" } } };
     render(<CustomerList />);
     fireEvent.click(within("Actions for CUST-0001", "Delete"));
-    expect(screen.getByText("These 7 orders have no deliveries and are deleted too:")).toBeTruthy();
-    const items = screen.getAllByRole("listitem").map((item) => item.textContent);
-    expect(items).toContain("ORD-0005");
-    expect(items).not.toContain("ORD-0006");
-    expect(items).toContain("and 2 more");
+    expect(screen.getByText("These 7 orders are deleted too")).toBeTruthy();
+    const links = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
+    expect(screen.getByRole("link", { name: "Open order ORD-0005" }).getAttribute("href")).toBe("/orders?facility=f1&order=o4");
+    expect(screen.queryByRole("link", { name: "Open order ORD-0006" })).toBeNull();
+    expect(links.filter((href) => href?.startsWith("/orders"))).toHaveLength(5);
+    expect(screen.getByText("and 2 more")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
     await waitFor(() => expect(state.remove).toHaveBeenCalledWith({ customerId: "id-CUST-0001", expectedVersion: 4, cascadeFingerprint: "v1:seven" }));
@@ -225,7 +226,7 @@ describe("CustomerList archive view", () => {
     state.preview = { data: undefined, isPending: false, isError: true, error: new Error("Customer was not deleted because deliveries were recorded on its orders. Archive it instead.") };
     render(<CustomerList />);
     fireEvent.click(within("Actions for CUST-0001", "Delete"));
-    expect(screen.getByText("CUST-0001 is in use and cannot be deleted.")).toBeTruthy();
+    expect(screen.getByText("CUST-0001 is in use")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Archive instead" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Confirm delete" })).toBeNull();
   });
@@ -238,8 +239,8 @@ describe("CustomerList archive view", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
     await waitFor(() => expect(state.remove).toHaveBeenLastCalledWith({ customerId: "id-CUST-0001", expectedVersion: 4, cascadeFingerprint: "v1:open" }));
     expect(await screen.findByText("The orders deleted with this customer changed. Review the list and delete again.")).toBeTruthy();
-    expect(screen.getByText("These 2 orders have no deliveries and are deleted too:")).toBeTruthy();
-    expect(screen.getByText("ORD-0002")).toBeTruthy();
+    expect(screen.getByText("These 2 orders are deleted too")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open order ORD-0002" })).toBeTruthy();
     expect(state.success).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
@@ -271,7 +272,7 @@ describe("CustomerList archive view", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
     await waitFor(() => expect(state.remove).toHaveBeenCalled());
     expect(screen.queryByRole("button", { name: "Archive instead" })).toBeNull();
-    expect(screen.queryByText(/is in use and cannot be deleted/)).toBeNull();
+    expect(screen.queryByText(/ is in use/)).toBeNull();
   });
 
   it("refuses the edit mode request on an archived customer and allows it on an active one", () => {

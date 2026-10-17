@@ -127,10 +127,10 @@ test.describe("Customer location archive", () => {
       await sheet.getByRole("button", { name: `Delete ${customerLocation.name}` }).click();
       await page.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).last().click();
 
-      await expect(sheet.getByText(`${customerLocation.name} is in use and cannot be deleted.`)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
-      await sheet.getByRole("button", { name: "Archive instead" }).click();
+      await expect(page.getByRole("dialog").getByText(`${customerLocation.name} is in use`)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+      await page.getByRole("dialog").getByRole("button", { name: "Archive instead" }).click();
       await expect(sheet.getByRole("group", { name: "Archived locations" }).getByText(customerLocation.name)).toBeVisible();
-      await expect(sheet.getByText(`${customerLocation.name} is in use and cannot be deleted.`)).toHaveCount(0);
+      await expect(page.getByRole("dialog").getByText(`${customerLocation.name} is in use`)).toHaveCount(0);
     } finally {
       const { db, pool } = createDbConnection();
       await db.delete(schema.customerLocations).where(eq(schema.customerLocations.id, secondId)).finally(() => pool.end());
