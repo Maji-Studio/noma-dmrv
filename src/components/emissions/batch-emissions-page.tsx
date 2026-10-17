@@ -1,8 +1,8 @@
 /**
  * The Emissions page of one credit batch (epic #1058, design C3c "Source
  * chips"): breadcrumb and pager, KPI strip, state chips and sort, then the
- * lines grouped by template group. A row opens the ledger drawer (From records
- * + Manual entries = Total); "Record this month" turns the list into a grid
+ * lines grouped by template group. A row expands as an accordion (From records
+ * + Manual entries = Total, then the line comment); "Record this month" turns the list into a grid
  * of every open line with one Save all.
  */
 "use client";
@@ -27,7 +27,8 @@ import { toSaveErrorMessage } from "@/lib/stale-version";
 import { useBatchLineQuery } from "./batch-emissions-query";
 import { BatchEmissionsTopBar } from "./batch-emissions-pager";
 import { BatchKpiStrip, LineToolbar, lineChipLabel, type BatchKpis } from "./batch-emissions-toolbar";
-import { EmissionLineDrawer, type DrawerView } from "./emission-line-drawer";
+import { EmissionEntryFormPanel } from "./emission-entry-form-panel";
+import type { EntryFormMode } from "./manual-entry-form";
 import { EmissionLineList } from "./emission-line-list";
 import {
   isOpen,
@@ -101,7 +102,9 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
   const linesQuery = useBatchEmissionLines(scope);
   const { filter, sort, setFilter, setSort } = useBatchLineQuery();
   const [recording, setRecording] = useState(false);
-  const [drawer, setDrawer] = useState<{ componentId: string; view: DrawerView } | null>(null);
+  const [form, setForm] = useState<{ componentId: string; mode: EntryFormMode } | null>(null);
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [undo, setUndo] = useState<UndoState | null>(null);
   const [undoing, setUndoing] = useState(false);
   const deleteEntry = useDeleteEmissionEntry(scope);
@@ -109,7 +112,7 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
 
   const overviewBatch = overview.data?.batches.find((batch) => batch.creditBatchId === scope.creditBatchId) ?? null;
   const lines = linesQuery.data ?? [];
-  const drawerLine = drawer ? (lines.find((line) => line.componentId === drawer.componentId) ?? null) : null;
+  const formLine = form ? (lines.find((line) => line.componentId === form.componentId) ?? null) : null;
   const visible = sortLines(lines.filter((line) => lineMatches(line, filter)), sort);
 
   if (overview.isSuccess && !overviewBatch) {
@@ -126,13 +129,23 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
   }
 
   const batch: EmissionBatch | null = overviewBatch ? batchFacts(overviewBatch) : null;
-  const openDrawer = (line: EmissionLine, view: DrawerView = { kind: "ledger" }) => setDrawer({ componentId: line.componentId, view });
+  const setExpandedLine = (line: EmissionLine, open: boolean) =>
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (open) next.add(line.componentId);
+      else next.delete(line.componentId);
+      return next;
+    });
+  const toggleLine = (line: EmissionLine) => {
+    const open = !expanded.has(line.componentId);
+    setExpandedLine(line, open);
+    if (!open && editingCommentId === line.componentId) setEditingCommentId(null);
+  };
 
   const removeEntry = async (line: EmissionLine, entry: EmissionEntry) => {
     try {
       await deleteEntry.mutateAsync({ id: entry.id, expectedVersion: entry.version });
-      // Undo lives in the page bar, outside the drawer's focus trap, so the drawer closes.
-      setDrawer(null);
+      // Undo shows under the row; its button takes focus because the entry's menu is gone.
       setUndo({ id: Date.now(), line, entry });
     } catch (error) {
       toast.error(toSaveErrorMessage(error, `The manual entry on ${line.displayName} was not deleted. Try again.`));
@@ -154,6 +167,10 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
   };
 
   const undoMessage = undo ? `Manual entry deleted on ${undo.line.displayName}.${undo.entry.documentCount ? " Undo brings back the values and the files." : ""}` : "";
+
+  const undoBar = undo ? (
+    <EmissionsUndoBar key={undo.id} inline message={undoMessage} undoing={undoing} onUndo={() => void undoLast()} onDismiss={() => setUndo(null)} />
+  ) : null;
 
   const counts = lineCounts(lines);
   const openCount = lines.filter(isOpen).length;
@@ -218,7 +235,10 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
               onEnterAgain={(line) => {
                 const entry = line.entries.find((candidate) => !candidate.counts);
                 // A line removed from the template takes no new entry; its ledger offers Delete.
-                if (entry) openDrawer(line, line.entryPolicy === "none" ? { kind: "ledger" } : { kind: "form", mode: { kind: "again", entry } });
+                if (!entry) return;
+                if (line.entryPolicy !== "none") return setForm({ componentId: line.componentId, mode: { kind: "again", entry } });
+                setRecording(false);
+                setExpandedLine(line, true);
               }}
             />
           ) : (
@@ -229,36 +249,34 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
                 grouped={sort === "template"}
                 scope={scope}
                 canWrite={entriesEnabled}
+                expanded={expanded}
+                editingCommentId={editingCommentId}
+                undo={undo && !recording ? { componentId: undo.line.componentId, bar: undoBar } : null}
                 filterLabel={lineChipLabel(filter)}
                 onClearFilter={() => setFilter(null)}
                 actions={{
-                  open: (line, options) => openDrawer(line, options?.add ? { kind: "form", mode: { kind: "add" } } : { kind: "ledger" }),
+                  toggle: toggleLine,
+                  form: (line, mode) => setForm({ componentId: line.componentId, mode }),
+                  comment: (line) => {
+                    setExpandedLine(line, true);
+                    setEditingCommentId(line.componentId);
+                  },
+                  editingComment: (line, editing) => setEditingCommentId(editing ? line.componentId : null),
+                  deleteEntry: (line, entry) => void removeEntry(line, entry),
                 }}
               />
             </div>
           )}
-          <EmissionLineDrawer
-            line={drawerLine}
-            view={drawer?.view ?? { kind: "ledger" }}
+          <EmissionEntryFormPanel
+            line={formLine}
+            mode={form?.mode ?? null}
             batch={batch}
             scope={scope}
             today={today}
-            canWrite={entriesEnabled}
-            onViewChange={(view) => setDrawer((current) => (current ? { ...current, view } : current))}
-            onClose={() => setDrawer(null)}
-            onDeleteEntry={(line, entry) => void removeEntry(line, entry)}
+            onClose={() => setForm(null)}
             onSaved={(line, warning) => (warning ? toast.warning(warning) : toast.success(`Manual entry saved on ${line.displayName}.`))}
           />
         </>
-      )}
-      {undo && !recording && (
-        <EmissionsUndoBar
-          key={undo.id}
-          message={undoMessage}
-          undoing={undoing}
-          onUndo={() => void undoLast()}
-          onDismiss={() => setUndo(null)}
-        />
       )}
     </div>
   );

@@ -1,33 +1,22 @@
 /**
- * The ledger drawer of one line: From records + Manual entries = Total, read
- * as an equation. Records are read-only and link to where they are made;
- * each manual entry carries its own ⋯. Add and Edit swap the ledger for the entry form in the
- * same drawer.
+ * The body of an expanded line row: From records + Manual entries = Total,
+ * read as an equation, then the line comment. Records are read-only and link
+ * to where they are made; each manual entry carries its own ⋯. Add and Edit
+ * open the entry form panel.
  */
 "use client";
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowUpRightIcon, CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react/dist/ssr";
-import { Button, Notice } from "@/components/ui";
-import {
-  SlideOverPanelBody,
-  SlideOverPanelContent,
-  SlideOverPanelDescription,
-  SlideOverPanelFooter,
-  SlideOverPanelHeader,
-  SlideOverPanelRoot,
-  SlideOverPanelTitle,
-} from "@/components/ui/slide-over-panel";
+import { Notice } from "@/components/ui";
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
 import { certificationRemovalTemplatesHref } from "@/lib/certification/links";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { cn } from "@/lib/utils";
-import { EmissionLineBadge } from "./emission-line-badge";
 import {
   NEEDS_SETUP_COPY,
   SINGLE_LINE_CAPTION,
-  addEntryRefusal,
   entriesFigure,
   formatFigure,
   hasRecordsFigure,
@@ -38,65 +27,13 @@ import {
   recordsText,
   stoppedEntries,
   valueEntries,
-  type EmissionBatch,
   type EmissionEntry,
   type EmissionLine,
 } from "./emission-line-display";
 import { ManualEntryItem, StoppedEntryItem } from "./emission-ledger-entries";
-import { ManualEntryForm, type EntryFormMode } from "./manual-entry-form";
+import { EmissionLineComment } from "./emission-line-comment";
+import type { EntryFormMode } from "./manual-entry-form";
 import { SOURCE_ICON } from "./emission-source-chips";
-
-export type DrawerView = { kind: "ledger" } | { kind: "form"; mode: EntryFormMode };
-
-interface EmissionLineDrawerProps {
-  line: EmissionLine | null;
-  view: DrawerView;
-  batch: EmissionBatch;
-  scope: EmissionBatchScope;
-  today: string;
-  /** False while manual entries are switched off: the ledger is read-only. */
-  canWrite: boolean;
-  onViewChange: (view: DrawerView) => void;
-  onClose: () => void;
-  onDeleteEntry: (line: EmissionLine, entry: EmissionEntry) => void;
-  /** Called after a form save; `warning` when the entry saved but its file did not. */
-  onSaved: (line: EmissionLine, warning?: string) => void;
-}
-
-export function EmissionLineDrawer({ line, view, batch, scope, today, canWrite, onViewChange, onClose, onDeleteEntry, onSaved }: EmissionLineDrawerProps) {
-  return (
-    <SlideOverPanelRoot open={!!line} onOpenChange={(open) => !open && onClose()}>
-      <SlideOverPanelContent size="default">
-        {line &&
-          (view.kind === "form" ? (
-            <ManualEntryForm
-              key={`${line.componentId}-${view.mode.kind}-${view.mode.kind === "add" ? "" : view.mode.entry.id}`}
-              line={line}
-              batch={batch}
-              scope={scope}
-              today={today}
-              mode={view.mode}
-              onCancel={() => onViewChange({ kind: "ledger" })}
-              onSaved={({ warning }) => {
-                onViewChange({ kind: "ledger" });
-                onSaved(line, warning);
-              }}
-            />
-          ) : (
-            <LedgerView
-              key={line.componentId}
-              line={line}
-              batch={batch}
-              scope={scope}
-              canWrite={canWrite}
-              onForm={(mode) => onViewChange({ kind: "form", mode })}
-              onDeleteEntry={onDeleteEntry}
-            />
-          ))}
-      </SlideOverPanelContent>
-    </SlideOverPanelRoot>
-  );
-}
 
 /** One ledger row: the operator in a gutter, a label and its detail, the figure on the right. */
 function LedgerRow({ op, label, figure, children, total, muted }: { op?: string; label: string; figure?: string; children?: ReactNode; total?: boolean; muted?: boolean }) {
@@ -118,23 +55,24 @@ function LedgerRow({ op, label, figure, children, total, muted }: { op?: string;
   );
 }
 
-interface LedgerViewProps {
+interface AccordionBodyProps {
+  id: string;
   line: EmissionLine;
-  batch: EmissionBatch;
   scope: EmissionBatchScope;
   canWrite: boolean;
+  editingComment: boolean;
+  onEditingComment: (editing: boolean) => void;
   onForm: (mode: EntryFormMode) => void;
   onDeleteEntry: (line: EmissionLine, entry: EmissionEntry) => void;
 }
 
-function LedgerView({ line, batch, scope, canWrite, onForm, onDeleteEntry }: LedgerViewProps) {
+export function EmissionLineAccordionBody({ id, line, scope, canWrite, editingComment, onEditingComment, onForm, onDeleteEntry }: AccordionBodyProps) {
   const [showDescription, setShowDescription] = useState(false);
   const records = lineRecords(line);
   const values = valueEntries(line);
   const stopped = stoppedEntries(line);
   const single = line.entryPolicy === "single";
   const takesEntries = line.entryPolicy !== "none";
-  const addRefusal = addEntryRefusal(line);
   const templatesHref = certificationRemovalTemplatesHref(scope.facilityId);
   const entriesSum = entriesFigure(line);
 
@@ -200,53 +138,33 @@ function LedgerView({ line, batch, scope, canWrite, onForm, onDeleteEntry }: Led
     );
   }
 
-  const singleEntry = single ? values[0] : undefined;
   const reviewWithoutEntries = line.state === "needsReview" && !stopped.length;
   return (
-    <>
-      <SlideOverPanelHeader>
-        <div className="flex min-w-0 flex-col gap-2">
-          <SlideOverPanelTitle>{line.displayName}</SlideOverPanelTitle>
-          <SlideOverPanelDescription>{`${line.groupName}, ${batch.code}`}</SlideOverPanelDescription>
+    <div id={id} role="region" aria-label={`${line.displayName} details`} className="flex flex-col gap-20 bg-[var(--paper)] px-16 pt-4 pb-20 md:pl-24">
+      {line.description && (
+        <div className="flex flex-col gap-8">
+          <button
+            type="button"
+            aria-expanded={showDescription}
+            onClick={() => setShowDescription((open) => !open)}
+            className="inline-flex min-h-44 items-center gap-6 self-start body-small font-medium text-[var(--color-text-interaction-primary)] underline-offset-4 hover:underline"
+          >
+            {showDescription ? <CaretDownIcon size={16} weight="bold" aria-hidden="true" /> : <CaretRightIcon size={16} weight="bold" aria-hidden="true" />}
+            Line description
+          </button>
+          {showDescription && <p className="body-small whitespace-pre-line text-[var(--color-text-secondary)]">{line.description}</p>}
         </div>
-      </SlideOverPanelHeader>
-      <SlideOverPanelBody>
-        <div className="flex flex-col gap-20">
-          <div className="flex flex-wrap items-center justify-between gap-12">
-            <EmissionLineBadge state={line.state} />
-            {line.description && (
-              <button
-                type="button"
-                aria-expanded={showDescription}
-                onClick={() => setShowDescription((open) => !open)}
-                className="inline-flex min-h-44 items-center gap-6 body-small font-medium text-[var(--color-text-interaction-primary)] underline-offset-4 hover:underline"
-              >
-                {showDescription ? <CaretDownIcon size={16} weight="bold" aria-hidden="true" /> : <CaretRightIcon size={16} weight="bold" aria-hidden="true" />}
-                Line description
-              </button>
-            )}
-          </div>
-          {showDescription && line.description && (
-            <p className="body-small whitespace-pre-line text-[var(--color-text-secondary)]">{line.description}</p>
-          )}
-          {reviewWithoutEntries && (
-            <Notice tone="warning" action={<Link href={templatesHref} className="body-small font-medium underline underline-offset-4">Open template review</Link>}>
-              {line.blocker?.message ?? "An admin reviews this line in the template review."}
-            </Notice>
-          )}
-          {ledger}
-        </div>
-      </SlideOverPanelBody>
-      {canWrite && line.state !== "needsSetup" && takesEntries && (
-        <SlideOverPanelFooter className="flex-wrap justify-between">
-          {singleEntry ? (
-            <Button variant="primary" onClick={() => onForm({ kind: "edit", entry: singleEntry })}>Edit manual entry</Button>
-          ) : (
-            !addRefusal && <Button variant="primary" onClick={() => onForm({ kind: "add" })}>Add manual entry</Button>
-          )}
-        </SlideOverPanelFooter>
       )}
-    </>
+      {reviewWithoutEntries && (
+        <Notice tone="warning" action={<Link href={templatesHref} className="body-small font-medium underline underline-offset-4">Open template review</Link>}>
+          {line.blocker?.message ?? "An admin reviews this line in the template review."}
+        </Notice>
+      )}
+      {ledger}
+      {line.state !== "needsSetup" && (
+        <EmissionLineComment line={line} scope={scope} canWrite={canWrite} editing={editingComment} onEditingChange={onEditingComment} />
+      )}
+    </div>
   );
 }
 
