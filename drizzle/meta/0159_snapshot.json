@@ -1,5 +1,5 @@
 {
-  "id": "da74b78d-b860-4a95-ba55-227a27d2be68",
+  "id": "2bfaa799-8e5e-497b-ab69-d1dc70b2be61",
   "prevId": "172ca9c2-2be8-4355-b5fc-463986bd1b2d",
   "version": "7",
   "dialect": "postgresql",
@@ -5616,7 +5616,7 @@
         },
         "credit_batches_isometric_max_one_month": {
           "name": "credit_batches_isometric_max_one_month",
-          "value": "\"credit_batches\".\"certifier\" is distinct from 'isometric'\n        or \"credit_batches\".\"end_date\" < (\"credit_batches\".\"start_date\" + interval '1 month')::date"
+          "value": "\"credit_batches\".\"certifier\" is distinct from 'isometric'\n        or \"credit_batches\".\"end_date\" <= (\"credit_batches\".\"start_date\" + interval '1 month')::date"
         }
       },
       "isRLSEnabled": false
@@ -8967,6 +8967,12 @@
           "notNull": true,
           "default": false
         },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -9082,6 +9088,10 @@
         "customer_locations_default_soil_temperature_c_range": {
           "name": "customer_locations_default_soil_temperature_c_range",
           "value": "\"customer_locations\".\"default_soil_temperature_c\" is null or (\"customer_locations\".\"default_soil_temperature_c\" >= -50 and \"customer_locations\".\"default_soil_temperature_c\" <= 60)"
+        },
+        "customer_locations_default_active": {
+          "name": "customer_locations_default_active",
+          "value": "not \"customer_locations\".\"is_default\" or \"customer_locations\".\"archived_at\" is null"
         }
       },
       "isRLSEnabled": false
