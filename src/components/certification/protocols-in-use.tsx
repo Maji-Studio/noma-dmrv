@@ -24,7 +24,7 @@ export function ProtocolsInUse() {
         {ISOMETRIC_PROTOCOL_PINS.map((pin) => (
           <li
             key={pin.slug}
-            className="flex items-baseline justify-between gap-16 border-b-[1px] border-[var(--clr-dark-purple-10)] py-8 last:border-b-0"
+            className="flex items-center justify-between gap-16 border-b-[1px] border-[var(--clr-dark-purple-10)] py-4 last:border-b-0"
           >
             <span className="flex flex-col">
               <span className="body-medium text-[var(--color-text-primary)]">
@@ -43,7 +43,7 @@ export function ProtocolsInUse() {
                   href={pin.registryUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="body-small inline-flex items-center gap-4 underline"
+                  className="body-small inline-flex min-h-44 items-center gap-4 underline"
                   aria-label={`${pin.name} on the Isometric registry`}
                 >
                   Registry
