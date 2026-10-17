@@ -51,7 +51,7 @@ export async function removalProductionBatchTargets(ctx: OrgContext, removalId: 
 }
 
 /** Fresh check before the remote DELETE and again under the finalization transaction. */
-export async function isRemovalProductionBatchShared(ctx: OrgContext, claim: RemovalDeletionClaim, target: RemovalProductionBatch, tx: DbTransaction | typeof db = db): Promise<boolean> {
+export async function isRemovalProductionBatchShared(ctx: OrgContext, claim: Pick<RemovalDeletionClaim, "removalId" | "submissionIds">, target: Pick<RemovalProductionBatch, "creditBatchId" | "externalProductionBatchId">, tx: DbTransaction | typeof db = db): Promise<boolean> {
   requireOrgScope(ctx);
   const memberships = await tx.select({ removalId: creditBatchApplications.removalId })
     .from(creditBatchApplications).where(and(eq(creditBatchApplications.creditBatchId, target.creditBatchId),
@@ -74,6 +74,22 @@ export async function isRemovalProductionBatchShared(ctx: OrgContext, claim: Rem
     return containsIdentity(row.payloadSnapshot, target.creditBatchId) ||
       (target.externalProductionBatchId !== null && containsIdentity(row.payloadSnapshot, target.externalProductionBatchId));
   });
+}
+
+/** Whether a Production Batch is also used by another Removal, so deleting this one keeps it. */
+export async function isProductionBatchSharedWithOtherRemovals(
+  ctx: OrgContext,
+  removalId: string,
+  target: Pick<RemovalProductionBatch, "creditBatchId" | "externalProductionBatchId">,
+): Promise<boolean> {
+  requireOrgScope(ctx);
+  const own = await db.select({ id: certificationSubmissions.id }).from(certificationSubmissions).where(and(
+    eq(certificationSubmissions.provider, ISOMETRIC_PROVIDER),
+    eq(certificationSubmissions.localEntityType, "removal"),
+    eq(certificationSubmissions.localEntityId, removalId),
+    eq(certificationSubmissions.organizationId, ctx.organizationId),
+  ));
+  return isRemovalProductionBatchShared(ctx, { removalId, submissionIds: own.map((row) => row.id) }, target);
 }
 
 function containsIdentity(value: unknown, identity: string): boolean {

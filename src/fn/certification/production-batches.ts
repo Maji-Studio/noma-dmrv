@@ -73,6 +73,7 @@ import {
 import {
   LEGACY_DAY_START_SUFFIX,
   LEGACY_DAY_END_SUFFIX,
+  physicalWindowFitsLegacyBounds,
   productionBatchMismatchMessage,
   productionBatchWindowKind,
 } from "./production-batch-comparison";
@@ -443,17 +444,12 @@ function matchesLegacyDateBoundPayloadHash(
     started_at: `${input.startDate}${LEGACY_DAY_START_SUFFIX}`,
     ended_at: `${input.endDate}${LEGACY_DAY_END_SUFFIX}`,
   };
-  const physicalStartMs = Date.parse(current.body.started_at);
-  const physicalEndMs = Date.parse(current.body.ended_at);
-  const legacyStartMs = Date.parse(legacyBody.started_at);
-  const legacyEndMs = Date.parse(legacyBody.ended_at);
-  const physicalWindowFitsLegacyBounds =
-    physicalStartMs >= legacyStartMs && physicalEndMs <= legacyEndMs;
+  const physicalWindowFitsLegacy = physicalWindowFitsLegacyBounds(current.body, input);
   // Display-name namespacing changes presentation, not a registered batch's identity.
   const legacyDisplayName = buildLegacyProductionBatchDisplayName(input.creditBatchCode);
   const previousNameBody = { ...current.body, display_name: legacyDisplayName || undefined };
   const previousWindowBody = { ...legacyBody, display_name: legacyDisplayName || undefined };
-  return payloadHash(previousNameBody) === storedHash || (physicalWindowFitsLegacyBounds &&
+  return payloadHash(previousNameBody) === storedHash || (physicalWindowFitsLegacy &&
     (payloadHash(legacyBody) === storedHash || payloadHash(previousWindowBody) === storedHash));
 }
 

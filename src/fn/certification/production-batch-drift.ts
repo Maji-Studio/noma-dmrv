@@ -1,3 +1,4 @@
+import { isProductionBatchSharedWithOtherRemovals } from "@/data-access/removal-production-batch-deletion";
 import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import type { OrgContext } from "@/lib/auth/server";
 import { formatFacilityTime } from "@/lib/date-utils";
@@ -10,6 +11,7 @@ import {
 import type { Logger } from "@/lib/log";
 import {
   compareProductionBatchFigures,
+  physicalWindowFitsLegacyBounds,
   type LegacyProductionBatchWindow,
 } from "./production-batch-comparison";
 import type { ProductionBatchSubmission } from "./production-batches";
@@ -20,7 +22,7 @@ import {
   REMOVAL_ENTITY_TYPE,
 } from "./shared";
 
-const DRIFT_TIMESTAMP_FORMAT = "yyyy-MM-dd HH:mm:ss";
+const DRIFT_TIMESTAMP_FORMATS = ["MMM d, yyyy, HH:mm", "MMM d, yyyy, HH:mm:ss"] as const;
 const DRIFT_MILLISECOND_DIGITS = 3;
 const DRIFT_TIME_ZONE = "UTC";
 
@@ -43,7 +45,7 @@ export async function assertRegisteredProductionBatchMatches(args: {
   const describe = (label: string, registry: string, noma: string) => {
     differences.push(`${label}: Isometric ${registry}, noma ${noma}.`);
   };
-  if (!matches.facility) describe("Facility mapping changed", remote.facility_id, current.facility_id);
+  if (!matches.facility) describe("Facility", remote.facility_id, current.facility_id);
   if (!matches.feedstocks) {
     describe("Feedstock types", [...remote.feedstock_type_ids].sort().join(", "), [...current.feedstock_type_ids].sort().join(", "));
   }
@@ -51,13 +53,22 @@ export async function assertRegisteredProductionBatchMatches(args: {
   if (!matches.mass || !matches.massUnit) {
     describe("Dry mass", formatRegisteredMass(remote.mass), formatRegisteredMass(current.mass));
   }
-  if (matches.window === "mismatch") {
-    if (!matches.start) describe("Production window start", formatInstant(remote.started_at), formatInstant(current.started_at));
-    if (!matches.end) describe("Production window end", formatInstant(remote.ended_at), formatInstant(current.ended_at));
+  const windowDiffers =
+    matches.window === "mismatch" ||
+    (matches.window === "legacy" && !physicalWindowFitsLegacyBounds(current, args.legacyWindow));
+  if (windowDiffers) {
+    if (!matches.start) describe("Production window start", ...formatInstantPair(remote.started_at, current.started_at));
+    if (!matches.end) describe("Production window end", ...formatInstantPair(remote.ended_at, current.ended_at));
   }
 
+  const shared = differences.length > 0 && await isProductionBatchSharedWithOtherRemovals(args.orgCtx, args.removalId, {
+    creditBatchId: submission.creditBatchId, externalProductionBatchId: remote.id,
+  });
+  const resolution = shared
+    ? "Another Removal also uses this Production Batch, so deleting this Removal keeps it in Isometric. Ask support to resolve the registry record."
+    : "To fix it before finalization, delete this Removal, which also removes the records noma created in Isometric, then submit again.";
   const message = differences.length > 0
-    ? `Credit batch ${submission.creditBatchCode} is already registered in Isometric with different figures than noma has now. ${differences.join(" ")} Check the production runs in this credit batch for edits made after the first submission. To fix it before finalization, delete this Removal, which also removes the records noma created in Isometric. Then submit again. Nothing is changed in Isometric automatically.`
+    ? `Credit batch ${submission.creditBatchCode} is registered in Isometric with different figures than noma has now. ${differences.join(" ")} Check the production runs in this credit batch for edits made after the first submission. ${resolution} Nothing is changed in Isometric automatically.`
     : null;
   args.log.warn(
     { creditBatchId: submission.creditBatchId, productionBatchId: remote.id },
@@ -92,9 +103,24 @@ function formatRegisteredMass(mass: { magnitude: number; unit: string }): string
   return `${mass.magnitude.toLocaleString(undefined, { maximumFractionDigits: MASS_KG_STORAGE_DECIMALS })} ${mass.unit}`;
 }
 
-function formatInstant(value: string): string {
+/**
+ * House date-time style in UTC (the registry stores UTC instants). Seconds and
+ * then milliseconds appear only when the two values would print the same.
+ */
+function formatInstantPair(registry: string, noma: string): [string, string] {
+  for (const pattern of DRIFT_TIMESTAMP_FORMATS) {
+    const left = formatInstant(registry, pattern, false);
+    const right = formatInstant(noma, pattern, false);
+    if (left !== right) return [left, right];
+  }
+  return [formatInstant(registry, DRIFT_TIMESTAMP_FORMATS[1], true), formatInstant(noma, DRIFT_TIMESTAMP_FORMATS[1], true)];
+}
+
+function formatInstant(value: string, pattern: string, withMillis: boolean): string {
   const instant = new Date(value);
-  return Number.isFinite(instant.getTime())
-    ? `${formatFacilityTime(instant, DRIFT_TIME_ZONE, DRIFT_TIMESTAMP_FORMAT)}.${String(instant.getUTCMilliseconds()).padStart(DRIFT_MILLISECOND_DIGITS, "0")} +00:00`
-    : value;
+  if (!Number.isFinite(instant.getTime())) return value;
+  const millis = withMillis
+    ? `.${String(instant.getUTCMilliseconds()).padStart(DRIFT_MILLISECOND_DIGITS, "0")}`
+    : "";
+  return `${formatFacilityTime(instant, DRIFT_TIME_ZONE, pattern)}${millis} UTC`;
 }

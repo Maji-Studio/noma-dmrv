@@ -42,6 +42,9 @@ import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import * as isometric from "@/lib/isometric";
 import * as sourceVerification from "@/lib/isometric/source-binding-verification";
 
+vi.mock("@/data-access/removal-production-batch-deletion", () => ({
+  isProductionBatchSharedWithOtherRemovals: vi.fn(async () => false),
+}));
 vi.mock("@/fn/certification/protocol-version-preflight", async (importOriginal) => {
   const actual = await importOriginal<
     typeof import("@/fn/certification/protocol-version-preflight")

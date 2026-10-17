@@ -21,6 +21,19 @@ export function timestampMatches(actual: string, expected: string): boolean {
   );
 }
 
+/** True when the physical window lies inside the legacy day-bound window. */
+export function physicalWindowFitsLegacyBounds(
+  body: Pick<CreateProductionBatchRequest, "started_at" | "ended_at">,
+  legacyWindow: LegacyProductionBatchWindow,
+): boolean {
+  return (
+    Date.parse(body.started_at) >=
+      Date.parse(`${legacyWindow.startDate}${LEGACY_DAY_START_SUFFIX}`) &&
+    Date.parse(body.ended_at) <=
+      Date.parse(`${legacyWindow.endDate}${LEGACY_DAY_END_SUFFIX}`)
+  );
+}
+
 /** Shared readback tolerances for registered batches and orphan reconciliation. */
 export function compareProductionBatchFigures(
   batch: IsometricProductionBatch,

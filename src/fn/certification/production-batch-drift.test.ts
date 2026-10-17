@@ -9,11 +9,15 @@ import type { ProductionBatchSubmission } from "./production-batches";
 const mocks = vi.hoisted(() => ({
   appendSyncEventBestEffort: vi.fn(),
   markSubmissionRejected: vi.fn(),
+  isShared: vi.fn(),
 }));
 vi.mock("./shared", () => ({
   ...mocks,
   ISOMETRIC_PROVIDER: "isometric",
   REMOVAL_ENTITY_TYPE: "removal",
+}));
+vi.mock("@/data-access/removal-production-batch-deletion", () => ({
+  isProductionBatchSharedWithOtherRemovals: mocks.isShared,
 }));
 vi.mock("@/data-access/certification", () => ({
   markSubmissionRejected: mocks.markSubmissionRejected,
@@ -52,6 +56,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.appendSyncEventBestEffort.mockResolvedValue(undefined);
   mocks.markSubmissionRejected.mockResolvedValue(undefined);
+  mocks.isShared.mockResolvedValue(false);
 });
 
 describe("assertRegisteredProductionBatchMatches", () => {
@@ -66,16 +71,16 @@ describe("assertRegisteredProductionBatchMatches", () => {
     expect(error).toBeInstanceOf(SafeError);
     const message = (error as SafeError).message;
     expect(message).toBe(
-      "Credit batch NM-001 is already registered in Isometric with different figures than noma has now. " +
-      "Facility mapping changed: Isometric fcl_registered, noma fcl_current. " +
+      "Credit batch NM-001 is registered in Isometric with different figures than noma has now. " +
+      "Facility: Isometric fcl_registered, noma fcl_current. " +
       "Feedstock types: Isometric ftt_registered, noma ftt_1, ftt_2. " +
       "Kind: Isometric other, noma biochar. " +
       "Dry mass: Isometric 1,200 kg, noma 1,150 kg. " +
-      "Production window start: Isometric 2026-03-01 06:15:00.000 +00:00, noma 2026-03-01 07:15:00.000 +00:00. " +
-      "Production window end: Isometric 2026-03-28 19:45:00.000 +00:00, noma 2026-03-28 18:45:00.000 +00:00. " +
+      "Production window start: Isometric Mar 1, 2026, 06:15 UTC, noma Mar 1, 2026, 07:15 UTC. " +
+      "Production window end: Isometric Mar 28, 2026, 19:45 UTC, noma Mar 28, 2026, 18:45 UTC. " +
       "Check the production runs in this credit batch for edits made after the first submission. " +
-      "To fix it before finalization, delete this Removal, which also removes the records noma created in Isometric. " +
-      "Then submit again. Nothing is changed in Isometric automatically.",
+      "To fix it before finalization, delete this Removal, which also removes the records noma created in Isometric, then submit again. " +
+      "Nothing is changed in Isometric automatically.",
     );
     expect(mocks.appendSyncEventBestEffort).toHaveBeenCalledWith(orgCtx, {
       provider: "isometric", entityType: "removal", entityId: "removal-1",
@@ -95,7 +100,7 @@ describe("assertRegisteredProductionBatchMatches", () => {
     let completeAudit!: () => void;
     mocks.appendSyncEventBestEffort.mockReturnValue(new Promise<void>((resolve) => { completeAudit = resolve; }));
     const pending = assertRegisteredProductionBatchMatches(args);
-    expect(mocks.appendSyncEventBestEffort).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(mocks.appendSyncEventBestEffort).toHaveBeenCalledOnce());
     expect(mocks.markSubmissionRejected).not.toHaveBeenCalled();
     const refused = expect(pending).rejects.toBeInstanceOf(SafeError);
     completeAudit();
@@ -149,5 +154,31 @@ describe("assertRegisteredProductionBatchMatches", () => {
     const args = fixture();
     args.remote.mass = mass;
     await expect(assertRegisteredProductionBatchMatches(args)).rejects.toThrow(/Dry mass:/);
+  });
+
+  it("adds seconds only when the two times print the same minute", async () => {
+    const args = fixture();
+    args.remote.ended_at = "2026-03-28T18:45:30.000Z";
+    await expect(assertRegisteredProductionBatchMatches(args)).rejects.toThrow(
+      /Production window end: Isometric Mar 28, 2026, 18:45:30 UTC, noma Mar 28, 2026, 18:45:00 UTC\./,
+    );
+  });
+
+  it("refuses a legacy-windowed remote when the physical window outgrew its bounds", async () => {
+    const args = fixture();
+    args.remote.started_at = "2026-03-01T00:00:00.000Z";
+    args.remote.ended_at = "2026-03-28T23:59:59.999Z";
+    args.submission.body.ended_at = "2026-03-29T01:00:00.000Z";
+    await expect(assertRegisteredProductionBatchMatches(args)).rejects.toThrow(/Production window end:/);
+  });
+
+  it("sends the operator to support when another Removal shares the batch", async () => {
+    mocks.isShared.mockResolvedValue(true);
+    const args = fixture();
+    args.remote.mass.magnitude = 1_200;
+    const error = await assertRegisteredProductionBatchMatches(args).catch((e: unknown) => e);
+    expect((error as SafeError).message).toContain("Another Removal also uses this Production Batch");
+    expect((error as SafeError).message).toContain("Ask support to resolve the registry record.");
+    expect((error as SafeError).message).not.toContain("delete this Removal");
   });
 });

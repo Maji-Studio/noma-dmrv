@@ -4,6 +4,10 @@ vi.mock("@/data-access/certifier-credentials", () => ({
   resolveIsometricClient: vi.fn(async () => mocks.client),
 }));
 
+vi.mock("@/data-access/removal-production-batch-deletion", () => ({
+  isProductionBatchSharedWithOtherRemovals: vi.fn(async () => false),
+}));
+
 import type { OrgContext } from "@/lib/auth/server";
 import { MASS_COMPARISON_EPSILON_KG } from "@/lib/calculations/mass-dry";
 import type { Logger } from "@/lib/log";
@@ -295,7 +299,7 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     if (missing) {
       expect((await ensure()).get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
     } else {
-      await expect(ensure()).rejects.toThrow(/mapping changed/);
+      await expect(ensure()).rejects.toThrow(/Facility: Isometric/);
       expect(mocks.client.post).not.toHaveBeenCalled();
     }
   });
@@ -506,7 +510,7 @@ describe("ensureProductionBatchesForCreditBatches", () => {
 
   it.each([
     [{ totalDryMassKg: 1_150 }, "Dry mass: Isometric 2,000 kg, noma 1,150 kg."],
-    [{ externalFacilityId: "fcl_new" }, "Facility mapping changed: Isometric fcl_1G8QT5ZAB1S0XSDW, noma fcl_new."],
+    [{ externalFacilityId: "fcl_new" }, "Facility: Isometric fcl_1G8QT5ZAB1S0XSDW, noma fcl_new."],
     [{ isometricFeedstockTypeId: "ftt_new" }, "Feedstock types: Isometric ftt_1D7KZ1P761S0G7BN, noma ftt_new."],
   ])("stops registered drift before later batches or sample POSTs: %j", async (patch, difference) => {
     const laterId = "22222222-2222-4222-8222-222222222222";
