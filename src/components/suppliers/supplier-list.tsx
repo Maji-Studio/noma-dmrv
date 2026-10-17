@@ -17,6 +17,7 @@ import {
   useRestoreSupplier,
   useSuppliers,
   useSupplier,
+  useFetchSupplier,
   useSupplierLocationsBySupplier,
   useUpdateSupplier,
 } from "@/hooks/use-suppliers";
@@ -198,6 +199,7 @@ export function SupplierList() {
   const archiveSupplier = useArchiveSupplier();
   const restoreSupplier = useRestoreSupplier();
   const toast = useToast();
+  const fetchSupplier = useFetchSupplier();
   const handledInvalidSupplierIdRef = useRef<string | null>(null);
 
   // Clear a deep-linked `?supplier=` that cannot be opened (deleted or
@@ -306,6 +308,24 @@ export function SupplierList() {
     }
   };
 
+  // A refused archive or restore means the sheet's copy of the row is stale
+  // (a deep-linked archived supplier is not in the active list, so the list
+  // cannot supply a fresher one). Take the current row, or close the sheet
+  // when it is gone, so the next Restore carries a version the server knows.
+  // The operator may close the sheet or open another one while the reload
+  // runs, so both outcomes apply only to a sheet still showing this supplier.
+  const resnapshotSheet = async (supplier: SupplierWithRelations) => {
+    if (sideSheetState?.entity?.id !== supplier.id) return;
+    const current = await fetchSupplier(supplier.id).catch(() => null);
+    const stillOpen = (sheet: { entity: SupplierWithRelations | null } | null) => sheet?.entity?.id === supplier.id;
+    if (current) {
+      setSideSheet((sheet) => (stillOpen(sheet) ? { entity: current as SupplierWithRelations, mode: "view" } : sheet));
+      return;
+    }
+    setSideSheet((sheet) => (stillOpen(sheet) ? null : sheet));
+    toast.error(`Supplier ${supplier.code} could not be reloaded. Open it again from the list.`);
+  };
+
   const handleArchive = async (supplier: SupplierWithRelations) => {
     // Act on the list's current row: the snapshot a notice or sheet holds goes stale after a refused version.
     const fresh = (suppliersData?.items ?? []).find((row) => row.id === supplier.id);
@@ -318,6 +338,7 @@ export function SupplierList() {
     } catch (error) {
       // Without a fresh row the notice would keep the stale version, so drop it.
       if (error instanceof StaleVersionError && !fresh) setDeleteConflict(null);
+      if (error instanceof StaleVersionError) await resnapshotSheet(supplier);
       setLifecycleError(toArchiveRestoreErrorMessage(error, `Supplier ${supplier.code}`, "archive", "The supplier was not archived. Try again."));
     }
   };
@@ -332,6 +353,7 @@ export function SupplierList() {
       closeSideSheet();
       toast.success(`Supplier ${supplier.code} restored.`);
     } catch (error) {
+      if (error instanceof StaleVersionError) await resnapshotSheet(supplier);
       setLifecycleError(toArchiveRestoreErrorMessage(error, `Supplier ${supplier.code}`, "restore", "The supplier was not restored. Try again."));
     }
   };

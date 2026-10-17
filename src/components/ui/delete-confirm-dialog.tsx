@@ -7,7 +7,7 @@
  */
 "use client";
 
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import { ServerError } from "@/components/forms/server-error";
 import { Button, Modal } from "@/components/ui";
 
@@ -21,6 +21,10 @@ interface DeleteConfirmDialogProps {
   errorMessage?: string;
   confirmLabel?: string;
   pendingLabel?: string;
+  /** What else the delete takes with it, shown under the message. */
+  children?: ReactNode;
+  /** Holds Delete while the dialog is still loading what it removes. */
+  confirmDisabled?: boolean;
 }
 
 export function DeleteConfirmDialog({
@@ -33,6 +37,8 @@ export function DeleteConfirmDialog({
   errorMessage,
   confirmLabel = "Delete",
   pendingLabel = "Deleting...",
+  children,
+  confirmDisabled = false,
 }: DeleteConfirmDialogProps) {
   const id = useId();
   const titleId = `${id}-delete-dialog-title`;
@@ -56,6 +62,7 @@ export function DeleteConfirmDialog({
           >
             {message}
           </p>
+          {children}
         </div>
         <ServerError message={errorMessage} />
         <div className="flex gap-16 justify-end">
@@ -72,7 +79,7 @@ export function DeleteConfirmDialog({
             variant="default"
             className="bg-[var(--color-signal-red)] text-white border-[var(--color-signal-red)] hover:opacity-90"
             onClick={onConfirm}
-            disabled={isPending}
+            disabled={isPending || confirmDisabled}
           >
             {isPending ? pendingLabel : confirmLabel}
           </Button>

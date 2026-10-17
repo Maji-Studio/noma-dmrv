@@ -9,6 +9,10 @@ const customerFormSource = readFileSync(
   new URL("./customers/customer-form.tsx", import.meta.url),
   "utf8",
 );
+const customerSavedLocationsSource = readFileSync(
+  new URL("./customers/customer-saved-locations.tsx", import.meta.url),
+  "utf8",
+);
 const supplierLocationFormSource = readFileSync(
   new URL("./suppliers/supplier-location-form.tsx", import.meta.url),
   "utf8",
@@ -28,7 +32,7 @@ const transportLegFormSource = readFileSync(
 
 describe.each([
   ["supplier", supplierFormSource, "SupplierLocationDialog"],
-  ["customer", customerFormSource, "CustomerLocationDialog"],
+  ["customer", customerSavedLocationsSource, "CustomerLocationDialog"],
 ])("%s location management", (_entity, source, dialogName) => {
   it("offers an edit action for each persisted location", () => {
     expect(source).toContain("setEditingLocation(loc)");

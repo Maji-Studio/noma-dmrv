@@ -342,6 +342,20 @@ describe("OrderForm customer field", () => {
       client.clear();
     });
 
+    it("offers no location editor for an archived destination and still lets an open order pick another one", () => {
+      state.locations = [{ ...location, archivedAt: new Date("2026-10-01") }];
+      state.locationOptions = [{ id: location.id, code: "", name: location.name! }, { id: "location-2", code: "", name: "South field" }];
+      state.customer = { archivedAt: null };
+      const client = new QueryClient();
+      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>);
+      const picker = screen.getByRole("combobox", { name: /^Customer location/ });
+      expect(picker.getAttribute("aria-readonly")).toBeNull();
+      fireEvent.click(picker);
+      expect(screen.queryByTestId("entity-select-edit")).toBeNull();
+      expect(screen.getByText("South field")).toBeTruthy();
+      client.clear();
+    });
+
     it("keeps the destination picker and location editing for an active customer", () => {
       const client = renderArchived(null);
       const picker = screen.getByRole("combobox", { name: /^Customer location/ });

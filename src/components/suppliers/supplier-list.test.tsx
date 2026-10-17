@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError } from "@/lib/stale-version";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
@@ -15,6 +15,8 @@ const state = vi.hoisted(() => ({
   success: vi.fn(),
   query: {} as Record<string, string | null>,
   linked: null as unknown,
+  fetchSupplier: vi.fn(),
+  error: vi.fn(),
 }));
 
 function supplier(code: string, archivedAt: Date | null): SupplierWithRelations {
@@ -37,6 +39,7 @@ vi.mock("@/hooks/use-suppliers", () => {
       return { data: { items, total: items.length, totalPages: 1 }, isLoading: false, error: null };
     },
     useSupplier: () => ({ data: state.linked, isLoading: false, isFetching: false, isPending: false, isSuccess: true, isError: false }),
+    useFetchSupplier: () => state.fetchSupplier,
     useSupplierLocationsBySupplier: () => ({ data: [], isLoading: false }),
     useCreateSupplierWithLocations: mutation,
     useUpdateSupplier: mutation,
@@ -51,7 +54,7 @@ vi.mock("@/hooks/use-list-pagination", () => ({
   useReconcileListPage: () => undefined,
 }));
 vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => undefined }));
-vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: state.success, error: vi.fn() }) }));
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: state.success, error: state.error }) }));
 vi.mock("@/components/forms", () => ({ ServerError: ({ message }: { message: string }) => <p role="alert">{message}</p> }));
 vi.mock("./supplier-form", () => ({ SupplierForm: () => null }));
 vi.mock("./supplier-read-sections", () => ({ supplierSheetSections: () => [] }));
@@ -60,8 +63,8 @@ vi.mock("@/components/ui/delete-confirm-dialog", () => ({
     isOpen ? <button type="button" onClick={onConfirm}>Confirm delete</button> : null,
 }));
 vi.mock("@/components/ui/entity-side-sheet", () => ({
-  EntitySideSheet: ({ open, mode, canEdit = true, viewModeNotice, onModeChange }: { open: boolean; mode: string; canEdit?: boolean; viewModeNotice?: ReactNode; onModeChange?: (mode: string) => void }) =>
-    open ? <aside aria-label="Sheet" data-mode={mode}>{viewModeNotice}<button type="button" onClick={() => onModeChange?.("edit")}>Request edit mode</button>{canEdit && <button type="button">Edit supplier</button>}</aside> : null,
+  EntitySideSheet: ({ open, mode, canEdit = true, viewModeNotice, onModeChange, onOpenChange }: { open: boolean; mode: string; canEdit?: boolean; viewModeNotice?: ReactNode; onModeChange?: (mode: string) => void; onOpenChange?: (open: boolean) => void }) =>
+    open ? <aside aria-label="Sheet" data-mode={mode}>{viewModeNotice}<button type="button" onClick={() => onOpenChange?.(false)}>Close sheet</button><button type="button" onClick={() => onModeChange?.("edit")}>Request edit mode</button>{canEdit && <button type="button">Edit supplier</button>}</aside> : null,
 }));
 vi.mock("@/components/ui/stat-card", () => ({ StatCard: ({ title }: { title: string }) => <section>{title}</section> }));
 vi.mock("@/components/ui", () => ({
@@ -105,6 +108,9 @@ beforeEach(() => {
   state.restore.mockReset().mockResolvedValue(undefined);
   state.remove.mockReset().mockResolvedValue(undefined);
   state.success.mockReset();
+  state.error.mockReset();
+  // The current row on the server: the one the list holds.
+  state.fetchSupplier.mockReset().mockImplementation(async (id: string) => state.items.find((item) => (item as { id: string }).id === id));
   state.items = [supplier("SUP-0001", null), supplier("SUP-0002", new Date("2026-01-01"))];
 });
 afterEach(cleanup);
@@ -197,6 +203,51 @@ describe("SupplierList archive view", () => {
     view.rerender(<SupplierList />);
     fireEvent.click(buttonIn(screen.getByLabelText("Sheet"), "Restore"));
     await waitFor(() => expect(state.restore).toHaveBeenLastCalledWith({ supplierId: "id-SUP-0002", expectedVersion: 5 }));
+  });
+
+  it("takes the current row for a deep-linked archived sheet after a stale Restore", async () => {
+    // The deep-linked archived supplier is not in the active list, so the list cannot supply a fresher version.
+    const stale = supplier("SUP-0002", new Date("2026-01-01"));
+    state.query = { supplier: stale.id };
+    state.linked = stale;
+    state.fetchSupplier.mockResolvedValue({ ...stale, version: 7 });
+    state.restore.mockRejectedValueOnce(new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "supplier", id: stale.id, code: STALE_VERSION_CONFLICT_CODE })).mockResolvedValue(undefined);
+    render(<SupplierList />);
+    fireEvent.click(buttonIn(screen.getByLabelText("Sheet"), "Restore"));
+    await waitFor(() => expect(state.restore).toHaveBeenLastCalledWith({ supplierId: stale.id, expectedVersion: 4 }));
+    expect(state.fetchSupplier).toHaveBeenCalledWith(stale.id);
+    expect((await screen.findByRole("alert")).textContent).toBe("Supplier SUP-0002 was not restored. It changed since the list loaded. Review it before restoring.");
+
+    fireEvent.click(buttonIn(screen.getByLabelText("Sheet"), "Restore"));
+    await waitFor(() => expect(state.restore).toHaveBeenLastCalledWith({ supplierId: stale.id, expectedVersion: 7 }));
+  });
+
+  it("closes a deep-linked sheet whose supplier is gone after a stale Restore", async () => {
+    const stale = supplier("SUP-0002", new Date("2026-01-01"));
+    state.query = { supplier: stale.id };
+    state.linked = stale;
+    state.fetchSupplier.mockRejectedValue(new Error("Supplier not found"));
+    state.restore.mockRejectedValue(new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "supplier", id: stale.id, code: STALE_VERSION_CONFLICT_CODE }));
+    render(<SupplierList />);
+    fireEvent.click(buttonIn(screen.getByLabelText("Sheet"), "Restore"));
+    await waitFor(() => expect(screen.queryByLabelText("Sheet")).toBeNull());
+    expect(state.error).toHaveBeenCalledWith("Supplier SUP-0002 could not be reloaded. Open it again from the list.");
+  });
+
+  it("leaves a sheet the operator closed while the stale Restore reload ran", async () => {
+    const stale = supplier("SUP-0002", new Date("2026-01-01"));
+    state.query = { supplier: stale.id };
+    state.linked = stale;
+    let finishReload: (row: unknown) => void = () => {};
+    state.fetchSupplier.mockReturnValue(new Promise((resolve) => { finishReload = resolve; }));
+    state.restore.mockRejectedValue(new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "supplier", id: stale.id, code: STALE_VERSION_CONFLICT_CODE }));
+    render(<SupplierList />);
+    fireEvent.click(buttonIn(screen.getByLabelText("Sheet"), "Restore"));
+    await waitFor(() => expect(state.fetchSupplier).toHaveBeenCalledWith(stale.id));
+    fireEvent.click(screen.getByRole("button", { name: "Close sheet" }));
+
+    await act(async () => finishReload({ ...stale, version: 7 }));
+    expect(screen.queryByLabelText("Sheet")).toBeNull();
   });
 
   it("does not offer Archive instead when an already archived supplier is refused as in use", async () => {

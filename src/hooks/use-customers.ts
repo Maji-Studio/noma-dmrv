@@ -32,6 +32,7 @@ import type {
   CustomerWithRelations,
   CreatedCustomerWithLocations,
 } from "@/data-access/customers";
+import type { CascadePreview } from "@/lib/domain-errors";
 import {
   getCustomersFn,
   getCustomerWithRelationsFn,
@@ -39,6 +40,9 @@ import {
   createCustomerWithLocationsFn,
   updateCustomerFn,
   deleteCustomerFn,
+  previewDeleteCustomerFn,
+  archiveCustomerLocationFn,
+  restoreCustomerLocationFn,
   archiveCustomerFn,
   restoreCustomerFn,
   createCustomerLocationFn,
@@ -49,6 +53,7 @@ import {
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { patchArrayListCacheByExactKeyWithSavedRow, patchListCachesWithSavedRow } from "./list-cache-utils";
 import { throwActionError, StaleVersionError } from "@/lib/stale-version";
+import { throwIfCascadeChanged } from "@/lib/cascade-changed";
 import { customerKeys } from "./customer-query-keys";
 import { entityKeys, invalidateEntityTypeQueries } from "./entity-query-keys";
 
@@ -150,6 +155,35 @@ export function useCustomerLocations(customerId: string, enabled = true) {
     },
     enabled: enabled && !!customerId,
     staleTime: 30000,
+  });
+}
+
+/**
+ * Dry run of a customer delete: the orders without deliveries that would go
+ * with it, and the fingerprint the delete must send back. Never cached, so the
+ * confirmation always reads the orders as they are now.
+ */
+export function useCustomerDeletePreview(customer: { id: string; version: number } | null) {
+  const queryClient = useQueryClient();
+  return useQuery({
+    queryKey: customerKeys.deletePreview(customer?.id ?? "", customer?.version ?? 0),
+    queryFn: async () => {
+      const result = await previewDeleteCustomerFn({ customerId: customer!.id, expectedVersion: customer!.version });
+      if (!result.success) {
+        try {
+          throwActionError(result);
+        } catch (error) {
+          // A stale row refreshes the list, as a stale delete does, so reopening the dialog reads the current version.
+          if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+          throw error;
+        }
+      }
+      return result.data;
+    },
+    enabled: !!customer,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
   });
 }
 
@@ -351,20 +385,29 @@ export function useUpdateCustomer(
  * Hook to delete a customer
  * Supports optimistic updates for immediate UI feedback
  */
+type DeleteCustomerVariables = { customerId: string; expectedVersion: number; cascadeFingerprint?: string };
+/** What a delete answers with, after the action's JSON round trip. */
+export interface DeletedCustomerResult {
+  cascade: CascadePreview;
+  warnings: string[];
+}
+
 export function useDeleteCustomer(
-  callbacks?: MutationCallbacks<void, { customerId: string; expectedVersion: number }>,
+  callbacks?: MutationCallbacks<DeletedCustomerResult, DeleteCustomerVariables>,
   options?: OptimisticUpdateOptions
 ) {
   const queryClient = useQueryClient();
   const { optimistic = true } = options ?? {};
 
   return useMutation({
-    mutationFn: async (variables: { customerId: string; expectedVersion: number }) => {
+    mutationFn: async (variables: DeleteCustomerVariables) => {
       const result = await deleteCustomerFn(variables);
       if (!result.success) {
+        // A changed order set carries the fresh list so the dialog can show it.
+        throwIfCascadeChanged(result);
         throwActionError(result);
       }
-      return;
+      return result.data;
     },
     onMutate: async (variables) => {
       const customerId = variables.customerId;
@@ -403,8 +446,11 @@ export function useDeleteCustomer(
       // Return context with snapshots for rollback
       return { previousCustomer, previousLists };
     },
-    onSuccess: async (_, variables) => {
+    onSuccess: async (data, variables) => {
       const customerId = variables.customerId;
+      // The orders that went with the customer leave the order lists and pickers.
+      queryClient.invalidateQueries({ queryKey: orderKeys.all });
+      invalidateEntityTypeQueries(queryClient, "order");
       // Remove specific customer from cache
       queryClient.removeQueries({ queryKey: customerKeys.detail(customerId) });
       queryClient.removeQueries({
@@ -421,7 +467,7 @@ export function useDeleteCustomer(
       });
       invalidateEntityTypeQueries(queryClient, CUSTOMER_ENTITY_TYPE);
 
-      await callbacks?.onSuccess?.(undefined, variables);
+      await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables, context) => {
       if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: customerKeys.all });
@@ -631,7 +677,7 @@ export function useUpdateCustomerLocation(
  */
 export function useDeleteCustomerLocation(
   customerId: string,
-  callbacks?: MutationCallbacks<void, { locationId: string; expectedVersion: number }>
+  callbacks?: MutationCallbacks<{ warnings: string[] } | undefined, { locationId: string; expectedVersion: number }>
 ) {
   const queryClient = useQueryClient();
 
@@ -641,12 +687,12 @@ export function useDeleteCustomerLocation(
       if (!result.success) {
         throwActionError(result);
       }
-      return;
+      return result.data;
     },
     onMutate: async (variables) => {
       await callbacks?.onMutate?.(variables);
     },
-    onSuccess: async (_, variables) => {
+    onSuccess: async (data, variables) => {
       const locationId = variables.locationId;
       // Remove from cache
       queryClient.removeQueries({
@@ -667,7 +713,7 @@ export function useDeleteCustomerLocation(
 
       queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
 
-      await callbacks?.onSuccess?.(undefined, variables);
+      await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables) => {
       if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: customerKeys.all });
@@ -677,6 +723,71 @@ export function useDeleteCustomerLocation(
       await callbacks?.onSettled?.(data, error, variables);
     },
   });
+}
+
+type CustomerLocationVersionVariables = { locationId: string; expectedVersion: number };
+type CustomerLocationLifecycleResult = CustomerLocation & { warnings: string[] };
+
+/**
+ * Archive and restore share one shape: a version-checked flip of `archivedAt`
+ * that can also move the default, so the siblings are refetched with it.
+ */
+function useCustomerLocationLifecycle(
+  customerId: string,
+  action: (variables: CustomerLocationVersionVariables) => ReturnType<typeof archiveCustomerLocationFn>,
+  callbacks?: MutationCallbacks<CustomerLocationLifecycleResult, CustomerLocationVersionVariables>,
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (variables: CustomerLocationVersionVariables) => {
+      const result = await action(variables);
+      if (!result.success) throwActionError(result);
+      return result.data;
+    },
+    onSuccess: async (data, variables) => {
+      // Merge the saved row (with its new version) into the locations cache
+      // before the refetch, so an open sheet never saves against the archive
+      // state or version from before this change.
+      const saved: Partial<CustomerLocationLifecycleResult> = { ...data };
+      delete saved.warnings;
+      patchArrayListCacheByExactKeyWithSavedRow<CustomerLocation>(queryClient, customerKeys.locations(customerId), { ...saved, id: data.id });
+      queryClient.setQueryData(customerLocationKeys.detail(data.id), saved);
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
+      invalidateEntityTypeQueries(queryClient, CUSTOMER_LOCATION_ENTITY_TYPE);
+      queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: customerKeys.locations(customerId) }),
+        queryClient.invalidateQueries({ queryKey: customerKeys.detailWithRelations(customerId) }),
+        // The list's location count covers active locations only.
+        queryClient.invalidateQueries({ queryKey: customerKeys.lists() }),
+      ]);
+      await callbacks?.onSuccess?.(data, variables);
+    },
+    onError: async (error, variables) => {
+      if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: customerKeys.all });
+      await callbacks?.onError?.(error, variables);
+    },
+    onSettled: async (data, error, variables) => {
+      await callbacks?.onSettled?.(data, error, variables);
+    },
+  });
+}
+
+/** Hook to archive a customer location: pickers hide it, stored orders keep it. */
+export function useArchiveCustomerLocation(
+  customerId: string,
+  callbacks?: MutationCallbacks<CustomerLocationLifecycleResult, CustomerLocationVersionVariables>,
+) {
+  return useCustomerLocationLifecycle(customerId, archiveCustomerLocationFn, callbacks);
+}
+
+/** Hook to restore an archived customer location. */
+export function useRestoreCustomerLocation(
+  customerId: string,
+  callbacks?: MutationCallbacks<CustomerLocationLifecycleResult, CustomerLocationVersionVariables>,
+) {
+  return useCustomerLocationLifecycle(customerId, restoreCustomerLocationFn, callbacks);
 }
 
 // ============================================

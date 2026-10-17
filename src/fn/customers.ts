@@ -95,6 +95,7 @@ export async function getCustomerLocationsFn(
       createdAt: Date;
       version: number;
       updatedAt: Date;
+      archivedAt: Date | null;
     }>
   >
 > {
@@ -218,7 +219,7 @@ export async function previewDeleteCustomerFn(data: z.infer<typeof deleteCustome
  */
 export async function createCustomerLocationFn(
   data: z.infer<typeof createCustomerLocationSchema>
-): Promise<ActionResult<CustomerLocation>> {
+): Promise<ActionResult<CustomerLocation & { warnings: string[] }>> {
   return withAction(async (ctx) => {
     const validated = createCustomerLocationSchema.parse(data);
 
@@ -249,7 +250,7 @@ export async function createCustomerLocationFn(
  */
 export async function updateCustomerLocationFn(
   data: z.infer<typeof updateCustomerLocationSchema>
-): Promise<ActionResult<CustomerLocation>> {
+): Promise<ActionResult<CustomerLocation & { warnings: string[] }>> {
   return withAction(async (ctx) => {
 
     const validated = updateCustomerLocationSchema.parse(data);
@@ -284,13 +285,13 @@ export async function updateCustomerLocationFn(
  */
 export async function deleteCustomerLocationFn(
   data: z.infer<typeof deleteCustomerLocationSchema>
-): Promise<ActionResult<void>> {
+): Promise<ActionResult<{ warnings: string[] }>> {
   return withAction(async (ctx) => {
 
     const validated = deleteCustomerLocationSchema.parse(data);
-    await runOperationInProcess(deleteCustomerLocation, ctx, validated);
+    const { warnings } = await runOperationInProcess(deleteCustomerLocation, ctx, validated);
 
-    return undefined;
+    return { warnings };
   }, { fallbackMessage: "Failed to delete customer location", log: { message: LOG_MESSAGE, context: { op: "customer-location:delete" } } });
 }
 

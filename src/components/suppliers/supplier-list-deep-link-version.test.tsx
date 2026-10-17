@@ -33,6 +33,7 @@ vi.mock("nuqs", () => ({
 vi.mock("@/hooks/use-suppliers", () => ({
   useSuppliers: () => ({ data: { items: [], total: 0, totalPages: 0 }, isLoading: false, error: null }),
   useSupplier: () => ({ data: harness.supplier, isLoading: false, isFetching: false, isPending: false, isSuccess: true, isError: false }),
+  useFetchSupplier: () => vi.fn(),
   useSupplierLocationsBySupplier: () => ({ data: [], isLoading: false }),
   useCreateSupplierWithLocations: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useUpdateSupplier: () => ({ isPending: false, mutateAsync: harness.update }),

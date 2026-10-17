@@ -62,6 +62,7 @@ vi.mock("@/hooks/use-customers", () => ({
   useCustomerLocations: () => harness.locationsQuery,
   useCreateCustomerWithLocations: () => ({ isPending: false, mutateAsync: harness.create }),
   useUpdateCustomer: () => ({ isPending: false, mutateAsync: harness.update }),
+  useCustomerDeletePreview: () => ({ data: undefined, error: null, isPending: false, isError: false }),
   useDeleteCustomer: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useArchiveCustomer: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useRestoreCustomer: () => ({ isPending: false, mutateAsync: vi.fn() }),

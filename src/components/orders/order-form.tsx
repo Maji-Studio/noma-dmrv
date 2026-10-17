@@ -225,7 +225,7 @@ export function OrderForm({
             label="Customer location"
             entityType="customerLocation"
             selectionLocked={isDestinationLocked}
-            onEditSelected={selectedLocation && selectedCustomerId && !isDestinationLocked
+            onEditSelected={selectedLocation && selectedCustomerId && !isDestinationLocked && !selectedLocation.archivedAt
               ? () => setEditingLocation({ customerId: selectedCustomerId, location: selectedLocation })
               : undefined}
             placeholder={selectedCustomerId ? "Select location..." : "Select a customer first"}
