@@ -15,7 +15,7 @@ import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/loading-skeleton";
-import { useRemovalTemplateReview } from "@/hooks/use-removal-template-review";
+import { useRemovalTemplateReview, useRemovalTemplateReviewEntry } from "@/hooks/use-removal-template-review";
 import { certificationSettingsHref } from "@/lib/certification/links";
 import { RemovalTemplateReviewCard } from "./removal-template-review-card";
 
@@ -24,11 +24,20 @@ const EMPTY_ICON_SIZE = 32;
 export interface RemovalTemplateReviewPanelProps {
   facilityId: string;
   canManage: boolean;
+  /**
+   * A template the operator asked to see (`?template=`). One the facility does
+   * not list yet is read and shown first, read-only; nothing is observed.
+   */
+  templateId?: string | null;
 }
 
-export function RemovalTemplateReviewPanel({ facilityId, canManage }: RemovalTemplateReviewPanelProps) {
+export function RemovalTemplateReviewPanel({ facilityId, canManage, templateId }: RemovalTemplateReviewPanelProps) {
   const query = useRemovalTemplateReview(facilityId);
   const retry = () => void query.refetch();
+  const requested = templateId ?? "";
+  const listed = !!query.data?.some((entry) => entry.templateId === requested);
+  // Wait for the list first so a listed template is never read twice.
+  const preview = useRemovalTemplateReviewEntry(facilityId, requested, !!requested && !!query.data && !listed);
 
   if (query.isLoading && !query.data) {
     return (
@@ -48,7 +57,23 @@ export function RemovalTemplateReviewPanel({ facilityId, canManage }: RemovalTem
     );
   }
 
-  if (query.data.length === 0) {
+  // The requested template leads, whether it is listed or only previewed.
+  const entries = [
+    ...(preview.data ? [preview.data] : []),
+    ...query.data.filter((entry) => entry.templateId === requested),
+    ...query.data.filter((entry) => entry.templateId !== requested),
+  ];
+  const previewFailed = !!requested && !listed && preview.isError;
+
+  if (requested && !listed && preview.isPending) {
+    return (
+      <div className="flex flex-col gap-16" aria-busy="true" aria-label="Loading template lines">
+        <Skeleton className="h-160 w-full" />
+      </div>
+    );
+  }
+
+  if (entries.length === 0 && !previewFailed) {
     return (
       <EmptyState
         icon={<ListChecksIcon size={EMPTY_ICON_SIZE} weight="bold" />}
@@ -66,7 +91,13 @@ export function RemovalTemplateReviewPanel({ facilityId, canManage }: RemovalTem
 
   return (
     <div className="flex flex-col gap-24">
-      {query.data.map((entry) => (
+      {previewFailed && (
+        <ServerError
+          message="That template's lines could not be read from Isometric. Try again."
+          action={<Button size="small" busy={preview.isFetching} onClick={() => void preview.refetch()}>Try again</Button>}
+        />
+      )}
+      {entries.map((entry) => (
         <RemovalTemplateReviewCard
           key={entry.templateId}
           entry={entry}

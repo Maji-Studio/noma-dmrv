@@ -15,6 +15,8 @@ vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn() })
 
 const mocks = vi.hoisted(() => ({
   data: [] as unknown[],
+  previewEntry: undefined as unknown,
+  previewEnabled: [] as boolean[],
   refetch: vi.fn(),
   mutateAsync: vi.fn(),
 }));
@@ -22,6 +24,13 @@ vi.mock("@/hooks/use-removal-template-review", () => ({
   useRemovalTemplateReview: () => ({
     data: mocks.data, isLoading: false, isError: false, isFetching: false, refetch: mocks.refetch,
   }),
+  useRemovalTemplateReviewEntry: (_facility: string, _template: string, enabled: boolean) => {
+    mocks.previewEnabled.push(enabled);
+    return {
+      data: enabled ? mocks.previewEntry : undefined, isPending: enabled && !mocks.previewEntry,
+      isError: false, isFetching: false, refetch: mocks.refetch,
+    };
+  },
   useReviewRemovalTemplateLines: () => ({ mutateAsync: mocks.mutateAsync, isPending: false }),
 }));
 
@@ -40,6 +49,8 @@ function entry(overrides: Record<string, unknown> = {}): RemovalTemplateReviewEn
     templateId: "rvt_test",
     template: { id: "rvt_test", display_name: "Dark Earth Carbon Template", credit_type: "REMOVAL" },
     observation: { id: OBSERVATION_ID, version: 3, enrichment: { cmp_startup: { volume: { unit: "L" } } } },
+    enrichment: { cmp_startup: { volume: { unit: "L" } } },
+    preview: false,
     isDefault: true,
     availability: "listed",
     changes: {},
@@ -64,6 +75,8 @@ function entry(overrides: Record<string, unknown> = {}): RemovalTemplateReviewEn
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.data = [entry()];
+  mocks.previewEntry = undefined;
+  mocks.previewEnabled = [];
   mocks.mutateAsync.mockResolvedValue({});
 });
 afterEach(cleanup);
@@ -71,6 +84,40 @@ afterEach(cleanup);
 const saveButton = () => screen.getByRole("button", { name: /^Save/ });
 
 describe("RemovalTemplateReviewPanel", () => {
+  it("shows a requested template the facility has not observed, first and read-only", () => {
+    mocks.previewEntry = entry({
+      templateId: "rvt_new", template: { id: "rvt_new", display_name: "Unused Template", credit_type: "REMOVAL" },
+      observation: null, preview: true, isDefault: false,
+    });
+    render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage templateId="rvt_new" />);
+
+    const names = screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent);
+    expect(names).toEqual(["Unused Template", "Dark Earth Carbon Template"]);
+    expect(screen.getByText("Not in use yet")).toBeTruthy();
+    // The one preview has nothing to save against; the listed card keeps its own controls.
+    expect(screen.getAllByRole("button", { name: /^Save/ })).toHaveLength(1);
+  });
+
+  it("does not read a requested template the facility already lists", () => {
+    render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage templateId="rvt_test" />);
+
+    expect(mocks.previewEnabled.every((enabled) => !enabled)).toBe(true);
+    expect(screen.queryByText("Not in use yet")).toBeNull();
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(1);
+  });
+
+  it("shows a requested template even when the facility lists none", () => {
+    mocks.data = [];
+    mocks.previewEntry = entry({
+      templateId: "rvt_new", template: { id: "rvt_new", display_name: "Unused Template", credit_type: "REMOVAL" },
+      observation: null, preview: true, isDefault: false,
+    });
+    render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage={false} templateId="rvt_new" />);
+
+    expect(screen.getByText("Unused Template")).toBeTruthy();
+    expect(screen.queryByText("No Removal templates yet")).toBeNull();
+  });
+
   it("is read-only for members and still flags the line that needs review", () => {
     render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage={false} />);
 

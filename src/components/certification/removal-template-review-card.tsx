@@ -215,6 +215,11 @@ export function RemovalTemplateReviewCard({
             noValidate
             className="flex flex-col gap-16"
           >
+            {entry.preview && (
+              <Notice tone="info" title="Not in use yet">
+                No facility default or credit batch uses this template. Switch a credit batch to it to review and save its lines.
+              </Notice>
+            )}
             {notFullyRead && (
               <Notice
                 tone="warning"
@@ -248,9 +253,9 @@ export function RemovalTemplateReviewCard({
                         idPrefix={`${entry.templateId}-${id}`}
                         needsReview={lineNeedsReview(line, entry.lineSourceProblems)}
                         problems={problemMessages(line, entry.lineSourceProblems)}
-                        // With no observation every line is unread; the template notice says so once.
-                        notFullyRead={!!entry.observation && unreadLines.has(id)}
-                        enrichment={entry.observation?.enrichment[id]}
+                        // With no units or factors read every line is unread; the template notice says so once.
+                        notFullyRead={!!entry.enrichment && unreadLines.has(id)}
+                        enrichment={entry.enrichment?.[id]}
                         showChange={hasEarlierRead}
                         // Without a read there is no observation to save against.
                         canManage={canManage && !!entry.observation}
@@ -265,7 +270,7 @@ export function RemovalTemplateReviewCard({
               </section>
             ))}
 
-            {canManage && (
+            {canManage && !entry.preview && (
               <FormActions
                 control={control}
                 sticky={false}
