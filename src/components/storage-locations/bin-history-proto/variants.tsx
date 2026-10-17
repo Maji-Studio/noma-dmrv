@@ -37,8 +37,8 @@ function VariantA({ parts }: { parts: EntryParts }) {
       <Title />
       <div id={id}>
         <BlockPair
-          before={<Block label="Before"><span className={HEADLINE}>{formatWet(parts.before.wetKg)}</span>{open && <PartList parts={parts.before.parts} reserveDelta />}</Block>}
-          after={<Block label="After"><span className={HEADLINE}>{formatWet(parts.after.wetKg)}</span>{open && <PartList parts={parts.after.parts} against={parts.before.parts} />}</Block>}
+          before={<Block label="Before"><span className={HEADLINE}>{formatWet(parts.before)}</span>{open && <PartList parts={parts.before.parts} reserveDelta />}</Block>}
+          after={<Block label="After"><span className={HEADLINE}>{formatWet(parts.after)}</span>{open && <PartList parts={parts.after.parts} against={parts.before.parts} />}</Block>}
         />
       </div>
       <Button type="button" variant="noOutline" className="-ml-8 min-h-44 w-fit gap-6 px-8 normal-case" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
@@ -56,8 +56,8 @@ function TotalPopover({ side, label, against }: { side: Side; label: string; aga
       title={`${label}: parts of the mix`}
       side="bottom"
       trigger={
-        <button type="button" aria-label={`${label}: ${formatWet(side.wetKg)}, show parts`} className={`${HEADLINE} flex min-h-44 w-full cursor-pointer items-center justify-between gap-6 text-left underline decoration-dotted underline-offset-4`}>
-          <span>{formatWet(side.wetKg)}</span>
+        <button type="button" aria-label={`${label}: ${formatWet(side)}, show parts`} className={`${HEADLINE} flex min-h-44 w-full cursor-pointer items-center justify-between gap-6 text-left underline decoration-dotted underline-offset-4`}>
+          <span>{formatWet(side)}</span>
           <CaretDownIcon size={14} aria-hidden="true" className="shrink-0 text-[var(--color-text-tertiary)]" />
         </button>
       }
@@ -128,8 +128,8 @@ function VariantC({ parts }: { parts: EntryParts }) {
     <div className="flex flex-col gap-4">
       <Title />
       <BlockPair
-        before={<Block label="Before"><span className={HEADLINE}>{formatWet(parts.before.wetKg)}</span><StackedBar side={parts.before} scaleKg={scaleKg} label="Before" /></Block>}
-        after={<Block label="After"><span className={HEADLINE}>{formatWet(parts.after.wetKg)}</span><StackedBar side={parts.after} scaleKg={scaleKg} label="After" /></Block>}
+        before={<Block label="Before"><span className={HEADLINE}>{formatWet(parts.before)}</span><StackedBar side={parts.before} scaleKg={scaleKg} label="Before" /></Block>}
+        after={<Block label="After"><span className={HEADLINE}>{formatWet(parts.after)}</span><StackedBar side={parts.after} scaleKg={scaleKg} label="After" /></Block>}
       />
       <p className="flex flex-wrap gap-x-16 gap-y-4 body-caption text-[var(--color-text-secondary)]">
         {legend.map((part) => <span key={part.key} className="inline-flex items-center gap-6"><Swatch part={part} /><PartName part={part} inline /></span>)}
