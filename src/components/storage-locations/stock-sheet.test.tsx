@@ -119,3 +119,15 @@ it("charts feedstock after its first intake when a run was dated earlier without
   expect(JSON.stringify(renderer.toJSON())).not.toContain("An intake is missing its mass basis");
   await act(async () => renderer.unmount());
 });
+
+
+it('crosses out a deleted product placement while retaining the product link', async () => {
+  state.output = [entry({ id: 'product', kind: 'intake', dryMassKg: -80, source: { entity: 'biocharProduct', id: 'product' } }),
+    entry({ id: 'placement-reversal', kind: 'reversal', correctsMovementId: 'product', dryMassKg: 80 })];
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<OutputStockHistory storageLocationId={BIN_ID} facilityId={FACILITY_ID} triggerLabel="History" />); });
+  await act(async () => renderer.root.findByType('button').props.onClick());
+  expect(JSON.stringify(renderer.toJSON())).toContain('line-through');
+  expect(renderer.root.findAllByType('a').map(link => link.props.href)).toContain(stockSourceHref({ entity: 'biocharProduct', id: 'product' }, FACILITY_ID));
+  await act(async () => renderer.unmount());
+});

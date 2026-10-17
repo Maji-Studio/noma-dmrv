@@ -47,6 +47,7 @@ export const deleteOrder: Operation<typeof deleteOrderInput, void> = {
   execute: async ({ ctx, tx, source, afterCommit, activity }, input) => {
     const order = await deleteOrderInTransaction(ctx, tx, input, source);
     activity.link({ facilityId: order.facilityId });
+    activity.capture(order.id, order, null);
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
   },
 };

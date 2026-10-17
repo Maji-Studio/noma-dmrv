@@ -25,6 +25,7 @@ import { DomainError } from "@/lib/domain-errors";
 import {
   acquireCertificationArtifactLocksSorted,
   certificationArtifactLockKey,
+  tryAcquireCertificationArtifactLocksSorted,
   type CertificationArtifactLock,
 } from "@/lib/certification/submission-lock";
 import { SafeError } from "@/lib/errors";
@@ -285,6 +286,45 @@ export async function lockCertifiedLineageArtifacts(
 }
 
 /**
+ * Non-blocking first half, for a caller that already holds a lock other
+ * writers take after artifacts (a bin stock lock). Waiting there could
+ * deadlock, so contention returns null and the caller aborts with a retryable
+ * conflict. The held keys feed `getLineageUnderLockedArtifacts`.
+ */
+export async function tryLockCertifiedLineageArtifacts(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  targets: CertifiedLineageTarget[],
+): Promise<ReadonlySet<string> | null> {
+  requireOrgScope(ctx);
+  const artifacts: CertificationArtifactLock[] = [];
+  for (const target of targets) {
+    artifacts.push(...lineageArtifactLocks(await lineageQuery(ctx, tx, target)));
+  }
+  if (!(await tryAcquireCertificationArtifactLocksSorted(tx, artifacts))) return null;
+  return new Set(artifacts.map(certificationArtifactLockKey));
+}
+
+/**
+ * Fresh lineage of one target while `lockedKeys` are held. Reaching an
+ * artifact outside them (a Removal assigned after the locks were taken)
+ * throws rather than locking it late.
+ */
+export async function getLineageUnderLockedArtifacts(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  lockedKeys: ReadonlySet<string>,
+  target: CertifiedLineageTarget,
+): Promise<LockedCertifiedLineageRow[]> {
+  requireOrgScope(ctx);
+  const lineage = await lineageQuery(ctx, tx, target, true);
+  if (lineageArtifactLocks(lineage).some((artifact) => !lockedKeys.has(certificationArtifactLockKey(artifact)))) {
+    throw new CertificationLineageChangedError();
+  }
+  return lineage;
+}
+
+/**
  * Second half, after the caller's row locks: re-resolves each target. An
  * artifact that was not locked up front (a Removal assigned while the writer
  * waited on a row) refuses the write rather than being locked out of order;
@@ -298,10 +338,7 @@ export async function assertLockedLineagesAllowMutation(
 ): Promise<void> {
   requireOrgScope(ctx);
   for (const check of checks) {
-    const lineage = await lineageQuery(ctx, tx, check.target, true);
-    if (lineageArtifactLocks(lineage).some((artifact) => !lockedKeys.has(certificationArtifactLockKey(artifact)))) {
-      throw new CertificationLineageChangedError();
-    }
+    const lineage = await getLineageUnderLockedArtifacts(ctx, tx, lockedKeys, check.target);
     const lock = recordLocks[check.target.entityType]({ removals: lineage.map(row => row.recordLockRemoval), dependents: [] });
     if (lock.level !== "sent") continue;
     throw new DomainError("certification_locked", formatCertificationLineageLockMessage({

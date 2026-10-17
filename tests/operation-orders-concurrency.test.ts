@@ -115,7 +115,7 @@ describe("order writer races", { timeout: SUITE_TIMEOUT_MS }, () => {
         expect(second.error).toBeInstanceOf(SafeError);
         expect(second.error).toMatchObject({ message: new SafeError("Order not found").message });
       } else {
-        expect(second.error).toMatchObject({ code: "certification_locked", issues: orderHasDeliveries().issues });
+        expect(second.error).toMatchObject({ code: "certification_locked", issues: orderHasDeliveries((await db.select().from(deliveries).where(eq(deliveries.orderId, f.order.id)))[0]).issues });
       }
     }
     expect(await db.select().from(orders).where(eq(orders.id, f.order.id))).toHaveLength(deleteFirst ? 0 : 1);

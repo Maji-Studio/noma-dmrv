@@ -2,9 +2,10 @@ import type { ActivityEventInput } from "../activity-events";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 import type { SnapshotStock } from "../stock-effects";
 import { runReferenceNotFound } from "@/lib/production-run-domain-errors";
+import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
 import { DomainError } from "@/lib/domain-errors";
 import { db, type DbTransaction } from "@/db";
-import { creditBatches, creditBatchProductionRuns, incidentReports, productionRuns, productionRunFeedstockDraws, productionRunFeedstocks, productionRunReadings } from "@/db/schema";
+import { outputStockRunAllocations, creditBatches, creditBatchProductionRuns, incidentReports, productionRuns, productionRunFeedstockDraws, productionRunFeedstocks, productionRunReadings } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { conflictCode, type ConflictRef } from "@/lib/conflict-ref";
 import { and, eq } from "drizzle-orm";
@@ -150,6 +151,16 @@ export async function deleteProductionRunInTransaction(
     );
   }
 
+  const [history] = await tx.select({ id: outputStockRunAllocations.id }).from(outputStockRunAllocations)
+    .where(and(eq(outputStockRunAllocations.organizationId, ctx.organizationId), eq(outputStockRunAllocations.productionRunId, productionRunId))).limit(1);
+  if (history) {
+    const lock = recordLocks.productionRun({ removals: [], dependents: [{ kind: "stockEntry", id: history.id, label: "in retained stock history" }] });
+    throw new DomainError("certification_locked", withRecordLockGuidance(
+      "This production run cannot be deleted.",
+      { ...lock, howToFree: "You can archive it with its facility." },
+    ));
+  }
+
   const productionIncidents = await tx
     .select({ id: incidentReports.id })
     .from(incidentReports)
@@ -175,9 +186,7 @@ export async function deleteProductionRunInTransaction(
     .delete(incidentReports)
     .where(and(eq(incidentReports.productionRunId, productionRunId), eq(incidentReports.organizationId, ctx.organizationId)));
 
-  await tx
-    .delete(productionRuns)
-    .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
+  await tx.delete(productionRuns).where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
   await retireDocumentsForEntities(ctx, tx, [
     { entityType: "production_run", entityId: productionRunId },
     ...productionIncidents.map((incident) => ({

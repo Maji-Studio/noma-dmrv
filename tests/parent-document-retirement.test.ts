@@ -209,7 +209,7 @@ describe("parent document retirement", () => {
     }
   });
 
-  it("preflights delivery and derived-leg evidence together before deleting storage", async () => {
+  it("preserves delivery and derived-leg evidence when the posted stock entry is missing", async () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const [facility] = await db
       .insert(facilities)
@@ -305,7 +305,7 @@ describe("parent document retirement", () => {
 
       await expect(
         deleteDelivery(makeTestOrgContext(TEST_USER_ID), delivery.id, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "deliveries", delivery.id)),
-      ).rejects.toThrow(/posted deliveries|bin history/i);
+      ).rejects.toThrow("Posted delivery stock entry was not found.");
 
       expect(provider.deleteCalls).toEqual([]);
       expect(provider.objects.has(deliveryKey)).toBe(true);

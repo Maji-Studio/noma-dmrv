@@ -1,3 +1,6 @@
+import { readRecordDependents } from "../record-lock-dependents";
+import { assertRecordLockFields } from "@/lib/record-lock-fields";
+import { recordLocks } from "@/lib/record-lock";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 /**
  * Production-run create / update / delete operations, including bin-based
@@ -587,7 +590,14 @@ export async function updateProductionRunInTransaction(
       locked.biocharStorageLocationId, data.biocharStorageLocationId,
     ]);
 
-    await assertProductionRunOutputBasisChange(ctx, tx, productionRunId, locked, data);
+    const recordLock = recordLocks.productionRun({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "productionRun", entityId: productionRunId }) });
+    try {
+      await assertProductionRunOutputBasisChange(ctx, tx, productionRunId, locked, data);
+    } catch (error) {
+      if (error instanceof SafeError) assertRecordLockFields(recordLock, locked, data, error.message);
+      throw error;
+    }
+    assertRecordLockFields(recordLock, locked, data);
 
     const lockedTargetStatus = data.status ?? locked.status;
     const lockedTargetStartTime = data.startTime ?? locked.startTime;

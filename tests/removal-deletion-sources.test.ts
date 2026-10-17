@@ -50,7 +50,7 @@ import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { withReleasedDocumentMirrorLock } from "@/data-access/certifier-removal-deletion";
 
-import { deleteDelivery } from "@/data-access/deliveries";
+import { deliveries, outputStockAllocations } from "@/db/schema";
 import { deleteRemoval } from "@/fn/certification/delete-removal";
 import {
   SUBMISSION_ATTEMPT_OUTCOMES,
@@ -223,6 +223,7 @@ describe("deleteRemoval evidence cleanup", () => {
       .select({ deliveryId: applications.deliveryId })
       .from(applications)
       .where(eq(applications.id, chain.applicationId));
+    const postedAllocations = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, application.deliveryId!));
     const applicationSourceId = registry.seedSource().id;
     const deliverySourceId = registry.seedSource().id;
     const applicationDocumentId = await insertMirroredDocument(fixture, {
@@ -279,7 +280,9 @@ describe("deleteRemoval evidence cleanup", () => {
     );
     const ctx = makeTestOrgContext();
     await expect(deleteTestApplication(ctx, chain.applicationId, await labLogisticsVersion(ctx, "applications", chain.applicationId))).resolves.toBeUndefined();
-    await expect(deleteDelivery(ctx, application.deliveryId!, await labLogisticsVersion(ctx, "deliveries", application.deliveryId!))).rejects.toThrow(/Posted deliveries retain their history/);
+    expect(await db.select().from(deliveries).where(eq(deliveries.id, application.deliveryId!))).toHaveLength(1);
+    expect(postedAllocations.length).toBeGreaterThan(0);
+    expect(await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, application.deliveryId!))).toEqual(postedAllocations);
     await expect(db.transaction((tx) => deleteDocumentInTransaction(ctx, tx, { documentId: deliveryDocumentId, expectedVersion: 1 }))).resolves.toMatchObject({ id: deliveryDocumentId });
     expect(
       await db

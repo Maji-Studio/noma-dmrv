@@ -11,9 +11,9 @@ vi.mock("@/data-access/production-incidents", () => ({ updateProductionIncident:
 vi.mock("@/data-access/production-samples", () => ({ updateProductionSample: mocks.update, deleteProductionSample: mocks.remove }));
 vi.mock("@/data-access/biochar-products", () => ({ updateBiocharProduct: mocks.update, deleteBiocharProduct: mocks.remove }));
 // Product updates run as `update_biochar_product`; the runner stands in for the database here.
-vi.mock("@/lib/operations/biochar-products", () => ({ makeBiocharProduct: {}, updateBiocharProduct: {} }));
+vi.mock("@/lib/operations/biochar-products", () => ({ makeBiocharProduct: {}, updateBiocharProduct: {}, deletePostedBiocharProduct: { id: "delete_posted_biochar_product" } }));
 vi.mock("@/lib/operations/runner", () => ({
-  runOperationInProcess: (_operation: unknown, ctx: unknown, input: { biocharProductId: string }) => mocks.update(ctx, input.biocharProductId, input),
+  runOperationInProcess: (operation: { id?: string }, ctx: unknown, input: { biocharProductId: string; productId: string; expectedVersion: number }) => operation.id === "delete_posted_biochar_product" ? mocks.remove(ctx, input.productId, input.expectedVersion) : mocks.update(ctx, input.biocharProductId, input),
 }));
 import { updateProductionIncidentFn, deleteProductionIncidentFn } from "./production-incidents";
 import { updateProductionSampleFn, deleteProductionSampleFn } from "./production-samples";

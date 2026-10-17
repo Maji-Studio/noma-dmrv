@@ -1,3 +1,6 @@
+import { readRecordDependents } from "./record-lock-dependents";
+import { assertRecordLockFields, recordFieldEqual } from "@/lib/record-lock-fields";
+import { recordLocks } from "@/lib/record-lock";
 import type { CaptureActivity } from "@/lib/activity-changes";
 import { db, type DbTransaction } from "@/db";
 import { biocharProducts, type BiocharProduct } from "@/db/schema";
@@ -51,16 +54,21 @@ function productNotFound(): DomainError {
 export async function updateBiocharProductInTransaction(ctx: OrgContext, tx: DbTransaction, productId: string, data: UpdateBiocharProductInput, capture?: CaptureActivity): Promise<BiocharProduct> {
   requireOrgScope(ctx);
   const [product] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId)));
-  if (!product) throw productNotFound();
+  if (!product || product.archivedAt) throw productNotFound();
   await lockBinStocks(ctx, tx, [product.storageLocationId, product.sourceBiocharStorageLocationId]);
   // Application allocation FKs take product KEY SHARE after artifact locks.
   await withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: "biocharProduct", entityId: productId }, "update"), "certification_locked");
   const [locked] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).for("update");
-  if (!locked) throw productNotFound();
+  if (!locked || locked.archivedAt) throw productNotFound();
   assertRowVersion({ entity: "biocharProduct", id: productId, expectedVersion: data.expectedVersion, actualVersion: locked.version });
   const placementChanged = data.placedAt !== undefined && new Date(data.placedAt).getTime() !== product.placedAt.getTime();
-  if (placementChanged || POSTED_FIELDS.some(key => data[key] !== undefined && data[key] !== product[key])) throw new SafeError(IMMUTABLE_POSTING_MESSAGE);
-  if (data.composition && compositionAllocationChanged(product.composition as Record<string, unknown>, data.composition)) throw new SafeError(IMMUTABLE_INGREDIENTS_MESSAGE);
+  const postingChanged = placementChanged || POSTED_FIELDS.some(key => data[key] !== undefined && !recordFieldEqual(key, product[key], data[key]));
+  const ingredientsChanged = data.composition && compositionAllocationChanged(product.composition as Record<string, unknown>, data.composition);
+  if (postingChanged || ingredientsChanged) {
+    const message = postingChanged ? IMMUTABLE_POSTING_MESSAGE : IMMUTABLE_INGREDIENTS_MESSAGE;
+    assertRecordLockFields(recordLocks.biocharProduct({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "biocharProduct", entityId: productId }) }), locked, data, message);
+    throw new SafeError(message);
+  }
   const [saved] = await withUniqueCodeGuard(ctx, biocharProducts, biocharProducts.code, CODE_CONFLICT_MESSAGES.biocharProduct, () => tx.update(biocharProducts)
     .set({ version: nextVersion(biocharProducts.version), code: data.code, status: data.status, densityKgM3: data.densityKgM3, updatedAt: new Date() })
     .where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).returning());

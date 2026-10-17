@@ -1,12 +1,13 @@
 "use server";
 
+import { deletePostedBiocharProduct } from "@/lib/operations/biochar-products";
+
 /**
  * Biochar Products Server Actions
  * Server-side functions for biochar product CRUD operations
  */
 
 import {
-  deleteBiocharProduct,
   getBiocharProductById as getBiocharProductByIdData,
   getBiocharProducts as getBiocharProductsData,
   type BiocharProductWithRelations,
@@ -171,7 +172,7 @@ export async function deleteBiocharProductFn(
 ): Promise<ActionResult<void>> {
   return withAction(async (ctx) => {
     const validated = deleteBiocharProductSchema.parse(data);
-    await deleteBiocharProduct(ctx, validated.productId, validated.expectedVersion);
+    await runOperationInProcess(deletePostedBiocharProduct, ctx, validated);
 
     return;
   }, {

@@ -1,3 +1,5 @@
+import { activeOutputMovement, deletedProductIds } from '../output-stock-active-movements';
+import { recordFieldEqual } from '@/lib/record-lock-fields';
 import type { DbTransaction } from "@/db";
 import {
   binMovements,
@@ -10,7 +12,7 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from '@/lib/errors';
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, sql, notInArray } from "drizzle-orm";
 import { formatFacilityDateTime } from "@/lib/format-utils";
 import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { isCountMovementSql } from "../output-stock-count";
@@ -44,7 +46,7 @@ export async function getProductionRunDependentProduct(
     .from(outputStockRunAllocations)
     .innerJoin(outputStockAllocations, and(eq(outputStockAllocations.organizationId, ctx.organizationId), eq(outputStockAllocations.id, outputStockRunAllocations.allocationId)))
     .innerJoin(binMovements, and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.id, outputStockAllocations.movementId)))
-    .where(and(eq(outputStockRunAllocations.organizationId, ctx.organizationId), eq(outputStockRunAllocations.productionRunId, productionRunId))).limit(1);
+    .where(and(eq(outputStockRunAllocations.organizationId, ctx.organizationId), eq(outputStockRunAllocations.productionRunId, productionRunId), activeOutputMovement(ctx, tx))).limit(1);
   if (effect) throw new SafeError(`Production stock is used by ${effect.kind}: ${effect.reason} (${await at(effect.at)}).`);
   const [product] = await tx
     .select({ id: biocharProducts.id, code: biocharProducts.code })
@@ -66,6 +68,7 @@ export async function getProductionRunDependentProduct(
       and(
         eq(biocharProductSourceAllocations.productionRunId, productionRunId),
         eq(biocharProducts.organizationId, ctx.organizationId),
+        notInArray(biocharProducts.id, deletedProductIds(ctx, tx)),
       ),
     )
     .limit(1);
@@ -81,7 +84,7 @@ export async function assertProductionRunOutputBasisChange(ctx: OrgContext, tx: 
   const changed = ['status', 'startTime', 'endTime', 'facilityId', 'reactorId', 'biocharStorageLocationId', 'biocharOutputKg', 'biocharMoisturePercent'].some(key => {
     const oldValue = before.get(key);
     const newValue = after.get(key);
-    return newValue !== undefined && (newValue instanceof Date ? newValue.getTime() : newValue) !== (oldValue instanceof Date ? oldValue.getTime() : oldValue);
+    return newValue !== undefined && !recordFieldEqual(key, oldValue, newValue);
   });
   if (changed) {
     const dependent = await getProductionRunDependentProduct(ctx, tx, productionRunId);

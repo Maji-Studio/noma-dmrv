@@ -1,3 +1,4 @@
+import { appendOutputStockReversal } from './output-stock-reversal';
 import type { CaptureActivity } from "@/lib/activity-changes";
 import { OPERATOR_ORDER_POLICY } from '@/lib/output-stock/planner';
 import { assertRowVersion, nextVersion } from "./row-version";
@@ -8,7 +9,7 @@ import type { OrgContext } from '@/lib/auth/server';
 import { DomainError } from '@/lib/domain-errors';
 import { SafeError } from '@/lib/errors';
 import { withFeedstockErrors } from '@/lib/feedstock-domain-errors';
-import { add, decimal, grams, GRAMS_PER_KG, kilograms, multiply, rational, readRational, round, storeRational } from '@/lib/output-stock';
+import { add, decimal, grams, GRAMS_PER_KG, kilograms, multiply, rational, round, storeRational } from '@/lib/output-stock';
 import { outputStockCommandSchema, outputStockPostSchema } from '@/schemas/output-stock';
 import type { OutputStockPostInput, OutputStockPreview } from '@/types/output-stock';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
@@ -161,20 +162,11 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Sto
   // The basis the posting was planned on, whether or not the caller named one.
   const basisFingerprint = options.recordedBasisFingerprint ?? input.basisFingerprint ?? preview.basisFingerprint;
   if (correction) {
-    const restoreGrams = correction.allocations.reduce((sum, a) => sum + grams(a.dryMassKg), BigInt(0));
-    // These audit balances include every layer, including physically future intakes.
-    const restoredBalance = prepared.layers.reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0));
-    const [reversal] = await tx.insert(binMovements).values({ organizationId: ctx.organizationId, storageLocationId: input.storageLocationId, lane: prepared.lane,
-      movementType: 'adjustment', massDeltaKg: Number(kilograms(restoreGrams)), reason: input.reason, createdBy: ctx.userId,
-      outputKind: 'reversal', occurredAt: new Date(input.occurredAt), idempotencyKey: `${input.idempotencyKey}:reversal`, basisFingerprint,
-      inputSnapshot: { ...correction.original.inputSnapshot, actorId: ctx.userId, payloadHash }, outputDryDeltaKg: kilograms(restoreGrams), balanceBeforeDryKg: kilograms(restoredBalance - restoreGrams), balanceAfterDryKg: kilograms(restoredBalance), correctsMovementId: correction.original.id }).returning();
-    for (const a of correction.allocations) {
-      const solids = readRational(a.basisSnapshot.solidsKg);
-      const [reversed] = await tx.insert(outputStockAllocations).values({ ...a, id: undefined, createdAt: undefined, organizationId: ctx.organizationId, movementId: reversal.id, reversesAllocationId: a.id,
-        dryMassKg: kilograms(-grams(a.dryMassKg)), wetMassKg: a.wetMassKg === null ? null : kilograms(-grams(a.wetMassKg)),
-        basisSnapshot: { ...a.basisSnapshot, solidsKg: storeRational(rational(-solids.numerator, solids.denominator)) } }).returning();
-      for (const r of correction.rows.filter(r => r.allocation.id === a.id && r.run)) await tx.insert(outputStockRunAllocations).values({ organizationId: ctx.organizationId, allocationId: reversed.id, productionRunId: r.run!.productionRunId, dryMassKg: kilograms(-grams(r.run!.dryMassKg)) });
-    }
+    await appendOutputStockReversal(ctx, tx, {
+      ...correction, reason: input.reason, occurredAt: new Date(input.occurredAt),
+      idempotencyKey: `${input.idempotencyKey}:reversal`, basisFingerprint, payloadHash,
+      balanceBeforeDryKg: kilograms(prepared.layers.reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0)) - correction.allocations.reduce((sum, a) => sum + grams(a.dryMassKg), BigInt(0))),
+    });
   }
   const beforeGrams = prepared.layers.reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0));
   const [movement] = await tx.insert(binMovements).values({ organizationId: ctx.organizationId, storageLocationId: input.storageLocationId, lane: prepared.lane,
