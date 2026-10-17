@@ -71,6 +71,7 @@ import {
   CERTIFICATION_SETTINGS_SECTION_PARAM,
   CERTIFICATION_SETTINGS_SOURCES_SECTION,
   CERTIFICATION_SETTINGS_TEMPLATE_MAPPING_SECTION,
+  CERTIFICATION_SETTINGS_TEMPLATE_PARAM,
 } from "@/lib/certification/links";
 import { CertificationHealthPanel } from "./certification-health-panel";
 import { CertifierSettingsPanel } from "./certifier-settings-panel";
@@ -166,6 +167,8 @@ export function CertificationSettings() {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
 
+  const [requestedTemplate] = useQueryState(CERTIFICATION_SETTINGS_TEMPLATE_PARAM);
+
   const soilTierActive =
     selectedFacility?.durabilityOption === SOIL_MODELLED_TIER;
 
@@ -225,6 +228,7 @@ export function CertificationSettings() {
         key={`removal-template-review-${facilityId}`}
         facilityId={facilityId}
         canManage={viewerCanManage}
+        templateId={requestedTemplate}
       />
     ) : null,
   });
