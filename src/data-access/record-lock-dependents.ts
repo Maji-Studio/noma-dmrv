@@ -1,6 +1,7 @@
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { activeOutputMovement, deletedProductIds, liveOutputMovementPredicate } from "./output-stock-active-movements";
+import { and, eq, inArray, isNotNull, notInArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
-import { applications, biocharProductSourceAllocations, creditBatchApplications, creditBatchProductionRuns, deliveries, outputStockAllocations, productionRunFeedstocks, samples, outputStockRunAllocations, binMovements, productionRuns } from "@/db/schema";
+import { applications, biocharProductSourceAllocations, creditBatchApplications, creditBatchProductionRuns, deliveries, outputStockAllocations, productionRunFeedstocks, samples, outputStockRunAllocations, binMovements, productionRuns, biocharProducts } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { RecordLockHolder } from "@/lib/record-lock";
 import type { CertifiedLineageEntityType, CertifiedLineageTarget } from "./certification-lineage-guards";
@@ -39,12 +40,14 @@ export async function readRecordDependentsBatch(
     case "productionRun": {
       const [products, batches, effects, runs] = await Promise.all([
         tx.select({ runId: biocharProductSourceAllocations.productionRunId, id: biocharProductSourceAllocations.biocharProductId }).from(biocharProductSourceAllocations)
-          .where(and(eq(biocharProductSourceAllocations.organizationId, org), inArray(biocharProductSourceAllocations.productionRunId, wanted))),
+          .where(and(eq(biocharProductSourceAllocations.organizationId, org), inArray(biocharProductSourceAllocations.productionRunId, wanted),
+            notInArray(biocharProductSourceAllocations.biocharProductId, deletedProductIds(ctx, tx)))),
         tx.select({ runId: creditBatchProductionRuns.productionRunId, id: creditBatchProductionRuns.creditBatchId }).from(creditBatchProductionRuns)
           .where(and(eq(creditBatchProductionRuns.organizationId, org), inArray(creditBatchProductionRuns.productionRunId, wanted))),
         tx.select({ runId: outputStockRunAllocations.productionRunId, id: outputStockAllocations.movementId }).from(outputStockRunAllocations)
           .innerJoin(outputStockAllocations, and(eq(outputStockAllocations.organizationId, org), eq(outputStockAllocations.id, outputStockRunAllocations.allocationId)))
-          .where(and(eq(outputStockRunAllocations.organizationId, org), inArray(outputStockRunAllocations.productionRunId, wanted))),
+          .innerJoin(binMovements, and(eq(binMovements.organizationId, org), eq(binMovements.id, outputStockAllocations.movementId)))
+          .where(and(eq(outputStockRunAllocations.organizationId, org), inArray(outputStockRunAllocations.productionRunId, wanted), activeOutputMovement(ctx, tx))),
         tx.select().from(productionRuns).where(and(eq(productionRuns.organizationId, org), inArray(productionRuns.id, wanted))),
       ]);
       const binIds = [...new Set(runs.flatMap(run => run.biocharStorageLocationId ? [run.biocharStorageLocationId] : []))];
@@ -63,9 +66,23 @@ export async function readRecordDependentsBatch(
       return result;
     }
     case "biocharProduct": {
-      const rows = await tx.select({ productId: outputStockAllocations.biocharProductId, id: outputStockAllocations.movementId }).from(outputStockAllocations)
-        .where(and(eq(outputStockAllocations.organizationId, org), inArray(outputStockAllocations.biocharProductId, wanted)));
+      const [rows, products] = await Promise.all([
+        tx.select({ productId: outputStockAllocations.biocharProductId, id: outputStockAllocations.movementId }).from(outputStockAllocations)
+          .innerJoin(binMovements, and(eq(binMovements.organizationId, org), eq(binMovements.id, outputStockAllocations.movementId)))
+          .where(and(eq(outputStockAllocations.organizationId, org), inArray(outputStockAllocations.biocharProductId, wanted), activeOutputMovement(ctx, tx))),
+        tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, org), inArray(biocharProducts.id, wanted))),
+      ]);
+      const binIds = [...new Set(products.flatMap(product => product.storageLocationId ? [product.storageLocationId] : []))];
+      const movements = binIds.length === 0 ? [] : await tx.select().from(binMovements)
+        .where(and(eq(binMovements.organizationId, org), inArray(binMovements.storageLocationId, binIds)));
       for (const row of rows) if (row.productId) push(row.productId, { kind: "stockEntry", id: row.id });
+      for (const product of products) {
+        if (!product.storageLocationId) continue;
+        const binMovementsOfProduct = movements.filter(movement => movement.storageLocationId === product.storageLocationId);
+        const counts = binMovementsOfProduct.filter(liveOutputMovementPredicate(binMovementsOfProduct)).filter(movement =>
+          isCountMovement(movement) && product.createdAt <= movement.createdAt && movement.occurredAt && product.placedAt <= movement.occurredAt);
+        for (const movement of counts) push(product.id, { kind: "stockEntry", id: movement.id });
+      }
       return result;
     }
     case "order": {

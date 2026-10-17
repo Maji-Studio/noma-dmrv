@@ -1,3 +1,4 @@
+import { deletedProductReversals } from './output-stock-active-movements';
 import { db, type DbTransaction } from '@/db';
 import { applications, binMovements, biocharProducts, biocharProductSourceAllocations, productionRuns, productIngredientSnapshots, storageLocations, users } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
@@ -27,6 +28,7 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   const sources = await reader.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId));
   const ingredients = products.length === 0 ? [] : await reader.select().from(productIngredientSnapshots)
     .where(and(eq(productIngredientSnapshots.organizationId, ctx.organizationId), inArray(productIngredientSnapshots.biocharProductId, products.map(product => product.id))));
+  const deletedPlacements = products.length === 0 ? [] : await deletedProductReversals(ctx, reader, products.map(product => product.id));
   const runCode = new Map(runs.map(r => [r.id, r.code]));
   const productCode = new Map(products.map(p => [p.id, p.code]));
   const history: OutputStockHistoryEntry[] = movements.filter(({ movement: m }) => m.outputKind).flatMap(({ movement: m, actorName }) => {
@@ -92,10 +94,17 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
     reason: `Intake ${r.code}`, wetMassKg: r.wet, moisturePercent: r.moisture, dryMassKg: -r.dry, beforeDryKg: 0, afterDryKg: 0,
     correctsMovementId: null, deliveryId: null, source: { entity: bin.type === 'product_bin' ? 'biocharProduct' : 'productionRun', id: r.id },
     wetDeltaKg: r.wet, solidsDeltaKg: r.solids, allocations: [{ layerId: r.id, code: r.code, wetMassKg: r.wet, dryMassKg: r.dry, runs: r.runs }] });
+  for (const [productId, movement] of new Map(deletedPlacements.map(row => [row.id, row.movement]))) {
+    const intake = history.find(entry => entry.kind === 'intake' && entry.id === productId);
+    if (!intake) continue;
+    history.push({ ...intake, id: `${movement.id}:placement`, kind: 'reversal', correctsMovementId: intake.id,
+      recordedAt: movement.createdAt.toISOString(), reason: movement.reason,
+      dryMassKg: -intake.dryMassKg, wetDeltaKg: -(intake.wetDeltaKg ?? 0), solidsDeltaKg: intake.solidsDeltaKg == null ? null : -intake.solidsDeltaKg });
+  }
   history.sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
   let balance = 0;
   for (const entry of history) {
-    if (entry.kind === 'intake') { entry.beforeDryKg = balance; entry.afterDryKg = balance - entry.dryMassKg; }
+    if (entry.kind === 'intake' || entry.id.endsWith(':placement')) { entry.beforeDryKg = balance; entry.afterDryKg = balance - entry.dryMassKg; }
     balance -= entry.dryMassKg;
   }
   // The correction path refuses an applied delivery too; locking it here keeps the delivery's other fields saveable.

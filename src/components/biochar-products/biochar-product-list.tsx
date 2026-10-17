@@ -118,15 +118,6 @@ function productEffectiveMoisturePercent(
 // Column Definitions
 // ============================================
 
-/**
- * Whether the server deletes a product at all. Today it keeps every posted
- * product (`deleteBiocharProduct` refuses), so Delete is never offered.
- * #1120 (PR #1135) adds delete while Open, with a stock reversal: that PR
- * sets this to true, and Delete then shows for Open products only, through
- * the existing confirm dialog and `useDeleteBiocharProduct`.
- */
-const PRODUCT_DELETE_ACCEPTED_WHILE_OPEN = false;
-
 function createColumns(
   onEdit: (product: BiocharProductWithRelations) => void,
   onDelete: (productId: string) => void,
@@ -202,13 +193,12 @@ function createColumns(
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
-      // Edit until Sent; Delete only where the server accepts it (Open, and
-      // only once PRODUCT_DELETE_ACCEPTED_WHILE_OPEN is on).
+      // Edit until Sent; Delete only while Open (the server archives the product).
       cell: ({ row }) => {
         const lock = locks[row.original.id];
         const actions = [
           ...(isRecordEditable(lock) ? [{ label: "Edit", onSelect: () => onEdit(row.original) }] : []),
-          ...(PRODUCT_DELETE_ACCEPTED_WHILE_OPEN && isRecordDeletable(lock)
+          ...(isRecordDeletable(lock)
             ? [{ label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) }]
             : []),
         ];
