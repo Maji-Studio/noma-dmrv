@@ -61,37 +61,52 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("CustomerSavedLocations", () => {
-  it("lists active locations first and archived ones in their own muted, read-only group", () => {
+  it("keeps archived locations behind a collapsed toggle labelled with their count", () => {
     state.locations = [location("l3", "E2E Old Field", { archivedAt: ARCHIVED_AT }), ...state.locations];
     render(<CustomerSavedLocations customerId="c1" />);
 
+    const toggle = screen.getByRole("button", { name: "Archived locations (1)" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText("E2E Old Field")).toBeNull();
+    expect(screen.getByRole("button", { name: "About archived locations" }).getAttribute("aria-description")).toBe(
+      "Pickers hide these. Existing orders keep them. Restore a location to edit it.",
+    );
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
     const archivedGroup = screen.getByRole("group", { name: "Archived locations" });
     expect(within(archivedGroup).getByText("E2E Old Field")).toBeTruthy();
     expect(within(archivedGroup).getByRole("button", { name: "Restore E2E Old Field" })).toBeTruthy();
     expect(within(archivedGroup).getByRole("button", { name: "Delete E2E Old Field" })).toBeTruthy();
     expect(within(archivedGroup).queryByRole("button", { name: /^Edit / })).toBeNull();
     expect(within(archivedGroup).queryByRole("button", { name: /^Archive / })).toBeNull();
+    // Compact rows: no address or coordinates line.
+    expect(within(archivedGroup).queryByText(/-6\.9000/)).toBeNull();
 
     expect(screen.getByRole("button", { name: "Edit E2E North Block" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Archive E2E North Block" })).toBeTruthy();
-    // Document order: the active rows come before the archived group.
-    const text = document.body.textContent ?? "";
-    expect(text.indexOf("E2E South Block")).toBeLessThan(text.indexOf("Archived locations"));
   });
 
-  it("shows no archived group when nothing is archived", () => {
+  it("shows no archived toggle when nothing is archived", () => {
     render(<CustomerSavedLocations customerId="c1" />);
     expect(screen.queryByRole("group", { name: "Archived locations" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Archived locations/ })).toBeNull();
   });
 
-  it("disables Archive on the last active location and says why before any click", () => {
+  it("disables Archive on the last active location and describes why before any click", () => {
     state.locations = [location("l1", "E2E North Block", { isDefault: true }), location("l3", "E2E Old Field", { archivedAt: ARCHIVED_AT })];
     render(<CustomerSavedLocations customerId="c1" />);
     const archive = screen.getByRole("button", { name: "Archive E2E North Block" }) as HTMLButtonElement;
     expect(archive.disabled).toBe(true);
-    const reason = document.getElementById(archive.getAttribute("aria-describedby") ?? "");
-    expect(reason?.textContent).toContain("This is the only active location, so it cannot be archived. Add or restore another location first.");
-    expect(reason?.getAttribute("data-tone")).toBe("info");
+    const reason = "This is the only active location, so it cannot be archived. Add or restore another location first.";
+    expect(archive.getAttribute("aria-description")).toBe(reason);
+    expect(screen.getByRole("button", { name: "Why Archive is unavailable" }).getAttribute("aria-description")).toBe(reason);
+  });
+
+  it("gives Archive no only-active reason while two locations are active", () => {
+    render(<CustomerSavedLocations customerId="c1" />);
+    expect(screen.queryByRole("button", { name: "Why Archive is unavailable" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Archive E2E North Block" }).getAttribute("aria-description")).toBeNull();
   });
 
   it("archives with the row version, confirms, and shows the default move as a warning", async () => {
@@ -107,6 +122,7 @@ describe("CustomerSavedLocations", () => {
     state.locations = [...state.locations, location("l3", "E2E Old Field", { archivedAt: ARCHIVED_AT })];
     state.restore.mockResolvedValue({ warnings: ["E2E Old Field is now the default location."] });
     render(<CustomerSavedLocations customerId="c1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Archived locations (1)" }));
     fireEvent.click(screen.getByRole("button", { name: "Restore E2E Old Field" }));
     await waitFor(() => expect(state.restore).toHaveBeenCalledWith({ locationId: "l3", expectedVersion: 3 }));
     expect(state.success).toHaveBeenCalledWith("E2E Old Field restored.");
@@ -181,6 +197,7 @@ describe("CustomerSavedLocations", () => {
     state.locations = [...state.locations, location("l3", "E2E Old Field", { archivedAt: ARCHIVED_AT })];
     state.remove.mockRejectedValue(new Error(IN_USE));
     render(<CustomerSavedLocations customerId="c1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Archived locations (1)" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete E2E Old Field" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
     await waitFor(() => expect(state.error).toHaveBeenCalledWith(IN_USE));

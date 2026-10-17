@@ -95,6 +95,8 @@ test.describe("Customer location archive", () => {
       await expect(page.getByText(DEFAULT_MOVED)).toBeVisible();
 
       const archivedGroup = sheet.getByRole("group", { name: "Archived locations" });
+      await expect(archivedGroup.getByRole("button", { name: "Archived locations (1)" })).toHaveAttribute("aria-expanded", "false");
+      await archivedGroup.getByRole("button", { name: "Archived locations (1)" }).click();
       await expect(archivedGroup.getByText(customerLocation.name)).toBeVisible();
       await expect(archivedGroup.getByRole("button", { name: `Edit ${customerLocation.name}` })).toHaveCount(0);
       expect((await readLocation(customerLocation.id))?.archivedAt).not.toBeNull();
@@ -102,13 +104,14 @@ test.describe("Customer location archive", () => {
       expect(await readLocation(secondId)).toMatchObject({ isDefault: true });
 
       // The last active location says why before anyone clicks.
-      await expect(sheet.getByText(LAST_ACTIVE_REASON)).toBeVisible();
-      await expect(sheet.getByRole("button", { name: `Archive ${SECOND_LOCATION_NAME}` })).toBeDisabled();
+      const lastArchive = sheet.getByRole("button", { name: `Archive ${SECOND_LOCATION_NAME}` });
+      await expect(lastArchive).toBeDisabled();
+      await expect(lastArchive).toHaveAttribute("aria-description", LAST_ACTIVE_REASON);
 
       await archivedGroup.getByRole("button", { name: `Restore ${customerLocation.name}` }).click();
       await expect(page.getByText(`${customerLocation.name} restored.`)).toBeVisible();
       await expect(sheet.getByRole("group", { name: "Archived locations" })).toHaveCount(0);
-      await expect(sheet.getByText(LAST_ACTIVE_REASON)).toHaveCount(0);
+      await expect(sheet.getByRole("button", { name: `Archive ${SECOND_LOCATION_NAME}` })).not.toHaveAttribute("aria-description", LAST_ACTIVE_REASON);
       expect((await readLocation(customerLocation.id))?.archivedAt).toBeNull();
       // The restored location does not take the default back from the one that holds it.
       expect(await readLocation(customerLocation.id)).toMatchObject({ isDefault: false });
@@ -129,6 +132,7 @@ test.describe("Customer location archive", () => {
 
       await expect(page.getByRole("dialog").getByText(`${customerLocation.name} is in use`)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
       await page.getByRole("dialog").getByRole("button", { name: "Archive instead" }).click();
+      await sheet.getByRole("button", { name: "Archived locations (1)" }).click();
       await expect(sheet.getByRole("group", { name: "Archived locations" }).getByText(customerLocation.name)).toBeVisible();
       await expect(page.getByRole("dialog").getByText(`${customerLocation.name} is in use`)).toHaveCount(0);
     } finally {

@@ -5,24 +5,25 @@
  */
 "use client";
 
-import { useId, useState } from "react";
+import { useState } from "react";
 import {
   ArchiveIcon,
   ArrowCounterClockwiseIcon,
+  CaretDownIcon,
   MapPinIcon,
   PencilIcon,
   PlusIcon,
   TrashIcon,
 } from "@phosphor-icons/react/dist/ssr";
+import { Collapsible } from "@base-ui/react/collapsible";
 import { FormSection, ServerError } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { DefaultLocationBadge } from "@/components/ui/default-location-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
 import { isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
-import { Notice } from "@/components/ui/notice";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
+import { InfoHint } from "@/components/ui/tooltip";
 import {
   useArchiveCustomerLocation,
   useCustomerLocations,
@@ -38,6 +39,9 @@ import type { EditableCustomerLocation } from "./customer-location-form";
 type SavedLocation = EditableCustomerLocation & { archivedAt: Date | null };
 
 const ICON_SIZE = 16;
+
+const ONLY_ACTIVE_REASON = "This is the only active location, so it cannot be archived. Add or restore another location first.";
+const ARCHIVED_HINT = "Pickers hide these. Existing orders keep them. Restore a location to edit it.";
 
 /** An in-use refusal for the only active location: neither Delete nor Archive can work yet. */
 const onlyActiveInUseMessage = (name: string) =>
@@ -63,7 +67,7 @@ function formatSavedLocationSummary({
   return parts.length > 0 ? parts.join(", ") : MISSING_VALUE.notRecorded;
 }
 
-function LocationIdentity({ location, archived }: { location: SavedLocation; archived?: boolean }) {
+function LocationIdentity({ location }: { location: SavedLocation }) {
   return (
     <div className="flex items-center gap-10 min-w-0">
       <MapPinIcon size={ICON_SIZE} className="shrink-0 text-[var(--color-text-tertiary)]" />
@@ -71,7 +75,6 @@ function LocationIdentity({ location, archived }: { location: SavedLocation; arc
         <p className="body-small font-medium flex items-center gap-8 min-w-0">
           <span className="truncate">{location.name}</span>
           {location.isDefault ? <DefaultLocationBadge /> : null}
-          {archived ? <StatusBadge status="archived" size="small" className="shrink-0" /> : null}
         </p>
         <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
           {formatSavedLocationSummary(location)}
@@ -85,7 +88,6 @@ const ROW_CLASS = "flex items-center justify-between gap-12 px-12 py-8 border bo
 
 export function CustomerSavedLocations({ customerId }: { customerId: string }) {
   const toast = useToast();
-  const onlyActiveHintId = useId();
   // `editingLocation` is deliberately not cleared on close: the modal keeps its
   // subtree mounted for the exit transition, so clearing it there would flip the
   // dialog title and submit label to the "Add" wording mid-fade. Opening the add
@@ -215,12 +217,13 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                   >
                     <PencilIcon size={ICON_SIZE} />
                   </Button>
+                  {isOnlyActive ? <InfoHint label="Why Archive is unavailable">{ONLY_ACTIVE_REASON}</InfoHint> : null}
                   <Button
                     variant="noOutline"
                     size="icon"
                     onClick={() => handleArchive(loc)}
                     disabled={isOnlyActive || archiveLocation.isPending}
-                    aria-describedby={isOnlyActive ? onlyActiveHintId : undefined}
+                    aria-description={isOnlyActive ? ONLY_ACTIVE_REASON : undefined}
                     aria-label={`Archive ${loc.name || loc.country}`}
                   >
                     <ArchiveIcon size={ICON_SIZE} />
@@ -238,43 +241,48 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
             ))}
           </div>
 
-          {isOnlyActive && (
-            <Notice id={onlyActiveHintId} tone="info">
-              This is the only active location, so it cannot be archived. Add or restore another location first.
-            </Notice>
-          )}
-
           {archivedLocations.length > 0 && (
-            <div className="flex flex-col gap-8" role="group" aria-label="Archived locations">
-              <p className="body-small font-medium text-[var(--color-text-secondary)]">Archived locations</p>
-              <Notice tone="info">
-                Pickers hide these. Existing orders keep them. Restore a location to edit it.
-              </Notice>
-              {archivedLocations.map((loc) => (
-                <div key={loc.id} className={`${ROW_CLASS} text-[var(--color-text-tertiary)]`}>
-                  <LocationIdentity location={loc} archived />
-                  <div className="flex shrink-0 items-center gap-8">
-                    <Button
-                      variant="noOutline"
-                      size="icon"
-                      onClick={() => handleRestore(loc)}
-                      disabled={restoreLocation.isPending}
-                      aria-label={`Restore ${loc.name || loc.country}`}
-                    >
-                      <ArrowCounterClockwiseIcon size={ICON_SIZE} />
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      onClick={() => setDeletingLocation(loc)}
-                      aria-label={`Delete ${loc.name || loc.country}`}
-                    >
-                      <TrashIcon size={ICON_SIZE} />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <Collapsible.Root role="group" aria-label="Archived locations" className="flex flex-col gap-4">
+              <div className="flex items-center gap-4">
+                <Collapsible.Trigger className="group flex min-h-24 cursor-pointer items-center gap-6 rounded-[4px] body-small font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]">
+                  Archived locations ({archivedLocations.length})
+                  <CaretDownIcon
+                    size={14}
+                    weight="bold"
+                    className="text-[var(--color-text-tertiary)] transition-transform duration-200 group-data-[panel-open]:rotate-180"
+                  />
+                </Collapsible.Trigger>
+                <InfoHint label="About archived locations">{ARCHIVED_HINT}</InfoHint>
+              </div>
+              <Collapsible.Panel>
+                <ul className="flex flex-col">
+                  {archivedLocations.map((loc) => (
+                    <li key={loc.id} className="flex items-center justify-between gap-12 px-12 py-4 text-[var(--color-text-tertiary)]">
+                      <span className="body-small truncate">{loc.name || loc.country}</span>
+                      <div className="flex shrink-0 items-center gap-8">
+                        <Button
+                          variant="noOutline"
+                          size="icon"
+                          onClick={() => handleRestore(loc)}
+                          disabled={restoreLocation.isPending}
+                          aria-label={`Restore ${loc.name || loc.country}`}
+                        >
+                          <ArrowCounterClockwiseIcon size={ICON_SIZE} />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          onClick={() => setDeletingLocation(loc)}
+                          aria-label={`Delete ${loc.name || loc.country}`}
+                        >
+                          <TrashIcon size={ICON_SIZE} />
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </Collapsible.Panel>
+            </Collapsible.Root>
           )}
         </div>
       )}
