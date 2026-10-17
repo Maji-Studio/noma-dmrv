@@ -97,15 +97,21 @@ it("creates, edits with a version, conflicts, and hard deletes while retaining w
   expect(await getEmissionLineComment(ctx, created.id)).toEqual(created);
   expect(await listEmissionLineComments(ctx, lineage.batchId)).toEqual([created]);
   await expect(setEmissionLineComment(ctx, input())).rejects.toMatchObject({ code: "conflict" });
-  const edited = await setEmissionLineComment({ ...ctx, userId: editorId }, { ...input(), body: "  Second wording  ", expectedVersion: 1 });
+  const edited = await setEmissionLineComment({ ...ctx, userId: editorId }, { ...input(), body: "  Second wording  ", id: created.id, expectedVersion: 1 });
   expect(edited).toMatchObject({ id: created.id, body: "Second wording", version: 2, createdBy: userId, updatedBy: editorId });
-  await expect(setEmissionLineComment(ctx, { ...input(), expectedVersion: 1 })).rejects.toMatchObject({ code: "stale_version" });
+  await expect(setEmissionLineComment(ctx, { ...input(), id: created.id, expectedVersion: 1 })).rejects.toMatchObject({ code: "stale_version" });
   await expect(deleteEmissionLineComment(ctx, { facilityId: lineage.facilityId, id: created.id, expectedVersion: 1 }))
     .rejects.toMatchObject({ code: "stale_version" });
   expect(await deleteEmissionLineComment(ctx, { id: created.id, expectedVersion: 2 })).toEqual({ id: created.id });
   expect(await listEmissionLineComments(ctx, lineage.batchId)).toEqual([]);
   await expect(getEmissionLineComment(ctx, created.id)).rejects.toMatchObject({ code: "not_found" });
-  await expect(setEmissionLineComment(ctx, { ...input(), expectedVersion: 2 })).rejects.toMatchObject({ code: "stale_version" });
+  await expect(setEmissionLineComment(ctx, { ...input(), id: created.id, expectedVersion: 2 })).rejects.toMatchObject({ code: "stale_version" });
+  // A stale edit of the deleted comment must not overwrite the comment that replaced it.
+  const replacement = await setEmissionLineComment(ctx, { ...input(), body: "Replacement wording" });
+  await expect(setEmissionLineComment(ctx, { ...input(), body: "Stale wording", id: created.id, expectedVersion: 1 }))
+    .rejects.toMatchObject({ code: "stale_version" });
+  expect(await getEmissionLineComment(ctx, replacement.id)).toMatchObject({ body: "Replacement wording", version: 1 });
+  await deleteEmissionLineComment(ctx, { id: replacement.id, expectedVersion: 1 });
   const events = await commentEvents(created.id);
   expect(events.map((event) => event.action)).toEqual(["created", "updated", "deleted"]);
   expect(events.every((event) => event.creditBatchId === lineage.batchId)).toBe(true);
@@ -126,7 +132,7 @@ it("rejects unknown lines and mismatched facilities without activity or mutation
   await expect(setEmissionLineComment(ctx, { ...input(), facilityId: otherBatch.facilityId })).rejects.toMatchObject({ code: "not_found" });
   expect(await listEmissionLineComments(ctx, lineage.batchId)).toEqual([]);
   const created = await setEmissionLineComment(ctx, input());
-  await expect(setEmissionLineComment(ctx, { ...input(), facilityId: otherBatch.facilityId, expectedVersion: created.version }))
+  await expect(setEmissionLineComment(ctx, { ...input(), facilityId: otherBatch.facilityId, id: created.id, expectedVersion: created.version }))
     .rejects.toMatchObject({ code: "not_found" });
   await expect(deleteEmissionLineComment(ctx, { facilityId: otherBatch.facilityId, id: created.id, expectedVersion: created.version }))
     .rejects.toMatchObject({ code: "not_found" });
@@ -140,7 +146,7 @@ it("isolates reads and writes across organizations with a composite FK backstop"
   expect(await listEmissionLineCommentsForBatches(foreignCtx, [lineage.batchId, otherBatch.batchId])).toEqual([]);
   expect(await listEmissionLineCommentsForBatches(ctx, [])).toEqual([]);
   await expect(getEmissionLineComment(foreignCtx, created.id)).rejects.toMatchObject({ code: "not_found" });
-  await expect(setEmissionLineComment(foreignCtx, { ...input(), expectedVersion: created.version })).rejects.toMatchObject({ code: "not_found" });
+  await expect(setEmissionLineComment(foreignCtx, { ...input(), id: created.id, expectedVersion: created.version })).rejects.toMatchObject({ code: "not_found" });
   await expect(setEmissionLineComment(foreignCtx, input("other"))).rejects.toMatchObject({ code: "not_found" });
   await expect(deleteEmissionLineComment(foreignCtx, { id: created.id, expectedVersion: created.version })).rejects.toMatchObject({ code: "not_found" });
   await expect(db.insert(emissionLineComments).values({ ...created, id: crypto.randomUUID(), organizationId: otherOrg })).rejects.toThrow();
@@ -187,7 +193,7 @@ it("reads saved comments with the flag off and refuses both writes", async () =>
   flag.enabled = false;
   try {
     expect(await getEmissionLineComment(ctx, created.id)).toEqual(created);
-    await expect(setEmissionLineComment(ctx, { ...input(), expectedVersion: created.version })).rejects.toThrow("not available");
+    await expect(setEmissionLineComment(ctx, { ...input(), id: created.id, expectedVersion: created.version })).rejects.toThrow("not available");
     await expect(deleteEmissionLineComment(ctx, { id: created.id, expectedVersion: created.version })).rejects.toThrow("not available");
   } finally {
     flag.enabled = true;

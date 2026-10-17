@@ -68,6 +68,7 @@ export async function setEmissionLineComment(ctx: OrgContext, input: SetEmission
     if (before) {
       if (data.expectedVersion === undefined)
         throw new DomainError("conflict", "This line already has a comment. Refresh and edit that comment.");
+      if (data.id !== before.id) throw staleRowVersion("emission_line_comment", data.id!);
       assertRowVersion({ entity: "emission_line_comment", id: before.id,
         expectedVersion: data.expectedVersion, actualVersion: before.version });
       const [after] = await tx.update(emissionLineComments).set({
@@ -80,7 +81,7 @@ export async function setEmissionLineComment(ctx: OrgContext, input: SetEmission
       return after;
     }
     // A deleted comment must not be silently recreated by a stale edit.
-    if (data.expectedVersion !== undefined) throw staleRowVersion("credit_batch", batch.id);
+    if (data.id !== undefined) throw staleRowVersion("emission_line_comment", data.id);
     const [after] = await tx.insert(emissionLineComments).values({
       organizationId: ctx.organizationId, creditBatchId: batch.id, componentId: data.componentId,
       body: data.body, createdBy: ctx.userId, updatedBy: ctx.userId,

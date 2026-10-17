@@ -23,7 +23,10 @@ it.each([
 });
 
 it("accepts versions for edits and requires them for deletes", () => {
-  expect(setEmissionLineCommentSchema.parse({ ...input, expectedVersion: 2 }).expectedVersion).toBe(2);
+  expect(setEmissionLineCommentSchema.parse({ ...input, id, expectedVersion: 2 }).expectedVersion).toBe(2);
+  // An edit names the loaded comment and its version together.
+  expect(setEmissionLineCommentSchema.safeParse({ ...input, expectedVersion: 2 }).success).toBe(false);
+  expect(setEmissionLineCommentSchema.safeParse({ ...input, id }).success).toBe(false);
   expect(deleteEmissionLineCommentSchema.parse({ id, expectedVersion: 2 })).toEqual({ id, expectedVersion: 2 });
   for (const patch of [{ expectedVersion: undefined }, { expectedVersion: 0 }, { expectedVersion: 1.5 }, { id: "invalid" }]) {
     expect(deleteEmissionLineCommentSchema.safeParse({ id, expectedVersion: 2, ...patch }).success).toBe(false);
