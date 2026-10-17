@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import {
   RECORD_LOCK_ERROR_MESSAGE,
   RECORD_LOCK_PENDING_MESSAGE,
+  RECORD_LOCK_RETRY_LABEL,
   type RecordLockLink,
   type RecordLockStatus,
   type RecordLockView,
@@ -68,8 +70,10 @@ export function RecordReturnedNotice({ lock }: { lock: RecordLockView | undefine
  */
 export function RecordLockNotice(props: {
   lock: RecordLockView | undefined;
-  /** Until the read answers, say so; a failed read says how to retry. */
+  /** Until the read answers, say so; a failed read offers an in-place retry. */
   status?: RecordLockStatus;
+  onRetry?: () => void;
+  retrying?: boolean;
   subject?: "record" | "storageBin";
   /** The kind keeps every field free while In use (a Sample), so only Sent has a line. */
   inUseLocksNothing?: boolean;
@@ -78,7 +82,15 @@ export function RecordLockNotice(props: {
     return <Notice tone="info" data-record-lock-notice="pending">{RECORD_LOCK_PENDING_MESSAGE}</Notice>;
   }
   if (!props.lock && props.status === "error") {
-    return <Notice tone="warning" data-record-lock-notice="error">{RECORD_LOCK_ERROR_MESSAGE}</Notice>;
+    return (
+      <Notice
+        tone="error"
+        data-record-lock-notice="error"
+        action={props.onRetry ? <Button variant="default" size="small" busy={props.retrying} onClick={props.onRetry}>{RECORD_LOCK_RETRY_LABEL}</Button> : undefined}
+      >
+        {RECORD_LOCK_ERROR_MESSAGE}
+      </Notice>
+    );
   }
   return (
     <>
@@ -97,7 +109,9 @@ function LockLine({ lock, subject = "record", inUseLocksNothing = false }: {
   if (subject === "storageBin") {
     return (
       <Notice tone="info" data-record-lock-notice={lock.level}>
-        In use by its stock history, so the storage type and feedstock type are locked.
+        {lock.heldBy[0] ? (
+          <>In use by its stock history, most recently <HolderLink link={lock.heldBy[0]} />, so the storage type and feedstock type are locked.</>
+        ) : "In use by its stock history, so the storage type and feedstock type are locked."}
       </Notice>
     );
   }

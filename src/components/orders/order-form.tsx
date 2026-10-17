@@ -26,7 +26,8 @@ import { ServerError } from "@/components/forms/server-error";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { CustomerLocationDetails } from "./customer-location-details";
-import { isRecordFieldLocked, type RecordLockView } from "@/lib/record-lock-view";
+import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
+import { recordInUseFreeFields } from "@/lib/record-lock";
 import { MatchingOutputBins } from "./matching-output-bins";
 
 import { useEffect, useState } from "react";
@@ -86,7 +87,8 @@ export function OrderForm({
   lock,
 }: OrderFormProps) {
   const isEditMode = !!order;
-  const locked = (field: string) => isEditMode && isRecordFieldLocked(lock, field);
+  // Fail closed: until the lock answers, fields an In use order holds stay disabled.
+  const locked = (field: string) => isEditMode && isRecordFieldHeld(lock, recordInUseFreeFields("order"), field);
   const [editingLocation, setEditingLocation] = useState<{ customerId: string; location: EditableCustomerLocation } | null>(null);
   const { facilityId: contextFacilityId, facilities } = useFacilityContext();
   // Organization operating defaults seed create mode only; an existing record

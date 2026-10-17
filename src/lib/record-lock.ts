@@ -147,6 +147,11 @@ export const recordLocks = {
 
 export type RecordLockKind = keyof typeof recordLocks;
 
+/** The fields a kind keeps free while In use, for forms whose lock has not answered. */
+export function recordInUseFreeFields(kind: RecordLockKind): readonly string[] {
+  return recordLocks[kind]({ dependents: [{ kind: "record", id: "" }], removals: [] }).freeFields;
+}
+
 /** Every lock refusal names its holder, then explains how to free the record. */
 export function withRecordLockGuidance(message: string, lock: RecordLock): string {
   if (lock.level === "open") return message;

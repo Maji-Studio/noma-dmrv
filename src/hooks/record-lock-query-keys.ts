@@ -42,20 +42,23 @@ function failedResult(data: unknown): boolean {
 }
 
 /**
- * MutationCache hook: after a write commits, refetch only the mounted lock
- * reads of the kinds it declared. Failed writes and undeclared ones refetch
- * nothing.
+ * MutationCache hook: after a write, refetch only the mounted lock reads of
+ * the kinds it declared. Ordinary writes refresh on success only. Registry
+ * writes (`"all"`) refresh on failure too: a failed or interrupted submission
+ * can still leave a Removal holding its lineage.
  */
 export function invalidateRecordLocksAfter(
   queryClient: QueryClient,
   data: unknown,
+  error: unknown,
   mutation: Pick<Mutation<unknown, unknown, unknown, unknown>, "meta">,
 ) {
   const touch = (mutation.meta as { recordLocks?: RecordLockTouch } | undefined)?.recordLocks;
-  if (!touch || failedResult(data)) return;
+  if (!touch) return;
   if (touch === "all") {
     void queryClient.invalidateQueries({ queryKey: recordLockKeys.all });
     return;
   }
+  if (error || failedResult(data)) return;
   for (const kind of touch) void queryClient.invalidateQueries({ queryKey: recordLockKeys.kind(kind) });
 }

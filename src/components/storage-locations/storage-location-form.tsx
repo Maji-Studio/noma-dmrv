@@ -81,10 +81,11 @@ export function StorageLocationForm({
 }: StorageLocationFormProps) {
   const isEditMode = !!storageLocation;
   // The identity guard (#767) refuses these two once any stock row points at
-  // the bin. Stock mode and formulation keep their own inline rules.
-  const identityLocked = isEditMode && !!lock && lock.level !== "open";
+  // the bin, and both wait for the lock to answer (fail closed). Stock mode
+  // keeps its own inline rule.
+  const identityLocked = isEditMode && (!lock || lock.level !== "open");
   // The formulation guard: only the one formulation every stored product has.
-  const formulationLocked = isEditMode && isBinFormulationLocked(lock, storageLocation?.formulationId ?? null);
+  const formulationLocked = isEditMode && (!lock || isBinFormulationLocked(lock, storageLocation?.formulationId ?? null));
   const { facilityId: contextFacilityId } = useFacilityContext();
 
   const typeChoices = allowedTypes ?? storageLocationTypes;

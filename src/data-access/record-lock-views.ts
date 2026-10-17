@@ -5,7 +5,7 @@
  * file only resolves the holders into links a screen can show. Writers never
  * read it: they re-check under their own locks.
  */
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import {
   applications, biocharProducts, binMovements, certifierGhgStatements, certifierRemovals, creditBatches, deliveries, feedstocks, orders,
@@ -92,11 +92,12 @@ export async function getStorageBinLockViews(ctx: OrgContext, ids: readonly stri
     .where(and(eq(storageLocations.organizationId, ctx.organizationId), inArray(storageLocations.id, unique)));
   const binIds = rows.map(bin => bin.id);
   if (!binIds.length) return {};
-  const [referencesByBin, storedFormulations] = await Promise.all([
+  const [referencesByBin, storedFormulations, latestByBin] = await Promise.all([
     countStorageLocationReferencesForBins(ctx, db, binIds),
     // The formulation guard compares every product stored in the bin.
     db.selectDistinct({ binId: biocharProducts.storageLocationId, formulationId: biocharProducts.formulationId }).from(biocharProducts)
       .where(and(eq(biocharProducts.organizationId, ctx.organizationId), inArray(biocharProducts.storageLocationId, binIds))),
+    latestBinRecords(ctx, binIds),
   ]);
   const views = rows.map((bin) => {
     const references = (referencesByBin.get(bin.id) ?? []).filter(reference => reference.count > 0);
@@ -105,11 +106,49 @@ export async function getStorageBinLockViews(ctx: OrgContext, ids: readonly stri
     const usedBy: RecordLockLink[] = references.map(reference => ({
       kind: "binReference", id: reference.blocker, label: reference.blocker, facilityId: bin.facilityId, count: reference.count,
     }));
-    const view: RecordLockView = { level: lock.level, heldBy: usedBy, usedBy, freeFields: [...lock.freeFields], howToFree: lock.howToFree, returnedBy: [],
+    const latest = latestByBin.get(bin.id);
+    // The lock line names the most recent record of its stock history, as a link.
+    const heldBy: RecordLockLink[] = latest && lock.level !== "open"
+      ? [{ kind: latest.kind, id: latest.id, label: latest.label, facilityId: latest.facilityId }] : [];
+    const view: RecordLockView = { level: lock.level, heldBy, usedBy, freeFields: [...lock.freeFields], howToFree: lock.howToFree, returnedBy: [],
       productFormulationIds: storedFormulations.filter(row => row.binId === bin.id).map(row => row.formulationId) };
     return [bin.id, view] as const;
   });
   return Object.fromEntries(views);
+}
+
+/**
+ * The most recent record that put stock in or took it out of each bin, one
+ * query per source table: intake, production output, product placement and
+ * delivery. Losses and counts have no record to link and are not named.
+ */
+async function latestBinRecords(ctx: OrgContext, binIds: readonly string[]): Promise<Map<string, RecordLockLink & { at: Date }>> {
+  requireOrgScope(ctx);
+  const org = ctx.organizationId;
+  const ids = [...binIds];
+  const [intakes, runs, products, deliveryRows] = await Promise.all([
+    db.selectDistinctOn([feedstocks.storageLocationId], { binId: feedstocks.storageLocationId, id: feedstocks.id, code: feedstocks.code, facilityId: feedstocks.facilityId, at: feedstocks.createdAt })
+      .from(feedstocks).where(and(eq(feedstocks.organizationId, org), inArray(feedstocks.storageLocationId, ids)))
+      .orderBy(feedstocks.storageLocationId, desc(feedstocks.createdAt)),
+    db.selectDistinctOn([productionRuns.biocharStorageLocationId], { binId: productionRuns.biocharStorageLocationId, id: productionRuns.id, code: productionRuns.code, facilityId: productionRuns.facilityId, at: productionRuns.createdAt })
+      .from(productionRuns).where(and(eq(productionRuns.organizationId, org), inArray(productionRuns.biocharStorageLocationId, ids)))
+      .orderBy(productionRuns.biocharStorageLocationId, desc(productionRuns.createdAt)),
+    db.selectDistinctOn([biocharProducts.storageLocationId], { binId: biocharProducts.storageLocationId, id: biocharProducts.id, code: biocharProducts.code, facilityId: biocharProducts.facilityId, at: biocharProducts.createdAt })
+      .from(biocharProducts).where(and(eq(biocharProducts.organizationId, org), inArray(biocharProducts.storageLocationId, ids)))
+      .orderBy(biocharProducts.storageLocationId, desc(biocharProducts.createdAt)),
+    db.selectDistinctOn([deliveries.storageLocationId], { binId: deliveries.storageLocationId, id: deliveries.id, code: deliveries.code, facilityId: deliveries.facilityId, at: deliveries.createdAt })
+      .from(deliveries).where(and(eq(deliveries.organizationId, org), inArray(deliveries.storageLocationId, ids)))
+      .orderBy(deliveries.storageLocationId, desc(deliveries.createdAt)),
+  ]);
+  const latest = new Map<string, RecordLockLink & { at: Date }>();
+  for (const [kind, rows] of [["feedstock", intakes], ["productionRun", runs], ["biocharProduct", products], ["delivery", deliveryRows]] as const) {
+    for (const row of rows) {
+      if (!row.binId) continue;
+      const current = latest.get(row.binId);
+      if (!current || row.at > current.at) latest.set(row.binId, { kind, id: row.id, label: row.code, facilityId: row.facilityId, at: row.at });
+    }
+  }
+  return latest;
 }
 
 const linkKey = (holder: Pick<RecordLockHolder, "kind" | "id">) => `${holder.kind}:${holder.id}`;

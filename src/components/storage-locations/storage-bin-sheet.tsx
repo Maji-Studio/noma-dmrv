@@ -50,7 +50,7 @@ export function StorageBinSheet({
   const createStorageLocation = useCreateStorageLocation();
   const updateStorageLocation = useUpdateStorageLocation();
   const toast = useToast();
-  const { lock, status: lockStatus } = useRecordLock("storageLocation", state?.entity?.id);
+  const { lock, status: lockStatus, retry: retryLock, retrying: lockRetrying } = useRecordLock("storageLocation", state?.entity?.id);
 
   const close = () => {
     onStateChange(null);
@@ -113,7 +113,7 @@ export function StorageBinSheet({
       // small, on the line beneath.
       title={state?.mode === "create" ? "Create storage bin" : state?.entity?.name ?? ""}
       subtitle={state?.mode === "create" ? undefined : state?.entity?.code}
-      {...recordLockSheetProps({ lock: lock, status: lockStatus, subject: "storageBin" })}
+      {...recordLockSheetProps({ lock, status: lockStatus, retry: retryLock, retrying: lockRetrying, subject: "storageBin" })}
       editLabel="Edit storage bin"
       canEdit={state?.entity?.archivedAt == null && isRecordEditable(lock)}
       sections={

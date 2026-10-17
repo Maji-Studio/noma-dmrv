@@ -11,7 +11,8 @@
  */
 "use client";
 
-import { isRecordFieldLocked, type RecordLockView } from "@/lib/record-lock-view";
+import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
+import { recordInUseFreeFields } from "@/lib/record-lock";
 import { FACILITY_REFERENCE_TEMPERATURE_NOTICE } from "@/lib/application-guidance";
 import { nullableNumericValue, numericValue } from "@/lib/form-utils";
 import { formatUtcDate, toDateInputValue } from "@/lib/date-utils";
@@ -159,7 +160,8 @@ export function ApplicationForm({
 }: ApplicationFormProps) {
   const isEditMode = !!application;
   // A Removal slice refuses delivery and applied mass changes (`assertMutableSlices`).
-  const locked = (field: string) => isEditMode && isRecordFieldLocked(lock, field);
+  // Fail closed: until the lock answers, fields an In use application holds stay disabled.
+  const locked = (field: string) => isEditMode && isRecordFieldHeld(lock, recordInUseFreeFields("application"), field);
   const { defaults: organizationDefaults } = useOrganizationDefaultValues();
   // Soil temperature feeds only the 200-year durable fraction; 1000-year
   // removals derive durability from petrographic reflectance + TGA.

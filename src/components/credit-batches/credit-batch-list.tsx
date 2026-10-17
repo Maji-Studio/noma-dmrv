@@ -456,7 +456,7 @@ export function CreditBatchList({
     co2eStoredPreviews,
   );
   const batchLocks = useRecordLocks("creditBatch", paginatedItems.map((batch) => batch.id));
-  const { lock: sheetLock, status: sheetLockStatus } = useRecordLock("creditBatch", viewEntity?.id);
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("creditBatch", viewEntity?.id);
   const membershipLocked = isCreditBatchMembershipLocked(sheetLock);
   const runOptionsQuery = useCreditBatchProductionRunOptions({
     facilityId: viewEntity?.facilityId,
@@ -728,7 +728,7 @@ export function CreditBatchList({
         subtitle={sideSheetSubtitle}
         editLabel="Edit credit batch"
         canEdit={isRecordEditable(sheetLock)}
-        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, inUseLocksNothing: !membershipLocked })}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: !membershipLocked })}
         size="wide"
         sections={
           sideSheetEntity

@@ -418,7 +418,7 @@ export function DeliveryList() {
 
   const deliveries = deliveriesData?.items ?? [];
   const deliveryLocks = useRecordLocks("delivery", deliveries.map((delivery) => delivery.id));
-  const { lock: sheetLock, status: sheetLockStatus } = useRecordLock("delivery", displaySideSheet?.entity?.id);
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("delivery", displaySideSheet?.entity?.id);
   const columns = createColumns(openEdit, facilities, deliveryLocks.locks, deliveryLocks.statusOf);
   const totalPages = deliveriesData?.totalPages ?? 0;
   useReconcileListPage({
@@ -607,7 +607,7 @@ export function DeliveryList() {
         }}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, inUseLocksNothing: true })}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit delivery"
         sections={

@@ -423,7 +423,7 @@ export function ProductionRunList() {
       ? ({ entity: focusedRun.data, mode: "view" } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
-  const { lock: sheetLock, status: sheetLockStatus } = useRecordLock("productionRun", displaySideSheet?.entity?.id);
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("productionRun", displaySideSheet?.entity?.id);
 
   const confirmCreateClose = () =>
     createWithEvidence.confirmClose(displaySideSheet?.mode === "create");
@@ -622,7 +622,7 @@ export function ProductionRunList() {
         onModeChange={handleModeChange}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, inUseLocksNothing: !isProductionRunOutputLocked(sheetLock) })}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: !isProductionRunOutputLocked(sheetLock) })}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit production run"
         size="wide"

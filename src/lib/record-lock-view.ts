@@ -65,7 +65,8 @@ export type RecordLockViews = Record<string, RecordLockView>;
 /**
  * A field the server refuses today: every field once Sent, and every field
  * outside `freeFields` while In use. An unknown lock leaves the field alone;
- * Save stays off until it answers (`recordLockSaveBlockedReason`).
+ * Save stays off until it answers (`recordLockSaveBlock`); forms use
+ * `isRecordFieldHeld` to keep held fields closed meanwhile.
  */
 export function isRecordFieldLocked(view: RecordLockView | null | undefined, field: string): boolean {
   if (!view || view.level === "open") return false;
@@ -86,18 +87,40 @@ export function isRecordDeletable(view: RecordLockView | null | undefined): bool
 }
 
 export const RECORD_LOCK_PENDING_MESSAGE = "Checking whether this record can change.";
-export const RECORD_LOCK_ERROR_MESSAGE = "Couldn't check whether this record can change. Refresh the page and try again.";
+export const RECORD_LOCK_ERROR_MESSAGE = "Couldn't check whether this record can change. Try again.";
 export const RECORD_LOCK_SENT_SAVE_MESSAGE = "This record was sent with its Removal, so it cannot be saved.";
+export const RECORD_LOCK_RETRY_LABEL = "Try again";
+
+/** Why an open edit form cannot save, and whether its fields go read-only. */
+export interface RecordLockSaveBlock {
+  reason: string;
+  tone: "info" | "error";
+  readOnly: boolean;
+}
 
 /**
- * Why Save is off in an open edit form: the lock has not answered, could not
- * be read, or arrived as Sent while the form was open. The draft stays.
+ * The lock's verdict on an open edit form: pending and failed reads turn
+ * Save off (the held fields are already disabled); a lock that arrives Sent
+ * turns the whole form read-only. The draft always stays.
  */
-export function recordLockSaveBlockedReason(view: RecordLockView | undefined, status: RecordLockStatus): string | null {
-  if (view?.level === "sent") return RECORD_LOCK_SENT_SAVE_MESSAGE;
+export function recordLockSaveBlock(view: RecordLockView | undefined, status: RecordLockStatus): RecordLockSaveBlock | null {
+  if (view?.level === "sent") return { reason: RECORD_LOCK_SENT_SAVE_MESSAGE, tone: "error", readOnly: true };
   if (view) return null;
-  if (status === "error") return RECORD_LOCK_ERROR_MESSAGE;
-  return status === "pending" ? RECORD_LOCK_PENDING_MESSAGE : null;
+  if (status === "error") return { reason: RECORD_LOCK_ERROR_MESSAGE, tone: "error", readOnly: false };
+  return status === "pending" ? { reason: RECORD_LOCK_PENDING_MESSAGE, tone: "info", readOnly: false } : null;
+}
+
+/**
+ * Fields an In use record holds, for a form whose lock has not answered: the
+ * kind's In use free fields stay open, everything else waits (fail closed).
+ * Once the lock answers this is `isRecordFieldLocked`.
+ */
+export function isRecordFieldHeld(
+  view: RecordLockView | undefined,
+  inUseFreeFields: readonly string[],
+  field: string,
+): boolean {
+  return view ? isRecordFieldLocked(view, field) : !inUseFreeFields.includes(field);
 }
 
 /**

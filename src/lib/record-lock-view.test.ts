@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isBinFormulationLocked, isProductionRunOutputLocked, isRecordDeletable, isRecordEditable, isRecordFieldLocked, recordLockSaveBlockedReason, type RecordLockView } from "./record-lock-view";
+import { isBinFormulationLocked, isProductionRunOutputLocked, isRecordDeletable, isRecordEditable, isRecordFieldHeld, isRecordFieldLocked, recordLockSaveBlock, type RecordLockView } from "./record-lock-view";
 
 const lock = (level: RecordLockView["level"]): RecordLockView => ({
   level, heldBy: [], usedBy: [], freeFields: level === "sent" ? [] : ["code", "quantityKg"], howToFree: null, returnedBy: [],
@@ -27,11 +27,19 @@ describe("record lock view helpers", () => {
     expect(isRecordDeletable(undefined)).toBe(false);
   });
 
-  it("turns Save off until the lock answers, when it fails, and once Sent", () => {
-    expect(recordLockSaveBlockedReason(undefined, "pending")).toBe("Checking whether this record can change.");
-    expect(recordLockSaveBlockedReason(undefined, "error")).toBe("Couldn't check whether this record can change. Refresh the page and try again.");
-    expect(recordLockSaveBlockedReason(lock("sent"), "ready")).toBe("This record was sent with its Removal, so it cannot be saved.");
-    expect(recordLockSaveBlockedReason(lock("inUse"), "ready")).toBeNull();
+  it("turns Save off until the lock answers and when it fails, and makes a Sent form read-only", () => {
+    expect(recordLockSaveBlock(undefined, "pending")).toEqual({ reason: "Checking whether this record can change.", tone: "info", readOnly: false });
+    expect(recordLockSaveBlock(undefined, "error")).toEqual({ reason: "Couldn't check whether this record can change. Try again.", tone: "error", readOnly: false });
+    expect(recordLockSaveBlock(lock("sent"), "ready")).toEqual({ reason: "This record was sent with its Removal, so it cannot be saved.", tone: "error", readOnly: true });
+    expect(recordLockSaveBlock(lock("inUse"), "ready")).toBeNull();
+  });
+
+  it("keeps the fields an In use record holds closed until the lock answers", () => {
+    const free = ["code", "quantityKg"];
+    expect(isRecordFieldHeld(undefined, free, "customerId")).toBe(true);
+    expect(isRecordFieldHeld(undefined, free, "quantityKg")).toBe(false);
+    expect(isRecordFieldHeld(lock("open"), free, "customerId")).toBe(false);
+    expect(isRecordFieldHeld(lock("sent"), free, "quantityKg")).toBe(true);
   });
 
   describe("product bin formulation (updateStorageLocation's guard)", () => {

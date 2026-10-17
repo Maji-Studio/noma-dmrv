@@ -78,7 +78,7 @@ export function StorageLocationQuickAddDialog({
 
   const update = useUpdateStorageLocation();
   // Editing a saved bin carries the same lock as its sheet.
-  const { lock, status: lockStatus } = useRecordLock("storageLocation", isOpen && storageLocation ? storageLocation.id : null);
+  const { lock, status: lockStatus, retry: retryLock, retrying: lockRetrying } = useRecordLock("storageLocation", isOpen && storageLocation ? storageLocation.id : null);
   const toast = useToast();
   const [editError, setEditError] = useState<string>();
   const archived = storageLocation?.archivedAt != null;
@@ -123,7 +123,7 @@ export function StorageLocationQuickAddDialog({
           {archived ? (
             <DetailSpine sections={readSections} />
           ) : storageLocation ? (
-            <RecordLockFormFrame lock={lock} status={lockStatus} subject="storageBin">
+            <RecordLockFormFrame lock={lock} status={lockStatus} retry={retryLock} retrying={lockRetrying} subject="storageBin">
               <StorageLocationForm
                 key={storageLocation.id}
                 storageLocation={storageLocation}

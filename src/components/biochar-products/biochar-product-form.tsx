@@ -60,7 +60,8 @@ import { formProductComposition, type FormProductComposition } from "./form-prod
 import { IngredientBinRows } from "./ingredient-bin-rows";
 import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
 import { Notice } from "@/components/ui/notice";
-import { isRecordFieldLocked, type RecordLockView } from "@/lib/record-lock-view";
+import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
+import { recordInUseFreeFields } from "@/lib/record-lock";
 
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
@@ -160,7 +161,8 @@ export function BiocharProductForm({
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   const isEditMode = !!product;
   // Posted fields are refused on every saved product; the rest follow the lock.
-  const locked = (field: string) => isEditMode && isRecordFieldLocked(lock, field);
+  // Fail closed: until the lock answers, fields an In use biocharProduct holds stay disabled.
+  const locked = (field: string) => isEditMode && isRecordFieldHeld(lock, recordInUseFreeFields("biocharProduct"), field);
   const hasFrozenSourceAllocation = Boolean(
     product?.sourceBiocharStorageLocationId,
   );

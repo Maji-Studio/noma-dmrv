@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { useForm } from "react-hook-form";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { FormActions } from "@/components/forms/form-actions";
+import type { SubmitBlock } from "@/components/ui/submit-block-context";
 import { EntitySideSheet } from "./index";
 
 vi.mock("@/components/ui/slide-over-panel", () => {
@@ -13,7 +14,7 @@ vi.mock("@/components/ui/slide-over-panel", () => {
     Body: ({ children }: { children: ReactNode }) => <main>{children}</main>,
   } };
 });
-vi.mock("@/components/ui/button", () => ({ Button: ({ children, ...props }: { children: ReactNode }) => <button {...props}>{children}</button> }));
+vi.mock("@/components/ui/button", () => ({ Button: ({ children, busy, ...props }: { children: ReactNode; busy?: boolean }) => <button data-busy={busy} {...props}>{children}</button> }));
 vi.mock("@/components/ui/modal", () => ({ Modal: () => null }));
 
 function DraftForm() {
@@ -24,10 +25,13 @@ function DraftForm() {
   </form>;
 }
 
-function renderSheet(reason: string | null, mode: "view" | "edit" = "edit") {
+const SENT: SubmitBlock = { reason: "This record was sent with its Removal, so it cannot be saved.", tone: "error", readOnly: true };
+const PENDING: SubmitBlock = { reason: "Checking whether this record can change.", tone: "info", readOnly: false };
+
+function renderSheet(block: SubmitBlock | null) {
   return create(
-    <EntitySideSheet open mode={mode} onModeChange={() => undefined} onOpenChange={() => undefined} title="ORD-1"
-      editNotice={<p>Sent with Removal Jan 1 to Mar 31, 2026, so every field is locked.</p>} submitBlockedReason={reason}>
+    <EntitySideSheet open mode="edit" onModeChange={() => undefined} onOpenChange={() => undefined} title="ORD-1"
+      editNotice={<p>Sent with Removal Jan 1 to Mar 31, 2026, so every field is locked.</p>} submitBlock={block}>
       <DraftForm />
     </EntitySideSheet>,
   );
@@ -41,26 +45,48 @@ beforeAll(() => {
 });
 afterEach(() => act(() => renderer?.unmount()));
 
-const saveButton = () => renderer.root.findAll((node) => node.type === "button" && node.props.children === "Save changes")[0];
+const buttonsNamed = (name: string) => renderer.root.findAll((node) => node.type === "button" && node.props.children === name);
+const text = () => JSON.stringify(renderer.toJSON());
 
 describe("EntitySideSheet record lock in edit mode", () => {
-  it("keeps the draft, shows the lock line and turns Save off with the reason", () => {
-    act(() => { renderer = renderSheet("This record was sent with its Removal, so it cannot be saved."); });
-    // The form stays mounted, so RHF keeps the typed draft.
+  it("keeps a Sent draft visible but read-only, with the lock line and the way back", () => {
+    act(() => { renderer = renderSheet(SENT); });
+    // The form stays mounted (RHF keeps the draft) inside a disabled fieldset.
     expect(renderer.root.findAllByType("input")).toHaveLength(1);
-    expect(JSON.stringify(renderer.toJSON())).toContain("Sent with Removal Jan 1 to Mar 31, 2026, so every field is locked.");
-    const save = saveButton();
+    expect(renderer.root.findByType("fieldset").props.disabled).toBe(true);
+    expect(text()).toContain("Sent with Removal Jan 1 to Mar 31, 2026, so every field is locked.");
+    expect(buttonsNamed("Save changes")).toHaveLength(0);
+    expect(buttonsNamed("Back to view")).toHaveLength(1);
+  });
+
+  it("explains a pending check above Save, which stays off, and leaves fields to the form", () => {
+    act(() => { renderer = renderSheet(PENDING); });
+    expect(renderer.root.findByType("fieldset").props.disabled).toBe(false);
+    const [save] = buttonsNamed("Save changes");
     expect(save.props.disabled).toBe(true);
-    // The reason is a Notice, linked to Save for screen readers.
     const [reason] = renderer.root.findAll((node) => node.type === "div" && node.props.id === save.props["aria-describedby"]);
     expect(reason.props.role).toBe("status");
-    expect(JSON.stringify(renderer.toJSON())).toContain("This record was sent with its Removal, so it cannot be saved.");
+    expect(reason.props["data-tone"]).toBe("info");
+    // Above the buttons: the reason renders before Save in document order.
+    expect(text().indexOf("Checking whether this record can change.")).toBeLessThan(text().indexOf("Save changes"));
+  });
+
+  it("offers an in-place retry for a failed check, in the blocked tone", () => {
+    const run = vi.fn();
+    act(() => {
+      renderer = renderSheet({ reason: "Couldn't check whether this record can change. Try again.", tone: "error", readOnly: false, retry: { label: "Try again", run } });
+    });
+    const [save] = buttonsNamed("Save changes");
+    const [reason] = renderer.root.findAll((node) => node.type === "div" && node.props.id === save.props["aria-describedby"]);
+    expect(reason.props["data-tone"]).toBe("error");
+    act(() => buttonsNamed("Try again")[0].props.onClick());
+    expect(run).toHaveBeenCalled();
+    expect(renderer.root.findAllByType("input")).toHaveLength(1);
   });
 
   it("leaves Save on when nothing blocks it", () => {
     act(() => { renderer = renderSheet(null); });
-    expect(saveButton().props.disabled).toBe(false);
-    expect(renderer.root.findAllByProps({ role: "status" })).toHaveLength(0);
+    expect(buttonsNamed("Save changes")[0].props.disabled).toBe(false);
   });
 });
 
@@ -70,7 +96,17 @@ describe("RecordLockFormFrame (picker edit dialogs)", () => {
     act(() => {
       renderer = create(<RecordLockFormFrame lock={undefined} status="pending"><DraftForm /></RecordLockFormFrame>);
     });
-    expect(saveButton().props.disabled).toBe(true);
-    expect(JSON.stringify(renderer.toJSON())).toContain("Checking whether this record can change.");
+    expect(buttonsNamed("Save changes")[0].props.disabled).toBe(true);
+    expect(text()).toContain("Checking whether this record can change.");
+  });
+
+  it("makes the dialog form read-only once Sent", async () => {
+    const { RecordLockFormFrame } = await import("@/components/record-locks/record-lock-sheet-props");
+    const sent = { level: "sent" as const, heldBy: [], usedBy: [], freeFields: [], howToFree: null, returnedBy: [] };
+    act(() => {
+      renderer = create(<RecordLockFormFrame lock={sent} status="ready"><DraftForm /></RecordLockFormFrame>);
+    });
+    expect(renderer.root.findByType("fieldset").props.disabled).toBe(true);
+    expect(buttonsNamed("Save changes")).toHaveLength(0);
   });
 });

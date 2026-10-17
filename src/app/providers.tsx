@@ -9,10 +9,11 @@ import { invalidateRecordLocksAfter } from "@/hooks/record-lock-query-keys";
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => {
     const client: QueryClient = new QueryClient({
-      // Mutation hooks declare which record kinds' locks a successful write
-      // can change (`recordLockMeta`); only those mounted reads refetch.
+      // Mutation hooks declare which record kinds' locks a write can change
+      // (`recordLockMeta`); only those mounted reads refetch, after success,
+      // or after any outcome for registry writes.
       mutationCache: new MutationCache({
-        onSuccess: (data, _variables, _context, mutation) => invalidateRecordLocksAfter(client, data, mutation),
+        onSettled: (data, error, _variables, _context, mutation) => invalidateRecordLocksAfter(client, data, error, mutation),
       }),
       defaultOptions: {
         queries: {

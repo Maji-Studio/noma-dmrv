@@ -216,7 +216,7 @@ export function OrderList() {
 
   const orders = ordersData?.items ?? [];
   const orderLocks = useRecordLocks("order", orders.map((order) => order.id));
-  const { lock: sheetLock, status: sheetLockStatus } = useRecordLock("order", displaySideSheet?.entity?.id);
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("order", displaySideSheet?.entity?.id);
   const totalOrders = ordersData?.total ?? 0;
   const totalPages = ordersData?.totalPages ?? 0;
   useReconcileListPage({
@@ -470,7 +470,7 @@ export function OrderList() {
         }}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus })}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit order"
         sections={sideSheetEntity ? orderSheetSections(sideSheetEntity) : undefined}

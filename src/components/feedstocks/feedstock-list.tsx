@@ -492,7 +492,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         ? ({ entity: focusedFeedstock.data, mode: "view" } as const)
         : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
-  const { lock: sheetLock, status: sheetLockStatus } = useRecordLock("feedstock", displaySideSheet?.entity?.id);
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("feedstock", displaySideSheet?.entity?.id);
   const activeFocusTarget = sideSheet
     ? null
     : parseEntityFocusTarget(deepLinkFocus);
@@ -658,7 +658,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         }
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, inUseLocksNothing: true })}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit feedstock"
         sections={sideSheetEntity ? feedstockSheetSections(sideSheetEntity) : undefined}

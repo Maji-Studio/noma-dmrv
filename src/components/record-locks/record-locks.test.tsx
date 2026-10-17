@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RecordLockLink, RecordLockView } from "@/lib/record-lock-view";
 import { RecordLockChip } from "./record-lock-chip";
 import { RecordLockNotice } from "./record-lock-notice";
@@ -85,6 +85,22 @@ describe("RecordLockNotice", () => {
     expect(container.textContent).toBe("");
     rerender(<RecordLockNotice lock={view("sent", [REMOVAL])} inUseLocksNothing />);
     expect(container.textContent).toContain("so every field is locked");
+  });
+
+  it("names a storage bin's latest stock record as a link when there is one", () => {
+    render(<RecordLockNotice lock={view("inUse", [DELIVERY])} subject="storageBin" />);
+    expect(screen.getByRole("status").textContent).toBe(
+      "In use by its stock history, most recently delivery DL-26-003, so the storage type and feedstock type are locked.",
+    );
+    expect(screen.getByRole("link", { name: "delivery DL-26-003" })).toBeTruthy();
+  });
+
+  it("offers an in-place retry when the lock read fails", () => {
+    const retry = vi.fn();
+    render(<RecordLockNotice lock={undefined} status="error" onRetry={retry} />);
+    expect(screen.getByRole("alert").textContent).toContain("Couldn't check whether this record can change. Try again.");
+    screen.getByRole("button", { name: "Try again" }).click();
+    expect(retry).toHaveBeenCalled();
   });
 
   it("names a storage bin's stock history instead of a record", () => {

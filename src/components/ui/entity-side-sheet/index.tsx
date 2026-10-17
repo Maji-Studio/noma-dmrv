@@ -22,7 +22,7 @@ import {
   type DetailPanelSection,
 } from "@/components/ui/detail-panel";
 import { SideSheetActionsContext } from "./side-sheet-context";
-import { SubmitBlockContext } from "@/components/ui/submit-block-context";
+import { SubmitBlockContext, type SubmitBlock } from "@/components/ui/submit-block-context";
 
 /* -------------------------------------------------------------------------------------------------
  * Back Arrow Icon
@@ -78,8 +78,12 @@ interface EntitySideSheetProps {
   titleBadge?: React.ReactNode;
   /** Edit-mode banner above the form (the record lock line). */
   editNotice?: React.ReactNode;
-  /** Edit mode: turns off the form's Save and says why, keeping the draft. */
-  submitBlockedReason?: string | null;
+  /**
+   * Edit mode: why the form cannot save. Save turns off with the reason
+   * beside it; a `readOnly` block also disables every field and offers only
+   * the way back. The draft stays in both cases.
+   */
+  submitBlock?: SubmitBlock | null;
   /** View-mode section config — rendered as read-only detail fields */
   sections?: DetailPanelSection[];
   /** Mirror a paired edit form's FormSpine numbering in read mode. */
@@ -126,7 +130,7 @@ function EntitySideSheet({
   subtitle,
   titleBadge,
   editNotice,
-  submitBlockedReason,
+  submitBlock,
   sections,
   numberedSections = false,
   viewModeChildren,
@@ -137,6 +141,7 @@ function EntitySideSheet({
   size = "wide",
 }: EntitySideSheetProps) {
   const isViewMode = mode === "view";
+  const editBlock = mode === "edit" ? submitBlock ?? null : null;
 
   const bodyRef = React.useRef<HTMLDivElement>(null);
   // Dirty tracking is two sources OR-ed together: a native input/change
@@ -278,15 +283,25 @@ function EntitySideSheet({
             </>
           ) : (
             <SideSheetActionsContext.Provider value={sheetActions}>
-              <SubmitBlockContext.Provider value={mode === "edit" ? submitBlockedReason ?? null : null}>
+              <SubmitBlockContext.Provider value={editBlock}>
                 {mode === "edit" && editNotice ? (
                   <div className="flex flex-col gap-12 pb-20">{editNotice}</div>
                 ) : null}
-                {children}
+                {/* Always mounted, so turning read-only never remounts the form. */}
+                <fieldset disabled={!!editBlock?.readOnly} className="contents" data-submit-block-fieldset>{children}</fieldset>
               </SubmitBlockContext.Provider>
             </SideSheetActionsContext.Provider>
           )}
         </SlideOverPanel.Body>
+
+        {/* A read-only edit form hides its own actions; the way back stays. */}
+        {mode === "edit" && editBlock?.readOnly && (
+          <SlideOverPanel.Footer className="justify-stretch">
+            <Button variant="default" className="flex-1" onClick={backToView}>
+              Back to view
+            </Button>
+          </SlideOverPanel.Footer>
+        )}
 
         {/* Footer — only in view mode */}
         {isViewMode && (

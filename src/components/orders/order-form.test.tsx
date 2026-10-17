@@ -13,6 +13,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import type { CustomerLocation, Facility, Order } from "@/db/schema";
 import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
 import type { RecordLockView } from "@/lib/record-lock-view";
+import { OPEN_LOCK } from "../../../tests/helpers/record-lock-mocks";
 
 const state = vi.hoisted(() => ({
   /** Every entity list request the form issues, in order. */
@@ -90,7 +91,7 @@ function renderForm(order?: Order) {
   // The quick-add dialogs EntitySelect mounts (closed) read the query client.
   return renderToStaticMarkup(
     <QueryClientProvider client={new QueryClient()}>
-      <OrderForm order={order} onSubmit={noop} />
+      <OrderForm order={order} onSubmit={noop} lock={OPEN_LOCK} />
     </QueryClientProvider>,
   );
 }
@@ -121,7 +122,7 @@ describe("OrderForm product details", () => {
         customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: "11111111-1111-4111-8111-111111111111",
         formulationId: "44444444-4444-4444-8444-444444444444",
         orderDate: new Date("2026-09-01T00:00:00Z"), quantityKg: 1000, packaging: "loose",
-      } as Order} onSubmit={submit} />
+      } as Order} onSubmit={submit} lock={OPEN_LOCK} />
     </QueryClientProvider>);
     const quantity = screen.getByRole("spinbutton", { name: /^Requested wet mass/ });
     fireEvent.change(quantity, { target: { value: "" } });
@@ -148,7 +149,7 @@ describe("OrderForm product details", () => {
           customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: "11111111-1111-4111-8111-111111111111",
           formulationId: "44444444-4444-4444-8444-444444444444",
           orderDate: new Date("2026-09-01T00:00:00Z"), quantityKg: 1000, packaging: "loose",
-        } as Order} onSubmit={submit} />
+        } as Order} onSubmit={submit} lock={OPEN_LOCK} />
       </QueryClientProvider>);
       const date = screen.getByLabelText(/^Order date/) as HTMLInputElement;
       expect(date.value).toBe("2026-09-01");
@@ -184,7 +185,7 @@ describe("OrderForm customer field", () => {
         customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: "",
         formulationId: "44444444-4444-4444-8444-444444444444",
         orderDate: "2026-09-01", quantityKg: 1000, packaging: "loose",
-      } as unknown as Order} onSubmit={submit} />
+      } as unknown as Order} onSubmit={submit} lock={OPEN_LOCK} />
     </QueryClientProvider>);
     const picker = screen.getByRole("combobox", { name: /^Customer location/ });
     await waitFor(() => expect(picker.textContent).toBe("Only location"));
@@ -209,14 +210,14 @@ describe("OrderForm customer field", () => {
     state.facilities.push(orderFacility);
     const order = { facilityId: orderFacility.id, customerId: location.customerId, customerLocationId: location.id } as Order;
     const client = new QueryClient();
-    const view = <QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>;
+    const view = <QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} lock={OPEN_LOCK} /></QueryClientProvider>;
     const { rerender } = render(view);
     fireEvent.click(screen.getByRole("combobox", { name: /^Customer location/ }));
     fireEvent.click(screen.getByTestId("entity-select-edit"));
     expect(state.editLocation).toHaveBeenLastCalledWith({ customerId: location.customerId, location, facility: orderFacility });
     state.locations = [{ ...location, version: 2, name: "Renamed field" }];
     state.locationOptions = [{ ...state.locationOptions[0], name: "Renamed field" }];
-    rerender(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>);
+    rerender(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} lock={OPEN_LOCK} /></QueryClientProvider>);
     expect(state.editLocation).toHaveBeenLastCalledWith({ customerId: location.customerId, location, facility: orderFacility });
     fireEvent.click(screen.getByRole("button", { name: "Close location editor" }));
     expect(screen.getByRole("combobox", { name: /^Customer location/ }).textContent).toBe("Renamed field");
@@ -228,7 +229,7 @@ describe("OrderForm customer field", () => {
   it("offers no location edit until the scoped location record is available", () => {
     state.locationOptions = [{ id: "location-1", code: "", name: "North field" }];
     const client = new QueryClient();
-    render(<QueryClientProvider client={client}><OrderForm order={{ customerId: "customer-1", customerLocationId: "location-1" } as Order} onSubmit={noop} /></QueryClientProvider>);
+    render(<QueryClientProvider client={client}><OrderForm order={{ customerId: "customer-1", customerLocationId: "location-1" } as Order} onSubmit={noop} lock={OPEN_LOCK} /></QueryClientProvider>);
     fireEvent.click(screen.getByRole("combobox", { name: /^Customer location/ }));
     expect(screen.queryByTestId("entity-select-edit")).toBeNull();
     client.clear();
@@ -296,7 +297,7 @@ describe("OrderForm customer field", () => {
       state.locationOptions = [{ id: location.id, code: "", name: location.name! }, { id: "location-2", code: "", name: "South field" }];
       state.customer = { archivedAt };
       const client = new QueryClient();
-      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>);
+      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} lock={OPEN_LOCK} /></QueryClientProvider>);
       return client;
     }
 
@@ -317,7 +318,7 @@ describe("OrderForm customer field", () => {
       state.locationOptions = [{ id: location.id, code: "", name: location.name! }, { id: "location-2", code: "", name: "South field" }];
       state.customer = undefined;
       const client = new QueryClient();
-      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>);
+      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} lock={OPEN_LOCK} /></QueryClientProvider>);
       const picker = screen.getByRole("combobox", { name: /^Customer location/ });
       expect(picker.getAttribute("aria-readonly")).toBe("true");
       fireEvent.click(picker);
@@ -333,7 +334,7 @@ describe("OrderForm customer field", () => {
       state.customer = undefined;
       state.customerIsError = true;
       const client = new QueryClient();
-      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>);
+      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} lock={OPEN_LOCK} /></QueryClientProvider>);
       const picker = screen.getByRole("combobox", { name: /^Customer location/ });
       expect(picker.getAttribute("aria-readonly")).toBe("true");
       expect(screen.queryByTestId("entity-select-edit")).toBeNull();
@@ -372,10 +373,10 @@ describe("OrderForm record lock (#1119)", () => {
     returnedBy: [],
   });
 
-  function renderLocked(level: RecordLockView["level"]) {
+  function renderLocked(level: RecordLockView["level"] | "pending") {
     const client = new QueryClient();
     render(<QueryClientProvider client={client}>
-      <OrderForm order={ORDER} onSubmit={noop} lock={lockAt(level)} />
+      <OrderForm order={ORDER} onSubmit={noop} lock={level === "pending" ? undefined : lockAt(level)} />
     </QueryClientProvider>);
     return {
       customer: screen.getByRole("combobox", { name: /^Customer(Required)?$/ }),
@@ -397,6 +398,12 @@ describe("OrderForm record lock (#1119)", () => {
   // The lock line itself renders once, from the sheet (`editNotice`).
   it("disables the fields a delivery holds while In use", () => {
     const fields = renderLocked("inUse");
+    expect([fields.customer, fields.location, fields.formulation].every(isDisabled)).toBe(true);
+    expect([fields.date, fields.quantity, fields.packaging].some(isDisabled)).toBe(false);
+  });
+
+  it("keeps the fields a delivery would hold closed until the lock answers", () => {
+    const fields = renderLocked("pending");
     expect([fields.customer, fields.location, fields.formulation].every(isDisabled)).toBe(true);
     expect([fields.date, fields.quantity, fields.packaging].some(isDisabled)).toBe(false);
   });

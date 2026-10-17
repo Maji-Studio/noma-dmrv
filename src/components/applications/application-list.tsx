@@ -273,7 +273,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     (focusedApplicationItem ? { entity: focusedApplicationItem, mode: "view" as const } : null);
 
   const applicationLock = useRecordCertificationLock("application", displaySideSheet?.entity?.id);
-  const { lock: sheetLock, status: sheetLockStatus } = useRecordLock("application", displaySideSheet?.entity?.id);
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("application", displaySideSheet?.entity?.id);
 
   // Error state
   const [createError, setCreateError] = useState<string | null>(null);
@@ -753,7 +753,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         canEdit={fieldsEditable && isRecordEditable(sheetLock)}
-        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus })}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
         editLabel="Edit application"
         size="wide"
         sections={sideSheetEntity ? applicationSheetSections(sideSheetEntity, { delivery: sideSheetDelivery, lock: applicationLock, durabilityOption }) : undefined}

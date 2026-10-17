@@ -341,9 +341,9 @@ export function BiocharProductList() {
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
   const productLocks = useRecordLocks("biocharProduct", products.map((product) => product.id));
-  // A lock that arrives as Sent keeps an open draft: Save turns off with the
-  // reason instead (`submitBlockedReason`).
-  const { lock: sheetLock, status: sheetLockStatus } = useRecordLock("biocharProduct", displaySideSheet?.entity?.id);
+  // A lock that arrives as Sent keeps an open draft, read-only, with the way
+  // back (`submitBlock`).
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("biocharProduct", displaySideSheet?.entity?.id);
   const activeFocusTarget = sideSheet
     ? null
     : parseEntityFocusTarget(deepLinkFocus);
@@ -625,7 +625,7 @@ export function BiocharProductList() {
         onModeChange={handleModeChange}
         title={displaySideSheet?.mode === "create" ? "Create biochar product" : (displaySideSheet?.entity?.code ?? "")}
         subtitle={displaySideSheet?.mode === "create" ? undefined : (displaySideSheet?.entity ? formatDayString(displaySideSheet.entity.productionDate) : undefined)}
-        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus })}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit product"
         sections={viewedEntity ? productSheetSections(viewedEntity, resolveFacilityTimezone(facilities, viewedEntity.facilityId)) : undefined}

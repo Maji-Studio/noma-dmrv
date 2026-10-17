@@ -23,7 +23,8 @@ const harness = vi.hoisted(() => ({
   sheet: { open: false, mode: "view" as string },
   lock: undefined as RecordLockView | undefined,
   lockStatus: "ready" as "pending" | "error" | "ready",
-  sheetProps: null as Record<string, unknown> | null,
+  retry: vi.fn(),
+  sheetProps: null as { canEdit?: boolean; submitBlock?: { retry?: { run: () => void } } | null } | null,
   columns: [] as Array<{ id?: string; cell?: unknown }>,
   rowActions: null as Array<{ label: string }> | null,
 }));
@@ -83,7 +84,7 @@ vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), e
 
 vi.mock("@/hooks/use-record-locks", () => ({
   useRecordLocks: () => ({ locks: harness.lock ? { [SAMPLE_ID]: harness.lock } : {}, statusOf: () => harness.lockStatus }),
-  useRecordLock: (_kind: string, id: string | null | undefined) => ({ lock: id ? harness.lock : undefined, status: harness.lockStatus }),
+  useRecordLock: (_kind: string, id: string | null | undefined) => ({ lock: id ? harness.lock : undefined, status: harness.lockStatus, retry: harness.retry, retrying: false }),
 }));
 
 vi.mock("@/components/ui", () => ({
@@ -116,7 +117,7 @@ vi.mock("@/components/ui/entity-side-sheet", () => ({
     onModeChange: ModeChange;
     children?: ReactNode;
     canEdit?: boolean;
-    submitBlockedReason?: string | null;
+    submitBlock?: { reason: string; tone: string; readOnly: boolean; retry?: { label: string; run: () => void } } | null;
     viewModeNotice?: ReactNode;
     titleBadge?: ReactNode;
   }) => {
@@ -205,12 +206,14 @@ describe("Sample sheet behind a Sent Removal", () => {
     renderer?.unmount();
   });
 
-  it("keeps an open edit draft when Sent arrives, with Save off and the reason", async () => {
+  it("keeps an open edit draft when Sent arrives, read-only, with the reason", async () => {
     harness.lock = SENT;
     harness.query = { sample: SAMPLE_ID, mode: "edit" };
     await act(async () => { renderer = create(<SampleList />); });
     expect(harness.sheet).toEqual({ open: true, mode: "edit" });
-    expect(harness.sheetProps?.submitBlockedReason).toBe("This record was sent with its Removal, so it cannot be saved.");
+    expect(harness.sheetProps?.submitBlock).toMatchObject({
+      reason: "This record was sent with its Removal, so it cannot be saved.", tone: "error", readOnly: true,
+    });
     renderer?.unmount();
   });
 
@@ -230,7 +233,12 @@ describe("Sample sheet behind a Sent Removal", () => {
     harness.lockStatus = "error";
     harness.query = { sample: SAMPLE_ID, mode: "edit" };
     await act(async () => { renderer = create(<SampleList />); });
-    expect(harness.sheetProps?.submitBlockedReason).toBe("Couldn't check whether this record can change. Refresh the page and try again.");
+    expect(harness.sheetProps?.submitBlock).toMatchObject({
+      reason: "Couldn't check whether this record can change. Try again.", tone: "error", readOnly: false,
+      retry: { label: "Try again" },
+    });
+    harness.sheetProps?.submitBlock?.retry?.run();
+    expect(harness.retry).toHaveBeenCalled();
     renderer?.unmount();
   });
 

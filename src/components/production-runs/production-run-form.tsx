@@ -117,7 +117,8 @@ export function ProductionRunForm({
   const formId = useId();
   const isEditMode = !!productionRun;
   // `assertProductionRunOutputBasisChange` refuses these once stock is used.
-  const outputLocked = isEditMode && isProductionRunOutputLocked(lock);
+  // Fail closed: the output basis waits for the lock to answer.
+  const outputLocked = isEditMode && (!lock || isProductionRunOutputLocked(lock));
   const transitionFrom = (productionRun?.status as ProductionRunStatus) ?? "running";
   const statusOptions = (isEditMode
     ? allowedProductionRunStatusesFrom(transitionFrom)

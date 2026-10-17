@@ -34,6 +34,9 @@ function chunk(ids: readonly string[]): string[][] {
 export function useRecordLocks(entityType: RecordLockViewKind, ids: readonly (string | null | undefined)[]): {
   locks: RecordLockViews;
   statusOf: (id: string) => RecordLockStatus;
+  /** Re-reads every failed chunk in place; open drafts are untouched. */
+  retry: () => void;
+  retrying: boolean;
 } {
   const chunks = chunk([...new Set(ids.filter((id): id is string => !!id).map(canonical))].sort());
   const queries = useQueries({
@@ -54,9 +57,12 @@ export function useRecordLocks(entityType: RecordLockViewKind, ids: readonly (st
     if (query.data && key in query.data) return "ready";
     return query.isPending || query.isFetching ? "pending" : "ready";
   };
+  const failed = queries.filter((query) => query.isError);
   return {
     locks: new Proxy(locks, { get: (target, prop) => (typeof prop === "string" ? target[canonical(prop)] : undefined) }),
     statusOf,
+    retry: () => { for (const query of failed) void query.refetch(); },
+    retrying: failed.some((query) => query.isFetching),
   };
 }
 
@@ -64,7 +70,9 @@ export function useRecordLocks(entityType: RecordLockViewKind, ids: readonly (st
 export function useRecordLock(entityType: RecordLockViewKind, id: string | null | undefined): {
   lock: RecordLockView | undefined;
   status: RecordLockStatus;
+  retry: () => void;
+  retrying: boolean;
 } {
-  const { locks, statusOf } = useRecordLocks(entityType, [id]);
-  return { lock: id ? locks[id] : undefined, status: id ? statusOf(id) : "ready" };
+  const { locks, statusOf, retry, retrying } = useRecordLocks(entityType, [id]);
+  return { lock: id ? locks[id] : undefined, status: id ? statusOf(id) : "ready", retry, retrying };
 }
