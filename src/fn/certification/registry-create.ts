@@ -306,8 +306,10 @@ async function reconcileToResult(
   };
 }
 
-async function markSubmissionRejectedBestEffort(
-  args: PerformRegistryCreateArgs,
+export async function markSubmissionRejectedBestEffort(
+  args: Pick<PerformRegistryCreateArgs,
+    "orgCtx" | "submissionRowId" | "expectedLockedAt" | "deferRejectionToAttempt" | "log"
+  >,
   errorMessage: string,
 ): Promise<void> {
   if (args.deferRejectionToAttempt || !args.submissionRowId) return;

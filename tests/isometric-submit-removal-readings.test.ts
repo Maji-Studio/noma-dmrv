@@ -11,6 +11,7 @@ import { makeTestOrgContext } from "./helpers/test-org";
 import * as readings from "@/data-access/production-run-readings";
 import * as imports from "@/data-access/production-run-reading-imports";
 import * as csv from "@/lib/production-readings/readings-csv";
+import * as productionBatches from "@/fn/certification/production-batches";
 import * as measurementSamples from "@/lib/isometric/measurement-samples";
 import * as isometric from "@/lib/isometric";
 import * as sourceVerification from "@/lib/isometric/source-binding-verification";
@@ -30,6 +31,8 @@ vi.mock("@/lib/isometric/source-binding-verification", () => ({
 }));
 
 beforeEach(() => {
+  // Production registration is separate from the telemetry boundary under test.
+  vi.spyOn(productionBatches, "ensureProductionBatchesForCreditBatches").mockResolvedValue(new Map());
   vi.mocked(sourceVerification.verifyRemovalSourceBindings).mockResolvedValue({
     state: "verified", verifiedCount: 1, totalCount: 1, mismatches: [],
   });

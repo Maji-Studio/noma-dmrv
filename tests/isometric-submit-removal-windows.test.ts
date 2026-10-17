@@ -8,6 +8,7 @@ import { reviewedTemplateSources } from "./helpers/template-line-sources";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { makeTestOrgContext } from "./helpers/test-org";
 import {
+  CREDIT_BATCH_ID,
   EXTERNAL_FACILITY_ID,
   EXTERNAL_FEEDSTOCK_TYPE_ID,
   EXTERNAL_PRODUCTION_BATCH_ID,
@@ -32,12 +33,19 @@ import * as productionBatchesDA from "@/data-access/certifier-production-batches
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as durabilitySamples from "@/fn/certification/durability-measurement-samples";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
+import * as sourcesMirror from "@/fn/certification/sources-mirror-core";
 import * as protocolPreflight from "@/fn/certification/protocol-version-preflight";
+import { SafeError } from "@/lib/errors";
+import { buildProductionBatchSubmission } from "@/fn/certification/production-batches";
+import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import * as isometric from "@/lib/isometric";
 import * as sourceVerification from "@/lib/isometric/source-binding-verification";
 
+vi.mock("@/data-access/removal-production-batch-deletion", () => ({
+  isProductionBatchSharedWithOtherRemovals: vi.fn(async () => false),
+}));
 vi.mock("@/fn/certification/protocol-version-preflight", async (importOriginal) => {
   const actual = await importOriginal<
     typeof import("@/fn/certification/protocol-version-preflight")
@@ -100,50 +108,68 @@ describe("submitRemoval — reporting window anchored to application date (issue
     );
   }
 
-  it("keeps the draft locked when production-batch binding fails after datapoints were created", async () => {
+  async function registeredBatch(remoteMassKg = ORIGINAL_BIOCHAR_MASS_KG) {
+    const orgCtx = makeTestOrgContext(USER_ID);
+    const [input] = await productionBatchesDA.getProductionBatchRegistryInputs(orgCtx, [CREDIT_BATCH_ID]);
+    const current = buildProductionBatchSubmission(input);
+    const remoteBody = { ...current.body, mass: { magnitude: remoteMassKg, unit: "kilogram" } };
+    vi.mocked(productionBatchesDA.getProductionBatchRegistrations).mockResolvedValue([{
+      id: "registration-1", organizationId: orgCtx.organizationId, provider: "isometric",
+      creditBatchId: CREDIT_BATCH_ID, externalProductionBatchId: EXTERNAL_PRODUCTION_BATCH_ID,
+      supplierReference: current.supplierRefId, externalProjectId: input.externalProjectId,
+      externalFacilityId: input.externalFacilityId!, massKg: remoteMassKg,
+      startedOn: current.startedOn, endedOn: current.endedOn,
+      payloadHash: remoteMassKg === current.massKg ? current.payloadHash : payloadHash(remoteBody),
+      createdAt: new Date(), updatedAt: new Date(),
+    }]);
+    isometricClientFake.get.mockResolvedValue({
+      ...remoteBody, id: EXTERNAL_PRODUCTION_BATCH_ID, uploaded_at: "2026-02-01T00:00:00.000Z",
+    });
+  }
+
+  it("rejects registered drift before Sources, Datapoints or MeasurementSamples and records the message", async () => {
+    prepareDurabilitySubmission();
+    await registeredBatch(ORIGINAL_BIOCHAR_MASS_KG + 50);
+    const error = await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID })
+      .catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(SafeError);
+    const message = (error as SafeError).message;
+    expect(message).toContain("different figures than noma has now");
+    expect(isometric.createDatapoint).not.toHaveBeenCalled();
+    expect(durabilitySamples.submitDurabilityMeasurementSamples).not.toHaveBeenCalled();
+    expect(isometric.createGhgEntry).not.toHaveBeenCalled();
+    expect(isometricClientFake.post).not.toHaveBeenCalled();
+    expect(evidenceLedgers.ensureEvidenceLedgersFromContext).not.toHaveBeenCalled();
+    expect(sourcesMirror.mirrorCandidateSourcesForSubmission).not.toHaveBeenCalled();
+    expect(removalsDA.markRemovalSubmissionExternalMutationPossible).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
+    expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
+    expect(ledgerClaim.markSubmissionInterrupted).not.toHaveBeenCalled();
+    expect(ledger.appendSyncEvent).toHaveBeenCalledWith(makeTestOrgContext(USER_ID),
+      expect.objectContaining({ entityType: "removal", entityId: REMOVAL_ID,
+        operation: `production-batch:drift:${CREDIT_BATCH_ID}`, status: "failed", errorMessage: message }));
+  });
+
+  it("rejects the draft when production-batch binding fails before any POST", async () => {
     prepareDurabilitySubmission();
     const originalError = new Error("production batch binding unavailable");
-    vi.mocked(
-      productionBatchesDA.getProductionBatchRegistryInputs,
-    ).mockRejectedValue(originalError);
-
-    await expect(
-      submitRemoval({
-        orgCtx: makeTestOrgContext(USER_ID),
-        removalId: REMOVAL_ID,
-      }),
-    ).rejects.toBe(originalError);
-
+    const inputs = await productionBatchesDA.getProductionBatchRegistryInputs(
+      makeTestOrgContext(USER_ID), [CREDIT_BATCH_ID],
+    );
+    vi.mocked(productionBatchesDA.getProductionBatchRegistryInputs)
+      .mockResolvedValueOnce(inputs)
+      .mockRejectedValue(originalError);
+    await expect(submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }))
+      .rejects.toBe(originalError);
     expect(storedRows).toHaveLength(1);
     expect(storedRows[0]).toMatchObject({
-      status: "draft",
-      metadata: {
-        lastError: "Removal submission failed unexpectedly. Retry the submission.",
-        lastAttemptOutcome: "interrupted",
-        externalMutation: "confirmed",
-      },
+      status: "rejected", lockedAt: null,
+      metadata: { lastError: "Removal submission failed unexpectedly. Retry the submission." },
     });
-    expect(storedRows[0].lockedAt).not.toBeNull();
-    expect(isometric.createDatapoint).toHaveBeenCalled();
-    expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
-    expect(ledgerClaim.markSubmissionInterrupted).toHaveBeenCalledOnce();
-
-    storedRows[0].lockedAt = new Date(0);
-    await expect(
-      submitRemoval({
-        orgCtx: makeTestOrgContext(USER_ID),
-        removalId: REMOVAL_ID,
-      }),
-    ).rejects.toBe(originalError);
-    expect(storedRows[0]).toMatchObject({
-      status: "draft",
-      metadata: {
-        lastAttemptOutcome: "interrupted",
-        externalMutation: "confirmed",
-      },
-    });
-    expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
-    expect(ledgerClaim.markSubmissionInterrupted).toHaveBeenCalledTimes(2);
+    expect(isometric.createDatapoint).not.toHaveBeenCalled();
+    expect(durabilitySamples.submitDurabilityMeasurementSamples).not.toHaveBeenCalled();
+    expect(ledger.markSubmissionRejected).toHaveBeenCalledOnce();
+    expect(ledgerClaim.markSubmissionInterrupted).not.toHaveBeenCalled();
   });
 
   it("does not create the GHG Entry when MeasurementSample source patching fails", async () => {
@@ -165,6 +191,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
 
   it("preserves the submission error when no-mutation rejection cleanup fails", async () => {
     prepareDurabilitySubmission();
+    await registeredBatch();
     vi.mocked(isometric.createDatapoint).mockRejectedValueOnce(
       new isometric.IsometricApiError(
         "422 Unprocessable",

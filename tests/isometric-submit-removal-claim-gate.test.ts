@@ -17,6 +17,7 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "./helpers/test-org";
 import * as ledger from "@/data-access/certification";
+import * as productionBatchesDA from "@/data-access/certifier-production-batches";
 import * as ledgerClaim from "@/data-access/certification-submissions";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as removalsDA from "@/data-access/certifier-removals";
@@ -180,6 +181,12 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
 
   it("claims only the unclaimed batch in a mixed follow-up Removal", async () => {
     const secondBatchId = "33333333-3333-4333-8333-333333333333";
+    const [productionInput] = await productionBatchesDA.getProductionBatchRegistryInputs(
+      makeTestOrgContext(USER_ID), [CREDIT_BATCH_ID],
+    );
+    vi.mocked(productionBatchesDA.getProductionBatchRegistryInputs).mockResolvedValue([
+      productionInput, { ...productionInput, creditBatchId: secondBatchId, creditBatchCode: "CB-TEST-002" },
+    ]);
     const memberBatchClaims = [
       {
         creditBatchId: CREDIT_BATCH_ID,
