@@ -483,6 +483,64 @@ it("bin metadata does not wait for feedstock artifacts while holding its stock l
 }, TEST_TIMEOUT_MS);
 
 
+it("a protected bin change answers a retryable conflict instead of waiting on a held artifact", async () => {
+  await ensureTestOrg();
+  await withLineageFixture(async f => {
+    const ctx = makeTestOrgContext();
+    const resume = gate();
+    let feedstockWriter: ReturnType<typeof outcome> | undefined;
+    let binWriter: ReturnType<typeof outcome> | undefined;
+    let binFinished = false;
+    let pid = 0;
+    try {
+      const version = await masterDataVersion(ctx, "storageLocations", f.feedstockBinId);
+      feedstockWriter = outcome(db.transaction(async tx => {
+        const lineage = await getLockedCertifiedLineage(ctx, tx, { entityType: "feedstock", entityId: f.feedstockId });
+        expect(lineage.length).toBeGreaterThan(0);
+        pid = await backendPid(tx);
+        await resume.promise;
+      }));
+      await expect.poll(() => pid, { timeout: BARRIER_TIMEOUT_MS }).not.toBe(0);
+      binWriter = outcome(updateStorageLocation(ctx, f.feedstockBinId, {
+        expectedVersion: version, type: "biochar_bin",
+      }).finally(() => { binFinished = true; }));
+      // The try-lock refuses while the feedstock writer still holds its artifact.
+      await expect.poll(() => binFinished, { timeout: BARRIER_TIMEOUT_MS }).toBe(true);
+      expect(await binWriter).toMatchObject({ ok: false, error: { code: "concurrent_write_retry", retryable: true } });
+      resume.release();
+      expect(await feedstockWriter).toMatchObject({ ok: true });
+      expect(await masterDataVersion(ctx, "storageLocations", f.feedstockBinId)).toBe(version);
+    } finally {
+      resume.release();
+      await Promise.all([feedstockWriter, binWriter]);
+    }
+  }, "none");
+}, TEST_TIMEOUT_MS);
+
+
+it("a protected bin change takes the lineage locks and refuses a Sent lineage", async () => {
+  await ensureTestOrg();
+  await withLineageFixture(async f => {
+    const ctx = makeTestOrgContext();
+    const version = await masterDataVersion(ctx, "storageLocations", f.feedstockBinId);
+    await expect(updateStorageLocation(ctx, f.feedstockBinId, { expectedVersion: version, type: "biochar_bin" }))
+      .rejects.toMatchObject({ code: "certification_locked" });
+    expect(await masterDataVersion(ctx, "storageLocations", f.feedstockBinId)).toBe(version);
+  });
+}, TEST_TIMEOUT_MS);
+
+
+it("a free-field bin change saves on an unsent lineage", async () => {
+  await ensureTestOrg();
+  await withLineageFixture(async f => {
+    const ctx = makeTestOrgContext();
+    const version = await masterDataVersion(ctx, "storageLocations", f.feedstockBinId);
+    await expect(updateStorageLocation(ctx, f.feedstockBinId, { expectedVersion: version, storageDescription: "Covered bay" }))
+      .resolves.toMatchObject({ version: version + 1, storageDescription: "Covered bay" });
+  }, "none");
+}, TEST_TIMEOUT_MS);
+
+
 it("bin metadata waits for output posting without holding its artifacts", async () => {
   const f = await postedStockFixture();
   const resume = gate();

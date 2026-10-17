@@ -1,4 +1,4 @@
-import { readStorageLocationRecordLock } from './storage-location-record-lock';
+import { assertProtectedChangesLocked, changesProtectedStorageLocationField, lockStorageLocationRecordsWithoutWaiting, readStorageLocationRecordLock } from './storage-location-record-lock';
 import { assertRecordLockFields } from '@/lib/record-lock-fields';
 /**
  * Storage Locations Data Access Layer
@@ -466,9 +466,15 @@ export async function updateStorageLocation(
   return db.transaction(async (tx) => {
     // Read before locking: `lockBinStock` reports an archived bin in stock
     // vocabulary, and an edit needs the restore instruction instead.
-    await readEditableStorageLocation(ctx, tx, storageLocationId);
+    const preview = await readEditableStorageLocation(ctx, tx, storageLocationId);
     await lockBinStock(ctx, tx, storageLocationId);
-    const recordLock = await readStorageLocationRecordLock(ctx, tx, storageLocationId);
+    // Lane or scope changes must not land under a Sent lineage, so they hold
+    // its artifacts (taken without waiting) to commit. Free-field saves take
+    // no artifact locks and keep the advisory Sent refusal.
+    const lineageLocked = changesProtectedStorageLocationField(preview, data);
+    const recordLock = lineageLocked
+      ? await lockStorageLocationRecordsWithoutWaiting(ctx, tx, storageLocationId)
+      : await readStorageLocationRecordLock(ctx, tx, storageLocationId);
     // `FOR UPDATE` on the bin row itself: the advisory lock above serializes
     // stock writes, but archive and restore change `updatedAt` without taking
     // it, so only the row lock makes the version check below race-free.
@@ -484,6 +490,7 @@ export async function updateStorageLocation(
       expectedVersion: data.expectedVersion,
       actualVersion: existing.version,
     });
+    assertProtectedChangesLocked(lineageLocked, existing, data);
 
     if (recordLock.level === 'sent') assertRecordLockFields(recordLock, existing, data);
 
