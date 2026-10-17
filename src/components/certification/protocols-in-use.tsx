@@ -16,7 +16,7 @@ export function ProtocolsInUse() {
           Protocols in use
         </p>
         <p className="body-small text-[var(--color-text-secondary)]">
-          Noma is built against these Isometric versions. They are fixed in the
+          noma is built against these Isometric versions. They are fixed in the
           app and the same for every facility.
         </p>
       </div>
