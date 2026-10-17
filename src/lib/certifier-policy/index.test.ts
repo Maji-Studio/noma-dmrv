@@ -7,7 +7,7 @@ describe("validateBatchPeriod", () => {
       certifier: "isometric",
       startDate: "2026-01-01",
       endDate: "2026-02-02",
-    })).toBe("A credit batch may span at most one month (one calendar month; noma rule).");
+    })).toBe("Choose an end date on or before 2026-01-31. Isometric credit batches must cover less than one month.");
   });
 
   it.each(["puro_earth", "verra", null] as const)("exempts batches with certifier %s from the Isometric cap", (certifier) => {

@@ -572,7 +572,7 @@ describe("Credit Batch Production-Run Validation", () => {
       startDate: "2025-06-01",
       endDate: "2025-09-30",
     };
-    const message = "A credit batch may span at most one month (one calendar month; noma rule).";
+    const message = "Choose an end date on or before 2025-06-30. Isometric credit batches must cover less than one month.";
     const calls = [
       () => db.transaction((tx) => assertNoOverlappingCreditBatchCohort(ctx, tx, period)),
       () => db.transaction((tx) => findMatchingUnassignedProductionRunIds(ctx, tx, period)),

@@ -1,9 +1,26 @@
-import { addMonths } from "date-fns/addMonths";
 import { isAfter } from "date-fns/isAfter";
 import { formatUtcDate } from "@/lib/date-utils";
 
 // noma conservative Isometric production-window rule; see docs/adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md.
-export const CREDIT_BATCH_WINDOW_DESCRIPTION = "one calendar month";
+const MONTH_CAP = 1;
+const PREVIOUS_DAY = 1;
+
+/** UTC calendar arithmetic, clamped like PostgreSQL date + interval '1 month'.
+ * Preserve the time for physical run spans; date windows pass UTC midnight.
+ */
+export function getCreditBatchMonthBoundary(start: Date): Date {
+  const boundary = new Date(start);
+  boundary.setUTCDate(1);
+  boundary.setUTCMonth(boundary.getUTCMonth() + MONTH_CAP);
+  const lastDay = new Date(boundary);
+  lastDay.setUTCMonth(lastDay.getUTCMonth() + MONTH_CAP, 0);
+  boundary.setUTCDate(Math.min(start.getUTCDate(), lastDay.getUTCDate()));
+  return boundary;
+}
+
+export function isCreditBatchUnderOneMonth(start: Date, end: Date): boolean {
+  return end < getCreditBatchMonthBoundary(start);
+}
 
 function toDateString(value: string | Date): string {
   return typeof value === "string" ? value : formatUtcDate(value);
@@ -45,8 +62,10 @@ export function getCreditBatchProductionWindowIssue(
     return "End date must be after start date";
   }
 
-  if (options.enforceMonthCap && isAfter(end, addMonths(start, 1))) {
-    return `A credit batch may span at most one month (${CREDIT_BATCH_WINDOW_DESCRIPTION}; noma rule).`;
+  if (options.enforceMonthCap && !isCreditBatchUnderOneMonth(start, end)) {
+    const lastAllowed = getCreditBatchMonthBoundary(start);
+    lastAllowed.setUTCDate(lastAllowed.getUTCDate() - PREVIOUS_DAY);
+    return `Choose an end date on or before ${formatUtcDate(lastAllowed)}. Isometric credit batches must cover less than one month.`;
   }
 
   return null;
