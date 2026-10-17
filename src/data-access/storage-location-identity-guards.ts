@@ -1,3 +1,5 @@
+import { DomainError } from '@/lib/domain-errors';
+import { recordLocks, withRecordLockGuidance } from '@/lib/record-lock';
 /**
  * Stocked-bin identity guard (issue #767).
  *
@@ -20,7 +22,6 @@
 
 import type { DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
-import { SafeError } from "@/lib/errors";
 import { laneForStorageType } from "@/schemas/bin-movements";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import { deriveBinLaneAvailableKg, hasNonZeroStock } from "./bin-stock-guards";
@@ -98,6 +99,7 @@ export async function assertBinIdentityChangeAllowed(
   const changedField = changedIdentityField(bin, next);
   if (!changedField) return;
 
+  const lock = recordLocks.storageLocation({ removals: [], dependents: [{ kind: 'stockEntry', id: bin.id }] });
   const availableKg = await deriveBinLaneAvailableKg(
     ctx,
     tx,
@@ -105,11 +107,11 @@ export async function assertBinIdentityChangeAllowed(
     laneForStorageType(bin.type),
   );
   if (hasNonZeroStock(availableKg)) {
-    throw new SafeError(stockBlocksMessage(changedField));
+    throw new DomainError("certification_locked", withRecordLockGuidance(stockBlocksMessage(changedField), lock));
   }
 
   const references = await countStorageLocationReferences(ctx, tx, bin.id);
   if (hasStorageLocationReferences(references)) {
-    throw new SafeError(historyBlocksMessage(changedField));
+    throw new DomainError("certification_locked", withRecordLockGuidance(historyBlocksMessage(changedField), lock));
   }
 }

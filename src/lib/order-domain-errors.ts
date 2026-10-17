@@ -34,8 +34,9 @@ export function orderQuantityBelowAllocated(allocatedWetKg: number): DomainError
     ["quantityKg"], { allocatedWetKg, unit: "kg" });
 }
 
-export function orderHasDeliveries(): DomainError {
-  return refusal("certification_locked", "Cannot delete an order with deliveries. Correct the deliveries that use it first; delivery deletion is not available yet.", ["orderId"]);
+export function orderHasDeliveries(delivery: { id: string; code: string }): DomainError {
+  const lock = recordLocks.order({ removals: [], dependents: [{ kind: "delivery", id: delivery.id, label: delivery.code }] });
+  return refusal("certification_locked", withRecordLockGuidance("Cannot delete an order with deliveries.", lock), ["orderId"]);
 }
 
 /** PATCH refuses archived orders; DELETE still works when the order has no deliveries. */

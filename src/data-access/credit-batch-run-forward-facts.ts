@@ -1,3 +1,4 @@
+import { deletedProductIds } from './output-stock-active-movements';
 /**
  * Run-forward facts for the consolidated credit-batch roll-up loader.
  *
@@ -15,7 +16,7 @@ import {
   formulations,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, notInArray } from "drizzle-orm";
 import type {
   BatchRunForwardDeliveryFact,
   BatchRunForwardProductFact,
@@ -67,6 +68,7 @@ export async function loadRunForwardFactsWithExecutor(
     .where(
       and(
         inArray(biocharProductSourceAllocations.productionRunId, runIds),
+        notInArray(biocharProducts.id, deletedProductIds(ctx, executor)),
         eq(biocharProductSourceAllocations.organizationId, ctx.organizationId),
       ),
     );

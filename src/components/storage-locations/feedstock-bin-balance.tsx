@@ -91,6 +91,7 @@ function FeedstockStockHistory({ storageLocationId, facilityId, renderTrigger }:
               {newDay && <LedgerDayHeader day={day} afterLabel={index === 0 ? "Wet stock after" : undefined} />}
               <LedgerLine id={`feedstock-entry-${entry.id}`} time={formatFacilityTime(new Date(entry.occurredAt), clock.timeZone, TIME_FORMAT)}
                 iconKind={ENTRY_ICONS[entry.kind]} label={ENTRY_LABELS[entry.kind]} note={entry.reason || entry.code || undefined}
+                struck={entry.reversed}
                 amount={entry.kind === "count" && entry.countedWetKg !== null ? `${formatMassKg(entry.countedWetKg)} wet` : signedWet(entry.wetDeltaKg)}
                 after={formatMassKg(entry.afterWetKg)}>
                 <StockSourceLink facilityId={facilityId} source={entry.sourceId && (entry.kind === "intake" || entry.kind === "run_draw" || entry.kind === "ingredient_draw")

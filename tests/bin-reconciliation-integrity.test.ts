@@ -84,7 +84,7 @@ async function postedFixture(stockKg = 100) { const f = await postedStockFixture
 afterEach(async () => { for (const f of postedFixtures.splice(0)) await cleanupPostedStock(f); });
 
 describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS }, () => {
-  it("keeps posted ingredient withdrawals when product deletion races a stock-take", async () => {
+  it.each([false, true])("serializes product deletion with an ingredient stock-take (count first: %s)", async (countFirst) => {
     const f = await postedFixture(0);
     const [bin] = await db.insert(storageLocations).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id,
       code: `E2E-ING-${f.tag}`, name: `E2E Ingredient ${f.tag}`, type: "feedstock_bin", feedstockTypeId: f.ingredientType.id }).returning();
@@ -92,13 +92,17 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
       status: "complete", storageLocationId: bin.id, feedstockTypeId: f.ingredientType.id, massWetKg: 100, massDryKg: 100, moistureContentPercent: 0, deliveryDate: new Date("2026-09-01") }));
     await db.update(storageLocations).set({ formulationId: f.recipe.id }).where(eq(storageLocations.id, f.bin.id));
     const product = await postProduct(f, { formulationId: f.recipe.id, massKg: 100, composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, storageLocationId: bin.id, massKg: 30, moistureContentPercent: 0 }] } });
+    const count = () => recordStockTakeMovement(f.ctx, { storageLocationId: bin.id, lane: "feedstock", countedMassKg: 50, countedWetMassKg: 50, moistureRatioUsed: 0, reason: "E2E concurrent count" });
+    if (countFirst) await count();
     const [deletion, stockTake] = await Promise.allSettled([
       deleteBiocharProduct(f.ctx, product.id, await productionVersion(f.ctx, "biocharProducts", product.id)),
-      recordStockTakeMovement(f.ctx, { storageLocationId: bin.id, lane: "feedstock", countedMassKg: 50, countedWetMassKg: 50, moistureRatioUsed: 0, reason: "E2E concurrent count" }),
+      countFirst ? Promise.resolve() : count(),
     ]);
-    expect(deletion.status).toBe("rejected"); expect(stockTake.status).toBe("fulfilled");
+    if (countFirst) expect(deletion.status).toBe("rejected");
+    expect(stockTake.status).toBe("fulfilled");
+    if (deletion.status === "rejected") expect(deletion.reason).toMatchObject({ code: "certification_locked" });
     expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory.currentWetMassKg).toBe(50);
-    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(70);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(deletion.status === "fulfilled" ? 0 : 70);
   });
 
   it("serializes a stock-take against a concurrent production-run feedstock draw", async () => {
