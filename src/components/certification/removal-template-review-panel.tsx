@@ -51,7 +51,7 @@ export function RemovalTemplateReviewPanel({ facilityId, canManage, templateId }
   if (query.isError || !query.data) {
     return (
       <ServerError
-        message="The Removal templates could not be read from Isometric. Try again."
+        message="The Removal templates could not be read from Isometric."
         action={<Button size="small" busy={query.isFetching} onClick={retry}>Try again</Button>}
       />
     );
@@ -59,7 +59,7 @@ export function RemovalTemplateReviewPanel({ facilityId, canManage, templateId }
 
   // The requested template leads, whether it is listed or only previewed.
   const entries = [
-    ...(preview.data ? [preview.data] : []),
+    ...(preview.data && !listed ? [preview.data] : []),
     ...query.data.filter((entry) => entry.templateId === requested),
     ...query.data.filter((entry) => entry.templateId !== requested),
   ];
@@ -93,7 +93,7 @@ export function RemovalTemplateReviewPanel({ facilityId, canManage, templateId }
     <div className="flex flex-col gap-24">
       {previewFailed && (
         <ServerError
-          message="That template's lines could not be read from Isometric. Try again."
+          message="That template's lines could not be read from Isometric."
           action={<Button size="small" busy={preview.isFetching} onClick={() => void preview.refetch()}>Try again</Button>}
         />
       )}
@@ -103,8 +103,8 @@ export function RemovalTemplateReviewPanel({ facilityId, canManage, templateId }
           entry={entry}
           facilityId={facilityId}
           canManage={canManage}
-          onRetry={retry}
-          isRetrying={query.isFetching}
+          onRetry={entry.preview ? () => void preview.refetch() : retry}
+          isRetrying={entry.preview ? preview.isFetching : query.isFetching}
         />
       ))}
     </div>

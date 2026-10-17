@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   data: [] as unknown[],
   previewEntry: undefined as unknown,
   previewEnabled: [] as boolean[],
+  previewRefetch: vi.fn(),
   refetch: vi.fn(),
   mutateAsync: vi.fn(),
 }));
@@ -27,8 +28,8 @@ vi.mock("@/hooks/use-removal-template-review", () => ({
   useRemovalTemplateReviewEntry: (_facility: string, _template: string, enabled: boolean) => {
     mocks.previewEnabled.push(enabled);
     return {
-      data: enabled ? mocks.previewEntry : undefined, isPending: enabled && !mocks.previewEntry,
-      isError: false, isFetching: false, refetch: mocks.refetch,
+      data: mocks.previewEntry, isPending: enabled && !mocks.previewEntry,
+      isError: false, isFetching: false, refetch: mocks.previewRefetch,
     };
   },
   useReviewRemovalTemplateLines: () => ({ mutateAsync: mocks.mutateAsync, isPending: false }),
@@ -96,6 +97,27 @@ describe("RemovalTemplateReviewPanel", () => {
     expect(screen.getByText("Not in use yet")).toBeTruthy();
     // The one preview has nothing to save against; the listed card keeps its own controls.
     expect(screen.getAllByRole("button", { name: /^Save/ })).toHaveLength(1);
+  });
+
+  it("drops a cached preview once the template is listed, so the card shows once", () => {
+    mocks.previewEntry = entry({ observation: null, preview: true });
+    const { rerender } = render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage templateId="rvt_test" />);
+    rerender(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage templateId="rvt_test" />);
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(1);
+  });
+
+  it("retries a previewed template through its own read", () => {
+    mocks.data = [];
+    mocks.previewEntry = entry({
+      templateId: "rvt_new", observation: null, preview: true, isDefault: false, enrichment: {},
+      enrichmentProblems: [{ code: "unknown-enrichment", componentId: "cmp_startup", inputKey: "volume" }],
+    });
+    render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage templateId="rvt_new" />);
+    mocks.refetch.mockClear();
+    mocks.previewRefetch.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(mocks.previewRefetch).toHaveBeenCalledTimes(1);
+    expect(mocks.refetch).not.toHaveBeenCalled();
   });
 
   it("does not read a requested template the facility already lists", () => {
