@@ -290,6 +290,9 @@ export function creditBatchSheetSections({
   activeFocusTarget,
 }: CreditBatchSheetSectionsOptions): DetailPanelSection[] {
   const removalId = creditBatch.productionEmissionsClaimedByRemovalId ?? healthSummary?.removalId ?? null;
+  const removalCode = creditBatch.productionEmissionsClaimedByRemovalId
+    ? healthSummary?.productionEmissionsClaimedByRemovalCode
+    : healthSummary?.removalCode;
   const preview = creditBatch.co2eStoredPreview;
   const durabilityResult = preview?.applicationResults.find(
     (result) => result.fDurable != null,
@@ -312,7 +315,7 @@ export function creditBatchSheetSections({
                 : "Certification progress unavailable"}
             </span>
           )}
-          {removalId && <Link href={certificationRemovalsHref({ facility: creditBatch.facilityId, removal: removalId })} className="body-small underline">Production emissions included in Removal {removalId.slice(0, 8)}…</Link>}
+          {removalId && <Link href={certificationRemovalsHref({ facility: creditBatch.facilityId, removal: removalId })} className="body-small underline">{removalCode ? `Production emissions included in Removal ${removalCode}` : "Production emissions included in a Removal"}</Link>}
           {/* Anchor for the checklist's `#batch-details` fix link — sits just
               above the Batch definition section so the jump lands on top of
               those fields rather than past them. */}
