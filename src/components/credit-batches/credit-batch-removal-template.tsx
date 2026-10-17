@@ -78,7 +78,7 @@ export function CreditBatchRemovalTemplate({
         />
         {canManage && !locked && (
           <Button size="small" variant="default" onClick={() => setSwitching(true)}>
-            Switch template
+            {pinnedId ? "Switch template" : "Set template"}
           </Button>
         )}
       </div>

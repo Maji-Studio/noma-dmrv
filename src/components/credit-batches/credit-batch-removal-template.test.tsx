@@ -58,6 +58,10 @@ describe("CreditBatchRemovalTemplate", () => {
 
   it("says an unpinned batch has no template and who can choose one", () => {
     mocks.pin = null;
+    mount(true);
+    expect(screen.getByRole("button", { name: "Set template" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Switch template" })).toBeNull();
+    cleanup();
     mount(false);
     expect(screen.getByText("Not set")).toBeTruthy();
     expect(screen.getByText("This credit batch has no Removal template. Ask an Owner or Admin to choose one.")).toBeTruthy();
