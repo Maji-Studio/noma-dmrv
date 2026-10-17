@@ -1,5 +1,6 @@
 import { isDeepStrictEqual as same } from "node:util";
 import { PARTY_CASES, PARTY_CUSTOMER_NAME, PARTY_FIELD, PARTY_PICKUP, PARTY_SUPPLIER_NAME, type PartyCaseId } from "./config";
+import { scoreLocationCriteria } from "./score-party-locations";
 import type { CaseScore } from "./score";
 import type { Transcript } from "./transcript";
 
@@ -19,7 +20,7 @@ export interface PartySnapshot {
   activity: PartyActivity[];
 }
 export interface PartyTarget {
-  partyId: string; name: string; facilityId: string; facilityName: string; before: PartySnapshot;
+  partyId: string; locationId?: string; name: string; facilityId: string; facilityName: string; before: PartySnapshot;
 }
 const VERSION_INCREMENT = 1;
 const INITIAL_VERSION = 1;
@@ -40,7 +41,7 @@ function conflictingSupplier(call: Transcript["calls"][number], partyId: string)
   return call.name === "mcp__noma__create_supplier" && call.isError === true && result?.code === "conflict"
     && Array.isArray(result.issues) && result.issues.some(issue => object(object(issue).meta).supplierId === partyId);
 }
-function sameSnapshot(left: PartySnapshot, right: PartySnapshot): boolean {
+export function sameSnapshot(left: PartySnapshot, right: PartySnapshot): boolean {
   const sorted = (value: PartySnapshot) => Object.fromEntries(Object.entries(value).map(([key, rows]) =>
     [key, key === "activity" ? [...value.activity].sort((a, b) => activityKey(a).localeCompare(activityKey(b)))
       : [...rows].sort((a, b) => String(a.id).localeCompare(String(b.id)))]));
@@ -86,7 +87,9 @@ export function scorePartyCase(caseId: PartyCaseId, target: PartyTarget, snapsho
   const definition = PARTY_CASES.find(({ id }) => id === caseId)!;
   const before = target.before;
   const criteria: Record<string, boolean> = { completed: transcript.completed, budget: transcript.calls.length <= definition.budget };
-  if (caseId === "supplier-with-pickup" || caseId === "customer-and-field") {
+  const locationCriteria = scoreLocationCriteria(caseId, target, snapshot, transcript);
+  if (locationCriteria) Object.assign(criteria, locationCriteria);
+  else if (caseId === "supplier-with-pickup" || caseId === "customer-and-field") {
     const supplier = caseId === "supplier-with-pickup";
     const key = supplier ? "suppliers" : "customers";
     const locationKey = supplier ? "supplierLocations" : "customerLocations";

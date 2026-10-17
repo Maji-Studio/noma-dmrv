@@ -30,6 +30,8 @@ these areas; the entry rules and invariants live in
 - **Follow-up:** add a test-only interception seam, bump the customer once through
   its operation, then release the agent. Score one stale write, a new read and
   one retry with the requested final change. Keep the case skipped until then.
+- Phase 7c adds the location-update, missing-GPS, archive, in-use refusal and
+  archived-order-destination cases; none provides the interception seam above.
 
 ### Align the Applications page credit batch filter (`app/application-batch-lineage-filter`, opened 2026-10-15)
 

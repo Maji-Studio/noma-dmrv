@@ -4,6 +4,9 @@ import { and, eq } from "drizzle-orm";
 import type { Pool } from "pg";
 import { db } from "@/db";
 import { activityEvents, apiIdempotencyRecords, customers, customerLocations, deliveries, documents, facilities, orders, storageObjectDeletions } from "@/db/schema";
+import { logger } from "@/lib/log";
+import { addCustomerLocation } from "@/lib/operations/customer-locations";
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { deleteCustomer } from "@/lib/operations/customers";
 import { recordOrder } from "@/lib/operations/orders";
 import { runOperation, type Operation } from "@/lib/operations/runner";
@@ -21,6 +24,7 @@ import { openOperationBarrier, waitForBlockedOperations } from "./helpers/operat
 
 const TIMEOUT_MS = 60_000;
 const CONNECTIONS = 4;
+const LOCATION_DISTANCE_KM = 25;
 const fixtures: OrderFixture[] = [];
 const deliveryOrganizations: string[] = [];
 let pool: Pool;
@@ -146,6 +150,39 @@ describe("customer delete orders", { timeout: TIMEOUT_MS }, () => {
       expect(a.ok).toBe(true);
       expect(b).toMatchObject({ ok: false, error: { code: createFirst ? "conflict" : "not_found",
         issues: [{ path: [createFirst ? "customerId" : "orderId"] }] } });
+    } finally { await barrier.rollback(); await Promise.allSettled(pending); }
+  });
+
+  it("finishes customer delete, location add and facility archive without a three-writer deadlock", async () => {
+    const f = await fixture();
+    await record(f);
+    const warnings = vi.spyOn(logger, "warn");
+    const errors = vi.spyOn(logger, "error");
+    const barrier = await openOperationBarrier(pool);
+    const pending: ReturnType<typeof settle>[] = [];
+    try {
+      await barrier.tx.select().from(customers).where(and(
+        eq(customers.organizationId, f.ctx.organizationId), eq(customers.id, f.customer.id),
+      )).for("update");
+      // Queue delete before add on the customer. Add holds a facility share;
+      // archive queues for that facility. A customer-first delete would then
+      // wait behind archive for its facility share and close the three-way cycle.
+      pending.push(settle(runOperation(deleteCustomer, f.ctx, input(f), { pool })));
+      await waitForBlockedOperations(pool, barrier.pid, 1);
+      pending.push(settle(runOperation(addCustomerLocation, f.ctx, {
+        ...TEST_SITE_POSITION, customerId: f.customer.id, name: `E2E Concurrent ${f.tag}`, country: "CH",
+        facilityDistances: [{ facilityId: f.facility.id, distanceKm: LOCATION_DISTANCE_KM, distanceSource: "manual" }],
+      }, { pool })));
+      await waitForBlockedOperations(pool, barrier.pid, 2);
+      pending.push(settle(archiveFacility(f.ctx, f.facility.id, f.facility.version)));
+      await waitForBlockedOperations(pool, barrier.pid, 3);
+      await barrier.commit();
+      const [removed, added, archived] = await Promise.all(pending);
+      expect(removed.ok).toBe(true);
+      expect(added).toMatchObject({ ok: false, error: { code: "not_found", issues: [{ path: ["customerId"] }] } });
+      expect(archived.ok).toBe(true);
+      // The runner can retry a deadlock into success; outcomes alone miss it.
+      expect(JSON.stringify([...warnings.mock.calls, ...errors.mock.calls])).not.toContain("40P01");
     } finally { await barrier.rollback(); await Promise.allSettled(pending); }
   });
 

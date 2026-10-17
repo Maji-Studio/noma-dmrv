@@ -879,3 +879,47 @@ to keep this active plan under the file-size limit.
 
 Moved to the [Phase 7a and 7b results archive](../archive/2026-10-16-api-phase-7ab-results.md)
 to keep this active plan under the file-size limit.
+
+## 27. Phase 7c results (2026-10-17)
+
+**Shipped:** eight supplier/customer location operations on the runner, REST and
+MCP; location detail reads and ETags; customer location archive/restore and the
+archived list filter; registered storage-site fences; customer deletion of
+orders without deliveries, with a cascade preview and optional fingerprint.
+Commit 11 adds five agent eval cases, location fuzz fixtures and examples,
+scorer/fixture unit tests, docs and the deferred three-writer barrier regression.
+
+**Implementation decisions:**
+- API locations include all stored facility pairs, including archived facilities,
+  so facility archive/restore cannot change a body under the same location ETag.
+  App selection readers remain active-only. Null pairs clear without requiring
+  an active facility; retained promotion pairs report failures at /isDefault.
+- Q85 uses the exact rebuilt registry payload hash for every mapping, not a GPS
+  tolerance. Writers use shared non-blocking site fences; registration holds
+  the exclusive fence. Pair-only updates do not fence. Mappings still block
+  deletion after their applications and deliveries are removed.
+- Customer delete locks order facilities before the customer, preventing the
+  cycle with location add and facility archive. Decision 121 permits the order
+  cascade with customers:delete alone. Warnings show five codes then a count.
+- Registry entries use API-safe readbacks. Location revision checks resolve the
+  location before the parent to preserve wrong-parent refusal pointers. Keyed
+  replays precede preconditions; keyless app deletes retain outcome-unknown copy.
+- Customer DELETE publishes cascade_changed and its fresh preview. Two OpenAPI
+  breaking-change acceptances record that contract correction. Old pre-fix MCP
+  delete replay records expire naturally; no pre-production compatibility path.
+- The supplier update eval changes only city; archive uses a non-default field
+  so it changes no sibling. Read-only archived-destination scoring requires
+  grounded order/location results and both requested facts.
+
+**Validation and follow-ups:** the related DB suites (275 files, 3,624 tests)
+and the full unit suite pass on the branch after merging staging (#1135). Local
+Schemathesis: 11,083 cases, 0 failures. `pnpm eval:mcp` ran on Sonnet because
+the default model was at its usage limit. All five 7c cases pass:
+customer-location-in-use first used 5 calls against a budget of 4, and its budget
+is now 6. One older case, formulation-restore, asked before restoring on Sonnet;
+rerun it on the default model before relying on that result. Commit 12 owns the
+location archive and restore UI, the fingerprint confirmation, the
+archived-destination guard in the order form, and Playwright. The stale-version
+eval stays skipped (`api/eval-stale-version`). Location fill cost and the wait
+between registration and removal recovery remain follow-ups, bounded by the
+lock timeout.

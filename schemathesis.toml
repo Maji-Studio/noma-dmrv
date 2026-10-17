@@ -112,6 +112,8 @@ include-operation-id = ["update_feedstock", "delete_feedstock", "update_producti
 [operations.checks.missing_required_header]
 expected-statuses = [400, 401, 403, 406, 415, 422, 428]
 
+# Location examples are bound from the private fixture by operationId in hooks.py.
+# Both path ids and location ETags are supplied, including archive/restore POSTs.
 # Hooks add one deterministic seeded example and release these scalar overrides
 # for the other phases, so random identifiers are still exercised.
 
