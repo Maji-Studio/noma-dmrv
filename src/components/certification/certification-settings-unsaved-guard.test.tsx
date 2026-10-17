@@ -154,4 +154,33 @@ describe("CertificationSettings unsaved changes", () => {
 
     await waitFor(() => expect(tabCloseWarned()).toBe(true));
   });
+
+  it("treats a saved value typed again as clean", async () => {
+    render(<CertificationSettings />);
+    edit();
+    fireEvent.click(screen.getByRole("button", { name: "Save estimates" }));
+    await waitFor(() => expect(tabCloseWarned()).toBe(false));
+
+    fireEvent.change(temperature(), { target: { value: "13" } });
+    await waitFor(() => expect(tabCloseWarned()).toBe(true));
+    fireEvent.change(temperature(), { target: { value: "12.5" } });
+
+    await waitFor(() => expect(tabCloseWarned()).toBe(false));
+  });
+
+  it("locks the inputs and ignores rail clicks while a save runs", async () => {
+    let finish!: () => void;
+    saveMock.mutateAsync.mockReturnValue(new Promise<void>((resolve) => { finish = resolve; }));
+    render(<CertificationSettings />);
+    edit();
+    fireEvent.click(screen.getByRole("button", { name: "Save estimates" }));
+    await waitFor(() => expect(temperature().readOnly).toBe(true));
+
+    goTo("Sources");
+
+    expect(confirmation()).toBeNull();
+    expect(screen.queryByText("Source visibility policy")).toBeNull();
+    finish();
+    await waitFor(() => expect(temperature().readOnly).toBe(false));
+  });
 });

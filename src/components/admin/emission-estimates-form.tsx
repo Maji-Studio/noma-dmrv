@@ -40,6 +40,19 @@ interface EmissionEstimatesFormProps {
   durabilityOption: "200_year" | "1000_year";
 }
 
+/** Inputs hold strings, so a baseline must too or retyping a saved value reads dirty. */
+function toInputValues(
+  facilityId: string,
+  temperature: number | null | undefined,
+  source: string | null | undefined,
+) {
+  return {
+    facilityId,
+    defaultSoilTemperatureC: temperature == null ? "" : String(temperature),
+    defaultSoilTemperatureSource: source ?? "",
+  };
+}
+
 export function EmissionEstimatesForm({
   facilityId,
   mapping,
@@ -58,12 +71,11 @@ export function EmissionEstimatesForm({
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(facilityEmissionConfigSchema),
-    defaultValues: {
+    defaultValues: toInputValues(
       facilityId,
-      defaultSoilTemperatureC: mapping?.defaultSoilTemperatureC ?? undefined,
-      defaultSoilTemperatureSource:
-        mapping?.defaultSoilTemperatureSource ?? undefined,
-    },
+      mapping?.defaultSoilTemperatureC,
+      mapping?.defaultSoilTemperatureSource,
+    ),
   });
 
   if (!mapping) {
@@ -94,7 +106,13 @@ export function EmissionEstimatesForm({
       const values = raw as FacilityEmissionConfigFormData;
       await saveMutation.mutateAsync(values);
       // Saved values are the new baseline, so the form is no longer unsaved.
-      reset(values);
+      reset(
+        toInputValues(
+          facilityId,
+          values.defaultSoilTemperatureC,
+          values.defaultSoilTemperatureSource,
+        ),
+      );
       toast.success("Emission estimates saved");
     } catch (error) {
       setError("root.serverError", {
@@ -132,6 +150,7 @@ export function EmissionEstimatesForm({
             id="defaultSoilTemperatureC"
             type="number"
             step="any"
+            readOnly={isSubmitting}
             error={!!errors.defaultSoilTemperatureC}
             {...register("defaultSoilTemperatureC")}
           />
@@ -146,6 +165,7 @@ export function EmissionEstimatesForm({
             id="defaultSoilTemperatureSource"
             type="text"
             maxLength={SOIL_TEMPERATURE_SOURCE_MAX_LENGTH}
+            readOnly={isSubmitting}
             error={!!errors.defaultSoilTemperatureSource}
             {...register("defaultSoilTemperatureSource")}
           />

@@ -57,8 +57,10 @@ export function useUnsavedPaneGuard() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
-  /** Runs `leave` now when nothing is unsaved, otherwise after confirmation. */
+  /** Runs `leave` now when nothing is unsaved, otherwise after confirmation. Ignored while a save runs. */
   const requestLeave = (leave: () => void) => {
+    // A save in flight cannot be discarded; mirror FormDialog and wait for it.
+    if ([...forms.current.values()].some((form) => form.busy)) return;
     if (dirty) setPendingLeave(() => leave);
     else leave();
   };
