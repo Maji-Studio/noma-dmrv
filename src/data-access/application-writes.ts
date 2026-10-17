@@ -1,3 +1,4 @@
+import { assertRecordLockFields } from '@/lib/record-lock-fields';
 import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
 import type { CaptureActivity } from "@/lib/activity-changes";
 /**
@@ -118,7 +119,9 @@ export async function updateApplicationInTransaction(ctx: OrgContext, tx: DbTran
   if (merged.evidenceMethod === "visual" && existing.evidenceMethod !== "visual") throw applicationRefusal("validation_failed", "evidenceMethod", "This evidence method is not available yet.");
   validateEvidence(merged, merged.fieldSizeHa, existing.code);
   const massChanged = (input.deliveryId !== undefined && input.deliveryId !== existing.deliveryId) || (input.appliedWetMassKg !== undefined && massGrams(input.appliedWetMassKg) !== massGrams(tonnesToKg(existing.biocharAppliedTons)));
-  if (massChanged) assertMutableSlices(scope, "update");
+  assertRecordLockFields(recordLocks.application({ removals: [], dependents: scope.slices.flatMap(slice => slice.removalId ? [{ kind: "removal", id: slice.removalId }] : []) }),
+    { ...existing, appliedWetMassKg: tonnesToKg(existing.biocharAppliedTons), applicationMethod: existing.applicationMethodType },
+    { ...fields, appliedWetMassKg, applicationMethod });
   const remainingBefore = await getApplicationRemainingWetMassKg(ctx, tx, delivery.id);
   const data = { ...fields, updatedAt: new Date(), version: nextVersion(applications.version),
     ...(input.fieldIdentifier !== undefined ? { fieldIdentifier: optionalText(input.fieldIdentifier) } : {}),

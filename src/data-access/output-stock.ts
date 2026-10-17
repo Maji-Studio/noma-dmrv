@@ -1,3 +1,4 @@
+import { deletedProductIds } from './output-stock-active-movements';
 import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, biocharProductSourceAllocations, outputStockAllocations, outputStockMoistureReadings, outputStockRunAllocations, productIngredientSnapshots, productionRuns, storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
@@ -6,7 +7,7 @@ import type { OutputStockLayer } from '@/lib/output-stock';
 import { outputStockBalance, projectBiocharLayers, projectMoistureBases, projectProductLayers, preLedgerWetRemovals, UnresolvedOutputStockError, type MoistureReadingRow, type WetRemovalRow } from '@/lib/output-stock/layer-projection';
 import { estimateStock, type LayerMoistureBasis } from '@/lib/output-stock/moisture-estimate';
 import { COMPLETED_PRODUCTION_RUN_STATUS } from '@/lib/production-runs/lifecycle';
-import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, sql, notInArray } from 'drizzle-orm';
 import { isCountMovementSql } from './output-stock-count';
 import { requireOrgScope } from './utils';
 
@@ -56,7 +57,7 @@ async function readLayerRows(ctx: OrgContext, bins: readonly OutputBinRef[], rea
       .orderBy(asc(biocharProductSourceAllocations.biocharProductId), asc(biocharProductSourceAllocations.productionRunId)) : [],
     productBinIds.length ? reader.select({ id: biocharProducts.id, binId: biocharProducts.storageLocationId, facilityId: biocharProducts.facilityId, archivedAt: biocharProducts.archivedAt,
       placedAt: biocharProducts.placedAt, postingSequence: biocharProducts.stockPostingSequence, composition: biocharProducts.composition })
-      .from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), inArray(biocharProducts.storageLocationId, productBinIds)))
+      .from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), inArray(biocharProducts.storageLocationId, productBinIds), notInArray(biocharProducts.id, deletedProductIds(ctx, reader))))
       .orderBy(asc(biocharProducts.stockPostingSequence), asc(biocharProducts.id)) : [],
     getOutputStockAllocationProjection(ctx, { sourceStorageLocationIds: bins.map(bin => bin.id) }, reader),
   ]);
@@ -197,7 +198,7 @@ async function readMoistureRows(ctx: OrgContext, bins: readonly Pick<OutputBinRe
     biocharBinIds.length ? reader.select({ id: productionRuns.id, wet: sql<string | null>`${productionRuns.biocharOutputKg}::text` }).from(productionRuns)
       .where(and(eq(productionRuns.organizationId, ctx.organizationId), inArray(productionRuns.biocharStorageLocationId, biocharBinIds))) : [],
     productBinIds.length ? reader.select({ id: biocharProducts.id, wet: sql<string | null>`(${biocharProducts.massKg} + coalesce(${biocharProducts.waterAddedKg}, 0))::text` }).from(biocharProducts)
-      .where(and(eq(biocharProducts.organizationId, ctx.organizationId), inArray(biocharProducts.storageLocationId, productBinIds))) : [],
+      .where(and(eq(biocharProducts.organizationId, ctx.organizationId), inArray(biocharProducts.storageLocationId, productBinIds), notInArray(biocharProducts.id, deletedProductIds(ctx, reader)))) : [],
     // Only a count's reading sets a layer's moisture; readings older removals saved are history, not a basis.
     reader.select({ reading: outputStockMoistureReadings, sequence: binMovements.postingSequence }).from(outputStockMoistureReadings)
       .innerJoin(binMovements, and(eq(binMovements.id, outputStockMoistureReadings.movementId), eq(binMovements.organizationId, ctx.organizationId)))

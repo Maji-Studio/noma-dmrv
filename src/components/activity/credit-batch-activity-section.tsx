@@ -20,7 +20,7 @@ import {
   activityChangeCount,
   activityEmptyDescription,
 } from "./activity-copy";
-import { activityActorDisplay } from "./activity-display";
+import { activityActorDisplay, activityActorText } from "./activity-display";
 import { ActivityEntry } from "./activity-entry";
 import { ActivityLoadError } from "./activity-load-error";
 import { activityKindTotals } from "./activity-filter-options";
@@ -64,7 +64,7 @@ export function CreditBatchActivitySection({
         rows={[
           {
             label: "Last change",
-            value: `${formatDateTime(last.occurredAt)} by ${actor.name}${actor.channel ? ` ${actor.channel}` : ""}`,
+            value: `${formatDateTime(last.occurredAt)} by ${activityActorText(actor)}`,
           },
           ...activityKindTotals(summary.data.counts).map((kind) => ({ label: kind.label, value: kind.count.toLocaleString() })),
         ]}
@@ -73,7 +73,7 @@ export function CreditBatchActivitySection({
         <h4 className="body-caption font-medium text-[var(--color-text-secondary)]">Latest changes</h4>
         <ul className="divide-y divide-[var(--color-border-tertiary)] border-y border-[var(--color-border-tertiary)]">
           {entries.map((item) => (
-            <ActivityEntry key={item.id} item={item} creditBatchId={creditBatchId} />
+            <ActivityEntry key={item.id} item={item} creditBatchId={creditBatchId} showDate />
           ))}
         </ul>
       </div>

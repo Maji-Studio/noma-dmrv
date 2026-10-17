@@ -646,7 +646,7 @@ describe("derived transport-leg transaction boundaries", () => {
     expect(firstDerived).toEqual([{ distanceKm: 20 }]);
     expect(await removalTransport()).toBe(4);
 
-    await expect(deleteDelivery(ctx, delivery.id, await labLogisticsVersion(ctx, "deliveries", delivery.id))).rejects.toThrow(/retain their history/);
+    await expect(deleteDelivery(ctx, delivery.id, await labLogisticsVersion(ctx, "deliveries", delivery.id))).rejects.toThrow(/application/i);
     const remainingLegs = await db
       .select({
         entityId: transportLegs.entityId,

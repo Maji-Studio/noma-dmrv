@@ -1,3 +1,6 @@
+import { readRecordDependents } from "./record-lock-dependents";
+import { assertRecordLockFields } from "@/lib/record-lock-fields";
+import { recordLocks } from "@/lib/record-lock";
 import type { CaptureActivity } from "@/lib/activity-changes";
 import { customerLocationFacilityDistances } from "@/db/schema";
 import type { ActivityEventInput } from "./activity-events";
@@ -390,6 +393,7 @@ export async function updateOrderInTransaction(ctx: OrgContext, tx: DbTransactio
       if (data[field] !== undefined && data[field] !== existing[field]) throw orderRelationshipFrozen(field, delivery.code);
     }
   }
+  assertRecordLockFields(recordLocks.order({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "order", entityId: orderId }) }), existing, data);
   if (locationCustomerId !== merged.customerId) throw orderCustomerLocationMismatch();
   if (data.quantityKg !== undefined) await assertOrderQuantityCoversAllocations(ctx, tx, { orderId, orderQuantityKg: data.quantityKg });
   return withUniqueCodeGuard(ctx, orders, orders.code, CODE_CONFLICT_MESSAGES.order, async () => {
@@ -409,9 +413,9 @@ export async function deleteOrderInTransaction(ctx: OrgContext, tx: DbTransactio
   if (!existing) throw orderReferenceNotFound("orderId");
   assertRowVersion({ entity: "order", id: orderId, expectedVersion, actualVersion: existing.version });
   await withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: "order", entityId: orderId }, "delete"), "certification_locked", ["orderId"]);
-  const [delivery] = await tx.select({ id: deliveries.id }).from(deliveries)
+  const [delivery] = await tx.select({ id: deliveries.id, code: deliveries.code }).from(deliveries)
     .where(and(eq(deliveries.orderId, orderId), eq(deliveries.organizationId, ctx.organizationId)));
-  if (delivery) throw orderHasDeliveries();
+  if (delivery) throw orderHasDeliveries(delivery);
   await tx.delete(orders).where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
   await retireDocumentsForEntities(ctx, tx, [{ entityType: "order", entityId: orderId }], source);
   return existing;
