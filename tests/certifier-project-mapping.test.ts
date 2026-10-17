@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import {
@@ -113,10 +114,7 @@ describe("upsertCertifierProject organization guard", () => {
  * mapping identifiers via `hasBlockingFacilitySubmission`.
  */
 async function insertBlockingSubmission(facilityId: string): Promise<void> {
-  const [removal] = await db
-    .insert(certifierRemovals)
-    .values({ organizationId: TEST_ORG_ID, facilityId })
-    .returning({ id: certifierRemovals.id });
+  const [removal] = await insertRemovalFixture(db, { organizationId: TEST_ORG_ID, facilityId });
   removalIds.push(removal.id);
 
   const [submission] = await db

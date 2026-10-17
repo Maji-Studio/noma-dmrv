@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "../helpers/removal-fixture";
 /**
  * Phase 1 carryover — facility ↔ Isometric project mapping E2E.
  *
@@ -156,7 +157,7 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
         // joined to a removal-scoped, non-terminal submission. The legacy
         // creditBatch-keyed shape no longer blocks (ADR 0003/0004), so seed
         // the current shape directly.
-        await tx.insert(schema.certifierRemovals).values({
+        await insertRemovalFixture(tx, {
         organizationId: DEC_ORG_ID,
           id: removalId,
           facilityId: facility.id,

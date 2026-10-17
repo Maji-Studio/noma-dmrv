@@ -320,6 +320,7 @@ export const certifierRemovals = pgTable(
     organizationId: text('organization_id')
       .notNull()
       .references(() => organizations.id),
+    code: text('code').notNull(),
     facilityId: uuid('facility_id')
       .notNull(),
     provider: certifierProvider('provider').notNull().default('isometric'),
@@ -339,6 +340,10 @@ export const certifierRemovals = pgTable(
   },
   (table) => [
     index('certifier_removals_organization_id_idx').on(table.organizationId),
+    unique('certifier_removals_organization_id_code_unique').on(
+      table.organizationId,
+      table.code,
+    ),
     unique('certifier_removals_id_organization_id_unique').on(
       table.id,
       table.organizationId,

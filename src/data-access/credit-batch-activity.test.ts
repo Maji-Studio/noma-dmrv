@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "../../tests/helpers/removal-fixture";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -162,7 +163,7 @@ it("finds stock movement history through member allocations when the writer has 
 it("finds aggregate Removal and GHG Statement events through the batch slices", async () => {
   const organizationId = ctx.organizationId;
   const [statement] = await db.insert(certifierGhgStatements).values({ organizationId, facilityId: fixture.facility.id, reportingPeriodEndOn: "2026-01-31" }).returning();
-  const [removal] = await db.insert(certifierRemovals).values({ organizationId, facilityId: fixture.facility.id, ghgStatementId: statement.id }).returning();
+  const [removal] = await insertRemovalFixture(db, { organizationId, facilityId: fixture.facility.id, ghgStatementId: statement.id });
   const [application] = await db.insert(applications).values({ organizationId, deliveryId: fixture.delivery.id,
     code: "ACT-APP", applicationDate: TIME, biocharAppliedTons: 0.01, biocharAppliedDryTons: 0.008, fieldSizeHa: 1 }).returning();
   await db.insert(creditBatchApplications).values({ organizationId, creditBatchId: fixture.batch.id,
