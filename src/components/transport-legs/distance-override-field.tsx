@@ -5,9 +5,9 @@
  * delivery (GLOSSARY "Distance override").
  *
  * Derived: the location's facility distance shows greyed and read-only, with
- * an "Override" action inside the input that unlocks manual entry.
+ * an outline "Override" button beside the input that unlocks manual entry.
  * Override: an editable distance with its source and an optional note, and
- * the same in-field action reads "Reset override" and returns to the derived
+ * the same button reads "Reset override" and returns to the derived
  * value. Where the value comes from reads behind the label's ⓘ.
  *
  * The owning form keeps the values in React Hook Form and maps them to its
@@ -17,7 +17,7 @@ import { useState, type ComponentProps, type ReactNode } from "react";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
-import { FormField } from "@/components/forms/form-field";
+import { ControlUnitSuffix, FormField, unitEndPadding } from "@/components/forms/form-field";
 import { FormInput } from "@/components/forms/form-input";
 import { FormSelect } from "@/components/forms/form-select";
 import { FormTextarea } from "@/components/forms/form-textarea";
@@ -38,18 +38,9 @@ import {
 
 export const LOCATION_DISTANCE_LINK_LABEL = "Add the location distance";
 
-/**
- * The input group draws the flat-control frame (border, fill, focus ring,
- * error border) around a borderless input, its unit and the in-field action,
- * so the action never overlaps typed digits and the field keeps its 40px box.
- */
-const GROUP_CLASSES =
-  "flex h-40 w-full items-center border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] transition-all has-[input:focus-visible]:border-[var(--color-interaction)] has-[input:focus-visible]:ring-1 has-[input:focus-visible]:ring-[var(--color-interaction)]";
-const GROUP_DERIVED_CLASSES = "bg-[var(--color-background-medium)]";
-const GROUP_ERROR_CLASSES = "border-[var(--color-signal-red)]";
-const INPUT_IN_GROUP_CLASSES =
-  "h-full min-w-0 flex-1 border-0 bg-transparent focus-visible:border-0 focus-visible:ring-0";
-const DERIVED_INPUT_CLASSES = "text-[color:var(--color-text-secondary)] cursor-default";
+const DISTANCE_INPUT_STYLE = { paddingInlineEnd: unitEndPadding(DISTANCE_UNIT) } as const;
+const DERIVED_INPUT_CLASSES =
+  "bg-[var(--color-background-medium)] text-[color:var(--color-text-secondary)] cursor-default";
 const LINK_ICON_SIZE = 14;
 
 type FocusTarget = "input" | "override" | null;
@@ -108,37 +99,35 @@ function RepairLink({ href }: { href: string }) {
 
 /**
  * FormField clones its single child to attach `aria-describedby` and
- * `aria-invalid`. The input shares a frame with its unit and action, so this
- * group takes those props and hands them to the input.
+ * `aria-invalid`. The input sits beside the action button, so this row takes
+ * those props and hands them to the input. The row wraps on a narrow screen:
+ * the input keeps a usable width and the button drops below it.
  */
-function DistanceInputGroup({
+function DistanceRow({
   inputProps,
   action,
   captionId,
-  derived,
-  invalid,
   ...aria
 }: {
   inputProps: ComponentProps<typeof FormInput>;
   action: ReactNode;
   captionId: string | undefined;
-  derived: boolean;
-  invalid: boolean;
   "aria-describedby"?: string;
   "aria-invalid"?: boolean | "true" | "false";
 }) {
   const describedBy = [aria["aria-describedby"], captionId].filter(Boolean).join(" ") || undefined;
   return (
-    <div className={cn(GROUP_CLASSES, derived && GROUP_DERIVED_CLASSES, invalid && GROUP_ERROR_CLASSES)}>
-      <FormInput
-        {...inputProps}
-        className={cn(INPUT_IN_GROUP_CLASSES, inputProps.className)}
-        aria-describedby={describedBy}
-        {...(aria["aria-invalid"] === true ? { "aria-invalid": true } : {})}
-      />
-      <span aria-hidden="true" className="px-8 text-[length:var(--text-s)] text-[var(--color-text-tertiary)]">
-        {DISTANCE_UNIT}
-      </span>
+    <div className="flex flex-wrap items-start gap-8">
+      <div className="relative min-w-[128px] flex-1 basis-[128px]">
+        <FormInput
+          {...inputProps}
+          className={cn("peer w-full", inputProps.className)}
+          style={DISTANCE_INPUT_STYLE}
+          aria-describedby={describedBy}
+          {...(aria["aria-invalid"] === true ? { "aria-invalid": true } : {})}
+        />
+        <ControlUnitSuffix unit={DISTANCE_UNIT} />
+      </div>
       {action}
     </div>
   );
@@ -194,9 +183,8 @@ export function DistanceOverrideField({
   const action = (
     <Button
       type="button"
-      size="small"
-      variant="noOutline"
-      className="mr-4 shrink-0"
+      variant="default"
+      className="shrink-0"
       disabled={disabled}
       autoFocus={!overriding && focusTarget === "override"}
       aria-label={overriding ? `${RESET_OVERRIDE_BUTTON_LABEL} to the location default` : `${OVERRIDE_BUTTON_LABEL} the ${DISTANCE_FIELD_LABEL.toLowerCase()}`}
@@ -227,13 +215,11 @@ export function DistanceOverrideField({
           certifyRequired={certifyRequired}
           certifyStatus={certifyStatus}
         >
-          <DistanceInputGroup
-            // A fresh group per state, so autoFocus moves focus with the switch.
+          <DistanceRow
+            // A fresh row per state, so autoFocus moves focus with the switch.
             key={overriding ? "override" : "derived"}
             captionId={line ? captionId : undefined}
             action={action}
-            derived={!overriding}
-            invalid={overriding && !!errors?.distanceKm}
             inputProps={overriding ? {
               id,
               type: "number",

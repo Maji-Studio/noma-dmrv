@@ -49,18 +49,19 @@ describe("DistanceOverrideField", () => {
     expect(screen.queryByRole("textbox", { name: /Distance note/ })).toBeNull();
   });
 
-  it("puts the Override action inside the input, beside the unit", () => {
+  it("puts the Override button beside the input, outside it", () => {
     const onOverride = vi.fn();
     render(<Harness onOverride={onOverride} />);
     const action = screen.getByRole("button", { name: OVERRIDE });
     expect(action.textContent).toBe("Override");
-    expect(action.parentElement).toBe(distance().parentElement);
+    expect(distance().parentElement?.contains(action)).toBe(false);
+    expect(action.parentElement).toBe(distance().parentElement?.parentElement);
     expect(distance().parentElement?.textContent).toContain("km");
     fireEvent.click(action);
     expect(onOverride).toHaveBeenCalledOnce();
   });
 
-  it("shows an override with its source and note, and Reset override in the input", () => {
+  it("shows an override with its source and note, and Reset override beside the input", () => {
     const onClear = vi.fn();
     render(<Harness overriding onClear={onClear} />);
     expect(distance().readOnly).toBe(false);
@@ -70,7 +71,7 @@ describe("DistanceOverrideField", () => {
     expect(screen.getByRole("textbox", { name: /Distance note/ })).toBeTruthy();
     const reset = screen.getByRole("button", { name: RESET });
     expect(reset.textContent).toBe("Reset override");
-    expect(reset.parentElement).toBe(distance().parentElement);
+    expect(reset.parentElement).toBe(distance().parentElement?.parentElement);
     fireEvent.click(reset);
     expect(onClear).toHaveBeenCalledOnce();
   });

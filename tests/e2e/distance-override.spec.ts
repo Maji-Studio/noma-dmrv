@@ -3,7 +3,7 @@
  *
  * A feedstock or delivery distance is two-state: the location's facility
  * distance, read-only, or an explicit override unlocked by the "Override"
- * action inside the input ("Reset override" returns to the location default).
+ * button beside the input ("Reset override" returns to the location default).
  * Where the value comes from reads behind the label's ⓘ on form and read view.
  * Covers, on both forms: set an override, save, read it back as an override,
  * reset it and read the location default again. After a location edit, the
@@ -114,7 +114,7 @@ test.describe("Distance override (#420)", () => {
       await expect(distanceField(sheet)).toHaveAttribute("readonly", "");
       await expectFormProvenance(sheet, /^From .*\. Source: Manual entry\./);
 
-      // Override, inside the input, unlocks manual entry with a source and a note.
+      // Override, the button beside the input, unlocks manual entry with a source and a note.
       await sheet.getByRole("button", { name: OVERRIDE_ACTION }).click();
       await expect(distanceField(sheet)).toBeEditable();
       await page.fill('input[name="transportDistanceKm"]', String(FEEDSTOCK_OVERRIDE_KM));
