@@ -75,6 +75,7 @@ import {
 import { CertificationHealthPanel } from "./certification-health-panel";
 import { CertifierSettingsPanel } from "./certifier-settings-panel";
 import { EnvBanner } from "./env-banner";
+import { ProtocolsInUse } from "./protocols-in-use";
 import { RegistrySourceVisibilitySettings } from "./registry-source-visibility-settings";
 import { SettingsRail, type SettingsSectionMeta } from "@/components/ui";
 import { RemovalTemplateDiagnosticPanel } from "./removal-template-diagnostic-panel";
@@ -191,11 +192,14 @@ export function CertificationSettings() {
           : false)
       : false,
     content: facilityId ? (
-      <CertifierSettingsPanel
-        facilityId={facilityId}
-        facilityLabel={selectedFacility?.code}
-        canManage={viewerCanManage}
-      />
+      <div className="flex flex-col gap-24">
+        <CertifierSettingsPanel
+          facilityId={facilityId}
+          facilityLabel={selectedFacility?.code}
+          canManage={viewerCanManage}
+        />
+        <ProtocolsInUse />
+      </div>
     ) : null,
   });
 
