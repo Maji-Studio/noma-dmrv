@@ -110,10 +110,7 @@ export function IsometricFeedstockImportDialog({
 
         {error && <ServerError message={error} />}
 
-        <div className="flex justify-end gap-12 border-t border-[var(--color-border-tertiary)] pt-16">
-          <Button variant="default" onClick={close} disabled={importFeedstockType.isPending}>
-            Cancel
-          </Button>
+        <div className="flex flex-wrap justify-start gap-12 border-t border-[var(--color-border-tertiary)] pt-16">
           <Button
             variant="primary"
             onClick={handleImport}
@@ -121,6 +118,9 @@ export function IsometricFeedstockImportDialog({
             busy={importFeedstockType.isPending}
           >
             Import feedstock type
+          </Button>
+          <Button variant="default" onClick={close} disabled={importFeedstockType.isPending}>
+            Cancel
           </Button>
         </div>
       </div>
