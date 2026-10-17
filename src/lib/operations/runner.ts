@@ -190,6 +190,18 @@ export async function runOperation<Input extends z.ZodType, Output>(
   return runOperationCore(operation, ctx, input, options, toJson<Output>);
 }
 
+/** Keyless callers (app actions) have no idempotency key that makes a retry safe. */
+export function keylessOutcomeUnknown(error: unknown): unknown {
+  if (error instanceof DomainError && error.code === "outcome_unknown") {
+    return new DomainError(
+      "outcome_unknown",
+      "It is not known whether this change was saved. Check the list before trying again.",
+      { cause: error },
+    );
+  }
+  return error;
+}
+
 /** Native results for server actions; replay and previews are JSON-only contracts. */
 export async function runOperationInProcess<Input extends z.ZodType, Output>(
   operation: Operation<Input, Output, OperationEffect | undefined>,
@@ -207,15 +219,7 @@ export async function runOperationInProcess<Input extends z.ZodType, Output>(
     const result = await runOperationCore(operation, ctx, input, options, (data) => data);
     return result.data;
   } catch (error) {
-    if (error instanceof DomainError && error.code === "outcome_unknown") {
-      // In-process callers have no idempotency key that makes a retry safe.
-      throw new DomainError(
-        "outcome_unknown",
-        "It is not known whether this change was saved. Check the list before trying again.",
-        { cause: error },
-      );
-    }
-    throw error;
+    throw keylessOutcomeUnknown(error);
   }
 }
 

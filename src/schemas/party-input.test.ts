@@ -1,5 +1,5 @@
 import { supplierVersionInput } from "./supplier-input";
-import { customerVersionInput } from "./customer-input";
+import { customerVersionInput, deleteCustomerInput } from "./customer-input";
 import { supplierFilterSchema } from "./suppliers";
 import { customerFilterSchema } from "./customers";
 import { describe, expect, it } from "vitest";
@@ -54,4 +54,12 @@ describe("party archive app inputs", () => {
       expect(schema.safeParse({ [field]: facilityId, expectedVersion: 2, archived: true }).success).toBe(false);
     }
   });
+});
+
+it("accepts an optional cascade fingerprint only for customer deletion", () => {
+  const input = { customerId: facilityId, expectedVersion: 1 };
+  expect(deleteCustomerInput.parse(input)).toEqual(input);
+  expect(deleteCustomerInput.parse({ ...input, cascadeFingerprint: "v1:preview" }).cascadeFingerprint).toBe("v1:preview");
+  expect(customerVersionInput.safeParse({ ...input, cascadeFingerprint: "v1:preview" }).success).toBe(false);
+  expect(deleteCustomerInput.safeParse({ ...input, cascadeFingerprint: 1 }).success).toBe(false);
 });

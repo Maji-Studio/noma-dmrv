@@ -12,6 +12,11 @@ export const stockPreviewSchema = z.object({
   stockEffects: stockEffectsSchema,
 });
 
+export const cascadePreviewSchema = z.object({
+  orders: z.array(z.object({ id: z.uuid().describe("Order identifier, UUID."), code: z.string().describe("Order code."), facilityId: z.uuid().describe("Facility the order belongs to, UUID.") })).describe("Orders that this customer delete would remove."),
+  cascadeFingerprint: z.string().describe("Opaque fingerprint of the order set; send it back to confirm this cascade."),
+});
+
 /** Wire shape emitted by problemResponse; open metadata carries safe domain limits. */
 export const problemSchema = z.object({
   type: z.string().describe("Problem type URI, urn:noma:problem:<code>."),
@@ -31,4 +36,9 @@ export const problemSchema = z.object({
   blockers: z.array(conflictRefSchema).optional().describe("Further visible blocking records, in display order."),
   current: z.unknown().optional().describe("Current resource representation after a failed version precondition."),
   preview: stockPreviewSchema.optional().describe("Fresh dry run after stock_basis_changed: the current basis fingerprint and stock effects. Absent when no preview could be computed."),
+});
+
+/** Customer delete has a cascade preview instead of a stock preview. */
+export const customerDeleteConflictSchema = problemSchema.extend({
+  preview: cascadePreviewSchema.optional().describe("Fresh order cascade after cascade_changed; absent if the fresh dry run failed."),
 });

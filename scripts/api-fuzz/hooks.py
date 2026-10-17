@@ -244,6 +244,7 @@ def before_add_examples(ctx, examples):
     add_application_examples(operation, examples)
     add_formulation_examples(operation, examples)
     add_party_examples(operation, examples)
+    add_location_examples(operation, examples)
     target = SEEDED_TARGETS.get(operation.label)
     create_body = SEEDED_CREATE_BODIES.get(operation.label)
     is_create = create_body is not None
@@ -407,6 +408,42 @@ def add_party_examples(operation, examples):
                 path_parameters={parameter.name: fixture[prefix + "Id"]},
                 query={"dryRun": "true"}, headers={IF_MATCH_HEADER: fixture[prefix + "Etag"]},
                 body=body, media_type="application/json", _meta=document_metadata(SEEDED_TARGET_DESCRIPTION),
+            ))
+
+
+def add_location_examples(operation, examples):
+    if not PARTY_FIXTURE:
+        return
+    fixture = PARTY_FIXTURE
+    command = operation.definition.raw.get("operationId", "")
+    for party in ("supplier", "customer"):
+        if command == f"get_{party}_location":
+            values = {"idOrCode": fixture[party + "Id"], "locationId": fixture[party + "LocationId"]}
+            examples.append(operation.Case(
+                path_parameters={p.name: values[p.name] for p in operation.path_parameters},
+                _meta=document_metadata(SEEDED_TARGET_DESCRIPTION),
+            ))
+        if command == f"add_{party}_location":
+            for distance in (LOCATION_DISTANCE_MIN_KM, LOCATION_DISTANCE_MAX_KM):
+                examples.append(operation.Case(
+                    path_parameters={p.name: fixture[party + "Id"] for p in operation.path_parameters},
+                    query={"dryRun": "true"}, headers={IDEMPOTENCY_HEADER: str(uuid4())}, media_type="application/json",
+                    body={"name": "API fuzz added place", "country": "TZ", "gpsLatitude": -8.12, "gpsLongitude": 36.45,
+                          "facilityDistances": [{"facilityId": fixture["facilityId"], "distanceKm": distance, "distanceSource": "manual"}]},
+                    _meta=document_metadata(SEEDED_CREATE_DESCRIPTION),
+                ))
+        targets = {f"update_{party}_location": party + "Location", f"delete_{party}_location": "delete" + party.capitalize() + "Location"}
+        if party == "customer":
+            targets.update(archive_customer_location="archiveCustomerLocation", restore_customer_location="restoreCustomerLocation")
+        if command in targets:
+            prefix = targets[command]
+            # Read both names from the operation, never substitute a parent id for locationId.
+            values = {"idOrCode": fixture.get(prefix + "ParentId", fixture[party + "Id"]), "locationId": fixture[prefix + "Id"]}
+            examples.append(operation.Case(
+                path_parameters={p.name: values[p.name] for p in operation.path_parameters},
+                query={"dryRun": "true"}, headers={IF_MATCH_HEADER: fixture[prefix + "Etag"]},
+                body={"city": "API fuzz city"} if command.startswith("update_") else {}, media_type="application/json",
+                _meta=document_metadata(SEEDED_TARGET_DESCRIPTION),
             ))
 
 

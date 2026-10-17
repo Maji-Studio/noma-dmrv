@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { actionFailureResponse, apiDenialResponse, problemResponse } from "./problem";
 import type { DomainErrorCode } from "@/lib/domain-errors";
-import { problemSchema } from "./problem-schema";
+import { problemSchema, customerDeleteConflictSchema } from "./problem-schema";
 import { conflictCode } from "@/lib/conflict-ref";
 import type { ApiContextDenial } from "@/lib/auth/api-context";
 
@@ -14,7 +14,7 @@ const expectedActionStatuses = {
   conflict: 409,
   certification_locked: 409,
   insufficient_stock: 409,
-  stock_basis_changed: 409,
+  stock_basis_changed: 409, cascade_changed: 409,
   forbidden: 403,
   reference_not_found: 422,
   reference_ambiguous: 422,
@@ -188,4 +188,12 @@ it.each([
   const response = actionFailureResponse({ success: false, code, error: "Safe detail" }, "/api/v1/me", "request");
   expect(response.status).toBe(status);
   expect(await response.json()).toMatchObject({ code, retryable });
+});
+
+it("publishes a cascade_changed preview through its conflict schema", async () => {
+  const preview = { orders: [{ id: "a3bc93e8-c504-426d-b159-c69d4a1fe83a", code: "ORD-0007", facilityId: "5f0c2a8e-6d1b-4f3a-9c7e-2b8d4e6f1a90" }], cascadeFingerprint: "v1:fresh" };
+  const response = actionFailureResponse({ success: false, code: "cascade_changed", error: "Review the changed orders.", preview }, "/api/v1/customers/id", "request-id");
+  expect(response.status).toBe(409);
+  const body = await response.json();
+  expect(customerDeleteConflictSchema.parse(body).preview).toEqual(preview);
 });

@@ -13,3 +13,6 @@ export const updateCustomerApiInput = z.strictObject({ ...z.object(apiFields).pa
 export type CreateCustomerInput = z.output<typeof createCustomerInput>;
 export type UpdateCustomerInput = z.output<typeof updateCustomerInput>;
 export type CustomerVersionInput = z.output<typeof customerVersionInput>;
+
+export const deleteCustomerInput = customerVersionInput.extend({ cascadeFingerprint: z.string().optional() });
+export type DeleteCustomerInput = z.output<typeof deleteCustomerInput>;

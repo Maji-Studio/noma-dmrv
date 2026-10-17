@@ -17,21 +17,22 @@
  * edge is introduced against pair writers, facility archive or formulation writes.
  */
 import type { CaptureActivity } from "@/lib/activity-changes";
-import { and, asc, isNull, isNotNull, sql, count, eq } from "drizzle-orm";
+import { and, asc, isNull, isNotNull, sql, eq } from "drizzle-orm";
 import { isPgForeignKeyViolation } from "@/db/errors";
 import type { DbTransaction } from "@/db";
 import { feedstocks, suppliers, supplierLocations, type Supplier, type SupplierLocation } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { partyNotFound, partyArchived, partyArchivedForEdit, partyArchiveConflict, partyRefusal, supplierHasIntakes } from "@/lib/party-domain-errors";
+import { partyNotFound, partyArchivedForEdit, partyArchiveConflict, partyRefusal, supplierHasIntakes } from "@/lib/party-domain-errors";
 import { createSupplierInput, updateSupplierInput, type CreateSupplierInput, type UpdateSupplierInput, type SupplierVersionInput } from "@/schemas/supplier-input";
 import { validationFailed } from "@/lib/operations/errors";
 import { CODE_CONFLICT_MESSAGES, withUniqueCodeGuard } from "./code-generator";
 import { guardSupplierName } from "./unique-name-guards";
 import { assertRowVersion, nextVersion } from "./row-version";
 import { lockPartyFacilities } from "./party-reference-guards";
-import { upsertLocationFacilityDistances, withLocationFacilityDistances } from "./location-facility-distances";
+import { withLocationFacilityDistances } from "./location-facility-distances";
 import { requireOrgScope } from "./utils";
-import type { FacilityDistanceInput } from "@/schemas/facility-distances";
+import { createSupplierLocationInTransaction } from "./supplier-location-writes";
+export { createSupplierLocationInTransaction } from "./supplier-location-writes";
 
 import { BLOCKER_LIMIT } from "@/config/party-input";
 
@@ -52,7 +53,7 @@ export async function createSupplierInTransaction(ctx: OrgContext, tx: DbTransac
   }).returning());
   const inserted: SupplierLocation[] = [];
   for (const location of locations) {
-    inserted.push(await createSupplierLocationInTransaction(ctx, tx, parent.id, location));
+    inserted.push((await createSupplierLocationInTransaction(ctx, tx, parent.id, location)).location);
   }
   const saved = await tx.select().from(supplierLocations).where(and(eq(supplierLocations.organizationId, ctx.organizationId), eq(supplierLocations.supplierId, parent.id)));
   const enriched = await withLocationFacilityDistances(ctx, "supplier", saved, tx);
@@ -83,97 +84,6 @@ export async function updateSupplierInTransaction(ctx: OrgContext, tx: DbTransac
       return saved;
     }));
 }
-export interface SupplierLocationInsertInput {
-  name?: string | null;
-  country: string;
-  stateRegion?: string | null;
-  city?: string | null;
-  gpsLatitude: number;
-  gpsLongitude: number;
-  address?: string | null;
-  facilityDistances?: FacilityDistanceInput[];
-  isDefault?: boolean;
-}
-
-/**
- * Insert one supplier location inside an open transaction, keeping the
- * at-most-one-default invariant the partial unique index enforces. The supplier
- * is re-checked through `tx` so a supplier inserted earlier in the same
- * transaction is visible.
- */
-export async function createSupplierLocationInTransaction(
-  ctx: OrgContext,
-  tx: DbTransaction,
-  supplierId: string,
-  data: SupplierLocationInsertInput,
-): Promise<SupplierLocation> {
-  requireOrgScope(ctx);
-
-  const [supplier] = await tx
-    .select({ id: suppliers.id, code: suppliers.code, archivedAt: suppliers.archivedAt })
-    .from(suppliers)
-    .where(
-      and(
-        eq(suppliers.id, supplierId),
-        eq(suppliers.organizationId, ctx.organizationId),
-      ),
-    )
-    // Match deletion and location updates: parent before children.
-    .for("no key update");
-
-  if (!supplier) {
-    throw partyNotFound("supplier");
-  }
-
-  if (supplier.archivedAt) throw partyArchived("supplier", supplier.code);
-
-  // The supplier's first location is always its default.
-  const [{ value: existingCount }] = await tx
-    .select({ value: count() })
-    .from(supplierLocations)
-    .where(
-      and(
-        eq(supplierLocations.supplierId, supplierId),
-        eq(supplierLocations.organizationId, ctx.organizationId),
-      ),
-    );
-  const makeDefault = data.isDefault === true || existingCount === 0;
-
-  // Clear the prior default first so the partial unique index never sees two.
-  if (makeDefault) {
-    await tx
-      .update(supplierLocations)
-      .set({ version: nextVersion(supplierLocations.version), isDefault: false, updatedAt: new Date() })
-      .where(
-        and(
-          eq(supplierLocations.supplierId, supplierId),
-          eq(supplierLocations.organizationId, ctx.organizationId),
-          eq(supplierLocations.isDefault, true),
-        ),
-      );
-  }
-
-  const [location] = await tx
-    .insert(supplierLocations)
-    .values({
-      organizationId: ctx.organizationId,
-      supplierId,
-      name: data.name ?? null,
-      country: data.country,
-      stateRegion: data.stateRegion ?? null,
-      city: data.city ?? null,
-      gpsLatitude: data.gpsLatitude,
-      gpsLongitude: data.gpsLongitude,
-      address: data.address ?? null,
-      isDefault: makeDefault,
-    })
-    .returning();
-
-  await upsertLocationFacilityDistances(ctx, tx, "supplier", location.id, data.facilityDistances);
-  return (await withLocationFacilityDistances(ctx, "supplier", [location], tx))[0];
-}
-
-
 /** Return deleted locations so the operation can record each child event. */
 export async function deleteSupplierInTransaction(ctx: OrgContext, tx: DbTransaction, input: SupplierVersionInput, capture?: CaptureActivity, captureLocation?: CaptureActivity): Promise<(typeof supplierLocations.$inferSelect)[]> {
   requireOrgScope(ctx);

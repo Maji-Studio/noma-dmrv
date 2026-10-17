@@ -9,22 +9,26 @@
  * Archive/restore: only the parent FOR UPDATE, no child/reference locks.
  * Explicit UPDATE strength conflicts with reference KEY SHARE; no locks follow it,
  * so archive cannot cycle with intake/order, location, update or delete writers.
- * Delete: parent FOR UPDATE, version, order check, children FOR UPDATE in id
- * order, child reference checks, delete children then parent.
- * Orders take customer then location KEY SHARE. Registration takes location
- * FK KEY SHARE. Deletes never lock orders or certification artifacts.
- * Pair saves take facility then parent locks. Creates fill only new parents;
- * updates and deletes never request facility or downstream locks, so no reverse
- * edge is introduced against pair writers, facility archive or formulation writes.
+ * Delete: topology advisory lock first; discover location ids through tx and
+ * take their registration fences in id order; order facilities FOR SHARE by
+ * id (including archived); customer FOR UPDATE, version; orders FOR UPDATE by id; refuse any delivery, including archived; locations FOR UPDATE by id,
+ * mapping check, fence any newly discovered locations; cascade fingerprint;
+ * delete each order through its writer; locations, then customer; Activity and
+ * after-commit document storage drain are owned by the operation.
  */
+import { createHash } from "node:crypto";
+import type { ActivityEventInput } from "./activity-events";
+import { lockBiocharTransportRouteTopology } from "./transport-legs";
+import { tryLockStorageSiteRegistration } from "./customer-location-registration-guards";
+import { deleteOrderInTransaction } from "./orders";
 import type { CaptureActivity } from "@/lib/activity-changes";
-import { and, asc, isNull, isNotNull, sql, eq } from "drizzle-orm";
+import { and, asc, isNull, isNotNull, sql, eq, inArray } from "drizzle-orm";
 import { isPgForeignKeyViolation } from "@/db/errors";
 import type { DbTransaction } from "@/db";
-import { orders, customers, customerLocations, type Customer, type CustomerLocation } from "@/db/schema";
+import { orders, deliveries, facilities, customers, customerLocations, type Customer, type CustomerLocation } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { partyNotFound, partyArchivedForEdit, partyArchiveConflict, customerHasOrders, customerHasStorageSites } from "@/lib/party-domain-errors";
-import { createCustomerInput, updateCustomerInput, type CreateCustomerInput, type UpdateCustomerInput, type CustomerVersionInput } from "@/schemas/customer-input";
+import { partyNotFound, partyArchivedForEdit, partyArchiveConflict, customerHasDeliveries, cascadeChanged, customerHasStorageSites } from "@/lib/party-domain-errors";
+import { createCustomerInput, updateCustomerInput, type CreateCustomerInput, type UpdateCustomerInput, type CustomerVersionInput, type DeleteCustomerInput } from "@/schemas/customer-input";
 import { validationFailed } from "@/lib/operations/errors";
 import { CODE_CONFLICT_MESSAGES, withUniqueCodeGuard } from "./code-generator";
 import { guardCustomerName } from "./unique-name-guards";
@@ -32,10 +36,13 @@ import { assertRowVersion, nextVersion } from "./row-version";
 import { lockPartyFacilities } from "./party-reference-guards";
 import { withLocationFacilityDistances } from "./location-facility-distances";
 import { requireOrgScope } from "./utils";
-import { findCustomerLocationBlockers } from "./customer-location-reference-guards";
+import { findRegisteredCustomerLocationIds } from "./certifier-storage-locations";
 import { createCustomerLocationInTransaction } from "./customer-create";
 
 import { BLOCKER_LIMIT } from "@/config/party-input";
+
+/** Prefix of the cascade fingerprint; bump it whenever the hashed input changes. */
+const CASCADE_FINGERPRINT_VERSION = "v1";
 
 export interface CreatedCustomerWithLocations {
   customer: Customer;
@@ -55,7 +62,7 @@ export async function createCustomerInTransaction(ctx: OrgContext, tx: DbTransac
   const inserted: CustomerLocation[] = [];
   for (const location of locations) {
     const { siteDescription, ...fields } = location;
-    inserted.push(await createCustomerLocationInTransaction(ctx, tx, parent.id, { ...fields, address: siteDescription }));
+    inserted.push((await createCustomerLocationInTransaction(ctx, tx, parent.id, { ...fields, address: siteDescription })).location);
   }
   const saved = await tx.select().from(customerLocations).where(and(eq(customerLocations.organizationId, ctx.organizationId), eq(customerLocations.customerId, parent.id)));
   const enriched = await withLocationFacilityDistances(ctx, "customer", saved, tx);
@@ -87,23 +94,61 @@ export async function updateCustomerInTransaction(ctx: OrgContext, tx: DbTransac
     }));
 }
 
-/** Return deleted locations so the operation can record each child event. */
-export async function deleteCustomerInTransaction(ctx: OrgContext, tx: DbTransaction, input: CustomerVersionInput, capture?: CaptureActivity, captureLocation?: CaptureActivity): Promise<(typeof customerLocations.$inferSelect)[]> {
+export interface DeletedCustomer {
+  customer: Customer;
+  locations: (typeof customerLocations.$inferSelect)[];
+  orders: (typeof orders.$inferSelect)[];
+  cascade: { orders: { id: string; code: string; facilityId: string }[]; cascadeFingerprint: string };
+  warnings: string[];
+}
+
+/** Return the locked rows for child Activity and the confirmation preview. */
+export async function deleteCustomerInTransaction(ctx: OrgContext, tx: DbTransaction, input: DeleteCustomerInput, capture?: CaptureActivity, captureLocation?: CaptureActivity, source: ActivityEventInput["source"] = "form"): Promise<DeletedCustomer> {
   requireOrgScope(ctx);
   const { customerId, expectedVersion } = input;
+  await lockBiocharTransportRouteTopology(ctx, tx);
+  const discovered = await tx.select({ id: customerLocations.id }).from(customerLocations)
+    .where(and(eq(customerLocations.organizationId, ctx.organizationId), eq(customerLocations.customerId, customerId))).orderBy(asc(customerLocations.id));
+  const fenced = new Set<string>();
+  for (const { id } of discovered) {
+    await tryLockStorageSiteRegistration(ctx, tx, id);
+    fenced.add(id);
+  }
+  // Facilities before the customer, as location saves and order writers take
+  // them; topology keeps the order set (and so this facility set) stable.
+  const customerOrders = tx.select({ facilityId: orders.facilityId }).from(orders)
+    .where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.customerId, customerId)));
+  await tx.select({ id: facilities.id }).from(facilities)
+    .where(and(eq(facilities.organizationId, ctx.organizationId), inArray(facilities.id, customerOrders)))
+    .orderBy(asc(facilities.id)).for("share");
   const [locked] = await tx.select().from(customers).where(and(eq(customers.organizationId, ctx.organizationId), eq(customers.id, customerId))).for("update");
   if (!locked) throw partyNotFound("customer");
   assertRowVersion({ entity: "customer", id: customerId, expectedVersion, actualVersion: locked.version });
-  const uses = await tx.select({ code: orders.code }).from(orders)
+  const lockedOrders = await tx.select().from(orders)
     .where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.customerId, customerId)))
-    .orderBy(asc(orders.code)).limit(BLOCKER_LIMIT);
-  if (uses.length) throw customerHasOrders(uses.map(row => row.code));
+    .orderBy(asc(orders.id)).for("update");
+  const orderIds = tx.select({ id: orders.id }).from(orders)
+    .where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.customerId, customerId)));
+  const uses = await tx.select({ code: deliveries.code }).from(deliveries)
+    .where(and(eq(deliveries.organizationId, ctx.organizationId), inArray(deliveries.orderId, orderIds)))
+    .orderBy(asc(deliveries.code)).limit(BLOCKER_LIMIT);
+  if (uses.length) throw customerHasDeliveries(uses.map(row => row.code));
   const children = await tx.select().from(customerLocations).where(and(eq(customerLocations.organizationId, ctx.organizationId), eq(customerLocations.customerId, customerId)))
     .orderBy(asc(customerLocations.id)).for("update");
   for (const child of children) {
-    const blockers = await findCustomerLocationBlockers(ctx, tx, child.id);
-    if (blockers.orderCodes.length) throw customerHasOrders(blockers.orderCodes);
-    if (blockers.registeredLocationIds.length) throw customerHasStorageSites(blockers.registeredLocationIds);
+    const registered = await findRegisteredCustomerLocationIds(ctx, tx, child.id);
+    if (registered.length) throw customerHasStorageSites(registered);
+  }
+  for (const child of children) {
+    if (!fenced.has(child.id)) await tryLockStorageSiteRegistration(ctx, tx, child.id);
+  }
+  const cascade = {
+    orders: lockedOrders.map(({ id, code, facilityId }) => ({ id, code, facilityId })),
+    cascadeFingerprint: `${CASCADE_FINGERPRINT_VERSION}:` + createHash("sha256").update(lockedOrders.map(row => row.id).sort().join(",")).digest("hex"),
+  };
+  if (input.cascadeFingerprint !== undefined && input.cascadeFingerprint !== cascade.cascadeFingerprint) throw cascadeChanged();
+  for (const order of lockedOrders) {
+    await deleteOrderInTransaction(ctx, tx, { orderId: order.id, expectedVersion: order.version }, source);
   }
   let deletingLocationId: string | undefined;
   try {
@@ -114,15 +159,18 @@ export async function deleteCustomerInTransaction(ctx: OrgContext, tx: DbTransac
     deletingLocationId = undefined;
     await tx.delete(customers).where(and(eq(customers.organizationId, ctx.organizationId), eq(customers.id, customerId)));
   } catch (error) {
-    if (isPgForeignKeyViolation(error, "orders_customer_id_customers_id_fk")) throw customerHasOrders();
-    if (isPgForeignKeyViolation(error, "orders_customer_location_id_customer_locations_id_fk")) throw customerHasOrders();
+    if (isPgForeignKeyViolation(error, "orders_customer_id_customers_id_fk")) throw customerHasDeliveries();
+    if (isPgForeignKeyViolation(error, "orders_customer_location_id_customer_locations_id_fk")) throw customerHasDeliveries();
     // PostgreSQL truncates this composite FK name to NAMEDATALEN - 1 bytes.
     if (isPgForeignKeyViolation(error, "certifier_storage_locations_customer_location_id_organization_i")) throw customerHasStorageSites(deletingLocationId ? [deletingLocationId] : []);
     throw error;
   }
   capture?.(locked.id, locked, null);
   for (const child of children) captureLocation?.(child.id, child, null);
-  return children;
+  const shown = lockedOrders.slice(0, BLOCKER_LIMIT).map(row => row.code).join(", ");
+  const more = lockedOrders.length > BLOCKER_LIMIT ? ` and ${lockedOrders.length - BLOCKER_LIMIT} more` : "";
+  const warnings = lockedOrders.length ? [`Also deleted ${lockedOrders.length} ${lockedOrders.length === 1 ? "order" : "orders"} without deliveries: ${shown}${more}.`] : [];
+  return { customer: locked, locations: children, orders: lockedOrders, cascade, warnings };
 }
 
 /** Lock only the party, including against reference KEY SHARE locks. */

@@ -1,3 +1,4 @@
+import { certifierStorageSiteLockKey } from "@/lib/certification/certifier-storage-site-lock";
 import { and, eq, sql } from "drizzle-orm";
 import { db, withDedicatedSessionAdvisoryLock, type DbTransaction } from "@/db";
 import { certifierBiocharApplications } from "@/db/schema/certifier-biochar-applications";
@@ -23,7 +24,7 @@ const DEFAULT_PROVIDER: CertifierProvider = "isometric";
 const STORAGE_LOCATION_LOCK_SCOPE = "certifier-storage-location:isometric";
 
 /**
- * Serializes one application site's registry registration: site lock first,
+ * Serializes registration: organization/site fence first, then project/site lock,
  * then the facility-project lock, then the external-project lock. Lock order
  * matches withCertifierProjectMappingLocks (facility-project lock before
  * external-project lock) — taking them in the opposite order would deadlock
@@ -41,24 +42,27 @@ export async function withStorageLocationRegistrationLocks<T>(
 ): Promise<T> {
   requireOrgScope(ctx);
   return withDedicatedSessionAdvisoryLock(
-    `${STORAGE_LOCATION_LOCK_SCOPE}:${input.externalProjectId}:${input.customerLocationId}`,
-    () =>
-      withDedicatedSessionAdvisoryLock(
-        certifierProjectLockKey({
-          organizationId: ctx.organizationId,
-          facilityId: input.facilityId,
-          provider: input.provider,
-        }),
-        () =>
-          withDedicatedSessionAdvisoryLock(
-            certifierExternalProjectLockKey({
-              organizationId: ctx.organizationId,
-              externalProjectId: input.externalProjectId,
-              provider: input.provider,
-            }),
-            fn,
-          ),
-      ),
+    certifierStorageSiteLockKey(ctx.organizationId, input.customerLocationId),
+    () => withDedicatedSessionAdvisoryLock(
+      `${STORAGE_LOCATION_LOCK_SCOPE}:${input.externalProjectId}:${input.customerLocationId}`,
+      () =>
+        withDedicatedSessionAdvisoryLock(
+          certifierProjectLockKey({
+            organizationId: ctx.organizationId,
+            facilityId: input.facilityId,
+            provider: input.provider,
+          }),
+          () =>
+            withDedicatedSessionAdvisoryLock(
+              certifierExternalProjectLockKey({
+                organizationId: ctx.organizationId,
+                externalProjectId: input.externalProjectId,
+                provider: input.provider,
+              }),
+              fn,
+            ),
+        ),
+    ),
   );
 }
 
@@ -389,4 +393,11 @@ export async function findRegisteredCustomerLocationIds(
       eq(certifierStorageLocations.customerLocationId, locationId),
     )).limit(1);
   return rows.map(row => row.locationId);
+}
+
+/** All mappings, independent of project, read on the runner connection. */
+export async function findCustomerLocationRegistrations(ctx: OrgContext, tx: DbTransaction, locationId: string) {
+  requireOrgScope(ctx);
+  return tx.select({ submittedPayload: certifierStorageLocations.submittedPayload, payloadHash: certifierStorageLocations.payloadHash }).from(certifierStorageLocations)
+    .where(and(eq(certifierStorageLocations.organizationId, ctx.organizationId), eq(certifierStorageLocations.customerLocationId, locationId)));
 }

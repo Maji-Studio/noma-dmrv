@@ -71,4 +71,18 @@ describe("buildPartyLocationDetailFields", () => {
     expect(fields[10].label).toBe("Location 2 · Location name");
     expect(fields[8].value).toBe("Test facility: 12 km (Manual entry)");
   });
+
+  it("lists archived customer locations after the active ones and marks them", () => {
+    const base = {
+      country: "Tanzania", stateRegion: null, city: null, address: null, gpsLatitude: -3.3, gpsLongitude: 37.3,
+      facilityDistances: [], defaultSoilTemperatureC: null, isDefault: false,
+    };
+    const fields = buildPartyLocationDetailFields([
+      { ...base, name: "Old field", archivedAt: new Date("2026-02-01") },
+      { ...base, name: "North field", isDefault: true, archivedAt: null },
+    ], options);
+
+    expect(fields[0]).toMatchObject({ label: "Location 1 · Location name", value: "North field" });
+    expect(fields[10]).toMatchObject({ label: "Location 2 (archived) · Location name", value: "Old field" });
+  });
 });

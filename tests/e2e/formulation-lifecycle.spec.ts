@@ -121,12 +121,12 @@ test.describe("Formulation archive and restore", () => {
     await rowAction(page, used.code, "Delete");
     await page.getByRole("dialog").getByRole("button", { name: /^Delete/ }).last().click();
 
-    await expect(page.getByText(`${used.code} is in use and cannot be deleted.`)).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole("dialog").getByText(`${used.code} is in use`)).toBeVisible({ timeout: 15000 });
     await expect(page.getByText("Archive it instead. Existing records keep it, while pickers hide it.")).toBeVisible();
 
-    await page.getByRole("button", { name: "Archive instead" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Archive instead" }).click();
     await expect(page.getByText(`Formulation ${used.code} archived. Restore it from the archived view.`)).toBeVisible();
-    await expect(page.getByText(`${used.code} is in use and cannot be deleted.`)).toHaveCount(0);
+    await expect(page.getByRole("dialog").getByText(`${used.code} is in use`)).toHaveCount(0);
 
     await page.getByRole("button", { name: "Archived", exact: true }).click();
     await page.locator("table tbody tr", { hasText: used.code }).click();

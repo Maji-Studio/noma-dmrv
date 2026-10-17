@@ -270,3 +270,46 @@ test("an archived supplier or customer opens read-only from an edit link, with n
     }
   }
 });
+
+test("renaming a supplier location keeps the fields the edit did not touch", async ({ adminPage: page }) => {
+  const { db, pool } = createDbConnection();
+  const runId = crypto.randomUUID().slice(0, 8);
+  const supplierId = crypto.randomUUID();
+  const locationId = crypto.randomUUID();
+  const supplierCode = `E2E-SUP-KEEP-${runId}`;
+  const locationName = `E2E Keep Location ${runId}`;
+  const updatedName = `E2E Keep Location Renamed ${runId}`;
+  let facilityId: string | undefined;
+  let secondFacilityId: string | undefined;
+  try {
+    const facility = await createTestFacility();
+    facilityId = facility.id;
+    secondFacilityId = (await createTestFacility()).id;
+    await db.insert(schema.suppliers).values({ id: supplierId, organizationId: DEC_ORG_ID, code: supplierCode, name: `E2E Keep Supplier ${runId}` });
+    await db.insert(schema.supplierLocations).values({
+      id: locationId, organizationId: DEC_ORG_ID, supplierId, name: locationName, country: "Tanzania",
+      stateRegion: "E2E Region", city: "E2E City", address: "E2E source site",
+      gpsLatitude: LOCATION_GPS_LATITUDE, gpsLongitude: LOCATION_GPS_LONGITUDE, isDefault: true,
+    });
+    await db.insert(schema.supplierLocationFacilityDistances).values({ organizationId: DEC_ORG_ID, locationId, facilityId, distanceKm: LOCATION_DISTANCE_KM, distanceSource: LOCATION_DISTANCE_SOURCE });
+
+    await openPartyEditSheet(page, "/suppliers", supplierCode, facility.id, facility.name);
+    await editLocationName(page, locationName, updatedName, "supplier-location-edit-dialog");
+
+    const [saved] = await db.select().from(schema.supplierLocations).where(eq(schema.supplierLocations.id, locationId));
+    expect(saved).toMatchObject({ name: updatedName, stateRegion: "E2E Region", city: "E2E City", address: "E2E source site", isDefault: true });
+    expect(saved?.gpsLatitude).toBeCloseTo(LOCATION_GPS_LATITUDE);
+    expect(saved?.gpsLongitude).toBeCloseTo(LOCATION_GPS_LONGITUDE);
+    const [distance] = await db.select().from(schema.supplierLocationFacilityDistances).where(eq(schema.supplierLocationFacilityDistances.locationId, locationId));
+    expect(distance).toMatchObject({ facilityId, distanceKm: LOCATION_DISTANCE_KM, distanceSource: LOCATION_DISTANCE_SOURCE });
+  } finally {
+    try {
+      await db.delete(schema.supplierLocations).where(eq(schema.supplierLocations.supplierId, supplierId));
+      await db.delete(schema.suppliers).where(eq(schema.suppliers.id, supplierId));
+      if (secondFacilityId) await deleteTestFacility(secondFacilityId);
+      if (facilityId) await deleteTestFacility(facilityId);
+    } finally {
+      await pool.end();
+    }
+  }
+});

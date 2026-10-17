@@ -174,5 +174,8 @@ it.each(["supplier", "customer"] as const)("registers the master-data %s writes 
   expect(allWriteTools.filter(tool => tool.scope?.startsWith(`${kind}s:`)).map(tool => [tool.name, tool.scope])).toEqual([
     [`create_${kind}`, `${kind}s:write`], [`update_${kind}`, `${kind}s:write`],
     [`delete_${kind}`, `${kind}s:delete`], [`archive_${kind}`, `${kind}s:write`], [`restore_${kind}`, `${kind}s:write`],
+    [`add_${kind}_location`, `${kind}s:write`], [`update_${kind}_location`, `${kind}s:write`],
+    [`delete_${kind}_location`, `${kind}s:delete`],
+    ...(kind === "customer" ? [["archive_customer_location", "customers:write"], ["restore_customer_location", "customers:write"]] : []),
   ]);
 });

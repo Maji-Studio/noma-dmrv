@@ -216,11 +216,16 @@ it.each(PARTY_CASES)("enforces completion, per-case scopes and tool-call budget 
   expect(score(id, baseline, transcript("Done.", calls)).criteria.budget).toBe(true);
   expect(score(id, baseline, transcript("Done.", [...calls, call("whoami")])).criteria.budget).toBe(false);
   expect(score(id, baseline, { ...transcript(), completed: false }).criteria.completed).toBe(false);
-  expect(scopes.some(scope => scope.endsWith(":delete"))).toBe(false);
+  expect(scopes.some(scope => scope.endsWith(":delete"))).toBe(id === "customer-location-in-use");
 });
 
 it("gives each case only its party and required grounding scopes", () => {
   expect(PARTY_CASES.map(({ id, scopes, budget }) => [id, scopes, budget])).toEqual([
+    ["supplier-location-update", ["suppliers:read", "suppliers:write"], 5],
+    ["customer-field-missing-gps", ["customers:read", "customers:write"], 4],
+    ["customer-location-archive", ["customers:read", "customers:write"], 5],
+    ["customer-location-in-use", ["customers:read", "customers:delete", "orders:read"], 6],
+    ["order-archived-destination", ["orders:read", "customers:read"], 4],
     ["supplier-with-pickup", ["suppliers:read", "suppliers:write", "facilities:read"], 6],
     ["customer-and-field", ["customers:read", "customers:write"], 6],
     ["supplier-already-exists", ["suppliers:read", "suppliers:write"], 4],

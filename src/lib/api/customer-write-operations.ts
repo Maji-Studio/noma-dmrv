@@ -1,11 +1,8 @@
 import { CUSTOMER_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { DomainError } from "@/lib/domain-errors";
 import { partyArchivedForEdit } from "@/lib/party-domain-errors";
-import { archiveCustomerApi, restoreCustomerApi, updateCustomerApi } from "@/lib/operations/customer-api";
-import { deleteCustomer } from "@/lib/operations/customers";
-import type { Operation } from "@/lib/operations/runner";
+import { archiveCustomerApi, restoreCustomerApi, updateCustomerApi, deleteCustomerApi } from "@/lib/operations/customer-api";
 import { readApiCustomer } from "@/lib/read-models/api-customers";
-import type { CustomerRepresentation } from "@/lib/representations/customers";
 
 type Scope = Parameters<typeof updateCustomerApi.execute>[0];
 async function checkRevision(scope: Scope, id: string, revision: number) {
@@ -29,15 +26,13 @@ export function representationCheckedUpdate(id: string, revision: number): typeo
   };
 }
 
-/** Keep the deleted representation in the outcome for dry runs and durable replay. */
-export function representationCheckedDelete(id: string, revision: number): Operation<typeof deleteCustomer.input, CustomerRepresentation> {
+/** REST keeps the customer and cascade in the outcome for dry runs and replay. */
+export function representationCheckedCascadeDelete(id: string, revision: number): typeof deleteCustomerApi {
   return {
-    ...deleteCustomer,
-    describe: input => deleteCustomer.describe!(input, undefined),
+    ...deleteCustomerApi,
     execute: async (scope, input) => {
-      const row = await checkRevision(scope, id, revision);
-      await deleteCustomer.execute(scope, input);
-      return row;
+      if (revision !== CUSTOMER_REPRESENTATION_REVISION) await checkRevision(scope, id, revision);
+      return deleteCustomerApi.execute(scope, input);
     },
   };
 }

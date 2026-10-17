@@ -30,7 +30,8 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { FormulationForm } from "./formulation-form";
-import { DeleteConflictNotice, isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
 import { ArchivedFormulationNotice } from "./formulation-notices";
 import { formatRatio, formulationSheetSections } from "./formulation-read-sections";
 import type { FormulationFormData } from "@/schemas/formulations";
@@ -222,7 +223,7 @@ export function FormulationList() {
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Formulation ${deletingFormulation.code}`, "Formulation was not deleted. Try again.");
       if (isInUseDeleteRefusal(message) && !deletingFormulation.archivedAt) {
-        // In use: the dialog gives way to a notice that offers Archive instead.
+        // In use: the dialog gives way to the in-use dialog that offers Archive instead.
         setDeleteConflict(deletingFormulation);
         setDeletingFormulation(null);
         return;
@@ -398,14 +399,19 @@ export function FormulationList() {
       </DataTable>
 
       {deleteConflict && (
-        <DeleteConflictNotice
+        <InUseDeleteDialog
           label={deleteConflict.code}
           onArchive={() => handleArchive(deleteConflict)}
+          onClose={() => {
+            setDeleteConflict(null);
+            setLifecycleError(null);
+          }}
           isPending={archiveFormulation.isPending}
+          errorMessage={lifecycleError}
         />
       )}
 
-      {((lifecycleError && !viewedEntity) || (deleteError && !deletingFormulation)) && (
+      {((lifecycleError && !viewedEntity && !deleteConflict) || (deleteError && !deletingFormulation)) && (
         <ServerError message={(!viewedEntity ? lifecycleError : null) ?? deleteError ?? ""} />
       )}
 
