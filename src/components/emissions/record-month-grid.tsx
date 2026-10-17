@@ -15,7 +15,6 @@ import {
   invalidateEmissionEntryReads,
   useConfirmEmissionEntry,
   useCreateEmissionEntry,
-  useMarkNothingToRecord,
   type EmissionBatchScope,
 } from "@/hooks/use-emission-entries";
 import { pluralize } from "@/lib/copy-utils";
@@ -58,7 +57,6 @@ export function RecordMonthGrid({ lines, batch, scope, today, onDone, onEnterAga
   const toast = useToast();
   const queryClient = useQueryClient();
   const createEntry = useCreateEmissionEntry(scope);
-  const markNothing = useMarkNothingToRecord(scope);
   const confirmEntry = useConfirmEmissionEntry(scope);
   const { upload } = useFileUpload();
   const [drafts, setDrafts] = useState<Record<string, RowDraft>>({});
@@ -68,7 +66,7 @@ export function RecordMonthGrid({ lines, batch, scope, today, onDone, onEnterAga
   const [showDone, setShowDone] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
 
-  const blank = (): RowDraft => ({ values: {}, date: defaultEntryDate(today, batch), note: "", nothing: false, file: null });
+  const blank = (): RowDraft => ({ values: {}, date: defaultEntryDate(today, batch), file: null });
   const draftOf = (line: EmissionLine) => drafts[line.componentId] ?? blank();
   const patch = (line: EmissionLine, change: Partial<RowDraft>) =>
     setDrafts((all) => ({ ...all, [line.componentId]: { ...(all[line.componentId] ?? blank()), ...change } }));
@@ -81,11 +79,11 @@ export function RecordMonthGrid({ lines, batch, scope, today, onDone, onEnterAga
     const kind = rowKind(line);
     if (kind === "fileOnly") return !!draft.file;
     if (kind !== "value") return false;
-    return draft.nothing || !!draft.file || Object.values(draft.values).some((value) => value.trim());
+    return !!draft.file || Object.values(draft.values).some((value) => value.trim());
   };
   const validate = (line: EmissionLine, draft: RowDraft): Record<string, string> => {
     if (rowKind(line) === "fileOnly") return {};
-    const errors = draft.nothing ? {} : validateFields(line, draft.values);
+    const errors = validateFields(line, draft.values);
     if (line.entryPolicy !== "single") {
       const dateError = validateEntryDate(draft.date, today, batch.startDate);
       if (dateError) errors.date = dateError;
@@ -96,7 +94,7 @@ export function RecordMonthGrid({ lines, batch, scope, today, onDone, onEnterAga
     .filter((line) => touched(line, draftOf(line)))
     .map((line) => ({ line, draft: draftOf(line), errors: validate(line, draftOf(line)) }));
   const ready = statuses.filter((status) => !Object.keys(status.errors).length);
-  const missingFile = ready.filter((status) => rowKind(status.line) === "value" && !status.draft.nothing && !status.draft.file).length;
+  const missingFile = ready.filter((status) => rowKind(status.line) === "value" && !status.draft.file).length;
   const failing = statuses.length - ready.length + Object.keys(serverErrors).length;
 
   const saveRow = async ({ line, draft }: RowStatus) => {
@@ -108,10 +106,6 @@ export function RecordMonthGrid({ lines, batch, scope, today, onDone, onEnterAga
       return;
     }
     const occurredOn = line.entryPolicy === "single" ? undefined : draft.date;
-    if (draft.nothing) {
-      await markNothing.mutateAsync({ ...scope, componentId: line.componentId, note: draft.note.trim() || null, occurredOn });
-      return;
-    }
     const created = await createEntry.mutateAsync({
       creditBatchId: scope.creditBatchId,
       componentId: line.componentId,
@@ -143,14 +137,12 @@ export function RecordMonthGrid({ lines, batch, scope, today, onDone, onEnterAga
     const nextErrors: Record<string, string> = {};
     const savedIds: string[] = [];
     let entries = 0;
-    let nothings = 0;
     let files = 0;
     for (const status of ready) {
       try {
         await saveRow(status);
         savedIds.push(status.line.componentId);
         if (rowKind(status.line) === "fileOnly") files += 1;
-        else if (status.draft.nothing) nothings += 1;
         else entries += 1;
       } catch (error) {
         nextErrors[status.line.componentId] = toSaveErrorMessage(error, SAVE_FALLBACK);
@@ -162,7 +154,6 @@ export function RecordMonthGrid({ lines, batch, scope, today, onDone, onEnterAga
     setDrafts((all) => Object.fromEntries(Object.entries(all).filter(([id]) => !savedIds.includes(id))));
     const parts = [
       entries ? `${entries} ${pluralize(entries, "manual entry", "manual entries")}` : "",
-      nothings ? `${nothings} ${pluralize(nothings, "line")} marked Nothing to record` : "",
       files ? `${files} ${pluralize(files, "file")} added` : "",
     ].filter(Boolean);
     if (parts.length) toast.success(`Saved ${parts.join(", ")}.`);

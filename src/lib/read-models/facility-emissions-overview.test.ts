@@ -51,7 +51,7 @@ beforeEach(() => {
   vi.mocked(loadBatchesEmissionAutomaticFacts).mockResolvedValue({ new: { automaticFigures: {} }, old: { automaticFigures: {} } });
   vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([
     entry("file", { documentCount: 0 }), entry("review", { observationId: "missing" }),
-    entry("zero", { kind: "zero", values: [] }), entry("recorded"),
+    entry("zero", { kind: "zero", confirmedForRemovalId: "removal", values: [] }), entry("recorded"),
     // Removal-owned zeros affect display state but do not count as operator entries this month.
     entry("empty", { kind: "zero", confirmedForRemovalId: "removal", values: [], occurredOn: "2026-10-16" }),
     entry("recorded", { id: "prior-month", createdAt: new Date("2026-10-01T02:00:00Z") }),
@@ -63,9 +63,9 @@ afterEach(() => vi.useRealTimers());
 it("derives all six states, facility-month counts and last occurrence with bulk calls", async () => {
   const result = await loadFacilityEmissionsOverview(ctx, "facility");
   expect(result.batches.map((row) => row.creditBatchId)).toEqual(["new", "old"]);
-  expect(result.batches[0]).toMatchObject({ status: "open", templateName: null, entriesThisMonth: 4,
+  expect(result.batches[0]).toMatchObject({ status: "open", templateName: null, entriesThisMonth: 3,
     lastEntryOn: "2026-10-16", lineCounts: { total: 6, open: 3, fileMissing: 1, needsReview: 1,
-      notRecorded: 0, nothingToRecord: 2, needsSetup: 1, recorded: 1 } });
+      notRecorded: 0, needsSetup: 1, recorded: 3 } });
   expect(result.batches[1]).toMatchObject({ entriesThisMonth: 0, lastEntryOn: null,
     lineCounts: { total: 6, open: 6, notRecorded: 5, needsSetup: 1 } });
   expect(getLatestTemplateObservations).toHaveBeenCalledExactlyOnceWith(ctx, "isometric", ["template"]);

@@ -63,7 +63,6 @@ beforeEach(() => {
     () => [batch], () => [{ archivedAt: null, timezone: "UTC" }], () => [batch], () => [locked],
     () => [locked], () => oldValues, () => [{ count: 1 }],
     () => [], // Active sibling values after the old row was tombstoned.
-    () => [], // Operator zeros.
     () => [saved], () => newValues, () => [{ count: 0 }],
     () => [saved], () => newValues, () => [{ count: 1 }]];
   select.mockImplementation(() => {
@@ -121,7 +120,7 @@ it.each(["reserved", "sent", "stale", "counts", "zero", "parent-changed", "missi
   if (state === "sent") locked.sentByRemovalId = "removal";
   if (state === "stale") locked.version++;
   if (state === "counts") current = previous;
-  if (state === "zero") locked.kind = "zero";
+  if (state === "zero") { locked.kind = "zero"; locked.confirmedForRemovalId = "removal"; }
   if (state === "parent-changed") locked.creditBatchId = "other-batch";
   if (state === "missing-observation") mocks.previous.mockResolvedValue(null);
   await expect(replaceEmissionEntry(ctx, input)).rejects.toThrow();

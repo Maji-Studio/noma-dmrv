@@ -17,7 +17,6 @@ import {
   useBatchEmissionLines,
   useDeleteEmissionEntry,
   useRestoreEmissionEntry,
-  useMarkNothingToRecord,
   type EmissionBatchScope,
 } from "@/hooks/use-emission-entries";
 import { useEmissionsOverview, type FacilityEmissionsOverviewBatch } from "@/hooks/use-emissions-overview";
@@ -48,9 +47,7 @@ const SUBTITLE = "Manual entries add on top of what records already hold.";
 const LIST_SKELETON = "h-320 w-full";
 const MONTH_LENGTH = 7;
 
-type UndoState =
-  | { id: number; kind: "nothing"; componentId: string; lineName: string; entry: { id: string; version: number } }
-  | { id: number; kind: "delete"; line: EmissionLine; entry: EmissionEntry };
+type UndoState = { id: number; line: EmissionLine; entry: EmissionEntry };
 
 interface BatchEmissionsPageProps {
   creditBatchId: string;
@@ -107,7 +104,6 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
   const [drawer, setDrawer] = useState<{ componentId: string; view: DrawerView } | null>(null);
   const [undo, setUndo] = useState<UndoState | null>(null);
   const [undoing, setUndoing] = useState(false);
-  const markNothing = useMarkNothingToRecord(scope);
   const deleteEntry = useDeleteEmissionEntry(scope);
   const restoreEntry = useRestoreEmissionEntry(scope);
 
@@ -132,21 +128,12 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
   const batch: EmissionBatch | null = overviewBatch ? batchFacts(overviewBatch) : null;
   const openDrawer = (line: EmissionLine, view: DrawerView = { kind: "ledger" }) => setDrawer({ componentId: line.componentId, view });
 
-  const markLine = async (line: EmissionLine) => {
-    try {
-      const entry = await markNothing.mutateAsync({ ...scope, componentId: line.componentId });
-      setUndo({ id: Date.now(), kind: "nothing", componentId: line.componentId, lineName: line.displayName, entry: { id: entry.id, version: entry.version } });
-    } catch (error) {
-      toast.error(toSaveErrorMessage(error, `${line.displayName} was not marked Nothing to record. Try again.`));
-    }
-  };
-
   const removeEntry = async (line: EmissionLine, entry: EmissionEntry) => {
     try {
       await deleteEntry.mutateAsync({ id: entry.id, expectedVersion: entry.version });
       // Undo lives in the page bar, outside the drawer's focus trap, so the drawer closes.
       setDrawer(null);
-      setUndo({ id: Date.now(), kind: "delete", line, entry });
+      setUndo({ id: Date.now(), line, entry });
     } catch (error) {
       toast.error(toSaveErrorMessage(error, `The manual entry on ${line.displayName} was not deleted. Try again.`));
     }
@@ -156,14 +143,8 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
     if (!undo) return;
     setUndoing(true);
     try {
-      if (undo.kind === "nothing") {
-        await deleteEntry.mutateAsync({ id: undo.entry.id, expectedVersion: undo.entry.version });
-      } else if (undo.entry.kind === "zero") {
-        await markNothing.mutateAsync({ ...scope, componentId: undo.line.componentId, note: undo.entry.note, occurredOn: undo.entry.occurredOn });
-      } else {
-        // Delete bumped the version once, so the restore expects the next one.
-        await restoreEntry.mutateAsync({ id: undo.entry.id, expectedVersion: undo.entry.version + 1 });
-      }
+      // Delete bumped the version once, so the restore expects the next one.
+      await restoreEntry.mutateAsync({ id: undo.entry.id, expectedVersion: undo.entry.version + 1 });
       setUndo(null);
     } catch (error) {
       toast.error(toSaveErrorMessage(error, "The change was not undone. Try again."));
@@ -172,14 +153,7 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
     }
   };
 
-  const undoMessage = !undo
-    ? ""
-    : undo.kind === "nothing"
-      ? `${undo.lineName} marked Nothing to record.`
-      : undo.entry.kind === "zero"
-        ? `Nothing to record removed from ${undo.line.displayName}.`
-        : `Manual entry deleted on ${undo.line.displayName}.${undo.entry.documentCount ? " Undo brings back the values and the files." : ""}`;
-  const undoLine = undo?.kind === "nothing" ? lines.find((line) => line.componentId === undo.componentId) : undefined;
+  const undoMessage = undo ? `Manual entry deleted on ${undo.line.displayName}.${undo.entry.documentCount ? " Undo brings back the values and the files." : ""}` : "";
 
   const counts = lineCounts(lines);
   const openCount = lines.filter(isOpen).length;
@@ -259,7 +233,6 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
                 onClearFilter={() => setFilter(null)}
                 actions={{
                   open: (line, options) => openDrawer(line, options?.add ? { kind: "form", mode: { kind: "add" } } : { kind: "ledger" }),
-                  nothing: (line) => void markLine(line),
                 }}
               />
             </div>
@@ -273,7 +246,6 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
             canWrite={entriesEnabled}
             onViewChange={(view) => setDrawer((current) => (current ? { ...current, view } : current))}
             onClose={() => setDrawer(null)}
-            onNothing={(line) => void markLine(line)}
             onDeleteEntry={(line, entry) => void removeEntry(line, entry)}
             onSaved={(line, warning) => (warning ? toast.warning(warning) : toast.success(`Manual entry saved on ${line.displayName}.`))}
           />
@@ -285,7 +257,6 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
           message={undoMessage}
           undoing={undoing}
           onUndo={() => void undoLast()}
-          onAddNote={undoLine ? () => { openDrawer(undoLine, { kind: "ledger", focusNote: true }); setUndo(null); } : undefined}
           onDismiss={() => setUndo(null)}
         />
       )}

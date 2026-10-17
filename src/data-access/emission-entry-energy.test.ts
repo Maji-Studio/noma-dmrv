@@ -95,7 +95,7 @@ it("groups entries by batch and uses each live pin while excluding stale, mismat
     entry("grid-batch", { documentCount: 0 }),
     entry("grid-batch", { observationId: "stale" }),
     entry("grid-batch", { values: [{ inputKey: "electricity_use", magnitude: "5", unit: "Wh" }] }),
-    entry("grid-batch", { kind: "zero", values: [] }),
+    entry("grid-batch", { kind: "zero", confirmedForRemovalId: "removal", values: [] }),
     entry("grid-batch", { observationId: "missing-history" }),
     entry("grid-batch", { deletedAt: new Date() }),
   ] as never);

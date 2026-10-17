@@ -79,14 +79,11 @@ export const emissionEntries = pgTable(
     uniqueIndex("emission_entries_confirmed_zero_unique")
       .on(t.confirmedForRemovalId, t.creditBatchId, t.componentId)
       .where(sql`${t.deletedAt} is null`),
-    uniqueIndex("emission_entries_operator_zero_unique")
-      .on(t.organizationId, t.creditBatchId, t.componentId)
-      .where(sql`${t.kind} = 'zero' and ${t.confirmedForRemovalId} is null and ${t.deletedAt} is null`),
     check("emission_entries_kind", sql`${t.kind} in ('value', 'zero')`),
     check("emission_entries_rule", sql`${t.lineRule} in ('additive', 'single')`),
     check(
       "emission_entries_zero_owner",
-      sql`(${t.kind} = 'value' and ${t.confirmedForRemovalId} is null) or ${t.kind} = 'zero'`,
+      sql`(${t.kind} = 'zero') = (${t.confirmedForRemovalId} is not null)`,
     ),
     check("emission_entries_revisions", sql`${t.version} > 0 and ${t.contentRevision} > 0`),
   ],

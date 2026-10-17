@@ -14,8 +14,6 @@ import {
   kgToTonnes,
   multiplyDecimals,
   tonnesToKg,
-  nothingApplies,
-  nothingRefusal,
   recordsChipText,
   recordsHref,
   recordsText,
@@ -51,7 +49,7 @@ describe("units and totals", () => {
     expect(displayUnit("kWh")).toBe("kWh");
   });
 
-  it("shows Not recorded, a zero for Nothing to record and Needs setup", () => {
+  it("shows Not recorded, a confirmed zero and Needs setup", () => {
     expect(lineTotalText(makeLine())).toBe("Not recorded");
     expect(lineTotalText(makeLine({ state: "confirmedZero", unit: "km" }))).toBe("0 km");
     expect(lineTotalText(makeLine({ state: "needsSetup" }))).toBe("Needs setup");
@@ -92,22 +90,6 @@ describe("mass in kg on mass × distance lines", () => {
       values: [{ inputKey: "leg", magnitude: "55.2", unit: "tonne * km", massDistanceDetail: { mass: { magnitude: "0.012", unit: "tonne" }, distance: { magnitude: "4600", unit: "km" } } }],
     } as never);
     expect(draftFromEntry(entry)).toEqual({ "leg:mass": "12", "leg:distance": "4600" });
-  });
-});
-
-describe("Nothing to record", () => {
-  it("is refused with a reason when entries or records hold a figure", () => {
-    expect(nothingRefusal(makeLine())).toBeNull();
-    expect(nothingRefusal(makeLine({ entries: [makeEntry(), makeEntry({ id: "entry-2" })] }))).toBe("This line has 2 manual entries.");
-    expect(nothingRefusal(makeLine({ records: RUNS }))).toBe("This line has 120 L from production runs.");
-    expect(nothingRefusal(makeLine({ records: { ...RUNS, figure: null } }))).toBeNull();
-  });
-
-  it("does not apply to lines that take no entries, need setup or are already marked", () => {
-    expect(nothingApplies(makeLine({ entryPolicy: "none" }))).toBe(false);
-    expect(nothingApplies(makeLine({ state: "needsSetup" }))).toBe(false);
-    expect(nothingApplies(makeLine({ entries: [makeEntry({ kind: "zero", values: [], total: null })] }))).toBe(false);
-    expect(nothingApplies(makeLine())).toBe(true);
   });
 });
 

@@ -1,12 +1,12 @@
 /**
  * One open line in "Record this month": its read-only source chips, then the
- * inputs for its shape, Attach file and Nothing to record. A File missing
+ * inputs for its shape and Attach file. A File missing
  * line only takes the file; Needs review and Needs setup lines say what to do.
  */
 "use client";
 
 import Link from "next/link";
-import { MinusCircleIcon, PaperclipIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
+import { PaperclipIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField } from "@/components/forms/form-field";
 import { ServerError } from "@/components/forms/server-error";
 import { Button, Input } from "@/components/ui";
@@ -20,8 +20,6 @@ import {
   addEntryRefusal,
   draftMassDistanceFigure,
   entryFields,
-  nothingApplies,
-  nothingRefusal,
   stoppedEntries,
   valueEntries,
   type EmissionLine,
@@ -34,8 +32,6 @@ const LABEL_ROW_OFFSET = "sm:mt-[30px]";
 export interface RowDraft {
   values: Record<string, string>;
   date: string;
-  note: string;
-  nothing: boolean;
   file: File | null;
 }
 
@@ -46,12 +42,8 @@ export function rowKind(line: EmissionLine): RowKind {
   if (line.state === "needsSetup") return "setup";
   if (line.state === "needsReview") return "review";
   if (line.state === "missingEvidence") return "fileOnly";
-  if (line.state === "empty" && (!addEntryRefusal(line) || canMarkNothing(line))) return "value";
+  if (line.state === "empty" && !addEntryRefusal(line)) return "value";
   return "none";
-}
-
-export function canMarkNothing(line: EmissionLine): boolean {
-  return nothingApplies(line) && !nothingRefusal(line);
 }
 
 /** The value entry a File missing line attaches its file to. */
@@ -147,19 +139,12 @@ export function RecordMonthRow({ line, scope, draft, errors, serverError, today,
       <div className="flex flex-col gap-8">
         <div className="flex flex-wrap items-start gap-x-12 gap-y-8">
           {lineHasChips(line) && (
-            <span className={cn("flex min-h-[40px] items-center gap-8", (takesValues || draft.nothing) && LABEL_ROW_OFFSET)}>
+            <span className={cn("flex min-h-[40px] items-center gap-8", takesValues && LABEL_ROW_OFFSET)}>
               {chips}
-              {takesValues && !draft.nothing && <span aria-hidden="true" className="body-large text-[var(--color-text-tertiary)]">+</span>}
+              {takesValues && <span aria-hidden="true" className="body-large text-[var(--color-text-tertiary)]">+</span>}
             </span>
           )}
-          {draft.nothing ? (
-            <div className="w-full sm:min-w-[260px] sm:flex-1">
-              <FormField id={`${idPrefix}-note`} label="Note" cue="Optional">
-                <Input id={`${idPrefix}-note`} value={draft.note} onChange={(event) => onChange({ note: event.target.value })} />
-              </FormField>
-            </div>
-          ) : (
-            takesValues &&
+          {takesValues &&
             fields.map((field) => (
               <div key={field.key} className="w-full sm:w-[200px]">
                 <FormField
@@ -178,9 +163,8 @@ export function RecordMonthRow({ line, scope, draft, errors, serverError, today,
                   />
                 </FormField>
               </div>
-            ))
-          )}
-          {!single && (takesValues || draft.nothing) && (
+            ))}
+          {!single && takesValues && (
             <div className="w-full sm:w-[168px]">
               <FormField id={`${idPrefix}-date`} label="Date" error={errors.date}>
                 <Input id={`${idPrefix}-date`} type="date" value={draft.date} min={startDate} max={today} onChange={(event) => onChange({ date: event.target.value })} />
@@ -189,18 +173,7 @@ export function RecordMonthRow({ line, scope, draft, errors, serverError, today,
           )}
         </div>
         <div className="flex flex-wrap items-center gap-x-16">
-          {takesValues && !draft.nothing && fileSlot}
-          {canMarkNothing(line) && (
-            <button
-              type="button"
-              aria-pressed={draft.nothing}
-              onClick={() => onChange({ nothing: !draft.nothing, file: null })}
-              className="inline-flex min-h-44 items-center gap-6 whitespace-nowrap body-small text-[var(--color-text-interaction-primary)] underline underline-offset-4"
-            >
-              <MinusCircleIcon size={16} aria-hidden="true" />
-              {draft.nothing ? "Enter a value instead" : "Nothing to record"}
-            </button>
-          )}
+          {takesValues && fileSlot}
         </div>
         {single && <p className="body-caption text-[var(--color-text-tertiary)]">Counts for the whole credit batch. No date.</p>}
       </div>

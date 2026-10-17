@@ -16,7 +16,7 @@ export type FacilityEmissionsOverview = {
     templateName: string | null;
     lineCounts: {
       total: number; open: number; fileMissing: number; needsReview: number; notRecorded: number;
-      nothingToRecord: number; needsSetup: number; recorded: number;
+      needsSetup: number; recorded: number;
     };
     entriesThisMonth: number;
     lastEntryOn: string | null;
@@ -25,13 +25,13 @@ export type FacilityEmissionsOverview = {
 const MONTH_PREFIX_LENGTH = 7;
 const STATE_COUNT_KEYS = {
   filled: "recorded", empty: "notRecorded", missingEvidence: "fileMissing",
-  confirmedZero: "nothingToRecord", needsReview: "needsReview", needsSetup: "needsSetup",
+  confirmedZero: "recorded", needsReview: "needsReview", needsSetup: "needsSetup",
 } as const;
 
 function lineCounts(lines: readonly Pick<BatchEmissionLine, "state">[]) {
   const counts: FacilityEmissionsOverview["batches"][number]["lineCounts"] = {
     total: lines.length, open: 0, fileMissing: 0, needsReview: 0, notRecorded: 0,
-    nothingToRecord: 0, needsSetup: 0, recorded: 0,
+    needsSetup: 0, recorded: 0,
   };
   for (const line of lines) counts[STATE_COUNT_KEYS[line.state]]++;
   counts.open = counts.notRecorded + counts.fileMissing + counts.needsReview + counts.needsSetup;
@@ -80,7 +80,7 @@ export async function loadFacilityEmissionsOverview(
       // One setup item represents an unread or unpinned template until its lines are known.
       lineCounts: lineCounts(observation ? lines : [{ state: "needsSetup" }]),
       entriesThisMonth: stored.filter((entry) =>
-        (entry.kind === "value" || entry.confirmedForRemovalId === null) &&
+        entry.kind === "value" &&
         formatFacilityDate(entry.createdAt, timezone).slice(0, MONTH_PREFIX_LENGTH) === month,
       ).length,
       lastEntryOn: stored.reduce<string | null>((last, entry) =>

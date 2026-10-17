@@ -3,7 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, certificationSubmissions, creditBatches, documents, emissionEntries,
   emissionEntryValues, removalTemplateObservations, storageObjectDeletions, users } from "@/db/schema";
-import { createEmissionEntry, getEmissionEntry, markNothingToRecord, replaceEmissionEntry } from "@/data-access/emission-entries";
+import { createEmissionEntry, getEmissionEntry, replaceEmissionEntry } from "@/data-access/emission-entries";
 import { insertDocument, listDocumentsForEntity } from "@/data-access/documents";
 import { cleanupLineageFixture, createLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
@@ -187,36 +187,4 @@ it("rolls back the tombstone and activity when replacement validation fails", as
   expect(await getEmissionEntry(ctx, row.id)).toEqual(before);
   expect(await listDocumentsForEntity(ctx, "emission_entry", row.id)).toEqual([file]);
   expect(await db.select().from(activityEvents).where(and(eq(activityEvents.entityId, row.id), eq(activityEvents.action, "deleted")))).toEqual([]);
-});
-it("rolls back an inserted replacement when operator-zero tombstoning fails", async () => {
-  const row = await original();
-  const file = await document(row.id);
-  const before = await getEmissionEntry(ctx, row.id);
-  await changeTemplate();
-  // Seed an operator zero beside a stopped value to exercise failure after insertion.
-  const [zero] = await db.insert(emissionEntries).values({ organizationId: ctx.organizationId,
-    creditBatchId: row.creditBatchId, componentId: row.componentId, removalTemplateId: templateId,
-    observationId: baseline.id, inputShape: row.inputShape, lineRule: "additive", kind: "zero",
-    occurredOn: row.occurredOn, createdBy: ctx.userId }).returning();
-  await reserve(zero.id);
-  await expect(replaceEmissionEntry(ctx, replacement(before))).rejects.toThrow("reserved or sent");
-  expect(await getEmissionEntry(ctx, row.id)).toEqual(before);
-  expect(await listDocumentsForEntity(ctx, "emission_entry", row.id)).toEqual([file]);
-  const rows = await db.select().from(emissionEntries).where(eq(emissionEntries.creditBatchId, fixture.batchId));
-  expect(rows.map(entry => entry.id).sort()).toEqual([row.id, zero.id].sort());
-  expect(await db.select().from(activityEvents).where(and(eq(activityEvents.entityId, row.id), eq(activityEvents.action, "deleted")))).toEqual([]);
-});
-it("tombstones an operator zero when replacement succeeds", async () => {
-  const confirmation = await markNothingToRecord(ctx, { facilityId: fixture.facilityId, creditBatchId: fixture.batchId, componentId: "lab" });
-  // Preserve the zero as an old-template confirmation while constructing a stopped value.
-  const [row] = await db.insert(emissionEntries).values({ organizationId: ctx.organizationId,
-    creditBatchId: fixture.batchId, componentId: "lab", removalTemplateId: templateId,
-    observationId: baseline.id, inputShape: baseline.definition.groups[0].components[0].inputs,
-    lineRule: "additive", kind: "value", occurredOn: confirmation.occurredOn, createdBy: ctx.userId }).returning();
-  await db.insert(emissionEntryValues).values({ organizationId: ctx.organizationId, entryId: row.id,
-    inputKey: "electricity_use", magnitude: "1", unit: "kWh" });
-  await changeTemplate();
-  await replaceEmissionEntry(ctx, replacement(row));
-  expect(await stored(confirmation.id)).toMatchObject({ deletedAt: expect.any(Date), version: confirmation.version + 1 });
-  expect(await db.select().from(activityEvents).where(and(eq(activityEvents.entityId, confirmation.id), eq(activityEvents.action, "deleted")))).toHaveLength(1);
 });

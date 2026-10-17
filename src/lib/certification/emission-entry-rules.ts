@@ -188,10 +188,6 @@ export function normalizedEntryValues(values: Omit<EntryValueInput, "quantityKin
     .sort((a, b) => a.inputKey.localeCompare(b.inputKey));
 }
 
-export function normalizeNothingToRecordNote(note: string | null | undefined) {
-  return note?.trim() || null;
-}
-
 /** Single lines cover the batch. Other omitted dates use the facility clock within its window. */
 export function resolveEmissionEntryDate(args: {
   entryPolicy: "additive" | "single" | "none";
@@ -218,37 +214,4 @@ export function validateEntryDate(args: {
   if (args.occurredOn > formatFacilityDate(args.now ?? new Date(), args.timezone) &&
       !(args.dateDefaulted && args.occurredOn === args.batchStartDate))
     throw new SafeError("Entry date cannot be in the future at this facility.");
-}
-
-export function validateOperatorZero(args: {
-  observation: EntryObservation; componentId: string; note?: string | null;
-  occurredOn: string; batchStartDate: string; timezone: string; now?: Date;
-  dateDefaulted?: boolean;
-  activeValueCount: number; activeOperatorZeroCount: number;
-  automaticFigure: { magnitude: string } | null;
-}) {
-  const note = normalizeNothingToRecordNote(args.note);
-  const line = entryLine(args.observation, args.componentId);
-  if (!line) throw new SafeError("This template line is no longer available. Choose another line.");
-  if (line.contract.scope !== "operating" || line.entryPolicy === "none" ||
-      validateLineSources(args.observation.definition, args.observation.lineSources)
-        .some((problem) => problem.componentId === args.componentId))
-    throw new SafeError("This template line does not allow entries. Review its setup.");
-  if (args.activeValueCount > 0)
-    throw new SafeError("This line has entries. Delete them before marking nothing to record.");
-  if (args.automaticFigure && Number(args.automaticFigure.magnitude) > 0) {
-    const source = line.contract.automaticSource;
-    const label = source?.startsWith("run-") ? "production runs"
-      : source === "delivery-transport" ? "deliveries"
-      : source?.endsWith("-transport") ? "transport legs"
-      : source === "sequestration" ? "applications" : null;
-    throw new SafeError(label
-      ? `This line already has records from ${label}. Nothing to record does not apply.`
-      : "This line already has records. Nothing to record does not apply.");
-  }
-  if (args.activeOperatorZeroCount > 0)
-    throw new SafeError("This line is already marked nothing to record. Edit its note instead.");
-  validateEntryDate(args);
-  return { note, inputShape: line.component.inputs.filter((input) => input.type === "monitored"),
-    lineRule: line.entryPolicy as "additive" | "single" };
 }

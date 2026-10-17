@@ -9,7 +9,6 @@ type Coverage = { status: "direct" } | { status: "runner"; operations: string[] 
 const ACTIVITY_COVERAGE = {
   "emission-entries.ts": {
     createEmissionEntry: { status: "direct" },
-    markNothingToRecord: { status: "direct" },
     updateEmissionEntry: { status: "direct" },
     confirmEmissionEntry: { status: "direct" },
     deleteEmissionEntry: { status: "direct" },

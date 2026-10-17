@@ -36,9 +36,9 @@ describe("batch emission line states", () => {
   it.each([
     ["empty", false, []], ["filled", true, []],
     ["missingEvidence", true, [{ hasEvidence: false }]],
-    ["filled", false, [{}]], ["confirmedZero", false, [{ kind: "zero", total: null, hasEvidence: false }]],
+    ["filled", false, [{}]], ["confirmedZero", false, [{ kind: "zero", confirmedForRemovalId: "removal", total: null, hasEvidence: false }]],
     ["needsReview", false, [{ counts: false, hasEvidence: false }]],
-    ["filled", false, [{ kind: "zero", total: null }, {}]],
+    ["filled", false, [{ kind: "zero", confirmedForRemovalId: "removal", total: null }, {}]],
   ] as const)("derives %s with automatic=%s and entries=%j", (state, automatic, overrides) => {
     const f = facts();
     f.automaticFigures = { "run-electricity": automatic ? { magnitude: "0", unit: "kWh" } : null };
@@ -75,7 +75,7 @@ describe("batch emission line states", () => {
   });
   it.each([
     ["filled", { kind: "value", hasEvidence: true }],
-    ["confirmedZero", { kind: "zero", total: null, hasEvidence: false }],
+    ["confirmedZero", { kind: "zero", confirmedForRemovalId: "removal", total: null, hasEvidence: false }],
     ["missingEvidence", { kind: "value", hasEvidence: false }],
   ] as const)("keeps the entry-only source blocker when entries display as %s", (state, overrides) => {
     const f = facts(); const id = f.definition.groups[0].components[0].id;
@@ -84,7 +84,7 @@ describe("batch emission line states", () => {
     expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state, blocker: { code: state === "missingEvidence" ? "entryMissingEvidence" : "lineHasNoSource" } });
   });
   it("exports the agreed labels", () => {
-    expect(EMISSION_LINE_STATE_LABELS).toEqual({ filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing", needsReview: "Needs review", needsSetup: "Needs setup", confirmedZero: "Nothing to record" });
+    expect(EMISSION_LINE_STATE_LABELS).toEqual({ filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing", needsReview: "Needs review", needsSetup: "Needs setup", confirmedZero: "Recorded as zero" });
   });
 });
 
@@ -108,14 +108,21 @@ it.each([
   });
 });
 
-it("operator zeros take precedence over a zero automatic figure and need no file or source blocker", () => {
+it("keeps a Removal-owned zero confirmed when the line has no automatic figure", () => {
   const f = facts();
-  f.entries = [entry(f, { kind: "zero", total: null, hasEvidence: false, confirmedForRemovalId: null })];
-  f.automaticFigures = { "run-electricity": { magnitude: "0", unit: "kWh" } };
+  f.entries = [entry(f, { kind: "zero", confirmedForRemovalId: "removal", total: null, hasEvidence: false })];
+  f.automaticFigures = { "run-electricity": null };
   expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state: "confirmedZero" });
   expect(deriveBatchEmissionLines(f)[0].blocker).toBeUndefined();
   f.lineSources[f.entries[0].componentId] = { scope: "operating", origin: "reviewed", entryPolicy: "additive" };
-  expect(deriveBatchEmissionLines(f)[0].blocker).toBeUndefined();
+  expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state: "confirmedZero", blocker: { code: "lineHasNoSource" } });
+});
+
+it.each(["0", "1"])("uses an automatic figure of %s instead of a Removal-owned zero", (magnitude) => {
+  const f = facts();
+  f.entries = [entry(f, { kind: "zero", confirmedForRemovalId: "removal", total: null, hasEvidence: false })];
+  f.automaticFigures = { "run-electricity": { magnitude, unit: "kWh" } };
+  expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state: "filled", total: { magnitude, unit: "kWh" } });
 });
 
 it("reports the automatic record kind, count and figure independently of entries", () => {

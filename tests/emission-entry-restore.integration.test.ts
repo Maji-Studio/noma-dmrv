@@ -2,8 +2,8 @@ import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, certificationSubmissions, creditBatches, documents, emissionEntries,
-  emissionEntryValues, facilities, productionRuns, removalTemplateObservations, storageObjectDeletions, users } from "@/db/schema";
-import { createEmissionEntry, deleteEmissionEntry, getEmissionEntry, markNothingToRecord, restoreEmissionEntry } from "@/data-access/emission-entries";
+  emissionEntryValues, facilities, removalTemplateObservations, storageObjectDeletions, users } from "@/db/schema";
+import { createEmissionEntry, deleteEmissionEntry, getEmissionEntry, restoreEmissionEntry } from "@/data-access/emission-entries";
 import { insertDocument, listDocumentsForEntity } from "@/data-access/documents";
 import { cleanupLineageFixture, createLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
@@ -74,11 +74,6 @@ async function value(componentId = "lab") {
   entryIds.push(row.id);
   return row;
 }
-async function zero(componentId = "lab") {
-  const row = await markNothingToRecord(ctx, { facilityId: fixture.facilityId, creditBatchId: fixture.batchId, componentId });
-  entryIds.push(row.id);
-  return row;
-}
 async function deleted(componentId = "lab") {
   const row = await value(componentId);
   await deleteEmissionEntry(ctx, row.id, row.version);
@@ -122,52 +117,6 @@ it("serializes two restores so a single line cannot acquire two values", async (
   const results = await Promise.allSettled([restoreEmissionEntry(ctx, first), restoreEmissionEntry(ctx, second)]);
   expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
   expect(results.find(result => result.status === "rejected")).toMatchObject({ reason: { message: "This line already has an entry. Edit that entry instead." } });
-});
-
-it("restoring a value tombstones an operator zero and records its deletion", async () => {
-  const input = await deleted();
-  const confirmation = await zero();
-  await restoreEmissionEntry(ctx, input);
-  const [stored] = await db.select().from(emissionEntries).where(eq(emissionEntries.id, confirmation.id));
-  expect(stored).toMatchObject({ deletedAt: expect.any(Date), version: confirmation.version + 1, contentRevision: confirmation.contentRevision + 1 });
-  expect(await db.select().from(activityEvents).where(and(eq(activityEvents.entityId, confirmation.id), eq(activityEvents.action, "deleted"))))
-    .toHaveLength(1);
-});
-
-it("restores an operator zero only while no values or other operator zero exist", async () => {
-  const row = await zero();
-  await deleteEmissionEntry(ctx, row.id, row.version);
-  const input = { id: row.id, expectedVersion: row.version + 1 };
-  const restored = await restoreEmissionEntry(ctx, input);
-  await deleteEmissionEntry(ctx, row.id, restored.version);
-  input.expectedVersion = restored.version + 1;
-  const other = await zero();
-  await expect(restoreEmissionEntry(ctx, input)).rejects.toThrow("already marked");
-  await deleteEmissionEntry(ctx, other.id, other.version);
-  await value();
-  await expect(restoreEmissionEntry(ctx, input)).rejects.toThrow("This line has entries.");
-});
-
-it("rolls back value restoration when its active operator zero is reserved", async () => {
-  const input = await deleted();
-  const confirmation = await zero();
-  const [submission] = await db.insert(certificationSubmissions).values({ organizationId: TEST_ORG_ID,
-    provider: "isometric", localEntityType: "removal", localEntityId: fixture.removalId,
-    submissionType: "removal", version: 1, status: "draft" }).returning();
-  submissionIds.push(submission.id);
-  await db.update(emissionEntries).set({ sendReservedBySubmissionId: submission.id }).where(eq(emissionEntries.id, confirmation.id));
-  await expect(restoreEmissionEntry(ctx, input)).rejects.toThrow("reserved or sent");
-  const rows = await db.select().from(emissionEntries).where(inArray(emissionEntries.id, [input.id, confirmation.id]));
-  expect(rows.find(row => row.id === input.id)).toMatchObject({ deletedAt: expect.any(Date), version: input.expectedVersion });
-  expect(rows.find(row => row.id === confirmation.id)).toMatchObject({ deletedAt: null, version: confirmation.version });
-});
-
-it("refuses a restored zero after automatic records become positive", async () => {
-  await db.update(productionRuns).set({ electricityKwh: 0 }).where(eq(productionRuns.id, fixture.productionRunId));
-  const row = await zero("site");
-  await deleteEmissionEntry(ctx, row.id, row.version);
-  await db.update(productionRuns).set({ electricityKwh: 3 }).where(eq(productionRuns.id, fixture.productionRunId));
-  await expect(restoreEmissionEntry(ctx, { id: row.id, expectedVersion: row.version + 1 })).rejects.toThrow("records from production runs");
 });
 
 it.each(["reserved", "sent", "owned-zero"] as const)("refuses a deleted entry that is %s without changing its tombstone", async state => {

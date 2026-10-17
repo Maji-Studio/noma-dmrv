@@ -1,15 +1,14 @@
 /**
  * The ledger drawer of one line: From records + Manual entries = Total, read
  * as an equation. Records are read-only and link to where they are made;
- * each manual entry carries its own ⋯. The footer offers Add manual entry and
- * Nothing to record. Add and Edit swap the ledger for the entry form in the
+ * each manual entry carries its own ⋯. Add and Edit swap the ledger for the entry form in the
  * same drawer.
  */
 "use client";
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowUpRightIcon, CaretDownIcon, CaretRightIcon, MinusCircleIcon } from "@phosphor-icons/react/dist/ssr";
+import { ArrowUpRightIcon, CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, Notice } from "@/components/ui";
 import {
   SlideOverPanelBody,
@@ -31,13 +30,9 @@ import {
   addEntryRefusal,
   entriesFigure,
   formatFigure,
-  nothingRefusalText,
   hasRecordsFigure,
   lineRecords,
   lineTotalText,
-  nothingApplies,
-  nothingEntry,
-  nothingRefusal,
   openSourceLabel,
   recordsHref,
   recordsText,
@@ -47,11 +42,11 @@ import {
   type EmissionEntry,
   type EmissionLine,
 } from "./emission-line-display";
-import { ManualEntryItem, NothingEntryItem, StoppedEntryItem } from "./emission-ledger-entries";
+import { ManualEntryItem, StoppedEntryItem } from "./emission-ledger-entries";
 import { ManualEntryForm, type EntryFormMode } from "./manual-entry-form";
 import { SOURCE_ICON } from "./emission-source-chips";
 
-export type DrawerView = { kind: "ledger"; focusNote?: boolean } | { kind: "form"; mode: EntryFormMode };
+export type DrawerView = { kind: "ledger" } | { kind: "form"; mode: EntryFormMode };
 
 interface EmissionLineDrawerProps {
   line: EmissionLine | null;
@@ -63,13 +58,12 @@ interface EmissionLineDrawerProps {
   canWrite: boolean;
   onViewChange: (view: DrawerView) => void;
   onClose: () => void;
-  onNothing: (line: EmissionLine) => void;
   onDeleteEntry: (line: EmissionLine, entry: EmissionEntry) => void;
   /** Called after a form save; `warning` when the entry saved but its file did not. */
   onSaved: (line: EmissionLine, warning?: string) => void;
 }
 
-export function EmissionLineDrawer({ line, view, batch, scope, today, canWrite, onViewChange, onClose, onNothing, onDeleteEntry, onSaved }: EmissionLineDrawerProps) {
+export function EmissionLineDrawer({ line, view, batch, scope, today, canWrite, onViewChange, onClose, onDeleteEntry, onSaved }: EmissionLineDrawerProps) {
   return (
     <SlideOverPanelRoot open={!!line} onOpenChange={(open) => !open && onClose()}>
       <SlideOverPanelContent size="default">
@@ -94,10 +88,8 @@ export function EmissionLineDrawer({ line, view, batch, scope, today, canWrite, 
               line={line}
               batch={batch}
               scope={scope}
-              focusNote={!!view.focusNote}
               canWrite={canWrite}
               onForm={(mode) => onViewChange({ kind: "form", mode })}
-              onNothing={onNothing}
               onDeleteEntry={onDeleteEntry}
             />
           ))}
@@ -130,23 +122,19 @@ interface LedgerViewProps {
   line: EmissionLine;
   batch: EmissionBatch;
   scope: EmissionBatchScope;
-  focusNote: boolean;
   canWrite: boolean;
   onForm: (mode: EntryFormMode) => void;
-  onNothing: (line: EmissionLine) => void;
   onDeleteEntry: (line: EmissionLine, entry: EmissionEntry) => void;
 }
 
-function LedgerView({ line, batch, scope, focusNote, canWrite, onForm, onNothing, onDeleteEntry }: LedgerViewProps) {
+function LedgerView({ line, batch, scope, canWrite, onForm, onDeleteEntry }: LedgerViewProps) {
   const [showDescription, setShowDescription] = useState(false);
   const records = lineRecords(line);
   const values = valueEntries(line);
   const stopped = stoppedEntries(line);
-  const zero = nothingEntry(line);
   const single = line.entryPolicy === "single";
   const takesEntries = line.entryPolicy !== "none";
   const addRefusal = addEntryRefusal(line);
-  const refusal = nothingRefusal(line);
   const templatesHref = certificationRemovalTemplatesHref(scope.facilityId);
   const entriesSum = entriesFigure(line);
 
@@ -175,10 +163,7 @@ function LedgerView({ line, batch, scope, focusNote, canWrite, onForm, onNothing
           onDelete={() => onDeleteEntry(line, entry)}
         />
       ))}
-      {zero && !values.length && (
-        <NothingEntryItem key={zero.id} line={line} entry={zero} scope={scope} canWrite={canWrite} startEditing={focusNote} onUndo={() => onDeleteEntry(line, zero)} />
-      )}
-      {!values.length && !stopped.length && !zero && <li className="body-caption text-[var(--color-text-tertiary)]">{MISSING_VALUE.none}</li>}
+      {!values.length && !stopped.length && <li className="body-caption text-[var(--color-text-tertiary)]">{MISSING_VALUE.none}</li>}
     </ul>
   );
 
@@ -254,23 +239,6 @@ function LedgerView({ line, batch, scope, focusNote, canWrite, onForm, onNothing
       </SlideOverPanelBody>
       {canWrite && line.state !== "needsSetup" && takesEntries && (
         <SlideOverPanelFooter className="flex-wrap justify-between">
-          <div className="flex min-w-0 flex-1 flex-col items-start">
-            {nothingApplies(line) &&
-              (refusal ? (
-                <>
-                  <Button variant="noOutline" disabled aria-describedby="nothing-refusal" className="gap-6 px-0">
-                    <MinusCircleIcon size={20} aria-hidden="true" />
-                    Nothing to record
-                  </Button>
-                  <span id="nothing-refusal" className="body-caption text-[var(--color-text-tertiary)]">{nothingRefusalText(refusal)}</span>
-                </>
-              ) : (
-                <Button variant="noOutline" onClick={() => onNothing(line)} className="gap-6 px-0">
-                  <MinusCircleIcon size={20} aria-hidden="true" />
-                  Nothing to record
-                </Button>
-              ))}
-          </div>
           {singleEntry ? (
             <Button variant="primary" onClick={() => onForm({ kind: "edit", entry: singleEntry })}>Edit manual entry</Button>
           ) : (

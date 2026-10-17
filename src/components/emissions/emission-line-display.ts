@@ -31,7 +31,6 @@ export const DATE_IN_FUTURE_MESSAGE = "Entry date cannot be in the future at thi
 export const DATE_INVALID_MESSAGE = "Enter a valid entry date.";
 export const NEEDS_SETUP_COPY = "noma cannot fill this template line yet. An admin sets it up in the template review.";
 export const SINGLE_LINE_CAPTION = "One manual entry per credit batch. It counts for the whole credit batch.";
-export const ZERO_SENT_COPY = "Isometric receives 0 for this line. The note stays in noma.";
 /**
  * The server's note limit (MAX_ENTRY_TEXT_LENGTH in src/schemas/emission-entries.ts).
  * That module imports node-only rules, so the client mirrors the number.
@@ -202,11 +201,6 @@ export function valueEntries(line: EmissionLine): EmissionEntry[] {
 export function stoppedEntries(line: EmissionLine): EmissionEntry[] {
   return line.entries.filter((entry) => !entry.counts);
 }
-/** The operator's Nothing to record entry, if any. */
-export function nothingEntry(line: EmissionLine): EmissionEntry | null {
-  return line.entries.find((entry) => entry.kind === "zero" && entry.counts && entry.confirmedForRemovalId === null) ?? null;
-}
-
 export function entryFigureText(entry: EmissionEntry): string {
   return entry.values
     .map((value) => {
@@ -243,25 +237,6 @@ export function lineTotalText(line: EmissionLine): string {
 }
 
 /* ---------- what the operator may do ---------- */
-
-/** Nothing to record applies to the line at all (allowed or refused). */
-export function nothingApplies(line: EmissionLine): boolean {
-  return line.state !== "needsSetup" && line.entryPolicy !== "none" && line.contract?.scope === "operating" && !nothingEntry(line);
-}
-
-/** null when Nothing to record is allowed, else why not. Mirrors the server rule. */
-export function nothingRefusal(line: EmissionLine): string | null {
-  const values = valueEntries(line).length;
-  if (values) return `This line has ${manualEntriesText(values)}.`;
-  const records = lineRecords(line);
-  if (hasRecordsFigure(records)) return `This line has ${formatFigure(records.figure)} from ${SOURCE_WORDS[records.source].many}.`;
-  return null;
-}
-
-/** The refused Nothing to record sentence, shared by the row tooltip, the ⋯ menu and the drawer footer. */
-export function nothingRefusalText(refusal: string): string {
-  return `Nothing to record is not available. ${refusal}`;
-}
 
 /** Why Add manual entry is not offered, or null when it is. */
 export function addEntryRefusal(line: EmissionLine): string | null {

@@ -2,7 +2,7 @@
  * The read view of a credit batch's emission lines: Line | State | Sources |
  * Total | actions, grouped by template group in template order. The whole row
  * opens the ledger drawer; the name is its keyboard target, while the chips,
- * the Nothing to record icon and the ⋯ menu stay separate controls.
+ * and the ⋯ menu stay separate controls.
  *
  * A list, not a table, so the row can be one click target and phones can
  * stack the same cells into a card.
@@ -11,8 +11,8 @@
 
 import { Fragment } from "react";
 import Link from "next/link";
-import { DotsThreeVerticalIcon, FunnelSimpleIcon, MinusCircleIcon } from "@phosphor-icons/react/dist/ssr";
-import { Button, DropdownMenu, EmptyState, Tooltip } from "@/components/ui";
+import { DotsThreeVerticalIcon, FunnelSimpleIcon } from "@phosphor-icons/react/dist/ssr";
+import { Button, DropdownMenu, EmptyState } from "@/components/ui";
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
 import { certificationRemovalTemplatesHref } from "@/lib/certification/links";
 import { cn } from "@/lib/utils";
@@ -20,13 +20,10 @@ import { EmissionLineBadge } from "./emission-line-badge";
 import {
   addEntryRefusal,
   groupLines,
-  nothingRefusalText,
   isOpen,
   isRecordsGap,
   lineRecords,
   lineTotalText,
-  nothingApplies,
-  nothingRefusal,
   openSourceLabel,
   recordsHref,
   valueEntries,
@@ -41,7 +38,6 @@ const ACTION_SIZE = "size-44";
 
 export interface LineActions {
   open: (line: EmissionLine, options?: { add?: boolean }) => void;
-  nothing: (line: EmissionLine) => void;
 }
 
 interface EmissionLineListProps {
@@ -161,52 +157,9 @@ function LineRow({ line, showGroup, scope, actions, canWrite }: LineRowProps) {
         className="col-start-2 row-start-1 -mt-8 -mr-8 flex items-start justify-end md:col-start-5 md:m-0 md:items-center"
         onClick={(event) => event.stopPropagation()}
       >
-        {canWrite && <NothingButton line={line} onNothing={actions.nothing} />}
         <RowMenu line={line} scope={scope} actions={actions} canWrite={canWrite} />
       </div>
     </li>
-  );
-}
-
-/**
- * One-tap Nothing to record. Always visible where it is allowed. Where it is
- * refused it sits disabled with its reason as the tooltip, shown on row hover
- * or focus on desktop only; phones read the reason in the ⋯ menu.
- */
-function NothingButton({ line, onNothing }: { line: EmissionLine; onNothing: (line: EmissionLine) => void }) {
-  if (!nothingApplies(line)) return <span aria-hidden="true" className={cn("hidden md:block", "w-44")} />;
-  const refusal = nothingRefusal(line);
-  const base = cn("inline-flex items-center justify-center", ACTION_SIZE);
-  if (refusal) {
-    return (
-      <Tooltip content={nothingRefusalText(refusal)}>
-        <button
-          type="button"
-          aria-disabled="true"
-          aria-label={nothingRefusalText(refusal)}
-          onClick={(event) => event.preventDefault()}
-          className={cn(
-            base,
-            "hidden cursor-not-allowed text-[var(--color-text-tertiary)] md:inline-flex md:opacity-0",
-            "md:group-hover:opacity-50 md:group-focus-within:opacity-50 md:focus-visible:opacity-50",
-          )}
-        >
-          <MinusCircleIcon size={18} aria-hidden="true" />
-        </button>
-      </Tooltip>
-    );
-  }
-  return (
-    <Tooltip content="Nothing to record">
-      <button
-        type="button"
-        aria-label="Nothing to record"
-        onClick={() => onNothing(line)}
-        className={cn(base, "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-medium)] hover:text-[var(--color-text-primary)]")}
-      >
-        <MinusCircleIcon size={18} aria-hidden="true" />
-      </button>
-    </Tooltip>
   );
 }
 
@@ -219,7 +172,7 @@ function MenuItemBody({ label, reason }: { label: string; reason?: string | null
   );
 }
 
-/** The short row menu: Add manual entry, the records page, Nothing to record, Line description. */
+/** The short row menu: Add manual entry, the records page, Line description. */
 function RowMenu({ line, scope, actions, canWrite }: { line: EmissionLine; scope: EmissionBatchScope; actions: LineActions; canWrite: boolean }) {
   const records = lineRecords(line);
   const upstream = records ? (
@@ -233,12 +186,6 @@ function RowMenu({ line, scope, actions, canWrite }: { line: EmissionLine; scope
       <MenuItemBody label="Add manual entry" reason={addRefusal} />
     </DropdownMenu.Item>
   ) : null;
-  const refusal = nothingRefusal(line);
-  const nothing = canWrite && nothingApplies(line) ? (
-    <DropdownMenu.Item key="nothing" disabled={!!refusal} onClick={() => actions.nothing(line)}>
-      <MenuItemBody label="Nothing to record" reason={refusal ? nothingRefusalText(refusal) : null} />
-    </DropdownMenu.Item>
-  ) : null;
   const setup = line.state === "needsSetup" ? (
     <DropdownMenu.Item key="setup" render={<Link href={certificationRemovalTemplatesHref(scope.facilityId)} />}>
       Open template review
@@ -250,7 +197,7 @@ function RowMenu({ line, scope, actions, canWrite }: { line: EmissionLine; scope
     </DropdownMenu.Item>
   );
   // Where the records hold nothing, the fix is usually upstream, so that page comes first.
-  const items = isRecordsGap(records) ? [upstream, add, nothing, description] : [add, upstream, nothing, setup, description];
+  const items = isRecordsGap(records) ? [upstream, add, description] : [add, upstream, setup, description];
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger

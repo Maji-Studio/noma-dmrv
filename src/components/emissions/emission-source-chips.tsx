@@ -4,7 +4,6 @@
  *   wash (sea fill)         records made on another page; links upstream
  *   dashed warning outline  the records source exists but holds nothing
  *   plain outline           manual entries typed on this page
- *   no border               Nothing to record
  */
 "use client";
 
@@ -14,7 +13,6 @@ import type { Icon } from "@phosphor-icons/react";
 import {
   ArrowUpRightIcon,
   GearSixIcon,
-  MinusCircleIcon,
   PencilSimpleIcon,
   PlantIcon,
   TruckIcon,
@@ -26,7 +24,6 @@ import {
   hasRecordsFigure,
   lineRecords,
   manualEntriesText,
-  nothingEntry,
   openSourceLabel,
   recordsChipText,
   recordsHref,
@@ -120,14 +117,6 @@ export function SourceChips({ line, ids, onEntries, interactive = true, quietTex
         <span className="line-through">{text}</span>
         <span>stopped</span>
       </EntryChip>,
-    );
-  }
-  if (nothingEntry(line)) {
-    entryChips.push(
-      <span key="nothing" className={cn(CHIP, "px-0 text-[var(--color-text-secondary)]")}>
-        <MinusCircleIcon size={ICON_SIZE} aria-hidden="true" />
-        Nothing to record
-      </span>,
     );
   }
   if (chips.length && entryChips.length) {

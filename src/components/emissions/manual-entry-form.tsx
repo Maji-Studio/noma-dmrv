@@ -14,7 +14,7 @@ import { FormField } from "@/components/forms/form-field";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { FormTextarea } from "@/components/forms/form-textarea";
 import { ServerError } from "@/components/forms/server-error";
-import { Button, Input, Notice } from "@/components/ui";
+import { Button, Input } from "@/components/ui";
 import {
   SlideOverPanelBody,
   SlideOverPanelDescription,
@@ -43,7 +43,6 @@ import {
   entryDocumentType,
   entryFields,
   entryValues,
-  nothingEntry,
   validateEntryDate,
   validateFields,
   type EmissionBatch,
@@ -92,7 +91,6 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
   const updateEntry = useUpdateEmissionEntry(scope);
   const replaceEntry = useReplaceEmissionEntry(scope);
   const saving = createEntry.isPending || updateEntry.isPending || replaceEntry.isPending || attachments.attachments.some((a) => a.status === "uploading");
-  const replacesNothing = mode.kind !== "edit" && !!nothingEntry(line);
   const computed = draftMassDistanceFigure(line, draft);
   const idPrefix = `entry-${line.componentId}`;
   // Pending flags update after a render; this blocks a second Enter or click in the same tick.
@@ -161,7 +159,6 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
             if (!saving) void save();
           }}
         >
-          {replacesNothing && <Notice tone="warning">{`This replaces Nothing to record on ${line.displayName}.`}</Notice>}
           {mode.kind === "again" && (
             <p className="body-small text-[var(--color-text-secondary)]">
               The earlier entry stopped counting after a template change. Saving replaces it and keeps its files.

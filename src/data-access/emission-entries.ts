@@ -1,7 +1,4 @@
-import { loadBatchAutomaticFigures } from "./batch-emission-automatic-figures";
-import { loadBatchEmissionEntryFacts } from "./emission-entry-facts";
-import { entryLine, resolveEmissionEntryDate, validateOperatorZero, validateEntryDate, normalizeNothingToRecordNote } from "@/lib/certification/emission-entry-rules";
-import { markNothingToRecordSchema, type MarkNothingToRecordInput } from "@/schemas/emission-entries";
+import { entryLine, resolveEmissionEntryDate } from "@/lib/certification/emission-entry-rules";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
@@ -9,7 +6,6 @@ import {
   emissionEntryValues,
   documents,
   certificationSubmissions,
-  creditBatches,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
@@ -179,24 +175,6 @@ export async function tombstoneEmissionZeros(
   entry: { creditBatchId: string; removalTemplateId: string; componentId: string },
 ) {
   requireOrgScope(ctx);
-  const zeros = await tx.select().from(emissionEntries).where(and(
-    eq(emissionEntries.organizationId, ctx.organizationId),
-    eq(emissionEntries.creditBatchId, entry.creditBatchId),
-    eq(emissionEntries.componentId, entry.componentId),
-    eq(emissionEntries.kind, "zero"), isNull(emissionEntries.confirmedForRemovalId),
-    isNull(emissionEntries.deletedAt),
-  )).orderBy(asc(emissionEntries.id));
-  for (const zero of zeros) {
-    const locked = await lockWritableEmissionEntry(ctx, tx, zero.id);
-    const { values } = await getEmissionEntry(ctx, zero.id, tx);
-    const before = { ...locked, values };
-    const [after] = await tx.update(emissionEntries).set({
-      deletedAt: new Date(), updatedAt: new Date(),
-      version: nextVersion(emissionEntries.version),
-      contentRevision: nextVersion(emissionEntries.contentRevision),
-    }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, zero.id))).returning();
-    await recordEmissionEntryActivity(ctx, tx, "deleted", before, { ...after, values: before.values });
-  }
   await tx
     .update(emissionEntries)
     .set({
@@ -335,13 +313,6 @@ export async function updateEmissionEntry(ctx: OrgContext, input: UpdateEmission
   return mutateEntry(ctx, data.id, data.expectedVersion, async (tx, entry, context) => {
     // A single-line date is fixed, including when a client still sends its date field.
     if (entry.lineRule === "single") data.occurredOn = undefined;
-    if (entry.kind === "zero") {
-      if (data.values) throw new SafeError("Recorded zeros do not have values. Add an entry instead.");
-      if (data.note !== undefined) data.note = normalizeNothingToRecordNote(data.note);
-      validateEntryDate({ occurredOn: data.occurredOn ?? entry.occurredOn,
-        batchStartDate: context.batch.startDate, timezone: context.facility.timezone,
-        dateDefaulted: data.occurredOn === undefined });
-    }
     if (entry.kind === "value" && (data.values || data.occurredOn)) {
       const values =
         data.values ??
@@ -470,14 +441,8 @@ export async function restoreEmissionEntry(ctx: OrgContext, input: RestoreEmissi
     eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, data.id),
   ));
   if (!initial) throw new SafeError("Emissions entry was not found.");
-  // Like markNothingToRecord, read automatic figures before holding the write connection.
-  const initialFacilityId = initial.kind === "zero" ? await getBatchFacilityForRestore(ctx, initial.creditBatchId) : null;
-  const automatic = initialFacilityId
-    ? await loadBatchAutomaticFigures(ctx, initialFacilityId, initial.creditBatchId)
-    : {};
   return db.transaction(async (tx) => {
     const { batch, facility, observation } = await lockedBatch(ctx, tx, initial.creditBatchId);
-    if (initialFacilityId && batch.facilityId !== initialFacilityId) throw emissionEntryParentChanged();
     const entry = await lockWritableEmissionEntry(ctx, tx, data.id, { includeDeleted: true });
     if (entry.creditBatchId !== initial.creditBatchId || entry.kind !== initial.kind) throw emissionEntryParentChanged();
     assertRowVersion({ entity: "emission_entry", id: entry.id, expectedVersion: data.expectedVersion, actualVersion: entry.version });
@@ -497,67 +462,15 @@ export async function restoreEmissionEntry(ctx: OrgContext, input: RestoreEmissi
     const common = { observation, componentId: entry.componentId, occurredOn: entry.occurredOn,
       batchStartDate: batch.startDate, timezone: facility.timezone, dateDefaulted: true,
       activeValueCount: siblings.filter((sibling) => sibling.kind === "value").length };
-    if (entry.kind === "value") {
-      validateEmissionEntry({ ...common, values: values.map((value) => ({ ...value,
-        quantityKind: entry.inputShape.find((shape) => shape.key === value.inputKey)!.quantityKind,
-      })) });
-      await tombstoneEmissionZeros(ctx, tx, entry);
-    } else {
-      const source = entryLine(observation, entry.componentId)?.contract.automaticSource;
-      validateOperatorZero({ ...common, note: entry.note,
-        activeOperatorZeroCount: siblings.filter((sibling) => sibling.kind === "zero" && sibling.confirmedForRemovalId === null).length,
-        automaticFigure: source ? automatic[source] ?? null : null,
-      });
-    }
+    validateEmissionEntry({ ...common, values: values.map((value) => ({ ...value,
+      quantityKind: entry.inputShape.find((shape) => shape.key === value.inputKey)!.quantityKind,
+    })) });
+    await tombstoneEmissionZeros(ctx, tx, entry);
     const [saved] = await tx.update(emissionEntries).set({
       deletedAt: null, updatedAt: new Date(), version: nextVersion(emissionEntries.version),
       contentRevision: nextVersion(emissionEntries.contentRevision),
     }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id))).returning();
     await recordEmissionEntryActivity(ctx, tx, "updated", { ...entry, values }, { ...saved, values });
-    return getEmissionEntry(ctx, entry.id, tx);
-  });
-}
-
-async function getBatchFacilityForRestore(ctx: OrgContext, creditBatchId: string) {
-  requireOrgScope(ctx);
-  const [batch] = await db.select({ facilityId: creditBatches.facilityId }).from(creditBatches).where(and(
-    eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, creditBatchId),
-  ));
-  if (!batch) throw new SafeError("Credit batch was not found.");
-  return batch.facilityId;
-}
-
-/** The automatic read is server-owned and precedes the write transaction to avoid pool starvation. */
-export async function markNothingToRecord(ctx: OrgContext, input: MarkNothingToRecordInput) {
-  requireOrgScope(ctx);
-  requireEmissionsEntriesEnabled();
-  const data = markNothingToRecordSchema.parse(input);
-  const automaticFigures = await loadBatchAutomaticFigures(ctx, data.facilityId, data.creditBatchId);
-  return db.transaction(async (tx) => {
-    const { batch, facility, observation } = await lockedBatch(ctx, tx, data.creditBatchId);
-    if (batch.facilityId !== data.facilityId) throw emissionEntryParentChanged();
-    const { entries } = await loadBatchEmissionEntryFacts(ctx, batch.id, observation, tx);
-    const siblings = entries.filter((entry) => entry.componentId === data.componentId);
-    const source = entryLine(observation, data.componentId)?.contract.automaticSource;
-    const entryPolicy = entryLine(observation, data.componentId)?.entryPolicy ?? "none";
-    const occurredOn = resolveEmissionEntryDate({
-      entryPolicy,
-      occurredOn: data.occurredOn, batchStartDate: batch.startDate,
-      batchEndDate: batch.endDate, timezone: facility.timezone,
-    });
-    const binding = validateOperatorZero({ ...data, occurredOn, observation,
-      dateDefaulted: entryPolicy === "single" || data.occurredOn === undefined,
-      batchStartDate: batch.startDate, timezone: facility.timezone,
-      activeValueCount: siblings.filter((entry) => entry.kind === "value" && entry.counts).length,
-      activeOperatorZeroCount: siblings.filter((entry) => entry.kind === "zero" && !entry.confirmedForRemovalId).length,
-      automaticFigure: source ? automaticFigures[source] ?? null : null,
-    });
-    const [entry] = await tx.insert(emissionEntries).values({
-      organizationId: ctx.organizationId, creditBatchId: batch.id,
-      removalTemplateId: observation.externalTemplateId, observationId: observation.id,
-      componentId: data.componentId, kind: "zero", occurredOn, createdBy: ctx.userId, ...binding,
-    }).returning();
-    await recordEmissionEntryActivity(ctx, tx, "created", null, { ...entry, values: [] });
     return getEmissionEntry(ctx, entry.id, tx);
   });
 }

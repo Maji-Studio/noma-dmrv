@@ -11,7 +11,7 @@ const UNIT_MISMATCH_MESSAGE = "Emissions values use different units. Use the sam
 
 export const EMISSION_LINE_STATE_LABELS = {
   filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing",
-  needsReview: "Needs review", needsSetup: "Needs setup", confirmedZero: "Nothing to record",
+  needsReview: "Needs review", needsSetup: "Needs setup", confirmedZero: "Recorded as zero",
 } as const;
 export type EmissionLineState = keyof typeof EMISSION_LINE_STATE_LABELS;
 export interface EmissionFigure { magnitude: string; unit: string }
@@ -73,7 +73,6 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     const decision = emissionLineBindingDecision({ component, groupKey: group.key, contract: stored, problems, enrichmentComplete: facts.enrichmentComplete });
     const entries = facts.entries.filter((entry) => entry.componentId === component.id);
     const counting = entries.filter((entry) => entry.counts);
-    const operatorZero = counting.some((entry) => entry.kind === "zero" && entry.confirmedForRemovalId === null);
     const values = counting.filter((entry) => entry.kind === "value");
     const automaticFigure = contract?.automaticSource ? ownValue(facts.automaticFigures, contract.automaticSource) ?? null : null;
     const records: EmissionLineRecords | null = contract?.automaticSource ? {
@@ -87,11 +86,9 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     else if (values.some((entry) => !entry.hasEvidence)) {
       state = "missingEvidence";
       blocker = { code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
-    } else if (!values.length && counting.some((entry) => entry.kind === "zero") &&
-      (!automaticFigure || (operatorZero && Number(automaticFigure.magnitude) === 0))) state = "confirmedZero";
-    else if (automaticFigure || values.length) state = "filled";
+    } else if (automaticFigure || values.length) state = "filled";
+    else if (counting.some((entry) => entry.kind === "zero")) state = "confirmedZero";
     else { state = "empty"; blocker = decision?.blocker; }
-    if (state === "confirmedZero" && operatorZero && blocker?.code === "lineHasNoSource") blocker = undefined;
     // A paired-input value has no scalar total. Do not show a partial sum.
     const figures = [
       ...(automaticFigure ? [automaticFigure] : []), ...values.flatMap((entry) => entry.total ? [entry.total] : []),

@@ -56,12 +56,6 @@ _On screen_: manual entry; the screen calls the part that comes from forms and
 routes "From records".
 _Avoid_: activity (reserved for the history log).
 
-**Nothing to record**:
-The state and the action for a template line an operator marks as having
-nothing to report: a recorded zero, with an optional note. Isometric receives
-0 for the line; the note stays in noma.
-_Avoid_: skipped, not applicable.
-
 **Emission estimate**:
 A per-facility configured value (reference soil temperature) used to derive
 submission data noma does not measure directly. Distinct from a measured value.

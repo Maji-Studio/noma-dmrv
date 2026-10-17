@@ -17,7 +17,7 @@ const NO_FILTER: EmissionsOverviewQuery = {
 function counts(overrides: Partial<EmissionLineCounts> = {}): EmissionLineCounts {
   return {
     total: 10, open: 0, fileMissing: 0, needsReview: 0, notRecorded: 0,
-    nothingToRecord: 0, needsSetup: 0, recorded: 10, ...overrides,
+    needsSetup: 0, recorded: 10, ...overrides,
   };
 }
 

@@ -47,10 +47,10 @@ it.each([false, true])("health uses stored entries for each batch (grouped=%s)",
   expect(toBatchHealthFacts(context, "one").emissionLines?.[0].state).toBe("filled");
   if (grouped) expect(toBatchHealthFacts(context, "two").emissionLines?.[0].state).toBe("empty");
 });
-it("names missing-evidence lines, while an operator zero has no blocker", async () => {
+it("names missing-evidence lines, while a Removal-owned zero keeps its source blocker", async () => {
   const batches = ["missing", "zero"].map(id => ({ id, removalTemplateId: "template" }));
   vi.mocked(loadBatchEmissionEntryFacts).mockImplementation(async (_ctx, id) => ({
-    entries: [{ ...value, hasEvidence: false, ...(id === "zero" ? { kind: "zero", total: null, confirmedForRemovalId: null, note: "No lab work" } : {}) }], previousObservations: new Map(),
+    entries: [{ ...value, hasEvidence: false, ...(id === "zero" ? { kind: "zero", total: null, confirmedForRemovalId: "removal" } : {}) }], previousObservations: new Map(),
   }) as never);
   const loaded = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facilityFacts);
   const resolved = resolveRemovalTemplate(batches, facilityFacts, loaded);
@@ -59,7 +59,7 @@ it("names missing-evidence lines, while an operator zero has no blocker", async 
   const checks = deriveBatchHealth(toBatchHealthFacts(context, "missing")).checks;
   expect(checks.find(check => check.key === "emissions")).toMatchObject({ status: "unmet", detail: "Add a file for Lab electricity EU." });
   expect(resolved.emissionLinesByBatchId.zero[0].state).toBe("confirmedZero");
-  expect(resolved.emissionLinesByBatchId.zero[0].blocker).toBeUndefined();
+  expect(resolved.emissionLinesByBatchId.zero[0].blocker).toMatchObject({ code: "lineHasNoSource" });
 });
 it("uses batch-wide automatic figures instead of empty placeholders", async () => {
   const facts = structuredClone(facilityFacts);

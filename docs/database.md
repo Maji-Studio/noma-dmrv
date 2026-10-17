@@ -495,7 +495,5 @@ decimal text. Values are non-negative and finite. Optional `mass_distance_detail
 JSON stores the entered mass and distance as decimal strings with canonical units.
 The writer checks their exact product against the magnitude. Partial unique indexes
 enforce one active single-policy value per batch and one live zero per Removal,
-batch and component. Removal-confirmed zeros are owned by their draft Removal.
-Operator-marked zeros have no Removal owner and have an optional note; a
-partial unique index allows one active operator zero per organization, batch
-and component. Adding a value tombstones operator zeros with captured activity.
+batch and component. Only the Removal-flow confirmation writes zero rows, each owned by its draft
+Removal through `confirmed_for_removal_id`.

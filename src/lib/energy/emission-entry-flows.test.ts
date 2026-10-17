@@ -21,7 +21,7 @@ it("adds site electricity and diesel, but never lab electricity", () => {
 });
 it("excludes deleted, non-counting, zero and incompatible-unit entries", () => {
   expect(emissionEntryFlows([
-    { ...entry, deletedAt: new Date() }, { ...entry, counts: false }, { ...entry, kind: "zero" },
+    { ...entry, deletedAt: new Date() }, { ...entry, counts: false }, { ...entry, kind: "zero", confirmedForRemovalId: "removal", total: null },
     { ...entry, unitMismatch: true }, { ...entry, total: { magnitude: "1", unit: "kg" } },
   ], contracts)).toEqual([]);
 });
