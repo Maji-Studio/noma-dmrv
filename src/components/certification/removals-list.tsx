@@ -28,6 +28,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import {
   useRemovalPreflightSummaries,
   useRemovalsForFacility,
@@ -47,9 +48,11 @@ import {
 } from "./removal-list-state";
 
 
-export function RemovalsList() {
+export function RemovalsList({ initialCreate = false }: { initialCreate?: boolean } = {}) {
   const { facilityId, selectedFacility } = useFacilityContext();
   const [dialogOpen, setDialogOpen] = useState(false);
+  // `?create=true` opens the wizard (the credit batch page's Start Removal).
+  const createIntent = useOpenCreateIntent({ initialOpen: initialCreate });
   // Resume an existing draft removal in the wizard — the consolidated landing
   // for the retired `/[removalId]/review` route, which now redirects here with
   // `?resume=<removalId>` (design doc §4).
@@ -58,9 +61,10 @@ export function RemovalsList() {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
 
-  const wizardOpen = dialogOpen || !!resume;
+  const wizardOpen = dialogOpen || !!resume || createIntent.isOpen;
   const closeWizard = () => {
     setDialogOpen(false);
+    createIntent.clear();
     void setResume(null);
   };
 

@@ -33,7 +33,9 @@ export interface RemovalBarGroup {
 
 export const NOT_IN_REMOVAL_GROUP_ID = "not-in-removal";
 
-function segmentOf(removal: RemovalBarRemoval): RemovalBarSegment {
+/** The bar segment for biochar a Removal holds, or for biochar in none. */
+export function segmentForRemoval(removal: Pick<RemovalBarRemoval, "phase"> | null): RemovalBarSegment {
+  if (!removal) return "notInRemoval";
   return removal.phase === "submitted" ? "submitted" : "draft";
 }
 
@@ -47,7 +49,7 @@ function partsOf(slices: readonly RemovalBarSlice[]): RemovalBarPart[] {
 export function removalBarGroups(model: CreditBatchPageModel): RemovalBarGroup[] {
   const groups: RemovalBarGroup[] = model.removals.map((removal) => ({
     id: removal.id,
-    segment: segmentOf(removal),
+    segment: segmentForRemoval(removal),
     removal,
     dryKg: removal.dryKg,
     parts: partsOf(model.slices.filter((slice) => slice.removalId === removal.id)),

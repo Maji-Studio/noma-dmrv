@@ -37,7 +37,7 @@ import {
 import { ServerError } from "@/components/forms";
 import { CreditBatchForm } from "./credit-batch-form";
 import { CreditBatchCard } from "./credit-batch-card";
-import { CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE, creditBatchUpdatePatch, isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
+import { isCreditBatchMembershipLocked, saveCreditBatchEdit } from "./credit-batch-update-patch";
 import { RecordUsedBy, recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { isRecordEditable } from "@/lib/record-lock-view";
@@ -299,41 +299,21 @@ export function CreditBatchList({
   const handleUpdate = async (data: CreditBatchFormData) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
-    try {
-      const { sampling, ...mutableData } = data;
-      void sampling;
-      // A held membership never reaches the server, so a notes-only save
-      // passes the slice guard; a free batch re-resolves on every save. A
-      // membership change made before the lock arrived is never dropped.
-      const patch = creditBatchUpdatePatch(mutableData, sideSheet.entity, membershipLocked);
-      if (!patch) {
-        setUpdateError(CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE);
-        return;
-      }
-      const result = await updateCreditBatch.mutateAsync({
-        creditBatchId: sideSheet.entity.id,
-        expectedVersion: sideSheet.entity.version,
-        ...patch,
-      });
-      if (result.success) {
-        closeSideSheet();
-        // The batch is saved. A warning says only that part of its detail did
-        // not load, so the operator is told what to do, not that it failed.
-        if (result.warning) toast.warning(`${result.warning} Refresh the page.`);
-        else toast.success("Credit batch updated.");
-      } else {
-        setUpdateError(
-          result.error || "Credit batch was not saved. Try again.",
-        );
-      }
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Credit batch was not saved. Try again.";
-      console.error("Credit batch update error:", err);
-      setUpdateError(message);
+    const outcome = await saveCreditBatchEdit({
+      data,
+      saved: sideSheet.entity,
+      membershipLocked,
+      update: (input) => updateCreditBatch.mutateAsync(input),
+    });
+    if (outcome.status === "error") {
+      setUpdateError(outcome.message);
+      return;
     }
+    closeSideSheet();
+    // The batch is saved. A warning says only that part of its detail did
+    // not load, so the operator is told what to do, not that it failed.
+    if (outcome.warning) toast.warning(`${outcome.warning} Refresh the page.`);
+    else toast.success("Credit batch updated.");
   };
 
   const handleDelete = (batchId: string) => {

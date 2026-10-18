@@ -38,6 +38,7 @@ import {
 import { sampleCreateHref, sampleDetailHref } from "@/lib/sample-create-intent";
 import { SheetLinkRow, SheetLinkRows } from "@/components/ui/sheet-link-row";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { focusRowProps } from "./credit-batch-page-parts";
 
 function Section({
   children,
@@ -198,20 +199,6 @@ function ReplicateTable({ summary }: { summary: DurabilityBatchSummary }) {
   );
 }
 
-/**
- * Scrolls a deep-linked Sample row into view once per focus
- * (`?focus=<sample id>`). A ref callback, so no effect is needed.
- */
-function syncFocusedRow(node: HTMLDivElement | null, focused: boolean) {
-  if (!node) return;
-  if (!focused) {
-    delete node.dataset.scrolled;
-  } else if (!node.dataset.scrolled) {
-    node.dataset.scrolled = "true";
-    node.scrollIntoView({ block: "center" });
-  }
-}
-
 function SampleSummaryRows({
   summary,
   facilityId,
@@ -224,15 +211,9 @@ function SampleSummaryRows({
   return (
     <SheetLinkRows>
       {summary.replicates.map((replicate) => {
-        const focused = replicate.id === focusedSampleId;
+        // `?focus=<sample id>` scrolls to this row and highlights it.
         return (
-          <div
-            key={replicate.id}
-            id={`sample-row-${replicate.id}`}
-            data-focused={focused || undefined}
-            ref={(node) => syncFocusedRow(node, focused)}
-            className={focused ? "bg-[var(--st-wait-bg)] outline outline-1 outline-[var(--st-wait-border)]" : undefined}
-          >
+          <div key={replicate.id} {...focusRowProps(`sample-row-${replicate.id}`, replicate.id === focusedSampleId)}>
             <SheetLinkRow
               href={sampleDetailHref(facilityId, replicate.id)}
               ariaLabel={`Open lab Sample ${replicate.sampleCode}`}

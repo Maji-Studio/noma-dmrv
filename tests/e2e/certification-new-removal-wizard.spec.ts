@@ -154,6 +154,30 @@ test.describe("Certification — New-Removal wizard", () => {
     }
   });
 
+  test("opens the wizard from a create link, as the credit batch page's Start Removal does", async ({
+    adminPage: page,
+    seededData,
+    cleanupTestData,
+  }) => {
+    void cleanupTestData;
+    const facilityId = seededData.facility.id;
+    const mapping = await seedCertifierMapping(facilityId, { externalProjectId: FAKE_PROJECT_ID });
+
+    try {
+      await page.goto(`/certification/removals?facility=${facilityId}&create=true`);
+      const dialog = page.getByRole("dialog");
+      await expect(
+        dialog.getByRole("heading", { name: "New Removal", level: 2 }),
+      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
+      // The intent is consumed, so closing does not reopen it.
+      await expect(page).not.toHaveURL(/[?&]create=/);
+      await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    } finally {
+      await mapping.cleanup();
+    }
+  });
+
   test("redirects the legacy review route into the wizard resume step", async ({
     adminPage: page,
     seededData,

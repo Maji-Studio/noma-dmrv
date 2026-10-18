@@ -3,10 +3,9 @@
 /**
  * The Emissions tab of the credit batch page: the one seam where
  * `CreditBatchEmissionsPanel` (#1058 PR 3) mounts behind
- * `EMISSIONS_ENTRIES_ENABLED` once it lands. The route reads the flag on the
- * server and passes it here as `entriesEnabled`; the panel takes it as its
- * `enabled` prop. Until then the tab points to the Energy page, where
- * production inputs are recorded today.
+ * `EMISSIONS_ENTRIES_ENABLED` once it lands (docs/open-questions.md). Until
+ * then the tab points to the Energy page, where production inputs are
+ * recorded today.
  */
 import Link from "next/link";
 import { LightningIcon } from "@phosphor-icons/react/dist/ssr";
@@ -15,10 +14,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { PAGE_PANEL } from "./credit-batch-page-parts";
 
 export interface CreditBatchEmissionsTabProps {
-  creditBatchId: string;
   facilityId: string;
-  /** The server's EMISSIONS_ENTRIES_ENABLED flag, for the panel. */
-  entriesEnabled: boolean;
 }
 
 export function CreditBatchEmissionsTab({ facilityId }: CreditBatchEmissionsTabProps) {

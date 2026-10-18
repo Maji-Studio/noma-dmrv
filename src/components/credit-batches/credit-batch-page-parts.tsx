@@ -70,26 +70,36 @@ export function IdentityChip({ children, icon }: { children: ReactNode; icon?: R
   );
 }
 
+const FOCUSED_ROW_CLASS = "bg-[var(--st-wait-bg)] outline outline-1 outline-[var(--st-wait-border)]";
+
 /**
- * Wraps a row so `?focus=<rowId>` highlights it and scrolls it into view once.
- * The ref callback does the scroll, so no effect is needed.
+ * Props for a deep-link focus target (`?focus=`): the element id, the
+ * highlight, and a ref callback that scrolls it into view once per focus.
+ * Context-free, so any row can take it; no effect is needed.
  */
+export function focusRowProps(id: string, focused: boolean) {
+  return {
+    id,
+    "data-focused": focused || undefined,
+    className: focused ? FOCUSED_ROW_CLASS : undefined,
+    ref: (node: HTMLElement | null) => {
+      if (!node) return;
+      if (!focused) {
+        delete node.dataset.scrolled;
+      } else if (!node.dataset.scrolled) {
+        node.dataset.scrolled = "true";
+        node.scrollIntoView({ block: "center" });
+      }
+    },
+  };
+}
+
+/** Wraps a row so `?focus=<rowId>` highlights it and scrolls it into view once. */
 export function FocusRow({ rowId, className, children, as: Tag = "div" }: { rowId: string; className?: string; children: ReactNode; as?: "div" | "li" }) {
   const { focus } = useCreditBatchPage();
-  const focused = focus === rowId;
+  const props = focusRowProps(`row-${rowId}`, focus === rowId);
   return (
-    <Tag
-      id={`row-${rowId}`}
-      data-focused={focused || undefined}
-      ref={(node: HTMLElement | null) => {
-        if (node && focused && node.dataset.scrolled !== rowId) {
-          node.dataset.scrolled = rowId;
-          node.scrollIntoView({ block: "center" });
-        }
-        if (node && !focused) delete node.dataset.scrolled;
-      }}
-      className={cn(className, focused && "bg-[var(--st-wait-bg)] outline outline-1 outline-[var(--st-wait-border)]")}
-    >
+    <Tag {...props} className={cn(className, props.className)}>
       {children}
     </Tag>
   );

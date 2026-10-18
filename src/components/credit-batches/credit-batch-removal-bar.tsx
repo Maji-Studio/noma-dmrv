@@ -84,8 +84,11 @@ function groupAccessibleLabel(group: RemovalBarGroup): string {
   return `${groupName(group)}${status}, ${tonnesFromKg(group.dryKg)}`;
 }
 
-function removalDateLine(removal: RemovalBarRemoval): string {
-  return removal.submittedAt ? `Submitted ${formatDate(removal.submittedAt)}` : `Created ${formatDate(removal.createdAt)}`;
+/** An interrupted submission reads as a draft, so only a submitted Removal names its submission date. */
+export function removalDateLine(removal: Pick<RemovalBarRemoval, "phase" | "submittedAt" | "createdAt">): string {
+  return removal.phase === "submitted" && removal.submittedAt
+    ? `Submitted ${formatDate(removal.submittedAt)}`
+    : `Created ${formatDate(removal.createdAt)}`;
 }
 
 function RemovalCardBody({ group }: { group: RemovalBarGroup }) {
@@ -164,12 +167,12 @@ export function CompactRemovalBar({ groups, facilityId }: { groups: RemovalBarGr
         {groups.map((group) => (
           <li key={group.id}>
             {group.removal ? (
-              <RemovalHoverLink group={group} href={removalHref(facilityId, group.removal.id)} className="group inline-flex min-h-24 items-center gap-6">
+              <RemovalHoverLink group={group} href={removalHref(facilityId, group.removal.id)} className="group inline-flex min-h-44 items-center gap-6">
                 <SegmentSwatch segment={group.segment} />
                 <span className="underline-offset-2 group-hover:underline">{compactLabel(group)}</span>
               </RemovalHoverLink>
             ) : (
-              <span className="inline-flex min-h-24 items-center gap-6">
+              <span className="inline-flex min-h-44 items-center gap-6">
                 <SegmentSwatch segment={group.segment} />
                 <span>{compactLabel(group)}</span>
               </span>

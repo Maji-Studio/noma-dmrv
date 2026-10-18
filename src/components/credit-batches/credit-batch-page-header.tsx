@@ -124,7 +124,7 @@ export function CreditBatchPageHeader(actions: CreditBatchHeaderActions) {
     <div className="flex flex-col gap-20">
       <Link
         href={creditBatchListHref(batch.facilityId)}
-        className={cn("inline-flex min-h-24 items-center gap-6 self-start body-small underline-offset-2 hover:underline", MUTED_TEXT)}
+        className={cn("inline-flex min-h-44 items-center gap-6 self-start body-small underline-offset-2 hover:underline", MUTED_TEXT)}
       >
         <ArrowLeftIcon size={16} aria-hidden />
         All credit batches

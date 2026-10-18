@@ -14,6 +14,7 @@ export interface CreditBatchPageContextValue {
   pageModel: CreditBatchPageModel | undefined;
   pageModelError: Error | null;
   retryPageModel: () => void;
+  retryingPageModel: boolean;
   openItems: CreditBatchOpenItemGroups;
   /** Blocking items once the batch health has answered; null before. */
   blockingCount: number | null;
@@ -23,7 +24,6 @@ export interface CreditBatchPageContextValue {
   lock: RecordLockView | undefined;
   lockStatus: RecordLockStatus;
   canManage: boolean;
-  emissionsEntriesEnabled: boolean;
   tab: CreditBatchPageTab;
   /** The row the URL asks to highlight (`?focus=`). */
   focus: string | null;

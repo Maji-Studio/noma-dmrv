@@ -3,6 +3,7 @@ import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model
 import type { DerivedStatus } from "@/lib/certification/status";
 import {
   NOT_IN_REMOVAL_GROUP_ID,
+  segmentForRemoval,
   notAppliedCaptionKg,
   removalBarGroups,
   showOverviewRemovals,
@@ -67,6 +68,14 @@ describe("removalBarGroups", () => {
     const groups = removalBarGroups(model([slice("a", 0, null), slice("b", 40, null)], [removal("empty", "draft", 0)]));
     expect(groups).toHaveLength(1);
     expect(groups[0].parts.map((part) => part.id)).toEqual(["b"]);
+  });
+});
+
+describe("segmentForRemoval", () => {
+  it("colours submitted, draft and unplaced biochar apart", () => {
+    expect(segmentForRemoval({ phase: "submitted" })).toBe("submitted");
+    expect(segmentForRemoval({ phase: "draft" })).toBe("draft");
+    expect(segmentForRemoval(null)).toBe("notInRemoval");
   });
 });
 

@@ -18,6 +18,12 @@ Deferred work lives here, never as a `TODO` in code.
 - `src/lib/credit-batches/open-items.ts:buildCreditBatchOpenItems`: Open-item problem
   wording for unmet checks, shared with the New Removal wizard; Kenji to decide; #1136.
 
+## Credit batch Emissions tab (2026-10-18) - **deferred**
+
+- `src/components/credit-batches/credit-batch-emissions-tab.tsx:CreditBatchEmissionsTab`:
+  the batch page's Emissions tab points to the Energy page. `CreditBatchEmissionsPanel`
+  from #1140 mounts here behind `EMISSIONS_ENTRIES_ENABLED` once it lands; #1136.
+
 ## Emissions entry dates (2026-10-16) - **deferred**
 
 - `src/lib/read-models/batch-emission-lines.ts:loadBatchEmissionLines` does not

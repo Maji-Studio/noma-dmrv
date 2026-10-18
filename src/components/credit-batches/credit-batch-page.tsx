@@ -15,7 +15,6 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
-import { NewRemovalDialog } from "@/components/certification/new-removal-dialog";
 import { ServerError } from "@/components/forms";
 import { EntityNotFound } from "@/components/navigation";
 import { recordLockSheetProps } from "@/components/record-locks";
@@ -36,6 +35,10 @@ import { useRecordLock } from "@/hooks/use-record-locks";
 import { creditBatchListHref } from "@/lib/certification/batch-health-links";
 import { ConflictError } from "@/lib/conflict-ref";
 import { CREDIT_BATCH_TAB_PARAM } from "@/lib/credit-batch-links";
+import { certificationRemovalsHref } from "@/lib/certification/links";
+import { CREATE_INTENT_PARAM } from "@/lib/create-intent";
+import { Button } from "@/components/ui/button";
+import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import {
   CREDIT_BATCH_PAGE_TAB_LABELS,
   CREDIT_BATCH_PAGE_TABS,
@@ -65,11 +68,7 @@ import { CreditBatchOverview } from "./credit-batch-page-overview";
 import { CountBadge, FOCUS_RING, MUTED_TEXT } from "./credit-batch-page-parts";
 import { CreditBatchRemovalsTab } from "./credit-batch-page-removals";
 import { CreditBatchActivitiesTab, CreditBatchProductionTab, CreditBatchSamplesTab } from "./credit-batch-page-tabs";
-import {
-  CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE,
-  creditBatchUpdatePatch,
-  isCreditBatchMembershipLocked,
-} from "./credit-batch-update-patch";
+import { isCreditBatchMembershipLocked, saveCreditBatchEdit } from "./credit-batch-update-patch";
 
 const QUERY_OPTIONS = { shallow: true, history: "replace" } as const;
 const NOT_FOUND_COPY = {
@@ -134,10 +133,15 @@ function BatchTabs({ tabListRef }: { tabListRef: React.RefObject<HTMLDivElement 
 }
 
 function TabBody() {
-  const { tab, batch, emissionsEntriesEnabled, pageModel, pageModelError, retryPageModel } = useCreditBatchPage();
+  const { tab, batch, pageModel, pageModelError, retryPageModel, retryingPageModel } = useCreditBatchPage();
   const needsModel = tab === "removals";
   if (needsModel && pageModelError) {
-    return <ServerError message="The Removals for this credit batch could not be loaded." action={<button type="button" className="body-small underline" onClick={retryPageModel}>Retry</button>} />;
+    return (
+      <ServerError
+        message="The Removals for this credit batch could not be loaded."
+        action={<Button variant="weak" size="small" busy={retryingPageModel} onClick={retryPageModel}>Retry</Button>}
+      />
+    );
   }
   if (needsModel && !pageModel) {
     return <p className={cn("body-small", MUTED_TEXT)} aria-busy>Loading Removals…</p>;
@@ -145,7 +149,7 @@ function TabBody() {
   switch (tab) {
     case "production": return <CreditBatchProductionTab />;
     case "samples": return <CreditBatchSamplesTab />;
-    case "emissions": return <CreditBatchEmissionsTab creditBatchId={batch.id} facilityId={batch.facilityId} entriesEnabled={emissionsEntriesEnabled} />;
+    case "emissions": return <CreditBatchEmissionsTab facilityId={batch.facilityId} />;
     case "removals": return <CreditBatchRemovalsTab />;
     case "activities": return <CreditBatchActivitiesTab />;
     default: return <CreditBatchOverview />;
@@ -155,11 +159,9 @@ function TabBody() {
 export function CreditBatchPage({
   creditBatchId,
   canManage,
-  emissionsEntriesEnabled,
 }: {
   creditBatchId: string;
   canManage: boolean;
-  emissionsEntriesEnabled: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -170,13 +172,15 @@ export function CreditBatchPage({
     parseAsStringLiteral(CREDIT_BATCH_PAGE_TABS).withDefault("overview").withOptions(QUERY_OPTIONS),
   );
   const [focus, setFocus] = useQueryState(ENTITY_DEEP_LINK_FOCUS_PARAM, parseAsString.withOptions(QUERY_OPTIONS));
-  const [editing, setEditing] = useState(false);
+  // The batch as Edit opened it: the form keeps this identity and version until
+  // it saves or closes, so a background refetch never drops a draft and a
+  // concurrent save answers as the stale-version conflict.
+  const [editSnapshot, setEditSnapshot] = useState<CreditBatchWithRelations | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteConflict, setDeleteConflict] = useState<ConflictError | null>(null);
-  const [wizard, setWizard] = useState<{ resumeRemovalId: string | null } | null>(null);
 
-  const { facilityId: contextFacilityId, isResolving, selectedFacility } = useFacilityContext();
+  const { facilityId: contextFacilityId, isResolving } = useFacilityContext();
   const batchQuery = useCreditBatch(creditBatchId);
   const pageModel = useCreditBatchPageModel(creditBatchId);
   const health = useBatchHealth(creditBatchId);
@@ -210,8 +214,9 @@ export function CreditBatchPage({
 
   const startEdit = () => {
     setUpdateError(null);
-    setEditing(true);
+    setEditSnapshot(batch);
   };
+  const closeEdit = () => setEditSnapshot(null);
 
   const go = (next: CreditBatchPageTab, row?: string | null) => {
     void setTab(next === "overview" ? null : next);
@@ -229,44 +234,30 @@ export function CreditBatchPage({
     if (item.target.rowId === CREDIT_BATCH_DETAILS_ROW && editable) startEdit();
   };
 
+  // Removals are made in the certification workspace, behind its registry guard.
   const onPrimary = (action: CreditBatchPrimaryAction) => {
     if (action.kind === "fix") openItem(action.item);
-    else setWizard({ resumeRemovalId: action.kind === "draft" ? action.removalId : null });
-  };
-
-  const closeWizard = () => {
-    setWizard(null);
-    void queryClient.invalidateQueries({ queryKey: creditBatchKeys.detail(batch.id) });
+    else if (action.kind === "draft") router.push(certificationRemovalsHref({ facility: batch.facilityId, removal: action.removalId }));
+    else router.push(certificationRemovalsHref({ facility: batch.facilityId, [CREATE_INTENT_PARAM]: "true" }));
   };
 
   const handleUpdate = async (data: CreditBatchFormData) => {
+    if (!editSnapshot) return;
     setUpdateError(null);
-    try {
-      const { sampling, ...mutableData } = data;
-      void sampling;
-      // A held membership never reaches the server, so a notes-only save
-      // passes the slice guard (same rule as the list's sheet).
-      const patch = creditBatchUpdatePatch(mutableData, batch, membershipLocked);
-      if (!patch) {
-        setUpdateError(CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE);
-        return;
-      }
-      const result = await updateCreditBatch.mutateAsync({
-        creditBatchId: batch.id,
-        expectedVersion: batch.version,
-        ...patch,
-      });
-      if (result.success) {
-        setEditing(false);
-        void queryClient.invalidateQueries({ queryKey: creditBatchKeys.detail(batch.id) });
-        if (result.warning) toast.warning(`${result.warning} Refresh the page.`);
-        else toast.success("Credit batch updated.");
-      } else {
-        setUpdateError(result.error || "Credit batch was not saved. Try again.");
-      }
-    } catch (err) {
-      setUpdateError(err instanceof Error ? err.message : "Credit batch was not saved. Try again.");
+    const outcome = await saveCreditBatchEdit({
+      data,
+      saved: editSnapshot,
+      membershipLocked,
+      update: (input) => updateCreditBatch.mutateAsync(input),
+    });
+    if (outcome.status === "error") {
+      setUpdateError(outcome.message);
+      return;
     }
+    closeEdit();
+    void queryClient.invalidateQueries({ queryKey: creditBatchKeys.detail(batch.id) });
+    if (outcome.warning) toast.warning(`${outcome.warning} Refresh the page.`);
+    else toast.success("Credit batch updated.");
   };
 
   const handleDeleteConfirm = async () => {
@@ -287,6 +278,7 @@ export function CreditBatchPage({
     pageModel: pageModel.data,
     pageModelError: pageModel.error,
     retryPageModel: () => void pageModel.refetch(),
+    retryingPageModel: pageModel.isFetching,
     openItems,
     blockingCount: blocking ? blocking.length : null,
     healthError: health.error,
@@ -295,7 +287,6 @@ export function CreditBatchPage({
     lock,
     lockStatus,
     canManage,
-    emissionsEntriesEnabled,
     tab,
     focus,
     go,
@@ -321,10 +312,10 @@ export function CreditBatchPage({
       </div>
 
       <EntitySideSheet
-        open={editing}
-        onOpenChange={(open) => !open && setEditing(false)}
+        open={editSnapshot !== null}
+        onOpenChange={(open) => !open && closeEdit()}
         mode="edit"
-        onModeChange={(mode) => mode === "view" && setEditing(false)}
+        onModeChange={(mode) => mode === "view" && closeEdit()}
         title={batch.code}
         subtitle={formatDateRange(batch.startDate, batch.endDate)}
         detailScope={batch.id}
@@ -333,11 +324,11 @@ export function CreditBatchPage({
         size="wide"
       >
         <CreditBatchForm
-          key={`${batch.id}:${batch.version}`}
-          creditBatch={batch}
+          key={batch.id}
+          creditBatch={editSnapshot ?? batch}
           onSubmit={handleUpdate}
           onClearServerError={() => setUpdateError(null)}
-          onCancel={() => setEditing(false)}
+          onCancel={closeEdit}
           isSubmitting={updateCreditBatch.isPending}
           errorMessage={updateError ?? undefined}
           canManage={canManage}
@@ -366,13 +357,6 @@ export function CreditBatchPage({
         </InUseDeleteDialog>
       )}
 
-      <NewRemovalDialog
-        facilityId={batch.facilityId}
-        facilityName={selectedFacility?.name?.trim() || selectedFacility?.code || batch.facility?.name || "Selected facility"}
-        isOpen={wizard !== null}
-        onClose={closeWizard}
-        resumeRemovalId={wizard?.resumeRemovalId ?? null}
-      />
     </CreditBatchPageProvider>
   );
 }

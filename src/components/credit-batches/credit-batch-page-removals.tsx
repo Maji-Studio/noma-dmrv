@@ -15,7 +15,7 @@ import { ghgStatementPeriodLabel } from "@/lib/credit-batches/ghg-statement-peri
 import {
   REMOVAL_BAR_SEGMENT_ORDER,
   removalBarGroups,
-  type RemovalBarSegment,
+  segmentForRemoval,
 } from "@/lib/credit-batches/removal-bar";
 import { ghgStatementDeepLinkHref } from "@/lib/ghg-statement-links";
 import { cn } from "@/lib/utils";
@@ -47,16 +47,14 @@ const STATEMENT_BADGES: Partial<Record<StatementKind, { status: StatusValue; lab
   superseded: { status: "superseded", label: "Superseded" },
 };
 
-function sliceSegment(model: CreditBatchPageModel, removalId: string | null): RemovalBarSegment {
-  if (!removalId) return "notInRemoval";
-  return model.removals.find((removal) => removal.id === removalId)?.phase === "submitted" ? "submitted" : "draft";
-}
-
 function DeliveryList({ model }: { model: CreditBatchPageModel }) {
   const { batch } = useCreditBatchPage();
   const rows = model.slices
     .filter((slice) => slice.dryKg > 0)
-    .map((slice) => ({ slice, segment: sliceSegment(model, slice.removalId), removal: model.removals.find((removal) => removal.id === slice.removalId) ?? null }))
+    .map((slice) => {
+      const removal = model.removals.find((candidate) => candidate.id === slice.removalId) ?? null;
+      return { slice, removal, segment: segmentForRemoval(removal) };
+    })
     .sort((a, b) => REMOVAL_BAR_SEGMENT_ORDER.indexOf(a.segment) - REMOVAL_BAR_SEGMENT_ORDER.indexOf(b.segment));
   return (
     <PagePanel title="Applied biochar by delivery" labelledBy="credit-batch-deliveries">
@@ -76,7 +74,7 @@ function DeliveryList({ model }: { model: CreditBatchPageModel }) {
               {removal ? (
                 <Link
                   href={removalHref(batch.facilityId, removal.id)}
-                  className={cn("group inline-flex min-h-24 flex-wrap items-center gap-8", FOCUS_RING)}
+                  className={cn("group inline-flex min-h-44 flex-wrap items-center gap-8", FOCUS_RING)}
                 >
                   <span className="body-small font-medium underline-offset-2 group-hover:underline">{removal.code}</span>
                   <RemovalStatus removal={removal} />

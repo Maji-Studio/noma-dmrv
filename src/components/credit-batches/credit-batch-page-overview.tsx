@@ -149,7 +149,7 @@ function RemovalsPanel() {
           <button
             type="button"
             onClick={() => go("removals")}
-            className={cn("inline-flex min-h-24 items-center gap-4 body-small underline-offset-2 hover:underline", MUTED_TEXT, FOCUS_RING)}
+            className={cn("inline-flex min-h-44 items-center gap-4 body-small underline-offset-2 hover:underline", MUTED_TEXT, FOCUS_RING)}
           >
             Details
             <ArrowRightIcon size={16} aria-hidden />
