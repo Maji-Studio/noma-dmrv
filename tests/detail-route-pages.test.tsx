@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   NOT_FOUND_ERROR,
+  REDIRECT_ERROR,
   mockRedirect,
   mockRequireOrgContext,
   mockGetCreditBatchById,
 } = vi.hoisted(() => ({
   NOT_FOUND_ERROR: "NEXT_NOT_FOUND",
+  REDIRECT_ERROR: "NEXT_REDIRECT",
   mockRedirect: vi.fn(),
   mockRequireOrgContext: vi.fn(),
   mockGetCreditBatchById: vi.fn(),
@@ -25,42 +27,56 @@ vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchById: mockGetCreditBatchById,
 }));
 
-import CreditBatchRedirectPage from "@/app/(app)/credit-batches/[id]/page";
+import CreditBatchRoute from "@/app/(app)/credit-batches/[id]/page";
 
-const VALID_MISSING_ID = "11111111-1111-4111-8111-111111111111";
+const BATCH_ID = "11111111-1111-4111-8111-111111111111";
 
-describe("credit batch detail route redirect", () => {
+describe("credit batch page route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Next's redirect never returns; the route must stop where it is called.
+    mockRedirect.mockImplementation(() => {
+      throw new Error(REDIRECT_ERROR);
+    });
     mockRequireOrgContext.mockResolvedValue({
       userId: "test-user",
       organizationId: "test-org",
     });
     mockGetCreditBatchById.mockResolvedValue({
-      id: VALID_MISSING_ID,
+      id: BATCH_ID,
       facilityId: "facility-1",
     });
   });
 
-  it("redirects the retired credit-batch detail route into the list side sheet", async () => {
-    await CreditBatchRedirectPage({
-      params: Promise.resolve({ id: VALID_MISSING_ID }),
-      searchParams: Promise.resolve({ facility: "facility-1" }),
-    });
+  it("adds the batch's facility to a link without one and keeps the other params", async () => {
+    await expect(
+      CreditBatchRoute({
+        params: Promise.resolve({ id: BATCH_ID }),
+        searchParams: Promise.resolve({ tab: "samples" }),
+      }),
+    ).rejects.toThrow(REDIRECT_ERROR);
 
-    expect(mockRedirect).toHaveBeenCalledWith(
-      `/credit-batches?facility=facility-1&batch=${VALID_MISSING_ID}`,
-    );
+    expect(mockRedirect).toHaveBeenCalledWith(`/credit-batches/${BATCH_ID}?tab=samples&facility=facility-1`);
   });
 
-  it("drops a stale batch param when redirecting the credit-batch detail route", async () => {
-    await CreditBatchRedirectPage({
-      params: Promise.resolve({ id: VALID_MISSING_ID }),
-      searchParams: Promise.resolve({ batch: "stale-id" }),
-    });
+  it("is a not-found when the facility param names another facility", async () => {
+    await expect(
+      CreditBatchRoute({
+        params: Promise.resolve({ id: BATCH_ID }),
+        searchParams: Promise.resolve({ facility: "facility-2" }),
+      }),
+    ).rejects.toThrow(NOT_FOUND_ERROR);
+    expect(mockRedirect).not.toHaveBeenCalled();
+  });
 
-    expect(mockRedirect).toHaveBeenCalledWith(
-      `/credit-batches?facility=facility-1&batch=${VALID_MISSING_ID}`,
-    );
+  it("is a not-found when the org-scoped read finds no batch", async () => {
+    mockGetCreditBatchById.mockResolvedValue(undefined);
+
+    await expect(
+      CreditBatchRoute({
+        params: Promise.resolve({ id: BATCH_ID }),
+        searchParams: Promise.resolve({ facility: "facility-1" }),
+      }),
+    ).rejects.toThrow(NOT_FOUND_ERROR);
   });
 });
