@@ -5,7 +5,9 @@
  * another's membership. Cross-org directory and lifecycle helpers enforce the
  * Platform-Admin gate in this layer as well as in their `fn/` callers.
  */
+import { revokeMemberOAuthGrants } from "./oauth-grant-lifecycle";
 import { disableOwnerApiKeys } from "./api-credential-auth";
+import { oauthRolePolicy } from "@/lib/auth/oauth-role-policy";
 import { canOwnApiKey } from "@/lib/auth/api-scopes";
 import { randomUUID } from "node:crypto";
 import { and, count, desc, eq, sql } from "drizzle-orm";
@@ -241,6 +243,9 @@ export async function updateMemberRoleAsPlatformAdmin(
     if (updated.length === 0) {
       throw new SafeError("Member not found.");
     }
+    if (!oauthRolePolicy(role).connect) {
+      await revokeMemberOAuthGrants(ctx.organizationId, member.userId, memberId, tx);
+    }
     if (!canOwnApiKey(role)) {
       await disableOwnerApiKeys(ctx.organizationId, member.userId, tx);
     }
@@ -299,6 +304,7 @@ export async function removeMemberAsPlatformAdmin(
       throw new SafeError("Member not found.");
     }
     await disableOwnerApiKeys(ctx.organizationId, member.userId, tx);
+    await revokeMemberOAuthGrants(ctx.organizationId, member.userId, memberId, tx);
   });
 }
 

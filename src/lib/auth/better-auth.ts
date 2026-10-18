@@ -7,7 +7,10 @@ import { APIError, createAuthMiddleware } from "better-auth/api";
 import { createAccessControl } from "better-auth/plugins/access";
 import { defaultStatements, ownerAc, adminAc, memberAc } from "better-auth/plugins/organization/access";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS, API_KEY_LIVE_PREFIX, API_KEY_MAX_EXPIRY_DAYS, API_KEY_TEST_PREFIX } from "@/config/api-keys";
+import { z } from "zod";
+import { revokeDeletedMemberOAuthGrants, revokeMemberOAuthGrants } from "@/data-access/oauth-grant-lifecycle";
 import { disableOwnerApiKeys } from "@/data-access/api-credential-auth";
+import { oauthRolePolicy } from "./oauth-role-policy";
 import { canOwnApiKey } from "./api-scopes";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -144,6 +147,8 @@ function buildTrustedOrigins(): string[] {
   return [...new Set(origins)];
 }
 
+const removedMemberResult = z.object({ id: z.string(), organizationId: z.string(), userId: z.string() });
+
 const apiKeyActions = ["create", "read", "update", "delete"] as const;
 const organizationAccess = createAccessControl({ ...defaultStatements, apiKey: apiKeyActions });
 
@@ -155,6 +160,17 @@ export const auth = betterAuth({
       if (ctx.path?.startsWith("/api-key/") && (ctx.request || ctx.headers)) {
         throw new APIError("FORBIDDEN", { message: "Use organization credential actions." });
       }
+    }),
+    after: createAuthMiddleware(async (ctx) => {
+      // Better Auth's leave endpoint does not invoke afterRemoveMember.
+      // Only a successful, server-returned member can trigger this revocation,
+      // and only once that membership row is gone. A refused leave returns an
+      // APIError, which does not parse. After hooks do not carry the endpoint's
+      // session, so the database, not the session, confirms the removal.
+      if (ctx.path !== "/organization/leave") return;
+      const result = removedMemberResult.safeParse(ctx.context.returned);
+      if (!result.success) return;
+      await revokeDeletedMemberOAuthGrants(result.data);
     }),
   },
   database: drizzleAdapter(db, {
@@ -380,9 +396,13 @@ export const auth = betterAuth({
       allowUserToCreateOrganization: false,
       organizationHooks: {
         afterRemoveMember: async ({ member }) => {
+          await revokeMemberOAuthGrants(member.organizationId, member.userId, member.id);
           await disableOwnerApiKeys(member.organizationId, member.userId);
         },
         afterUpdateMemberRole: async ({ member }) => {
+          if (!oauthRolePolicy(member.role).connect) {
+            await revokeMemberOAuthGrants(member.organizationId, member.userId, member.id);
+          }
           if (!canOwnApiKey(member.role)) {
             await disableOwnerApiKeys(member.organizationId, member.userId);
           }

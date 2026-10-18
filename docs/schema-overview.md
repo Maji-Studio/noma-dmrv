@@ -13,6 +13,7 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 |---|---|
 | Auth, orgs, members, invitations | `src/db/schema/auth.ts` |
 | API credentials (`api_keys`) and management records (`api_key_owners`) | `src/db/schema/api-keys.ts` |
+| OAuth clients, resources, consents, tokens, grants and authorization attempts | `src/db/schema/oauth.ts` |
 | API bookkeeping (`api_idempotency_records`, `api_rate_limit_buckets`, `organization_api_access`) | `src/db/schema/api.ts` |
 | Emissions entries and input values | `src/db/schema/emission-entries.ts`. Organization-consistent references, versioned tombstones, entry claims, and exact decimal values. |
 | Activity history (`activity_events`) | `src/db/schema/activity.ts` |
@@ -226,3 +227,28 @@ the version in the same statement. UI commands require the loaded version; see
 [expected-version checks](./architecture.md#expected-version-checks-on-edit-forms).
 Sample `analysis_date`, `r0_analysis_date`, and `tga_analysis_date` are calendar
 `date` columns; `sampling_time` remains a timestamp instant.
+
+## OAuth storage
+
+`oauth.ts` maps every Better Auth OAuth provider 1.7.10 model field to a
+snake_case column. Arrays use `text[]`, JSON uses `jsonb`, and optional plugin
+fields remain nullable. Consent `reference_id` is deliberately required here.
+The plugin is registered separately from the table definitions.
+
+| Table | Purpose and constraints |
+|---|---|
+| `oauth_clients` | Platform client registry. Unique `client_id`. |
+| `oauth_resources` | Platform audiences and nullable policy overrides. Unique `identifier`. |
+| `oauth_client_resources` | Client access to audiences. Unique client/resource pair; the resource FK targets `identifier`, not the row id. |
+| `oauth_grants` | Organization credential generations. Immutable binding, management version, creation and activity times, revocation time and reason. Partial unique active binding. Member removal sets `member_id` null. |
+| `oauth_authorization_attempts` | Insert-only organization choice keyed by the verified request digest. Session deletion cascades; grant deletion sets `grant_id` null. Expiry is indexed. `member_id` retains the original identity after removal. |
+| `oauth_consents` | Current scopes per generation. Required grant FK with cascade; unique client/user/reference tuple. |
+| `oauth_access_tokens` | Hashed opaque tokens with audience, scopes and optional confirmation. Unique token hash; grant and expiry indexes. |
+| `oauth_refresh_tokens` | Hashed rotating tokens with replay state. Unique token hash; grant and expiry indexes. |
+| `oauth_client_assertions` | Platform single-use assertion digests, indexed and purged by expiry. |
+
+Both token tables reference the grant with cascade and the browser session
+with set null. Signing out does not disconnect an app. Revocation changes only
+the generation and consent; token rows survive until expiry cleanup. Grant
+creation explicitly uses the same instant for `created_at` and `last_used_at`;
+the database defaults also share the transaction timestamp.

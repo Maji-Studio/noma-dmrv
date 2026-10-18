@@ -339,7 +339,10 @@ describe("credential resolution", () => {
       .from(apiKeyOwners)
       .where(eq(apiKeyOwners.credentialId, created.id));
     expect(owner.memberId).toBeNull();
-    expect(owner.revokedAt).toBeNull();
+    // Leave runs the removal hook; a direct delete skips it and relies on the
+    // resolver's membership check alone.
+    if (action === "leave") expect(owner.revokedAt).toBeInstanceOf(Date);
+    else expect(owner.revokedAt).toBeNull();
     expect(await resolveApiContext(request(created.key))).toEqual({
       ok: false,
       denial: "credential_owner_removed",
