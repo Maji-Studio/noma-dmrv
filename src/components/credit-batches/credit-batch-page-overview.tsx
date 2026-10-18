@@ -36,10 +36,14 @@ const GROUPS: Record<GroupKey, { title: string; help: string; dot: string }> = {
 
 const GROUP_ORDER: readonly GroupKey[] = ["blocking", "check", "waiting"];
 
-const ITEM_ROW = cn(
-  "group -mx-12 flex min-h-44 w-[calc(100%+24px)] items-center justify-between gap-16 px-12 py-12 text-left hover:bg-[var(--color-surface-medium)]",
-  FOCUS_RING,
-);
+/** The hover fill bleeds 12px past the text; beside an ⓘ only on the left. */
+function itemRowClass(besideHint: boolean) {
+  return cn(
+    "group flex min-h-44 items-center justify-between gap-16 px-12 py-12 text-left hover:bg-[var(--color-surface-medium)]",
+    besideHint ? "-ml-12 w-[calc(100%+12px)]" : "-mx-12 w-[calc(100%+24px)]",
+    FOCUS_RING,
+  );
+}
 
 /** One open item. The whole row is the target: a tab and row here, or the repair page. */
 function OpenItemRow({ item }: { item: CreditBatchOpenItem }) {
@@ -53,17 +57,25 @@ function OpenItemRow({ item }: { item: CreditBatchOpenItem }) {
       <ArrowRightIcon size={16} className="shrink-0 text-[var(--color-text-tertiary)] group-hover:text-[var(--color-text-primary)]" aria-hidden />
     </>
   );
+  const rowClass = itemRowClass(!!item.why);
+  const target = "href" in item.target ? (
+    <Link href={item.target.href} className={rowClass}>
+      {body}
+    </Link>
+  ) : (
+    <button type="button" className={rowClass} onClick={() => openItem(item)}>
+      {body}
+    </button>
+  );
   return (
     <li className={ROW_RULE}>
-      {"href" in item.target ? (
-        <Link href={item.target.href} className={ITEM_ROW}>
-          {body}
-        </Link>
-      ) : (
-        <button type="button" className={ITEM_ROW} onClick={() => openItem(item)}>
-          {body}
-        </button>
-      )}
+      {item.why ? (
+        // The ⓘ sits beside the row target, never inside it.
+        <div className="flex items-center gap-4">
+          <div className="min-w-0 flex-1">{target}</div>
+          <InfoHint label="Why is this required?">{item.why}</InfoHint>
+        </div>
+      ) : target}
     </li>
   );
 }

@@ -47,7 +47,7 @@ async function openBatchEditor(
   );
   await waitForFacilityHydration(page, data.facility.name);
   const dialog = page.getByRole("dialog");
-  await dialog.getByRole("button", { name: "Edit credit batch", exact: true }).click();
+  await dialog.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(
     dialog.getByRole("button", { name: "Update credit batch", exact: true }),
   ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });

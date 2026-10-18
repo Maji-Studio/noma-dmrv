@@ -138,6 +138,14 @@ describe("buildCreditBatchOpenItems", () => {
     ]);
   });
 
+  it("keeps a requirement's reasoning for its ⓘ", () => {
+    const result = buildCreditBatchOpenItems({ ...batchContext, health: { state: "incomplete", issueCount: 1, checks: [{
+      key: "production", label: "Production", requirementLabel: "Linked production data", status: "unmet",
+      whyDetail: "Every applied tonne traces to a production run.",
+    }] } });
+    expect(result.blocking[0].why).toBe("Every applied tonne traces to a production run.");
+  });
+
   it.each<BatchHealthFixTarget>([
     "creditBatchTemplate", "batchDetails", "labSamples", "emissions",
     "templateLineReview", "certificationTemplates", "certificationEmissions", "productionRuns",

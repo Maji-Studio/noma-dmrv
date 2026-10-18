@@ -98,12 +98,12 @@ async function expectRemovalReadyWithoutApplicationEvidence(
   await page.goto(
     `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
   );
-  const checklist = page.getByTestId("batch-health-strip");
+  const checklist = page.getByRole("region", { name: "Open items" });
   // The fixture links a fake registry project, so the batch stays unpinned
-  // (plan 2026-10-15 §4.2). That template check is the only open issue.
-  await expect(checklist.getByText("1 issue open")).toBeVisible({
-    timeout: COLD_COMPILE_TIMEOUT_MS,
-  });
+  // (plan 2026-10-15 §4.2). That template check is the only blocking item.
+  await expect(
+    checklist.getByRole("region", { name: /^Blocking/ }).getByRole("listitem"),
+  ).toHaveCount(1, { timeout: COLD_COMPILE_TIMEOUT_MS });
   await expect(
     checklist.getByText("Choose a Removal template for this credit batch."),
   ).toBeVisible();

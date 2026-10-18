@@ -33,7 +33,7 @@ test.describe("200-year durability readiness", () => {
     );
 
     await adminPage.goto(
-      `/credit-batches/${batch.creditBatchId}?facility=${seededData.facility.id}`,
+      `/credit-batches/${batch.creditBatchId}?facility=${seededData.facility.id}&tab=samples`,
     );
 
     const panel = adminPage.getByTestId("credit-batch-durability-panel");

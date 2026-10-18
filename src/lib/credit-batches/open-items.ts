@@ -30,6 +30,8 @@ export interface CreditBatchOpenItem {
   id: string;
   title: string;
   detail?: string;
+  /** The protocol reasoning behind a requirement, shown behind an ⓘ. */
+  why?: string;
   target:
     | { tab: "overview" | "production" | "samples" | "emissions" | "removals"; rowId?: string }
     | { href: string };
@@ -89,6 +91,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       id: `health:${healthCheck.key}:${healthCheck.issueKey ?? fix}`,
       title: healthCheck.requirementLabel,
       detail: healthCheck.detail,
+      ...(healthCheck.whyDetail ? { why: healthCheck.whyDetail } : {}),
       target,
     });
   }

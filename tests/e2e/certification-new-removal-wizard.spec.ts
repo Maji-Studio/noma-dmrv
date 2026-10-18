@@ -259,7 +259,7 @@ test.describe("Certification — New-Removal wizard", () => {
       await page.goto(
         `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
       );
-      const healthStrip = page.getByTestId("batch-health-strip");
+      const healthStrip = page.getByRole("region", { name: "Open items" });
       // The open gap reads as the plain requirement…
       await expect(healthStrip).toContainText(PRODUCTION_REQUIREMENT, {
         timeout: COLD_COMPILE_TIMEOUT_MS,
@@ -293,7 +293,7 @@ test.describe("Certification — New-Removal wizard", () => {
       await page.goto(
         `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
       );
-      const healthStrip = page.getByTestId("batch-health-strip");
+      const healthStrip = page.getByRole("region", { name: "Open items" });
       // The open production gap renders as a plain requirement row…
       const productionRow = healthStrip.locator("li", {
         hasText: PRODUCTION_REQUIREMENT,
@@ -346,11 +346,11 @@ test.describe("Certification — New-Removal wizard (Phase 0 cross-surface)", { 
     try {
       batch = await seedNotReadyListedBatch(seededData, testRunId);
 
-      // Surface 1 — the credit-batch detail page's certification checklist.
+      // Surface 1 — the credit batch page's open items.
       await page.goto(
         `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
       );
-      await expect(page.getByTestId("batch-health-strip")).toContainText(
+      await expect(page.getByRole("region", { name: "Open items" })).toContainText(
         PRODUCTION_REQUIREMENT,
         { timeout: COLD_COMPILE_TIMEOUT_MS },
       );
@@ -467,7 +467,7 @@ test.describe("Certification — New-Removal wizard (Phase 2 readiness workspace
       ).toHaveAttribute(
         "href",
         new RegExp(
-          `/credit-batches\\?facility=${facilityId}&batch=${batch.creditBatchId}`,
+          `/credit-batches/${batch.creditBatchId}\\?facility=${facilityId}`,
         ),
       );
     } finally {

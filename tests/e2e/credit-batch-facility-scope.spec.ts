@@ -8,7 +8,7 @@ import { seedCreditBatch } from "./fixtures/seed-chain-data";
 import * as schema from "../../src/db/schema";
 
 test.describe("credit batch facility scope", () => {
-  test("deep links use the batch's canonical facility", async ({
+  test("the page follows the batch's own facility", async ({
     adminPage,
     seededData,
   }) => {
@@ -34,23 +34,27 @@ test.describe("credit batch facility scope", () => {
         .returning({ id: schema.facilities.id });
       otherFacilityId = otherFacility.id;
 
-      // The retired detail route resolves the batch in the active organization
-      // before redirecting into the list's view sheet. Any stale facility query
-      // is replaced with the batch's actual facility.
-      await adminPage.goto(
-        `/credit-batches/${batch.id}?facility=${otherFacilityId}`,
-      );
-
+      // The page takes its facility from the batch: a link without one gains
+      // it, and a link naming another facility is a not-found.
+      await adminPage.goto(`/credit-batches/${batch.id}`);
       await expect(adminPage).toHaveURL((url) => {
         return (
-          url.pathname === "/credit-batches" &&
-          url.searchParams.get("facility") === seededData.facility.id &&
-          url.searchParams.get("batch") === batch.id
+          url.pathname === `/credit-batches/${batch.id}` &&
+          url.searchParams.get("facility") === seededData.facility.id
         );
       });
       await expect(
-        adminPage.getByRole("heading", { name: batch.code }),
+        adminPage.getByRole("heading", { level: 1, name: batch.code }),
       ).toBeVisible();
+
+      const response = await adminPage.goto(
+        `/credit-batches/${batch.id}?facility=${otherFacilityId}`,
+      );
+      expect(response?.status()).toBe(404);
+      await expect(
+        adminPage.getByRole("heading", { name: "Credit batch not found", exact: true }),
+      ).toBeVisible();
+      await expect(adminPage.getByText(batch.code, { exact: true })).toHaveCount(0);
     } finally {
       if (otherFacilityId) {
         await db
