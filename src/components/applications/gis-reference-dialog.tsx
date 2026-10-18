@@ -258,14 +258,7 @@ function DialogBody({
 
       {errorMessage && <DialogError message={errorMessage} />}
 
-      <div className="flex items-center justify-end gap-8 border-t border-[var(--color-border-tertiary)] pt-16">
-        <Button
-          variant="weak"
-          disabled={normalizeMutation.isPending}
-          onClick={onClose}
-        >
-          Cancel
-        </Button>
+      <div className="flex flex-wrap items-center justify-start gap-8 border-t border-[var(--color-border-tertiary)] pt-16">
         {mode === "upload" ? (
           <Button
             variant="primary"
@@ -285,6 +278,13 @@ function DialogBody({
             Insert
           </Button>
         )}
+        <Button
+          variant="weak"
+          disabled={normalizeMutation.isPending}
+          onClick={onClose}
+        >
+          Cancel
+        </Button>
       </div>
     </div>
   );
