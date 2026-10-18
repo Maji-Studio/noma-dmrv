@@ -9,6 +9,8 @@ function summary(
     state: "ready",
     issueCount: 0,
     removalId: null,
+    removalCode: null,
+    productionEmissionsClaimedByRemovalCode: null,
     removalStatus: null,
     ghgStatementId: null,
     ghgStatementStatus: null,
