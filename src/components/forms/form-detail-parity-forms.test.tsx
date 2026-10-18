@@ -66,10 +66,12 @@ vi.mock("@/hooks/use-facility-context", () => ({
 }));
 
 import { renderBothLevels, sourceFiles } from "./form-detail-parity-harness";
+import { requiredMarkers } from "./form-required-markers-harness";
 import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
 import { FeedstockForm } from "@/components/feedstocks/feedstock-form";
 import { OutputStockForm } from "@/components/storage-locations/output-stock-form";
 import { StorageLocationForm } from "@/components/storage-locations/storage-location-form";
+import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import { ProductionRunForm } from "@/components/production-runs/production-run-form";
 import { ProductionIncidentForm } from "@/components/production-runs/production-incident-form";
 import { ProductionSampleForm } from "@/components/production-runs/production-sample-form";
@@ -254,5 +256,35 @@ describe("sheet form detail level parity", () => {
     if (shows) expect(simple.text).toContain(shows);
     expect(detailed.items).toEqual(simple.items);
     expect(detailed.text).toEqual(simple.text);
+  });
+});
+
+/**
+ * Fields that refuse an empty submit without carrying the star, each with the
+ * reason: the rule is one of several fields, so no single input is required.
+ */
+const REFUSES_EMPTY_WITHOUT_STAR: Record<string, string[]> = {
+  "production sample": ["weightGrams"], // at least one measured value, any field
+};
+
+describe("required markers match what a form needs to submit", () => {
+  it.each(CREATE_CASES)("$name form stars every field an empty submit refuses", async ({ name, element }) => {
+    const { starred, failing } = await requiredMarkers(<NuqsTestingAdapter>{element}</NuqsTestingAdapter>);
+    const allowed = REFUSES_EMPTY_WITHOUT_STAR[name] ?? [];
+    const unstarred = failing.filter(id => !starred.includes(id) && !allowed.includes(id));
+    expect(unstarred).toEqual([]);
+    // The exemptions stay honest: an exempt field still refuses an empty submit.
+    for (const id of allowed) expect(failing).toContain(id);
+  });
+
+  it.each([
+    ["running", ["reactorId", "startDate", "startTime", "feedstockDraws.0.storageLocationId", "feedstockDraws.0.wetMassKg"]],
+    ["complete", ["reactorId", "startDate", "startTime", "endDate", "endTime", "feedstockDraws.0.storageLocationId", "feedstockDraws.0.wetMassKg", "feedstockMoisturePercent", "biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"]],
+    ["failed", ["reactorId", "startDate", "startTime", "endDate", "endTime", "feedstockDraws.0.storageLocationId", "feedstockDraws.0.wetMassKg", "feedstockMoisturePercent"]],
+    ["cancelled", ["reactorId", "cancellationReason", "startDate", "startTime", "feedstockDraws.0.storageLocationId", "feedstockDraws.0.wetMassKg"]],
+  ] as const)("production run stars the fields a %s run needs, and no others", async (status, expected) => {
+    const run = as<ProductionRunWithRelations>({ id: "run", facilityId: "facility", reactorId: "reactor", status, startTime: DAY, endTime: DAY, feedstockDraws: [{ storageLocationId: "bin", storageLocationName: "Feedstock bin", wetMassKg: 1000 }], feedstocks: [], totalFeedstockWetMassKg: 1000 });
+    const { starred } = await requiredMarkers(<NuqsTestingAdapter><ProductionRunForm onSubmit={noop} productionRun={run} /></NuqsTestingAdapter>, { submit: false });
+    expect([...starred].sort()).toEqual([...expected].sort());
   });
 });

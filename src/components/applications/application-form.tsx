@@ -582,6 +582,7 @@ export function ApplicationForm({
           latitudeError={errors.gpsLatitude?.message}
           longitudeError={errors.gpsLongitude?.message}
           disabled={isSubmitting}
+          required={(evidenceMethod ?? "location") === "location"}
         />
 
       </FormSection>

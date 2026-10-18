@@ -62,6 +62,7 @@ export function FieldPositionField({
   latitudeError,
   longitudeError,
   disabled = false,
+  required = false,
   mode,
   onModeChange,
   onPositionChange,
@@ -74,6 +75,8 @@ export function FieldPositionField({
   latitudeError?: string;
   longitudeError?: string;
   disabled?: boolean;
+  /** The pin is needed to save: true while the evidence method is Customer location. */
+  required?: boolean;
   mode: FieldPositionMode;
   onModeChange: (mode: FieldPositionMode) => void;
   onPositionChange: (position: PositionValue) => void;
@@ -134,6 +137,7 @@ export function FieldPositionField({
           latitudeError={latitudeError}
           longitudeError={longitudeError}
           disabled={disabled}
+          required={required}
         />
       )}
     </div>
