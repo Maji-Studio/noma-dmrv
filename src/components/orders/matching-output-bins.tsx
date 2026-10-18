@@ -12,6 +12,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useMatchingOutputBins, useOutputStockBalance } from "@/hooks/use-output-stock";
 import { PackageIcon } from "@phosphor-icons/react/dist/ssr";
 import { Notice } from "@/components/ui/notice";
+import { DRY_BIOCHAR_LABEL } from "@/components/biochar-products/product-composition-components";
 
 /** Status lines under a block: caption size, secondary ink. */
 const STATUS_CLASS = "body-caption text-[var(--color-text-secondary)]";
@@ -64,7 +65,7 @@ export function MatchingOutputBins({ facilityId, formulationId }: { facilityId: 
         <DerivedHeadline
           label="Available wet stock, estimate"
           value={summary.wet}
-          secondary={{ label: "Available dry stock", value: summary.dry }}
+          secondary={{ label: DRY_BIOCHAR_LABEL, value: summary.dry }}
           sub={`${summary.binCount} ${pluralize(summary.binCount, "bin", "bins")}`}
         />
         <CaretRightIcon aria-hidden size={16} weight="bold" className="shrink-0 text-[var(--color-text-tertiary)]" />
