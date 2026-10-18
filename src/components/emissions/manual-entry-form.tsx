@@ -80,7 +80,7 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
   const seed = mode.kind === "add" ? undefined : mode.entry;
   const single = line.entryPolicy === "single";
   const fields = entryFields(line);
-  const [draft, setDraft] = useState<Record<string, string>>(() => (seed ? draftFromEntry(seed) : {}));
+  const [draft, setDraft] = useState<Record<string, string>>(() => (seed ? draftFromEntry(seed, line) : {}));
   const [date, setDate] = useState(() => (mode.kind === "edit" ? mode.entry.occurredOn : defaultEntryDate(today, batch)));
   const [note, setNote] = useState(seed?.note ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});

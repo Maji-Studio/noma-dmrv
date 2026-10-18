@@ -88,7 +88,24 @@ describe("mass in kg on mass × distance lines", () => {
     const entry = makeEntry({
       values: [{ inputKey: "leg", magnitude: "55.2", unit: "tonne * km", massDistanceDetail: { mass: { magnitude: "0.012", unit: "tonne" }, distance: { magnitude: "4600", unit: "km" } } }],
     } as never);
-    expect(draftFromEntry(entry)).toEqual({ "leg:mass": "12", "leg:distance": "4600" });
+    expect(draftFromEntry(entry, line)).toEqual({ "leg:mass": "12", "leg:distance": "4600" });
+  });
+
+  it("leaves mass and distance empty when the line's units changed", () => {
+    const entry = makeEntry({
+      values: [{ inputKey: "leg", magnitude: "55.2", unit: "tonne * km", massDistanceDetail: { mass: { magnitude: "0.012", unit: "tonne" }, distance: { magnitude: "4600", unit: "km" } } }],
+    } as never);
+    const miles = { ...line, inputShape: [{ ...line.inputShape[0], unit: "mi * tonne" }] };
+    expect(draftFromEntry(entry, miles)).toEqual({});
+  });
+});
+
+describe("enter again", () => {
+  it("keeps values whose unit still matches and clears the ones the template changed", () => {
+    const entry = makeEntry({ counts: false });
+    expect(draftFromEntry(entry, makeLine())).toEqual({ energy: "42.5" });
+    const wattHours = makeLine({ inputShape: [{ key: "energy", type: "monitored", quantityKind: "energy", unit: "Wh" }] } as never);
+    expect(draftFromEntry(entry, wattHours)).toEqual({});
   });
 });
 

@@ -318,15 +318,23 @@ export function entryFields(line: EmissionLine): EntryFieldSpec[] {
   });
 }
 
-/** Draft field values from an existing entry (edit, enter again). */
-export function draftFromEntry(entry: EmissionEntry): Record<string, string> {
+/**
+ * Draft field values from an existing entry (edit, enter again). A value whose
+ * unit no longer matches the line's input stays empty: after a template change
+ * from kWh to Wh, "2" must be typed again, never carried over as 2 Wh.
+ */
+export function draftFromEntry(entry: EmissionEntry, line: EmissionLine): Record<string, string> {
   const draft: Record<string, string> = {};
   for (const value of entry.values) {
+    const input = line.inputShape.find((candidate) => candidate.key === value.inputKey);
+    if (!input?.unit) continue;
     if (value.massDistanceDetail) {
+      const units = input.quantityKind === "mass_distance" ? massDistanceUnits(input.unit) : null;
+      if (units?.mass !== value.massDistanceDetail.mass.unit || units.distance !== value.massDistanceDetail.distance.unit) continue;
       const { mass } = value.massDistanceDetail;
       draft[`${value.inputKey}:mass`] = mass.unit === "tonne" ? tonnesToKg(mass.magnitude) : mass.magnitude;
       draft[`${value.inputKey}:distance`] = value.massDistanceDetail.distance.magnitude;
-    } else draft[value.inputKey] = value.magnitude;
+    } else if (input.quantityKind !== "mass_distance" && value.unit === input.unit) draft[value.inputKey] = value.magnitude;
   }
   return draft;
 }
