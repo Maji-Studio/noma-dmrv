@@ -12,6 +12,8 @@ import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import type { BatchHealthFixTarget } from "@/lib/certification/batch-health";
 import { buildCreditBatchOpenItems } from "./open-items";
 
+const batchContext = { facilityId: "facility", creditBatchId: "batch" };
+
 function fixture() {
   const [durability] = buildDurabilityBatchSummaries([{
     creditBatchId: "batch",
@@ -20,7 +22,7 @@ function fixture() {
     runs: [],
     samples: [],
   }]);
-  return { durability };
+  return { ...batchContext, durability };
 }
 
 function replicate(overrides: Partial<DurabilitySummaryReplicate> = {}): DurabilitySummaryReplicate {
@@ -72,7 +74,7 @@ function pageModel(): CreditBatchPageModel {
 
 describe("buildCreditBatchOpenItems", () => {
   it("keeps absent sources empty", () => {
-    expect(buildCreditBatchOpenItems({})).toEqual({
+    expect(buildCreditBatchOpenItems(batchContext)).toEqual({
       blocking: [],
       check: [],
       waiting: [],
@@ -80,7 +82,7 @@ describe("buildCreditBatchOpenItems", () => {
   });
 
   it("uses requirement wording and routes local fixes and external records", () => {
-    const result = buildCreditBatchOpenItems({
+    const result = buildCreditBatchOpenItems({ ...batchContext,
       health: {
         state: "incomplete",
         issueCount: 4,
@@ -127,7 +129,7 @@ describe("buildCreditBatchOpenItems", () => {
     expect(result.blocking.map(row => [row.title, row.target])).toEqual([
       ["Sample data complete", { tab: "samples" }],
       ["Emissions recorded", { tab: "emissions" }],
-      ["Template resolved", { href: "/certification/settings?section=removal-templates&facility=" }],
+      ["Template resolved", { href: "/certification/settings?section=removal-templates&facility=facility" }],
       ["Distances recorded", { href: "/customers?location=location" }],
     ]);
   });
@@ -141,7 +143,7 @@ describe("buildCreditBatchOpenItems", () => {
     const localTabs = { creditBatchTemplate: "overview", batchDetails: "overview",
       labSamples: "samples", emissions: "emissions" };
     const tab = localTabs[fixTarget as keyof typeof localTabs];
-    const result = buildCreditBatchOpenItems({ pageModel: pageModel(),
+    const result = buildCreditBatchOpenItems({ ...batchContext, pageModel: pageModel(),
       health: { state: "incomplete", issueCount: 1, checks: [check] } });
     expect(result.blocking[0].target).toEqual(tab ? { tab } : {
       href: batchHealthFixLinkFor(check, "facility", "batch").href,
@@ -151,7 +153,7 @@ describe("buildCreditBatchOpenItems", () => {
   it.each<BatchHealthFixTarget>([
     "templateLineReview", "certificationTemplates", "certificationEmissions", "emissions",
   ])("routes emission review to %s", fixTarget => {
-    const result = buildCreditBatchOpenItems({ pageModel: pageModel(), emissionLines: [{
+    const result = buildCreditBatchOpenItems({ ...batchContext, emissionLines: [{
       componentId: "diesel", displayName: "Diesel", state: "needsReview", groupKey: "production",
       blueprintKey: "production", contract: undefined, automaticFigure: null, entries: [], total: null,
       blocker: { code: "lineNeedsReview", message: "Review this line", fixTarget },
@@ -251,11 +253,23 @@ describe("buildCreditBatchOpenItems", () => {
     expect(buildCreditBatchOpenItems(input).check).toHaveLength(1);
   });
 
-  it.each([null, 0])("omits the unapplied item for %s dry kg", notAppliedDryKg => {
+  it.each([null, 0, 0.001, 4.999])("omits the unapplied item for %s dry kg", notAppliedDryKg => {
     const model = pageModel();
     model.mass.notAppliedDryKg = notAppliedDryKg;
     model.milestones.ghgStatement = null;
-    expect(buildCreditBatchOpenItems({ pageModel: model }).waiting).toEqual([]);
+    expect(buildCreditBatchOpenItems({ ...batchContext, pageModel: model }).waiting).toEqual([]);
+  });
+
+  it.each([5, 5.001])("shows the unapplied item at the visible threshold for %s dry kg", notAppliedDryKg => {
+    const model = pageModel();
+    model.mass.notAppliedDryKg = notAppliedDryKg;
+    model.milestones.ghgStatement = null;
+    expect(buildCreditBatchOpenItems({ ...batchContext, pageModel: model }).waiting).toEqual([{
+      id: "not-applied",
+      title: "0.01 t produced but not applied yet",
+      detail: "It can join a Removal once its application is recorded.",
+      target: { tab: "removals" },
+    }]);
   });
 
   it.each([
@@ -272,6 +286,6 @@ describe("buildCreditBatchOpenItems", () => {
   ])("formats the waiting period: $title", ({ title, ...period }) => {
     const model = pageModel();
     Object.assign(model.milestones.ghgStatement!, period);
-    expect(buildCreditBatchOpenItems({ pageModel: model }).waiting[0].title).toBe(title);
+    expect(buildCreditBatchOpenItems({ ...batchContext, pageModel: model }).waiting[0].title).toBe(title);
   });
 });

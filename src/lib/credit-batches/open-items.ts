@@ -18,6 +18,9 @@ import type { BatchEmissionLine } from "@/lib/certification/emission-lines";
 import { formatTonnes } from "@/lib/format-utils";
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
 
+// Five kg rounds up to the smallest visible amount at two-decimal tonne precision.
+const MIN_VISIBLE_NOT_APPLIED_DRY_KG = 5;
+
 export interface CreditBatchOpenItem {
   id: string;
   title: string;
@@ -28,6 +31,8 @@ export interface CreditBatchOpenItem {
 }
 
 export interface CreditBatchOpenItemsInput {
+  facilityId: string;
+  creditBatchId: string;
   health?: BatchHealth;
   durability?: DurabilityBatchSummary;
   emissionLines?: readonly BatchEmissionLine[];
@@ -71,8 +76,8 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       target = {
         href: batchHealthFixLinkFor(
           healthCheck,
-          input.pageModel?.facilityId ?? "",
-          input.pageModel?.creditBatchId,
+          input.facilityId,
+          input.creditBatchId,
         ).href,
       };
     }
@@ -110,8 +115,8 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       const target: CreditBatchOpenItem["target"] = settingsFix
         ? { href: batchHealthFixLinkFor(
             { key: "emissions", fixTarget },
-            input.pageModel?.facilityId ?? "",
-            input.pageModel?.creditBatchId,
+            input.facilityId,
+            input.creditBatchId,
           ).href }
         : { tab: "emissions", rowId: line.componentId };
       check.push({
@@ -132,7 +137,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     });
   }
   const notAppliedDryKg = input.pageModel?.mass.notAppliedDryKg;
-  if (notAppliedDryKg != null && notAppliedDryKg > 0) {
+  if (notAppliedDryKg != null && notAppliedDryKg >= MIN_VISIBLE_NOT_APPLIED_DRY_KG) {
     waiting.push({
       id: "not-applied",
       title: `${formatTonnes(kgToTonnes(notAppliedDryKg))} produced but not applied yet`,

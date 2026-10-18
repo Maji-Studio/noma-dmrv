@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import {
   applications,
   deliveries,
@@ -28,6 +28,8 @@ import {
   hasMissingRemotePeriod,
 } from "./certifier-ghg-statements";
 
+const PAGE_MODEL_SNAPSHOT = { isolationLevel: "repeatable read", accessMode: "read only" } as const;
+
 /** All mass is dry biochar kg except the explicitly named slice wetKg. */
 export type CreditBatchPageModel = Awaited<ReturnType<typeof getCreditBatchPageModel>>;
 
@@ -47,11 +49,18 @@ function sumDryGrams(rows: readonly { dryKg: number }[]): number {
 
 export async function getCreditBatchPageModel(ctx: OrgContext, creditBatchId: string) {
   requireOrgScope(ctx);
-  const rollup = (await loadCreditBatchRollups(ctx, [creditBatchId]))[creditBatchId];
+  // Slice ownership and Removal deletion commit together. Keep every nested
+  // read on this executor so they share a snapshot and never re-enter the pool.
+  return db.transaction(tx => loadCreditBatchPageModel(ctx, creditBatchId, tx), PAGE_MODEL_SNAPSHOT);
+}
+
+async function loadCreditBatchPageModel(ctx: OrgContext, creditBatchId: string, tx: DbTransaction) {
+  requireOrgScope(ctx);
+  const rollup = (await loadCreditBatchRollups(ctx, [creditBatchId], undefined, tx))[creditBatchId];
   if (!rollup) throw new DomainError("not_found", "Credit batch not found.");
 
   const [sliceRows, links] = await Promise.all([
-    db.select({
+    tx.select({
       applicationId: applications.id,
       applicationCode: applications.code,
       applicationDate: applications.applicationDate,
@@ -85,7 +94,7 @@ export async function getCreditBatchPageModel(ctx: OrgContext, creditBatchId: st
         eq(creditBatchApplications.organizationId, ctx.organizationId),
       ))
       .orderBy(asc(applications.applicationDate), asc(applications.id)),
-    listCreditBatchCertificationLinks(ctx, [creditBatchId]),
+    listCreditBatchCertificationLinks(ctx, [creditBatchId], tx),
   ]);
   const slices = sliceRows.map(({ field, location, ...slice }) => {
     const destinationLabel = field?.trim() || location?.trim();
@@ -99,7 +108,7 @@ export async function getCreditBatchPageModel(ctx: OrgContext, creditBatchId: st
   )];
   const [rows, submissions] = await Promise.all([
     removalIds.length
-      ? db.select()
+      ? tx.select()
           .from(certifierRemovals)
           .where(and(
             inArray(certifierRemovals.id, removalIds),
@@ -108,7 +117,7 @@ export async function getCreditBatchPageModel(ctx: OrgContext, creditBatchId: st
           .orderBy(asc(certifierRemovals.createdAt), asc(certifierRemovals.id))
       : [],
     removalIds.length
-      ? db.select().from(certificationSubmissions)
+      ? tx.select().from(certificationSubmissions)
           .innerJoin(certifierRemovals, and(
             eq(certifierRemovals.id, certificationSubmissions.localEntityId),
             eq(certifierRemovals.organizationId, ctx.organizationId),
@@ -170,13 +179,13 @@ export async function getCreditBatchPageModel(ctx: OrgContext, creditBatchId: st
   // application spans batches. Never use the list's wet appliedWeightTons.
   const appliedDryGrams = sumDryGrams(slices);
   const firstSubmitted = removals
-    .filter(row => row.submittedAt)
+    .filter(row => row.phase === "submitted" && row.submittedAt)
     .sort((a, b) => a.submittedAt!.getTime() - b.submittedAt!.getTime())
     .at(0);
   // Match CreditBatchHealthSummary: the newest holding Removal (createdAt,
   // then id descending), even when an older Removal has a statement and it doesn't.
   const statementId = links.find(link => link.removalId !== null)?.ghgStatementId;
-  const statement = statementId ? await getCertifierGhgStatementById(ctx, statementId) : null;
+  const statement = statementId ? await getCertifierGhgStatementById(ctx, statementId, tx) : null;
   let ghgStatement: CreditBatchPageGhgStatement | null = null;
   if (statement) {
     const statementSubmissions = await getLatestSubmissionsForEntities(ctx, {
@@ -184,7 +193,7 @@ export async function getCreditBatchPageModel(ctx: OrgContext, creditBatchId: st
       submissionType: "ghg_statement",
       localEntityType: "ghgStatement",
       localEntityIds: [statement.id],
-    }, rollup.batch.facilityId);
+    }, rollup.batch.facilityId, tx);
     const latest = statementSubmissions.get(statement.id) ?? null;
     const submittedToVerifierAt = getMetadataValue(latest?.metadata, "submittedToVerifierAt");
     const creditsIssuedAt = getMetadataValue(latest?.metadata, "creditsIssuedAt");
