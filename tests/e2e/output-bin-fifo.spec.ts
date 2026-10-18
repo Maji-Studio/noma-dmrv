@@ -97,7 +97,10 @@ test.describe("Output-bin conserved FIFO", () => {
     expect(saved.products[0].placedAt.toISOString()).toBe(FIFO_BROWSER_INSTANT);
     expect(saved.balance.beforeDryKg).toBe(100);
     await openBin(page, pureFixture);
-    await expect(page.getByRole("region", { name: "Stock", exact: true })).toContainText("100 kg dry biochar");
+    // Wet leads (200 kg at 50% moisture); the dry biochar the bin tracks is the secondary figure under it.
+    const stock = page.getByRole("region", { name: "Stock", exact: true });
+    await expect(stock).toContainText("≈ 200 kg wet");
+    await expect(stock.getByText("Dry biochar", { exact: true }).locator("xpath=following-sibling::span[1]")).toHaveText("100 kg");
     await expect(page.getByRole("button", { name: "Adjust stock", exact: true })).toBeVisible();
     await evidence(page, info, "pure-product-stock");
   });
