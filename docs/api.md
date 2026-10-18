@@ -258,7 +258,16 @@ representations plus the next position. REST and MCP share parsed-input readers 
 cursors bind the resource, organization and filters, but not page size. The
 representation deliberately contains only feedstock-owned fields and reference
 ids, without joined transport data or entity names. Feedstock representation
-revision 2 removes intake GPS fields; date, supplier, wet mass, moisture and bin
+revision 3 adds nullable `distanceKmOverride`, `distanceSource` and `distanceNote`.
+Input names remain `transportDistanceKm` and `transportDistanceSource`: omission
+preserves the override and recorded leg, a positive distance sets an override,
+and null clears it and captures the current supplier-location facility distance.
+Legacy zero remains accepted as a clear, so the v1 input contract stays additive;
+zero is never persisted as an override. On an already derived record, null and
+zero preserve the recorded leg, including when the location pair is missing.
+Only clearing an existing override or changing the route captures the current
+location distance. Clearing an override also clears its note.
+Revision 2 removed intake GPS fields; date, supplier, wet mass, moisture and bin
 are non-null. Moisture is below 100%. PATCH cannot clear the bin or supply derived
 `massDryKg`. Supplier-location and driver
 ids are not feedstock columns. Percent values use 0 to 100. Business dates use
@@ -329,8 +338,8 @@ no locations. Supplier locations have no code or archive column.
 ### Master data on REST and MCP
 
 [Master data writes](./api-master-data.md) owns supplier, customer and formulation
-operations on REST and MCP: scopes, locations on create, name uniqueness,
-archive/restore, archived list filters, delete blockers and write preconditions.
+operations on REST and MCP: scopes, location writes and detail reads, archive
+semantics, registration fences, distance warnings and customer-delete previews.
 
 ### Customers and orders on REST and MCP
 
@@ -341,17 +350,9 @@ See [master-data read fields and archived filters](./api-master-data.md#supplier
 locations include required names and coordinates plus `facilityDistances`, an array
 of `{ facilityId, distanceKm, distanceSource }`. Supplier locations expose the
 same array, replacing the customer scalar distance and adding supplier facility
-distances. These list-only location endpoints do not emit revision ETags. Missing
-pairs are absent from the array. Distances are positive one-way kilometres; GPS-derived values carry
-`map_estimate`. These REST/MCP location endpoints remain read-only. App location
-writes upsert supplied facility pairs and leave omitted arrays/pairs unchanged;
-each supplied pair requires `distanceKm`. A null value removes a pair; empty
-form input normalizes to null, while an omitted key is rejected.
-Pair saves fill missing delivery snapshots and feedstock transport distances in
-the same transaction, skipping certification-locked lineage. Non-null recorded
-distances remain unchanged. Delivery snapshots store the pair independently of
-an override; effective distance is override ?? recorded. Clearing an override
-restores the snapshot, and provenance-only edits do not refresh it. Orders expose
+distances. Lists have no ETags; location detail reads and writes use the location
+version. See [party locations](./api-master-data.md#party-locations) for distance
+inputs, archived destinations, defaults, fills and delete refusals. Orders expose
 list and id-or-code reads under `orders:read`. Both read scopes are on by default.
 Storage locations expose `formulationId` at representation revision 3 and
 accept `type` and `formulationId` list filters.

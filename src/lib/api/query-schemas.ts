@@ -81,6 +81,7 @@ export const creditBatchListSchema = z.strictObject({
 });
 export const customerLocationListSchema = supplierLocationListSchema.extend({
   q: prefixSchema.describe("Case-insensitive literal prefix search on customer location name."),
+  archived: archivedSchema,
 });
 const orderedDateSchema = z.iso.date().refine((value) => parseCalendarDate(value) !== null, "Enter a real calendar date, YYYY-MM-DD.");
 export const orderListSchema = z.strictObject({

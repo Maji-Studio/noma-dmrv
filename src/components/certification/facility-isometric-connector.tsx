@@ -369,8 +369,8 @@ function ConnectorBody({
 
       {!mapping && availableProjects.length > 0 && (
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          New connections use the {DEFAULT_PROTOCOL_LABEL} protocol by default.
-          Change it in Certification → Settings after connecting.
+          New connections use the {DEFAULT_PROTOCOL_LABEL} protocol. See the
+          versions in Certification → Settings.
         </p>
       )}
 

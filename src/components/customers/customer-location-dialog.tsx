@@ -11,6 +11,7 @@ import {
   useCreateCustomerLocation,
   useUpdateCustomerLocation,
 } from "@/hooks/use-customers";
+import { useToast } from "@/components/ui/toast";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { facilityDistanceChanges } from "@/lib/facility-distance-changes";
 import type { CustomerLocationFormData } from "@/schemas/customers";
@@ -51,6 +52,7 @@ export function CustomerLocationDialog({
   const [error, setError] = useState<string | null>(null);
   const createLocation = useCreateCustomerLocation();
   const updateLocation = useUpdateCustomerLocation();
+  const toast = useToast();
   const isEditing = location !== undefined;
 
   // Modal unmounts its children while closed, so the embedded form resets on
@@ -76,8 +78,9 @@ export function CustomerLocationDialog({
         isDefault: data.isDefault,
       };
 
+      let saved: { warnings?: string[] } | undefined;
       if (location) {
-        await updateLocation.mutateAsync({
+        saved = await updateLocation.mutateAsync({
           locationId: location.id,
           // The version the dialog opened on, so a concurrent edit is refused
           // instead of silently overwritten (#768).
@@ -85,12 +88,15 @@ export function CustomerLocationDialog({
           ...locationData,
         });
       } else {
-        await createLocation.mutateAsync({
+        saved = await createLocation.mutateAsync({
           customerId,
           ...locationData,
         });
       }
       handleClose();
+      // The write committed: say what it changed besides the location itself
+      // (default moved, distances filled).
+      if (saved?.warnings?.length) toast.warning(saved.warnings.join(" "));
     } catch (err) {
       // The dialog stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.

@@ -18,6 +18,7 @@ import {
   useRestoreSupplier,
   useSuppliers,
   useSupplier,
+  useFetchSupplier,
   useSupplierLocationsBySupplier,
   useUpdateSupplier,
 } from "@/hooks/use-suppliers";
@@ -33,7 +34,8 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
-import { DeleteConflictNotice, isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { ArchivedSupplierNotice } from "@/components/parties";
 import { SupplierForm, type PendingSupplierLocation } from "./supplier-form";
@@ -199,6 +201,7 @@ export function SupplierList() {
   const archiveSupplier = useArchiveSupplier();
   const restoreSupplier = useRestoreSupplier();
   const toast = useToast();
+  const fetchSupplier = useFetchSupplier();
   const handledInvalidSupplierIdRef = useRef<string | null>(null);
 
   // Clear a deep-linked `?supplier=` that cannot be opened (deleted or
@@ -297,7 +300,7 @@ export function SupplierList() {
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Supplier ${deletingSupplier.code}`, "Supplier was not deleted. Try again.");
       if (isInUseDeleteRefusal(message) && !deletingSupplier.archivedAt) {
-        // In use: the dialog gives way to a notice that offers Archive instead.
+        // In use: the dialog gives way to the in-use dialog that offers Archive instead.
         setDeleteConflict(deletingSupplier);
         setDeletingSupplier(null);
         return;
@@ -305,6 +308,24 @@ export function SupplierList() {
       if (error instanceof StaleVersionError) setDeletingSupplier(null);
       setDeleteError(message);
     }
+  };
+
+  // A refused archive or restore means the sheet's copy of the row is stale
+  // (a deep-linked archived supplier is not in the active list, so the list
+  // cannot supply a fresher one). Take the current row, or close the sheet
+  // when it is gone, so the next Restore carries a version the server knows.
+  // The operator may close the sheet or open another one while the reload
+  // runs, so both outcomes apply only to a sheet still showing this supplier.
+  const resnapshotSheet = async (supplier: SupplierWithRelations) => {
+    if (sideSheetState?.entity?.id !== supplier.id) return;
+    const current = await fetchSupplier(supplier.id).catch(() => null);
+    const stillOpen = (sheet: { entity: SupplierWithRelations | null } | null) => sheet?.entity?.id === supplier.id;
+    if (current) {
+      setSideSheet((sheet) => (stillOpen(sheet) ? { entity: current as SupplierWithRelations, mode: "view" } : sheet));
+      return;
+    }
+    setSideSheet((sheet) => (stillOpen(sheet) ? null : sheet));
+    toast.error(`Supplier ${supplier.code} could not be reloaded. Open it again from the list.`);
   };
 
   const handleArchive = async (supplier: SupplierWithRelations) => {
@@ -319,6 +340,7 @@ export function SupplierList() {
     } catch (error) {
       // Without a fresh row the notice would keep the stale version, so drop it.
       if (error instanceof StaleVersionError && !fresh) setDeleteConflict(null);
+      if (error instanceof StaleVersionError) await resnapshotSheet(supplier);
       setLifecycleError(toArchiveRestoreErrorMessage(error, `Supplier ${supplier.code}`, "archive", "The supplier was not archived. Try again."));
     }
   };
@@ -333,6 +355,7 @@ export function SupplierList() {
       closeSideSheet();
       toast.success(`Supplier ${supplier.code} restored.`);
     } catch (error) {
+      if (error instanceof StaleVersionError) await resnapshotSheet(supplier);
       setLifecycleError(toArchiveRestoreErrorMessage(error, `Supplier ${supplier.code}`, "restore", "The supplier was not restored. Try again."));
     }
   };
@@ -469,14 +492,19 @@ export function SupplierList() {
       </DataTable>
 
       {deleteConflict && (
-        <DeleteConflictNotice
+        <InUseDeleteDialog
           label={deleteConflict.code}
           onArchive={() => handleArchive(deleteConflict)}
+          onClose={() => {
+            setDeleteConflict(null);
+            setLifecycleError(null);
+          }}
           isPending={archiveSupplier.isPending}
+          errorMessage={lifecycleError}
         />
       )}
 
-      {((lifecycleError && !viewedEntity) || (deleteError && !deletingSupplier)) && (
+      {((lifecycleError && !viewedEntity && !deleteConflict) || (deleteError && !deletingSupplier)) && (
         <ServerError message={(!viewedEntity ? lifecycleError : null) ?? deleteError ?? ""} />
       )}
 

@@ -13,6 +13,11 @@ Deferred work lives here, never as a `TODO` in code.
 
 **`needs-registry-check`** marks a question that must be answered by the Isometric MCP server (`how_to`, then the protocol/OpenAPI tools) or a sandbox probe, **never** from `docs/isometric/*`, which are non-authoritative local summaries. Do not close one of these from a local doc.
 
+## Open-item problem wording
+
+- `src/lib/credit-batches/open-items.ts:buildCreditBatchOpenItems`: Open-item problem
+  wording for unmet checks, shared with the New Removal wizard; Kenji to decide; #1136.
+
 ## Emissions entry dates (2026-10-16) - **deferred**
 
 - `src/lib/read-models/batch-emission-lines.ts:loadBatchEmissionLines` does not

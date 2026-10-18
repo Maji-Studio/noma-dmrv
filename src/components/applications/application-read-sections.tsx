@@ -121,7 +121,6 @@ export function applicationSheetSections(application: ApplicationListItem, conte
       fields: context.lock.isPending ? [{ label: "Certification", value: "Checking whether Application fields can be edited." }] : [],
       content: (
         <>
-          {context.lock.data && <Notice>Application fields are locked by certification.</Notice>}
           {context.lock.error && (
             <div className="flex flex-col gap-8">
               <ServerError message="The certification lock could not be checked. Fields remain view-only until the check succeeds." />

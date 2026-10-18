@@ -28,6 +28,7 @@ import { withAction } from "../with-action";
 // reporting window, the environment for the registry deep link).
 export interface RemovalBreakdownData extends RegistryCarbonResult {
   removalId: string;
+  code: string;
   externalId: string | null;
   startedOn: string | null;
   completedOn: string | null;
@@ -109,6 +110,7 @@ export async function loadRemovalBreakdown(
         registryStatementId: ghgEntry.ghg_statement_id,
         registryStatementStatus: ghgStatement?.status ?? null,
         removalId,
+        code: removal.code,
         externalId,
         startedOn: removal.startedOn,
         completedOn: removal.completedOn,

@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./removal-fixture";
 import { apiActivityWhere } from "./api-activity";
 import { createHash, randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
@@ -66,7 +67,7 @@ export async function submitDocumentDelivery(f: ApiDocumentWriteFixture, applica
   const application = applicationId ? { id: applicationId } : (await db.insert(applications).values({ organizationId, code: `AP-DOC-${f.tag}`, deliveryId: f.owners.delivery.id,
     applicationDate: new Date("2026-09-16T00:00:00Z"), biocharAppliedTons: 0.01, biocharAppliedDryTons: 0.01,
     fieldSizeHa: 1, gpsLatitude: 0, gpsLongitude: 0 }).returning())[0];
-  const [removal] = await db.insert(certifierRemovals).values({ organizationId, facilityId: f.facility.id }).returning();
+  const [removal] = await insertRemovalFixture(db, { organizationId, facilityId: f.facility.id });
   await db.insert(creditBatchApplications).values({ organizationId, creditBatchId: f.batch.id, applicationId: application.id,
     allocatedWetMassKg: DELIVERY_KG, allocatedDryMassKg: DELIVERY_KG, removalId: removal.id });
   await db.insert(certificationSubmissions).values({ organizationId, provider: "isometric", submissionType: "removal", localEntityType: "removal",

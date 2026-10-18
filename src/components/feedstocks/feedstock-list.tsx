@@ -13,6 +13,9 @@ import { parseAsString, useQueryState } from "nuqs";
 import { FEEDSTOCK_DEEP_LINK_PARAM } from "@/lib/feedstock-links";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
+import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -34,11 +37,13 @@ import { FeedstockForm } from "./feedstock-form";
 import {
   useFeedstocks,
   useFeedstock,
+  useFetchFeedstock,
   useCreateFeedstock,
   useUpdateFeedstock,
   useDeleteFeedstock,
 } from "@/hooks/use-feedstocks";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useTransportDistanceDrift } from "@/hooks/use-transport-distance-refresh";
 import {
   useListPagination,
   useReconcileListPage,
@@ -68,6 +73,8 @@ import { ILLUSTRATION_SIZE, FeedstockArt } from "@/components/ui/illustrations";
 function createColumns(
   onEdit: (feedstock: FeedstockWithRelations) => void,
   onDelete: (feedstock: FeedstockWithRelations) => void,
+  locks: RecordLockViews,
+  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<FeedstockWithRelations>[] {
   return [
     {
@@ -171,21 +178,23 @@ function createColumns(
         />
       ),
     },
+    recordLockColumn<FeedstockWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end">
-          <RowActionsMenu
-            label={`Actions for ${row.original.code}`}
-            actions={[
-              { label: "Edit", onSelect: () => onEdit(row.original) },
-              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original) },
-            ]}
-          />
-        </div>
-      ),
+      cell: ({ row }) => {
+        const lock = locks[row.original.id];
+        const actions = [
+          ...(isRecordEditable(lock) ? [{ label: "Edit", onSelect: () => onEdit(row.original) }] : []),
+          ...(isRecordDeletable(lock) ? [{ label: "Delete", destructive: true, onSelect: () => onDelete(row.original) }] : []),
+        ];
+        return (
+          <div className="flex items-center justify-end">
+            {actions.length > 0 && <RowActionsMenu label={`Actions for ${row.original.code}`} actions={actions} />}
+          </div>
+        );
+      },
       enableSorting: false,
     },
   ];
@@ -281,6 +290,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   );
   const createFeedstock = useCreateFeedstock();
   const updateFeedstock = useUpdateFeedstock();
+  const fetchFeedstock = useFetchFeedstock();
   const deleteFeedstock = useDeleteFeedstock();
   const toast = useToast();
   const createWithEvidence = useCreateWithEvidence({
@@ -335,8 +345,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         deliveryDate: data.deliveryDate,
         supplierId: data.supplierId,
         vehicleId: data.vehicleId || null,
-        transportDistanceKm: data.transportDistanceKm ?? null,
-        transportDistanceSource: data.transportDistanceSource ?? null,
+        transportDistanceKm: data.transportDistanceKm,
+        transportDistanceSource: data.transportDistanceSource,
+        distanceNote: data.distanceNote,
         feedstockTypeId: data.feedstockTypeId,
         massWetKg: data.allocations[0]?.allocatedWetMassKg ?? data.totalWetMassKg,
         moistureContentPercent: data.moisturePercent,
@@ -416,9 +427,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   };
   useOpenCreateIntent(openCreate);
 
-  const columns = createColumns(openEdit, handleDelete);
-
   const feedstockItems = feedstocksData?.items ?? [];
+  const feedstockLocks = useRecordLocks("feedstock", feedstockItems.map((item) => item.id));
+  const columns = createColumns(openEdit, handleDelete, feedstockLocks.locks, feedstockLocks.statusOf);
   const totalPages = feedstocksData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -485,7 +496,22 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       : focusedFeedstock.data
         ? ({ entity: focusedFeedstock.data, mode: "view" } as const)
         : null;
-  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  // View mode reads the live record, so a deliberate distance refresh shows
+  // at once and Edit freezes the refreshed version (#768 freezes on entry).
+  const liveViewEntity =
+    sideSheet?.mode === "view" && sideSheet.entity && focusedFeedstock.data?.id === sideSheet.entity.id
+      ? focusedFeedstock.data
+      : null;
+  const displaySideSheet = liveViewEntity
+    ? ({ entity: liveViewEntity, mode: "view" } as const)
+    : sideSheet ?? deepLinkedSideSheet;
+  const viewedFeedstockId =
+    displaySideSheet?.mode === "view" ? displaySideSheet.entity?.id ?? "" : "";
+  const recordedDistance = useTransportDistanceDrift(
+    { entityType: "feedstock", entityId: viewedFeedstockId },
+    !!viewedFeedstockId,
+  );
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("feedstock", displaySideSheet?.entity?.id);
   const activeFocusTarget = sideSheet
     ? null
     : parseEntityFocusTarget(deepLinkFocus);
@@ -652,11 +678,20 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         }
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
+        canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit feedstock"
-        sections={sideSheetEntity ? feedstockSheetSections(sideSheetEntity) : undefined}
+        sections={sideSheetEntity ? feedstockSheetSections(sideSheetEntity, {
+          distanceKm: recordedDistance.data?.recordedDistanceKm,
+          source: recordedDistance.data?.recordedDistanceSource,
+          locationDefaultKm: recordedDistance.data?.currentDistanceKm,
+          pending: recordedDistance.isPending,
+        }) : undefined}
       >
         <FeedstockForm
-          key={sideSheetEntity?.id ?? "create"}
+          // The version keys the form too, so a refresh from location reopens
+          // it on the record it saved instead of a stale draft.
+          key={sideSheetEntity ? `${sideSheetEntity.id}:${sideSheetEntity.version}` : "create"}
           feedstock={sideSheetEntity ?? undefined}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={attemptCloseSideSheet}
@@ -674,6 +709,11 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           deferredAttachments={deferredAttachments}
           retryEntityIds={createdFeedstockIds}
           focusTarget={sideSheetMode === "edit" ? activeFocusTarget : null}
+          onDistanceRefreshed={async () => {
+            if (!sideSheetEntity) return;
+            const fresh = await fetchFeedstock(sideSheetEntity.id);
+            setSideSheet({ entity: fresh, mode: "edit" });
+          }}
         />
       </EntitySideSheet>
     </div>

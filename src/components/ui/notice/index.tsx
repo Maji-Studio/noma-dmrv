@@ -7,6 +7,10 @@
  * page full of advisories stays quiet and the one thing stopping the user is
  * the only box. Live-region roles follow the tone: `status` announces politely
  * (info, warning, success); `alert` interrupts, so it is reserved for errors.
+ *
+ * `boxed` is an opt-in quiet card for a lock or state that explains why a
+ * record cannot change: a light neutral surface and compact padding. It never
+ * turns red; the error tone keeps its own tint and ignores it.
  */
 import type { HTMLAttributes, ReactNode } from "react";
 import {
@@ -21,6 +25,9 @@ import { cn } from "@/lib/utils";
 export type NoticeTone = "info" | "warning" | "error" | "success";
 
 const NOTICE_ICON_SIZE = 16;
+/** Neutral card for `boxed`: 8px vertical, 12px horizontal, small-card radius. */
+const BOXED_CLASS =
+  "bg-[var(--color-surface-light)] rounded-[8px] px-12 py-8";
 
 const TONES: Record<
   NoticeTone,
@@ -59,12 +66,15 @@ export interface NoticeProps
   title?: ReactNode;
   /** A link or button that resolves the notice, shown after the text. */
   action?: ReactNode;
+  /** Quiet neutral card for non-error tones. Ignored for `error`. */
+  boxed?: boolean;
 }
 
 export function Notice({
   tone = "warning",
   title,
   action,
+  boxed = false,
   className,
   children,
   ...props
@@ -78,7 +88,7 @@ export function Notice({
       data-tone={tone}
       className={cn(
         "flex flex-wrap items-start gap-x-8 gap-y-8",
-        config.boxClass,
+        config.boxClass || (boxed && BOXED_CLASS),
         className,
       )}
       {...props}

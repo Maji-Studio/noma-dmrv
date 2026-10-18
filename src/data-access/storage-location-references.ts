@@ -11,7 +11,7 @@
  * table means adding one row and both guards see it.
  */
 
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
 import type { db } from "@/db";
 import {
   biocharProducts,
@@ -37,6 +37,24 @@ export interface StorageLocationReference {
 }
 
 /**
+ * Every table that points at a bin, with the noun the delete refusal shows.
+ * Both the single-bin guard count and the batched screen read walk this one
+ * list, so a table added here reaches both.
+ */
+const REFERENCE_SOURCES = [
+  { blocker: "feedstock batches", table: feedstocks, bin: feedstocks.storageLocationId, org: feedstocks.organizationId },
+  { blocker: "production runs using it as a feedstock bin", table: productionRunFeedstockDraws, bin: productionRunFeedstockDraws.storageLocationId, org: productionRunFeedstockDraws.organizationId },
+  { blocker: "production runs using it as a biochar bin", table: productionRuns, bin: productionRuns.biocharStorageLocationId, org: productionRuns.organizationId },
+  { blocker: "biochar products stored in it", table: biocharProducts, bin: biocharProducts.storageLocationId, org: biocharProducts.organizationId },
+  { blocker: "biochar products sourced from it", table: biocharProducts, bin: biocharProducts.sourceBiocharStorageLocationId, org: biocharProducts.organizationId },
+  { blocker: "product source allocations drawing from it", table: biocharProductSourceAllocations, bin: biocharProductSourceAllocations.sourceStorageLocationId, org: biocharProductSourceAllocations.organizationId },
+  { blocker: "deliveries drawing from it", table: deliveries, bin: deliveries.storageLocationId, org: deliveries.organizationId },
+  { blocker: "storage inventory records", table: biocharStorageInventory, bin: biocharStorageInventory.storageLocationId, org: biocharStorageInventory.organizationId },
+  { blocker: "reconciliation or movement history", table: binMovements, bin: binMovements.storageLocationId, org: binMovements.organizationId },
+  { blocker: "output bin layer records", table: outputStockAllocations, bin: outputStockAllocations.sourceStorageLocationId, org: outputStockAllocations.organizationId },
+] as const;
+
+/**
  * Count every row that still points at one bin, org-scoped.
  *
  * Pass the caller's transaction when the answer has to be consistent with a
@@ -48,145 +66,41 @@ export async function countStorageLocationReferences(
   storageLocationId: string,
 ): Promise<StorageLocationReference[]> {
   requireOrgScope(ctx);
-  const organizationId = ctx.organizationId;
+  const counts = await Promise.all(REFERENCE_SOURCES.map((source) =>
+    tx
+      .select({ value: count() })
+      .from(source.table)
+      .where(and(eq(source.bin, storageLocationId), eq(source.org, ctx.organizationId))),
+  ));
+  return REFERENCE_SOURCES.map((source, index) => ({
+    blocker: source.blocker,
+    count: Number(counts[index][0]?.value ?? 0),
+  }));
+}
 
-  const [
-    [{ value: feedstockCount }],
-    [{ value: feedstockRunCount }],
-    [{ value: biocharRunCount }],
-    [{ value: productCount }],
-    [{ value: sourcedProductCount }],
-    [{ value: sourceAllocationCount }],
-    [{ value: deliveryCount }],
-    [{ value: inventoryCount }],
-    [{ value: movementCount }],
-    [{ value: outputAllocationCount }],
-  ] = await Promise.all([
+/**
+ * `countStorageLocationReferences` for many bins at once: one grouped query
+ * per reference table, whatever the number of bins (the storage board).
+ */
+export async function countStorageLocationReferencesForBins(
+  ctx: OrgContext,
+  tx: DbReader,
+  storageLocationIds: readonly string[],
+): Promise<Map<string, StorageLocationReference[]>> {
+  requireOrgScope(ctx);
+  const ids = [...new Set(storageLocationIds)];
+  if (ids.length === 0) return new Map();
+  const grouped = await Promise.all(REFERENCE_SOURCES.map((source) =>
     tx
-      .select({ value: count() })
-      .from(feedstocks)
-      .where(
-        and(
-          eq(feedstocks.storageLocationId, storageLocationId),
-          eq(feedstocks.organizationId, organizationId),
-        ),
-      ),
-    tx
-      .select({ value: count() })
-      .from(productionRunFeedstockDraws)
-      .where(
-        and(
-          eq(productionRunFeedstockDraws.storageLocationId, storageLocationId),
-          eq(productionRunFeedstockDraws.organizationId, organizationId),
-        ),
-      ),
-    tx
-      .select({ value: count() })
-      .from(productionRuns)
-      .where(
-        and(
-          eq(productionRuns.biocharStorageLocationId, storageLocationId),
-          eq(productionRuns.organizationId, organizationId),
-        ),
-      ),
-    tx
-      .select({ value: count() })
-      .from(biocharProducts)
-      .where(
-        and(
-          eq(biocharProducts.storageLocationId, storageLocationId),
-          eq(biocharProducts.organizationId, organizationId),
-        ),
-      ),
-    tx
-      .select({ value: count() })
-      .from(biocharProducts)
-      .where(
-        and(
-          eq(biocharProducts.sourceBiocharStorageLocationId, storageLocationId),
-          eq(biocharProducts.organizationId, organizationId),
-        ),
-      ),
-    tx
-      .select({ value: count() })
-      .from(biocharProductSourceAllocations)
-      .where(
-        and(
-          eq(
-            biocharProductSourceAllocations.sourceStorageLocationId,
-            storageLocationId,
-          ),
-          eq(biocharProductSourceAllocations.organizationId, organizationId),
-        ),
-      ),
-    tx
-      .select({ value: count() })
-      .from(deliveries)
-      .where(
-        and(
-          eq(deliveries.storageLocationId, storageLocationId),
-          eq(deliveries.organizationId, organizationId),
-        ),
-      ),
-    tx
-      .select({ value: count() })
-      .from(biocharStorageInventory)
-      .where(
-        and(
-          eq(biocharStorageInventory.storageLocationId, storageLocationId),
-          eq(biocharStorageInventory.organizationId, organizationId),
-        ),
-      ),
-    tx
-      .select({ value: count() })
-      .from(binMovements)
-      .where(
-        and(
-          eq(binMovements.storageLocationId, storageLocationId),
-          eq(binMovements.organizationId, organizationId),
-        ),
-      ),
-    tx
-      .select({ value: count() })
-      .from(outputStockAllocations)
-      .where(
-        and(
-          eq(outputStockAllocations.sourceStorageLocationId, storageLocationId),
-          eq(outputStockAllocations.organizationId, organizationId),
-        ),
-      ),
-  ]);
-
-  return [
-    { blocker: "feedstock batches", count: Number(feedstockCount) },
-    {
-      blocker: "production runs using it as a feedstock bin",
-      count: Number(feedstockRunCount),
-    },
-    {
-      blocker: "production runs using it as a biochar bin",
-      count: Number(biocharRunCount),
-    },
-    { blocker: "biochar products stored in it", count: Number(productCount) },
-    {
-      blocker: "biochar products sourced from it",
-      count: Number(sourcedProductCount),
-    },
-    {
-      blocker: "product source allocations drawing from it",
-      count: Number(sourceAllocationCount),
-    },
-    { blocker: "deliveries drawing from it", count: Number(deliveryCount) },
-    { blocker: "storage inventory records", count: Number(inventoryCount) },
-    {
-      blocker: "reconciliation or movement history",
-      count: Number(movementCount),
-    },
-    {
-      blocker: "output bin layer records",
-      count: Number(outputAllocationCount),
-    },
-  ];
+      .select({ binId: source.bin, value: count() })
+      .from(source.table)
+      .where(and(inArray(source.bin, ids), eq(source.org, ctx.organizationId)))
+      .groupBy(source.bin),
+  ));
+  return new Map(ids.map((id) => [id, REFERENCE_SOURCES.map((source, index) => ({
+    blocker: source.blocker,
+    count: Number(grouped[index].find((row) => row.binId === id)?.value ?? 0),
+  }))]));
 }
 
 /** The operator-facing nouns for every reference kind that still has rows. */

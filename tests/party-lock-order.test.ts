@@ -1,3 +1,5 @@
+import type { OrgContext } from "@/lib/auth/server";
+import { lockBiocharTransportRouteTopology } from "@/data-access/transport-legs";
 import { createOrderInTransaction } from "@/data-access/orders";
 import { updateCustomerInTransaction } from "@/data-access/customer-writes";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -29,6 +31,7 @@ async function queue(kind: "supplier" | "customer", organizationId: string, id: 
   const pending: ReturnType<typeof settle>[] = [];
   try {
     const table = kind === "supplier" ? suppliers : customers;
+    if (kind === "customer") await lockBiocharTransportRouteTopology({ organizationId, userId: "lock-order-barrier" } as OrgContext, barrier.tx);
     await barrier.tx.select().from(table).where(and(eq(table.organizationId, organizationId), eq(table.id, id))).for("update");
     for (const [index, call] of calls.entries()) {
       pending.push(settle(call()));
@@ -53,7 +56,8 @@ describe("party lock order", { timeout: TIMEOUT_MS }, () => {
     const remove = () => runOperation(deleteCustomer, f.ctx, { customerId: f.customer.id, expectedVersion: 1 }, { pool: writers });
     const results = await queue("customer", f.ctx.organizationId, f.customer.id, first ? [create, remove] : [remove, create]);
     expect(results[0].ok).toBe(true);
-    expect(results[1]).toMatchObject({ ok: false, error: { code: first ? "conflict" : "not_found" } });
+    if (first) expect(results[1].ok).toBe(true);
+    else expect(results[1]).toMatchObject({ ok: false, error: { code: "not_found" } });
   });
   it.each([false, true])("metadata edit passes a customer KEY SHARE; code edit waits: %s", async code => {
     const f = await createOrderFixture(); orders.push(f);

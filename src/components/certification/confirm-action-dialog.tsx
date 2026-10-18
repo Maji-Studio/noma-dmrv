@@ -36,6 +36,8 @@ interface ConfirmActionDialogProps {
   isProduction?: boolean;
   /** Surface a server error below the body. */
   errorMessage?: string;
+  /** Blocks the primary action when the body names a blocker. Cancel stays live. */
+  confirmDisabled?: boolean;
 }
 
 const TITLE_ID = "confirm-action-title";
@@ -52,6 +54,7 @@ export function ConfirmActionDialog({
   isPending = false,
   isProduction = false,
   errorMessage,
+  confirmDisabled = false,
 }: ConfirmActionDialogProps) {
   const isDestructive = variant === "destructive";
   const isNeutral = variant === "neutral";
@@ -72,15 +75,7 @@ export function ConfirmActionDialog({
 
         {errorMessage && <ServerError message={errorMessage} />}
 
-        <div className="flex justify-end gap-12">
-          <Button
-            size="large"
-            variant="default"
-            onClick={onClose}
-            disabled={isPending}
-          >
-            Cancel
-          </Button>
+        <div className="flex flex-wrap justify-start gap-12">
           <Button
             size="large"
             variant={isDestructive || isNeutral ? "default" : "primary"}
@@ -90,9 +85,18 @@ export function ConfirmActionDialog({
                 : undefined
             }
             onClick={onConfirm}
+            disabled={confirmDisabled}
             busy={isPending}
           >
             {isPending ? (busyLabel ?? `${confirmLabel}…`) : confirmLabel}
+          </Button>
+          <Button
+            size="large"
+            variant="default"
+            onClick={onClose}
+            disabled={isPending}
+          >
+            Cancel
           </Button>
         </div>
       </div>

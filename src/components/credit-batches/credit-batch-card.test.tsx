@@ -74,6 +74,7 @@ describe("CreditBatchCard", () => {
       onView,
       onEdit,
       onDelete,
+      lock: { level: "open", heldBy: [], usedBy: [], freeFields: [], howToFree: null, returnedBy: [] },
     });
     const menu = findRowActions(view);
 
@@ -119,6 +120,8 @@ describe("CreditBatchCard", () => {
       state: "ready",
       issueCount: 0,
       removalId: "removal-1",
+      removalCode: null,
+      productionEmissionsClaimedByRemovalCode: null,
       removalStatus: deriveRemovalStatus({ local: "rejected", lockInFlight: false }),
       recordLock: recordLocks.creditBatch({ dependents: [], removals: [{ id: "removal-1",
         submissions: [{ status: "submitted" }, { status: "rejected" }], statements: [] }] }),
@@ -202,6 +205,8 @@ describe("CreditBatchCard", () => {
       state: "incomplete",
       issueCount: 2,
       removalId: null,
+      removalCode: null,
+      productionEmissionsClaimedByRemovalCode: null,
       removalStatus: null,
       ghgStatementId: null,
       ghgStatementStatus: null,
@@ -218,6 +223,8 @@ describe("CreditBatchCard", () => {
       state: "ready",
       issueCount: 0,
       removalId: "removal-1",
+      removalCode: null,
+      productionEmissionsClaimedByRemovalCode: null,
       removalStatus: {
         kind: "submitted",
         value: "issued",
@@ -244,6 +251,8 @@ describe("CreditBatchCard", () => {
       state: "ready",
       issueCount: 0,
       removalId: null,
+      removalCode: null,
+      productionEmissionsClaimedByRemovalCode: null,
       removalStatus: null,
       ghgStatementId: null,
       ghgStatementStatus: null,
@@ -253,5 +262,12 @@ describe("CreditBatchCard", () => {
 
     expect(text).toContain("Batch data ready");
     expect(text).not.toContain("Ready to certify");
+  });
+});
+
+describe("CreditBatchCard before its lock answers", () => {
+  it("offers only Open details", () => {
+    const view = CreditBatchCard({ creditBatch, onView: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn() });
+    expect(findRowActions(view)?.props.actions.map(({ label }) => label)).toEqual(["Open details"]);
   });
 });

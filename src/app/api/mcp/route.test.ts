@@ -13,8 +13,10 @@ import { mcpInstructions } from "@/lib/mcp/instructions";
 import { biocharStockGuide, domainGuide, labSampleGuide, orderGuide, deliveryGuide, llmsGuide } from "@/lib/api/llms-guide";
 
 const MCP_INSTRUCTIONS_MAX_CHARS = 2000;
-const EXPECTED_TOOL_COUNT = 70;
+const EXPECTED_TOOL_COUNT = 78;
 const PARTY_WRITE_TOOLS = ["supplier", "customer"].flatMap(kind => ["create", "update", "delete", "archive", "restore"].map(command => `${command}_${kind}`));
+const LOCATION_WRITE_TOOLS = ["add_supplier_location", "update_supplier_location", "delete_supplier_location",
+  "add_customer_location", "update_customer_location", "delete_customer_location", "archive_customer_location", "restore_customer_location"];
 const FORMULATION_WRITE_TOOLS = ["create_formulation", "update_formulation", "delete_formulation", "archive_formulation", "restore_formulation"];
 vi.mock("@/db", () => ({ db: {} }));
 
@@ -141,7 +143,7 @@ describe("authenticated MCP read route", () => {
     const { result } = await body(response);
     expect(result.tools).toHaveLength(EXPECTED_TOOL_COUNT);
     expect(result.tools[0]).toMatchObject({ annotations: { readOnlyHint: true } });
-    expect(result.tools.filter((tool: { name: string }) => ![...PARTY_WRITE_TOOLS, ...FORMULATION_WRITE_TOOLS, "record_application", "update_application", "delete_application", "request_document_upload", "confirm_document_upload", "log_feedstock_delivery", "update_feedstock", "delete_feedstock", "start_production_run", "update_production_run", "delete_production_run", "make_biochar_product", "update_biochar_product", "record_output_stock_movement", "record_lab_sample", "update_lab_sample", "delete_lab_sample", "record_order", "update_order", "delete_order", "record_delivery", "update_delivery"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
+    expect(result.tools.filter((tool: { name: string }) => ![...PARTY_WRITE_TOOLS, ...LOCATION_WRITE_TOOLS, ...FORMULATION_WRITE_TOOLS, "record_application", "update_application", "delete_application", "request_document_upload", "confirm_document_upload", "log_feedstock_delivery", "update_feedstock", "delete_feedstock", "start_production_run", "update_production_run", "delete_production_run", "make_biochar_product", "update_biochar_product", "record_output_stock_movement", "record_lab_sample", "update_lab_sample", "delete_lab_sample", "record_order", "update_order", "delete_order", "record_delivery", "update_delivery"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
     const find = result.tools.find((tool: { name: string }) => tool.name === "find_feedstocks");
     expect(find.inputSchema.additionalProperties).toBe(false);
     expect(find.inputSchema.properties.limit).toMatchObject({ type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT,
@@ -328,7 +330,7 @@ it("returns invalid_query for an invalid document owner type", async () => {
   });
 });
 
-it.each(["record_application", "update_application", "delete_application", "request_document_upload", "confirm_document_upload", "log_feedstock_delivery", "update_feedstock", "delete_feedstock", "record_order", "update_order", "delete_order", "record_delivery", "update_delivery"])("charges %s and dry runs as writes", async (name) => {
+it.each([...LOCATION_WRITE_TOOLS, "record_application", "update_application", "delete_application", "request_document_upload", "confirm_document_upload", "log_feedstock_delivery", "update_feedstock", "delete_feedstock", "record_order", "update_order", "delete_order", "record_delivery", "update_delivery"])("charges %s and dry runs as writes", async (name) => {
   for (const dryRun of [false, true]) {
     expect(mcpRequestAccess((await mocks.resolve()).ctx, { method: "tools/call", params: { name, arguments: { dryRun } } })).toBe("write");
     await call(name, { dryRun });
@@ -415,7 +417,7 @@ it.each([
     expect(vi.mocked(serveMcp).mock.calls.at(-1)![1].deadlineAt).toBe(started + budget);
   } finally { clock.mockRestore(); }
 });
-it.each(["record_application", "update_application", "delete_application", "request_document_upload", "confirm_document_upload"])("enforces the write switch for %s", async name => {
+it.each([...LOCATION_WRITE_TOOLS, "record_application", "update_application", "delete_application", "request_document_upload", "confirm_document_upload"])("enforces the write switch for %s", async name => {
   mocks.env.API_WRITES_DISABLED = true;
   expect(await body(await call(name, { ownerType: "delivery" }))).toMatchObject({
     result: { isError: true, structuredContent: { code: "api_writes_disabled" } },
@@ -462,4 +464,34 @@ it.each(["supplier", "customer"] as const)("exposes the master-data %s tools onl
       }
     }
   }
+});
+
+
+it.each(["supplier", "customer"] as const)("hides %s location commands without their matching scope", async kind => {
+  const commands = LOCATION_WRITE_TOOLS.filter(name => name.includes(`_${kind}_`));
+  for (const permission of ["read", "write", "delete"] as const) {
+    mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: [`${kind}s:${permission}`], organizationId: "org-1" } });
+    const listing = await body(await POST(rpc("tools/list")));
+    const names = listing.result.tools.map((tool: { name: string }) => tool.name);
+    for (const name of commands) {
+      const allowed = permission === (name.startsWith("delete_") ? "delete" : "write");
+      expect(names.includes(name)).toBe(allowed);
+      if (allowed) continue;
+      const hidden = await body(await call(name));
+      expect(mocks.post).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ access: "read" }), null);
+      expect(hidden.error).toEqual((await body(await call("unknown_tool"))).error);
+    }
+  }
+});
+it.each(LOCATION_WRITE_TOOLS)("returns a retryable deadline result for %s before dispatch", async name => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  const now = Date.now();
+  const resolution = await mocks.resolve();
+  mocks.resolve.mockImplementation(async () => {
+    vi.setSystemTime(now + OPERATION_DEADLINE_MS);
+    return resolution;
+  });
+  const response = await call(name, { requestKey: "write" });
+  expect(response.status).toBe(200);
+  expect(await body(response)).toMatchObject({ result: { isError: true, structuredContent: { code: "deadline_exceeded", retryable: true } } });
 });

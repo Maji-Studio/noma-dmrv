@@ -212,7 +212,7 @@ describe("credit batch checks read under the batch lock", { timeout: SUITE_TIMEO
   });
 
   it("refuses a facility-local time in a DST gap or fold rather than guessing", async () => {
-    // An Isometric batch spans at most one month, so each clock change gets a batch of its own.
+    // An Isometric batch spans less than one month, so each clock change gets a batch of its own.
     // 2026-03-29 02:30 never happens in Berlin; 2025-10-26 02:30 happens twice.
     const spring = await fixture({ timeZone: "Europe/Berlin", window: { startDate: "2026-03-01", endDate: "2026-03-31" } });
     await expect(record(spring, { samplingTime: { date: "2026-03-29", time: "02:30" } })).rejects.toMatchObject(onField("samplingTime"));

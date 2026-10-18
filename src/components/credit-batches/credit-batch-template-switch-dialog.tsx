@@ -37,6 +37,20 @@ import {
 
 const DIALOG_TITLE_ID = "credit-batch-template-switch-title";
 
+// A batch with no pin sets its first template; a pinned one switches.
+const SWITCH_COPY = {
+  title: "Switch template",
+  submitting: "Switching…",
+  success: (code: string) => `Removal template switched for ${code}.`,
+  failure: "The Removal template was not switched. Try again.",
+};
+const SET_COPY = {
+  title: "Set template",
+  submitting: "Setting…",
+  success: (code: string) => `Removal template set for ${code}.`,
+  failure: "The Removal template was not set. Try again.",
+};
+
 export interface CreditBatchTemplateSwitchDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -91,6 +105,7 @@ function SwitchTemplateForm({
   const dialogActions = useContext(FormDialogContext);
   const switchTemplate = useSwitchCreditBatchRemovalTemplate();
   const toast = useToast();
+  const copy = creditBatch.removalTemplateId ? SWITCH_COPY : SET_COPY;
 
   // Only Removal templates can be pinned; the action refuses anything else.
   const options = (templates ?? [])
@@ -122,7 +137,7 @@ function SwitchTemplateForm({
       });
       reset(values);
       dialogActions?.markSaved(control);
-      toast.success(`Removal template switched for ${creditBatch.code}.`);
+      toast.success(copy.success(creditBatch.code));
       onClose();
     } catch (error) {
       if (getStaleVersionConflict(error)) {
@@ -131,7 +146,7 @@ function SwitchTemplateForm({
       }
       setError("root.serverError", {
         type: "server",
-        message: toSaveErrorMessage(error, "The Removal template was not switched. Try again."),
+        message: toSaveErrorMessage(error, copy.failure),
       });
     }
   };
@@ -139,7 +154,7 @@ function SwitchTemplateForm({
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-24">
       <header className="flex flex-col gap-4">
-        <h2 id={DIALOG_TITLE_ID} className="title-heading-3">Switch template</h2>
+        <h2 id={DIALOG_TITLE_ID} className="title-heading-3">{copy.title}</h2>
         <p className="body-small text-[var(--color-text-secondary)]">
           {`Removals for ${creditBatch.code} use this template's lines.`}
         </p>
@@ -187,8 +202,8 @@ function SwitchTemplateForm({
         ) : undefined}
         submitDisabled={unchanged || stale}
         submitVariant="default"
-        submitLabel="Switch template"
-        submittingLabel="Switching…"
+        submitLabel={copy.title}
+        submittingLabel={copy.submitting}
       />
     </form>
   );

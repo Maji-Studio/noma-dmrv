@@ -189,7 +189,7 @@ function WizardBody({
             ? "The progress connection stopped responding. The registry submission may still be running. Close this dialog and refresh the page to reconcile its status."
             : "A submission for this Removal is in progress. Wait for it to finish before making changes."}
         </p>
-        <div className="flex justify-end">
+        <div className="flex justify-start">
           <Button variant="primary" onClick={onClose}>
             Close
           </Button>
@@ -288,15 +288,8 @@ export function Footer({
   if (step === "submit") return null;
 
   return (
-    <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
-      <span className="body-caption text-[var(--color-text-tertiary)]">
-        {selectable.ready} of {selectable.total} batches with complete data ·{" "}
-        {selectable.selected} selected
-      </span>
+    <div className="flex flex-wrap items-center justify-start gap-x-16 gap-y-12 border-t border-[var(--color-border-secondary)] pt-16">
       <div className="flex items-center gap-12">
-        <Button variant="default" onClick={onCancel}>
-          Cancel
-        </Button>
         <Button
           variant="primary"
           onClick={onConfirm}
@@ -305,7 +298,14 @@ export function Footer({
         >
           Continue
         </Button>
+        <Button variant="default" onClick={onCancel}>
+          Cancel
+        </Button>
       </div>
+      <span className="body-caption text-[var(--color-text-tertiary)]">
+        {selectable.ready} of {selectable.total} batches with complete data ·{" "}
+        {selectable.selected} selected
+      </span>
     </div>
   );
 }

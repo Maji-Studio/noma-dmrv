@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import {
@@ -113,10 +114,7 @@ describe("upsertCertifierProject organization guard", () => {
  * mapping identifiers via `hasBlockingFacilitySubmission`.
  */
 async function insertBlockingSubmission(facilityId: string): Promise<void> {
-  const [removal] = await db
-    .insert(certifierRemovals)
-    .values({ organizationId: TEST_ORG_ID, facilityId })
-    .returning({ id: certifierRemovals.id });
+  const [removal] = await insertRemovalFixture(db, { organizationId: TEST_ORG_ID, facilityId });
   removalIds.push(removal.id);
 
   const [submission] = await db
@@ -367,7 +365,7 @@ describe("upsertCertifierProject credit batch adoption", () => {
     expect(first.certifier).toBeNull();
     const codes = [first.code, second.code].sort().join(", ");
     await expect(link(facilityId)).rejects.toThrow(new SafeError(
-      `Credit batches ${codes} span more than one calendar month. Shorten or archive them before linking this facility to Isometric.`,
+      `Credit batches ${codes} span one calendar month or more. Shorten or archive them before linking this facility to Isometric.`,
     ));
     expect(await getCertifierProjectByFacility(ctx, facilityId)).toBeNull();
     for (const batch of [first, second]) {
@@ -392,13 +390,13 @@ describe("upsertCertifierProject credit batch adoption", () => {
     const restoredBatch = await storedBatch(batch.id);
     expect(restoredBatch).toMatchObject({ archivedAt: null, certifier: null });
     await expect(link(facilityId)).rejects.toThrow(new SafeError(
-      `Credit batch ${batch.code} spans more than one calendar month. Shorten or archive it before linking this facility to Isometric.`,
+      `Credit batch ${batch.code} spans one calendar month or more. Shorten or archive it before linking this facility to Isometric.`,
     ));
     expect(await getCertifierProjectByFacility(ctx, facilityId)).toBeNull();
     expect(await storedBatch(batch.id)).toEqual(restoredBatch);
   });
 
-  it.each(["2027-02-27", "2027-02-28"])("links and stamps a period ending %s from January 31", async endDate => {
+  it.each(["2027-02-26", "2027-02-27"])("links and stamps a period ending %s from January 31", async endDate => {
     const facilityId = await createFacility();
     const batch = await createBatch(facilityId, "2027-01-31", endDate);
     await link(facilityId);
@@ -406,7 +404,7 @@ describe("upsertCertifierProject credit batch adoption", () => {
     expect(adopted).toMatchObject({ certifier: "isometric", version: batch.version + 1 });
     await expect(updateCreditBatch(ctx, batch.id, {
       expectedVersion: adopted.version, endDate: new Date("2027-04-30"),
-    })).rejects.toThrow(/at most one month/);
+    })).rejects.toThrow(/less than one month/);
     await expect(db.update(creditBatches).set({ endDate: "2027-04-30" })
       .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, ctx.organizationId))))
       .rejects.toMatchObject({ cause: { constraint: "credit_batches_isometric_max_one_month" } });
@@ -420,13 +418,31 @@ describe("upsertCertifierProject credit batch adoption", () => {
     expect((await storedBatch(batch.id)).version).toBe(adopted.version);
   });
 
+  it.each([
+    ["2027-01-01", "2027-01-31", "2027-02-01"],
+    ["2027-02-15", "2027-03-14", "2027-03-15"],
+    ["2027-01-31", "2027-02-27", "2027-02-28"],
+    ["2024-01-31", "2024-02-28", "2024-02-29"],
+  ])("enforces the strict DB boundary from %s", async (start, allowed, boundary) => {
+    const facilityId = await createFacility();
+    const batch = await createBatch(facilityId, start, boundary);
+    // Uncertified batches may reach or exceed the boundary.
+    await expect(link(facilityId)).rejects.toThrow(/one calendar month or more/);
+    await updateCreditBatch(ctx, batch.id, { expectedVersion: batch.version, endDate: new Date(allowed) });
+    await link(facilityId);
+    await expect(db.update(creditBatches).set({ endDate: boundary })
+      .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, ctx.organizationId))))
+      .rejects.toMatchObject({ cause: { constraint: "credit_batches_isometric_max_one_month" } });
+    expect((await storedBatch(batch.id)).endDate).toBe(allowed);
+  });
+
   it("allows linking after an overlong batch is shortened", async () => {
     const facilityId = await createFacility();
     const batch = await createBatch(facilityId, "2027-01-01", "2027-04-30");
     await expect(link(facilityId)).rejects.toThrow(
-      `Credit batch ${batch.code} spans more than one calendar month. Shorten or archive it before linking this facility to Isometric.`,
+      `Credit batch ${batch.code} spans one calendar month or more. Shorten or archive it before linking this facility to Isometric.`,
     );
-    await updateCreditBatch(ctx, batch.id, { expectedVersion: batch.version, endDate: new Date("2027-02-01") });
+    await updateCreditBatch(ctx, batch.id, { expectedVersion: batch.version, endDate: new Date("2027-01-31") });
     await link(facilityId);
     expect((await storedBatch(batch.id)).certifier).toBe("isometric");
   });
