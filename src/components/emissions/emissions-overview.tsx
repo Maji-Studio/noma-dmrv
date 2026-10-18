@@ -26,7 +26,8 @@ import { EmissionsOverviewToolbar } from "./emissions-overview-toolbar";
 const TITLE = "Emissions";
 const SUBTITLE = "Every line your credit batches' Removal templates ask for.";
 const ACTIVITY_TITLE = "Facility activity";
-const ACTIVITY_CAPTION = "Includes manual entries on fuel and electricity lines.";
+// Matches emissionEntryFlows: only lines with a production run source reach site energy.
+const ACTIVITY_CAPTION = "Includes manual entries on lines fed by production runs: electricity and diesel.";
 const ACTIVITY_REGION_ID = "facility-activity";
 const TABLE_SKELETON_CLASS = "h-320 w-full";
 const PANEL_CLASS = "[border:var(--panel-border)] bg-[var(--paper)]";
