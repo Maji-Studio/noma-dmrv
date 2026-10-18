@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { feedstocks, supplierLocations, supplierLocationFacilityDistances } from "@/db/schema";
 import { getFeedstockById, updateFeedstockInTransaction } from "@/data-access/feedstocks";
-import { createSupplierLocation, updateSupplierLocation } from "@/data-access/suppliers";
+import { createSupplierLocation, updateSupplierLocation } from "./helpers/party-location-writes";
 import * as transport from "@/data-access/transport-legs";
 import { withLineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_SITE_POSITION } from "./helpers/test-org";
