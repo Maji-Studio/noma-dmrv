@@ -101,7 +101,7 @@ describe("delete dependency guards", () => {
     }
   });
 
-  it("blocks deleting a customer with orders", async () => {
+  it("blocks deleting a customer with deliveries", async () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
@@ -130,6 +130,11 @@ describe("delete dependency guards", () => {
         }))
         .returning({ id: orders.id });
 
+      await insertOutputDeliveryFixture(tx, {
+        organizationId: TEST_ORG_ID, code: `DL-DDG-CU-${tag}`, facilityId: facility.id,
+        orderId: order.id, deliveryDate: new Date("2026-06-14"), deliveredWetMassKg: 100,
+      }, row => ({ id: row.id }));
+
       return {
         customerId: customer.id,
         facilityId: facility.id,
@@ -140,10 +145,11 @@ describe("delete dependency guards", () => {
 
     try {
       await expect(deleteCustomer(makeTestOrgContext(TEST_USER_ID), fixture.customerId, await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "customers", fixture.customerId))).rejects.toThrow(
-        /orders/,
+        /deliveries were recorded/,
       );
     } finally {
       await db.transaction(async (tx) => {
+        await deleteOutputDeliveryFixtures(tx, eq(deliveries.orderId, fixture.orderId));
         await deleteOutputOrderFixtures(tx, eq(orders.id, fixture.orderId));
         await deleteOutputProductFixtures(tx, eq(biocharProducts.id, fixture.productId));
         await tx.delete(customers).where(eq(customers.id, fixture.customerId));

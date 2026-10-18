@@ -46,7 +46,6 @@ import {
   type RemovalListRow,
 } from "./removal-list-state";
 
-const SHORT_ID = 8;
 
 export function RemovalsList() {
   const { facilityId, selectedFacility } = useFacilityContext();
@@ -104,10 +103,6 @@ export function RemovalsList() {
   );
 }
 
-function shortId(id: string): string {
-  return id.slice(0, SHORT_ID);
-}
-
 function reportingWindow(summary: RemovalListRow): string | null {
   return summary.startedOn && summary.completedOn
     ? formatDateRange(summary.startedOn, summary.completedOn)
@@ -119,7 +114,7 @@ function RemovalCell({ summary }: { summary: RemovalListRow }) {
   return (
     <div className="flex flex-col gap-2 min-w-0">
       <span className="body-small font-mono text-[var(--color-text-primary)] truncate">
-        {shortId(summary.removalId)}…
+        {summary.code}
       </span>
       {window && (
         <span className="body-caption text-[var(--color-text-tertiary)]">
@@ -211,7 +206,7 @@ const createColumns = (locks: RecordLockViews): ColumnDef<RemovalListRow>[] => [
     id: "removal",
     header: "Removal",
     accessorFn: (summary) =>
-      `${summary.removalId} ${reportingWindow(summary) ?? ""}`,
+      `${summary.code} ${summary.removalId} ${reportingWindow(summary) ?? ""}`,
     cell: ({ row }) => <RemovalCell summary={row.original} />,
   },
   {

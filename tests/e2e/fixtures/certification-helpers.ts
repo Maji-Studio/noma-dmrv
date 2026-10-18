@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "../../helpers/removal-fixture";
 import { insertEstablishedOutputApplicationFixture as insertOutputApplicationFixture } from "../../helpers/output-contract-fixtures";
 import { formatUtcDate } from "@/lib/date-utils";
 import { deleteOutputApplicationFixtures } from "../../helpers/output-contract-fixtures";
@@ -276,7 +277,7 @@ export async function seedGroupedRemovalWithChain(
         feedstockTypeId: feedstockRow.feedstockTypeId,
       });
       // Group: a Removal ledger row plus one immutable application slice.
-      await tx.insert(schema.certifierRemovals).values({
+      await insertRemovalFixture(tx, {
         organizationId: DEC_ORG_ID,
         id: id.removal,
         facilityId: refs.facilityId,

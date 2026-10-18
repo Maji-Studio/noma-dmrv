@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed regression tests for the resolved-facility scope on the
@@ -68,10 +69,7 @@ async function seedFixture(): Promise<ScopeFixture> {
       .values({ organizationId: TEST_ORG_ID, facilityId: facilityA.id, reportingPeriodEndOn: "2026-06-30" })
       .returning({ id: certifierGhgStatements.id });
 
-    const [removalA] = await tx
-      .insert(certifierRemovals)
-      .values({ organizationId: TEST_ORG_ID, facilityId: facilityA.id })
-      .returning({ id: certifierRemovals.id });
+    const [removalA] = await insertRemovalFixture(tx, { organizationId: TEST_ORG_ID, facilityId: facilityA.id });
 
     const [removalSubmissionA] = await tx
       .insert(certificationSubmissions)

@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed tests for the §8.6.2 production-emissions claim write inside
@@ -109,14 +110,8 @@ async function createFixture(): Promise<Fixture> {
       .values({ organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id })
       .returning({ id: productionProcesses.id });
 
-    const [removalA] = await tx
-      .insert(certifierRemovals)
-      .values({ organizationId: TEST_ORG_ID, facilityId: facility.id })
-      .returning({ id: certifierRemovals.id });
-    const [removalB] = await tx
-      .insert(certifierRemovals)
-      .values({ organizationId: TEST_ORG_ID, facilityId: facility.id })
-      .returning({ id: certifierRemovals.id });
+    const [removalA] = await insertRemovalFixture(tx, { organizationId: TEST_ORG_ID, facilityId: facility.id });
+    const [removalB] = await insertRemovalFixture(tx, { organizationId: TEST_ORG_ID, facilityId: facility.id });
     createdRemovalIds.push(removalA.id, removalB.id);
 
     const [batch] = await tx

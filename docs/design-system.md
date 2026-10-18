@@ -508,6 +508,9 @@ restore for free.
   form reports separately, so saving keys cannot clear an unlinked project
   draft in the same registry dialog. Cancel, Escape, backdrop and the close
   button all warn before discarding and hold while a save is pending.
+- **Dialog actions sit bottom left, primary first, then secondary** (Delete,
+  then Cancel). Where it is easy, records a dialog names link to the record
+  through its deep-link helper; reuse `SheetLinkRow` (`@/components/ui/sheet-link-row`).
 - **`dismissOnClickOutside={false}`** for multi-step workflows where a stray
   backdrop click would discard in-progress work. Close button and ESC stay live.
 - **`dismissible={false}`** only while an irreversible request is active. It
@@ -881,7 +884,11 @@ Fifteen list components share one shape. Copy it rather than re-deriving:
   far from the field that caused it.
 - **Destructive confirm** is `DeleteConfirmDialog`
   (`@/components/ui/delete-confirm-dialog`), driven by a `deletingXId` state.
-  Never hand-roll a `Modal` for this.
+  Never hand-roll a `Modal` for this. Pass `width="md"` when it lists records.
+  A delete the server refuses as in use is not an inline notice: the confirm
+  dialog gives way to `InUseDeleteDialog` (`@/components/ui/in-use-delete-dialog`)
+  with "Archive instead" first and "Cancel" after. Omit `onArchive` where
+  archiving would be refused too; it then shows only "Close".
 - **Toolbar controls are deliberately raw**: a hand-rolled `h-40` search
   `<input>` and plain `<select>`s, both needing `aria-label` — not `Input` or a
   Base UI Select. `<DataTable.Toolbar>` / `<DataTable.Pagination>` go in as

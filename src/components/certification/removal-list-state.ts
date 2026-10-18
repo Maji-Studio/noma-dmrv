@@ -16,6 +16,7 @@ export interface RemovalEnrichmentState {
 
 export interface RemovalListRow {
   removalId: string;
+  code: string;
   startedOn: string | null;
   completedOn: string | null;
   memberBatchCodes: string[];
@@ -52,6 +53,7 @@ export function buildRemovalListRows(
       lifecycleData?.local ?? identity.latestSubmission?.status ?? null;
     return {
       removalId,
+      code: data?.code ?? identity.removal.code,
       startedOn,
       completedOn,
       memberBatchCodes:

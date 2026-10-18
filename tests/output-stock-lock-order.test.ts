@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { lockBinStock } from "@/data-access/lock-bin-stocks";
 import { updateStorageLocation } from "@/data-access/storage-locations";
 import { withLineageFixture } from "./helpers/certification-lineage-fixture";
@@ -81,7 +82,7 @@ async function addRemoval(f: Fixture, deliveryKg = LOSS_KG) {
   const [batch] = await db.insert(creditBatches).values({ organizationId, code: `E2E-LOCK-CB-${f.tag}`,
     facilityId: f.facility.id, feedstockTypeId: f.ingredientType.id, productionProcessId: process.id,
     startDate: "2026-09-01", endDate: "2026-09-30", certifier: "isometric" }).returning();
-  const [removal] = await db.insert(certifierRemovals).values({ organizationId, facilityId: f.facility.id }).returning();
+  const [removal] = await insertRemovalFixture(db, { organizationId, facilityId: f.facility.id });
   await db.insert(creditBatchProductionRuns).values({ organizationId, creditBatchId: batch.id, productionRunId: f.runs[0].id });
   await db.insert(creditBatchApplications).values({ organizationId, creditBatchId: batch.id, applicationId: application.id,
     removalId: removal.id, allocatedWetMassKg: LOSS_KG, allocatedDryMassKg: LOSS_KG });

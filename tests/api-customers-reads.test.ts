@@ -71,7 +71,7 @@ describe("customer and destination REST reads", { timeout: READ_TIMEOUT_MS }, ()
     await lookupProblem(await list(`?cursor=${first.nextCursor}`, b.key), 400, "invalid_cursor");
   });
 
-  it("lists GPS destinations and one-way distance without address or soil temperature by parent UUID or code", async () => {
+  it("lists GPS destinations, stored distances, site defaults and archive state by parent UUID or code", async () => {
     for (const identifier of [a.customer.id, a.customer.id.toUpperCase(), a.customer.code]) {
       const response = await locations(identifier);
       expect(response.status).toBe(200);
@@ -82,7 +82,7 @@ describe("customer and destination REST reads", { timeout: READ_TIMEOUT_MS }, ()
         expect(Object.keys(row).sort()).toEqual(Object.keys(customerLocationRepresentationSchema.shape).sort());
       }
       expect(page.data[1]).toMatchObject({ customerId: a.customer.id, gpsLatitude: 0, gpsLongitude: 8.5, facilityDistances: [{ facilityId: a.facility.id, distanceKm: 20, distanceSource: "document" }], isDefault: true, siteDescription: "hidden", defaultSoilTemperatureC: 25, country: expect.any(String), stateRegion: null, city: null });
-      expect(page.data[0]).toMatchObject({ gpsLatitude: TEST_SITE_POSITION.gpsLatitude, gpsLongitude: TEST_SITE_POSITION.gpsLongitude, facilityDistances: [], isDefault: false });
+      expect(page.data[0]).toMatchObject({ gpsLatitude: TEST_SITE_POSITION.gpsLatitude, gpsLongitude: TEST_SITE_POSITION.gpsLongitude, facilityDistances: [], isDefault: false, archivedAt: null });
     }
     expect(await ids(await locations(a.otherCustomer.id))).toEqual([]);
   });

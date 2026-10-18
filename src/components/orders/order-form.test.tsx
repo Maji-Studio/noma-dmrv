@@ -201,7 +201,7 @@ describe("OrderForm customer field", () => {
     const location: CustomerLocation = {
       id: "location-1", customerId: "customer-1", name: "North field", country: "TZ", version: 1,
       facilityDistances: [], organizationId: "organization-1", gpsLatitude: -6.8, gpsLongitude: 39.2,
-      address: null, city: null, stateRegion: null, defaultSoilTemperatureC: null, isDefault: true,
+      address: null, city: null, stateRegion: null, defaultSoilTemperatureC: null, isDefault: true, archivedAt: null,
       createdAt: new Date("2026-09-12"), updatedAt: new Date("2026-09-12"),
     };
     state.locations = [location];
@@ -287,7 +287,7 @@ describe("OrderForm customer field", () => {
     const location: CustomerLocation = {
       id: "location-1", customerId: "customer-1", name: "North field", country: "TZ", version: 1,
       facilityDistances: [], organizationId: "organization-1", gpsLatitude: -6.8, gpsLongitude: 39.2,
-      address: null, city: null, stateRegion: null, defaultSoilTemperatureC: null, isDefault: true,
+      address: null, city: null, stateRegion: null, defaultSoilTemperatureC: null, isDefault: true, archivedAt: null,
       createdAt: new Date("2026-09-12"), updatedAt: new Date("2026-09-12"),
     };
     const order = { customerId: "customer-1", customerLocationId: "location-1" } as Order;
@@ -341,6 +341,20 @@ describe("OrderForm customer field", () => {
       expect(screen.getByText("The customer could not be loaded, so the customer location is locked. Try again.")).toBeTruthy();
       fireEvent.click(screen.getByRole("button", { name: "Try again" }));
       expect(state.refetchCustomer).toHaveBeenCalledTimes(1);
+      client.clear();
+    });
+
+    it("offers no location editor for an archived destination and still lets an open order pick another one", () => {
+      state.locations = [{ ...location, archivedAt: new Date("2026-10-01") }];
+      state.locationOptions = [{ id: location.id, code: "", name: location.name! }, { id: "location-2", code: "", name: "South field" }];
+      state.customer = { archivedAt: null };
+      const client = new QueryClient();
+      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>);
+      const picker = screen.getByRole("combobox", { name: /^Customer location/ });
+      expect(picker.getAttribute("aria-readonly")).toBeNull();
+      fireEvent.click(picker);
+      expect(screen.queryByTestId("entity-select-edit")).toBeNull();
+      expect(screen.getByText("South field")).toBeTruthy();
       client.clear();
     });
 

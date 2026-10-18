@@ -218,7 +218,7 @@ export function RemovalDetailSheet({
         <SlideOverPanel.Content size="default">
           <SlideOverPanel.Header showClose>
             <SlideOverPanel.Title>
-              Removal {summary.removalId.slice(0, 8)}…
+              {summary.code}
             </SlideOverPanel.Title>
             {hasReportingWindow && (
               <SlideOverPanel.Description>{window}</SlideOverPanel.Description>
