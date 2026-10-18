@@ -15,6 +15,8 @@ import {
 } from "react-hook-form";
 import { Button } from "@/components/ui";
 import { FormDialogContext } from "@/components/ui/form-dialog-context";
+import { Notice } from "@/components/ui/notice";
+import { useSubmitBlock } from "@/components/ui/submit-block-context";
 import { cn } from "@/lib/utils";
 import {
   useSideSheetActions,
@@ -107,6 +109,8 @@ export function FormActions<
   const sheetActions = useSideSheetActions();
   const dialogActions = React.useContext(FormDialogContext);
   const inSheet = sticky && sheetActions !== null;
+  const block = useSubmitBlock();
+  const blockedReasonId = React.useId();
   const inDialog = guardDialogCancel && dialogActions !== null;
   const handleCancel = onCancel
     ? inSheet
@@ -123,7 +127,9 @@ export function FormActions<
       {control && inSheet && (
         <SheetDirtyBridge control={control} reportDirty={sheetActions.reportDirty} />
       )}
-    {(showSubmit || handleCancel || errorMessage) && <div
+    {/* A read-only form (a lock that arrived Sent) offers no actions here; its
+        container keeps the way back and the lock line says why. */}
+    {!block?.readOnly && (showSubmit || handleCancel || errorMessage) && <div
       ref={sticky ? reserveStickyFooterSpace : undefined}
       className={cn(
         "flex flex-col gap-16 border-t border-[var(--color-border-secondary)]",
@@ -137,13 +143,28 @@ export function FormActions<
       )}
     >
       <ServerError message={errorMessage} action={errorAction} />
+      {/* Why Save is off sits above the buttons, in the tone of the block. */}
+      {showSubmit && block && (
+        <Notice
+          tone={block.tone}
+          id={blockedReasonId}
+          action={block.retry ? (
+            <Button type="button" variant="default" size="small" busy={block.retry.running} onClick={block.retry.run}>
+              {block.retry.label}
+            </Button>
+          ) : undefined}
+        >
+          {block.reason}
+        </Notice>
+      )}
       <div className="flex items-center justify-start gap-16">
         {showSubmit && <Button
           type={submitType}
           variant={submitVariant}
           form={formId}
           onClick={onSubmitClick}
-          disabled={isSubmitting || submitDisabled}
+          disabled={isSubmitting || submitDisabled || !!block}
+          aria-describedby={block ? blockedReasonId : undefined}
         >
           {isSubmitting ? submittingLabel : submitLabel ?? defaultSubmitLabel}
         </Button>}

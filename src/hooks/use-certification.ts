@@ -4,6 +4,7 @@
  * submission flow (N credit batches → 1 Isometric Removal — ADR 0003).
  */
 
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { activityKeys } from "./activity-query-keys";
 import {
   type QueryClient,
@@ -616,6 +617,7 @@ export function useSelectableBatches(facilityId: string, enabled = true) {
 export function useSubmitRemoval() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: (vars: {
       input: SubmitRemovalInput;
       onProgress: (update: SubmissionProgressUpdate) => void;
@@ -646,6 +648,7 @@ export function useSubmitRemoval() {
 export function useCreateRemovalWithBatches() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: async (input: CreateRemovalWithBatchesInput) =>
       unwrap(await createRemovalWithBatchesAction(input)),
     onSuccess: () => {
@@ -658,6 +661,7 @@ export function useCreateRemovalWithBatches() {
 export function useDeleteRemoval() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: async (input: DeleteRemovalInput) => unwrap(await deleteRemovalAction(input)),
     onSuccess: () =>
       invalidateCertificationReadiness(queryClient, {
@@ -717,6 +721,7 @@ export function useRegistryGhgStatementsForFacility(
 export function useSyncGhgStatementsFromRegistry() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: async (facilityId: string) =>
       unwrap(await reconcileGhgStatementsFromRegistry(facilityId)),
     onSuccess: () => {
@@ -808,6 +813,7 @@ export function useOpenRemovalsForFacility(
 export function useCreateGhgStatement() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: async (input: CreateGhgStatementInput) =>
       unwrap(await createGhgStatementDraft(input)),
     onSuccess: () =>
@@ -821,6 +827,7 @@ export function useCreateGhgStatement() {
 export function useSubmitGhgStatementToVerifier() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: async (vars: {
       ghgStatementId: string;
       input: SubmitGhgStatementDialogInput;
@@ -850,6 +857,7 @@ export function useSubmitGhgStatementToVerifier() {
 export function useRefreshGhgStatementStatus() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: async (submissionId: string) =>
       unwrap(await refreshGhgStatementStatus(submissionId)),
     onSuccess: () => {

@@ -5,6 +5,7 @@ import { patchListCachesWithSavedRow } from "./list-cache-utils";
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import type { ConflictRef } from "@/lib/conflict-ref";
 import {
   useMutation,
@@ -170,6 +171,7 @@ export function useCreateProductionRun(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.productionRun),
     mutationFn: async (data: CreateProductionRunData) => {
       const result = await createProductionRunFn(data);
       if (!result.success) {
@@ -229,6 +231,7 @@ export function useUpdateProductionRun(
   const { optimistic = true } = options ?? {};
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.productionRun),
     mutationFn: async (data: UpdateProductionRunData) => {
       const result = await updateProductionRunFn(data);
       if (!result.success) {
@@ -378,6 +381,7 @@ export function useDeleteProductionRun(
   const { optimistic = true } = options ?? {};
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.productionRun),
     mutationFn: async (variables: DeleteProductionRunData) => {
       const result = await deleteProductionRunFn(variables);
       if (!result.success) {

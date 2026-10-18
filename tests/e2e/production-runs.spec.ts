@@ -434,6 +434,9 @@ async function editFirstRow(page: Page) {
   // cleanly). A post-save list refetch can re-render the row and detach the
   // menu's "Edit" item mid-click, so retry the open→Edit sequence instead of
   // waiting for network idle (CI dev servers may never settle within budget).
+  // Edit is offered only once the row's lock read answers (#1119), so wait
+  // for its chip first.
+  await expect(page.locator("tbody tr").first().locator("[data-record-lock]")).toBeVisible({ timeout: 15000 });
   await expect(async () => {
     await page
       .locator("tbody tr")
@@ -602,6 +605,12 @@ test.describe("Production Run lifecycle (#254)", () => {
     });
     await submitCreate(page);
     await waitForSideSheetClose(page);
+    // Only the new run is running; the seeded run is complete and In use, so
+    // the first row must be this one before editing.
+    await page
+      .getByLabel("Filter production runs by status")
+      .selectOption("running");
+    await expect(page.locator('tbody [data-status="running"]').first()).toBeVisible();
     await editFirstRow(page);
     await chooseRunStatus(page, "cancelled");
 

@@ -24,6 +24,8 @@
 
 import { RowActionsMenu } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { RecordLockChip } from "@/components/record-locks/record-lock-chip";
+import type { RecordLockView } from "@/lib/record-lock-view";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { useOutputStockBalance } from "@/hooks/use-output-stock";
 import { MISSING_VALUE } from "@/lib/copy-utils";
@@ -52,6 +54,8 @@ interface StorageBinTileProps {
   actions: BinRowAction[];
   onView: (bin: StorageLocationWithFacility) => void;
   onReconcile: (bin: StorageLocationWithFacility) => void;
+  /** Open or In use, from the board's one batched lock read. */
+  lock?: RecordLockView;
 }
 
 export function StorageBinTile({
@@ -59,6 +63,7 @@ export function StorageBinTile({
   actions,
   onView,
   onReconcile,
+  lock,
 }: StorageBinTileProps) {
   const output = useOutputStockBalance(bin.type === "feedstock_bin" || bin.archivedAt != null ? null : { storageLocationId: bin.id, facilityId: bin.facilityId });
   const massKg = bin.type === "feedstock_bin" ? binCurrentMassKg(bin) : bin.archivedAt != null ? (bin.type === "biochar_bin" ? bin.biocharInventory.dryMassKg : bin.productInventory.dryMassKg) ?? null : output.data?.beforeDryKg ?? null;
@@ -128,6 +133,7 @@ export function StorageBinTile({
           <h3 className="min-w-0 flex-1 truncate body-small font-semibold" title={material}>
             {material}
           </h3>
+          {lock && <RecordLockChip level={lock.level} className="shrink-0" />}
           <span className="shrink-0">
             <RowActionsMenu label={`Actions for ${bin.code}`} actions={actions} />
           </span>

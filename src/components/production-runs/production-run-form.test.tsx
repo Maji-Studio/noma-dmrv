@@ -22,6 +22,7 @@ vi.mock("./production-readings-field", () => ({ ProductionReadingsField: () => n
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null, Tooltip: ({ children }: { children: ReactNode }) => children }));
 
 import { ProductionRunForm } from "./production-run-form";
+import { OPEN_LOCK } from "../../../tests/helpers/record-lock-mocks";
 
 const savedRun = {
   id: "55555555-5555-4555-8555-555555555555",
@@ -42,7 +43,7 @@ afterEach(cleanup);
 describe("ProductionRunForm reopening", () => {
   it.each(["complete", "failed"] as const)("reopens a saved %s run without touching its end fields", async (status) => {
     const onSubmit = vi.fn();
-    render(<ProductionRunForm productionRun={{ ...savedRun, status }} onSubmit={onSubmit} />);
+    render(<ProductionRunForm productionRun={{ ...savedRun, status }} onSubmit={onSubmit} lock={OPEN_LOCK} />);
     const endDate = document.querySelector<HTMLInputElement>('input[name="endDate"]')!;
     const endTime = document.querySelector<HTMLInputElement>('input[name="endTime"]')!;
     expect(endDate.value).toBe("2026-07-15");
@@ -61,7 +62,7 @@ describe("ProductionRunForm reopening", () => {
 
   it("keeps the end-time field error for an already Running run", async () => {
     const onSubmit = vi.fn();
-    render(<ProductionRunForm productionRun={{ ...savedRun, status: "running", endTime: null }} onSubmit={onSubmit} />);
+    render(<ProductionRunForm productionRun={{ ...savedRun, status: "running", endTime: null }} onSubmit={onSubmit} lock={OPEN_LOCK} />);
     fireEvent.change(document.querySelector('input[name="endTime"]')!, { target: { value: "12:00" } });
     fireEvent.click(screen.getByRole("button", { name: "Update production run" }));
     await screen.findByText("Choose Complete or clear the end time for a Running run.");
