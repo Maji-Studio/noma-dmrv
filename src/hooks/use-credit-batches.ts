@@ -1,3 +1,4 @@
+import { getCreditBatchPageModelFn } from "@/fn/credit-batch-page-model";
 import type { ActionResult } from "@/types/actions";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import type { DeleteCreditBatchData } from "@/schemas/credit-batches";
@@ -232,5 +233,14 @@ export function useDeleteCreditBatch() {
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
       invalidateCertificationReadiness(queryClient);
     },
+  });
+}
+
+export function useCreditBatchPageModel(creditBatchId: string) {
+  return useQuery({
+    queryKey: creditBatchKeys.pageModel(creditBatchId),
+    queryFn: async () => unwrap(await getCreditBatchPageModelFn(creditBatchId)),
+    enabled: !!creditBatchId,
+    staleTime: CREDIT_BATCH_STALE_TIME_MS,
   });
 }

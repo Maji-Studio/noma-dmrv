@@ -1,3 +1,4 @@
+import { invalidateRecordedTransport } from "./transport-distance-query-keys";
 /**
  * Feedstock React Query Hooks
  * Client-side state management for the unified delivery + bin allocation workflow.
@@ -75,6 +76,19 @@ export function useFeedstock(feedstockId: string, enabled = true) {
   });
 }
 
+/**
+ * Reads one feedstock fresh, for a sheet that must reopen its form on the
+ * record's new version (after a deliberate refresh from location).
+ */
+export function useFetchFeedstock() {
+  const queryClient = useQueryClient();
+  return (feedstockId: string) => queryClient.fetchQuery({
+    queryKey: feedstockKeys.detail(feedstockId),
+    queryFn: async () => unwrap(await getFeedstockByIdFn(feedstockId)),
+    staleTime: 0,
+  });
+}
+
 export function useFeedstockStats(
   scope?: Partial<FeedstockStatsFilterData>,
   options?: { enabled?: boolean },
@@ -110,6 +124,7 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void invalidateRecordedTransport(queryClient);
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
       void invalidateCertificationReadiness(queryClient);
@@ -142,6 +157,7 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void invalidateRecordedTransport(queryClient);
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
       void invalidateCertificationReadiness(queryClient);
@@ -169,6 +185,7 @@ export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, DeleteFee
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void invalidateRecordedTransport(queryClient);
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
       void invalidateCertificationReadiness(queryClient);

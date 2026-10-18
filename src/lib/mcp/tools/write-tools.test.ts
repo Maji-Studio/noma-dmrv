@@ -50,6 +50,7 @@ const context = {
 } as unknown as ApiRouteContext;
 const row = {
   id: UUID, code: "FS-26-0231", version: VERSION, facilityId: UUID, status: "complete",
+  distanceKmOverride: null, distanceSource: null, distanceNote: null,
   deliveryDate: "2026-10-06", supplierId: UUID, vehicleId: null, feedstockTypeId: UUID,
   storageLocationId: UUID, deliveryGroupId: null, massWetKg: MASS_KG, massDryKg: 70,
   moistureContentPercent: 30, gpsLatitude: null, gpsLongitude: null, overrideJustification: null,

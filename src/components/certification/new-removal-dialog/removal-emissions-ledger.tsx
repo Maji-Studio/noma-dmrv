@@ -179,7 +179,7 @@ export function RemovalEmissionsLedger({
                       removal: claim.claimingRemovalId,
                     })}
                   >
-                    Previously included in Removal {claim.claimingRemovalId.slice(0, 8)}…
+                    {claim.claimingRemovalCode ? `Previously included in Removal ${claim.claimingRemovalCode}` : "Previously included in a Removal"}
                   </LedgerLink>
                 ) : (
                   "Included in this Removal"
