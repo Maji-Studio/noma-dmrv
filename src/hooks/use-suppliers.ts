@@ -565,6 +565,7 @@ export function useDeleteSupplierLocation(supplierId: string, callbacks?: Mutati
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(supplierId) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.detail(supplierId) });
+      queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       callbacks?.onSuccess?.(undefined, variables);
     },
     onError: (error, variables) => {

@@ -114,6 +114,7 @@ export function useCreateApplication() {
       // membership isn't known here, so invalidate the whole credit-batch
       // scope rather than guessing a single detail key.
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.all });
+      queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       invalidateCertificationReadiness(queryClient);
     },
   });
@@ -184,6 +185,7 @@ export function useDeleteApplication() {
       // it belonged to; batch membership isn't known here, so invalidate
       // the whole credit-batch scope rather than guessing.
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.all });
+      queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       invalidateCertificationReadiness(queryClient);
     },
   });

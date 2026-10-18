@@ -229,6 +229,11 @@ function fitGeography(map: maplibregl.Map, geo: ChainOfCustodyGeoData, animate: 
   });
 }
 
+/** "ready" means style loaded and camera settled, not that data is painted. */
+function setMapState(container: HTMLDivElement, state: "loading" | "ready") {
+  if (container.dataset.mapState !== state) container.dataset.mapState = state;
+}
+
 function token(name: string, fallback: string): string {
   return (
     getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
@@ -264,15 +269,15 @@ export default function CarbonTransitMap({
   const onLegHoverRef = useRef(onLegHover);
   // Latest hover so the geo-sync rebuild re-applies the right line opacity.
   const hoverLegIdRef = useRef(hoverLegId);
-  const pendingGeoRef = useRef(geo);
-  const [styleReady, setStyleReady] = useState(false);
+  const latestGeoRef = useRef(geo);
+  const [readyMap, setReadyMap] = useState<maplibregl.Map | null>(null);
   const [satOn, setSatOn] = useState(false);
   // WebGL can be unavailable (headless browsers, exhausted contexts) — the
   // viewer degrades to the rails instead of crashing the page.
   const [mapFailed, setMapFailed] = useState(false);
 
   useEffect(() => {
-    pendingGeoRef.current = geo;
+    latestGeoRef.current = geo;
     onMarkerClickRef.current = onMarkerClick;
     onClearRef.current = onClear;
     onLegHoverRef.current = onLegHover;
@@ -282,9 +287,9 @@ export default function CarbonTransitMap({
     focusRef.current = focus;
   });
 
-  const fitToMarkers = (animate: boolean) => {
+  const fitToGeography = (animate: boolean) => {
     const map = mapRef.current;
-    if (map) fitGeography(map, pendingGeoRef.current, animate);
+    if (map) fitGeography(map, latestGeoRef.current, animate);
   };
 
   // Map instance lifecycle — the legitimate imperative-DOM exception.
@@ -309,7 +314,7 @@ export default function CarbonTransitMap({
       return;
     }
     mapRef.current = map;
-    container.dataset.mapState = "loading";
+    setMapState(container, "loading");
     popupRef.current = new maplibregl.Popup({
       closeButton: false,
       offset: POPUP_OFFSET_PX,
@@ -411,8 +416,10 @@ export default function CarbonTransitMap({
 
       // Fit directly from the latest props: markers are built in a later
       // React effect, and StrictMode may recreate the map before it commits.
-      fitGeography(map, pendingGeoRef.current, false);
-      setStyleReady(true);
+      fitGeography(map, latestGeoRef.current, false);
+      // Tie readiness to this instance: a lifecycle re-run can replace a
+      // loaded map while React preserves state, as in route-mini-map.
+      setReadyMap(map);
     });
 
     // Like the GIS preview's data-map-state; detailed read-only observations
@@ -429,7 +436,7 @@ export default function CarbonTransitMap({
             .map((feature) => ({ id: feature.properties.legId, geometry: feature.geometry })),
         );
       }
-      container.dataset.mapState = "ready";
+      setMapState(container, "ready");
     });
 
     // Marching ants — cycling the dasharray makes the gaps appear to travel.
@@ -464,6 +471,7 @@ export default function CarbonTransitMap({
       markersRef.current = [];
       chipsRef.current = [];
       mapRef.current = null;
+      setReadyMap(null);
       map.remove();
     };
   }, []);
@@ -471,8 +479,8 @@ export default function CarbonTransitMap({
   // Sync legs + markers + chips with the chain data.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !styleReady) return;
-    if (containerRef.current) containerRef.current.dataset.mapState = "loading";
+    if (readyMap === null || readyMap !== map) return;
+    if (containerRef.current) setMapState(containerRef.current, "loading");
 
     const currentFocus = focusRef.current;
     const { plottable } = resolveLegEndpoints(geo);
@@ -575,13 +583,13 @@ export default function CarbonTransitMap({
       markersRef.current.push(marker);
     }
 
-    fitToMarkers(false);
-  }, [geo, routeGeometries, popupContent, styleReady]);
+    fitToGeography(false);
+  }, [geo, routeGeometries, popupContent, readyMap]);
 
   // Cross-link highlight from the DAG (ungeolocated nodes resolve to facility).
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !highlight || !styleReady) return;
+    if (readyMap === null || readyMap !== map || !highlight) return;
 
     const elements = markersRef.current.map((marker) => marker.getElement());
     for (const element of elements) element.classList.remove("cvm-hl");
@@ -600,7 +608,7 @@ export default function CarbonTransitMap({
       () => target.classList.remove("cvm-hl"),
       HIGHLIGHT_HOLD_MS
     );
-  }, [highlight, styleReady]);
+  }, [highlight, readyMap]);
 
   // Cross-surface focus — dim markers, distance chips, and leg lines outside
   // the active sub-chain (driven by the shared selection, in sync with the bar
@@ -608,7 +616,7 @@ export default function CarbonTransitMap({
   // highlight ring above.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !styleReady) return;
+    if (readyMap === null || readyMap !== map) return;
 
     for (const marker of markersRef.current) {
       const element = marker.getElement();
@@ -639,7 +647,7 @@ export default function CarbonTransitMap({
       | maplibregl.GeoJSONSource
       | undefined;
     source?.setData({ type: "FeatureCollection", features });
-  }, [focus, styleReady]);
+  }, [focus, readyMap]);
 
   // Transient hover isolation — the hovered leg's line + chip stay lit while
   // every other leg ghosts back. Layered over the persistent focus dimming
@@ -647,7 +655,7 @@ export default function CarbonTransitMap({
   // to the focus state when the pointer leaves.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !styleReady) return;
+    if (readyMap === null || readyMap !== map) return;
 
     const layers: ReadonlyArray<readonly [string, number, number]> = [
       [LEGS_BASE_LAYER_ID, LEG_LINE_OPACITY, LEG_HOVER_OPACITY],
@@ -678,7 +686,7 @@ export default function CarbonTransitMap({
         hoverLegId === null && currentFocus !== null && !currentFocus.legIds.has(legId)
       );
     }
-  }, [hoverLegId, styleReady]);
+  }, [hoverLegId, readyMap]);
 
   const toggleSat = () => {
     const map = mapRef.current;
@@ -723,7 +731,7 @@ export default function CarbonTransitMap({
       <MapControls
         onZoomIn={() => mapRef.current?.zoomIn()}
         onZoomOut={() => mapRef.current?.zoomOut()}
-        onFit={() => fitToMarkers(true)}
+        onFit={() => fitToGeography(true)}
         satOn={satOn}
         onToggleSat={toggleSat}
         className={controlsClassName}

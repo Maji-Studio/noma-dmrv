@@ -1,29 +1,33 @@
 // @vitest-environment jsdom
 import { act, cleanup, render } from "@testing-library/react";
-import { StrictMode } from "react";
+import { Activity, StrictMode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { ChainOfCustodyGeoData } from "@/data-access/chain-of-custody-geo";
 import CarbonTransitMap from "./carbon-transit-map";
+import { LEGS_SOURCE_ID } from "./viewer-constants";
 
 const mocks = vi.hoisted(() => ({ maps: [] as Array<{
   load?: () => void;
   fitBounds: ReturnType<typeof vi.fn>;
+  sources: Map<string, { setData: ReturnType<typeof vi.fn> }>;
+  remove: ReturnType<typeof vi.fn>;
 }> }));
 vi.mock("@/components/map", () => ({ applyBrandRecolor: vi.fn(), MapControls: () => null }));
 vi.mock("maplibre-gl", () => ({
   Map: class {
     load?: () => void;
     fitBounds = vi.fn();
+    sources = new Map<string, { setData: ReturnType<typeof vi.fn> }>();
     constructor() { mocks.maps.push(this); }
     once(event: string, callback: () => void) { if (event === "load") this.load = callback; }
     on() {}
-    addSource() {}
+    addSource(id: string) { this.sources.set(id, { setData: vi.fn() }); }
     addLayer() {}
     getLayer() { return {}; }
-    getSource() { return { setData: vi.fn() }; }
+    getSource(id: string) { return this.sources.get(id); }
     setPaintProperty() {}
     resize() {}
-    remove() {}
+    remove = vi.fn();
   },
   LngLatBounds: class {
     points: unknown[] = [];
@@ -51,6 +55,17 @@ const geo: ChainOfCustodyGeoData = {
   }],
   legs: [], warnings: [],
 };
+const customerGeo: ChainOfCustodyGeoData = {
+  ...geo,
+  legs: [{
+    id: "outbound", kind: "outbound", entityType: "biochar", entityId: "product",
+    originLat: -6, originLng: 35, destinationLat: -9, destinationLng: 41,
+    originName: null, destinationName: null, distanceKm: 25, distanceSource: "manual",
+    isDerived: true, loadMassKg: 100, appliedWetMassKg: 100, materialLabel: null,
+    outerHref: null, outerCode: null, outerNodeId: "application:app",
+  }],
+};
+
 const movedGeo = { ...geo, nodes: [{ ...geo.nodes[0], lat: -8, lng: 40 }] };
 const props = {
   routeGeometries: undefined, popupContent: {}, highlight: null, focus: null, hoverLegId: null,
@@ -79,18 +94,56 @@ it("refits when geography changes after load", async () => {
 });
 
 it("fits a customer route endpoint beyond the application's field marker", async () => {
-  const customerGeo: ChainOfCustodyGeoData = {
-    ...geo,
-    legs: [{
-      id: "outbound", kind: "outbound", entityType: "biochar", entityId: "product",
-      originLat: -6, originLng: 35, destinationLat: -9, destinationLng: 41,
-      originName: null, destinationName: null, distanceKm: 25, distanceSource: "manual",
-      isDerived: true, loadMassKg: 100, appliedWetMassKg: 100, materialLabel: null,
-      outerHref: null, outerCode: null, outerNodeId: "application:app",
-    }],
-  };
   render(<CarbonTransitMap {...props} geo={customerGeo} />);
   const map = mocks.maps.at(-1)!;
   await act(async () => { map.load!(); });
   expect(map.fitBounds.mock.lastCall?.[0].points).toContainEqual([41, -9]);
+});
+
+it("moves an outbound leg's fallback endpoint when application GPS changes", async () => {
+  const fallbackGeo: ChainOfCustodyGeoData = {
+    ...customerGeo,
+    legs: customerGeo.legs.map((leg) => ({ ...leg, destinationLat: null, destinationLng: null })),
+  };
+  const view = render(<CarbonTransitMap {...props} geo={fallbackGeo} />);
+  const map = mocks.maps.at(-1)!;
+  await act(async () => { map.load!(); });
+  const source = map.sources.get(LEGS_SOURCE_ID)!;
+  expect(source.setData.mock.lastCall?.[0].features[0].geometry.coordinates.at(-1)).toEqual([39, -7]);
+
+  view.rerender(<CarbonTransitMap {...props} geo={{ ...fallbackGeo, nodes: movedGeo.nodes }} />);
+  expect(source.setData.mock.lastCall?.[0].features[0].geometry.coordinates.at(-1)).toEqual([40, -8]);
+});
+
+it("paints legs after a ready map is recreated with React state preserved", async () => {
+  // Activity reconnects effects while retaining state, reproducing the same
+  // lifecycle boundary as Fast Refresh after the first map has loaded.
+  const view = render(
+    <Activity mode="visible"><CarbonTransitMap {...props} geo={customerGeo} /></Activity>,
+  );
+  const firstMap = mocks.maps.at(-1)!;
+  await act(async () => { firstMap.load!(); });
+  expect(firstMap.sources.get(LEGS_SOURCE_ID)?.setData.mock.lastCall?.[0].features)
+    .toEqual([expect.objectContaining({ properties: expect.objectContaining({ legId: "outbound" }) })]);
+
+  view.rerender(<Activity mode="hidden"><CarbonTransitMap {...props} geo={customerGeo} /></Activity>);
+  expect(firstMap.remove).toHaveBeenCalledOnce();
+  view.rerender(<Activity mode="visible"><CarbonTransitMap {...props} geo={customerGeo} /></Activity>);
+  const replacementMap = mocks.maps.at(-1)!;
+  expect(replacementMap).not.toBe(firstMap);
+  expect(replacementMap.sources.has(LEGS_SOURCE_ID)).toBe(false);
+
+  await act(async () => { replacementMap.load!(); });
+  expect(replacementMap.sources.get(LEGS_SOURCE_ID)?.setData.mock.lastCall?.[0])
+    .toEqual({
+      type: "FeatureCollection",
+      features: [expect.objectContaining({
+        properties: expect.objectContaining({ legId: "outbound" }),
+        geometry: expect.objectContaining({
+          coordinates: expect.arrayContaining([[
+            customerGeo.legs[0].destinationLng, customerGeo.legs[0].destinationLat,
+          ]]),
+        }),
+      })],
+    });
 });

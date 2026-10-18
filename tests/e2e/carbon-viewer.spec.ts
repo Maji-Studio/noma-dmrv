@@ -17,6 +17,7 @@ import * as crypto from "crypto";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { Page } from "@playwright/test";
+import { SWIFTSHADER_ARGS } from "./fixtures/swiftshader";
 import { Pool } from "pg";
 import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../src/db/schema";
@@ -31,7 +32,6 @@ const DAR_POINT = { lat: -6.8, lng: 39.28 };
 const FIELD_POINT = { lat: -6.75, lng: 39.2 };
 const EDITED_FIELD_POINT = { lat: -3.4, lng: 36.7 };
 const EDITED_CUSTOMER_POINT = { lat: -8.5, lng: 37.5 };
-const SWIFTSHADER_ARGS = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"];
 const MAP_READY_TIMEOUT_MS = 45_000;
 const COORDINATE_TOLERANCE_DEGREES = 0.001;
 const MAX_BACK_STEPS = 6;
@@ -117,11 +117,12 @@ async function expectRenderedGeography(page: Page, applicationId: string, field:
     const value = await map.getAttribute("data-rendered-legs");
     if (!value) return false;
     const legs = JSON.parse(value) as { id: string; geometry: { coordinates: number[][] } }[];
-    return legs.some((leg) => leg.id.endsWith(`application:${applicationId}`) &&
-      leg.geometry.coordinates.some(([lng, lat]) =>
-        Math.abs(lng - destination.lng) < COORDINATE_TOLERANCE_DEGREES &&
-        Math.abs(lat - destination.lat) < COORDINATE_TOLERANCE_DEGREES,
-      ));
+    return legs.some((leg) => {
+      const endpoint = leg.geometry.coordinates.at(-1);
+      return leg.id.endsWith(`application:${applicationId}`) && endpoint !== undefined &&
+        Math.abs(endpoint[0] - destination.lng) < COORDINATE_TOLERANCE_DEGREES &&
+        Math.abs(endpoint[1] - destination.lat) < COORDINATE_TOLERANCE_DEGREES;
+    });
   }).toBe(true);
 }
 

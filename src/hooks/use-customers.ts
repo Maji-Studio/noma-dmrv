@@ -716,6 +716,7 @@ export function useDeleteCustomerLocation(
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
 
       queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
+      queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -760,6 +761,7 @@ function useCustomerLocationLifecycle(
       void queryClient.invalidateQueries({ queryKey: activityKeys.all });
       invalidateEntityTypeQueries(queryClient, CUSTOMER_LOCATION_ENTITY_TYPE);
       queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
+      queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: customerKeys.locations(customerId) }),
         queryClient.invalidateQueries({ queryKey: customerKeys.detailWithRelations(customerId) }),
