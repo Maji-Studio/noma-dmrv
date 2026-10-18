@@ -32,3 +32,6 @@ export const deliveryAppliedLockedReason = (applicationCode: string) => `Locked 
 export const INGREDIENT_SOLIDS_LABEL = "Ingredient solids";
 export const ESTIMATED_WATER_LABEL = "Water, estimated";
 export const ESTIMATED_WET_LABEL = "Wet, estimated";
+
+/** What an output bin's wet stock is, said once for every hint that needs it. */
+export const WET_STOCK_DEFINITION = "Wet stock is an estimate: wet mass added less wet mass taken out. Drying in the bin is not tracked, so wet stock can read high.";
