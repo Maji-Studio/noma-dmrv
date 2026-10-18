@@ -110,12 +110,12 @@ export function OrganizationAdminRow({ org, apiAccessEnabled, entering, onEnter 
             Every API key in this organization stops working until API access is turned back on.
             The API keys are not revoked.
           </p>
-          <div className="flex justify-end gap-8">
-            <Button type="button" variant="weak" disabled={apiAccess.isPending} onClick={() => setConfirmOff(false)}>
-              Cancel
-            </Button>
+          <div className="flex flex-wrap justify-start gap-8">
             <Button type="button" busy={apiAccess.isPending} onClick={() => setApiAccess(false)}>
               Turn API access off
+            </Button>
+            <Button type="button" variant="weak" disabled={apiAccess.isPending} onClick={() => setConfirmOff(false)}>
+              Cancel
             </Button>
           </div>
         </div>
