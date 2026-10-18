@@ -109,3 +109,16 @@ describe("BatchEmissionsPage undo", () => {
     expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
   });
 });
+
+describe("BatchEmissionsPage Record this month", () => {
+  it("stays available when every line is recorded but one still adds up entries", () => {
+    render(<BatchEmissionsPage creditBatchId="cb" entriesEnabled />);
+    expect((screen.getByRole("button", { name: "Record this month" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("is off when no line can take anything", () => {
+    mocks.lines = [makeLine({ state: "filled", entryPolicy: "single", entries: [makeEntry()] })];
+    render(<BatchEmissionsPage creditBatchId="cb" entriesEnabled />);
+    expect((screen.getByRole("button", { name: "Record this month" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});

@@ -44,6 +44,7 @@ import {
 import { EmissionsUndoBar } from "./emissions-undo-bar";
 import { MONTH_PREFIX_LENGTH, useEmissionsOverviewQuery } from "./emissions-overview-query";
 import { RecordMonthGrid } from "./record-month-grid";
+import { takesGridInput } from "./record-month-row";
 
 const SUBTITLE = "Manual entries add on top of what records already hold.";
 const LIST_SKELETON = "h-320 w-full";
@@ -199,8 +200,7 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
   ) : null;
 
   const counts = lineCounts(lines);
-  const openCount = lines.filter(isOpen).length;
-  const canRecord = entriesEnabled && !!batch && openCount > 0;
+  const canRecord = entriesEnabled && !!batch && lines.some(takesGridInput);
 
   return (
     <div className="container-max page-shell">

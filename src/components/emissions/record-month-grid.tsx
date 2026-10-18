@@ -1,6 +1,7 @@
 /**
- * "Record this month": every open line of the credit batch at once. Records
- * stay as they are; what the operator types adds on top. Save all validates
+ * "Record this month": every open line of the credit batch at once, then the
+ * recorded lines that add up entries, so a second month goes in the same way.
+ * Records stay as they are; what the operator types adds on top. Save all validates
  * inline, then saves line by line, so one refused line keeps its error and its
  * draft while the others save.
  */
@@ -37,7 +38,7 @@ import {
   type EmissionLine,
 } from "./emission-line-display";
 import { SourceChips } from "./emission-source-chips";
-import { RecordMonthRow, entryMissingFile, rowKind, type RowDraft } from "./record-month-row";
+import { RecordMonthRow, addsToRecordedLine, entryMissingFile, rowKind, type RowDraft } from "./record-month-row";
 
 const SAVE_FALLBACK = "This line was not saved. Check its values and try again.";
 const FILE_FALLBACK = "The file did not upload. Try again.";
@@ -72,7 +73,9 @@ export function RecordMonthGrid({ lines, batch, scope, today, onDone, onEnterAga
     setDrafts((all) => ({ ...all, [line.componentId]: { ...(all[line.componentId] ?? blank()), ...change } }));
 
   const openLines = lines.filter(isOpen);
-  const doneLines = lines.filter((line) => !isOpen(line));
+  const addLines = lines.filter(addsToRecordedLine);
+  const doneLines = lines.filter((line) => !isOpen(line) && !addsToRecordedLine(line));
+  const editableLines = [...openLines, ...addLines];
   const gapLines = openLines.filter((line) => rowKind(line) === "value" && isRecordsGap(lineRecords(line)));
 
   const touched = (line: EmissionLine, draft: RowDraft) => {
@@ -90,7 +93,7 @@ export function RecordMonthGrid({ lines, batch, scope, today, onDone, onEnterAga
     }
     return errors;
   };
-  const statuses: RowStatus[] = openLines
+  const statuses: RowStatus[] = editableLines
     .filter((line) => touched(line, draftOf(line)))
     .map((line) => ({ line, draft: draftOf(line), errors: validate(line, draftOf(line)) }));
   const ready = statuses.filter((status) => !Object.keys(status.errors).length);
@@ -182,6 +185,28 @@ export function RecordMonthGrid({ lines, batch, scope, today, onDone, onEnterAga
     .filter(Boolean)
     .join(", ");
 
+  const renderRow = (line: EmissionLine) => (
+    <RecordMonthRow
+      key={line.componentId}
+      line={line}
+      scope={scope}
+      draft={draftOf(line)}
+      errors={attempted && touched(line, draftOf(line)) ? validate(line, draftOf(line)) : {}}
+      serverError={serverErrors[line.componentId] ?? null}
+      today={today}
+      startDate={batch.startDate}
+      onChange={(change) => {
+        patch(line, change);
+        if (serverErrors[line.componentId]) {
+          setServerErrors((all) => Object.fromEntries(Object.entries(all).filter(([id]) => id !== line.componentId)));
+        }
+      }}
+      onConfirm={(target) => void confirmLine(target)}
+      onEnterAgain={onEnterAgain}
+      confirming={confirming === line.componentId}
+    />
+  );
+
   return (
     <section aria-labelledby="record-month-title" className="flex flex-col gap-12">
       <div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
@@ -198,29 +223,13 @@ export function RecordMonthGrid({ lines, batch, scope, today, onDone, onEnterAga
       <div className="bg-[var(--paper)] [border:var(--panel-border)]">
         {/* Locked while Save all runs, so a draft typed mid-save is neither saved stale nor dropped. */}
         <fieldset disabled={saving} className="min-w-0">
-          <ul aria-label="Open lines">
-            {openLines.map((line) => (
-              <RecordMonthRow
-                key={line.componentId}
-                line={line}
-                scope={scope}
-                draft={draftOf(line)}
-                errors={attempted && touched(line, draftOf(line)) ? validate(line, draftOf(line)) : {}}
-                serverError={serverErrors[line.componentId] ?? null}
-                today={today}
-                startDate={batch.startDate}
-                onChange={(change) => {
-                  patch(line, change);
-                  if (serverErrors[line.componentId]) {
-                    setServerErrors((all) => Object.fromEntries(Object.entries(all).filter(([id]) => id !== line.componentId)));
-                  }
-                }}
-                onConfirm={(target) => void confirmLine(target)}
-                onEnterAgain={onEnterAgain}
-                confirming={confirming === line.componentId}
-              />
-            ))}
-          </ul>
+          <ul aria-label="Open lines">{openLines.map(renderRow)}</ul>
+          {addLines.length > 0 && (
+            <>
+              <p className="bg-[var(--sea)] px-16 py-8 body-caption font-medium text-[var(--color-text-tertiary)] [border-top:var(--row-divider)]">Add to recorded lines</p>
+              <ul aria-label="Add to recorded lines">{addLines.map(renderRow)}</ul>
+            </>
+          )}
         </fieldset>
         {showDone && (
           <>

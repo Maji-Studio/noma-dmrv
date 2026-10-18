@@ -1,7 +1,8 @@
 /**
- * One open line in "Record this month": its read-only source chips, then the
+ * One line in "Record this month": its read-only source chips, then the
  * inputs for its shape and Attach file. A File missing
  * line only takes the file; Needs review and Needs setup lines say what to do.
+ * A recorded line that adds up entries keeps its inputs, so the next month adds on top.
  */
 "use client";
 
@@ -37,13 +38,25 @@ export interface RowDraft {
 
 export type RowKind = "value" | "fileOnly" | "review" | "setup" | "none";
 
-/** What the grid lets the operator do on an open line. */
+/** A recorded line that still takes another entry: additive, with nothing refusing one. */
+export function addsToRecordedLine(line: EmissionLine): boolean {
+  return (line.state === "filled" || line.state === "confirmedZero") && line.entryPolicy === "additive" && !addEntryRefusal(line);
+}
+
+/** What the grid lets the operator do on a line. */
 export function rowKind(line: EmissionLine): RowKind {
   if (line.state === "needsSetup") return "setup";
   if (line.state === "needsReview") return "review";
   if (line.state === "missingEvidence") return "fileOnly";
   if (line.state === "empty" && !addEntryRefusal(line)) return "value";
+  if (addsToRecordedLine(line)) return "value";
   return "none";
+}
+
+/** Whether "Record this month" has anything for this line to take. */
+export function takesGridInput(line: EmissionLine): boolean {
+  const kind = rowKind(line);
+  return kind === "value" || kind === "fileOnly" || kind === "review";
 }
 
 /** The value entry a File missing line attaches its file to. */
