@@ -62,7 +62,7 @@ it("creates under the batch lock with server attribution and a persisted snapsho
 });
 
 it("edits with a loaded version and captures the stored before and after rows", async () => {
-  expect(await setEmissionLineComment(ctx, { ...input, expectedVersion: before.version })).toEqual(after);
+  expect(await setEmissionLineComment(ctx, { ...input, id, expectedVersion: before.version })).toEqual(after);
   expect(locks).toEqual(["update"]);
   expect(updated).toHaveBeenCalledExactlyOnceWith({ body: "New wording", updatedBy: ctx.userId,
     updatedAt: expect.any(Date), version: expect.anything() });
@@ -71,7 +71,7 @@ it("edits with a loaded version and captures the stored before and after rows", 
 });
 
 it.each([undefined, 1])("refuses duplicate creation or a stale edit (%s) before changing a row", async (expectedVersion) => {
-  await expect(setEmissionLineComment(ctx, { ...input, expectedVersion }))
+  await expect(setEmissionLineComment(ctx, { ...input, ...(expectedVersion === undefined ? {} : { id, expectedVersion }) }))
     .rejects.toMatchObject({ code: expectedVersion === undefined ? "conflict" : "stale_version" });
   expect(insert).not.toHaveBeenCalled();
   expect(update).not.toHaveBeenCalled();
@@ -80,7 +80,7 @@ it.each([undefined, 1])("refuses duplicate creation or a stale edit (%s) before 
 
 it("refuses to recreate a deleted comment from a stale edit", async () => {
   selected = [[]];
-  await expect(setEmissionLineComment(ctx, { ...input, expectedVersion: 2 })).rejects.toMatchObject({ code: "stale_version" });
+  await expect(setEmissionLineComment(ctx, { ...input, id, expectedVersion: 2 })).rejects.toMatchObject({ code: "stale_version" });
   expect(insert).not.toHaveBeenCalled();
 });
 
