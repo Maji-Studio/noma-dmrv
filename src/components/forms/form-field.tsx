@@ -5,7 +5,7 @@
 
 import { cloneElement, isValidElement, type CSSProperties, type ReactNode } from "react";
 import { FormError } from "./form-error";
-import { Button } from "@/components/ui/button";
+import { TextAction } from "./text-action";
 import { InfoHint } from "@/components/ui/tooltip";
 import {
   CertificationFieldTag,
@@ -266,16 +266,13 @@ export function FormField({
             {cue}
           </p>
           {cueAction && (
-            <Button
-              type="button"
-              variant="noOutline"
-              size="small"
-              className="h-auto px-0 text-[var(--color-interaction)] hover:bg-transparent hover:underline"
+            <TextAction
+              className="-my-12"
               disabled={cueAction.disabled}
               onClick={cueAction.onClick}
             >
               {cueAction.label}
-            </Button>
+            </TextAction>
           )}
         </div>
       )}

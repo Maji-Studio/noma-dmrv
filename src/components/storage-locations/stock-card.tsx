@@ -7,7 +7,8 @@
 "use client";
 
 import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
-import { Button, EmptyState } from "@/components/ui";
+import { TextAction } from "@/components/forms/text-action";
+import { EmptyState } from "@/components/ui";
 import type { ReactNode } from "react";
 import { InfoHint } from "@/components/ui/tooltip";
 import { STOCK_ACTION_LABEL } from "@/lib/output-stock/labels";
@@ -20,10 +21,9 @@ const CHART_EMPTY = "Recorded movements will appear here.";
 /** A card's one action: a text button at the right of its header. */
 export function CardTextButton({ icon, children, onClick }: { icon: ReactNode; children: ReactNode; onClick: () => void }) {
   return (
-    <Button type="button" variant="noOutline" onClick={onClick}
-      className="-mr-6 inline-flex min-h-44 shrink-0 items-center gap-6 px-6 body-caption text-[var(--color-text-primary)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]">
+    <TextAction onClick={onClick} className="-mr-6">
       {icon}{children}
-    </Button>
+    </TextAction>
   );
 }
 
