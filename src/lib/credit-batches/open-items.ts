@@ -15,10 +15,7 @@ import type {
   DurabilitySummaryReplicate,
 } from "@/lib/certification/durability-batch-summary";
 import type { BatchEmissionLine } from "@/lib/certification/emission-lines";
-import {
-  NO_LAB_REPORT_PHRASE,
-  NO_REFLECTANCE_HISTOGRAM_PHRASE,
-} from "@/lib/certification/sample-document-warnings";
+import type { SampleDocumentWarningKey } from "@/lib/certification/sample-document-warnings";
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { formatTonnes } from "@/lib/format-utils";
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
@@ -65,21 +62,21 @@ function outlierTitle(replicate: DurabilitySummaryReplicate): string {
     : `Sample ${replicate.sampleCode} is outside the durability limits`;
 }
 
-/**
- * A batch health warning (non-blocking Sample document evidence) as a Check
- * item. Known warnings get a fixed id and a problem title; any other warning
- * keeps its own text as the title.
- */
-function documentWarningItem(warning: string): CreditBatchOpenItem {
-  const target = { tab: "samples" as const };
-  if (warning.includes(NO_LAB_REPORT_PHRASE)) {
-    return { id: "document:lab-report", title: "No lab report on any Sample", detail: "Upload a lab report to one of its Samples. You can still submit the Removal.", target };
-  }
-  if (warning.includes(NO_REFLECTANCE_HISTOGRAM_PHRASE)) {
-    return { id: "document:reflectance-histogram", title: "No reflectance histogram on any Sample", detail: "Upload a reflectance histogram to one of its Samples. You can still submit the Removal.", target };
-  }
-  return { id: `document:${warning}`, title: warning, target };
-}
+/** Non-blocking Sample document gaps, worded as Check items on the Samples tab. */
+const DOCUMENT_WARNING_ITEMS: Record<SampleDocumentWarningKey, CreditBatchOpenItem> = {
+  labReport: {
+    id: "document:lab-report",
+    title: "No lab report on any Sample",
+    detail: "Upload a lab report to one of its Samples. You can still submit the Removal.",
+    target: { tab: "samples" },
+  },
+  reflectanceHistogram: {
+    id: "document:reflectance-histogram",
+    title: "No reflectance histogram on any Sample",
+    detail: "Upload a reflectance histogram to one of its Samples. You can still submit the Removal.",
+    target: { tab: "samples" },
+  },
+};
 
 export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
   const blocking: CreditBatchOpenItem[] = [];
@@ -116,8 +113,8 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     });
   }
 
-  for (const warning of new Set(input.health?.warnings ?? [])) {
-    check.push(documentWarningItem(warning));
+  for (const key of new Set(input.health?.documentWarnings ?? [])) {
+    check.push(DOCUMENT_WARNING_ITEMS[key]);
   }
 
   const outlierCodes = new Set<string>();
@@ -160,7 +157,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
   }
 
   const statement = input.pageModel?.milestones.ghgStatement;
-  if (statement?.status === "in-verification") {
+  if (statement?.status.kind === "in-verification") {
     waiting.push({
       id: `verification:${statement.id}`,
       title: `GHG Statement ${ghgStatementPeriodLabel(statement)}: In verification`,

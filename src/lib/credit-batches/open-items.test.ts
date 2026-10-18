@@ -9,7 +9,7 @@ import {
   type DurabilitySummaryReplicate,
 } from "@/lib/certification/durability-batch-summary";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
-import { sampleDocumentWarnings } from "@/lib/certification/sample-document-warnings";
+import { sampleDocumentWarningKeys } from "@/lib/certification/sample-document-warnings";
 import type { BatchHealthFixTarget } from "@/lib/certification/batch-health";
 import {
   buildCreditBatchOpenItems,
@@ -69,7 +69,7 @@ function pageModel(): CreditBatchPageModel {
         reportingPeriodStartOn: null,
         reportingPeriodEndOn: "2026-06-30",
         hasMissingPeriod: false,
-        status: "in-verification",
+        status: { kind: "in-verification", value: "pending", label: "In verification", isActionable: false, isTerminal: false },
         submittedToVerifierAt: null,
         creditsIssuedAt: null,
       },
@@ -140,17 +140,16 @@ describe("buildCreditBatchOpenItems", () => {
   });
 
   it("lists Sample document warnings as Check items on the Samples tab", () => {
-    const warnings = sampleDocumentWarnings({
+    const documentWarnings = sampleDocumentWarningKeys({
       sampling: "sampled", creditBatchCode: "CB-1", hasLabReport: false,
       hasReflectanceHistogram: false, durabilityOption: "1000_year",
     });
     const result = buildCreditBatchOpenItems({ ...batchContext,
-      health: { state: "ready", issueCount: 0, checks: [], warnings: [...warnings, warnings[0], "Another hint."] } });
+      health: { state: "ready", issueCount: 0, checks: [], documentWarnings: [...documentWarnings, "labReport"] } });
     expect(result.blocking).toEqual([]);
     expect(result.check.map(item => [item.id, item.title, item.target])).toEqual([
       ["document:lab-report", "No lab report on any Sample", { tab: "samples" }],
       ["document:reflectance-histogram", "No reflectance histogram on any Sample", { tab: "samples" }],
-      ["document:Another hint.", "Another hint.", { tab: "samples" }],
     ]);
   });
 
@@ -237,7 +236,7 @@ describe("buildCreditBatchOpenItems", () => {
       },
     ]);
     input.pageModel.mass.notAppliedDryKg = null;
-    input.pageModel.milestones.ghgStatement!.status = "verified";
+    input.pageModel.milestones.ghgStatement!.status = { kind: "verified", value: "verified", label: "Verified", isActionable: false, isTerminal: true };
     expect(buildCreditBatchOpenItems(input).waiting).toEqual([]);
   });
 

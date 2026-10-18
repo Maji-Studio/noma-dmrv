@@ -38,7 +38,8 @@ export interface CreditBatchPageGhgStatement {
   reportingPeriodStartOn: string | null;
   reportingPeriodEndOn: string | null;
   hasMissingPeriod: boolean;
-  status: ReturnType<typeof deriveSubmissionStatus>["kind"];
+  /** The canonical derived status, as the Removals carry it: kind, badge value and label. */
+  status: ReturnType<typeof deriveSubmissionStatus>;
   submittedToVerifierAt: string | null;
   creditsIssuedAt: string | null;
 }
@@ -208,7 +209,7 @@ async function loadCreditBatchPageModel(ctx: OrgContext, creditBatchId: string, 
         latest ? isLockedInFlight(latest) : false,
         "ghgStatement",
         "unknown",
-      ).kind,
+      ),
       submittedToVerifierAt: typeof submittedToVerifierAt === "string"
         ? submittedToVerifierAt
         : null,

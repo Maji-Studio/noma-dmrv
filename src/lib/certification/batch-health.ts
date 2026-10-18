@@ -1,4 +1,5 @@
 import type { BatchEmissionLine } from "./emission-lines";
+import type { SampleDocumentWarningKey } from "./sample-document-warnings";
 /**
  * Per-credit-batch health classifier — the pure decision behind "is this batch
  * complete enough to group into a removal, and if not, what's missing?" It is
@@ -129,6 +130,8 @@ export interface BatchTransportFact {
 export interface BatchHealthFacts {
   emissionLines?: BatchEmissionLine[] | null;
   warnings?: string[];
+  /** The same Sample document warnings as typed keys, for surfaces with their own wording. */
+  documentWarnings?: SampleDocumentWarningKey[];
   /**
    * Raw carbon and durability lab-input blockers (sample carbon content,
    * H/C_org, O/C_org, total carbon, s_fraction, and replicate coverage).
@@ -175,6 +178,8 @@ export interface BatchHealthFacts {
 
 export interface BatchHealth {
   warnings?: string[];
+  /** Non-blocking Sample document gaps behind `warnings`, as typed keys. */
+  documentWarnings?: SampleDocumentWarningKey[];
   state: BatchHealthState;
   /** Count of `unmet` checks; `skipped` checks do not count. */
   issueCount: number;
@@ -503,6 +508,7 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
     issueCount,
     checks,
     warnings: facts.warnings ?? [],
+    documentWarnings: facts.documentWarnings ?? [],
   };
 }
 

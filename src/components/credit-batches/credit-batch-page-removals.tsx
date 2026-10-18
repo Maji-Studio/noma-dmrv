@@ -9,7 +9,7 @@
 import Link from "next/link";
 import { ArchiveIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui";
-import { StatusBadge, type StatusValue } from "@/components/ui/status-badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
 import { ghgStatementPeriodLabel } from "@/lib/credit-batches/ghg-statement-period-label";
 import {
@@ -31,21 +31,6 @@ import {
   sliceMeta,
   tonnesFromKg,
 } from "./credit-batch-removal-bar";
-
-type StatementKind = NonNullable<CreditBatchPageModel["milestones"]["ghgStatement"]>["status"];
-
-/** The statement's badge, with the values the credit batch lifecycle rail uses for the same kinds. */
-const STATEMENT_BADGES: Partial<Record<StatementKind, { status: StatusValue; label: string }>> = {
-  "in-progress": { status: "running", label: "Updating" },
-  draft: { status: "running", label: "Draft" },
-  "in-registry": { status: "running", label: "In registry" },
-  "pending-changes": { status: "pending", label: "Pending changes" },
-  "in-verification": { status: "pending", label: "In verification" },
-  verified: { status: "verified", label: "Verified" },
-  issued: { status: "issued", label: "Issued" },
-  "verification-failed": { status: "rejected", label: "Verification failed" },
-  superseded: { status: "superseded", label: "Superseded" },
-};
 
 function DeliveryList({ model }: { model: CreditBatchPageModel }) {
   const { batch } = useCreditBatchPage();
@@ -94,7 +79,6 @@ function GhgStatementPanel({ model }: { model: CreditBatchPageModel }) {
   const { batch } = useCreditBatchPage();
   const statement = model.milestones.ghgStatement;
   if (!statement) return null;
-  const badge = STATEMENT_BADGES[statement.status];
   return (
     <PagePanel title="GHG Statement" labelledBy="credit-batch-ghg-statement">
       <Link
@@ -104,7 +88,7 @@ function GhgStatementPanel({ model }: { model: CreditBatchPageModel }) {
         <span className="body-medium font-medium underline-offset-2 group-hover:underline">
           GHG Statement {ghgStatementPeriodLabel(statement)}
         </span>
-        {badge && <StatusBadge status={badge.status} label={badge.label} />}
+        <StatusBadge status={statement.status.value} label={statement.status.label} />
       </Link>
     </PagePanel>
   );

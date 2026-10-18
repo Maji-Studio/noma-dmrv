@@ -15,7 +15,7 @@
 
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
-import { sampleDocumentWarnings } from "./sample-document-warnings";
+import { sampleDocumentWarningKeys, sampleDocumentWarnings } from "./sample-document-warnings";
 import type { BatchHealthFacts } from "./batch-health";
 import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "./preview-gaps";
 
@@ -83,6 +83,7 @@ export function toBatchHealthFacts(
     templateBlockers: ctx.templateBlockers ?? [],
     emissionLines: ctx.emissionLines,
     warnings: batch ? sampleDocumentWarnings({ ...batch, creditBatchCode: batch.code }) : [],
+    documentWarnings: batch ? sampleDocumentWarningKeys({ ...batch, creditBatchCode: batch.code }) : [],
     carbonMissingInputs: carbonMissingInputs(ctx, batchId),
     facilityEmissionsBlockers: batch?.facilityEmissionsGateBlockers ?? [],
     feedstockTypeMappingGaps: facilitySetupComplete

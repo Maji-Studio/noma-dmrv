@@ -81,11 +81,14 @@ function OpenItemRow({ item }: { item: CreditBatchOpenItem }) {
 }
 
 function OpenItemGroups() {
-  const { openItems, blockingCount } = useCreditBatchPage();
+  const { openItems, blockingCount, healthError } = useCreditBatchPage();
   const shown = GROUP_ORDER.filter((group) => openItems[group].length > 0);
   if (shown.length === 0) {
-    // Until the batch health answers, "nothing open" would be a guess.
-    if (blockingCount == null) return <p className={cn("body-small", MUTED_TEXT)} aria-busy>Checking this credit batch…</p>;
+    // Until the batch health answers, "nothing open" would be a guess. A
+    // failed health says so in its own notice above, so nothing repeats it here.
+    if (blockingCount == null) {
+      return healthError ? null : <p className={cn("body-small", MUTED_TEXT)} aria-busy>Checking this credit batch…</p>;
+    }
     return <EmptyState padding="sm" icon={<CheckCircleIcon size={32} weight="thin" />} title="Nothing is open on this credit batch" />;
   }
   return (

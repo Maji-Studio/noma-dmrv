@@ -51,12 +51,8 @@ export interface CreditBatchMilestone {
 
 const VERIFIED_KINDS: readonly DerivedStatusKind[] = ["verified", "issued"];
 
-/** What a GHG Statement short of verification is doing, said on the Verified step. */
-const STATEMENT_STEP_CAPTIONS: Partial<Record<DerivedStatusKind, string>> = {
-  "in-verification": "In verification",
-  "pending-changes": "Pending changes",
-  "verification-failed": "Verification failed",
-};
+/** Statement states the Verified step names, in the statement's own canonical label. */
+const STATEMENT_STEP_CAPTION_KINDS: readonly DerivedStatusKind[] = ["in-verification", "pending-changes", "verification-failed"];
 
 /** Under one gram of difference is the same mass at the page's precision. */
 const SAME_MASS_TOLERANCE_KG = 0.001;
@@ -85,7 +81,8 @@ function removalCaption(model: CreditBatchPageModel): string | null {
 
 /**
  * The four milestones, each named for what has happened. The first reads
- * "Missing data" with the blocking count until no blocking item remains.
+ * "Missing data" with the blocking count until no blocking item remains, and
+ * "Batch data" while the batch health is loading or failed.
  * "Data complete" and "Verified" carry no date: none is stored.
  */
 export function creditBatchMilestones({ blockingCount, pageModel }: CreditBatchMilestoneInput): CreditBatchMilestone[] {
@@ -94,7 +91,8 @@ export function creditBatchMilestones({ blockingCount, pageModel }: CreditBatchM
   const steps: { key: CreditBatchMilestoneKey; label: string; done: boolean; failed?: boolean; caption: string | null; count?: number }[] = [
     {
       key: "data",
-      label: missing ? "Missing data" : "Data complete",
+      // Until the health answers, the step names itself without a verdict.
+      label: missing ? "Missing data" : blockingCount === 0 ? "Data complete" : "Batch data",
       done: blockingCount === 0,
       caption: null,
       count: missing ? blockingCount : undefined,
@@ -108,15 +106,15 @@ export function creditBatchMilestones({ blockingCount, pageModel }: CreditBatchM
     {
       key: "verified",
       label: "Verified",
-      done: !!statement && VERIFIED_KINDS.includes(statement.status),
-      failed: statement?.status === "verification-failed",
-      caption: statement ? STATEMENT_STEP_CAPTIONS[statement.status] ?? null : null,
+      done: !!statement && VERIFIED_KINDS.includes(statement.status.kind),
+      failed: statement?.status.kind === "verification-failed",
+      caption: statement && STATEMENT_STEP_CAPTION_KINDS.includes(statement.status.kind) ? statement.status.label : null,
     },
     {
       key: "issued",
       label: "Credits issued",
-      done: statement?.status === "issued",
-      caption: statement?.status === "issued" && statement.creditsIssuedAt ? formatDate(statement.creditsIssuedAt) : null,
+      done: statement?.status.kind === "issued",
+      caption: statement?.status.kind === "issued" && statement.creditsIssuedAt ? formatDate(statement.creditsIssuedAt) : null,
     },
   ];
   const currentIndex = steps.findIndex((step) => !step.done);

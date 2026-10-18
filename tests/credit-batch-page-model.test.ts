@@ -271,7 +271,7 @@ describe("credit batch page model", () => {
         reportingPeriodStartOn: null,
         reportingPeriodEndOn: "2026-06-30",
         hasMissingPeriod: false,
-        status: "in-verification",
+        status: expect.objectContaining({ kind: "in-verification", value: "pending", label: "In verification" }),
         submittedToVerifierAt,
         creditsIssuedAt: null,
       });

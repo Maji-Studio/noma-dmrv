@@ -122,6 +122,15 @@ export function traceabilityApplicationHref(
   return `/traceability?${params.toString()}`;
 }
 
+/** A credit batch on the Traceability page, in its default view. */
+export function traceabilityBatchHref(
+  creditBatchId: string,
+  facilityId: string,
+): string {
+  const params = new URLSearchParams({ facility: facilityId, batch: creditBatchId });
+  return `/traceability?${params.toString()}`;
+}
+
 /** The Traceability view value of the batch Activity segment. */
 export const TRACEABILITY_ACTIVITY_VIEW = "activity";
 

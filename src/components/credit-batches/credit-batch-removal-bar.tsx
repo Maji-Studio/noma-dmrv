@@ -146,24 +146,22 @@ function compactLabel(group: RemovalBarGroup): string {
   return `${group.removal.code}${draft} ${tonnesFromKg(group.dryKg)}`;
 }
 
-/** Overview: one slim bar and one wrapping line of key items. Each Removal opens its hover card. */
+/** Overview: one slim bar and one wrapping line of key items. Each Removal's key item opens its hover card. */
 export function CompactRemovalBar({ groups, facilityId }: { groups: RemovalBarGroup[]; facilityId: string }) {
   return (
     <div className="flex flex-col gap-12">
-      <div role="group" aria-label="Applied biochar by Removal" className="flex h-12 gap-2">
-        {groups.map((group) => {
-          const style = { flexGrow: group.dryKg, flexBasis: 0, minWidth: MIN_GROUP_PX, backgroundColor: SEGMENT_FILLS[group.segment] };
-          const className = "h-full border border-[var(--st-off-border)]";
-          return group.removal ? (
-            <RemovalHoverLink key={group.id} group={group} href={removalHref(facilityId, group.removal.id)} className={cn(className, "hover:opacity-80")} style={style}>
-              <span className="sr-only">{groupAccessibleLabel(group)}</span>
-            </RemovalHoverLink>
-          ) : (
-            <span key={group.id} aria-hidden className={className} style={style} />
-          );
-        })}
+      {/* The segments are too small to be targets: the key items below are the links. */}
+      <div aria-hidden className="flex h-12 gap-2">
+        {groups.map((group) => (
+          <span
+            key={group.id}
+            title={groupAccessibleLabel(group)}
+            className="h-full border border-[var(--st-off-border)]"
+            style={{ flexGrow: group.dryKg, flexBasis: 0, minWidth: MIN_GROUP_PX, backgroundColor: SEGMENT_FILLS[group.segment] }}
+          />
+        ))}
       </div>
-      <ul className="flex flex-wrap gap-x-16 gap-y-4 body-small">
+      <ul aria-label="Applied biochar by Removal" className="flex flex-wrap gap-x-16 gap-y-4 body-small">
         {groups.map((group) => (
           <li key={group.id}>
             {group.removal ? (

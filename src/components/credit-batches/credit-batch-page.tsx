@@ -12,7 +12,6 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { ServerError } from "@/components/forms";
@@ -24,7 +23,6 @@ import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
 import { useToast } from "@/components/ui/toast";
 import { useBatchDurabilitySummary, useBatchHealth } from "@/hooks/use-certification";
 import {
-  creditBatchKeys,
   useCreditBatch,
   useCreditBatchPageModel,
   useDeleteCreditBatch,
@@ -35,7 +33,7 @@ import { useRecordLock } from "@/hooks/use-record-locks";
 import { creditBatchListHref } from "@/lib/certification/batch-health-links";
 import { ConflictError } from "@/lib/conflict-ref";
 import { CREDIT_BATCH_TAB_PARAM } from "@/lib/credit-batch-links";
-import { certificationRemovalsHref } from "@/lib/certification/links";
+import { certificationRemovalsHref, traceabilityBatchHref } from "@/lib/certification/links";
 import { CREATE_INTENT_PARAM } from "@/lib/create-intent";
 import { Button } from "@/components/ui/button";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
@@ -63,7 +61,7 @@ import { CreditBatchForm } from "./credit-batch-form";
 import { CREDIT_BATCH_DELETE_MESSAGE } from "./credit-batch-list";
 import { CreditBatchEmissionsTab } from "./credit-batch-emissions-tab";
 import { CreditBatchPageProvider, useCreditBatchPage, type CreditBatchPageContextValue } from "./credit-batch-page-context";
-import { CreditBatchKeyNumbers, CreditBatchPageHeader, creditBatchTraceabilityHref } from "./credit-batch-page-header";
+import { CreditBatchKeyNumbers, CreditBatchPageHeader } from "./credit-batch-page-header";
 import { CreditBatchOverview } from "./credit-batch-page-overview";
 import { CountBadge, FOCUS_RING, MUTED_TEXT } from "./credit-batch-page-parts";
 import { CreditBatchRemovalsTab } from "./credit-batch-page-removals";
@@ -122,7 +120,7 @@ function BatchTabs({ tabListRef }: { tabListRef: React.RefObject<HTMLDivElement 
       </div>
       {/* Phones reach Traceability through the ⋯ menu; the tab row has no room. */}
       <Link
-        href={creditBatchTraceabilityHref(batch.id, batch.facilityId)}
+        href={traceabilityBatchHref(batch.id, batch.facilityId)}
         className={cn("hidden shrink-0 items-center gap-6 pl-16 body-small underline-offset-2 hover:text-[var(--color-text-primary)] hover:underline sm:inline-flex", MUTED_TEXT, FOCUS_RING)}
       >
         Open in Traceability
@@ -165,7 +163,6 @@ export function CreditBatchPage({
 }) {
   const router = useRouter();
   const toast = useToast();
-  const queryClient = useQueryClient();
   const tabListRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useQueryState(
     CREDIT_BATCH_TAB_PARAM,
@@ -177,7 +174,9 @@ export function CreditBatchPage({
   // concurrent save answers as the stale-version conflict.
   const [editSnapshot, setEditSnapshot] = useState<CreditBatchWithRelations | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  // The batch as the delete dialog opened on it: a refetch while it is open
+  // never deletes against changes the operator has not seen.
+  const [deleting, setDeleting] = useState<{ id: string; version: number } | null>(null);
   const [deleteConflict, setDeleteConflict] = useState<ConflictError | null>(null);
 
   const { facilityId: contextFacilityId, isResolving } = useFacilityContext();
@@ -255,19 +254,19 @@ export function CreditBatchPage({
       return;
     }
     closeEdit();
-    void queryClient.invalidateQueries({ queryKey: creditBatchKeys.detail(batch.id) });
     if (outcome.warning) toast.warning(`${outcome.warning} Refresh the page.`);
     else toast.success("Credit batch updated.");
   };
 
   const handleDeleteConfirm = async () => {
+    if (!deleting) return;
     try {
-      await deleteCreditBatch.mutateAsync({ creditBatchId: batch.id, expectedVersion: batch.version });
-      setDeleting(false);
+      await deleteCreditBatch.mutateAsync({ creditBatchId: deleting.id, expectedVersion: deleting.version });
+      setDeleting(null);
       toast.success("Credit batch deleted.");
       router.push(creditBatchListHref(batch.facilityId));
     } catch (error) {
-      setDeleting(false);
+      setDeleting(null);
       if (error instanceof ConflictError) setDeleteConflict(error);
       else toast.error(toDeleteErrorMessage(error, "Credit batch", "Credit batch was not deleted. Try again."));
     }
@@ -301,7 +300,7 @@ export function CreditBatchPage({
   return (
     <CreditBatchPageProvider value={value}>
       <div className="container-max page-shell min-w-0">
-        <CreditBatchPageHeader primary={primary} onPrimary={onPrimary} onDelete={() => setDeleting(true)} />
+        <CreditBatchPageHeader primary={primary} onPrimary={onPrimary} onDelete={() => setDeleting({ id: batch.id, version: batch.version })} />
         <CreditBatchKeyNumbers />
         <div className="flex min-w-0 flex-col gap-24">
           <BatchTabs tabListRef={tabListRef} />
@@ -337,9 +336,9 @@ export function CreditBatchPage({
       </EntitySideSheet>
 
       <DeleteConfirmDialog
-        isOpen={deleting}
+        isOpen={deleting !== null}
         onConfirm={handleDeleteConfirm}
-        onCancel={() => setDeleting(false)}
+        onCancel={() => setDeleting(null)}
         title="Delete credit batch"
         message={CREDIT_BATCH_DELETE_MESSAGE}
         isPending={deleteCreditBatch.isPending}

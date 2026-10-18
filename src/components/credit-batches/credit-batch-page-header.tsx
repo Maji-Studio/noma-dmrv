@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { creditBatchListHref } from "@/lib/certification/batch-health-links";
+import { traceabilityBatchHref } from "@/lib/certification/links";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   APPLIED_DRY_LABEL,
@@ -31,11 +32,6 @@ import { isCreditBatchDeletable } from "./credit-batch-card";
 import { useCreditBatchPage } from "./credit-batch-page-context";
 import { CountBadge, IdentityChip, MUTED_TEXT } from "./credit-batch-page-parts";
 import { carbonEstimateGap } from "./credit-batch-view";
-
-/** The batch on the Traceability page. */
-export function creditBatchTraceabilityHref(creditBatchId: string, facilityId: string): string {
-  return `/traceability?${new URLSearchParams({ facility: facilityId, batch: creditBatchId })}`;
-}
 
 export interface CreditBatchHeaderActions {
   primary: CreditBatchPrimaryAction | null;
@@ -52,7 +48,7 @@ function OverflowMenu({ onDelete }: { onDelete: () => void }) {
         <DotsThreeIcon size={20} weight="bold" aria-hidden />
       </DropdownMenu.Trigger>
       <DropdownMenu.Content align="end">
-        <DropdownMenu.Item render={<Link href={creditBatchTraceabilityHref(batch.id, batch.facilityId)} />}>
+        <DropdownMenu.Item render={<Link href={traceabilityBatchHref(batch.id, batch.facilityId)} />}>
           Open in Traceability
         </DropdownMenu.Item>
         {deletable && (

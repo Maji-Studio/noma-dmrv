@@ -29,7 +29,12 @@ function removal(overrides: Partial<Removal> = {}): Removal {
   };
 }
 
-function statement(status: Statement["status"], overrides: Partial<Statement> = {}): Statement {
+const STATEMENT_LABELS: Partial<Record<Statement["status"]["kind"], string>> = {
+  verified: "Verified", issued: "Issued", "verification-failed": "Verification failed", "in-verification": "In verification",
+};
+
+function statement(kind: Statement["status"]["kind"], overrides: Partial<Statement> = {}): Statement {
+  const status: Statement["status"] = { kind, value: "pending", label: STATEMENT_LABELS[kind] ?? kind, isActionable: false, isTerminal: false };
   return {
     id: "statement",
     reportingPeriodStartOn: "2026-07-01",
@@ -129,8 +134,8 @@ describe("creditBatchMilestones", () => {
     expect(failed[2]).toMatchObject({ state: "failed", caption: "Verification failed" });
   });
 
-  it("keeps the data step open without a count while the health loads", () => {
-    expect(creditBatchMilestones({ blockingCount: null, pageModel: undefined })[0]).toEqual({ key: "data", label: "Data complete", state: "current", caption: null });
+  it("names the data step without a verdict while the health loads or failed", () => {
+    expect(creditBatchMilestones({ blockingCount: null, pageModel: undefined })[0]).toEqual({ key: "data", label: "Batch data", state: "current", caption: null });
   });
 });
 
