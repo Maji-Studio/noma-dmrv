@@ -19,7 +19,7 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatFacilityTime } from "@/lib/date-utils";
 import { formatFacilityDateTime, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
-import { LOST_MASS_LABEL, outputStockEventLabel } from "@/lib/output-stock/labels";
+import { ESTIMATED_WATER_LABEL, LOST_MASS_LABEL, outputStockEventLabel } from "@/lib/output-stock/labels";
 import type { FeedstockLedgerEntry } from "@/types/feedstock-bin-ledger";
 import { CardTextButton, StockCard, StockChartCard } from "./stock-card";
 import { LedgerBeforeAfter, LedgerDayHeader, LedgerFacts, LedgerLine } from "./stock-ledger";
@@ -133,8 +133,8 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
     { label: "Moisture at intake", value: batch.moisturePercent === null ? MISSING_VALUE.notAvailable : formatMoisturePercent(batch.moisturePercent) },
     { label: "Received on", value: formatFacilityDateTime(batch.receivedAt, clock.timeZone) },
   ] }));
-  if (waterKg !== null && waterKg > 0) bands.push({ label: "Water, estimated", kg: waterKg, category: "existing-water", details: [
-    { label: "Water, estimated", value: formatMassKg(waterKg) },
+  if (waterKg !== null && waterKg > 0) bands.push({ label: ESTIMATED_WATER_LABEL, kg: waterKg, category: "existing-water", details: [
+    { label: ESTIMATED_WATER_LABEL, value: formatMassKg(waterKg) },
     { label: "Moisture", value: formatMoisturePercent(estimatedMoisturePercent) },
   ] });
   return <div className="flex flex-col gap-16">

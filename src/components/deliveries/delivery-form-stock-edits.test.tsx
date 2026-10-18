@@ -22,7 +22,7 @@ vi.mock("@/fn/output-stock", () => ({
     editLockedReason: null, sources: [{ layerId: ids.a, moisturePercent: 20 }] }] }),
   getOutputSubBinsFn: async () => ({ success: true, data: { stockMode: "split", drawOrder: "oldest_first", subBins: [ids.a, ids.b].map((layerId, index) => ({
     layerId, code: index === 0 ? "P1" : "P2", placedAt: "2026-09-12T12:00:00.000Z", dryMassKg: 1000, solidsKg: 1000,
-    wetEstimateKg: 1250, moisturePercent: 20, basis: null, recentMovements: [],
+    wetEstimateKg: 1250, moisturePercent: 20, basis: null, recentMovements: [], ingredients: [],
   })) } }),
   previewOutputStockFn: (...args: unknown[]) => state.preview(...args),
 }));

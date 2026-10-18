@@ -32,6 +32,7 @@ import { RowActionsMenu } from "@/components/ui";
 import { handleRowActivationClick } from "@/components/ui/data-table/data-table-helpers";
 import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { DRY_BIOCHAR_LABEL } from "@/components/biochar-products/product-composition-components";
 import { RecordLockChip } from "@/components/record-locks/record-lock-chip";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
@@ -185,7 +186,7 @@ export function StorageBinTile({
             )}
           </div>
           {!isEmpty && massKg != null && wetEstimateKg != null && (
-            <SecondaryFigure label="Dry biochar" value={formatMassKg(massKg)} />
+            <SecondaryFigure label={DRY_BIOCHAR_LABEL} value={formatMassKg(massKg)} />
           )}
         </div>
 

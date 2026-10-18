@@ -76,7 +76,7 @@ it("uses the same feedstock cards, links intake/run/product history and leaves l
 });
 
 it("wraps every split bay and fills a lone bay against capacity", async () => {
-  const subBin: OutputSubBin = { layerId: "layer", code: "PR-001", placedAt: INSTANT, dryMassKg: 80, solidsKg: 80, wetEstimateKg: 100, moisturePercent: 20, basis: null, recentMovements: [] };
+  const subBin: OutputSubBin = { layerId: "layer", code: "PR-001", placedAt: INSTANT, dryMassKg: 80, solidsKg: 80, wetEstimateKg: 100, moisturePercent: 20, basis: null, recentMovements: [], ingredients: [] };
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<SubBinBays subBins={[subBin]} capacityKg={200} label="Sub-bins" timeZone="UTC" />); });
   expect(renderer.root.findAllByType("span").some(node => node.props.style?.height === "50%" && node.props["aria-hidden"] === "true")).toBe(true);
@@ -131,3 +131,15 @@ it('crosses out a deleted product placement while retaining the product link', a
   expect(renderer.root.findAllByType('a').map(link => link.props.href)).toContain(stockSourceHref({ entity: 'biocharProduct', id: 'product' }, FACILITY_ID));
   await act(async () => renderer.unmount());
 });
+
+it("names a lone product bay's parts like the product composition, by ingredient", async () => {
+  const subBin: OutputSubBin = { layerId: "layer", code: "BP-001", placedAt: INSTANT, dryMassKg: 90, solidsKg: 160, wetEstimateKg: 200, moisturePercent: 20, basis: null, recentMovements: [],
+    ingredients: [{ name: "Compost", solidsKg: 40 }, { name: "Clay", solidsKg: 30 }] };
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<SubBinBays subBins={[subBin]} label="Sub-bins" timeZone="UTC" />); });
+  const parts = renderer.root.findByProps({ "aria-label": "BP-001 contents" }).findAllByType("dt").map(node => node.findAllByType("span").at(-1)!.children.join(""));
+  expect(parts).toEqual(["Water, estimated", "Compost solids", "Clay solids", "Dry biochar"]);
+  expect(JSON.stringify(renderer.toJSON())).not.toMatch(/Solids|Ingredients, dry|Biochar, dry/);
+  await act(async () => renderer.unmount());
+});
+

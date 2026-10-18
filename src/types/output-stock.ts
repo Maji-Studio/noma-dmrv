@@ -2,6 +2,7 @@ import type { z } from 'zod';
 import type { MoistureBasis } from '@/lib/output-stock/moisture-estimate';
 import type { OutputDrawOrder, OutputStockMode } from '@/lib/output-stock/stock-mode';
 import type { orderedSourceSchema } from '@/schemas/output-stock';
+import type { SubBinIngredient } from '@/lib/output-stock/sub-bin-ingredients';
 /** Serializable operator read models; exact fractions remain inside the ledger. */
 export interface OutputStockAllocationView {
   layerId: string;
@@ -141,6 +142,8 @@ export interface OutputSubBin {
   basis: MoistureBasis | null;
   /** Newest first, at most `SUB_BIN_RECENT_MOVEMENTS`. */
   recentMovements: SubBinMovement[];
+  /** `solidsKg` less `dryMassKg`, split by ingredient in the product's saved shares; empty for pure biochar. */
+  ingredients: SubBinIngredient[];
 }
 
 export interface OutputSubBins {
