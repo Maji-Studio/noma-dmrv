@@ -47,8 +47,9 @@ const NARROW_PCT = 5;
 const MIN_TRACK_PX = 880;
 /** The label column beside the track from `sm` up. */
 const LABEL_COL_PX = 128;
-/** The smallest hit width of a (+) slot (docs/design-system.md: 44px touch target); narrower gaps get no slot. */
+/** The Issued check mark on a bar. */
 const BAR_MARK_PX = 12;
+/** The smallest hit width of a (+) slot (docs/design-system.md: 44px touch target); narrower gaps get no slot. */
 const MIN_SLOT_PX = 44;
 const UNNAMED_FEEDSTOCK = "Feedstock not set";
 
