@@ -12,6 +12,7 @@ import { useState, type ReactNode } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
 import { Notice } from "@/components/ui/notice";
+import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import { InfoHint } from "@/components/ui/tooltip";
 import { useFeedstockBinStock } from "@/hooks/use-bin-movements";
 import { useFacilityClock } from "@/hooks/use-facility-context";
@@ -149,9 +150,8 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
         {formatMassKg(stock.data.currentWetKg)} wet
         {capacityKg != null && <span className="body-small text-[var(--color-text-tertiary)]"> of {formatMassKg(capacityKg)}</span>}
       </>}
-      caption={stock.data && <>
-        {estimatedDryKg === null ? `Dry solids: ${MISSING_VALUE.notAvailable}` : `≈ ${formatMassKg(estimatedDryKg)} dry solids`} · {estimatedMoisturePercent === null ? MISSING_VALUE.notAvailable : formatMoisturePercent(estimatedMoisturePercent)} moisture
-      </>}
+      // Dry solids only when the batches' moisture gives them; the moisture itself is in the water band's details.
+      caption={stock.data && estimatedDryKg !== null && <SecondaryFigure label="Dry solids, estimated" value={formatMassKg(estimatedDryKg)} />}
       onAdjust={onAdjust}
     >
       {stock.data && bands.length === 0 && <EmptyState icon={null} title="No stock in this bin" padding="sm" />}

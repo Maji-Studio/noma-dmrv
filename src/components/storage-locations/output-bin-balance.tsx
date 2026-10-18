@@ -106,7 +106,7 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
         {stockFigure(wetKg, dryKg)}
         {capacityKg != null && <span className="body-small text-[var(--color-text-tertiary)]"> of {formatMassKg(capacityKg)}</span>}
       </>}
-      // The pile's moisture is in its water band's details, like a sub-bin's under its bay.
+      // Dry biochar sits under the wet figure only while wet leads; without a wet estimate it is the headline itself.
       caption={ready && wetKg !== null && dryKg !== null && <SecondaryFigure label={DRY_BIOCHAR_LABEL} value={formatMassKg(dryKg)} />}
       onAdjust={onAdjust}
     >

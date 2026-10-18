@@ -13,6 +13,7 @@ vi.mock("@/components/ui/modal", () => ({ Modal: ({ isOpen, children }: { isOpen
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null, Tooltip: ({ children }: { children: ReactNode }) => children }));
 vi.mock("./sub-bin-card", () => ({ DetailsTooltip: ({ trigger }: { trigger: ReactNode }) => trigger, SubBinTooltip: ({ trigger }: { trigger: ReactNode }) => trigger, subBinMoistureText: () => "20%" }));
 
+import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import { FeedstockBinBalance } from "./feedstock-bin-balance";
 import { OutputStockHistory } from "./output-stock-history";
 import { StockLevelChart } from "./stock-level-chart";
@@ -62,6 +63,9 @@ it("uses the same feedstock cards, links intake/run/product history and leaves l
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<FeedstockBinBalance storageLocationId={BIN_ID} facilityId={FACILITY_ID} capacityKg={100} onAdjust={adjust} />); });
   expect(renderer.root.findAllByType("section").map(section => section.props["aria-label"])).toEqual(["Stock", "Stock over time"]);
+  // Dry solids read under the wet stock; the moisture is in the water band's details, not the caption.
+  expect(renderer.root.findByType(SecondaryFigure).props).toMatchObject({ label: "Dry solids, estimated", value: "40 kg" });
+  expect(text(renderer.root.findAllByType("section")[0]!)).not.toMatch(/Not available|moisture/);
   const actions = renderer.root.findAllByType("button");
   await act(async () => actions.find(button => text(button).includes("Adjust stock"))!.props.onClick());
   expect(adjust).toHaveBeenCalledOnce();

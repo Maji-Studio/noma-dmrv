@@ -81,7 +81,11 @@ export function StorageBinTile({
   const wetEstimateKg = bin.type === "feedstock_bin" || bin.archivedAt != null ? null : output.data?.beforeEstimatedWetKg ?? null;
   const fillPercent = bin.type === "feedstock_bin" ? binCapacityPercent(bin) : null;
   const needsReconciliation = binNeedsReconciliation(bin);
-  const isEmpty = massKg === 0;
+  // A known positive wet estimate is stock, even where the dry biochar rounds to nothing.
+  const hasWetStock = wetEstimateKg != null && wetEstimateKg > 0;
+  const isEmpty = !hasWetStock && massKg === 0;
+  // An active output bin's figures arrive with its stock read; until then the slot stays blank.
+  const loading = bin.type !== "feedstock_bin" && bin.archivedAt == null && !output.data && !output.error;
   const isArchived = bin.archivedAt != null;
   const material = binMaterialName(bin);
   const { Icon, ink } = BIN_TYPE_META[bin.type];
@@ -179,13 +183,13 @@ export function StorageBinTile({
                     : "text-[var(--color-text-primary)]"
               }`}
             >
-              <TileFigure feedstock={bin.type === "feedstock_bin"} massKg={massKg} wetEstimateKg={wetEstimateKg} />
+              {!loading && <TileFigure feedstock={bin.type === "feedstock_bin"} massKg={massKg} wetEstimateKg={wetEstimateKg} />}
             </span>
             {needsReconciliation && (
               <ReconcileLink bin={bin} onReconcile={onReconcile} />
             )}
           </div>
-          {!isEmpty && massKg != null && wetEstimateKg != null && (
+          {!isEmpty && !loading && massKg != null && wetEstimateKg != null && (
             <SecondaryFigure label={DRY_BIOCHAR_LABEL} value={formatMassKg(massKg)} />
           )}
         </div>
@@ -200,9 +204,12 @@ export function StorageBinTile({
 /**
  * The tile's one figure. A feedstock bin's stock is its wet mass. An output
  * bin leads with its wet estimate, and falls back to the dry biochar it tracks
- * when nothing dates a moisture.
+ * when nothing dates a moisture. A positive wet estimate wins over a dry
+ * biochar that rounds to nothing, so the tile never says Empty over wet stock
+ * the sheet shows.
  */
 function TileFigure({ feedstock, massKg, wetEstimateKg }: { feedstock: boolean; massKg: number | null; wetEstimateKg: number | null }) {
+  if (!feedstock && wetEstimateKg != null && wetEstimateKg > 0) return `≈ ${formatWetEstimate(wetEstimateKg)} kg wet`;
   if (massKg == null) return MISSING_VALUE.notAvailable;
   if (massKg === 0) return "Empty";
   if (feedstock) return `${formatMassKg(massKg)} wet`;

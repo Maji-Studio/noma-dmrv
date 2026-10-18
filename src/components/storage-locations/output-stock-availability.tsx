@@ -1,6 +1,7 @@
 "use client";
 
 import { CompositionCard, DerivedHeadline } from "@/components/forms";
+import { DRY_BIOCHAR_LABEL } from "@/components/biochar-products/product-composition-components";
 import { SegmentBar, SegmentKey } from "@/components/ui/segment-bar";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatMassKg } from "@/lib/format-utils";
@@ -79,10 +80,10 @@ export function OutputStockAvailability({ binName, dryKg, wetEstimate = null, al
             label="Available wet stock, estimate"
             value={`≈ ${formatWetEstimate(wetEstimate.kg)} kg wet`}
             // Dry stock is a balance, not a calculation: a secondary line at both levels.
-            secondary={{ label: "Available dry stock", value: dryKg == null ? null : formatMassKg(dryKg) }}
+            secondary={{ label: DRY_BIOCHAR_LABEL, value: dryKg == null ? null : formatMassKg(dryKg) }}
             sub={wetEstimate.basis}
           />
-        : <DerivedHeadline label="Available dry stock" value={dry} />}
+        : <DerivedHeadline label="Available dry biochar" value={dry} />}
     >
       {segments.length > 0 && <div className="flex flex-col gap-6">
         <SegmentBar label={`Batches in ${binName}`} segments={segments} />
