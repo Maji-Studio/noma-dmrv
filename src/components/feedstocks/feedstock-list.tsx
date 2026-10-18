@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { feedstockDeepLinkHref } from "@/lib/feedstock-links";
 import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
 import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -78,7 +79,7 @@ function createColumns(
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -594,6 +595,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => feedstockDeepLinkHref(row.id, row.facilityId)}
         emptyMessage={
           <EmptyState
             padding="md"
