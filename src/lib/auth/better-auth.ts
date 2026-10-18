@@ -3,6 +3,7 @@
  * Sets up authentication with email/password and admin invite
  */
 import { createOAuthProvider } from "./oauth-provider";
+import { createOAuthCimdPlugins } from "./oauth-cimd";
 import { oauthBefore } from "./oauth-hooks";
 import { OAUTH_ENDPOINT_LIMITS } from "@/config/oauth";
 import { apiKey } from "@better-auth/api-key";
@@ -383,6 +384,7 @@ export const auth = betterAuth({
   },
   plugins: [
     ...(env.OAUTH_PROVIDER_ENABLED ? [createOAuthProvider()] : []),
+    ...createOAuthCimdPlugins(),
     apiKey({
       references: "organization",
       defaultPrefix: env.NODE_ENV === "production" ? API_KEY_LIVE_PREFIX : API_KEY_TEST_PREFIX,

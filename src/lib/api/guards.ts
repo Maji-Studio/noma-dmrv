@@ -25,12 +25,13 @@ function limitedResponse(result: RateLimitResult, info: RequestInfo): Response {
 export async function preAuthGuard(
   request: Request,
   info: RequestInfo,
+  bucket: "api" | "oauth" = "api",
 ): Promise<{ response: Response | null; result: RateLimitResult | null }> {
   if (bypassLimits()) return { response: null, result: null };
   const ip = clientIp(request.headers);
   const capacity = API_CONNECTOR_EGRESS_CIDRS.some(cidr => matchesCidr(ip, cidr)) ? API_RATE_LIMITS.connectorIp : API_RATE_LIMITS.ip;
   const result = await consumeRateLimit({
-    key: clientIpBucketKey(request.headers), capacity, refillPerMinute: capacity,
+    key: `${bucket === "oauth" ? "oauth-" : ""}${clientIpBucketKey(request.headers)}`, capacity, refillPerMinute: capacity,
   });
   return { response: result.allowed ? null : limitedResponse(result, info), result };
 }

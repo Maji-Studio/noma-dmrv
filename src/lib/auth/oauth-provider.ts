@@ -24,6 +24,9 @@ export function createOAuthProvider() {
     codeExpiresIn: OAUTH_CODE_SECONDS, accessTokenExpiresIn: OAUTH_ACCESS_TOKEN_SECONDS,
     refreshTokenExpiresIn: OAUTH_REFRESH_TOKEN_SECONDS, refreshTokenReuseInterval: OAUTH_PLUGIN_REPLAY_SECONDS,
     allowDynamicClientRegistration: false,
+    // Empty refuses proofs at runtime; discovery omits DPoP support.
+    // Request policy and resolver also refuse sender-constrained tokens.
+    dpop: { signingAlgorithms: [] },
     rateLimit: { token: OAUTH_ENDPOINT_LIMITS.token, authorize: OAUTH_ENDPOINT_LIMITS.authorize, revoke: OAUTH_ENDPOINT_LIMITS.revoke },
   };
   const plugin = oauthProvider(options);

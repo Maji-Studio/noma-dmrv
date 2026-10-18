@@ -20,6 +20,15 @@ export const OAUTH_ENDPOINT_LIMITS = {
   consent: { window: 60, max: 120 },
   continue: { window: 60, max: 120 },
 } as const;
+export const OAUTH_DISCOVERY_CACHE_CONTROL = "public, max-age=300";
+export const OAUTH_CIMD_FETCH_POLICY = {
+  minimumFetchInterval: 1,
+  maximumConcurrentFetches: 16,
+  maximumConcurrentFetchesPerOrigin: 4,
+  maximumFetchesPerMinute: 120,
+  maximumFetchesPerOriginPerMinute: 30,
+} as const;
+export const OAUTH_CIMD_MAX_CACHE_ENTRIES = 100;
 
 export function isOAuthGenerationIdle(lastUsedAt: Date, now: Date): boolean {
   return now.getTime() - lastUsedAt.getTime() >= OAUTH_IDLE_LIMIT_MS;

@@ -32,6 +32,12 @@ const AUTH_ROUTES = ["/login", "/forgot-password"];
  * `/api/mcp/anything` stay behind the session.
  */
 const MACHINE_CLIENT_ROUTES = new Set(["/api/mcp", "/api/cron/purge-api-records", "/api/cron/sweep-document-uploads"]);
+const DISCOVERY_ROUTES = new Set([
+  "/.well-known/oauth-authorization-server/api/auth",
+  "/.well-known/oauth-protected-resource",
+  "/.well-known/oauth-protected-resource/api/mcp",
+  "/.well-known/oauth-protected-resource/api/v1",
+]);
 
 /**
  * Check if path matches any of the given routes
@@ -57,7 +63,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (MACHINE_CLIENT_ROUTES.has(pathname) || pathname === "/api/v1" || pathname.startsWith("/api/v1/")) {
+  if (DISCOVERY_ROUTES.has(pathname) || MACHINE_CLIENT_ROUTES.has(pathname) || pathname === "/api/v1" || pathname.startsWith("/api/v1/")) {
     return NextResponse.next();
   }
 
