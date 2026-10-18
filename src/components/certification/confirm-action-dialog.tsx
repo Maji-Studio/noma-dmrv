@@ -75,15 +75,7 @@ export function ConfirmActionDialog({
 
         {errorMessage && <ServerError message={errorMessage} />}
 
-        <div className="flex justify-end gap-12">
-          <Button
-            size="large"
-            variant="default"
-            onClick={onClose}
-            disabled={isPending}
-          >
-            Cancel
-          </Button>
+        <div className="flex flex-wrap justify-start gap-12">
           <Button
             size="large"
             variant={isDestructive || isNeutral ? "default" : "primary"}
@@ -97,6 +89,14 @@ export function ConfirmActionDialog({
             busy={isPending}
           >
             {isPending ? (busyLabel ?? `${confirmLabel}…`) : confirmLabel}
+          </Button>
+          <Button
+            size="large"
+            variant="default"
+            onClick={onClose}
+            disabled={isPending}
+          >
+            Cancel
           </Button>
         </div>
       </div>

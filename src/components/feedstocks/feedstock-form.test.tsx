@@ -359,7 +359,7 @@ describe("FeedstockForm single-bin mass editing", () => {
   it("clears a saved override back to the derived distance with null", async () => {
     const { renderer, onSubmit } = await renderForm(overridden);
     try {
-      await act(async () => { buttonByText(renderer, "Reset override").props.onClick(); });
+      await act(async () => { buttonByText(renderer, "Reset to default").props.onClick(); });
       expect(distanceInput(renderer)).toBeUndefined();
       await submit(renderer);
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({

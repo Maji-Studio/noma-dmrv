@@ -101,7 +101,6 @@ function DistanceRefreshDialog({
       }
       confirmLabel={REFRESH_FROM_LOCATION_LABEL}
       busyLabel="Refreshing…"
-      variant="neutral"
       isPending={refresh.isPending}
       confirmDisabled={drift.hasSubmittedRemoval}
       errorMessage={error ?? undefined}

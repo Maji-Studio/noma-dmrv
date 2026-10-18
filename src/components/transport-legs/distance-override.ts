@@ -18,7 +18,8 @@ export const DISTANCE_FIELD_LABEL = "One-way distance";
 export const DISTANCE_SOURCE_FIELD_LABEL = "Distance source";
 export const DISTANCE_NOTE_FIELD_LABEL = "Distance note";
 export const OVERRIDE_BUTTON_LABEL = "Override";
-export const RESET_OVERRIDE_BUTTON_LABEL = "Reset override";
+export const RESET_TO_DEFAULT_BUTTON_LABEL = "Reset to default";
+export const RESET_TO_DEFAULT_ARIA_LABEL = "Reset to the location default";
 export const OVERRIDE_DISTANCE_REQUIRED_MESSAGE = "Enter a distance, or reset the override.";
 /** The schemas' own positive-distance message, so the field and the server agree. */
 export const OVERRIDE_DISTANCE_POSITIVE_MESSAGE = DELIVERY_DISTANCE_MESSAGE;

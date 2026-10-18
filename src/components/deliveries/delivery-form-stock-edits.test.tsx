@@ -118,7 +118,7 @@ it("clears a legacy zero distance override when saving a metadata edit", async (
 // The two-state distance field's request mapping (GLOSSARY "Distance override").
 const distanceInput = () => screen.getByRole("spinbutton", { name: /One-way distance/ }) as HTMLInputElement;
 const OVERRIDE = "Override the one-way distance";
-const RESET = "Reset override to the location default";
+const RESET = "Reset to the location default";
 const overridden = { ...delivery, distanceKmOverride: 60, distanceSource: "document", distanceNote: "Detour" } as Delivery;
 
 it("shows the derived distance read-only and omits it on save", async () => {

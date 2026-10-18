@@ -35,7 +35,7 @@ function Harness(props: Overrides) {
 
 const distance = () => screen.getByRole("spinbutton", { name: /One-way distance/ }) as HTMLInputElement;
 const OVERRIDE = "Override the one-way distance";
-const RESET = "Reset override to the location default";
+const RESET = "Reset to the location default";
 
 describe("DistanceOverrideField", () => {
   it("shows a derived distance greyed and read-only, its provenance behind the ⓘ", () => {
@@ -61,7 +61,7 @@ describe("DistanceOverrideField", () => {
     expect(onOverride).toHaveBeenCalledOnce();
   });
 
-  it("shows an override with its source and note, and Reset override beside the input", () => {
+  it("shows an override with its source and note, and Reset to default beside the input", () => {
     const onClear = vi.fn();
     render(<Harness overriding onClear={onClear} />);
     expect(distance().readOnly).toBe(false);
@@ -70,7 +70,7 @@ describe("DistanceOverrideField", () => {
     expect(screen.getByRole("combobox", { name: /Distance source/ })).toBeTruthy();
     expect(screen.getByRole("textbox", { name: /Distance note/ })).toBeTruthy();
     const reset = screen.getByRole("button", { name: RESET });
-    expect(reset.textContent).toBe("Reset override");
+    expect(reset.textContent).toBe("Reset to default");
     expect(reset.parentElement).toBe(distance().parentElement?.parentElement);
     fireEvent.click(reset);
     expect(onClear).toHaveBeenCalledOnce();

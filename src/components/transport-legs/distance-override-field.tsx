@@ -7,7 +7,7 @@
  * Derived: the location's facility distance shows greyed and read-only, with
  * an outline "Override" button beside the input that unlocks manual entry.
  * Override: an editable distance with its source and an optional note, and
- * the same button reads "Reset override" and returns to the derived
+ * the same button reads "Reset to default" and returns to the derived
  * value. Where the value comes from reads behind the label's ⓘ.
  *
  * The owning form keeps the values in React Hook Form and maps them to its
@@ -33,7 +33,8 @@ import {
   distanceProvenance,
   OVERRIDE_BUTTON_LABEL,
   overrideSourceOptions,
-  RESET_OVERRIDE_BUTTON_LABEL,
+  RESET_TO_DEFAULT_ARIA_LABEL,
+  RESET_TO_DEFAULT_BUTTON_LABEL,
 } from "./distance-override";
 
 export const LOCATION_DISTANCE_LINK_LABEL = "Add the location distance";
@@ -187,7 +188,7 @@ export function DistanceOverrideField({
       className="shrink-0"
       disabled={disabled}
       autoFocus={!overriding && focusTarget === "override"}
-      aria-label={overriding ? `${RESET_OVERRIDE_BUTTON_LABEL} to the location default` : `${OVERRIDE_BUTTON_LABEL} the ${DISTANCE_FIELD_LABEL.toLowerCase()}`}
+      aria-label={overriding ? RESET_TO_DEFAULT_ARIA_LABEL : `${OVERRIDE_BUTTON_LABEL} the ${DISTANCE_FIELD_LABEL.toLowerCase()}`}
       onClick={() => {
         if (overriding) {
           setFocusTarget("override");
@@ -198,7 +199,7 @@ export function DistanceOverrideField({
         }
       }}
     >
-      {overriding ? RESET_OVERRIDE_BUTTON_LABEL : OVERRIDE_BUTTON_LABEL}
+      {overriding ? RESET_TO_DEFAULT_BUTTON_LABEL : OVERRIDE_BUTTON_LABEL}
     </Button>
   );
 

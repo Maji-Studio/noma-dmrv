@@ -3,7 +3,7 @@
  *
  * A feedstock or delivery distance is two-state: the location's facility
  * distance, read-only, or an explicit override unlocked by the "Override"
- * button beside the input ("Reset override" returns to the location default).
+ * button beside the input ("Reset to default" returns to the location default).
  * Where the value comes from reads behind the label's ⓘ on form and read view.
  * Covers, on both forms: set an override, save, read it back as an override,
  * reset it and read the location default again. After a location edit, the
@@ -38,7 +38,7 @@ const SEEDED_CUSTOMER_KM = 25;
 const CUSTOMER_KM_AFTER_EDIT = 35;
 const OVERRIDE_NOTE = "E2E detour via the coastal road";
 const OVERRIDE_ACTION = "Override the one-way distance";
-const RESET_ACTION = "Reset override to the location default";
+const RESET_ACTION = "Reset to the location default";
 const DISTANCE_HINT = "More about One-way distance";
 
 function distanceField(dialog: Locator) {
@@ -143,7 +143,7 @@ test.describe("Distance override (#420)", () => {
       await expect(route()).toContainText(`${FEEDSTOCK_OVERRIDE_KM} km one way`, { timeout: 15000 });
       await expect(view.getByTestId("transport-distance-drift")).toHaveCount(0);
 
-      // Edit: Reset override returns the field to the derived value.
+      // Edit: Reset to default returns the field to the derived value.
       await page.getByRole("button", { name: "Edit feedstock" }).click();
       let editSheet = page.locator('[role="dialog"]');
       await expect(distanceField(editSheet)).toHaveValue(String(FEEDSTOCK_OVERRIDE_KM));
