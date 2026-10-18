@@ -6,7 +6,7 @@
  */
 import { CaretLeftIcon, CaretRightIcon, CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
-import { dayPercentOfYear, monthIndexIn, type TimelineState } from "@/lib/credit-batches/timeline";
+import { dayPercentOfYear, daysInMonths, monthIndexIn, type TimelineState } from "@/lib/credit-batches/timeline";
 import { getStatusState, type StatusStateClass } from "@/lib/status-state";
 import { cn } from "@/lib/utils";
 
@@ -24,12 +24,14 @@ export const STATE_STATUS: Record<TimelineState, string> = {
   issued: "issued",
 };
 
-const TONE_BY_STATE_CLASS: Record<StatusStateClass, { solid: string; tint: string; edge: string }> = {
-  neutral: { solid: "bg-[var(--st-off)]", tint: "bg-[var(--st-off-bg)]", edge: "border-[var(--st-off)]" },
-  "in-progress": { solid: "bg-[var(--st-run)]", tint: "bg-[var(--st-run-bg)]", edge: "border-[var(--st-run)]" },
-  success: { solid: "bg-[var(--st-ok)]", tint: "bg-[var(--st-ok-bg)]", edge: "border-[var(--st-ok)]" },
-  warning: { solid: "bg-[var(--st-wait)]", tint: "bg-[var(--st-wait-bg)]", edge: "border-[var(--st-wait)]" },
-  error: { solid: "bg-[var(--st-bad)]", tint: "bg-[var(--st-bad-bg)]", edge: "border-[var(--st-bad)]" },
+type Tone = { solid: string; tint: string; edge: string; text: string };
+
+const TONE_BY_STATE_CLASS: Record<StatusStateClass, Tone> = {
+  neutral: { solid: "bg-[var(--st-off)]", tint: "bg-[var(--st-off-bg)]", edge: "border-[var(--st-off)]", text: "text-[var(--st-off)]" },
+  "in-progress": { solid: "bg-[var(--st-run)]", tint: "bg-[var(--st-run-bg)]", edge: "border-[var(--st-run)]", text: "text-[var(--st-run)]" },
+  success: { solid: "bg-[var(--st-ok)]", tint: "bg-[var(--st-ok-bg)]", edge: "border-[var(--st-ok)]", text: "text-[var(--st-ok)]" },
+  warning: { solid: "bg-[var(--st-wait)]", tint: "bg-[var(--st-wait-bg)]", edge: "border-[var(--st-wait)]", text: "text-[var(--st-wait)]" },
+  error: { solid: "bg-[var(--st-bad)]", tint: "bg-[var(--st-bad-bg)]", edge: "border-[var(--st-bad)]", text: "text-[var(--st-bad)]" },
 };
 
 const STATE_TITLE: Record<TimelineState, string> = {
@@ -40,7 +42,10 @@ const STATE_TITLE: Record<TimelineState, string> = {
 };
 
 /** Solid, tint and edge per state, for bars, hover cards and the legend. */
-export const STATE_TONE: Record<TimelineState, { solid: string; tint: string; edge: string; title: string }> = {
+/** The tone of a bar whose state has not loaded. */
+export const UNKNOWN_TONE = TONE_BY_STATE_CLASS[getStatusState("unknown")];
+
+export const STATE_TONE: Record<TimelineState, Tone & { title: string }> = {
   blocking: { ...TONE_BY_STATE_CLASS[getStatusState(STATE_STATUS.blocking)], title: STATE_TITLE.blocking },
   ready: { ...TONE_BY_STATE_CLASS[getStatusState(STATE_STATUS.ready)], title: STATE_TITLE.ready },
   submitted: { ...TONE_BY_STATE_CLASS[getStatusState(STATE_STATUS.submitted)], title: STATE_TITLE.submitted },
@@ -50,7 +55,7 @@ export const STATE_TONE: Record<TimelineState, { solid: string; tint: string; ed
 /** Ready and Issued share the success tone, so Issued also carries a check mark. */
 export function StateMark({ state, size }: { state: TimelineState; size: number }) {
   return state === "issued" ? (
-    <CheckCircleIcon size={size} weight="fill" className="shrink-0 text-[var(--st-ok)]" aria-hidden />
+    <CheckCircleIcon size={size} weight="fill" className={cn("shrink-0", STATE_TONE.issued.text)} aria-hidden />
   ) : (
     <span className={cn("shrink-0 rounded-full", STATE_TONE[state].solid)} style={{ width: size, height: size }} aria-hidden />
   );
@@ -106,11 +111,16 @@ export function StateLegend() {
   );
 }
 
+/** Month columns weighted by their days, the same day mapping bars, slots and the Today line use. */
+function monthColumns(year: number): string {
+  return daysInMonths(year).map((days) => `${days}fr`).join(" ");
+}
+
 /** The month labels over a track; the current month is set in medium weight. */
 export function MonthAxis({ year, today, className }: { year: number; today: string; className?: string }) {
   const currentMonth = monthIndexIn(year, today);
   return (
-    <div className={cn("grid grid-cols-12", className)} aria-hidden>
+    <div className={cn("grid", className)} style={{ gridTemplateColumns: monthColumns(year) }} aria-hidden>
       {MONTH_LABELS.map((label, index) => (
         <span key={label} className={cn("pl-6 body-caption", index === currentMonth ? "font-medium text-[var(--color-text-primary)]" : MUTED)}>
           {label}
@@ -124,7 +134,7 @@ export function MonthAxis({ year, today, className }: { year: number; today: str
 export function MonthGrid({ year, today }: { year: number; today: string }) {
   const currentMonth = monthIndexIn(year, today);
   return (
-    <div className="absolute inset-0 grid grid-cols-12" aria-hidden>
+    <div className="absolute inset-0 grid" style={{ gridTemplateColumns: monthColumns(year) }} aria-hidden>
       {MONTH_LABELS.map((label, index) => (
         <span key={label} className={cn("border-l border-[var(--color-border-tertiary)]", index === currentMonth && "bg-[var(--color-surface-light)]")} />
       ))}

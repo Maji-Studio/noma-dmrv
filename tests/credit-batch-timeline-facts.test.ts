@@ -1,7 +1,15 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/auth/server", async (original) => ({
+  ...(await original<typeof import("@/lib/auth/server")>()),
+  requireOrgContext: vi.fn(),
+}));
+
 import { db } from "@/db";
 import { applications, certifierRemovals, creditBatchApplications } from "@/db/schema";
 import { eq, inArray } from "drizzle-orm";
+import { requireOrgContext } from "@/lib/auth/server";
+import { loadCreditBatchTimelineFactsFn } from "@/fn/credit-batch-timeline-facts";
 import { listCreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
 import { createLineageFixture, cleanupLineageFixture } from "./helpers/certification-lineage-fixture";
 import {
@@ -11,6 +19,9 @@ import {
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 beforeAll(() => ensureTestOrg());
+beforeEach(() => {
+  vi.mocked(requireOrgContext).mockResolvedValue(makeTestOrgContext());
+});
 
 describe("credit batch timeline facts", () => {
   it("batches produced, applied and not-in-Removal dry mass with Removal codes, scoped to the organization", async () => {
@@ -56,6 +67,26 @@ describe("credit batch timeline facts", () => {
         await deleteOutputApplicationFixtures(db, inArray(applications.id, extraIds));
       }
       await cleanupLineageFixture(fixture);
+    }
+  });
+});
+
+describe("credit batch timeline facts action", () => {
+  it("refuses a batch that belongs to another facility of the same organization", async () => {
+    const facilityA = await createLineageFixture("none");
+    const facilityB = await createLineageFixture("none");
+    try {
+      expect(facilityA.facilityId).not.toBe(facilityB.facilityId);
+      const refused = await loadCreditBatchTimelineFactsFn(facilityA.facilityId, [facilityB.batchId]);
+      expect(refused.success).toBe(false);
+      expect("data" in refused ? refused.data : undefined).toBeUndefined();
+
+      const allowed = await loadCreditBatchTimelineFactsFn(facilityA.facilityId, [facilityA.batchId]);
+      expect(allowed.success).toBe(true);
+      expect(allowed.success && Object.keys(allowed.data)).toEqual([facilityA.batchId]);
+    } finally {
+      await cleanupLineageFixture(facilityB);
+      await cleanupLineageFixture(facilityA);
     }
   });
 });

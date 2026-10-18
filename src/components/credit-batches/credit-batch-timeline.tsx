@@ -29,6 +29,7 @@ import {
   type TimelineState,
 } from "@/lib/credit-batches/timeline";
 import { formatDateRange } from "@/lib/format-utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { cn } from "@/lib/utils";
 import { BatchHoverCard } from "./credit-batch-timeline-hover-card";
 import {
@@ -39,6 +40,7 @@ import {
   StateLegend,
   StateMark,
   TodayLine,
+  UNKNOWN_TONE,
   YearSwitcher,
 } from "./credit-batch-timeline-parts";
 
@@ -72,7 +74,7 @@ interface BatchView {
 
 /** What the bar's label says while its state is not known. */
 function pendingStateLabel(readinessFailed: boolean): string {
-  return readinessFailed ? "Readiness not available" : "Loading";
+  return readinessFailed ? MISSING_VALUE.notAvailable : "Loading";
 }
 
 /** Opens a scroll box with today in the middle, once per year shown. */
@@ -102,7 +104,7 @@ function Bar({ batch, spot, view }: { batch: TimelineBatch; spot: BarPlacement; 
         className={cn(
           "absolute inset-0 flex items-center gap-4 overflow-hidden border-l-[3px] pr-4 group-hover:brightness-95",
           narrow ? "justify-center pl-0" : "pl-6",
-          tone ? [tone.tint, tone.edge] : "border-[var(--st-off)] bg-[var(--color-surface-light)]",
+          tone ? [tone.tint, tone.edge] : [UNKNOWN_TONE.tint, UNKNOWN_TONE.edge],
         )}
       >
         {narrow ? (
@@ -124,7 +126,7 @@ function Bar({ batch, spot, view }: { batch: TimelineBatch; spot: BarPlacement; 
       {/* The count sits on the corner so the code keeps the bar's width. */}
       {view.blockingCount > 0 && (
         <span
-          className="absolute -top-8 right-0 z-10 inline-flex min-w-20 items-center justify-center rounded-full bg-[var(--st-bad)] px-6 body-caption font-medium tabular-nums text-white"
+          className={cn("absolute -top-8 right-0 z-10 inline-flex min-w-20 items-center justify-center rounded-full px-6 body-caption font-medium tabular-nums text-white", STATE_TONE.blocking.solid)}
           role="img"
           aria-label={`Missing data ${view.blockingCount}`}
         >
@@ -145,9 +147,9 @@ function NewBatchSlot({ slot, spot, onPick }: { slot: DateWindow; spot: BarPlace
           type="button"
           aria-label={label}
           onClick={onPick}
-          className="group absolute inset-x-[2px] inset-y-0 flex items-center justify-center text-[var(--color-text-tertiary)] outline-offset-2 hover:text-[var(--color-text-primary)] focus-visible:text-[var(--color-text-primary)]"
+          className="group absolute inset-0 flex items-center justify-center text-[var(--color-text-tertiary)] outline-offset-2 hover:text-[var(--color-text-primary)] focus-visible:text-[var(--color-text-primary)]"
         >
-          <span className="absolute inset-x-0 inset-y-10 border border-dashed border-[var(--color-border-secondary)] group-hover:border-[var(--ink)] group-hover:bg-[var(--color-surface-medium)] group-focus-visible:border-[var(--ink)]" aria-hidden />
+          <span className="absolute inset-x-[2px] inset-y-10 border border-dashed border-[var(--color-border-secondary)] group-hover:border-[var(--ink)] group-hover:bg-[var(--color-surface-medium)] group-focus-visible:border-[var(--ink)]" aria-hidden />
           <PlusIcon size={16} className="relative" aria-hidden />
         </button>
       </Tooltip>

@@ -95,6 +95,14 @@ export function defaultNewBatchWindow(batches: readonly DateWindow[], today: str
   throw new Error("No free calendar month found");
 }
 
+/** Days in each month of `year`: the weights of the month columns, so they share the day mapping of `placeOnYear`. */
+export function daysInMonths(year: number): number[] {
+  return Array.from({ length: 12 }, (_, month) => {
+    const first = Date.UTC(year, month, 1);
+    return (Date.UTC(year, month + 1, 1) - first) / MS_PER_DAY;
+  });
+}
+
 export interface BarPlacement {
   /** Percent of the year track. */
   left: number;

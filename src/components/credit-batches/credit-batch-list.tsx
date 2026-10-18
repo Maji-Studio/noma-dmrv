@@ -63,7 +63,7 @@ import {
   useDeleteCreditBatch,
 } from "@/hooks/use-credit-batches";
 import { formatDateRange } from "@/lib/format-utils";
-import { formatLocalDate } from "@/lib/date-utils";
+import { formatFacilityDate } from "@/lib/date-utils";
 import {
   defaultNewBatchWindow,
   monthWindow,
@@ -77,7 +77,7 @@ import {
 import { useCreditBatchHealthSummaries } from "@/hooks/use-certification";
 import type { CreditBatchFormData } from "@/schemas/credit-batches";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useListPagination } from "@/hooks/use-list-pagination";
 import { SelectFacilityEmptyState } from "@/components/navigation";
@@ -132,8 +132,6 @@ export function CreditBatchList({
   initialView?: CreditBatchListView;
 }) {
   const [view, setView] = useState<CreditBatchListView>(initialView);
-  // The day the timeline marks and "New credit batch" proposes windows from.
-  const [today] = useState(() => formatLocalDate(new Date()));
   const [createDefaults, setCreateDefaults] = useState<NewBatchRequest | null>(null);
   // Filter & pagination state
   const [searchQuery, setSearchQuery] = useState("");
@@ -168,6 +166,9 @@ export function CreditBatchList({
   const createIntent = useOpenCreateIntent({ initialOpen: initialCreate });
 
   const { facilityId: contextFacilityId } = useFacilityContext();
+  // The facility's day: what the timeline marks and "New credit batch" proposes windows from.
+  const { timeZone } = useFacilityClock(contextFacilityId);
+  const today = formatFacilityDate(new Date(), timeZone);
   const { currentPage, pageSize, setCurrentPage, setPageSize } =
     useListPagination(contextFacilityId);
 

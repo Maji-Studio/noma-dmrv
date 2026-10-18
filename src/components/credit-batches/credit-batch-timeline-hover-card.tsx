@@ -86,8 +86,8 @@ function HoverCardBody({ batch }: { batch: HoverCardBatch }) {
         </div>
       </div>
       {batch.blockingCount > 0 && (
-        <div className="flex items-center gap-8 bg-[var(--st-bad-bg)] px-16 py-8 body-small font-medium">
-          <WarningCircleIcon size={16} weight="fill" className="shrink-0 text-[var(--st-bad)]" aria-hidden />
+        <div className={cn("flex items-center gap-8 px-16 py-8 body-small font-medium", STATE_TONE.blocking.tint)}>
+          <WarningCircleIcon size={16} weight="fill" className={cn("shrink-0", STATE_TONE.blocking.text)} aria-hidden />
           {`Missing data ${batch.blockingCount}`}
         </div>
       )}

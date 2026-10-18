@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   dayPercentOfYear,
+  daysInMonths,
   defaultNewBatchWindow,
   deriveTimelineState,
   groupByFeedstock,
@@ -92,6 +93,18 @@ describe("placeOnYear", () => {
   });
   it("puts a day on the year track", () => {
     expect(dayPercentOfYear("2026-07-02")).toBeCloseTo(50, 0);
+  });
+});
+
+describe("daysInMonths", () => {
+  it("puts 1 Mar where the day mapping puts it, in a normal and a leap year", () => {
+    for (const [year, daysBeforeMarch] of [[2026, 59], [2028, 60]] as const) {
+      const days = daysInMonths(year);
+      const total = days.reduce((sum, count) => sum + count, 0);
+      const marchColumnStart = ((days[0] + days[1]) / total) * 100;
+      expect(days[0] + days[1]).toBe(daysBeforeMarch);
+      expect(marchColumnStart).toBeCloseTo(dayPercentOfYear(`${year}-03-01`), 8);
+    }
   });
 });
 
