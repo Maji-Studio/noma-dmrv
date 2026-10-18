@@ -8,7 +8,7 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { DRY_BIOCHAR_LABEL, ingredientSolidsLabel } from "@/components/biochar-products/product-composition-components";
-import { ESTIMATED_WATER_LABEL, INGREDIENT_SOLIDS_LABEL, mixPileName } from "@/lib/output-stock/labels";
+import { ESTIMATED_WATER_LABEL, INGREDIENT_SOLIDS_LABEL, mixPileName, WET_STOCK_DEFINITION } from "@/lib/output-stock/labels";
 import { OutputStockHistory } from "./output-stock-history";
 import { StockLevelChart } from "./stock-level-chart";
 import { buildStockLevelSeries } from "./stock-level-series";
@@ -19,8 +19,8 @@ import { contentsRows } from "./sub-bin-card";
 import type { OutputSubBin } from "@/types/output-stock";
 import { formatFacilityDateTime } from "@/lib/format-utils";
 
-const SPLIT_HINT = "Wet stock is an estimate: the wet mass added less the wet mass taken out, at the moisture last recorded for each sub-bin. Draws and lost mass leave that moisture as it was, so wet stock reads high once the stock dries. Bays are drawn by wet mass, the hatched top being the estimated water, in the order a draw takes them.";
-const MIX_HINT = "Wet stock is an estimate: the wet mass added less the wet mass taken out. Each batch added brings its own wet mass and moisture. Draws and lost mass leave the pile's moisture as it was, so wet stock reads high once the stock dries. The hatched water sits on top of the dry batches.";
+const SPLIT_HINT = `${WET_STOCK_DEFINITION} Each bay is a sub-bin, drawn by wet mass with its water hatched on top, in the order draws take them.`;
+const MIX_HINT = `${WET_STOCK_DEFINITION} The water is hatched on top of the dry batches.`;
 const SUB_BINS_LABEL = "Sub-bins, next out first";
 const PERCENT = 100;
 
