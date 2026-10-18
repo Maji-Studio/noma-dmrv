@@ -109,7 +109,7 @@ describe("createCreditBatchFn", () => {
       .toMatchObject({
         success: false,
         code: "validation_failed",
-        issues: [{ path: ["endDate"], message: "A credit batch may span at most one month (one calendar month; noma rule)." }],
+        issues: [{ path: ["endDate"], message: "Choose an end date on or before Jan 31, 2026. Isometric credit batches must cover less than one month." }],
       });
     expect(mocks.createCreditBatch).not.toHaveBeenCalled();
   });

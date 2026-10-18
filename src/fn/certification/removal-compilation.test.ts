@@ -18,6 +18,9 @@ vi.mock("../with-action", async () => {
 vi.mock("@/data-access/utils", () => ({
   requireOrgFacility: vi.fn(),
 }));
+vi.mock("@/data-access/certifier-production-batches", () => ({
+  getProductionBatchRegistryInputs: async () => [],
+}));
 vi.mock("@/data-access/certifier-removals", () => ({
   getCertifierRemovalById: vi.fn(),
 }));
