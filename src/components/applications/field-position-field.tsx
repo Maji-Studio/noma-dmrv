@@ -1,6 +1,8 @@
 "use client";
 
+import { FormError } from "@/components/forms/form-error";
 import { FormField } from "@/components/forms/form-field";
+import { RequiredMarker } from "@/components/forms/required-marker";
 import { PositionPicker, type PositionValue } from "@/components/forms/position-picker";
 import { SegmentedControl } from "@/components/forms/segmented-control";
 
@@ -107,6 +109,7 @@ export function FieldPositionField({
           <div className="flex flex-col gap-4">
             <span className="body-small text-[var(--color-text-secondary)]">
               Customer location
+              {required && <RequiredMarker />}
             </span>
             <span className="body-small font-medium text-[var(--color-text-primary)]">
               {derived
@@ -122,6 +125,7 @@ export function FieldPositionField({
                   : "Choose a delivery in step 1 and the position follows its destination."}
               </span>
             )}
+            <FormError id="derivedPosition-error" message={latitudeError ?? longitudeError} />
           </div>
         )}
       </div>

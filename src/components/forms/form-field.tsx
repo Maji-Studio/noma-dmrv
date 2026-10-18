@@ -5,6 +5,7 @@
 
 import { cloneElement, isValidElement, type CSSProperties, type ReactNode } from "react";
 import { FormError } from "./form-error";
+import { RequiredMarker } from "./required-marker";
 import { InfoHint } from "@/components/ui/tooltip";
 import {
   CertificationFieldTag,
@@ -205,12 +206,7 @@ export function FormField({
       >
         {label}
         {(unit ?? labelUnit) && <span className="sr-only"> ({unit ?? labelUnit})</span>}
-        {required && (
-          <>
-            <span className="text-[var(--color-signal-red)] ml-2" aria-hidden="true">*</span>
-            <span className="sr-only">Required</span>
-          </>
-        )}
+        {required && <RequiredMarker />}
       </label>
       {certifyRequired && (
         // The 24px row centres the CERT chip on the ⓘ's line.
