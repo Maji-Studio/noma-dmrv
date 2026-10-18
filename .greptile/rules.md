@@ -3,7 +3,6 @@
 Greptile is the repository-wide correctness reviewer for noma-dmrv. CodeRabbit
 and CI remain responsible for general review summaries, formatting, syntax,
 linting, dependency advice, and routine style feedback.
-The UI action-order rule below extends this scope to dialog and form workflow semantics.
 
 ## How to investigate a change
 
@@ -65,10 +64,7 @@ Pay special attention to:
 
 ## UI action order
 
-- Dialog and form footers put actions bottom left, primary action first, then
-  secondary. A refused delete is a dialog whose first action is the alternative,
-  for example "Archive instead". Apply this rule to UI workflows, including
-  shared footer primitives; do not expand it into general visual style review.
+Dialog and form footers follow docs/design-system.md (Modal: actions bottom left, primary first) and docs/forms.md (FormActions); flag a footer that breaks that order.
 
 ## Comment quality
 

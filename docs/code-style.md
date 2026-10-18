@@ -105,6 +105,6 @@ copy-pasteable walkthrough is [../TEMPLATE_USAGE.md](../TEMPLATE_USAGE.md) and t
 Design gates in `pnpm verify:static`: `pnpm check:radius` allows only `rounded-none`,
 `rounded-full`, `rounded-4` and `rounded-8` (including side/corner utilities).
 `pnpm check:shadow` allows only `shadow-none`, `pnpm check:raw-button` keeps raw JSX buttons inside UI primitives,
-and `pnpm check:formatting` keeps locale formatting out of components and pages.
+and `pnpm check:formatting` keeps local date and time formatting out of components and pages.
 The four rules share `scripts/check-design-rules.ts`; existing refactoring
 exceptions there pin the file, utility/API and occurrence count with a reason.

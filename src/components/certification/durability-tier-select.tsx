@@ -124,7 +124,7 @@ export function DurabilityTierSelect({
                   {tier.title}
                 </span>
                 {!tier.available && (
-                  <span className="body-small rounded-2 bg-[var(--color-surface-medium)] px-6 py-1 text-[var(--color-text-tertiary)]">
+                  <span className="body-small rounded-[2px] bg-[var(--color-surface-medium)] px-6 py-1 text-[var(--color-text-tertiary)]">
                     Available later
                   </span>
                 )}

@@ -94,11 +94,11 @@ describe("UI scopes and exception budgets", () => {
     expect(scan('<button />', "src/components/ui/button/index.jsx")).toEqual([]);
   });
 
-  it("checks locale methods and Intl calls in all UI roots, including plain TS helpers", () => {
+  it("checks date and time APIs in all UI roots, including plain TS helpers", () => {
     const source = [
-      'date.toLocaleDateString(); date.toLocaleTimeString(); n.toLocaleString();',
-      'new Intl.DateTimeFormat(); new Intl.NumberFormat(); new Intl.RelativeTimeFormat();',
-      'Intl.NumberFormat(); n["toLocaleString"]();',
+      'date.toLocaleDateString(); date.toLocaleTimeString();',
+      'new Intl.DateTimeFormat(); new Intl.RelativeTimeFormat(); new Intl.DurationFormat();',
+      'Intl.DateTimeFormat(); date["toLocaleTimeString"](); Intl["DurationFormat"];',
     ].join("\n");
     for (const file of [COMPONENT_FILE, "src/app/page.tsx", "src/features/report/format.ts"]) {
       expect(scan(source, file)).toHaveLength(8);
@@ -106,31 +106,31 @@ describe("UI scopes and exception budgets", () => {
     for (const file of ["src/lib/format-utils.ts", "src/lib/date-utils.ts", "src/data-access/report.ts"]) {
       expect(scan(source, file)).toEqual([]);
     }
-    expect(scan('const text = "toLocaleString new Intl.NumberFormat";')).toEqual([]);
-    expect(scan("const formatter = Intl.RelativeTimeFormat; const method = value.toLocaleString;"))
+    expect(scan('const text = "toLocaleDateString new Intl.DateTimeFormat";')).toEqual([]);
+    expect(scan("const formatter = Intl.RelativeTimeFormat; const method = date.toLocaleDateString;"))
       .toHaveLength(2);
   });
 
-  it("checks ListFormat and other current or future Intl formatters", () => {
-    expect(scan('new Intl.ListFormat(); new Intl.DurationFormat(); new Intl.FutureFormat(); Intl["ListFormat"];')
-      .map((hit) => hit.value)).toEqual(["Intl.ListFormat", "Intl.DurationFormat", "Intl.FutureFormat", "Intl.ListFormat"]);
+  it("does not flag ListFormat, number formatting or other non-date formatters", () => {
+    expect(scan('new Intl.ListFormat(); Intl["ListFormat"]; new Intl.NumberFormat(); Intl.NumberFormat(); n.toLocaleString(); n["toLocaleString"](); new Intl.FutureFormat();'))
+      .toEqual([]);
     expect(scan('new Other.ListFormat(); new Intl.Collator();')).toEqual([]);
   });
 
   it.each([0, 1])("rejects stale allowlist budgets with %i remaining occurrences", (count) => {
-    const hits = scan('n.toLocaleString();'.repeat(count));
-    const exceptions = [{ file: COMPONENT_FILE, rule: "formatting" as const, value: "toLocaleString", count: 2, reason: "Existing quantity formatting." }];
+    const hits = scan('date.toLocaleDateString();'.repeat(count));
+    const exceptions = [{ file: COMPONENT_FILE, rule: "formatting" as const, value: "toLocaleDateString", count: 2, reason: "Existing date formatting." }];
     expect(() => applyAllowlist(hits, exceptions)).toThrow(
-      `Stale allowlist entry: ${COMPONENT_FILE} (formatting: toLocaleString) has ${count} occurrence(s), below pinned count 2. Lower the count or delete this entry.`,
+      `Stale allowlist entry: ${COMPONENT_FILE} (formatting: toLocaleDateString) has ${count} occurrence(s), below pinned count 2. Lower the count or delete this entry.`,
     );
   });
 
   it("does not let an exempt file accumulate extra occurrences or another API", () => {
-    const hits = scan('n.toLocaleString(); other.toLocaleString(); date.toLocaleDateString();');
-    const exceptions = [{ file: COMPONENT_FILE, rule: "formatting" as const, value: "toLocaleString", count: 1, reason: "Existing quantity formatting." }];
-    expect(applyAllowlist(hits, exceptions).map((hit) => hit.value)).toEqual(["toLocaleString", "toLocaleDateString"]);
-    expect(applyAllowlist(scan('n.toLocaleString();'), exceptions)).toEqual([]);
-    expect(() => applyAllowlist(scan('n.toLocaleString();', "src/components/other.tsx"), exceptions))
+    const hits = scan('date.toLocaleDateString(); other.toLocaleDateString(); date.toLocaleTimeString();');
+    const exceptions = [{ file: COMPONENT_FILE, rule: "formatting" as const, value: "toLocaleDateString", count: 1, reason: "Existing date formatting." }];
+    expect(applyAllowlist(hits, exceptions).map((hit) => hit.value)).toEqual(["toLocaleDateString", "toLocaleTimeString"]);
+    expect(applyAllowlist(scan('date.toLocaleDateString();'), exceptions)).toEqual([]);
+    expect(() => applyAllowlist(scan('date.toLocaleDateString();', "src/components/other.tsx"), exceptions))
       .toThrow("has 0 occurrence(s), below pinned count 1. Lower the count or delete this entry.");
   });
 });

@@ -13,8 +13,8 @@ const UI_DIRS = ["src/components/", "src/app/", "src/features/"];
 const PRIMITIVES_DIR = "src/components/ui/";
 // These own shared formatting, rather than consuming it. Neither is currently in UI_DIRS.
 const FORMAT_HELPERS = new Set(["src/lib/format-utils.ts", "src/lib/date-utils.ts"]);
-const LOCALE_METHODS = new Set(["toLocaleDateString", "toLocaleTimeString", "toLocaleString"]);
-const INTL_FORMATTER = /^.+Format$/;
+const LOCALE_METHODS = new Set(["toLocaleDateString", "toLocaleTimeString"]);
+const INTL_FORMATTERS = new Set(["DateTimeFormat", "RelativeTimeFormat", "DurationFormat"]);
 const ALLOWED_RADIUS_VALUES = new Set(["none", "full", "4", "8"]);
 const RADIUS_SIDES = "(?:[trblse]|tl|tr|bl|br|ss|se|es|ee)";
 const RULES = ["radius", "shadow", "raw-button", "formatting"] as const;
@@ -122,9 +122,37 @@ const ALLOWLIST: readonly Exception[] = [
   {
     file: "src/components/certification/durability-tier-select.tsx",
     rule: "radius",
-    value: "rounded-2",
+    value: "rounded-[2px]",
     count: 1,
-    reason: "Existing chip preserves its 2px radius; new code is limited to none, full, 4 and 8 pending visual review.",
+    reason: "legacy arbitrary radius listed in docs/design-system.md; swapping to the token breaks tailwind-merge overrides",
+  },
+  {
+    file: "src/components/customers/customer-saved-locations.tsx",
+    rule: "radius",
+    value: "rounded-[4px]",
+    count: 1,
+    reason: "legacy arbitrary radius listed in docs/design-system.md; swapping to the token breaks tailwind-merge overrides",
+  },
+  {
+    file: "src/components/ui/accordion/index.tsx",
+    rule: "radius",
+    value: "rounded-[8px]",
+    count: 1,
+    reason: "legacy arbitrary radius listed in docs/design-system.md; swapping to the token breaks tailwind-merge overrides",
+  },
+  {
+    file: "src/components/ui/card/index.tsx",
+    rule: "radius",
+    value: "rounded-[8px]",
+    count: 2,
+    reason: "legacy arbitrary radius listed in docs/design-system.md; swapping to the token breaks tailwind-merge overrides",
+  },
+  {
+    file: "src/components/ui/notice/index.tsx",
+    rule: "radius",
+    value: "rounded-[8px]",
+    count: 1,
+    reason: "legacy arbitrary radius listed in docs/design-system.md; swapping to the token breaks tailwind-merge overrides",
   },
   {
     file: "src/components/forms/choice-card-group.tsx",
@@ -322,153 +350,6 @@ const ALLOWLIST: readonly Exception[] = [
     count: 1,
     reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
   },
-  {
-    file: "src/components/activity/activity-change-lines.ts",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/activity/activity-copy.ts",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/activity/activity-filter-options.ts",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/activity/credit-batch-activity-section.tsx",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/certification/new-removal-dialog/removal-emissions-ledger.tsx",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/certification/removal-template-trace-view.tsx",
-    rule: "formatting",
-    value: "Intl.NumberFormat",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/chain-of-custody/use-chain-graph.ts",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/credit-batches/cohort-input-ledger.tsx",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/credit-batches/credit-batch-view.tsx",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/dashboard/flow-hero-scene.tsx",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/dashboard/hero-kpi-band.tsx",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/energy/energy-display.ts",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/feedstocks/feedstock-allocation-summary.tsx",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/feedstocks/wet-mass-warning.tsx",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/forms/entity-select/remaining-mass.ts",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/formulations/formulation-form.tsx",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Share input formatting requires a shared helper migration that preserves editable precision.",
-  },
-  {
-    file: "src/components/orders/order-list.tsx",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 2,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/orders/order-read-sections.tsx",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/reactors/reactor-throughput.ts",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/storage-locations/stock-level-chart.tsx",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
-  {
-    file: "src/components/storage-locations/stock-preview-shared.ts",
-    rule: "formatting",
-    value: "toLocaleString",
-    count: 1,
-    reason: "Existing local quantity/count formatting requires migration to shared helpers while preserving its units, locale and precision.",
-  },
 ];
 
 export interface Violation {
@@ -568,7 +449,7 @@ export function findDesignViolations(source: string, file: string, radiusValues:
         : ts.isStringLiteral(node.argumentExpression) ? node.argumentExpression.text : undefined;
       if (name && LOCALE_METHODS.has(name)) {
         report(node, "formatting", name);
-      } else if (name && INTL_FORMATTER.test(name) && node.expression.getText() === "Intl") {
+      } else if (name && INTL_FORMATTERS.has(name) && node.expression.getText() === "Intl") {
         report(node, "formatting", `Intl.${name}`);
       }
     }

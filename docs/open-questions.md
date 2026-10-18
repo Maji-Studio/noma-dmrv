@@ -66,6 +66,15 @@ Deferred work lives here, never as a `TODO` in code.
   the read) or drop the table with a migration. Until then the table, its test
   cleanup in `tests/e2e/global-teardown.ts` and the dev-seed delete stay.
 
+## Design-check allowlist backlog (`ui/design-checks`)
+
+`scripts/check-design-rules.ts:ALLOWLIST` pins the migration backlog. The six
+legacy arbitrary radii (five entries) must stay until token replacements preserve
+tailwind-merge overrides.
+
+- Shadow removal: 15 entries, a visual change that needs review.
+- Raw `<button>` to `Button` migration: 37 occurrences across 26 entries.
+
 ## DataTable mobile cards (`ui/data-table`) - **deferred**
 
 - `src/components/ui/data-table/index.tsx:DataTable` renders each mobile card as
