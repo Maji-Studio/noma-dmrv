@@ -263,7 +263,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
       PRODUCTION_RUN_DATE,
     );
 
-    await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
+    await page.goto(`/credit-batches?facility=${seededData.facility.id}&view=list`);
     await page.waitForLoadState("networkidle");
 
     await page.click('button:has-text("New credit batch")');

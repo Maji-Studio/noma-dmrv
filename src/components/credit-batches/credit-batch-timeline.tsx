@@ -37,6 +37,7 @@ import {
   MUTED,
   STATE_TONE,
   StateLegend,
+  StateMark,
   TodayLine,
   YearSwitcher,
 } from "./credit-batch-timeline-parts";
@@ -44,6 +45,11 @@ import {
 /** Below this share of the year (about 18 days) a bar has no room for text. */
 const NARROW_PCT = 5;
 const MIN_TRACK_PX = 880;
+/** The label column beside the track from `sm` up. */
+const LABEL_COL_PX = 128;
+/** The smallest hit width of a (+) slot (docs/design-system.md: 44px touch target); narrower gaps get no slot. */
+const BAR_MARK_PX = 12;
+const MIN_SLOT_PX = 44;
 const UNNAMED_FEEDSTOCK = "Feedstock not set";
 
 export interface NewBatchRequest extends DateWindow {
@@ -104,6 +110,7 @@ function Bar({ batch, spot, view }: { batch: TimelineBatch; spot: BarPlacement; 
           <>
             {spot.cutStart && <CutMark side="start" />}
             {/* Every bar is a credit batch, so the shared "CB-" prefix is dropped; the control's label carries the full code. */}
+            {view.state === "issued" && <StateMark state="issued" size={BAR_MARK_PX} />}
             <span className="truncate body-caption font-medium tabular-nums">{batch.code.replace(/^CB-/, "")}</span>
             {spot.cutEnd && (
               <span className="ml-auto">
@@ -132,13 +139,15 @@ function NewBatchSlot({ slot, spot, onPick }: { slot: DateWindow; spot: BarPlace
   return (
     <li className="absolute inset-y-0" style={{ left: `${spot.left}%`, width: `${spot.width}%` }}>
       <Tooltip content={label}>
+        {/* The button fills the whole 56px track row (the 44px touch target); the dashed box is its visible part. */}
         <button
           type="button"
           aria-label={label}
           onClick={onPick}
-          className="absolute inset-x-[2px] inset-y-10 flex items-center justify-center border border-dashed border-[var(--color-border-secondary)] text-[var(--color-text-tertiary)] outline-offset-2 hover:border-[var(--ink)] hover:bg-[var(--color-surface-medium)] hover:text-[var(--color-text-primary)] focus-visible:border-[var(--ink)] focus-visible:text-[var(--color-text-primary)]"
+          className="group absolute inset-x-[2px] inset-y-0 flex items-center justify-center text-[var(--color-text-tertiary)] outline-offset-2 hover:text-[var(--color-text-primary)] focus-visible:text-[var(--color-text-primary)]"
         >
-          <PlusIcon size={16} aria-hidden />
+          <span className="absolute inset-x-0 inset-y-10 border border-dashed border-[var(--color-border-secondary)] group-hover:border-[var(--ink)] group-hover:bg-[var(--color-surface-medium)] group-focus-visible:border-[var(--ink)]" aria-hidden />
+          <PlusIcon size={16} className="relative" aria-hidden />
         </button>
       </Tooltip>
     </li>
@@ -160,6 +169,14 @@ export function CreditBatchTimeline({
   onNewBatch: (request: NewBatchRequest) => void;
 }) {
   const [year, setYear] = useState(() => Number(today.slice(0, 4)));
+  // The rendered track width, so a gap too narrow for a touch target gets no (+) slot.
+  const [trackPx, setTrackPx] = useState(MIN_TRACK_PX - LABEL_COL_PX);
+  const observeTrack = (track: HTMLElement | null) => {
+    if (!track) return;
+    const observer = new ResizeObserver(([entry]) => setTrackPx(entry.contentRect.width));
+    observer.observe(track);
+    return () => observer.disconnect();
+  };
   const timelineBatches: TimelineBatch[] = batches.map((batch) => ({
     id: batch.id,
     code: batch.code,
@@ -253,7 +270,7 @@ export function CreditBatchTimeline({
                 <div className="sticky left-0 z-30 flex w-fit min-w-0 flex-col justify-center gap-2 bg-[var(--paper)] pt-10 pr-12 sm:w-auto sm:py-10">
                   <span className="body-small font-medium">{row.feedstockName}</span>
                 </div>
-                <ul data-track className="relative h-[56px]" aria-label={`${row.feedstockName} credit batches in ${year}`}>
+                <ul data-track ref={rowIndex === 0 ? observeTrack : undefined} className="relative h-[56px]" aria-label={`${row.feedstockName} credit batches in ${year}`}>
                   <MonthGrid year={year} today={today} />
                   {row.batches.map((batch) => {
                     const spot = placeOnYear(batch, year);
@@ -286,7 +303,7 @@ export function CreditBatchTimeline({
                   })}
                   {slots.map((slot) => {
                     const spot = placeOnYear(slot, year);
-                    return spot ? (
+                    return spot && (spot.width / 100) * trackPx >= MIN_SLOT_PX ? (
                       <NewBatchSlot
                         key={slot.start}
                         slot={slot}

@@ -4,22 +4,57 @@
  * Pieces the credit batch timeline shares: the year switcher, month axis and
  * grid, the Today line and the state legend.
  */
-import { CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react/dist/ssr";
+import { CaretLeftIcon, CaretRightIcon, CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { dayPercentOfYear, monthIndexIn, type TimelineState } from "@/lib/credit-batches/timeline";
+import { getStatusState, type StatusStateClass } from "@/lib/status-state";
 import { cn } from "@/lib/utils";
 
 export const MUTED = "text-[var(--color-text-secondary)]";
 
+const LEGEND_MARK_PX = 10;
+
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** The semantic status each timeline state stands for; its tone comes from `getStatusState` (status-state.ts). */
+export const STATE_STATUS: Record<TimelineState, string> = {
+  blocking: "failed",
+  ready: "ready",
+  submitted: "submitted",
+  issued: "issued",
+};
+
+const TONE_BY_STATE_CLASS: Record<StatusStateClass, { solid: string; tint: string; edge: string }> = {
+  neutral: { solid: "bg-[var(--st-off)]", tint: "bg-[var(--st-off-bg)]", edge: "border-[var(--st-off)]" },
+  "in-progress": { solid: "bg-[var(--st-run)]", tint: "bg-[var(--st-run-bg)]", edge: "border-[var(--st-run)]" },
+  success: { solid: "bg-[var(--st-ok)]", tint: "bg-[var(--st-ok-bg)]", edge: "border-[var(--st-ok)]" },
+  warning: { solid: "bg-[var(--st-wait)]", tint: "bg-[var(--st-wait-bg)]", edge: "border-[var(--st-wait)]" },
+  error: { solid: "bg-[var(--st-bad)]", tint: "bg-[var(--st-bad-bg)]", edge: "border-[var(--st-bad)]" },
+};
+
+const STATE_TITLE: Record<TimelineState, string> = {
+  blocking: "Needs work",
+  ready: "Ready",
+  submitted: "Submitted",
+  issued: "Issued",
+};
 
 /** Solid, tint and edge per state, for bars, hover cards and the legend. */
 export const STATE_TONE: Record<TimelineState, { solid: string; tint: string; edge: string; title: string }> = {
-  blocking: { solid: "bg-[var(--st-bad)]", tint: "bg-[var(--st-bad-bg)]", edge: "border-[var(--st-bad)]", title: "Needs work" },
-  ready: { solid: "bg-[var(--st-wait)]", tint: "bg-[var(--st-wait-bg)]", edge: "border-[var(--st-wait)]", title: "Ready" },
-  submitted: { solid: "bg-[var(--st-run)]", tint: "bg-[var(--st-run-bg)]", edge: "border-[var(--st-run)]", title: "Submitted" },
-  issued: { solid: "bg-[var(--st-ok)]", tint: "bg-[var(--st-ok-bg)]", edge: "border-[var(--st-ok)]", title: "Issued" },
+  blocking: { ...TONE_BY_STATE_CLASS[getStatusState(STATE_STATUS.blocking)], title: STATE_TITLE.blocking },
+  ready: { ...TONE_BY_STATE_CLASS[getStatusState(STATE_STATUS.ready)], title: STATE_TITLE.ready },
+  submitted: { ...TONE_BY_STATE_CLASS[getStatusState(STATE_STATUS.submitted)], title: STATE_TITLE.submitted },
+  issued: { ...TONE_BY_STATE_CLASS[getStatusState(STATE_STATUS.issued)], title: STATE_TITLE.issued },
 };
+
+/** Ready and Issued share the success tone, so Issued also carries a check mark. */
+export function StateMark({ state, size }: { state: TimelineState; size: number }) {
+  return state === "issued" ? (
+    <CheckCircleIcon size={size} weight="fill" className="shrink-0 text-[var(--st-ok)]" aria-hidden />
+  ) : (
+    <span className={cn("shrink-0 rounded-full", STATE_TONE[state].solid)} style={{ width: size, height: size }} aria-hidden />
+  );
+}
 
 export const STATE_ORDER: TimelineState[] = ["blocking", "ready", "submitted", "issued"];
 
@@ -63,7 +98,7 @@ export function StateLegend() {
     <ul className={cn("flex flex-wrap items-center gap-x-16 gap-y-6 body-caption", MUTED)}>
       {STATE_ORDER.map((state) => (
         <li key={state} className="inline-flex items-center gap-6">
-          <span className={cn("size-8 rounded-full", STATE_TONE[state].solid)} aria-hidden />
+          <StateMark state={state} size={LEGEND_MARK_PX} />
           {STATE_TONE[state].title}
         </li>
       ))}

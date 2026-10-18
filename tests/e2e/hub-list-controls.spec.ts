@@ -74,7 +74,7 @@ test.describe("Hub list controls", () => {
       ),
     );
 
-    await adminPage.goto(`/credit-batches?facility=${seededData.facility.id}`);
+    await adminPage.goto(`/credit-batches?facility=${seededData.facility.id}&view=list`);
     await expect(
       adminPage.locator("article").filter({ hasText: `HUB-${tag}` }).first(),
     ).toBeVisible({ timeout: 15000 });
@@ -96,7 +96,7 @@ test.describe("Hub list controls", () => {
     const deleteItem = adminPage.getByRole("menuitem", { name: "Delete" });
     await expect(editItem).not.toHaveClass(/st-bad/);
     await expect(deleteItem).toHaveClass(/st-bad/);
-    await expect(adminPage).toHaveURL(/\/credit-batches\?facility=/);
+    await expect(adminPage).toHaveURL(/\/credit-batches\?facility=.*view=list/);
     await adminPage.keyboard.press("Escape");
 
     await firstCard.click();

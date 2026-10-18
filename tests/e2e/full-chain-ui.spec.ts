@@ -610,7 +610,7 @@ test.describe("Full Chain UI Smoke Test", () => {
 
     // ─── 7. CREDIT BATCH ───────────────────────────────────
     await test.step("Create credit batch", async () => {
-      await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
+      await page.goto(`/credit-batches?facility=${seededData.facility.id}&view=list`);
       await page.waitForLoadState("networkidle");
 
       await page.click('button:has-text("New credit batch")');

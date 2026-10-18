@@ -160,7 +160,9 @@ export type TimelineState = "blocking" | "ready" | "submitted" | "issued";
 /**
  * The state a bar shows. A submitted Removal or an issued batch wins over data
  * readiness; otherwise any blocking item means "blocking". Null while the
- * readiness of the batch has not loaded.
+ * readiness of the batch has not loaded. A failed verification is "blocking"
+ * even when no data is missing; a rejected or interrupted Removal (step 0) keeps
+ * showing the data readiness.
  */
 export function deriveTimelineState(input: {
   lifecycleStepIndex: number;
@@ -169,6 +171,8 @@ export function deriveTimelineState(input: {
   blockingCount: number;
 } | null): TimelineState | null {
   if (!input) return null;
+  // A failed verification (a failed step after the Removal was submitted) needs work.
+  if (input.lifecycleFailed && input.lifecycleStepIndex >= SUBMITTED_STEP_INDEX) return "blocking";
   if (!input.lifecycleFailed && input.lifecycleStepIndex >= ISSUED_STEP_INDEX) return "issued";
   if (!input.lifecycleFailed && input.lifecycleStepIndex >= SUBMITTED_STEP_INDEX) return "submitted";
   return input.healthState === "ready" && input.blockingCount === 0 ? "ready" : "blocking";

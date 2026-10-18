@@ -29,9 +29,10 @@ const POINTER_CLOSE_REASONS = new Set(["trigger-hover", "trigger-focus"]);
 /** Tonnes below this read as zero in the "not in a Removal" line. */
 const NEGLIGIBLE_TONNES = 0.005;
 
+/** Submitted has no badge of its own; Running shares its in-progress tone. */
 const STATE_BADGE: Record<TimelineState, StatusValue> = {
   blocking: "failed",
-  ready: "pending",
+  ready: "ready",
   submitted: "running",
   issued: "issued",
 };

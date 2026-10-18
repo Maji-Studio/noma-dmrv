@@ -14,7 +14,7 @@ test.describe("credit-batch card scanability", () => {
       seededData.feedstockType.id,
     );
 
-    await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
+    await page.goto(`/credit-batches?facility=${seededData.facility.id}&view=list`);
 
     const card = page.locator("article").filter({ hasText: batch.code });
     await expect(card).toHaveCount(1);
