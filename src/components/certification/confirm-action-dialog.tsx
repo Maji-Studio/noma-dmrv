@@ -36,6 +36,8 @@ interface ConfirmActionDialogProps {
   isProduction?: boolean;
   /** Surface a server error below the body. */
   errorMessage?: string;
+  /** Blocks the primary action when the body names a blocker. Cancel stays live. */
+  confirmDisabled?: boolean;
 }
 
 const TITLE_ID = "confirm-action-title";
@@ -52,6 +54,7 @@ export function ConfirmActionDialog({
   isPending = false,
   isProduction = false,
   errorMessage,
+  confirmDisabled = false,
 }: ConfirmActionDialogProps) {
   const isDestructive = variant === "destructive";
   const isNeutral = variant === "neutral";
@@ -82,6 +85,7 @@ export function ConfirmActionDialog({
                 : undefined
             }
             onClick={onConfirm}
+            disabled={confirmDisabled}
             busy={isPending}
           >
             {isPending ? (busyLabel ?? `${confirmLabel}…`) : confirmLabel}
