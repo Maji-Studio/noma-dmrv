@@ -378,7 +378,9 @@ _Avoid_: treating an application event or facility inventory bin as the site.
 
 **Credit batch**:
 noma's production-cohort unit of carbon accounting — the production
-runs of **one feedstock** at one facility within a ≤1-month window.
+runs of **one feedstock** at one facility within a production window. Under Isometric, both the window and the member-run
+span (earliest start to latest end) must cover less than one month. Other
+certifiers have no month cap.
 This makes a credit batch the Isometric protocol's **production
 batch**: the lab-characterisation and sampling unit (one feedstock,
 consistent pyrolysis conditions). The one-calendar-month cap is noma’s
@@ -579,13 +581,16 @@ surfaces as evidence health, never as an upload error.
 _Avoid_: validation failure (the photo is not rejected).
 
 **Distance override**:
-A one-way distance recorded on a delivery only when that delivery's
-routing differs from the destination's stored distance for the delivery's facility.
-The delivery records its location and facility distance independently of the
-override. Clearing an override restores that recorded distance. Pair saves fill
-missing distances on unlocked deliveries and feedstock transport, but never
-replace a recorded distance, including for unsubmitted Removals. Deliberate
-refresh and per-leg overrides are separate operations; submitted and certified
+A positive one-way distance saved on a feedstock or delivery when its route
+needs an explicit distance instead of the location's facility default. The
+record stores the override, its provenance and an optional note. Derived legs
+keep their recorded distances: changing a location default affects future
+records, while pair saves can fill missing distances on unlocked records.
+Clearing a feedstock override deliberately derives its leg from the current
+supplier default location and facility pair. Clearing a delivery override
+restores its independently recorded pair distance. Refresh from location is a
+separate deliberate, version-checked correction of a derived distance; it
+re-stamps the current pair and resyncs transport. Submitted and certified
 lineage remains locked.
 _Avoid_: treating the override as the primary distance value.
 

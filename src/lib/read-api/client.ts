@@ -17,6 +17,8 @@ import type { OnboardingStatusInput, DashboardOverviewInput, CreditBatchActivity
 import type { Facility, Organization } from "@/db/schema";
 import { missingRecordMessage } from "@/lib/errors";
 import type { FacilityCertifierSummary } from "@/lib/read-models";
+import type { RecordLocksReadInput } from "@/lib/read-models/record-locks";
+import type { RecordLockViews } from "@/lib/record-lock-view";
 import { facilityIdSchema } from "@/lib/read-models/facility-id";
 import type { FacilityFilterData } from "@/schemas/facilities";
 import type { ProductionRunFilterData } from "@/schemas/production-runs";
@@ -406,4 +408,12 @@ export async function getCreditBatchActivitySummaryRead(
   return mapReadData(result, wire => ({ ...wire,
     latest: wire.latest ? decodeDates<CreditBatchActivityPage["items"][number]>(wire.latest, ACTIVITY_DATE_FIELDS) : null,
   }));
+}
+
+/** Open, In use or Sent for one chunk of ids (no timestamps cross this read). */
+export function getRecordLocksRead(
+  input: RecordLocksReadInput,
+  options?: ReadRequestOptions,
+): Promise<ActionResult<RecordLockViews>> {
+  return requestRead<RecordLockViews>("/api/reads/record-locks", input, options);
 }

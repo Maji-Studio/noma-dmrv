@@ -123,6 +123,7 @@ export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "e
     code: string;
     durabilityOption: DurabilityOption;
     claimedByRemovalId: string | null;
+    claimingRemovalCode?: string | null;
     productionRunIds: string[];
     applicationIds: string[];
     applicationSlices?: {

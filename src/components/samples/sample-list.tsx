@@ -1,5 +1,6 @@
 "use client";
 
+import { entityViewHref } from "@/lib/entity-deep-link";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * SampleList component
@@ -35,6 +36,9 @@ import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
+import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
@@ -99,12 +103,14 @@ function DurabilityBadge({ durability }: { durability: "200_year" | "1000_year" 
 
 function createColumns(
   onEdit: (sample: SampleWithRelations) => void,
-  onDelete: (sampleId: string) => void
+  onDelete: (sampleId: string) => void,
+  locks: RecordLockViews,
+  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<SampleWithRelations>[] {
   return [
     {
       accessorKey: "sampleCode",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">
@@ -162,19 +168,24 @@ function createColumns(
         />
       ),
     },
+    recordLockColumn<SampleWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
+      // A Sample stays fully editable while In use; only a Sent Removal
+      // refuses its edit and delete (#687 item 2), so neither is offered.
       cell: ({ row }) => (
         <div className="flex items-center justify-end">
-          <RowActionsMenu
-            label={`Actions for ${row.original.sampleCode}`}
-            actions={[
-              { label: "Edit", onSelect: () => onEdit(row.original) },
-              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
-            ]}
-          />
+          {isRecordEditable(locks[row.original.id]) && (
+            <RowActionsMenu
+              label={`Actions for ${row.original.sampleCode}`}
+              actions={[
+                { label: "Edit", onSelect: () => onEdit(row.original) },
+                { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
+              ]}
+            />
+          )}
         </div>
       ),
       enableSorting: false,
@@ -310,6 +321,10 @@ export function SampleList({
     : null;
   const displaySideSheet =
     sideSheet ?? createIntentSideSheet ?? deepLinkedSideSheet;
+  const sampleLocks = useRecordLocks("sample", samples.map((sample) => sample.id));
+  // A lock that arrives as Sent keeps an open draft, read-only, with the way
+  // back (`submitBlock`).
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("sample", displaySideSheet?.entity?.id);
   const activeFocusTarget = displaySideSheet?.entity?.id === focusedSampleId
     ? parseEntityFocusTarget(deepLinkFocus)
     : null;
@@ -554,7 +569,7 @@ export function SampleList({
   const isSubmitting =
     createSample.isPending || updateSample.isPending || isFlushing;
 
-  const columns = createColumns(openEdit, handleDelete);
+  const columns = createColumns(openEdit, handleDelete, sampleLocks.locks, sampleLocks.statusOf);
 
   if (!contextFacilityId) {
     return (
@@ -619,6 +634,7 @@ export function SampleList({
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => entityViewHref("/samples", "sample", row.id, contextFacilityId)}
         emptyMessage={
           <EmptyState
             padding="md"
@@ -691,6 +707,8 @@ export function SampleList({
         onModeChange={handleModeChange}
         title={displaySideSheet?.mode === "create" ? "Create Sample" : (displaySideSheet?.entity?.sampleCode ?? "")}
         subtitle={displaySideSheet?.mode === "create" ? undefined : viewSubtitle}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
+        canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit Sample"
         sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity, { hideTransport }) : undefined}
       >

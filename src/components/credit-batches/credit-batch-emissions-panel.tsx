@@ -17,7 +17,7 @@ import { isOpen } from "@/components/emissions/emission-line-display";
 import { emissionsBatchHref } from "@/components/emissions/emissions-overview-query";
 import { useBatchEmissionLines } from "@/hooks/use-emission-entries";
 import { cn } from "@/lib/utils";
-import { SheetLinkRows } from "./sheet-link-row";
+import { SheetLinkRows } from "@/components/ui/sheet-link-row";
 
 const OPEN_EMISSIONS_LABEL = "Open emissions";
 

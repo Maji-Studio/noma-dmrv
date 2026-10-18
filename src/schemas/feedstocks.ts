@@ -4,14 +4,14 @@
  */
 
 import { z } from "zod";
-import { optionalDistanceSource } from "./distance-source";
+import { DISTANCE_NOTE_MAX_LENGTH, DISTANCE_NOTE_MAX_MESSAGE, optionalDistanceSource } from "./distance-source";
 import { exceedsMassWithTolerance } from "@/lib/calculations/mass-dry";
 import {
   calendarDateSchema,
-  clearablePositiveNumber,
   emptyToNull,
   expectedVersionSchema,
   optionalPositiveNumber,
+  clearablePositiveNumber,
   pipeToCanonicalNumber,
   positiveMassKgSchema,
   requiredNumber,
@@ -89,11 +89,9 @@ export const feedstockFormSchema = z.object({
 
   // Optional transport
   vehicleId: emptyToNull.or(uuidSchema()).nullable().optional().describe("Vehicle identifier, UUID, or null when unspecified."),
-  // Road distance (km) for the feedstock transport leg — autofills from the
-  // supplier's default location distance-to-facility, overridable per delivery. Both fields are
-  // transient (not feedstock columns) — they flow into the derived transport
-  // leg at sync time.
-  transportDistanceKm: optionalPositiveNumber.describe("Transport road distance in kilometres; null clears the distance."),
+  // Explicit override; derived distance remains on the transport leg.
+  transportDistanceKm: optionalPositiveNumber.describe("Explicit positive transport distance override in kilometres; null returns to the current location distance. Legacy zero is accepted as a clear."),
+  distanceNote: z.string().max(DISTANCE_NOTE_MAX_LENGTH, DISTANCE_NOTE_MAX_MESSAGE).nullable().optional().describe("Distance override note, untrusted plain text, or null when absent."),
   transportDistanceSource: optionalDistanceSource.describe("Distance evidence: map_estimate is a mapped route, manual is operator-entered, document is documented evidence; null when unspecified."),
 
   // --- Material ---
@@ -162,7 +160,8 @@ export const updateFeedstockSchema = z.object({
   // Clearable, not optional-null: `syncFeedstockTransportLeg` preserves the
   // leg's stored distance only when this key is absent, so an omitted patch
   // must stay `undefined` instead of collapsing to an explicit clear.
-  transportDistanceKm: clearablePositiveNumber.describe("Transport road distance in kilometres; null clears the distance."),
+  transportDistanceKm: clearablePositiveNumber.describe("Explicit positive transport distance override in kilometres; null returns to the current location distance. Legacy zero is accepted as a clear. On an already derived record, null and zero preserve the recorded leg, even when the location pair is missing."),
+  distanceNote: z.string().max(DISTANCE_NOTE_MAX_LENGTH, DISTANCE_NOTE_MAX_MESSAGE).nullable().optional().describe("Distance override note, untrusted plain text, or null when absent."),
   transportDistanceSource: optionalDistanceSource.describe("Distance evidence: map_estimate is a mapped route, manual is operator-entered, document is documented evidence; null when unspecified."),
   feedstockTypeId: uuidSchema().optional().describe("Feedstock type identifier, UUID."),
   massWetKg: positiveMassKgSchema("Must be greater than 0").optional().describe("Allocated wet mass in kilograms."),

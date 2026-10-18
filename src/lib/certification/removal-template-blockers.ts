@@ -8,6 +8,12 @@ export const REMOVAL_TEMPLATE_BLOCKERS = {
   missingFixedDatapoint: "Set each value in the Isometric template editor before submitting.",
   templateLinesNeedReview: "Review the Removal template lines in Certification settings.",
 } as const;
+/**
+ * Landing line for a deep link to a credit batch's template block when the
+ * block has no Notice of its own (the pin exists and Isometric lists it). The
+ * link does not carry which blocker sent the operator, so this fits all of them.
+ */
+export const REMOVAL_TEMPLATE_LANDING_LINE = "Check this credit batch's Removal template before submitting a Removal.";
 export type RemovalTemplateBlockerCode = keyof typeof REMOVAL_TEMPLATE_BLOCKERS;
 export interface RemovalTemplateBlocker { code: RemovalTemplateBlockerCode; message: string }
 export function removalTemplateBlocker(code: RemovalTemplateBlockerCode): RemovalTemplateBlocker {

@@ -62,7 +62,7 @@ test.describe("Transport round trip (#852)", () => {
     await waitForSideSheet(page);
     const dialog = page.locator('[role="dialog"]');
 
-    await expect(dialog.getByRole("spinbutton", { name: "Distance (km)" })).toBeVisible();
+    await expect(dialog.getByRole("spinbutton", { name: "One-way distance (km)" })).toBeVisible();
     await expect(dialog.getByText(/trip type/i)).toHaveCount(0);
     await expect(dialog.locator('select[name="transportTripType"]')).toHaveCount(0);
 
@@ -79,6 +79,8 @@ test.describe("Transport round trip (#852)", () => {
       seededData.feedstockType.id,
       seededData.feedstockType.name
     );
+    // The seeded supplier location has no facility distance: enter one as an override.
+    await dialog.getByRole("button", { name: "Override the one-way distance" }).click();
     await page.fill('input[name="transportDistanceKm"]', "40");
     // The route under the entry counts the round trip.
     await expect(

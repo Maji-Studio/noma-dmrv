@@ -37,6 +37,7 @@ const orderFacility = {
   gpsLongitude: 37.3,
 } as Facility;
 
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }) }));
 vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({ selectedFacility: globalFacility, facilities: [globalFacility] }),
 }));

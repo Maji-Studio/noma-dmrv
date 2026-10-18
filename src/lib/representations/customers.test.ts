@@ -15,7 +15,7 @@ it("publishes a destination's GPS and one-way distance with site defaults but no
   const row = { ...base, ...hidden, country: "TZ", stateRegion: null, city: null, siteDescription: "Field", customerId: id, gpsLatitude: 0, gpsLongitude: 0,
     facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: 20, distanceSource: "document" as const }], isDefault: true };
   expect(representCustomerLocation(row)).toEqual({ id, customerId: id, name: "Customer", version: 1,
-    country: "TZ", stateRegion: null, city: null, siteDescription: "Field", defaultSoilTemperatureC: 25, gpsLatitude: 0, gpsLongitude: 0, facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: 20, distanceSource: "document" }], isDefault: true, createdAt: at, updatedAt: at });
+    country: "TZ", stateRegion: null, city: null, siteDescription: "Field", defaultSoilTemperatureC: 25, gpsLatitude: 0, gpsLongitude: 0, facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: 20, distanceSource: "document" }], isDefault: true, archivedAt: null, createdAt: at, updatedAt: at });
   expect(representCustomerLocation({ ...row, facilityDistances: [], }))
     .toMatchObject({ facilityDistances: [], });
 });

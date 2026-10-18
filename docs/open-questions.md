@@ -13,6 +13,11 @@ Deferred work lives here, never as a `TODO` in code.
 
 **`needs-registry-check`** marks a question that must be answered by the Isometric MCP server (`how_to`, then the protocol/OpenAPI tools) or a sandbox probe, **never** from `docs/isometric/*`, which are non-authoritative local summaries. Do not close one of these from a local doc.
 
+## Open-item problem wording
+
+- `src/lib/credit-batches/open-items.ts:buildCreditBatchOpenItems`: Open-item problem
+  wording for unmet checks, shared with the New Removal wizard; Kenji to decide; #1136.
+
 ## Emissions entry dates (2026-10-16) - **deferred**
 
 - `src/lib/read-models/batch-emission-lines.ts:loadBatchEmissionLines` does not
@@ -60,14 +65,6 @@ Deferred work lives here, never as a `TODO` in code.
   "for now". Decide whether to resume estimates (rebuild the settings form and
   the read) or drop the table with a migration. Until then the table, its test
   cleanup in `tests/e2e/global-teardown.ts` and the dev-seed delete stay.
-
-## DataTable mobile cards (`ui/data-table`) - **deferred**
-
-- `src/components/ui/data-table/index.tsx:DataTable` renders each mobile card as
-  a `role="button"` container that holds nested buttons (the Removals list
-  Retry button, and now `CertificationStatusBadge`), which screen readers
-  announce unreliably. Fix: a semantic card with a separate record-opening
-  button or link beside its controls. It changes every DataTable consumer.
 
 ## Activity reads
 

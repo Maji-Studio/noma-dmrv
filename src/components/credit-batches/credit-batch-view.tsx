@@ -24,7 +24,7 @@ import { formatDate, formatTonnes } from "@/lib/format-utils";
 import { formatWetDryMass, PERCENT_SCALE } from "@/lib/mass-moisture";
 import { CreditBatchLifecycleSteps } from "./credit-batch-lifecycle";
 import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
-import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
+import { SheetLinkRow, SheetLinkRows } from "@/components/ui/sheet-link-row";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
@@ -294,6 +294,9 @@ export function creditBatchSheetSections({
   emissionsEntriesEnabled,
 }: CreditBatchSheetSectionsOptions): DetailPanelSection[] {
   const removalId = creditBatch.productionEmissionsClaimedByRemovalId ?? healthSummary?.removalId ?? null;
+  const removalCode = creditBatch.productionEmissionsClaimedByRemovalId
+    ? healthSummary?.productionEmissionsClaimedByRemovalCode
+    : healthSummary?.removalCode;
   const preview = creditBatch.co2eStoredPreview;
   const durabilityResult = preview?.applicationResults.find(
     (result) => result.fDurable != null,
@@ -316,7 +319,7 @@ export function creditBatchSheetSections({
                 : "Certification progress unavailable"}
             </span>
           )}
-          {removalId && <Link href={certificationRemovalsHref({ facility: creditBatch.facilityId, removal: removalId })} className="body-small underline">Production emissions included in Removal {removalId.slice(0, 8)}…</Link>}
+          {removalId && <Link href={certificationRemovalsHref({ facility: creditBatch.facilityId, removal: removalId })} className="body-small underline">{removalCode ? `Production emissions included in Removal ${removalCode}` : "Production emissions included in a Removal"}</Link>}
           {/* Anchor for the checklist's `#batch-details` fix link — sits just
               above the Batch definition section so the jump lands on top of
               those fields rather than past them. */}

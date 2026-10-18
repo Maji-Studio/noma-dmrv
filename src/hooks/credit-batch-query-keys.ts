@@ -7,6 +7,7 @@ export const creditBatchKeys = {
     [...creditBatchKeys.lists(), filters] as const,
   details: () => [...creditBatchKeys.all, "detail"] as const,
   detail: (id: string) => [...creditBatchKeys.details(), id] as const,
+  pageModel: (id: string) => [...creditBatchKeys.detail(id), "pageModel"] as const,
   previewsPrefix: () => [...creditBatchKeys.all, "previews"] as const,
   previews: (ids: string[]) => [...creditBatchKeys.previewsPrefix(), ids] as const,
   productionRunOptionsPrefix: () =>

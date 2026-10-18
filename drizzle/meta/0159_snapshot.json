@@ -1,5 +1,5 @@
 {
-  "id": "b164944e-b017-4160-86df-9280c9681f92",
+  "id": "2bfaa799-8e5e-497b-ab69-d1dc70b2be61",
   "prevId": "172ca9c2-2be8-4355-b5fc-463986bd1b2d",
   "version": "7",
   "dialect": "postgresql",
@@ -332,7 +332,7 @@
       "checkConstraints": {
         "activity_events_entity_type": {
           "name": "activity_events_entity_type",
-          "value": "\"activity_events\".\"entity_type\" in ('emission_entry', 'emission_line_comment', 'removal', 'ghg_statement', 'production_run', 'biochar_product', 'lab_sample', 'order', 'delivery', 'application', 'credit_batch', 'document', 'transport_leg', 'feedstock', 'bin_movement', 'supplier', 'supplier_location', 'customer', 'customer_location', 'formulation')"
+          "value": "\"activity_events\".\"entity_type\" in ('emission_entry', 'removal', 'ghg_statement', 'production_run', 'biochar_product', 'lab_sample', 'order', 'delivery', 'application', 'credit_batch', 'document', 'transport_leg', 'feedstock', 'bin_movement', 'supplier', 'supplier_location', 'customer', 'customer_location', 'formulation')"
         },
         "activity_events_action": {
           "name": "activity_events_action",
@@ -6763,161 +6763,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.emission_line_comments": {
-      "name": "emission_line_comments",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "credit_batch_id": {
-          "name": "credit_batch_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "component_id": {
-          "name": "component_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "body": {
-          "name": "body",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "emission_line_comments_organization_id_organizations_id_fk": {
-          "name": "emission_line_comments_organization_id_organizations_id_fk",
-          "tableFrom": "emission_line_comments",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "emission_line_comments_created_by_users_id_fk": {
-          "name": "emission_line_comments_created_by_users_id_fk",
-          "tableFrom": "emission_line_comments",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "emission_line_comments_updated_by_users_id_fk": {
-          "name": "emission_line_comments_updated_by_users_id_fk",
-          "tableFrom": "emission_line_comments",
-          "tableTo": "users",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "emission_line_comments_credit_batch_id_organization_id_credit_batches_id_organization_id_fk": {
-          "name": "emission_line_comments_credit_batch_id_organization_id_credit_batches_id_organization_id_fk",
-          "tableFrom": "emission_line_comments",
-          "tableTo": "credit_batches",
-          "columnsFrom": [
-            "credit_batch_id",
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id",
-            "organization_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "emission_line_comments_id_org_unique": {
-          "name": "emission_line_comments_id_org_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "organization_id"
-          ]
-        },
-        "emission_line_comments_line_unique": {
-          "name": "emission_line_comments_line_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "credit_batch_id",
-            "component_id"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "emission_line_comments_body_nonempty": {
-          "name": "emission_line_comments_body_nonempty",
-          "value": "length(trim(\"emission_line_comments\".\"body\")) > 0"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.facilities": {
       "name": "facilities",
       "schema": "",
@@ -9122,6 +8967,12 @@
           "notNull": true,
           "default": false
         },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -9237,6 +9088,10 @@
         "customer_locations_default_soil_temperature_c_range": {
           "name": "customer_locations_default_soil_temperature_c_range",
           "value": "\"customer_locations\".\"default_soil_temperature_c\" is null or (\"customer_locations\".\"default_soil_temperature_c\" >= -50 and \"customer_locations\".\"default_soil_temperature_c\" <= 60)"
+        },
+        "customer_locations_default_active": {
+          "name": "customer_locations_default_active",
+          "value": "not \"customer_locations\".\"is_default\" or \"customer_locations\".\"archived_at\" is null"
         }
       },
       "isRLSEnabled": false

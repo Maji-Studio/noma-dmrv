@@ -39,6 +39,9 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { StatCard } from "@/components/ui/stat-card";
 import { MassPair } from "@/components/ui/mass-pair";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
+import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { isProductionRunOutputLocked, isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
@@ -79,12 +82,14 @@ function productionRunDetailHref(run: ProductionRunWithRelations) {
 
 function createColumns(
   onEdit: (run: ProductionRunWithRelations) => void,
-  onDelete: (runId: string) => void
+  onDelete: (runId: string) => void,
+  locks: RecordLockViews,
+  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<ProductionRunWithRelations>[] {
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -144,25 +149,29 @@ function createColumns(
         />
       ),
     },
+    recordLockColumn<ProductionRunWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end">
-          <RowActionsMenu
-            label={`Actions for ${row.original.code}`}
-            actions={[
-              {
-                label: "Open details",
-                href: productionRunDetailHref(row.original),
-              },
-              { label: "Edit", onSelect: () => onEdit(row.original) },
-              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
-            ]}
-          />
-        </div>
-      ),
+      cell: ({ row }) => {
+        const lock = locks[row.original.id];
+        return (
+          <div className="flex items-center justify-end">
+            <RowActionsMenu
+              label={`Actions for ${row.original.code}`}
+              actions={[
+                {
+                  label: "Open details",
+                  href: productionRunDetailHref(row.original),
+                },
+                ...(isRecordEditable(lock) ? [{ label: "Edit", onSelect: () => onEdit(row.original) }] : []),
+                ...(isRecordDeletable(lock) ? [{ label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) }] : []),
+              ]}
+            />
+          </div>
+        );
+      },
       enableSorting: false,
     },
   ];
@@ -252,6 +261,7 @@ export function ProductionRunList() {
   const toast = useToast();
 
   const runs = runsData?.items ?? [];
+  const runLocks = useRecordLocks("productionRun", runs.map((run) => run.id));
   const setDeletingRunId = (id: string | null) => setDeleting(runs.find(row => row.id === id) ?? null);
   const totalPages = runsData?.totalPages ?? 0;
   useReconcileListPage({
@@ -371,7 +381,7 @@ export function ProductionRunList() {
     creditBatchFilter ||
     affectedRunIds.length > 0;
 
-  const columns = createColumns(openEdit, handleDelete);
+  const columns = createColumns(openEdit, handleDelete, runLocks.locks, runLocks.statusOf);
 
   useEffect(() => {
     if (!focusedRunId) {
@@ -413,6 +423,7 @@ export function ProductionRunList() {
       ? ({ entity: focusedRun.data, mode: "view" } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("productionRun", displaySideSheet?.entity?.id);
 
   const confirmCreateClose = () =>
     createWithEvidence.confirmClose(displaySideSheet?.mode === "create");
@@ -515,6 +526,7 @@ export function ProductionRunList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={productionRunDetailHref}
         emptyMessage={
           <EmptyState
             padding="md"
@@ -611,6 +623,8 @@ export function ProductionRunList() {
         onModeChange={handleModeChange}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: !isProductionRunOutputLocked(sheetLock) })}
+        canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit production run"
         size="wide"
         sections={sideSheetEntity ? productionRunSheetSections(sideSheetEntity, facilities) : undefined}
@@ -618,6 +632,7 @@ export function ProductionRunList() {
         <ProductionRunForm
           key={sideSheetEntity?.id ?? "create"}
           productionRun={sideSheetEntity ?? undefined}
+          lock={sheetLock}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={attemptCloseSideSheet}
           isSubmitting={createRun.isPending || updateRun.isPending || isFlushing}

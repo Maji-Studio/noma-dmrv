@@ -270,6 +270,7 @@ describe("ensureStorageLocation", () => {
     const result = await ensure();
 
     const lockKeys = [
+      `certifier-storage-site:org-test:${CUSTOMER_LOCATION_ID}`,
       `certifier-storage-location:isometric:prj-test:${CUSTOMER_LOCATION_ID}`,
       "certifier-project-mapping:org-test:isometric:facility-1",
       "certifier-external-project:org-test:isometric:prj-test",

@@ -1,19 +1,12 @@
-/**
- * deleteCustomer blocked-delete copy.
- *
- * Orders have no cancellation state, so the old "Cancel or reassign those
- * orders first" message named an action the app cannot perform (#774). These
- * assertions pin the replacement copy verbatim.
- */
+/** Customer delete refusal copy and storage-site FK mapping. Database fully mocked. */
 import { getTableName, type Table } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
 
-const state = vi.hoisted(() => ({ locationCount: 0, orderCount: 0, deleted: false, deleteCount: 0, failDeleteAt: 0 }));
+const state = vi.hoisted(() => ({ locationCount: 0, deliveryCount: 0, deleted: false, deleteCount: 0, failDeleteAt: 0 }));
 
 vi.mock("@/db", () => {
-  // Minimal stand-in for the three reads deleteCustomer makes: the existence
-  // check, then the location and order counts.
+  // Minimal table results for the delete guards; no database connection.
   const tableRows = (table: Table) => {
     switch (getTableName(table)) {
       case "customers":
@@ -21,7 +14,10 @@ vi.mock("@/db", () => {
       case "customer_locations":
         return Array.from({ length: state.locationCount }, (_, index) => ({ id: `location-${index}`, version: 1 }));
       case "orders":
-        return Array.from({ length: state.orderCount }, (_, index) => ({ code: `ORD-${index}` }));
+      case "facilities":
+        return [];
+      case "deliveries":
+        return Array.from({ length: state.deliveryCount }, (_, index) => ({ code: `DEL-${index}` }));
       case "certifier_storage_locations":
         return [];
       default:
@@ -29,6 +25,7 @@ vi.mock("@/db", () => {
     }
   };
   const executor = {
+      execute: () => Promise.resolve({ rows: [{ acquired: true }] }),
       select: () => ({
         from: (table: Table) => ({
           where: () => {
@@ -51,6 +48,9 @@ vi.mock("@/db", () => {
   return { db: { ...executor, transaction: (callback: (tx: typeof executor) => unknown) => callback(executor) } };
 });
 
+vi.mock("./orders", () => ({ deleteOrderInTransaction: vi.fn() }));
+vi.mock("./transport-legs", () => ({ lockBiocharTransportRouteTopology: vi.fn() }));
+
 const { deleteCustomerInTransaction } = await import("./customer-writes");
 const { db } = await import("@/db");
 const deleteCustomer = (ctx: OrgContext, customerId: string, expectedVersion: number) => db.transaction(async tx => { await deleteCustomerInTransaction(ctx, tx, { customerId, expectedVersion }); });
@@ -59,18 +59,18 @@ const ctx: OrgContext = { userId: "user-1", organizationId: "org-1" } as OrgCont
 
 beforeEach(() => {
   state.locationCount = 0;
-  state.orderCount = 0;
+  state.deliveryCount = 0;
   state.deleted = false;
   state.deleteCount = 0;
   state.failDeleteAt = 0;
 });
 
 describe("deleteCustomer", () => {
-  it("names only actions that exist when orders still reference the customer", async () => {
-    state.orderCount = 2;
+  it("refuses when deliveries were recorded, including archived deliveries", async () => {
+    state.deliveryCount = 2;
 
     await expect(deleteCustomer(ctx, "customer-1", 1)).rejects.toThrow(
-      "Customer was not deleted because orders still use it. Open Orders and review them. Reassign them where appropriate, or keep this customer.",
+      "Customer was not deleted because deliveries were recorded on its orders. Archive it instead.",
     );
     expect(state.deleted).toBe(false);
   });

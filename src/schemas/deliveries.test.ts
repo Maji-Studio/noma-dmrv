@@ -149,3 +149,13 @@ describe("delivery range validation copy", () => {
     );
   });
 });
+
+it("preserves omitted update distances and accepts only positive overrides or explicit clears", () => {
+  const input = { deliveryId: ORDER_ID, expectedVersion: 1 };
+  expect(updateDeliverySchema.parse(input).distanceKmOverride).toBeUndefined();
+  expect(updateDeliverySchema.parse({ ...input, distanceKmOverride: null }).distanceKmOverride).toBeNull();
+  expect(updateDeliverySchema.parse({ ...input, distanceKmOverride: 25 }).distanceKmOverride).toBe(25);
+  for (const distanceKmOverride of [0, -1]) {
+    expect(updateDeliverySchema.safeParse({ ...input, distanceKmOverride }).success).toBe(false);
+  }
+});

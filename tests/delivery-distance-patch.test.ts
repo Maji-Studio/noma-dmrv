@@ -1,16 +1,22 @@
 import { customerLocationFacilityDistances } from "@/db/schema";
 import { TEST_SITE_POSITION } from "./helpers/test-org";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { createDeliveryInTransaction, updateDeliveryInTransaction } from "@/data-access/delivery-output-writes";
 import { getDeliveryWithRelations, getDeliveries } from "@/data-access/deliveries";
-import { updateCustomerLocation } from "@/data-access/customers";
+import { updateCustomerLocation } from "./helpers/customer-location-operations";
 import { archiveFacility } from "@/data-access/facilities";
 import { customerLocations, orders, transportLegs } from "@/db/schema";
 import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 import { createDeliveryFixture } from "./helpers/delivery-create-fixture";
 import { cleanupOutputStockFixture } from "./helpers/output-stock-cleanup";
+
+import { updateDeliveryFn } from "@/fn/deliveries";
+const auth = vi.hoisted(() => ({ context: vi.fn() }));
+vi.mock("@/lib/auth/server", async importOriginal => ({
+  ...await importOriginal<typeof import("@/lib/auth/server")>(), requireOrgContext: auth.context,
+}));
 
 const organizations: string[] = [];
 afterEach(async () => {
@@ -27,6 +33,21 @@ async function fixture() {
   return { ...f, location, delivery: created.delivery };
 }
 describe("delivery distance PATCH", () => {
+  it.each(["metadata", "note"])("preserves override, source and derived distance through a %s action edit", async edit => {
+    const f = await fixture();
+    auth.context.mockResolvedValue(f.ctx);
+    const before = await db.select().from(transportLegs).where(eq(transportLegs.organizationId, f.ctx.organizationId));
+    const result = await updateDeliveryFn({
+      deliveryId: f.delivery.id, expectedVersion: f.delivery.version,
+      ...(edit === "metadata" ? { code: `E2E-EDIT-${f.tag}` } : { distanceNote: "Updated route evidence" }),
+    });
+    expect(result).toMatchObject({ success: true, data: {
+      distanceKmOverride: 30, distanceSource: "manual", recordedDistanceKm: 20,
+      recordedDistanceSource: "map_estimate", distanceNote: edit === "note" ? "Updated route evidence" : "Route evidence",
+    } });
+    const after = await db.select().from(transportLegs).where(eq(transportLegs.organizationId, f.ctx.organizationId));
+    expect(after.map(row => [row.distanceKm, row.distanceSource])).toEqual(before.map(row => [row.distanceKm, row.distanceSource]));
+  });
   it("keeps omitted values, clears override and source, and derives one-way legs", async () => {
     const f = await fixture();
     expect((await getDeliveryWithRelations(f.ctx, f.delivery.id)).effectiveDistanceKm).toBe(30);

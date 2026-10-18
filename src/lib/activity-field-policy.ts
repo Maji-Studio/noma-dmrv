@@ -67,7 +67,7 @@ export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
     id: "ignore", organizationId: "ignore", version: "ignore", createdAt: "ignore", updatedAt: "ignore",
     customerId: { link: "customer" }, name: "value", country: "value", stateRegion: "value", city: "value",
     gpsLatitude: "value", gpsLongitude: "value", isDefault: "value", defaultSoilTemperatureC: "value",
-    address: "name", facilityDistances: "name",
+    address: "name", facilityDistances: "name", archivedAt: "value",
   } },
   feedstock: { table: feedstocks, fields: {
     id: "ignore",
@@ -85,6 +85,9 @@ export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
     massWetKg: "value",
     massDryKg: "value",
     moistureContentPercent: "value",
+    distanceKmOverride: "value",
+    distanceSource: "value",
+    distanceNote: "name",
     transportDistanceKm: "value",
     transportDistanceSource: "value",
     storageLocationId: { link: "storage_location" },

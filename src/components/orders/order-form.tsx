@@ -26,6 +26,8 @@ import { ServerError } from "@/components/forms/server-error";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { CustomerLocationDetails } from "./customer-location-details";
+import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
+import { recordInUseFreeFields } from "@/lib/record-lock";
 import { MatchingOutputBins } from "./matching-output-bins";
 
 import { useEffect, useState } from "react";
@@ -71,6 +73,8 @@ interface OrderFormProps {
   errorMessage?: string;
   /** Custom label for the submit button */
   submitLabel?: string;
+  /** The saved order's lock; locked fields are disabled before anyone types. */
+  lock?: RecordLockView;
 }
 
 export function OrderForm({
@@ -80,8 +84,11 @@ export function OrderForm({
   isSubmitting = false,
   errorMessage,
   submitLabel,
+  lock,
 }: OrderFormProps) {
   const isEditMode = !!order;
+  // Fail closed: until the lock answers, fields an In use order holds stay disabled.
+  const locked = (field: string) => isEditMode && isRecordFieldHeld(lock, recordInUseFreeFields("order"), field);
   const [editingLocation, setEditingLocation] = useState<{ customerId: string; location: EditableCustomerLocation } | null>(null);
   const { facilityId: contextFacilityId, facilities } = useFacilityContext();
   // Organization operating defaults seed create mode only; an existing record
@@ -186,7 +193,7 @@ export function OrderForm({
             <FormInput
               id="orderDate"
               type="date"
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("orderDate")}
               error={!!errors.orderDate}
               {...register("orderDate")}
             />
@@ -209,7 +216,7 @@ export function OrderForm({
             entityType="customer"
             allowEdit
             placeholder="Select customer..."
-            disabled={isSubmitting}
+            disabled={isSubmitting || locked("customerId")}
             required
             // Customers are org-shared, so a lone one is not "the" customer for
             // this order. Require an explicit pick, matching the feedstock
@@ -225,12 +232,12 @@ export function OrderForm({
             label="Customer location"
             entityType="customerLocation"
             selectionLocked={isDestinationLocked}
-            onEditSelected={selectedLocation && selectedCustomerId && !isDestinationLocked
+            onEditSelected={selectedLocation && selectedCustomerId && !isDestinationLocked && !selectedLocation.archivedAt
               ? () => setEditingLocation({ customerId: selectedCustomerId, location: selectedLocation })
               : undefined}
             placeholder={selectedCustomerId ? "Select location..." : "Select a customer first"}
             emptyHint={{ message: "Add a location to this customer first." }}
-            disabled={isSubmitting || !selectedCustomerId}
+            disabled={isSubmitting || !selectedCustomerId || locked("customerLocationId")}
             filterBy={selectedCustomerId ? { customerId: selectedCustomerId } : undefined}
             dependsOn={watchedCustomerId}
             autoSelectSingle
@@ -264,7 +271,7 @@ export function OrderForm({
         icon={<PackageIcon size={14} weight="bold" />}
         fields={["formulationId", "quantityKg", "packaging"]}
       >
-        <FormEntitySelect control={control} name="formulationId" label="Formulation" entityType="formulation" allowEdit placeholder="Select formulation..." required disabled={isSubmitting} />
+        <FormEntitySelect control={control} name="formulationId" label="Formulation" entityType="formulation" allowEdit placeholder="Select formulation..." required disabled={isSubmitting || locked("formulationId")} />
 
         <div className="grid grid-cols-1 gap-x-16 gap-y-20">
           <FormField
@@ -275,7 +282,7 @@ export function OrderForm({
           >
             <FormSelect
               id="packaging"
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("packaging")}
               error={!!errors.packaging}
               options={packagingOptions}
               {...register("packaging")}
@@ -293,7 +300,7 @@ export function OrderForm({
               type="number"
               step="any"
               placeholder="e.g., 1000"
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("quantityKg")}
               error={!!errors.quantityKg}
               {...register("quantityKg")}
             />
