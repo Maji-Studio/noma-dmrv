@@ -23,6 +23,10 @@ Deferred work lives here, never as a `TODO` in code.
 - `src/components/credit-batches/credit-batch-emissions-tab.tsx:CreditBatchEmissionsTab`:
   the batch page's Emissions tab points to the Energy page. `CreditBatchEmissionsPanel`
   from #1140 mounts here behind `EMISSIONS_ENTRIES_ENABLED` once it lands; #1136.
+- `src/components/credit-batches/credit-batch-page-parts.tsx:PAGE_PANEL` is a
+  feature-local panel surface (border and paper). Moving the page's panels onto
+  the shared `Card` surface (`--panel-bg`, `--panel-border`, `--panel-shadow`)
+  is a visual change that needs its own design check; #1156 review.
 
 ## Emissions entry dates (2026-10-16) - **deferred**
 
