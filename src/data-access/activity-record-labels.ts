@@ -5,7 +5,7 @@ import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import type { PgTable, AnyPgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/db";
-import { emissionEntries, applications, biocharProducts, binMovements, certifierGhgStatements, certifierRemovals, creditBatches, deliveries, documents, feedstocks, orders, productionRuns, samples, transportLegs } from "@/db/schema";
+import { emissionEntries, emissionLineComments, applications, biocharProducts, binMovements, certifierGhgStatements, certifierRemovals, creditBatches, deliveries, documents, feedstocks, orders, productionRuns, samples, transportLegs } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
@@ -32,6 +32,8 @@ const identified = <T extends PgTable & { id: AnyPgColumn; organizationId: AnyPg
 const sources: Record<string, LabelSource> = {
   emission_entry: { ...identified(emissionEntries), label: sql<string>`'Emissions entry'`,
     facility: sql<string | null>`(select ${creditBatches.facilityId} from ${creditBatches} where ${creditBatches.id} = ${emissionEntries.creditBatchId} and ${creditBatches.organizationId} = ${emissionEntries.organizationId})` },
+  emission_line_comment: { ...identified(emissionLineComments), label: sql<string>`'Line comment'`,
+    facility: sql<string | null>`(select ${creditBatches.facilityId} from ${creditBatches} where ${creditBatches.id} = ${emissionLineComments.creditBatchId} and ${creditBatches.organizationId} = ${emissionLineComments.organizationId})` },
   facility: named(facilities), supplier: named(suppliers), customer: named(customers),
   customer_location: named(customerLocations), vehicle: named(vehicles), driver: named(drivers), operator: named(operators),
   feedstock_type: named(feedstockTypes), storage_location: named(storageLocations), formulation: named(formulations),

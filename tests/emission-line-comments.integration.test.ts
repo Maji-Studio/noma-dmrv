@@ -6,6 +6,7 @@ import {
   setEmissionLineComment, deleteEmissionLineComment, getEmissionLineComment,
   listEmissionLineComments, listEmissionLineCommentsForBatches,
 } from "@/data-access/emission-line-comments";
+import { resolveActivityRecords } from "@/data-access/activity-record-labels";
 import { loadBatchEmissionLines } from "@/lib/read-models/batch-emission-lines";
 import { loadFacilityEmissionsOverview } from "@/lib/read-models/facility-emissions-overview";
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
@@ -118,6 +119,14 @@ it("creates, edits with a version, conflicts, and hard deletes while retaining w
   expect(events[0].changes.body).toEqual({ from: null, to: "First wording" });
   expect(events[1].changes.body).toEqual({ from: "First wording", to: "Second wording" });
   expect(events[1].changedFields).toEqual(["body"]);
+  // The activity log names the record; a hard-deleted comment reads as deleted, a live one links to its facility.
+  const records = await resolveActivityRecords(ctx, [
+    { entityType: "emission_line_comment", entityId: created.id, action: "deleted" },
+    { entityType: "emission_line_comment", entityId: (await setEmissionLineComment(ctx, input())).id, action: "created" },
+  ]);
+  const [gone, live] = [...records.values()];
+  expect(gone).toMatchObject({ label: null, deleted: true });
+  expect(live).toMatchObject({ label: "Line comment", deleted: false, facilityId: lineage.facilityId });
 });
 
 it("serializes competing creates into one success and one conflict", async () => {
