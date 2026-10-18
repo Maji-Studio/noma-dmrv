@@ -1,5 +1,6 @@
 "use client";
 import { EmptyState, Notice } from "@/components/ui";
+import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import { useFacilityClock } from "@/hooks/use-facility-context";
 import { useOutputStockBalance, useOutputStockHistory, useOutputSubBins } from "@/hooks/use-output-stock";
 import { MISSING_VALUE } from "@/lib/copy-utils";
@@ -49,6 +50,16 @@ function mixPileBands(layers: OutputSubBin[], dryKg: number | null, wetKg: numbe
 }
 
 /**
+ * The card's headline: the wet estimate operators find on site. Without one,
+ * the dry biochar the bin tracks is the only honest figure and takes its place,
+ * as it does on the board's tile.
+ */
+function stockFigure(wetKg: number | null, dryKg: number | null): string {
+  if (wetKg !== null) return `≈ ${formatWetEstimate(wetKg)} kg wet`;
+  return dryKg === null ? MISSING_VALUE.notAvailable : `${formatMassKg(dryKg)} dry biochar`;
+}
+
+/**
  * An output bin's stock card: the wet estimate operators plan loads by, the
  * tracked dry biochar under it, a split bin's sub-bins as bays or a mix bin
  * as one pile, then the stock action and the history.
@@ -83,13 +94,11 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
         {subBins.error && <Notice tone="error">{subBins.error.message}</Notice>}
       </>}
       figure={ready && <>
-        {wetKg === null ? MISSING_VALUE.notAvailable : `≈ ${formatWetEstimate(wetKg)} kg wet`}
+        {stockFigure(wetKg, dryKg)}
         {capacityKg != null && <span className="body-small text-[var(--color-text-tertiary)]"> of {formatMassKg(capacityKg)}</span>}
       </>}
-      caption={ready && <>
-        {mode === "mix" && `${mixMoisture === null ? MISSING_VALUE.notAvailable : formatMoisturePercent(mixMoisture)} moisture · `}
-        {dryKg === null ? MISSING_VALUE.notAvailable : formatMassKg(dryKg)} dry biochar
-      </>}
+      // The pile's moisture is in its water band's details, like a sub-bin's under its bay.
+      caption={ready && wetKg !== null && dryKg !== null && <SecondaryFigure label="Dry biochar" value={formatMassKg(dryKg)} />}
       onAdjust={onAdjust}
     >
       {ready && layers.length === 0 && <EmptyState icon={null} title="No stock in this bin" padding="sm" />}

@@ -15,6 +15,12 @@
  * headline stays in ordinary ink so the material reads as content rather than
  * as a category badge.
  *
+ * The figure is the wet mass, because that is what an operator finds on site.
+ * Biochar and product bins track dry biochar, so it reads under the wet
+ * estimate as a smaller secondary figure, the same pair the detail sheet's
+ * stock card shows. Without a wet estimate the dry biochar is the only honest
+ * figure and takes its place.
+ *
  * Every mass here is fixed kg (`formatMassKg`), matching the detail sheet the
  * tile opens: a tile reading "1.5 t" above a sheet reading "1,470 kg" for the
  * same bin is the incoherence that rule prevents. Facility-wide roll-ups (the
@@ -24,6 +30,7 @@
 
 import { RowActionsMenu } from "@/components/ui";
 import { handleRowActivationClick } from "@/components/ui/data-table/data-table-helpers";
+import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { RecordLockChip } from "@/components/record-locks/record-lock-chip";
 import type { RecordLockView } from "@/lib/record-lock-view";
@@ -32,6 +39,7 @@ import { useOutputStockBalance } from "@/hooks/use-output-stock";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDate, formatDateTime, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
+import { formatWetEstimate } from "./stock-preview-shared";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   BIN_TYPE_META,
@@ -68,6 +76,8 @@ export function StorageBinTile({
 }: StorageBinTileProps) {
   const output = useOutputStockBalance(bin.type === "feedstock_bin" || bin.archivedAt != null ? null : { storageLocationId: bin.id, facilityId: bin.facilityId });
   const massKg = bin.type === "feedstock_bin" ? binCurrentMassKg(bin) : bin.archivedAt != null ? (bin.type === "biochar_bin" ? bin.biocharInventory.dryMassKg : bin.productInventory.dryMassKg) ?? null : output.data?.beforeDryKg ?? null;
+  // An archived bin has no posting read, so it has no wet estimate either.
+  const wetEstimateKg = bin.type === "feedstock_bin" || bin.archivedAt != null ? null : output.data?.beforeEstimatedWetKg ?? null;
   const fillPercent = bin.type === "feedstock_bin" ? binCapacityPercent(bin) : null;
   const needsReconciliation = binNeedsReconciliation(bin);
   const isEmpty = massKg === 0;
@@ -157,20 +167,25 @@ export function StorageBinTile({
           )}
         </p>
 
-        <div className="flex items-baseline justify-between gap-8">
-          <span
-            className={`body-large font-semibold tabular-nums ${
-              needsReconciliation
-                ? "text-[var(--color-signal-red)]"
-                : isEmpty
-                  ? "text-[var(--color-text-tertiary)]"
-                  : "text-[var(--color-text-primary)]"
-            }`}
-          >
-            {massKg == null ? MISSING_VALUE.notAvailable : isEmpty ? "Empty" : formatMassKg(massKg)}{massKg != null && bin.type !== "feedstock_bin" && " dry biochar"}
-          </span>
-          {needsReconciliation && (
-            <ReconcileLink bin={bin} onReconcile={onReconcile} />
+        <div className="flex flex-col gap-2">
+          <div className="flex items-baseline justify-between gap-8">
+            <span
+              className={`body-large font-semibold tabular-nums ${
+                needsReconciliation
+                  ? "text-[var(--color-signal-red)]"
+                  : isEmpty
+                    ? "text-[var(--color-text-tertiary)]"
+                    : "text-[var(--color-text-primary)]"
+              }`}
+            >
+              <TileFigure feedstock={bin.type === "feedstock_bin"} massKg={massKg} wetEstimateKg={wetEstimateKg} />
+            </span>
+            {needsReconciliation && (
+              <ReconcileLink bin={bin} onReconcile={onReconcile} />
+            )}
+          </div>
+          {!isEmpty && massKg != null && wetEstimateKg != null && (
+            <SecondaryFigure label="Dry biochar" value={formatMassKg(massKg)} />
           )}
         </div>
 
@@ -179,6 +194,18 @@ export function StorageBinTile({
       </div>
     </article>
   );
+}
+
+/**
+ * The tile's one figure. A feedstock bin's stock is its wet mass. An output
+ * bin leads with its wet estimate, and falls back to the dry biochar it tracks
+ * when nothing dates a moisture.
+ */
+function TileFigure({ feedstock, massKg, wetEstimateKg }: { feedstock: boolean; massKg: number | null; wetEstimateKg: number | null }) {
+  if (massKg == null) return MISSING_VALUE.notAvailable;
+  if (massKg === 0) return "Empty";
+  if (feedstock) return `${formatMassKg(massKg)} wet`;
+  return wetEstimateKg == null ? `${formatMassKg(massKg)} dry biochar` : `≈ ${formatWetEstimate(wetEstimateKg)} kg wet`;
 }
 
 /**

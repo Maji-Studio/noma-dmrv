@@ -26,6 +26,35 @@ describe('archived storage board tile', () => {
     expect(text).not.toContain('dry biochar');
     await act(async () => renderer.unmount());
   });
+  it('leads an active output bin with its wet estimate and keeps dry biochar as the secondary figure', async () => {
+    preview.mockReturnValue({ data: { beforeDryKg: 90, beforeEstimatedWetKg: 200 }, error: undefined } as never);
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, archivedAt: null, type: 'product_bin', productInventory: { formulationNames: [] } } as never} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).toContain('≈ 200 kg wet');
+    expect(text).toMatch(/"Dry biochar"\]\},\{.*"children":\["90 kg"\]/);
+    await act(async () => renderer.unmount());
+    preview.mockReturnValue({ data: undefined, error: undefined });
+  });
+  it('falls back to dry biochar when nothing dates a moisture', async () => {
+    preview.mockReturnValue({ data: { beforeDryKg: 90, beforeEstimatedWetKg: null }, error: undefined } as never);
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, archivedAt: null } as never} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).toContain('90 kg dry biochar');
+    expect(text).not.toContain('kg wet');
+    expect(text).not.toContain('Not available');
+    await act(async () => renderer.unmount());
+    preview.mockReturnValue({ data: undefined, error: undefined });
+  });
+  it('names a feedstock bin\'s stock as wet mass with no dry figure under it', async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, archivedAt: null, type: 'feedstock_bin', feedstockTypeName: 'Pine chips', feedstockInventory: { currentWetMassKg: 400, feedstockTypes: [] } } as never} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).toContain('400 kg wet');
+    expect(text).not.toContain('Dry biochar');
+    await act(async () => renderer.unmount());
+  });
   it('exposes the bin through one link and leaves the tile without a role or tab stop', async () => {
     const onView = vi.fn();
     let renderer!: ReactTestRenderer;
