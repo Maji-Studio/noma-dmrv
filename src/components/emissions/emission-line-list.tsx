@@ -247,7 +247,7 @@ function RowMenu({ line, scope, actions, canWrite }: { line: EmissionLine; scope
       Open template review
     </DropdownMenu.Item>
   ) : null;
-  const comment = canWrite && line.state !== "needsSetup" ? (
+  const comment = canWrite && line.state !== "needsSetup" && !line.removedFromTemplate ? (
     <DropdownMenu.Item key="comment" onClick={() => actions.comment(line)}>
       {line.comment ? "Edit comment" : "Add comment"}
     </DropdownMenu.Item>

@@ -36,7 +36,8 @@ interface AccordionBodyProps {
 export function EmissionLineAccordionBody({ id, line, scope, canWrite, editingComment, onEditingComment, onForm, onDeleteEntry }: AccordionBodyProps) {
   const model = lineBodyModel(line, canWrite);
   const setup = line.state === "needsSetup";
-  const addComment = canWrite && !setup && !line.comment && !editingComment;
+  // A line removed from the template takes no comment; the server refuses one.
+  const addComment = canWrite && !setup && !line.removedFromTemplate && !line.comment && !editingComment;
   return (
     <div id={id} role="region" aria-label={`${line.displayName} details`} className="flex flex-col pb-10">
       {(setup || model.reviewWithoutEntries) && (

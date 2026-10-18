@@ -187,6 +187,7 @@ it("returns typed entry details and retains removed lines for re-entry", async (
   expect(removed).toMatchObject({
     label: "Lab electricity",
     entries: [{ id: "entry", counts: false, canConfirm: false }],
+    removedFromTemplate: true,
     comment: null,
   });
 });
@@ -244,7 +245,7 @@ it("shows re-entry for unit changes and keeps other lines healthy", async () => 
   );
   const lines = await loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch");
   expect(lines[0]).toMatchObject({ state: "needsReview", total: null, blocker: { code: "lineNeedsReview", message: "Enter the values again for the current template line." }, entries: [expect.objectContaining({ counts: false, canConfirm: false })] });
-  expect(lines[1]).toMatchObject({ state: "filled", total: { magnitude: "1", unit: "kWh" } });
+  expect(lines[1]).toMatchObject({ state: "filled", total: { magnitude: "1", unit: "kWh" }, removedFromTemplate: false });
   expect(lines.every((line) => line.comment === null)).toBe(true);
   vi.mocked(listEmissionLineComments).mockResolvedValue([
     { id: "comment", componentId: "healthy", body: "Context", version: 1, updatedAt: new Date(), updatedBy: "user-id" },

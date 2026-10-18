@@ -205,6 +205,14 @@ describe("EmissionLineList", () => {
     expect(actions.editingComment).toHaveBeenCalledWith(expect.anything(), true);
   });
 
+  it("offers no comment on a line removed from the template", async () => {
+    renderList([makeLine({ state: "needsReview", removedFromTemplate: true, entries: [makeEntry({ counts: false, canConfirm: false })] })], true, ["line-1"]);
+    expect(screen.queryByRole("button", { name: "Add comment" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Metered electricity use emissions" }));
+    await screen.findAllByRole("menuitem");
+    expect(screen.queryByRole("menuitem", { name: "Add comment" })).toBeNull();
+  });
+
   it("opens the comment editor from Add comment", () => {
     const actions = renderList([makeLine()], true, ["line-1"]);
     fireEvent.click(screen.getByRole("button", { name: "Add comment" }));

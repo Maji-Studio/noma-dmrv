@@ -70,7 +70,8 @@ export function buildBatchEmissionLines(
         };
       });
     // Retired entry components remain visible for re-entry, but their comments do not.
-    const comment = currentComponents.has(line.componentId) ? commentsByComponent.get(line.componentId) : undefined;
+    const removedFromTemplate = !currentComponents.has(line.componentId);
+    const comment = removedFromTemplate ? undefined : commentsByComponent.get(line.componentId);
     return {
       ...line,
       label: line.displayName,
@@ -79,6 +80,7 @@ export function buildBatchEmissionLines(
       unit: inputShape.length === 1 ? inputShape[0].unit : null,
       entryPolicy: line.contract?.entryPolicy ?? "none",
       entries: entries.filter((entry) => entry.componentId === line.componentId),
+      removedFromTemplate,
       comment: comment ? {
         id: comment.id, body: comment.body, version: comment.version,
         updatedAt: comment.updatedAt, updatedBy: comment.updatedBy,
