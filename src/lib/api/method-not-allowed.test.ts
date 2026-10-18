@@ -8,7 +8,7 @@ import { buildOpenApiDocument } from "./openapi/document";
 
 const mocks = vi.hoisted(() => ({ resolve: vi.fn(), pre: vi.fn(), post: vi.fn(), log: vi.fn() }));
 vi.mock("@/lib/auth/api-context", () => ({ resolveApiContext: mocks.resolve }));
-vi.mock("./guards", () => ({ preAuthGuard: mocks.pre, postAuthGuard: mocks.post }));
+vi.mock("./guards", () => ({ preAuthGuard: mocks.pre, credentialAdmissionGuard: vi.fn(async () => ({ response: null, result: null })), postAuthGuard: mocks.post }));
 vi.mock("@/lib/log", () => ({ logger: { error: mocks.log } }));
 
 const rateHeaders = { "RateLimit-Limit": "120", "RateLimit-Remaining": "119", "RateLimit-Reset": "1" };

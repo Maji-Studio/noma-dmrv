@@ -1,3 +1,4 @@
+import { apiAudit } from "@/lib/api/audit";
 import { z } from "zod";
 import { DomainError } from "@/lib/domain-errors";
 import { toOperationJsonSchema } from "@/lib/operations/json-schema";
@@ -29,7 +30,7 @@ export async function createLabSampleResponse(request: Request, { ctx, headers, 
   rejectUnknownFields(body, createContract);
   const result = await runOperation(representationCheckedRecord, ctx, body, {
     deadlineMs: remainingDeadlineMs(deadlineAt), dryRun,
-    audit: { requestId, credentialId: ctx.credentialId, transport: "rest" as const },
+    audit: apiAudit(ctx, requestId, "rest"),
     idempotency: key ? { credentialId: ctx.credentialId, key } : undefined,
   });
   const responseBody = labSampleBody(result.data);
@@ -51,7 +52,7 @@ export async function mutateLabSampleResponse(request: Request, context: ApiRout
   if (!id) throw new DomainError("not_found", NOT_FOUND_MESSAGE);
   const key = readIdempotencyKey(request, false);
   const options = {
-    audit: { requestId, credentialId: ctx.credentialId, transport: "rest" as const },
+    audit: apiAudit(ctx, requestId, "rest"),
     dryRun,
     idempotency: key ? { credentialId: ctx.credentialId, key, target: id, precondition: precondition! } : undefined,
   };

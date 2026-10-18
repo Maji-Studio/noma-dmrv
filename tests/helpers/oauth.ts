@@ -68,3 +68,16 @@ export async function createOAuthFixture() {
   };
 }
 export type OAuthFixture = Awaited<ReturnType<typeof createOAuthFixture>>;
+
+/** Build transport requests without exposing the fixture's bearer as a return value. */
+export function oauthRequest(access: Awaited<ReturnType<OAuthFixture["accessToken"]>>, path: string, init: RequestInit = {}) {
+  const request = access.request(path);
+  const headers = new Headers(request.headers);
+  new Headers(init.headers).forEach((value, name) => headers.set(name, value));
+  return new Request(request, { ...init, headers });
+}
+export function oauthRpc(access: Awaited<ReturnType<OAuthFixture["accessToken"]>>, method: string, params: Record<string, unknown> = {}) {
+  return oauthRequest(access, "/api/mcp", { method: "POST", headers: {
+    "content-type": "application/json", accept: "application/json, text/event-stream", "mcp-protocol-version": "2025-06-18",
+  }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+}

@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { DatabaseError } from "pg";
 import { DomainError } from "@/lib/domain-errors";
 const mocks = vi.hoisted(() => ({ log: vi.fn(), pre: vi.fn(), post: vi.fn(), resolve: vi.fn(), read: vi.fn() }));
-vi.mock("@/lib/api/guards", () => ({ preAuthGuard: mocks.pre, postAuthGuard: mocks.post }));
+vi.mock("@/lib/api/guards", () => ({ preAuthGuard: mocks.pre, credentialAdmissionGuard: vi.fn(async () => ({ response: null, result: null })), postAuthGuard: mocks.post }));
 vi.mock("@/lib/auth/api-context", () => ({ resolveApiContext: mocks.resolve }));
 vi.mock("@/lib/read-models/api-me", () => ({ readApiMe: mocks.read }));
 vi.mock("@/lib/log", () => ({ logger: { error: mocks.log } }));

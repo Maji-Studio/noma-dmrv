@@ -1,3 +1,4 @@
+import { apiAudit } from "@/lib/api/audit";
 import { z } from "zod";
 import { DomainError } from "@/lib/domain-errors";
 import { createSupplierApi } from "@/lib/operations/supplier-api";
@@ -39,7 +40,7 @@ export async function createSupplierResponse(request: Request, { ctx, headers, d
   rejectUnknownFields(body, createContract);
   const result = await runOperation(createSupplierApi, ctx, body, {
     deadlineMs: remainingDeadlineMs(deadlineAt), dryRun,
-    audit: { requestId, credentialId: ctx.credentialId, transport: "rest" },
+    audit: apiAudit(ctx, requestId, "rest"),
     idempotency: key ? { credentialId: ctx.credentialId, key } : undefined,
   });
   const responseBody = createSupplierBody(result.data);
@@ -66,7 +67,7 @@ export async function updateSupplierResponse(request: Request, { ctx, headers, d
       ? { ...body, supplierId: id, expectedVersion: version } : body;
     const result = await runOperation(representationCheckedUpdate(id, revision), ctx, input, {
       deadlineMs: remainingDeadlineMs(deadlineAt), dryRun,
-      audit: { requestId, credentialId: ctx.credentialId, transport: "rest" },
+      audit: apiAudit(ctx, requestId, "rest"),
       idempotency: key ? { credentialId: ctx.credentialId, key, target: id, precondition: precondition! } : undefined,
     });
     const responseBody = supplierBody(result.data);
@@ -93,7 +94,7 @@ export async function commandSupplierResponse(request: Request, { ctx, headers, 
   return withCurrentOnStale(ctx, id, async () => {
     const options = {
       deadlineMs: remainingDeadlineMs(deadlineAt), dryRun,
-      audit: { requestId, credentialId: ctx.credentialId, transport: "rest" as const },
+      audit: apiAudit(ctx, requestId, "rest"),
       idempotency: key ? { credentialId: ctx.credentialId, key, target: id, precondition: precondition! } : undefined,
     };
     const input = { supplierId: id, expectedVersion: version };

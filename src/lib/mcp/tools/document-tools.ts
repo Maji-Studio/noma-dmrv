@@ -45,6 +45,11 @@ const annotations = { readOnlyHint: false, openWorldHint: false, destructiveHint
 
 function access(kind: "read" | "write") {
   return {
+    requiredScopes(args: unknown) {
+      const parsed = ownerSchema.safeParse(args);
+      if (!parsed.success) throw validationFailed(parsed.error);
+      return [API_DOCUMENT_OWNERS[parsed.data.ownerType][kind === "read" ? "readScope" : "writeScope"]];
+    },
     visible: (ctx: ApiContext) => API_DOCUMENT_OWNER_TYPES.some(owner => canAccessOwnerDocuments(ctx, owner, kind)),
     authorize(ctx: ApiContext, args: unknown) {
       if (kind === "read") parseQueryInput(args, ownerSchema);

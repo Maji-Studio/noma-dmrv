@@ -1,3 +1,4 @@
+import { apiKeyContext } from "../../../../tests/helpers/api-context";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { supplierWriteTools } from "./supplier-tools";
 import { customerWriteTools } from "./customer-tools";
@@ -18,7 +19,7 @@ const CLOCK = "2026-10-06T10:00:00.000Z";
 const DEADLINE_MS = 10_000;
 const tools = [...supplierWriteTools, ...customerWriteTools].filter(tool => tool.name.endsWith("_location"));
 const site = { name: "Site", country: "Tanzania", gpsLatitude: -8, gpsLongitude: 34 };
-const context = { ctx: { credentialId: "credential", organizationId: "org", userId: "user" }, deadlineAt: 0,
+const context = { ctx: apiKeyContext({ credentialId: "credential", organizationId: "org", userId: "user" }), deadlineAt: 0,
   requestId: "request", instance: "/api/mcp", headers: new Headers() } as unknown as ApiRouteContext;
 const kind = (name: string) => name.includes("supplier") ? "supplier" : "customer";
 const args = (name: string): Record<string, unknown> => ({ [`${kind(name)}Id`]: PARENT_ID,

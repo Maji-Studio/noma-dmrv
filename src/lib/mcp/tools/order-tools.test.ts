@@ -1,3 +1,4 @@
+import { apiKeyContext } from "../../../../tests/helpers/api-context";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ORDER_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { representationEtag } from "@/lib/api/etag";
@@ -30,7 +31,7 @@ const row = { id: ID, code: "OR-26-0001", version: 1, facilityId: ID, customerId
   formulationId: ID, orderDate: "2026-09-12", quantityKg: MASS_KG, packaging: "bagged", archivedAt: null, createdAt: CLOCK, updatedAt: CLOCK };
 const create = { facilityId: ID, customerId: ID, customerLocationId: ID, formulationId: ID, orderDate: row.orderDate, quantityKg: MASS_KG };
 const target = { orderId: ID, expectedVersion: row.version };
-const context = { ctx: { credentialId: "credential", organizationId: "org", userId: "user" }, deadlineAt: 0,
+const context = { ctx: apiKeyContext({ credentialId: "credential", organizationId: "org", userId: "user" }), deadlineAt: 0,
   requestId: "request", instance: "/api/mcp", headers: new Headers() } as unknown as ApiRouteContext;
 const args = (name: string) => name === "record_order" ? create : target;
 const schema = (name: string) => name === "record_order" ? recordOrderInput : name === "update_order" ? updateOrderInput : deleteOrderInput;

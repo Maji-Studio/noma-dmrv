@@ -1,3 +1,4 @@
+import { apiKeyContext } from "../../../../tests/helpers/api-context";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DomainError } from "@/lib/domain-errors";
 import { validationFailed } from "@/lib/operations/errors";
@@ -20,7 +21,7 @@ describe.each(["supplier", "customer"] as const)("%s write tools", kind => {
   const tools = (kind === "supplier" ? supplierWriteTools : customerWriteTools).filter(tool => !tool.name.endsWith("_location"));
   const idKey = `${kind}Id`;
   const row = { id: ID, code: kind === "supplier" ? "SUP-0001" : "CUS-0001", name: "Party", version: 1, ...(kind === "supplier" ? { sourceRegion: null } : { cropType: null }), archivedAt: null, createdAt: CLOCK, updatedAt: CLOCK };
-  const context = { ctx: { credentialId: "credential", organizationId: "org", userId: "user" }, deadlineAt: 0,
+  const context = { ctx: apiKeyContext({ credentialId: "credential", organizationId: "org", userId: "user" }), deadlineAt: 0,
     requestId: "request", instance: "/api/mcp", headers: new Headers() } as unknown as ApiRouteContext;
   const args = (name: string) => name === `create_${kind}` ? { name: "Party", locations: [{ name: "Site", country: "Tanzania", gpsLatitude: -8, gpsLongitude: 34 }] } : { [idKey]: ID, expectedVersion: 1 };
   beforeEach(() => {

@@ -234,12 +234,18 @@ versions answer `replay_unavailable`. The claim path deletes expired records
 lazily before reclaiming their keys.
 
 `src/lib/api/guards.ts:preAuthGuard` charges the pre-authentication IP limit
-first. Routes then resolve the credential with `resolveApiContext` (including
-organization API access), and call `src/lib/api/guards.ts:postAuthGuard`: the
-write kill switch precedes credential and organization limits, charged in that
+first: 300 requests per minute, or 6,000 for configured connector egress CIDRs
+when forwarding headers come through Vercel. Routes then resolve the credential
+with `resolveApiContext` (including organization API access) and charge its
+admit bucket before body parsing, scope checks or method refusals. The admit
+capacity and refill budget are `API_ADMIT_RATE_LIMIT`, the credential read plus
+write budgets (600 + 120 = 720 requests per minute), so admission preserves
+combined throughput. Refused requests still consume admission.
+After scope checks, `src/lib/api/guards.ts:postAuthGuard` applies the write kill
+switch before credential and organization operation limits, charged in that
 order with separate read/write budgets. Dry runs count as writes. PostgreSQL
 token buckets are debited outside the operation transaction; rollback never
-refunds them. Limits come from `src/config/api-rate-limits.ts:API_RATE_LIMITS`.
+refunds them. Limits come from `src/config/api-rate-limits.ts`.
 
 `GET /api/cron/purge-api-records` verifies a bearer `CRON_SECRET`, then purges
 expired idempotency records and idle rate-limit buckets in bounded batches.
@@ -250,7 +256,7 @@ Staging is Preview and relies on lazy claim expiry; see
 ### Feedstock REST adapter
 
 `lib/api/route.ts` records the deadline, runs `preAuthGuard`, resolves the
-credential, checks role/scope through `admitApiRequest`, then runs
+credential, charges credential admission, checks role/scope through `admitApiRequest`, then runs
 `postAuthGuard` before the handler. GET and HEAD use read budgets (including
 `/api/v1/me`); all other methods, including dry runs, use write budgets. Guard
 denials return directly. Admitted responses, including problems, carry the
@@ -651,14 +657,18 @@ requires the method/path (or `components`) and change description on each line.
 ### MCP tools on API keys
 
 `src/app/api/mcp/route.ts` serves stateless JSON-RPC POSTs through the pinned
-`mcp-handler` and MCP server SDK. GET and DELETE return 405. Origin validation
-runs first; requests without Origin pass. The shared `lib/api/route.ts`
+`mcp-handler` and MCP server SDK. GET and DELETE authenticate before returning
+405 with `Allow: POST` (decision 132); missing credentials return 401. These
+method refusals charge the pre-authentication IP and credential admit buckets
+only, with no read or write operation debit. POST Origin validation runs first;
+requests without Origin pass. The shared `lib/api/route.ts`
 admission wrapper starts the deadline before authentication, assigns a request
 id and applies the same API-key resolver and rate-limit buckets as REST.
 After authentication, the preparation hook bounds the body to `API_BODY_MAX_BYTES`
 and returns HTTP 413 `payload_too_large` if it exceeds that limit. JSON-RPC
 batch arrays return HTTP 400 `batch_not_supported`. Both refusals use
-`application/problem+json` and precede authenticated rate limiting and dispatch.
+`application/problem+json` and follow credential admission but precede operation
+rate limiting and dispatch.
 `lib/mcp/server.ts` classifies calls to write tools as writes, including dry runs;
 other admitted MCP requests count as reads.
 
@@ -668,10 +678,15 @@ get_feedstock. Each request captures its resolved context in a fresh server.
 and delete_feedstock through the same operation runner as REST. Each write needs
 one requestKey reused on retry; dryRun previews may omit it. Updates and deletes
 take expectedVersion from get_feedstock. Activity audit rows record source `mcp`.
-Existing tools keep their single `hasRoleAndScope` scope check. Document tools
-use `visible(ctx)` to appear when the role floor and any supported owner's
-scope allow them, then `authorize(ctx, args)` checks the selected owner before
-execution. A missing owner scope returns an `isError` `missing_scope` problem.
+API keys discover tools allowed by their scopes. OAuth discovery uses the live
+role ceiling, allowing clients to discover grantable writes; deletes remain
+hidden and return "Unknown tool." OAuth calls missing a grantable scope return
+HTTP 403 with an `insufficient_scope` challenge before dispatch and operation
+rate limiting. The dispatcher also checks every required scope before execution
+and returns an `isError` `missing_scope` problem as a backstop. Document tools
+use `visible(ctx)` for owner-sensitive discovery, then `authorize(ctx, args)`
+checks the selected owner. Missing or unknown document owner types stay inside
+MCP argument validation; document reads return `invalid_query`.
 `find_documents` and `get_document_download_url` use the owner's read scope;
 `request_document_upload` and `confirm_document_upload` use its write scope.
 The upload request requires `requestKey`; confirmation takes neither a key nor

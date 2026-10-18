@@ -23,7 +23,7 @@ const guidance = `${REQUEST_KEY_RULE} ${STOCK_EFFECTS_RULE} ${UNTRUSTED_TEXT}`;
 
 export const biocharProductWriteTools: WriteTool[] = [
   {
-    kind: "write", name: "make_biochar_product", scope: "biochar-products:write", input: createInput, output: createOutput,
+    kind: "write", name: "make_biochar_product", scope: "biochar-products:write", requiredScopes: () => ["biochar-products:write"], input: createInput, output: createOutput,
     annotations: { ...annotations, destructiveHint: false },
     description: `Make a biochar product: draw biochar, and ingredients for a blend, from bins and place it in a product bin. Call whoami, find_formulations and find_storage_locations first. ${BIOCHAR_PRODUCT_GUIDANCE} ${guidance}`,
     async execute(context, raw) {
@@ -38,7 +38,7 @@ export const biocharProductWriteTools: WriteTool[] = [
     },
   },
   {
-    kind: "write", name: "update_biochar_product", scope: "biochar-products:write", input: updateInput, output: updateOutput,
+    kind: "write", name: "update_biochar_product", scope: "biochar-products:write", requiredScopes: () => ["biochar-products:write"], input: updateInput, output: updateOutput,
     annotations: { ...annotations, destructiveHint: true },
     description: `Update a biochar product by UUID. Only code, status and densityKgM3 can change; null clears the density. Call get_biochar_product first and pass version as expectedVersion. A stale version fails with the current record. ${guidance}`,
     execute: update,

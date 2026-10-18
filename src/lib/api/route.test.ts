@@ -10,7 +10,7 @@ import { apiRoute } from "./route";
 
 const mocks = vi.hoisted(() => ({ resolve: vi.fn(), log: vi.fn(), pre: vi.fn(), post: vi.fn() }));
 vi.mock("@/lib/auth/api-context", () => ({ resolveApiContext: mocks.resolve }));
-vi.mock("./guards", () => ({ preAuthGuard: mocks.pre, postAuthGuard: mocks.post }));
+vi.mock("./guards", () => ({ preAuthGuard: mocks.pre, credentialAdmissionGuard: vi.fn(async () => ({ response: null, result: null })), postAuthGuard: mocks.post }));
 vi.mock("@/lib/log", () => ({ logger: { error: mocks.log } }));
 beforeEach(() => {
   vi.resetAllMocks();

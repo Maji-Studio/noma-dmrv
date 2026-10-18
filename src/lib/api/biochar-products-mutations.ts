@@ -1,3 +1,4 @@
+import { apiAudit } from "@/lib/api/audit";
 import { DomainError } from "@/lib/domain-errors";
 import { toOperationJsonSchema } from "@/lib/operations/json-schema";
 import { runOperation } from "@/lib/operations/runner";
@@ -23,7 +24,7 @@ export async function createBiocharProductResponse(request: Request, { ctx, head
   rejectUnknownFields(body, createContract);
   const result = await runWithStockBasisPreview(representationCheckedMake, ctx, body, {
     deadlineAt, dryRun,
-    audit: { requestId, credentialId: ctx.credentialId, transport: "rest" as const },
+    audit: apiAudit(ctx, requestId, "rest"),
     idempotency: key ? { credentialId: ctx.credentialId, key } : undefined,
   }, (data) => data.basisFingerprint);
   const responseBody = madeProductBody(result, dryRun);
@@ -52,7 +53,7 @@ export async function updateBiocharProductResponse(request: Request, { ctx, head
       ? { ...body, biocharProductId: id, expectedVersion: version } : body;
     const result = await runOperation(representationCheckedUpdate(id, revision), ctx, input, {
       deadlineMs: remainingDeadlineMs(deadlineAt), dryRun,
-      audit: { requestId, credentialId: ctx.credentialId, transport: "rest" as const },
+      audit: apiAudit(ctx, requestId, "rest"),
       idempotency: key ? { credentialId: ctx.credentialId, key, target: id, precondition: precondition! } : undefined,
     });
     const data = productBodyData(result.data);

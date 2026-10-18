@@ -1,3 +1,4 @@
+import { apiKeyContext } from "../../../../tests/helpers/api-context";
 import { beforeEach, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { API_FEEDSTOCK_MAX_ALLOCATIONS, API_IDEMPOTENCY_KEY_MAX_LENGTH, FEEDSTOCK_REPRESENTATION_REVISION } from "@/config/api-rest";
@@ -45,7 +46,7 @@ const VERSION = 4;
 const MASS_KG = 100;
 const DEADLINE_MS = 10_000;
 const context = {
-  ctx: { credentialId: "credential", organizationId: "organization", userId: "user", orgRole: "admin", scopes: [] },
+  ctx: apiKeyContext({ credentialId: "credential", organizationId: "organization", userId: "user", orgRole: "admin", scopes: [] }),
   deadlineAt: Date.now() + DEADLINE_MS, requestId: "request", instance: "/api/mcp", headers: new Headers(),
 } as unknown as ApiRouteContext;
 const row = {

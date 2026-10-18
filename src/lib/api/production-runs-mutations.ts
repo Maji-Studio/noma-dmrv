@@ -1,3 +1,4 @@
+import { apiAudit } from "@/lib/api/audit";
 import { remainingDeadlineMs } from "./write-checks";
 import { z } from "zod";
 import { checkProductionRunDraws, productionRunBody, representationCheckedStart, representationCheckedUpdate, representationCheckedDelete, withCurrentOnStale } from "./production-run-write-checks";
@@ -27,7 +28,7 @@ export async function createProductionRunResponse(request: Request, { ctx, heade
   checkProductionRunDraws(body);
   const result = await runOperation(representationCheckedStart, ctx, body, {
     deadlineMs: remainingDeadlineMs(deadlineAt),
-    audit: { requestId, credentialId: ctx.credentialId, transport: "rest" as const },
+    audit: apiAudit(ctx, requestId, "rest"),
     dryRun, idempotency: key ? { credentialId: ctx.credentialId, key } : undefined,
   });
   const responseBody = productionRunBody(result, dryRun);
@@ -48,7 +49,7 @@ export async function mutateProductionRunResponse(request: Request, context: Api
   if (!id) throw new DomainError("not_found", "Production run was not found.");
   const key = readIdempotencyKey(request, false);
   const options = {
-    audit: { requestId, credentialId: ctx.credentialId, transport: "rest" as const },
+    audit: apiAudit(ctx, requestId, "rest"),
     dryRun, idempotency: key ? { credentialId: ctx.credentialId, key, target: id, precondition: precondition! } : undefined,
   };
   return withCurrentOnStale(ctx, id, async () => {

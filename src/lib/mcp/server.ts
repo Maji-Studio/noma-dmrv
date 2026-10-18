@@ -5,7 +5,9 @@ import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { API_VERSION } from "@/config/api-rest";
 import type { ApiContext } from "@/lib/auth/api-context";
 import type { ApiRouteContext } from "@/lib/api/route";
+import { oauthRoleCeiling } from "@/lib/auth/oauth-scopes";
 import { principalAllows } from "@/lib/auth/api-scopes";
+import { ApiHttpError } from "@/lib/api/http-error";
 import { deadlineExceeded } from "@/lib/domain-errors";
 import { toToolSchema } from "@/lib/operations/mcp-schema";
 import { readTools } from "./tools/read-tools";
@@ -13,7 +15,9 @@ import { toolOutputSchema, toolFailure, toolSuccess, writesDisabledResult } from
 import { mcpInstructions } from "./instructions";
 
 function visibleTools(ctx: ApiContext) {
-  return new Map([...readTools, ...writeTools].filter((tool) => tool.visible ? tool.visible(ctx) : !tool.scope || principalAllows(ctx, tool.scope))
+  const discovery = ctx.principal.kind === "oauth" ? { ...ctx, scopes: [...oauthRoleCeiling(ctx.orgRole)] } : ctx;
+  return new Map([...readTools, ...writeTools].filter((tool) => tool.visible ? tool.visible(discovery)
+    : tool.requiredScopes({}).every(scope => principalAllows(discovery, scope)))
     .map((tool) => [tool.name, tool]));
 }
 
@@ -22,6 +26,25 @@ function requestedTool(ctx: ApiContext, body: unknown) {
     || !("params" in body) || !body.params || typeof body.params !== "object"
     || !("name" in body.params) || typeof body.params.name !== "string") return undefined;
   return visibleTools(ctx).get(body.params.name);
+}
+
+/** OAuth calls to discoverable tools resolve scopes before dispatch, so a
+ * missing grantable scope gets a step-up challenge. Hidden tools (such as
+ * deletes, never grantable to a connection) fall through to "Unknown tool". */
+export function mcpRequestRequiredScopes(ctx: ApiContext, body: unknown) {
+  if (ctx.principal.kind !== "oauth" || !body || typeof body !== "object"
+    || !("method" in body) || body.method !== "tools/call"
+    || !("params" in body) || !body.params || typeof body.params !== "object"
+    || !("name" in body.params) || typeof body.params.name !== "string") return [];
+  const name = body.params.name;
+  const tool = visibleTools(ctx).get(name);
+  const args = "arguments" in body.params ? body.params.arguments : {};
+  try {
+    return tool?.requiredScopes(args) ?? [];
+  } catch {
+    // Dispatch owns argument validation and its structured tool errors.
+    return [];
+  }
 }
 
 export function mcpRequestAccess(ctx: ApiContext, body: unknown): "read" | "write" {
@@ -50,6 +73,9 @@ export function serveMcp(request: Request, context: ApiRouteContext): Promise<Re
       try {
         if (Date.now() >= context.deadlineAt) throw deadlineExceeded("before starting");
         await tool.authorize?.(context.ctx, rpc.params.arguments ?? {});
+        if (!tool.requiredScopes(rpc.params.arguments ?? {}).every(scope => principalAllows(context.ctx, scope))) {
+          throw new ApiHttpError(403, "missing_scope", "The credential cannot authorize this request.");
+        }
         if (tool.kind === "write") {
           if (env.API_WRITES_DISABLED) return writesDisabledResult();
           const result = await tool.execute(context, rpc.params.arguments ?? {});

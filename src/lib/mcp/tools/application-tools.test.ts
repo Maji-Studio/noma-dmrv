@@ -1,3 +1,4 @@
+import { apiKeyContext } from "../../../../tests/helpers/api-context";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { ApiContext } from "@/lib/auth/api-context";
 import { principalAllows, type ApiScope } from "@/lib/auth/api-scopes";
@@ -27,7 +28,7 @@ const row = { id: ID, code: "AP-1", version: 1, deliveryId: ID, applicationDate:
   gpsLatitude: 1, gpsLongitude: 2, gisBoundary: null, soilTemperatureSource: null, soilTemperatureC: null, allocations: [],
   createdAt: "2025-07-08T00:00:00Z", updatedAt: "2025-07-08T00:00:00Z" };
 const output = { application: row, allocations: [], deliveryBalance: { remainingWetMassKgBefore: 500, remainingWetMassKgAfter: 400 }, warnings: ["GPS copied from customer location North."] };
-const context = { ctx: { credentialId: "credential", organizationId: "org", orgRole: "admin", scopes: [] },
+const context = { ctx: apiKeyContext({ credentialId: "credential", organizationId: "org", orgRole: "admin", scopes: [] }),
   requestId: "request", deadlineAt: 0 } as unknown as ApiRouteContext;
 const args = (name: string) => name === "record_application" ? create : target;
 const write = (name: string) => applicationWriteTools.find(tool => tool.name === name)!;

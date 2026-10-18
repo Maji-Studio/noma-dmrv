@@ -1,8 +1,8 @@
 import { env } from "@/config/env";
-import { API_RATE_LIMITS } from "@/config/api-rate-limits";
+import { API_RATE_LIMITS, API_ADMIT_RATE_LIMIT, API_CONNECTOR_EGRESS_CIDRS } from "@/config/api-rate-limits";
 import { consumeRateLimit, type RateLimitResult } from "@/data-access/api-rate-limits";
 import type { ApiContext } from "@/lib/auth/api-context";
-import { clientIpBucketKey } from "./client-ip";
+import { clientIp, clientIpBucketKey, matchesCidr } from "./client-ip";
 import { problemResponse, rateLimitHeaders } from "./problem";
 
 type RequestInfo = { requestId: string; instance: string };
@@ -27,8 +27,19 @@ export async function preAuthGuard(
   info: RequestInfo,
 ): Promise<{ response: Response | null; result: RateLimitResult | null }> {
   if (bypassLimits()) return { response: null, result: null };
+  const ip = clientIp(request.headers);
+  const capacity = API_CONNECTOR_EGRESS_CIDRS.some(cidr => matchesCidr(ip, cidr)) ? API_RATE_LIMITS.connectorIp : API_RATE_LIMITS.ip;
   const result = await consumeRateLimit({
-    key: clientIpBucketKey(request.headers), capacity: API_RATE_LIMITS.ip, refillPerMinute: API_RATE_LIMITS.ip,
+    key: clientIpBucketKey(request.headers), capacity, refillPerMinute: capacity,
+  });
+  return { response: result.allowed ? null : limitedResponse(result, info), result };
+}
+
+/** Every resolved request pays before parsing, scopes or method refusal. */
+export async function credentialAdmissionGuard(ctx: ApiContext, info: RequestInfo) {
+  if (bypassLimits()) return { response: null, result: null };
+  const result = await consumeRateLimit({
+    key: `credential:${ctx.credentialId}:admit`, capacity: API_ADMIT_RATE_LIMIT, refillPerMinute: API_ADMIT_RATE_LIMIT,
   });
   return { response: result.allowed ? null : limitedResponse(result, info), result };
 }
