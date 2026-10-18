@@ -12,3 +12,6 @@ allowBuilds:
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+
+patchedDependencies:
+  '@better-auth/oauth-provider@1.7.10': patches/@better-auth__oauth-provider@1.7.10.patch

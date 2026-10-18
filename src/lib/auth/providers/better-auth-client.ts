@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { createAuthClient } from "better-auth/react";
 import { organizationClient } from "better-auth/client/plugins";
 
@@ -31,7 +32,7 @@ function resolveAuthBaseURL(): string {
 
 export const authClient = createAuthClient({
   baseURL: resolveAuthBaseURL(),
-  plugins: [organizationClient()],
+  plugins: [organizationClient(), oauthProviderClient()],
 });
 
 export interface AuthResult<T = void> {

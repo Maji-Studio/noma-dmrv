@@ -2,6 +2,9 @@
  * Better Auth configuration
  * Sets up authentication with email/password and admin invite
  */
+import { createOAuthProvider } from "./oauth-provider";
+import { oauthBefore } from "./oauth-hooks";
+import { OAUTH_ENDPOINT_LIMITS } from "@/config/oauth";
 import { apiKey } from "@better-auth/api-key";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { createAccessControl } from "better-auth/plugins/access";
@@ -160,6 +163,7 @@ export const auth = betterAuth({
       if (ctx.path?.startsWith("/api-key/") && (ctx.request || ctx.headers)) {
         throw new APIError("FORBIDDEN", { message: "Use organization credential actions." });
       }
+      if (env.OAUTH_PROVIDER_ENABLED) return oauthBefore(ctx);
     }),
     after: createAuthMiddleware(async (ctx) => {
       // Better Auth's leave endpoint does not invoke afterRemoveMember.
@@ -180,6 +184,13 @@ export const auth = betterAuth({
     // default, so opt in explicitly or those writes can commit independently.
     transaction: true,
     schema: {
+      oauthClient: schema.oauthClients,
+      oauthResource: schema.oauthResources,
+      oauthClientResource: schema.oauthClientResources,
+      oauthConsent: schema.oauthConsents,
+      oauthAccessToken: schema.oauthAccessTokens,
+      oauthRefreshToken: schema.oauthRefreshTokens,
+      oauthClientAssertion: schema.oauthClientAssertions,
       apikey: schema.apiKeys,
       user: schema.users,
       session: schema.sessions,
@@ -277,6 +288,7 @@ export const auth = betterAuth({
     window: 60,
     max: 100,
     customRules: {
+      ...(env.OAUTH_PROVIDER_ENABLED ? { "/oauth2/consent": OAUTH_ENDPOINT_LIMITS.consent, "/oauth2/continue": OAUTH_ENDPOINT_LIMITS.continue } : {}),
       "/sign-in/email": { window: 15 * 60, max: 10 },
       "/sign-up/email": { window: 60 * 60, max: 3 },
       "/request-password-reset": { window: 15 * 60, max: 5 },
@@ -370,6 +382,7 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    ...(env.OAUTH_PROVIDER_ENABLED ? [createOAuthProvider()] : []),
     apiKey({
       references: "organization",
       defaultPrefix: env.NODE_ENV === "production" ? API_KEY_LIVE_PREFIX : API_KEY_TEST_PREFIX,
