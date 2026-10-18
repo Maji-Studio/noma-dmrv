@@ -39,6 +39,9 @@ import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useRef, useState } from "react";
 import { ORDER_DEEP_LINK_PARAM } from "@/lib/order-links";
 import { OrderForm } from "./order-form";
+import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { orderSheetSections } from "./order-read-sections";
 import { ILLUSTRATION_SIZE, OrderArt } from "@/components/ui/illustrations";
 
@@ -51,7 +54,9 @@ const ORDER_CUSTOMER_FILTER_OPTIONS = { includeArchived: "true" };
 
 function createColumns(
   onEdit: (order: OrderWithRelations) => void,
-  onDelete: (orderId: string) => void
+  onDelete: (orderId: string) => void,
+  locks: RecordLockViews,
+  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<OrderWithRelations>[] {
   return [
     {
@@ -115,21 +120,25 @@ function createColumns(
         return <StatusBadge status={badgeStatus} label={label} />;
       },
     },
+    recordLockColumn<OrderWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end">
-          <RowActionsMenu
-            label={`Actions for ${row.original.code}`}
-            actions={[
-              { label: "Edit", onSelect: () => onEdit(row.original) },
-              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
-            ]}
-          />
-        </div>
-      ),
+      cell: ({ row }) => {
+        const lock = locks[row.original.id];
+        // Never offer what the server refuses: Sent locks every field, and an
+        // order with deliveries cannot be deleted.
+        const actions = [
+          ...(isRecordEditable(lock) ? [{ label: "Edit", onSelect: () => onEdit(row.original) }] : []),
+          ...(isRecordDeletable(lock) ? [{ label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) }] : []),
+        ];
+        return (
+          <div className="flex items-center justify-end">
+            {actions.length > 0 && <RowActionsMenu label={`Actions for ${row.original.code}`} actions={actions} />}
+          </div>
+        );
+      },
       enableSorting: false,
     },
   ];
@@ -206,6 +215,8 @@ export function OrderList() {
   const toast = useToast();
 
   const orders = ordersData?.items ?? [];
+  const orderLocks = useRecordLocks("order", orders.map((order) => order.id));
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("order", displaySideSheet?.entity?.id);
   const totalOrders = ordersData?.total ?? 0;
   const totalPages = ordersData?.totalPages ?? 0;
   useReconcileListPage({
@@ -325,7 +336,7 @@ export function OrderList() {
   };
   const hasActiveFilters = !!searchQuery || !!statusFilter || !!customerFilter;
 
-  const columns = createColumns(openEdit, handleDelete);
+  const columns = createColumns(openEdit, handleDelete, orderLocks.locks, orderLocks.statusOf);
 
   if (!facilityId) {
     return (
@@ -459,12 +470,15 @@ export function OrderList() {
         }}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
+        canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit order"
         sections={sideSheetEntity ? orderSheetSections(sideSheetEntity) : undefined}
       >
         <OrderForm
           key={sideSheetEntity?.id ?? "create"}
           order={displaySideSheet?.entity as Order | undefined}
+          lock={sheetLock}
           onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
           onCancel={closeSideSheet}
           isSubmitting={createOrder.isPending || updateOrder.isPending}

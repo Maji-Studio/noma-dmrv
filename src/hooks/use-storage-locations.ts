@@ -4,6 +4,7 @@
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import {
   keepPreviousData,
   useMutation,
@@ -99,6 +100,7 @@ export function useCreateStorageLocation(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.storageLocation),
     mutationFn: async (data: CreateStorageLocationData) => {
       const result = await createStorageLocationFn(data);
       if (!result.success) {
@@ -153,6 +155,7 @@ export function useUpdateStorageLocation(
   const { optimistic = true } = options ?? {};
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.storageLocation),
     mutationFn: async (data: UpdateStorageLocationData) => {
       const result = await updateStorageLocationFn(data);
       // Keeps an expected-version refusal typed so the open edit form can show
@@ -305,6 +308,7 @@ export function useArchiveStorageLocation(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.storageLocation),
     mutationFn: async (variables: { storageLocationId: string; expectedVersion: number }) => {
       const result = await archiveStorageLocationFn(variables);
       if (!result.success) {
@@ -344,6 +348,7 @@ export function useRestoreStorageLocation(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.storageLocation),
     mutationFn: async (variables: { storageLocationId: string; expectedVersion: number }) => {
       const result = await restoreStorageLocationFn(variables);
       if (!result.success) {
@@ -386,6 +391,7 @@ export function useDeleteStorageLocation(
   const { optimistic = true } = options ?? {};
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.storageLocation),
     mutationFn: async (variables: { storageLocationId: string; expectedVersion: number }) => {
       const result = await deleteStorageLocationFn(variables);
       if (!result.success) {

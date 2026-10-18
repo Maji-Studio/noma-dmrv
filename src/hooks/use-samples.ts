@@ -1,4 +1,5 @@
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 /**
  * Samples React Query Hooks
@@ -108,6 +109,7 @@ export function useCreateSample(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.sample),
     mutationFn: async (data: CreateSampleData) => unwrap(await createSampleFn(data)),
     onMutate: async (variables) => {
       await callbacks?.onMutate?.(variables);
@@ -153,6 +155,7 @@ export function useUpdateSample(
   const { optimistic = true } = options ?? {};
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.sample),
     mutationFn: async (data: UpdateSampleData) => {
       const result = await updateSampleFn(data);
       if (!result.success) {
@@ -291,6 +294,7 @@ export function useDeleteSample(
   const { optimistic = true } = options ?? {};
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.sample),
     mutationFn: async (variables: DeleteSampleData) => {
       const result = await deleteSampleFn(variables);
       if (!result.success) {
