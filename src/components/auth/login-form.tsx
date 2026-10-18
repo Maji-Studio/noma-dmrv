@@ -27,6 +27,26 @@ function getSafeSignInPath(from: string | null): string {
   return from;
 }
 
+function isSignedCallback(url: URL, callback: URL): boolean {
+  if (url.origin !== callback.origin || url.pathname !== callback.pathname || url.hash !== "") return false;
+  return [...callback.searchParams].every(([name, value]) => url.searchParams.getAll(name).includes(value));
+}
+
+function safeOAuthContinuation(value: string, query: Pick<URLSearchParams, "get" | "getAll">): string | null {
+  try {
+    const url = new URL(value, window.location.origin);
+    if (value.startsWith("/") && !value.startsWith("//") && !value.startsWith("/\\") &&
+      url.origin === window.location.origin) return url.href;
+    // Remembered consent goes straight to the client's callback with the
+    // response parameters (code, state, iss) appended, so match the signed
+    // redirect_uri's origin and path and keep its own query parameters.
+    const signedCallback = query.get("redirect_uri");
+    if (query.get("sig") && query.getAll("ba_param").includes("redirect_uri") && signedCallback &&
+      ["https:", "http:"].includes(url.protocol) && isSignedCallback(url, new URL(signedCallback))) return url.href;
+  } catch { /* Malformed continuations must restart authorization. */ }
+  return null;
+}
+
 export function LoginForm() {
   const [serverError, setServerError] = useState("");
   const [showResendVerification, setShowResendVerification] = useState(false);
@@ -58,6 +78,15 @@ export function LoginForm() {
     const result = await signIn(data.email, data.password);
 
     if (result.success) {
+      if (result.redirectUrl) {
+        const continuation = safeOAuthContinuation(result.redirectUrl, searchParams);
+        if (!continuation) {
+          setServerError("Start again from the app.");
+          return;
+        }
+        window.location.assign(continuation);
+        return;
+      }
       router.push(getSafeSignInPath(searchParams.get("from")));
     } else {
       setServerError(

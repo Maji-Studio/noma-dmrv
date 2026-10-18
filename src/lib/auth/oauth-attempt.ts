@@ -21,7 +21,11 @@ async function currentAttempt({ user, session }: Identity) {
   // 1.7.10 sets this at authorize and verifies oauth_query before consent/continue.
   const state = await getOAuthProviderState();
   if (!state?.query) accessDenied();
-  const query = new URLSearchParams(state.query);
+  return oauthAttemptIdentity({ user, session }, new URLSearchParams(state.query));
+}
+
+/** Only call with provider state or a signature-verified query. */
+export async function oauthAttemptIdentity({ user, session }: Identity, query: URLSearchParams) {
   const clientId = query.get("client_id");
   if (!clientId || !query.get("code_challenge") || !query.get("redirect_uri")) accessDenied();
   const requested = query.getAll("resource");
@@ -38,7 +42,7 @@ export async function shouldRedirectOAuth(input: Identity): Promise<boolean> {
     const existing = await findOAuthAttempt(attempt);
     const selection = await getOAuthOrganizationSelection(attempt);
     if (existing) {
-      if (!selection.memberships.some(member => member.memberId === existing.memberId && member.organizationId === existing.organizationId)) accessDenied();
+      if (!selection.memberships.some(member => !member.disabledReason && member.memberId === existing.memberId && member.organizationId === existing.organizationId)) accessDenied();
       return false;
     }
     if (!selection.autoSelectOrganizationId) return true;

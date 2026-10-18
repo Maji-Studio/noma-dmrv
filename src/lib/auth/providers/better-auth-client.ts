@@ -12,6 +12,7 @@ import { organizationClient } from "better-auth/client/plugins";
 const PASSWORD_RESET_TIMEOUT_MS = 10000;
 /** Path the reset-password email link should redirect the user back to. */
 const PASSWORD_RESET_REDIRECT_PATH = "/reset-password";
+const OAUTH_RESTART_ERRORS = new Set(["invalid_signature", "access_denied"]);
 
 /**
  * Resolve the origin auth requests should target.
@@ -39,6 +40,7 @@ export interface AuthResult<T = void> {
   success: boolean;
   data?: T;
   error?: string;
+  redirectUrl?: string;
 }
 
 export interface AuthUser {
@@ -79,10 +81,17 @@ function getErrorMessage(error: unknown): string | null {
 }
 
 function mapBetterAuthError(error: unknown): string {
+  if (typeof error === "object" && error !== null) {
+    const codes = ["code" in error ? error.code : undefined, "error" in error ? error.error : undefined];
+    if (codes.some(code => typeof code === "string" && OAUTH_RESTART_ERRORS.has(code.toLowerCase()))) {
+      return "Start again from the app.";
+    }
+  }
   const rawMessage = getErrorMessage(error);
 
   if (rawMessage) {
     const message = rawMessage.toLowerCase();
+    if (OAUTH_RESTART_ERRORS.has(message)) return "Start again from the app.";
 
     if (message.includes("email not verified")) {
       return "Verify your email before signing in.";
@@ -134,6 +143,11 @@ export async function signInWithPassword(
         success: false,
         error: "You could not be signed in. Check your details and try again.",
       };
+    }
+
+    // OAuth replaces the sign-in payload with a provider-validated continuation.
+    if (result.data.redirect === true && typeof result.data.url === "string") {
+      return { success: true, redirectUrl: result.data.url };
     }
 
     // Check if email is verified

@@ -47,6 +47,12 @@ export interface ActionBoundaryViolation {
 
 export const ACTION_BOUNDARY_ALLOWLIST: readonly ActionBoundaryException[] = [
   {
+    file: "src/fn/oauth-session.ts",
+    function: "withOAuthSession",
+    sites: { "action-failure": 1 },
+    reason: "OAuth picker and consent actions use a verified session without an active organization; signed query errors must not be logged.",
+  },
+  {
     file: "src/fn/invitation-bootstrap.ts",
     function: "toWarnableResult",
     sites: { "catch-failure": 2 },

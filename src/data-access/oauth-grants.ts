@@ -1,7 +1,7 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db, type DbTransaction } from "@/db";
-import { members, oauthClients, oauthConsents, oauthGrants } from "@/db/schema";
+import { members, users, oauthClients, oauthConsents, oauthGrants } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { oauthRolePolicy } from "@/lib/auth/oauth-role-policy";
 import { DomainError } from "@/lib/domain-errors";
@@ -26,9 +26,10 @@ async function listGrants(ctx: OrgContext, all: boolean) {
   const policy = await requireManager(ctx);
   if (all && !policy.manageAll) throw new DomainError("forbidden", "An organization Owner or Admin is required.");
   return db.select({ id: oauthGrants.id, userId: oauthGrants.userId, clientId: oauthGrants.clientId,
-    name: oauthClients.name, resource: oauthGrants.resource, scopes: oauthConsents.scopes,
+    name: oauthClients.name, memberName: users.name, resource: oauthGrants.resource, scopes: oauthConsents.scopes,
     createdAt: oauthGrants.createdAt, lastUsedAt: oauthGrants.lastUsedAt, version: oauthGrants.version })
     .from(oauthGrants)
+    .innerJoin(users, eq(users.id, oauthGrants.userId))
     .innerJoin(oauthClients, eq(oauthClients.clientId, oauthGrants.clientId))
     .innerJoin(oauthConsents, and(eq(oauthConsents.referenceId, oauthGrants.id),
       eq(oauthConsents.clientId, oauthGrants.clientId), eq(oauthConsents.userId, oauthGrants.userId)))

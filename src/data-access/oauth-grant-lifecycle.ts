@@ -2,7 +2,7 @@ import { OAUTH_CODE_LIFETIME_MS, isOAuthGenerationIdle } from "@/config/oauth";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
-import { members, oauthAuthorizationAttempts, oauthConsents, oauthGrants, organizationApiAccess, sessions, users, type OAuthGrant, type OAuthRevocationReason } from "@/db/schema";
+import { members, oauthAuthorizationAttempts, oauthConsents, oauthGrants, organizationApiAccess, organizations, sessions, users, type OAuthGrant, type OAuthRevocationReason } from "@/db/schema";
 import { DomainError } from "@/lib/domain-errors";
 import { oauthRolePolicy } from "@/lib/auth/oauth-role-policy";
 import { disableOwnerApiKeys } from "./api-credential-auth";
@@ -144,22 +144,24 @@ export async function revokeDeletedMemberOAuthGrants(member: { id: string; organ
 
 // org-scope-ok: session-authenticated authorization attempt; membership validated in the same query
 export async function getOAuthOrganizationSelection(input: { sessionId: string; userId: string; clientId: string; resource: string }) {
-  const eligible = await db.select({ organizationId: members.organizationId, memberId: members.id, role: members.role })
-    .from(members).innerJoin(users, eq(users.id, members.userId))
+  const rows = await db.select({ organizationId: members.organizationId, memberId: members.id, role: members.role, name: organizations.name, apiEnabled: organizationApiAccess.enabled })
+    .from(members).innerJoin(organizations, eq(organizations.id, members.organizationId)).innerJoin(users, eq(users.id, members.userId))
     .innerJoin(sessions, and(eq(sessions.userId, users.id), eq(sessions.id, input.sessionId)))
     .leftJoin(organizationApiAccess, eq(organizationApiAccess.organizationId, members.organizationId))
-    .where(and(eq(members.userId, input.userId), eq(users.emailVerified, true), gt(sessions.expiresAt, new Date()),
-      or(isNull(organizationApiAccess.enabled), eq(organizationApiAccess.enabled, true))));
-  const memberships = eligible.filter(member => oauthRolePolicy(member.role).connect);
-  if (memberships.length === 0) return { memberships, autoSelectOrganizationId: null, preselectedOrganizationId: null };
+    .where(and(eq(members.userId, input.userId), eq(users.emailVerified, true), gt(sessions.expiresAt, new Date())));
+  const memberships = rows.filter(member => oauthRolePolicy(member.role).connect).map(({ apiEnabled, ...member }) => ({
+    ...member, disabledReason: apiEnabled === false ? "API access is disabled for this organization." : undefined,
+  }));
+  const eligible = memberships.filter(member => !member.disabledReason);
+  if (eligible.length === 0) return { memberships, autoSelectOrganizationId: null, preselectedOrganizationId: null };
   const [recent] = await db.select({ organizationId: oauthGrants.organizationId })
     .from(oauthGrants).innerJoin(oauthConsents, and(eq(oauthConsents.referenceId, oauthGrants.id),
       eq(oauthConsents.clientId, oauthGrants.clientId), eq(oauthConsents.userId, oauthGrants.userId)))
     .innerJoin(members, and(eq(members.id, oauthGrants.memberId), eq(members.organizationId, oauthGrants.organizationId), eq(members.userId, oauthGrants.userId)))
     .innerJoin(sessions, and(eq(sessions.userId, members.userId), eq(sessions.id, input.sessionId)))
-    .where(and(inArray(oauthGrants.organizationId, memberships.map(member => member.organizationId)), eq(oauthGrants.userId, input.userId), eq(oauthGrants.clientId, input.clientId), eq(oauthGrants.resource, input.resource),
+    .where(and(inArray(oauthGrants.organizationId, eligible.map(member => member.organizationId)), eq(oauthGrants.userId, input.userId), eq(oauthGrants.clientId, input.clientId), eq(oauthGrants.resource, input.resource),
       isNull(oauthGrants.revokedAt), gt(sessions.expiresAt, new Date())))
     .orderBy(desc(oauthGrants.lastUsedAt), oauthGrants.id).limit(1);
-  return { memberships, autoSelectOrganizationId: memberships.length === 1 ? memberships[0].organizationId : null,
-    preselectedOrganizationId: recent && memberships.some(member => member.organizationId === recent.organizationId) ? recent.organizationId : null };
+  return { memberships, autoSelectOrganizationId: eligible.length === 1 ? eligible[0].organizationId : null,
+    preselectedOrganizationId: recent && eligible.some(member => member.organizationId === recent.organizationId) ? recent.organizationId : null };
 }
