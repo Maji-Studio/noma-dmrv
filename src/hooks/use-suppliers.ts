@@ -1,4 +1,5 @@
 import { transportLegKeys } from "./use-transport-legs";
+import { chainOfCustodyKeys } from "./use-chain-of-custody";
 import { feedstockKeys } from "./use-feedstocks";
 import { invalidateCertificationReadiness } from "./use-certification";
 /**
@@ -507,6 +508,7 @@ export function useCreateSupplierLocation(callbacks?: MutationCallbacks<Supplier
       queryClient.invalidateQueries({ queryKey: supplierKeys.detail(variables.supplierId) });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: transportLegKeys.all }),
+        queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all }),
         queryClient.invalidateQueries({ queryKey: feedstockKeys.all }),
         invalidateCertificationReadiness(queryClient, { creditBatchPreviews: true }),
       ]);
@@ -536,6 +538,7 @@ export function useUpdateSupplierLocation(supplierId: string, callbacks?: Mutati
       queryClient.invalidateQueries({ queryKey: supplierKeys.detail(supplierId) });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: transportLegKeys.all }),
+        queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all }),
         queryClient.invalidateQueries({ queryKey: feedstockKeys.all }),
         invalidateCertificationReadiness(queryClient, { creditBatchPreviews: true }),
       ]);

@@ -1,5 +1,6 @@
 import { deliveryKeys } from "./use-deliveries";
 import { transportLegKeys } from "./use-transport-legs";
+import { chainOfCustodyKeys } from "./use-chain-of-custody";
 import { invalidateCertificationReadiness } from "./use-certification";
 /**
  * Customers React Query Hooks
@@ -638,6 +639,7 @@ export function useUpdateCustomerLocation(
     },
     onSuccess: async (data, variables) => {
       patchArrayListCacheByExactKeyWithSavedRow<CustomerLocation>(queryClient, customerKeys.locations(data.customerId), data);
+      queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       void queryClient.invalidateQueries({ queryKey: activityKeys.all });
       // Update cache with actual server data
       queryClient.setQueryData(customerLocationKeys.detail(data.id), data);

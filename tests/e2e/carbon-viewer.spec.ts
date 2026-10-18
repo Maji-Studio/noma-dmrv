@@ -8,11 +8,9 @@ import { outputOrderFixtureValues, insertEstablishedOutputDeliveryFixture as ins
  * geography panel's rails (custody stages, not-geolocated), the split-view
  * cross-linking into the DAG, and the nothing-to-plot empty state.
  *
- * Hermetic by construction: every assertion targets React overlays and URL
- * state — never the MapLibre canvas — so the suite passes with or without a
- * MapTiler key, and external basemap hosts are route-aborted regardless.
- * Route-geometry fetches resolve server-side via the stub geo provider
- * (GEO_PROVIDER=stub in .env.test) and are not asserted here.
+ * The renderer regressions additionally inspect painted MapLibre features,
+ * camera bounds and projected markers. A local blank basemap and SwiftShader
+ * keep them independent of external tiles and GPU availability.
  */
 
 import * as crypto from "crypto";
@@ -23,12 +21,22 @@ import { Pool } from "pg";
 import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../src/db/schema";
 import { test, expect, type SeededChainData } from "./fixtures";
+import { clickRowMenuItem, waitForFacilityHydration, waitForSideSheetClose } from "./fixtures/page-helpers";
+import { routeGeometriesRequestSchema, type RouteGeometriesRequest } from "@/schemas/geo";
 
 // Seed geography (matches fixtures/seed-chain-data.ts: facility at Dodoma,
 // supplier/customer-location at Dar-ish coordinates).
 const FACILITY_POINT = { lat: -6.163, lng: 35.7516 };
 const DAR_POINT = { lat: -6.8, lng: 39.28 };
 const FIELD_POINT = { lat: -6.75, lng: 39.2 };
+const EDITED_FIELD_POINT = { lat: -3.4, lng: 36.7 };
+const EDITED_CUSTOMER_POINT = { lat: -8.5, lng: 37.5 };
+const SWIFTSHADER_ARGS = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"];
+const MAP_READY_TIMEOUT_MS = 45_000;
+const COORDINATE_TOLERANCE_DEGREES = 0.001;
+const MAX_BACK_STEPS = 6;
+
+test.use({ launchOptions: { args: SWIFTSHADER_ARGS } });
 
 // Inbound (feedstock) leg distance — seeded directly on its transport_legs row
 // and rendered verbatim on the rail's inbound pill.
@@ -60,8 +68,68 @@ function traceabilityUrl(
 
 /** Keep the suite offline: basemap/style/tile hosts are never real deps. */
 async function blockExternalMapHosts(page: Page) {
-  await page.route("**://api.maptiler.com/**", (route) => route.abort());
+  // A configured key must not make load depend on an aborted style request.
+  await page.route("**://api.maptiler.com/**", (route) =>
+    route.fulfill({ json: { version: 8, sources: {}, layers: [] } }),
+  );
   await page.route("**://server.arcgisonline.com/**", (route) => route.abort());
+}
+
+function observeRouteRequests(page: Page): RouteGeometriesRequest[] {
+  const requests: RouteGeometriesRequest[] = [];
+  page.on("request", (request) => {
+    if (request.method() !== "POST" || !request.headers()["next-action"]) return;
+    try {
+      const args: unknown = request.postDataJSON();
+      const parsed = routeGeometriesRequestSchema.safeParse(Array.isArray(args) ? args[0] : null);
+      if (parsed.success) requests.push(parsed.data);
+    } catch { /* Unrelated multipart server actions. */ }
+  });
+  return requests;
+}
+
+async function expectRenderedGeography(page: Page, applicationId: string, field: typeof FIELD_POINT, destination: typeof DAR_POINT) {
+  const map = page.getByTestId("carbon-viewer-map");
+  await expect(map).toHaveAttribute("data-map-state", "ready", { timeout: MAP_READY_TIMEOUT_MS });
+  const marker = map.locator(`[data-node-id="application:${applicationId}"]`);
+  await expect(marker).toHaveAttribute("data-position", JSON.stringify([field.lng, field.lat]));
+  // MapLibre projects these elements. Visibility alone would pass for a marker
+  // translated beyond the map's clipped viewport, so compare their centers.
+  await expect.poll(() => map.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    const markers = [...element.querySelectorAll('[data-testid="carbon-viewer-marker"]')];
+    return markers.length > 0 && markers.every((marker) => {
+      const rect = marker.getBoundingClientRect();
+      const x = rect.x + rect.width / 2;
+      const y = rect.y + rect.height / 2;
+      return x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom;
+    });
+  })).toBe(true);
+  await expect.poll(async () => {
+    const value = await map.getAttribute("data-map-bounds");
+    if (!value) return false;
+    const [[west, south], [east, north]] = JSON.parse(value) as number[][];
+    return [FACILITY_POINT, field, destination].every(({ lat, lng }) =>
+      lng >= west && lng <= east && lat >= south && lat <= north,
+    );
+  }).toBe(true);
+  await expect.poll(async () => {
+    const value = await map.getAttribute("data-rendered-legs");
+    if (!value) return false;
+    const legs = JSON.parse(value) as { id: string; geometry: { coordinates: number[][] } }[];
+    return legs.some((leg) => leg.id.endsWith(`application:${applicationId}`) &&
+      leg.geometry.coordinates.some(([lng, lat]) =>
+        Math.abs(lng - destination.lng) < COORDINATE_TOLERANCE_DEGREES &&
+        Math.abs(lat - destination.lat) < COORDINATE_TOLERANCE_DEGREES,
+      ));
+  }).toBe(true);
+}
+
+/** Browser history uses the existing Next router and retains the QueryClient. */
+async function returnToCachedMap(page: Page, mapUrl: string) {
+  for (let step = 0; step < MAX_BACK_STEPS && page.url() !== mapUrl; step++) await page.goBack();
+  await expect(page).toHaveURL(mapUrl);
+  await expect(page.locator("html")).toHaveAttribute("data-cached-map", mapUrl);
 }
 
 /**
@@ -220,6 +288,73 @@ async function seedGeoLineage(
 test.describe("Carbon Viewer (traceability geography)", () => {
   test.beforeEach(async ({ adminPage }) => {
     await blockExternalMapHosts(adminPage);
+    await adminPage.addInitScript(() => {
+      document.addEventListener("DOMContentLoaded", () => {
+        document.documentElement.dataset.observeCarbonMap = "true";
+      }, { once: true });
+    });
+  });
+
+  test("opening the map fits projected markers and paints the route without FIT", async ({ adminPage: page, seededData, cleanupTestData }) => {
+    void cleanupTestData;
+    const lineage = await seedGeoLineage(seededData);
+    await page.goto(traceabilityUrl(seededData.facility.id, { application: lineage.application.id, view: "map" }));
+    await expectRenderedGeography(page, lineage.application.id, FIELD_POINT, DAR_POINT);
+  });
+
+  test("editing application GPS refreshes a cached rendered map without a reload or expiry", async ({ adminPage: page, seededData, cleanupTestData }) => {
+    void cleanupTestData;
+    // Freeze Date, not timers: editing/compilation cannot silently expire the
+    // 30-second query and hide a missing invalidation.
+    await page.clock.setFixedTime(new Date());
+    const lineage = await seedGeoLineage(seededData);
+    await page.goto(traceabilityUrl(seededData.facility.id, { application: lineage.application.id, view: "map" }));
+    await expectRenderedGeography(page, lineage.application.id, FIELD_POINT, DAR_POINT);
+    const mapUrl = page.url();
+    await page.locator("html").evaluate((element, url) => element.setAttribute("data-cached-map", url), mapUrl);
+    await page.locator("nav").getByRole("link", { name: "Applications", exact: true }).click();
+    await expect(page).toHaveURL(/\/applications/);
+    await waitForFacilityHydration(page, seededData.facility.name);
+    await page.getByRole("textbox", { name: "Search applications" }).fill(lineage.application.code);
+    await page.getByRole("row").filter({ hasText: lineage.application.code }).click();
+    await page.getByRole("button", { name: "Edit application", exact: true }).click();
+    const sheet = page.getByRole("dialog");
+    await sheet.getByRole("radio", { name: "Set manually", exact: true }).check();
+    await sheet.getByLabel("GPS latitude", { exact: false }).fill(String(EDITED_FIELD_POINT.lat));
+    await sheet.getByLabel("GPS longitude", { exact: false }).fill(String(EDITED_FIELD_POINT.lng));
+    await sheet.getByRole("button", { name: "Update application", exact: true }).click();
+    await waitForSideSheetClose(page);
+    await returnToCachedMap(page, mapUrl);
+    // Delivery routing retains customer-site priority; the field pin moves.
+    await expectRenderedGeography(page, lineage.application.id, EDITED_FIELD_POINT, DAR_POINT);
+  });
+
+  test("editing customer GPS requests and paints a new route on the cached map", async ({ adminPage: page, seededData, cleanupTestData }) => {
+    void cleanupTestData;
+    await page.clock.setFixedTime(new Date());
+    const requests = observeRouteRequests(page);
+    const lineage = await seedGeoLineage(seededData);
+    await page.goto(traceabilityUrl(seededData.facility.id, { application: lineage.application.id, view: "map" }));
+    await expectRenderedGeography(page, lineage.application.id, FIELD_POINT, DAR_POINT);
+    const mapUrl = page.url();
+    await page.locator("html").evaluate((element, url) => element.setAttribute("data-cached-map", url), mapUrl);
+    await page.locator("nav").getByRole("link", { name: "Customers", exact: true }).click();
+    await expect(page).toHaveURL(/\/customers/);
+    await waitForFacilityHydration(page, seededData.facility.name);
+    await page.getByRole("textbox", { name: "Search customers" }).fill(seededData.customer.code);
+    await clickRowMenuItem(page, page.getByRole("button", { name: `Actions for ${seededData.customer.code}` }), "Edit");
+    await page.getByRole("button", { name: `Edit ${seededData.customerLocation.name}`, exact: true }).click();
+    const dialog = page.getByTestId("customer-location-edit-dialog");
+    await dialog.getByLabel("GPS latitude", { exact: false }).fill(String(EDITED_CUSTOMER_POINT.lat));
+    await dialog.getByLabel("GPS longitude", { exact: false }).fill(String(EDITED_CUSTOMER_POINT.lng));
+    await dialog.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await returnToCachedMap(page, mapUrl);
+    await expect.poll(() => requests.some((request) => request.legs.some((leg) =>
+      leg.id.endsWith(`application:${lineage.application.id}`) &&
+      leg.destination.lat === EDITED_CUSTOMER_POINT.lat && leg.destination.lng === EDITED_CUSTOMER_POINT.lng,
+    ))).toBe(true);
+    await expectRenderedGeography(page, lineage.application.id, FIELD_POINT, EDITED_CUSTOMER_POINT);
   });
 
   test("view segment toggles lineage / map / split and persists in the URL", async ({

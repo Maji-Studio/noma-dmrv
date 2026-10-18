@@ -213,6 +213,22 @@ function plottedNodes(geo: ChainOfCustodyGeoData): PlottedNode[] {
   return nodes;
 }
 
+function fitGeography(map: maplibregl.Map, geo: ChainOfCustodyGeoData, animate: boolean) {
+  const points = plottedNodes(geo).map((node): [number, number] => [node.lng, node.lat]);
+  // Customer destinations can differ from the application's field marker.
+  for (const { origin, destination } of resolveLegEndpoints(geo).plottable) {
+    points.push([origin.lng, origin.lat], [destination.lng, destination.lat]);
+  }
+  if (points.length === 0) return;
+  const bounds = new maplibregl.LngLatBounds();
+  for (const point of points) bounds.extend(point);
+  map.fitBounds(bounds, {
+    padding: FIT_PADDING,
+    maxZoom: FIT_MAX_ZOOM,
+    duration: animate ? FIT_DURATION_MS : 0,
+  });
+}
+
 function token(name: string, fallback: string): string {
   return (
     getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
@@ -248,6 +264,7 @@ export default function CarbonTransitMap({
   const onLegHoverRef = useRef(onLegHover);
   // Latest hover so the geo-sync rebuild re-applies the right line opacity.
   const hoverLegIdRef = useRef(hoverLegId);
+  const pendingGeoRef = useRef(geo);
   const [styleReady, setStyleReady] = useState(false);
   const [satOn, setSatOn] = useState(false);
   // WebGL can be unavailable (headless browsers, exhausted contexts) — the
@@ -255,6 +272,7 @@ export default function CarbonTransitMap({
   const [mapFailed, setMapFailed] = useState(false);
 
   useEffect(() => {
+    pendingGeoRef.current = geo;
     onMarkerClickRef.current = onMarkerClick;
     onClearRef.current = onClear;
     onLegHoverRef.current = onLegHover;
@@ -266,16 +284,7 @@ export default function CarbonTransitMap({
 
   const fitToMarkers = (animate: boolean) => {
     const map = mapRef.current;
-    if (!map || markersRef.current.length === 0) return;
-    const bounds = new maplibregl.LngLatBounds();
-    for (const marker of markersRef.current) {
-      bounds.extend(marker.getLngLat());
-    }
-    map.fitBounds(bounds, {
-      padding: FIT_PADDING,
-      maxZoom: FIT_MAX_ZOOM,
-      duration: animate ? FIT_DURATION_MS : 0,
-    });
+    if (map) fitGeography(map, pendingGeoRef.current, animate);
   };
 
   // Map instance lifecycle — the legitimate imperative-DOM exception.
@@ -300,6 +309,7 @@ export default function CarbonTransitMap({
       return;
     }
     mapRef.current = map;
+    container.dataset.mapState = "loading";
     popupRef.current = new maplibregl.Popup({
       closeButton: false,
       offset: POPUP_OFFSET_PX,
@@ -399,7 +409,27 @@ export default function CarbonTransitMap({
         onLegHoverRef.current?.(null);
       });
 
+      // Fit directly from the latest props: markers are built in a later
+      // React effect, and StrictMode may recreate the map before it commits.
+      fitGeography(map, pendingGeoRef.current, false);
       setStyleReady(true);
+    });
+
+    // Like the GIS preview's data-map-state; detailed read-only observations
+    // are opt-in so ordinary views do not query/serialize painted features.
+    // "render" rather than "idle": the marching-ants timer repaints forever,
+    // so the map never goes idle.
+    map.on("render", () => {
+      if (!map.getLayer(LEGS_BASE_LAYER_ID) || map.isMoving()) return;
+      if (document.documentElement.dataset.observeCarbonMap === "true") {
+        container.dataset.mapBounds = JSON.stringify(map.getBounds().toArray());
+        container.dataset.renderedLegs = JSON.stringify(
+          map.queryRenderedFeatures({ layers: [LEGS_BASE_LAYER_ID, FALLBACK_LAYER_ID] })
+            .filter((feature) => feature.geometry.type === "LineString")
+            .map((feature) => ({ id: feature.properties.legId, geometry: feature.geometry })),
+        );
+      }
+      container.dataset.mapState = "ready";
     });
 
     // Marching ants — cycling the dasharray makes the gaps appear to travel.
@@ -442,6 +472,7 @@ export default function CarbonTransitMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !styleReady) return;
+    if (containerRef.current) containerRef.current.dataset.mapState = "loading";
 
     const currentFocus = focusRef.current;
     const { plottable } = resolveLegEndpoints(geo);
@@ -508,6 +539,7 @@ export default function CarbonTransitMap({
 
     for (const node of plottedNodes(geo)) {
       const element = createSiteMarkerElement(node);
+      element.dataset.position = JSON.stringify([node.lng, node.lat]);
       element.addEventListener("mouseenter", () => {
         if (!pinnedRef.current) openPopup(node);
       });
