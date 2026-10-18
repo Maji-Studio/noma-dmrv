@@ -270,7 +270,7 @@ export function FormField({
               type="button"
               variant="noOutline"
               size="small"
-              className="text-[var(--color-interaction)]"
+              className="h-auto px-0 text-[var(--color-interaction)] hover:bg-transparent hover:underline"
               disabled={cueAction.disabled}
               onClick={cueAction.onClick}
             >
