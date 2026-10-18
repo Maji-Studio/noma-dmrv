@@ -220,7 +220,7 @@ it("refreshes with the drift's version and asks the sheet to reopen on the new o
   fireEvent.click(await screen.findByRole("button", { name: "Refresh from location" }));
   const dialog = await screen.findByRole("dialog", { name: "Refresh distance from location?" });
   expect(dialog.textContent).toContain("The recorded distance changes from 42 km to 55 km");
-  await act(async () => { fireEvent.click(within(dialog).getByRole("button", { name: "Refresh from location" })); });
+  await act(async () => { fireEvent.click(within(dialog).getByRole("button", { name: "Refresh" })); });
   expect(state.refresh).toHaveBeenCalledWith({ entityId: ids.delivery, expectedVersion: 3 });
   await waitFor(() => expect(reopened).toHaveBeenCalledOnce());
   expect(save).not.toHaveBeenCalled();

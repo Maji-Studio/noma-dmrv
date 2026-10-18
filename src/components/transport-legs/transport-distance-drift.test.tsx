@@ -69,7 +69,7 @@ describe("TransportDistanceDriftNotice", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Refresh from location" }));
     expect(screen.getByText("Refresh distance from location?")).toBeTruthy();
     expect(screen.getByText("The recorded distance changes from 42 km to 55 km, the location's current distance, and the feedstock's transport is recalculated.")).toBeTruthy();
-    const confirm = screen.getAllByRole("button", { name: "Refresh from location" }).at(-1)!;
+    const confirm = screen.getByRole("button", { name: "Refresh" });
     await act(async () => { fireEvent.click(confirm); });
     expect(mocks.refresh).toHaveBeenCalledWith({ entityId: target.entityId, expectedVersion: 3 });
     await waitFor(() => expect(mocks.success).toHaveBeenCalledWith("Distance for FS-26-001 refreshed to 55 km."));
@@ -79,7 +79,7 @@ describe("TransportDistanceDriftNotice", () => {
     renderNotice({ hasSubmittedRemoval: true });
     fireEvent.click(await screen.findByRole("button", { name: "Refresh from location" }));
     expect(screen.getByText(/This feedstock feeds a submitted Removal, so its distance cannot be refreshed\./)).toBeTruthy();
-    const confirm = screen.getAllByRole("button", { name: "Refresh from location" }).at(-1)! as HTMLButtonElement;
+    const confirm = screen.getByRole("button", { name: "Refresh" }) as HTMLButtonElement;
     expect(confirm.disabled).toBe(true);
   });
 
@@ -88,7 +88,7 @@ describe("TransportDistanceDriftNotice", () => {
     mocks.refresh.mockResolvedValue({ success: false, error: message });
     renderNotice();
     fireEvent.click(await screen.findByRole("button", { name: "Refresh from location" }));
-    await act(async () => { fireEvent.click(screen.getAllByRole("button", { name: "Refresh from location" }).at(-1)!); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Refresh" })); });
     expect(await screen.findByText(message)).toBeTruthy();
     expect(screen.getByText("Refresh distance from location?")).toBeTruthy();
     expect(mocks.success).not.toHaveBeenCalled();

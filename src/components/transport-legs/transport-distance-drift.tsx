@@ -21,6 +21,8 @@ import type { TransportDistanceTarget } from "@/schemas/transport-distance-refre
 export const REFRESH_FROM_LOCATION_LABEL = "Refresh from location";
 const DRIFT_TITLE = "Location distance changed";
 const CONFIRM_TITLE = "Refresh distance from location?";
+// Short, so it fits beside Cancel in the 400px confirm dialog; the title names the location.
+const CONFIRM_LABEL = "Refresh";
 const REFRESH_FAILED_MESSAGE = "The distance was not refreshed. Try again.";
 
 const RECORD_NOUNS: Record<TransportDistanceTarget["entityType"], string> = {
@@ -99,7 +101,7 @@ function DistanceRefreshDialog({
           )}
         </div>
       }
-      confirmLabel={REFRESH_FROM_LOCATION_LABEL}
+      confirmLabel={CONFIRM_LABEL}
       busyLabel="Refreshing…"
       isPending={refresh.isPending}
       confirmDisabled={drift.hasSubmittedRemoval}

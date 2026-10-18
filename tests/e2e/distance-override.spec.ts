@@ -177,7 +177,7 @@ test.describe("Distance override (#420)", () => {
       await editDrift.getByRole("button", { name: "Refresh from location" }).click();
       const confirm = page.getByRole("dialog", { name: "Refresh distance from location?" });
       await expect(confirm).toContainText(`changes from ${LOCATION_KM} km to ${LOCATION_KM_AFTER_EDIT} km`);
-      await confirm.getByRole("button", { name: "Refresh from location" }).click();
+      await confirm.getByRole("button", { name: "Refresh", exact: true }).click();
       await expect(confirm).toBeHidden();
       await expect(page.getByText(`Distance for ${created.code} refreshed to ${LOCATION_KM_AFTER_EDIT} km.`)).toBeVisible();
       // The sheet reopens the form on the refreshed version, so Save is not a stale-version conflict.
@@ -268,7 +268,7 @@ test.describe("Distance override (#420)", () => {
       await expect(drift).toContainText(`Recorded ${SEEDED_CUSTOMER_KM} km. Location now ${CUSTOMER_KM_AFTER_EDIT} km.`, { timeout: 15000 });
       await drift.getByRole("button", { name: "Refresh from location" }).click();
       const confirm = page.getByRole("dialog", { name: "Refresh distance from location?" });
-      await confirm.getByRole("button", { name: "Refresh from location" }).click();
+      await confirm.getByRole("button", { name: "Refresh", exact: true }).click();
       await expect(confirm).toBeHidden();
       await expect(drift).toHaveCount(0);
       await expect(deliveryRoute()).toContainText(`${CUSTOMER_KM_AFTER_EDIT} km one way`, { timeout: 15000 });
