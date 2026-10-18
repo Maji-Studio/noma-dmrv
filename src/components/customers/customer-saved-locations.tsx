@@ -247,7 +247,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
           {archivedLocations.length > 0 && (
             <Collapsible.Root role="group" aria-label="Archived locations" className="flex flex-col gap-4">
               <div className="flex items-center gap-4">
-                <Collapsible.Trigger className="group flex min-h-24 cursor-pointer items-center gap-6 rounded-[4px] body-small font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]">
+                <Collapsible.Trigger className="group flex min-h-24 cursor-pointer items-center gap-6 rounded-4 body-small font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]">
                   Archived locations ({archivedLocations.length})
                   <CaretDownIcon
                     size={14}

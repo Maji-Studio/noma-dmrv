@@ -22,7 +22,7 @@ const cardRootVariants = cva(
         large: "p-40",
       },
       radius: {
-        default: "rounded-[8px]",
+        default: "rounded-8",
         none: "rounded-none",
       }
     },
@@ -296,7 +296,7 @@ Footer.displayName = "Card.Footer"
 const cardIconVariants = cva("flex items-center justify-center text-[var(--color-text-primary)]", {
   variants: {
     bordered: {
-      true: "border border-[var(--color-border-tertiary)] rounded-[8px]",
+      true: "border border-[var(--color-border-tertiary)] rounded-8",
       false: "",
     },
     size: {

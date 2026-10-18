@@ -27,7 +27,7 @@ export type NoticeTone = "info" | "warning" | "error" | "success";
 const NOTICE_ICON_SIZE = 16;
 /** Neutral card for `boxed`: 8px vertical, 12px horizontal, small-card radius. */
 const BOXED_CLASS =
-  "bg-[var(--color-surface-light)] rounded-[8px] px-12 py-8";
+  "bg-[var(--color-surface-light)] rounded-8 px-12 py-8";
 
 const TONES: Record<
   NoticeTone,
