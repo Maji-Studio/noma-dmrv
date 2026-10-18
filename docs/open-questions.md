@@ -79,14 +79,6 @@ Deferred work lives here, never as a `TODO` in code.
   the read) or drop the table with a migration. Until then the table, its test
   cleanup in `tests/e2e/global-teardown.ts` and the dev-seed delete stay.
 
-## DataTable mobile cards (`ui/data-table`) - **deferred**
-
-- `src/components/ui/data-table/index.tsx:DataTable` renders each mobile card as
-  a `role="button"` container that holds nested buttons (the Removals list
-  Retry button, and now `CertificationStatusBadge`), which screen readers
-  announce unreliably. Fix: a semantic card with a separate record-opening
-  button or link beside its controls. It changes every DataTable consumer.
-
 ## Activity reads
 
 - `src/data-access/credit-batch-activity-members.ts:loadActivityMembers` resolves

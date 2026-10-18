@@ -15,30 +15,28 @@ import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useId, useState } from "react";
 
-import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine, FormTextarea, makeCertFieldStatus, MoistureField, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
+import { FormActions, FormEntitySelect, FormField, FormSection, FormSpine, makeCertFieldStatus, MoistureField, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
-import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
-import { FormSelect } from "@/components/forms/form-select";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import { TransportRoutePreview } from "@/components/transport-legs";
 import type { Delivery } from "@/db/schema";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
-import { resolveDeliveryDistanceSourceChoice } from "./delivery-distance-source";
+import { DistanceOverrideField } from "@/components/transport-legs/distance-override-field";
+import { DistanceDriftAction, SAVE_BEFORE_REFRESH_REASON } from "@/components/transport-legs/transport-distance-drift";
+import { distanceOverridePatch, emptyToNullSource, hasSavedOverride, overrideDistanceError } from "@/components/transport-legs/distance-override";
+import { customerLocationDistanceLink } from "@/lib/location-distance-links";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { useFacility } from "@/hooks/use-facilities";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
-import { useOrdersForSelect } from "@/hooks/use-orders";
+import { useOrdersForSelect, useOrderWithRelations } from "@/hooks/use-orders";
 import { useOutputDrawDraft } from "@/hooks/use-output-draw-draft";
 import { useSubBinDraw } from "@/hooks/use-sub-bin-draw";
 import { SubBinDrawField } from "@/components/storage-locations/sub-bin-draw-field";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import { STRICT_FORMULATION_MATCH } from "@/schemas/biochar-products";
 import { deliveryFormSchema, type DeliveryFormData } from "@/schemas/deliveries";
-import {
-  DISTANCE_SOURCE_LABELS,
-  type DistanceSourceValue,
-} from "@/schemas/distance-source";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, MapPinIcon, ScalesIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm, useWatch } from "react-hook-form";
@@ -82,9 +80,11 @@ interface DeliveryFormProps {
   submitLabel?: string;
   deferredAttachments?: UseDeferredAttachmentsResult;
   focusTarget?: EntityFocusTarget | null;
+  /** A refresh from location saved a new version: reopen the form on it. */
+  onDistanceRefreshed?: () => void;
 }
 
-export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, errorMessage, submitLabel, deferredAttachments, focusTarget }: DeliveryFormProps) {
+export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, errorMessage, submitLabel, deferredAttachments, focusTarget, onDistanceRefreshed }: DeliveryFormProps) {
   const refreshedDelivery = useDeliveryWithRelations(delivery?.id ?? "");
   const distanceRecord = delivery ? deliveryAfterDistanceFill(delivery, refreshedDelivery.data) : undefined;
   const isEditMode = !!delivery;
@@ -105,6 +105,10 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   });
   const orders = ordersData ?? [];
   const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const savedOverride = delivery
+    ? { distanceKm: delivery.distanceKmOverride, source: delivery.distanceSource, note: delivery.distanceNote }
+    : null;
+  const [overriding, setOverriding] = useState(hasSavedOverride(savedOverride));
 
   const defaultValues = {
     idempotencyKey,
@@ -121,8 +125,9 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     storageLocationId: delivery?.storageLocationId ?? "",
     driverId: delivery?.driverId ?? undefined,
     vehicleId: delivery?.vehicleId ?? undefined,
-    distanceKmOverride: delivery?.distanceKmOverride === 0 ? null : delivery?.distanceKmOverride ?? undefined,
-    distanceSource: delivery?.distanceSource ?? null,
+    // Only an override is a form value; the derived distance is the recorded pair.
+    distanceKmOverride: (hasSavedOverride(savedOverride) ? delivery?.distanceKmOverride : null) as number | null,
+    distanceSource: (hasSavedOverride(savedOverride) ? delivery?.distanceSource : null) as DistanceSourceValue | null,
     distanceNote: delivery?.distanceNote ?? "",
   };
 
@@ -133,7 +138,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     handleSubmit,
     setValue,
     setError,
-    formState: { errors },
+    clearErrors,
+    formState: { errors, isDirty },
   } = useForm({
     resolver: zodResolver(deliveryFormSchema),
     // onTouched so spine markers can flag errors on blur, not only on submit.
@@ -157,89 +163,38 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const draftDistanceSource = useWatch({ control, name: "distanceSource" });
 
   const selectedOrder = orders.find((o) => o.id === watchOrderId);
+  // Clearing an override restores the recorded pair snapshot (GLOSSARY).
   const storedDistanceKm = distanceRecord ? distanceRecord.recordedDistanceKm ?? null : selectedOrder?.destinationDistanceKm ?? null;
   const storedDistanceSource = distanceRecord ? distanceRecord.recordedDistanceSource ?? null : selectedOrder?.destinationDistanceSource ?? null;
 
-  // An override changes the effective distance; clearing it restores the snapshot.
-  const effectiveDistanceKm = distanceKmOverride ?? storedDistanceKm;
-  const effectiveDraftDistanceSource: DistanceSourceValue | null =
-    draftDistanceSource === "document"
-      ? "document"
-      : distanceKmOverride != null
-        ? (draftDistanceSource ?? "manual")
-        : storedDistanceSource;
-  const distanceSourceOptions = [
-    ...(storedDistanceKm != null && storedDistanceSource === "map_estimate"
-      ? [{
-          value: "map_estimate",
-          label: DISTANCE_SOURCE_LABELS.map_estimate,
-        }]
-      : []),
-    ...(distanceKmOverride != null ||
-    storedDistanceSource === "manual" ||
-    storedDistanceKm == null
-      ? [{ value: "manual", label: DISTANCE_SOURCE_LABELS.manual }]
-      : []),
-    ...(effectiveDraftDistanceSource === "document"
-      ? [{ value: "document", label: DISTANCE_SOURCE_LABELS.document }]
-      : []),
-  ] as const;
+  // The trip's effective distance, resolved like the saved route: a delivery
+  // can document the stored route without overriding its distance.
+  const effectiveDistanceKm = overriding ? (distanceKmOverride ?? null) : storedDistanceKm;
+  const effectiveDraftDistanceSource: DistanceSourceValue | null = overriding
+    ? (draftDistanceSource ?? "manual")
+    : delivery?.distanceSource === "document" ? "document" : storedDistanceSource;
+  // The repair link needs the order's customer; load it only when the pair is missing.
+  const { data: orderRelations } = useOrderWithRelations(watchOrderId ?? "", !!watchOrderId && storedDistanceKm == null);
+  const customerLocationRepairHref = orderRelations && formFacilityId
+    ? customerLocationDistanceLink({ facilityId: formFacilityId, partyId: orderRelations.customerId, locationId: orderRelations.customerLocationId })
+    : null;
 
-  // Text draft so in-flight typing survives; resync when the effective value
-  // changes from outside (order switch, prefill) — adjust-state-during-render.
-  const [distanceDraft, setDistanceDraft] = useState(formatDistance(effectiveDistanceKm));
-  const [syncedDistanceKm, setSyncedDistanceKm] = useState(effectiveDistanceKm);
-  if (effectiveDistanceKm !== syncedDistanceKm) {
-    setSyncedDistanceKm(effectiveDistanceKm);
-    if (parseDistanceDraft(distanceDraft) !== effectiveDistanceKm) {
-      setDistanceDraft(formatDistance(effectiveDistanceKm));
-    }
-  }
-
-  const handleDistanceChange = (raw: string) => {
-    setDistanceDraft(raw);
-    const parsed = parseDistanceDraft(raw);
-    if (parsed === undefined) return; // unparseable in-flight text — wait
-    const isOverride = parsed !== null && (parsed <= 0 || parsed !== storedDistanceKm);
-    // Keep the render-time resync quiet while editing; a cleared/reverted
-    // draft refills from the stored value on blur instead of mid-keystroke.
-    setSyncedDistanceKm(isOverride ? parsed : storedDistanceKm);
-    setValue("distanceKmOverride", isOverride ? parsed : null, {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-    setValue("distanceSource", isOverride ? "manual" : null, { shouldDirty: true });
+  const startOverride = () => {
+    setOverriding(true);
+    setValue("distanceKmOverride", null, SET_VALUE_OPTS);
+    setValue("distanceSource", "manual", { shouldDirty: true });
   };
-
-  const handleDistanceBlur = () => {
-    if (parseDistanceDraft(distanceDraft) !== effectiveDistanceKm) {
-      setDistanceDraft(formatDistance(effectiveDistanceKm));
-    }
+  const clearOverride = () => {
+    setOverriding(false);
+    clearErrors(["distanceKmOverride", "distanceSource", "distanceNote"]);
+    setValue("distanceKmOverride", null, { shouldDirty: true });
+    setValue("distanceSource", null, { shouldDirty: true });
+    setValue("distanceNote", "", { shouldDirty: true });
   };
-
-  const handleDistanceSourceChange = (raw: string) => {
-    const choice = resolveDeliveryDistanceSourceChoice(raw, {
-      storedDistanceKm,
-      storedDistanceSource,
-      hasOverride: distanceKmOverride != null,
-    });
-    if (choice.kind === "inherit-stored" && storedDistanceKm != null) {
-      setDistanceDraft(formatDistance(storedDistanceKm));
-      setSyncedDistanceKm(storedDistanceKm);
-      setValue("distanceKmOverride", null, SET_VALUE_OPTS);
-      setValue("distanceSource", null, SET_VALUE_OPTS);
-      setValue("distanceNote", "", SET_VALUE_OPTS);
-      return;
-    }
-    setValue("distanceSource", choice.kind === "set" ? choice.source : null, SET_VALUE_OPTS);
-  };
-
 
   // Switching orders invalidates a trip-specific override and its note.
   useClearOnDependencyChange(watchOrderId, () => {
-    setValue("distanceKmOverride", null, { shouldValidate: true });
-    setValue("distanceSource", null);
-    setValue("distanceNote", "");
+    if (overriding) clearOverride();
   });
 
   const wetMass = Number(watchWetMass);
@@ -278,16 +233,23 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
   const submitDelivery = handleSubmit(async (data) => {
     if (!canSave || (massLocked && massChanged)) return;
-    const normalized = data.distanceKmOverride == null ? { ...data, distanceNote: "" } : data;
+    const submitted = { overriding, distanceKm: data.distanceKmOverride, source: data.distanceSource, note: data.distanceNote };
+    const overrideError = overrideDistanceError(submitted);
+    if (overrideError) {
+      setError("distanceKmOverride", { type: "manual", message: overrideError }, { shouldFocus: true });
+      return;
+    }
+    // The order is locked once saved; guard the baseline anyway, as the feedstock form does.
+    const patch = distanceOverridePatch(savedOverride, submitted, { routeChanged: isEditMode && data.orderId !== delivery.orderId });
+    const distanceFields = { distanceKmOverride: patch.distanceKm, distanceSource: patch.source, distanceNote: patch.note };
     // A failed save needs no refetch here: the host reports the error and the
     // mutation hooks invalidate `outputStockKeys.all`, which refreshes this preview.
-    await onSubmit({ ...normalized, status: "delivered", idempotencyKey, basisFingerprint: basisFingerprint ?? "pending-preview", correctsMovementId: stockChanged ? openedMovement?.id : undefined,
+    await onSubmit({ ...data, ...distanceFields, status: "delivered", idempotencyKey, basisFingerprint: basisFingerprint ?? "pending-preview", correctsMovementId: stockChanged ? openedMovement?.id : undefined,
       ...(isEditMode && !stockChanged ? { sources: undefined, deliveredWetMassKg: delivery.deliveredWetMassKg, moistureContentPercent: delivery.moistureContentPercent ?? undefined } : {}) } as DeliveryFormData, (error) => {
       const issues = deliveryActionFieldIssues(error, [
         "deliveryDate", "orderId", "storageLocationId", "deliveredWetMassKg",
-        "distanceSource", "distanceKmOverride",
         ...(massLocked || draw.usesSingleMoisture ? ["moistureContentPercent" as const] : []),
-        ...(distanceKmOverride != null ? ["distanceNote" as const] : []),
+        ...(overriding ? ["distanceKmOverride" as const, "distanceSource" as const, "distanceNote" as const] : []),
       ] as const);
       if (!issues) return false;
       issues.forEach((issue, index) => {
@@ -296,17 +258,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       return true;
     }, distanceRecord?.version);
   });
-
-  // Why the field is empty stays visible (a cue). With a distance there is no
-  // cue: the route below shows the round trip it counts.
-  const distanceCue = !watchOrderId
-    ? "Select an order to load the destination's stored distance."
-    : undefined;
-  const distanceHelperText = !watchOrderId
-    ? undefined
-    : storedDistanceKm == null
-      ? "This destination has no stored distance. Add one to the customer location, or enter a distance for this delivery."
-      : "Facility › destination distance. Edit only when routing differs.";
 
   return (
     // The wrapper div absorbs the side-sheet Body's direct-child flex-col
@@ -443,69 +394,40 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           activeTarget={focusTarget}
           actionLabel="Complete the saved transport route information"
         >
-        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
-          <FormField
-            id="distanceSource"
-            label="Distance source"
-            error={errors.distanceSource?.message}
-          >
-            <FormSelect
-              id="distanceSource"
-              options={distanceSourceOptions}
-              placeholder="Select source"
-              disabled={isSubmitting || effectiveDistanceKm == null}
-              error={!!errors.distanceSource}
-              {...register("distanceSource")}
-              // The select shows the effective source, which may be inherited
-              // from the customer location while the form value stays null.
-              // These overrides keep RHF's handlers from copying the displayed
-              // value into the form; blur still validates through trigger().
-              value={effectiveDraftDistanceSource ?? ""}
-              onChange={(event) => handleDistanceSourceChange(event.target.value)}
-              onBlur={() => void trigger("distanceSource")}
-            />
-          </FormField>
-
-          <FormField
+          <DistanceOverrideField
             id="distanceKmOverride"
-            label="One-way distance"
-            unit="km"
-            error={errors.distanceKmOverride?.message}
-            helperText={distanceHelperText}
-            cue={distanceCue}
-          >
-            <FormInput
-              id="distanceKmOverride"
-              type="number"
-              step="any"
-              min={0}
-              placeholder="e.g., 85"
-              disabled={isSubmitting}
-              error={!!errors.distanceKmOverride}
-              value={distanceDraft}
-              onChange={(event) => handleDistanceChange(event.target.value)}
-              onBlur={handleDistanceBlur}
-            />
-          </FormField>
-
-        </div>
-
-        {distanceKmOverride != null && (
-          <FormField
-            id="distanceNote"
-            label="Distance note"
-            error={errors.distanceNote?.message}
-            helperText="Explain why this trip used a different route."
-          >
-            <FormTextarea
-              id="distanceNote"
-              placeholder="e.g., detour via the coastal road due to bridge closure"
-              disabled={isSubmitting}
-              error={!!errors.distanceNote}
-              {...register("distanceNote")}
-            />
-          </FormField>
-        )}
+            sourceId="distanceSource"
+            noteId="distanceNote"
+            hint="The one-way distance from this facility to the order's customer location. Override it when this trip took a different route."
+            overriding={overriding}
+            onOverride={startOverride}
+            onClear={clearOverride}
+            derived={{ distanceKm: storedDistanceKm, source: storedDistanceSource }}
+            // A new delivery reads the pair from the order list; claim nothing until it loads.
+            pending={!distanceRecord && !!watchOrderId && ordersData === undefined}
+            locationName={selectedOrder?.destinationName ?? null}
+            awaitingMessage={watchOrderId ? null : "Select an order to load the destination's distance."}
+            repairHref={customerLocationRepairHref}
+            footer={delivery && !hasSavedOverride(savedOverride) ? (
+              <DistanceDriftAction
+                target={{ entityType: "delivery", entityId: delivery.id }}
+                recordCode={delivery.code}
+                disabledReason={isDirty ? SAVE_BEFORE_REFRESH_REASON : null}
+                onRefreshed={() => onDistanceRefreshed?.()}
+              />
+            ) : undefined}
+            distanceRegistration={register("distanceKmOverride", { setValueAs: nullableNumericValue })}
+            sourceRegistration={register("distanceSource", { setValueAs: emptyToNullSource })}
+            noteRegistration={register("distanceNote")}
+            source={draftDistanceSource}
+            notePlaceholder="e.g., detour via the coastal road due to a bridge closure"
+            errors={{
+              distanceKm: errors.distanceKmOverride?.message,
+              source: errors.distanceSource?.message,
+              note: errors.distanceNote?.message,
+            }}
+            disabled={isSubmitting}
+          />
         </ActionableFocusTarget>
         <TransportRoutePreview
           entityType="biochar"

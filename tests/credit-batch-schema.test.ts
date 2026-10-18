@@ -1,7 +1,7 @@
 /**
  * Credit Batch Form Schema Tests (pure — no database)
  *
- * Covers the ADR 0016 ≤1-month production-batch window enforced by the form's
+ * Covers the ADR 0016 less-than-one-month production-batch window enforced by the form's
  * superRefine, including the certifier context supplied by its callers.
  */
 import { describe, expect, it } from "vitest";
@@ -40,9 +40,9 @@ describe("creditBatchFormSchema — production window", () => {
     }
   });
 
-  it("attributes the unchanged month cap to noma", () => {
+  it("states the last allowed end date", () => {
     expect(getCreditBatchProductionWindowIssue("2026-01-01", "2026-02-02"))
-      .toBe("A credit batch may span at most one month (one calendar month; noma rule).");
+      .toBe("Choose an end date on or before Jan 31, 2026. Isometric credit batches must cover less than one month.");
   });
 
   it("accepts a window under one month", () => {
@@ -63,7 +63,7 @@ describe("creditBatchFormSchema — production window", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       const issue = result.error.issues.find((i) => i.path[0] === "endDate");
-      expect(issue?.message).toMatch(/at most one month/i);
+      expect(issue?.message).toMatch(/less than one month/i);
     }
   });
 

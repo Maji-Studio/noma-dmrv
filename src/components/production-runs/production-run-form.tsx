@@ -56,6 +56,7 @@ import type { StorageLocationType } from "@/schemas/storage-locations";
 import { ProductionRunFeedstockDrawRow } from "./production-run-feedstock-draw-row";
 import { ProductionRunMixBinNotice } from "./production-run-mix-bin-notice";
 import { summarizeFeedstockWetInput } from "./production-run-feedstock-input";
+import { isProductionRunOutputLocked, type RecordLockView } from "@/lib/record-lock-view";
 
 // ============================================
 // Constants for select options
@@ -99,6 +100,8 @@ interface ProductionRunFormProps {
    */
   children?: React.ReactNode;
   deferredAttachments?: UseDeferredAttachmentsResult;
+  /** The saved run's lock: a product, stock entry or count fixes its output basis. */
+  lock?: RecordLockView;
 }
 export function ProductionRunForm({
   productionRun,
@@ -109,9 +112,13 @@ export function ProductionRunForm({
   submitLabel,
   children,
   deferredAttachments,
+  lock,
 }: ProductionRunFormProps) {
   const formId = useId();
   const isEditMode = !!productionRun;
+  // `assertProductionRunOutputBasisChange` refuses these once stock is used.
+  // Fail closed: the output basis waits for the lock to answer.
+  const outputLocked = isEditMode && (!lock || isProductionRunOutputLocked(lock));
   const transitionFrom = (productionRun?.status as ProductionRunStatus) ?? "running";
   const statusOptions = (isEditMode
     ? allowedProductionRunStatusesFrom(transitionFrom)
@@ -387,7 +394,7 @@ export function ProductionRunForm({
             id="status"
             legend="Run status"
             options={statusOptions}
-            disabled={isSubmitting}
+            disabled={isSubmitting || outputLocked}
             error={!!errors.status}
             {...register("status")}
           />
@@ -424,7 +431,7 @@ export function ProductionRunForm({
                   value={field.value}
                   onChange={field.onChange}
                   placeholder="Select a reactor..."
-                  disabled={isSubmitting || !watchedFacilityId}
+                  disabled={isSubmitting || !watchedFacilityId || outputLocked}
                   error={!!errors.reactorId}
                   filterBy={watchedFacilityId ? { facilityId: watchedFacilityId } : undefined}
                   autoSelectSingle
@@ -461,14 +468,14 @@ export function ProductionRunForm({
             cue={timezoneHelperText}
             required
           >
-            <FormInput id="startDate" type="date" disabled={isSubmitting} error={!!errors.startDate} {...register("startDate")} />
+            <FormInput id="startDate" type="date" disabled={isSubmitting || outputLocked} error={!!errors.startDate} {...register("startDate")} />
           </FormField>
 
           <FormField id="startTime" label="Start time" error={errors.startTime?.message} required>
             <FormInput
               id="startTime"
               type="time"
-              disabled={isSubmitting}
+              disabled={isSubmitting || outputLocked}
               error={!!errors.startTime}
               {...register("startTime")}
             />
@@ -498,7 +505,7 @@ export function ProductionRunForm({
             <FormInput
               id="endDate"
               type="date"
-              disabled={isSubmitting}
+              disabled={isSubmitting || outputLocked}
               error={!!errors.endDate}
               {...register("endDate")}
             />
@@ -508,7 +515,7 @@ export function ProductionRunForm({
             <FormInput
               id="endTime"
               type="time"
-              disabled={isSubmitting}
+              disabled={isSubmitting || outputLocked}
               error={!!errors.endTime}
               {...register("endTime")}
             />
@@ -676,7 +683,7 @@ export function ProductionRunForm({
                 allowEdit
                 value={field.value || undefined}
                 onChange={field.onChange}
-                disabled={isSubmitting || !watchedFacilityId}
+                disabled={isSubmitting || !watchedFacilityId || outputLocked}
                 error={!!errors.biocharStorageLocationId}
                 filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "biochar_bin" } : undefined}
                 allowCreate={!!watchedFacilityId}
@@ -696,7 +703,7 @@ export function ProductionRunForm({
             required: watchedStatus === "complete",
             error: biocharOutputError,
             warning: massBalanceFeedback.wetWarning,
-            disabled: isSubmitting,
+            disabled: isSubmitting || outputLocked,
             placeholder: "e.g. 150",
             certifyRequired: isProductionRunCertifyField("biocharOutputKg"),
             certifyStatus: certStatus("biocharOutputKg"),
@@ -706,7 +713,7 @@ export function ProductionRunForm({
             id: "biocharMoisturePercent",
             required: watchedStatus === "complete",
             error: errors.biocharMoisturePercent?.message,
-            disabled: isSubmitting,
+            disabled: isSubmitting || outputLocked,
             placeholder: "e.g. 1.5",
             certifyRequired: isProductionRunCertifyField("biocharMoisturePercent"),
             certifyStatus: certStatus("biocharMoisturePercent"),

@@ -39,6 +39,29 @@ describe("Notice", () => {
     }
   });
 
+  it("boxes a non-error tone on a neutral surface without any red", () => {
+    const out = renderToStaticMarkup(
+      <Notice tone="info" boxed>
+        In use by delivery DL-1.
+      </Notice>,
+    );
+    expect(out).toContain("--color-surface-light");
+    expect(out).toContain("py-8");
+    expect(out).toContain("px-12");
+    expect(out).not.toContain("--st-bad");
+    expect(out).toContain('role="status"');
+  });
+
+  it("keeps the error box unchanged when boxed is passed", () => {
+    const out = renderToStaticMarkup(
+      <Notice tone="error" boxed>
+        Failed.
+      </Notice>,
+    );
+    expect(out).toContain("--st-bad-bg");
+    expect(out).not.toContain("--color-surface-light");
+  });
+
   it("renders a title, the line and an action in order", () => {
     const out = renderToStaticMarkup(
       <Notice title="Over delivery" action={<a href="/x">Open batch</a>}>

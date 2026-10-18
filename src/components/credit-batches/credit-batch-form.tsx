@@ -42,6 +42,8 @@ import { MethodBPrerequisitesSetup } from "./method-b-prerequisites-setup";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { CreditBatchProductionRunsPreview } from "./credit-batch-production-runs-preview";
 import { Notice } from "@/components/ui/notice";
+import type { RecordLockView } from "@/lib/record-lock-view";
+import { isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
 
 type CreditBatchFormInput = z.input<ReturnType<typeof creditBatchFormSchemaForCertifier>>;
 type CreditBatchFormResolver = Resolver<CreditBatchFormInput, unknown, CreditBatchFormData>;
@@ -94,6 +96,8 @@ interface CreditBatchFormProps {
    * `YYYY-MM-DD`. Applied only while the operator has not edited a date.
    */
   windowForFeedstock?: (feedstockTypeId: string) => { startDate: string; endDate: string } | null;
+  /** The saved batch's lock: a Removal holding its slices fixes its definition. */
+  lock?: RecordLockView;
 }
 
 export function CreditBatchForm({
@@ -108,8 +112,12 @@ export function CreditBatchForm({
   canManage = false,
   defaultValues,
   windowForFeedstock,
+  lock,
 }: CreditBatchFormProps) {
   const isEditMode = !!creditBatch;
+  // Fail closed: the definition stays fixed until the lock answers, so a
+  // lock that arrives Held can never meet an edited membership.
+  const membershipLocked = isEditMode && (!lock || isCreditBatchMembershipLocked(lock));
   const { facilityId: contextFacilityId } = useFacilityContext();
 
   const {
@@ -338,7 +346,7 @@ export function CreditBatchForm({
             entityType="feedstockType"
             allowEdit
             placeholder="Select feedstock type..."
-            disabled={isSubmitting}
+            disabled={isSubmitting || membershipLocked}
             required
             filterBy={{ usage: "pyrolysis" }}
             onChange={(value) => {
@@ -392,7 +400,7 @@ export function CreditBatchForm({
             <FormInput
               id="startDate"
               type="date"
-              disabled={isSubmitting}
+              disabled={isSubmitting || membershipLocked}
               error={!!errors.startDate}
               {...register("startDate", {
                 onChange: () => onClearServerError?.(),
@@ -409,7 +417,7 @@ export function CreditBatchForm({
             <FormInput
               id="endDate"
               type="date"
-              disabled={isSubmitting}
+              disabled={isSubmitting || membershipLocked}
               error={!!errors.endDate}
               {...register("endDate", {
                 onChange: () => onClearServerError?.(),

@@ -331,7 +331,7 @@ describe("derived transport-leg transaction boundaries", () => {
         transportDistanceKm: 25,
         transportDistanceSource: "document",
       }));
-    expect(result.feedstocks[0].status).toBe("complete");
+    expect(result.feedstocks[0]).toMatchObject({ status: "complete", distanceKmOverride: 25, distanceSource: "document" });
     const feedstockId = result.feedstocks[0].id;
 
     const partialUpdate = await db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, feedstockId, {
