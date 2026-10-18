@@ -15,7 +15,7 @@ vi.mock("@/hooks/use-entities", () => ({
   useEntityById: () => ({ data: BIN, dataUpdatedAt: 0, isPending: false, isError: false, error: null }),
 }));
 
-const availability = vi.hoisted(() => ({ availableKg: 1_000.3 - 0.0004 as number | null }));
+const availability = vi.hoisted(() => ({ availableKg: (1_000.3 - 0.0004) as number | null }));
 vi.mock("@/hooks/use-stock-availability", () => ({
   useStockAvailability: () => ({ data: availability }),
 }));
@@ -54,7 +54,7 @@ describe("ProductionRunFeedstockDrawRow Add all", () => {
     const onWetMassChange = vi.fn();
     renderRow(onWetMassChange);
 
-    fireEvent.click(screen.getByRole("button", { name: "Add all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add all stock to feedstock source 1" }));
 
     expect(onWetMassChange).toHaveBeenCalledWith(1_000.299);
   });
@@ -63,6 +63,6 @@ describe("ProductionRunFeedstockDrawRow Add all", () => {
     availability.availableKg = 0;
     renderRow(vi.fn());
 
-    expect(screen.queryByRole("button", { name: "Add all" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Add all/ })).toBeNull();
   });
 });

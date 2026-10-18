@@ -73,12 +73,17 @@ const OPEN_LOCK: RecordLockView = {
 function renderForm({
   application,
   delivery = DELIVERY,
-}: { application?: Application; delivery?: ApplicationDeliveryOption } = {}) {
+  lock = application ? OPEN_LOCK : undefined,
+}: {
+  application?: Application;
+  delivery?: ApplicationDeliveryOption;
+  lock?: RecordLockView;
+} = {}) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <ApplicationForm
         application={application}
-        lock={application ? OPEN_LOCK : undefined}
+        lock={lock}
         deliveries={[delivery]}
         onSubmit={() => undefined}
       />
@@ -94,7 +99,7 @@ describe("ApplicationForm Add all", () => {
     const input = screen.getByRole("spinbutton", { name: /Biochar product applied/ }) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "100" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "Add all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add all to biochar product applied" }));
 
     // Edit mode adds this application's own 400 kg back: 1,000 - 400 + 400.
     expect(await screen.findByDisplayValue("1000")).toBe(input);
@@ -106,12 +111,58 @@ describe("ApplicationForm Add all", () => {
       delivery: { ...DELIVERY, alreadyAppliedWetKg: 1_400 },
     });
 
-    expect(screen.queryByRole("button", { name: "Add all" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add all to biochar product applied" })).toBeNull();
   });
 
   it("is hidden when no delivery is selected", () => {
     renderForm();
 
-    expect(screen.queryByRole("button", { name: "Add all" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add all to biochar product applied" })).toBeNull();
+  });
+
+  it("fills the field in create mode after a delivery is picked", async () => {
+    renderForm();
+    fireEvent.click(screen.getByTestId("entity-select-trigger"));
+    fireEvent.click(await screen.findByRole("option", { name: /DL-26-001|Chicken/ }));
+    const input = screen.getByRole("spinbutton", { name: /Biochar product applied/ }) as HTMLInputElement;
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add all to biochar product applied" }));
+
+    // New application: 1,000 - 400 already applied.
+    expect(await screen.findByDisplayValue("600")).toBe(input);
+  });
+
+  it("stays and fills after the empty input loses focus to it", async () => {
+    renderForm({ application: EDITED_APPLICATION });
+    const input = screen.getByRole("spinbutton", { name: /Biochar product applied/ }) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "" } });
+    fireEvent.focus(input);
+    fireEvent.blur(input);
+
+    // The required error now replaces the cue; the action must not unmount.
+    expect(await screen.findByText(/required/i, { selector: "[role=alert]" })).toBeTruthy();
+    const button = screen.getByRole("button", { name: "Add all to biochar product applied" });
+    fireEvent.click(button);
+
+    expect(await screen.findByDisplayValue("1000")).toBe(input);
+    expect(screen.getByRole("button", { name: "Add all to biochar product applied" })).toBe(button);
+  });
+
+  it("stays visible while the over-draw error shows", async () => {
+    renderForm({ application: EDITED_APPLICATION });
+    const input = screen.getByRole("spinbutton", { name: /Biochar product applied/ });
+    fireEvent.change(input, { target: { value: "5000" } });
+
+    expect(await screen.findByText(/Only 1,000 kg remains in this delivery/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add all to biochar product applied" })).toBeTruthy();
+  });
+
+  it("is hidden, not dimmed, when the applied mass is locked", () => {
+    renderForm({
+      application: EDITED_APPLICATION,
+      lock: { ...OPEN_LOCK, level: "sent" },
+    });
+
+    expect(screen.queryByRole("button", { name: /Add all/ })).toBeNull();
   });
 });

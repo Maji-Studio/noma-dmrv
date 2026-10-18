@@ -480,13 +480,15 @@ export function ApplicationForm({
             hint="As-received mass at delivery, water included."
             cue={stockCues.appliedMassCue}
             cueAction={
-              wholeAvailableKg !== null
+              wholeAvailableKg !== null && !locked("appliedWetMassKg")
                 ? {
                     label: "Add all",
-                    disabled: isSubmitting || locked("appliedWetMassKg"),
+                    ariaLabel: "Add all to biochar product applied",
+                    disabled: isSubmitting,
                     onClick: () =>
                       setValue("biocharAppliedKg", wholeAvailableKg, {
                         shouldDirty: true,
+                        shouldTouch: true,
                         shouldValidate: true,
                       }),
                   }

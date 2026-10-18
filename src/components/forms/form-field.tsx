@@ -5,7 +5,7 @@
 
 import { cloneElement, isValidElement, type CSSProperties, type ReactNode } from "react";
 import { FormError } from "./form-error";
-import { TextAction } from "./text-action";
+import { Button } from "@/components/ui/button";
 import { InfoHint } from "@/components/ui/tooltip";
 import {
   CertificationFieldTag,
@@ -62,11 +62,19 @@ interface FormFieldProps {
    */
   cue?: string;
   /**
-   * A tertiary text action beside the cue ("Add all"), for a shortcut that
-   * fills the control from the figure the cue states. Shown only while the cue
-   * shows; it is not rendered without a cue.
+   * A tertiary text action at the right of the cue row ("Add all"), for a
+   * shortcut that fills the control from the figure the cue states. It stays
+   * mounted, in the same place, whenever `cue` has text, whatever error or
+   * warning replaces the cue's message (an unmount between blur and click
+   * would swallow the click). Not rendered without a cue. Omit it to hide it.
+   * `ariaLabel` names it for screen readers; the visible `label` stays short.
    */
-  cueAction?: { label: string; onClick: () => void; disabled?: boolean };
+  cueAction?: {
+    label: string;
+    onClick: () => void;
+    disabled?: boolean;
+    ariaLabel?: string;
+  };
   /**
    * Unit suffix shown inside the end of the control ("kg", "%", "km"), so the
    * label needs no "(kg)". The accessible name keeps the unit.
@@ -182,6 +190,7 @@ export function FormField({
   // One caption line under the control at a time: an error or warning
   // replaces the cue while it shows.
   const showCue = hasText(cue) && !error && !showWarning;
+  const showCueAction = cueAction !== undefined && hasText(cue);
 
   // Point the control at whichever message is rendered below it, then the
   // explanation behind the ⓘ, then the CERT chip.
@@ -234,6 +243,29 @@ export function FormField({
     </div>
   );
 
+  const messages = (
+    <>
+      {showCue && (
+        <div className="mt-6">
+          <p id={cueId} className="body-caption text-[var(--color-text-tertiary)]">
+            {cue}
+          </p>
+        </div>
+      )}
+      {showWarning && (
+        <p
+          id={warningId}
+          className="body-caption text-[var(--st-wait)] mt-6"
+          role="status"
+          aria-live="polite"
+        >
+          {warning}
+        </p>
+      )}
+      <FormError id={errorId} message={error} />
+    </>
+  );
+
   return (
     <div>
       {/* With an aside the label group and the aside wrap as two units, so
@@ -260,33 +292,24 @@ export function FormField({
           {hintContent}
         </span>
       )}
-      {showCue && (
-        <div className="mt-6 flex flex-wrap items-center gap-x-8">
-          <p id={cueId} className="body-caption text-[var(--color-text-tertiary)]">
-            {cue}
-          </p>
-          {cueAction && (
-            <TextAction
-              className="-my-12"
-              disabled={cueAction.disabled}
-              onClick={cueAction.onClick}
-            >
-              {cueAction.label}
-            </TextAction>
-          )}
+      {showCueAction ? (
+        <div className="flex items-start justify-between gap-8">
+          <div className="min-w-0">{messages}</div>
+          <Button
+            type="button"
+            variant="noOutline"
+            className="-mb-12 -mr-8 min-h-44 shrink-0 items-start px-8 pt-6 normal-case"
+            aria-label={cueAction.ariaLabel}
+            aria-describedby={error ? errorId : showWarning ? warningId : cueId}
+            disabled={cueAction.disabled}
+            onClick={cueAction.onClick}
+          >
+            <span className="body-caption normal-case">{cueAction.label}</span>
+          </Button>
         </div>
+      ) : (
+        messages
       )}
-      {showWarning && (
-        <p
-          id={warningId}
-          className="body-caption text-[var(--st-wait)] mt-6"
-          role="status"
-          aria-live="polite"
-        >
-          {warning}
-        </p>
-      )}
-      <FormError id={errorId} message={error} />
     </div>
   );
 }

@@ -152,6 +152,7 @@ export function ProductionRunFeedstockDrawRow({
               wholeDrawKg !== null
                 ? {
                     label: "Add all",
+                    ariaLabel: `Add all stock to feedstock source ${index + 1}`,
                     disabled,
                     onClick: () => onWetMassChange(wholeDrawKg),
                   }
