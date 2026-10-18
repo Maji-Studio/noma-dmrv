@@ -511,6 +511,9 @@ restore for free.
 - **Dialog actions sit bottom left, primary first, then secondary** (Delete,
   then Cancel). Where it is easy, records a dialog names link to the record
   through its deep-link helper; reuse `SheetLinkRow` (`@/components/ui/sheet-link-row`).
+- A dialog that lists records uses `md` width. Its text has hierarchy (a short
+  heading, then grouped lines), never one paragraph. Archived children sit
+  behind a collapsed toggle as compact rows, not full cards.
 - **`dismissOnClickOutside={false}`** for multi-step workflows where a stray
   backdrop click would discard in-progress work. Close button and ESC stay live.
 - **`dismissible={false}`** only while an irreversible request is active. It
@@ -568,6 +571,20 @@ input is not the touch target: the whole label is, and `SegmentedControl`
 segments are at least 44px tall. The sheet header Simple/Detailed toggle
 (`FormDetailToggle`) is sheet chrome, not a form field, and stays a separate
 component.
+
+### Before and after
+
+A value change (bin moisture reset, stock preview, correction) is two blocks
+with an arrow between them: before on the left, arrow, after on the right.
+Never write it as a sentence. A short heading may introduce the pair.
+Unchanged values ("30% → 30%") are not shown.
+
+### Consistency across sibling surfaces
+
+A style change reaches every sibling surface of the same kind (all table
+headers, a whole page's chrome) in the same PR, so no screen is left in two
+type systems. Put risky surfaces, such as the dashboard, in a last commit that
+can be dropped on its own.
 
 ### Illustrations — `src/components/ui/illustrations`
 
