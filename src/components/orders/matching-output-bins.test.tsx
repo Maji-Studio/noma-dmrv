@@ -85,7 +85,8 @@ describe("MatchingOutputBins", () => {
     // Without a resolved wet estimate the headline falls back to dry stock.
     expect(html).toContain("Available dry stock");
     expect(html).toContain("100 kg dry biochar");
-    expect(html).not.toContain("wet");
+    // No wet figure; the hint still says what wet stock is.
+    expect(html).not.toMatch(/kg wet|Available wet stock/);
     expect(html).not.toMatch(/Before loading|After loading|removed|>0 kg dry biochar|150 kg/);
   });
   it("leads with the bin's wet estimate and reads dry stock as a secondary line", () => {

@@ -33,7 +33,7 @@ const MODE_CHANGE_CAPTIONS: Record<string, string> = {
 
 /** The one fact the entries cannot show as a figure. */
 const HISTORY_HINT =
-  "Each entry is one measurement. Wet stock is the mass added less the mass taken out. Only a count sets moisture again; earlier measurements stay unchanged.";
+  "Each entry is one measurement. Wet stock is the wet mass added less the wet mass taken out, and taking stock out leaves the moisture as it was. Earlier entries stay unchanged.";
 
 /** The entry's own size with the moisture it was weighed at, for the original and corrected blocks. */
 function entryFigure(entry: OutputStockHistoryEntry, kind: string): string {
