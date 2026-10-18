@@ -12,7 +12,7 @@ import { useState, type ReactNode } from "react";
 import { MoistureResetChange } from "./moisture-reset-change";
 import { OutputStockAllocations } from "./output-stock-availability";
 import { InlineMassChange, StockBalanceChange, StockRows, type StockRow } from "./stock-figures";
-import { batchSegments, binLabel, capitalize, dryingNotice, movementDirection, SPLIT_MATERIAL_LABEL, splitWetMassKg, stockCardHint } from "./stock-preview-shared";
+import { batchSegments, binLabel, capitalize, dryingNotice, movementDirection, splitDryLabel, splitWetMassKg, stockCardHint } from "./stock-preview-shared";
 import { Notice } from "@/components/ui/notice";
 
 /**
@@ -50,7 +50,7 @@ export function StockLoadCard({ preview, actions }: { preview: Preview; actions?
         <SegmentKey segments={drawn} />
       </div> : enteredWetKg !== null && <div className="space-y-6">
         <p className="body-caption text-[var(--color-text-secondary)]">{enteredCaption(preview)}</p>
-        <MoistureSplit calculation={false} wetMassKg={enteredWetKg} moisturePercent={preview.movementMoisturePercent} materialLabel={SPLIT_MATERIAL_LABEL} />
+        <MoistureSplit calculation={false} wetMassKg={enteredWetKg} moisturePercent={preview.movementMoisturePercent} dryLabel={splitDryLabel(preview)} />
       </div>}
       {notice && <Notice>{notice}</Notice>}
       {preview.blockingMessage === null && preview.moistureReset && <MoistureResetChange reset={preview.moistureReset} />}

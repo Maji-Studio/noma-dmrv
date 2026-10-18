@@ -82,7 +82,7 @@ test.describe("Split bin picker", () => {
     // A tap opens it too, for touch screens with neither hover nor keyboard focus.
     await cards.first().getByRole("button", { name: `${f.products[0].code} details` }).click();
     await expect(page.getByText("Wet, estimated", { exact: true })).toBeVisible();
-    await expect(page.getByText("≈ 1,500 kg wet", { exact: true })).toBeVisible();
+    await expect(page.getByText("≈ 1,500 kg", { exact: true })).toBeVisible();
     // Its contents as the product composition names them, not one "Solids" figure.
     // The card's secondary figure also reads "Dry biochar", so this reads the details' own table.
     const contents = page.getByLabel("Contents", { exact: true });
