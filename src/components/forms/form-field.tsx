@@ -5,6 +5,7 @@
 
 import { cloneElement, isValidElement, type CSSProperties, type ReactNode } from "react";
 import { FormError } from "./form-error";
+import { Button } from "@/components/ui/button";
 import { InfoHint } from "@/components/ui/tooltip";
 import {
   CertificationFieldTag,
@@ -60,6 +61,12 @@ interface FormFieldProps {
    * "Facility time: Africa/Dar es Salaam"). Everything else is `hint`.
    */
   cue?: string;
+  /**
+   * A tertiary text action beside the cue ("Add all"), for a shortcut that
+   * fills the control from the figure the cue states. Shown only while the cue
+   * shows; it is not rendered without a cue.
+   */
+  cueAction?: { label: string; onClick: () => void; disabled?: boolean };
   /**
    * Unit suffix shown inside the end of the control ("kg", "%", "km"), so the
    * label needs no "(kg)". The accessible name keeps the unit.
@@ -155,6 +162,7 @@ export function FormField({
   helperText,
   hint,
   cue,
+  cueAction,
   unit,
   labelUnit,
   required,
@@ -253,10 +261,22 @@ export function FormField({
         </span>
       )}
       {showCue && (
-        <div className="mt-6">
+        <div className="mt-6 flex flex-wrap items-center gap-x-8">
           <p id={cueId} className="body-caption text-[var(--color-text-tertiary)]">
             {cue}
           </p>
+          {cueAction && (
+            <Button
+              type="button"
+              variant="noOutline"
+              size="small"
+              className="text-[var(--color-interaction)]"
+              disabled={cueAction.disabled}
+              onClick={cueAction.onClick}
+            >
+              {cueAction.label}
+            </Button>
+          )}
         </div>
       )}
       {showWarning && (

@@ -63,6 +63,7 @@ import {
   deliveryStockOverdrawMessage,
   formatStockLimitKg,
   isStockOverdraw,
+  wholeStockDrawKg,
 } from "@/lib/stock-overdraw";
 import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
 
@@ -361,6 +362,8 @@ export function ApplicationForm({
     errors.biocharAppliedKg?.message ??
     applicationStockError ??
     routedServerError.inlineError;
+  const wholeAvailableKg =
+    availableKg !== null ? wholeStockDrawKg(availableKg) : null;
   const stockCues = applicationStockCues({
     delivery: selectedDelivery,
     availableKg,
@@ -476,6 +479,19 @@ export function ApplicationForm({
             certifyStatus={certStatus("biocharAppliedKg")}
             hint="As-received mass at delivery, water included."
             cue={stockCues.appliedMassCue}
+            cueAction={
+              wholeAvailableKg !== null
+                ? {
+                    label: "Add all",
+                    disabled: isSubmitting || locked("appliedWetMassKg"),
+                    onClick: () =>
+                      setValue("biocharAppliedKg", wholeAvailableKg, {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      }),
+                  }
+                : undefined
+            }
           >
             <FormInput
               id="biocharAppliedKg"
