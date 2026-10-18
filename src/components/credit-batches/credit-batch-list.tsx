@@ -722,7 +722,7 @@ export function CreditBatchList({
         onModeChange={handleModeChange}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit credit batch"
+        editLabel="Edit"
         canEdit={isRecordEditable(sheetLock)}
         {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: !membershipLocked })}
         size="wide"
