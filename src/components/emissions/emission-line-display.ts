@@ -362,6 +362,13 @@ export function draftMassDistanceFigure(line: EmissionLine, draft: Record<string
 }
 
 /** Wire values for create and update. Call after validateFields passes. */
+/** The template units a draft is typed in. A change means the typed numbers no longer mean the same. */
+export function inputShapeKey(line: EmissionLine): string {
+  return line.inputShape.map((input) => `${input.key}:${input.quantityKind}:${input.unit ?? ""}`).join("|");
+}
+
+export const UNITS_CHANGED_MESSAGE = "The template units changed while you typed. Enter the values again in the units shown.";
+
 export function entryValues(line: EmissionLine, draft: Record<string, string>) {
   return line.inputShape.map((input) => {
     const unit = input.unit ?? "";

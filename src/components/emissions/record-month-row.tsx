@@ -31,6 +31,8 @@ import { SourceChips } from "./emission-source-chips";
 const LABEL_ROW_OFFSET = "sm:mt-[30px]";
 
 export interface RowDraft {
+  /** The template units the values were typed in (inputShapeKey). */
+  shape: string;
   values: Record<string, string>;
   date: string;
   file: File | null;

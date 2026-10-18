@@ -27,6 +27,7 @@ import {
   defaultEntryDate,
   entryDocumentType,
   entryValues,
+  inputShapeKey,
   isOpen,
   isRecordsGap,
   lineRecords,
@@ -67,10 +68,12 @@ export function RecordMonthGrid({ lines, batch, scope, today, onDone, onEnterAga
   const [showDone, setShowDone] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
 
-  const blank = (): RowDraft => ({ values: {}, date: defaultEntryDate(today, batch), file: null });
-  const draftOf = (line: EmissionLine) => drafts[line.componentId] ?? blank();
+  const blank = (line: EmissionLine): RowDraft => ({ shape: inputShapeKey(line), values: {}, date: defaultEntryDate(today, batch), file: null });
+  // A draft typed in units the template no longer uses is dropped, never saved in the new units.
+  const current = (line: EmissionLine, draft: RowDraft | undefined) => (draft?.shape === inputShapeKey(line) ? draft : blank(line));
+  const draftOf = (line: EmissionLine) => current(line, drafts[line.componentId]);
   const patch = (line: EmissionLine, change: Partial<RowDraft>) =>
-    setDrafts((all) => ({ ...all, [line.componentId]: { ...(all[line.componentId] ?? blank()), ...change } }));
+    setDrafts((all) => ({ ...all, [line.componentId]: { ...current(line, all[line.componentId]), ...change } }));
 
   const openLines = lines.filter(isOpen);
   const addLines = lines.filter(addsToRecordedLine);

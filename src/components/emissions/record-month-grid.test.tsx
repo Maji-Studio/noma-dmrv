@@ -49,6 +49,22 @@ describe("RecordMonthGrid", () => {
     expect(screen.getByRole("button", { name: "Show done lines (1)" })).toBeTruthy();
   });
 
+  it("drops a draft typed in units the template no longer uses", () => {
+    const grid = (unit: string) => (
+      <QueryClientProvider client={new QueryClient()}>
+        <RecordMonthGrid
+          lines={[makeLine({ inputShape: [{ key: "energy", type: "monitored", quantityKind: "energy", unit }] } as never)]}
+          batch={BATCH} scope={SCOPE} today="2026-10-18" onDone={vi.fn()} onEnterAgain={vi.fn()}
+        />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(grid("kWh"));
+    fireEvent.change(screen.getByLabelText(/Energy/), { target: { value: "2" } });
+    rerender(grid("Wh"));
+    expect(screen.getByLabelText(/Energy/)).toHaveProperty("value", "");
+    expect((screen.getByRole("button", { name: "Save all" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("saves a second month on a recorded line", async () => {
     mocks.createEntry.mockResolvedValue({ id: "entry-9" });
     const onDone = renderGrid([RECORDED]);

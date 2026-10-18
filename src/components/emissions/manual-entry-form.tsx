@@ -43,6 +43,8 @@ import {
   entryDocumentType,
   entryFields,
   entryValues,
+  inputShapeKey,
+  UNITS_CHANGED_MESSAGE,
   validateEntryDate,
   validateFields,
   type EmissionBatch,
@@ -84,6 +86,8 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
   const [date, setDate] = useState(() => (mode.kind === "edit" ? mode.entry.occurredOn : defaultEntryDate(today, batch)));
   const [note, setNote] = useState(seed?.note ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // The units the draft was typed in: a template refresh must never reinterpret the numbers.
+  const [typedIn, setTypedIn] = useState(() => inputShapeKey(line));
   const [serverError, setServerError] = useState<string | null>(null);
   const attachments = useDeferredAttachments();
   const queryClient = useQueryClient();
@@ -98,6 +102,13 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
 
   const save = async () => {
     if (inFlight.current) return;
+    if (inputShapeKey(line) !== typedIn) {
+      setTypedIn(inputShapeKey(line));
+      setDraft({});
+      setErrors({});
+      setServerError(UNITS_CHANGED_MESSAGE);
+      return;
+    }
     const next = validateFields(line, draft);
     const dateError = single ? null : validateEntryDate(date, today, batch.startDate);
     if (dateError) next.date = dateError;

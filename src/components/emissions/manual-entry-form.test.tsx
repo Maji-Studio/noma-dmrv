@@ -56,3 +56,28 @@ describe("ManualEntryForm again mode", () => {
     expect(mutations.create).not.toHaveBeenCalled();
   });
 });
+
+describe("ManualEntryForm template units", () => {
+  it("asks for the values again when the template units change after typing", async () => {
+    mutations.create.mockResolvedValue({ id: "entry-9" });
+    const form = (unit: string) => (
+      <QueryClientProvider client={new QueryClient()}>
+        <ManualEntryForm
+          line={makeLine({ inputShape: [{ key: "energy", type: "monitored", quantityKind: "energy", unit }] } as never)}
+          batch={BATCH} scope={SCOPE} today="2026-10-10" mode={{ kind: "add" }} onCancel={vi.fn()} onSaved={vi.fn()}
+        />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(form("kWh"));
+    fireEvent.change(screen.getByRole("textbox", { name: /Energy/ }), { target: { value: "2" } });
+    rerender(form("Wh"));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText(/template units changed/)).toBeTruthy();
+    expect(mutations.create).not.toHaveBeenCalled();
+    expect(screen.getByRole("textbox", { name: /Energy/ })).toHaveProperty("value", "");
+    fireEvent.change(screen.getByRole("textbox", { name: /Energy/ }), { target: { value: "2000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mutations.create).toHaveBeenCalledTimes(1));
+    expect(mutations.create.mock.calls[0][0].values[0]).toMatchObject({ magnitude: "2000", unit: "Wh" });
+  });
+});
