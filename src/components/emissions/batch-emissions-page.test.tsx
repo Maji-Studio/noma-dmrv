@@ -34,7 +34,10 @@ vi.mock("@/hooks/use-emission-entries", () => ({
 vi.mock("./batch-emissions-query", () => ({
   useBatchLineQuery: () => ({ filter: mocks.filter, sort: "template", setFilter: vi.fn(), setSort: vi.fn() }),
 }));
-vi.mock("./emissions-overview-query", () => ({ useEmissionsOverviewQuery: () => ({ query: {} }) }));
+vi.mock("./emissions-overview-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./emissions-overview-query")>()),
+  useEmissionsOverviewQuery: () => ({ query: {} }),
+}));
 vi.mock("./batch-emissions-pager", () => ({ BatchEmissionsTopBar: () => null }));
 vi.mock("./batch-emissions-toolbar", () => ({ BatchKpiStrip: () => null, LineToolbar: () => null, lineChipLabel: () => null }));
 vi.mock("./emission-entry-form-panel", () => ({ EmissionEntryFormPanel: () => null }));

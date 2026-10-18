@@ -42,12 +42,11 @@ import {
   type EmissionLine,
 } from "./emission-line-display";
 import { EmissionsUndoBar } from "./emissions-undo-bar";
-import { useEmissionsOverviewQuery } from "./emissions-overview-query";
+import { MONTH_PREFIX_LENGTH, useEmissionsOverviewQuery } from "./emissions-overview-query";
 import { RecordMonthGrid } from "./record-month-grid";
 
 const SUBTITLE = "Manual entries add on top of what records already hold.";
 const LIST_SKELETON = "h-320 w-full";
-const MONTH_LENGTH = 7;
 
 /** `version` is the deleted entry's version, which the restore expects. */
 type UndoState = { id: number; line: EmissionLine; entry: EmissionEntry; version: number };
@@ -83,7 +82,7 @@ function batchSubtitle(batch: FacilityEmissionsOverviewBatch): string {
 
 function batchKpis(lines: EmissionLine[], timeZone: string, today: string): BatchKpis {
   const entries = lines.flatMap(valueEntries);
-  const month = today.slice(0, MONTH_LENGTH);
+  const month = today.slice(0, MONTH_PREFIX_LENGTH);
   return {
     open: lines.filter(isOpen).length,
     total: lines.length,
@@ -213,6 +212,7 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
             facilityId={scope.facilityId}
             batches={overview.data?.batches ?? []}
             query={overviewQuery}
+            today={today}
             lineFilter={filter}
             lineSort={sort}
           />

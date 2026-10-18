@@ -9,7 +9,7 @@ import {
   type EmissionsOverviewQuery,
 } from "./emissions-overview-query";
 
-const NOW = new Date("2026-10-16T12:00:00Z");
+const TODAY = "2026-10-16";
 const NO_FILTER: EmissionsOverviewQuery = {
   q: "", status: null, period: null, from: null, to: null, sort: "period", dir: "desc",
 };
@@ -38,49 +38,56 @@ const codes = (rows: FacilityEmissionsOverviewBatch[]) => rows.map((row) => row.
 
 describe("periodRange", () => {
   it("resolves presets against the current month", () => {
-    expect(periodRange({ period: "month", from: null, to: null }, NOW)).toEqual(["2026-10", "2026-10"]);
-    expect(periodRange({ period: "3m", from: null, to: null }, NOW)).toEqual(["2026-08", "2026-10"]);
-    expect(periodRange({ period: "6m", from: null, to: null }, NOW)).toEqual(["2026-05", "2026-10"]);
-    expect(periodRange({ period: "year", from: null, to: null }, NOW)).toEqual(["2026-01", "2026-10"]);
-    expect(periodRange({ period: "custom", from: "2026-02", to: null }, NOW)).toEqual(["2026-02", null]);
-    expect(periodRange({ period: null, from: "2026-02", to: null }, NOW)).toEqual([null, null]);
+    expect(periodRange({ period: "month", from: null, to: null }, TODAY)).toEqual(["2026-10", "2026-10"]);
+    expect(periodRange({ period: "3m", from: null, to: null }, TODAY)).toEqual(["2026-08", "2026-10"]);
+    expect(periodRange({ period: "6m", from: null, to: null }, TODAY)).toEqual(["2026-05", "2026-10"]);
+    expect(periodRange({ period: "year", from: null, to: null }, TODAY)).toEqual(["2026-01", "2026-10"]);
+    expect(periodRange({ period: "custom", from: "2026-02", to: null }, TODAY)).toEqual(["2026-02", null]);
+    expect(periodRange({ period: null, from: "2026-02", to: null }, TODAY)).toEqual([null, null]);
+  });
+
+  it("resolves presets on the facility's calendar day, across a year boundary", () => {
+    // 1 January at the facility while UTC still reads 31 December.
+    expect(periodRange({ period: "month", from: null, to: null }, "2027-01-01")).toEqual(["2027-01", "2027-01"]);
+    expect(periodRange({ period: "3m", from: null, to: null }, "2027-01-01")).toEqual(["2026-11", "2027-01"]);
+    expect(periodRange({ period: "year", from: null, to: null }, "2027-01-01")).toEqual(["2027-01", "2027-01"]);
   });
 });
 
 describe("filterAndSortBatches", () => {
   it("sorts by period, newest first, by default", () => {
-    expect(codes(filterAndSortBatches(BATCHES, NO_FILTER, NOW))).toEqual(["CB-2026-10", "CB-2026-09", "CB-2026-07", "CB-2025-12"]);
+    expect(codes(filterAndSortBatches(BATCHES, NO_FILTER, TODAY))).toEqual(["CB-2026-10", "CB-2026-09", "CB-2026-07", "CB-2025-12"]);
   });
 
   it("searches the batch code without case", () => {
-    expect(codes(filterAndSortBatches(BATCHES, { ...NO_FILTER, q: " cb-2026-0 " }, NOW))).toEqual(["CB-2026-09", "CB-2026-07"]);
+    expect(codes(filterAndSortBatches(BATCHES, { ...NO_FILTER, q: " cb-2026-0 " }, TODAY))).toEqual(["CB-2026-09", "CB-2026-07"]);
   });
 
   it("keeps batches whose period overlaps the range", () => {
-    expect(codes(filterAndSortBatches(BATCHES, { ...NO_FILTER, period: "3m" }, NOW))).toEqual(["CB-2026-10", "CB-2026-09"]);
-    expect(codes(filterAndSortBatches(BATCHES, { ...NO_FILTER, period: "custom", from: "2026-07", to: "2026-07" }, NOW))).toEqual(["CB-2026-07"]);
+    expect(codes(filterAndSortBatches(BATCHES, { ...NO_FILTER, period: "3m" }, TODAY))).toEqual(["CB-2026-10", "CB-2026-09"]);
+    expect(codes(filterAndSortBatches(BATCHES, { ...NO_FILTER, period: "custom", from: "2026-07", to: "2026-07" }, TODAY))).toEqual(["CB-2026-07"]);
   });
 
   it("filters by line state", () => {
-    expect(codes(filterAndSortBatches(BATCHES, { ...NO_FILTER, status: "done" }, NOW))).toEqual(["CB-2025-12"]);
-    expect(codes(filterAndSortBatches(BATCHES, { ...NO_FILTER, status: "files" }, NOW))).toEqual(["CB-2026-07"]);
-    expect(codes(filterAndSortBatches(BATCHES, { ...NO_FILTER, status: "review" }, NOW))).toEqual(["CB-2026-09"]);
-    expect(codes(filterAndSortBatches(BATCHES, { ...NO_FILTER, status: "open" }, NOW))).toHaveLength(3);
+    expect(codes(filterAndSortBatches(BATCHES, { ...NO_FILTER, status: "done" }, TODAY))).toEqual(["CB-2025-12"]);
+    expect(codes(filterAndSortBatches(BATCHES, { ...NO_FILTER, status: "files" }, TODAY))).toEqual(["CB-2026-07"]);
+    expect(codes(filterAndSortBatches(BATCHES, { ...NO_FILTER, status: "review" }, TODAY))).toEqual(["CB-2026-09"]);
+    expect(codes(filterAndSortBatches(BATCHES, { ...NO_FILTER, status: "open" }, TODAY))).toHaveLength(3);
   });
 
   it("does not count a batch without lines as done", () => {
     const empty = batch("CB-EMPTY", "2026-10-01", null, counts({ total: 0, recorded: 0 }));
-    expect(codes(filterAndSortBatches([empty], { ...NO_FILTER, status: "done" }, NOW))).toEqual([]);
+    expect(codes(filterAndSortBatches([empty], { ...NO_FILTER, status: "done" }, TODAY))).toEqual([]);
   });
 
   it("sorts by open lines and by code in either direction", () => {
-    expect(codes(filterAndSortBatches(BATCHES, { ...NO_FILTER, sort: "open", dir: "desc" }, NOW))).toEqual(["CB-2026-10", "CB-2026-07", "CB-2026-09", "CB-2025-12"]);
-    expect(codes(filterAndSortBatches(BATCHES, { ...NO_FILTER, sort: "code", dir: "asc" }, NOW))).toEqual(["CB-2025-12", "CB-2026-07", "CB-2026-09", "CB-2026-10"]);
+    expect(codes(filterAndSortBatches(BATCHES, { ...NO_FILTER, sort: "open", dir: "desc" }, TODAY))).toEqual(["CB-2026-10", "CB-2026-07", "CB-2026-09", "CB-2025-12"]);
+    expect(codes(filterAndSortBatches(BATCHES, { ...NO_FILTER, sort: "code", dir: "asc" }, TODAY))).toEqual(["CB-2025-12", "CB-2026-07", "CB-2026-09", "CB-2026-10"]);
   });
 
   it("leaves the state filter out of the KPI facet", () => {
     const withState: EmissionsOverviewQuery = { ...NO_FILTER, status: "done" };
-    expect(facetBatches(BATCHES, withState, NOW)).toHaveLength(4);
+    expect(facetBatches(BATCHES, withState, TODAY)).toHaveLength(4);
   });
 });
 

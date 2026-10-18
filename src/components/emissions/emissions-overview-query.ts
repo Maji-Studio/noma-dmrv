@@ -37,6 +37,10 @@ export const PERIOD_LABELS: Record<PeriodPreset, string> = {
 };
 /** How many months before the current one each rolling preset reaches back. */
 const ROLLING_MONTHS_BACK = { "3m": 2, "6m": 5 } as const;
+/** "YYYY-MM" out of an ISO date. */
+export const MONTH_PREFIX_LENGTH = 7;
+/** "YYYY" out of an ISO date. */
+const YEAR_PREFIX_LENGTH = 4;
 
 export const BATCH_SORTS = ["period", "open", "code"] as const;
 export type BatchSort = (typeof BATCH_SORTS)[number];
@@ -121,27 +125,27 @@ export function emissionsBatchHref(creditBatchId: string, query: EmissionsHrefQu
 
 /* ---------- pure filtering and sorting ---------- */
 
-function monthOf(date: Date): string {
-  return date.toISOString().slice(0, 7);
-}
-
 function shiftMonth(month: string, by: number): string {
+  // UTC arithmetic only shifts a calendar month that is already resolved.
   const date = new Date(`${month}-01T00:00:00Z`);
   date.setUTCMonth(date.getUTCMonth() + by);
-  return monthOf(date);
+  return date.toISOString().slice(0, MONTH_PREFIX_LENGTH);
 }
 
-/** Inclusive YYYY-MM range for a period preset; null bounds are open. */
+/**
+ * Inclusive YYYY-MM range for a period preset; null bounds are open.
+ * `today` is the facility's calendar day (YYYY-MM-DD), so "This month" is the facility's month.
+ */
 export function periodRange(
   query: Pick<EmissionsOverviewQuery, "period" | "from" | "to">,
-  now: Date = new Date(),
+  today: string,
 ): [string | null, string | null] {
-  const current = monthOf(now);
+  const current = today.slice(0, MONTH_PREFIX_LENGTH);
   switch (query.period) {
     case "month": return [current, current];
     case "3m":
     case "6m": return [shiftMonth(current, -ROLLING_MONTHS_BACK[query.period]), current];
-    case "year": return [`${current.slice(0, 4)}-01`, current];
+    case "year": return [`${current.slice(0, YEAR_PREFIX_LENGTH)}-01`, current];
     case "custom": return [query.from || null, query.to || null];
     default: return [null, null];
   }
@@ -159,8 +163,8 @@ export function matchesStatus(batch: FacilityEmissionsOverviewBatch, status: Bat
 
 /** A batch overlaps the range when its period touches any month in it. */
 function inPeriod(batch: FacilityEmissionsOverviewBatch, [lo, hi]: [string | null, string | null]): boolean {
-  const start = batch.startDate.slice(0, 7);
-  const end = batch.endDate ? batch.endDate.slice(0, 7) : null;
+  const start = batch.startDate.slice(0, MONTH_PREFIX_LENGTH);
+  const end = batch.endDate ? batch.endDate.slice(0, MONTH_PREFIX_LENGTH) : null;
   if (hi && start > hi) return false;
   if (lo && end && end < lo) return false;
   return true;
@@ -170,9 +174,9 @@ function inPeriod(batch: FacilityEmissionsOverviewBatch, [lo, hi]: [string | nul
 export function facetBatches(
   batches: readonly FacilityEmissionsOverviewBatch[],
   query: Pick<EmissionsOverviewQuery, "q" | "period" | "from" | "to">,
-  now: Date = new Date(),
+  today: string,
 ): FacilityEmissionsOverviewBatch[] {
-  const range = periodRange(query, now);
+  const range = periodRange(query, today);
   const needle = query.q.trim().toLowerCase();
   return batches.filter((batch) => inPeriod(batch, range) && (!needle || batch.code.toLowerCase().includes(needle)));
 }
@@ -196,9 +200,9 @@ export function sortBatches(
 export function filterAndSortBatches(
   batches: readonly FacilityEmissionsOverviewBatch[],
   query: EmissionsOverviewQuery,
-  now: Date = new Date(),
+  today: string,
 ): FacilityEmissionsOverviewBatch[] {
-  const facet = facetBatches(batches, query, now);
+  const facet = facetBatches(batches, query, today);
   const { status } = query;
   const filtered = status ? facet.filter((batch) => matchesStatus(batch, status)) : facet;
   return sortBatches(filtered, query.sort, query.dir);

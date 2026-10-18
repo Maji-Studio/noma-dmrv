@@ -15,7 +15,8 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { PageHeader } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useEmissionsOverview } from "@/hooks/use-emissions-overview";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
+import { formatFacilityDate } from "@/lib/date-utils";
 import { FilteredEmpty, NoBatchesEmpty } from "./emissions-overview-empty";
 import { EmissionsOverviewKpis } from "./emissions-overview-kpis";
 import { facetBatches, filterAndSortBatches, useEmissionsOverviewQuery } from "./emissions-overview-query";
@@ -52,6 +53,9 @@ export function EmissionsOverview({ entriesEnabled }: EmissionsOverviewProps) {
 
 function EmissionsLedger({ facilityId, entriesEnabled }: { facilityId: string; entriesEnabled: boolean }) {
   const { data, isLoading, error } = useEmissionsOverview(facilityId);
+  // Period presets resolve on the facility's calendar, like its KPIs.
+  const { timeZone } = useFacilityClock(facilityId);
+  const today = formatFacilityDate(new Date(), timeZone);
   const { query, setQuery, toggleSort, clear, hasFilters } = useEmissionsOverviewQuery();
   const [activityOpen, setActivityOpen] = useQueryState(
     "activity",
@@ -67,8 +71,8 @@ function EmissionsLedger({ facilityId, entriesEnabled }: { facilityId: string; e
   }
 
   const batches = data?.batches ?? [];
-  const facet = facetBatches(batches, query);
-  const rows = filterAndSortBatches(batches, query);
+  const facet = facetBatches(batches, query, today);
+  const rows = filterAndSortBatches(batches, query, today);
 
   return (
     <div className="container-max page-shell">
@@ -96,7 +100,7 @@ function EmissionsLedger({ facilityId, entriesEnabled }: { facilityId: string; e
             />
             {rows.length === 0 ? (
               <div className="p-16 [border-top:var(--panel-head-border)]">
-                <FilteredEmpty batches={batches} query={query} setQuery={setQuery} onClear={clear} />
+                <FilteredEmpty batches={batches} query={query} today={today} setQuery={setQuery} onClear={clear} />
               </div>
             ) : (
               <EmissionsOverviewTable rows={rows} query={query} facilityId={facilityId} onSort={toggleSort} />

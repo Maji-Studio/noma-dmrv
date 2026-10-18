@@ -65,11 +65,13 @@ function joinNames(parts: string[]): string {
 interface FilteredEmptyProps {
   batches: readonly FacilityEmissionsOverviewBatch[];
   query: EmissionsOverviewQuery;
+  /** The facility's calendar day, YYYY-MM-DD. */
+  today: string;
   setQuery: SetEmissionsOverviewQuery;
   onClear: () => void;
 }
 
-export function FilteredEmpty({ batches, query, setQuery, onClear }: FilteredEmptyProps) {
+export function FilteredEmpty({ batches, query, today, setQuery, onClear }: FilteredEmptyProps) {
   const active = activeFilters(query);
   const best = active
     .map((filter) => {
@@ -78,7 +80,7 @@ export function FilteredEmpty({ batches, query, setQuery, onClear }: FilteredEmp
         ...filter.reset,
         q: filter.reset.q === null ? "" : query.q,
       };
-      return { filter, count: filterAndSortBatches(batches, relaxed).length };
+      return { filter, count: filterAndSortBatches(batches, relaxed, today).length };
     })
     .filter(({ count }) => count > 0)
     .sort((a, b) => b.count - a.count)[0];

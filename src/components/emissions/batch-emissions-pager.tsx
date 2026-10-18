@@ -35,13 +35,15 @@ interface BatchEmissionsTopBarProps {
   facilityId: string;
   batches: readonly FacilityEmissionsOverviewBatch[];
   query: EmissionsOverviewQuery;
+  /** The facility's calendar day, YYYY-MM-DD: the overview's period presets resolve on it. */
+  today: string;
   lineFilter: LineFilter | null;
   lineSort: LineSort;
 }
 
-export function BatchEmissionsTopBar({ code, creditBatchId, facilityId, batches, query, lineFilter, lineSort }: BatchEmissionsTopBarProps) {
+export function BatchEmissionsTopBar({ code, creditBatchId, facilityId, batches, query, today, lineFilter, lineSort }: BatchEmissionsTopBarProps) {
   const router = useRouter();
-  const filtered = filterAndSortBatches(batches, query);
+  const filtered = filterAndSortBatches(batches, query, today);
   const inFilter = filtered.some((batch) => batch.creditBatchId === creditBatchId);
   // A batch outside the overview filter (a deep link) walks every batch instead.
   const list = inFilter ? filtered : sortBatches(batches, query.sort, query.dir);
