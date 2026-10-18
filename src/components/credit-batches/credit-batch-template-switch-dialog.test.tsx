@@ -149,6 +149,16 @@ describe("CreditBatchTemplateSwitchDialog", () => {
     expect((screen.getByRole("button", { name: "Switch template" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("says set template when the batch has no pin", async () => {
+    render(dialog({ ...BATCH, removalTemplateId: null }));
+    await screen.findByRole("dialog", { name: "Set template" });
+    await act(async () => {
+      fireEvent.change(document.getElementById("removalTemplateId")!, { target: { value: "rvt_new" } });
+    });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Set template" })); });
+    expect(mocks.success).toHaveBeenCalledWith("Removal template set for CB-26-001.");
+  });
+
   it("switches the pin against the batch version and closes", async () => {
     mount();
     await screen.findByRole("dialog", { name: "Switch template" });

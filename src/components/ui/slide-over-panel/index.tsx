@@ -335,7 +335,7 @@ function Footer({ children, className }: SlideOverPanelFooterProps) {
   return (
     <div
       className={cn(
-        "flex items-center justify-end gap-12",
+        "flex items-center justify-start gap-12",
         "px-24 py-16",
         "border-t border-[var(--color-border-secondary)]",
         "bg-[var(--color-background-white)]",

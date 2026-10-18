@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "../helpers/removal-fixture";
 /**
  * Certification workspace E2E — section navigation across the three routes and
  * the consolidated Settings surface (Stage 3 remodel).
@@ -127,6 +128,7 @@ test.describe("Certification workspace — status history", () => {
 
     const facilityId = seededData.facility.id;
     const removalId = crypto.randomUUID();
+    let removalCode = "";
     const submissionId = crypto.randomUUID();
     const createdAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
     const submittedAt = new Date(Date.now() - 60 * 60 * 1000);
@@ -136,7 +138,7 @@ test.describe("Certification workspace — status history", () => {
     const { db, pool } = createDbConnection();
     try {
       await db.transaction(async (tx) => {
-        await tx.insert(schema.certifierRemovals).values({
+        const [removalRow] = await insertRemovalFixture(tx, {
           organizationId: DEC_ORG_ID,
           id: removalId,
           facilityId,
@@ -145,6 +147,7 @@ test.describe("Certification workspace — status history", () => {
           startedOn: createdAt.toISOString().slice(0, 10),
           completedOn: submittedAt.toISOString().slice(0, 10),
         });
+        removalCode = removalRow.code;
         await tx.insert(schema.certificationSubmissions).values({
           organizationId: DEC_ORG_ID,
           id: submissionId,
@@ -209,12 +212,13 @@ test.describe("Certification workspace — status history", () => {
       await expect(history).toBeHidden();
       await expect(listBadge).toBeFocused();
 
-      // The row itself still opens the sheet, by keyboard and by click.
+      // The record link in the row's identity column opens the sheet by keyboard
+      // (the row itself has no tab stop); a click on the row opens it too.
       const row = page
         .getByRole("table", { name: "Removals" })
         .getByRole("row")
-        .filter({ hasText: removalId.slice(0, 8) });
-      await row.focus();
+        .filter({ hasText: removalCode });
+      await row.locator("[data-row-link]").focus();
       await page.keyboard.press("Enter");
       await expect(sheet).toBeVisible();
       await expect(page).toHaveURL(new RegExp(`removal=${removalId}`));
@@ -222,7 +226,7 @@ test.describe("Certification workspace — status history", () => {
       await expect(sheet).toHaveCount(0);
 
       // Same badge on the detail sheet; Escape closes the popover, not the sheet.
-      await page.getByRole("cell", { name: new RegExp(removalId.slice(0, 8)) }).click();
+      await page.getByRole("cell", { name: new RegExp(removalCode) }).click();
       await expect(sheet).toBeVisible();
       await sheet.getByRole("button", { name: "Submitted, status history" }).click();
       await expect(history).toBeVisible();

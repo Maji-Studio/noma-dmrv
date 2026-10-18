@@ -15,6 +15,7 @@ function StorageBinEditDialog({ bin, close }: { bin: StorageLocationWithFacility
 
 const mocks = vi.hoisted(() => ({ update: vi.fn(), create: vi.fn(), success: vi.fn(), actions: undefined as unknown }));
 vi.mock("@/hooks/use-storage-locations", () => ({ useUpdateStorageLocation: () => ({ mutateAsync: mocks.update, isPending: false }) }));
+vi.mock("@/hooks/use-record-locks", async () => (await import("../../../../tests/helpers/record-lock-mocks")).openRecordLocksModule);
 vi.mock("@/hooks/use-quick-add-submit", () => ({ useQuickAddSubmit: () => ({ handleSubmit: mocks.create, isSubmitting: false, error: null }) }));
 vi.mock("@/fn/quick-add", () => ({ createStorageLocationFn: vi.fn() }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: mocks.success }) }));

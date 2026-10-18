@@ -33,6 +33,7 @@ vi.mock("nuqs", () => ({
 vi.mock("@/hooks/use-suppliers", () => ({
   useSuppliers: () => ({ data: { items: [], total: 0, totalPages: 0 }, isLoading: false, error: null }),
   useSupplier: () => ({ data: harness.supplier, isLoading: false, isFetching: false, isPending: false, isSuccess: true, isError: false }),
+  useFetchSupplier: () => vi.fn(),
   useSupplierLocationsBySupplier: () => ({ data: [], isLoading: false }),
   useCreateSupplierWithLocations: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useUpdateSupplier: () => ({ isPending: false, mutateAsync: harness.update }),
@@ -49,7 +50,7 @@ vi.mock("@/hooks/use-list-pagination", () => ({
 }));
 vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => undefined }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
-vi.mock("@phosphor-icons/react/dist/ssr", () => ({ UsersIcon: () => null, PlusIcon: () => null, ArchiveIcon: () => null }));
+vi.mock("@phosphor-icons/react/dist/ssr", () => ({ UsersIcon: () => null, PlusIcon: () => null, ArchiveIcon: () => null, InfoIcon: () => null, WarningIcon: () => null, WarningCircleIcon: () => null, CheckCircleIcon: () => null }));
 vi.mock("@/components/ui", () => ({
   Button: ({ children }: { children?: ReactNode }) => <button type="button">{children}</button>,
   EmptyState: () => null,

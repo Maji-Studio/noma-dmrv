@@ -5,7 +5,8 @@
  * Owner or Admin switches it here.
  *
  * Readiness blockers deep-link to this block (`?focus=removal-template`), and
- * the shared focus target scrolls to it and says why the operator landed here.
+ * the shared focus target scrolls to it. The block says why the operator landed
+ * here once: its own Notice when the pin is missing, else a neutral line.
  */
 "use client";
 
@@ -18,7 +19,7 @@ import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { useFacilityCertifierSummary, useIsometricProjectTemplates } from "@/hooks/use-certification";
 import { useCreditBatch } from "@/hooks/use-credit-batches";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
+import { REMOVAL_TEMPLATE_LANDING_LINE } from "@/lib/certification/removal-template-blockers";
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { RawIdentifiers } from "@/components/certification/removal-template-mapping-view";
 import { CreditBatchTemplateSwitchDialog } from "./credit-batch-template-switch-dialog";
@@ -56,11 +57,15 @@ export function CreditBatchRemovalTemplate({
   const namePending = !!pinnedId && !pinned && !lookupSettled && !templates.isError && (summary.isLoading || templates.isLoading);
   const value = pinnedId ? pinned?.display_name ?? MISSING_VALUE.notAvailable : null;
 
+  // The two Notices below already say why an unpinned or vanished pin needs
+  // attention, so the focus callout stays quiet there rather than repeat them.
+  const landingLabel = !pinnedId || pinnedMissing ? null : REMOVAL_TEMPLATE_LANDING_LINE;
+
   return (
     <ActionableFocusTarget
       target={ENTITY_FOCUS_TARGETS.removalTemplate}
       activeTarget={activeFocusTarget}
-      actionLabel={REMOVAL_TEMPLATE_BLOCKERS.unpinnedTemplate}
+      actionLabel={landingLabel}
       className="flex flex-col gap-12"
     >
       <div className="flex flex-wrap items-start justify-between gap-12">
@@ -73,7 +78,7 @@ export function CreditBatchRemovalTemplate({
         />
         {canManage && !locked && (
           <Button size="small" variant="default" onClick={() => setSwitching(true)}>
-            Switch template
+            {pinnedId ? "Switch template" : "Set template"}
           </Button>
         )}
       </div>

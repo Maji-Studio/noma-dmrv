@@ -123,7 +123,9 @@ describe("application evidence panels and the certification lock", () => {
     expect(screen.getByRole("button", { name: "Remove" })).toBeTruthy();
   });
 
-  it("explains locked fields and files separately on the application sheet", () => {
+  // Locked fields are named once, by the sheet's record lock line (#1119);
+  // the evidence section only explains its files.
+  it("explains locked files in the evidence section, leaving fields to the lock line", () => {
     mocks.locked = true;
     const application = {
       id: APPLICATION_ID, evidenceMethod: "boundary", gisBoundary: null, allocationShares: [],
@@ -134,7 +136,7 @@ describe("application evidence panels and the certification lock", () => {
     render(withQueryClient(<>{sections.map((section) => <div key={section.title}>{section.content}</div>)}</>));
 
     expect(screen.getAllByText(RECORD_FILES_LOCKED_MESSAGE)).toHaveLength(1);
-    expect(screen.getByText("Application fields are locked by certification.")).toBeTruthy();
+    expect(screen.queryByText("Application fields are locked by certification.")).toBeNull();
     expect(screen.getByText("No GIS reference")).toBeTruthy();
     expect(screen.queryByText("Choose Edit to add the field boundary.")).toBeNull();
     expect(sections.flatMap((section) => section.fields).some((field) => field.label === "Certification")).toBe(false);

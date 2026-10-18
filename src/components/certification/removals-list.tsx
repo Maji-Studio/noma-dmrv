@@ -16,6 +16,7 @@
  */
 "use client";
 
+import { certificationRemovalsHref } from "@/lib/certification/links";
 import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { useState } from "react";
@@ -37,13 +38,15 @@ import { formatDateRange } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import { NewRemovalDialog } from "./new-removal-dialog";
+import { CORRECTION_NEEDED_LABEL, RemovalCorrectionCell } from "./removal-correction-needed";
+import { useRecordLocks } from "@/hooks/use-record-locks";
+import type { RecordLockView, RecordLockViews } from "@/lib/record-lock-view";
 import { RemovalDetailSheet } from "./removal-detail-sheet";
 import {
   buildRemovalListRows,
   type RemovalListRow,
 } from "./removal-list-state";
 
-const SHORT_ID = 8;
 
 export function RemovalsList() {
   const { facilityId, selectedFacility } = useFacilityContext();
@@ -101,10 +104,6 @@ export function RemovalsList() {
   );
 }
 
-function shortId(id: string): string {
-  return id.slice(0, SHORT_ID);
-}
-
 function reportingWindow(summary: RemovalListRow): string | null {
   return summary.startedOn && summary.completedOn
     ? formatDateRange(summary.startedOn, summary.completedOn)
@@ -114,16 +113,16 @@ function reportingWindow(summary: RemovalListRow): string | null {
 function RemovalCell({ summary }: { summary: RemovalListRow }) {
   const window = reportingWindow(summary);
   return (
-    <div className="flex flex-col gap-2 min-w-0">
+    <span className="flex flex-col gap-2 min-w-0">
       <span className="body-small font-mono text-[var(--color-text-primary)] truncate">
-        {shortId(summary.removalId)}…
+        {summary.code}
       </span>
       {window && (
         <span className="body-caption text-[var(--color-text-tertiary)]">
           {window}
         </span>
       )}
-    </div>
+    </span>
   );
 }
 
@@ -149,7 +148,7 @@ function MemberBatchesCell({ summary }: { summary: RemovalListRow }) {
   );
 }
 
-export function StatusCell({ summary }: { summary: RemovalListRow }) {
+export function StatusCell({ summary, lock }: { summary: RemovalListRow; lock?: RecordLockView }) {
   const status = deriveRemovalWorkflowStatus({
     local: summary.local,
     lockInFlight: summary.lockInFlight,
@@ -184,6 +183,7 @@ export function StatusCell({ summary }: { summary: RemovalListRow }) {
           </span>
         </span>
       )}
+      <RemovalCorrectionCell lock={lock} />
       {status.canRetry && (
         <Button
           variant="default"
@@ -202,12 +202,13 @@ export function StatusCell({ summary }: { summary: RemovalListRow }) {
   );
 }
 
-const columns: ColumnDef<RemovalListRow>[] = [
+const createColumns = (locks: RecordLockViews): ColumnDef<RemovalListRow>[] => [
   {
     id: "removal",
+    meta: { recordLink: true },
     header: "Removal",
     accessorFn: (summary) =>
-      `${summary.removalId} ${reportingWindow(summary) ?? ""}`,
+      `${summary.code} ${summary.removalId} ${reportingWindow(summary) ?? ""}`,
     cell: ({ row }) => <RemovalCell summary={row.original} />,
   },
   {
@@ -227,9 +228,9 @@ const columns: ColumnDef<RemovalListRow>[] = [
         enrichmentStatus: summary.enrichmentStatus,
         readiness: summary.readiness,
       });
-      return `${status.label} ${status.reasons.join(" ")}`;
+      return `${status.label} ${status.reasons.join(" ")}${locks[summary.removalId]?.returnedBy.length ? ` ${CORRECTION_NEEDED_LABEL}` : ""}`;
     },
-    cell: ({ row }) => <StatusCell summary={row.original} />,
+    cell: ({ row }) => <StatusCell summary={row.original} lock={locks[row.original.removalId]} />,
   },
 ];
 
@@ -252,6 +253,8 @@ function ListBody({
     facilityId,
     identityRows.map((entry) => entry.removal.id),
   );
+  // One read for the page: which sent Removals Isometric returned.
+  const removalLocks = useRecordLocks("removal", identityRows.map((entry) => entry.removal.id));
 
   if (identities.error) {
     return (
@@ -264,6 +267,7 @@ function ListBody({
   }
 
   const rows = buildRemovalListRows(identityRows, enrichmentByRemovalId);
+  const columns = createColumns(removalLocks.locks);
   const selected = removalId
     ? rows.find((r) => r.removalId === removalId)
     : undefined;
@@ -287,6 +291,7 @@ function ListBody({
           isLoading={identities.isLoading}
           hoverable
           onRowClick={(row) => setRemovalId(row.removalId)}
+          getRowHref={(row) => certificationRemovalsHref({ facility: facilityId, removal: row.removalId })}
           aria-label="Removals"
           emptyMessage={
             <EmptyState
@@ -327,6 +332,7 @@ function ListBody({
           summary={selected}
           isProduction={identities.data.isProduction}
           facilityId={facilityId}
+          lock={removalLocks.locks[selected.removalId]}
           open
           onClose={() => setRemovalId(null)}
         />

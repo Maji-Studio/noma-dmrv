@@ -54,6 +54,7 @@ import {
   TreeStructureIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { EmissionEstimatesForm } from "@/components/admin/emission-estimates-form";
+import { FormDialogContext } from "@/components/ui/form-dialog-context";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { SETTINGS_CONSOLE_MAX_WIDTH_CLASS } from "@/components/settings/settings-console";
 import { PageHeader } from "@/components/ui";
@@ -76,10 +77,12 @@ import {
 import { CertificationHealthPanel } from "./certification-health-panel";
 import { CertifierSettingsPanel } from "./certifier-settings-panel";
 import { EnvBanner } from "./env-banner";
+import { ProtocolsInUse } from "./protocols-in-use";
 import { RegistrySourceVisibilitySettings } from "./registry-source-visibility-settings";
 import { SettingsRail, type SettingsSectionMeta } from "@/components/ui";
 import { RemovalTemplateDiagnosticPanel } from "./removal-template-diagnostic-panel";
 import { RemovalTemplateReviewPanel } from "./removal-template-review-panel";
+import { useUnsavedPaneGuard } from "./use-unsaved-pane-guard";
 
 const SECTION_CERTIFIER = CERTIFICATION_SETTINGS_CERTIFIER_SECTION;
 const SECTION_SOURCES = CERTIFICATION_SETTINGS_SOURCES_SECTION;
@@ -168,6 +171,9 @@ export function CertificationSettings() {
   );
 
   const [requestedTemplate] = useQueryState(CERTIFICATION_SETTINGS_TEMPLATE_PARAM);
+  // Panes with drafts report their dirty state through `guard.actions`; a rail
+  // click on another section asks before the pane unmounts and drops them.
+  const guard = useUnsavedPaneGuard();
 
   const soilTierActive =
     selectedFacility?.durabilityOption === SOIL_MODELLED_TIER;
@@ -194,11 +200,14 @@ export function CertificationSettings() {
           : false)
       : false,
     content: facilityId ? (
-      <CertifierSettingsPanel
-        facilityId={facilityId}
-        facilityLabel={selectedFacility?.code}
-        canManage={viewerCanManage}
-      />
+      <div className="flex flex-col gap-24">
+        <CertifierSettingsPanel
+          facilityId={facilityId}
+          facilityLabel={selectedFacility?.code}
+          canManage={viewerCanManage}
+        />
+        <ProtocolsInUse />
+      </div>
     ) : null,
   });
 
@@ -350,7 +359,10 @@ export function CertificationSettings() {
         <SettingsRail
           sections={sections}
           selectedKey={selected?.key ?? ""}
-          onSelect={(key) => void setRequestedSection(key)}
+          onSelect={(key) => {
+            if (key === selected?.key) return;
+            guard.requestLeave(() => void setRequestedSection(key));
+          }}
           ariaLabel="Certification settings categories"
           idPrefix="certification-settings"
         />
@@ -366,7 +378,9 @@ export function CertificationSettings() {
               </p>
             </div>
 
-            <div className="p-24">{selected.content}</div>
+            <FormDialogContext.Provider value={guard.actions}>
+              <div className="p-24">{selected.content}</div>
+            </FormDialogContext.Provider>
 
             <div className="border-t-[1px] border-[var(--clr-dark-purple-10)] px-24 py-16">
               <span className="body-caption text-[var(--color-text-tertiary)]">
@@ -378,6 +392,7 @@ export function CertificationSettings() {
           </section>
         )}
       </div>
+      {guard.dialog}
     </div>
   );
 }

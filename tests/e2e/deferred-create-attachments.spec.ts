@@ -76,6 +76,8 @@ async function fillMinimalFeedstock(
     seededData.feedstockType.id,
     seededData.feedstockType.name,
   );
+  // The seeded supplier location has no facility distance: enter one as an override.
+  await page.getByRole("button", { name: "Override the one-way distance" }).click();
   await page.fill('input[name="transportDistanceKm"]', "40");
   await page.fill('input[name="totalWetMassKg"]', "100");
   await page.fill('input[name="moisturePercent"]', "25");

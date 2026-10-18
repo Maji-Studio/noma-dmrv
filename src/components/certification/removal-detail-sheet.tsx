@@ -47,6 +47,8 @@ import {
 } from "./removal-list-state";
 import { removalDeletionCopy } from "./removal-deletion-copy";
 import { Notice } from "@/components/ui/notice";
+import type { RecordLockView } from "@/lib/record-lock-view";
+import { RemovalCorrectionNotice } from "./removal-correction-needed";
 
 interface RemovalDetailSheetProps {
   summary: RemovalListRow;
@@ -54,6 +56,8 @@ interface RemovalDetailSheetProps {
   facilityId: string;
   open: boolean;
   onClose: () => void;
+  /** Which Isometric returned, if any: shows "Correction needed". */
+  lock?: RecordLockView;
 }
 
 export function RemovalStorageSitesField({
@@ -160,6 +164,7 @@ export function RemovalDetailSheet({
   facilityId,
   open,
   onClose,
+  lock,
 }: RemovalDetailSheetProps) {
   const { data: certifierSummary } = useFacilityCertifierSummary(
     facilityId,
@@ -213,7 +218,7 @@ export function RemovalDetailSheet({
         <SlideOverPanel.Content size="default">
           <SlideOverPanel.Header showClose>
             <SlideOverPanel.Title>
-              Removal {summary.removalId.slice(0, 8)}…
+              {summary.code}
             </SlideOverPanel.Title>
             {hasReportingWindow && (
               <SlideOverPanel.Description>{window}</SlideOverPanel.Description>
@@ -224,6 +229,7 @@ export function RemovalDetailSheet({
             <EnvBanner isProduction={isProduction} variant="inline" />
 
             <SubmissionStatusSection summary={summary} status={workflowStatus} />
+            <RemovalCorrectionNotice lock={lock} />
 
             {summary.externalId && (
               <RemovalCarbonBreakdown

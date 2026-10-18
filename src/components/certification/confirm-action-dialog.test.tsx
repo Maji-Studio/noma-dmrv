@@ -32,7 +32,7 @@ describe("ConfirmActionDialog", () => {
       variant: "neutral",
     });
 
-    const confirmButton = findButtons(view)[1];
+    const confirmButton = findButtons(view)[0];
 
     expect(confirmButton?.props.variant).toBe("default");
     expect(confirmButton?.props.className).toBeUndefined();
