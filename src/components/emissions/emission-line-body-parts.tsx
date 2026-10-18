@@ -32,6 +32,7 @@ import {
   type LineRecords,
 } from "./emission-line-display";
 import type { EntryMenuItem } from "./emission-ledger-entries";
+import { TOUCH_TARGET } from "./emission-line-grid";
 import { SOURCE_ICON } from "./emission-source-chips";
 
 export const ICON = 14;
@@ -60,8 +61,10 @@ export function lineBodyModel(line: EmissionLine, canWrite: boolean) {
   };
 }
 
-const QUIET_ACTION =
-  "inline-flex min-h-28 items-center gap-6 text-left body-small font-medium text-[var(--color-text-interaction-primary)] underline decoration-[color:var(--color-border-primary)] underline-offset-4 hover:decoration-current";
+const QUIET_ACTION = cn(
+  TOUCH_TARGET,
+  "inline-flex min-h-28 items-center gap-6 text-left body-small font-medium text-[var(--color-text-interaction-primary)] underline decoration-[color:var(--color-border-primary)] underline-offset-4 hover:decoration-current",
+);
 
 /** The one tertiary action style: text with a quiet underline, an optional leading icon. */
 export function QuietAction({ children, icon, onClick, label, expanded, controls, className }: {

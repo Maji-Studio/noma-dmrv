@@ -213,6 +213,13 @@ describe("EmissionLineList", () => {
     expect(screen.queryByRole("menuitem", { name: "Add comment" })).toBeNull();
   });
 
+  it("gives the inline actions and the entries chip a 44px hit area", () => {
+    renderList([makeLine({ state: "filled", entries: [makeEntry()] })], true, ["line-1"]);
+    for (const name of ["Add comment", /^Add manual entry/, /Show manual entries/]) {
+      for (const button of screen.getAllByRole("button", { name })) expect(button.className).toContain("before:h-44");
+    }
+  });
+
   it("opens the comment editor from Add comment", () => {
     const actions = renderList([makeLine()], true, ["line-1"]);
     fireEvent.click(screen.getByRole("button", { name: "Add comment" }));
