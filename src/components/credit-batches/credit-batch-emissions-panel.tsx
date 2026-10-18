@@ -11,28 +11,19 @@ import { ArrowRightIcon, CheckCircleIcon } from "@phosphor-icons/react/dist/ssr"
 import { SectionLabel } from "@/components/forms/section-label";
 import { Notice } from "@/components/ui/notice";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { StatusBadge, type StatusValue } from "@/components/ui/status-badge";
+// By file, not the emissions barrel: the batch sheet needs only these.
+import { EmissionLineBadge } from "@/components/emissions/emission-line-badge";
+import { isOpen } from "@/components/emissions/emission-line-display";
+import { emissionsBatchHref } from "@/components/emissions/emissions-overview-query";
 import { useBatchEmissionLines } from "@/hooks/use-emission-entries";
-import { EMISSION_LINE_STATE_LABELS, type EmissionLineState } from "@/lib/certification/emission-lines";
 import { cn } from "@/lib/utils";
 import { SheetLinkRows } from "./sheet-link-row";
 
-const OPEN_STATES: readonly EmissionLineState[] = ["empty", "missingEvidence", "needsReview", "needsSetup"];
-const BADGE_STATUS: Record<string, StatusValue> = {
-  empty: "pending",
-  missingEvidence: "pending",
-  needsReview: "pending",
-  needsSetup: "missing_data",
-};
 const OPEN_EMISSIONS_LABEL = "Open emissions";
 
-export function emissionsBatchHref(creditBatchId: string): string {
-  return `/emissions/${creditBatchId}`;
-}
-
-function OpenEmissionsLink({ creditBatchId }: { creditBatchId: string }) {
+function OpenEmissionsLink({ creditBatchId, facilityId }: { creditBatchId: string; facilityId: string }) {
   return (
-    <Link href={emissionsBatchHref(creditBatchId)} className={cn(buttonVariants({ variant: "weak", size: "small" }), "shrink-0")}>
+    <Link href={emissionsBatchHref(creditBatchId, { facility: facilityId })} className={cn(buttonVariants({ variant: "weak", size: "small" }), "shrink-0")}>
       {OPEN_EMISSIONS_LABEL}
       <ArrowRightIcon size={14} aria-hidden />
     </Link>
@@ -83,7 +74,7 @@ export function CreditBatchEmissionsPanel({
     );
   }
 
-  const open = lines.filter((line) => OPEN_STATES.includes(line.state));
+  const open = lines.filter(isOpen);
   if (open.length === 0) {
     return (
       <PanelSection>
@@ -92,7 +83,7 @@ export function CreditBatchEmissionsPanel({
             <CheckCircleIcon size={16} weight="bold" aria-hidden />
             All lines recorded
           </span>
-          <OpenEmissionsLink creditBatchId={creditBatchId} />
+          <OpenEmissionsLink creditBatchId={creditBatchId} facilityId={facilityId} />
         </div>
       </PanelSection>
     );
@@ -108,13 +99,13 @@ export function CreditBatchEmissionsPanel({
           {open.map((line) => (
             <div key={line.componentId} className="flex min-w-0 items-center justify-between gap-12 py-10">
               <span className="truncate body-small font-medium text-[var(--color-text-primary)]">{line.label}</span>
-              <StatusBadge status={BADGE_STATUS[line.state]} label={EMISSION_LINE_STATE_LABELS[line.state]} size="small" />
+              <EmissionLineBadge state={line.state} size="small" />
             </div>
           ))}
         </SheetLinkRows>
       </div>
       <div className="flex justify-end">
-        <OpenEmissionsLink creditBatchId={creditBatchId} />
+        <OpenEmissionsLink creditBatchId={creditBatchId} facilityId={facilityId} />
       </div>
     </PanelSection>
   );

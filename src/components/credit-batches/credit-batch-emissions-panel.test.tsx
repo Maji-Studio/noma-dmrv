@@ -33,13 +33,13 @@ describe("CreditBatchEmissionsPanel", () => {
     expect(screen.getByText("File missing")).toBeTruthy();
     expect(screen.queryByText("Grid")).toBeNull();
     expect(screen.queryByText("Zero")).toBeNull();
-    expect(screen.getByRole("link", { name: /Open emissions/ }).getAttribute("href")).toBe("/emissions/cb-1");
+    expect(screen.getByRole("link", { name: /Open emissions/ }).getAttribute("href")).toBe("/emissions/cb-1?facility=f-1");
   });
 
   it("states that all lines are recorded and keeps the link", () => {
     query.data = [line("b", "Grid", "filled")];
     render_();
     expect(screen.getByText("All lines recorded")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Open emissions/ }).getAttribute("href")).toBe("/emissions/cb-1");
+    expect(screen.getByRole("link", { name: /Open emissions/ }).getAttribute("href")).toBe("/emissions/cb-1?facility=f-1");
   });
 });
