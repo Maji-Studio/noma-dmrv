@@ -1,6 +1,6 @@
 # Authentication
 
-Better Auth 1.7.7 (email/password, email verification, password reset, invite-first signup) plus the org-scoping layer built on the Better Auth organization plugin. Read this before touching a guard, a server action's auth line, the proxy, or anything that reads `activeOrganizationId`. This doc owns the guard vocabulary — [architecture.md](./architecture.md) defers to it. Env vars and signup policy: [security.md](./security.md). Auth email delivery: [mail-setup.md](./mail-setup.md). Tenancy rationale: [ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md).
+Better Auth 1.7.10 (email/password, email verification, password reset, invite-first signup) plus the org-scoping layer built on the Better Auth organization plugin. Read this before touching a guard, a server action's auth line, the proxy, or anything that reads `activeOrganizationId`. This doc owns the guard vocabulary — [architecture.md](./architecture.md) defers to it. Env vars and signup policy: [security.md](./security.md). Auth email delivery: [mail-setup.md](./mail-setup.md). Tenancy rationale: [ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md).
 
 Guards live in `src/lib/auth/server.ts`; the client hook `useAuth` is exported from `src/lib/auth/client.ts` (**not** from `providers/better-auth-client.ts`, which exports only `authClient`, types, and raw helpers).
 
@@ -129,7 +129,7 @@ reseeded: `pnpm db:reset` then `pnpm db:seed` locally, the
 
 ## API credentials
 
-`@better-auth/api-key` 1.7.7 stores hashed, organization-bound credentials in
+`@better-auth/api-key` 1.7.10 stores hashed, organization-bound credentials in
 `api_keys`; `api_key_owners` binds each to its creating user and issuance
 membership independently of client-editable metadata. The adapter maps the plugin's `apikey` model to
 `apiKeys`. Keys use `noma_live_` when `env.NODE_ENV` is `production` and
