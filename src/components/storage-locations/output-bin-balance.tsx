@@ -18,8 +18,8 @@ import { contentsRows } from "./sub-bin-card";
 import type { OutputSubBin } from "@/types/output-stock";
 import { formatFacilityDateTime } from "@/lib/format-utils";
 
-const SPLIT_HINT = "Wet stock is an estimate from the latest moisture reading of each sub-bin. Wet mass added less wet mass taken out determines the wet estimate; only a count resets moisture. Bays are drawn by wet mass, the hatched top being the estimated water, in the order a draw takes them.";
-const MIX_HINT = "Wet stock is an estimate from the pile's latest moisture reading, drawn as the hatched water on top of the dry batches. Draws leave the estimated moisture unchanged. Each batch added brings its own wet mass.";
+const SPLIT_HINT = "Wet stock is an estimate: the wet mass added less the wet mass taken out, at the moisture last recorded for each sub-bin. Draws and lost mass leave that moisture as it was, so wet stock reads high once the stock dries. Bays are drawn by wet mass, the hatched top being the estimated water, in the order a draw takes them.";
+const MIX_HINT = "Wet stock is an estimate: the wet mass added less the wet mass taken out. Each batch added brings its own wet mass and moisture. Draws and lost mass leave the pile's moisture as it was, so wet stock reads high once the stock dries. The hatched water sits on top of the dry batches.";
 const SUB_BINS_LABEL = "Sub-bins, next out first";
 const PERCENT = 100;
 /** Below this a part is rounding, not a band worth drawing. */
