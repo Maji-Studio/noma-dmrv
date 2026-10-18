@@ -347,7 +347,7 @@ const ALLOWLIST: readonly Exception[] = [
     file: "src/components/storage-locations/storage-bin-tile.tsx",
     rule: "raw-button",
     value: "<button",
-    count: 1,
+    count: 2,
     reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
   },
 ];

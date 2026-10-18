@@ -73,15 +73,7 @@ legacy arbitrary radii (five entries) must stay until token replacements preserv
 tailwind-merge overrides.
 
 - Shadow removal: 15 entries, a visual change that needs review.
-- Raw `<button>` to `Button` migration: 37 occurrences across 26 entries.
-
-## DataTable mobile cards (`ui/data-table`) - **deferred**
-
-- `src/components/ui/data-table/index.tsx:DataTable` renders each mobile card as
-  a `role="button"` container that holds nested buttons (the Removals list
-  Retry button, and now `CertificationStatusBadge`), which screen readers
-  announce unreliably. Fix: a semantic card with a separate record-opening
-  button or link beside its controls. It changes every DataTable consumer.
+- Raw `<button>` to `Button` migration: 38 occurrences across 26 entries.
 
 ## Activity reads
 
