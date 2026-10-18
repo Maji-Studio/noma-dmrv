@@ -91,6 +91,7 @@ export interface CreditBatchHealthSummary {
 // and wizard submit step render).
 export interface RemovalPreflightSummary {
   removalId: string;
+  code: string;
   startedOn: string | null;
   completedOn: string | null;
   memberBatchCodes: string[];
@@ -134,6 +135,7 @@ async function buildRemovalPreflightSummary(
   facilityFacts: Awaited<ReturnType<typeof loadFacilityCertifierFacts>>,
 ): Promise<RemovalPreflightSummary> {
   const scope = await resolveScopeForRemoval(orgCtx, removalId);
+  if (!scope.removal) throw new SafeError("Removal not found.");
   const [ctx, recentSyncEvents] = await Promise.all([
     buildRemovalContext(orgCtx, scope, facilityFacts),
     listRecentSyncEvents(orgCtx, {
@@ -143,8 +145,8 @@ async function buildRemovalPreflightSummary(
     }),
   ]);
   const facts = toRemovalReadinessFacts(ctx);
-  const startedOn = scope.removal?.startedOn ?? null;
-  const completedOn = scope.removal?.completedOn ?? null;
+  const startedOn = scope.removal.startedOn ?? null;
+  const completedOn = scope.removal.completedOn ?? null;
   const submissionInterrupted =
     isRemovalSubmissionInterruptedFromSubmission(ctx.latestSubmission, {
       startedOn,
@@ -152,6 +154,7 @@ async function buildRemovalPreflightSummary(
     });
   return {
     removalId,
+    code: scope.removal.code,
     startedOn,
     completedOn,
     memberBatchCodes: ctx.memberBatches.map((batch) => batch.code),
@@ -167,7 +170,7 @@ async function buildRemovalPreflightSummary(
       submissionId: ctx.latestSubmission?.id ?? null,
       submissionVersion: ctx.latestSubmission?.version ?? null,
       submissionStatus: ctx.latestSubmission?.status ?? null,
-      removalMetadata: scope.removal?.metadata ?? null,
+      removalMetadata: scope.removal.metadata ?? null,
     }),
     submissionWarnings: ctx.submissionWarnings,
     recentSyncEvents,

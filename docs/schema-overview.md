@@ -96,6 +96,8 @@ Kenji chose that one backfill on 2026-10-15. It fails on rows that violate the
 other requirements. Run `pnpm db:reset` locally; shared staging uses the manual
 reset workflow in [database.md](./database.md), announced first.
 
+Migration `0158_removal_code` requires a database reset where Removals exist; after merge, shared staging uses the manual reset workflow in [database.md](./database.md), announced first.
+
 Production starts have no database time default. Physical feedstock sources
 live only in `production_run_feedstock_draws`; the run stores their total wet
 mass. Database CHECKs keep run moisture at or above 0% and below 100%.

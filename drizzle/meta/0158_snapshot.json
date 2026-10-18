@@ -1,5 +1,5 @@
 {
-  "id": "3a6d4c8b-6431-484e-9a66-e26c6ce5fe86",
+  "id": "172ca9c2-2be8-4355-b5fc-463986bd1b2d",
   "prevId": "b6bfc44a-1b73-46d7-af44-e9c4b2428aa9",
   "version": "7",
   "dialect": "postgresql",
@@ -3656,6 +3656,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "facility_id": {
           "name": "facility_id",
           "type": "uuid",
@@ -3801,6 +3807,14 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
+        "certifier_removals_organization_id_code_unique": {
+          "name": "certifier_removals_organization_id_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "code"
+          ]
+        },
         "certifier_removals_id_organization_id_unique": {
           "name": "certifier_removals_id_organization_id_unique",
           "nullsNotDistinct": false,
@@ -7514,25 +7528,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "distance_km_override": {
-          "name": "distance_km_override",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "distance_source": {
-          "name": "distance_source",
-          "type": "distance_source",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "distance_note": {
-          "name": "distance_note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "feedstock_type_id": {
           "name": "feedstock_type_id",
           "type": "uuid",
@@ -7686,10 +7681,6 @@
       },
       "policies": {},
       "checkConstraints": {
-        "feedstocks_distance_override_positive": {
-          "name": "feedstocks_distance_override_positive",
-          "value": "\"feedstocks\".\"distance_km_override\" is null or \"feedstocks\".\"distance_km_override\" > 0"
-        },
         "feedstocks_mass_dry_non_negative": {
           "name": "feedstocks_mass_dry_non_negative",
           "value": "\"feedstocks\".\"mass_dry_kg\" >= 0"

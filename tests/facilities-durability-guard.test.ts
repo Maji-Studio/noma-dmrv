@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
@@ -134,10 +135,7 @@ async function insertBlockingRemoval(
   chain: FacilityChain,
   status: "draft" | "submitted" | "accepted" = "submitted",
 ): Promise<void> {
-  const [removal] = await db
-    .insert(certifierRemovals)
-    .values({ organizationId: TEST_ORG_ID, facilityId: chain.facilityId })
-    .returning({ id: certifierRemovals.id });
+  const [removal] = await insertRemovalFixture(db, { organizationId: TEST_ORG_ID, facilityId: chain.facilityId });
   createdIds.certifierRemovals.push(removal.id);
 
   const [submission] = await db

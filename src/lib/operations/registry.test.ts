@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 // This contract only parses schemas; operation execution never reaches the DB.
+vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/data-access/production-runs", () => ({
   createProductionRunInTransaction: vi.fn(), updateProductionRunInTransaction: vi.fn(), deleteProductionRunInTransaction: vi.fn(),
 }));
@@ -20,6 +21,8 @@ import { recordDeliveryForUi } from "./deliveries";
 const FEEDSTOCK_ID = "11111111-1111-4111-8111-111111111111";
 const INITIAL_VERSION = 1;
 const UPDATE_INPUTS: Record<string, unknown> = {
+  update_supplier_location: { supplierId: FEEDSTOCK_ID, locationId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION, city: "Site" },
+  update_customer_location: { customerId: FEEDSTOCK_ID, locationId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION, city: "Site" },
   update_supplier: { supplierId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_customer: { customerId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_formulation: { formulationId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
@@ -43,8 +46,7 @@ describe.each(Object.entries(operationRegistry))("registry operation %s", (key, 
       expect(UPDATE_INPUTS[key]).toBeDefined();
       const parsed: Record<string, unknown> = operation.input.parse(UPDATE_INPUTS[key]);
       for (const [field, schema] of Object.entries(operation.input.shape)) {
-        if (schema.isOptional()) {
-          expect(UPDATE_INPUTS[key]).not.toHaveProperty(field);
+        if (schema.isOptional() && !Object.hasOwn(UPDATE_INPUTS[key] as object, field)) {
           expect(parsed[field], `${key}.${field}`).toBeUndefined();
         }
       }

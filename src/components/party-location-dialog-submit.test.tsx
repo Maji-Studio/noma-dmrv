@@ -43,6 +43,7 @@ const harness = vi.hoisted(() => ({
   titles: [] as string[],
 }));
 
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }) }));
 vi.mock("@/components/forms/entity-select/quick-add-dialog-shell", () => ({
   QuickAddDialogShell: ({
     title,

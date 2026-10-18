@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/data-access/certifier-credentials", async (importOriginal) =>
@@ -118,14 +119,11 @@ async function createFixture(): Promise<string> {
     provider: "isometric",
     externalProjectId: `prj_ggs_final_${runId}`,
   });
-  const [removal] = await db
-    .insert(certifierRemovals)
-    .values({
+  const [removal] = await insertRemovalFixture(db, {
       organizationId: TEST_ORG_ID,
       facilityId: facility.id,
       completedOn: "2026-03-15",
-    })
-    .returning({ id: certifierRemovals.id });
+    });
   await db.insert(certificationSubmissions).values({
     organizationId: TEST_ORG_ID,
     provider: "isometric",
