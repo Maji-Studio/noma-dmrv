@@ -9,6 +9,8 @@
  */
 import { useState } from "react";
 import { CaretLeftIcon, CaretRightIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
+import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useCreditBatchHealthSummaries } from "@/hooks/use-certification";
 import { useCreditBatchTimelineFacts } from "@/hooks/use-credit-batches";
@@ -42,8 +44,6 @@ import {
 /** Below this share of the year (about 18 days) a bar has no room for text. */
 const NARROW_PCT = 5;
 const MIN_TRACK_PX = 880;
-/** Batches per timeline request; the server caps one request at 200. */
-const MAX_FACT_BATCHES = 200;
 const UNNAMED_FEEDSTOCK = "Feedstock not set";
 
 export interface NewBatchRequest extends DateWindow {
@@ -61,6 +61,11 @@ interface TimelineBatch extends DateWindow {
 interface BatchView {
   state: TimelineState | null;
   blockingCount: number;
+}
+
+/** What the bar's label says while its state is not known. */
+function pendingStateLabel(readinessFailed: boolean): string {
+  return readinessFailed ? "Readiness not available" : "Loading";
 }
 
 /** Opens a scroll box with today in the middle, once per year shown. */
@@ -111,8 +116,9 @@ function Bar({ batch, spot, view }: { batch: TimelineBatch; spot: BarPlacement; 
       {/* The count sits on the corner so the code keeps the bar's width. */}
       {view.blockingCount > 0 && (
         <span
-          className="absolute -top-8 -right-4 z-10 inline-flex min-w-20 items-center justify-center rounded-full bg-[var(--st-bad)] px-6 body-caption font-medium tabular-nums text-white"
-          aria-hidden
+          className="absolute -top-8 right-0 z-10 inline-flex min-w-20 items-center justify-center rounded-full bg-[var(--st-bad)] px-6 body-caption font-medium tabular-nums text-white"
+          role="img"
+          aria-label={`Missing data ${view.blockingCount}`}
         >
           {view.blockingCount}
         </span>
@@ -163,15 +169,19 @@ export function CreditBatchTimeline({
     feedstockTypeName: batch.feedstockTypeName,
     source: batch,
   }));
-  const years = timelineYears(timelineBatches, today);
   const rows = groupByFeedstock(timelineBatches, UNNAMED_FEEDSTOCK);
-  // Readiness and hover facts load for the shown year only.
+  const slotsByRow = rows.map((row) => newBatchSlots(row.batches, today));
+  const years = timelineYears([...timelineBatches, ...slotsByRow.flat()], today);
+  // Readiness and hover facts load for the shown year only; both hooks chunk their requests.
   const idsInYear = timelineBatches
     .filter((batch) => placeOnYear(batch, year))
-    .map((batch) => batch.id)
-    .slice(0, MAX_FACT_BATCHES);
-  const { data: summaries = {} } = useCreditBatchHealthSummaries(facilityId, idsInYear);
-  const { data: facts = {} } = useCreditBatchTimelineFacts(facilityId, idsInYear);
+    .map((batch) => batch.id);
+  const health = useCreditBatchHealthSummaries(facilityId, idsInYear);
+  const factsQuery = useCreditBatchTimelineFacts(facilityId, idsInYear);
+  const summaries = health.data;
+  const facts = factsQuery.data;
+  const readinessFailed = health.error != null;
+  const factsFailed = factsQuery.error != null;
 
   const viewOf = (batch: TimelineBatch): BatchView => {
     const summary = summaries[batch.id];
@@ -196,6 +206,28 @@ export function CreditBatchTimeline({
       className="flex min-w-0 flex-col gap-20 border border-[var(--color-border-secondary)] bg-[var(--paper)] p-20 sm:p-24"
       aria-label="Credit batches over time"
     >
+      {(readinessFailed || factsFailed) && (
+        <Notice
+          tone="warning"
+          action={
+            <Button
+              variant="weak"
+              size="small"
+              busy={health.isFetching || factsQuery.isFetching}
+              onClick={() => {
+                if (readinessFailed) void health.refetch();
+                if (factsFailed) void factsQuery.refetch();
+              }}
+            >
+              Retry
+            </Button>
+          }
+        >
+          {readinessFailed
+            ? "Readiness and the figures on each credit batch could not be loaded."
+            : "The figures on each credit batch could not be loaded."}
+        </Notice>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-12">
         <div className="flex flex-col gap-2">
           <YearSwitcher year={year} years={years} today={today} onChange={setYear} />
@@ -213,8 +245,8 @@ export function CreditBatchTimeline({
             <span className="hidden sm:block" />
             <MonthAxis year={year} today={today} className="h-24" />
           </div>
-          {rows.map((row) => {
-            const slots = newBatchSlots(row.batches, today);
+          {rows.map((row, rowIndex) => {
+            const slots = slotsByRow[rowIndex];
             return (
               <div key={row.feedstockTypeId} className="grid border-t border-[var(--color-border-tertiary)] sm:grid-cols-[128px_minmax(0,1fr)]">
                 {/* On a phone the name sits above the track and stays in view while the track scrolls. */}
@@ -227,7 +259,7 @@ export function CreditBatchTimeline({
                     const spot = placeOnYear(batch, year);
                     if (!spot) return null;
                     const view = viewOf(batch);
-                    const stateLabel = view.state ? STATE_TONE[view.state].title : "Loading";
+                    const stateLabel = view.state ? STATE_TONE[view.state].title : pendingStateLabel(readinessFailed);
                     return (
                       <li key={batch.id}>
                         <div className="absolute inset-y-0" style={{ left: `${spot.left}%`, width: `${spot.width}%` }}>
@@ -240,8 +272,9 @@ export function CreditBatchTimeline({
                               state: view.state,
                               blockingCount: view.blockingCount,
                               facts: facts[batch.id],
+                              factsStatus: factsFailed ? "failed" : factsQuery.isLoading ? "loading" : "ready",
                             }}
-                            label={`${batch.code}, ${row.feedstockName}, ${formatDateRange(batch.start, batch.end)}, ${stateLabel}`}
+                            label={`${batch.code}, ${row.feedstockName}, ${formatDateRange(batch.start, batch.end)}, ${stateLabel}${view.blockingCount > 0 ? `, Missing data ${view.blockingCount}` : ""}`}
                             className="group absolute inset-0 block outline-offset-2"
                             onOpenBatch={() => onOpenBatch(batch.source)}
                           >

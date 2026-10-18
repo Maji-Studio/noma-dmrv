@@ -137,7 +137,11 @@ export function monthIndexIn(year: number, date: string): number {
   return Number(date.slice(0, 4)) === year ? Number(date.slice(5, 7)) - 1 : -1;
 }
 
-/** The years a timeline can show, oldest first: every year a batch touches, plus the year of `today`. */
+/**
+ * The years a timeline can show, oldest first: every year a window touches, plus
+ * the year of `today`. Pass the proposed new-batch slots with the batches, so a
+ * trailing slot that falls in the next year can be reached.
+ */
 export function timelineYears(batches: readonly DateWindow[], today: string): number[] {
   const years = new Set<number>([Number(today.slice(0, 4))]);
   for (const batch of batches) {

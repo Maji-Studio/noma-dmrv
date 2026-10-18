@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { uuidSchema } from "@/schemas/helpers";
 import {
   listCreditBatchTimelineFacts,
   type CreditBatchTimelineFacts,
@@ -18,9 +19,9 @@ export async function loadCreditBatchTimelineFactsFn(
   batchIds: string[],
 ): Promise<ActionResult<Record<string, CreditBatchTimelineFacts>>> {
   return withAction(async (ctx) => {
-    const validFacilityId = z.string().uuid().parse(facilityId);
+    const validFacilityId = uuidSchema().parse(facilityId);
     await requireOrgFacility(ctx, validFacilityId);
-    const ids = z.array(z.string().uuid()).max(MAX_TIMELINE_BATCHES).parse(batchIds);
+    const ids = z.array(uuidSchema()).max(MAX_TIMELINE_BATCHES).parse(batchIds);
     const facts = await listCreditBatchTimelineFacts(ctx, ids);
     if (Object.values(facts).some((row) => row.facilityId !== validFacilityId)) {
       throw new SafeError("Batch does not belong to requested facility");

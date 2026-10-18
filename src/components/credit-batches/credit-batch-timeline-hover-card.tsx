@@ -44,9 +44,13 @@ export interface HoverCardBatch {
   state: TimelineState | null;
   blockingCount: number;
   facts: CreditBatchTimelineFacts | undefined;
+  /** Whether `facts` is still loading or could not be loaded, so a gap is not read as a missing measurement. */
+  factsStatus: "loading" | "failed" | "ready";
 }
 
-function tonnesOrMissing(kg: number | null | undefined): string {
+function tonnesOrMissing(kg: number | null | undefined, status: HoverCardBatch["factsStatus"]): string {
+  if (status === "loading") return "Loading";
+  if (status === "failed") return MISSING_VALUE.notAvailable;
   return kg == null ? MISSING_VALUE.notAvailable : formatTonnes(kgToTonnes(kg));
 }
 
@@ -83,12 +87,12 @@ function HoverCardBody({ batch }: { batch: HoverCardBatch }) {
       {batch.blockingCount > 0 && (
         <div className="flex items-center gap-8 bg-[var(--st-bad-bg)] px-16 py-8 body-small font-medium">
           <WarningCircleIcon size={16} weight="fill" className="shrink-0 text-[var(--st-bad)]" aria-hidden />
-          {`${batch.blockingCount} blocking ${batch.blockingCount === 1 ? "item" : "items"}`}
+          {`Missing data ${batch.blockingCount}`}
         </div>
       )}
       <dl className="grid grid-cols-2 gap-12 border-t border-[var(--color-border-tertiary)] px-16 py-12">
-        <Figure label="Produced (dry)" value={tonnesOrMissing(facts?.producedDryKg)} />
-        <Figure label="Applied (dry)" value={tonnesOrMissing(facts?.appliedDryKg)} />
+        <Figure label="Produced (dry)" value={tonnesOrMissing(facts?.producedDryKg, batch.factsStatus)} />
+        <Figure label="Applied (dry)" value={tonnesOrMissing(facts?.appliedDryKg, batch.factsStatus)} />
       </dl>
       {facts && notInRemoval > NEGLIGIBLE_TONNES && (
         <p className={cn("border-t border-[var(--color-border-tertiary)] px-16 py-10 body-small", MUTED)}>

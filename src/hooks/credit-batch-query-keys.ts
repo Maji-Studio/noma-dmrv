@@ -7,8 +7,9 @@ export const creditBatchKeys = {
   details: () => [...creditBatchKeys.all, "detail"] as const,
   detail: (id: string) => [...creditBatchKeys.details(), id] as const,
   pageModel: (id: string) => [...creditBatchKeys.detail(id), "pageModel"] as const,
+  timelineFactsPrefix: () => [...creditBatchKeys.all, "timelineFacts"] as const,
   timelineFacts: (facilityId: string, ids: string[]) =>
-    [...creditBatchKeys.all, "timelineFacts", facilityId, ids] as const,
+    [...creditBatchKeys.timelineFactsPrefix(), facilityId, ids] as const,
   previewsPrefix: () => [...creditBatchKeys.all, "previews"] as const,
   previews: (ids: string[]) => [...creditBatchKeys.previewsPrefix(), ids] as const,
   productionRunOptionsPrefix: () =>

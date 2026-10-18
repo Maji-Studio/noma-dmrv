@@ -99,6 +99,11 @@ describe("timelineYears", () => {
   it("covers batch years and today, without holes", () => {
     expect(timelineYears([{ start: "2024-11-01", end: "2024-11-30" }], "2026-10-16")).toEqual([2024, 2025, 2026]);
   });
+  it("reaches the next year when a batch ends on Dec 31 and its trailing slot falls in January", () => {
+    const batches = [{ start: "2026-12-01", end: "2026-12-31" }];
+    expect(timelineYears(batches, "2026-12-10")).toEqual([2026]);
+    expect(timelineYears([...batches, ...newBatchSlots(batches, "2026-12-10")], "2026-12-10")).toEqual([2026, 2027]);
+  });
   it("is just this year without batches", () => {
     expect(timelineYears([], "2026-10-16")).toEqual([2026]);
   });
