@@ -6,13 +6,15 @@ import { useOutputStockBalance, useOutputStockHistory, useOutputSubBins } from "
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
-import { mixPileName } from "@/lib/output-stock/labels";
+import { DRY_BIOCHAR_LABEL, ingredientSolidsLabel } from "@/components/biochar-products/product-composition-components";
+import { ESTIMATED_WATER_LABEL, INGREDIENT_SOLIDS_LABEL, mixPileName } from "@/lib/output-stock/labels";
 import { OutputStockHistory } from "./output-stock-history";
 import { StockLevelChart } from "./stock-level-chart";
 import { buildStockLevelSeries } from "./stock-level-series";
 import { CardTextButton, StockCard, StockChartCard } from "./stock-card";
 import { formatWetEstimate } from "./stock-preview-shared";
 import { MixPileBay, SubBinBays, type PileBand } from "./sub-bin-bays";
+import { contentsRows } from "./sub-bin-card";
 import type { OutputSubBin } from "@/types/output-stock";
 import { formatFacilityDateTime } from "@/lib/format-utils";
 
@@ -24,26 +26,33 @@ const PERCENT = 100;
 const PILE_PART_MIN_KG = 0.05;
 
 /**
- * A mix bin's pile from the bottom up: each batch's dry biochar, then any
- * ingredient solids (a product bin), then wet stock less those solids as
- * estimated water, so the bands add up to the wet estimate on the card.
+ * A mix bin's pile from the bottom up: each batch's dry biochar, then each
+ * ingredient's solids across the batches (a product bin), then wet stock less
+ * those solids as estimated water, so the bands add up to the wet estimate on
+ * the card. Parts are named the way the product composition names them.
  */
 function mixPileBands(layers: OutputSubBin[], dryKg: number | null, wetKg: number | null, moisturePercent: number | null, timeZone: string): PileBand[] {
   const solidsKg = layers.reduce((sum, layer) => sum + layer.solidsKg, 0);
   const ingredientsKg = solidsKg - layers.reduce((sum, layer) => sum + layer.dryMassKg, 0);
+  const byIngredient = new Map<string, number>();
+  for (const ingredient of layers.flatMap((layer) => layer.ingredients)) byIngredient.set(ingredient.name, (byIngredient.get(ingredient.name) ?? 0) + ingredient.solidsKg);
+  const named = [...byIngredient].map(([name, kg]) => ({ label: ingredientSolidsLabel(name), kg }));
+  // What the split does not name stays one part, so the bands still add up.
+  const restKg = ingredientsKg - named.reduce((sum, part) => sum + part.kg, 0);
+  const ingredientBands = [...named, { label: INGREDIENT_SOLIDS_LABEL, kg: restKg }].filter((part) => part.kg >= PILE_PART_MIN_KG);
   const waterKg = wetKg === null ? 0 : wetKg - solidsKg;
   return [
     ...layers.map((layer) => ({ label: layer.code, kg: layer.dryMassKg, details: [
       { label: "Share of dry biochar", value: dryKg ? `${Math.round((layer.dryMassKg / dryKg) * PERCENT)}%` : MISSING_VALUE.notAvailable },
-      { label: "Dry biochar", value: formatMassKg(layer.dryMassKg) },
-      { label: "Solids", value: formatMassKg(layer.solidsKg) },
+      // A batch in a pile has no wet estimate of its own, so it has no water row.
+      ...contentsRows({ dryMassKg: layer.dryMassKg, ingredients: layer.ingredients, waterKg: null }),
       { label: "Added", value: formatFacilityDateTime(layer.placedAt, timeZone) },
     ] })),
-    ...(ingredientsKg >= PILE_PART_MIN_KG ? [{ label: "Ingredients, dry", kg: ingredientsKg, category: "ingredient-solids" as const, details: [
-      { label: "Ingredient solids", value: formatMassKg(ingredientsKg) },
-    ] }] : []),
-    ...(waterKg >= PILE_PART_MIN_KG ? [{ label: "Water, estimated", kg: waterKg, category: "existing-water" as const, details: [
-      { label: "Water, estimated", value: formatMassKg(waterKg) },
+    ...ingredientBands.map((part) => ({ ...part, category: "ingredient-solids" as const, details: [
+      { label: part.label, value: formatMassKg(part.kg) },
+    ] })),
+    ...(waterKg >= PILE_PART_MIN_KG ? [{ label: ESTIMATED_WATER_LABEL, kg: waterKg, category: "existing-water" as const, details: [
+      { label: ESTIMATED_WATER_LABEL, value: formatMassKg(waterKg) },
       { label: "Moisture", value: moisturePercent === null ? MISSING_VALUE.notAvailable : formatMoisturePercent(moisturePercent) },
     ] }] : []),
   ];
@@ -98,7 +107,7 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
         {capacityKg != null && <span className="body-small text-[var(--color-text-tertiary)]"> of {formatMassKg(capacityKg)}</span>}
       </>}
       // The pile's moisture is in its water band's details, like a sub-bin's under its bay.
-      caption={ready && wetKg !== null && dryKg !== null && <SecondaryFigure label="Dry biochar" value={formatMassKg(dryKg)} />}
+      caption={ready && wetKg !== null && dryKg !== null && <SecondaryFigure label={DRY_BIOCHAR_LABEL} value={formatMassKg(dryKg)} />}
       onAdjust={onAdjust}
     >
       {ready && layers.length === 0 && <EmptyState icon={null} title="No stock in this bin" padding="sm" />}

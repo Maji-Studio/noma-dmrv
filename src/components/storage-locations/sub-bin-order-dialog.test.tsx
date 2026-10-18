@@ -21,7 +21,7 @@ vi.stubGlobal("requestAnimationFrame", (callback: () => void) => { callback(); r
 vi.stubGlobal("document", { getElementById: (id: string) => ({ focus: () => focused.ids.push(id) }) });
 
 function subBin(layerId: string, code: string): OutputSubBin {
-  return { layerId, code, placedAt: "2026-09-10T12:00:00.000Z", dryMassKg: 100, solidsKg: 110, wetEstimateKg: 150, moisturePercent: 26.7, basis: null, recentMovements: [] };
+  return { layerId, code, placedAt: "2026-09-10T12:00:00.000Z", dryMassKg: 100, solidsKg: 110, wetEstimateKg: 150, moisturePercent: 26.7, basis: null, recentMovements: [], ingredients: [] };
 }
 const SUB_BINS = [subBin("a", "B-0412"), subBin("b", "B-0419")];
 

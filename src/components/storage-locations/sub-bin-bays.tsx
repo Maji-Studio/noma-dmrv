@@ -14,6 +14,8 @@ import type { CSSProperties, ReactNode } from "react";
 import { MASS_CATEGORY_FILLS, formatCompositionMass, type MassCategory, type MassSegment } from "@/components/forms/composition-ledger";
 import { SegmentKey, batchAccentFill } from "@/components/ui/segment-bar";
 import { formatFacilityTime } from "@/lib/date-utils";
+import { DRY_BIOCHAR_LABEL, ingredientSolidsLabel } from "@/components/biochar-products/product-composition-components";
+import { ESTIMATED_WATER_LABEL, INGREDIENT_SOLIDS_LABEL } from "@/lib/output-stock/labels";
 import type { OutputSubBin } from "@/types/output-stock";
 import { formatWetEstimate } from "./stock-preview-shared";
 import { DetailsTooltip, SubBinTooltip, subBinMoistureText } from "./sub-bin-card";
@@ -28,8 +30,6 @@ const PILE_LIST_LIMIT = 6;
 /** Bays are narrow; the day added is enough, the full time sits in its details. */
 const BAY_DATE_FORMAT = "MMM d";
 const PERCENT = 100;
-const WATER_LABEL = "Water, estimated";
-const INGREDIENTS_LABEL = "Ingredients, dry";
 
 function bayTint(index: number): string {
   return `color-mix(in srgb, ${batchAccentFill(index)} ${BAY_TINT_PERCENT}%, transparent)`;
@@ -46,6 +46,19 @@ function bayWaterKg(subBin: OutputSubBin): number {
 
 function bayIngredientsKg(subBin: OutputSubBin): number {
   return Math.max(subBin.solidsKg - subBin.dryMassKg, 0);
+}
+
+/**
+ * A sub-bin's ingredient solids by ingredient, as the product composition
+ * names them. Whatever the split does not name (rounding, a product read
+ * without its lines) stays one "Ingredient solids" part, so the parts still
+ * add up to the bay.
+ */
+function ingredientParts(subBin: OutputSubBin): { label: string; kg: number }[] {
+  const named = subBin.ingredients.filter((ingredient) => ingredient.solidsKg >= PART_MIN_KG)
+    .map((ingredient) => ({ label: ingredientSolidsLabel(ingredient.name), kg: ingredient.solidsKg }));
+  const restKg = bayIngredientsKg(subBin) - named.reduce((sum, part) => sum + part.kg, 0);
+  return restKg >= PART_MIN_KG ? [...named, { label: INGREDIENT_SOLIDS_LABEL, kg: restKg }] : named;
 }
 
 function bayFigure(subBin: OutputSubBin): string {
@@ -84,7 +97,10 @@ function BinParts({ rows, label }: { rows: PartRow[]; label: string }) {
           <dt className="flex min-w-0 items-center gap-8 text-[var(--color-text-secondary)]">
             <span aria-hidden="true" className={`h-12 w-12 shrink-0 border border-[var(--color-border-secondary)] ${row.swatchClassName ?? ""}`} style={row.swatchStyle} />
             {row.details ? <DetailsTooltip title={row.label} rows={row.details} trigger={
-              <Button type="button" variant="noOutline" className="h-auto min-h-44 min-w-0 justify-start p-0 body-caption normal-case" aria-label={`${row.label} details`}><span className="truncate">{row.label}</span></Button>
+              <Button type="button" variant="noOutline" className="h-auto min-h-44 min-w-0 justify-start p-0 body-caption normal-case" aria-label={`${row.label} details`}>
+                {/* The button's own label type is mono caps; the part reads like the rows without details. */}
+                <span className="truncate body-caption normal-case text-[var(--color-text-secondary)]">{row.label}</span>
+              </Button>
             } /> : <span className="truncate">{row.label}</span>}
           </dt>
           <dd className="text-right font-medium">{formatCompositionMass(row.kg)}</dd>
@@ -137,9 +153,9 @@ export function SubBinBays({ subBins, timeZone, label, capacityKg }: { subBins: 
       <div className="flex flex-wrap items-center gap-x-16 gap-y-12">
         <ul aria-label={label} className="tabular-nums"><li><SubBinBay subBin={subBin} index={0} percent={capacityKg && capacityKg > 0 ? Math.min(bayMassKg(subBin) / capacityKg, 1) * PERCENT : PERCENT} nextOut={false} timeZone={timeZone} /></li></ul>
         <BinParts label={`${subBin.code} contents`} rows={[
-          ...(waterKg >= PART_MIN_KG ? [{ label: WATER_LABEL, kg: waterKg, swatchClassName: MASS_CATEGORY_FILLS["existing-water"] }] : []),
-          ...(ingredientsKg >= PART_MIN_KG ? [{ label: INGREDIENTS_LABEL, kg: ingredientsKg, swatchClassName: MASS_CATEGORY_FILLS["ingredient-solids"] }] : []),
-          { label: "Biochar, dry", kg: subBin.dryMassKg, swatchStyle: { background: bayTint(0) } },
+          ...(waterKg >= PART_MIN_KG ? [{ label: ESTIMATED_WATER_LABEL, kg: waterKg, swatchClassName: MASS_CATEGORY_FILLS["existing-water"] }] : []),
+          ...ingredientParts(subBin).map((part) => ({ ...part, swatchClassName: MASS_CATEGORY_FILLS["ingredient-solids"] })),
+          { label: DRY_BIOCHAR_LABEL, kg: subBin.dryMassKg, swatchStyle: { background: bayTint(0) } },
         ]} />
       </div>
     );
@@ -147,8 +163,8 @@ export function SubBinBays({ subBins, timeZone, label, capacityKg }: { subBins: 
   const largestKg = Math.max(...subBins.map(bayMassKg), 0);
   // The batch codes name themselves under each bin; the key covers the parts every bin shares.
   const sharedParts: MassSegment[] = [
-    { label: INGREDIENTS_LABEL, mass: ingredientsKg, category: "ingredient-solids" as const },
-    { label: WATER_LABEL, mass: waterKg, category: "existing-water" as const },
+    { label: INGREDIENT_SOLIDS_LABEL, mass: ingredientsKg, category: "ingredient-solids" as const },
+    { label: ESTIMATED_WATER_LABEL, mass: waterKg, category: "existing-water" as const },
   ].filter((part) => part.mass >= PART_MIN_KG);
   return (
     <div className="flex flex-col gap-8">

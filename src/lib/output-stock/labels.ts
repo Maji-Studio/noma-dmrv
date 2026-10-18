@@ -22,3 +22,13 @@ export const LOST_MASS_SUBMIT_LABEL = "Save lost mass";
 
 /** An application builds on the delivery, so its stock can no longer change. */
 export const deliveryAppliedLockedReason = (applicationCode: string) => `Locked because application ${applicationCode} uses this delivery. Correct or remove the application first.`;
+
+/**
+ * The parts of a bin's stock beside its dry biochar, named the way the product
+ * composition names them: each ingredient's solids by material ("Compost
+ * solids", `ingredientSolidsLabel`) where the bin knows them, all of them
+ * together where it does not, and the water the records estimate.
+ */
+export const INGREDIENT_SOLIDS_LABEL = "Ingredient solids";
+export const ESTIMATED_WATER_LABEL = "Water, estimated";
+export const ESTIMATED_WET_LABEL = "Wet, estimated";

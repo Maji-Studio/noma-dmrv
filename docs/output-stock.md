@@ -150,7 +150,11 @@ hatched estimated water. Product ingredient solids are a separate solid band,
 not water. Output points replay frozen stock effects, including reversals, in
 physical-time order; explanatory moisture rows are not counted twice. Missing
 historical wet or solids bases leave water unknown. Bay, pile-band and chart
-point details open on hover, keyboard focus or tap.
+point details open on hover, keyboard focus or tap. A product bin's bays and
+pile bands name their parts as the product composition does (dry biochar,
+"<ingredient> solids", estimated water): `getOutputSubBins` splits each layer's
+ingredient solids by the product's saved ingredient snapshots, pro rata, since
+a draw takes a blend as mixed. Presentation only; nothing posts from the split.
 
 Feedstock's org-scoped `feedstock-bin-ledger.ts` reads completed intakes,
 production-run draws, product ingredient draws, losses and old counts. The pile

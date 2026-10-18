@@ -10,7 +10,8 @@ import { createBiocharProduct, updateBiocharProduct } from "@/data-access/biocha
 import { updateFormulationInTransaction } from "@/data-access/formulation-writes";
 import { getStorageLocationWithFacility } from "@/data-access/storage-locations";
 import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
-import { cleanupPostedStock, postedStockFixture, postProduct, productInput } from "./helpers/posted-output-stock-fixture";
+import { getOutputSubBins } from "@/data-access/output-sub-bins";
+import { cleanupPostedStock, postedStockFixture, postProduct, productInput, STOCK_TIME } from "./helpers/posted-output-stock-fixture";
 
 const VERSION_STEP = 1;
 const fixtures: Awaited<ReturnType<typeof postedStockFixture>>[] = [];
@@ -154,6 +155,13 @@ describe("posted product bin and formulation contract", () => {
     const f = await fixture(); const product = await blend(f, { composition: composition(f, 20, null, { moistureContentPercent: 10 }) });
     expect(await snapshot(product.id)).toMatchObject({ sourceStorageLocationId: null, drySolidsKg: "18.000" });
     await expect(updateBiocharProduct(f.ctx, product.id, { expectedVersion: await productionVersion(f.ctx, "biocharProducts", product.id), massKg: 110 })).rejects.toThrow("immutable");
+  });
+  it("names each sub-bin's ingredient solids by material for the bin's cards", async () => {
+    const f = await fixture(); const product = await blend(f, { composition: composition(f, 20, null, { moistureContentPercent: 10 }) });
+    const { subBins } = await getOutputSubBins(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME });
+    const subBin = subBins.find(s => s.layerId === product.id)!;
+    expect(subBin.ingredients).toEqual([{ name: f.ingredientType.name, solidsKg: 18 }]);
+    expect(subBin.solidsKg - subBin.dryMassKg).toBeCloseTo(18);
   });
   it("retains its ratio snapshot when the live formulation and metadata change", async () => {
     const f = await fixture(); const product = await blend(f); await db.transaction(async tx => updateFormulationInTransaction(f.ctx, tx, { formulationId: f.recipe.id, expectedVersion: f.recipe.version, biocharRatio: 0.7 }));
