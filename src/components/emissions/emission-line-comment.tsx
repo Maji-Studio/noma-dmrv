@@ -49,7 +49,7 @@ interface LineCommentProps {
 /** The comment row: the saved comment, or its editor while adding or editing. Nothing when there is neither. */
 export function LineComment({ line, scope, canWrite, editing, onEditingChange }: LineCommentProps) {
   if (editing && canWrite) {
-    return <CommentEditor key={line.comment?.version ?? "new"} line={line} scope={scope} onDone={() => onEditingChange(false)} />;
+    return <CommentEditor line={line} scope={scope} onDone={() => onEditingChange(false)} />;
   }
   if (!line.comment) return null;
   return <CommentView line={line} scope={scope} canWrite={canWrite} onEdit={() => onEditingChange(true)} />;
@@ -130,10 +130,15 @@ export function useCommentDelete(line: EmissionLine, scope: EmissionBatchScope) 
   };
 }
 
+/**
+ * The editor keeps the comment it opened on (id, version, words) for the whole
+ * edit: a refresh or a refused save never swaps the target or drops the draft.
+ * A conflict keeps the draft; Cancel and edit again to start from the latest.
+ */
 function CommentEditor({ line, scope, onDone }: { line: EmissionLine; scope: EmissionBatchScope; onDone: () => void }) {
   const save = useSetEmissionLineComment(scope);
-  const comment = line.comment;
-  const [body, setBody] = useState(comment?.body ?? "");
+  const [opened] = useState(() => (line.comment ? { id: line.comment.id, version: line.comment.version } : null));
+  const [body, setBody] = useState(line.comment?.body ?? "");
   const [error, setError] = useState<string | null>(null);
   const id = `comment-${line.componentId}`;
   const submit = async () => {
@@ -147,7 +152,7 @@ function CommentEditor({ line, scope, onDone }: { line: EmissionLine; scope: Emi
         creditBatchId: scope.creditBatchId,
         componentId: line.componentId,
         body: trimmed,
-        ...(comment ? { id: comment.id, expectedVersion: comment.version } : {}),
+        ...(opened ? { id: opened.id, expectedVersion: opened.version } : {}),
       });
       onDone();
     } catch (caught) {

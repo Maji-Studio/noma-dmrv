@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError } from "@/lib/stale-version";
 import { EmissionLineList } from "./emission-line-list";
 import { makeEntry, makeLine } from "./emission-line-test-fixtures";
 
@@ -25,6 +26,7 @@ const SECOND_ENTRY = makeEntry({
   total: { magnitude: "38", unit: "kWh" },
 });
 
+const QUERY_CLIENT = new QueryClient();
 const COMMENT = { id: "c1", body: "No flights this period", version: 3, updatedAt: new Date(), updatedBy: "u1" };
 
 function makeActions() {
@@ -229,6 +231,28 @@ describe("EmissionLineList", () => {
       expect(mocks.setComment).toHaveBeenCalledWith({ facilityId: "fac", creditBatchId: "cb", componentId: "line-1", body: "Updated", id: "c1", expectedVersion: 3 }),
     );
     expect(await screen.findByText("boom")).toBeTruthy();
+  });
+
+  it("keeps the opened comment and the draft when the lines refresh and the save conflicts", async () => {
+    mocks.setComment.mockRejectedValue(new StaleVersionError("stale", { entity: "emission_line_comment", id: "c1", code: STALE_VERSION_CONFLICT_CODE }));
+    const list = (comment: typeof COMMENT) => (
+      <QueryClientProvider client={QUERY_CLIENT}>
+        <EmissionLineList lines={[makeLine({ comment })]} grouped scope={SCOPE} actions={makeActions()} expanded={new Set(["line-1"])}
+          editingCommentId="line-1" undo={null} canWrite filterLabel={null} onClearFilter={vi.fn()} />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(list(COMMENT));
+    fireEvent.change(screen.getByRole("textbox", { name: "Comment" }), { target: { value: "My draft" } });
+    // Someone else replaced the comment: a new id, and a version that moved on.
+    rerender(list({ ...COMMENT, id: "c2", body: "Their words", version: 1 }));
+    expect(screen.getByRole("textbox", { name: "Comment" })).toHaveProperty("value", "My draft");
+    fireEvent.click(screen.getByRole("button", { name: "Save comment" }));
+    await waitFor(() =>
+      expect(mocks.setComment).toHaveBeenCalledWith(expect.objectContaining({ body: "My draft", id: "c1", expectedVersion: 3 })),
+    );
+    expect(await screen.findByText(STALE_VERSION_MESSAGE)).toBeTruthy();
+    rerender(list({ ...COMMENT, id: "c2", body: "Their words", version: 2 }));
+    expect(screen.getByRole("textbox", { name: "Comment" })).toHaveProperty("value", "My draft");
   });
 
   it("deletes a comment after confirming", async () => {
