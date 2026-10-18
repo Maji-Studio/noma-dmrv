@@ -87,6 +87,13 @@ interface CreditBatchFormProps {
   stickyActions?: boolean;
   /** Owner/admin capability, computed on the server by the page. */
   canManage?: boolean;
+  /** Create mode only: the values the form opens with instead of today's date. */
+  defaultValues?: { feedstockTypeId?: string; startDate?: string; endDate?: string };
+  /**
+   * Create mode only: the window to propose once a feedstock is picked, as
+   * `YYYY-MM-DD`. Applied only while the operator has not edited a date.
+   */
+  windowForFeedstock?: (feedstockTypeId: string) => { startDate: string; endDate: string } | null;
 }
 
 export function CreditBatchForm({
@@ -99,6 +106,8 @@ export function CreditBatchForm({
   submitLabel,
   stickyActions = true,
   canManage = false,
+  defaultValues,
+  windowForFeedstock,
 }: CreditBatchFormProps) {
   const isEditMode = !!creditBatch;
   const { facilityId: contextFacilityId } = useFacilityContext();
@@ -108,15 +117,15 @@ export function CreditBatchForm({
     handleSubmit,
     control,
     trigger,
-    formState: { errors, isSubmitted },
+    formState: { errors, isSubmitted, dirtyFields },
     setValue,
   } = useForm<CreditBatchFormInput, unknown, CreditBatchFormData>({
     resolver: resolveBatch,
     defaultValues: {
       facilityId: creditBatch?.facilityId ?? contextFacilityId ?? "",
-      feedstockTypeId: creditBatch?.feedstockTypeId ?? "",
-      startDate: toDateInputValue(creditBatch?.startDate),
-      endDate: toDateInputValue(creditBatch?.endDate),
+      feedstockTypeId: creditBatch?.feedstockTypeId ?? defaultValues?.feedstockTypeId ?? "",
+      startDate: toDateInputValue(creditBatch?.startDate ?? defaultValues?.startDate),
+      endDate: toDateInputValue(creditBatch?.endDate ?? defaultValues?.endDate),
       sampling: creditBatch?.sampling ?? "sampled",
       productionRunIds: creditBatch?.productionRunIds ?? [],
       siteManagementNotes: creditBatch?.siteManagementNotes ?? "",
@@ -332,7 +341,18 @@ export function CreditBatchForm({
             disabled={isSubmitting}
             required
             filterBy={{ usage: "pyrolysis" }}
-            onChange={() => onClearServerError?.()}
+            onChange={(value) => {
+              onClearServerError?.();
+              // A new batch proposes the feedstock's next free month, until
+              // the operator has typed a date of their own.
+              const proposed = !isEditMode && value && !dirtyFields.startDate && !dirtyFields.endDate
+                ? windowForFeedstock?.(String(value))
+                : null;
+              if (proposed) {
+                setValue("startDate", proposed.startDate as never);
+                setValue("endDate", proposed.endDate as never);
+              }
+            }}
           />
         </div>
 

@@ -87,7 +87,7 @@ test("read surfaces use canonical dates while native inputs keep ISO values", as
     const orderRow = page.locator("tbody tr").filter({ hasText: orderCode });
     await expect(orderRow).toContainText("Jun 13, 2026");
 
-    await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
+    await page.goto(`/credit-batches?facility=${seededData.facility.id}&view=list`);
     const sameYearCard = page.locator("article").filter({ hasText: sameYearCode });
     const crossYearCard = page.locator("article").filter({ hasText: crossYearCode });
     await expect(sameYearCard).toContainText("Jun 1 to Jun 30, 2026");

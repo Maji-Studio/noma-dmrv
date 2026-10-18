@@ -34,6 +34,7 @@ vi.mock("@/components/ui/notice", () => ({ Notice: () => null }));
 vi.mock("@/components/ui/illustrations", () => ({ ILLUSTRATION_SIZE: { empty: 48 }, CreditBatchArt: () => null }));
 vi.mock("@phosphor-icons/react/dist/ssr", () => ({ CertificateIcon: () => null, LeafIcon: () => null, PlusIcon: () => null }));
 vi.mock("./credit-batch-form", () => ({ CreditBatchForm: () => null }));
+vi.mock("./credit-batch-timeline", () => ({ CreditBatchTimeline: () => null }));
 vi.mock("./credit-batch-filters", () => ({ CreditBatchFilters: () => null }));
 vi.mock("./credit-batch-health-strip", () => ({ CreditBatchHealthStrip: () => null }));
 vi.mock("./credit-batch-durability-panel", () => ({ CreditBatchDurabilityPanel: () => null }));
@@ -55,7 +56,7 @@ it("shows the server's deletion refusal in the toast", async () => {
   harness.remove.mockRejectedValueOnce(new Error(reason));
   let renderer: ReactTestRenderer | undefined;
   try {
-    await act(async () => { renderer = create(<CreditBatchList canManage />); });
+    await act(async () => { renderer = create(<CreditBatchList canManage initialView="list" />); });
     await act(async () => { harness.onDelete!(harness.batch.id); });
     await act(async () => { await harness.onConfirm!(); });
     expect(harness.remove).toHaveBeenCalledWith({ creditBatchId: harness.batch.id, expectedVersion: harness.batch.version });
@@ -73,7 +74,7 @@ it("shows a blocked delete with a link to the Sample and clears it for the next 
   }));
   let renderer: ReactTestRenderer | undefined;
   try {
-    await act(async () => { renderer = create(<CreditBatchList canManage />); });
+    await act(async () => { renderer = create(<CreditBatchList canManage initialView="list" />); });
     await act(async () => { harness.onDelete!(harness.batch.id); });
     await act(async () => { await harness.onConfirm!(); });
     const alert = renderer!.root.findByProps({ role: "alert" });

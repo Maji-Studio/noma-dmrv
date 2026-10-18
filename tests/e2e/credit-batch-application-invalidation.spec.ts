@@ -97,7 +97,7 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
     await createApplicationForLineage(page, seededData, today);
 
     // Baseline: visit /credit-batches and read the pre-edit Weight figure.
-    await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
+    await page.goto(`/credit-batches?facility=${seededData.facility.id}&view=list`);
     await page.waitForLoadState("networkidle");
 
     const card = page.locator("article").filter({ hasText: lineage.creditBatchCode });
@@ -134,6 +134,8 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
     await page.locator("nav").getByRole("link", { name: "Credit Batches" }).click();
     await page.waitForURL(/\/credit-batches(\?|$)/);
     await page.waitForLoadState("networkidle");
+    // The sidebar link opens the timeline; the card figures live in the list view.
+    await page.getByRole("button", { name: "List", exact: true }).click();
 
     const cardAfter = page.locator("article").filter({ hasText: lineage.creditBatchCode });
     const appliedBiocharMetricAfter = cardAfter

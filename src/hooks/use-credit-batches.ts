@@ -17,6 +17,7 @@ import {
   updateCreditBatchFn,
   deleteCreditBatchFn,
 } from "@/fn/credit-batches";
+import { loadCreditBatchTimelineFactsFn } from "@/fn/credit-batch-timeline-facts";
 import { getCreditBatchesRead } from "@/lib/read-api/client";
 import type {
   CreditBatchFormData,
@@ -68,6 +69,17 @@ export function useCreditBatch(id: string) {
     queryKey: creditBatchKeys.detail(id),
     queryFn: async () => unwrap(await getCreditBatchByIdFn(id)),
     enabled: !!id,
+    staleTime: CREDIT_BATCH_STALE_TIME_MS,
+  });
+}
+
+/** Produced, applied and Removal facts for the timeline's hover cards, one request per facility. */
+export function useCreditBatchTimelineFacts(facilityId: string | undefined, batchIds: string[]) {
+  const sortedIds = [...batchIds].sort();
+  return useQuery({
+    queryKey: creditBatchKeys.timelineFacts(facilityId ?? "", sortedIds),
+    queryFn: async () => unwrap(await loadCreditBatchTimelineFactsFn(facilityId ?? "", sortedIds)),
+    enabled: !!facilityId && sortedIds.length > 0,
     staleTime: CREDIT_BATCH_STALE_TIME_MS,
   });
 }

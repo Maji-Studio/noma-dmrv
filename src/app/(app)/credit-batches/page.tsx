@@ -25,6 +25,7 @@ export default async function CreditBatchesPage({
     <CreditBatchList
       canManage={canManage}
       initialCreate={isCreateIntentValue(query[CREATE_INTENT_PARAM])}
+      initialView={query.view === "list" ? "list" : "timeline"}
     />
   );
 }
