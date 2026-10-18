@@ -45,7 +45,7 @@ export async function confirmEmissionEntryFn(
 }
 export async function deleteEmissionEntryFn(
   input: z.input<typeof emissionEntryVersionSchema>,
-): Promise<ActionResult<{ id: string }>> {
+): Promise<ActionResult<{ id: string; version: number }>> {
   return withAction((ctx) => {
     const data = emissionEntryVersionSchema.parse(input);
     return deleteEmissionEntry(ctx, data.id, data.expectedVersion);

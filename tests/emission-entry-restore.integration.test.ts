@@ -76,8 +76,9 @@ async function value(componentId = "lab") {
 }
 async function deleted(componentId = "lab") {
   const row = await value(componentId);
-  await deleteEmissionEntry(ctx, row.id, row.version);
-  return { id: row.id, expectedVersion: row.version + 1 };
+  const removed = await deleteEmissionEntry(ctx, row.id, row.version);
+  expect(removed).toEqual({ id: row.id, version: row.version + 1 });
+  return { id: row.id, expectedVersion: removed.version };
 }
 
 it("restores the original values and files, bumps both versions, and captures before/after activity", async () => {
@@ -108,7 +109,7 @@ it("refuses a stale version, foreign org, disabled gate, duplicate restore and u
   await expect(restoreEmissionEntry(ctx, input)).rejects.toThrow("Disabled");
   gate.enabled = true;
   const row = await restoreEmissionEntry(ctx, input);
-  await expect(restoreEmissionEntry(ctx, { id: row.id, expectedVersion: row.version })).rejects.toThrow("already active");
+  await expect(restoreEmissionEntry(ctx, { id: row.id, expectedVersion: row.version })).rejects.toThrow("already restored");
 });
 
 it("serializes two restores so a single line cannot acquire two values", async () => {

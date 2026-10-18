@@ -17,7 +17,7 @@ interface EmissionsUndoBarProps {
   onUndo: () => void;
   onDismiss: () => void;
   undoing?: boolean;
-  /** Sits in the flow under the affected row instead of floating, and takes focus. */
+  /** Sits in the flow under the affected row instead of floating. Either way Undo takes focus: the deleted entry's menu is gone. */
   inline?: boolean;
 }
 
@@ -40,7 +40,7 @@ export function EmissionsUndoBar({ message, onUndo, onDismiss, undoing, inline }
     >
       <span className="min-w-0 flex-1 basis-[240px] body-small">{message}</span>
       <span className="flex items-center gap-8">
-        <Button size="small" variant="default" busy={undoing} onClick={onUndo} autoFocus={inline}>
+        <Button size="small" variant="default" busy={undoing} onClick={onUndo} autoFocus>
           Undo
         </Button>
         <Button size="icon" variant="noOutline" aria-label="Dismiss" onClick={onDismiss}>

@@ -11,6 +11,7 @@ import { useState } from "react";
 import { FileDashedIcon } from "@phosphor-icons/react/dist/ssr";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, Notice, PageHeader } from "@/components/ui";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -48,7 +49,9 @@ const SUBTITLE = "Manual entries add on top of what records already hold.";
 const LIST_SKELETON = "h-320 w-full";
 const MONTH_LENGTH = 7;
 
-type UndoState = { id: number; line: EmissionLine; entry: EmissionEntry };
+/** `version` is the deleted entry's version, which the restore expects. */
+type UndoState = { id: number; line: EmissionLine; entry: EmissionEntry; version: number };
+type EntryTarget = { line: EmissionLine; entry: EmissionEntry };
 
 interface BatchEmissionsPageProps {
   creditBatchId: string;
@@ -107,6 +110,8 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [undo, setUndo] = useState<UndoState | null>(null);
   const [undoing, setUndoing] = useState(false);
+  const [stoppedDelete, setStoppedDelete] = useState<EntryTarget | null>(null);
+  const [stoppedDeleteError, setStoppedDeleteError] = useState<string | null>(null);
   const deleteEntry = useDeleteEmissionEntry(scope);
   const restoreEntry = useRestoreEmissionEntry(scope);
 
@@ -142,13 +147,34 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
     if (!open && editingCommentId === line.componentId) setEditingCommentId(null);
   };
 
+  const deleteFailed = (line: EmissionLine, error: unknown) =>
+    toSaveErrorMessage(error, `The manual entry on ${line.displayName} was not deleted. Try again.`);
+
   const removeEntry = async (line: EmissionLine, entry: EmissionEntry) => {
+    // A stopped entry cannot be restored against the current template, so it gets no Undo: confirm first.
+    if (!entry.counts) {
+      setStoppedDeleteError(null);
+      setStoppedDelete({ line, entry });
+      return;
+    }
+    try {
+      const deleted = await deleteEntry.mutateAsync({ id: entry.id, expectedVersion: entry.version });
+      // Undo shows under the row; its button takes focus because the entry's menu is gone.
+      setUndo({ id: Date.now(), line, entry, version: deleted.version });
+    } catch (error) {
+      toast.error(deleteFailed(line, error));
+    }
+  };
+
+  const confirmStoppedDelete = async () => {
+    if (!stoppedDelete) return;
+    const { line, entry } = stoppedDelete;
     try {
       await deleteEntry.mutateAsync({ id: entry.id, expectedVersion: entry.version });
-      // Undo shows under the row; its button takes focus because the entry's menu is gone.
-      setUndo({ id: Date.now(), line, entry });
+      setStoppedDelete(null);
+      toast.success(`Manual entry deleted on ${line.displayName}.`);
     } catch (error) {
-      toast.error(toSaveErrorMessage(error, `The manual entry on ${line.displayName} was not deleted. Try again.`));
+      setStoppedDeleteError(deleteFailed(line, error));
     }
   };
 
@@ -156,8 +182,7 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
     if (!undo) return;
     setUndoing(true);
     try {
-      // Delete bumped the version once, so the restore expects the next one.
-      await restoreEntry.mutateAsync({ id: undo.entry.id, expectedVersion: undo.entry.version + 1 });
+      await restoreEntry.mutateAsync({ id: undo.entry.id, expectedVersion: undo.version });
       setUndo(null);
     } catch (error) {
       toast.error(toSaveErrorMessage(error, "The change was not undone. Try again."));
@@ -168,8 +193,10 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
 
   const undoMessage = undo ? `Manual entry deleted on ${undo.line.displayName}.${undo.entry.documentCount ? " Undo brings back the values and the files." : ""}` : "";
 
+  // Under its row while the row is listed; floating when the delete moved the line out of the filter or off the template.
+  const undoInline = !!undo && visible.some((line) => line.componentId === undo.line.componentId);
   const undoBar = undo ? (
-    <EmissionsUndoBar key={undo.id} inline message={undoMessage} undoing={undoing} onUndo={() => void undoLast()} onDismiss={() => setUndo(null)} />
+    <EmissionsUndoBar key={undo.id} inline={undoInline} message={undoMessage} undoing={undoing} onUndo={() => void undoLast()} onDismiss={() => setUndo(null)} />
   ) : null;
 
   const counts = lineCounts(lines);
@@ -251,7 +278,7 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
                 canWrite={entriesEnabled}
                 expanded={expanded}
                 editingCommentId={editingCommentId}
-                undo={undo && !recording ? { componentId: undo.line.componentId, bar: undoBar } : null}
+                undo={undo && undoInline ? { componentId: undo.line.componentId, bar: undoBar } : null}
                 filterLabel={lineChipLabel(filter)}
                 onClearFilter={() => setFilter(null)}
                 actions={{
@@ -265,8 +292,18 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
                   deleteEntry: (line, entry) => void removeEntry(line, entry),
                 }}
               />
+              {undo && !undoInline && undoBar}
             </div>
           )}
+          <DeleteConfirmDialog
+            isOpen={!!stoppedDelete}
+            title="Delete this manual entry?"
+            message={stoppedDelete ? `The stopped manual entry on ${stoppedDelete.line.displayName} is deleted. It cannot be undone.` : ""}
+            onConfirm={() => void confirmStoppedDelete()}
+            onCancel={() => setStoppedDelete(null)}
+            isPending={deleteEntry.isPending}
+            errorMessage={stoppedDeleteError ?? undefined}
+          />
           <EmissionEntryFormPanel
             line={formLine}
             mode={form?.mode ?? null}

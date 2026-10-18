@@ -426,7 +426,8 @@ export async function deleteEmissionEntry(ctx: OrgContext, id: string, expectedV
         .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, id)))
         .returning();
       await recordEmissionEntryActivity(ctx, tx, "deleted", entry, { ...saved, values: entry.values });
-      return { id };
+      // Undo restores against this version.
+      return { id, version: saved.version };
     },
     true,
   );
@@ -440,13 +441,13 @@ export async function restoreEmissionEntry(ctx: OrgContext, input: RestoreEmissi
   const [initial] = await db.select().from(emissionEntries).where(and(
     eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, data.id),
   ));
-  if (!initial) throw new SafeError("Emissions entry was not found.");
+  if (!initial) throw new SafeError("The manual entry was not found.");
   return db.transaction(async (tx) => {
     const { batch, facility, observation } = await lockedBatch(ctx, tx, initial.creditBatchId);
     const entry = await lockWritableEmissionEntry(ctx, tx, data.id, { includeDeleted: true });
     if (entry.creditBatchId !== initial.creditBatchId || entry.kind !== initial.kind) throw emissionEntryParentChanged();
     assertRowVersion({ entity: "emission_entry", id: entry.id, expectedVersion: data.expectedVersion, actualVersion: entry.version });
-    if (!entry.deletedAt) throw new SafeError("This emissions entry is already active. Refresh the page.");
+    if (!entry.deletedAt) throw new SafeError("This manual entry was already restored. Refresh the page.");
     if (entry.confirmedForRemovalId !== null)
       throw new SafeError("Recorded zeros can only be changed through their Removal.");
     const previous = await getTemplateObservationById(ctx, entry.observationId, tx);
