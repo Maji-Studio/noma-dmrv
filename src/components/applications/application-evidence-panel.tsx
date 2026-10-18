@@ -211,6 +211,14 @@ export function ApplicationEvidencePanel({
         />
       )}
 
+      {mode === "boundary" && !readOnly && (
+        <span className="body-small font-medium text-[var(--color-text-secondary)]">
+          GIS reference
+          <span className="ml-2 text-[var(--color-signal-red)]" aria-hidden="true">*</span>
+          <span className="sr-only">Required</span>
+        </span>
+      )}
+
       {mode === "boundary" && (
         <GisReferenceField
           boundary={boundary}
