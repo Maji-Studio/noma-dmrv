@@ -16,6 +16,7 @@
  */
 "use client";
 
+import { certificationRemovalsHref } from "@/lib/certification/links";
 import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { useState } from "react";
@@ -112,7 +113,7 @@ function reportingWindow(summary: RemovalListRow): string | null {
 function RemovalCell({ summary }: { summary: RemovalListRow }) {
   const window = reportingWindow(summary);
   return (
-    <div className="flex flex-col gap-2 min-w-0">
+    <span className="flex flex-col gap-2 min-w-0">
       <span className="body-small font-mono text-[var(--color-text-primary)] truncate">
         {summary.code}
       </span>
@@ -121,7 +122,7 @@ function RemovalCell({ summary }: { summary: RemovalListRow }) {
           {window}
         </span>
       )}
-    </div>
+    </span>
   );
 }
 
@@ -204,6 +205,7 @@ export function StatusCell({ summary, lock }: { summary: RemovalListRow; lock?: 
 const createColumns = (locks: RecordLockViews): ColumnDef<RemovalListRow>[] => [
   {
     id: "removal",
+    meta: { recordLink: true },
     header: "Removal",
     accessorFn: (summary) =>
       `${summary.code} ${summary.removalId} ${reportingWindow(summary) ?? ""}`,
@@ -289,6 +291,7 @@ function ListBody({
           isLoading={identities.isLoading}
           hoverable
           onRowClick={(row) => setRemovalId(row.removalId)}
+          getRowHref={(row) => certificationRemovalsHref({ facility: facilityId, removal: row.removalId })}
           aria-label="Removals"
           emptyMessage={
             <EmptyState

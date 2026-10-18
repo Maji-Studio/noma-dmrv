@@ -3,6 +3,7 @@
  * Main biochar product listing with CRUD operations, stat cards, and DataTable
  */
 "use client";
+import { biocharProductDeepLinkHref } from "@/lib/biochar-product-links";
 import { StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { ServerError } from "@/components/forms";
@@ -127,7 +128,7 @@ function createColumns(
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -532,6 +533,7 @@ export function BiocharProductList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => biocharProductDeepLinkHref(row.id, row.facilityId)}
         emptyMessage={
           <EmptyState
             padding="md"

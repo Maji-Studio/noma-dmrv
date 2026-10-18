@@ -8,6 +8,7 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
+  type Cell,
   type ColumnDef,
   type ColumnFiltersState,
   type PaginationState,
@@ -38,8 +39,13 @@ import {
   STICKY_END_HEADER_CLASSES,
   columnLabel,
   handleRowActivationClick,
-  handleRowActivationKeyDown,
 } from "./data-table-helpers";
+import {
+  RowLink,
+  recordLinkVisibility,
+  rowLinkColumnId,
+  warnMissingRecordLink,
+} from "./row-link";
 
 /* ------------------------------------------------------------------ */
 /*  Data Table Context                                                  */
@@ -148,6 +154,12 @@ export interface DataTableProps<TData, TValue> extends VariantProps<typeof table
   hoverable?: boolean;
   // Callbacks
   onRowClick?: (row: TData) => void;
+  /**
+   * Deep link that opens a row's record (the same URL `onRowClick` opens in
+   * place). The record-link column then renders as a real `<a href>` so
+   * open-in-new-tab works; omit it for tables without a deep link.
+   */
+  getRowHref?: (row: TData) => string | undefined;
   // Loading state
   isLoading?: boolean;
   // Empty state
@@ -211,6 +223,7 @@ function DataTableRoot<TData, TValue>({
   hoverable = false,
   // Callbacks
   onRowClick,
+  getRowHref,
   // Loading state
   isLoading = false,
   // Empty state
@@ -304,7 +317,12 @@ function DataTableRoot<TData, TValue>({
 
   // Use external values if provided
   const effectiveGlobalFilter = externalGlobalFilter ?? globalFilter;
-  const effectiveColumnVisibility = externalColumnVisibility ?? columnVisibility;
+  // The record-link column is the only way to open a record by keyboard, so no
+  // visibility state (including a caller's) may hide it.
+  const requestedColumnVisibility = externalColumnVisibility ?? columnVisibility;
+  const effectiveColumnVisibility = onRowClick
+    ? { ...requestedColumnVisibility, ...recordLinkVisibility(columns) }
+    : requestedColumnVisibility;
   const effectiveRowSelection = externalRowSelection ?? rowSelection;
   const effectivePagination = {
     pageIndex: externalPageIndex ?? pagination.pageIndex,
@@ -339,6 +357,32 @@ function DataTableRoot<TData, TValue>({
     pageCount: externalPageCount,
     getRowId,
   });
+
+  // With `onRowClick`, the column marked `meta.recordLink` renders as the
+  // record's link, the only keyboard / screen-reader activation target; the
+  // row itself stays a plain row (see `row-link.tsx`).
+  if (
+    process.env.NODE_ENV !== "production" &&
+    onRowClick &&
+    !columns.some((column) => column.meta?.recordLink)
+  ) {
+    warnMissingRecordLink(ariaLabel);
+  }
+  const linkColumnId = onRowClick
+    ? rowLinkColumnId(table.getVisibleLeafColumns())
+    : undefined;
+  const renderCell = (cell: Cell<TData, unknown>, record: TData) => {
+    const content = flexRender(cell.column.columnDef.cell, cell.getContext());
+    if (!onRowClick || cell.column.id !== linkColumnId) return content;
+    return (
+      <RowLink
+        onActivate={() => onRowClick(record)}
+        href={getRowHref?.(record)}
+      >
+        {content}
+      </RowLink>
+    );
+  };
 
   const contextValue = React.useMemo(
     () => ({ table }),
@@ -470,27 +514,14 @@ function DataTableRoot<TData, TValue>({
                         hoverable: hoverable || !!onRowClick,
                         selected: row.getIsSelected(),
                       }),
-                      onRowClick &&
-                        "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-interaction)]"
+                      onRowClick && "cursor-pointer"
                     )}
+                    // Pointer-only convenience. No role, tabIndex or key
+                    // handler: the `meta.recordLink` link is the accessible target.
                     onClick={
                       onRowClick
                         ? (event) =>
                             handleRowActivationClick(event, () =>
-                              onRowClick(row.original),
-                            )
-                        : undefined
-                    }
-                    // A clickable row must be reachable and activatable by
-                    // keyboard: focusable with Enter/Space activation, but
-                    // WITHOUT role="button" — that would override the implicit
-                    // role="row" and sever the cell to column-header
-                    // association for screen readers.
-                    tabIndex={onRowClick ? 0 : undefined}
-                    onKeyDown={
-                      onRowClick
-                        ? (event) =>
-                            handleRowActivationKeyDown(event, () =>
                               onRowClick(row.original),
                             )
                         : undefined
@@ -508,7 +539,7 @@ function DataTableRoot<TData, TValue>({
                             STICKY_END_CELL_CLASSES
                         )}
                       >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        {renderCell(cell, row.original)}
                       </td>
                     ))}
                   </tr>
@@ -536,26 +567,17 @@ function DataTableRoot<TData, TValue>({
             table.getRowModel().rows.map((row) => (
               <div
                 key={row.id}
+                data-record-card=""
                 className={cn(
                   "border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-16 py-8",
                   row.getIsSelected() && "bg-[var(--color-interaction)]/10",
                   onRowClick &&
-                    "cursor-pointer transition-colors hover:bg-[var(--color-background-medium)] active:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-interaction)]",
+                    "cursor-pointer transition-colors hover:bg-[var(--color-background-medium)] active:bg-[var(--color-background-medium)]",
                 )}
                 onClick={
                   onRowClick
                     ? (event) =>
                         handleRowActivationClick(event, () =>
-                          onRowClick(row.original),
-                        )
-                    : undefined
-                }
-                role={onRowClick ? "button" : undefined}
-                tabIndex={onRowClick ? 0 : undefined}
-                onKeyDown={
-                  onRowClick
-                    ? (event) =>
-                        handleRowActivationKeyDown(event, () =>
                           onRowClick(row.original),
                         )
                     : undefined
@@ -578,10 +600,7 @@ function DataTableRoot<TData, TValue>({
                         </span>
                       )}
                       <div className="body-small min-w-0 break-words text-right">
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext(),
-                        )}
+                        {renderCell(cell, row.original)}
                       </div>
                     </div>
                   );
@@ -741,7 +760,12 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
   const menuId = React.useId();
   const hideableColumns = table
     .getAllLeafColumns()
-    .filter((column) => column.getCanHide() && columnLabel(column));
+    .filter(
+      (column) =>
+        column.getCanHide() &&
+        !column.columnDef.meta?.recordLink &&
+        columnLabel(column),
+    );
   const hasVisibilityChanges = hideableColumns.some((column) => !column.getIsVisible());
 
   React.useEffect(() => {

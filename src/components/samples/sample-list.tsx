@@ -1,5 +1,6 @@
 "use client";
 
+import { entityViewHref } from "@/lib/entity-deep-link";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * SampleList component
@@ -109,7 +110,7 @@ function createColumns(
   return [
     {
       accessorKey: "sampleCode",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">
@@ -630,6 +631,7 @@ export function SampleList({
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => entityViewHref("/samples", "sample", row.id, contextFacilityId)}
         emptyMessage={
           <EmptyState
             padding="md"

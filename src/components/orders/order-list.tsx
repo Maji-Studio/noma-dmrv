@@ -1,5 +1,6 @@
 "use client";
 
+import { orderDeepLinkHref } from "@/lib/order-links";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * OrderList component
@@ -61,7 +62,7 @@ function createColumns(
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true },
       header: "Code",
       cell: ({ row }) => <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>,
     },
@@ -404,6 +405,7 @@ export function OrderList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => orderDeepLinkHref(row.id, row.facilityId)}
         emptyMessage={
           <EmptyState
             padding="md"

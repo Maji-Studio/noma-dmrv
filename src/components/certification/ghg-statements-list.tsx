@@ -17,6 +17,7 @@
  */
 "use client";
 
+import { ghgStatementDeepLinkHref } from "@/lib/ghg-statement-links";
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
 import { parseAsString, useQueryState } from "nuqs";
@@ -193,14 +194,14 @@ function statementPeriod(item: GhgStatementListItem): {
 function PeriodCell({ item }: { item: GhgStatementListItem }) {
   const { primary, secondary } = statementPeriod(item);
   return (
-    <div className="flex flex-col gap-2 min-w-0">
+    <span className="flex flex-col gap-2 min-w-0">
       <span className="body-small font-mono text-[var(--color-text-primary)] truncate">
         {primary}
       </span>
       <span className="body-caption text-[var(--color-text-tertiary)]">
         {secondary}
       </span>
-    </div>
+    </span>
   );
 }
 
@@ -253,6 +254,7 @@ function StatusCell({ item }: { item: GhgStatementListItem }) {
 const columns: ColumnDef<GhgStatementListItem>[] = [
   {
     id: "period",
+    meta: { recordLink: true },
     header: "Reporting period",
     accessorFn: (item) => statementPeriod(item).primary,
     cell: ({ row }) => <PeriodCell item={row.original} />,
@@ -418,6 +420,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
           isLoading={query.isLoading}
           hoverable
           onRowClick={(row) => setStatementId(row.statement.id)}
+          getRowHref={(row) => ghgStatementDeepLinkHref(row.statement.id, facilityId)}
           aria-label="GHG Statements"
           emptyMessage={
             <EmptyState
