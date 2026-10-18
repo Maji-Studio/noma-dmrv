@@ -6,7 +6,6 @@ vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEna
 vi.mock("@/data-access/emission-automatic-masses", () => ({ getEmissionAutomaticMasses: vi.fn() }));
 vi.mock("@/data-access/utils", () => ({ requireOrgFacility: vi.fn(), requireOrgScope: vi.fn() }));
 import { beforeEach, expect, it, vi } from "vitest";
-import { SafeError } from "@/lib/errors";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 
 vi.mock("@/data-access/credit-batches", () => ({ getCreditBatchById: vi.fn() }));
@@ -66,7 +65,12 @@ it("loads saved template order and group names without registry access", async (
     }))));
 });
 
-it("names the first delivery without load mass before requesting any transport legs", async () => {
+it("shows the lines when a delivery has no load mass, leaving delivery transport unrecorded", async () => {
+  const definition = normalizeTemplateDefinition(fixture as GhgEntryTemplate);
+  vi.mocked(getLatestTemplateObservation).mockResolvedValue({ externalTemplateId: "template", definition,
+    enrichment: {}, lineSources: withTemplateOrder(fixture as GhgEntryTemplate, resolveLineSources({ definition })),
+  } as never);
+  vi.mocked(listEmissionEntries).mockResolvedValue([]);
   vi.mocked(loadCreditBatchRollups).mockResolvedValue({
     batch: {
       lineageFacts: {
@@ -77,7 +81,6 @@ it("names the first delivery without load mass before requesting any transport l
               deliveries: [
                 { id: "complete", code: "DL-1", wetMassKg: 10 },
                 { id: "missing", code: "DL-2", wetMassKg: null },
-                { id: "also-missing", code: "DL-3", wetMassKg: null },
               ],
             },
           ],
@@ -85,11 +88,15 @@ it("names the first delivery without load mass before requesting any transport l
       },
     },
   } as never);
-  await expect(loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch")).rejects.toThrowError(
-    new SafeError("Delivery DL-2 has no load mass. Add it before submitting."),
-  );
-  expect(getTransportLegsForEntities).not.toHaveBeenCalled();
-  expect(loadBiocharDeliveryTransportLegs).not.toHaveBeenCalled();
+  vi.mocked(getTransportLegsForEntities).mockResolvedValue([]);
+  vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
+  vi.mocked(getEmissionAutomaticMasses).mockResolvedValue({ runs: {}, legs: {} });
+  const lines = await loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch");
+  expect(lines.length).toBeGreaterThan(0);
+  expect(loadBiocharDeliveryTransportLegs).toHaveBeenCalledWith(expect.anything(), [{ deliveryId: "complete", loadMassKg: 10 }]);
+  const delivery = lines.filter((line) => line.contract?.automaticSource === "delivery-transport");
+  expect(delivery.length).toBeGreaterThan(0);
+  for (const line of delivery) expect(line.automaticFigure).toBeNull();
 });
 
 it("refuses a batch from another facility before loading accounting", async () => {

@@ -25,7 +25,8 @@ export async function loadBatchEmissionLines(ctx: OrgContext, facilityId: string
   if ("code" in pin) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS[pin.code]);
   const observation = await getLatestTemplateObservation(ctx, "isometric", pin.pin);
   if (!observation) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
-  const automaticFacts = await loadBatchEmissionAutomaticFacts(ctx, facilityId, creditBatchId, { requireDeliveryMass: true });
+  // Display read: a delivery without load mass leaves delivery transport unrecorded, like the overview.
+  const automaticFacts = await loadBatchEmissionAutomaticFacts(ctx, facilityId, creditBatchId);
   // Like the overview and readiness, stored entries count only while entries are switched on.
   const { entries, previousObservations } = emissionsEntriesEnabled()
     ? await loadBatchEmissionEntryFacts(ctx, creditBatchId, observation)
