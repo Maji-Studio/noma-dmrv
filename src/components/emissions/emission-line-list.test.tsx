@@ -264,4 +264,23 @@ describe("EmissionLineList", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(mocks.deleteComment).toHaveBeenCalledWith({ facilityId: "fac", id: "c1", expectedVersion: 3 }));
   });
+
+  it("keeps the comment the delete dialog opened on when the lines refresh", async () => {
+    mocks.deleteComment.mockRejectedValue(new StaleVersionError("stale", { entity: "emission_line_comment", id: "c1", code: STALE_VERSION_CONFLICT_CODE }));
+    const list = (comment: typeof COMMENT) => (
+      <QueryClientProvider client={QUERY_CLIENT}>
+        <EmissionLineList lines={[makeLine({ comment })]} grouped scope={SCOPE} actions={makeActions()} expanded={new Set(["line-1"])}
+          editingCommentId={null} undo={null} canWrite filterLabel={null} onClearFilter={vi.fn()} />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(list(COMMENT));
+    fireEvent.click(screen.getByRole("button", { name: "Actions for the comment" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete comment" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }));
+    expect(await screen.findByText(STALE_VERSION_MESSAGE)).toBeTruthy();
+    rerender(list({ ...COMMENT, body: "Their words", version: 4 }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(mocks.deleteComment).toHaveBeenCalledTimes(2));
+    expect(mocks.deleteComment).toHaveBeenLastCalledWith({ facilityId: "fac", id: "c1", expectedVersion: 3 });
+  });
 });

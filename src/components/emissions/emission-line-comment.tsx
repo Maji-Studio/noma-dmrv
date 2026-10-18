@@ -92,19 +92,22 @@ function CommentView({ line, scope, canWrite, onEdit }: { line: EmissionLine; sc
   );
 }
 
-/** Delete for the line comment: `request` opens the confirm dialog, render `dialog` once. */
+/**
+ * Delete for the line comment: `request` opens the confirm dialog, render `dialog` once.
+ * The dialog keeps the comment it opened on (id, version): a refresh after a refused
+ * delete never retargets it. Cancel and delete again to act on the latest comment.
+ */
 export function useCommentDelete(line: EmissionLine, scope: EmissionBatchScope) {
   const toast = useToast();
   const remove = useDeleteEmissionLineComment(scope);
-  const [confirming, setConfirming] = useState(false);
+  const [target, setTarget] = useState<{ id: string; version: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const comment = line.comment;
   const confirmDelete = async () => {
-    if (!comment) return;
+    if (!target) return;
     setError(null);
     try {
-      await remove.mutateAsync({ facilityId: scope.facilityId, id: comment.id, expectedVersion: comment.version });
-      setConfirming(false);
+      await remove.mutateAsync({ facilityId: scope.facilityId, id: target.id, expectedVersion: target.version });
+      setTarget(null);
       toast.success(`Comment deleted on ${line.displayName}.`);
     } catch (caught) {
       setError(toSaveErrorMessage(caught, DELETE_FALLBACK));
@@ -112,19 +115,20 @@ export function useCommentDelete(line: EmissionLine, scope: EmissionBatchScope) 
   };
   const dialog = (
     <DeleteConfirmDialog
-      isOpen={confirming}
+      isOpen={!!target}
       title="Delete this comment?"
       message={`The comment on ${line.displayName} is removed. Earlier wording stays in the activity log.`}
       onConfirm={() => void confirmDelete()}
-      onCancel={() => setConfirming(false)}
+      onCancel={() => setTarget(null)}
       isPending={remove.isPending}
       errorMessage={error ?? undefined}
     />
   );
   return {
     request: () => {
+      if (!line.comment) return;
       setError(null);
-      setConfirming(true);
+      setTarget({ id: line.comment.id, version: line.comment.version });
     },
     dialog,
   };
