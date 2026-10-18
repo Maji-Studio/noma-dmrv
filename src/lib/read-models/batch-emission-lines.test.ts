@@ -1,7 +1,8 @@
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntries: vi.fn() }));
 vi.mock("@/data-access/emission-line-comments", () => ({ listEmissionLineComments: vi.fn() }));
 vi.mock("@/db", () => ({ db: {} }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => true }));
+const gate = vi.hoisted(() => ({ enabled: true }));
+vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => gate.enabled }));
 vi.mock("@/data-access/emission-automatic-masses", () => ({ getEmissionAutomaticMasses: vi.fn() }));
 vi.mock("@/data-access/utils", () => ({ requireOrgFacility: vi.fn(), requireOrgScope: vi.fn() }));
 import { beforeEach, expect, it, vi } from "vitest";
@@ -37,6 +38,7 @@ import { withTemplateOrder } from "@/lib/isometric/template-observations/templat
 
 beforeEach(() => {
   vi.resetAllMocks();
+  gate.enabled = true;
   vi.mocked(listEmissionLineComments).mockResolvedValue([]);
   vi.mocked(getCreditBatchById).mockResolvedValue({
     removalTemplateId: "template",
@@ -161,6 +163,13 @@ it("returns typed entry details and retains removed lines for re-entry", async (
     entries: [{ id: "entry", version: 2, counts: true, documentCount: 0 }],
     comment: { id: comment.id, body: comment.body, version: comment.version, updatedAt: comment.updatedAt, updatedBy: comment.updatedBy },
   });
+  // Switched off, the page shows what records hold, like the overview and readiness.
+  gate.enabled = false;
+  vi.mocked(listEmissionEntries).mockClear();
+  const [recordsOnly] = await loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch");
+  expect(listEmissionEntries).not.toHaveBeenCalled();
+  expect(recordsOnly).toMatchObject({ state: "empty", total: null, entries: [] });
+  gate.enabled = true;
   vi.mocked(getLatestTemplateObservation).mockResolvedValue({
     ...current,
     definition: { groups: [] },
