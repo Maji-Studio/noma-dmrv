@@ -47,7 +47,7 @@ beforeEach(() => {
   lockedEntry = { ...entry };
   const batch = { id: "batch", facilityId: "facility", removalTemplateId: "template", archivedAt: null, startDate: "2026-01-01" };
   const rows = [[batch], [{ archivedAt: null, timezone: "UTC" }], [batch], () => [lockedEntry],
-    values, [], [], [saved], values, [{ count: 1 }]];
+    values, [], [saved], values, [{ count: 1 }]];
   select.mockImplementation(() => {
     const result = rows.shift();
     if (!result) throw new Error("Unexpected query");
