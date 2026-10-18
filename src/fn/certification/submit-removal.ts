@@ -33,7 +33,11 @@ import {
   submitDurabilityMeasurementSamples,
   type DurabilityMeasurementSampleSubmission,
 } from "./durability-measurement-samples";
-import { bindProductionBatchesToMeasurementSamples } from "./production-batches";
+import {
+  bindProductionBatchesToMeasurementSamples,
+  ensureProductionBatchesForCreditBatches,
+} from "./production-batches";
+import { assertRegisteredProductionBatchesMatch } from "./production-batch-precheck";
 import { readRemovalDurabilityMeasurementSamples } from "./durability-measurement-sample-snapshot";
 import {
   assertProductionClaimGateFresh,
@@ -282,6 +286,13 @@ async function submitRemovalCore(
     log,
   });
   const client = await resolveIsometricClient(orgCtx);
+
+  await assertRegisteredProductionBatchesMatch({
+    orgCtx,
+    removalId,
+    creditBatchIds: ctx.memberBatches.map((batch) => batch.id),
+    log,
+  });
 
   // Everything below may create or update Isometric Sources before the
   // submission ledger draft exists. Persist that the registry boundary is
@@ -659,6 +670,39 @@ async function runRemovalSubmission({
     );
   }
 
+  // Register and check production batches before sending any Datapoints.
+  if (durabilityMeasurementSubmissions && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
+    throw new SafeError(DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE);
+  }
+  const boundSubmissions = durabilityMeasurementSubmissions
+    ? await bindProductionBatchesToMeasurementSamples({
+        orgCtx,
+        removalId,
+        submissionRow: row,
+        expectedLockedAt,
+        deferRejectionToAttempt: true,
+        onExternalMutation: (state) => recordRemovalExternalMutation(attempt, state),
+        submissions: durabilityMeasurementSubmissions,
+        log,
+      })
+    : null;
+
+  const measurementBatchIds = new Set(
+    durabilityMeasurementSubmissions?.map((submission) => submission.creditBatchId),
+  );
+  await ensureProductionBatchesForCreditBatches({
+    orgCtx,
+    removalId,
+    submissionRow: row,
+    expectedLockedAt,
+    deferRejectionToAttempt: true,
+    onExternalMutation: (state) => recordRemovalExternalMutation(attempt, state),
+    creditBatchIds: biocharApplicationIntents
+      .map((intent) => intent.creditBatchId)
+      .filter((id) => !measurementBatchIds.has(id)),
+    log,
+  });
+
   const datapointTotal = transport.datapointBodies.length;
   if (datapointTotal === 0) {
     onProgress?.({ step: "removal.sending_inputs", state: "skipped" });
@@ -712,30 +756,13 @@ async function runRemovalSubmission({
   // datapoints; the direct product_mass input was already posted through the
   // idempotent loop above. The gate is already open whenever submissions are
   // present; the explicit guard is defence-in-depth for future callers.
-  if (durabilityMeasurementSubmissions && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
-    throw new SafeError(DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE);
-  }
-  if (durabilityMeasurementSubmissions) {
-    const durabilityTotal = durabilityMeasurementSubmissions.length;
+  if (boundSubmissions) {
+    const durabilityTotal = boundSubmissions.length;
     onProgress?.({
       step: "removal.sending_durability",
       state: durabilityTotal === 0 ? "skipped" : "active",
       completed: 0,
       total: durabilityTotal,
-    });
-    // Issue #630: the registry needs the Production Batch to exist before a
-    // MeasurementSample can point at it, so register (or reuse) it first and
-    // stamp the resulting `ptb_…` onto the snapshot bodies.
-    const boundSubmissions = await bindProductionBatchesToMeasurementSamples({
-      orgCtx,
-      removalId,
-      submissionRow: row,
-      expectedLockedAt,
-      deferRejectionToAttempt: true,
-      onExternalMutation: (state) =>
-        recordRemovalExternalMutation(attempt, state),
-      submissions: durabilityMeasurementSubmissions,
-      log,
     });
     const {
       submitted,

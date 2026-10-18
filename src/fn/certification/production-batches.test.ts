@@ -4,12 +4,17 @@ vi.mock("@/data-access/certifier-credentials", () => ({
   resolveIsometricClient: vi.fn(async () => mocks.client),
 }));
 
+vi.mock("@/data-access/removal-production-batch-deletion", () => ({
+  isProductionBatchSharedWithOtherRemovals: vi.fn(async () => false),
+}));
+
 import type { OrgContext } from "@/lib/auth/server";
 import { MASS_COMPARISON_EPSILON_KG } from "@/lib/calculations/mass-dry";
 import type { Logger } from "@/lib/log";
 import type { ProductionBatchRegistryInput } from "@/data-access/certifier-production-batches";
 import type { IsometricProductionBatch } from "@/lib/isometric/production-batches";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
+import { SafeError } from "@/lib/errors";
 import { IsometricApiError } from "@/lib/isometric/client";
 import type { PerformRegistryCreateArgs } from "./registry-create";
 import type { DurabilityMeasurementSampleSubmission } from "./durability-measurement-samples";
@@ -21,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   upsertProductionBatchRegistration: vi.fn(),
   replaceMissingProductionBatchRegistration: vi.fn(),
   appendSyncEventBestEffort: vi.fn(),
+  markSubmissionRejectedBestEffort: vi.fn(),
   client: {
     get: vi.fn(),
     post: vi.fn(),
@@ -44,6 +50,7 @@ vi.mock("./shared", async (importOriginal) => {
 });
 
 vi.mock("./registry-create", () => ({
+  markSubmissionRejectedBestEffort: mocks.markSubmissionRejectedBestEffort,
   supplierRefLookup: (
     result: { found: true; externalId: string } | { found: false },
   ) =>
@@ -292,7 +299,7 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     if (missing) {
       expect((await ensure()).get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
     } else {
-      await expect(ensure()).rejects.toThrow(/mapping changed/);
+      await expect(ensure()).rejects.toThrow(/Facility: Isometric/);
       expect(mocks.client.post).not.toHaveBeenCalled();
     }
   });
@@ -461,7 +468,21 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
   });
 
-  it("records drift when the batch data changed after registration", async () => {
+  it("does not compare figures when the current hash matches the stored hash", async () => {
+    mocks.getProductionBatchRegistrations.mockResolvedValue([{
+      creditBatchId: CREDIT_BATCH_ID, externalProductionBatchId: PRODUCTION_BATCH_ID,
+      supplierReference: await currentSupplierRef(),
+      externalProjectId: registryInput().externalProjectId,
+      externalFacilityId: registryInput().externalFacilityId,
+      payloadHash: await currentPayloadHash(),
+    }]);
+    mocks.client.get.mockResolvedValue(remoteBatch(await currentSupplierRef(), PRODUCTION_BATCH_ID,
+      { mass: { magnitude: 1_200, unit: "kg" } }));
+    await expect(ensure()).resolves.toEqual(new Map([[CREDIT_BATCH_ID, PRODUCTION_BATCH_ID]]));
+    expect(mocks.appendSyncEventBestEffort).not.toHaveBeenCalled();
+  });
+
+  it("keeps succeeded drift audit when the hash changes without different figures", async () => {
     mocks.getProductionBatchRegistrations.mockResolvedValue([
       {
         creditBatchId: CREDIT_BATCH_ID,
@@ -480,6 +501,54 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     const [, event] = mocks.appendSyncEventBestEffort.mock.calls[0];
     expect(event.operation).toBe(
       `production-batch:drift:${CREDIT_BATCH_ID}`,
+    );
+    expect(event.status).toBe("succeeded");
+    expect(event.responsePayload.reused).toBe(true);
+    expect(log.warn).toHaveBeenCalledWith(expect.anything(),
+      "registered production batch differs from current batch data; reusing the registered record");
+  });
+
+  it.each([
+    [{ totalDryMassKg: 1_150 }, "Dry mass: Isometric 2,000 kg, noma 1,150 kg."],
+    [{ externalFacilityId: "fcl_new" }, "Facility: Isometric fcl_1G8QT5ZAB1S0XSDW, noma fcl_new."],
+    [{ isometricFeedstockTypeId: "ftt_new" }, "Feedstock types: Isometric ftt_1D7KZ1P761S0G7BN, noma ftt_new."],
+  ])("stops registered drift before later batches or sample POSTs: %j", async (patch, difference) => {
+    const laterId = "22222222-2222-4222-8222-222222222222";
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({ creditBatchId: laterId }), registryInput(patch),
+    ]);
+    mocks.getProductionBatchRegistrations.mockResolvedValue([{
+      creditBatchId: CREDIT_BATCH_ID,
+      externalProductionBatchId: PRODUCTION_BATCH_ID,
+      supplierReference: await currentSupplierRef(),
+      externalProjectId: registryInput().externalProjectId,
+      externalFacilityId: registryInput().externalFacilityId,
+      payloadHash: await currentPayloadHash(),
+    }]);
+    const sendMeasurements = vi.fn();
+    const pending = bindProductionBatchesToMeasurementSamples({
+      orgCtx, removalId: "removal-1", submissionRow: { id: "submission-1" }, log,
+      submissions: [CREDIT_BATCH_ID, laterId].map((creditBatchId) => ({
+        creditBatchId, body: { production_batch_id: null },
+      } as DurabilityMeasurementSampleSubmission)),
+    }).then(sendMeasurements);
+
+    await expect(pending).rejects.toBeInstanceOf(SafeError);
+    expect(sendMeasurements).not.toHaveBeenCalled();
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(performRegistryCreate).not.toHaveBeenCalled();
+    expect(mocks.upsertProductionBatchRegistration).not.toHaveBeenCalled();
+    expect(mocks.client.get).toHaveBeenCalledOnce();
+    const [, event] = mocks.appendSyncEventBestEffort.mock.calls[0];
+    expect(event).toMatchObject({
+      entityType: "removal", entityId: "removal-1",
+      operation: `production-batch:drift:${CREDIT_BATCH_ID}`, status: "failed",
+      errorMessage: expect.stringContaining(difference),
+      requestPayload: expect.objectContaining({ mass: { magnitude: registryInput(patch).totalDryMassKg, unit: "kg" } }),
+      responsePayload: { mass: { magnitude: 2_000 }, reused: false },
+    });
+    expect(mocks.markSubmissionRejectedBestEffort).toHaveBeenCalledWith(
+      expect.objectContaining({ submissionRowId: "submission-1" }), event.errorMessage,
     );
   });
 
@@ -525,7 +594,7 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       },
     ]);
 
-    await ensure();
+    await expect(ensure()).rejects.toThrow(/different figures than noma has now/);
 
     expect(mocks.migrateProductionBatchPayloadHash).not.toHaveBeenCalled();
     expect(mocks.appendSyncEventBestEffort).toHaveBeenCalledTimes(1);
@@ -547,7 +616,7 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       },
     ]);
 
-    await ensure();
+    await expect(ensure()).rejects.toThrow(/different figures than noma has now/);
 
     expect(mocks.migrateProductionBatchPayloadHash).not.toHaveBeenCalled();
     expect(mocks.appendSyncEventBestEffort).toHaveBeenCalledTimes(1);
@@ -569,7 +638,7 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       },
     ]);
 
-    await ensure();
+    await expect(ensure()).rejects.toThrow(/different figures than noma has now/);
 
     expect(mocks.migrateProductionBatchPayloadHash).not.toHaveBeenCalled();
     expect(mocks.appendSyncEventBestEffort).toHaveBeenCalledTimes(1);
