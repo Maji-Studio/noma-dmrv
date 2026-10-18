@@ -185,6 +185,20 @@ describe("credit batch CO₂e stored", () => {
   });
 });
 
+describe("credit batch sheet applied biochar", () => {
+  const applied = (appliedDryKg?: number | null) => creditBatchSheetSections({ ...baseOptions, creditBatch: makeBatch({}), appliedDryKg })
+    .find((entry) => entry.title === "Batch definition")?.fields.find((field) => field.label === "Applied biochar (dry)");
+
+  it("reads dry applied biochar from the page model, as the batch page does", () => {
+    expect(applied(320)).toMatchObject({ value: "0.32 t", pending: false });
+  });
+
+  it("waits while the page model loads and says when it failed", () => {
+    expect(applied(undefined)).toMatchObject({ value: null, pending: true });
+    expect(applied(null)).toMatchObject({ value: null, pending: false, emptySituation: "notAvailable" });
+  });
+});
+
 describe("credit batch production-run preview", () => {
   it("labels running previews without labeling completed members", () => {
     const creditBatch = {

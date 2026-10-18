@@ -15,6 +15,10 @@ import type {
   DurabilitySummaryReplicate,
 } from "@/lib/certification/durability-batch-summary";
 import type { BatchEmissionLine } from "@/lib/certification/emission-lines";
+import {
+  NO_LAB_REPORT_PHRASE,
+  NO_REFLECTANCE_HISTOGRAM_PHRASE,
+} from "@/lib/certification/sample-document-warnings";
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { formatTonnes } from "@/lib/format-utils";
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
@@ -61,6 +65,22 @@ function outlierTitle(replicate: DurabilitySummaryReplicate): string {
     : `Sample ${replicate.sampleCode} is outside the durability limits`;
 }
 
+/**
+ * A batch health warning (non-blocking Sample document evidence) as a Check
+ * item. Known warnings get a fixed id and a problem title; any other warning
+ * keeps its own text as the title.
+ */
+function documentWarningItem(warning: string): CreditBatchOpenItem {
+  const target = { tab: "samples" as const };
+  if (warning.includes(NO_LAB_REPORT_PHRASE)) {
+    return { id: "document:lab-report", title: "No lab report on any Sample", detail: "Upload a lab report to one of its Samples. You can still submit the Removal.", target };
+  }
+  if (warning.includes(NO_REFLECTANCE_HISTOGRAM_PHRASE)) {
+    return { id: "document:reflectance-histogram", title: "No reflectance histogram on any Sample", detail: "Upload a reflectance histogram to one of its Samples. You can still submit the Removal.", target };
+  }
+  return { id: `document:${warning}`, title: warning, target };
+}
+
 export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
   const blocking: CreditBatchOpenItem[] = [];
   const check: CreditBatchOpenItem[] = [];
@@ -94,6 +114,10 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       ...(healthCheck.whyDetail ? { why: healthCheck.whyDetail } : {}),
       target,
     });
+  }
+
+  for (const warning of new Set(input.health?.warnings ?? [])) {
+    check.push(documentWarningItem(warning));
   }
 
   const outlierCodes = new Set<string>();

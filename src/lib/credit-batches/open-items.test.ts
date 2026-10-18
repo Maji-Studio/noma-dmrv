@@ -9,6 +9,7 @@ import {
   type DurabilitySummaryReplicate,
 } from "@/lib/certification/durability-batch-summary";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
+import { sampleDocumentWarnings } from "@/lib/certification/sample-document-warnings";
 import type { BatchHealthFixTarget } from "@/lib/certification/batch-health";
 import {
   buildCreditBatchOpenItems,
@@ -135,6 +136,21 @@ describe("buildCreditBatchOpenItems", () => {
       ["Emissions recorded", { tab: "emissions" }],
       ["Template resolved", { href: "/certification/settings?section=removal-templates&facility=facility" }],
       ["Distances recorded", { href: "/customers?location=location" }],
+    ]);
+  });
+
+  it("lists Sample document warnings as Check items on the Samples tab", () => {
+    const warnings = sampleDocumentWarnings({
+      sampling: "sampled", creditBatchCode: "CB-1", hasLabReport: false,
+      hasReflectanceHistogram: false, durabilityOption: "1000_year",
+    });
+    const result = buildCreditBatchOpenItems({ ...batchContext,
+      health: { state: "ready", issueCount: 0, checks: [], warnings: [...warnings, warnings[0], "Another hint."] } });
+    expect(result.blocking).toEqual([]);
+    expect(result.check.map(item => [item.id, item.title, item.target])).toEqual([
+      ["document:lab-report", "No lab report on any Sample", { tab: "samples" }],
+      ["document:reflectance-histogram", "No reflectance histogram on any Sample", { tab: "samples" }],
+      ["document:Another hint.", "Another hint.", { tab: "samples" }],
     ]);
   });
 

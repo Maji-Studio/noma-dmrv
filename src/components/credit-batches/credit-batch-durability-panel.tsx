@@ -198,40 +198,66 @@ function ReplicateTable({ summary }: { summary: DurabilityBatchSummary }) {
   );
 }
 
+/**
+ * Scrolls a deep-linked Sample row into view once per focus
+ * (`?focus=<sample id>`). A ref callback, so no effect is needed.
+ */
+function syncFocusedRow(node: HTMLDivElement | null, focused: boolean) {
+  if (!node) return;
+  if (!focused) {
+    delete node.dataset.scrolled;
+  } else if (!node.dataset.scrolled) {
+    node.dataset.scrolled = "true";
+    node.scrollIntoView({ block: "center" });
+  }
+}
+
 function SampleSummaryRows({
   summary,
   facilityId,
+  focusedSampleId,
 }: {
   summary: DurabilityBatchSummary;
   facilityId: string;
+  focusedSampleId?: string | null;
 }) {
   return (
     <SheetLinkRows>
-      {summary.replicates.map((replicate) => (
-        <SheetLinkRow
-          key={replicate.id}
-          href={sampleDetailHref(facilityId, replicate.id)}
-          ariaLabel={`Open lab Sample ${replicate.sampleCode}`}
-          primary={
-            <span className="inline-flex min-w-0 items-center gap-6">
-              {replicate.outlier && (
-                <WarningIcon
-                  size={13}
-                  weight="fill"
-                  className="shrink-0 text-[var(--st-wait)]"
-                  aria-label="Chemistry outlier"
-                />
-              )}
-              {replicate.sampleCode}
-            </span>
-          }
-          meta={
-            <span className="body-caption text-[var(--color-text-tertiary)]">
-              {sampleProvenanceLabel(replicate)}
-            </span>
-          }
-        />
-      ))}
+      {summary.replicates.map((replicate) => {
+        const focused = replicate.id === focusedSampleId;
+        return (
+          <div
+            key={replicate.id}
+            id={`sample-row-${replicate.id}`}
+            data-focused={focused || undefined}
+            ref={(node) => syncFocusedRow(node, focused)}
+            className={focused ? "bg-[var(--st-wait-bg)] outline outline-1 outline-[var(--st-wait-border)]" : undefined}
+          >
+            <SheetLinkRow
+              href={sampleDetailHref(facilityId, replicate.id)}
+              ariaLabel={`Open lab Sample ${replicate.sampleCode}`}
+              primary={
+                <span className="inline-flex min-w-0 items-center gap-6">
+                  {replicate.outlier && (
+                    <WarningIcon
+                      size={13}
+                      weight="fill"
+                      className="shrink-0 text-[var(--st-wait)]"
+                      aria-label="Chemistry outlier"
+                    />
+                  )}
+                  {replicate.sampleCode}
+                </span>
+              }
+              meta={
+                <span className="body-caption text-[var(--color-text-tertiary)]">
+                  {sampleProvenanceLabel(replicate)}
+                </span>
+              }
+            />
+          </div>
+        );
+      })}
     </SheetLinkRows>
   );
 }
@@ -251,9 +277,12 @@ export function sampleProvenanceLabel(
 export function CreditBatchDurabilityPanel({
   creditBatchId,
   facilityId,
+  focusedSampleId,
 }: {
   creditBatchId: string;
   facilityId: string;
+  /** A Sample a deep link points at (`?focus=`): its row scrolls into view, highlighted. */
+  focusedSampleId?: string | null;
 }) {
   const { data: summary, isLoading, error } =
     useBatchDurabilitySummary(creditBatchId);
@@ -305,7 +334,7 @@ export function CreditBatchDurabilityPanel({
   return (
     <Section action={action}>
       <DurabilityReadinessSignals summary={summary} />
-      <SampleSummaryRows summary={summary} facilityId={facilityId} />
+      <SampleSummaryRows summary={summary} facilityId={facilityId} focusedSampleId={focusedSampleId} />
 
       <details className="group border border-[var(--color-border-tertiary)]">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-12 px-12 py-10 body-small font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]">

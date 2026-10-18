@@ -56,6 +56,7 @@ import {
   useCreditBatch,
   useCreditBatchCo2eStoredPreviews,
   useCreditBatchProductionRunOptions,
+  useCreditBatchPageModel,
   useCreateCreditBatch,
   useUpdateCreditBatch,
   useDeleteCreditBatch,
@@ -457,6 +458,8 @@ export function CreditBatchList({
   const batchLocks = useRecordLocks("creditBatch", paginatedItems.map((batch) => batch.id));
   const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("creditBatch", viewEntity?.id);
   const membershipLocked = isCreditBatchMembershipLocked(sheetLock);
+  // One read for the one batch the sheet shows: its applied biochar is dry, as on the page.
+  const sheetPageModel = useCreditBatchPageModel(viewEntity?.id ?? "");
   const runOptionsQuery = useCreditBatchProductionRunOptions({
     facilityId: viewEntity?.facilityId,
     startDate: viewEntity?.startDate,
@@ -745,6 +748,9 @@ export function CreditBatchList({
                   sideSheetEntity.id === focusedBatchId
                     ? parseEntityFocusTarget(deepLinkFocus)
                     : null,
+                appliedDryKg: sheetPageModel.error
+                  ? null
+                  : sheetPageModel.data?.mass.appliedDryKg,
               })
             : undefined
         }

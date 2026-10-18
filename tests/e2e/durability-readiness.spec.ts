@@ -46,6 +46,16 @@ test.describe("200-year durability readiness", () => {
     await expect(signals).toContainText("Chemistry eligible");
     await expect(signals).not.toContainText("distinct runs/days");
 
+    // An open item's `?focus=<sample id>` highlights that Sample's row.
+    const rows = panel.locator('[id^="sample-row-"]');
+    await expect(rows).toHaveCount(batch.sampleCodes.length);
+    const focusedId = (await rows.nth(1).getAttribute("id"))!.replace("sample-row-", "");
+    await adminPage.goto(
+      `/credit-batches/${batch.creditBatchId}?facility=${seededData.facility.id}&tab=samples&focus=${focusedId}`,
+    );
+    await expect(panel.locator(`#sample-row-${focusedId}`)).toHaveAttribute("data-focused", "true");
+    await expect(panel.locator("[data-focused]")).toHaveCount(1);
+
     await panel.getByText("View chemistry details", { exact: true }).click();
 
     // The raw replicates roll up into the batch.

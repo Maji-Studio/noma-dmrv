@@ -19,6 +19,7 @@ vi.mock("@/hooks/use-credit-batches", () => ({
   useCreditBatch: () => ({}),
   useCreditBatchCo2eStoredPreviews: () => ({ data: {} }),
   useCreditBatchProductionRunOptions: () => ({ data: [] }),
+  useCreditBatchPageModel: () => ({}),
   useCreateCreditBatch: () => ({}),
   useUpdateCreditBatch: () => ({}),
   useDeleteCreditBatch: () => ({ mutateAsync: harness.remove }),

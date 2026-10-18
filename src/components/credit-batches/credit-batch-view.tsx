@@ -23,6 +23,7 @@ import { CreditBatchLifecycleSteps } from "./credit-batch-lifecycle";
 import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
 import { SheetLinkRow, SheetLinkRows } from "@/components/ui/sheet-link-row";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { APPLIED_DRY_LABEL } from "@/lib/credit-batches/batch-page";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { computeCohortInputTotals } from "./cohort-input-ledger";
@@ -270,6 +271,8 @@ interface CreditBatchSheetSectionsOptions extends CreditBatchRunsContentProps {
   locked?: boolean;
   /** The deep-link focus target the sheet was opened with. */
   activeFocusTarget?: string | null;
+  /** Applied dry biochar (kg) from the page model; undefined while it loads, null when it failed. */
+  appliedDryKg?: number | null;
 }
 
 export function creditBatchSheetSections({
@@ -284,6 +287,7 @@ export function creditBatchSheetSections({
   canManage = false,
   locked = false,
   activeFocusTarget,
+  appliedDryKg,
 }: CreditBatchSheetSectionsOptions): DetailPanelSection[] {
   const removalId = creditBatch.productionEmissionsClaimedByRemovalId ?? healthSummary?.removalId ?? null;
   const removalCode = creditBatch.productionEmissionsClaimedByRemovalId
@@ -342,8 +346,11 @@ export function creditBatchSheetSections({
         { label: "Start date", value: formatDate(creditBatch.startDate) },
         { label: "End date", value: formatDate(creditBatch.endDate) },
         {
-          label: "Applied biochar",
-          value: formatTonnes(creditBatch.appliedWeightTons),
+          // Dry, from the page model's slices, as on the batch page.
+          label: APPLIED_DRY_LABEL,
+          value: appliedDryKg == null ? null : formatTonnes(kgToTonnes(appliedDryKg)),
+          pending: appliedDryKg === undefined,
+          emptySituation: "notAvailable" as const,
         },
         ...(durabilityResult?.fDurable != null
           ? [{ label: "Durability estimate (capped)", value: formatDurabilityPercent(durabilityResult.fDurable) }]

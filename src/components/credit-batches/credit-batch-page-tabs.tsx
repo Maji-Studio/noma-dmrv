@@ -119,10 +119,10 @@ export function CreditBatchProductionTab() {
 
 /** The existing durability panel; it brings its own heading and its one "Record another Sample" action. */
 export function CreditBatchSamplesTab() {
-  const { batch } = useCreditBatchPage();
+  const { batch, focus } = useCreditBatchPage();
   return (
     <div className={cn(PAGE_PANEL, "p-16 sm:p-24 [&>section]:border-t-0 [&>section]:pt-0")}>
-      <CreditBatchDurabilityPanel creditBatchId={batch.id} facilityId={batch.facilityId} />
+      <CreditBatchDurabilityPanel creditBatchId={batch.id} facilityId={batch.facilityId} focusedSampleId={focus} />
     </div>
   );
 }

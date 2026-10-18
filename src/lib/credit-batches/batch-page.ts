@@ -22,6 +22,9 @@ export const CREDIT_BATCH_PAGE_TAB_LABELS: Record<CreditBatchPageTab, string> = 
   activities: "Activities",
 };
 
+/** Applied biochar reads dry everywhere the batch shows it (epic #1136 build check). */
+export const APPLIED_DRY_LABEL = "Applied biochar (dry)";
+
 export interface CreditBatchOpenItemGroups {
   blocking: readonly CreditBatchOpenItem[];
   check: readonly CreditBatchOpenItem[];

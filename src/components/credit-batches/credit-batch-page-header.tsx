@@ -19,6 +19,7 @@ import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { creditBatchListHref } from "@/lib/certification/batch-health-links";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
+  APPLIED_DRY_LABEL,
   creditBatchMilestones,
   type CreditBatchMilestone,
   type CreditBatchPrimaryAction,
@@ -153,13 +154,13 @@ interface KeyNumber {
 }
 
 function appliedNumber(pageModel: ReturnType<typeof useCreditBatchPage>["pageModel"], failed: boolean): KeyNumber {
-  if (!pageModel && failed) return { label: "Applied biochar (dry)", value: MISSING_VALUE.notAvailable, sub: null };
-  if (!pageModel) return { label: "Applied biochar (dry)", value: null, sub: null };
+  if (!pageModel && failed) return { label: APPLIED_DRY_LABEL, value: MISSING_VALUE.notAvailable, sub: null };
+  if (!pageModel) return { label: APPLIED_DRY_LABEL, value: null, sub: null };
   const { appliedDryKg, notInRemovalDryKg } = pageModel.mass;
   let sub: string | null = null;
   if (notInRemovalDryKg > 0) sub = `${formatTonnes(kgToTonnes(notInRemovalDryKg))} not in a Removal`;
   else if (pageModel.removals.length > 0) sub = "All in Removals";
-  return { label: "Applied biochar (dry)", value: formatTonnes(kgToTonnes(appliedDryKg)), sub };
+  return { label: APPLIED_DRY_LABEL, value: formatTonnes(kgToTonnes(appliedDryKg)), sub };
 }
 
 /** Three figures an operator checks first. Open items live in the Overview badge and list. */
