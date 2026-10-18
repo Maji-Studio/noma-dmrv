@@ -20,14 +20,93 @@ route handlers do not import the database. The shared REST problem builder
 lives at `lib/api/problem.ts`. See [auth.md](./auth.md#api-credentials) for
 credential and denial contracts.
 
-OAuth tokens are bound to one grant generation and one REST or MCP audience.
-`credential_audience_mismatch` returns 401 when a token is used for the other
-audience. When `OAUTH_PROVIDER_ENABLED` is true, OAuth 401s include
-`error="invalid_token"` and authentication challenges include the audience-specific
-`resource_metadata` URL and read scopes. With the flag off, every 401 retains the
-bare `WWW-Authenticate: Bearer` header because discovery is unavailable. OAuth
-`missing_scope` responses include an `insufficient_scope` challenge with the
-current and required scopes. API-key scope denials retain their existing headers.
+### OAuth for API callers
+
+Use an OAuth connection for an app acting as a member, or an Owner/Admin API key
+for scripts and internal agents. Send one `Authorization: Bearer <credential>`;
+cookies and `x-api-key` never authenticate. [Auth](./auth.md#oauth-connections)
+owns generation checks and denial precedence; [security](./security.md#oauth-provider-and-client-controls)
+owns deployment gates and the exact client allowlist. The provider stays off
+until the staging connector proof.
+
+[OAuth config](../src/lib/auth/oauth-config.ts) derives the issuer and audiences
+from the `NEXT_PUBLIC_APP_URL` origin. For origin `<origin>`:
+
+| Purpose | URL |
+|---|---|
+| Issuer | `<origin>/api/auth` |
+| Authorization / token | `<origin>/api/auth/oauth2/authorize` / `<origin>/api/auth/oauth2/token` |
+| Authorization server discovery | `<origin>/.well-known/oauth-authorization-server/api/auth` |
+| REST audience / protected-resource metadata | `<origin>/api/v1` / `<origin>/.well-known/oauth-protected-resource/api/v1` |
+| MCP audience / protected-resource metadata | `<origin>/api/mcp` / `<origin>/.well-known/oauth-protected-resource/api/mcp` |
+| Root protected-resource metadata (MCP alias) | `<origin>/.well-known/oauth-protected-resource` |
+
+[Discovery](../src/lib/auth/oauth-discovery.ts) is public with GET CORS `*` and
+300-second caching, and returns 404 when the flag is off. There is no OpenID or
+JWKS document. Use authorization code with S256 PKCE. Request one `resource`
+for the chosen transport on authorization and token exchange; a missing resource
+can use the client's single linked resource. CIMD clients link to MCP only.
+REST and MCP tokens are not interchangeable: the other audience gives 401
+`credential_audience_mismatch`.
+
+[Grantable scopes](../src/lib/auth/oauth-scopes.ts) are the API `:read` and
+`:write` set, never `:delete`. Unknown or delete scopes give `invalid_scope`.
+Owner, Admin and Member have the same OAuth ceiling; domain guards still apply.
+Start with reads. A missing authorize scope defaults to registered read scopes
+plus `offline_access`. Request `offline_access` to keep the connection through
+rotating refresh tokens; consent preserves it without a checkbox. Access tokens
+last one hour; 30 days without API use ends the connection. Refresh is not use.
+
+With `OAUTH_PROVIDER_ENABLED=true`, 401 challenges include the audience's
+`resource_metadata` and read scopes; OAuth bearer denials add
+`error="invalid_token"`. Missing grantable scopes return 403 `missing_scope`
+with `error="insufficient_scope"` and the union of current and required scopes
+in `WWW-Authenticate`. Re-authorize with that union for step-up consent. MCP lists
+grantable writes before they are allowed, then checks argument-dependent scopes
+before dispatch. Deletes stay hidden. Keys keep their scope-filtered tool list
+and existing scope refusals. With the flag off, 401s carry only the bare Bearer
+challenge. See [MCP tools](#mcp-tools-on-api-keys).
+
+Admission applies to both credential kinds. A pre-resolution IP bucket allows
+300 requests per minute, or 6,000 for configured connector egress ranges
+(initially Anthropic `160.79.104.0/21`). After resolution, a per-credential
+`admit` bucket allows 720 per minute and charges before scope, method or body
+refusals. Read/write credential and organization buckets still apply. Values
+live in [rate-limit config](../src/config/api-rate-limits.ts); revisit the
+connector tier after the proof.
+
+#### Connected apps
+
+At `/settings/connected-apps`, each member sees and disconnects their own
+connections in the active organization. Owners and Admins also have All members
+and may disconnect anyone's connection. A Platform Admin needs real membership.
+Disconnect ends the generation immediately; records it saved stay. Reconnecting
+creates a new generation and idempotency namespace. The picker chooses the
+connection's organization without switching the browser's active organization.
+See [management guards](../src/data-access/oauth-grants.ts).
+
+#### Connecting Claude and ChatGPT
+
+Run this c8 proof on staging after merge, enabling OAuth there only (plan decision
+129). Use `https://staging.app.noma.maji.studio/api/mcp`. Prove Claude first;
+ChatGPT follows once its CIMD `private_key_jwt` path has a verified fix or
+workaround (decision 122). Allowlist Claude's exact client identity,
+`https://claude.ai/oauth/mcp-oauth-client-metadata`, in `OAUTH_CIMD_CLIENT_IDS`
+for the proof. Add ChatGPT only after verifying its exact identity. Dynamic
+registration is off.
+
+1. Add the connector by URL and connect. Sign in, pick the organization (use a
+   person with two eligible memberships to exercise the picker), and allow reads
+   only.
+2. Call `whoami` and a `find_*` tool. Confirm the selected organization and reads.
+3. Ask for a write. Confirm 403 `insufficient_scope`, accept the step-up consent,
+   then confirm the intended write succeeds.
+4. Disconnect in noma Settings, Connected apps. Confirm the next call fails and
+   the app asks to reconnect.
+5. Record client versions, results and blockers in [plan section 28](./plans/2026-10-06-data-entry-api.md#28-oauth-track-results-2026-10-19).
+   Record claude.ai metadata `Cache-Control`, its reaction to `invalid_client`
+   on refresh, concurrent refresh behavior and connector rate-limit observations.
+   Never retain raw codes, tokens or signed storage URLs in proof artifacts.
 
 ### Lab samples on the runner
 
@@ -122,6 +201,21 @@ including missing upload bytes and a lineage that changes while locks are
 acquired. MCP carries the same flag. A byte inspection refusal is 422
 `validation_failed` and commits the failed state; retrying that failed row
 returns 409 with its stored reason.
+
+### Uploading from Claude
+
+Decision 92 keeps the presigned upload path: a shell-capable agent requests an
+upload, PUTs bytes without the API bearer, then confirms with its credential.
+Decision 128 defers file attachments from chat apps. Tell the person to attach
+the file to the record in noma. Never put bytes into a tool call.
+
+A future claude.ai sandbox upload would need outbound network access to the
+exact hostname in `upload.url`, set in Claude's network access domain allowlist.
+For Spaces this is the configured bucket/region endpoint host, not the noma app
+host; [storage config](./storage.md#bucket-and-prefix-convention) determines it.
+Do not assume that host or setting has been verified with the real connector.
+ChatGPT file hand-off would need a separate server-side fetch path. Both remain
+[follow-ups](./open-questions-architecture.md#oauth-connection-follow-ups).
 
 ### Operation effects and API bookkeeping
 
@@ -618,6 +712,8 @@ use Zod's output JSON Schema conversion. Strict query schemas live in
 map is shared by resource adapters and the document generator. Descriptions belong in
 Zod schemas. Transport headers and possible statuses are declared in the generator.
 The generator imports no runtime credentials, environment or database modules.
+Its OAuth security scheme uses origin-relative issuer endpoints, S256 PKCE and
+the shared grantable scope set; delete operations remain API-key only.
 
 `GET /api/v1/openapi.json` and `GET /api/v1/llms.txt` are public, bypass credential
 resolution and rate-limit guards, and cache publicly for 300 seconds. OpenAPI
@@ -663,7 +759,7 @@ method refusals charge the pre-authentication IP and credential admit buckets
 only, with no read or write operation debit. POST Origin validation runs first;
 requests without Origin pass. The shared `lib/api/route.ts`
 admission wrapper starts the deadline before authentication, assigns a request
-id and applies the same API-key resolver and rate-limit buckets as REST.
+id and applies the same bearer resolver and rate-limit buckets as REST.
 After authentication, the preparation hook bounds the body to `API_BODY_MAX_BYTES`
 and returns HTTP 413 `payload_too_large` if it exceeds that limit. JSON-RPC
 batch arrays return HTTP 400 `batch_not_supported`. Both refusals use

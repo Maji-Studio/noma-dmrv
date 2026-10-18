@@ -27,7 +27,7 @@ Next.js 16 uses `src/proxy.ts` (Node runtime, so Better Auth can use Node crypto
 - `AUTH_ROUTES` — only `/login` and `/forgot-password`; authenticated users are redirected to `/dashboard`. `/reset-password` and `/set-password` are public but **not** auth routes, deliberately: a signed-in user must be able to follow an invite's set-password link.
 - Unverified sessions are redirected to `/verify-email` (403 JSON for `/api/*`). `requireAuth()` does **not** check `emailVerified` — the `(app)` layout calls bare `requireAuth()`, so verification enforcement there comes entirely from the proxy. Use `requireVerifiedAuth()` where the page itself must guarantee it.
 - `/admin/*` is gated by the admin layout's `requireAdmin()`.
-- Exact `/api/mcp`, `/api/v1`, and `/api/v1/*` bypass session lookup. The v1 method guard handles unsupported methods; supported methods keep their route handlers. MCP and private REST routes resolve bearer API keys with `resolveApiContext`. MCP validates Origin before admission, uses the shared pre-auth and authenticated read/write rate limits, and lists only tools allowed by the credential scopes. `/api/v1x`, `/api/mcpx` and `/api/mcp/tools` stay behind the session, covered by `tests/middleware.test.ts`. See [MCP tools](./api.md#mcp-tools-on-api-keys) for write tools, requestKey, dryRun, server instructions and the in-MCP `api_writes_disabled` result.
+- Exact `/api/mcp`, `/api/v1`, and `/api/v1/*` bypass session lookup. The v1 method guard handles unsupported methods; supported methods keep their route handlers. MCP and private REST routes resolve bearer API keys or OAuth access tokens with `resolveApiContext`. MCP validates Origin before admission, uses the shared pre-auth and authenticated read/write rate limits, and filters key tool discovery by scopes. OAuth discovers grantable writes for step-up. `/api/v1x`, `/api/mcpx` and `/api/mcp/tools` stay behind the session, covered by `tests/middleware.test.ts`. See [MCP tools](./api.md#mcp-tools-on-api-keys) for write tools, requestKey, dryRun, server instructions and the in-MCP `api_writes_disabled` result.
 
 ### Public verifier report capability
 
@@ -183,14 +183,14 @@ management version.
 
 ### API request context
 
-`resolveApiContext(request)` returns `{ ok: true, ctx: ApiContext }` or
+`resolveApiContext(request, audience)` returns `{ ok: true, ctx: ApiContext }` or
 `{ ok: false, denial: ApiContextDenial }`, following the session resolver's
-result vocabulary. `ApiContext` extends `OrgContext`: `userId` is the key owner,
-`organizationId` is the key organization, `orgRole` is the live membership,
+result vocabulary. `ApiContext` extends `OrgContext`: `userId` is the credential owner,
+`organizationId` is the credential organization, `orgRole` is the live membership,
 and `isPlatformAdmin` is always false. It also carries `principal`,
 `credentialId`, enumerated `scopes`, and safe credential metadata.
 
-Only one `Authorization: Bearer <key>` is accepted. Duplicate Authorization
+Only one `Authorization: Bearer <credential>` is accepted. Duplicate Authorization
 values and bearer plus `x-api-key` are refused. `x-api-key` alone is unsupported:
 `verifyApiKey` accepts a key directly and does not need that header. Cookies
 are ignored when a bearer exists, and cookies alone cannot authenticate.
@@ -219,12 +219,87 @@ applies there.
 They do not call `resolveApiContext` or the rate-limit guards and cache publicly
 for 300 seconds. The proxy passes both exact paths before session lookup.
 
-`GET /api/v1/me` accepts any authenticated key, including an empty scope set.
+`GET /api/v1/me` accepts either credential kind, including an empty scope set.
 It returns organization, active facilities with `timeZone` and facility-local
-`today` (`YYYY-MM-DD`), role, scopes, and credential id/name/expiry. A read model
+`today` (`YYYY-MM-DD`), role, scopes, and credential kind/id/name/expiry. A read model
 calls an organization-scoped data-access read. Expiry is an ISO UTC instant.
 
-### REST denials and errors
+## OAuth connections
+
+OAuth lets a member connect an app as themselves in one organization. Owner,
+Admin and Member may connect; API keys remain Owner/Admin credentials for scripts
+and internal agents. Neither path has a Platform Admin membership override.
+`ApiContext.principal.kind` distinguishes them; OAuth uses the grant generation
+id as `credentialId` for rate limits, idempotency and audit, with `oauthClientId`
+on activity events. See [API caller guidance](./api.md#oauth-for-api-callers).
+
+[Grant lifecycle](../src/data-access/oauth-grant-lifecycle.ts) binds each
+`oauth_grants` generation to one user, issuance membership, organization, client
+and resource. Codes, consent and tokens carry that id in `referenceId`. Step-up
+reuses a live generation; reconnecting after revocation creates a new one. An
+immutable, ten-minute authorization attempt binds the selected organization to
+the session, client, PKCE challenge, resource and redirect URI, so two tabs can
+choose independently. It never changes `activeOrganizationId`. The picker skips
+only when exactly one membership is eligible; otherwise it preselects the most
+recently used consented connection. See [attempt callbacks](../src/lib/auth/oauth-attempt.ts).
+
+One [eligibility check](../src/lib/auth/oauth-eligibility.ts),
+`assertGenerationEligible`, runs at consent reference resolution, code exchange,
+refresh and API resolution. It re-reads, in order: the live membership must match
+the issuance membership and permit connecting; email must be verified; the
+generation must be unrevoked; API use must be within 30 days of `lastUsedAt`
+(initially creation time); organization API access must be enabled. Idle expiry
+revokes the generation before any activity update. Refreshes do not count as use.
+Code exchange and refresh map eligibility failures to `invalid_grant`.
+
+The [OAuth resolver](../src/lib/auth/oauth-context.ts) runs in this order:
+
+1. Require the provider flag, a stored access-token hash, no sender binding
+   (`confirmation`), and a matching generation, client and user.
+2. Refuse a token already marked revoked, then run generation eligibility.
+3. Check access-token expiry, then require exactly the generation's resource and
+   the route's audience, then check that the client exists and is enabled.
+4. Require current consent. Effective scopes intersect token, consent, grantable
+   scopes and the live role ceiling. Narrowing consent constrains old tokens.
+5. Update `lastUsedAt` at most once a minute, only on an unrevoked generation.
+
+The [header parser](../src/lib/auth/api-credential-header.ts) selects by prefix:
+`noma_live_` or `noma_test_` for keys, `noma_oat_` for OAuth. Refresh tokens
+(`noma_ort_`), JWT-shaped and unknown bearers fail without fallback. Missing or
+purged rows give `credential_invalid`. Membership removal precedes generation
+revocation, so normal Disconnect does not hide `credential_owner_removed`.
+
+[Token hooks](../src/lib/auth/oauth-hooks.ts) own refresh reuse: an identical
+retry within 30 seconds can replay the response; later reuse revokes only that
+generation and returns `invalid_grant`. The plugin replay window is 120 seconds,
+and the auth route's Vercel duration is 30 seconds. The [pnpm patch](../patches/@better-auth__oauth-provider@1.7.10.patch)
+makes plugin family teardown refuse with `invalid_grant`, preventing deletion
+across organizations and audiences. Application revocation marks the generation
+and deletes its consent, leaving plugin token rows untouched until purge.
+Refresh tokens must retain `offline_access`: dropping it is `invalid_scope`;
+a stored refresh row without it is `invalid_grant`. Browser sign-out revokes
+that session's access tokens, but refresh can continue the connection.
+
+[Membership hooks](../src/lib/auth/better-auth.ts) revoke on removal and on a
+role change that no longer permits connecting. Owner/Admin/Member transitions
+keep OAuth connections; API keys still disable on role changes. Self-service
+`/organization/leave` has an after-hook because the plugin skips
+`afterRemoveMember`; it verifies the returned membership is gone before revoking
+connections and disabling keys. [Platform Admin membership changes](../src/data-access/organizations.ts)
+apply the same policy in their transaction. Direct deletion still fails the issuance-membership
+check, and re-admission cannot restore old authority.
+
+The [provider](../src/lib/auth/oauth-provider.ts) uses opaque, hashed tokens,
+authorization code with S256 PKCE and refresh rotation. No `jwt()`, `mcp()`, DCR,
+client credentials or DPoP flow is enabled. `clientPrivileges` permits only
+`create` for server-side registration in a live Platform Admin session; every
+other client action is denied. HTTP OAuth paths are limited to authorize, token,
+consent, continue and revoke, including for signed-in users.
+`OAUTH_PROVIDER_ENABLED` defaults to false: the plugins are absent, discovery is
+404 and OAuth bearers fail closed. See [security gates and client runbook](./security.md#oauth-provider-and-client-controls)
+and [Connected apps](./api.md#connected-apps).
+
+## REST denials and errors
 
 `src/lib/api/problem.ts` builds RFC 9457 responses with `code`, `retryable`,
 and pointer-based `errors`, sanitizes 500 bodies, and maps `ActionFailure`
@@ -235,14 +310,17 @@ and `Cache-Control: private, no-store`.
 | --- | --- |
 | `credential_missing`, `credential_malformed`, `credential_ambiguous` | 401 |
 | `credential_header_unsupported`, `cookie_session_unsupported` | 401 |
-| `credential_invalid`, `credential_expired`, `credential_disabled`, `credential_revoked` | 401 |
-| `credential_owner_removed`, `credential_owner_unverified`, `credential_audience_mismatch` | 401 |
+| `credential_invalid`, `credential_expired` | 401 |
+| `credential_owner_removed`, `credential_owner_unverified` | 401 |
+| `credential_audience_mismatch` (OAuth resource differs from the route audience) | 401 |
+| `credential_revoked` (key revoked; OAuth generation or token revoked, or consent absent) | 401 |
+| `credential_disabled` (key disabled; OAuth client missing or disabled) | 401 |
 | `missing_scope`, `insufficient_role`, `api_access_disabled` | 403 |
 
 When `OAUTH_PROVIDER_ENABLED` is true, authentication denials include a Bearer
-challenge with resource metadata and read scopes. Refused bearer credentials on 401s also include `error="invalid_token"`. Unknown or purged credentials
+challenge with resource metadata and read scopes. OAuth bearer denials on 401s also include `error="invalid_token"`. Unknown or purged credentials
 return `credential_invalid`; expired credentials still present in storage
-return `credential_expired`. Owner demotion uses `credential_owner_removed`
+return `credential_expired`. API-key owner demotion uses `credential_owner_removed`
 as required by the credential lifecycle contract, rather than the operation's
 403 `insufficient_role` refusal.
 

@@ -687,6 +687,20 @@ are Admin-and-up), or *Member* (day-to-day MRV data entry). A user may
 hold memberships in several Organizations, though one is the norm.
 _Avoid_: teammate, seat.
 
+### Connected apps
+
+**Connected app**:
+An app a person has allowed to act for them in one **Organization**, within
+permissions they approve. This is the app-facing term shown in Settings.
+_Avoid_: integration, API key, OAuth client when writing interface copy.
+
+**OAuth client**:
+The technical identity of an app that requests a person's permission to use
+noma; one OAuth client can have many **Connected apps** belonging to different
+people or Organizations.
+_Avoid_: client in operator-facing copy; treating the app identity as one
+person's connection.
+
 ## Relationships
 
 - An **Organization** owns one or more facilities; every domain record

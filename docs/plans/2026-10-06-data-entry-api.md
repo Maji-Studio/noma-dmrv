@@ -1,7 +1,7 @@
 # Data-entry API (REST + MCP): plan
 
 - **Owner:** Kenji Nguyen
-- **Status:** in progress; Phases 0 to 7 done (sections 15 to 27), OAuth track next
+- **Status:** in progress; Phases 0 to 7 done (sections 15 to 27), OAuth implementation complete; staging connector proof pending (c8)
 - **Last reviewed:** 2026-10-06 (against `e4ba77c2`, plus the Phase 0 branch `feat/data-entry-api-spike`)
 
 Drafted from four Codex research memos (gpt-6.1-sol: REST practice, MCP and auth, codebase audit; gpt-6-astra: independent architecture draft). Reviewed by gpt-6-astra (adversarial), gpt-6.1-sol (fact-check and QA), Fable 5.1 (architecture) and Sonnet 5.5 (API consumer walk-throughs). Section 14 lists what changed and why.
@@ -206,8 +206,8 @@ The API never promises rollback once `COMMIT` may have reached PostgreSQL. Files
 |---|---|---|---|
 | Browser UI | Better Auth session; keeps using server actions | Active organization (unchanged) | Role checks as today |
 | Scripts, internal agents (REST and MCP) | API key (`@better-auth/api-key`, matching the Better Auth version): hashed, prefixed `noma_live_` / `noma_test_`, shown once, expiring, revocable, last-used tracked | Exactly one organization, server-set at creation, immutable | Per-operation allowlist |
-| First-party mobile app | OAuth 2.1 authorization code + S256 PKCE, system browser, preregistered public client, refresh token in secure storage | One organization per grant, chosen at consent; switching = new grant | Field-operator bundle, no delete by default |
-| Third-party agents (MCP) | OAuth 2.1 + PKCE + consent; Client ID Metadata Documents preferred, DCR only for a needed client; RFC 8707 resource indicator | One organization per grant, shown on consent | Read by default; writes opt-in; delete separate |
+| First-party mobile app (Phase 8) | OAuth 2.1 authorization code + S256 PKCE, system browser, preregistered public client, refresh token in secure storage | One organization per generation, chosen at consent | Read/write role ceiling; no delete |
+| Third-party agents (MCP) | OAuth 2.1 + S256 PKCE + consent; exact allowlisted Client ID Metadata Documents, no DCR; RFC 8707 resource indicator | One organization per generation, shown on consent | Read first, step up for writes; no delete |
 
 **Credential issuance is locked down at the plugin, not just the UI.** Better Auth's API-key endpoints live under `/api/auth`, which the proxy does not guard. Every create, update and delete endpoint must enforce:
 - Owner or Admin in the target organization through a real membership row: a Platform Admin without membership cannot mint a key for that organization;
@@ -221,9 +221,16 @@ Client-editable metadata never carries authority. API-key session emulation stay
 
 **Every request re-checks the principal.** For API keys: the key is valid, unexpired and unrevoked, and its owner is still a member with a sufficient role. For OAuth: the persisted grant binds user, organization, client, resource (audience) and scopes; each request checks the grant is active and membership is current, so a locally verified JWT alone is not enough. Refresh keeps the binding and never reads the session's active organization. REST and MCP are separate audiences; a token for one is refused by the other. A key owned by someone who left returns 401 with `credential_owner_removed`, and expiry/owner-removal notices go to organization admins.
 
-**Better Auth upgrade (decided 2026-10-07, section 13).** Upgrade `better-auth` 1.6.23 to 1.7.7 **before Phase 2**, as its own PR with the full auth E2E, so API keys are built once on the final version. 1.7.7 changes nothing for API keys (`@better-auth/api-key` 1.7.7 is functionally the same as 1.6.x) but ships what the OAuth track needs: `@better-auth/oauth-provider` (authorization code + S256 PKCE, an org-picker step whose choice is stored on the consent, RFC 8707 resources bound to the grant, refresh rotation, introspection, revocation; uses `jwt()`), `@better-auth/cimd` (Client ID Metadata Documents) and `@better-auth/mcp` (`requireMcpAuth`, protected-resource handler; the old `mcp()` plugin moved here and needs an explicit `resource`). Core and every `@better-auth/*` package move together. The installed 1.7.7 schema requires account `accessTokenExpiresAt`, `refreshTokenExpiresAt` and `scope`, with auth lookup indexes and optional Drizzle relations; it does not require `issuer`. API-key gaps open in every version, closed by our wrapper: client `update` can clear expiry (block client updates; create and update through our own server actions calling `auth.api`), no scope-versus-role hook, rate limit defaults to 10 per 24 h, and member removal does not touch keys.
+**Better Auth.** Core and installed `@better-auth/*` plugins are pinned to
+1.7.10. The OAuth provider uses `@better-auth/oauth-provider` directly with
+`@better-auth/cimd`, opaque hashed access and refresh tokens, authorization code
+with S256 PKCE, request-bound organization choice and separate REST/MCP resources.
+There is no `jwt()`, `mcp()` or `@better-auth/mcp`. The pnpm patch refuses the
+plugin's cross-generation refresh-family teardown; the application hook owns
+reuse. API-key HTTP endpoints stay blocked in favor of guarded application
+actions. See [auth](../auth.md#oauth-connections) and [upgrade checks](../security.md#oauth-provider-and-client-controls).
 
-**Resolver and proxy.** `resolveApiContext(request)` in src/lib/auth/api-context.ts (new in Phase 1) accepts exactly one credential type, rejects ambiguity, never falls back from a bad bearer token to cookies, and enforces verified email itself. The proxy returns early for `/api/v1/*`, `/api/mcp`, the public OpenAPI document and the OAuth discovery documents (`/.well-known/oauth-protected-resource`, authorization-server metadata and the path aliases Better Auth 1.7 documents), **before** the session lookup (`src/lib/auth/middleware.ts:51`), so neither the session branch nor the unverified-email branch fires (`:82`, `:95`). Every other route is unchanged. Tests cover cookie-free and unverified-cookie requests and exact route boundaries (`/api/v1x` is not carved out). The OpenAPI document is exempt from `resolveApiContext`. Cookie sessions are not accepted on `/api/v1` in v1 (no CSRF surface).
+**Resolver and proxy.** `resolveApiContext(request, audience)` in src/lib/auth/api-context.ts (new in Phase 1) accepts exactly one credential type, rejects ambiguity, never falls back from a bad bearer token to cookies, and enforces verified email itself. The proxy returns early for `/api/v1/*`, `/api/mcp`, the public OpenAPI document and the OAuth discovery documents (`/.well-known/oauth-protected-resource`, authorization-server metadata and the path aliases Better Auth 1.7 documents), **before** the session lookup (`src/lib/auth/middleware.ts:51`), so neither the session branch nor the unverified-email branch fires (`:82`, `:95`). Every other route is unchanged. Tests cover cookie-free and unverified-cookie requests and exact route boundaries (`/api/v1x` is not carved out). The OpenAPI document is exempt from `resolveApiContext`. Cookie sessions are not accepted on `/api/v1` in v1 (no CSRF surface).
 
 **Credential management UI (the access control for API and agents).** Organization settings page, Owners and Admins only:
 - create a key: name, expiry, and a permission grid of entity × read / write / delete. Read is on by default, write is opt-in, delete is off by default and needs a deliberate tick;
@@ -306,7 +313,7 @@ Use the existing Vitest layout and throwaway test DB (`docs/testing.md`; Vitest 
 | 5. Lab and logistics | Lab samples (5a, single creates only, decision 58), then orders and deliveries | Per-operation outcome, parity, authorization and stock tests |
 | 6. Field application | Applications with evidence documents (upload request, presigned PUT, confirm) | Same, plus document upload tests |
 | 7. Master data writes | Suppliers, customers, formulations (reads already exist from Phase 2) | Same |
-| OAuth track (starts when Phase 3 lands) | `@better-auth/oauth-provider` + `@better-auth/cimd` + `@better-auth/mcp` on 1.7.7 (already upgraded in 1.5): consent with organization choice, grant checks, discovery documents; mobile public client; claude.ai and ChatGPT connectors | OAuth test list green; named connectors work |
+| OAuth track | Better Auth 1.7.10 with `@better-auth/oauth-provider` and `@better-auth/cimd`; opaque tokens, grant generations, organization picker, consent, Connected apps, discovery and read-first step-up; mobile registration stays in Phase 8 | Automated OAuth suites green; staging Claude proof, then ChatGPT once CIMD works; provider off until c8, production after the domain split |
 | 8. Offline mobile | Change feed, client ids, reference sync, outbox, longer idempotency retention | Separate plan |
 
 Order follows the operator workflow (Kenji, 2026-10-06). Starting with feedstock intake means the pilot is also the hardest case (compound create, bin stock, transport). That is deliberate, and it is why Phase 0 proves the transaction and lock design on exactly that write. Credit batches stay UI-only until a client needs them; lab samples reference them through read-only lookups.
@@ -527,7 +534,7 @@ Confirmed without another question:
 | Idempotency claim protocol (`ON CONFLICT` + `lock_timeout`), replay before precondition, re-authorized replays, PII in stored responses | all three engineering reviews |
 | ETag stability (request id to header, no includes), version bump by every writer incl. siblings | gpt-6-astra, gpt-6.1-sol |
 | Credential issuance locked at the plugin endpoints; membership required to mint; per-operation scopes excluding admin operations | gpt-6-astra, Fable 5.1 |
-| Persisted OAuth grant checks; separate audiences; `mcp()` replaces `oauthProvider()` in 1.7; discovery routes through the proxy | gpt-6-astra, gpt-6.1-sol |
+| Persisted OAuth generation checks; separate audiences; `oauthProvider()` directly on 1.7.10, no `mcp()`; exact discovery routes through the proxy | gpt-6-astra, gpt-6.1-sol |
 | MCP on API keys in Phase 3, OAuth on a parallel track; Better Auth upgrade opens the OAuth track unless the spike says otherwise | Fable 5.1 (gpt-6-astra preferred upgrading first) |
 | MCP: `expectedVersion`, `requestKey`, success/error output union, `dryRun`, `whoami`, `find_*`, verb-first names | all four |
 | Codes and `?q=` lookup, reference errors with candidates, facility time-zone semantics, `/me`, unit-named fields, actionable error metadata, public OpenAPI, generated client | Sonnet 5.5, Fable 5.1 |
@@ -642,3 +649,25 @@ archived-destination guard in the order form, and Playwright. The stale-version
 eval stays skipped (`api/eval-stale-version`). Location fill cost and the wait
 between registration and removal recovery remain follow-ups, bounded by the
 lock timeout.
+
+## 28. OAuth track results (2026-10-19)
+
+- **c1:** Better Auth and installed plugins pinned to 1.7.10; earlier API phase
+  results archived.
+- **c2:** migration 0162 adds provider tables, grant generations and immutable
+  authorization attempts, with lifecycle, membership revocation and purge seams.
+- **c3:** OAuth bearer resolution, shared eligibility, live Member role ceiling,
+  separate audiences, scope step-up, audit identity and admission buckets.
+- **c4:** provider and CIMD behind the flag; exact HTTP endpoint boundary;
+  generation-scoped refresh reuse; pnpm patch refuses plugin family teardown;
+  public discovery and client metadata documents.
+- **c5:** picker/consent actions and Connected apps management guards.
+- **c6:** organization picker, consent and Connected apps screens with unit and
+  browser coverage.
+
+Keep `OAUTH_PROVIDER_ENABLED=false` everywhere until the staging proof. Enable it
+on staging only for c8 after merge; production stays off until the domain split.
+Run [Connecting Claude and ChatGPT](../api.md#connecting-claude-and-chatgpt),
+then record client versions, outcomes and blockers here.
+
+**Connector proof: pending (c8)**

@@ -6,19 +6,21 @@ import { API_KEY_LIVE_PREFIX, API_KEY_TEST_PREFIX } from "@/config/api-keys";
 import { IDEMPOTENCY_RETENTION_DAYS } from "@/config/operations";
 import { BIOCHAR_PRODUCT_MASS, OUTPUT_BIN_STOCK_ETAG, OUTPUT_BIN_STOCK_SOURCES, FEEDSTOCK_UNITS, LAB_SAMPLE_BATCHES, LAB_SAMPLE_RATIOS, LAB_SAMPLE_TIMES, LAB_SAMPLE_UNITS, LAB_SAMPLE_WARNINGS, OUTPUT_STOCK_BASIS, OUTPUT_STOCK_COUNT, OUTPUT_STOCK_NO_CORRECTIONS, OUTPUT_STOCK_TIMES, PRODUCTION_RUN_GUIDANCE, UNTRUSTED_TEXT } from "@/lib/operations/agent-guidance";
 
+export const oauthGuide = `OAuth connects one member in one organization. Read first; reauthorize with the challenged scopes on 403 insufficient_scope. No delete. Disconnect in Settings, Connected apps. Attach chat files in noma.`;
+
 export const domainGuide = `## Feedstock intake
 
-- Operators weigh wet mass as received. Dry mass is derived from wet mass and moisture, not weighed for bin stock. ${FEEDSTOCK_UNITS}
-- A feedstock record is material received into one feedstock bin, with its feedstock type, supplier, wet mass, moisture and delivery date. One delivery logged into several bins creates one record per receiving bin.
-- Business dates are the facility's local YYYY-MM-DD. Use its today and IANA timeZone from whoami or /me, never the device or model clock.
-- Resolve ids through lookups. Read the current version before updating or deleting.
-- Ask for missing required values such as moisture. Never invent them.
+- Weigh wet mass as received. Derive dry mass from wet mass and moisture. ${FEEDSTOCK_UNITS}
+- A feedstock record is intake into one feedstock bin: type, supplier, wet mass, moisture and delivery date. A delivery split across bins creates one record per bin.
+- Use facility-local YYYY-MM-DD, today and IANA timeZone from whoami or /me, never the device or model clock.
+- Look up ids with find_*. Read versions before edits or deletes.
+- Ask for required values; never invent them.
 - ${UNTRUSTED_TEXT}
 
 ## Production runs
 
 - ${PRODUCTION_RUN_GUIDANCE}
-- Resolve the reactor and bins in the run facility before writing.
+- Resolve reactor and bins in the run facility.
 `;
 
 /**
@@ -73,6 +75,10 @@ export const llmsGuide = `# noma data-entry API v1
 Public contract: /api/v1/openapi.json
 Base URL: /api/v1
 
+## OAuth connections
+
+${oauthGuide}
+
 ${domainGuide}
 ${biocharStockGuide}
 ${labSampleGuide}
@@ -92,7 +98,7 @@ MCP: find_documents and get_document_download_url require the chosen owner's rea
 
 ## REST requests
 
-- Authenticate private routes with Authorization: Bearer <key> only. Keys start with ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX}. Cookies and x-api-key do not authenticate.
+- Authenticate private routes with Authorization: Bearer <API key or OAuth access token> only. Keys start with ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX}. Cookies and x-api-key do not authenticate.
 - GET /me returns the credential organization, active facilities, role, scopes and expiry. Reads require the resource :read scope. Feedstock creates and updates require feedstocks:write; deletes require feedstocks:delete. Production run creates and updates require production-runs:write; deletes require production-runs:delete. Biochar product creates and updates, and loss and count postings on output bins, require biochar-products:write; products cannot be deleted. /me needs no scope. Domain guards still apply.
 - Resolve reference UUIDs through read-only facilities, feedstock-types, storage-locations, vehicles, drivers and reactors. Read formulations with formulations:read. Use POST /formulations with Idempotency-Key; PATCH and DELETE /formulations/{id} and POST /formulations/{id}/archive and /restore use UUID paths with If-Match (formulations:write for create, update, archive and restore; formulations:delete for delete). Biochar products (biochar-products:read) are read-only lookups; /storage-locations/{idOrCode}/stock-movements lists a biochar or product bin's posted movements, newest first (biochar-products:read), and POST on it records a loss or count (UUID only). Credit batches (credit-batches:read) are a read-only lookup. A lab sample (lab-samples:read) belongs to one credit batch, and the batch's facility, shown in the facility's durabilityOption and timeZone, sets its tier and clock. POST /lab-samples (lab-samples:write, Idempotency-Key required) records one replicate and PATCH moves or edits it; DELETE needs lab-samples:delete. Writes return the sample and any calculated ratios or certification gaps in warnings. Supplier locations require the parent UUID. GET detail accepts UUID or exact code; PATCH and DELETE require UUID.
 - Use POST /suppliers with Idempotency-Key; PATCH and DELETE /suppliers/{id} and POST /suppliers/{id}/archive and /restore use UUID paths with If-Match (suppliers:write for create, update, archive and restore; suppliers:delete for delete).

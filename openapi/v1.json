@@ -733,7 +733,48 @@
         "type": "object"
       }
     },
-    "securitySchemes": {"bearerAuth": {"bearerFormat": "API key", "description": "Authorization: Bearer <key> only. Keys use noma_live_ or noma_test_ prefixes and bind exactly one organization; cookies and x-api-key cannot authorize requests.", "scheme": "bearer", "type": "http"}}
+    "securitySchemes": {
+      "bearerAuth": {"bearerFormat": "API key", "description": "Authorization: Bearer <key> only. Keys use noma_live_ or noma_test_ prefixes and bind exactly one organization; cookies and x-api-key cannot authorize requests.", "scheme": "bearer", "type": "http"},
+      "oauth2": {
+        "description": "OAuth connections require the provider flag. Authorization code with S256 PKCE only, using the same-origin /api/auth issuer. Send resource for this origin's /api/v1 audience. Start with read scopes and step up on 403 insufficient_scope. Request offline_access for refresh; no delete scopes are grantable.",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "/api/auth/oauth2/authorize",
+            "scopes": {
+              "applications:read": "Allow applications:read.",
+              "applications:write": "Allow applications:write.",
+              "biochar-products:read": "Allow biochar-products:read.",
+              "biochar-products:write": "Allow biochar-products:write.",
+              "credit-batches:read": "Allow credit-batches:read.",
+              "customers:read": "Allow customers:read.",
+              "customers:write": "Allow customers:write.",
+              "deliveries:read": "Allow deliveries:read.",
+              "deliveries:write": "Allow deliveries:write.",
+              "drivers:read": "Allow drivers:read.",
+              "facilities:read": "Allow facilities:read.",
+              "feedstock-types:read": "Allow feedstock-types:read.",
+              "feedstocks:read": "Allow feedstocks:read.",
+              "feedstocks:write": "Allow feedstocks:write.",
+              "formulations:read": "Allow formulations:read.",
+              "formulations:write": "Allow formulations:write.",
+              "lab-samples:read": "Allow lab-samples:read.",
+              "lab-samples:write": "Allow lab-samples:write.",
+              "orders:read": "Allow orders:read.",
+              "orders:write": "Allow orders:write.",
+              "production-runs:read": "Allow production-runs:read.",
+              "production-runs:write": "Allow production-runs:write.",
+              "reactors:read": "Allow reactors:read.",
+              "storage-locations:read": "Allow storage-locations:read.",
+              "suppliers:read": "Allow suppliers:read.",
+              "suppliers:write": "Allow suppliers:write.",
+              "vehicles:read": "Allow vehicles:read."
+            },
+            "tokenUrl": "/api/auth/oauth2/token"
+          }
+        },
+        "type": "oauth2"
+      }
+    }
   },
   "info": {
     "description": "Organization-scoped feedstock intake, production runs, biochar products, lab samples, formulations, orders and balances, suppliers, customers and destination lookups, and output bin stock movement history. Use POST /formulations with Idempotency-Key; PATCH and DELETE /formulations/{id} and POST /formulations/{id}/archive and /restore use UUID paths with If-Match (formulations:write for create, update, archive and restore; formulations:delete for delete). Use POST /suppliers with Idempotency-Key; PATCH and DELETE /suppliers/{id} and POST /suppliers/{id}/archive and /restore use UUID paths with If-Match (suppliers:write for create, update, archive and restore; suppliers:delete for delete). Use POST /customers with Idempotency-Key; PATCH and DELETE /customers/{id} and POST /customers/{id}/archive and /restore use UUID paths with If-Match (customers:write for create, update, archive and restore; customers:delete for delete). Business dates are facility-local YYYY-MM-DD; event times are sent as RFC 3339 with an explicit offset or as facility-local { date, time }, and returned as UTC instants. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers. Unsupported methods on visible paths return Problem405 with Allow listing supported methods, including automatic HEAD and OPTIONS. Private refusals follow bearer authentication and path visibility checks; unknown or invisible paths return 404 without Allow. Public discovery paths need no credential. This response is a path-level refusal, not a response of a published operation.",
@@ -768,6 +809,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["applications:read"]}],
         "x-required-scope": "applications:read"
       },
       "post": {
@@ -872,6 +914,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["applications:write"]}],
         "x-required-scope": "applications:write"
       }
     },
@@ -929,6 +972,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}],
         "x-required-scope": "applications:delete"
       },
       "get": {
@@ -936,6 +980,7 @@
         "operationId": "get_application",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/application", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["applications:read"]}],
         "x-required-scope": "applications:read"
       },
       "patch": {
@@ -1045,6 +1090,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["applications:write"]}],
         "x-required-scope": "applications:write"
       }
     },
@@ -1054,6 +1100,7 @@
         "operationId": "get_application_boundary",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/application_boundary", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Stored boundary and summary.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["applications:read"]}],
         "x-required-scope": "applications:read"
       }
     },
@@ -1077,6 +1124,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["applications:read"]}],
         "x-required-scope": "applications:read"
       },
       "post": {
@@ -1142,6 +1190,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["applications:write"]}],
         "x-required-scope": "applications:write"
       }
     },
@@ -1151,6 +1200,7 @@
         "operationId": "get_application_document",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Document UUID belonging to this record.", "in": "path", "name": "documentId", "required": true, "schema": {"format": "uuid", "type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/document", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Document representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["applications:read"]}],
         "x-required-scope": "applications:read"
       }
     },
@@ -1174,6 +1224,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["applications:write"]}],
         "x-required-scope": "applications:write"
       }
     },
@@ -1191,6 +1242,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["applications:read"]}],
         "x-required-scope": "applications:read"
       }
     },
@@ -1219,6 +1271,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["biochar-products:read"]}],
         "x-required-scope": "biochar-products:read"
       },
       "post": {
@@ -1299,6 +1352,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["biochar-products:write"]}],
         "x-required-scope": "biochar-products:write"
       }
     },
@@ -1308,6 +1362,7 @@
         "operationId": "get_biochar_product",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/biochar_product", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["biochar-products:read"]}],
         "x-required-scope": "biochar-products:read"
       },
       "patch": {
@@ -1336,6 +1391,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["biochar-products:write"]}],
         "x-required-scope": "biochar-products:write"
       }
     },
@@ -1361,6 +1417,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["credit-batches:read"]}],
         "x-required-scope": "credit-batches:read"
       }
     },
@@ -1370,6 +1427,7 @@
         "operationId": "get_credit_batch",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/credit_batch", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["credit-batches:read"]}],
         "x-required-scope": "credit-batches:read"
       }
     },
@@ -1392,6 +1450,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["customers:read"]}],
         "x-required-scope": "customers:read"
       },
       "post": {
@@ -1462,6 +1521,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["customers:write"]}],
         "x-required-scope": "customers:write"
       }
     },
@@ -1549,6 +1609,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}],
         "x-required-scope": "customers:delete"
       },
       "get": {
@@ -1556,6 +1617,7 @@
         "operationId": "get_customer",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/customer", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["customers:read"]}],
         "x-required-scope": "customers:read"
       },
       "patch": {
@@ -1584,6 +1646,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["customers:write"]}],
         "x-required-scope": "customers:write"
       }
     },
@@ -1614,6 +1677,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["customers:write"]}],
         "x-required-scope": "customers:write"
       }
     },
@@ -1637,6 +1701,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["customers:read"]}],
         "x-required-scope": "customers:read"
       },
       "post": {
@@ -1692,6 +1757,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["customers:write"]}],
         "x-required-scope": "customers:write"
       }
     },
@@ -1724,6 +1790,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}],
         "x-required-scope": "customers:delete"
       },
       "get": {
@@ -1731,6 +1798,7 @@
         "operationId": "get_customer_location",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Location identifier under this parent, UUID.", "in": "path", "name": "locationId", "required": true, "schema": {"format": "uuid", "type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/customer_location", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Location representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["customers:read"]}],
         "x-required-scope": "customers:read"
       },
       "patch": {
@@ -1788,6 +1856,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["customers:write"]}],
         "x-required-scope": "customers:write"
       }
     },
@@ -1819,6 +1888,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["customers:write"]}],
         "x-required-scope": "customers:write"
       }
     },
@@ -1850,6 +1920,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["customers:write"]}],
         "x-required-scope": "customers:write"
       }
     },
@@ -1880,6 +1951,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["customers:write"]}],
         "x-required-scope": "customers:write"
       }
     },
@@ -1908,6 +1980,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["deliveries:read"]}],
         "x-required-scope": "deliveries:read"
       },
       "post": {
@@ -2089,6 +2162,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["deliveries:write"]}],
         "x-required-scope": "deliveries:write"
       }
     },
@@ -2098,6 +2172,7 @@
         "operationId": "get_delivery",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/delivery", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["deliveries:read"]}],
         "x-required-scope": "deliveries:read"
       },
       "patch": {
@@ -2146,6 +2221,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["deliveries:write"]}],
         "x-required-scope": "deliveries:write"
       }
     },
@@ -2167,6 +2243,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["deliveries:read"]}],
         "x-required-scope": "deliveries:read"
       }
     },
@@ -2190,6 +2267,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["deliveries:read"]}],
         "x-required-scope": "deliveries:read"
       },
       "post": {
@@ -2255,6 +2333,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["deliveries:write"]}],
         "x-required-scope": "deliveries:write"
       }
     },
@@ -2264,6 +2343,7 @@
         "operationId": "get_delivery_document",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Document UUID belonging to this record.", "in": "path", "name": "documentId", "required": true, "schema": {"format": "uuid", "type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/document", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Document representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["deliveries:read"]}],
         "x-required-scope": "deliveries:read"
       }
     },
@@ -2287,6 +2367,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["deliveries:write"]}],
         "x-required-scope": "deliveries:write"
       }
     },
@@ -2304,6 +2385,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["deliveries:read"]}],
         "x-required-scope": "deliveries:read"
       }
     },
@@ -2325,6 +2407,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["drivers:read"]}],
         "x-required-scope": "drivers:read"
       }
     },
@@ -2334,6 +2417,7 @@
         "operationId": "get_driver",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/driver", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["drivers:read"]}],
         "x-required-scope": "drivers:read"
       }
     },
@@ -2355,6 +2439,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["facilities:read"]}],
         "x-required-scope": "facilities:read"
       }
     },
@@ -2364,6 +2449,7 @@
         "operationId": "get_facility",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/facility", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["facilities:read"]}],
         "x-required-scope": "facilities:read"
       }
     },
@@ -2385,6 +2471,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["feedstock-types:read"]}],
         "x-required-scope": "feedstock-types:read"
       }
     },
@@ -2394,6 +2481,7 @@
         "operationId": "get_feedstock_type",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/feedstock_type", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["feedstock-types:read"]}],
         "x-required-scope": "feedstock-types:read"
       }
     },
@@ -2417,6 +2505,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["feedstocks:read"]}],
         "x-required-scope": "feedstocks:read"
       },
       "post": {
@@ -2475,6 +2564,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["feedstocks:write"]}],
         "x-required-scope": "feedstocks:write"
       }
     },
@@ -2506,6 +2596,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}],
         "x-required-scope": "feedstocks:delete"
       },
       "get": {
@@ -2513,6 +2604,7 @@
         "operationId": "get_feedstock",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/feedstock", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["feedstocks:read"]}],
         "x-required-scope": "feedstocks:read"
       },
       "patch": {
@@ -2568,6 +2660,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["feedstocks:write"]}],
         "x-required-scope": "feedstocks:write"
       }
     },
@@ -2591,6 +2684,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["feedstocks:read"]}],
         "x-required-scope": "feedstocks:read"
       },
       "post": {
@@ -2656,6 +2750,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["feedstocks:write"]}],
         "x-required-scope": "feedstocks:write"
       }
     },
@@ -2665,6 +2760,7 @@
         "operationId": "get_feedstock_document",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Document UUID belonging to this record.", "in": "path", "name": "documentId", "required": true, "schema": {"format": "uuid", "type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/document", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Document representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["feedstocks:read"]}],
         "x-required-scope": "feedstocks:read"
       }
     },
@@ -2688,6 +2784,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["feedstocks:write"]}],
         "x-required-scope": "feedstocks:write"
       }
     },
@@ -2705,6 +2802,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["feedstocks:read"]}],
         "x-required-scope": "feedstocks:read"
       }
     },
@@ -2727,6 +2825,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["formulations:read"]}],
         "x-required-scope": "formulations:read"
       },
       "post": {
@@ -2768,6 +2867,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["formulations:write"]}],
         "x-required-scope": "formulations:write"
       }
     },
@@ -2799,6 +2899,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}],
         "x-required-scope": "formulations:delete"
       },
       "get": {
@@ -2806,6 +2907,7 @@
         "operationId": "get_formulation",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/formulation", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["formulations:read"]}],
         "x-required-scope": "formulations:read"
       },
       "patch": {
@@ -2853,6 +2955,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["formulations:write"]}],
         "x-required-scope": "formulations:write"
       }
     },
@@ -2883,6 +2986,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["formulations:write"]}],
         "x-required-scope": "formulations:write"
       }
     },
@@ -2913,6 +3017,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["formulations:write"]}],
         "x-required-scope": "formulations:write"
       }
     },
@@ -2939,6 +3044,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["lab-samples:read"]}],
         "x-required-scope": "lab-samples:read"
       },
       "post": {
@@ -3019,6 +3125,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["lab-samples:write"]}],
         "x-required-scope": "lab-samples:write"
       }
     },
@@ -3050,6 +3157,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}],
         "x-required-scope": "lab-samples:delete"
       },
       "get": {
@@ -3057,6 +3165,7 @@
         "operationId": "get_lab_sample",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/lab_sample", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["lab-samples:read"]}],
         "x-required-scope": "lab-samples:read"
       },
       "patch": {
@@ -3139,6 +3248,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["lab-samples:write"]}],
         "x-required-scope": "lab-samples:write"
       }
     },
@@ -3162,6 +3272,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["lab-samples:read"]}],
         "x-required-scope": "lab-samples:read"
       },
       "post": {
@@ -3227,6 +3338,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["lab-samples:write"]}],
         "x-required-scope": "lab-samples:write"
       }
     },
@@ -3236,6 +3348,7 @@
         "operationId": "get_lab_sample_document",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Document UUID belonging to this record.", "in": "path", "name": "documentId", "required": true, "schema": {"format": "uuid", "type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/document", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Document representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["lab-samples:read"]}],
         "x-required-scope": "lab-samples:read"
       }
     },
@@ -3259,6 +3372,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["lab-samples:write"]}],
         "x-required-scope": "lab-samples:write"
       }
     },
@@ -3276,16 +3390,18 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["lab-samples:read"]}],
         "x-required-scope": "lab-samples:read"
       }
     },
     "/llms.txt": {"get": {"description": "Public agent guide.", "operationId": "get_llms_guide", "responses": {"200": {"content": {"text/plain": {"schema": {"description": "Plain-text guide for API agents.", "type": "string"}}}, "description": "Public agent guide.", "headers": {"Cache-Control": {"description": "Public cache, max-age=300 seconds.", "schema": {"type": "string"}}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}}, "security": [], "x-required-scope": null}},
     "/me": {
       "get": {
-        "description": "Read the credential organization, active facilities, local today dates and localTime wall clocks, role, scopes and safe credential metadata. Required scope: none (any authenticated API key).",
+        "description": "Read the credential organization, active facilities, local today dates and localTime wall clocks, role, scopes and safe credential metadata. Required scope: none (any authenticated API credential).",
         "operationId": "whoami",
         "parameters": [],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/me", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Credential context.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": []}],
         "x-required-scope": null
       }
     },
@@ -3314,6 +3430,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["orders:read"]}],
         "x-required-scope": "orders:read"
       },
       "post": {
@@ -3358,6 +3475,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["orders:write"]}],
         "x-required-scope": "orders:write"
       }
     },
@@ -3389,6 +3507,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}],
         "x-required-scope": "orders:delete"
       },
       "get": {
@@ -3396,6 +3515,7 @@
         "operationId": "get_order",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/order", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["orders:read"]}],
         "x-required-scope": "orders:read"
       },
       "patch": {
@@ -3446,6 +3566,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["orders:write"]}],
         "x-required-scope": "orders:write"
       }
     },
@@ -3477,6 +3598,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["orders:read"]}],
         "x-required-scope": "orders:read"
       }
     },
@@ -3502,6 +3624,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["production-runs:read"]}],
         "x-required-scope": "production-runs:read"
       },
       "post": {
@@ -3581,6 +3704,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["production-runs:write"]}],
         "x-required-scope": "production-runs:write"
       }
     },
@@ -3612,6 +3736,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}],
         "x-required-scope": "production-runs:delete"
       },
       "get": {
@@ -3619,6 +3744,7 @@
         "operationId": "get_production_run",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/production_run", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["production-runs:read"]}],
         "x-required-scope": "production-runs:read"
       },
       "patch": {
@@ -3700,6 +3826,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["production-runs:write"]}],
         "x-required-scope": "production-runs:write"
       }
     },
@@ -3723,6 +3850,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["reactors:read"]}],
         "x-required-scope": "reactors:read"
       }
     },
@@ -3732,6 +3860,7 @@
         "operationId": "get_reactor",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/reactor", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["reactors:read"]}],
         "x-required-scope": "reactors:read"
       }
     },
@@ -3757,6 +3886,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["storage-locations:read"]}],
         "x-required-scope": "storage-locations:read"
       }
     },
@@ -3766,6 +3896,7 @@
         "operationId": "get_storage_location",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Receiving facility filter, UUID.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Receiving facility filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/storage_location", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["storage-locations:read"]}],
         "x-required-scope": "storage-locations:read"
       }
     },
@@ -3788,6 +3919,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["biochar-products:read"]}],
         "x-required-scope": "biochar-products:read"
       }
     },
@@ -3806,6 +3938,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["biochar-products:read"]}],
         "x-required-scope": "biochar-products:read"
       },
       "post": {
@@ -3865,6 +3998,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["biochar-products:write"]}],
         "x-required-scope": "biochar-products:write"
       }
     },
@@ -3887,6 +4021,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["suppliers:read"]}],
         "x-required-scope": "suppliers:read"
       },
       "post": {
@@ -3955,6 +4090,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["suppliers:write"]}],
         "x-required-scope": "suppliers:write"
       }
     },
@@ -3986,6 +4122,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}],
         "x-required-scope": "suppliers:delete"
       },
       "get": {
@@ -3993,6 +4130,7 @@
         "operationId": "get_supplier",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/supplier", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["suppliers:read"]}],
         "x-required-scope": "suppliers:read"
       },
       "patch": {
@@ -4021,6 +4159,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["suppliers:write"]}],
         "x-required-scope": "suppliers:write"
       }
     },
@@ -4051,6 +4190,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["suppliers:write"]}],
         "x-required-scope": "suppliers:write"
       }
     },
@@ -4073,6 +4213,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["suppliers:read"]}],
         "x-required-scope": "suppliers:read"
       },
       "post": {
@@ -4126,6 +4267,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["suppliers:write"]}],
         "x-required-scope": "suppliers:write"
       }
     },
@@ -4158,6 +4300,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}],
         "x-required-scope": "suppliers:delete"
       },
       "get": {
@@ -4165,6 +4308,7 @@
         "operationId": "get_supplier_location",
         "parameters": [{"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}}, {"description": "Location identifier under this parent, UUID.", "in": "path", "name": "locationId", "required": true, "schema": {"format": "uuid", "type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/supplier_location", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Location representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["suppliers:read"]}],
         "x-required-scope": "suppliers:read"
       },
       "patch": {
@@ -4220,6 +4364,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["suppliers:write"]}],
         "x-required-scope": "suppliers:write"
       }
     },
@@ -4250,6 +4395,7 @@
           "500": {"$ref": "#/components/responses/Problem500"},
           "503": {"$ref": "#/components/responses/Problem503"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["suppliers:write"]}],
         "x-required-scope": "suppliers:write"
       }
     },
@@ -4271,6 +4417,7 @@
           "429": {"$ref": "#/components/responses/Problem429"},
           "500": {"$ref": "#/components/responses/Problem500"}
         },
+        "security": [{"bearerAuth": []}, {"oauth2": ["vehicles:read"]}],
         "x-required-scope": "vehicles:read"
       }
     },
@@ -4280,6 +4427,7 @@
         "operationId": "get_vehicle",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/vehicle", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "security": [{"bearerAuth": []}, {"oauth2": ["vehicles:read"]}],
         "x-required-scope": "vehicles:read"
       }
     }

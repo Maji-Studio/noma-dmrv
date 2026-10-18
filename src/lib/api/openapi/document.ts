@@ -16,6 +16,7 @@ import { API_VERSION } from "@/config/api-rest";
 import { readDescriptions } from "@/lib/operations/read-descriptions";
 import { z } from "zod";
 import { API_BODY_MAX_BYTES, API_FEEDSTOCK_MAX_ALLOCATIONS, API_DOCS_CACHE_SECONDS } from "@/config/api-rest";
+import { OAUTH_GRANTABLE_SCOPES } from "@/lib/auth/oauth-scopes";
 import { API_KEY_LIVE_PREFIX, API_KEY_TEST_PREFIX } from "@/config/api-keys";
 import { createFeedstockSchema, updateFeedstockSchema } from "@/schemas/feedstocks";
 import type { JsonSchema } from "@/lib/operations/json-schema";
@@ -48,6 +49,7 @@ const resourceReadDescriptions: Partial<Record<(typeof resources)[number]["path"
   customers: { list: `${readDescriptions.list} ${readDescriptions.customers}`, get: readDescriptions.customers },
 };
 
+const OAUTH_ISSUER_PATH = "/api/auth";
 const READ_ERRORS = [400, 401, 403, 429, 500];
 const WRITE_ERRORS = [400, 401, 403, 404, 409, 422, 429, 500, 503];
 const JSON_INDENT = 2;
@@ -299,11 +301,31 @@ export function buildOpenApiDocument() {
       content: { [mediaType]: { schema: mediaType === "text/plain" ? { type: "string", description: "Plain-text guide for API agents." } : { type: "object", description: "OpenAPI 3.1 document.", additionalProperties: true } } },
     } } } };
   }
+  for (const methods of Object.values(paths)) {
+    for (const operation of Object.values(methods)) {
+      if (operation.security) continue;
+      const scope = operation["x-required-scope"];
+      operation.security = scope && !OAUTH_GRANTABLE_SCOPES.has(scope)
+        ? [{ bearerAuth: [] }]
+        : [{ bearerAuth: [] }, { oauth2: scope ? [scope] : [] }];
+    }
+  }
   return {
     openapi: "3.1.0",
     info: { title: "noma data-entry API", version: API_VERSION, description: "Organization-scoped feedstock intake, production runs, biochar products, lab samples, formulations, orders and balances, suppliers, customers and destination lookups, and output bin stock movement history. Use POST /formulations with Idempotency-Key; PATCH and DELETE /formulations/{id} and POST /formulations/{id}/archive and /restore use UUID paths with If-Match (formulations:write for create, update, archive and restore; formulations:delete for delete). Use POST /suppliers with Idempotency-Key; PATCH and DELETE /suppliers/{id} and POST /suppliers/{id}/archive and /restore use UUID paths with If-Match (suppliers:write for create, update, archive and restore; suppliers:delete for delete). Use POST /customers with Idempotency-Key; PATCH and DELETE /customers/{id} and POST /customers/{id}/archive and /restore use UUID paths with If-Match (customers:write for create, update, archive and restore; customers:delete for delete). Business dates are facility-local YYYY-MM-DD; event times are sent as RFC 3339 with an explicit offset or as facility-local { date, time }, and returned as UTC instants. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers. Unsupported methods on visible paths return Problem405 with Allow listing supported methods, including automatic HEAD and OPTIONS. Private refusals follow bearer authentication and path visibility checks; unknown or invisible paths return 404 without Allow. Public discovery paths need no credential. This response is a path-level refusal, not a response of a published operation." },
     servers: [{ url: "/api/v1" }], security: [{ bearerAuth: [] }], paths,
-    components: { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "API key", description: `Authorization: Bearer <key> only. Keys use ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX} prefixes and bind exactly one organization; cookies and x-api-key cannot authorize requests.` } }, schemas, headers: headerComponents, responses },
+    components: { securitySchemes: {
+      bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "API key", description: `Authorization: Bearer <key> only. Keys use ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX} prefixes and bind exactly one organization; cookies and x-api-key cannot authorize requests.` },
+      oauth2: {
+        type: "oauth2",
+        description: "OAuth connections require the provider flag. Authorization code with S256 PKCE only, using the same-origin /api/auth issuer. Send resource for this origin's /api/v1 audience. Start with read scopes and step up on 403 insufficient_scope. Request offline_access for refresh; no delete scopes are grantable.",
+        flows: { authorizationCode: {
+          authorizationUrl: `${OAUTH_ISSUER_PATH}/oauth2/authorize`,
+          tokenUrl: `${OAUTH_ISSUER_PATH}/oauth2/token`,
+          scopes: Object.fromEntries([...OAUTH_GRANTABLE_SCOPES].map(scope => [scope, `Allow ${scope}.`])),
+        } },
+      },
+    }, schemas, headers: headerComponents, responses },
   };
 }
 
