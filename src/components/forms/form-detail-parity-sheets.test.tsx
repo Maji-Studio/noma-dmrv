@@ -52,7 +52,6 @@ vi.mock("@/components/samples/sample-documents-panel", () => ({ SampleDocumentsP
 vi.mock("@/components/orders/order-location-read", () => ({ OrderLocationRead: stub("Delivery location") }));
 vi.mock("@/components/credit-batches/credit-batch-removal-template", () => ({ CreditBatchRemovalTemplate: stub("Removal template") }));
 vi.mock("@/components/certification/facility-certifier-summary", () => ({ FacilityCertifierSummary: stub("Registry connection") }));
-vi.mock("@/components/activity", () => ({ CreditBatchActivitySection: stub("Batch activity") }));
 
 import { renderBothLevels, sourceFiles } from "./form-detail-parity-harness";
 import { EntitySideSheetSections } from "@/components/ui/entity-side-sheet";

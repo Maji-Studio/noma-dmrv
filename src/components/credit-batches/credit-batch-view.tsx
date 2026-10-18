@@ -1,13 +1,10 @@
 /**
- * Credit-batch side-sheet view mode — the sections config for EntitySideSheet.
+ * Credit-batch side-sheet view mode, the sections config for EntitySideSheet.
  *
- * One question drives the order: is this batch ready to become credits, and
- * what needs fixing if not? Certification progress leads, then the batch's
- * identity (mirroring the edit form's section titles), the member production
- * runs closed by the carbon estimate they produce, notes, and the batch's
- * recorded activity (which fetches its own summary). The interactive
- * certification checklist and lab-sample panels mount below via
- * `viewModeChildren` because they fetch their own data.
+ * The sheet is a preview of the batch page (`/credit-batches/[id]`), which
+ * holds the open items, Samples and activity. Certification progress leads,
+ * then the batch's identity (mirroring the edit form's section titles), the
+ * member production runs closed by the carbon estimate they produce, and notes.
  */
 import { CompositionCard, DerivedHeadline } from "@/components/forms";
 import Link from "next/link";
@@ -36,7 +33,6 @@ import {
   productionRunDeepLinkHref,
 } from "@/lib/certification/links";
 import { Notice } from "@/components/ui/notice";
-import { CreditBatchActivitySection } from "@/components/activity";
 
 /** Names the figure, so the headline needs no label of its own. */
 const CARBON_ESTIMATE_TITLE = "Carbon estimate, before project emissions";
@@ -52,7 +48,7 @@ const DURABILITY_PERCENT_DIGITS = 1;
  * Why the estimate is missing, as one caption under the empty figure. Setup
  * gaps come first because they block every other input.
  */
-function carbonEstimateGap(missingInputs: readonly string[]): string | null {
+export function carbonEstimateGap(missingInputs: readonly string[]): string | null {
   if (missingInputs.includes("facilityCertifierProject")) return "No certifier project is linked to this facility.";
   if (missingInputs.includes("isometricCertifier")) return "Estimates are available for Isometric projects only.";
   if (missingInputs.includes(STORED_CO2E_PREVIEW_REVERIFICATION_GAP)) return "Paused for 200-year batches until the soil storage module is re-verified.";
@@ -150,7 +146,7 @@ function formatDurabilityPercent(fraction: number): string {
   return `${(fraction * PERCENT_SCALE).toFixed(DURABILITY_PERCENT_DIGITS)}%`;
 }
 
-function durabilityLabel(value: CreditBatchWithRelations["durabilityOption"]) {
+export function durabilityLabel(value: CreditBatchWithRelations["durabilityOption"]) {
   return value === "200_year" ? "200 years" : "1,000 years";
 }
 
@@ -392,16 +388,6 @@ export function creditBatchSheetSections({
     {
       id: "notes",
       fields: [{ label: "Notes", value: creditBatch.siteManagementNotes }],
-    },
-    {
-      title: "Activity",
-      fields: [],
-      content: (
-        <CreditBatchActivitySection
-          creditBatchId={creditBatch.id}
-          facilityId={creditBatch.facilityId}
-        />
-      ),
     },
   ];
 }

@@ -10,8 +10,6 @@ import type {
 } from "@/data-access/credit-batches";
 import { creditBatchSheetSections } from "./credit-batch-view";
 
-// The Activity section fetches its own data; these suites render without a query client.
-vi.mock("@/components/activity", () => ({ CreditBatchActivitySection: () => null }));
 vi.mock("next/link", () => ({ default: ({ children, href, ...props }: { children: ReactNode; href: string }) => <a href={href} {...props}>{children}</a> }));
 // The pinned template block reads live queries; its own suite covers it.
 vi.mock("./credit-batch-removal-template", () => ({ CreditBatchRemovalTemplate: () => <div>Removal template block</div> }));

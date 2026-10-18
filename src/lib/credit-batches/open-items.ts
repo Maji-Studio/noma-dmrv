@@ -15,11 +15,16 @@ import type {
   DurabilitySummaryReplicate,
 } from "@/lib/certification/durability-batch-summary";
 import type { BatchEmissionLine } from "@/lib/certification/emission-lines";
+import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { formatTonnes } from "@/lib/format-utils";
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
 
 // Five kg rounds up to the smallest visible amount at two-decimal tonne precision.
-const MIN_VISIBLE_NOT_APPLIED_DRY_KG = 5;
+export const MIN_VISIBLE_NOT_APPLIED_DRY_KG = 5;
+
+/** Overview rows a health check lands on: the Removal template block and the batch details. */
+export const CREDIT_BATCH_TEMPLATE_ROW = ENTITY_FOCUS_TARGETS.removalTemplate;
+export const CREDIT_BATCH_DETAILS_ROW = "batch-details";
 
 export interface CreditBatchOpenItem {
   id: string;
@@ -67,11 +72,10 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       target = { tab: "samples" };
     } else if (fix === "emissions") {
       target = { tab: "emissions" };
-    } else if ([
-      "creditBatchTemplate",
-      "batchDetails",
-    ].includes(fix)) {
-      target = { tab: "overview" };
+    } else if (fix === "creditBatchTemplate") {
+      target = { tab: "overview", rowId: CREDIT_BATCH_TEMPLATE_ROW };
+    } else if (fix === "batchDetails") {
+      target = { tab: "overview", rowId: CREDIT_BATCH_DETAILS_ROW };
     } else {
       target = {
         href: batchHealthFixLinkFor(

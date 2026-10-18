@@ -10,7 +10,11 @@ import {
 } from "@/lib/certification/durability-batch-summary";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import type { BatchHealthFixTarget } from "@/lib/certification/batch-health";
-import { buildCreditBatchOpenItems } from "./open-items";
+import {
+  buildCreditBatchOpenItems,
+  CREDIT_BATCH_DETAILS_ROW,
+  CREDIT_BATCH_TEMPLATE_ROW,
+} from "./open-items";
 
 const batchContext = { facilityId: "facility", creditBatchId: "batch" };
 
@@ -140,12 +144,16 @@ describe("buildCreditBatchOpenItems", () => {
   ])("preserves the repair destination for %s", fixTarget => {
     const check = { key: "template" as const, label: "Template", requirementLabel: "Template ready",
       status: "unmet" as const, fixTarget };
-    const localTabs = { creditBatchTemplate: "overview", batchDetails: "overview",
-      labSamples: "samples", emissions: "emissions" };
-    const tab = localTabs[fixTarget as keyof typeof localTabs];
+    const localTargets = {
+      creditBatchTemplate: { tab: "overview", rowId: CREDIT_BATCH_TEMPLATE_ROW },
+      batchDetails: { tab: "overview", rowId: CREDIT_BATCH_DETAILS_ROW },
+      labSamples: { tab: "samples" },
+      emissions: { tab: "emissions" },
+    };
+    const local = localTargets[fixTarget as keyof typeof localTargets];
     const result = buildCreditBatchOpenItems({ ...batchContext, pageModel: pageModel(),
       health: { state: "incomplete", issueCount: 1, checks: [check] } });
-    expect(result.blocking[0].target).toEqual(tab ? { tab } : {
+    expect(result.blocking[0].target).toEqual(local ?? {
       href: batchHealthFixLinkFor(check, "facility", "batch").href,
     });
   });

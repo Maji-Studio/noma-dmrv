@@ -89,7 +89,7 @@ export function batchHealthFixLinkFor(
   };
   switch (target) {
     case "emissions":
-      return { label: "Review emissions", href: creditBatchId ? creditBatchDeepLinkHref(creditBatchId, facilityId) : `/credit-batches?${query(undefined, false)}` };
+      return { label: "Review emissions", href: creditBatchId ? creditBatchDeepLinkHref(creditBatchId, facilityId, { tab: "emissions" }) : `/credit-batches?${query(undefined, false)}` };
     case "certificationTemplates":
       return { label: "Review Removal templates", href: certificationRemovalTemplatesHref(facilityId) };
     case "creditBatchTemplate":

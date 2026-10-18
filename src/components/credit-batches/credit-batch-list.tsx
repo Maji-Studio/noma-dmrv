@@ -8,9 +8,9 @@ import { toDeleteErrorMessage } from "@/lib/stale-version";
  * rendered; progress comes from data readiness, Removal submission, and the
  * linked GHG Statement's verifier status.
  *
- * Clicking a card opens the unified side sheet in view mode (deep-linkable via
- * `?batch=<id>`, mirroring the production-run list) — there is no separate
- * detail page; `/credit-batches/[id]` redirects here.
+ * Clicking a card opens the side sheet as a preview (deep-linkable via
+ * `?batch=<id>`). Its lead action opens the batch's own page,
+ * `/credit-batches/[id]`, where the checklist, Samples and activity live.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -41,8 +41,6 @@ import { CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE, creditBatchUpdatePatch, isCreditB
 import { RecordUsedBy, recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { isRecordEditable } from "@/lib/record-lock-view";
-import { CreditBatchHealthStrip } from "./credit-batch-health-strip";
-import { CreditBatchDurabilityPanel } from "./credit-batch-durability-panel";
 import { creditBatchSheetSections } from "./credit-batch-view";
 import {
   CreditBatchFilters,
@@ -64,7 +62,8 @@ import {
 } from "@/hooks/use-credit-batches";
 import { formatDateRange } from "@/lib/format-utils";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
-import { CREDIT_BATCH_DEEP_LINK_PARAM } from "@/lib/credit-batch-links";
+import { CREDIT_BATCH_DEEP_LINK_PARAM, creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
+import { buttonVariants } from "@/components/ui/button";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   parseEntityFocusTarget,
@@ -465,9 +464,6 @@ export function CreditBatchList({
     includeCreditBatchId: viewEntity?.id,
   });
   const memberRunIds = new Set(viewEntity?.productionRunIds ?? []);
-  const memberRuns = (runOptionsQuery.data ?? []).filter((run) =>
-    memberRunIds.has(run.id),
-  );
   const displayedRuns = (runOptionsQuery.data ?? []).filter((run) => {
     if (memberRunIds.has(run.id)) return true;
     return (
@@ -753,20 +749,16 @@ export function CreditBatchList({
             : undefined
         }
         viewModeChildren={
+          sideSheetEntity ? <RecordUsedBy lock={sheetLock} /> : undefined
+        }
+        viewPrimaryAction={
           sideSheetEntity ? (
-            <>
-              <CreditBatchHealthStrip
-                creditBatchId={sideSheetEntity.id}
-                facilityId={sideSheetEntity.facilityId}
-                productionRuns={memberRuns}
-                feedstockName={sideSheetEntity.feedstockTypeName}
-              />
-              <CreditBatchDurabilityPanel
-                creditBatchId={sideSheetEntity.id}
-                facilityId={sideSheetEntity.facilityId}
-              />
-              <RecordUsedBy lock={sheetLock} />
-            </>
+            <Link
+              href={creditBatchDeepLinkHref(sideSheetEntity.id, sideSheetEntity.facilityId)}
+              className={buttonVariants({ variant: "primary", className: "flex-1" })}
+            >
+              Open credit batch
+            </Link>
           ) : undefined
         }
       >
