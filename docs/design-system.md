@@ -152,7 +152,10 @@ and an optional `action` (a link or button); no eyebrow, no uppercase.
 | `success` | An action completed and the page stays | green icon, no tint | `status` |
 | `error` | The task is blocked or a save failed | red icon, **tinted** | `alert` |
 
-Only `error` is tinted, so one blocker stands out on a page of advisories. Keep
+Only `error` is tinted red, so one blocker stands out on a page of advisories.
+`boxed` is an opt-in quiet neutral card (`--color-surface-light`, 8px/12px
+padding, 8px radius) for a lock or state that explains why a record cannot
+change; the record lock notices use it. Keep
 `alert` for blocking errors; do not upgrade a warning to it. Field-level
 feedback stays in `FormField` (`error`, `warning`), not a Notice. `ServerError`
 renders through `Notice`. For loading failures with a retry, pass the button as
@@ -667,8 +670,16 @@ The one outcome screen for auth pages (check your email, email verified, verific
   sentence case.
 - **`DropdownMenu` / `RowActionsMenu`** — `RowActionsMenu` is *the* single
   row-action pattern for table and card lists: a quiet ⋮ per row, verbs in the
-  menu. Row click opens the detail side sheet everywhere; explicit "View"
-  buttons are retired (detail routes become an "Open details" item).
+  menu. A clickable `DataTable` marks its code or name column
+  `meta: { recordLink: true }`; that cell is the record link, the only
+  keyboard / screen-reader target, and the column cannot be hidden (it is the
+  one way in without a pointer). With `getRowHref` (the list's deep link, e.g.
+  `?customer=<id>`) it is a real `<a href>`: a plain click opens the sheet in
+  place, modifier and middle clicks open the deep link in a new tab. Without
+  one (reactors, formulations) it is a link-styled button. Never mark a column
+  whose cell renders its own controls. Rows and mobile cards carry no role or
+  `tabIndex`; a whole-row click is a pointer-only convenience. It opens
+  the detail side sheet everywhere; explicit "View" buttons are retired (detail routes become an "Open details" item).
   `destructive: true` for irreversible actions only — **archive, restore, and
   unlink are reversible and stay neutral.** The wrapper stops propagation so
   menu clicks never fire the row click.

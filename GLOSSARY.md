@@ -371,7 +371,9 @@ _Avoid_: treating an application event or facility inventory bin as the site.
 
 **Credit batch**:
 noma's production-cohort unit of carbon accounting — the production
-runs of **one feedstock** at one facility within a ≤1-month window.
+runs of **one feedstock** at one facility within a production window. Under Isometric, both the window and the member-run
+span (earliest start to latest end) must cover less than one month. Other
+certifiers have no month cap.
 This makes a credit batch the Isometric protocol's **production
 batch**: the lab-characterisation and sampling unit (one feedstock,
 consistent pyrolysis conditions). The one-calendar-month cap is noma’s

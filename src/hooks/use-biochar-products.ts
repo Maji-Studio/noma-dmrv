@@ -1,4 +1,5 @@
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { outputStockKeys } from "./use-output-stock";
 /**
@@ -92,6 +93,7 @@ export function useCreateBiocharProduct(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.biocharProduct),
     mutationFn: async (data: CreateBiocharProductData) =>
       unwrap(await createBiocharProductFn(data)),
     onMutate: async (variables) => {
@@ -131,6 +133,7 @@ export function useUpdateBiocharProduct(
   const { optimistic = true } = options ?? {};
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.biocharProduct),
     mutationFn: async (data: UpdateBiocharProductData) => {
       const result = await updateBiocharProductFn(data);
       if (!result.success) {
@@ -263,6 +266,7 @@ export function useDeleteBiocharProduct(
   const { optimistic = true } = options ?? {};
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.biocharProduct),
     mutationFn: async (variables: DeleteBiocharProductData) => {
       const result = await deleteBiocharProductFn(variables);
       if (!result.success) {

@@ -62,7 +62,8 @@ describe("sheet detail presentation", () => {
     await mount(mode);
     expect(simpleSelected()).toBe(true);
     expect(renderer.root.findByType("header").findAllByType("fieldset")).toHaveLength(1);
-    expect(renderer.root.findByType("main").findAllByType("fieldset")).toHaveLength(0);
+    // The read-only wrapper (`data-submit-block-fieldset`) is not a switch.
+    expect(renderer.root.findByType("main").findAll((node) => node.type === "fieldset" && !node.props["data-submit-block-fieldset"])).toHaveLength(0);
   });
 
   it("toggles without dirty/discard, keeps warnings, and ignores presentation events in the body", async () => {

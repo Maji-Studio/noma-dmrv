@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { entityViewHref } from "@/lib/entity-deep-link";
 import { useEffect, useRef, useState } from "react";
 import { parseAsString, useQueryState } from "nuqs";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -67,7 +68,7 @@ function createColumns(
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">
@@ -474,6 +475,7 @@ export function CustomerList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => entityViewHref("/customers", CUSTOMER_DEEP_LINK_PARAM, row.id)}
         emptyMessage={
           <EmptyState
             padding="md"

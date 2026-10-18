@@ -89,3 +89,25 @@ it.each(["sent", "inUse"] as const)("names holders and gives release guidance fo
   });
   expect(message).toBe("Cannot edit this record. Held by production run RUN-42. Correct the production run first.");
 });
+
+describe("returned Removals", () => {
+  const returned = (submittedAt: string) => ({ id: "removal", submissions: [{ status: "submitted", externalId: "entry", submittedAt }], statements: [{
+    id: "statement", status: "FAILED_VERIFICATION", fresh: true, submittedToVerifier: true, returnedAt: "2026-10-02T00:00:00Z", removalExternalIds: ["entry"],
+  }] });
+
+  it("names the returned Removal and its statement once Sent is lifted", () => {
+    expect(recordLocks.productionRun({ dependents: [], removals: [returned("2026-10-01T00:00:00Z")] })).toMatchObject({
+      level: "open", returnedBy: [{ removalId: "removal", statements: [{ id: "statement", status: "FAILED_VERIFICATION" }] }],
+    });
+  });
+
+  it("is not returned when an attempt is newer than the return, which keeps it Sent", () => {
+    const lock = recordLocks.productionRun({ dependents: [], removals: [returned("2026-10-03T00:00:00Z")] });
+    expect(lock.level).toBe("sent");
+    expect(lock.returnedBy).toBeUndefined();
+  });
+
+  it("is not returned when nothing ever reached Isometric", () => {
+    expect(recordLocks.productionRun({ dependents: [], removals: [{ id: "removal", submissions: [{ status: "rejected" }], statements: [] }] }).returnedBy).toBeUndefined();
+  });
+});
