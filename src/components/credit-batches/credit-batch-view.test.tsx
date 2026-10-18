@@ -249,7 +249,7 @@ it("shows saved fields, the durability result and the carbon estimate figure at 
   expect(simple.indexOf("Production runs")).toBeLessThan(simple.indexOf("≈ 12.50 t CO₂e"));
   expect(sections.map(section => section.title)).not.toContain("Carbon ledger");
   expect(simple).toContain("Wood chips");
-  expect(simple).toContain("Production emissions included in Removal");
+  expect(simple).toContain("Production emissions included in a Removal");
   await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
   const detailed = visibleText(renderer.root);
   expect(detailed).toContain("12.50");

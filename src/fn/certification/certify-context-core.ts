@@ -1,3 +1,4 @@
+import { getRemovalCodes } from "@/data-access/removal-codes";
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 import { getTransportDistanceFixLinks } from "@/data-access/transport-distance-fix-links";
 import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
@@ -108,11 +109,13 @@ export async function buildRemovalContext(
   // `MemberCreditBatch` (UI-facing) and carried only on the submission context.
   // Lineage arrays sorted here so the post-claim fresh re-assert compares
   // order-insensitively.
+  const claimCodes = await getRemovalCodes(orgCtx, scope.memberBatches.flatMap(b => b.productionEmissionsClaimedByRemovalId ? [b.productionEmissionsClaimedByRemovalId] : []));
   const memberBatchClaims = scope.memberBatches.map((b) => ({
     creditBatchId: b.id,
     code: b.code,
     durabilityOption: b.durabilityOption,
     claimedByRemovalId: b.productionEmissionsClaimedByRemovalId,
+    claimingRemovalCode: claimCodes.get(b.productionEmissionsClaimedByRemovalId ?? "") ?? null,
     productionRunIds: [...b.productionRunIds].sort(),
     applicationIds: [...b.applicationIds].sort(),
     applicationSlices: b.applicationSlices,

@@ -25,6 +25,7 @@ export interface RemovalLedgerClaim {
   creditBatchId: string;
   creditBatchCode: string;
   claimingRemovalId: string | null;
+  claimingRemovalCode: string | null;
   contribution: "production-and-delivery" | "delivery-only";
 }
 
@@ -46,6 +47,7 @@ interface MemberBatchClaim {
   creditBatchId: string;
   code: string;
   claimedByRemovalId: string | null;
+  claimingRemovalCode?: string | null;
   productionRunIds: string[];
   applicationIds: string[];
   applicationSlices?: Array<{ applicationId: string }>;
@@ -75,6 +77,7 @@ export function buildRemovalLedgerPreview(args: {
     creditBatchId: batch.creditBatchId,
     creditBatchCode: batch.code,
     claimingRemovalId: batch.claimedByRemovalId,
+    claimingRemovalCode: batch.claimingRemovalCode ?? null,
     contribution: productionClaimContribution(
       batch.claimedByRemovalId,
       args.removalId,

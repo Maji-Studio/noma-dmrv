@@ -9,6 +9,8 @@ export interface CreditBatchCertificationLink {
   id: string;
   facilityId: string;
   removalId: string | null;
+  removalCode: string | null;
+  productionEmissionsClaimedByRemovalId: string | null;
   ghgStatementId: string | null;
   removalStartedOn: string | null;
   removalCompletedOn: string | null;
@@ -26,6 +28,8 @@ export async function listCreditBatchCertificationLinks(
       id: creditBatches.id,
       facilityId: creditBatches.facilityId,
       removalId: creditBatchApplications.removalId,
+      removalCode: certifierRemovals.code,
+      productionEmissionsClaimedByRemovalId: creditBatches.productionEmissionsClaimedByRemovalId,
       ghgStatementId: certifierRemovals.ghgStatementId,
       removalStartedOn: certifierRemovals.startedOn,
       removalCompletedOn: certifierRemovals.completedOn,
@@ -61,6 +65,8 @@ export async function listCreditBatchCertificationLinks(
     id: row.id,
     facilityId: row.facilityId,
     removalId: row.removalId,
+    removalCode: row.removalCode,
+    productionEmissionsClaimedByRemovalId: row.productionEmissionsClaimedByRemovalId,
     ghgStatementId: row.ghgStatementId,
     removalStartedOn: row.removalStartedOn,
     removalCompletedOn: row.removalCompletedOn,
