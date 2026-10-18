@@ -12,6 +12,7 @@ export const maxDuration = 30;
 const BASE_DEADLINE_MS = OPERATION_DEADLINE_MS;
 
 const authenticatedHandler = apiRoute("api.mcp", undefined, serveMcp, {
+  audience: "mcp",
   deadlineMs: BASE_DEADLINE_MS,
   deadlineInHandler: true,
   writesDisabledInHandler: true,

@@ -10,4 +10,4 @@ export const GET = apiRoute<Params>("api.v1.applications.boundary.get", "applica
   const etag = applicationEtag({ version });
   headers.set("ETag", etag);
   return Response.json({ data }, { headers });
-});
+}, { audience: "rest" });

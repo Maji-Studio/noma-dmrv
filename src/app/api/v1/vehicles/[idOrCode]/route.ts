@@ -10,4 +10,4 @@ export const GET = apiRoute<Params>("api.v1.vehicles.get", "vehicles:read", asyn
   const data = await readVehicle(request, ctx, idOrCode);
   headers.set("ETag", vehicleEtag(data));
   return Response.json({ data }, { headers });
-});
+}, { audience: "rest" });

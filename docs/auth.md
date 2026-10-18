@@ -205,8 +205,8 @@ when its hook has disabled the key. The v1 vocabulary is `feedstocks:read`,
 `feedstocks:write`, `feedstocks:delete`, and read-only `facilities`, `suppliers`,
 `feedstock-types`, `storage-locations`, `vehicles`, and `drivers`. Plugin
 permissions are `{ entity: [action] }`; wildcards grant nothing. `hasScope`
-checks the credential alone, and `hasRoleAndScope` intersects Owner/Admin with
-the requested scope. Operation/domain guards must still enforce the remaining
+checks the credential alone, and `principalAllows` intersects API keys with Owner/Admin and OAuth with its
+live role ceiling, then checks the requested scope. Operation/domain guards must still enforce the remaining
 operation permission.
 
 The proxy bypasses session lookup for `/api/v1` and `/api/v1/*`, including
@@ -236,10 +236,11 @@ and `Cache-Control: private, no-store`.
 | `credential_missing`, `credential_malformed`, `credential_ambiguous` | 401 |
 | `credential_header_unsupported`, `cookie_session_unsupported` | 401 |
 | `credential_invalid`, `credential_expired`, `credential_disabled`, `credential_revoked` | 401 |
-| `credential_owner_removed`, `credential_owner_unverified` | 401 |
+| `credential_owner_removed`, `credential_owner_unverified`, `credential_audience_mismatch` | 401 |
 | `missing_scope`, `insufficient_role`, `api_access_disabled` | 403 |
 
-Every 401 includes `WWW-Authenticate: Bearer`. Unknown or purged credentials
+When `OAUTH_PROVIDER_ENABLED` is true, authentication denials include a Bearer
+challenge with resource metadata and read scopes. Refused bearer credentials on 401s also include `error="invalid_token"`. Unknown or purged credentials
 return `credential_invalid`; expired credentials still present in storage
 return `credential_expired`. Owner demotion uses `credential_owner_removed`
 as required by the credential lifecycle contract, rather than the operation's

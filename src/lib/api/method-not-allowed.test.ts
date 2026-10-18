@@ -1,3 +1,4 @@
+import { apiKeyContext } from "../../../tests/helpers/api-context";
 import { beforeEach, expect, it, vi } from "vitest";
 import { guardApiMethod } from "./method-not-allowed";
 import { problemResponse } from "./problem";
@@ -15,7 +16,7 @@ const request = (path: string, method = "PUT") => new Request(`https://example.t
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.pre.mockResolvedValue({ response: null, result: null });
-  mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: ["facilities:read", "feedstocks:write"] } });
+  mocks.resolve.mockResolvedValue({ ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: ["facilities:read", "feedstocks:write"] }) });
   mocks.post.mockResolvedValue({ ok: true, headers: new Headers(rateHeaders) });
 });
 
@@ -50,7 +51,7 @@ it.each(["DELETE", "POST", "PATCH", "PUT", "PROPFIND"])("refuses unsupported %s"
 });
 
 it("returns the canonical 405 on every published v1 path", async () => {
-  mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: API_SCOPES } });
+  mocks.resolve.mockResolvedValue({ ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: [...API_SCOPES] }) });
   for (const [path, operations] of Object.entries(buildOpenApiDocument().paths)) {
     const concrete = `/api/v1${path.replace(/\{[^}]+\}/g, "CODE-1.png")}`;
     const response = (await guardApiMethod(request(concrete)))!;
@@ -96,7 +97,7 @@ it.each(["credential_missing", "credential_invalid", "api_access_disabled"])("re
 });
 
 it("conceals private paths without a visible operation just like unknown paths", async () => {
-  mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: [] } });
+  mocks.resolve.mockResolvedValue({ ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: [] }) });
   const responses = [];
   for (const path of ["/api/v1/facilities", "/api/v1/facilities/FAC-1", "/api/v1/unknown"]) {
     const response = (await guardApiMethod(request(path)))!;
@@ -113,7 +114,7 @@ it("conceals private paths without a visible operation just like unknown paths",
 });
 
 it("checks role as well as scope before disclosing a method table", async () => {
-  mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "member", scopes: ["facilities:read"] } });
+  mocks.resolve.mockResolvedValue({ ok: true, ctx: apiKeyContext({ orgRole: "member", scopes: ["facilities:read"] }) });
   expect((await guardApiMethod(request("/api/v1/facilities")))?.status).toBe(404);
   expect(mocks.post).not.toHaveBeenCalled();
 });

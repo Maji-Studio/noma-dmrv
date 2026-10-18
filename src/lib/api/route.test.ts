@@ -1,3 +1,5 @@
+import { env } from "@/config/env";
+import { apiKeyContext } from "../../../tests/helpers/api-context";
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
 import { DOCUMENT_CONFIRM_DEADLINE_MS } from "@/config/documents";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -14,16 +16,16 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.pre.mockResolvedValue({ response: null, result: null });
   mocks.post.mockResolvedValue({ ok: true, headers: new Headers(rateHeaders) });
-  mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: ["feedstocks:write"] } });
+  mocks.resolve.mockResolvedValue({ ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: ["feedstocks:write"] }) });
 });
 const rateHeaders = { "RateLimit-Limit": "120", "RateLimit-Remaining": "119", "RateLimit-Reset": "1" };
 const request = () => new Request("https://example.test/api/v1/feedstocks?dryRun=true");
 it.each([
   { orgRole: "admin", scopes: [] }, { orgRole: "member", scopes: ["feedstocks:write"] },
-])("refuses missing scope or role before invoking the handler", async (ctx) => {
-  mocks.resolve.mockResolvedValue({ ok: true, ctx });
+] as const)("refuses missing scope or role before invoking the handler", async (ctx) => {
+  mocks.resolve.mockResolvedValue({ ok: true, ctx: apiKeyContext({ ...ctx, scopes: [...ctx.scopes] }) });
   const handler = vi.fn();
-  const response = await apiRoute("test", "feedstocks:write", handler)(request());
+  const response = await apiRoute("test", "feedstocks:write", handler, { audience: "rest" })(request());
   expect(response.status).toBe(403);
   expect(await response.json()).toMatchObject({ code: "missing_scope", instance: "/api/v1/feedstocks" });
   expect(handler).not.toHaveBeenCalled();
@@ -34,7 +36,7 @@ it("converts domain issues using action failures and escapes JSON Pointers", asy
     throw new DomainError("validation_failed", "Remove unrecognized properties.", {
       issues: [{ path: ["allocations", 0, "a/b~"], code: "unknown_field", message: "Unknown property." }],
     });
-  });
+  }, { audience: "rest" });
   const response = await route(request());
   expect(response.status).toBe(422);
   expect(await response.json()).toMatchObject({ errors: [{ pointer: "/allocations/0/a~1b~0", code: "unknown_field" }] });
@@ -44,7 +46,7 @@ it("logs domain infrastructure failures once without the action converter's raw 
   const marker = "do-not-log-this-value";
   const route = apiRoute("test", "feedstocks:write", async () => {
     throw new DomainError("outcome_unknown", marker, { cause: new Error(marker) });
-  });
+  }, { audience: "rest" });
   const response = await route(request());
   expect(response.status).toBe(500);
   expect(await response.json()).toMatchObject({ code: "outcome_unknown", retryable: true });
@@ -52,7 +54,7 @@ it("logs domain infrastructure failures once without the action converter's raw 
   expect(JSON.stringify(mocks.log.mock.calls)).not.toContain(marker);
 });
 it("applies request headers even to an empty successful response", async () => {
-  const response = await apiRoute("test", "feedstocks:write", async () => new Response(null, { status: 204 }))(request());
+  const response = await apiRoute("test", "feedstocks:write", async () => new Response(null, { status: 204 }), { audience: "rest" })(request());
   expect(response.status).toBe(204);
   expect(response.headers.get("cache-control")).toBe("private, no-store");
   expect(response.headers.get("x-request-id")).toBeTruthy();
@@ -68,10 +70,10 @@ it("records the absolute deadline before authentication", async () => {
   });
   mocks.resolve.mockImplementation(async () => {
     vi.setSystemTime(start + OPERATION_DEADLINE_MS - 1);
-    return { ok: true, ctx: { orgRole: "admin", scopes: ["feedstocks:write"] } };
+    return { ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: ["feedstocks:write"] }) };
   });
   const handler = vi.fn(async () => new Response(null, { status: 204 }));
-  await apiRoute("test", "feedstocks:write", handler)(request());
+  await apiRoute("test", "feedstocks:write", handler, { audience: "rest" })(request());
   expect(handler.mock.calls[0]).toBeDefined();
   expect(handler).toHaveBeenCalledWith(expect.any(Request), expect.objectContaining({ deadlineAt: start + OPERATION_DEADLINE_MS }), {});
 });
@@ -81,10 +83,10 @@ it.each(["GET", "HEAD", "POST", "PATCH", "DELETE"])("refuses %s before its handl
   vi.setSystemTime(start);
   mocks.resolve.mockImplementation(async () => {
     vi.setSystemTime(start + OPERATION_DEADLINE_MS);
-    return { ok: true, ctx: { orgRole: "admin", scopes: ["feedstocks:write"] } };
+    return { ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: ["feedstocks:write"] }) };
   });
   const handler = vi.fn(async () => new Response(null, { status: 204 }));
-  const response = await apiRoute("test", "feedstocks:write", handler)(new Request(request(), { method }));
+  const response = await apiRoute("test", "feedstocks:write", handler, { audience: "rest" })(new Request(request(), { method }));
   expect(response.status).toBe(500);
   expect(await response.json()).toMatchObject({ code: "deadline_exceeded", retryable: true });
   expect(handler).not.toHaveBeenCalled();
@@ -98,13 +100,13 @@ it("allows the document confirm budget and preserves retryable missing-object gu
   vi.setSystemTime(start);
   mocks.resolve.mockImplementation(async () => {
     vi.setSystemTime(start + OPERATION_DEADLINE_MS);
-    return { ok: true, ctx: { orgRole: "admin", scopes: ["feedstocks:write"] } };
+    return { ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: ["feedstocks:write"] }) };
   });
   const retryAfterSeconds = 1;
   const route = apiRoute("test", "feedstocks:write", async (_request, { deadlineAt }) => {
     expect(deadlineAt).toBe(start + DOCUMENT_CONFIRM_DEADLINE_MS);
     throw new DomainError("conflict", "Upload the file before confirming.", { retryable: true, retryAfterSeconds });
-  }, { deadlineMs: DOCUMENT_CONFIRM_DEADLINE_MS });
+  }, { audience: "rest", deadlineMs: DOCUMENT_CONFIRM_DEADLINE_MS });
   const response = await route(request());
   expect(response.status).toBe(409);
   expect(response.headers.get("retry-after")).toBe(String(retryAfterSeconds));
@@ -114,7 +116,7 @@ it("allows the document confirm budget and preserves retryable missing-object gu
 
 it("runs pre-auth, credential resolution, post-auth and handler in order", async () => {
   const handler = vi.fn(async () => new Response(null, { status: 204 }));
-  await apiRoute("test", "feedstocks:write", handler)(request());
+  await apiRoute("test", "feedstocks:write", handler, { audience: "rest" })(request());
   const order = [mocks.pre, mocks.resolve, mocks.post, handler].map((mock) => mock.mock.invocationCallOrder[0]);
   expect(order).toEqual([...order].sort((a, b) => a - b));
   expect(mocks.pre).toHaveBeenCalledWith(expect.any(Request), expect.objectContaining({ instance: "/api/v1/feedstocks", requestId: expect.any(String) }));
@@ -124,7 +126,7 @@ it("returns a pre-auth 429 without resolving credentials", async () => {
   const refusal = new Response(null, { status: 429 });
   mocks.pre.mockResolvedValue({ response: refusal, result: null });
   const handler = vi.fn();
-  expect(await apiRoute("test", undefined, handler)(request())).toBe(refusal);
+  expect(await apiRoute("test", undefined, handler, { audience: "rest" })(request())).toBe(refusal);
   expect(mocks.resolve).not.toHaveBeenCalled();
   expect(mocks.post).not.toHaveBeenCalled();
   expect(handler).not.toHaveBeenCalled();
@@ -134,14 +136,14 @@ it("returns a post-auth denial without invoking the handler", async () => {
   const refusal = new Response(null, { status: 503 });
   mocks.post.mockResolvedValue({ ok: false, response: refusal });
   const handler = vi.fn();
-  expect(await apiRoute("test", undefined, handler)(request())).toBe(refusal);
+  expect(await apiRoute("test", undefined, handler, { audience: "rest" })(request())).toBe(refusal);
   expect(handler).not.toHaveBeenCalled();
 });
 
 it.each([
   ["GET", "read"], ["HEAD", "read"], ["POST", "write"], ["PATCH", "write"], ["DELETE", "write"],
 ])("treats %s as %s even with dryRun=true and no scope", async (method, access) => {
-  await apiRoute("test", undefined, async () => new Response(null))(
+  await apiRoute("test", undefined, async () => new Response(null), { audience: "rest" })(
     new Request(request(), { method }),
   );
   expect(mocks.post).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({ access }), null);
@@ -155,7 +157,7 @@ it.each(["success", "returned problem", "http error", "domain error", "unexpecte
       if (kind === "unexpected error") throw new Error("Unexpected failure");
       if (kind === "returned problem") return problemResponse({ status: 422, code: "validation_failed", detail: "Invalid input.", ...context });
       return new Response(null, { status: 204, headers: { ETag: '"1.1"' } });
-    })(request());
+    }, { audience: "rest" })(request());
     for (const [name, value] of Object.entries(rateHeaders)) expect(response.headers.get(name)).toBe(value);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(response.headers.get("x-request-id")).toBeTruthy();
@@ -170,10 +172,10 @@ it("prepares once after authentication and passes the replacement request to the
   const replacement = new Request(original, { method: "POST", body: "prepared" });
   const prepare = vi.fn(async () => ({ request: replacement, access: "read" as const }));
   const handler = vi.fn(async (received: Request) => new Response(await received.text()));
-  const response = await apiRoute("test", undefined, handler, { prepare })(original);
+  const response = await apiRoute("test", undefined, handler, { audience: "rest", prepare })(original);
   expect(await response.text()).toBe("prepared");
   expect(prepare).toHaveBeenCalledExactlyOnceWith(original, expect.objectContaining({
-    ctx: { orgRole: "admin", scopes: ["feedstocks:write"] },
+    ctx: apiKeyContext({ orgRole: "admin", scopes: ["feedstocks:write"] }),
   }));
   expect(handler).toHaveBeenCalledWith(replacement, expect.any(Object), {});
   expect(mocks.post).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({ access: "read" }), null);
@@ -185,7 +187,7 @@ it("does not prepare an unauthenticated request", async () => {
   mocks.resolve.mockResolvedValue({ ok: false, denial: "credential_missing" });
   const prepare = vi.fn();
   const handler = vi.fn();
-  const response = await apiRoute("test", undefined, handler, { prepare })(request());
+  const response = await apiRoute("test", undefined, handler, { audience: "rest", prepare })(request());
   expect(response.status).toBe(401);
   expect(prepare).not.toHaveBeenCalled();
   expect(mocks.post).not.toHaveBeenCalled();
@@ -199,7 +201,7 @@ it("preserves query validation issue pointers in 400 responses", async () => {
   const handler = apiRoute("test", undefined, async (req) => {
     parseApiQuery(req, lookupListSchema);
     return Response.json({});
-  });
+  }, { audience: "rest" });
   const response = await handler(new Request("https://example.test/api/v1/facilities?q=bad%00value"));
   expect(response.status).toBe(400);
   expect(await response.json()).toMatchObject({ code: "invalid_query", errors: [{ pointer: "/q", code: "custom" }] });
@@ -211,10 +213,23 @@ it("includes query schema issues in invalid_query problem bodies", async () => {
   const handler = apiRoute("test", undefined, async (req) => {
     parseApiQuery(req, lookupListSchema);
     return Response.json({});
-  });
+  }, { audience: "rest" });
   const response = await handler(new Request("https://example.test/api/v1/facilities?limit=0"));
   expect(response.status).toBe(400);
   expect(await response.json()).toMatchObject({ code: "invalid_query", errors: [{
     pointer: "/limit", code: "invalid_format", detail: expect.any(String),
   }] });
+});
+
+it.each(["noma_ort_synthetic", "eyJhbGciOiJub25lIn0.e30.signature"])("challenges a refused bearer regardless of token shape", async token => {
+  const enabled = env.OAUTH_PROVIDER_ENABLED;
+  env.OAUTH_PROVIDER_ENABLED = true;
+  try {
+    mocks.resolve.mockResolvedValue({ ok: false, denial: "credential_invalid" });
+    const response = await apiRoute("test", undefined, vi.fn(), { audience: "rest" })(new Request(request(), {
+      headers: { authorization: `Bearer ${token}` },
+    }));
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain('error="invalid_token"');
+  } finally { env.OAUTH_PROVIDER_ENABLED = enabled; }
 });

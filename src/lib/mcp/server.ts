@@ -5,7 +5,7 @@ import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { API_VERSION } from "@/config/api-rest";
 import type { ApiContext } from "@/lib/auth/api-context";
 import type { ApiRouteContext } from "@/lib/api/route";
-import { hasRoleAndScope } from "@/lib/auth/api-scopes";
+import { principalAllows } from "@/lib/auth/api-scopes";
 import { deadlineExceeded } from "@/lib/domain-errors";
 import { toToolSchema } from "@/lib/operations/mcp-schema";
 import { readTools } from "./tools/read-tools";
@@ -13,7 +13,7 @@ import { toolOutputSchema, toolFailure, toolSuccess, writesDisabledResult } from
 import { mcpInstructions } from "./instructions";
 
 function visibleTools(ctx: ApiContext) {
-  return new Map([...readTools, ...writeTools].filter((tool) => tool.visible ? tool.visible(ctx) : !tool.scope || hasRoleAndScope(ctx, tool.scope))
+  return new Map([...readTools, ...writeTools].filter((tool) => tool.visible ? tool.visible(ctx) : !tool.scope || principalAllows(ctx, tool.scope))
     .map((tool) => [tool.name, tool]));
 }
 

@@ -29,7 +29,7 @@ export function documentWriteHandler(ownerType: ApiDocumentOwnerType, kind: Writ
   const owner = API_DOCUMENT_OWNERS[ownerType];
   return apiRoute<Params>(`api.v1.${owner.path}.documents.${kind}`, owner.writeScope, async (request, context, params) => {
     const { ctx, headers, deadlineAt, requestId, instance } = context;
-    if (!canAccessOwnerDocuments(ctx, ownerType, "write")) return apiDenialResponse("missing_scope", instance, requestId);
+    if (!canAccessOwnerDocuments(ctx, ownerType, "write")) return apiDenialResponse("missing_scope", instance, requestId, { role: ctx.orgRole, oauth: ctx.principal.kind === "oauth", scopes: ctx.scopes, requiredScopes: [owner.writeScope] });
     const { dryRun } = parseApiQuery(request, mutationQuerySchema);
     if (dryRun) throw new DomainError("validation_failed", NO_DRY_RUN);
     const audit = { requestId, credentialId: ctx.credentialId, transport: "rest" as const };
@@ -58,5 +58,5 @@ export function documentWriteHandler(ownerType: ApiDocumentOwnerType, kind: Writ
     if (outcome.status !== 200) throw outcome.error;
     headers.set("ETag", documentEtag(outcome.data));
     return Response.json({ data: outcome.data }, { headers });
-  }, kind === "confirm" ? { deadlineMs: DOCUMENT_CONFIRM_DEADLINE_MS } : {});
+  }, { audience: "rest", ...(kind === "confirm" ? { deadlineMs: DOCUMENT_CONFIRM_DEADLINE_MS } : {}) });
 }

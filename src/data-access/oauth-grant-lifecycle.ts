@@ -1,3 +1,4 @@
+import { OAUTH_CODE_LIFETIME_MS, isOAuthGenerationIdle } from "@/config/oauth";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -7,7 +8,6 @@ import { oauthRolePolicy } from "@/lib/auth/oauth-role-policy";
 import { disableOwnerApiKeys } from "./api-credential-auth";
 import { nextVersion } from "./row-version";
 
-const ATTEMPT_LIFETIME_MS = 10 * 60 * 1_000;
 type AttemptIdentity = { attemptKey: string; sessionId: string; userId: string };
 type AttemptSelection = AttemptIdentity & { organizationId: string };
 type AttemptBinding = AttemptIdentity & { clientId: string; resource: string };
@@ -42,7 +42,7 @@ export async function selectOAuthOrganization(input: AttemptSelection) {
     await tx.insert(oauthAuthorizationAttempts).values({
       attemptKey: input.attemptKey, sessionId: input.sessionId, userId: input.userId,
       organizationId: input.organizationId, memberId: member.id,
-      createdAt: now, expiresAt: new Date(now.getTime() + ATTEMPT_LIFETIME_MS),
+      createdAt: now, expiresAt: new Date(now.getTime() + OAUTH_CODE_LIFETIME_MS),
     }).onConflictDoNothing();
     // org-scope-ok: session-authenticated authorization attempt; membership validated in the same query
     const [attempt] = await tx.select().from(oauthAuthorizationAttempts)
@@ -85,6 +85,10 @@ export async function resolveAttemptGrant(input: AttemptBinding) {
     let grant: OAuthGrant | undefined = existing[0];
     if (grant && grant.memberId !== member.id) {
       await revokeGeneration(grant.id, "member_changed", tx);
+      grant = undefined;
+    }
+    if (grant && isOAuthGenerationIdle(grant.lastUsedAt, now)) {
+      await revokeGeneration(grant.id, "inactive", tx);
       grant = undefined;
     }
     if (!grant) {

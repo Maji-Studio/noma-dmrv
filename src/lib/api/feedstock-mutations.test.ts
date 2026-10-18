@@ -1,3 +1,4 @@
+import { apiKeyContext } from "../../../tests/helpers/api-context";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
 import { DomainError } from "@/lib/domain-errors";
@@ -33,7 +34,7 @@ beforeEach(() => {
   vi.setSystemTime(START);
   mocks.resolve.mockImplementation(async () => {
     vi.setSystemTime(START + AUTH_MS);
-    return { ok: true, ctx: { orgRole: "admin", scopes: ["feedstocks:write", "feedstocks:delete"], credentialId: "key" } };
+    return { ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: ["feedstocks:write", "feedstocks:delete"], credentialId: "key" }) };
   });
   // Stop after observing admission, before response serialization.
   mocks.run.mockRejectedValue(new DomainError("not_found", "Feedstock was not found."));
@@ -55,11 +56,11 @@ function invoke(method: "POST" | "PATCH" | "DELETE", elapsed: number) {
   } else {
     mocks.resolve.mockImplementation(async () => {
       vi.setSystemTime(START + elapsed);
-      return { ok: true, ctx: { orgRole: "admin", scopes: ["feedstocks:delete"], credentialId: "key" } };
+      return { ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: ["feedstocks:delete"], credentialId: "key" }) };
     });
   }
   return apiRoute("test", method === "DELETE" ? "feedstocks:delete" : "feedstocks:write",
-    method === "POST" ? createFeedstockResponse : (req, context) => mutateFeedstockResponse(req, context, ID, method),
+    method === "POST" ? createFeedstockResponse : (req, context) => mutateFeedstockResponse(req, context, ID, method), { audience: "rest" },
   )(request);
 }
 
@@ -79,9 +80,9 @@ it.each(["POST", "PATCH", "DELETE"] as const)("%s never starts an operation afte
 it("does not start a POST when authentication consumes the budget", async () => {
   mocks.resolve.mockImplementation(async () => {
     vi.setSystemTime(START + OPERATION_DEADLINE_MS);
-    return { ok: true, ctx: { orgRole: "admin", scopes: ["feedstocks:write"], credentialId: "key" } };
+    return { ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: ["feedstocks:write"], credentialId: "key" }) };
   });
-  const response = await apiRoute("test", "feedstocks:write", createFeedstockResponse)(new Request(
+  const response = await apiRoute("test", "feedstocks:write", createFeedstockResponse, { audience: "rest" })(new Request(
     "https://example.test/api/v1/feedstocks", {
       method: "POST", headers: { "content-type": "application/json", "idempotency-key": "test-key" }, body: "{}",
     },
@@ -97,7 +98,7 @@ function deleteRequest(body?: BodyInit, contentType: string | null = "applicatio
   } as RequestInit);
 }
 const deleteRoute = apiRoute("test", "feedstocks:delete", (request, context) =>
-  mutateFeedstockResponse(request, context, ID, "DELETE"));
+  mutateFeedstockResponse(request, context, ID, "DELETE"), { audience: "rest" });
 
 it.each([undefined, "{}"])("accepts the empty DELETE contract (%s)", async (body) => {
   await deleteRoute(deleteRequest(body));
@@ -155,7 +156,7 @@ it("bounds a streamed DELETE body before running the operation", async () => {
 });
 
 it("accepts a create idempotency key on a dry run", async () => {
-  const response = await apiRoute("test", "feedstocks:write", createFeedstockResponse)(new Request(
+  const response = await apiRoute("test", "feedstocks:write", createFeedstockResponse, { audience: "rest" })(new Request(
     "https://example.test/api/v1/feedstocks?dryRun=true", {
       method: "POST", headers: { "content-type": "application/json", "idempotency-key": "dry-run-key" }, body: "{}",
     },
@@ -168,7 +169,7 @@ it("accepts a create idempotency key on a dry run", async () => {
 });
 
 it.each(["false", "true"])("requires a create key before domain validation with dryRun=%s", async (dryRun) => {
-  const response = await apiRoute("test", "feedstocks:write", createFeedstockResponse)(new Request(
+  const response = await apiRoute("test", "feedstocks:write", createFeedstockResponse, { audience: "rest" })(new Request(
     `https://example.test/api/v1/feedstocks?dryRun=${dryRun}`, {
       method: "POST", headers: { "content-type": "application/json" }, body: "{}",
     },
@@ -180,7 +181,7 @@ it.each(["false", "true"])("requires a create key before domain validation with 
 
 it("preserves the runner's committed-key refusal on a create dry run", async () => {
   mocks.run.mockRejectedValue(new DomainError("key_already_used", "Use a new key for this dry run."));
-  const response = await apiRoute("test", "feedstocks:write", createFeedstockResponse)(new Request(
+  const response = await apiRoute("test", "feedstocks:write", createFeedstockResponse, { audience: "rest" })(new Request(
     "https://example.test/api/v1/feedstocks?dryRun=true", {
       method: "POST", headers: { "content-type": "application/json", "idempotency-key": "committed-key" }, body: "{}",
     },
@@ -192,7 +193,7 @@ it("preserves the runner's committed-key refusal on a create dry run", async () 
 
 it.each(["PATCH", "DELETE"] as const)("%s rejects a NUL target before running the operation", async (method) => {
   const response = await apiRoute("test", method === "DELETE" ? "feedstocks:delete" : "feedstocks:write", (req, context) =>
-    mutateFeedstockResponse(req, context, "bad\u0000id", method))(new Request("https://example.test/api/v1/feedstocks/bad%00id", {
+    mutateFeedstockResponse(req, context, "bad\u0000id", method), { audience: "rest" })(new Request("https://example.test/api/v1/feedstocks/bad%00id", {
     method, headers: { "if-match": '\"1.1\"' },
   }));
   expect(response.status).toBe(404);

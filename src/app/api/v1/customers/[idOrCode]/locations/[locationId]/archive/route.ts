@@ -6,4 +6,4 @@ export const maxDuration = 30;
 
 type Params = { idOrCode: string; locationId: string };
 export const POST = apiRoute<Params>("api.v1.customers.locations.archive", "customers:write", (request, context, { idOrCode, locationId }) =>
-  mutateCustomerLocationResponse(request, context, idOrCode, locationId, "archive"));
+  mutateCustomerLocationResponse(request, context, idOrCode, locationId, "archive"), { audience: "rest" });

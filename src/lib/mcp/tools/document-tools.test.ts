@@ -11,7 +11,7 @@ import type { ApiScope } from "@/lib/auth/api-scopes";
 import { documentReadTools, documentWriteTools } from "./document-tools";
 
 vi.mock("@/db", () => ({ db: {} }));
-const context = (scopes: ApiScope[], orgRole = "admin") => ({ scopes, orgRole }) as ApiContext;
+const context = (scopes: ApiScope[], orgRole = "admin") => ({ scopes, orgRole, principal: { kind: "api-key" } }) as ApiContext;
 const all = () => [...documentReadTools, ...documentWriteTools];
 it.each([
   { scopes: ["deliveries:read"], role: "admin", names: ["find_documents", "get_document_download_url"] },

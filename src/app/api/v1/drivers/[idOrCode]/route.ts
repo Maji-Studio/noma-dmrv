@@ -10,4 +10,4 @@ export const GET = apiRoute<Params>("api.v1.drivers.get", "drivers:read", async 
   const data = await readDriver(request, ctx, idOrCode);
   headers.set("ETag", driverEtag(data));
   return Response.json({ data }, { headers });
-});
+}, { audience: "rest" });

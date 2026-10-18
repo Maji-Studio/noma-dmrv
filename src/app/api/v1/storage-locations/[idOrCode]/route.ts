@@ -10,4 +10,4 @@ export const GET = apiRoute<Params>("api.v1.storage-locations.get", "storage-loc
   const data = await readStorageLocation(request, ctx, idOrCode);
   headers.set("ETag", storageLocationEtag(data));
   return Response.json({ data }, { headers });
-});
+}, { audience: "rest" });

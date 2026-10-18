@@ -19,9 +19,10 @@ export const meRepresentationSchema = z.object({
     localTime: z.string().regex(LOCAL_TIME_PATTERN).describe("Current facility-local wall-clock time, HH:MM."),
     today: z.iso.date().describe("Current facility-local business date, YYYY-MM-DD."),
   })).describe("Accessible active facilities and their current local dates and times."),
-  role: z.enum(["owner", "admin"]).describe("Live organization role: owner owns the organization; admin administers it."),
+  role: z.enum(["owner", "admin", "member"]).describe("Live organization role: owner owns the organization; admin administers it; member performs data entry."),
   scopes: z.array(apiScopeRepresentationSchema).describe("Credential scopes intersected with the live membership role."),
   credential: z.object({
+    kind: z.enum(["api-key", "oauth"]).describe("Credential authentication method."),
     id: z.string().describe("Credential identifier, opaque string."),
     name: z.string().nullable().describe("Credential display name, plain text, or null when unspecified."),
     expiresAt: z.iso.datetime().describe("Credential expiry instant in UTC, RFC 3339."),

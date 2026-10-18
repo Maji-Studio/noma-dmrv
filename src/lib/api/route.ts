@@ -1,7 +1,8 @@
+import { getOAuthConfig } from "@/lib/auth/oauth-config";
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
 import { randomUUID } from "node:crypto";
 import { resolveApiContext, type ApiContext } from "@/lib/auth/api-context";
-import { hasRoleAndScope, type ApiScope } from "@/lib/auth/api-scopes";
+import { principalAllows, type ApiScope } from "@/lib/auth/api-scopes";
 import { deadlineExceeded, DomainError } from "@/lib/domain-errors";
 import { toActionFailure } from "@/fn/action-errors";
 import { actionFailureResponse, apiDenialResponse, apiHttpErrorResponse, apiResponseHeaders, rateLimitHeaders } from "./problem";
@@ -22,8 +23,8 @@ export interface ApiRouteContext {
 async function admitApiRequest(
   access: "read" | "write", context: ApiRouteContext, scope: ApiScope | undefined, ipResult: RateLimitResult | null, writesDisabledInHandler?: boolean,
 ) {
-  if (scope && !hasRoleAndScope(context.ctx, scope)) {
-    return { ok: false as const, response: apiDenialResponse("missing_scope", context.instance, context.requestId) };
+  if (scope && !principalAllows(context.ctx, scope)) {
+    return { ok: false as const, response: apiDenialResponse("missing_scope", context.instance, context.requestId, { role: context.ctx.orgRole, oauth: context.ctx.principal.kind === "oauth", scopes: context.ctx.scopes, requiredScopes: [scope] }) };
   }
   return postAuthGuard(context.ctx, {
     requestId: context.requestId, instance: context.instance,
@@ -32,6 +33,7 @@ async function admitApiRequest(
 }
 
 interface ApiRouteOptions {
+  audience: "rest" | "mcp";
   /** Named command exceptions may use a longer budget, including authentication. */
   deadlineMs?: number;
   /** Charge write buckets normally; the handler must enforce the write switch. */
@@ -46,7 +48,7 @@ export function apiRoute<Params = Record<string, never>>(
   op: string,
   scope: ApiScope | undefined,
   handler: (request: Request, context: ApiRouteContext, params: Params) => Promise<Response>,
-  options: ApiRouteOptions = {},
+  options: ApiRouteOptions,
 ) {
   return async (request: Request, route?: { params: Promise<Params> }): Promise<Response> => {
     const deadlineAt = Date.now() + (options.deadlineMs ?? OPERATION_DEADLINE_MS);
@@ -63,8 +65,11 @@ export function apiRoute<Params = Record<string, never>>(
       if (preAuth.result) {
         for (const [name, value] of rateLimitHeaders(preAuth.result)) headers.set(name, value);
       }
-      const resolution = await resolveApiContext(request);
-      if (!resolution.ok) return apiDenialResponse(resolution.denial, instance, requestId);
+      const audience = getOAuthConfig()[options.audience];
+      const resolution = await resolveApiContext(request, audience);
+      if (!resolution.ok) {
+        return apiDenialResponse(resolution.denial, instance, requestId, { audience, oauth: /^Bearer\s+\S+/i.test(request.headers.get("authorization") ?? "") });
+      }
       const context = { deadlineAt, ctx: resolution.ctx, requestId, instance, headers: apiResponseHeaders(requestId) };
       const prepared = options.prepare ? await options.prepare(request, context) : {
         request, access: request.method === "GET" || request.method === "HEAD" ? "read" as const : "write" as const,

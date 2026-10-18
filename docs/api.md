@@ -20,6 +20,15 @@ route handlers do not import the database. The shared REST problem builder
 lives at `lib/api/problem.ts`. See [auth.md](./auth.md#api-credentials) for
 credential and denial contracts.
 
+OAuth tokens are bound to one grant generation and one REST or MCP audience.
+`credential_audience_mismatch` returns 401 when a token is used for the other
+audience. When `OAUTH_PROVIDER_ENABLED` is true, OAuth 401s include
+`error="invalid_token"` and authentication challenges include the audience-specific
+`resource_metadata` URL and read scopes. With the flag off, every 401 retains the
+bare `WWW-Authenticate: Bearer` header because discovery is unavailable. OAuth
+`missing_scope` responses include an `insufficient_scope` challenge with the
+current and required scopes. API-key scope denials retain their existing headers.
+
 ### Lab samples on the runner
 
 Lab sample create, update (including a move to another credit batch) and delete

@@ -1,3 +1,4 @@
+import { getOAuthConfig } from "@/lib/auth/oauth-config";
 /** DB-backed contract suite. Run only after generating/applying the API-key migration. */
 import { createHmac, randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -189,7 +190,7 @@ describe("credential issuance and management", () => {
       enabled: false,
       expiresAt: stored.expiresAt,
     });
-    expect(await resolveApiContext(request(created.key))).toEqual({
+    expect(await resolveApiContext(request(created.key), getOAuthConfig().rest)).toEqual({
       ok: false,
       denial: "credential_revoked",
     });
@@ -343,7 +344,7 @@ describe("credential resolution", () => {
     // resolver's membership check alone.
     if (action === "leave") expect(owner.revokedAt).toBeInstanceOf(Date);
     else expect(owner.revokedAt).toBeNull();
-    expect(await resolveApiContext(request(created.key))).toEqual({
+    expect(await resolveApiContext(request(created.key), getOAuthConfig().rest)).toEqual({
       ok: false,
       denial: "credential_owner_removed",
     });
@@ -360,18 +361,18 @@ describe("credential resolution", () => {
         role: "admin",
       },
     });
-    expect(await resolveApiContext(request(created.key))).toEqual({
+    expect(await resolveApiContext(request(created.key), getOAuthConfig().rest)).toEqual({
       ok: false,
       denial: "credential_owner_removed",
     });
     expect((await GET(request(created.key))).status).toBe(401);
     expect((await listApiKeys(ctx)).find((key) => key.id === created.id)?.enabled).toBe(false);
     const replacement = await createApiKey(ctx, input());
-    expect(await resolveApiContext(request(replacement.key))).toMatchObject({ ok: true });
+    expect(await resolveApiContext(request(replacement.key), getOAuthConfig().rest)).toMatchObject({ ok: true });
   });
   it("resolves a verified live Admin with no platform override and updates last-used", async () => {
     const created = await createApiKey(ctx, input());
-    expect(await resolveApiContext(request(created.key))).toMatchObject({
+    expect(await resolveApiContext(request(created.key), getOAuthConfig().rest)).toMatchObject({
       ok: true,
       ctx: {
         userId: ctx.userId,
@@ -402,7 +403,7 @@ describe("credential resolution", () => {
       .set({ emailVerified: false })
       .where(eq(users.id, ctx.userId));
     const denial = state === "removed" || state === "demoted" ? "credential_owner_removed" : state === "unverified" ? "credential_owner_unverified" : `credential_${state}`;
-    expect(await resolveApiContext(request(created.key))).toEqual({
+    expect(await resolveApiContext(request(created.key), getOAuthConfig().rest)).toEqual({
       ok: false,
       denial,
     });
@@ -410,19 +411,19 @@ describe("credential resolution", () => {
   });
   it("rejects two credentials, ignores cookies with a bearer, refuses cookie-only and bad bearer fallback", async () => {
     const created = await createApiKey(ctx, input());
-    expect(await resolveApiContext(request(created.key, { "x-api-key": created.key }))).toEqual({
+    expect(await resolveApiContext(request(created.key, { "x-api-key": created.key }), getOAuthConfig().rest)).toEqual({
       ok: false,
       denial: "credential_ambiguous",
     });
-    expect(await resolveApiContext(request(created.key, { cookie: adminHeaders.get("cookie")! }))).toMatchObject({
+    expect(await resolveApiContext(request(created.key, { cookie: adminHeaders.get("cookie")! }), getOAuthConfig().rest)).toMatchObject({
       ok: true,
       ctx: { userId: ctx.userId },
     });
-    expect(await resolveApiContext(request(undefined, { cookie: adminHeaders.get("cookie")! }))).toEqual({
+    expect(await resolveApiContext(request(undefined, { cookie: adminHeaders.get("cookie")! }), getOAuthConfig().rest)).toEqual({
       ok: false,
       denial: "cookie_session_unsupported",
     });
-    expect(await resolveApiContext(request("unknown", { cookie: adminHeaders.get("cookie")! }))).toEqual({
+    expect(await resolveApiContext(request("unknown", { cookie: adminHeaders.get("cookie")! }), getOAuthConfig().rest)).toEqual({
       ok: false,
       denial: "credential_invalid",
     });
@@ -461,11 +462,11 @@ describe("credential resolution", () => {
     expect(stored.enabled).toBe(false);
     const [owner] = await db.select().from(apiKeyOwners).where(eq(apiKeyOwners.credentialId, created.id));
     expect(owner).toMatchObject({ version: 2, revocationReason: "credential_owner_removed" });
-    expect(await resolveApiContext(request(created.key))).toEqual({
+    expect(await resolveApiContext(request(created.key), getOAuthConfig().rest)).toEqual({
       ok: false,
       denial: "credential_owner_removed",
     });
-    expect(await resolveApiContext(request(otherKey.key))).toMatchObject({
+    expect(await resolveApiContext(request(otherKey.key), getOAuthConfig().rest)).toMatchObject({
       ok: true,
       ctx: { organizationId: otherOrg },
     });
@@ -520,6 +521,7 @@ it("/me permits an empty scope set and returns only the key organization's facil
     today: date,
   });
   expect(data.credential).toEqual({
+    kind: "api-key",
     id: created.id,
     name: created.name,
     expiresAt: created.expiresAt?.toISOString(),
@@ -543,7 +545,7 @@ it.each(["remove", "demote"])("Platform Admin %s override disables credentials i
   expect(stored.enabled).toBe(false);
   const [owner] = await db.select().from(apiKeyOwners).where(eq(apiKeyOwners.credentialId, created.id));
   expect(owner).toMatchObject({ version: 2, revocationReason: "credential_owner_removed" });
-  expect(await resolveApiContext(request(created.key))).toEqual({
+  expect(await resolveApiContext(request(created.key), getOAuthConfig().rest)).toEqual({
     ok: false,
     denial: "credential_owner_removed",
   });

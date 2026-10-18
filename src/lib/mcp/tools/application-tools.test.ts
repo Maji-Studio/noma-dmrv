@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import type { ApiContext } from "@/lib/auth/api-context";
-import { hasRoleAndScope, type ApiScope } from "@/lib/auth/api-scopes";
+import { principalAllows, type ApiScope } from "@/lib/auth/api-scopes";
 import type { ApiRouteContext } from "@/lib/api/route";
 import { resourceQueries } from "@/lib/api/query-schemas";
 import { APPLICATION_REPRESENTATION_REVISION } from "@/config/api-rest";
@@ -45,8 +45,8 @@ it.each([
   { scopes: ["applications:write"], role: "owner", names: ["record_application", "update_application"] },
   { scopes: ["applications:read", "applications:write", "applications:delete", "deliveries:read"], role: "member", names: [] },
 ])("admits $role with $scopes", ({ scopes, role, names }) => {
-  const ctx = { scopes: scopes as ApiScope[], orgRole: role } as ApiContext;
-  expect([...applicationReadTools, ...applicationWriteTools].filter(tool => hasRoleAndScope(ctx, tool.scope!)).map(tool => tool.name)).toEqual(names);
+  const ctx = { principal: { kind: "api-key" }, scopes: scopes as ApiScope[], orgRole: role } as ApiContext;
+  expect([...applicationReadTools, ...applicationWriteTools].filter(tool => principalAllows(ctx, tool.scope!)).map(tool => tool.name)).toEqual(names);
 });
 it("shares every application list filter and reader with REST", async () => {
   const tool = applicationReadTools[0]; expect(tool.input).toBe(resourceQueries.applications.list);

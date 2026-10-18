@@ -1,3 +1,4 @@
+import { apiKeyContext } from "../../../../tests/helpers/api-context";
 import { beforeEach, expect, it, vi } from "vitest";
 import { productionRunRepresentationSchema } from "@/lib/representations/production-runs";
 import { createProductionRunInput, updateProductionRunInput } from "@/schemas/production-run-input";
@@ -41,9 +42,9 @@ const row = productionRunRepresentationSchema.parse({
     "biocharStorageLocationId"].map((key) => [key, null])),
 });
 const context = {
-  ctx: { userId: "user", credentialId: "credential", organizationId: "org", orgRole: "admin", scopes: ["production-runs:write", "production-runs:read", "production-runs:delete", "reactors:read"] },
+  ctx: apiKeyContext({ userId: "user", credentialId: "credential", organizationId: "org", orgRole: "admin", scopes: ["production-runs:write", "production-runs:read", "production-runs:delete", "reactors:read"] }),
   deadlineAt: 0, requestId: "request", instance: "/api/mcp", headers: new Headers(),
-} as unknown as ApiRouteContext;
+} satisfies ApiRouteContext;
 const create = { facilityId: ID, reactorId: ID, startTime: CLOCK, status: "running" };
 const target = { productionRunId: ID, expectedVersion: 1 };
 const args = (name: string) => name === "start_production_run" ? create : target;

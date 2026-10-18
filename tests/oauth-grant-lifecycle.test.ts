@@ -235,3 +235,17 @@ it("resolves while another transaction holds a membership foreign-key lock", asy
     expect(grant.memberId).toBe(f.memberIds[0]);
   } finally { await barrier.rollback(); await pool.end(); }
 });
+
+it("replaces an idle generation for a fresh attempt and leaves old attempt bindings dead", async () => {
+  const originalAttempt = f.attempt();
+  await selectOAuthOrganization(originalAttempt);
+  const binding = { ...originalAttempt, clientId: f.clientId, resource: OAUTH_TEST_RESOURCE };
+  const original = await resolveAttemptGrant(binding);
+  await db.update(oauthGrants).set({ lastUsedAt: new Date(0) }).where(eq(oauthGrants.id, original.id));
+  const freshAttempt = f.attempt();
+  await selectOAuthOrganization(freshAttempt);
+  const replacement = await resolveAttemptGrant({ ...binding, ...freshAttempt });
+  expect(replacement.id).not.toBe(original.id);
+  expect(await db.query.oauthGrants.findFirst({ where: eq(oauthGrants.id, original.id) })).toMatchObject({ revocationReason: "inactive" });
+  await expect(resolveAttemptGrant(binding)).rejects.toMatchObject({ code: "forbidden" });
+});

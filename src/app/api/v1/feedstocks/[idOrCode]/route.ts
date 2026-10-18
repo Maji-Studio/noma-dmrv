@@ -14,8 +14,8 @@ export const GET = apiRoute<Params>("api.v1.feedstocks.get", "feedstocks:read", 
   const data = await readFeedstock(ctx, idOrCode);
   headers.set("ETag", feedstockEtag(data));
   return Response.json({ data }, { headers });
-});
+}, { audience: "rest" });
 export const PATCH = apiRoute<Params>("api.v1.feedstocks.update", "feedstocks:write", (request, context, { idOrCode }) =>
-  mutateFeedstockResponse(request, context, idOrCode, "PATCH"));
+  mutateFeedstockResponse(request, context, idOrCode, "PATCH"), { audience: "rest" });
 export const DELETE = apiRoute<Params>("api.v1.feedstocks.delete", "feedstocks:delete", (request, context, { idOrCode }) =>
-  mutateFeedstockResponse(request, context, idOrCode, "DELETE"));
+  mutateFeedstockResponse(request, context, idOrCode, "DELETE"), { audience: "rest" });

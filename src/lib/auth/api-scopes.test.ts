@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { API_SCOPES, hasRoleAndScope, hasScope, scopesFromPermissions, scopesFromStoredPermissions, serializeApiPermissions, toApiPermissions } from "./api-scopes";
+import { API_SCOPES, principalAllows, hasScope, scopesFromPermissions, scopesFromStoredPermissions, serializeApiPermissions, toApiPermissions } from "./api-scopes";
 
 describe("API authority", () => {
   it("round trips the exact v1 allowlist through plugin permissions", () => {
@@ -10,9 +10,9 @@ describe("API authority", () => {
     expect(scopesFromPermissions({ "*": ["*"], feedstocks: ["*"], facilities: ["write"] })).toEqual([]);
   });
   it.each(["owner", "admin", "member", null] as const)("intersects %s with scopes", (orgRole) => {
-    expect(hasRoleAndScope({ orgRole, scopes: ["feedstocks:write"] }, "feedstocks:write"))
+    expect(principalAllows({ principal: { kind: "api-key" }, orgRole, scopes: ["feedstocks:write"] }, "feedstocks:write"))
       .toBe(orgRole === "owner" || orgRole === "admin");
-    expect(hasRoleAndScope({ orgRole, scopes: [] }, "feedstocks:write")).toBe(false);
+    expect(principalAllows({ principal: { kind: "api-key" }, orgRole, scopes: [] }, "feedstocks:write")).toBe(false);
   });
   it("does not imply read or delete from write", () => {
     expect(hasScope({ scopes: ["feedstocks:write"] }, "feedstocks:delete")).toBe(false);
@@ -38,9 +38,9 @@ it("allows customer and order scopes without implying reads or deletes from an o
 it("offers delivery writes only by explicit scope, with no delete capability", () => {
   expect(scopesFromPermissions({ deliveries: ["read", "write", "delete"] })).toEqual(["deliveries:read", "deliveries:write"]);
   expect(hasScope({ scopes: ["deliveries:write"] }, "deliveries:read")).toBe(false);
-  expect(hasRoleAndScope({ orgRole: "admin", scopes: [] }, "deliveries:write")).toBe(false);
-  expect(hasRoleAndScope({ orgRole: "admin", scopes: ["deliveries:write"] }, "deliveries:write")).toBe(true);
-  expect(hasRoleAndScope({ orgRole: "member", scopes: ["deliveries:write"] }, "deliveries:write")).toBe(false);
+  expect(principalAllows({ principal: { kind: "api-key" }, orgRole: "admin", scopes: [] }, "deliveries:write")).toBe(false);
+  expect(principalAllows({ principal: { kind: "api-key" }, orgRole: "admin", scopes: ["deliveries:write"] }, "deliveries:write")).toBe(true);
+  expect(principalAllows({ principal: { kind: "api-key" }, orgRole: "member", scopes: ["deliveries:write"] }, "deliveries:write")).toBe(false);
 });
 
 it("keeps application scopes independent and role restricted", () => {
@@ -48,21 +48,27 @@ it("keeps application scopes independent and role restricted", () => {
   expect(hasScope({ scopes: ["applications:write"] }, "applications:delete")).toBe(false);
   expect(hasScope({ scopes: ["applications:write"] }, "applications:read")).toBe(false);
   for (const scope of ["applications:write", "applications:delete"] as const) {
-    expect(hasRoleAndScope({ orgRole: "member", scopes: [scope] }, scope)).toBe(false);
-    expect(hasRoleAndScope({ orgRole: "admin", scopes: [] }, scope)).toBe(false);
-    expect(hasRoleAndScope({ orgRole: "admin", scopes: [scope] }, scope)).toBe(true);
+    expect(principalAllows({ principal: { kind: "api-key" }, orgRole: "member", scopes: [scope] }, scope)).toBe(false);
+    expect(principalAllows({ principal: { kind: "api-key" }, orgRole: "admin", scopes: [] }, scope)).toBe(false);
+    expect(principalAllows({ principal: { kind: "api-key" }, orgRole: "admin", scopes: [scope] }, scope)).toBe(true);
   }
 });
 
 it("recognizes independent formulation permissions", () => {
   expect(scopesFromPermissions({ formulations: ["read", "write", "delete"] })).toEqual(["formulations:read", "formulations:write", "formulations:delete"]);
-  expect(hasRoleAndScope({ orgRole: "admin", scopes: ["formulations:read"] }, "formulations:write")).toBe(false);
-  expect(hasRoleAndScope({ orgRole: "admin", scopes: ["formulations:write"] }, "formulations:delete")).toBe(false);
-  expect(hasRoleAndScope({ orgRole: "admin", scopes: ["formulations:delete"] }, "formulations:write")).toBe(false);
+  expect(principalAllows({ principal: { kind: "api-key" }, orgRole: "admin", scopes: ["formulations:read"] }, "formulations:write")).toBe(false);
+  expect(principalAllows({ principal: { kind: "api-key" }, orgRole: "admin", scopes: ["formulations:write"] }, "formulations:delete")).toBe(false);
+  expect(principalAllows({ principal: { kind: "api-key" }, orgRole: "admin", scopes: ["formulations:delete"] }, "formulations:write")).toBe(false);
 });
 
 it.each(["suppliers", "customers"] as const)("keeps %s mutation scopes independent", entity => {
   expect(scopesFromPermissions({ [entity]: ["read", "write", "delete"] })).toEqual([`${entity}:read`, `${entity}:write`, `${entity}:delete`]);
-  expect(hasRoleAndScope({ orgRole: "admin", scopes: [`${entity}:read`] }, `${entity}:write`)).toBe(false);
-  expect(hasRoleAndScope({ orgRole: "admin", scopes: [`${entity}:delete`] }, `${entity}:write`)).toBe(false);
+  expect(principalAllows({ principal: { kind: "api-key" }, orgRole: "admin", scopes: [`${entity}:read`] }, `${entity}:write`)).toBe(false);
+  expect(principalAllows({ principal: { kind: "api-key" }, orgRole: "admin", scopes: [`${entity}:delete`] }, `${entity}:write`)).toBe(false);
+});
+
+it("allows Member OAuth read/write, never deletes, while Member keys remain refused", () => {
+  const context = { orgRole: "member" as const, scopes: [...API_SCOPES], principal: { kind: "oauth" as const } };
+  expect(principalAllows(context, "feedstocks:write")).toBe(true);
+  expect(principalAllows(context, "feedstocks:delete")).toBe(false);
 });

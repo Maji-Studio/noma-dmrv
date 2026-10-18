@@ -1,9 +1,13 @@
-import { expect, it } from "vitest";
+import { env } from "@/config/env";
+import { beforeEach, expect, it, vi } from "vitest";
 import { actionFailureResponse, apiDenialResponse, problemResponse } from "./problem";
 import type { DomainErrorCode } from "@/lib/domain-errors";
 import { problemSchema, customerDeleteConflictSchema } from "./problem-schema";
 import { conflictCode } from "@/lib/conflict-ref";
 import type { ApiContextDenial } from "@/lib/auth/api-context";
+
+vi.mock("@/config/env", () => ({ env: { NEXT_PUBLIC_APP_URL: "https://example.test", OAUTH_PROVIDER_ENABLED: false } }));
+beforeEach(() => { env.OAUTH_PROVIDER_ENABLED = false; });
 
 // Independent expectations from the REST plan, section 4 (Errors).
 const expectedActionStatuses = {
@@ -51,6 +55,7 @@ const expectedDenialStatuses = {
   credential_header_unsupported: 401,
   cookie_session_unsupported: 401,
   credential_invalid: 401,
+  credential_audience_mismatch: 401,
   credential_expired: 401,
   credential_disabled: 401,
   credential_revoked: 401,
@@ -64,7 +69,8 @@ const expectedDenialStatuses = {
 it.each(Object.entries(expectedDenialStatuses))("maps denial %s to %s", (denial, status) => {
   const response = apiDenialResponse(denial as ApiContextDenial, "/api/v1/me", "request-id");
   expect(response.status).toBe(status);
-  expect(response.headers.get("www-authenticate")).toBe(status === 401 ? "Bearer" : null);
+  if (status === 401) expect(response.headers.get("www-authenticate")).toBe("Bearer");
+  else expect(response.headers.get("www-authenticate")).toBeNull();
 });
 
 it("escapes JSON pointers and preserves safe validation metadata", async () => {
@@ -196,4 +202,56 @@ it("publishes a cascade_changed preview through its conflict schema", async () =
   expect(response.status).toBe(409);
   const body = await response.json();
   expect(customerDeleteConflictSchema.parse(body).preview).toEqual(preview);
+});
+
+it("adds an invalid-token challenge for OAuth with the route resource metadata", () => {
+  env.OAUTH_PROVIDER_ENABLED = true;
+  const response = apiDenialResponse("credential_audience_mismatch", "/api/mcp", "id", { oauth: true });
+  const challenge = response.headers.get("www-authenticate")!;
+  expect(challenge).toContain('error="invalid_token"');
+  expect(challenge).toContain('/.well-known/oauth-protected-resource/api/mcp"');
+  expect(challenge).toContain("feedstocks:read");
+  expect(challenge).not.toContain(":write");
+  expect(challenge).not.toContain("offline_access");
+});
+it("adds a step-up union for OAuth missing scope only", () => {
+  env.OAUTH_PROVIDER_ENABLED = true;
+  const response = apiDenialResponse("missing_scope", "/api/v1/feedstocks", "id", { oauth: true, role: "member", scopes: ["feedstocks:read"], requiredScopes: ["feedstocks:write"] });
+  expect(response.status).toBe(403);
+  expect(response.headers.get("www-authenticate")).toContain('error="insufficient_scope", scope="feedstocks:read feedstocks:write"');
+  expect(apiDenialResponse("missing_scope", "/api/v1/feedstocks", "id").headers.has("www-authenticate")).toBe(false);
+});
+
+it.each([false, true])("gates REST and MCP discovery challenges when enabled=%s", (enabled) => {
+  env.OAUTH_PROVIDER_ENABLED = enabled;
+  for (const instance of ["/api/v1/me", "/api/mcp"]) {
+    for (const oauth of [false, true]) {
+      for (const [denial, status] of Object.entries(expectedDenialStatuses)) {
+        if (status !== 401) continue;
+        const response = apiDenialResponse(denial as ApiContextDenial, instance, "id", { oauth });
+        const challenge = response.headers.get("www-authenticate");
+        if (!enabled) expect(challenge).toBe("Bearer");
+        else {
+          expect(challenge).toContain(`resource_metadata="https://example.test/.well-known/oauth-protected-resource${instance === "/api/mcp" ? "/api/mcp" : "/api/v1"}"`);
+          expect(challenge).toContain('scope="');
+          expect(challenge?.includes('error="invalid_token"')).toBe(oauth);
+        }
+      }
+    }
+  }
+});
+
+it.each(["member", "unknown"])("does not offer ungrantable delete scopes to %s", role => {
+  env.OAUTH_PROVIDER_ENABLED = true;
+  const response = apiDenialResponse("missing_scope", "/api/v1/feedstocks/id", "id", {
+    oauth: true, role, scopes: ["feedstocks:read"], requiredScopes: ["feedstocks:delete"],
+  });
+  expect(response.status).toBe(403);
+  expect(response.headers.has("www-authenticate")).toBe(false);
+});
+it("does not offer scopes outside the role ceiling", () => {
+  env.OAUTH_PROVIDER_ENABLED = true;
+  expect(apiDenialResponse("missing_scope", "/api/v1/feedstocks", "id", {
+    oauth: true, role: "unknown", requiredScopes: ["feedstocks:write"],
+  }).headers.has("www-authenticate")).toBe(false);
 });
