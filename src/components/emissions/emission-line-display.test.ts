@@ -173,4 +173,15 @@ describe("filters and groups", () => {
     ]);
     expect(groups.map((group) => `${group.label} ${group.lines.length}`)).toEqual(["CO₂ stored 2", "Sampling required for MRV 1"]);
   });
+  it("puts a line removed from the template at the end of its group, not in a second group", () => {
+    const groups = groupLines([
+      makeLine({ componentId: "a", groupKey: "pyrolysis", groupName: "Pyrolysis" }),
+      makeLine({ componentId: "b", groupKey: "transport", groupName: "Transport" }),
+      makeLine({ componentId: "removed", groupKey: "pyrolysis", groupName: "Pyrolysis" }),
+    ]);
+    expect(groups.map((group) => [group.key, group.lines.map((line) => line.componentId)])).toEqual([
+      ["pyrolysis", ["a", "removed"]],
+      ["transport", ["b"]],
+    ]);
+  });
 });

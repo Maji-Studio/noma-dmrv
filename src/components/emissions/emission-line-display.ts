@@ -274,14 +274,19 @@ export function sortLines(lines: EmissionLine[], sort: LineSort): EmissionLine[]
   );
 }
 
+/**
+ * Lines under their group, groups in first-seen order. A line removed from the
+ * template sorts after every current group; it joins its group's end instead
+ * of opening the same group a second time.
+ */
 export function groupLines(lines: EmissionLine[]): { key: string; label: string; lines: EmissionLine[] }[] {
-  const groups: { key: string; label: string; lines: EmissionLine[] }[] = [];
+  const groups = new Map<string, { key: string; label: string; lines: EmissionLine[] }>();
   for (const line of lines) {
-    const last = groups.at(-1);
-    if (last?.key === line.groupKey) last.lines.push(line);
-    else groups.push({ key: line.groupKey, label: line.groupName, lines: [line] });
+    const group = groups.get(line.groupKey);
+    if (group) group.lines.push(line);
+    else groups.set(line.groupKey, { key: line.groupKey, label: line.groupName, lines: [line] });
   }
-  return groups;
+  return [...groups.values()];
 }
 
 export interface LineCounts { all: number; open: number; missing: number; review: number; notRecorded: number; done: number }
