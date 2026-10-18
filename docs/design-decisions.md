@@ -1,6 +1,6 @@
 # Design decisions
 
-What we tried per surface, what replaced it, and why. Read the entries for a surface before proposing a layout or pattern there; never re-propose something listed under "Rejected". Add an entry when a pick or a reversal lands (date, what was tried, what replaced it, the issue or PR). The rules themselves live in `docs/design-system.md`, `docs/forms.md` and `docs/ux-writing.md`; this file holds the history.
+This is the per-surface log of what we tried, what replaced it, and why. Read it before proposing a layout or pattern on a surface; never re-propose something listed under "Rejected". Add an entry when a pick or a reversal lands (date, what was tried, what replaced it, the issue or PR). The rules themselves live in `docs/design-system.md`, `docs/forms.md` and `docs/ux-writing.md`; this file holds the history.
 
 ## Cross-cutting
 
@@ -29,7 +29,7 @@ What we tried per surface, what replaced it, and why. Read the entries for a sur
 ## Stock, bins and transport
 
 - **Stock blocks** (PR 822 picks, #1001; 2026-09-23, 10-17): dry biochar headline → wet mass first, dry biochar below in a smaller, lighter line; correction previews show wet first.
-- **Stock history**: timeline. Bin history (#1004) is open: always wet mass, dry when available, the rest in the table, top to bottom on phones.
+- **Stock history**: timeline. Bin history (#1004): always wet mass, dry when available, the rest in the table, top to bottom on phones.
 - **Bin sheet** (#992): titled cards, the bin figure is hoverable, one text action top right per card, ⓘ next to the title, one "Adjust stock" (lost mass) action. Rejected: "Record loss" and "Reconcile stock" buttons; stock history buttons outside the bin route.
 - **Transport legs** (#892): derived transport on every record → transport only where goods move; route rail variant B, one line per leg with a menu, "View map" in a dialog. Rejected: two competing summary areas on the right.
 - **Production run flow** (#888, #999): Sankey, left to right, with numbers; water taken up shown as an inflow.
@@ -41,7 +41,3 @@ What we tried per surface, what replaced it, and why. Read the entries for a sur
 - **Credit batch overview**: card grid (kanban-like) and calendar → timeline with quiet bars, (+) slots in gaps defaulting to the rest of the month, applied mass in dry tonnes, hover cards only where they add information. Rejected: hovers that repeat a label or say "open batch page"; "Sampled" stats.
 - **Locks** (#1101, #1134): ad hoc per-form locking → one rule (Open, In use, Sent); a locked record shows an informative box and no call to action it cannot take.
 - **Status history** (#1074, #1146): popover on the status badge, timeline-like.
-
-## Open
-
-- Monthly facility report (#1109) layout A, B or C; bin history (#1004); switch-template warning (#1144); submission history (#1148, proposed Fine / Stopped / Needs support); row links (#1130, the user wants the full row clickable).

@@ -15,14 +15,14 @@ Load `maji-design-app` first and follow its steps. This skill adds what noma dec
 - `docs/design-decisions.md`: what was tried per surface, what replaced it, and what the user rejected. Read the entries for your surface before proposing anything.
 - `GLOSSARY.md`: domain terms override casual wording.
 
-## noma specifics
+## noma specifics (look up the owning section, do not restate it)
 
-- **Wet mass first.** Stock and mass figures lead with the wet mass the operator reads and enters; dry biochar sits below, smaller and lighter.
-- **Simple and Detailed** differ only in explanation. Simple keeps every input, figure and action (guarded by `form-detail-parity*.test.tsx`).
-- **Certification fields** use the CERT chip, never a "Required for certification" text or a legend.
-- **Dialogs:** actions bottom left, primary first; `md` width when listing records; text with hierarchy, never one paragraph; referenced records link where easy.
-- **Locks:** a locked record shows an informative box saying what cannot change, and no call to action it cannot take.
-- **Consistency:** when a style changes, carry it to every sibling surface in the same PR; risky surfaces (the dashboard) go in a droppable last commit.
+- Wet mass first: `docs/design-system.md` § Wet mass, moisture, dry mass; `docs/forms.md` § Stock blocks lead with wet mass.
+- Simple and Detailed: `docs/forms.md` § Simple and Detailed presentation (explanation only, parity test).
+- CERT chip: `docs/forms.md` § CERT chip status.
+- Dialogs: `docs/design-system.md` § Modal (action order, width, linked records).
+- Locks: `docs/design-system.md` § Notice (informative box, no unavailable action).
+- Consistency: `docs/design-system.md` § Consistency across sibling surfaces.
 
 ## Prototypes in noma
 

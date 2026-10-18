@@ -13,6 +13,16 @@ Deferred work lives here, never as a `TODO` in code.
 
 **`needs-registry-check`** marks a question that must be answered by the Isometric MCP server (`how_to`, then the protocol/OpenAPI tools) or a sandbox probe, **never** from `docs/isometric/*`, which are non-authoritative local summaries. Do not close one of these from a local doc.
 
+## Open design picks (`ui/design-picks`)
+
+A pick moves into [design-decisions.md](./design-decisions.md) and the owning doc ([design-system.md](./design-system.md), [forms.md](./forms.md)), then its bullet is removed.
+
+- Monthly facility report (#1109): layout A, B or C.
+- Bin history (#1004): `src/data-access/output-stock-history.ts:getOutputStockHistory` feeds the history, decided as a timeline with wet mass always shown; the table and phone order are open.
+- Switch-template warning (#1144): wording and placement.
+- Submission history (#1148): proposed statuses Fine / Stopped / Needs support.
+- Row links (#1130): the user wants the full row clickable.
+
 ## Open-item problem wording
 
 - `src/lib/credit-batches/open-items.ts:buildCreditBatchOpenItems`: Open-item problem
