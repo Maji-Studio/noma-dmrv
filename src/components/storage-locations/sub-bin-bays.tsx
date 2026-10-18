@@ -13,6 +13,7 @@ import { DropIcon } from "@phosphor-icons/react/dist/ssr";
 import type { CSSProperties, ReactNode } from "react";
 import { MASS_CATEGORY_FILLS, formatCompositionMass, type MassCategory, type MassSegment } from "@/components/forms/composition-ledger";
 import { SegmentKey, batchAccentFill } from "@/components/ui/segment-bar";
+import { STOCK_PART_MIN_KG } from "@/config/output-stock";
 import { formatFacilityTime } from "@/lib/date-utils";
 import { DRY_BIOCHAR_LABEL, ingredientSolidsLabel } from "@/components/biochar-products/product-composition-components";
 import { ESTIMATED_WATER_LABEL, INGREDIENT_SOLIDS_LABEL } from "@/lib/output-stock/labels";
@@ -23,8 +24,6 @@ import { DetailsTooltip, SubBinTooltip, subBinMoistureText } from "./sub-bin-car
 /** How much of a batch accent a bay's fill carries, so the figure on it stays legible. */
 const BAY_TINT_PERCENT = 32;
 const SHARES_LABEL = "Dry biochar by batch";
-/** Below this a part is rounding, not one worth a key entry. */
-const PART_MIN_KG = 0.05;
 /** Batches listed beside a pile before the rest fold into one line. */
 const PILE_LIST_LIMIT = 6;
 /** Bays are narrow; the day added is enough, the full time sits in its details. */
@@ -55,10 +54,10 @@ function bayIngredientsKg(subBin: OutputSubBin): number {
  * add up to the bay.
  */
 function ingredientParts(subBin: OutputSubBin): { label: string; kg: number }[] {
-  const named = subBin.ingredients.filter((ingredient) => ingredient.solidsKg >= PART_MIN_KG)
+  const named = subBin.ingredients.filter((ingredient) => ingredient.solidsKg >= STOCK_PART_MIN_KG)
     .map((ingredient) => ({ label: ingredientSolidsLabel(ingredient.name), kg: ingredient.solidsKg }));
   const restKg = bayIngredientsKg(subBin) - named.reduce((sum, part) => sum + part.kg, 0);
-  return restKg >= PART_MIN_KG ? [...named, { label: INGREDIENT_SOLIDS_LABEL, kg: restKg }] : named;
+  return restKg >= STOCK_PART_MIN_KG ? [...named, { label: INGREDIENT_SOLIDS_LABEL, kg: restKg }] : named;
 }
 
 function bayFigure(subBin: OutputSubBin): string {
@@ -97,7 +96,7 @@ function BinParts({ rows, label }: { rows: PartRow[]; label: string }) {
           <dt className="flex min-w-0 items-center gap-8 text-[var(--color-text-secondary)]">
             <span aria-hidden="true" className={`h-12 w-12 shrink-0 border border-[var(--color-border-secondary)] ${row.swatchClassName ?? ""}`} style={row.swatchStyle} />
             {row.details ? <DetailsTooltip title={row.label} rows={row.details} trigger={
-              <Button type="button" variant="noOutline" className="h-auto min-h-44 min-w-0 justify-start p-0 body-caption normal-case" aria-label={`${row.label} details`}>
+              <Button type="button" variant="noOutline" className="h-auto min-h-44 min-w-0 justify-start p-0" aria-label={`${row.label} details`}>
                 {/* The button's own label type is mono caps; the part reads like the rows without details. */}
                 <span className="truncate body-caption normal-case text-[var(--color-text-secondary)]">{row.label}</span>
               </Button>
@@ -135,7 +134,7 @@ function SubBinBay({ subBin, index, percent, nextOut, timeZone }: { subBin: Outp
             <span className="inline-flex items-center gap-2 body-caption text-[var(--color-text-tertiary)]">
               <DropIcon size={12} aria-label="Estimated moisture" />{subBinMoistureText(subBin)}
             </span>
-            <span className="body-caption text-[var(--color-text-tertiary)]">{formatFacilityTime(new Date(subBin.placedAt), timeZone, BAY_DATE_FORMAT)}</span>
+            <span className="body-caption normal-case text-[var(--color-text-tertiary)]">{formatFacilityTime(new Date(subBin.placedAt), timeZone, BAY_DATE_FORMAT)}</span>
           </span>
         </Button>
       } />
@@ -153,7 +152,7 @@ export function SubBinBays({ subBins, timeZone, label, capacityKg }: { subBins: 
       <div className="flex flex-wrap items-center gap-x-16 gap-y-12">
         <ul aria-label={label} className="tabular-nums"><li><SubBinBay subBin={subBin} index={0} percent={capacityKg && capacityKg > 0 ? Math.min(bayMassKg(subBin) / capacityKg, 1) * PERCENT : PERCENT} nextOut={false} timeZone={timeZone} /></li></ul>
         <BinParts label={`${subBin.code} contents`} rows={[
-          ...(waterKg >= PART_MIN_KG ? [{ label: ESTIMATED_WATER_LABEL, kg: waterKg, swatchClassName: MASS_CATEGORY_FILLS["existing-water"] }] : []),
+          ...(waterKg >= STOCK_PART_MIN_KG ? [{ label: ESTIMATED_WATER_LABEL, kg: waterKg, swatchClassName: MASS_CATEGORY_FILLS["existing-water"] }] : []),
           ...ingredientParts(subBin).map((part) => ({ ...part, swatchClassName: MASS_CATEGORY_FILLS["ingredient-solids"] })),
           { label: DRY_BIOCHAR_LABEL, kg: subBin.dryMassKg, swatchStyle: { background: bayTint(0) } },
         ]} />
@@ -165,7 +164,7 @@ export function SubBinBays({ subBins, timeZone, label, capacityKg }: { subBins: 
   const sharedParts: MassSegment[] = [
     { label: INGREDIENT_SOLIDS_LABEL, mass: ingredientsKg, category: "ingredient-solids" as const },
     { label: ESTIMATED_WATER_LABEL, mass: waterKg, category: "existing-water" as const },
-  ].filter((part) => part.mass >= PART_MIN_KG);
+  ].filter((part) => part.mass >= STOCK_PART_MIN_KG);
   return (
     <div className="flex flex-col gap-8">
       <ul aria-label={label} className="flex flex-wrap gap-x-8 gap-y-16 tabular-nums">

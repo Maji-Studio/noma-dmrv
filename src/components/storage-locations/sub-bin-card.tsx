@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
 import { InfoIcon } from "@phosphor-icons/react/dist/ssr";
 import { cloneElement, useState, type MouseEvent, type ReactElement } from "react";
+import { STOCK_PART_MIN_KG } from "@/config/output-stock";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
@@ -20,8 +21,6 @@ const MOVEMENT_LABELS: Record<SubBinMovement["kind"], string> = {
 };
 
 const TOOLTIP_OFFSET_PX = 6;
-/** Below this a part is rounding, not one worth a row. */
-const PART_MIN_KG = 0.05;
 const CONTENTS_LABEL = "Contents";
 const MOVEMENTS_LABEL = "Latest movements";
 /** The shared tooltip's delays (`components/ui/tooltip`). */
@@ -48,16 +47,17 @@ export interface DetailRow { label: string; value: string }
 
 /**
  * What a sub-bin or batch is made of, as the product composition names the
- * parts: its dry biochar, each ingredient's solids, then the water its wet
- * estimate holds over those solids. Pure biochar has no ingredient row, and a
- * batch with no wet estimate has no water row: there is nothing to subtract.
+ * parts, top down in the order the bay draws them: the water its wet estimate
+ * holds over its solids, each ingredient's solids, then its dry biochar. Pure
+ * biochar has no ingredient row, and a batch with no wet estimate has no water
+ * row: there is nothing to subtract.
  */
 export function contentsRows({ dryMassKg, ingredients, waterKg }: Pick<OutputSubBin, "dryMassKg" | "ingredients"> & { waterKg: number | null }): DetailRow[] {
   return [
-    { label: DRY_BIOCHAR_LABEL, value: formatMassKg(dryMassKg) },
-    ...ingredients.filter((ingredient) => ingredient.solidsKg >= PART_MIN_KG)
+    ...(waterKg !== null && waterKg >= STOCK_PART_MIN_KG ? [{ label: ESTIMATED_WATER_LABEL, value: formatMassKg(waterKg) }] : []),
+    ...ingredients.filter((ingredient) => ingredient.solidsKg >= STOCK_PART_MIN_KG)
       .map((ingredient) => ({ label: ingredientSolidsLabel(ingredient.name), value: formatMassKg(ingredient.solidsKg) })),
-    ...(waterKg !== null && waterKg >= PART_MIN_KG ? [{ label: ESTIMATED_WATER_LABEL, value: formatMassKg(waterKg) }] : []),
+    { label: DRY_BIOCHAR_LABEL, value: formatMassKg(dryMassKg) },
   ];
 }
 
@@ -114,7 +114,8 @@ export function DetailsTooltip({ title, rows, groups = [], trigger }: {
  */
 export function SubBinTooltip({ subBin, timeZone, trigger }: { subBin: OutputSubBin; timeZone: string; trigger: TapTrigger }) {
   const wet = subBin.wetEstimateKg === null ? [] : [
-    { label: ESTIMATED_WET_LABEL, value: subBinWetText(subBin) },
+    // The label already says wet, so the value is the bare estimate.
+    { label: ESTIMATED_WET_LABEL, value: `≈ ${formatWetEstimate(subBin.wetEstimateKg)} kg` },
     { label: "Moisture", value: subBinMoistureText(subBin) },
   ];
   const waterKg = subBin.wetEstimateKg === null ? null : Math.max(subBin.wetEstimateKg - subBin.solidsKg, 0);

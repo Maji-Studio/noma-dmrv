@@ -7,13 +7,16 @@ import { batchAccentFill } from "@/components/ui/segment-bar";
 import type { AffectedStockPreview as Preview, OutputStockBalanceView } from "@/types/output-stock";
 
 /**
- * The split bar divides a wet mass into dry solids and water, and dry solids are
- * not the tracked quantity: a blended product bin holding 84 kg of dry solids
- * holds 70 kg of dry biochar. Naming the segment "dry biochar" would put two
- * different masses under one label on the same block, so the bar says solids and
- * the balance pair keeps the tracked quantity.
+ * The dry part of the split bar, which divides a wet mass into its dry part and
+ * water. In a biochar bin that dry part is dry biochar. In a product or
+ * ingredient bin it is not the tracked quantity: a blended product bin holding
+ * 84 kg of dry solids holds 70 kg of dry biochar, so naming the segment "dry
+ * biochar" there would put two different masses under one label on the same
+ * block. The bar says dry solids and the balance pair keeps the tracked quantity.
  */
-export const SPLIT_MATERIAL_LABEL = "Solids";
+export function splitDryLabel(preview: Pick<Preview, "lane">): string {
+  return preview.lane === "biochar" ? "Dry biochar" : "Dry solids";
+}
 
 /**
  * Wet estimates are whole kilograms. They are computed at an entered moisture,

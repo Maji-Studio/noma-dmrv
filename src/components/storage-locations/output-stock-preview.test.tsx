@@ -196,12 +196,13 @@ describe("StockMovementCard", () => {
     expect(text).toContain("Wet stock in bin, estimate");
     expect(text).toMatch(/≈ 500\s+490 kg/);
     expect(text).toContain("10 kg wet lost at 30% moisture");
-    expect(text).toMatch(/Dry solids\s+7 kg/);
+    // A biochar bin's dry part is dry biochar itself, so the bar names it.
+    expect(text).toMatch(/Dry biochar\s+7 kg/);
     expect(text).toMatch(/Water\s+3 kg/);
     expect(card.markup()).toContain('"data-moisture-segment":"dry"');
     expect(card.renderer.root.findAll(node => node.props.role === "group" && node.props["aria-label"] === "Dry biochar in bin: 350 kg before, 343 kg after")).toHaveLength(1);
-    expect(text.indexOf("Wet stock in bin")).toBeLessThan(text.indexOf("Dry solids"));
-    expect(text.indexOf("Dry solids")).toBeLessThan(text.indexOf("Dry biochar in bin"));
+    expect(text.indexOf("Wet stock in bin")).toBeLessThan(text.search(/Dry biochar\s+7 kg/));
+    expect(text.search(/Dry biochar\s+7 kg/)).toBeLessThan(text.indexOf("Dry biochar in bin"));
     // The entered figures are the inputs, not the consequence, so none of them
     // is readable until the disclosure is opened.
     expect(text).not.toContain("Wet removed");
