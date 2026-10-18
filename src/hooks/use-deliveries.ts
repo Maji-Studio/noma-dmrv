@@ -1,3 +1,4 @@
+import { invalidateRecordedTransport } from "./transport-distance-query-keys";
 import { throwDeliveryActionError } from "@/lib/delivery-action-errors";
 import { StaleVersionError } from "@/lib/stale-version";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
@@ -99,6 +100,19 @@ export function useDeliveryWithRelations(deliveryId: string, enabled = true) {
 }
 
 /**
+ * Reads one delivery fresh, for a sheet that must reopen its form on the
+ * record's new version (after a deliberate refresh from location).
+ */
+export function useFetchDeliveryWithRelations() {
+  const queryClient = useQueryClient();
+  return (deliveryId: string) => queryClient.fetchQuery({
+    queryKey: deliveryKeys.detailWithRelations(deliveryId),
+    queryFn: async () => unwrap(await getDeliveryWithRelationsFn(deliveryId)),
+    staleTime: 0,
+  });
+}
+
+/**
  * Hook to fetch delivery statistics
  */
 export function useDeliveryStats(
@@ -151,6 +165,7 @@ export function useCreateDelivery(
       // Invalidate stats
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void invalidateRecordedTransport(queryClient);
       // Delivery writes resync the derived biochar distribution leg and its
       // evidence set, inputs to certification readiness.
       void invalidateCertificationReadiness(queryClient);
@@ -269,6 +284,7 @@ export function useUpdateDelivery(
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void invalidateRecordedTransport(queryClient);
       // Delivery writes resync the derived biochar distribution leg and its
       // evidence set, inputs to certification readiness.
       void invalidateCertificationReadiness(queryClient);
@@ -371,6 +387,7 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void invalidateRecordedTransport(queryClient);
       void queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
       void queryClient.invalidateQueries({ queryKey: biocharProductKeys.details() });
       void queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });

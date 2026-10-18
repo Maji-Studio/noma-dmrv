@@ -34,12 +34,14 @@ describe("RemovalEmissionsLedger", () => {
               creditBatchId: "batch-1",
               creditBatchCode: "CB-001",
               claimingRemovalId: "removal-previous",
+              claimingRemovalCode: "RM-26-001",
               contribution: "delivery-only",
             },
             {
               creditBatchId: "batch-2",
               creditBatchCode: "CB-002",
               claimingRemovalId: null,
+              claimingRemovalCode: null,
               contribution: "production-and-delivery",
             },
           ],
@@ -51,7 +53,7 @@ describe("RemovalEmissionsLedger", () => {
 
     expect(html).toContain("≈ 12.34 t CO₂e");
     expect(html.match(/Estimated CO₂e/g)).toHaveLength(1);
-    expect(html).toContain("Previously included in Removal removal-…");
+    expect(html).toContain("Previously included in Removal RM-26-001");
     expect(html).toContain("Mass and distance");
     expect(html).toContain("AP-001");
     expect(html).toContain("Emission allocation");
