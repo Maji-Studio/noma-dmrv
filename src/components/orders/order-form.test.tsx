@@ -349,7 +349,7 @@ describe("OrderForm customer field", () => {
       state.locationOptions = [{ id: location.id, code: "", name: location.name! }, { id: "location-2", code: "", name: "South field" }];
       state.customer = { archivedAt: null };
       const client = new QueryClient();
-      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>);
+      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} lock={OPEN_LOCK} /></QueryClientProvider>);
       const picker = screen.getByRole("combobox", { name: /^Customer location/ });
       expect(picker.getAttribute("aria-readonly")).toBeNull();
       fireEvent.click(picker);
