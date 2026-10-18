@@ -16,7 +16,10 @@ Isometric batches (D14, [#368](https://github.com/Maji-Studio/noma-dmrv/issues/3
 The shared date helper owns date validity and ordering for every certifier.
 Create, update, membership, run options, and the certifier-aware form check use
 this split. The Isometric-conditional DB constraint
-`credit_batches_isometric_max_one_month` remains the backstop.
+`credit_batches_isometric_max_one_month` enforces `end_date < start_date + interval '1 month'`.
+The form and server use the same strict, month-end-clamped boundary. Isometric
+readiness and submission also check earliest member-run start to latest end and
+name the latest-ending run when that span reaches one month.
 
 As an implementation decision of [#368](https://github.com/Maji-Studio/noma-dmrv/issues/368)'s
 D14 follow-through, linking a facility to Isometric refuses archived facilities

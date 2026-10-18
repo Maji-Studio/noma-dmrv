@@ -51,7 +51,7 @@ applications cover.
 and End-of-Life phases only; GHGAM §4.1 keeps operational emissions
 per-period, and the front-load is §8.6.2-clean because all of a credit
 batch's production operations occur within the batch's reporting period
-(the batch is ≤ 1 month by ADR 0016, and the entry's window spans production
+(the batch is less than one month by ADR 0016, and the entry's window spans production
 start → latest application).
 
 ## Decision

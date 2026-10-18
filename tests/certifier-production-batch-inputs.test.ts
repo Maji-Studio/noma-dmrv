@@ -224,12 +224,14 @@ describe("getProductionBatchRegistryInputs", () => {
     expect(inputByCode.get(`CB-PTB-A-${tag}`)).toMatchObject({
       startedAt: "2026-01-02T07:00:00.000Z",
       endedAt: "2026-01-31T23:00:00.000Z",
+      latestEndingRunCode: `PR-PTB-A2-${tag}`,
       totalDryMassKg: 30,
       runsMissingEndTime: 0,
     });
     expect(inputByCode.get(`CB-PTB-B-${tag}`)).toMatchObject({
       startedAt: "2026-02-05T09:00:00.000Z",
       endedAt: "2026-02-05T11:00:00.000Z",
+      latestEndingRunCode: `PR-PTB-B1-${tag}`,
       totalDryMassKg: 70,
       runsMissingEndTime: 1,
     });
