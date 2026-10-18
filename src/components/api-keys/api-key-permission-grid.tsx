@@ -7,26 +7,49 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import { cn } from "@/lib/utils";
 import { API_PERMISSION_ACTIONS, API_PERMISSION_LABELS, API_PERMISSION_ROWS } from "./api-key-permissions";
 
+type PermissionAction = (typeof API_PERMISSION_ACTIONS)[number];
+
 interface ApiKeyPermissionGridProps {
   value: readonly ApiScope[];
   onChange: (value: ApiScope[]) => void;
   disabled?: boolean;
   error?: string;
+  /** Show only these scopes (rows without one are dropped). Defaults to every scope. */
+  scopes?: readonly ApiScope[];
+  /** Columns to show. Defaults to Read, Write and Delete. */
+  actions?: readonly PermissionAction[];
+  /** Prefix for the element ids, so two grids on one page do not collide. */
+  idPrefix?: string;
+  /** Names the table for screen readers. */
+  caption?: string;
+  /** Keeps the "Permissions" legend for screen readers only, when a heading above already says it. */
+  hideLegend?: boolean;
 }
 
-export function ApiKeyPermissionGrid({ value, onChange, disabled, error }: ApiKeyPermissionGridProps) {
+export function ApiKeyPermissionGrid({
+  value, onChange, disabled, error, scopes, actions: allActions = API_PERMISSION_ACTIONS,
+  idPrefix = "api-key-permissions", caption = "API key permissions by entity", hideLegend = false,
+}: ApiKeyPermissionGridProps) {
+  const noteId = `${idPrefix}-note`;
+  const errorId = `${idPrefix}-error`;
+  const rows = API_PERMISSION_ROWS.filter((row) => !scopes || row.scopes.some((scope) => scopes.includes(scope)));
+  // A restricted grid drops a column nobody asked for, so no header sits over empty cells.
+  const actions = scopes ? allActions.filter((action) => scopes.some((scope) => scope.endsWith(`:${action}`))) : allActions;
+  const showDelete = actions.includes("delete");
   return (
-    <fieldset aria-describedby={error ? "api-key-permissions-note api-key-permissions-error" : "api-key-permissions-note"} aria-invalid={!!error} className="min-w-0 space-y-12" disabled={disabled}>
-      <legend className="body-small font-medium">Permissions</legend>
-      <Notice tone="warning" id="api-key-permissions-note">
-        Delete allows the key to delete records. Select it only when needed.
-      </Notice>
+    <fieldset aria-describedby={showDelete ? (error ? `${noteId} ${errorId}` : noteId) : error ? errorId : undefined} aria-invalid={!!error} className="min-w-0 space-y-12" disabled={disabled}>
+      <legend className={cn("body-small font-medium", hideLegend && "sr-only")}>Permissions</legend>
+      {showDelete && (
+        <Notice tone="warning" id={noteId}>
+          Delete allows the key to delete records. Select it only when needed.
+        </Notice>
+      )}
       <table className="w-full body-small border-collapse">
-        <caption className="sr-only">API key permissions by entity</caption>
+        <caption className="sr-only">{caption}</caption>
         <thead>
           <tr className="border-b border-[var(--color-border-secondary)]">
             <th scope="col" className="py-8 text-left body-small font-medium text-[var(--color-text-secondary)]">Entity</th>
-            {API_PERMISSION_ACTIONS.map((action) => (
+            {actions.map((action) => (
               <th key={action} scope="col" className="py-8 text-center body-small font-medium text-[var(--color-text-secondary)]">
                 {API_PERMISSION_LABELS[action]}
               </th>
@@ -34,11 +57,11 @@ export function ApiKeyPermissionGrid({ value, onChange, disabled, error }: ApiKe
           </tr>
         </thead>
         <tbody>
-          {API_PERMISSION_ROWS.map((row) => (
+          {rows.map((row) => (
             <tr key={row.entity} className="border-b border-[var(--color-border-tertiary)]">
               <th scope="row" className="py-8 pr-8 text-left font-normal">{row.label}</th>
-              {API_PERMISSION_ACTIONS.map((action) => {
-                const scope = row.scopes.find((scope) => scope === `${row.entity}:${action}`);
+              {actions.map((action) => {
+                const scope = row.scopes.find((scope) => scope === `${row.entity}:${action}` && (!scopes || scopes.includes(scope)));
                 return (
                   <td key={action} className={cn("text-center", scope && action === "delete" && "bg-[var(--st-bad-bg)]")}>
                     {scope ? (
@@ -47,7 +70,7 @@ export function ApiKeyPermissionGrid({ value, onChange, disabled, error }: ApiKe
                         <input
                           type="checkbox"
                           checked={value.includes(scope)}
-                          aria-describedby={action === "delete" ? "api-key-permissions-note" : undefined}
+                          aria-describedby={action === "delete" ? noteId : undefined}
                           className={cn("size-16 cursor-pointer accent-[var(--color-interaction)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--color-interaction)]", action === "delete" && "accent-[var(--st-bad)]")}
                           onChange={(event) => onChange(event.target.checked ? [...value, scope] : value.filter((selected) => selected !== scope))}
                         />
@@ -60,7 +83,7 @@ export function ApiKeyPermissionGrid({ value, onChange, disabled, error }: ApiKe
           ))}
         </tbody>
       </table>
-      <FormError id="api-key-permissions-error" message={error} />
+      <FormError id={errorId} message={error} />
     </fieldset>
   );
 }

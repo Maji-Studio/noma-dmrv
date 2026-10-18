@@ -33,6 +33,9 @@ function resolveAuthBaseURL(): string {
 
 export const authClient = createAuthClient({
   baseURL: resolveAuthBaseURL(),
+  // The default redirect plugin would follow any `{ redirect, url }` response
+  // unchecked. Callers follow OAuth continuations through followOAuthContinuation.
+  disableDefaultFetchPlugins: true,
   plugins: [organizationClient(), oauthProviderClient()],
 });
 

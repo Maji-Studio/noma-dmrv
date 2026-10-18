@@ -145,7 +145,7 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
                       "peer-checked:border-[var(--color-interaction)] peer-checked:bg-[var(--color-background-interaction-light)] peer-checked:shadow-[inset_0_0_0_1px_var(--color-interaction)]",
                       "forced-colors:peer-checked:border-[Highlight] forced-colors:peer-checked:border-2",
                       "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--color-interaction)]",
-                      "peer-disabled:opacity-60 peer-disabled:hover:border-[var(--color-border-secondary)]",
+                      "peer-disabled:hover:border-[var(--color-border-secondary)]",
                       error && "border-[var(--color-signal-red)]",
                     )}
                   >
@@ -153,7 +153,7 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
                       <span
                         aria-hidden
                         className={cn(
-                          "shrink-0 items-center text-[var(--color-text-secondary)]",
+                          "shrink-0 items-center text-[var(--color-text-secondary)] group-has-[input:disabled]:opacity-60",
                           stackArt ? "flex" : "hidden @min-[22rem]:flex",
                         )}
                       >
@@ -162,7 +162,7 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
                     )}
                     <span className="flex min-w-0 flex-1 flex-col gap-4">
                       <span className="flex items-center gap-8">
-                        <span className="body-small font-medium text-[var(--color-text-primary)]">
+                        <span className="body-small font-medium text-[var(--color-text-primary)] group-has-[input:disabled]:opacity-60">
                           {option.title}
                         </span>
                         {option.badge && (
