@@ -43,6 +43,7 @@ import { Button } from "@/components/ui/button";
 import { SectionLabel } from "@/components/forms/section-label";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { SecondaryFigure } from "@/components/ui/secondary-figure";
+import { InfoHint } from "@/components/ui/tooltip";
 import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 import {
   isCertFieldValuePresent,
@@ -171,6 +172,8 @@ DetailRow.displayName = "DetailRow";
 interface DetailFieldProps {
   label: string;
   value: React.ReactNode;
+  /** Explanation behind an ⓘ beside the label, mirroring the form field's. */
+  hint?: React.ReactNode;
   className?: string;
   certifyRequired?: boolean;
   /** Override the value-derived saved status for composite requirements. */
@@ -271,6 +274,7 @@ function resolveDetailFieldValue({
 function DetailField({
   label,
   value,
+  hint,
   className,
   certifyRequired,
   certifyStatus,
@@ -291,6 +295,7 @@ function DetailField({
       <span className="flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
         {label}
         {certifyRequired && <CertificationFieldTag status={resolvedCertifyStatus} />}
+        {hint != null && <InfoHint side="top" label={`More about ${label}`}>{hint}</InfoHint>}
       </span>
       <span
         className={cn("body-medium break-words", valueClassName)}
@@ -345,6 +350,8 @@ function DetailSecondaryLine({
 export interface DetailPanelField {
   label: string;
   value: React.ReactNode;
+  /** Explanation behind an ⓘ beside the label, mirroring the form field's. */
+  hint?: React.ReactNode;
   certifyRequired?: boolean;
   certifyStatus?: CertFieldStatus;
   /** Which missing-value token stands in when `value` is empty. Defaults to `notRecorded`. */
@@ -407,6 +414,7 @@ function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
                   key={`${rowIdx}-${fieldIdx}`}
                   label={field.label}
                   value={field.value}
+                  hint={field.hint}
                   certifyRequired={field.certifyRequired}
                   certifyStatus={field.certifyStatus}
                   emptySituation={field.emptySituation}

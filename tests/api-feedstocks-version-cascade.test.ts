@@ -151,7 +151,7 @@ describe("feedstock version cascade across action and REST", { timeout: SUITE_TI
     expect(distanceLegs[0]).toMatchObject({
       id: initialLeg.id, version: THIRD_VERSION, distanceKm: DISTANCE_ONLY_KM, loadMassKg: UPDATED_WET_KG,
     });
-    expect(distanceOnly).toEqual({ ...updated, version: THIRD_VERSION, updatedAt: distanceOnly.updatedAt });
+    expect(distanceOnly).toEqual({ ...updated, distanceKmOverride: DISTANCE_ONLY_KM, version: THIRD_VERSION, updatedAt: distanceOnly.updatedAt });
     const latest = await readFeedstock(fixture, saved.row.id);
     expect(latest.etag).toBe(etagAt(THIRD_VERSION));
     expect(latest.row).toEqual(distanceOnly);

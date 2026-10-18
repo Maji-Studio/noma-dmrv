@@ -120,7 +120,13 @@ location/facility pairs, composite organization-safe foreign keys, and cascade
 on location deletion. Locations and parties have no scalar distance columns.
 Delivery `recorded_distance_km` and `recorded_distance_source` snapshot the resolved
 pair independently of an optional override, preserving per-delivery accounting
-when the location's defaults change. Pair upserts fill null delivery snapshots
+when the location's defaults change. Feedstock `distance_km_override`,
+`distance_source` and `distance_note` persist an explicit override separately
+from its derived leg. Clearing that override captures the current supplier
+default location and facility pair; omitting distance from an edit keeps the
+recorded leg distance. A version-checked refresh explicitly re-stamps a derived
+feedstock or delivery distance and resyncs legs under the lineage guard.
+Pair upserts fill null delivery snapshots
 and missing feedstock legs in the same transaction, skipping locked certification
 lineage and archived cargo. Saving a pair fills a missing distance; never changes a recorded one. Missing pairs permit entry and block
 certification readiness where transport is required.

@@ -7,6 +7,10 @@ type Coverage = { status: "direct" } | { status: "runner"; operations: string[] 
 // Explicit inventory includes wrappers, cascades and derived writers. Discovery
 // below scans the whole data-access tree so new modules cannot bypass it.
 const ACTIVITY_COVERAGE = {
+  "transport-distance-refresh.ts": {
+    refreshFeedstockDistanceInTransaction: { status: "runner", operations: ["refresh_feedstock_distance"] },
+    refreshDeliveryDistanceInTransaction: { status: "runner", operations: ["refresh_delivery_distance"] },
+  },
   "emission-entries.ts": {
     createEmissionEntry: { status: "direct" },
     updateEmissionEntry: { status: "direct" },

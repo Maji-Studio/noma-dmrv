@@ -41,6 +41,7 @@ vi.mock("@/hooks/use-deliveries", () => ({
   }),
   useCreateDelivery: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useUpdateDelivery: () => ({ isPending: false, mutateAsync: harness.update }),
+  useFetchDeliveryWithRelations: () => vi.fn(),
 }));
 vi.mock("@/hooks/use-credit-batches", () => ({
   useCreditBatches: () => ({ data: [], isLoading: false, error: null }),

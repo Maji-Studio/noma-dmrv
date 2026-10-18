@@ -151,9 +151,12 @@ it("shows typed server refusals beside the delivery field", async () => {
   expect(await screen.findByText("Enter a time at or before now.")).toBeTruthy();
 });
 
-it("refuses a typed zero distance with the server's message", async () => {
+it("refuses a typed zero override with the server's message", async () => {
   render(<DeliveryForm delivery={delivery} onSubmit={vi.fn()} />, { wrapper });
-  fireEvent.change(screen.getByRole("spinbutton", { name: /One-way distance/ }), { target: { value: "0" } });
+  fireEvent.click(screen.getByRole("button", { name: "Override the one-way distance" }));
+  const input = screen.getByRole("spinbutton", { name: /One-way distance/ });
+  fireEvent.change(input, { target: { value: "0" } });
+  fireEvent.blur(input);
   expect(await screen.findByText("Distance must be greater than 0")).toBeTruthy();
 });
 

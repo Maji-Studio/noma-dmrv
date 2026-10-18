@@ -217,8 +217,9 @@ test.describe("Feedstock UI CRUD", () => {
 
     // With no supplier chosen, no supplier-derived transport distance cascades.
     await expect(
-      dialog.locator('input[name="transportDistanceKm"]')
+      dialog.getByRole("spinbutton", { name: "One-way distance (km)" })
     ).toHaveValue("");
+    await expect(dialog.getByText("Select a supplier to load its location distance.")).toBeVisible();
   });
 
   test("shows concise allocation feedback while entering split masses", async ({

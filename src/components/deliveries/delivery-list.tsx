@@ -31,6 +31,7 @@ import {
   useDeliveries,
   useDeliveryStats,
   useDeliveryWithRelations,
+  useFetchDeliveryWithRelations,
   useUpdateDelivery,
 } from "@/hooks/use-deliveries";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -275,6 +276,7 @@ export function DeliveryList() {
   // Mutations
   const createDelivery = useCreateDelivery();
   const updateDelivery = useUpdateDelivery();
+  const fetchDelivery = useFetchDeliveryWithRelations();
   const toast = useToast();
   const createWithEvidence = useCreateWithEvidence({
     entityType: "delivery",
@@ -326,7 +328,15 @@ export function DeliveryList() {
           mode: deepLinkMode === "edit" ? "edit" as const : "view" as const,
         }
       : null;
-  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  // View mode reads the live record, so a deliberate distance refresh shows
+  // at once and Edit freezes the refreshed version.
+  const liveViewEntity =
+    sideSheet?.mode === "view" && sideSheet.entity && focusedDelivery.data?.id === sideSheet.entity.id
+      ? deliveryDetailToRelations(focusedDelivery.data)
+      : null;
+  const displaySideSheet = liveViewEntity
+    ? ({ entity: liveViewEntity, mode: "view" } as const)
+    : sideSheet ?? deepLinkedSideSheet;
 
   // Side sheet helpers
   const openCreate = () => {
@@ -606,7 +616,9 @@ export function DeliveryList() {
         }
       >
         <DeliveryForm
-          key={sideSheetEntity?.id ?? "create"}
+          // The version keys the form too, so a refresh from location reopens
+          // it on the record it saved instead of a stale draft.
+          key={sideSheetEntity ? `${sideSheetEntity.id}:${sideSheetEntity.version}` : "create"}
           delivery={sideSheetEntity as Delivery | undefined}
           onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
           onCancel={attemptCloseSideSheet}
@@ -615,6 +627,11 @@ export function DeliveryList() {
           submitLabel={sideSheetMode === "create" ? "Create delivery" : "Save changes"}
           deferredAttachments={deferredAttachments}
           focusTarget={sideSheetMode === "edit" ? activeFocusTarget : null}
+          onDistanceRefreshed={async () => {
+            if (!sideSheetEntity) return;
+            const fresh = await fetchDelivery(sideSheetEntity.id);
+            setSideSheet({ entity: deliveryDetailToRelations(fresh), mode: "edit" });
+          }}
         />
       </EntitySideSheet>
 

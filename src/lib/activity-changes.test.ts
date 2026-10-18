@@ -203,3 +203,19 @@ it.each(["supplier", "customer"])("never captures %s contact values", entityType
   expect(result.changedFields).toEqual(["address", "contactEmail", "contactName", "contactPhone"]);
   expect(result.changes).toEqual({});
 });
+
+it("captures feedstock override values and effective transport without storing the note", () => {
+  expect(diffActivityChanges("feedstock", {
+    distanceKmOverride: null, distanceSource: null, distanceNote: null,
+    transportDistanceKm: 42, transportDistanceSource: "manual",
+  }, {
+    distanceKmOverride: 55, distanceSource: "document", distanceNote: "private note",
+    transportDistanceKm: 55, transportDistanceSource: "document",
+  })).toEqual({
+    changedFields: ["distanceKmOverride", "distanceNote", "distanceSource", "transportDistanceKm", "transportDistanceSource"],
+    changes: {
+      distanceKmOverride: { from: null, to: "55" }, distanceSource: { from: null, to: "document" },
+      transportDistanceKm: { from: 42, to: 55 }, transportDistanceSource: { from: "manual", to: "document" },
+    },
+  });
+});
