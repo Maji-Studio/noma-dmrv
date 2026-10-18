@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useEffectEvent } from "react";
 import { XIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -22,12 +22,14 @@ interface EmissionsUndoBarProps {
 }
 
 export function EmissionsUndoBar({ message, onUndo, onDismiss, undoing, inline }: EmissionsUndoBarProps) {
-  // External-system sync: a timer that dismisses the bar. Remount (key) to restart it.
+  // External-system sync: a timer that dismisses the bar. Parent renders keep it
+  // running (the latest onDismiss is read when it fires); remount (key) to restart it.
+  const dismiss = useEffectEvent(onDismiss);
   useEffect(() => {
     if (undoing) return;
-    const timer = window.setTimeout(onDismiss, UNDO_VISIBLE_MS);
+    const timer = window.setTimeout(dismiss, UNDO_VISIBLE_MS);
     return () => window.clearTimeout(timer);
-  });
+  }, [undoing]);
   return (
     <div
       role="status"
