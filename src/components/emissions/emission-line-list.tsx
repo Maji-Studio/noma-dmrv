@@ -2,8 +2,9 @@
  * The read view of a credit batch's emission lines: Line | State | Sources |
  * Total | actions, grouped by template group in template order. Each row is
  * an accordion: the name button (aria-expanded) toggles the body, and the
- * whole header is a larger click target. Add manual entry sits on the right
- * of the row; the chips, links and the ⋯ menu stay separate controls.
+ * whole header is a larger click target. Add manual entry lives in the row's
+ * ⋯ menu, and in the Sources cell as a quiet link while the line has no
+ * source yet; the chips, links and the ⋯ menu stay separate controls.
  *
  * A list, not a table, so the row can be one click target and phones can
  * stack the same cells into a card.
@@ -14,10 +15,12 @@ import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
 import { CaretDownIcon, CaretRightIcon, ChatTextIcon, DotsThreeVerticalIcon, FunnelSimpleIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, DropdownMenu, EmptyState } from "@/components/ui";
+import { InfoHint } from "@/components/ui/tooltip";
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
 import { certificationRemovalTemplatesHref } from "@/lib/certification/links";
 import { cn } from "@/lib/utils";
 import { EmissionLineAccordionBody } from "./emission-line-accordion-body";
+import { ROW_COLUMNS } from "./emission-line-grid";
 import { EmissionLineBadge } from "./emission-line-badge";
 import {
   addEntryRefusal,
@@ -33,13 +36,11 @@ import {
 } from "./emission-line-display";
 import type { EntryFormMode } from "./manual-entry-form";
 import { SourceChips } from "./emission-source-chips";
+import { AddEntryLink } from "./emission-line-body-parts";
 
 /** Line | State | Sources | Total | actions; phones stack the cells into a card. */
-const ROW_GRID =
-  "grid grid-cols-[minmax(0,1fr)_auto] gap-x-12 gap-y-8 md:grid-cols-[minmax(0,1.25fr)_148px_minmax(0,1fr)_minmax(120px,168px)_212px] md:items-center md:gap-x-16";
+const ROW_GRID = cn("grid grid-cols-[minmax(0,1fr)_auto] gap-x-12 gap-y-8 md:items-center", ROW_COLUMNS);
 const ACTION_SIZE = "size-44";
-/** Phones: the add action gets its own full-width row under the card; wide: it sits right of the Total. */
-const ADD_BUTTON = "col-span-2 row-start-4 w-full md:col-span-1 md:row-start-auto md:w-auto";
 const MENU_CELL = "col-start-2 row-start-1 -mt-8 -mr-8 md:m-0 md:col-auto";
 
 export interface LineActions {
@@ -142,31 +143,43 @@ function LineRow({ line, showGroup, scope, actions, canWrite, expanded, editingC
       <div
         onClick={() => actions.toggle(line)}
         className={cn(
-          "group cursor-pointer px-16 py-12 hover:bg-[var(--row-hover-bg-solid)]",
+          "group cursor-pointer px-16 py-12",
+          "hover:bg-[var(--row-hover-bg-solid)]",
           ROW_GRID,
-          isOpen(line) && "bg-[var(--st-wait-bg)]/40",
+          // The open tint marks a line to do; an expanded row is read as a whole, so it drops the tint.
+          isOpen(line) && !expanded && "bg-[var(--st-wait-bg)]/40",
         )}
       >
         <div className="col-start-1 row-start-1 min-w-0">
-          <button
-            type="button"
-            aria-expanded={expanded}
-            aria-controls={bodyId}
-            onClick={(event) => {
-              event.stopPropagation();
-              actions.toggle(line);
-            }}
-            className="inline-flex min-h-24 items-center gap-6 text-left body-small font-medium underline-offset-4 group-hover:underline"
-          >
-            <Caret size={14} weight="bold" aria-hidden="true" className="shrink-0 text-[var(--color-text-tertiary)]" />
-            {line.displayName}
-            {line.comment && (
-              <>
-                <ChatTextIcon size={14} aria-hidden="true" className="shrink-0 text-[var(--color-text-tertiary)]" />
-                <span className="sr-only">, has a comment</span>
-              </>
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              aria-expanded={expanded}
+              aria-controls={bodyId}
+              onClick={(event) => {
+                event.stopPropagation();
+                actions.toggle(line);
+              }}
+              className="inline-flex min-h-24 min-w-0 items-center gap-6 text-left body-small font-medium underline-offset-4 group-hover:underline"
+            >
+              <Caret size={14} weight="bold" aria-hidden="true" className="shrink-0 text-[var(--color-text-tertiary)]" />
+              {line.displayName}
+            </button>
+            {line.description && (
+              // The ⓘ opens on its own press; it must not also toggle the row.
+              <span className="inline-flex shrink-0" onClick={(event) => event.stopPropagation()}>
+                <InfoHint label={`More about ${line.displayName}`}>
+                  <span className="whitespace-pre-line">{line.description}</span>
+                </InfoHint>
+              </span>
             )}
-          </button>
+            {line.comment && (
+              <span className="inline-flex min-h-24 shrink-0 items-center px-4">
+                <ChatTextIcon size={14} aria-hidden="true" className="text-[var(--color-text-tertiary)]" />
+                <span className="sr-only">Has a comment</span>
+              </span>
+            )}
+          </div>
           {showGroup && <span className="block pl-20 body-caption text-[var(--color-text-tertiary)]">{line.groupName}</span>}
         </div>
         <div className="col-start-1 row-start-3 self-center md:col-start-2 md:row-start-1">
@@ -182,7 +195,12 @@ function LineRow({ line, showGroup, scope, actions, canWrite, expanded, editingC
               An admin sets this line up in the template review
             </Link>
           ) : (
-            <SourceChips line={line} ids={scope} onEntries={() => !expanded && actions.toggle(line)} />
+            <SourceChips
+              line={line}
+              ids={scope}
+              onEntries={() => !expanded && actions.toggle(line)}
+              emptyAction={canWrite && !addEntryRefusal(line) ? <AddEntryLink line={line} onAdd={() => actions.form(line, { kind: "add" })} /> : undefined}
+            />
           )}
         </div>
         <div
@@ -194,11 +212,7 @@ function LineRow({ line, showGroup, scope, actions, canWrite, expanded, editingC
         >
           {total}
         </div>
-        <div
-          className="contents md:col-start-5 md:flex md:items-center md:justify-end md:gap-4"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <AddEntryButton line={line} canWrite={canWrite} onForm={actions.form} />
+        <div className="contents md:col-start-5 md:flex md:items-center md:justify-end" onClick={(event) => event.stopPropagation()}>
           <RowMenu line={line} scope={scope} actions={actions} canWrite={canWrite} />
         </div>
       </div>
@@ -219,28 +233,10 @@ function LineRow({ line, showGroup, scope, actions, canWrite, expanded, editingC
   );
 }
 
-/** Add manual entry on the right of the row; a one-entry line offers Edit instead. */
-function AddEntryButton({ line, canWrite, onForm }: { line: EmissionLine; canWrite: boolean; onForm: LineActions["form"] }) {
-  if (!canWrite || line.entryPolicy === "none" || line.state === "needsSetup") return null;
-  const single = line.entryPolicy === "single" ? valueEntries(line)[0] : undefined;
-  if (single) {
-    return (
-      <Button size="small" variant="weak" className={ADD_BUTTON} aria-label={`Edit manual entry on ${line.displayName}`} onClick={() => onForm(line, { kind: "edit", entry: single })}>
-        Edit manual entry
-      </Button>
-    );
-  }
-  if (addEntryRefusal(line)) return null;
-  return (
-    <Button size="small" variant="weak" className={ADD_BUTTON} aria-label={`Add manual entry on ${line.displayName}`} onClick={() => onForm(line, { kind: "add" })}>
-      Add manual entry
-    </Button>
-  );
-}
-
-/** The short row menu: the records page, template review, the comment. */
+/** The row menu: Add (or Edit) manual entry, the records page, template review, the comment. */
 function RowMenu({ line, scope, actions, canWrite }: { line: EmissionLine; scope: EmissionBatchScope; actions: LineActions; canWrite: boolean }) {
   const records = lineRecords(line);
+  const entry = canWrite ? entryMenuItem(line, actions.form) : null;
   const upstream = records ? (
     <DropdownMenu.Item key="open" render={<Link href={recordsHref(records, scope)} />}>
       {openSourceLabel(records.source)}
@@ -253,10 +249,10 @@ function RowMenu({ line, scope, actions, canWrite }: { line: EmissionLine; scope
   ) : null;
   const comment = canWrite && line.state !== "needsSetup" ? (
     <DropdownMenu.Item key="comment" onClick={() => actions.comment(line)}>
-      {line.comment ? "Edit comment" : "Comment"}
+      {line.comment ? "Edit comment" : "Add comment"}
     </DropdownMenu.Item>
   ) : null;
-  const items = [upstream, setup, comment].filter(Boolean);
+  const items = [entry, upstream, setup, comment].filter(Boolean);
   if (!items.length) return null;
   return (
     <span className={MENU_CELL}>
@@ -277,4 +273,15 @@ function RowMenu({ line, scope, actions, canWrite }: { line: EmissionLine; scope
     </DropdownMenu.Root>
     </span>
   );
+}
+
+/** Add manual entry, or Edit manual entry on a one-entry line that holds its entry. */
+function entryMenuItem(line: EmissionLine, onForm: LineActions["form"]): ReactNode {
+  if (line.entryPolicy === "none" || line.state === "needsSetup") return null;
+  const single = line.entryPolicy === "single" ? valueEntries(line)[0] : undefined;
+  if (single) {
+    return <DropdownMenu.Item key="entry" onClick={() => onForm(line, { kind: "edit", entry: single })}>Edit manual entry</DropdownMenu.Item>;
+  }
+  if (addEntryRefusal(line)) return null;
+  return <DropdownMenu.Item key="entry" onClick={() => onForm(line, { kind: "add" })}>Add manual entry</DropdownMenu.Item>;
 }

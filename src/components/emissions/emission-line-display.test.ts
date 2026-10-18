@@ -5,7 +5,6 @@ import {
   displayUnit,
   draftFromEntry,
   draftMassDistanceFigure,
-  entriesFigure,
   entryFields,
   entryValues,
   groupLines,
@@ -139,18 +138,6 @@ describe("dates", () => {
     expect(validateEntryDate("2026-08-31", "2026-10-16", batch.startDate)).toMatch(/before the credit batch start/);
     expect(validateEntryDate("2026-10-17", "2026-10-16", batch.startDate)).toMatch(/future/);
     expect(validateEntryDate("2026-09-10", "2026-10-16", batch.startDate)).toBeNull();
-  });
-});
-
-describe("entries sum", () => {
-  it("adds decimal strings exactly", () => {
-    const line = makeLine({
-      entries: [
-        makeEntry({ id: "a", total: { magnitude: "0.1", unit: "kWh" } }),
-        makeEntry({ id: "b", total: { magnitude: "0.2", unit: "kWh" } }),
-      ],
-    });
-    expect(entriesFigure(line)).toEqual({ magnitude: "0.3", unit: "kWh" });
   });
 });
 

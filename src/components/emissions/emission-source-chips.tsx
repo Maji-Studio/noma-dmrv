@@ -54,9 +54,11 @@ interface SourceChipsProps {
   interactive?: boolean;
   /** Show "No records source" when there are no chips at all. */
   quietText?: boolean;
+  /** Shown in place of the quiet text when there are no chips, such as Add manual entry. */
+  emptyAction?: ReactNode;
 }
 
-export function SourceChips({ line, ids, onEntries, interactive = true, quietText = true }: SourceChipsProps) {
+export function SourceChips({ line, ids, onEntries, interactive = true, quietText = true, emptyAction }: SourceChipsProps) {
   if (line.state === "needsSetup") {
     return <span className="body-caption text-[var(--color-text-tertiary)]">{EMISSION_LINE_STATE_LABELS.needsSetup}</span>;
   }
@@ -125,6 +127,7 @@ export function SourceChips({ line, ids, onEntries, interactive = true, quietTex
   chips.push(...entryChips);
 
   if (!chips.length) {
+    if (emptyAction) return emptyAction;
     if (!quietText) return null;
     const text = line.entryPolicy === "single" ? "One manual entry per credit batch" : "No records source";
     return <span className="body-caption text-[var(--color-text-tertiary)]">{text}</span>;

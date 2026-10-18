@@ -2,13 +2,13 @@
  * Pure vocabulary for the credit batch Emissions page (epic #1058, design C3c
  * "Source chips"). Every surface on the page (row, chips, drawer, add form,
  * bulk grid) reads a line's composition and its copy from here, so the words
- * match: From records + Manual entries = Total.
+ * match: records and manual entries add up to the Total.
  *
  * On screen an emissions entry is a "manual entry" (GLOSSARY.md: Emissions
- * entry). Records made on other pages read "From records" with their origin.
+ * entry). Records made on other pages are named by their origin ("3 production runs").
  */
 import type { EmissionEntry, EmissionLine, LineRecords, RecordsSource } from "@/hooks/use-emission-entries";
-import { EMISSION_LINE_STATE_LABELS, sumFigures, type EmissionFigure, type EmissionLineState } from "@/lib/certification/emission-lines";
+import { EMISSION_LINE_STATE_LABELS, type EmissionFigure, type EmissionLineState } from "@/lib/certification/emission-lines";
 import { canonicalDecimal, canonicalUnit } from "@/lib/isometric/template-observations/units";
 import type { QuantityKind } from "@/lib/isometric/template-observations/types";
 import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
@@ -179,6 +179,12 @@ export function recordsText(records: LineRecords): string {
   return `Not recorded on ${counted}`;
 }
 
+/** Where the figure comes from, without repeating it: "3 production runs", "Not recorded on 22 production runs". */
+export function recordsSourceText(records: LineRecords): string {
+  const words = SOURCE_WORDS[records.source];
+  return hasRecordsFigure(records) ? countWords(records.count, words.one, words.many) : recordsText(records);
+}
+
 /** Where the records are made, filtered to the batch where the page supports it. */
 export function recordsHref(records: LineRecords, ids: { facilityId: string; creditBatchId: string }): string {
   const params = new URLSearchParams({ facility: ids.facilityId });
@@ -201,7 +207,7 @@ export function valueEntries(line: EmissionLine): EmissionEntry[] {
 export function stoppedEntries(line: EmissionLine): EmissionEntry[] {
   return line.entries.filter((entry) => !entry.counts);
 }
-export function entryFigureText(entry: EmissionEntry): string {
+function entryFigureText(entry: EmissionEntry): string {
   return entry.values
     .map((value) => {
       const detail = value.massDistanceDetail;
@@ -210,20 +216,6 @@ export function entryFigureText(entry: EmissionEntry): string {
       return `${formatFigure(detail.mass)} × ${formatFigure(detail.distance)} = ${figure}`;
     })
     .join(", ");
-}
-
-/** Sum of counting value entries; null when they hold paired inputs or mixed units. */
-export function entriesFigure(line: EmissionLine): EmissionFigure | null {
-  const totals = valueEntries(line).map((entry) => entry.total);
-  if (!totals.length || totals.some((total) => !total)) return null;
-  const unit = totals[0]!.unit;
-  if (totals.some((total) => total!.unit !== unit)) return null;
-  try {
-    return sumFigures(totals as EmissionFigure[]);
-  } catch {
-    // An unreadable magnitude: show no sum rather than a wrong one.
-    return null;
-  }
 }
 
 /** The row Total: the server total, the single entry's pair, a zero, or a missing token. */
