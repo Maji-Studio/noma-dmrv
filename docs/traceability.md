@@ -113,8 +113,8 @@ inside batch context, with a "Batch roll-up" button back.
     on the facility the record lives at now, which `resolveActivityRecords`
     reads with the label; deleted records are tombstones with no link. Field names only, never
     values. Empty and complete lists name `ACTIVITY_RECORDING_STARTED_AT`
-    (`src/config/activity.ts`). The credit batch side sheet's Activity section
-    summarizes the same history and links here. Components:
+    (`src/config/activity.ts`). The credit batch page's Activities tab mounts
+    the same view in page flow (`inline`). Components:
     `src/components/activity/`.
 - **Application (drill-down)** — segments `Lineage | Map | Split | Trail`:
   - **Trail** — each custody step with its date, mass figure, and what attests it:

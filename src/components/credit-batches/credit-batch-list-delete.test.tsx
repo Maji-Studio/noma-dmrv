@@ -38,7 +38,6 @@ vi.mock("@/components/record-locks", async () => (await import("../../../tests/h
 
 vi.mock("./credit-batch-form", () => ({ CreditBatchForm: () => null }));
 vi.mock("./credit-batch-filters", () => ({ CreditBatchFilters: () => null }));
-vi.mock("./credit-batch-health-strip", () => ({ CreditBatchHealthStrip: () => null }));
 vi.mock("./credit-batch-durability-panel", () => ({ CreditBatchDurabilityPanel: () => null }));
 vi.mock("./credit-batch-view", () => ({ creditBatchSheetSections: () => [] }));
 vi.mock("./credit-batch-card", () => ({ CreditBatchCard: ({ onDelete }: { onDelete: (id: string) => void }) => {

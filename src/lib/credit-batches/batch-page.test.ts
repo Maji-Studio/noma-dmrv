@@ -13,7 +13,7 @@ type Removal = CreditBatchPageModel["removals"][number];
 type Statement = NonNullable<CreditBatchPageModel["milestones"]["ghgStatement"]>;
 
 const DRAFT_STATUS: DerivedStatus = { kind: "not-submitted", value: "draft", label: "Not submitted", isActionable: true, isTerminal: false };
-const SUBMITTED_STATUS: DerivedStatus = { kind: "submitted", value: "submitted", label: "Submitted", isActionable: false, isTerminal: true };
+const SUBMITTED_STATUS: DerivedStatus = { kind: "submitted", value: "running", label: "Submitted", isActionable: false, isTerminal: true };
 
 function removal(overrides: Partial<Removal> = {}): Removal {
   return {

@@ -147,7 +147,8 @@ async function loadCreditBatchPageModel(ctx: OrgContext, creditBatchId: string, 
         ? [version.submittedAt]
         : [],
     )
-      .sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
+      .sort((a, b) => a.getTime() - b.getTime())
+      .at(0) ?? null;
     const window = { startedOn: row.startedOn, completedOn: row.completedOn };
     const status = deriveSubmissionStatus(
       submission,

@@ -276,9 +276,9 @@ export async function loadCertificationOverview(
 
 /**
  * Per-batch certification-readiness verdicts for the Credit Batches overview,
- * keyed by batch id. Reuses the SAME `deriveBatchHealth` classifier the detail
- * page's submission gate (`CreditBatchHealthStrip`) and the New-Removal wizard
- * use, so a card's cert tag can never disagree with the gate it links into.
+ * keyed by batch id. Reuses the SAME `deriveBatchHealth` classifier the credit
+ * batch page's open items and the New-Removal wizard use, so a card's cert tag
+ * can never disagree with the gate it links into.
  *
  * The caller passes the visible page's batch ids (all belonging to `facilityId`,
  * since the list is facility-scoped). The facility certifier facts are resolved

@@ -796,7 +796,19 @@ Routes themselves are 5–10 line server wrappers — `src/app/(app)/orders/page
 renders `src/components/orders/order-list.tsx`. The shell and all state live in
 that `"use client"` component, **not** in `page.tsx`. Records open in their
 list's side sheet; detail routes only redirect there
-(`production-runs/[id]/page.tsx`, `credit-batches/[id]/page.tsx`).
+(`production-runs/[id]/page.tsx`).
+
+**Routed record pages** are the exception, for a record whose work outgrows a
+sheet: today only the credit batch (`credit-batches/[id]`, epic #1136). The
+route org-scopes the record and answers `notFound()` for another organization
+or a `?facility=` naming another facility, then renders one client component
+in the same `container-max page-shell`. It opens with a back link to the list,
+a `PageHeader` titled with the record code (no subtitle), one state-driven
+primary action, Edit (the edit form in an `EntitySideSheet` over the page) and
+a ⋯ menu holding delete. Sections are tabs in `?tab=` (the first tab stays out
+of the URL); the tab row scrolls inside its bar on phones. The list's sheet
+stays as a preview whose lead footer action opens the page
+(`viewPrimaryAction`), and every deep link to the record goes to the page.
 
 ```tsx
 <div className="container-max page-shell">

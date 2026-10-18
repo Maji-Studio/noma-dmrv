@@ -49,7 +49,7 @@ describe("deriveBatchHealth", () => {
       .filter((check) => check.key === "template")
       .map((check) => batchHealthFixLinkFor(check, "facility-1", "batch-1"));
     expect(links).toEqual([
-      { label: "Switch template", href: "/credit-batches?facility=facility-1&batch=batch-1&focus=removal-template" },
+      { label: "Switch template", href: "/credit-batches/batch-1?facility=facility-1&focus=removal-template" },
       { label: "Review template lines", href: "/certification/settings?section=removal-templates&facility=facility-1" },
     ]);
   });
