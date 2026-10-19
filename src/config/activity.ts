@@ -7,7 +7,5 @@
  */
 export const ACTIVITY_RECORDING_STARTED_AT = new Date("2026-10-15T20:02:55Z");
 
-/** Entries the credit batch side sheet previews before linking to the full list. */
-export const ACTIVITY_SHEET_PREVIEW_LIMIT = 5;
 /** Page size of the Traceability Activity list; each "Show more" loads one page. */
 export const ACTIVITY_LIST_PAGE_SIZE = 25;

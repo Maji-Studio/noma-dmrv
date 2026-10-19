@@ -204,7 +204,7 @@ export function CreditBatchFilters({
               >
                 <option value="all">All batches</option>
                 <option value="needs_attention">Needs attention</option>
-                <option value="ready">Data complete</option>
+                <option value="ready">Ready for submission</option>
               </select>
             </label>
 

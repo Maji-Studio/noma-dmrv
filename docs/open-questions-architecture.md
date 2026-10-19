@@ -240,7 +240,9 @@ these areas; the entry rules and invariants live in
   is **not** dead: both delete surfaces read it as `registryBoundaryOpened`
   for the confirmation copy (`src/lib/certification/removal-external-mutation.ts`,
   consumed by `src/fn/certification/removals-hub.ts` and the certify
-  context); issue #746 decides whether it also becomes a role gate.
+  context), and it is also the role gate: once it is set, deleting needs
+  `REMOVAL_REGISTRY_DELETION_MIN_ROLE` (`src/lib/certification/removal-deletion-role.ts`,
+  issue #746).
 - **To resolve:** retire `discardLocalRemovalDraft` and port the three
   fixtures onto `claimRemovalDeletion` (which takes the same Removal row and
   artifact locks), or record why the discard seam stays. The marker and its
@@ -613,24 +615,6 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   organization shows Not found; later, noma could name the owning organization
   and offer to switch. Non-members keep the 404
   (`tests/e2e/org-isolation.spec.ts`). Parked 2026-10-19 (#372).
-
-### Drop the `ALLOW_SELF_SIGNUP` flag (`auth/drop-self-signup-flag`, opened 2026-07-20)
-
-- **Decided:** public self-signup is not a supported configuration. The product
-  is B2B invite-only, so the flag has exactly one correct value and is a tunable
-  that is never tuned.
-- **Current state:** `false` in every environment — `.env.example:28`,
-  `tests/setup.ts:21`, `.github/workflows/e2e.yml:35`,
-  `.github/workflows/e2e-live.yml:41` — feeding
-  `disableSignUp: !env.ALLOW_SELF_SIGNUP` (`src/lib/auth/better-auth.ts:171`).
-- **Simplification (S):** hardcode `disableSignUp: true`, delete
-  `ALLOW_SELF_SIGNUP` from `src/config/env.ts:64` and the four environment
-  declarations, and rewrite `tests/auth-config.test.ts:6` to assert the constant
-  rather than the env round-trip. Removes a config surface whose only failure
-  mode is someone setting it to `true`.
-- **Why it hasn't been done:** no urgency — the flag is fail-closed and every
-  environment already pins it. Worth folding into the next auth-area change
-  rather than as its own PR.
 
 ### Does the app-shell scrollport deserve a permanent E2E guard? (`e2e/scrollport-guard`, opened 2026-07-29)
 

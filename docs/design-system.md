@@ -681,7 +681,9 @@ The one outcome screen for auth pages (check your email, email verified, verific
   `?customer=<id>`) it is a real `<a href>`: a plain click opens the sheet in
   place, modifier and middle clicks open the deep link in a new tab. Without
   one (reactors, formulations) it is a link-styled button. Never mark a column
-  whose cell renders its own controls. Rows and mobile cards carry no role or
+  whose cell renders its own controls; a line that needs its own link (the
+  Removal's registry record) goes in `meta.recordLinkDetails`, which renders
+  under the record link and outside it. Rows and mobile cards carry no role or
   `tabIndex`; a whole-row click is a pointer-only convenience. It opens
   the detail side sheet everywhere; explicit "View" buttons are retired (detail routes become an "Open details" item).
   `destructive: true` for irreversible actions only — **archive, restore, and
@@ -808,7 +810,19 @@ Routes themselves are 5–10 line server wrappers — `src/app/(app)/orders/page
 renders `src/components/orders/order-list.tsx`. The shell and all state live in
 that `"use client"` component, **not** in `page.tsx`. Records open in their
 list's side sheet; detail routes only redirect there
-(`production-runs/[id]/page.tsx`, `credit-batches/[id]/page.tsx`).
+(`production-runs/[id]/page.tsx`).
+
+**Routed record pages** are the exception, for a record whose work outgrows a
+sheet: today only the credit batch (`credit-batches/[id]`, epic #1136). The
+route org-scopes the record and answers `notFound()` for another organization
+or a `?facility=` naming another facility, then renders one client component
+in the same `container-max page-shell`. It opens with a back link to the list,
+a `PageHeader` titled with the record code (no subtitle), one state-driven
+primary action, Edit (the edit form in an `EntitySideSheet` over the page) and
+a ⋯ menu holding delete. Sections are tabs in `?tab=` (the first tab stays out
+of the URL); the tab row scrolls inside its bar on phones. The list's sheet
+stays as a preview whose lead footer action opens the page
+(`viewPrimaryAction`), and every deep link to the record goes to the page.
 
 ```tsx
 <div className="container-max page-shell">

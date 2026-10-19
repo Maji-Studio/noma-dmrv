@@ -18,7 +18,8 @@
  * bin (ADR 0027).
  */
 
-import { and, eq, gt, inArray, lt, ne, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, lt, ne, notExists, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { DbTransaction } from "@/db";
 import {
   biocharProducts,
@@ -133,6 +134,7 @@ async function listLaneWithdrawals(
       : [];
 
   const movementSlots = remaining - products.length;
+  const reversal = alias(binMovements, "loss_reversal");
   const movements =
     movementSlots > 0
       ? await tx
@@ -148,6 +150,16 @@ async function listLaneWithdrawals(
               eq(binMovements.storageLocationId, storageLocationId),
               eq(binMovements.lane, "feedstock"),
               lt(binMovements.massDeltaKg, 0),
+              or(
+                ne(binMovements.movementType, "loss"),
+                notExists(tx.select({ id: reversal.id }).from(reversal).where(and(
+                  eq(reversal.organizationId, ctx.organizationId),
+                  eq(reversal.storageLocationId, storageLocationId),
+                  eq(reversal.lane, "feedstock"),
+                  eq(reversal.movementType, "adjustment"),
+                  eq(reversal.correctsMovementId, binMovements.id),
+                ))),
+              ),
             ),
           )
           .orderBy(binMovements.createdAt, binMovements.id)

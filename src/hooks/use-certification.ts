@@ -378,6 +378,7 @@ export function useFacilityCertifierMapping(
 export function useFacilityCertifierSummary(
   facilityId: string,
   enabled = true,
+  options: { readCacheOnly?: boolean } = {},
 ) {
   return useQuery({
     queryKey: certificationKeys.facilitySummary(facilityId),
@@ -389,6 +390,11 @@ export function useFacilityCertifierSummary(
       ),
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,
+    // readCacheOnly: observe what another observer loaded; never fetch again
+    // on mount, window focus or reconnect.
+    ...(options.readCacheOnly
+      ? { refetchOnMount: false, refetchOnWindowFocus: false, refetchOnReconnect: false }
+      : {}),
   });
 }
 

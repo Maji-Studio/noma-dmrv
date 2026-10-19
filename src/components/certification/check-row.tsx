@@ -1,10 +1,8 @@
 /**
  * CheckRow — one row of a certification checklist (icon · label · detail · fix
- * link). Shared by the removal-level requirements shown on the wizard's
- * confirm-&-submit step (`new-removal-dialog/submit-step.tsx`) and the
- * batch-level health strip (`credit-batches/credit-batch-health-strip.tsx`) so
- * the two surfaces can never disagree on how a met/unmet/skipped check renders.
- * Both feed status unions structurally equal to `CheckStatus`.
+ * link) for the removal-level requirements on the wizard's confirm-and-submit
+ * step (`new-removal-dialog/submit-step.tsx`). Its status union is
+ * structurally equal to `CheckStatus`.
  */
 "use client";
 
