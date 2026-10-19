@@ -13,7 +13,7 @@ const PHONE_WIDTH_PX = 375;
 const PHONE_HEIGHT_PX = 812;
 
 test.describe("credit batch page", () => {
-  test("opens from the list preview, switches tabs and follows an open item", async ({
+  test("opens from a list row, switches tabs and follows an open item", async ({
     adminPage: page,
     seededData,
   }) => {
@@ -22,15 +22,13 @@ test.describe("credit batch page", () => {
 
     await page.goto(`/credit-batches?facility=${seededData.facility.id}&view=list`);
     await expect(page.locator("aside").getByText(seededData.facility.name, { exact: false })).toBeVisible();
-    await creditBatchRow(page, batch.code).getByRole("button", { name: `Open credit batch ${batch.code}` }).click();
-
-    // The sheet is a preview whose lead action opens the page.
-    const sheet = page.getByRole("dialog");
-    await expect(sheet.getByRole("heading", { name: batch.code })).toBeVisible();
-    await expect(sheet.getByTestId("batch-health-strip")).toHaveCount(0);
-    await sheet.getByRole("link", { name: "Open credit batch" }).click();
+    // The code is a real link to the page; the row and the menu's Open details lead there too.
+    const code = creditBatchRow(page, batch.code).getByRole("link", { name: `Open credit batch ${batch.code}` });
+    await expect(code).toHaveAttribute("href", `/credit-batches/${batch.id}?facility=${seededData.facility.id}`);
+    await code.click();
 
     await expect(page).toHaveURL((url) => url.pathname === `/credit-batches/${batch.id}` && url.searchParams.get("facility") === seededData.facility.id);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.getByRole("heading", { level: 1, name: batch.code })).toBeVisible();
     await expect(page.getByRole("list", { name: "Credit batch progress" })).toBeVisible();
     await expect(page.getByTestId("credit-batch-progress-trigger")).toBeHidden();
@@ -80,6 +78,25 @@ test.describe("credit batch page", () => {
 
     // While items block, the header offers no primary button: the Overview shows what is open.
     await expect(page.getByRole("button", { name: "Fix next item" })).toHaveCount(0);
+  });
+
+  test("opens from a timeline bar and from the row", async ({ adminPage: page, seededData }) => {
+    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const batch = await seedCreditBatch(seededData.facility.id, `PAGE-BAR-${tag}`, seededData.feedstockType.id);
+    const isBatchPage = (url: URL) => url.pathname === `/credit-batches/${batch.id}`;
+
+    await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
+    await page.getByRole("link", { name: new RegExp(`^${batch.code},`) }).click();
+    await expect(page).toHaveURL(isBatchPage);
+    await expect(page.getByRole("heading", { level: 1, name: batch.code })).toBeVisible();
+
+    await page.goto(`/credit-batches?facility=${seededData.facility.id}&view=list`);
+    await creditBatchRow(page, batch.code).click({ position: { x: 400, y: 10 } });
+    await expect(page).toHaveURL(isBatchPage);
+
+    // Old preview links still open the sheet.
+    await page.goto(`/credit-batches?facility=${seededData.facility.id}&batch=${batch.id}`);
+    await expect(page.getByRole("dialog").getByRole("heading", { name: batch.code })).toBeVisible();
   });
 
   test("answers a not-found for another facility", async ({ adminPage: page, seededData }) => {

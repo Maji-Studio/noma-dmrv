@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import {
   appliedDryLabel,
@@ -46,7 +47,7 @@ function renderRow(overrides: Partial<Parameters<typeof CreditBatchListRow>[0]> 
     facts,
     factsStatus: "ready" as const,
     lock: lockAt("open"),
-    onView: vi.fn(),
+    onOpen: vi.fn(),
     onEdit: vi.fn(),
     onDelete: vi.fn(),
     ...overrides,
@@ -61,18 +62,22 @@ describe("CreditBatchListRow", () => {
     for (const text of ["Chicken manure", "Open", "Missing data", "Applied (dry)", "0.32 t"]) {
       expect(within(row).getAllByText(text).length).toBeGreaterThan(0);
     }
-    // A phone drops the shared "CB-" prefix; the code stays whole in the text and the button's name.
-    expect(within(row).getByRole("button", { name: "Open credit batch CB-26-009" }).textContent).toBe("CB-26-009");
+    // A phone drops the shared "CB-" prefix; the code stays whole in the text and the link's name.
+    expect(within(row).getByRole("link", { name: "Open credit batch CB-26-009" }).textContent).toBe("CB-26-009");
     expect(row.textContent).toContain("Aug 1 to Aug 31, 2026");
     expect(row.textContent).not.toContain("0.70");
   });
 
-  it("opens the batch from the row and from the code button", () => {
+  it("opens the batch page from the row, and the code is a real link to it", () => {
     const { props, row } = renderRow();
     fireEvent.click(row);
-    fireEvent.click(within(row).getByRole("button", { name: "Open credit batch CB-26-009" }));
-    expect(props.onView).toHaveBeenCalledTimes(2);
-    expect(props.onView).toHaveBeenCalledWith(creditBatch);
+    expect(props.onOpen).toHaveBeenCalledTimes(1);
+    expect(props.onOpen).toHaveBeenCalledWith(creditBatch);
+    const link = within(row).getByRole("link", { name: "Open credit batch CB-26-009" });
+    expect(link.getAttribute("href")).toBe(creditBatchDeepLinkHref(creditBatch.id, creditBatch.facilityId));
+    // The link navigates itself; the row does not push a second time.
+    fireEvent.click(link);
+    expect(props.onOpen).toHaveBeenCalledTimes(1);
   });
 
   it("shows In use and Sent, but not the default Open lock", () => {
@@ -94,12 +99,12 @@ describe("appliedDryLabel", () => {
 });
 
 describe("creditBatchRowActions", () => {
-  const handlers = { onView: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn() };
+  const handlers = { onOpen: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn() };
 
   it("marks only Delete as destructive", () => {
     const actions = creditBatchRowActions({ creditBatch, lock: lockAt("open"), ...handlers });
     actions.forEach((action) => action.onSelect());
-    expect(handlers.onView).toHaveBeenCalledWith(creditBatch);
+    expect(handlers.onOpen).toHaveBeenCalledWith(creditBatch);
     expect(handlers.onEdit).toHaveBeenCalledWith(creditBatch);
     expect(handlers.onDelete).toHaveBeenCalledWith(creditBatch.id);
     expect(actions.map(({ label, destructive }) => [label, destructive])).toEqual([

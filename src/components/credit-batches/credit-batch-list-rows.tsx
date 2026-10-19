@@ -12,6 +12,7 @@
  * Issued. Applied biochar is the dry mass held by the batch's slices.
  */
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { EyeIcon, PencilSimpleIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import { RowActionsMenu } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
@@ -21,6 +22,7 @@ import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeli
 import type { CreditBatchStateView } from "@/lib/credit-batches/batch-state";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
 import { cn } from "@/lib/utils";
@@ -62,13 +64,13 @@ export function appliedDryLabel(facts: CreditBatchTimelineFacts | undefined, sta
 export function creditBatchRowActions({
   creditBatch,
   lock,
-  onView,
+  onOpen,
   onEdit,
   onDelete,
 }: {
   creditBatch: CreditBatchWithRelations;
   lock: RecordLockView | undefined;
-  onView: (creditBatch: CreditBatchWithRelations) => void;
+  onOpen: (creditBatch: CreditBatchWithRelations) => void;
   onEdit: (creditBatch: CreditBatchWithRelations) => void;
   onDelete: (creditBatchId: string) => void;
 }) {
@@ -77,7 +79,7 @@ export function creditBatchRowActions({
   // guard enforces it.
   const locked = !isRecordEditable(lock);
   return [
-    { label: "Open details", icon: <EyeIcon size={16} />, onSelect: () => onView(creditBatch) },
+    { label: "Open details", icon: <EyeIcon size={16} />, onSelect: () => onOpen(creditBatch) },
     ...(locked ? [] : [{ label: "Edit", icon: <PencilSimpleIcon size={16} />, onSelect: () => onEdit(creditBatch) }]),
     ...(!locked && isCreditBatchDeletable(lock)
       ? [{ label: "Delete", destructive: true, icon: <TrashIcon size={16} />, onSelect: () => onDelete(creditBatch.id) }]
@@ -131,7 +133,7 @@ export function CreditBatchListRow({
   facts,
   factsStatus,
   lock,
-  onView,
+  onOpen,
   onEdit,
   onDelete,
 }: {
@@ -142,7 +144,8 @@ export function CreditBatchListRow({
   factsStatus: FactsStatus;
   /** The batch's record lock, from the list's one batched read. */
   lock: RecordLockView | undefined;
-  onView: (creditBatch: CreditBatchWithRelations) => void;
+  /** Opens the batch page; the code link and the row both lead there. */
+  onOpen: (creditBatch: CreditBatchWithRelations) => void;
   onEdit: (creditBatch: CreditBatchWithRelations) => void;
   onDelete: (creditBatchId: string) => void;
 }) {
@@ -150,29 +153,27 @@ export function CreditBatchListRow({
   const dates = formatDateRange(creditBatch.startDate, creditBatch.endDate);
   const codePrefix = CODE_PREFIX.exec(creditBatch.code)?.[0] ?? "";
   return (
-    // The whole row is a pointer convenience; the code button is the keyboard
-    // and screen-reader route to the same view (no role or tabIndex on the row).
+    // The whole row is a pointer convenience; the code link is the keyboard
+    // and screen-reader route to the same page (no role or tabIndex on the row).
     <li
       data-credit-batch-row={creditBatch.code}
       className={cn(ROW_GRID, "cursor-pointer py-12 transition-colors hover:bg-[var(--row-hover-bg)] [border-bottom:var(--row-divider)] last:[border-bottom:none] xl:py-8")}
-      onClick={() => onView(creditBatch)}
+      onClick={() => onOpen(creditBatch)}
     >
       <div className="flex min-w-0 flex-col gap-4 xl:contents">
         <div className="flex min-w-0 items-center justify-between gap-12 xl:contents">
           <div className="flex min-w-0 items-baseline gap-8 xl:contents">
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onView(creditBatch);
-              }}
+            <Link
+              href={creditBatchDeepLinkHref(creditBatch.id, creditBatch.facilityId)}
+              // The link navigates itself; the row's own click must not push a second time.
+              onClick={(event) => event.stopPropagation()}
               aria-label={`Open credit batch ${creditBatch.code}`}
               className="shrink-0 cursor-pointer text-left body-small font-medium tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] xl:col-start-1 xl:row-start-1"
             >
               {/* Every row is a credit batch, so a phone drops the shared "CB-" prefix as the timeline bars do; the label keeps the full code. */}
               {codePrefix && <span className="max-xl:hidden">{codePrefix}</span>}
               {creditBatch.code.slice(codePrefix.length)}
-            </button>
+            </Link>
             <span className={cn("min-w-0 truncate body-small xl:col-start-2 xl:row-start-1 xl:text-[var(--color-text-primary)]", MUTED)}>
               {creditBatch.feedstockTypeName ?? UNNAMED_FEEDSTOCK}
             </span>
@@ -213,7 +214,7 @@ export function CreditBatchListRow({
       <RowActionsMenu
         label={`Actions for credit batch ${creditBatch.code}`}
         className="flex justify-center self-center [&>button]:size-44 xl:col-start-7 xl:row-start-1"
-        actions={creditBatchRowActions({ creditBatch, lock, onView, onEdit, onDelete })}
+        actions={creditBatchRowActions({ creditBatch, lock, onOpen, onEdit, onDelete })}
       />
     </li>
   );

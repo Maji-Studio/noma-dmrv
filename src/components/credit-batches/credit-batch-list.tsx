@@ -16,6 +16,7 @@ import { toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ConflictError } from "@/lib/conflict-ref";
 import { parseAsString, useQueryState } from "nuqs";
 import {
@@ -153,6 +154,7 @@ export function CreditBatchList({
 
   // Side sheet state — `?batch=` deep-links the view sheet (production-run
   // convention); local state handles sheets opened by clicks.
+  const router = useRouter();
   const [focusedBatchId, setFocusedBatchId] = useQueryState(
     CREDIT_BATCH_DEEP_LINK_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
@@ -389,11 +391,10 @@ export function CreditBatchList({
     setUpdateError(null);
     setSideSheet({ entity: null, mode: "create" });
   };
-  const openView = (batch: CreditBatchWithRelations) => {
-    setCreateError(null);
-    setUpdateError(null);
-    void setFocusedBatchId(batch.id);
-    setSideSheet({ entity: batch, mode: "view" });
+  // Bars and rows open the batch page. The preview sheet stays for old
+  // `?batch=<id>` links and for Edit.
+  const openPage = (batch: CreditBatchWithRelations) => {
+    router.push(creditBatchDeepLinkHref(batch.id, batch.facilityId));
   };
   const openEdit = (batch: CreditBatchWithRelations) => {
     setCreateError(null);
@@ -637,7 +638,6 @@ export function CreditBatchList({
           batches={allItems}
           facilityId={contextFacilityId}
           today={today}
-          onOpenBatch={openView}
           onNewBatch={openCreate}
         />
       ) : (
@@ -756,7 +756,7 @@ export function CreditBatchList({
                   facts={factsQuery.data[batch.id]}
                   factsStatus={factsQuery.error ? "failed" : factsQuery.isLoading ? "loading" : "ready"}
                   lock={batchLocks.locks[batch.id]}
-                  onView={openView}
+                  onOpen={openPage}
                   onEdit={openEdit}
                   onDelete={handleDelete}
                 />
