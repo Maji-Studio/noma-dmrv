@@ -126,6 +126,7 @@ export function ProductionSampleForm({
               render={({ field }) => (
                 <EntitySelect
                   id="production-sample-sampledById"
+                  fieldName="sampledById"
                   entityType="operator"
                   allowEdit
                   value={field.value ?? ""}

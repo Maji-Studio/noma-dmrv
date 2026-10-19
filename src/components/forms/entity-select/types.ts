@@ -144,6 +144,11 @@ interface EntitySelectBaseProps {
   onEditSelected?: () => void;
   /** Overrides the default Edit <selectedOption.name> label. */
   editLabel?: string;
+  /**
+   * The RHF field path this picker writes, set as `data-field-name` on the
+   * trigger so the form error summary can find and focus it when `id` differs.
+   */
+  fieldName?: string;
 
 }
 

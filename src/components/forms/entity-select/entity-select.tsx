@@ -243,6 +243,7 @@ function EntitySelectView({
   noneOption,
   onEditSelected,
   editLabel,
+  fieldName,
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
   isOpen,
@@ -672,6 +673,7 @@ function EntitySelectView({
             aria-describedby={triggerDescribedBy}
             aria-invalid={ariaInvalid}
             data-testid="entity-select-trigger"
+            data-field-name={fieldName}
             data-has-value={Boolean(value)}
             className={cn(
               "flex h-40 w-full items-center justify-between gap-2 border bg-[var(--color-background-white)] px-12 text-[var(--text-s)] transition-all",

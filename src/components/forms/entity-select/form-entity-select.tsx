@@ -121,6 +121,7 @@ export function FormEntitySelect<
     >
       <EntitySelect
         id={id}
+        fieldName={name}
         entityType={entityType}
         value={field.value}
         onBlur={field.onBlur}

@@ -35,7 +35,7 @@ export {
 export { DistanceCalcField } from "./distance-calc-field";
 
 // Position Picker (map preview + address search + manual lat/lng)
-export { PositionPicker, type PositionValue, type PickerAccent } from "./position-picker";
+export { GPS_FIELD_NAMES, PositionPicker, type PositionValue, type PickerAccent } from "./position-picker";
 
 // Entity Select
 export {
