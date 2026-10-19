@@ -14,6 +14,7 @@ import { useQueryStates } from "nuqs";
 // parsers at module scope breaks server components that import these helpers.
 import { parseAsString, parseAsStringLiteral } from "nuqs/server";
 import type { FacilityEmissionsOverviewBatch } from "@/hooks/use-emissions-overview";
+import { EMISSION_LINE_STATE_LABELS } from "@/lib/certification/emission-lines";
 
 export const EMISSIONS_PATH = "/emissions";
 
@@ -23,7 +24,7 @@ export const BATCH_STATUS_LABELS: Record<BatchStatusFilter, string> = {
   open: "Lines open",
   done: "Done",
   files: "File missing",
-  review: "Needs review",
+  review: EMISSION_LINE_STATE_LABELS.needsReview,
 };
 
 export const PERIOD_PRESETS = ["month", "3m", "6m", "year", "custom"] as const;

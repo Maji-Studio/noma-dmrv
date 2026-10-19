@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { EntryEvidence, ICON, RecordsSourceLink, entryAmount, lineBodyModel, useEntryActions } from "./emission-line-body-parts";
 import { formatFigure, hasRecordsFigure, type EmissionEntry, type EmissionLine } from "./emission-line-display";
 import { EntryMenu, entryDateText, stoppedEntryMessage, useStoppedEntry } from "./emission-ledger-entries";
-import { NAME_INSET, TABLE_ROW } from "./emission-line-grid";
+import { MENU_PULL, NAME_INSET, TABLE_ROW } from "./emission-line-grid";
 import type { EntryFormMode } from "./manual-entry-form";
 
 const CELL_Y = "py-10";
@@ -26,7 +26,7 @@ const SOURCE_CELL = cn("col-start-1 row-start-1 flex min-w-0 flex-col", CELL_Y, 
 const DATE_CELL = cn("hidden md:col-start-2 md:row-start-1 md:block body-small text-[var(--color-text-secondary)]", CELL_Y);
 const AMOUNT_CELL = cn("col-start-2 row-start-1 md:col-start-4 flex flex-col items-end text-right body-small tabular-nums", CELL_Y);
 /** The ⋯ centres on the first text line without making the row taller. */
-const MENU_CELL = "col-start-3 row-start-1 md:col-start-5 -mt-2 -mb-12 flex justify-end self-start";
+const MENU_CELL = cn("col-start-3 row-start-1 md:col-start-5 -mt-2 -mb-12 flex justify-end self-start", MENU_PULL);
 /** Phones: a full-width line under the row; wide: the Sources column. */
 const DETAIL_CELL = cn("col-span-2 col-start-1 row-start-2 min-w-0 pb-10 md:col-span-1 md:col-start-3 md:row-start-1 md:pb-0", NAME_INSET, "md:pl-0", "md:py-10");
 const DIVIDER = "[border-top:var(--row-divider)]";
@@ -58,7 +58,7 @@ export function SourcesTable({ line, scope, canWrite, model, onForm, onDeleteEnt
         <div role="row" className={cn(TABLE_ROW, DIVIDER)}>
           <span role="cell" className={SOURCE_CELL}>
             <RecordsSourceLink records={records} scope={scope} className="self-start" />
-            <span className="body-caption text-[var(--color-text-tertiary)] md:hidden">{RECORDS_DATE}</span>
+            <span className="body-small text-[var(--color-text-secondary)] md:hidden">{RECORDS_DATE}</span>
           </span>
           <span role="cell" className={DATE_CELL}>{RECORDS_DATE}</span>
           <span role="cell" className={cn(AMOUNT_CELL, !hasRecordsFigure(records) && "text-[var(--color-text-tertiary)]")}>

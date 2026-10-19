@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { EntryMenu } from "./emission-ledger-entries";
 import { ICON } from "./emission-line-body-parts";
 import { MAX_NOTE_LENGTH, NOTE_TOO_LONG_MESSAGE, type EmissionLine } from "./emission-line-display";
-import { NAME_INSET, TABLE_ROW } from "./emission-line-grid";
+import { MENU_PULL, NAME_INSET, TABLE_ROW } from "./emission-line-grid";
 
 const EMPTY_MESSAGE = "Enter a comment.";
 const SAVE_FALLBACK = "The comment was not saved. Try again.";
@@ -36,7 +36,7 @@ const COMMENT_ROW = cn(TABLE_ROW, "[border-top:var(--row-divider)]");
 const LABEL_CELL = cn("col-span-2 col-start-1 row-start-1 inline-flex items-center gap-6 self-start py-10 body-small text-[var(--color-text-secondary)] md:col-span-1", NAME_INSET);
 /** Phones: under the label, full width; wide: from Date across to Amount. */
 const BODY_CELL = cn("col-span-3 col-start-1 row-start-2 min-w-0 pb-10 md:col-span-3 md:col-start-2 md:row-start-1 md:py-10 md:pl-0", NAME_INSET);
-const MENU_CELL = "col-start-3 row-start-1 md:col-start-5 -mt-2 flex justify-end self-start";
+const MENU_CELL = cn("col-start-3 row-start-1 md:col-start-5 -mt-2 flex justify-end self-start", MENU_PULL);
 
 interface LineCommentProps {
   line: EmissionLine;
