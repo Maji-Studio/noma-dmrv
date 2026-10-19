@@ -28,6 +28,7 @@ import {
   useDeleteCreditBatch,
   useUpdateCreditBatch,
 } from "@/hooks/use-credit-batches";
+import { useBatchEmissionLines } from "@/hooks/use-emission-entries";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useRecordLock } from "@/hooks/use-record-locks";
 import { creditBatchListHref } from "@/lib/certification/batch-health-links";
@@ -193,6 +194,9 @@ export function CreditBatchPage({
   const deleteCreditBatch = useDeleteCreditBatch();
 
   const batch = batchQuery.data;
+  const emissionLines = useBatchEmissionLines(emissionsEntriesEnabled && batch
+    ? { facilityId: batch.facilityId, creditBatchId: batch.id }
+    : null);
   if (!batch || (contextFacilityId && !isResolving && contextFacilityId !== batch.facilityId)) {
     if (batchQuery.isPending) return null;
     return (
@@ -207,6 +211,7 @@ export function CreditBatchPage({
     facilityId: batch.facilityId,
     creditBatchId: batch.id,
     health: health.data,
+    emissionLines: emissionsEntriesEnabled ? emissionLines.data : undefined,
     durability: durability.data ?? undefined,
     pageModel: pageModel.data,
   });

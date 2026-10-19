@@ -1,5 +1,10 @@
 "use server";
 
+import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
+import { buildDurabilityBatchSummaries } from "@/lib/certification/durability-batch-summary";
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
+import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
+import { loadBatchesEmissionLines } from "@/lib/read-models/batches-emission-lines";
 import { getRemovalCodes } from "@/data-access/removal-codes";
 import { z } from "zod";
 import { getRecordLocksForTargets } from "@/data-access/record-certification-lock";
@@ -81,6 +86,8 @@ export interface CreditBatchHealthSummary {
   state: BatchHealthState;
   /** Count of unmet (blocking) checks; 0 when ready. */
   issueCount: number;
+  /** Non-blocking Check items, using the batch page's open-items builder. */
+  checkCount: number;
   /** The latest Removal containing this batch, or null before its first one. */
   removalId: string | null;
   removalCode: string | null;
@@ -376,6 +383,16 @@ export async function loadCreditBatchHealthSummaries(
       ids,
       facilityFacts,
     );
+    const [batchesWithSamples, emissionDisplayByBatch] = await Promise.all([
+      getCreditBatchesWithSamples(orgCtx, ids),
+      // Match the page's flag: hidden Emissions panels contribute no Check items.
+      emissionsEntriesEnabled()
+        ? loadBatchesEmissionLines(orgCtx, ids.map((id) => batchRowById.get(id)!))
+        : Promise.resolve(undefined),
+    ]);
+    const durabilityByBatch = new Map(
+      buildDurabilityBatchSummaries(batchesWithSamples).map((summary) => [summary.creditBatchId, summary]),
+    );
     const locks = await getRecordLocksForTargets(orgCtx, ids.map(entityId => ({ entityType: "creditBatch", entityId })));
     const locksById = new Map(ids.map((id, index) => [id, locks[index]]));
     const summaries: Record<string, CreditBatchHealthSummary> = {};
@@ -398,6 +415,13 @@ export async function loadCreditBatchHealthSummaries(
         recordLock: locksById.get(batchId)!,
         state: health.state,
         issueCount: health.issueCount,
+        checkCount: buildCreditBatchOpenItems({
+          facilityId: validFacilityId,
+          creditBatchId: batchId,
+          health,
+          durability: durabilityByBatch.get(batchId),
+          emissionLines: emissionDisplayByBatch?.get(batchId)?.lines,
+        }).check.length,
         removalId,
         removalCode: batchRow?.removalCode ?? null,
         productionEmissionsClaimedByRemovalCode: claimCodes.get(batchRow?.productionEmissionsClaimedByRemovalId ?? "") ?? null,
