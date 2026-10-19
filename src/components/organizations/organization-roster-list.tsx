@@ -12,6 +12,9 @@ interface OrganizationRosterRowProps {
   secondary?: ReactNode;
   actions?: ReactNode;
   details?: ReactNode;
+  /** Replaces the default one-line truncation of `primary`, for a value that must show in full. */
+  primaryClassName?: string;
+  /** Replaces the default one-line truncation of `secondary`, for a value that must show in full. */
   secondaryClassName?: string;
 }
 
@@ -31,20 +34,26 @@ export function OrganizationRosterRow({
   secondary,
   actions,
   details,
+  primaryClassName,
   secondaryClassName,
 }: OrganizationRosterRowProps) {
   return (
     <li className="flex flex-col border-b border-[var(--color-border-tertiary)] last:border-b-0">
       <div className="flex flex-wrap items-center justify-between gap-12 px-16 py-12">
         <div className="flex min-w-0 flex-col">
-          <span className="body-small font-medium text-[var(--color-text-primary)] truncate">
+          <span
+            className={cn(
+              "body-small font-medium text-[var(--color-text-primary)]",
+              primaryClassName ?? "truncate",
+            )}
+          >
             {primary}
           </span>
           {secondary && (
             <span
               className={cn(
-                "body-caption text-[var(--color-text-secondary)] truncate",
-                secondaryClassName,
+                "body-caption text-[var(--color-text-secondary)]",
+                secondaryClassName ?? "truncate",
               )}
             >
               {secondary}

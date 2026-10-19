@@ -29,13 +29,14 @@ export function ApiKeyList({ keys, onEdit, onRevoke }: {
           <OrganizationRosterRow
             key={key.id}
             primary={name}
+            primaryClassName="whitespace-normal break-words"
             actions={
               <>
                 <StatusBadge status={status} />
                 {status === "active" && (
                   <>
-                    <Button variant="weak" size="small" aria-label={`Edit ${name}`} onClick={() => onEdit(key)}>Edit</Button>
-                    <Button variant="destructive" size="small" aria-label={`Revoke ${name}`} onClick={() => onRevoke(key)}>Revoke</Button>
+                    <Button aria-label={`Edit ${name}`} onClick={() => onEdit(key)}>Edit</Button>
+                    <Button variant="destructive" aria-label={`Revoke ${name}`} onClick={() => onRevoke(key)}>Revoke</Button>
                   </>
                 )}
               </>

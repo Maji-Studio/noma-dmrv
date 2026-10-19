@@ -61,7 +61,7 @@ export function OrganizationPicker() {
           />
           {refused && <OAuthRestartNotice />}
           <div className="flex justify-start">
-            <Button type="submit" variant="primary" busy={select.isPending} disabled={!usable || !selected}>Continue</Button>
+            <Button type="submit" variant="primary" size="large" busy={select.isPending} disabled={!usable || !selected}>Continue</Button>
           </div>
         </form>
       )}

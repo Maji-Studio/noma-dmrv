@@ -89,8 +89,8 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
       )}
       {failed && <OAuthRestartNotice />}
       <div className="flex justify-start gap-16">
-        <Button variant="primary" busy={decision.isPending} disabled={submittedScopes.length === 0} onClick={() => void decide(true)}>Allow</Button>
-        <Button disabled={decision.isPending} onClick={() => void decide(false)}>Deny</Button>
+        <Button variant="primary" size="large" busy={decision.isPending} disabled={submittedScopes.length === 0} onClick={() => void decide(true)}>Allow</Button>
+        <Button size="large" disabled={decision.isPending} onClick={() => void decide(false)}>Deny</Button>
       </div>
       <p className="body-caption text-[var(--color-text-tertiary)]">
         You can disconnect at any time in <Link href={SETTINGS_CONNECTED_APPS_HREF} target="_blank" rel="noopener" className="underline">Settings, Connected apps</Link>.

@@ -7,6 +7,10 @@ import { formatDateTime } from "@/lib/format-utils";
 import { oauthAppName, oauthAppNameStart } from "./oauth-labels";
 import { clientIdHost, connectionPermissionSummary } from "./connected-app-permissions";
 
+/** An app names itself, so the host is the one thing a person can verify: it always shows in full, never truncated. */
+const WRAP_HOST = "whitespace-normal break-all";
+const WRAP_NAME = "whitespace-normal break-words";
+
 /** The settings roster row, as Members and Vehicles and crew list theirs: name and host, a quiet action, details below. */
 export function ConnectedAppList({ grants, label, showMember, onDisconnect }: {
   grants: OAuthGrantListItem[];
@@ -21,9 +25,11 @@ export function ConnectedAppList({ grants, label, showMember, onDisconnect }: {
         <OrganizationRosterRow
           key={grant.id}
           primary={oauthAppNameStart(grant.name)}
+          primaryClassName={WRAP_NAME}
           secondary={clientIdHost(grant.clientId) ?? undefined}
+          secondaryClassName={WRAP_HOST}
           actions={
-            <Button variant="destructive" size="small" aria-label={`Disconnect ${oauthAppName(grant.name)}${showMember ? ` for ${grant.memberName}` : ""}`}
+            <Button variant="destructive" aria-label={`Disconnect ${oauthAppName(grant.name)}${showMember ? ` for ${grant.memberName}` : ""}`}
               onClick={() => onDisconnect(grant)}>Disconnect</Button>
           }
           details={
