@@ -2,8 +2,7 @@
  * The Emissions page of one credit batch (epic #1058, design C3c "Source
  * chips"): breadcrumb and pager, KPI strip, state chips and sort, then the
  * lines grouped by template group. A row expands as an accordion (From records
- * + Manual entries = Total, then the line comment); "Record this month" turns the list into a grid
- * of every open line with one Save all.
+ * + Manual entries = Total, then the line comment).
  */
 "use client";
 
@@ -43,8 +42,6 @@ import {
 } from "./emission-line-display";
 import { EmissionsUndoBar } from "./emissions-undo-bar";
 import { MONTH_PREFIX_LENGTH, useEmissionsOverviewQuery } from "./emissions-overview-query";
-import { RecordMonthGrid } from "./record-month-grid";
-import { takesGridInput } from "./record-month-row";
 
 const SUBTITLE = "Manual entries add on top of what records already hold.";
 const LIST_SKELETON = "h-320 w-full";
@@ -104,7 +101,6 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
   const { query: overviewQuery } = useEmissionsOverviewQuery();
   const linesQuery = useBatchEmissionLines(scope);
   const { filter, sort, setFilter, setSort } = useBatchLineQuery();
-  const [recording, setRecording] = useState(false);
   const [form, setForm] = useState<{ componentId: string; mode: EntryFormMode } | null>(null);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -200,7 +196,6 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
   ) : null;
 
   const counts = lineCounts(lines);
-  const canRecord = entriesEnabled && !!batch && lines.some(takesGridInput);
 
   return (
     <div className="container-max page-shell">
@@ -222,20 +217,6 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
         <PageHeader
           title={overviewBatch?.code ?? "Emissions"}
           subtitle={overviewBatch ? batchSubtitle(overviewBatch) : SUBTITLE}
-          actions={
-            recording || !entriesEnabled ? null : (
-              <Button
-                variant="primary"
-                disabled={!canRecord}
-                onClick={() => {
-                  setUndo(null);
-                  setRecording(true);
-                }}
-              >
-                Record this month
-              </Button>
-            )
-          }
         />
       </div>
       {!entriesEnabled && <Notice tone="info">Manual entries are not switched on yet. Lines show what records hold.</Notice>}
@@ -252,49 +233,31 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
       ) : (
         <>
           <BatchKpiStrip kpis={batchKpis(lines, timeZone, today)} filter={filter} onFilter={setFilter} />
-          {recording ? (
-            <RecordMonthGrid
-              lines={lines}
-              batch={batch}
+          <div className="flex flex-col gap-12">
+            <LineToolbar counts={counts} filter={filter} sort={sort} onFilter={setFilter} onSort={setSort} />
+            <EmissionLineList
+              lines={visible}
+              grouped={sort === "template"}
               scope={scope}
-              today={today}
-              onDone={() => setRecording(false)}
-              onEnterAgain={(line) => {
-                const entry = line.entries.find((candidate) => !candidate.counts);
-                // A line removed from the template takes no new entry; its ledger offers Delete.
-                if (!entry) return;
-                if (line.entryPolicy !== "none") return setForm({ componentId: line.componentId, mode: { kind: "again", entry } });
-                setRecording(false);
-                setExpandedLine(line, true);
+              canWrite={entriesEnabled}
+              expanded={expanded}
+              editingCommentId={editingCommentId}
+              undo={undo && undoInline ? { componentId: undo.line.componentId, bar: undoBar } : null}
+              filterLabel={lineChipLabel(filter)}
+              onClearFilter={() => setFilter(null)}
+              actions={{
+                toggle: toggleLine,
+                form: (line, mode) => setForm({ componentId: line.componentId, mode }),
+                comment: (line) => {
+                  setExpandedLine(line, true);
+                  setEditingCommentId(line.componentId);
+                },
+                editingComment: (line, editing) => setEditingCommentId(editing ? line.componentId : null),
+                deleteEntry: (line, entry) => void removeEntry(line, entry),
               }}
             />
-          ) : (
-            <div className="flex flex-col gap-12">
-              <LineToolbar counts={counts} filter={filter} sort={sort} onFilter={setFilter} onSort={setSort} />
-              <EmissionLineList
-                lines={visible}
-                grouped={sort === "template"}
-                scope={scope}
-                canWrite={entriesEnabled}
-                expanded={expanded}
-                editingCommentId={editingCommentId}
-                undo={undo && undoInline ? { componentId: undo.line.componentId, bar: undoBar } : null}
-                filterLabel={lineChipLabel(filter)}
-                onClearFilter={() => setFilter(null)}
-                actions={{
-                  toggle: toggleLine,
-                  form: (line, mode) => setForm({ componentId: line.componentId, mode }),
-                  comment: (line) => {
-                    setExpandedLine(line, true);
-                    setEditingCommentId(line.componentId);
-                  },
-                  editingComment: (line, editing) => setEditingCommentId(editing ? line.componentId : null),
-                  deleteEntry: (line, entry) => void removeEntry(line, entry),
-                }}
-              />
-              {undo && !undoInline && undoBar}
-            </div>
-          )}
+            {undo && !undoInline && undoBar}
+          </div>
           <DeleteConfirmDialog
             isOpen={!!stoppedDelete}
             title="Delete this manual entry?"

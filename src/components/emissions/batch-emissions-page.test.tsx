@@ -41,7 +41,6 @@ vi.mock("./emissions-overview-query", async (importOriginal) => ({
 vi.mock("./batch-emissions-pager", () => ({ BatchEmissionsTopBar: () => null }));
 vi.mock("./batch-emissions-toolbar", () => ({ BatchKpiStrip: () => null, LineToolbar: () => null, lineChipLabel: () => null }));
 vi.mock("./emission-entry-form-panel", () => ({ EmissionEntryFormPanel: () => null }));
-vi.mock("./record-month-grid", () => ({ RecordMonthGrid: () => null }));
 // The list itself is covered by emission-line-list.test.tsx; here each row offers a Delete and shows its Undo bar.
 vi.mock("./emission-line-list", () => ({
   EmissionLineList: ({ lines, actions, undo }: { lines: EmissionLine[]; actions: LineActions; undo: RowUndo | null }) => (
@@ -107,18 +106,5 @@ describe("BatchEmissionsPage undo", () => {
     await waitFor(() => expect(mocks.deleteEntry).toHaveBeenCalledWith({ id: "entry-1", expectedVersion: 2 }));
     await waitFor(() => expect(mocks.toast.success).toHaveBeenCalled());
     expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
-  });
-});
-
-describe("BatchEmissionsPage Record this month", () => {
-  it("stays available when every line is recorded but one still adds up entries", () => {
-    render(<BatchEmissionsPage creditBatchId="cb" entriesEnabled />);
-    expect((screen.getByRole("button", { name: "Record this month" }) as HTMLButtonElement).disabled).toBe(false);
-  });
-
-  it("is off when no line can take anything", () => {
-    mocks.lines = [makeLine({ state: "filled", entryPolicy: "single", entries: [makeEntry()] })];
-    render(<BatchEmissionsPage creditBatchId="cb" entriesEnabled />);
-    expect((screen.getByRole("button", { name: "Record this month" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
