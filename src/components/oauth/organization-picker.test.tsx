@@ -55,7 +55,8 @@ it("shows an organization with API access off as disabled, with the reason", () 
 it("shows an empty state without memberships", () => {
   mocks.choices.mockReturnValue(data({ memberships: [], preselectedOrganizationId: null }));
   render(<OrganizationPicker />);
-  expect(screen.getByText("You are not a member of an organization yet. Ask an Owner to invite you.")).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "No organizations yet" })).toBeTruthy();
+  expect(screen.getByText("Ask an Owner to invite you.")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
 });
 
