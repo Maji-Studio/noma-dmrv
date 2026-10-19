@@ -105,7 +105,6 @@ it.each([
   { target: '2026-09-12T18:00:00.000Z', blocker: EARLIER, direction: 'earlier' },
   { target: '2026-09-16T12:00:00.000Z', blocker: LATER, direction: 'later' },
   { target: LATER, blocker: LATER, direction: 'onto a later instant' },
-  { target: STOCK_TIME, blocker: STOCK_TIME, direction: 'past a later sequence at the same instant' },
 ])('preview and write refuse moving $direction past an independent draw', async ({ target, blocker }) => {
   const f = await fixture();
   await db.update(facilities).set({ timezone: 'Africa/Dar_es_Salaam' }).where(and(eq(facilities.organizationId, f.ctx.organizationId), eq(facilities.id, f.facility.id)));
@@ -123,6 +122,16 @@ it.each([
     .rejects.toThrow(preview.blockingMessage!);
   expect(await getOutputStockHistory(f.ctx, f.bin.id)).toEqual(before);
   expect(await storedDelivery(f, delivery.id)).toMatchObject({ deliveryDate: delivery.deliveryDate, version: delivery.version });
+});
+
+it('lets a mass-only correction keep its time beside a later same-instant delivery from another sub-bin', async () => {
+  const f = await fixture();
+  const other = await postProduct(f, { massKg: 100 });
+  const first = await createDelivery(f.ctx, { ...await deliveryInput(f, 100), sources: [{ layerId: f.product!.id, moisturePercent: 0 }] });
+  await createDelivery(f.ctx, { ...await deliveryInput(f, 100), sources: [{ layerId: other.id, moisturePercent: 0 }] });
+  const preview = await previewOutputStock(f.ctx, await correctionInput(f, first.id, STOCK_TIME));
+  expect(preview.blockingMessage).toBeNull();
+  expect(await updateDelivery(f.ctx, first.id, { expectedVersion: first.version, deliveredWetMassKg: 90 })).toMatchObject({ deliveredWetMassKg: 90 });
 });
 
 it('allows moving onto an earlier draw instant because the replacement sorts after it', async () => {

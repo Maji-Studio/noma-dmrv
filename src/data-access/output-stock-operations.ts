@@ -167,6 +167,8 @@ async function deliveryTimeCrossingMessage(ctx: OrgContext, input: OutputStockPr
   const isLive = liveOutputMovementPredicate(movements);
   const originalTime = original.occurredAt!.getTime();
   const replacementTime = new Date(input.occurredAt).getTime();
+  // A correction that keeps the time (mass or moisture only) moves nothing; real dependencies are refused elsewhere.
+  if (replacementTime === originalTime) return null;
   const crossed = movements.find(event => {
     if (event.id === original.id || !event.kind || !REMOVAL_KINDS.has(event.kind) || !event.occurredAt || !isLive(event)) return false;
     const time = event.occurredAt.getTime();

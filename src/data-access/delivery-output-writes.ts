@@ -218,7 +218,7 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
       if (bin?.archivedAt) throw deliveryValidationFailed(['storageLocationId'], 'Source bin is archived. Unarchive it before editing delivery stock.');
       if (!current) throw new SafeError('Posted delivery stock entry not found.');
       await assertOutputMovementEditable(ctx, existing.storageLocationId, current.id, tx);
-      if (data.correctsMovementId && data.correctsMovementId !== current.id) throw new SafeError('This delivery was corrected. Reload it before editing its mass.');
+      if (data.correctsMovementId && data.correctsMovementId !== current.id) throw new SafeError('This delivery was corrected. Reload it before editing it.');
       const savedSources = current.inputSnapshot?.sources;
       if (moistureChanged && data.sources === undefined && Array.isArray(savedSources)) throw new SafeError('Edit the moisture reading for each sub-bin in this delivery.');
       ({ savedProducts } = await recordOutputStockMovementInTransaction(ctx, tx, {
