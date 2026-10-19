@@ -1,11 +1,10 @@
 {
-  "_doc": "Read-only sandbox inventory for `pnpm isometric:coverage-check --source=fixture` (ADR 0005 / ADR 0018). The pinned live template has no allowed PROJECT-scope period inputs. Any future exception must identify the exact normalized group/blueprint/component/input tuple; stale exceptions fail the check.",
+  "_doc": "Read-only sandbox inventory for `pnpm isometric:coverage-check -- --source=fixture` (ADR 0032). Live template lines use the same contracts as readiness and submission. Entry-only operating lines warn; lines without a settled contract, forbidden lines and unmapped inputs fail.",
   "facilities": [
     {
       "label": "Dark Earth sandbox demo",
       "externalProjectId": "prj_1K9YJ33RKSBX9FFF",
-      "defaultRemovalTemplateId": "rvt_1KS4S43VPSBXA26X",
-      "allowedSandboxPeriodInputs": []
+      "defaultRemovalTemplateId": "rvt_1KS4S43VPSBXA26X"
     }
   ]
 }

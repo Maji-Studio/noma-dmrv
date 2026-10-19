@@ -2,26 +2,27 @@ import { getOrganizationApiAccess } from "@/data-access/organization-api-access"
 import { defaultKeyHasher } from "@better-auth/api-key";
 import { findApiCredential, findApiCredentialMember } from "@/data-access/api-credential-auth";
 import { auth } from "./better-auth";
-import type { OrgContext } from "./server";
+import type { OrgContext, OrgRole } from "./server";
 import { canOwnApiKey, scopesFromStoredPermissions, type ApiScope } from "./api-scopes";
 import { parseApiCredential, type ApiContextDenial } from "./api-credential-header";
 
 export type { ApiContextDenial } from "./api-credential-header";
 
 export type ApiContext = OrgContext & {
-  orgRole: "owner" | "admin";
+  orgRole: OrgRole;
   isPlatformAdmin: false;
   credentialId: string;
   principal: {
     userId: string;
     credentialId: string;
-    kind: "api-key";
-  };
+  } & ({ kind: "api-key" } | { kind: "oauth"; oauthClientId: string });
+
   scopes: ApiScope[];
   credential: {
     id: string;
     name: string | null;
     expiresAt: Date;
+    kind: "api-key" | "oauth";
   };
 };
 
@@ -100,6 +101,7 @@ async function resolveStoredCredential(keyHash: string): Promise<ApiContextResol
       },
       scopes: scopesFromStoredPermissions(key.permissions),
       credential: {
+        kind: "api-key",
         id: key.id,
         name: key.name,
         expiresAt: key.expiresAt,
@@ -108,9 +110,13 @@ async function resolveStoredCredential(keyHash: string): Promise<ApiContextResol
   };
 }
 
-export async function resolveApiContext(request: Request): Promise<ApiContextResolution> {
+export async function resolveApiContext(request: Request, audience: string): Promise<ApiContextResolution> {
   const parsed = parseApiCredential(request.headers);
   if (!parsed.ok) return parsed;
+  if (parsed.kind === "oauth") {
+    const { resolveOAuthContext } = await import("./oauth-context");
+    return resolveOAuthContext(parsed.key, audience);
+  }
   const hash = await defaultKeyHasher(parsed.key);
   // Diagnose disabled owners before the plugin returns an opaque invalid key.
   const before = await resolveStoredCredential(hash);

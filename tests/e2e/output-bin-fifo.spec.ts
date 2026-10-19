@@ -44,7 +44,7 @@ test.describe("Output-bin conserved FIFO", () => {
       const f = await seedOutputStockBrowserFixture(testUsers.admin.id);
       await openBin(page, f);
       await page.getByRole("button", { name: "Edit storage bin", exact: true }).click();
-      const order = page.getByRole("group", { name: "Default draw order", exact: true });
+      const order = page.getByRole("group", { name: /^Default draw order/ });
       await expect(order).toBeVisible();
       await expect(order.getByRole("radio", { name: /^Oldest first/ })).toBeChecked();
       await evidence(page, info, `default-draw-order-before-${viewport.name}`);

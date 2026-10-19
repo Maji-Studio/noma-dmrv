@@ -2,9 +2,9 @@
  * Credit Batch / Application Cache Invalidation E2E Test (issue #396)
  *
  * `useUpdateApplication` (and create/delete) now invalidate `creditBatchKeys`
- * on success, so a credit batch's derived `appliedWeightTons` (Σ member
- * applications' biocharAppliedTons) doesn't go stale once cached — the
- * credit-batches query uses `refetchOnWindowFocus: false`.
+ * on success, so a credit batch's applied biochar (the List view shows the dry
+ * mass of its slices) doesn't go stale once cached — the credit-batches
+ * queries use `refetchOnWindowFocus: false`.
  *
  * The credit-batches list and the application editor live on separate
  * routes with no shared component (there is no single page in this app that
@@ -23,6 +23,7 @@ import * as crypto from "crypto";
 import { test, expect, type SeededChainData } from "./fixtures";
 import { seedCreditBatchProductionLineage } from "./fixtures/seed-chain-data";
 import {
+  creditBatchRow,
   selectEntity,
   selectFirstEntity,
   waitForFacilityHydration,
@@ -31,6 +32,10 @@ import {
 } from "./fixtures/page-helpers";
 import type { Page } from "@playwright/test";
 import { fillStockMoisture } from "./helpers/stock-moisture";
+
+/** 5000 kg applied from a delivery at 10% moisture, then edited to 3000 kg: dry is 90% of each. */
+const APPLIED_DRY_BEFORE = "4.50 t";
+const APPLIED_DRY_AFTER = "2.70 t";
 
 async function createApplicationForLineage(
   page: Page,
@@ -96,21 +101,13 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
 
     await createApplicationForLineage(page, seededData, today);
 
-    // Baseline: visit /credit-batches and read the pre-edit Weight figure.
-    await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
+    // Baseline: visit /credit-batches and read the pre-edit applied (dry) figure.
+    await page.goto(`/credit-batches?facility=${seededData.facility.id}&view=list`);
     await page.waitForLoadState("networkidle");
 
-    const card = page.locator("article").filter({ hasText: lineage.creditBatchCode });
-    await expect(card).toBeVisible({ timeout: 10000 });
-    const appliedBiocharMetric = card
-      .getByText("Applied biochar", { exact: true })
-      .locator("xpath=..");
-    // The applications form's "biocharAppliedKg" input is entered in kg
-    // (applicationTonsToKg converts for display) but the schema field — and
-    // this rollup — is in tonnes, so 5000 kg in reads back as "5.00 t".
-    await expect(
-      appliedBiocharMetric.getByText("5.00 t", { exact: true }),
-    ).toBeVisible({ timeout: 10000 });
+    const row = creditBatchRow(page, lineage.creditBatchCode);
+    await expect(row).toBeVisible({ timeout: 10000 });
+    await expect(row.locator("[data-applied-dry]")).toHaveText(APPLIED_DRY_BEFORE, { timeout: 10000 });
 
     // Navigate to /applications via the sidebar (client-side nav — the
     // QueryClient created once in providers.tsx survives the route change).
@@ -130,17 +127,16 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
     // Back to /credit-batches, again via client-side nav — no page.reload(),
     // no page.goto(). This is the exact scenario the fix targets: a query
     // that was cached under refetchOnWindowFocus:false must have been
-    // invalidated by the application mutation, or this would still read 5.00.
+    // invalidated by the application mutation, or this would still read 4.50 t.
     await page.locator("nav").getByRole("link", { name: "Credit Batches" }).click();
     await page.waitForURL(/\/credit-batches(\?|$)/);
     await page.waitForLoadState("networkidle");
+    // The sidebar link opens the timeline; the row figures live in the list view.
+    await page.getByRole("button", { name: "List", exact: true }).click();
 
-    const cardAfter = page.locator("article").filter({ hasText: lineage.creditBatchCode });
-    const appliedBiocharMetricAfter = cardAfter
-      .getByText("Applied biochar", { exact: true })
-      .locator("xpath=..");
-    await expect(
-      appliedBiocharMetricAfter.getByText("3.00 t", { exact: true }),
-    ).toBeVisible({ timeout: 10000 });
+    // 5000 kg became 3000 kg of the same delivery: the dry figure follows.
+    await expect(creditBatchRow(page, lineage.creditBatchCode).locator("[data-applied-dry]")).toHaveText(APPLIED_DRY_AFTER, {
+      timeout: 10000,
+    });
   });
 });

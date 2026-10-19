@@ -63,8 +63,13 @@ import {
   deliveryStockOverdrawMessage,
   formatStockLimitKg,
   isStockOverdraw,
+  wholeStockDrawKg,
 } from "@/lib/stock-overdraw";
 import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(applicationFormSchema);
 
 // ============================================
 // Constants for select options
@@ -361,6 +366,8 @@ export function ApplicationForm({
     errors.biocharAppliedKg?.message ??
     applicationStockError ??
     routedServerError.inlineError;
+  const wholeAvailableKg =
+    availableKg !== null ? wholeStockDrawKg(availableKg) : null;
   const stockCues = applicationStockCues({
     delivery: selectedDelivery,
     availableKg,
@@ -476,11 +483,26 @@ export function ApplicationForm({
             certifyStatus={certStatus("biocharAppliedKg")}
             hint="As-received mass at delivery, water included."
             cue={stockCues.appliedMassCue}
+            cueAction={
+              wholeAvailableKg !== null && !locked("appliedWetMassKg")
+                ? {
+                    label: "Add all",
+                    ariaLabel: "Add all to biochar product applied",
+                    disabled: isSubmitting,
+                    onClick: () =>
+                      setValue("biocharAppliedKg", wholeAvailableKg, {
+                        shouldDirty: true,
+                        shouldTouch: true,
+                        shouldValidate: true,
+                      }),
+                  }
+                : undefined
+            }
           >
             <FormInput
               id="biocharAppliedKg"
               type="number"
-              step="any"
+              {...numberBounds("biocharAppliedKg")}
               placeholder="e.g., 5000"
               disabled={isSubmitting || locked("appliedWetMassKg")}
               error={!!biocharAppliedError}
@@ -514,7 +536,7 @@ export function ApplicationForm({
             <FormInput
               id="fieldSizeHa"
               type="number"
-              step="any"
+              {...numberBounds("fieldSizeHa")}
               placeholder="e.g., 2.5"
               disabled={isSubmitting}
               error={!!errors.fieldSizeHa}
@@ -582,6 +604,7 @@ export function ApplicationForm({
           latitudeError={errors.gpsLatitude?.message}
           longitudeError={errors.gpsLongitude?.message}
           disabled={isSubmitting}
+          required={(evidenceMethod ?? "location") === "location"}
         />
 
       </FormSection>
@@ -665,7 +688,7 @@ export function ApplicationForm({
             <FormInput
               id="soilTemperatureC"
               type="number"
-              step="any"
+              {...numberBounds("soilTemperatureC")}
               placeholder="e.g., 25.0"
               disabled={isSubmitting}
               error={!!errors.soilTemperatureC}

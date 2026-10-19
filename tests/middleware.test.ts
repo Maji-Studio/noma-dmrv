@@ -102,3 +102,49 @@ describe("cron proxy boundary", () => {
     expect(getSessionMock).toHaveBeenCalledOnce();
   });
 });
+
+describe("OAuth discovery proxy boundary", () => {
+  it.each([
+    "/.well-known/oauth-authorization-server/api/auth",
+    "/.well-known/oauth-protected-resource",
+    "/.well-known/oauth-protected-resource/api/mcp",
+    "/.well-known/oauth-protected-resource/api/v1",
+  ])("passes %s without a session lookup", async path => {
+    getSessionMock.mockReset();
+    const { updateSession } = await import("@/lib/auth/middleware");
+    expect((await updateSession(new NextRequest(`http://localhost:3100${path}`))).status).toBe(200);
+    expect(getSessionMock).not.toHaveBeenCalled();
+  });
+  it.each([
+    "/.well-known/oauth-protected-resourcex", "/.well-known/oauth-protected-resource/api/mcp/x",
+    "/.well-known/oauth-protected-resource/", "/.well-known/oauth-authorization-server/api/auth/x",
+    "/.well-known/oauth-authorization-server", "/oauth/organization", "/oauth/consent",
+  ])("keeps %s behind the session", async path => {
+    getSessionMock.mockReset();
+    getSessionMock.mockResolvedValue(null);
+    const { updateSession } = await import("@/lib/auth/middleware");
+    const response = await updateSession(new NextRequest(`http://localhost:3100${path}`));
+    expect(response.status).toBe(307);
+    expect(new URL(response.headers.get("location")!).pathname).toBe("/login");
+    expect(getSessionMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe("OAuth login continuation", () => {
+  it("lets an authenticated user reach login with the provider's signed query", async () => {
+    getSessionMock.mockResolvedValue({ user: { emailVerified: true } });
+    const { updateSession } = await import("@/lib/auth/middleware");
+    const response = await updateSession(new NextRequest("http://localhost:3100/login?sig=signature&ba_param=1"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+  it.each(["/login", "/login?prompt=login", "/login?sig=signature", "/login?ba_param=1", "/forgot-password?sig=signature&ba_param=1", "/login/child?sig=signature&ba_param=1"])(
+    "keeps the authenticated redirect for %s", async path => {
+      getSessionMock.mockResolvedValue({ user: { emailVerified: true } });
+      const { updateSession } = await import("@/lib/auth/middleware");
+      const response = await updateSession(new NextRequest(`http://localhost:3100${path}`));
+      expect(response.status).toBe(307);
+      expect(new URL(response.headers.get("location")!).pathname).toBe("/dashboard");
+    },
+  );
+});

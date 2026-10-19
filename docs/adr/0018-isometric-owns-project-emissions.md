@@ -25,12 +25,12 @@ Status: accepted (2026-07-02)
 > [ADR 0031](./0031-operator-energy-estimates.md). Estimates paused 2026-10-16,
 > see ADR 0031.
 
-> **Proposed supersession 2026-10-15**: [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
+> **Superseded in part 2026-10-19** (proposed 2026-10-15): [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
 > moves operating emissions (staff travel, lab electricity, sampling consumables,
 > pyrolyzer direct emissions, sample shipping) onto Removals as per-batch
 > emissions entries. Establishment and end-of-life stay project-level, and the
-> scope guard keeps those tuples. Until ADR 0032 is accepted and implemented,
-> everything below is in force.
+> scope guard keeps those tuples. ADR 0032 was accepted on 2026-10-19. Until it
+> is fully implemented, everything below is in force.
 
 ## Context
 

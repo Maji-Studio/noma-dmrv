@@ -383,7 +383,7 @@ describe("OrderForm record lock (#1119)", () => {
     heldBy: level === "open" ? [] : [DELIVERY],
     usedBy: level === "open" ? [] : [DELIVERY],
     freeFields: level === "sent" ? [] : ["code", "quantityKg", "orderDate", "packaging"],
-    howToFree: level === "open" ? null : "Correct or remove the records that use it first.",
+    howToFree: level === "open" ? null : "To change them, first correct or remove those records.",
     returnedBy: [],
   });
 
@@ -406,7 +406,7 @@ describe("OrderForm record lock (#1119)", () => {
   it("leaves every field editable and shows no lock line while Open", () => {
     const fields = renderLocked("open");
     expect(Object.values(fields).some(isDisabled)).toBe(false);
-    expect(screen.queryByText(/In use by/)).toBeNull();
+    expect(document.querySelector("[data-record-lock-notice]")).toBeNull();
   });
 
   // The lock line itself renders once, from the sheet (`editNotice`).

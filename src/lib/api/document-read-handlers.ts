@@ -17,7 +17,7 @@ export function documentReadHandler(ownerType: ApiDocumentOwnerType, kind: ReadK
   const owner = API_DOCUMENT_OWNERS[ownerType];
   return apiRoute<Params>(`api.v1.${owner.path}.documents.${kind}`, owner.readScope, async (request, context, params) => {
     const { ctx, headers, instance, requestId } = context;
-    if (!canAccessOwnerDocuments(ctx, ownerType, "read")) return apiDenialResponse("missing_scope", instance, requestId);
+    if (!canAccessOwnerDocuments(ctx, ownerType, "read")) return apiDenialResponse("missing_scope", instance, requestId, { role: ctx.orgRole, oauth: ctx.principal.kind === "oauth", scopes: ctx.scopes, requiredScopes: [owner.readScope] });
     if (kind === "list") {
       const { limit, cursor, ...filters } = parseApiQuery(request, documentListSchema(ownerType));
       const ownerId = await resolveApiDocumentOwner(ctx, ownerType, lookupIdentifier(params.idOrCode));
@@ -40,5 +40,5 @@ export function documentReadHandler(ownerType: ApiDocumentOwnerType, kind: ReadK
     const etag = documentEtag(data);
     headers.set("ETag", etag);
     return Response.json({ data }, { headers });
-  });
+  }, { audience: "rest" });
 }

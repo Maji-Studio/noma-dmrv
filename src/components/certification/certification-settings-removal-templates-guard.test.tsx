@@ -48,6 +48,9 @@ vi.mock("@/hooks/use-removal-template-review", () => ({
     data: [entry()], isLoading: false, isError: false, isFetching: false, refetch: vi.fn(),
   }),
   useReviewRemovalTemplateLines: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useRemovalTemplateReviewEntry: () => ({
+    data: undefined, isLoading: false, isError: false, isFetching: false, refetch: vi.fn(),
+  }),
 }));
 vi.mock("./certifier-settings-panel", () => ({ CertifierSettingsPanel: () => <div>Certifier pane</div> }));
 vi.mock("./env-banner", () => ({ EnvBanner: () => null }));

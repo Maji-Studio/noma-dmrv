@@ -91,7 +91,7 @@ describe("useSubmitGhgStatementToVerifier", () => {
       onError: (error: Error) => void;
     }];
     await onError(error);
-    expect(invalidateQueries).toHaveBeenCalledTimes(3);
+    expect(invalidateQueries).toHaveBeenCalledTimes(4);
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.details() });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: activityKeys.all });
     expect(invalidateQueries).toHaveBeenCalledWith({
@@ -171,9 +171,12 @@ describe("invalidateCertificationReadiness", () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.details() });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: activityKeys.all });
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(3);
+    expect(invalidateQueries).toHaveBeenCalledTimes(4);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: creditBatchKeys.timelineFactsPrefix(),
     });
   });
 
@@ -185,7 +188,7 @@ describe("invalidateCertificationReadiness", () => {
       creditBatchPreviews: true,
     });
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(invalidateQueries).toHaveBeenCalledTimes(5);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
     });

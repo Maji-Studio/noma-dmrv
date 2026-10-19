@@ -1,8 +1,9 @@
+import { getOAuthConfig } from "@/lib/auth/oauth-config";
 /** Real handlers, credentials and Postgres. Written for reviewer execution; never run by the implementation agent. */
 import { createApiKey } from "@/data-access/api-keys";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { resolveApiContext } from "@/lib/auth/api-context";
-import { hasRoleAndScope, type ApiScope } from "@/lib/auth/api-scopes";
+import { principalAllows, type ApiScope } from "@/lib/auth/api-scopes";
 import { apiRoute } from "@/lib/api/route";
 import { toolFailure } from "@/lib/mcp/results";
 import { readTools } from "@/lib/mcp/tools/read-tools";
@@ -94,15 +95,15 @@ describe("formulation lines", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, () => {
       { key: (await createApiKey(a.ctx, { name: "Delete fixture", scopes: ["formulations:delete"], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS })).key, write: false, delete: true },
     ];
     for (const permissions of permissionKeys) {
-      const resolution = await resolveApiContext(lookupRequest("formulations", "", permissions.key));
+      const resolution = await resolveApiContext(lookupRequest("formulations", "", permissions.key), getOAuthConfig().rest);
       expect(resolution.ok).toBe(true);
       if (!resolution.ok) throw new Error("Fixture key did not resolve");
       for (const operation of ["create", "update", "archive", "restore", "delete"]) {
         const scope: ApiScope = operation === "delete" ? "formulations:delete" : "formulations:write";
         const allowed = operation === "delete" ? permissions.delete : permissions.write;
-        expect(hasRoleAndScope(resolution.ctx, scope)).toBe(allowed);
+        expect(principalAllows(resolution.ctx, scope)).toBe(allowed);
         // Exercise the shared admission boundary with a stub handler.
-        const handler = apiRoute(`${operation}_formulation`, scope, async () => new Response(null, { status: 204 }));
+        const handler = apiRoute(`${operation}_formulation`, scope, async () => new Response(null, { status: 204 }), { audience: "rest" });
         const response = await handler(new Request("http://localhost:3100/api/v1/formulations", { method: "POST", headers: { authorization: `Bearer ${permissions.key}` } }));
         if (allowed) expect(response.status).toBe(204);
         else await lookupProblem(response, 403, "missing_scope");
@@ -112,7 +113,7 @@ describe("formulation lines", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, () => {
 
   it("keeps the existing MCP lookup in parity for archive filters and cursors", async () => {
     await db.insert(formulations).values([0, 1].map(index => ({ organizationId: a.ctx.organizationId, code: `MCP-ARCHIVED-${index}`, name: "Archived recipe", archivedAt: new Date() })));
-    const resolution = await resolveApiContext(lookupRequest("formulations", "", a.key));
+    const resolution = await resolveApiContext(lookupRequest("formulations", "", a.key), getOAuthConfig().rest);
     if (!resolution.ok) throw new Error("Fixture key did not resolve");
     const tool = readTools.find(tool => tool.name === "find_formulations")!;
     const rest = await (await LIST(lookupRequest("formulations", "?archived=true&limit=1", a.key))).json();

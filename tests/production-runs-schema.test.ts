@@ -7,6 +7,10 @@ import {
 } from "@/schemas/production-runs";
 
 const originalTz = process.env.TZ;
+const FRACTIONAL_RESIDENCE_MINUTES = 1.5;
+const VALID_RESIDENCE_MINUTES = 30;
+const ZERO_RESIDENCE_MINUTES = 0;
+const NEGATIVE_RESIDENCE_MINUTES = -1;
 
 afterEach(() => {
   process.env.TZ = originalTz;
@@ -38,6 +42,49 @@ const completeProductionRunInput = {
   endTime: "12:00",
   biocharOutputKg: 10,
 };
+
+describe("productionRunFormSchema residence time", () => {
+  it.each(["1.5", FRACTIONAL_RESIDENCE_MINUTES])(
+    "rejects fractional minutes %s with a whole-number message",
+    residenceTimeMinutes => {
+      const result = productionRunFormSchema.safeParse({
+        ...completeProductionRunInput, residenceTimeMinutes,
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues).toContainEqual(expect.objectContaining({
+          path: ["residenceTimeMinutes"],
+          message: "Enter residence time as a whole number of minutes.",
+        }));
+      }
+    },
+  );
+
+  it.each([ZERO_RESIDENCE_MINUTES, NEGATIVE_RESIDENCE_MINUTES])(
+    "rejects non-positive minutes %s with the minimum message",
+    residenceTimeMinutes => {
+      const result = productionRunFormSchema.safeParse({
+        ...completeProductionRunInput, residenceTimeMinutes,
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues).toContainEqual(expect.objectContaining({
+          path: ["residenceTimeMinutes"],
+          message: "Residence time must be at least 1 minute.",
+        }));
+      }
+    },
+  );
+
+  it.each([
+    { input: "30", expected: VALID_RESIDENCE_MINUTES },
+    { input: "", expected: null },
+  ])("parses residence time '$input' as $expected", ({ input, expected }) => {
+    expect(productionRunFormSchema.parse({
+      ...completeProductionRunInput, residenceTimeMinutes: input,
+    }).residenceTimeMinutes).toBe(expected);
+  });
+});
 
 describe("running end time validation", () => {
   it.each([

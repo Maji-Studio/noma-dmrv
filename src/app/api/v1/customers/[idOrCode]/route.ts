@@ -11,10 +11,10 @@ export const GET = apiRoute<Params>("api.v1.customers.get", "customers:read", as
   const data = await readCustomer(request, ctx, idOrCode);
   headers.set("ETag", customerEtag(data));
   return Response.json({ data }, { headers });
-});
+}, { audience: "rest" });
 
 export const PATCH = apiRoute<Params>("api.v1.customers.update", "customers:write", (request, context, { idOrCode }) =>
-  updateCustomerResponse(request, context, idOrCode));
+  updateCustomerResponse(request, context, idOrCode), { audience: "rest" });
 
 export const DELETE = apiRoute<Params>("api.v1.customers.delete", "customers:delete", (request, context, { idOrCode }) =>
-  commandCustomerResponse(request, context, idOrCode, "delete"));
+  commandCustomerResponse(request, context, idOrCode, "delete"), { audience: "rest" });

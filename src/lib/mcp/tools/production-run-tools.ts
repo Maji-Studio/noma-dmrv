@@ -26,7 +26,7 @@ const versionGuidance = "Call get_production_run first and pass version as expec
 
 export const productionRunWriteTools: WriteTool[] = [
   {
-    kind: "write", name: startProductionRun.id, scope: "production-runs:write", input: createInput, output: itemOutput,
+    kind: "write", name: startProductionRun.id, scope: "production-runs:write", requiredScopes: () => ["production-runs:write"], input: createInput, output: itemOutput,
     annotations: { ...annotations, destructiveHint: false },
     description: `Start a production run. Call whoami, find_reactors and find_storage_locations first. Draws deduct wet mass from feedstock bins. ${guidance}`,
     async execute(context, raw) {
@@ -41,7 +41,7 @@ export const productionRunWriteTools: WriteTool[] = [
     },
   },
   {
-    kind: "write", name: updateProductionRun.id, scope: "production-runs:write", input: updateInput, output: itemOutput,
+    kind: "write", name: updateProductionRun.id, scope: "production-runs:write", requiredScopes: () => ["production-runs:write"], input: updateInput, output: itemOutput,
     annotations: { ...annotations, destructiveHint: true },
     description: `Update a production run by UUID, including status, draws and output. Draw changes adjust bin stock; cancellation returns its drawn stock. ${versionGuidance} ${guidance}`,
     execute: (context, raw) => mutate(context, raw, "update"),
@@ -51,7 +51,7 @@ export const productionRunWriteTools: WriteTool[] = [
     },
   },
   {
-    kind: "write", name: deleteProductionRun.id, scope: "production-runs:delete", input: deleteInput, output: deleteOutput,
+    kind: "write", name: deleteProductionRun.id, scope: "production-runs:delete", requiredScopes: () => ["production-runs:delete"], input: deleteInput, output: deleteOutput,
     annotations: { ...annotations, destructiveHint: true },
     description: `Delete a production run by UUID and return drawn stock. Dependencies may refuse deletion. Returns deleted id and code, or data on a dry run. ${versionGuidance} ${guidance}`,
     execute: (context, raw) => mutate(context, raw, "delete"),

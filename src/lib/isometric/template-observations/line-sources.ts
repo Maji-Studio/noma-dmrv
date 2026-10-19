@@ -9,6 +9,8 @@ export interface LineContract {
   automaticSource?: AutomaticSourceId;
   entryPolicy: EntryPolicy;
   origin: "bootstrap" | "carried" | "reviewed" | "proposed";
+  /** Display metadata from raw template arrays, excluded from entry compatibility. */
+  templateOrder?: { groupPosition: number; position: number };
 }
 export type LineSources = Record<string, LineContract>;
 export interface LineSourceProblem {

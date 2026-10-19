@@ -17,6 +17,7 @@ import {
 } from "react";
 import { CheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
+import { RequiredMarker } from "./required-marker";
 
 export interface SegmentedOption {
   value: string;
@@ -35,6 +36,8 @@ export interface SegmentedControlProps {
   onValueChange?: (value: string) => void;
   onBlur?: FocusEventHandler<HTMLInputElement>;
   disabled?: boolean;
+  /** Adds "Required" to the legend; the visible star stays on the FormField label. */
+  required?: boolean;
   error?: boolean;
   "aria-describedby"?: string;
   "aria-invalid"?: boolean | "true" | "false";
@@ -53,6 +56,7 @@ export const SegmentedControl = forwardRef<HTMLInputElement, SegmentedControlPro
       onValueChange,
       onBlur,
       disabled = false,
+      required = false,
       error,
       className,
       ...aria
@@ -75,7 +79,10 @@ export const SegmentedControl = forwardRef<HTMLInputElement, SegmentedControlPro
         aria-describedby={aria["aria-describedby"]}
         aria-invalid={error ? true : aria["aria-invalid"]}
       >
-        <legend className="sr-only">{legend}</legend>
+        <legend className="sr-only">
+          {legend}
+          {required && <RequiredMarker visual={false} />}
+        </legend>
         {options.map((option) => {
           const optionDisabled = disabled || option.disabled;
           return (

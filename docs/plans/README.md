@@ -24,6 +24,6 @@ Active plans:
 - [2026-09-14 FIFO bin accounting](./2026-09-14-fifo-bin-accounting.md), approved, owner Kenji Nguyen. Implementation pending in [#756](https://github.com/Maji-Studio/noma-dmrv/issues/756).
 - [2026-09-16 Loading speed plan](./2026-09-16-loading-speed-plan.md), proposed, owner Kenji Nguyen. Finish PRs #761-#763, then region move, auth dedupe, dashboard query budget, shell streaming.
 - [2026-10-06 Data-entry API (REST + MCP)](./2026-10-06-data-entry-api.md), in progress, owner Kenji Nguyen. Phase 0 spike done (section 15); Phase 1 foundations next.
-- [2026-10-15 Template-driven emissions entries](./2026-10-15-template-driven-emissions.md), proposed, owner Kenji Nguyen. Decisions settled; five PRs, none started. ADR 0032.
+- [2026-10-15 Template-driven emissions entries](./2026-10-15-template-driven-emissions.md), in progress, owner Kenji Nguyen. ADR 0032 accepted 2026-10-19; PRs 1-3 merged, PR 4 next.
 
 The [simplification analysis](../archive/plans/2026-09-07-simplification-analysis.md) and [rollout plan](../archive/plans/2026-09-07-simplification-rollout-plan.md) are archived after A2/A3 shipped. Remaining decisions are in [open questions](../open-questions-architecture.md#simplification-rollout-follow-ups-simplificationremaining-decisions-opened-2026-10-14).

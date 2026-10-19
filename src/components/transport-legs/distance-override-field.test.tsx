@@ -38,6 +38,13 @@ const OVERRIDE = "Override the one-way distance";
 const RESET = "Reset to the location default";
 
 describe("DistanceOverrideField", () => {
+  it("stars the one-way distance only while overriding", () => {
+    const { rerender } = render(<Harness />);
+    expect(screen.queryByText("Required")).toBeNull();
+    rerender(<Harness overriding />);
+    expect(screen.getByText("Required")).toBeTruthy();
+  });
+
   it("shows a derived distance greyed and read-only, its provenance behind the ⓘ", () => {
     render(<Harness />);
     expect(distance().readOnly).toBe(true);

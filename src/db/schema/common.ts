@@ -291,6 +291,7 @@ export const certificationSubmissionStatus = pgEnum(
 
 export const ACTIVITY_ENTITY_TYPES = [
   "emission_entry",
+  "emission_line_comment",
   "removal",
   "ghg_statement",
   "production_run",

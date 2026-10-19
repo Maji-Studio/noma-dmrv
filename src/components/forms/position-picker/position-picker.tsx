@@ -17,10 +17,13 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 import { FormField } from "@/components/forms/form-field";
 import { FormInput } from "@/components/forms/form-input";
+import { RequiredMarker } from "@/components/forms/required-marker";
 import { InfoHint } from "@/components/ui/tooltip";
 import { GEOCODE_DEBOUNCE_MS } from "@/config/geo";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useGeoCapabilities, useReverseGeocode } from "@/hooks/use-geo";
+import { numberInputConstraints } from "@/lib/number-input-constraints";
+import { latitudeSchema, longitudeSchema } from "@/schemas/helpers";
 import { AddressSearch } from "./address-search";
 import type { MapAccent } from "@/components/map";
 
@@ -28,6 +31,10 @@ import type { MapAccent } from "@/components/map";
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 
 const MAP_PREVIEW_HEIGHT_CLASS = "h-[260px]";
+
+/** Native min, max and step for the manual inputs, read from the schemas. */
+const LATITUDE_BOUNDS = numberInputConstraints(latitudeSchema);
+const LONGITUDE_BOUNDS = numberInputConstraints(longitudeSchema);
 
 // maplibre-gl is ~250 kB gzipped — keep it out of the route bundle and only
 // fetch it when a picker with a configured basemap actually renders.
@@ -147,14 +154,7 @@ export function PositionPicker({
       <div className="flex items-baseline justify-between border-b border-[var(--clr-dark-purple-30)] px-12 py-8">
         <span className="body-small font-medium text-[var(--color-text-secondary)]">
           {label}
-          {required && (
-            <>
-              <span className="text-[var(--color-signal-red)] ml-2" aria-hidden="true">
-                *
-              </span>
-              <span className="sr-only">Required</span>
-            </>
-          )}
+          {required && <RequiredMarker />}
         </span>
         <span className="body-caption text-[var(--color-text-tertiary)]">
           Search · click map · type
@@ -211,13 +211,13 @@ export function PositionPicker({
             id={`${idPrefix}-latitude`}
             label="GPS latitude"
             error={latitudeError}
-            cue="-90 to 90"
+            cue={`${LATITUDE_BOUNDS.min} to ${LATITUDE_BOUNDS.max}`}
             required={required}
           >
             <FormInput
               id={`${idPrefix}-latitude`}
               type="number"
-              step="any"
+              {...LATITUDE_BOUNDS}
               placeholder="e.g., -3.3349"
               disabled={disabled}
               error={!!latitudeError}
@@ -230,13 +230,13 @@ export function PositionPicker({
             id={`${idPrefix}-longitude`}
             label="GPS longitude"
             error={longitudeError}
-            cue="-180 to 180"
+            cue={`${LONGITUDE_BOUNDS.min} to ${LONGITUDE_BOUNDS.max}`}
             required={required}
           >
             <FormInput
               id={`${idPrefix}-longitude`}
               type="number"
-              step="any"
+              {...LONGITUDE_BOUNDS}
               placeholder="e.g., 37.3404"
               disabled={disabled}
               error={!!longitudeError}

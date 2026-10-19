@@ -259,3 +259,13 @@ export async function clickRowMenuItem(
     }
   }).toPass({ timeout: ROW_MENU_TOTAL_TIMEOUT_MS });
 }
+
+/** A credit batch row in the /credit-batches List view (`?view=list`). */
+export function creditBatchRow(page: Page, code: string): Locator {
+  return page.locator(`[data-credit-batch-row="${code}"]`);
+}
+
+/** Any credit batch row in the List view. */
+export function creditBatchRows(page: Page): Locator {
+  return page.locator("[data-credit-batch-row]");
+}

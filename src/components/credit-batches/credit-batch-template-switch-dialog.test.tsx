@@ -99,8 +99,11 @@ describe("CreditBatchTemplateSwitchDialog", () => {
     expect(mocks.preview).toHaveBeenLastCalledWith(FACILITY_ID, "rvt_new", true);
     expect(screen.getByText("2 lines need review")).toBeTruthy();
     expect(screen.getByText("Removals for CB-26-001 stay blocked until an Owner or Admin reviews them.")).toBeTruthy();
-    const link = screen.getByRole("link", { name: "Open Removal templates" });
+    const link = screen.getByRole("link", { name: "Review lines in a new tab" });
+    // Straight to the chosen template, in a new tab so the unsaved choice stays here.
     expect(link.getAttribute("href")).toContain("section=removal-templates");
+    expect(link.getAttribute("href")).toContain("template=rvt_new");
+    expect(link.getAttribute("target")).toBe("_blank");
     expect((screen.getByRole("button", { name: "Switch template" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -128,7 +131,7 @@ describe("CreditBatchTemplateSwitchDialog", () => {
 
     expect(screen.getByText("All lines in this template are reviewed.")).toBeTruthy();
     expect(screen.queryByText(/need review/)).toBeNull();
-    expect(screen.queryByRole("link", { name: "Open Removal templates" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Review lines in a new tab" })).toBeNull();
   });
 
   it("offers a retry when the preview cannot be read and still allows the switch", async () => {

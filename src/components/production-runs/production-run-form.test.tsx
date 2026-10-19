@@ -11,8 +11,9 @@ vi.mock("@/hooks/use-facility-context", () => ({
   }),
 }));
 vi.mock("@/hooks/use-entities", () => ({ useEntityById: () => ({ data: undefined }) }));
+const pickers = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 vi.mock("@/components/forms/entity-select", () => ({
-  EntitySelect: () => null,
+  EntitySelect: (props: Record<string, unknown>) => { pickers.push(props); return null; },
   StorageLocationQuickAddDialog: () => null,
   useQuickAddDialog: () => ({ isOpen: false, open: vi.fn(), close: vi.fn() }),
 }));
@@ -38,7 +39,19 @@ const savedRun = {
   biocharStorageLocationId: "44444444-4444-4444-8444-444444444444",
 } as unknown as ProductionRunWithRelations;
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); pickers.length = 0; });
+
+describe("ProductionRunForm reactor picker", () => {
+  it("links to creating a reactor at the run's facility", () => {
+    render(<ProductionRunForm onSubmit={vi.fn()} />);
+    const reactor = pickers.findLast((props) => props.entityType === "reactor");
+    expect(reactor).toMatchObject({
+      allowCreate: true,
+      createHref: "/reactors?facility=11111111-1111-4111-8111-111111111111&create=true",
+      emptyHint: { message: "This facility has no reactors yet." },
+    });
+  });
+});
 
 describe("ProductionRunForm reopening", () => {
   it.each(["complete", "failed"] as const)("reopens a saved %s run without touching its end fields", async (status) => {

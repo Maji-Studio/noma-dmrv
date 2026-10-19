@@ -98,8 +98,17 @@ function LegRow({
     TRANSPORT_METHOD_ICONS[leg.method as TransportMethodValue] ?? FALLBACK_METHOD_ICON;
   const method = transportMethodLabel(leg.method);
   // Label and value pairs, so a missing value is the shared token itself.
-  const source = `Distance source: ${leg.sourceLabel ?? MISSING_VALUE.notRecorded}`;
-  const load = showLoad ? ` · Load: ${formatMass(leg.loadKg)}` : "";
+  // Without a distance there is nothing to have a source, and the right-hand
+  // column already says "Not recorded", so the left side names only the method.
+  // The counted distance derives from the one-way distance, so both are missing
+  // together.
+  const hasDistance = leg.oneWayKm != null;
+  const load = showLoad ? `Load: ${formatMass(leg.loadKg)}` : "";
+  const captionParts = [
+    hasDistance ? `Distance source: ${leg.sourceLabel ?? MISSING_VALUE.notRecorded}` : "",
+    load,
+  ].filter(Boolean);
+  const showCaption = captionParts.length > 0 || evidenceAttached !== undefined;
 
   return (
     <div className={GRID}>
@@ -113,18 +122,20 @@ function LegRow({
       <div className="min-w-0 space-y-2 py-12">
         <p className="body-medium text-[var(--color-text-secondary)]">
           <span className="sr-only">{`Leg to ${stopName(leg.destinationName)}. `}</span>
-          {leg.oneWayKm == null ? (
-            `${method} · One way: ${formatDistanceKm(leg.oneWayKm)}`
-          ) : (
+          {hasDistance ? (
             <>
               {method} · <span className="tabular-nums">{formatDistanceKm(leg.oneWayKm)}</span> one way
             </>
+          ) : (
+            method
           )}
         </p>
-        <p className="flex items-start gap-8 body-caption text-[var(--color-text-tertiary)]">
-          <span className="min-w-0 tabular-nums">{`${source}${load}`}</span>
-          {evidenceAttached !== undefined && <EvidenceIcon attached={evidenceAttached} />}
-        </p>
+        {showCaption && (
+          <p className="flex items-start gap-8 body-caption text-[var(--color-text-tertiary)]">
+            <span className="min-w-0 tabular-nums">{captionParts.join(" · ")}</span>
+            {evidenceAttached !== undefined && <EvidenceIcon attached={evidenceAttached} />}
+          </p>
+        )}
       </div>
       <div className="flex items-start gap-4 py-12">
         <div className="text-right">

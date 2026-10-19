@@ -7,6 +7,10 @@ type Coverage = { status: "direct" } | { status: "runner"; operations: string[] 
 // Explicit inventory includes wrappers, cascades and derived writers. Discovery
 // below scans the whole data-access tree so new modules cannot bypass it.
 const ACTIVITY_COVERAGE = {
+  "emission-line-comments.ts": {
+    setEmissionLineComment: { status: "direct" },
+    deleteEmissionLineComment: { status: "direct" },
+  },
   "transport-distance-refresh.ts": {
     refreshFeedstockDistanceInTransaction: { status: "runner", operations: ["refresh_feedstock_distance"] },
     refreshDeliveryDistanceInTransaction: { status: "runner", operations: ["refresh_delivery_distance"] },
@@ -16,7 +20,9 @@ const ACTIVITY_COVERAGE = {
     updateEmissionEntry: { status: "direct" },
     confirmEmissionEntry: { status: "direct" },
     deleteEmissionEntry: { status: "direct" },
-    tombstoneEmissionZeros: { status: "exempt", reason: "No zero rows are written before PR 4; PR 4 must record zero tombstoning activity (docs/open-questions.md)." },
+    restoreEmissionEntry: { status: "direct" },
+    replaceEmissionEntry: { status: "direct" },
+    tombstoneEmissionZeros: { status: "direct" },
   },
   "emission-entry-lock.ts": {
     bumpEmissionEntryEvidence: { status: "exempt", reason: "The document writer records the activity." },
@@ -167,7 +173,7 @@ const ACTIVITY_COVERAGE = {
 
 const COVERED_TABLES = new Set([
   "creditBatches", "creditBatchProductionRuns", "creditBatchApplications",
-  "applications", "documents", "transportLegs", "emissionEntries", "emissionEntryValues",
+  "applications", "documents", "transportLegs", "emissionEntries", "emissionEntryValues", "emissionLineComments",
   "formulations", "formulationIngredients",
 ]);
 const WRITE_PREFIX = /^(create|update|delete|attach|detach|archive|insert|upsert|sync|replace|retire|remove|set|mark)/;

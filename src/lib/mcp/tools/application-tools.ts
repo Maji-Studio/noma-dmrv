@@ -26,21 +26,21 @@ const applicationIdentifier = resourceQueries.applications.get.extend({ idOrCode
 const deliveryIdentifier = resourceQueries.deliveries.get.extend({ idOrCode: z.string().describe("Delivery UUID or exact code from find_deliveries.") });
 export const applicationReadTools: ReadTool[] = [
   {
-    kind: "read", name: "find_applications", scope: "applications:read", input: resourceQueries.applications.list,
+    kind: "read", name: "find_applications", scope: "applications:read", requiredScopes: () => ["applications:read"], input: resourceQueries.applications.list,
     output: listEnvelopeSchema(applicationRepresentationSchema),
     description: `Find applications with the REST list filters. creditBatchId follows physical lineage, including mix-bin applications held out of credit batches. Dates are calendar dates; appliedFrom is inclusive and appliedBefore exclusive. ${UNTRUSTED_TEXT}`,
     execute: (ctx, raw) => readApplicationListFromInput(ctx, parseQueryInput(raw, resourceQueries.applications.list)),
     summarize(body) { const count = (body.data as unknown[]).length; return `${count} ${count === 1 ? "application" : "applications"}.${body.nextCursor ? " More results: pass nextCursor." : ""}`; },
   },
   {
-    kind: "read", name: "get_application", scope: "applications:read", input: applicationIdentifier,
+    kind: "read", name: "get_application", scope: "applications:read", requiredScopes: () => ["applications:read"], input: applicationIdentifier,
     output: itemEnvelopeSchema(applicationRepresentationSchema),
     description: `Get an application and its version by UUID or exact code from find_applications. Pass version as expectedVersion to update_application or delete_application. Full geometry is not in this result; read REST /applications/{idOrCode}/boundary for it. ${UNTRUSTED_TEXT}`,
     async execute(ctx, raw) { const { idOrCode } = parseQueryInput(raw, applicationIdentifier); return { data: await readApiApplication(ctx, lookupIdentifier(idOrCode)) }; },
     summarize: body => { const row = body.data as ApplicationRepresentation; return `Application ${row.code}, version ${row.version}.`; },
   },
   {
-    kind: "read", name: "get_delivery_application_balance", scope: "deliveries:read", input: deliveryIdentifier,
+    kind: "read", name: "get_delivery_application_balance", scope: "deliveries:read", requiredScopes: () => ["deliveries:read"], input: deliveryIdentifier,
     output: itemEnvelopeSchema(deliveryApplicationBalanceRepresentationSchema),
     description: `Read delivered, applied and remaining wet kg, earliest application date and site defaults from one snapshot. Call find_deliveries first for the delivery idOrCode. Call this before record_application. Requires deliveries:read. Application writes change this balance without changing the delivery version; it is not a reservation. ${UNTRUSTED_TEXT}`,
     execute(ctx, raw) { const { idOrCode } = parseQueryInput(raw, deliveryIdentifier); return readApiDeliveryApplicationBalance(ctx, lookupIdentifier(idOrCode)); },
@@ -63,7 +63,7 @@ function guidedText(headline: string, body: Record<string, unknown>) {
 }
 export const applicationWriteTools: WriteTool[] = [
   {
-    kind: "write", name: "record_application", scope: "applications:write", input: createInput, output: applicationWriteEnvelopeSchema,
+    kind: "write", name: "record_application", scope: "applications:write", requiredScopes: () => ["applications:write"], input: createInput, output: applicationWriteEnvelopeSchema,
     annotations: { ...annotations, destructiveHint: false },
     description: `Record one field application; an application is not a delivery. ${APPLICATION_GUIDANCE} ${guidance}`,
     async execute(context, raw) {
@@ -74,14 +74,14 @@ export const applicationWriteTools: WriteTool[] = [
     summarize(body, dryRun) { const row = body.data as ApplicationRepresentation; return guidedText(dryRun ? `Dry run: would record application ${row.code} (provisional code).` : `Recorded application ${row.code} (version ${row.version}).`, body); },
   },
   {
-    kind: "write", name: "update_application", scope: "applications:write", input: updateInput, output: applicationWriteEnvelopeSchema,
+    kind: "write", name: "update_application", scope: "applications:write", requiredScopes: () => ["applications:write"], input: updateInput, output: applicationWriteEnvelopeSchema,
     annotations: { ...annotations, destructiveHint: true },
     description: `Update an application by UUID. Send only changed fields; omission preserves values and null clears clearable fields. Updates never copy site defaults. Repointing to another delivery rebuilds allocations. Supply raw GeoJSON for boundaries. ${versionGuidance} ${guidance}`,
     execute: (context, raw) => mutate(context, raw, "update"),
     summarize(body, dryRun) { const row = body.data as ApplicationRepresentation; return guidedText(dryRun ? `Dry run: would update application ${row.code} to version ${row.version}.` : `Updated application ${row.code} to version ${row.version}.`, body); },
   },
   {
-    kind: "write", name: "delete_application", scope: "applications:delete", input: deleteInput, output: deleteOutput,
+    kind: "write", name: "delete_application", scope: "applications:delete", requiredScopes: () => ["applications:delete"], input: deleteInput, output: deleteOutput,
     annotations: { ...annotations, destructiveHint: true },
     description: `Delete an application by UUID and retire its documents. Requires applications:delete. Certification locks may prevent deletion. Returns deleted id and code, or data on a dry run. ${versionGuidance} ${guidance}`,
     execute: (context, raw) => mutate(context, raw, "delete"),

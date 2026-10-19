@@ -1,4 +1,4 @@
-import { hasRoleAndScope, type ApiScope } from "@/lib/auth/api-scopes";
+import { principalAllows, type ApiScope } from "@/lib/auth/api-scopes";
 import { DELIVERY_EVIDENCE_DOCUMENT_TYPES } from "@/lib/certification/delivery-evidence";
 import { TRANSPORT_EVIDENCE_DOCUMENT_TYPES } from "@/lib/certification/transport-evidence";
 import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
@@ -45,8 +45,8 @@ export function allowsApiDocumentType(ownerType: ApiDocumentOwnerType, documentT
 }
 
 /** Owner scope and API role floor are always checked together. */
-export function canAccessOwnerDocuments(context: Parameters<typeof hasRoleAndScope>[0], ownerType: string, access: "read" | "write"): boolean {
-  return isApiDocumentOwnerType(ownerType) && hasRoleAndScope(context, API_DOCUMENT_OWNERS[ownerType][access === "read" ? "readScope" : "writeScope"]);
+export function canAccessOwnerDocuments(context: Parameters<typeof principalAllows>[0], ownerType: string, access: "read" | "write"): boolean {
+  return isApiDocumentOwnerType(ownerType) && principalAllows(context, API_DOCUMENT_OWNERS[ownerType][access === "read" ? "readScope" : "writeScope"]);
 }
 
 export function apiDocumentOwnerType(entityType: string): ApiDocumentOwnerType {
