@@ -246,8 +246,11 @@ describe("TransportLegsEditor route rail", () => {
       ),
     );
 
-    expect(rendered).toContain("Road · One way: Not recorded");
-    expect(rendered).toContain("Distance source: Not recorded");
+    expect(rendered).toContain("Road");
+        // The leg row reads method, load, then one "Not recorded" before the stop.
+    expect(rendered).toContain("Road Load: 2 kg Not recorded E2E Regional collection hub");
+    expect(rendered).not.toContain("One way:");
+    expect(rendered).not.toContain("Distance source");
     expect(rendered).not.toContain("null km");
   });
 

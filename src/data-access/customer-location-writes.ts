@@ -1,4 +1,4 @@
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { customers, customerLocations, type CustomerLocation } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -13,6 +13,7 @@ import { upsertLocationFacilityDistances, withLocationFacilityDistances } from "
 import { assertRowVersion, nextVersion } from "./row-version";
 import { CUSTOMER_LOCATION_ORDER } from "./customers";
 import { requireOrgScope } from "./utils";
+import { demoteDefaultPartyLocation } from "./party-location-default";
 
 import { createCustomerLocationInTransaction } from "./customer-create";
 import { lockBiocharTransportRouteTopology } from "./transport-legs";
@@ -111,22 +112,7 @@ export async function updateCustomerLocationInTransaction(ctx: OrgContext, tx: D
 
   // Promoting this location to default demotes the customer's current default.
   if (data.isDefault === true) {
-    const siblings = await tx.select().from(customerLocations).where(and(
-      eq(customerLocations.customerId, customerId), eq(customerLocations.organizationId, ctx.organizationId),
-      eq(customerLocations.isDefault, true), ne(customerLocations.id, locationId),
-    ));
-    const demoted = await tx
-      .update(customerLocations)
-      .set({ version: nextVersion(customerLocations.version), isDefault: false, updatedAt: new Date() })
-      .where(
-        and(
-          eq(customerLocations.customerId, customerId),
-          eq(customerLocations.organizationId, ctx.organizationId),
-          eq(customerLocations.isDefault, true),
-          ne(customerLocations.id, locationId)
-        )
-      ).returning();
-    for (const sibling of demoted) captureLocation?.(sibling.id, siblings.find(row => row.id === sibling.id)!, sibling);
+    await demoteDefaultPartyLocation(ctx, tx, { kind: "customer", parentId: customerId, exceptLocationId: locationId, captureLocation });
   }
 
   const [updated] = await tx
@@ -188,8 +174,9 @@ export async function deleteCustomerLocationInTransaction(ctx: OrgContext, tx: D
 
   const before = (await withLocationFacilityDistances(ctx, "customer", [versioned], tx))[0];
   const blockers = await findCustomerLocationBlockers(ctx, tx, locationId);
-  if (blockers.orderCodes.length) throw customerLocationHasOrders(blockers.orderCodes);
-  if (blockers.registeredLocationIds.length) throw customerLocationHasStorageSite();
+  const archived = versioned.archivedAt !== null;
+  if (blockers.orderCodes.length) throw customerLocationHasOrders(blockers.orderCodes, archived);
+  if (blockers.registeredLocationIds.length) throw customerLocationHasStorageSite(archived);
   const deleted = await tx
     .delete(customerLocations)
     .where(
@@ -203,8 +190,8 @@ export async function deleteCustomerLocationInTransaction(ctx: OrgContext, tx: D
       customerId: customerLocations.customerId,
       isDefault: customerLocations.isDefault,
     }).catch((error: unknown) => {
-      if (isPgForeignKeyViolation(error, "orders_customer_location_id_customer_locations_id_fk")) throw customerLocationHasOrders();
-      if (isPgForeignKeyViolation(error, "certifier_storage_locations_customer_location_id_organization_i")) throw customerLocationHasStorageSite();
+      if (isPgForeignKeyViolation(error, "orders_customer_location_id_customer_locations_id_fk")) throw customerLocationHasOrders([], archived);
+      if (isPgForeignKeyViolation(error, "certifier_storage_locations_customer_location_id_organization_i")) throw customerLocationHasStorageSite(archived);
       throw error;
     });
 

@@ -1,3 +1,4 @@
+import { getOAuthConfig } from "@/lib/auth/oauth-config";
 import { beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -19,7 +20,7 @@ import { GET } from "@/app/api/v1/me/route";
 import { apiDenialResponse } from "@/lib/api/problem";
 import { resolveApiContext } from "./api-context";
 
-const request = () => new Request("http://localhost/api/v1/me", { headers: { authorization: "Bearer synthetic" } });
+const request = () => new Request("http://localhost/api/v1/me", { headers: { authorization: "Bearer noma_test_synthetic" } });
 
 const stored = () => ({
   key: {
@@ -54,7 +55,7 @@ beforeEach(() => {
 });
 
 it("checks live membership after plugin verification and never forwards cookies", async () => {
-  const result = await resolveApiContext(request());
+  const result = await resolveApiContext(request(), getOAuthConfig().rest);
   expect(result).toMatchObject({
     ok: true,
     ctx: {
@@ -64,7 +65,7 @@ it("checks live membership after plugin verification and never forwards cookies"
       scopes: ["feedstocks:read"],
     },
   });
-  expect(mocks.verify).toHaveBeenCalledWith({ body: { key: "synthetic" } });
+  expect(mocks.verify).toHaveBeenCalledWith({ body: { key: "noma_test_synthetic" } });
   expect(mocks.member).toHaveBeenCalledTimes(2);
 });
 
@@ -74,7 +75,7 @@ it("refuses removal between verification and context construction", async () => 
     role: "admin",
     emailVerified: true,
   }).mockResolvedValueOnce(undefined);
-  expect(await resolveApiContext(request())).toEqual({
+  expect(await resolveApiContext(request(), getOAuthConfig().rest)).toEqual({
     ok: false,
     denial: "credential_owner_removed",
   });
@@ -88,7 +89,7 @@ it("refuses a concurrent revocation after verification", async () => {
       revokedAt: new Date(),
     },
   });
-  expect(await resolveApiContext(request())).toEqual({
+  expect(await resolveApiContext(request(), getOAuthConfig().rest)).toEqual({
     ok: false,
     denial: "credential_revoked",
   });
@@ -100,7 +101,7 @@ it("throws when plugin verification fails but the stored credential remains vali
     key: null,
     error: { code: "INVALID_API_KEY" },
   });
-  await expect(resolveApiContext(request())).rejects.toThrow("API credential verification failed unexpectedly.");
+  await expect(resolveApiContext(request(), getOAuthConfig().rest)).rejects.toThrow("API credential verification failed unexpectedly.");
   expect(mocks.find).toHaveBeenCalledTimes(2);
 });
 
@@ -123,7 +124,7 @@ it("returns a 401 denial when the credential disappears during plugin verificati
     error: { code: "INVALID_API_KEY" },
   });
   mocks.find.mockReturnValueOnce(stored()).mockReturnValueOnce(undefined);
-  const result = await resolveApiContext(request());
+  const result = await resolveApiContext(request(), getOAuthConfig().rest);
   expect(result).toEqual({
     ok: false,
     denial: "credential_invalid",
@@ -140,7 +141,7 @@ it.each([null, "previous-member"])("refuses a missing or replaced issuance membe
       memberId,
     },
   });
-  expect(await resolveApiContext(request())).toEqual({
+  expect(await resolveApiContext(request(), getOAuthConfig().rest)).toEqual({
     ok: false,
     denial: "credential_owner_removed",
   });
@@ -155,7 +156,7 @@ it("does not resurrect credentials on owner re-admission", async () => {
       revocationReason: "credential_owner_removed",
     },
   });
-  expect(await resolveApiContext(request())).toEqual({
+  expect(await resolveApiContext(request(), getOAuthConfig().rest)).toEqual({
     ok: false,
     denial: "credential_owner_removed",
   });

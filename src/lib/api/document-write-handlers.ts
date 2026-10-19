@@ -1,3 +1,4 @@
+import { apiAudit } from "@/lib/api/audit";
 import { requestDocumentUploadWithCapability } from "@/lib/documents/upload-request";
 import { z } from "zod";
 import { DOCUMENT_CONFIRM_DEADLINE_MS } from "@/config/documents";
@@ -29,10 +30,10 @@ export function documentWriteHandler(ownerType: ApiDocumentOwnerType, kind: Writ
   const owner = API_DOCUMENT_OWNERS[ownerType];
   return apiRoute<Params>(`api.v1.${owner.path}.documents.${kind}`, owner.writeScope, async (request, context, params) => {
     const { ctx, headers, deadlineAt, requestId, instance } = context;
-    if (!canAccessOwnerDocuments(ctx, ownerType, "write")) return apiDenialResponse("missing_scope", instance, requestId);
+    if (!canAccessOwnerDocuments(ctx, ownerType, "write")) return apiDenialResponse("missing_scope", instance, requestId, { role: ctx.orgRole, oauth: ctx.principal.kind === "oauth", scopes: ctx.scopes, requiredScopes: [owner.writeScope] });
     const { dryRun } = parseApiQuery(request, mutationQuerySchema);
     if (dryRun) throw new DomainError("validation_failed", NO_DRY_RUN);
-    const audit = { requestId, credentialId: ctx.credentialId, transport: "rest" as const };
+    const audit = apiAudit(ctx, requestId, "rest");
     if (kind === "request") {
       const key = readIdempotencyKey(request, true)!;
       const body = await readJsonBody(request);
@@ -58,5 +59,5 @@ export function documentWriteHandler(ownerType: ApiDocumentOwnerType, kind: Writ
     if (outcome.status !== 200) throw outcome.error;
     headers.set("ETag", documentEtag(outcome.data));
     return Response.json({ data: outcome.data }, { headers });
-  }, kind === "confirm" ? { deadlineMs: DOCUMENT_CONFIRM_DEADLINE_MS } : {});
+  }, { audience: "rest", ...(kind === "confirm" ? { deadlineMs: DOCUMENT_CONFIRM_DEADLINE_MS } : {}) });
 }
