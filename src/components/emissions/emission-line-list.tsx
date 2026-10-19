@@ -25,7 +25,6 @@ import { EmissionLineBadge } from "./emission-line-badge";
 import {
   addEntryRefusal,
   groupLines,
-  isOpen,
   lineRecords,
   lineTotalText,
   openSourceLabel,
@@ -146,8 +145,6 @@ function LineRow({ line, showGroup, scope, actions, canWrite, expanded, editingC
           "group cursor-pointer px-16 py-12",
           "hover:bg-[var(--row-hover-bg-solid)]",
           ROW_GRID,
-          // The open tint marks a line to do; an expanded row is read as a whole, so it drops the tint.
-          isOpen(line) && !expanded && "bg-[var(--st-wait-bg)]/40",
         )}
       >
         <div className="col-start-1 row-start-1 min-w-0">
