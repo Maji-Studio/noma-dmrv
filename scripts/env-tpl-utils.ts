@@ -45,7 +45,8 @@ export const REQUIRED_DEPLOYED_VARS = new Set([
 ]);
 
 // Shape of an env-var name (and therefore a per-var 1Password field label).
-const ENV_NAME_RE = /^[A-Z_][A-Z0-9_]*$/;
+const ENV_NAME_PATTERN = "[A-Z_][A-Z0-9_]*";
+const ENV_NAME_RE = new RegExp(`^${ENV_NAME_PATTERN}$`);
 
 export interface TemplateEntry {
   name: string;
@@ -57,7 +58,7 @@ export interface TemplateEntry {
 export function parseWorkflowOpReferences(workflow: string): Map<string, Set<string>> {
   const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const referencePattern = new RegExp(
-    `op://${escapeRegex(VAULT)}/${escapeRegex(ITEM_PREFIX)} ([A-Za-z0-9_-]+)/([A-Z_][A-Z0-9_]*)(?=["'\\s]|$)`,
+    `op://${escapeRegex(VAULT)}/${escapeRegex(ITEM_PREFIX)} ([A-Za-z0-9_-]+)/(${ENV_NAME_PATTERN})(?=["'\\s]|$)`,
     "g"
   );
   const references = new Map<string, Set<string>>();

@@ -136,6 +136,21 @@ function main(): void {
     console.log("");
   }
 
+  // A workflow ref to an item no check covers (a typo, or a new item) would
+  // fail load-secrets-action just the same.
+  const checkedEnvs = new Set<string>(CHECKS.map((c) => c.env));
+  const uncheckedEnvs = [...workflowReferences.keys()].filter((e) => !checkedEnvs.has(e)).sort();
+  if (uncheckedEnvs.length > 0) {
+    hasBrokenRefs = true;
+    console.log("  ❌  Referenced by GitHub workflows, but no such 1Password item is checked:");
+    for (const env of uncheckedEnvs) {
+      for (const [name, files] of workflowReferences.get(env)!) {
+        console.log(`        ${ITEM_PREFIX} ${env}/${name} (${[...files].join(", ")})`);
+      }
+    }
+    console.log("");
+  }
+
   if (hasUntracked) {
     console.log(
       "Add any wanted variables to the matching template as:\n" +
@@ -150,7 +165,7 @@ function main(): void {
     );
     process.exit(1);
   }
-  console.log("No broken required references.");
+  console.log("No broken required or workflow references.");
 }
 
 main();
