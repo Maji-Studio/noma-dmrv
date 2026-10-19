@@ -74,6 +74,25 @@ describe("org-scoped template observations", () => {
       assignments: { [component.id]: { scope, entryPolicy, automaticSource } } });
     expect(reviewed.lineSources[component.id].templateOrder).toEqual({ groupPosition: 0, position: 0 });
   });
+  it("drops stored proposals that share one figure when the unchanged template is read again (#1198)", async () => {
+    const value = template();
+    const line = value.groups[0].components[0];
+    const ids = [`shared_a_${tag}`, `shared_b_${tag}`];
+    value.groups[0].components = ids.map((id) => ({ ...structuredClone(line), id }));
+    const first = await observe(value);
+    for (const id of ids) expect(first.lineSources[id]).toMatchObject({ scope: "unassigned", origin: "proposed" });
+    // A row stored before the fix: both lines proposed the same automatic figure.
+    const proposal = { scope: "operating", automaticSource: "run-electricity", entryPolicy: "additive", origin: "proposed" } as const;
+    await db.update(removalTemplateObservations)
+      .set({ lineSources: Object.fromEntries(ids.map((id) => [id, { ...first.lineSources[id], ...proposal }])) })
+      .where(and(eq(removalTemplateObservations.organizationId, TEST_ORG_ID), eq(removalTemplateObservations.id, first.id)));
+    const second = await observe(value);
+    expect(second).toMatchObject({ id: first.id, version: first.version + 1 });
+    for (const id of ids) {
+      expect(second.lineSources[id]).toMatchObject({ scope: "unassigned", entryPolicy: "none", origin: "proposed" });
+      expect(second.lineSources[id].automaticSource).toBeUndefined();
+    }
+  });
   it("inserts once and only bumps lastObservedAt on an unchanged read", async () => {
     const value = template();
     const first = await observe(value);

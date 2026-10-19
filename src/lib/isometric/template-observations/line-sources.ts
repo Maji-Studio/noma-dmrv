@@ -58,6 +58,35 @@ export function validateLineSources(definition: TemplateDefinition, lineSources:
   return problems;
 }
 
+/**
+ * The one check for whether a pending proposal can be accepted as is; the
+ * Accept proposal control and any bulk accept use it. Accepting every
+ * acceptable proposal together adds no problem: collisions are reported on
+ * every owner of a figure, including pending proposals, so no two acceptable
+ * proposals share one. The save still checks the whole template, so it also
+ * needs every other line free of problems.
+ */
+export function isAcceptableProposal(definition: TemplateDefinition, lineSources: LineSources, componentId: string): boolean {
+  const contract = ownValue(lineSources, componentId);
+  if (!contract || contract.origin !== "proposed" || contract.scope === "unassigned") return false;
+  if (!definition.groups.some((group) => group.components.some((component) => component.id === componentId))) return false;
+  const accepted: LineSources = { ...lineSources, [componentId]: { ...contract, origin: "reviewed" } };
+  return !validateLineSources(definition, accepted).some((problem) => problem.componentId === componentId && problem.code !== "unassigned");
+}
+
+export function withoutUnacceptableProposals(definition: TemplateDefinition, lineSources: LineSources): LineSources {
+  // noma has no precedence rule between lines sharing a figure: none is proposed
+  // it and the operator decides. Every proposal noma makes can be accepted and
+  // saved as is. Check the input snapshot before applying any replacements.
+  return Object.fromEntries(Object.entries(lineSources).map(([id, contract]): [string, LineContract] => [id,
+    contract.origin === "proposed" && contract.scope !== "unassigned" && !isAcceptableProposal(definition, lineSources, id)
+      ? { scope: "unassigned", entryPolicy: "none", origin: "proposed",
+        ...(contract.templateOrder ? { templateOrder: contract.templateOrder } : {}),
+      }
+      : { ...contract },
+  ]));
+}
+
 export function resolveLineSources({ definition, previous }: {
   definition: TemplateDefinition;
   previous?: { definition: TemplateDefinition; lineSources: LineSources };
@@ -68,8 +97,10 @@ export function resolveLineSources({ definition, previous }: {
     for (const component of group.components) {
       const carried = previousIds.has(component.id) && previous && ownValue(previous.lineSources, component.id);
       // A pending proposal stays pending across repeated observations. Changing
-      // its origin to carried would accept it on the next live read.
-      if (carried) {
+      // its origin to carried would accept it on the next live read. An empty
+      // proposal is not carried: a figure dropped for a clash is proposed again
+      // once the clash is gone, and the final pass still filters it.
+      if (carried && !(carried.origin === "proposed" && carried.scope === "unassigned")) {
         sources[component.id] = { ...carried, origin: carried.origin === "proposed" ? "proposed" : "carried" };
         continue;
       }
@@ -87,5 +118,5 @@ export function resolveLineSources({ definition, previous }: {
       }
     }
   }
-  return sources;
+  return withoutUnacceptableProposals(definition, sources);
 }

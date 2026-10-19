@@ -23,7 +23,6 @@ import { cn } from "@/lib/utils";
 import { RawIdentifiers } from "./removal-template-mapping-view";
 import {
   ASSIGNABLE_SCOPES,
-  canAcceptProposal,
   CHANGE_LABELS,
   ENTRY_POLICY_LABELS,
   inputUnitLabel,
@@ -57,6 +56,8 @@ export interface RemovalTemplateLineRowProps {
   /** Show the change badge only when an earlier read exists to compare with. */
   showChange: boolean;
   canManage: boolean;
+  /** Accepting the proposal unchanged would save (`canAcceptProposal` in the review model). */
+  canAcceptProposal: boolean;
   draft: LineAssignment | undefined;
   editing: boolean;
   onDraftChange: (draft: LineAssignment | undefined) => void;
@@ -172,6 +173,7 @@ export function RemovalTemplateLineRow({
   enrichment,
   showChange,
   canManage,
+  canAcceptProposal,
   draft,
   editing,
   onDraftChange,
@@ -246,7 +248,7 @@ export function RemovalTemplateLineRow({
 
       {canManage && (needsReview || draft) && (
         <div className="flex flex-wrap items-center gap-8">
-          {canAcceptProposal(line) && !draft && (
+          {canAcceptProposal && !draft && (
             <Button
               size="small"
               variant="default"
