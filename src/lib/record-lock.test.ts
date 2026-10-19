@@ -129,6 +129,12 @@ describe("interrupted Removals", () => {
   const interrupted = (id: string) => ({ id, label: id, submissions: [{ status: "draft" }], statements: [] });
   const sentRemoval = (id: string) => ({ id, label: id, submissions: [{ status: "submitted" }], statements: [] });
 
+  it("keeps a draft already at Isometric interrupted, so delete or resume stays the advice", () => {
+    const remoteDraft = { id: "REM-9", label: "REM-9", submissions: [{ status: "draft", externalId: "rem_9" }], statements: [] };
+    const lock = recordLocks.feedstock({ dependents: [], removals: [remoteDraft] });
+    expect(lock).toMatchObject({ level: "sent", interruptedHolders: [{ kind: "removal", id: "REM-9" }] });
+  });
+
   it("marks the Sent lock interrupted and words the refusal for one Removal", async () => {
     const { withRecordLockGuidance } = await import("./record-lock");
     const lock = recordLocks.feedstock({ dependents: [], removals: [interrupted("REM-1")] });

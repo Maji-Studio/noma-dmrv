@@ -138,8 +138,14 @@ export interface RecordLock<Field extends string = string> {
  * Isometric (no submitted or accepted attempt, no remote effect) and no
  * statement covers it. An earlier rejected attempt does not change that.
  */
+/**
+ * Sent, with no statement and no attempt that Isometric took as submitted or
+ * accepted. A draft already created at Isometric still counts: sending it was
+ * started and not finished, so delete or resume is the way out.
+ */
 export function isInterruptedRemoval(removal: RecordLockRemoval): boolean {
-  return isSentRemoval(removal) && !removal.statements.length && !removal.submissions.some(isRemoteSubmission);
+  return isSentRemoval(removal) && !removal.statements.length &&
+    !removal.submissions.some(submission => REMOTELY_SUBMITTED_STATUSES.has(submission.status as LocalSubmissionStatus));
 }
 
 export function isSentRemoval(removal: RecordLockRemoval): boolean {
