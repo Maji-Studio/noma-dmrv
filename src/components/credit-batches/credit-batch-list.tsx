@@ -3,12 +3,13 @@
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * CreditBatchList component
- * Card grid layout with operational filters, pagination, and a derived
- * cross-artifact lifecycle. The dormant credit_batches.status column is not
- * rendered; progress comes from data readiness, Removal submission, and the
- * linked GHG Statement's verifier status.
+ * The Timeline (default) or the List: compact rows with folded filters,
+ * pagination, the timeline's lifecycle state and the dry applied biochar. The
+ * dormant credit_batches.status column is not rendered; progress comes from
+ * data readiness, Removal submission, and the linked GHG Statement's verifier
+ * status.
  *
- * Clicking a card opens the unified side sheet in view mode (deep-linkable via
+ * Clicking a row opens the unified side sheet in view mode (deep-linkable via
  * `?batch=<id>`, mirroring the production-run list) — there is no separate
  * detail page; `/credit-batches/[id]` redirects here.
  */
@@ -36,7 +37,7 @@ import {
 } from "@/components/ui";
 import { ServerError } from "@/components/forms";
 import { CreditBatchForm } from "./credit-batch-form";
-import { CreditBatchCard } from "./credit-batch-card";
+import { CreditBatchListRow, CreditBatchListRows } from "./credit-batch-list-rows";
 import {
   CreditBatchTimeline,
   type NewBatchRequest,
@@ -62,11 +63,13 @@ import {
   useCreditBatch,
   useCreditBatchCo2eStoredPreviews,
   useCreditBatchProductionRunOptions,
+  useCreditBatchTimelineFacts,
   useCreateCreditBatch,
   useUpdateCreditBatch,
   useDeleteCreditBatch,
 } from "@/hooks/use-credit-batches";
 import { formatDateRange } from "@/lib/format-utils";
+import { creditBatchStateOf } from "@/lib/credit-batches/batch-state";
 import { formatFacilityDate } from "@/lib/date-utils";
 import {
   defaultNewBatchWindow,
@@ -489,7 +492,13 @@ export function CreditBatchList({
     displaySideSheet?.entity ?? null,
     co2eStoredPreviews,
   );
-  const batchLocks = useRecordLocks("creditBatch", paginatedItems.map((batch) => batch.id));
+  const pageBatchIds = paginatedItems.map((batch) => batch.id);
+  const batchLocks = useRecordLocks("creditBatch", pageBatchIds);
+  // Dry applied biochar for the visible rows only; the timeline loads its own year.
+  const factsQuery = useCreditBatchTimelineFacts(
+    contextFacilityId ?? undefined,
+    view === "list" ? pageBatchIds : [],
+  );
   const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("creditBatch", viewEntity?.id);
   const membershipLocked = isCreditBatchMembershipLocked(sheetLock);
   const runOptionsQuery = useCreditBatchProductionRunOptions({
@@ -605,18 +614,39 @@ export function CreditBatchList({
       />
 
       {allItems.length > 0 && (
-        <div className="flex items-center gap-8" role="group" aria-label="Credit batch view">
-          {(["timeline", "list"] as const).map((option) => (
-            <Button
-              key={option}
-              variant={view === option ? "primary" : "weak"}
-              size="small"
-              aria-pressed={view === option}
-              onClick={() => setView(option)}
-            >
-              {option === "timeline" ? "Timeline" : "List"}
-            </Button>
-          ))}
+        <div className="flex flex-wrap items-center justify-between gap-x-20 gap-y-8">
+          <div className="flex items-center gap-8" role="group" aria-label="Credit batch view">
+            {(["timeline", "list"] as const).map((option) => (
+              <Button
+                key={option}
+                variant={view === option ? "primary" : "weak"}
+                size="small"
+                aria-pressed={view === option}
+                onClick={() => setView(option)}
+              >
+                {option === "timeline" ? "Timeline" : "List"}
+              </Button>
+            ))}
+          </div>
+          {/* Compact operational summary of the listed batches. */}
+          {view === "list" && (
+            <div className="flex flex-wrap items-center gap-x-20 gap-y-4">
+              <span className="inline-flex items-center gap-6 body-small font-medium text-[var(--color-text-primary)]">
+                <CertificateIcon size={16} weight="bold" aria-hidden />
+                {listLoading
+                  ? "Loading batches…"
+                  : readinessResultsUnavailable
+                    ? "Readiness unavailable"
+                    : `${totalFiltered} ${totalFiltered === 1 ? "batch" : "batches"}`}
+              </span>
+              {hasCompleteCo2eSummary && totalCo2e != null && (
+                <span className="inline-flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
+                  <LeafIcon size={16} weight="bold" aria-hidden />
+                  {`${totalCo2e.toFixed(2)} t estimated CO₂e stored`}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -630,24 +660,6 @@ export function CreditBatchList({
         />
       ) : (
         <>
-        {/* Compact operational summary */}
-        <div className="flex flex-wrap items-center gap-x-20 gap-y-8 border-y border-[var(--color-border-tertiary)] py-12">
-          <span className="inline-flex items-center gap-6 body-small font-medium text-[var(--color-text-primary)]">
-            <CertificateIcon size={16} weight="bold" aria-hidden />
-            {listLoading
-              ? "Loading batches…"
-              : readinessResultsUnavailable
-                ? "Readiness unavailable"
-                : `${totalFiltered} ${totalFiltered === 1 ? "batch" : "batches"}`}
-          </span>
-          {hasCompleteCo2eSummary && totalCo2e != null && (
-            <span className="inline-flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
-              <LeafIcon size={16} weight="bold" aria-hidden />
-              {`${totalCo2e.toFixed(2)} t estimated CO₂e stored`}
-            </span>
-          )}
-        </div>
-
         <CreditBatchFilters
           search={searchQuery}
           startDate={startDateFilter}
@@ -703,7 +715,25 @@ export function CreditBatchList({
           </Notice>
         )}
 
-        {/* Card Grid or Empty State */}
+        {factsQuery.error && (
+          <Notice
+            tone="warning"
+            action={
+              <Button
+                variant="weak"
+                size="small"
+                busy={factsQuery.isFetching}
+                onClick={() => void factsQuery.refetch()}
+              >
+                Retry
+              </Button>
+            }
+          >
+            The applied biochar of each credit batch could not be loaded.
+          </Notice>
+        )}
+
+        {/* Rows or Empty State */}
         {readinessResultsUnavailable ? null : listLoading ? (
           <div
             className="bg-[var(--panel-bg)] [border:var(--panel-border)] p-32 body-small text-[var(--color-text-tertiary)]"
@@ -734,20 +764,22 @@ export function CreditBatchList({
           />
         ) : (
           <>
-            <div className="grid grid-cols-1 gap-24 xl:grid-cols-2 2xl:grid-cols-3">
+            <CreditBatchListRows>
               {paginatedItems.map((batch) => (
-                <CreditBatchCard
+                <CreditBatchListRow
                   key={batch.id}
                   creditBatch={batch}
-                  health={healthError ? undefined : batchHealthSummaries[batch.id]}
-                  isHealthLoading={healthLoading && !healthError}
+                  view={creditBatchStateOf(healthError ? undefined : batchHealthSummaries[batch.id])}
+                  readinessStatus={healthError ? "failed" : healthLoading ? "loading" : "ready"}
+                  facts={factsQuery.data[batch.id]}
+                  factsStatus={factsQuery.error ? "failed" : factsQuery.isLoading ? "loading" : "ready"}
+                  lock={batchLocks.locks[batch.id]}
                   onView={openView}
                   onEdit={openEdit}
                   onDelete={handleDelete}
-                  lock={batchLocks.locks[batch.id]}
                 />
               ))}
-            </div>
+            </CreditBatchListRows>
 
             <ListPagination
               page={safeCurrentPage}

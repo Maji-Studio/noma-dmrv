@@ -15,9 +15,8 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { useCreditBatchHealthSummaries } from "@/hooks/use-certification";
 import { useCreditBatchTimelineFacts } from "@/hooks/use-credit-batches";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
-import { deriveCreditBatchLifecycle } from "@/lib/certification/credit-batch-lifecycle";
+import { creditBatchStateOf, type CreditBatchStateView } from "@/lib/credit-batches/batch-state";
 import {
-  deriveTimelineState,
   groupByFeedstock,
   dayPercentOfYear,
   monthIndexIn,
@@ -26,13 +25,13 @@ import {
   timelineYears,
   type BarPlacement,
   type DateWindow,
-  type TimelineState,
 } from "@/lib/credit-batches/timeline";
 import { formatDateRange } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { cn } from "@/lib/utils";
 import { BatchHoverCard } from "./credit-batch-timeline-hover-card";
 import {
+  BlockingCount,
   MonthAxis,
   MonthGrid,
   MUTED,
@@ -67,10 +66,7 @@ interface TimelineBatch extends DateWindow {
   source: CreditBatchWithRelations;
 }
 
-interface BatchView {
-  state: TimelineState | null;
-  blockingCount: number;
-}
+type BatchView = CreditBatchStateView;
 
 /** What the bar's label says while its state is not known. */
 function pendingStateLabel(readinessFailed: boolean): string {
@@ -125,13 +121,12 @@ function Bar({ batch, spot, view }: { batch: TimelineBatch; spot: BarPlacement; 
       </span>
       {/* The count sits on the corner so the code keeps the bar's width. */}
       {view.blockingCount > 0 && (
-        <span
-          className={cn("absolute -top-8 right-0 z-10 inline-flex min-w-20 items-center justify-center rounded-full px-6 body-caption font-medium tabular-nums text-white", STATE_TONE.blocking.solid)}
+        <BlockingCount
+          count={view.blockingCount}
+          className="absolute -top-8 right-0 z-10"
           role="img"
           aria-label={`Missing data ${view.blockingCount}`}
-        >
-          {view.blockingCount}
-        </span>
+        />
       )}
     </span>
   );
@@ -203,19 +198,7 @@ export function CreditBatchTimeline({
   const readinessFailed = health.error != null;
   const factsFailed = factsQuery.error != null;
 
-  const viewOf = (batch: TimelineBatch): BatchView => {
-    const summary = summaries[batch.id];
-    if (!summary) return { state: null, blockingCount: 0 };
-    const lifecycle = deriveCreditBatchLifecycle(summary);
-    const state = deriveTimelineState({
-      lifecycleStepIndex: lifecycle.currentStepIndex,
-      lifecycleFailed: lifecycle.stepStates[lifecycle.currentStepIndex] === "failed",
-      healthState: summary.state,
-      blockingCount: summary.issueCount,
-    });
-    // Waiting items never count; a submitted or issued batch shows no count.
-    return { state, blockingCount: state === "blocking" ? summary.issueCount : 0 };
-  };
+  const viewOf = (batch: TimelineBatch): BatchView => creditBatchStateOf(summaries[batch.id]);
 
   const inYear = timelineBatches.filter((batch) => placeOnYear(batch, year));
   const openCount = inYear.filter((batch) => viewOf(batch).state === "blocking").length;

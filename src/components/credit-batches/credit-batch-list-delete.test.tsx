@@ -19,6 +19,7 @@ vi.mock("@/hooks/use-credit-batches", () => ({
   useCreditBatch: () => ({}),
   useCreditBatchCo2eStoredPreviews: () => ({ data: {} }),
   useCreditBatchProductionRunOptions: () => ({ data: [] }),
+  useCreditBatchTimelineFacts: () => ({ data: {}, isLoading: false, isFetching: false, error: null, refetch: vi.fn() }),
   useCreateCreditBatch: () => ({}),
   useUpdateCreditBatch: () => ({}),
   useDeleteCreditBatch: () => ({ mutateAsync: harness.remove }),
@@ -42,10 +43,13 @@ vi.mock("./credit-batch-filters", () => ({ CreditBatchFilters: () => null }));
 vi.mock("./credit-batch-health-strip", () => ({ CreditBatchHealthStrip: () => null }));
 vi.mock("./credit-batch-durability-panel", () => ({ CreditBatchDurabilityPanel: () => null }));
 vi.mock("./credit-batch-view", () => ({ creditBatchSheetSections: () => [] }));
-vi.mock("./credit-batch-card", () => ({ CreditBatchCard: ({ onDelete }: { onDelete: (id: string) => void }) => {
-  harness.onDelete = onDelete;
-  return null;
-} }));
+vi.mock("./credit-batch-list-rows", () => ({
+  CreditBatchListRows: ({ children }: { children: ReactNode }) => <>{children}</>,
+  CreditBatchListRow: ({ onDelete }: { onDelete: (id: string) => void }) => {
+    harness.onDelete = onDelete;
+    return null;
+  },
+}));
 vi.mock("@/components/ui/entity-side-sheet", () => ({ EntitySideSheet: () => null }));
 vi.mock("@/components/ui/delete-confirm-dialog", () => ({ DeleteConfirmDialog: ({ onConfirm }: { onConfirm: () => Promise<void> }) => {
   harness.onConfirm = onConfirm;

@@ -4,6 +4,7 @@
  * Pieces the credit batch timeline shares: the year switcher, month axis and
  * grid, the Today line and the state legend.
  */
+import type { HTMLAttributes } from "react";
 import { CaretLeftIcon, CaretRightIcon, CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { dayPercentOfYear, daysInMonths, monthIndexIn, type TimelineState } from "@/lib/credit-batches/timeline";
@@ -64,6 +65,18 @@ export function StateMark({ state, size }: { state: TimelineState; size: number 
     <CheckCircleIcon size={size} weight="fill" className={cn("shrink-0", STATE_TONE.issued.text)} aria-hidden />
   ) : (
     <span className={cn("shrink-0 rounded-full", STATE_TONE[state].solid)} style={{ width: size, height: size }} aria-hidden />
+  );
+}
+
+/** The orange count of blocking items on an Open batch; the caller names it for screen readers. */
+export function BlockingCount({ count, className, ...props }: { count: number } & HTMLAttributes<HTMLSpanElement>) {
+  return (
+    <span
+      {...props}
+      className={cn("inline-flex min-w-20 items-center justify-center rounded-full px-6 body-caption font-medium tabular-nums text-white", STATE_TONE.blocking.solid, className)}
+    >
+      {count}
+    </span>
   );
 }
 
