@@ -62,6 +62,7 @@ it("publishes delivery create and metadata PATCH, keeping corrections and custom
   expect(recordDeliveryForUi.id).toBe("record_posted_delivery");
   expect(getOperation(recordDeliveryForUi.id)).toBeUndefined();
   expect(getOperation("update_posted_delivery")).toBeUndefined();
+  expect(getOperation("delete_output_stock_loss")).toBeUndefined();
   expect(getOperation("refresh_feedstock_distance")).toBeUndefined();
   expect(getOperation("refresh_delivery_distance")).toBeUndefined();
   expect(getOperation("delete_delivery")).toBeUndefined();

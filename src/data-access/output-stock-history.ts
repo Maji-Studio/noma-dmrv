@@ -3,6 +3,7 @@ import { db, type DbTransaction } from '@/db';
 import { applications, binMovements, biocharProducts, biocharProductSourceAllocations, productionRuns, productIngredientSnapshots, storageLocations, users } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
+import { ALREADY_CORRECTED_MESSAGE, ALREADY_DELETED_MESSAGE } from '@/lib/loss-correction-messages';
 import { orderedSourcesSchema } from '@/schemas/output-stock';
 import type { OutputMoistureReset, OutputStockHistoryEntry, OutputStockPreview } from '@/types/output-stock';
 import { and, asc, eq, inArray } from 'drizzle-orm';
@@ -120,8 +121,14 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   }
   const editableIds = history.filter(entry => entry.kind !== 'reversal' && ['loss', 'delivery'].includes(entry.eventKind ?? entry.kind)).map(entry => entry.id);
   const certificationLocks = await getOutputMovementCertificationLocks(ctx, reader, editableIds, rows);
+  const reversedIds = new Set(movements.filter(({ movement }) => movement.outputKind === 'reversal').map(({ movement }) => movement.correctsMovementId));
+  const replacedIds = new Set(movements.filter(({ movement }) => movement.outputKind === 'replacement').map(({ movement }) => movement.correctsMovementId));
   for (const entry of history) {
     if (entry.kind === 'reversal' || !['loss', 'delivery'].includes(entry.eventKind ?? entry.kind)) continue;
+    if (reversedIds.has(entry.id)) {
+      entry.editLockedReason = replacedIds.has(entry.id) ? ALREADY_CORRECTED_MESSAGE : ALREADY_DELETED_MESSAGE;
+      continue;
+    }
     const original = movements.find(row => row.movement.id === entry.id)?.movement;
     const code = entry.deliveryId ? applicationCode.get(entry.deliveryId) : undefined;
     if (original) entry.editLockedReason = code ? deliveryAppliedLockedReason(code) : await outputMovementLockReason(ctx, storageLocationId, original.id, reader, { original, facilityId: bin.facilityId, all: rows, layers, certificationLocks: certificationLocks.get(original.id) ?? [] });
