@@ -19,8 +19,8 @@ import { contentsRows } from "./sub-bin-card";
 import type { OutputSubBin } from "@/types/output-stock";
 import { formatFacilityDateTime } from "@/lib/format-utils";
 
-const SPLIT_HINT = `${WET_STOCK_DEFINITION} Each bay is a sub-bin, drawn by wet mass with its water hatched on top, in the order draws take them.`;
-const MIX_HINT = `${WET_STOCK_DEFINITION} The water is hatched on top of the dry batches.`;
+const SPLIT_CAPTION = `Each bay is a sub-bin, drawn by wet mass with its water hatched on top, in the order draws take them.`;
+const MIX_CAPTION = `The water is hatched on top of the dry batches.`;
 const SUB_BINS_LABEL = "Sub-bins, next out first";
 const PERCENT = 100;
 
@@ -63,7 +63,7 @@ export function mixPileBands(layers: OutputSubBin[], dryKg: number | null, wetKg
  * as it does on the board's tile.
  */
 function stockFigure(wetKg: number | null, dryKg: number | null): string {
-  if (wetKg !== null) return `≈ ${formatWetEstimate(wetKg)} kg wet`;
+  if (wetKg !== null) return `${formatWetEstimate(wetKg)} kg wet mass`;
   return dryKg === null ? MISSING_VALUE.notAvailable : `${formatMassKg(dryKg)} dry biochar`;
 }
 
@@ -95,7 +95,7 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
   return <div className="flex flex-col gap-16">
     <StockCard
       title={mode === "mix" && preview.data ? mixPileName(preview.data.binName) : "Stock"}
-      hint={mode === "mix" ? MIX_HINT : SPLIT_HINT}
+      hint={WET_STOCK_DEFINITION}
       status={<>
         {(subBins.isLoading || preview.isLoading) && <p role="status" className="body-caption">Loading stock...</p>}
         {preview.error && <Notice tone="error">{preview.error.message}</Notice>}
@@ -113,6 +113,7 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
       {!subBins.isLoading && layers.length > 0 && (mode === "mix"
         ? <MixPileBay bands={mixPileBands(layers, dryKg, wetKg, mixMoisture, clock.timeZone)} capacityKg={capacityKg} />
         : <SubBinBays subBins={layers} timeZone={clock.timeZone} label={SUB_BINS_LABEL} capacityKg={capacityKg} />)}
+      {!subBins.isLoading && layers.length > 0 && <p className="body-caption text-[var(--color-text-secondary)]">{mode === "mix" ? MIX_CAPTION : SPLIT_CAPTION}</p>}
     </StockCard>
     <StockChartCard history={<OutputStockHistory storageLocationId={storageLocationId} facilityId={facilityId}
       renderTrigger={(open, icon) => <CardTextButton icon={icon} onClick={open}>History</CardTextButton>} />}>

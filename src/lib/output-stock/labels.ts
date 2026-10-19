@@ -34,4 +34,4 @@ export const ESTIMATED_WATER_LABEL = "Water, estimated";
 export const ESTIMATED_WET_LABEL = "Wet, estimated";
 
 /** What an output bin's wet stock is, said once for every hint that needs it. */
-export const WET_STOCK_DEFINITION = "Wet stock is an estimate: wet mass added less wet mass taken out. Drying in the bin is not tracked, so wet stock can read high.";
+export const WET_STOCK_DEFINITION = "Estimated: the wet mass that went in, minus what was taken out. Drying isn't tracked, so the real figure may be lower.";

@@ -31,7 +31,7 @@ export function summarizeMatchingStock(bins: readonly MatchingOutputBin[]): { we
   const dryKg = withDry.reduce((sum, bin) => sum + (bin.dryMassKg ?? 0), 0);
   const coverage = (known: number) => known === binCount ? "" : ` in ${known} of ${binCount} bins`;
   return {
-    wet: withWet.length === 0 ? null : `≈ ${formatWetEstimate(wetKg)} kg wet${coverage(withWet.length)}`,
+    wet: withWet.length === 0 ? null : `${formatWetEstimate(wetKg)} kg wet mass${coverage(withWet.length)}`,
     dry: withDry.length === 0 ? null : `${formatMassKg(dryKg)}${coverage(withDry.length)}`,
     binCount,
   };

@@ -31,7 +31,7 @@ describe('archived storage board tile', () => {
     preview.mockReturnValue({ data: { beforeDryKg: 90, beforeEstimatedWetKg: 200 }, error: undefined } as never);
     let renderer!: ReactTestRenderer;
     await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, archivedAt: null, type: 'product_bin', productInventory: { formulationNames: [] } } as never} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
-    expect(JSON.stringify(renderer.toJSON())).toContain('≈ 200 kg wet');
+    expect(JSON.stringify(renderer.toJSON())).toContain('200 kg wet mass');
     expect(renderer.root.findByType(SecondaryFigure).props).toMatchObject({ label: 'Dry biochar', value: '90 kg' });
     await act(async () => renderer.unmount());
     preview.mockReturnValue({ data: undefined, error: undefined });
@@ -41,7 +41,7 @@ describe('archived storage board tile', () => {
     let renderer!: ReactTestRenderer;
     await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, archivedAt: null } as never} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
     const text = JSON.stringify(renderer.toJSON());
-    expect(text).toContain('≈ 3 kg wet');
+    expect(text).toContain('3 kg wet mass');
     expect(text).not.toContain('Empty');
     expect(renderer.root.findByType('article').props.className).not.toContain('opacity-70');
     expect(renderer.root.findByType(SecondaryFigure).props).toMatchObject({ label: 'Dry biochar', value: '0 kg' });
