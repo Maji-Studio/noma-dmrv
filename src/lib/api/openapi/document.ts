@@ -301,15 +301,10 @@ export function buildOpenApiDocument() {
       content: { [mediaType]: { schema: mediaType === "text/plain" ? { type: "string", description: "Plain-text guide for API agents." } : { type: "object", description: "OpenAPI 3.1 document.", additionalProperties: true } } },
     } } } };
   }
-  for (const methods of Object.values(paths)) {
-    for (const operation of Object.values(methods)) {
-      if (operation.security) continue;
-      const scope = operation["x-required-scope"];
-      operation.security = scope && !OAUTH_GRANTABLE_SCOPES.has(scope)
-        ? [{ bearerAuth: [] }]
-        : [{ bearerAuth: [] }, { oauth2: scope ? [scope] : [] }];
-    }
-  }
+  // Operations keep the global bearer requirement: an OAuth access token is
+  // also an Authorization: Bearer credential. The oauth2 scheme documents how
+  // to obtain one; per-operation alternatives would hide the bearer header
+  // from contract fuzzing (Schemathesis negative auth probes).
   return {
     openapi: "3.1.0",
     info: { title: "noma data-entry API", version: API_VERSION, description: "Organization-scoped feedstock intake, production runs, biochar products, lab samples, formulations, orders and balances, suppliers, customers and destination lookups, and output bin stock movement history. Use POST /formulations with Idempotency-Key; PATCH and DELETE /formulations/{id} and POST /formulations/{id}/archive and /restore use UUID paths with If-Match (formulations:write for create, update, archive and restore; formulations:delete for delete). Use POST /suppliers with Idempotency-Key; PATCH and DELETE /suppliers/{id} and POST /suppliers/{id}/archive and /restore use UUID paths with If-Match (suppliers:write for create, update, archive and restore; suppliers:delete for delete). Use POST /customers with Idempotency-Key; PATCH and DELETE /customers/{id} and POST /customers/{id}/archive and /restore use UUID paths with If-Match (customers:write for create, update, archive and restore; customers:delete for delete). Business dates are facility-local YYYY-MM-DD; event times are sent as RFC 3339 with an explicit offset or as facility-local { date, time }, and returned as UTC instants. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers. Unsupported methods on visible paths return Problem405 with Allow listing supported methods, including automatic HEAD and OPTIONS. Private refusals follow bearer authentication and path visibility checks; unknown or invisible paths return 404 without Allow. Public discovery paths need no credential. This response is a path-level refusal, not a response of a published operation." },

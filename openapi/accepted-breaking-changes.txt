@@ -149,3 +149,7 @@ PATCH /biochar-products/{idOrCode} the `data/productionDate` response's property
 # Customer delete never returned stock preview fields. Remove once this contract reaches the base branch.
 DELETE /customers/{idOrCode} removed the required property `preview/basisFingerprint` from the response with the `409` status [response-required-property-removed].
 DELETE /customers/{idOrCode} removed the required property `preview/stockEffects` from the response with the `409` status [response-required-property-removed].
+# OAuth track (PR #1161, decision 131): Members may connect apps, so /me and whoami
+# report role "member" for OAuth callers. API keys still report owner or admin.
+# Remove this acceptance once the contract reaches the CI comparison base.
+GET /me added the new `member` enum value to the `data/role` response property for the response status `200` [response-property-enum-value-added]. The server may now return a value the previous contract excluded, so a client written against it may not handle the response. If the value set is meant to grow, declare it with x-extensible-enum.
