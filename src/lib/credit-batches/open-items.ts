@@ -14,7 +14,7 @@ import type {
   DurabilityBatchSummary,
   DurabilitySummaryReplicate,
 } from "@/lib/certification/durability-batch-summary";
-import type { BatchEmissionLine } from "@/lib/certification/emission-lines";
+import { EMISSION_LINE_STATE_LABELS, type BatchEmissionLine } from "@/lib/certification/emission-lines";
 import { formatTonnes } from "@/lib/format-utils";
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
 
@@ -116,7 +116,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
         : { tab: "emissions", rowId: line.componentId };
       check.push({
         id: `emission:${line.componentId}`,
-        title: `${line.displayName} needs a check`,
+        title: `${line.displayName}: ${EMISSION_LINE_STATE_LABELS.needsReview}`,
         detail: line.blocker?.message,
         target,
       });
