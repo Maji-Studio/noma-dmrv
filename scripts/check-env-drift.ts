@@ -9,12 +9,16 @@
  * the matching template; this script surfaces that gap.
  *
  * For each (template, 1Password item) pair it reports:
- *   - fields present in 1Password but NOT referenced in the template
+ *   - fields present in 1Password, absent from the template, and read by workflows
+ *     → informational: keep these workflow-only fields out of the template
+ *   - fields present in 1Password but referenced by neither template nor workflows
  *     → newly-set secrets you probably want to add to the template
  *   - OPTIONAL template refs whose field is MISSING from 1Password
  *     → advisory: the tolerant sync scripts skip these with a warning
  *   - REQUIRED template refs whose field is MISSING from 1Password
  *     → broken: the sync scripts refuse to run, and the app cannot boot
+ *   - workflow refs whose field is MISSING from 1Password, with workflow filenames
+ *     → broken: load-secrets-action fails the step
  *
  * Prints field NAMES only — never secret values.
  *
@@ -23,7 +27,8 @@
  *
  * Prerequisites: 1Password CLI authenticated (`op signin`).
  *
- * Exit code: 0 unless a REQUIRED ref is missing from 1Password (CI-usable).
+ * Exit code: 1 if a REQUIRED template ref or any workflow ref is missing from
+ * 1Password; otherwise 0 (CI-usable).
  * Untracked-in-template and missing-optional findings are advisory and do not
  * fail the check on their own.
  */
@@ -36,6 +41,7 @@ import {
   VAULT,
   fetchItemFieldNames,
   parseTemplate,
+  readWorkflowOpReferences,
   templateOpFieldNames,
 } from "./env-tpl-utils";
 
@@ -62,6 +68,7 @@ function main(): void {
   console.log("Checking drift between 1Password and the env templates\n");
   check1PasswordAuth();
 
+  const workflowReferences = readWorkflowOpReferences();
   let hasBrokenRefs = false;
   let hasUntracked = false;
 
@@ -83,11 +90,19 @@ function main(): void {
         `↔ 1Password item: ${ITEM_PREFIX} ${env} (${itemFields.size} fields) ──`
     );
 
-    const untracked = [...itemFields].filter((n) => !templateFields.has(n)).sort();
+    const workflowFields = workflowReferences.get(env) ?? new Map<string, Set<string>>();
+    const outsideTemplate = [...itemFields].filter((n) => !templateFields.has(n)).sort();
+    const workflowOnly = outsideTemplate.filter((n) => workflowFields.has(n));
+    const untracked = outsideTemplate.filter((n) => !workflowFields.has(n));
+    const missingWorkflow = [...workflowFields.keys()].filter((n) => !itemFields.has(n)).sort();
     const missing = [...templateFields].filter((n) => !itemFields.has(n)).sort();
     const missingOptional = missing.filter((n) => !required.has(n));
     const missingRequired = missing.filter((n) => required.has(n));
 
+    if (workflowOnly.length > 0) {
+      console.log(`  ℹ️  Read only by GitHub workflows (keep out of ${templateFile}):`);
+      for (const name of workflowOnly) console.log(`        ${name}`);
+    }
     if (untracked.length > 0) {
       hasUntracked = true;
       console.log(`  ⚠️  In 1Password but NOT in ${templateFile} (consider adding):`);
@@ -106,8 +121,32 @@ function main(): void {
       );
       for (const name of missingRequired) console.log(`        ${name}`);
     }
-    if (untracked.length === 0 && missing.length === 0) {
+    if (missingWorkflow.length > 0) {
+      hasBrokenRefs = true;
+      console.log(
+        "  ❌  Referenced by GitHub workflows but MISSING from 1Password (load-secrets-action fails the step):"
+      );
+      for (const name of missingWorkflow) {
+        console.log(`        ${name} (${[...workflowFields.get(name)!].join(", ")})`);
+      }
+    }
+    if (untracked.length === 0 && missing.length === 0 && missingWorkflow.length === 0) {
       console.log("  ✅  In sync");
+    }
+    console.log("");
+  }
+
+  // A workflow ref to an item no check covers (a typo, or a new item) would
+  // fail load-secrets-action just the same.
+  const checkedEnvs = new Set<string>(CHECKS.map((c) => c.env));
+  const uncheckedEnvs = [...workflowReferences.keys()].filter((e) => !checkedEnvs.has(e)).sort();
+  if (uncheckedEnvs.length > 0) {
+    hasBrokenRefs = true;
+    console.log("  ❌  Referenced by GitHub workflows, but no such 1Password item is checked:");
+    for (const env of uncheckedEnvs) {
+      for (const [name, files] of workflowReferences.get(env)!) {
+        console.log(`        ${ITEM_PREFIX} ${env}/${name} (${[...files].join(", ")})`);
+      }
     }
     console.log("");
   }
@@ -122,11 +161,11 @@ function main(): void {
 
   if (hasBrokenRefs) {
     console.error(
-      "Drift check failed: a template references REQUIRED fields missing from 1Password."
+      "Drift check failed: required template or GitHub workflow fields are missing from 1Password."
     );
     process.exit(1);
   }
-  console.log("No broken required references.");
+  console.log("No broken required or workflow references.");
 }
 
 main();

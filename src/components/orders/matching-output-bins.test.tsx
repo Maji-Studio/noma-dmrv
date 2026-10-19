@@ -30,18 +30,18 @@ describe("MatchingOutputBins", () => {
     expect(html).not.toContain("Orders do not reserve stock.");
     expect(html).not.toContain("150 kg");
   });
-  it("shows one wet total with dry as a secondary line, and the button opens the bins", () => {
+  it("shows only the available wet mass on the row, and the button opens the bins", () => {
     state.bins = [
       { id: "a", code: "B1", name: "Bin A", dryMassKg: 100, estimatedWetMassKg: 120 },
       { id: "b", code: "B2", name: "Bin B", dryMassKg: 70, estimatedWetMassKg: 80 },
     ];
     const html = renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />);
     const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
-    expect(text).toContain("Available wet stock, estimate");
-    expect(text).toContain("≈ 200 kg wet");
-    expect(text).toContain("Available dry stock 170 kg");
+    expect(text).toContain("Available 200 kg wet mass");
+    expect(text).not.toContain("Available wet stock");
+    expect(text).not.toContain("dry biochar");
+    expect(text).not.toContain("2 bins");
     expect(text).not.toContain("Tap to see");
-    expect(text).toContain("2 bins");
     expect(html).not.toContain('role="article"');
   });
   it("says how many bins a partial wet estimate covers and keeps wet as the headline", () => {
@@ -51,22 +51,21 @@ describe("MatchingOutputBins", () => {
       { id: "c", code: "B3", name: "C", dryMassKg: 30, estimatedWetMassKg: null },
     ];
     const summary = summarizeMatchingStock(bins);
-    expect(summary.wet).toBe("≈ 170 kg wet in 2 of 3 bins");
-    expect(summary.dry).toBe("200 kg");
+    expect(summary.wet).toBe("170 kg wet mass in 2 of 3 bins");
   });
-  it("says how many bins a partial dry sum covers", () => {
-    const summary = summarizeMatchingStock([
+  it("keeps the partial coverage on the row", () => {
+    state.bins = [
       { id: "a", code: "B1", name: "A", dryMassKg: 100, estimatedWetMassKg: 120 },
-      { id: "b", code: "B2", name: "B", dryMassKg: null, estimatedWetMassKg: 50 },
+      { id: "b", code: "B2", name: "B", dryMassKg: null, estimatedWetMassKg: null },
       { id: "c", code: "B3", name: "C", dryMassKg: 30, estimatedWetMassKg: 10 },
-    ]);
-    expect(summary.dry).toBe("130 kg in 2 of 3 bins");
-    expect(summary.wet).toBe("≈ 180 kg wet");
+    ];
+    const text = renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    expect(text).toContain("Available 130 kg wet mass in 2 of 3 bins");
+    expect(text).not.toContain("dry biochar");
   });
   it("reads Not available when nothing resolves", () => {
     const summary = summarizeMatchingStock([{ id: "a", code: "B1", name: "A", dryMassKg: null, estimatedWetMassKg: null }]);
     expect(summary.wet).toBeNull();
-    expect(summary.dry).toBeNull();
   });
   it("explicitly permits an order without stock", () => {
     state.bins = [];
@@ -83,9 +82,10 @@ describe("MatchingOutputBins", () => {
     expect(html).toContain("background:var(--acc-prod)");
     expect(html).not.toContain("Stock history");
     // Without a resolved wet estimate the headline falls back to dry stock.
-    expect(html).toContain("Available dry stock");
+    expect(html).toContain("Available dry biochar");
     expect(html).toContain("100 kg dry biochar");
-    expect(html).not.toContain("wet");
+    // No wet figure; the hint still says what wet stock is.
+    expect(html).not.toMatch(/kg wet|Available wet stock/);
     expect(html).not.toMatch(/Before loading|After loading|removed|>0 kg dry biochar|150 kg/);
   });
   it("leads with the bin's wet estimate and reads dry stock as a secondary line", () => {
@@ -94,7 +94,7 @@ describe("MatchingOutputBins", () => {
     expect(html).toContain("Available wet stock, estimate");
     expect(html).toContain("118 kg wet");
     expect(html).toContain("Wet mass added less wet mass taken out");
-    expect(html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")).toContain("Available dry stock 100 kg");
+    expect(html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")).toContain("100 kg dry biochar");
   });
   it.each(["loading", "error"] as const)("keeps stock informational when details are %s", status => {
     state[status] = true;

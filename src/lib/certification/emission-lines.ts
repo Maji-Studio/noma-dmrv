@@ -11,7 +11,7 @@ const UNIT_MISMATCH_MESSAGE = "Emissions values use different units. Use the sam
 
 export const EMISSION_LINE_STATE_LABELS = {
   filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing",
-  needsReview: "Needs review", needsSetup: "Needs setup", confirmedZero: "Recorded as zero",
+  needsReview: "Check entry", needsSetup: "Not set up", confirmedZero: "Recorded as zero",
 } as const;
 export type EmissionLineState = keyof typeof EMISSION_LINE_STATE_LABELS;
 export interface EmissionFigure { magnitude: string; unit: string }

@@ -7,6 +7,7 @@
 import { DataTable } from "@/components/ui";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDate } from "@/lib/format-utils";
+import { EMISSION_LINE_STATE_LABELS } from "@/lib/certification/emission-lines";
 import { cn } from "@/lib/utils";
 import { LINE_SORTS, LINE_SORT_LABELS, type LineCounts, type LineFilter, type LineSort } from "./emission-line-display";
 
@@ -70,7 +71,7 @@ export const LINE_CHIPS: { filter: LineFilter | null; label: string; count: keyo
   { filter: null, label: "All", count: "all" },
   { filter: "open", label: "Open", count: "open" },
   { filter: "missing", label: "File missing", count: "missing" },
-  { filter: "review", label: "Needs review", count: "review" },
+  { filter: "review", label: EMISSION_LINE_STATE_LABELS.needsReview, count: "review" },
   { filter: "notRecorded", label: "Not recorded", count: "notRecorded" },
   { filter: "done", label: "Done", count: "done" },
 ];

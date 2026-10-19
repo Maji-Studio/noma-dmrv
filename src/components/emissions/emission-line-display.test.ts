@@ -48,11 +48,20 @@ describe("units and totals", () => {
     expect(displayUnit("kWh")).toBe("kWh");
   });
 
-  it("shows Not recorded, a confirmed zero and Needs setup", () => {
+  it("shows Not recorded, a confirmed zero and Not set up", () => {
     expect(lineTotalText(makeLine())).toBe("Not recorded");
     expect(lineTotalText(makeLine({ state: "confirmedZero", unit: "km" }))).toBe("0 km");
-    expect(lineTotalText(makeLine({ state: "needsSetup" }))).toBe("Needs setup");
+    expect(lineTotalText(makeLine({ state: "needsSetup" }))).toBe("Not set up");
     expect(lineTotalText(makeLine({ state: "filled", total: { magnitude: "19880", unit: "kWh" } }))).toBe("19,880 kWh");
+  });
+
+  it("reads Not available, never Not recorded, when a line holds figures that do not add up", () => {
+    const mixedUnits = makeLine({ state: "needsReview", entries: [makeEntry({ values: [{ id: "v1", organizationId: "org", entryId: "entry-1", inputKey: "energy", magnitude: "3.2", unit: "MWh", massDistanceDetail: null }], total: null })] });
+    expect(lineTotalText(mixedUnits)).toBe("Not available");
+    expect(lineTotalText(makeLine({ state: "needsReview", entries: [makeEntry({ counts: false })] }))).toBe("Not available");
+    const records = { source: "productionRuns" as const, count: 3, figure: { magnitude: "72", unit: "kWh" } };
+    expect(lineTotalText(makeLine({ state: "needsReview", records } as never))).toBe("Not available");
+    expect(lineTotalText(makeLine({ records: { ...records, figure: null } } as never))).toBe("Not recorded");
   });
 
   it("multiplies decimals exactly", () => {

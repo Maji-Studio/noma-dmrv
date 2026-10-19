@@ -330,7 +330,7 @@ describe("DetailField secondary line", () => {
     const present = renderToStaticMarkup(
       <DetailField label="Biochar product applied (kg)" value="5,000 kg" secondary={{ label: "Dry biochar applied", value: "4,000 kg", certifyRequired: true }} />,
     );
-    expect(present).toContain("Dry biochar applied");
+    expect(present).toContain("dry biochar applied");
     expect(present).toContain("4,000 kg");
     expect(present).toContain('data-cert-field="satisfied"');
 

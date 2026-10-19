@@ -1,6 +1,6 @@
 /**
  * Pure state behind the credit batch page (`/credit-batches/[id]`): its tabs,
- * the Overview badge, the four progress milestones and the one state-driven
+ * the per-tab to-do badges, the four progress milestones and the one state-driven
  * header action. Components render these; nothing here fetches.
  */
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
@@ -31,7 +31,7 @@ export interface CreditBatchOpenItemGroups {
   waiting: readonly CreditBatchOpenItem[];
 }
 
-/** The Overview tab badge: Blocking and Check items. Waiting items never count (Kenji, 2026-10-18). */
+/** The Overview total: Blocking and Check items, used by the Overview tab badge (via `tabBadge`) and the header progress step. Waiting items never count (Kenji, 2026-10-18). */
 export function overviewBadgeCount(items: CreditBatchOpenItemGroups): number {
   return items.blocking.length + items.check.length;
 }
@@ -39,7 +39,31 @@ export function overviewBadgeCount(items: CreditBatchOpenItemGroups): number {
 /** What the first progress step and the list status call an Open batch with work left. */
 export const OPEN_TODOS_LABEL = "Open to-dos";
 
-/** The accessible name of an open to-dos count: the Overview tab badge and the first progress step. */
+export interface CreditBatchTabBadge {
+  count: number;
+  /** True when the tab holds at least one Blocking item; otherwise it is the Check style. */
+  blocking: boolean;
+}
+
+/**
+ * The to-do badge on one tab, or null when it has none. Overview carries the total
+ * (`overviewBadgeCount`). Production, Samples, Emissions and Removals count the Blocking and
+ * Check items whose `target.tab` is that tab; Waiting never counts. Items that target an
+ * `href` or Overview count only in the Overview total. Activities has no to-dos.
+ */
+export function tabBadge(tab: CreditBatchPageTab, items: CreditBatchOpenItemGroups): CreditBatchTabBadge | null {
+  if (tab === "activities") return null;
+  if (tab === "overview") {
+    const total = overviewBadgeCount(items);
+    return total > 0 ? { count: total, blocking: items.blocking.length > 0 } : null;
+  }
+  const onTab = (item: CreditBatchOpenItem) => "tab" in item.target && item.target.tab === tab;
+  const blocking = items.blocking.filter(onTab).length;
+  const count = blocking + items.check.filter(onTab).length;
+  return count > 0 ? { count, blocking: blocking > 0 } : null;
+}
+
+/** The accessible name of an open to-dos count: a tab badge and the first progress step. */
 export function todosLabel(count: number): string {
   return `${count} open ${count === 1 ? "to-do" : "to-dos"}`;
 }

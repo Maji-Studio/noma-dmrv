@@ -118,6 +118,23 @@ function LockLine({ lock, subject = "record", inUseLocksNothing = false }: {
       </Notice>
     );
   }
+  const interrupted = lock.level === "sent" ? lock.interruptedHolders ?? [] : [];
+  if (interrupted.length && interrupted.length >= lock.heldBy.length) {
+    return (
+      <Notice tone="info" boxed data-record-lock-notice="sent">
+        Nothing can be changed, because sending <HolderList holders={lock.heldBy} /> to Isometric was started and not finished. {lock.howToFree}
+      </Notice>
+    );
+  }
+  if (interrupted.length) {
+    const interruptedIds = new Set(interrupted.map(holder => holder.id));
+    const sent = lock.heldBy.filter(holder => !interruptedIds.has(holder.id));
+    return (
+      <Notice tone="info" boxed data-record-lock-notice="sent">
+        Nothing can be changed, because this was sent to Isometric with <HolderList holders={sent} />, and sending <HolderList holders={interrupted} /> was started and not finished. {lock.howToFree}
+      </Notice>
+    );
+  }
   if (lock.level === "sent") {
     return (
       <Notice tone="info" boxed data-record-lock-notice="sent">
