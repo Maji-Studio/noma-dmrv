@@ -132,6 +132,45 @@ describe("DataTable clickable rows", () => {
     }
   });
 
+  it.each(["desktop", "mobile"] as const)(
+    "renders %s record link details under the link, outside it, with their own link",
+    (surface) => {
+      const withDetails: ColumnDef<Row>[] = [
+        {
+          ...columns[0]!,
+          meta: {
+            recordLink: true,
+            recordLinkDetails: (row: Row) => (
+              <a
+                href={`https://registry.example/${row.id}`}
+                onClick={(event) => event.preventDefault()}
+              >
+                Registry {row.id}
+              </a>
+            ),
+          },
+        },
+        columns[1]!,
+      ];
+      const onRowClick = vi.fn();
+      const view = render(
+        <DataTable columns={withDetails} data={rows} onRowClick={onRowClick} />,
+      );
+      const container =
+        surface === "desktop"
+          ? view.container.querySelector("tbody tr")!
+          : view.container.querySelector<HTMLElement>("div.md\\:hidden > div")!;
+      expect(container.querySelector("[data-row-link]")!.textContent).toBe("SUP-001");
+      const detailsLink = within(container as HTMLElement).getByText("Registry r1");
+      expect(detailsLink.getAttribute("href")).toBe("https://registry.example/r1");
+      for (const control of Array.from(container.querySelectorAll(INTERACTIVE))) {
+        expect(control.parentElement?.closest(INTERACTIVE)).toBeNull();
+      }
+      fireEvent.click(detailsLink);
+      expect(onRowClick).not.toHaveBeenCalled();
+    },
+  );
+
   it("does not offer the identity column in the column visibility menu", () => {
     render(
       <DataTable columns={columns} data={rows} onRowClick={vi.fn()}>
