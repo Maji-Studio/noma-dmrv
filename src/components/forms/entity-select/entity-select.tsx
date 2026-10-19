@@ -29,6 +29,7 @@ import { ENTITY_SEARCH_LIMIT, SELECT_SEARCH_MIN_OPTIONS } from "@/config/forms";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useEntityOptions, useEntityById } from "@/hooks/use-entities";
+import { useRefreshEntityOptionsOnReturn } from "@/hooks/use-refresh-entity-options-on-return";
 import type { EntitySelectProps, EntityOption } from "./types";
 import { useDebounce } from "@/hooks/use-debounce";
 import { DriverQuickAddDialog } from "./driver-quick-add-dialog";
@@ -45,6 +46,8 @@ export { EntityOptionText } from "./entity-select-row";
 const EntityEditDialog = dynamic(() => import("./entity-edit-dialog").then((module) => module.EntityEditDialog));
 
 const MENU_SIDE_OFFSET = 4;
+/** `MouseEvent.button` for a middle click, which opens a link in a new tab without `click`. */
+const MIDDLE_MOUSE_BUTTON = 1;
 const MENU_COLLISION_PADDING = 8;
 // TypeScript's DOM lib does not declare focusVisible yet; browsers without it ignore it.
 const POINTER_FOCUS: FocusOptions & { focusVisible?: boolean } = { focusVisible: false };
@@ -150,6 +153,7 @@ function ServerEntitySelect(props: ServerEntitySelectProps) {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const onEditSelected = props.onEditSelected ?? (props.allowEdit && isEditableEntityType(entityType) ? () => setIsEditOpen(true) : undefined);
   const debouncedSearch = useDebounce(searchQuery, 200);
+  const refreshOnReturn = useRefreshEntityOptionsOnReturn(entityType);
   const {
     data: fetchedOptions = [],
     dataUpdatedAt: listDataUpdatedAt,
@@ -176,6 +180,7 @@ function ServerEntitySelect(props: ServerEntitySelectProps) {
       <EntitySelectView
         {...props}
         onEditSelected={onEditSelected}
+        refreshOnReturn={refreshOnReturn}
         queryData={{
           fetchedOptions,
           listDataUpdatedAt,
@@ -212,6 +217,7 @@ function EntitySelectView({
   allowCreate = false,
   createLabel,
   onCreateNew,
+  createHref,
   filterBy,
   dependsOn,
   excludeIds,
@@ -232,7 +238,12 @@ function EntitySelectView({
   searchQuery,
   setSearchQuery,
   queryData,
-}: EntitySelectProps & PickerState & { queryData?: EntityQueryData }) {
+  refreshOnReturn,
+}: EntitySelectProps & PickerState & {
+  queryData?: EntityQueryData;
+  /** Reload the options when the operator returns from a page opened in a new tab. */
+  refreshOnReturn?: () => void;
+}) {
   const [isDriverDialogOpen, setIsDriverDialogOpen] = useState(false);
   const [isOperatorDialogOpen, setIsOperatorDialogOpen] = useState(false);
   const [isVehicleDialogOpen, setIsVehicleDialogOpen] = useState(false);
@@ -371,7 +382,14 @@ function EntitySelectView({
   };
   const defaultCreateAction = isLocal ? undefined : createActions[entityType as keyof typeof createActions];
 
-  const resolvedCreateAction = onCreateNew ?? defaultCreateAction;
+  const openCreatePage = createHref
+    ? () => {
+        window.open(createHref, "_blank", "noopener,noreferrer");
+        refreshOnReturn?.();
+      }
+    : undefined;
+  const createOpensNewTab = !onCreateNew && Boolean(openCreatePage);
+  const resolvedCreateAction = onCreateNew ?? openCreatePage ?? defaultCreateAction;
   const hasCreateAction = Boolean(resolvedCreateAction);
   const shouldShowCreateAction = shouldRenderCreateAction({
     allowCreate,
@@ -766,6 +784,8 @@ function EntitySelectView({
                             href={emptyHint.href}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={refreshOnReturn}
+                            onAuxClick={(event) => { if (event.button === MIDDLE_MOUSE_BUTTON) refreshOnReturn?.(); }}
                             onKeyDown={(event) => {
                               if (event.key === "Enter") event.stopPropagation();
                               if (event.key === "Tab" || event.key === "Escape") handleKeyDown(event);
@@ -793,6 +813,7 @@ function EntitySelectView({
                       editLabel={editLabel ?? `${isArchivedSelection ? "View" : "Edit"} ${selectedOption?.name}`}
                       isViewOnly={isArchivedSelection}
                       createLabel={createLabel || defaultCreateLabel}
+                      createOpensNewTab={createOpensNewTab}
                     />
                   ))}
                   {!disabled && !selectionLocked && showMoreResults && (

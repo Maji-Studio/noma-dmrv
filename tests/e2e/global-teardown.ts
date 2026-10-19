@@ -612,6 +612,17 @@ export default async function globalTeardown() {
 
       // ─── Auth data: sessions, accounts, users ───
 
+      // Attempts do not cascade from clients; remove them before the registry sweep.
+      await client.query(`
+        DELETE FROM oauth_authorization_attempts
+        WHERE client_id IN (SELECT client_id FROM oauth_clients WHERE name LIKE 'E2E %')
+      `);
+      // Client deletion cascades grants, consents, tokens, assertions and resource links.
+      await client.query(`DELETE FROM oauth_clients WHERE name LIKE 'E2E %'`);
+      await client.query(`DELETE FROM oauth_resources WHERE id LIKE 'e2e-oauth-resource-%'`);
+      // Organization deletion also cascades any attempts not yet bound to a client.
+      await client.query(`DELETE FROM organizations WHERE name LIKE 'E2E OAuth Organization %'`);
+
       // Sessions for E2E users
       await client.query(`DELETE FROM session WHERE user_id LIKE 'e2e-%'`);
 

@@ -1,3 +1,4 @@
+import { purgeExpiredOAuthAttempts, purgePendingOAuthGrants, purgeExpiredOAuthTokens, purgeExpiredOAuthClientAssertions } from "@/data-access/oauth-purge";
 import { authorizeCronRequest } from "@/lib/auth/cron";
 import { purgeExpiredIdempotencyRecords } from "@/data-access/api-idempotency-records";
 import { purgeIdleRateLimitBuckets } from "@/data-access/api-rate-limits";
@@ -12,7 +13,11 @@ export async function GET(request: Request): Promise<Response> {
   const now = new Date();
   const idempotencyRecords = await purgeExpiredIdempotencyRecords(now);
   const rateLimitBuckets = await purgeIdleRateLimitBuckets(now);
-  const counts = { idempotencyRecords, rateLimitBuckets };
+  const oauthAttempts = await purgeExpiredOAuthAttempts(now);
+  const oauthPendingGrants = await purgePendingOAuthGrants(now);
+  const oauthTokens = await purgeExpiredOAuthTokens(now);
+  const oauthClientAssertions = await purgeExpiredOAuthClientAssertions(now);
+  const counts = { idempotencyRecords, rateLimitBuckets, oauthAttempts, oauthPendingGrants, oauthTokens, oauthClientAssertions };
   logger.info(counts, "API records purged");
   return Response.json(counts, { headers });
 }
