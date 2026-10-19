@@ -309,8 +309,9 @@ function ListBody({
   );
   // One read for the page: which sent Removals Isometric returned.
   const removalLocks = useRecordLocks("removal", identityRows.map((entry) => entry.removal.id));
-  // Already cached by the certification registry guard: no extra request.
-  const certifierSummary = useFacilityCertifierSummary(facilityId);
+  // Loaded by the certification registry guard; this observer only reads that
+  // cache and never refetches it, even when it has gone stale.
+  const certifierSummary = useFacilityCertifierSummary(facilityId, true, { readCacheOnly: true });
 
   if (identities.error) {
     return (
