@@ -14,12 +14,14 @@ import type { ConflictRef } from "@/lib/conflict-ref";
 import {
   getFeedstockBinStockFn,
   recordLossFn,
+  removeLossFn,
   recordStockTakeFn,
 } from "@/fn/bin-movements";
 import { stockAvailabilityKeys } from "@/hooks/use-stock-availability";
 import { storageLocationKeys } from "@/hooks/use-storage-locations";
 import type {
   RecordLossData,
+  RemoveLossData,
   RecordStockTakeData,
 } from "@/schemas/bin-movements";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -49,11 +51,13 @@ export type RecordLossConflict = ConflictRef;
  */
 export class RecordLossConflictError extends Error {
   readonly conflict: RecordLossConflict;
+  readonly blockers?: ConflictRef[];
 
-  constructor(message: string, conflict: RecordLossConflict) {
+  constructor(message: string, conflict: RecordLossConflict, blockers?: ConflictRef[]) {
     super(message);
     this.name = "RecordLossConflictError";
     this.conflict = conflict;
+    this.blockers = blockers;
   }
 }
 
@@ -62,15 +66,18 @@ export function throwRecordLossError(result: {
   error: string;
   field?: "lossMassKg";
   issues?: DomainIssue[];
+  code?: string;
   conflict?: RecordLossConflict;
+  blockers?: ConflictRef[];
 }): never {
   const timeIssue = result.issues?.find(issue => issue.path[0] === "occurredAt");
   if (timeIssue) throw new RecordLossFieldError(timeIssue.message, "occurredAt");
   if (result.field) {
     throw new RecordLossFieldError(result.error, result.field);
   }
-  if (result.conflict) {
-    throw new RecordLossConflictError(result.error, result.conflict);
+  // Only a reused request key is a conflict; a locked entry carries its bin too but reads as its own message.
+  if (result.conflict && (result.code === undefined || result.code === "conflict")) {
+    throw new RecordLossConflictError(result.error, result.conflict, result.blockers);
   }
   throw new Error(result.error);
 }
@@ -130,6 +137,19 @@ export function useRecordLoss() {
       if (!result.success) {
         throwRecordLossError(result);
       }
+      return result.data;
+    },
+    onSuccess: (_data, variables) => invalidate(variables.storageLocationId),
+  });
+}
+
+export function useRemoveLoss() {
+  const invalidate = useInvalidateAfterMovement();
+  return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.stock),
+    mutationFn: async (data: RemoveLossData) => {
+      const result = await removeLossFn(data);
+      if (!result.success) throwRecordLossError(result);
       return result.data;
     },
     onSuccess: (_data, variables) => invalidate(variables.storageLocationId),

@@ -17,6 +17,7 @@ import { certificationSubmissions } from "./certification";
 import {
   certifierBiocharApplicationCorrectionStatus,
   certifierBiocharApplicationLifecycleStatus,
+  certifierBiocharApplicationSourceReadbackStatus,
   certifierProvider,
 } from "./common";
 import { certifierProductionBatches } from "./certifier-production-batches";
@@ -66,6 +67,9 @@ export const certifierBiocharApplications = pgTable(
       .notNull()
       .default("none"),
     driftReason: text("drift_reason"),
+    sourceReadbackStatus: certifierBiocharApplicationSourceReadbackStatus("source_readback_status")
+      .notNull().default("not_checked"),
+    sourceReadbackCheckedAt: timestamp("source_readback_checked_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

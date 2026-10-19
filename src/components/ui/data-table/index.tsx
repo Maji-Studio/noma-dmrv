@@ -373,14 +373,16 @@ function DataTableRoot<TData, TValue>({
     : undefined;
   const renderCell = (cell: Cell<TData, unknown>, record: TData) => {
     const content = flexRender(cell.column.columnDef.cell, cell.getContext());
-    if (!onRowClick || cell.column.id !== linkColumnId) return content;
+    const details = cell.column.columnDef.meta?.recordLinkDetails?.(record);
+    if (!onRowClick || cell.column.id !== linkColumnId) return <>{content}{details}</>;
     return (
-      <RowLink
-        onActivate={() => onRowClick(record)}
-        href={getRowHref?.(record)}
-      >
-        {content}
-      </RowLink>
+      <>
+        <RowLink onActivate={() => onRowClick(record)} href={getRowHref?.(record)}
+          before={cell.column.columnDef.meta?.recordLinkBefore?.(record)}>
+          {content}
+        </RowLink>
+        {details}
+      </>
     );
   };
 

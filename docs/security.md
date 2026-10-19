@@ -132,11 +132,6 @@ Non-obvious semantics only:
 - **Both-or-neither pairs** (`superRefine`): `RESEND_API_KEY` +
   `RESEND_FROM_EMAIL`; `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
   (seed/CI-only, not runtime app credentials).
-- **Signup is invite-only.** `ALLOW_SELF_SIGNUP` is `false` in every environment
-  (`.env.example`, `tests/setup.ts`, both E2E workflows) and public self-signup
-  is not a supported configuration for a B2B tenant — the flag is a tunable
-  that is never tuned. See [Architecture open questions](./open-questions-architecture.md#drop-the-allow_self_signup-flag-authdrop-self-signup-flag-opened-2026-07-20)
-  (`auth/drop-self-signup-flag`).
 - **`CREDENTIALS_ENCRYPTION_KEY`** — a hard boot requirement in production (see
   Hermetic-CI exception below). Server-only 32-byte hex/base64 key.
 - **`BETTER_AUTH_SECRET`** and **`STORAGE_SIGNING_SECRET`** — min length 32. In
@@ -153,6 +148,44 @@ Non-obvious semantics only:
   than inheriting the sandbox default. Targeting the sandbox is the opt-in.
 - **`GEO_PROVIDER`** — `ors` default, `stub` = hermetic test fixtures. See
   [ADR 0009](./adr/0009-provider-agnostic-server-proxied-geo.md).
+
+### OAuth provider and client controls
+
+| Variable | Values and default | Validation and production gate |
+|---|---|---|
+| `OAUTH_PROVIDER_ENABLED` | `true` or `false`; default `false` | When on in production, `NEXT_PUBLIC_APP_URL` must equal an HTTPS origin with no path, query or trailing slash. Only hermetic CI skips this origin gate. |
+| `OAUTH_CIMD_CLIENT_IDS` | Comma-separated exact HTTPS metadata URLs; default empty (no CIMD) | Every environment requires a path and public DNS host, with no IP literal, local/special hostname, credentials, port, query or fragment. Production keeps the same validation. |
+
+[Env gates](../src/config/oauth-env-validation.ts) and
+[provider wiring](../src/lib/auth/oauth-provider.ts) fail closed. Keep the flag
+off everywhere until the [staging proof](./api.md#connecting-claude-and-chatgpt).
+Production OAuth starts only after the production domain split: the issuer and
+both audiences embed the app host, so moving hosts invalidates connections.
+Never copy a staging issuer into production.
+
+[CIMD](../src/lib/auth/oauth-cimd.ts) matches the complete `client_id` URL against
+`OAUTH_CIMD_CLIENT_IDS`, including persisted-client resolution. A trusted host
+alone grants nothing. Its [fetch transport](../src/lib/auth/oauth-cimd-transport.ts)
+refuses private/special DNS addresses and redirects, bounds response size and
+time, and pins the checked public address. Dynamic registration stays off.
+Server-side preregistration requires the live Platform Admin create privilege;
+HTTP client-management endpoints remain closed. See [auth](./auth.md#oauth-connections).
+
+To disable a client, an authorized operator sets `oauth_clients.disabled` to
+true. This blocks API resolution and the plugin's token path. A concurrent CIMD
+refetch can overwrite it, so re-check after a minute. Remove its exact identity
+from `OAUTH_CIMD_CLIENT_IDS` and redeploy to prevent later discovery. Removing an
+id alone does not revoke stored tokens: existing access tokens can live out
+their hour. Keep the client disabled, or revoke its generations when immediate
+revocation is required. Do not log tokens or raw metadata containing secrets.
+
+The [pnpm patch](../patches/@better-auth__oauth-provider@1.7.10.patch) makes
+`invalidateRefreshFamily` refuse rather than delete tokens across organizations
+and resources. Re-check the patch on **every Better Auth upgrade**, together
+with the refresh race and endpoint-lockdown suites in [testing](./testing.md#oauth-suites).
+The application hook owns reuse and revocation; the patch is its backstop.
+
+### Variables read outside envSchema
 
 Read directly from `process.env`, **not** validated by `env.ts`:
 
@@ -257,6 +290,7 @@ Notes:
   refs with no matching field (per-var warning) and abort only on a missing
   **required** field (`REQUIRED_LOCAL_VARS` / `REQUIRED_DEPLOYED_VARS` in
   `scripts/env-tpl-utils.ts`). `pnpm env:check` reports the same split.
+  It also cross-checks workflow `op://` references against each item.
 - `load-secrets-action` **fails the step** when a referenced `op://` field does
   not exist — it does not skip. Add the field before the workflow runs.
 - The `op` CLI that `load-secrets-action` installs is pinned through its
@@ -332,6 +366,14 @@ the Settings UI uses. Without that variable the mapping is finished by hand in
 Certification Settings. The seed only reads registry catalogues and templates;
 it creates no registry business records. `reset-empty-staging` continues to
 omit registry credentials.
+
+After a `reset-seed-staging` run, check by hand that the registry connection
+works, because the scheduled live checks use their own credentials and seed
+their own mapping:
+
+1. Certification → Settings shows healthy Isometric credentials.
+2. The Mafinga facility is mapped to the sandbox project and a Removal template.
+3. `/certification/removals` opens without redirecting to Settings.
 
 ## Operational Defaults
 

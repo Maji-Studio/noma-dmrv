@@ -31,7 +31,7 @@ vi.mock("@/hooks/use-output-stock", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-output-stock")>(),
   useMatchingOutputBins: () => ({ data: [{ id: "bin", code: "PB-001", name: "Product bin", dryMassKg: 1500, estimatedWetMassKg: 1800 }], isLoading: false, error: null }),
   useOutputStockBalance: () => ({ data: { binName: "Mix bin", beforeDryKg: 1440, beforeEstimatedWetKg: 1800, moistureEstimate: { moisturePercent: 20 } }, isLoading: false, error: null }),
-  useOutputSubBins: () => ({ data: { stockMode: "mix", subBins: [{ code: "B-001", dryMassKg: 800 }, { code: "B-002", dryMassKg: 640 }] }, isLoading: false, error: null }),
+  useOutputSubBins: () => ({ data: { stockMode: "mix", subBins: [{ code: "B-001", dryMassKg: 800, solidsKg: 800, ingredients: [] }, { code: "B-002", dryMassKg: 640, solidsKg: 640, ingredients: [] }] }, isLoading: false, error: null }),
   useOutputStockHistory: () => ({ dataUpdatedAt: Date.parse("2026-09-22T12:00:00.000Z"), data: [{ id: "entry", deliveryId: "delivery", kind: "delivery", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [{ layerId: "batch", code: "B-001", wetMassKg: null, dryMassKg: 80, runs: [{ productionRunId: "run", code: "PR-001", dryMassKg: 80 }] }] }], isLoading: false, error: null }),
 }));
 vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: ({ triggerLabel }: { triggerLabel?: string }) => <button type="button">{triggerLabel ?? "History"}</button> }));
@@ -52,7 +52,6 @@ vi.mock("@/components/samples/sample-documents-panel", () => ({ SampleDocumentsP
 vi.mock("@/components/orders/order-location-read", () => ({ OrderLocationRead: stub("Delivery location") }));
 vi.mock("@/components/credit-batches/credit-batch-removal-template", () => ({ CreditBatchRemovalTemplate: stub("Removal template") }));
 vi.mock("@/components/certification/facility-certifier-summary", () => ({ FacilityCertifierSummary: stub("Registry connection") }));
-vi.mock("@/components/activity", () => ({ CreditBatchActivitySection: stub("Batch activity") }));
 
 import { renderBothLevels, sourceFiles } from "./form-detail-parity-harness";
 import { EntitySideSheetSections } from "@/components/ui/entity-side-sheet";
@@ -163,7 +162,7 @@ describe("read sheet detail level parity", () => {
   it.each([
     { name: "formulation", keys: ["name", "Blend composition by volume", "description"], first: "Formulation name", last: "Description" },
     { name: "reactor", keys: ["identifier", "Reactor configuration"], first: "Identifier", last: "Nominal throughput (tph)" },
-    { name: "credit batch", keys: ["Certification progress", "Removal template", "Batch definition", "Production runs", "notes", "Activity"], first: "Feedstock type", last: "Notes" },
+    { name: "credit batch", keys: ["Certification progress", "Removal template", "Batch definition", "Production runs", "notes"], first: "Feedstock type", last: "Notes" },
   ])("keeps $name read groups and field order without generic headings", async ({ name, keys, first, last }) => {
     const { sections } = READ_SECTION_CASES.find(entry => entry.name === name)!;
     expect(sections.map(section => section.id ?? section.title)).toEqual(keys);

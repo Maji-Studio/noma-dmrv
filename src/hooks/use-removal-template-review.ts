@@ -1,7 +1,7 @@
 import { throwActionError } from "@/lib/stale-version";
 import { patchArrayListCachesByPrefixWithSavedRow } from "./list-cache-utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { loadRemovalTemplateReviewPreview, loadRemovalTemplateReview, reviewRemovalTemplateLines, switchCreditBatchRemovalTemplate } from "@/fn/certification/removal-template-review";
+import { loadRemovalTemplateReviewEntry, loadRemovalTemplateReviewPreview, loadRemovalTemplateReview, reviewRemovalTemplateLines, switchCreditBatchRemovalTemplate } from "@/fn/certification/removal-template-review";
 import type { ReviewRemovalTemplateLinesInput, SwitchCreditBatchRemovalTemplateInput } from "@/schemas/removal-template-review";
 import { unwrap } from "./types";
 import { certificationKeys } from "./use-certification";
@@ -22,6 +22,16 @@ export function useRemovalTemplateReviewPreview(facilityId: string, removalTempl
   return useQuery({
     queryKey: certificationKeys.removalTemplateReviewPreview(facilityId, removalTemplateId),
     queryFn: async () => unwrap(await loadRemovalTemplateReviewPreview({ facilityId, removalTemplateId })),
+    enabled: enabled && !!facilityId && !!removalTemplateId,
+    staleTime: REVIEW_STALE_MS,
+  });
+}
+
+/** One listed template's lines for review, read without observing it. */
+export function useRemovalTemplateReviewEntry(facilityId: string, removalTemplateId: string, enabled = true) {
+  return useQuery({
+    queryKey: certificationKeys.removalTemplateReviewEntry(facilityId, removalTemplateId),
+    queryFn: async () => unwrap(await loadRemovalTemplateReviewEntry({ facilityId, removalTemplateId })),
     enabled: enabled && !!facilityId && !!removalTemplateId,
     staleTime: REVIEW_STALE_MS,
   });

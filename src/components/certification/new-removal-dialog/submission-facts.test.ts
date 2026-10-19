@@ -78,7 +78,7 @@ function check(
   key: RemovalRequirementCheck["key"],
   status: RemovalRequirementCheck["status"],
 ): RemovalRequirementCheck {
-  return { key, label: key, requirementLabel: key, status };
+  return { key, label: key, requirementLabel: key, unmetLabel: key, status };
 }
 
 function readiness(

@@ -52,7 +52,6 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/noma_dmrv_e2e
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
-      ALLOW_SELF_SIGNUP: "false"
       DISABLE_RATE_LIMIT: "true"
       # Same throwaway storage placeholders as e2e.yml — they only satisfy the
       # fail-closed env validation for the production build; no spec touches S3.
@@ -128,7 +127,6 @@ jobs:
           DATABASE_URL=${DATABASE_URL}
           NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
           BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
-          ALLOW_SELF_SIGNUP=${ALLOW_SELF_SIGNUP}
           DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
           EOF
 

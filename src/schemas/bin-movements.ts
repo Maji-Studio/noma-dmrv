@@ -18,6 +18,7 @@ import {
   requiredMassKgSchema,
   requiredPositiveMassKgSchema,
   toNumberOrNull,
+  uuidSchema,
 } from "./helpers";
 import { type StorageLocationType } from "./storage-locations";
 
@@ -167,8 +168,9 @@ export const recordStockTakeSchema = z
 export type RecordStockTakeData = z.infer<typeof recordStockTakeSchema>;
 
 export const recordLossSchema = z.object({
+  correctsMovementId: uuidSchema().optional(),
   occurredAt: stockEventInstantSchema(),
-  storageLocationId: z.uuid("Choose a valid storage bin."),
+  storageLocationId: uuidSchema("Choose a valid storage bin."),
   lane: z.enum(binMovementLanes),
   idempotencyKey: requestKeySchema,
   reason: reasonSchema,
@@ -179,3 +181,11 @@ export const recordLossSchema = z.object({
   ),
 });
 export type RecordLossData = z.infer<typeof recordLossSchema>;
+
+export const removeLossSchema = z.object({
+  storageLocationId: uuidSchema("Choose a valid storage bin."),
+  correctsMovementId: uuidSchema(),
+  idempotencyKey: requestKeySchema,
+  reason: reasonSchema,
+});
+export type RemoveLossData = z.infer<typeof removeLossSchema>;

@@ -2,6 +2,7 @@ import { domainGuide } from "@/lib/api/llms-guide";
 import { REQUEST_KEY_RULE, STOCK_EFFECTS_RULE } from "@/lib/operations/agent-guidance";
 
 export const mcpInstructions = `${domainGuide}
+
 ## MCP requests
 
 - Call whoami first. Use find_* lookups for ids.

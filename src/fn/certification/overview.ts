@@ -57,6 +57,11 @@ import {
   resolveScopeForRemoval,
 } from "./certify-context-core";
 
+import { logger } from "@/lib/log";
+import { refreshRemovalEvidenceLinks, type RemovalEvidenceLinks } from "./biochar-application-source-readback";
+
+const evidenceLinksLog = logger.child({ mod: "application-source-readback" });
+
 // Per-removal readiness rebuilds the submission context (DB-only — the facility
 // half is resolved once up front). Bound how many run at once so a facility with
 // many removals can't fan out an unbounded burst of query chains at the pool.
@@ -110,6 +115,8 @@ export interface RemovalPreflightSummary {
   readiness: RemovalReadiness;
   /** Post-submit verification of Sources on their intended registry targets. */
   evidenceHealth: RemovalEvidenceHealth | null;
+  /** Application Source readback counts and latest attempted check time. */
+  evidenceLinks: RemovalEvidenceLinks;
   // Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant diesel the
   // active template cannot carry. Shown alongside readiness; never gates submit.
   submissionWarnings: string[];
@@ -175,6 +182,7 @@ async function buildRemovalPreflightSummary(
       submissionStatus: ctx.latestSubmission?.status ?? null,
       removalMetadata: scope.removal.metadata ?? null,
     }),
+    evidenceLinks: await refreshRemovalEvidenceLinks(orgCtx, ctx.latestSubmission?.id ?? null, evidenceLinksLog),
     submissionWarnings: ctx.submissionWarnings,
     recentSyncEvents,
   };
@@ -276,9 +284,9 @@ export async function loadCertificationOverview(
 
 /**
  * Per-batch certification-readiness verdicts for the Credit Batches overview,
- * keyed by batch id. Reuses the SAME `deriveBatchHealth` classifier the detail
- * page's submission gate (`CreditBatchHealthStrip`) and the New-Removal wizard
- * use, so a card's cert tag can never disagree with the gate it links into.
+ * keyed by batch id. Reuses the SAME `deriveBatchHealth` classifier the credit
+ * batch page's open items and the New-Removal wizard use, so a card's cert tag
+ * can never disagree with the gate it links into.
  *
  * The caller passes the visible page's batch ids (all belonging to `facilityId`,
  * since the list is facility-scoped). The facility certifier facts are resolved

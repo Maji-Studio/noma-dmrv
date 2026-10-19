@@ -13,10 +13,27 @@ Deferred work lives here, never as a `TODO` in code.
 
 **`needs-registry-check`** marks a question that must be answered by the Isometric MCP server (`how_to`, then the protocol/OpenAPI tools) or a sandbox probe, **never** from `docs/isometric/*`, which are non-authoritative local summaries. Do not close one of these from a local doc.
 
+## Open design picks (`ui/design-picks`)
+
+A pick moves into [design-decisions.md](./design-decisions.md) and the owning doc ([design-system.md](./design-system.md), [forms.md](./forms.md)), then its bullet is removed.
+
+- Monthly facility report (#1109): layout A, B or C.
+- Bin history (#1004): wet mass always, dry when available, the rest in the table, top to bottom on phones are settled; the layout pick is open.
+- Switch-template warning (#1144): how the warning leads to the template's line review.
+- Submission history (#1148): proposed statuses Fine / Stopped / Needs support.
+- Row links (#1130): the user wants the full row clickable.
+
 ## Open-item problem wording
 
 - `src/lib/credit-batches/open-items.ts:buildCreditBatchOpenItems`: Open-item problem
   wording for unmet checks, shared with the New Removal wizard; Kenji to decide; #1136.
+
+## Credit batch page panels (2026-10-18) - **deferred**
+
+- `src/components/credit-batches/credit-batch-page-parts.tsx:PAGE_PANEL` is a
+  feature-local panel surface (border and paper). Moving the page's panels onto
+  the shared `Card` surface (`--panel-bg`, `--panel-border`, `--panel-shadow`)
+  is a visual change that needs its own design check; #1156 review.
 
 ## Credit batch timeline follow-ups (#1153) - **deferred**
 
@@ -30,6 +47,16 @@ Deferred work lives here, never as a `TODO` in code.
   gives (+) slots a 44px minimum but not batch bars: a batch of a few days is a
   bar a few pixels wide. Needs a design decision for bars whose 44px hit areas
   would overlap.
+
+## Late production runs after submission (`credit-batches/late-runs`) - **parked**
+
+- `src/data-access/credit-batch-membership.ts:assertNoOverlappingCreditBatchCohort`
+  keeps one credit batch per facility and feedstock for any day. A production
+  run completed after its batch's Removal was submitted therefore has no batch
+  and is not credited. Parked on 2026-10-19 (#674, closed): Kenji keeps the
+  one-batch rule until a real late run needs crediting. Isometric's protocol
+  says nothing either way about two Removals or GHG Statements with overlapping
+  dates, so reopening this starts with asking Isometric.
 
 ## Record-lock follow-ups
 

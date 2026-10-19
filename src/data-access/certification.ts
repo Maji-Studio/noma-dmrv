@@ -582,10 +582,11 @@ export async function getLatestSubmissionsForEntities(
   // entity lives in a different facility are dropped from the result — a
   // batched read must not leak another facility's ledger rows.
   expectedFacilityId?: string,
+  executor: Tx | typeof db = db,
 ): Promise<Map<string, CertificationSubmissionRow>> {
   requireOrgScope(ctx);
   if (key.localEntityIds.length === 0) return new Map();
-  const rows = await db
+  const rows = await executor
     .selectDistinctOn([certificationSubmissions.localEntityId])
     .from(certificationSubmissions)
     .where(
@@ -606,7 +607,7 @@ export async function getLatestSubmissionsForEntities(
   }
   const facilityById = await facilityIdsForLocalEntities(
     ctx,
-    db,
+    executor,
     key.localEntityType,
     rows.map((row) => row.localEntityId),
   );

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/db", () => ({}));
+
 vi.mock("@/lib/log", () => ({
   logger: { child: () => ({ debug: vi.fn(), warn: vi.fn(), error: vi.fn() }) },
 }));

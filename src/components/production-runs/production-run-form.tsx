@@ -6,7 +6,7 @@
 "use client";
 
 import { MoistureSplit } from "@/components/ui/moisture-split";
-import { nullableNumericValue, integerValue } from "@/lib/form-utils";
+import { nullableNumericValue } from "@/lib/form-utils";
 import { formatLocalDate, resolveFacilityTimezone } from "@/lib/date-utils";
 import {
   buildProductionRunResolver,
@@ -33,8 +33,10 @@ import {
 } from "@/components/forms/entity-select";
 import { useEntityById } from "@/hooks/use-entities";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import { createIntentHref } from "@/lib/create-intent";
 import {
   formatProductionRunStatus,
+  productionRunFormSchema,
   type ProductionRunFormData,
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
@@ -57,6 +59,10 @@ import { ProductionRunFeedstockDrawRow } from "./production-run-feedstock-draw-r
 import { ProductionRunMixBinNotice } from "./production-run-mix-bin-notice";
 import { summarizeFeedstockWetInput } from "./production-run-feedstock-input";
 import { isProductionRunOutputLocked, type RecordLockView } from "@/lib/record-lock-view";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(productionRunFormSchema);
 
 // ============================================
 // Constants for select options
@@ -65,6 +71,8 @@ import { isProductionRunOutputLocked, type RecordLockView } from "@/lib/record-l
 const isProductionRunCertifyField = (field: string) =>
   isCertifyFormField("productionRun", field);
 
+const REACTORS_LIST_PATH = "/reactors";
+const NO_REACTORS_HINT = { message: "This facility has no reactors yet." };
 // Quick-add on the Biochar Storage select only mints biochar bins (the run's
 // output lands here), mirroring how the biochar-product form scopes its bin.
 const BIOCHAR_BIN_QUICK_ADD_TYPES = ["biochar_bin"] as const satisfies readonly StorageLocationType[];
@@ -435,6 +443,9 @@ export function ProductionRunForm({
                   error={!!errors.reactorId}
                   filterBy={watchedFacilityId ? { facilityId: watchedFacilityId } : undefined}
                   autoSelectSingle
+                  allowCreate
+                  createHref={watchedFacilityId ? createIntentHref(REACTORS_LIST_PATH, watchedFacilityId) : undefined}
+                  emptyHint={NO_REACTORS_HINT}
                 />
               )}
             />
@@ -630,7 +641,7 @@ export function ProductionRunForm({
             <FormInput
               id="feedingRateKgHr"
               type="number"
-              step="any"
+              {...numberBounds("feedingRateKgHr")}
               placeholder="e.g. 420"
               disabled={isSubmitting}
               error={!!errors.feedingRateKgHr}
@@ -644,13 +655,11 @@ export function ProductionRunForm({
             <FormInput
               id="residenceTimeMinutes"
               type="number"
-              step="1"
+              {...numberBounds("residenceTimeMinutes")}
               placeholder="e.g. 30"
               disabled={isSubmitting}
               error={!!errors.residenceTimeMinutes}
-              {...register("residenceTimeMinutes", {
-                setValueAs: integerValue,
-              })}
+              {...register("residenceTimeMinutes")}
             />
           </FormField>
         </div>
@@ -762,7 +771,7 @@ export function ProductionRunForm({
             <FormInput
               id="dieselOperationLiters"
               type="number"
-              step="any"
+              {...numberBounds("dieselOperationLiters")}
               placeholder="e.g. 50"
               disabled={isSubmitting}
               error={!!errors.dieselOperationLiters}
@@ -783,7 +792,7 @@ export function ProductionRunForm({
             <FormInput
               id="dieselGensetLiters"
               type="number"
-              step="any"
+              {...numberBounds("dieselGensetLiters")}
               placeholder="e.g. 25"
               disabled={isSubmitting}
               error={!!errors.dieselGensetLiters}
@@ -804,7 +813,7 @@ export function ProductionRunForm({
             <FormInput
               id="preprocessingFuelLiters"
               type="number"
-              step="any"
+              {...numberBounds("preprocessingFuelLiters")}
               placeholder="e.g. 10"
               disabled={isSubmitting}
               error={!!errors.preprocessingFuelLiters}
@@ -825,7 +834,7 @@ export function ProductionRunForm({
             <FormInput
               id="electricityKwh"
               type="number"
-              step="any"
+              {...numberBounds("electricityKwh")}
               placeholder="e.g. 100"
               disabled={isSubmitting}
               error={!!errors.electricityKwh}

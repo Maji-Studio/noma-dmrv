@@ -8,14 +8,14 @@ import { feedstockDeepLinkHref } from "@/lib/feedstock-links";
 import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
 import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { CalendarIcon, PackageIcon, PlusIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
+import { PackageIcon, PlusIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, useQueryState } from "nuqs";
 import { FEEDSTOCK_DEEP_LINK_PARAM } from "@/lib/feedstock-links";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
+import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -74,12 +74,11 @@ function createColumns(
   onEdit: (feedstock: FeedstockWithRelations) => void,
   onDelete: (feedstock: FeedstockWithRelations) => void,
   locks: RecordLockViews,
-  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<FeedstockWithRelations>[] {
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true, recordLink: true },
+      meta: { nowrap: true, recordLink: true, recordLinkBefore: recordLockTitleMark(locks) },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -90,38 +89,21 @@ function createColumns(
       meta: { nowrap: true },
       header: "Delivery date",
       cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <CalendarIcon size={16} className="text-[var(--color-text-tertiary)]" />
-          <span>{formatCalendarDate(row.original.deliveryDate)}</span>
-        </div>
+        <span>{formatCalendarDate(row.original.deliveryDate)}</span>
       ),
     },
     {
       accessorKey: "supplierName",
       header: "Supplier",
       cell: ({ row }) => (
-        <div className="flex flex-col">
-          <span>{row.original.supplierName || MISSING_VALUE.notRecorded}</span>
-          {row.original.supplierCode && (
-            <span className="body-small text-[var(--color-text-tertiary)]">
-              {row.original.supplierCode}
-            </span>
-          )}
-        </div>
+        <span>{row.original.supplierName || MISSING_VALUE.notRecorded}</span>
       ),
     },
     {
       accessorKey: "feedstockTypeName",
       header: "Feedstock type",
       cell: ({ row }) => (
-        <div className="flex flex-col">
-          <span>{row.original.feedstockTypeName || MISSING_VALUE.notRecorded}</span>
-          {row.original.feedstockTypeCategory && (
-            <span className="body-small text-[var(--color-text-tertiary)] capitalize">
-              {row.original.feedstockTypeCategory}
-            </span>
-          )}
-        </div>
+        <span>{row.original.feedstockTypeName || MISSING_VALUE.notRecorded}</span>
       ),
     },
     // Wet and dry sit side by side, so both stay in fixed kg — auto-tonne
@@ -145,8 +127,8 @@ function createColumns(
       header: "Storage bin",
       cell: ({ row }) => (
         <span>
-          {row.original.storageLocationCode ??
-            row.original.storageLocationName ??
+          {row.original.storageLocationName ??
+            row.original.storageLocationCode ??
             MISSING_VALUE.notSet}
         </span>
       ),
@@ -178,7 +160,6 @@ function createColumns(
         />
       ),
     },
-    recordLockColumn<FeedstockWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
@@ -210,7 +191,7 @@ function buildFeedstockTransferToast(feedstocks: FeedstockWithRelations[]) {
     0,
   );
   const binLabels = feedstocks
-    .map((feedstock) => feedstock.storageLocationCode ?? feedstock.storageLocationName)
+    .map((feedstock) => feedstock.storageLocationName ?? feedstock.storageLocationCode)
     .filter((label): label is string => Boolean(label));
   const uniqueBinLabels = [...new Set(binLabels)];
 
@@ -429,7 +410,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
 
   const feedstockItems = feedstocksData?.items ?? [];
   const feedstockLocks = useRecordLocks("feedstock", feedstockItems.map((item) => item.id));
-  const columns = createColumns(openEdit, handleDelete, feedstockLocks.locks, feedstockLocks.statusOf);
+  const columns = createColumns(openEdit, handleDelete, feedstockLocks.locks);
   const totalPages = feedstocksData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -574,6 +555,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
 
       {/* Stats */}
       {stats}
+
+      <RecordLockListNotice read={feedstockLocks} />
 
       {/* Data Table */}
       <DataTable

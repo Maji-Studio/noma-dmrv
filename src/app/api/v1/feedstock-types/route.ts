@@ -5,4 +5,4 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export const GET = apiRoute("api.v1.feedstock-types.list", "feedstock-types:read", async (request, { ctx, headers }) =>
-  Response.json(await readFeedstockTypeList(request, ctx), { headers }));
+  Response.json(await readFeedstockTypeList(request, ctx), { headers }), { audience: "rest" });

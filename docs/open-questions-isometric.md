@@ -22,20 +22,51 @@ retired questions do not belong in this file.
   and provide an explicit recovery path that preserves the original journal
   and prevents duplicate Biochar Applications after an ambiguous POST.
 
-### Biochar Application Source attachment is never read back (`isometric/biochar-application-source-readback`, opened 2026-09-08, `needs-registry-check`)
+### Biochar Application Source readback awaits a staging retest (`isometric/biochar-application-source-readback`, opened 2026-09-08)
 
-- **Observed** — `CreateBiocharApplicationRequest` accepts `source_ids`, but
-  the `BiocharApplication` response (POST and GET) and `GET /sources` expose
-  no Application-to-Source link (public Certify OpenAPI, checked 2026-09-08).
-  Only the GraphQL `BiocharSpreadEvent.biocharSpreadEventSources` field does.
-- **Decision** — the accepted create request is the attachment contract:
-  `src/lib/isometric/biochar-applications.ts:sourceSetMismatchMessage`
-  compares the reviewed set only when a readback carries `source_ids`, treats
-  an omitted or null field as nothing to verify, and reports any other shape
-  as drift. The immutable submission snapshot keeps the IDs sent. A strict
-  readback guard had blocked every evidence-bearing Removal on staging.
-- **To resolve** — read the attachment back through GraphQL (issue #737) and
-  make the exact-set comparison unconditional again.
+- **Verified probe (2026-10-19):** Certify REST accepts `source_ids` but omits
+  them on POST and GET. GraphQL uses `POST /graphql` at the same origin:
+  `https://api.sandbox.isometric.com/graphql` or `https://api.isometric.com/graphql`.
+  Authentication requires both Certify headers: `Authorization: Bearer <accessToken>`
+  and `X-Client-Secret: <clientSecret>`. Omitting the latter returns HTTP 401.
+- **Query:** the root has no Biochar Spread Event lookup; query through the project:
+
+  ```graphql
+  query BiocharApplicationSources($projectId: ID!, $ids: [ID!]) {
+    project(id: $projectId) {
+      __typename
+      ... on Project {
+        biocharSpreadEvents(first: 2, filter: { idIn: $ids }) {
+          nodes { id biocharSpreadEventSources { source { id } } }
+        }
+      }
+      ... on ObjectNotFoundError { message }
+    }
+  }
+  ```
+
+- **Observed shapes:** an unknown event returns
+  `{"data":{"project":{"__typename":"Project","biocharSpreadEvents":{"nodes":[]}}}}`.
+  An unknown project returns
+  `{"data":{"project":{"__typename":"ObjectNotFoundError","message":"..."}}}`.
+  GraphQL errors use `{"errors":[...],"data":null}` or partial data with HTTP 200.
+- **Implemented (#737, decision 737-q2):** after Application confirmation,
+  GraphQL compares the expected Source set, ignoring order and duplicates.
+  Missing, unexpected, empty or malformed sets stop submission with
+  `source_set_mismatch` drift. No answer continues with persisted `unconfirmed`
+  status and an ID-only warning. Summary reloads retry only unconfirmed,
+  lifecycle-confirmed registrations; success clears the note, and a new mismatch
+  is recorded without changing submission drift or failing the summary.
+  Empty expected sets stay `not_checked`; confirmed checks are reused.
+  REST still skips omitted/null `source_ids` and rejects malformed or wrong sets.
+- **Verified on a live record (2026-10-19):** a sandbox Biochar Application
+  created with noma's request builder came back with id `bse_...`, which is
+  also its `BiocharSpreadEvent.id`. `biocharSpreadEventSources` listed exactly
+  the `source_ids` sent on create; REST still omitted them. After
+  `DELETE /biochar_applications/{id}` the event no longer resolves.
+- **To resolve:** retest one fresh evidence-bearing Removal through the full
+  submit path on staging (issue #737 step 4), then retire this entry. Until
+  then event-not-found stays no answer, never drift.
 
 ### Removal deletion leaves Datapoints behind (`isometric/removal-deletion-orphans`, opened 2026-09-08)
 
@@ -686,3 +717,9 @@ Three failure-path gaps, each a surprising mode before a registry write:
 - **Current handling**: Certification → Settings shows the pinned versions from `docs/isometric/versions.json` (#1092). The column is nullable and the mapping action never sets it, so the submit preflight normally warns "missing" and records a sync event.
 - **Options**: (a) let the operator record the Certify project's protocol version per project, so the preflight can detect a mismatch; (b) drop the column and the preflight warning, since the Certify API exposes no protocol version and the pin is global.
 - **To resolve**: Kenji picks one. Not decided in #1092.
+
+### Corrections after finalization (`isometric/post-finalization-correction`, opened 2026-10-19) - **parked**
+
+- **Anchor**: `src/lib/isometric/production-batches.ts:createProductionBatch` and `src/data-access/certifier-removal-deletion.ts:finalizeRemovalDeletion`.
+- **Current handling**: Certify has no PATCH for Production Batches or MeasurementSamples. Before finalization, deleting the Removal removes the owned registry records and is the correction path. After finalization, noma builds no replacement flow: the operator is told to contact an admin or Isometric.
+- **Parked** on 2026-10-19 (Kenji, epic #632): #1112 (replace a registered batch) and #1113 (show superseded resources) are closed until a real case appears. Reopening this starts with asking Isometric whether it accepts a replacement resource after finalization or amends on its side.

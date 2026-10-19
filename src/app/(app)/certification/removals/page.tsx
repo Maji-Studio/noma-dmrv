@@ -5,7 +5,13 @@
  * grouping. Protected by the requireAuth guard in the (app) layout.
  */
 import { RemovalsList } from "@/components/certification/removals-list";
+import { CREATE_INTENT_PARAM, isCreateIntentValue } from "@/lib/create-intent";
 
-export default function CertificationRemovalsPage() {
-  return <RemovalsList />;
+export default async function CertificationRemovalsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const query = await searchParams;
+  return <RemovalsList initialCreate={isCreateIntentValue(query[CREATE_INTENT_PARAM])} />;
 }

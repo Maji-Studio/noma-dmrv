@@ -20,6 +20,12 @@ describe("InUseDeleteDialog", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("explains the refusal without suggesting Archive when there is no archive handler", () => {
+    render(<InUseDeleteDialog label="Depot" onClose={vi.fn()} />);
+    expect(screen.getByText("Depot cannot be deleted because other records still use it.")).toBeTruthy();
+    expect(screen.queryByText(/archive/i)).toBeNull();
+  });
+
   it("shows only Close without an archive handler", () => {
     render(<InUseDeleteDialog label="Depot" onClose={vi.fn()}>Custom reason.</InUseDeleteDialog>);
     expect(screen.queryByRole("button", { name: "Archive instead" })).toBeNull();

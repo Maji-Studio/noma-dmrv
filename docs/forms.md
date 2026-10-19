@@ -148,6 +148,34 @@ Masses are backed by `numeric(14,3)` columns. A hand-rolled `z.number().positive
 
 Same reasoning for `PG_INTEGER_MAX` on integer columns, and `RATIO_INPUT_MAX` (9.999999) for ratio fields backed by `numeric(7,6)` whose domain exceeds `[0, 1]` (H:C org, O:C org). True 0–1 fractions keep their own `.max(1)`.
 
+### Native number constraints
+
+A number input's native `min`, `max` and `step` come from the Zod schema that
+validates it, never from hand-typed numbers. Build a lookup once at module
+level and spread it onto the input:
+
+```typescript
+const numberBounds = numberInputConstraintsFor(sampleFormSchema);
+<FormInput id="totalCarbonPercent" type="number" {...numberBounds("totalCarbonPercent")} … />
+```
+
+`numberInputConstraintsFor` (`@/lib/number-input-constraints`) unwraps
+preprocess pipes, nullables and `"" | number` unions, reads array elements
+(`"ingredients.sharePercent"`) and throws on an unknown path. `step` is the
+schema's `multipleOf`, 1 for an integer, else `"any"`; an exclusive bound
+(`.positive()`) becomes the next step, or the bound itself with `"any"`. For a
+lone field schema use `numberInputConstraints(latitudeSchema)`. A form may set
+`step` after the spread when its display precision differs (formulation
+shares). `number-input-bounds-coverage.test.ts` fails on a number input with no
+bounds spread and no `min`.
+
+The native attributes give the spinner its range and expose min and max to
+assistive tech. They do not block a save: `FormActions`' submit sets
+`formNoValidate` on click (`skipNativeChecksUnlessUnparsed`), so the schema's
+messages explain a refusal. The exception is a number input holding text the
+browser cannot parse ("1e"): it reports an empty value the schema would read as
+cleared, so the browser's own check stays on and blocks the save.
+
 ### GPS coordinates
 
 Facilities, supplier locations and customer locations require a GPS pair to
@@ -327,6 +355,7 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
 - When the actions render **inside an owning parent form**, pass `submitType="button"` + `onSubmitClick` — nesting `<form>` elements is invalid HTML.
 - `formId` is the escape hatch when extension content must render between the fields and the CTA: the CTA lives outside the `<form>` and points back at it by id.
 - `submitDisabled` gates on an unmet precondition (e.g. an unchecked acknowledgement).
+- The submit skips the browser's constraint bubbles except for unparsed number text (see [Native number constraints](#native-number-constraints)); a nested `submitType="button"` is untouched.
 
 ### FormSpine
 
@@ -588,12 +617,15 @@ stock family presents wet first. Only presentation changes.
   estimate", each batch's wet mass added less wet mass taken out from its last
   count, since an order has no departure moisture yet, with available dry stock as a secondary line under it at
   both levels; the batch bar and key as the picture. On the order form and
-  read sheet the bins collapse into one tappable "Available stock" row
-  (wet estimate first, dry secondary) that opens a "Matching stock" modal with
-  these cards. The row's wet figure sums only the bins that have an estimate and
-  says "in N of M bins" when some do not; it never switches to dry.
-- A wet estimate is computed at a moisture, not weighed: its label always says
-  "estimate", and it reads in whole kilograms.
+  read sheet the bins collapse into one tappable row labelled "Available" with
+  the wet figure only ("2,500 kg wet mass"), plus "in N of M bins" when some
+  bins lack an estimate so a partial sum never reads as the full stock. Dry
+  stock and the bin breakdown sit in the "Matching stock" modal the row opens.
+- A wet estimate is computed at a moisture, not weighed, and reads in whole
+  kilograms as "N kg wet mass" with no "≈" and no "estimate" on the figure.
+  Where the figure has a label, the label says estimate ("Available wet stock,
+  estimate"); otherwise its info hint says "Estimated: …". Secondary figures
+  lead with the number ("1,500 kg dry biochar", "270 kg dry solids").
 
 ### Stock moisture readings
 

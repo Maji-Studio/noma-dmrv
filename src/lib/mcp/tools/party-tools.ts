@@ -58,7 +58,7 @@ export function partyWriteTools<
     const inputSchema = schema.safeExtend(controls.shape);
     const contract = toOperationJsonSchema(inputSchema);
     return {
-      kind: "write", name: `${command}_${kind}`, scope: command === "delete" ? `${kind}s:delete` : `${kind}s:write`,
+      kind: "write", name: `${command}_${kind}`, scope: command === "delete" ? `${kind}s:delete` : `${kind}s:write`, requiredScopes: () => [command === "delete" ? `${kind}s:delete` : `${kind}s:write`],
       input: inputSchema, output: command === "create" ? createOutput : command === "delete" ? deleteOutput : itemOutput,
       annotations: { readOnlyHint: false, openWorldHint: false, idempotentHint: true, destructiveHint: command !== "create" },
       description: partyToolDescription(kind, command),
@@ -135,7 +135,7 @@ function locationCommand<Input extends z.ZodObject, Row extends { id: string; ve
   const contract = toOperationJsonSchema(inputSchema);
   const output = z.object({ data: representation, warnings: z.array(z.string()).optional() });
   return {
-    kind: "write", name: operation.id, scope: command === "delete" ? `${kind}s:delete` : `${kind}s:write`,
+    kind: "write", name: operation.id, scope: command === "delete" ? `${kind}s:delete` : `${kind}s:write`, requiredScopes: () => [command === "delete" ? `${kind}s:delete` : `${kind}s:write`],
     input: inputSchema, output,
     annotations: { readOnlyHint: false, openWorldHint: false, idempotentHint: true, destructiveHint: command !== "add" },
     description: locationToolDescription(kind, command),
