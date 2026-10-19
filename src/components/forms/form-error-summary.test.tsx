@@ -12,7 +12,7 @@ import { z } from "zod";
 import { FormActions } from "./form-actions";
 import { FormField } from "./form-field";
 import { FormInput } from "./form-input";
-import { listFieldErrors, orderFieldErrors } from "./form-error-summary";
+import { ItemText, listFieldErrors, orderFieldErrors } from "./form-error-summary";
 import { readFieldDirectory } from "./form-error-summary-dom";
 
 const schema = z.object({
@@ -66,6 +66,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const ANNOUNCEMENT = "Not saved. Fix the fields that show an error.";
+
+function announcementOf() {
+  return screen.getAllByRole("alert").find((node) => node.textContent === ANNOUNCEMENT);
+}
+
 async function pressSave() {
   fireEvent.click(screen.getByRole("button", { name: "Save sample" }));
   return screen.findByText("Not saved. Fix 3 fields.");
@@ -75,7 +81,7 @@ describe("FormErrorSummary", () => {
   it("shows nothing before the first save", () => {
     render(<SampleLikeForm onValid={vi.fn()} />);
 
-    expect(screen.queryByText(/Not saved/)).toBeNull();
+    expect(screen.queryByText(/^Not saved\. Fix \d/)).toBeNull();
   });
 
   it("lists the refused fields in form order with their labels", async () => {
@@ -87,7 +93,7 @@ describe("FormErrorSummary", () => {
 
     // The list is not a live region; one fixed line announces each refusal.
     expect(summary.getAttribute("role")).toBeNull();
-    expect(within(summary).getByRole("alert").textContent).toBe("Not saved. Fix the fields that show an error.");
+    expect(announcementOf()).toBeTruthy();
     expect(links.map((link) => link.textContent)).toEqual([
       "Credit batch: Select a credit batch.",
       // The message already names its field, so no "Lab name:" lead.
@@ -136,8 +142,28 @@ describe("FormErrorSummary", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /^Credit batch/ }));
     });
-    await waitFor(() => expect(screen.queryByText(/Not saved/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/^Not saved\. Fix \d/)).toBeNull());
     expect(onValid).not.toHaveBeenCalled();
+  });
+});
+
+describe("FormErrorSummary announcement", () => {
+  it("keeps one announcement per refused save while the list empties and refills", async () => {
+    render(<SampleLikeForm onValid={vi.fn()} />);
+    await pressSave();
+    const first = announcementOf();
+
+    fireEvent.change(screen.getByLabelText(/^pH/), { target: { value: "7" } });
+    fireEvent.change(screen.getByLabelText(/^Lab name/), { target: { value: "SGS" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Credit batch/ }));
+    });
+    await waitFor(() => expect(screen.queryByText(/^Not saved\. Fix \d/)).toBeNull());
+    fireEvent.change(screen.getByLabelText(/^pH/), { target: { value: "20" } });
+    await screen.findByText("Not saved. Fix 1 field.");
+
+    // Same node: React did not remount the alert, so it is not read again.
+    expect(announcementOf()).toBe(first);
   });
 });
 
@@ -169,6 +195,15 @@ describe("FormErrorSummary rows", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save blend" }));
 
     expect(await screen.findByRole("link", { name: "Share, row 2: Enter at most 100." })).toBeTruthy();
+  });
+
+  it("keeps the row when the message already names its field", async () => {
+    document.body.innerHTML = "";
+    const errors = { ingredients: [undefined, { materialId: { type: "custom", message: "Blend material is required" } }] };
+    const items = orderFieldErrors(listFieldErrors({ errors } as never), new Map([["ingredients.1.materialId", { label: "Blend material", index: 0 }]]));
+    const { container } = render(<ul>{items.map((item) => <li key={item.path}><ItemText item={item} /></li>)}</ul>);
+
+    expect(container.textContent).toBe("Blend material is required (row 2)");
   });
 });
 

@@ -99,10 +99,10 @@ export function orderFieldErrors(
     .map(({ item }) => item);
 }
 
-/** "Share" in the second ingredient row reads "Share, row 2". */
-function rowLabel(label: string, path: string): string {
+/** The 1-based row of a field array entry ("ingredients.1.share" is row 2). */
+function rowNumber(path: string): number | null {
   const index = path.split(".").find((segment) => /^\d+$/.test(segment));
-  return index === undefined ? label : `${label}, row ${Number(index) + 1}`;
+  return index === undefined ? null : Number(index) + 1;
 }
 
 /** "Identifier is required" already names its field; no "Identifier:" lead. */
@@ -110,11 +110,18 @@ function namesItsField(label: string, message: string): boolean {
   return message.toLowerCase().startsWith(label.toLowerCase());
 }
 
-function ItemText({ item }: { item: FieldErrorItem }) {
-  if (!item.label || namesItsField(item.label, item.message)) return <>{item.message}</>;
+/**
+ * "Share, row 2: Enter at most 100." A message that already names its field
+ * keeps only the row: "Blend material is required (row 2)".
+ */
+export function ItemText({ item }: { item: FieldErrorItem }) {
+  const row = rowNumber(item.path);
+  if (!item.label || namesItsField(item.label, item.message)) {
+    return <>{row === null ? item.message : `${item.message} (row ${row})`}</>;
+  }
   return (
     <>
-      <span className="font-medium">{rowLabel(item.label, item.path)}</span>
+      <span className="font-medium">{row === null ? item.label : `${item.label}, row ${row}`}</span>
       {": "}
       {item.message}
     </>
@@ -165,33 +172,43 @@ export function FormErrorSummary<
     return () => clearTimeout(timer);
   }, [firstPath, submitCount, getForm]);
 
-  if (!visible) return null;
+  // The list changes as fields are fixed; announcing it whole on every
+  // change would drown the field the user is editing. One line per refused
+  // save instead, mounted for the whole attempt, so the summary leaving and
+  // coming back while the user edits does not announce it again.
+  const announcement = submitCount === 0 ? null : (
+    <p key={submitCount} role="alert" className="sr-only">
+      {isSubmitSuccessful ? "" : ANNOUNCEMENT}
+    </p>
+  );
+
+  if (!visible) return announcement;
 
   return (
-    <Notice tone="error" live={false} title={countLabel(items.length)} data-form-error-summary="">
-      {/* The list changes as fields are fixed; announcing it whole on every
-          change would drown the field the user is editing. */}
-      <p key={submitCount} role="alert" className="sr-only">{ANNOUNCEMENT}</p>
-      <ul className={`mt-4 flex flex-col gap-4 ${LIST_HEIGHT_CLASS}`}>
-        {items.map((item) => (
-          <li key={item.path}>
-            {item.located ? (
-              <a
-                href={`#${item.path}`}
-                className="block min-h-24 py-2 text-[var(--color-text-primary)] underline underline-offset-2"
-                onClick={(event) => {
-                  event.preventDefault();
-                  focusField(getForm(), item.path);
-                }}
-              >
-                <ItemText item={item} />
-              </a>
-            ) : (
-              <p className="py-2">{item.message}</p>
-            )}
-          </li>
-        ))}
-      </ul>
-    </Notice>
+    <>
+      {announcement}
+      <Notice tone="error" live={false} title={countLabel(items.length)} data-form-error-summary="">
+        <ul className={`mt-4 flex flex-col gap-4 ${LIST_HEIGHT_CLASS}`}>
+          {items.map((item) => (
+            <li key={item.path}>
+              {item.located ? (
+                <a
+                  href={`#${item.path}`}
+                  className="block min-h-24 py-2 text-[var(--color-text-primary)] underline underline-offset-2"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    focusField(getForm(), item.path);
+                  }}
+                >
+                  <ItemText item={item} />
+                </a>
+              ) : (
+                <p className="py-2">{item.message}</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      </Notice>
+    </>
   );
 }
