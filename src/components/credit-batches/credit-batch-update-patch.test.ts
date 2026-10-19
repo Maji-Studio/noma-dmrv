@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { RecordLockView } from "@/lib/record-lock-view";
-import { creditBatchUpdatePatch, isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
+import {
+  CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE,
+  creditBatchUpdatePatch,
+  isCreditBatchMembershipLocked,
+  saveCreditBatchEdit,
+} from "./credit-batch-update-patch";
 
 const SAVED = { facilityId: "f-1", feedstockTypeId: "ft-1", startDate: "2026-09-01", endDate: "2026-09-30", productionRunIds: ["run-1", "run-2"] };
 const FORM = {
@@ -31,5 +36,40 @@ describe("credit batch update patch", () => {
     expect(isCreditBatchMembershipLocked(lock("sent", []))).toBe(true);
     expect(isCreditBatchMembershipLocked(lock("inUse", ["sample"]))).toBe(false);
     expect(isCreditBatchMembershipLocked(undefined)).toBe(false);
+  });
+});
+
+describe("saveCreditBatchEdit", () => {
+  const snapshot = { ...SAVED, id: "batch-1", version: 3 };
+  const data = { ...FORM, sampling: "sampled" as const };
+
+  it("sends the snapshot's version without sampling, so a concurrent save conflicts", async () => {
+    const update = vi.fn(async () => ({ success: true }));
+    await expect(saveCreditBatchEdit({ data, saved: snapshot, membershipLocked: false, update })).resolves.toEqual({ status: "saved" });
+    expect(update).toHaveBeenCalledWith({ creditBatchId: "batch-1", expectedVersion: 3, ...FORM });
+  });
+
+  it("keeps the warning of a save whose follow-up failed", async () => {
+    const update = async () => ({ success: true, warning: "Details did not load." });
+    await expect(saveCreditBatchEdit({ data, saved: snapshot, membershipLocked: false, update }))
+      .resolves.toEqual({ status: "saved", warning: "Details did not load." });
+  });
+
+  it("refuses a held membership change before calling the server", async () => {
+    const update = vi.fn();
+    const moved = { ...data, startDate: new Date("2026-08-01T00:00:00Z") };
+    await expect(saveCreditBatchEdit({ data: moved, saved: snapshot, membershipLocked: true, update }))
+      .resolves.toEqual({ status: "error", message: CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("turns a refused or thrown save into the form's error", async () => {
+    await expect(saveCreditBatchEdit({ data, saved: snapshot, membershipLocked: false, update: async () => ({ success: false, error: "Stale." }) }))
+      .resolves.toEqual({ status: "error", message: "Stale." });
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await expect(saveCreditBatchEdit({ data, saved: snapshot, membershipLocked: false, update: async () => { throw new Error("Changed by someone else."); } }))
+      .resolves.toEqual({ status: "error", message: "Changed by someone else." });
+    expect(errorLog).toHaveBeenCalled();
+    errorLog.mockRestore();
   });
 });

@@ -10,8 +10,15 @@ import {
   type DurabilitySummaryReplicate,
 } from "@/lib/certification/durability-batch-summary";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
+import { sampleDocumentWarningKeys } from "@/lib/certification/sample-document-warnings";
 import type { BatchHealthFixTarget } from "@/lib/certification/batch-health";
-import { buildCreditBatchOpenItems } from "./open-items";
+import {
+  buildCreditBatchOpenItems,
+  CREDIT_BATCH_DETAILS_ROW,
+  CREDIT_BATCH_TEMPLATE_ROW,
+} from "./open-items";
+
+const batchContext = { facilityId: "facility", creditBatchId: "batch" };
 
 function fixture() {
   const [durability] = buildDurabilityBatchSummaries([{
@@ -21,7 +28,7 @@ function fixture() {
     runs: [],
     samples: [],
   }]);
-  return { durability };
+  return { ...batchContext, durability };
 }
 
 function replicate(overrides: Partial<DurabilitySummaryReplicate> = {}): DurabilitySummaryReplicate {
@@ -63,7 +70,7 @@ function pageModel(): CreditBatchPageModel {
         reportingPeriodStartOn: null,
         reportingPeriodEndOn: "2026-06-30",
         hasMissingPeriod: false,
-        status: "in-verification",
+        status: { kind: "in-verification", value: "pending", label: "In verification", isActionable: false, isTerminal: false },
         submittedToVerifierAt: null,
         creditsIssuedAt: null,
       },
@@ -73,15 +80,15 @@ function pageModel(): CreditBatchPageModel {
 
 describe("buildCreditBatchOpenItems", () => {
   it("keeps absent sources empty", () => {
-    expect(buildCreditBatchOpenItems({})).toEqual({
+    expect(buildCreditBatchOpenItems(batchContext)).toEqual({
       blocking: [],
       check: [],
       waiting: [],
     });
   });
 
-  it("uses requirement wording and routes local fixes and external records", () => {
-    const result = buildCreditBatchOpenItems({
+  it("names the problem for unmet checks and routes local fixes and external records", () => {
+    const result = buildCreditBatchOpenItems({ ...batchContext,
       health: {
         state: "incomplete",
         issueCount: 4,
@@ -90,24 +97,28 @@ describe("buildCreditBatchOpenItems", () => {
             key: "carbon",
             label: "Carbon",
             requirementLabel: "Sample data complete",
+            unmetLabel: "No Sample data",
             status: "unmet",
           },
           {
             key: "emissions",
             label: "Emissions",
             requirementLabel: "Emissions recorded",
+            unmetLabel: "Emissions not recorded",
             status: "unmet",
           },
           {
             key: "template",
             label: "Template",
             requirementLabel: "Template resolved",
+            unmetLabel: "Template has unresolved parts",
             status: "unmet",
           },
           {
             key: "transport",
             label: "Transport",
             requirementLabel: "Distances recorded",
+            unmetLabel: "Distances not recorded",
             status: "unmet",
             affectedRecords: [{
               id: "location",
@@ -120,31 +131,58 @@ describe("buildCreditBatchOpenItems", () => {
             key: "production",
             label: "Production",
             requirementLabel: "Production linked",
+            unmetLabel: "No production linked",
             status: "met",
           },
         ],
       },
     });
     expect(result.blocking.map(row => [row.title, row.target])).toEqual([
-      ["Sample data complete", { tab: "samples" }],
-      ["Emissions recorded", { tab: "emissions" }],
-      ["Template resolved", { href: "/certification/settings?section=removal-templates&facility=" }],
-      ["Distances recorded", { href: "/customers?location=location" }],
+      ["No Sample data", { tab: "samples" }],
+      ["Emissions not recorded", { tab: "emissions" }],
+      ["Template has unresolved parts", { href: "/certification/settings?section=removal-templates&facility=facility" }],
+      ["Distances not recorded", { href: "/customers?location=location" }],
     ]);
+  });
+
+  it("lists Sample document warnings as Check items on the Samples tab", () => {
+    const documentWarnings = sampleDocumentWarningKeys({
+      sampling: "sampled", creditBatchCode: "CB-1", hasLabReport: false,
+      hasReflectanceHistogram: false, durabilityOption: "1000_year",
+    });
+    const result = buildCreditBatchOpenItems({ ...batchContext,
+      health: { state: "ready", issueCount: 0, checks: [], documentWarnings: [...documentWarnings, "labReport"] } });
+    expect(result.blocking).toEqual([]);
+    expect(result.check.map(item => [item.id, item.title, item.target])).toEqual([
+      ["document:lab-report", "No lab report on any Sample", { tab: "samples" }],
+      ["document:reflectance-histogram", "No reflectance histogram on any Sample", { tab: "samples" }],
+    ]);
+  });
+
+  it("keeps a requirement's reasoning for its ⓘ", () => {
+    const result = buildCreditBatchOpenItems({ ...batchContext, health: { state: "incomplete", issueCount: 1, checks: [{
+      key: "production", label: "Production", requirementLabel: "Linked production data", unmetLabel: "No production run linked", status: "unmet",
+      whyDetail: "Every applied tonne traces to a production run.",
+    }] } });
+    expect(result.blocking[0].why).toBe("Every applied tonne traces to a production run.");
   });
 
   it.each<BatchHealthFixTarget>([
     "creditBatchTemplate", "batchDetails", "labSamples", "emissions",
     "templateLineReview", "certificationTemplates", "certificationEmissions", "productionRuns",
   ])("preserves the repair destination for %s", fixTarget => {
-    const check = { key: "template" as const, label: "Template", requirementLabel: "Template ready",
+    const check = { key: "template" as const, label: "Template", requirementLabel: "Template ready", unmetLabel: "Template not ready",
       status: "unmet" as const, fixTarget };
-    const localTabs = { creditBatchTemplate: "overview", batchDetails: "overview",
-      labSamples: "samples", emissions: "emissions" };
-    const tab = localTabs[fixTarget as keyof typeof localTabs];
-    const result = buildCreditBatchOpenItems({ pageModel: pageModel(),
+    const localTargets = {
+      creditBatchTemplate: { tab: "overview", rowId: CREDIT_BATCH_TEMPLATE_ROW },
+      batchDetails: { tab: "overview", rowId: CREDIT_BATCH_DETAILS_ROW },
+      labSamples: { tab: "samples" },
+      emissions: { tab: "emissions" },
+    };
+    const local = localTargets[fixTarget as keyof typeof localTargets];
+    const result = buildCreditBatchOpenItems({ ...batchContext, pageModel: pageModel(),
       health: { state: "incomplete", issueCount: 1, checks: [check] } });
-    expect(result.blocking[0].target).toEqual(tab ? { tab } : {
+    expect(result.blocking[0].target).toEqual(local ?? {
       href: batchHealthFixLinkFor(check, "facility", "batch").href,
     });
   });
@@ -152,7 +190,7 @@ describe("buildCreditBatchOpenItems", () => {
   it.each<BatchHealthFixTarget>([
     "templateLineReview", "certificationTemplates", "certificationEmissions", "emissions",
   ])("routes emission review to %s", fixTarget => {
-    const result = buildCreditBatchOpenItems({ pageModel: pageModel(), emissionLines: [{
+    const result = buildCreditBatchOpenItems({ ...batchContext, emissionLines: [{
       componentId: "diesel", displayName: "Diesel", state: "needsReview", groupKey: "production", groupName: "Production", groupPosition: 0, position: 0,
       description: null, entryPolicy: "additive", records: null,
       blueprintKey: "production", contract: undefined, automaticFigure: null, entries: [], total: null,
@@ -211,7 +249,7 @@ describe("buildCreditBatchOpenItems", () => {
       },
     ]);
     input.pageModel.mass.notAppliedDryKg = null;
-    input.pageModel.milestones.ghgStatement!.status = "verified";
+    input.pageModel.milestones.ghgStatement!.status = { kind: "verified", value: "verified", label: "Verified", isActionable: false, isTerminal: true };
     expect(buildCreditBatchOpenItems(input).waiting).toEqual([]);
   });
 
@@ -259,11 +297,23 @@ describe("buildCreditBatchOpenItems", () => {
     expect(buildCreditBatchOpenItems(input).check).toHaveLength(1);
   });
 
-  it.each([null, 0])("omits the unapplied item for %s dry kg", notAppliedDryKg => {
+  it.each([null, 0, 0.001, 4.999])("omits the unapplied item for %s dry kg", notAppliedDryKg => {
     const model = pageModel();
     model.mass.notAppliedDryKg = notAppliedDryKg;
     model.milestones.ghgStatement = null;
-    expect(buildCreditBatchOpenItems({ pageModel: model }).waiting).toEqual([]);
+    expect(buildCreditBatchOpenItems({ ...batchContext, pageModel: model }).waiting).toEqual([]);
+  });
+
+  it.each([5, 5.001])("shows the unapplied item at the visible threshold for %s dry kg", notAppliedDryKg => {
+    const model = pageModel();
+    model.mass.notAppliedDryKg = notAppliedDryKg;
+    model.milestones.ghgStatement = null;
+    expect(buildCreditBatchOpenItems({ ...batchContext, pageModel: model }).waiting).toEqual([{
+      id: "not-applied",
+      title: "0.01 t produced but not applied yet",
+      detail: "It can join a Removal once its application is recorded.",
+      target: { tab: "removals" },
+    }]);
   });
 
   it.each([
@@ -280,7 +330,7 @@ describe("buildCreditBatchOpenItems", () => {
   ])("formats the waiting period: $title", ({ title, ...period }) => {
     const model = pageModel();
     Object.assign(model.milestones.ghgStatement!, period);
-    expect(buildCreditBatchOpenItems({ pageModel: model }).waiting[0].title).toBe(title);
+    expect(buildCreditBatchOpenItems({ ...batchContext, pageModel: model }).waiting[0].title).toBe(title);
   });
 });
 
@@ -291,7 +341,7 @@ it("surfaces a negative O/C_org as an unpaired H/C sample", () => {
     samples: [{ id: "sample", sampleCode: "SAM-1", hToCOrgRatio: 0.3, oToCOrgRatio: -0.1 } as Sample],
   }]);
   expect(durability.replicates[0]).toMatchObject({ hToCorg: 0.3, oToCorg: null });
-  expect(buildCreditBatchOpenItems({ durability }).check).toEqual([{
+  expect(buildCreditBatchOpenItems({ ...batchContext, durability }).check).toEqual([{
     id: "unpaired:SAM-1", title: "Sample SAM-1 has H/C without paired O/C",
     target: { tab: "samples", rowId: "sample" },
   }]);
