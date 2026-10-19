@@ -1,6 +1,6 @@
 # Authentication
 
-Better Auth 1.7.7 (email/password, email verification, password reset, invite-first signup) plus the org-scoping layer built on the Better Auth organization plugin. Read this before touching a guard, a server action's auth line, the proxy, or anything that reads `activeOrganizationId`. This doc owns the guard vocabulary — [architecture.md](./architecture.md) defers to it. Env vars and signup policy: [security.md](./security.md). Auth email delivery: [mail-setup.md](./mail-setup.md). Tenancy rationale: [ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md).
+Better Auth 1.7.7 (email/password, email verification, password reset, invite-first signup) plus the org-scoping layer built on the Better Auth organization plugin. Read this before touching a guard, a server action's auth line, the proxy, or anything that reads `activeOrganizationId`. This doc owns the guard vocabulary — [architecture.md](./architecture.md) defers to it. Env vars: [security.md](./security.md). Auth email delivery: [mail-setup.md](./mail-setup.md). Tenancy rationale: [ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md).
 
 Guards live in `src/lib/auth/server.ts`; the client hook `useAuth` is exported from `src/lib/auth/client.ts` (**not** from `providers/better-auth-client.ts`, which exports only `authClient`, types, and raw helpers).
 
@@ -105,6 +105,8 @@ Two distinct limiters — a real trip hazard:
 2. `withAction` has an opt-in per-user in-memory limiter (`options.rateLimit`) for expensive actions only.
 
 ## Invitations
+
+Signup is invite-only: public signup is off in code (`disableSignUp: true` in `src/lib/auth/better-auth.ts`), with no env flag to turn it on. Users join through an organization invite or the admin bootstrap CLI.
 
 Organization Admins and Owners invite from organization settings; Better Auth enforces invitation and membership changes server-side. Re-inviting the same email cancels the stale pending invite. Email delivery is best-effort — the inviter always gets a copyable accept link. `/admin/users` redirects to `/settings/organization`.
 

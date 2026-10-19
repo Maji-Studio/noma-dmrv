@@ -132,8 +132,6 @@ Non-obvious semantics only:
 - **Both-or-neither pairs** (`superRefine`): `RESEND_API_KEY` +
   `RESEND_FROM_EMAIL`; `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
   (seed/CI-only, not runtime app credentials).
-- **Signup is invite-only.** Public signup is disabled in code with
-  `disableSignUp: true` in `src/lib/auth/better-auth.ts`.
 - **`CREDENTIALS_ENCRYPTION_KEY`** — a hard boot requirement in production (see
   Hermetic-CI exception below). Server-only 32-byte hex/base64 key.
 - **`BETTER_AUTH_SECRET`** and **`STORAGE_SIGNING_SECRET`** — min length 32. In
