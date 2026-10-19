@@ -33,6 +33,7 @@ import {
 } from "@/components/forms/entity-select";
 import { useEntityById } from "@/hooks/use-entities";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import { createIntentHref } from "@/lib/create-intent";
 import {
   formatProductionRunStatus,
   type ProductionRunFormData,
@@ -67,6 +68,8 @@ const isProductionRunCertifyField = (field: string) =>
 
 // Quick-add on the Biochar Storage select only mints biochar bins (the run's
 // output lands here), mirroring how the biochar-product form scopes its bin.
+const REACTORS_LIST_PATH = "/reactors";
+const NO_REACTORS_HINT = { message: "This facility has no reactors yet." };
 const BIOCHAR_BIN_QUICK_ADD_TYPES = ["biochar_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 const EMPTY_FEEDSTOCK_DRAW = { storageLocationId: "", wetMassKg: undefined };
@@ -435,6 +438,9 @@ export function ProductionRunForm({
                   error={!!errors.reactorId}
                   filterBy={watchedFacilityId ? { facilityId: watchedFacilityId } : undefined}
                   autoSelectSingle
+                  allowCreate
+                  createHref={watchedFacilityId ? createIntentHref(REACTORS_LIST_PATH, watchedFacilityId) : undefined}
+                  emptyHint={NO_REACTORS_HINT}
                 />
               )}
             />

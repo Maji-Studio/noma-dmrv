@@ -39,6 +39,7 @@ const entityState = vi.hoisted(() => ({
   selectedError: null as Error | null,
 }));
 
+vi.mock("@/hooks/use-refresh-entity-options-on-return", () => ({ useRefreshEntityOptionsOnReturn: () => () => {} }));
 vi.mock("@/hooks/use-entities", () => ({
   useEntityOptions: () => ({
     data: entityState.options,
