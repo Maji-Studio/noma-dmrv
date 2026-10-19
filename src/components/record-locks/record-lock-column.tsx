@@ -28,11 +28,7 @@ export function recordLockColumn<T extends { id: string }>(
  */
 export function recordLockTitleMark<T extends { id: string }>(locks: RecordLockViews) {
   return function titleMark(row: T) {
-    return (
-      <>
-        <RecordLockSentMark lock={locks[row.id]} />
-        {locks[row.id]?.level === "sent" ? null : <span aria-hidden className="inline-block w-[1em] shrink-0" />}
-      </>
-    );
+    // No placeholder for unsent rows: almost none are Sent, so a reserved slot is a blank gutter on every list.
+    return locks[row.id]?.level === "sent" ? <RecordLockSentMark lock={locks[row.id]} /> : null;
   };
 }

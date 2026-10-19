@@ -63,12 +63,9 @@ describe("overview surfaces show only Sent", () => {
     expect(screen.getAllByText("Sent")).toHaveLength(2);
   });
 
-  it("marks only Sent with a named lock icon, and keeps the slot for other rows", () => {
+  it("marks only Sent with a named lock icon, and renders nothing for other rows", () => {
     const mark = recordLockTitleMark<{ id: string }>({ a: view("inUse", [RUN]), b: view("sent", [REMOVAL]) });
-    const open = render(<>{mark({ id: "a" })}</>);
-    expect(screen.queryByRole("img", { name: "Sent" })).toBeNull();
-    expect(open.container.querySelector("span[aria-hidden]")).not.toBeNull();
-    open.unmount();
+    expect(mark({ id: "a" })).toBeNull();
     render(<>{mark({ id: "b" })}</>);
     const icon = screen.getByRole("img", { name: "Sent" });
     expect(icon.getAttribute("title")).toBe("Sent to Isometric");
