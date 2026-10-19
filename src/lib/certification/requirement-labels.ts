@@ -62,6 +62,9 @@ export interface CertRequirementMeta {
   whyDetail: string;
 }
 
+/** The template check's unmet label when the batch has no Removal template at all. */
+export const NO_REMOVAL_TEMPLATE_LABEL = "No Removal template chosen";
+
 export const CERT_REQUIREMENT_META: Record<
   CertRequirementKey,
   CertRequirementMeta

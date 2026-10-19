@@ -23,7 +23,7 @@ import {
   defaultProductionReadinessGap,
   type ProductionReadinessGap,
 } from "./production-readiness";
-import { CERT_REQUIREMENT_META, entityFieldUnmetLabel } from "./requirement-labels";
+import { CERT_REQUIREMENT_META, entityFieldUnmetLabel, NO_REMOVAL_TEMPLATE_LABEL } from "./requirement-labels";
 import {
   removalTemplateBlockerDestination,
   type RemovalTemplateBlocker,
@@ -496,6 +496,7 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
       ...(facts.templateBlockers ?? []).map((blocker): BatchHealthCheckBase => ({
         key: "template", label: "Removal template reviewed", status: "unmet", detail: blocker.message,
         fixTarget: removalTemplateBlockerDestination(blocker.code),
+        ...(blocker.code === "unpinnedTemplate" ? { unmetLabel: NO_REMOVAL_TEMPLATE_LABEL } : {}),
       })),
       ...(facts.emissionLines != null ? [{
         key: "emissions" as const, label: "Emissions", fixTarget: "emissions" as const,

@@ -24,7 +24,7 @@ import {
   defaultProductionReadinessGap,
   type ProductionReadinessGap,
 } from "./production-readiness";
-import { CERT_REQUIREMENT_META } from "./requirement-labels";
+import { CERT_REQUIREMENT_META, NO_REMOVAL_TEMPLATE_LABEL } from "./requirement-labels";
 import type { RemovalTemplateBlocker, RemovalTemplateBlockerCode } from "./removal-template-blockers";
 import { pluralize } from "@/lib/copy-utils";
 import {
@@ -166,6 +166,14 @@ function futureDatedMeasurementSummary(measurement: string): string {
 
 function describeCategories(categories: TransportCategory[]): string {
   return categories.join(", ");
+}
+
+/** Whether the only template problem is that no Removal template is chosen. */
+function noTemplateChosen(facts: RemovalReadinessFacts): boolean {
+  const blockers = facts.templateBlockers ?? [];
+  return blockers.length > 0
+    ? blockers.every((blocker) => blocker.code === "unpinnedTemplate")
+    : !facts.hasRemovalTemplate;
 }
 
 // The one canonical template-resolution blocker reason. Returns null when the
@@ -515,7 +523,10 @@ export interface RemovalRequirementCheck {
 type RemovalRequirementCheckBase = Omit<
   RemovalRequirementCheck,
   "requirementLabel" | "unmetLabel" | "whyDetail"
->;
+> & {
+  /** Overrides the meta's unmet label for one specific problem (no template chosen). */
+  unmetLabel?: string;
+};
 
 function withRequirementMeta(
   check: RemovalRequirementCheckBase,
@@ -524,7 +535,7 @@ function withRequirementMeta(
   return {
     ...check,
     requirementLabel: meta.requirementLabel,
-    unmetLabel: meta.unmetLabel,
+    unmetLabel: check.unmetLabel ?? meta.unmetLabel,
     whyDetail: meta.whyDetail,
   };
 }
@@ -684,6 +695,7 @@ export function buildRemovalRequirementsChecklist(
       ...(linked && credentialsConfigured && facts.templateBlockers?.length
         ? { templateBlockerCodes: facts.templateBlockers.map((blocker) => blocker.code) }
         : {}),
+      ...(noTemplateChosen(facts) ? { unmetLabel: NO_REMOVAL_TEMPLATE_LABEL } : {}),
     },
     ...transport,
     ...uniformity,

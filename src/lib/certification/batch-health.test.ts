@@ -54,6 +54,13 @@ describe("deriveBatchHealth", () => {
     ]);
   });
 
+  it("names a missing template as not chosen, and other template problems as unresolved", () => {
+    const unpinned = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("unpinnedTemplate")] })), "template");
+    expect(unpinned.unmetLabel).toBe("No Removal template chosen");
+    const lines = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("templateLinesNeedReview")] })), "template");
+    expect(lines.unmetLabel).toBe("Removal template has unresolved parts");
+  });
+
   it("keeps document warnings separate from blocking issues", () => {
     const result = deriveBatchHealth(facts({ warnings: ["Missing lab report"] }));
     expect(result.state).toBe("ready");
