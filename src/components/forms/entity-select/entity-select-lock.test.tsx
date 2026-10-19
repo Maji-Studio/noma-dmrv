@@ -15,6 +15,16 @@ const created: EntityOption = { id: "new-driver", code: "D-NEW", name: "New driv
 const server = vi.hoisted(() => ({ respond: () => {} }));
 const options: EntityOption[] = [{ id: "one", code: "1", name: "North bin" }, { id: "two", code: "2", name: "South bin" }];
 
+// Every render's onValueChange, so a test can replay an older render's handler.
+const combobox = vi.hoisted(() => ({ handlers: [] as ((row: unknown, details: unknown) => void)[] }));
+vi.mock("@base-ui/react/combobox", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@base-ui/react/combobox")>();
+  const Root = ((props: { onValueChange: (row: unknown, details: unknown) => void }) => {
+    combobox.handlers.push(props.onValueChange);
+    return <actual.Combobox.Root {...(props as object)} />;
+  }) as unknown as typeof actual.Combobox.Root;
+  return { ...actual, Combobox: { ...actual.Combobox, Root } };
+});
 vi.mock("@/hooks/use-refresh-entity-options-on-return", () => ({ useRefreshEntityOptionsOnReturn: () => () => {} }));
 vi.mock("@/hooks/use-entities", () => ({
   useEntityOptions: () => ({ data: [], isLoading: false, error: null }),
@@ -38,6 +48,7 @@ vi.mock("./feedstock-type-quick-add-dialog", () => ({ FeedstockTypeQuickAddDialo
 vi.mock("./formulation-quick-add-dialog", () => ({ FormulationQuickAddDialog: () => null }));
 
 beforeEach(() => {
+  combobox.handlers = [];
   Element.prototype.scrollIntoView = vi.fn();
   window.matchMedia = vi.fn().mockImplementation(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
 });
@@ -93,4 +104,21 @@ it("keeps focus on a locked field that still offers Edit when the lock closes it
 
   expect(listbox()).toBeNull();
   expect(document.activeElement).toBe(trigger());
+});
+
+it("refuses an Edit activation from before the field became disabled", () => {
+  const edit = vi.fn();
+  const picker = (disabled: boolean) => (
+    <EntitySelect options={options} value="one" onChange={vi.fn()} onEditSelected={edit} selectionLocked disabled={disabled} />
+  );
+  const view = render(picker(false));
+  fireEvent.click(trigger());
+  const staleHandler = combobox.handlers.at(-1)!;
+
+  view.rerender(picker(true));
+  act(() => {
+    staleHandler({ id: "edit", kind: "edit" }, { reason: "item-press", event: new MouseEvent("click"), cancel: () => {} });
+  });
+
+  expect(edit).not.toHaveBeenCalled();
 });

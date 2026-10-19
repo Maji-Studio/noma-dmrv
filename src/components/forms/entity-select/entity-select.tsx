@@ -358,7 +358,7 @@ function EntitySelectView({
 
   // Read at pick time, not from this render's props: async quick-add saves and
   // Base UI item handlers can call back with an older render's closure (#1177).
-  const selectionBlocked = useRef(disabled || selectionLocked);
+  const latestLock = useRef({ disabled, selectionLocked });
   const wasOpen = useRef(isOpen);
 
   const isInsidePicker = (target: EventTarget | null) => target instanceof Node && (
@@ -389,7 +389,7 @@ function EntitySelectView({
   const handleCreatedEntity = (entity: EntityOption) => {
     // A quick-add save resolves with the handler from when it was submitted;
     // a lock that arrived meanwhile keeps the new record out of the field.
-    if (!selectionBlocked.current) onChange(entity.id);
+    if (!latestLock.current.disabled && !latestLock.current.selectionLocked) onChange(entity.id);
     closeMenu();
   };
   const createActions = {
@@ -421,8 +421,8 @@ function EntitySelectView({
   const canEdit = Boolean(value && selectedOption && onEditSelected);
   const triggerDisabled = disabled || (selectionLocked && !canEdit);
   useLayoutEffect(() => {
-    const lockArrived = (disabled || selectionLocked) && !selectionBlocked.current;
-    selectionBlocked.current = disabled || selectionLocked;
+    const lockArrived = (disabled && !latestLock.current.disabled) || (selectionLocked && !latestLock.current.selectionLocked);
+    latestLock.current = { disabled, selectionLocked };
     const lockClosedMenu = lockArrived && wasOpen.current && !isOpen;
     wasOpen.current = isOpen;
     // The lock closes the menu without closeMenu; drop the stale descendant.
@@ -491,8 +491,9 @@ function EntitySelectView({
 
   const activateRow = (row: SelectRow, byPointer = false) => {
     if (row.kind === "option" && row.option.disabled) return;
-    // Only Edit stays open to a locked field; it never changes the value.
-    if (row.kind !== "edit" && selectionBlocked.current) return;
+    // Edit stays available only on a selectionLocked field; disabled refuses every row.
+    const lock = latestLock.current;
+    if (lock.disabled || (lock.selectionLocked && row.kind !== "edit")) return;
     // Base UI items cancel pointerdown, so a pointer pick never moves focus and
     // the trigger would keep or inherit a keyboard focus ring. Drop focus as a
     // press on a non-focusable row did, and return it without the ring.
