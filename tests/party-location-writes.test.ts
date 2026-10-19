@@ -1,11 +1,11 @@
 import { recordOrder } from "@/lib/operations/orders";
 import { orderInput } from "./helpers/order-operation-fixture";
 import { orders } from "@/db/schema";
-import { addCustomerLocation, updateCustomerLocation, deleteCustomerLocation } from "@/lib/operations/customer-locations";
+import { addCustomerLocation, updateCustomerLocation, deleteCustomerLocation, archiveCustomerLocation } from "@/lib/operations/customer-locations";
 import { archiveCustomer } from "@/lib/operations/customers";
 import { getCustomerLocations } from "@/data-access/customers";
 import { and, asc, eq } from "drizzle-orm";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { activityEvents, suppliers, supplierLocations, customers, customerLocations, deliveries, feedstocks, storageObjectDeletions, transportLegs } from "@/db/schema";
 import { runOperation, runOperationInProcess } from "@/lib/operations/runner";
@@ -20,6 +20,9 @@ import { cleanupOutputStockFixture } from "./helpers/output-stock-cleanup";
 import { withLineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext } from "./helpers/test-org";
 import { ensureOutputFixtureActor } from "./helpers/output-contract-fixtures";
+import { createCustomerLocationInTransaction } from "@/data-access/customer-create";
+import { updateCustomerLocationInTransaction, deleteCustomerLocationInTransaction } from "@/data-access/customer-location-writes";
+import { createSupplierLocationInTransaction, updateSupplierLocationInTransaction } from "@/data-access/supplier-location-writes";
 
 const fixtures: PartyArchiveFixture[] = [];
 const deliveryOrganizations: string[] = [];
@@ -43,6 +46,46 @@ async function locationActivity(organizationId: string, entityId: string) {
   return db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, organizationId), eq(activityEvents.entityId, entityId)))
     .orderBy(asc(activityEvents.sequence));
 }
+
+describe.each(["customer", "supplier"] as const)("%s default demotion", kind => {
+  it.each(["create", "update"] as const)("%s captures the demoted default and leaves other parents and organizations unchanged", async command => {
+    const f = await fixture();
+    const foreign = await fixture();
+    const table = kind === "customer" ? customerLocations : supplierLocations;
+    const parentId = kind === "customer" ? f.customer.id : f.parent.id;
+    const otherParentId = kind === "customer" ? f.otherCustomer.id : f.supplier.id;
+    const foreignParentId = kind === "customer" ? foreign.customer.id : foreign.parent.id;
+    const create = kind === "customer" ? createCustomerLocationInTransaction : createSupplierLocationInTransaction;
+    const update = kind === "customer" ? updateCustomerLocationInTransaction : updateSupplierLocationInTransaction;
+    const input = { ...site, name: "Default field", isDefault: true };
+    const first = (await db.transaction(async tx => create(f.ctx, tx, parentId, input))).location;
+    const second = (await db.transaction(async tx => create(f.ctx, tx, parentId, { ...input, name: "Second field", isDefault: false }))).location;
+    const other = (await db.transaction(async tx => create(f.ctx, tx, otherParentId, input))).location;
+    const foreignLocation = (await db.transaction(async tx => create(foreign.ctx, tx, foreignParentId, input))).location;
+    const readRow = async (id: string) => (await db.select().from(table).where(eq(table.id, id)))[0];
+    const before = await readRow(first.id);
+    const untouched = await Promise.all([readRow(other.id), readRow(foreignLocation.id)]);
+    const captureLocation = vi.fn();
+
+    const promoted = await db.transaction(async tx => command === "create"
+      ? (await create(f.ctx, tx, parentId, input, captureLocation)).location
+      : update(f.ctx, tx, { locationId: second.id, expectedVersion: second.version, isDefault: true }, undefined, captureLocation));
+
+    const demoted = await readRow(first.id);
+    expect(promoted).toMatchObject({ isDefault: true, version: command === "create" ? 1 : 2 });
+    expect(demoted).toMatchObject({ isDefault: false, version: 2 });
+    expect(demoted.updatedAt.getTime()).toBeGreaterThan(before.updatedAt.getTime());
+    expect(captureLocation.mock.calls).toEqual([[first.id, before, demoted]]);
+    expect(await Promise.all([readRow(other.id), readRow(foreignLocation.id)])).toEqual(untouched);
+    if (command === "create") expect(await readRow(second.id)).toMatchObject({ isDefault: false, version: 1 });
+
+    // Reasserting the current default must not demote or capture that same row.
+    captureLocation.mockClear();
+    await db.transaction(async tx => update(f.ctx, tx, { locationId: promoted.id, expectedVersion: promoted.version, isDefault: true }, undefined, captureLocation));
+    expect(captureLocation).not.toHaveBeenCalled();
+    expect(await readRow(promoted.id)).toMatchObject({ isDefault: true, version: promoted.version + 1 });
+  });
+});
 
 describe("supplier location operations", () => {
   it.each([1, 3])("warns when add fills %s intakes", async count => {
@@ -349,6 +392,19 @@ describe("customer location operations", () => {
 });
 
 describe("customer location delete blockers", () => {
+  it("refuses deleting an archived location with orders without suggesting archive", async () => {
+    const f = await fixture();
+    const order = await runOperationInProcess(recordOrder, f.ctx, orderInput(f));
+    await runOperationInProcess(addCustomerLocation, f.ctx, { ...site, name: "Other field", customerId: f.customer.id });
+    const archived = await runOperationInProcess(archiveCustomerLocation, f.ctx, customerVersion(f.location));
+    const before = await db.select().from(customerLocations).where(eq(customerLocations.id, archived.id));
+    await expect(db.transaction(tx => deleteCustomerLocationInTransaction(f.ctx, tx, customerVersion(archived)))).rejects.toMatchObject({
+      code: "conflict", message: "Customer location was not deleted because orders use it.",
+      issues: [{ path: ["locationId"], meta: { orderCodes: [order.code] } }],
+    });
+    expect(await db.select().from(customerLocations).where(eq(customerLocations.id, archived.id))).toEqual(before);
+  });
+
   it("includes archived orders and returns the first five codes without deleting anything", async () => {
     const f = await fixture();
     const codes: string[] = [];

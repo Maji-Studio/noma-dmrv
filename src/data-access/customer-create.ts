@@ -9,8 +9,8 @@ import type { FacilityDistanceInput } from "@/schemas/facility-distances";
 import { partyArchived, partyNotFound } from "@/lib/party-domain-errors";
 import { upsertLocationFacilityDistances, withLocationFacilityDistances } from "./location-facility-distances";
 import { lockLocationFacilities } from "./party-reference-guards";
-import { nextVersion } from "./row-version";
 import { requireOrgScope } from "./utils";
+import { demoteDefaultPartyLocation } from "./party-location-default";
 
 export interface CustomerLocationInsertInput {
   name: string;
@@ -76,20 +76,7 @@ export async function createCustomerLocationInTransaction(
 
   // Clear the prior default first so the partial unique index never sees two.
   if (makeDefault) {
-    const siblings = await tx.select().from(customerLocations).where(and(
-      eq(customerLocations.customerId, customerId), eq(customerLocations.organizationId, ctx.organizationId), eq(customerLocations.isDefault, true),
-    ));
-    const demoted = await tx
-      .update(customerLocations)
-      .set({ version: nextVersion(customerLocations.version), isDefault: false, updatedAt: new Date() })
-      .where(
-        and(
-          eq(customerLocations.customerId, customerId),
-          eq(customerLocations.organizationId, ctx.organizationId),
-          eq(customerLocations.isDefault, true),
-        ),
-      ).returning();
-    for (const sibling of demoted) captureLocation?.(sibling.id, siblings.find(row => row.id === sibling.id)!, sibling);
+    await demoteDefaultPartyLocation(ctx, tx, { kind: "customer", parentId: customerId, captureLocation });
   }
 
   const [location] = await tx
