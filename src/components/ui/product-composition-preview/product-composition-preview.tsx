@@ -291,7 +291,7 @@ function productFlowDiagram(
     const kg = segments.reduce((total, segment) => total + segment.kg, 0);
     if (kg <= 0) return [];
     const wet = source.parts.some((part) => part.kind !== "addedWater");
-    return [{ id: `source-${sourceIndex}`, column: 0, name: source.label, caption: wet ? `${format(kg)} wet` : format(kg), segments }];
+    return [{ id: `source-${sourceIndex}`, column: 0, name: source.label, caption: wet ? `${format(kg)} wet mass` : format(kg), segments }];
   });
 
   return {

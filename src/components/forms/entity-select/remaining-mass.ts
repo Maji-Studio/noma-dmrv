@@ -24,7 +24,7 @@ export function formatRemainingMass(
     remainingMass.labelVariant === "excluding-this-order"
       ? "Remaining, excluding this order"
       : "Remaining now";
-  const wet = formatPart(remainingMass.wetKg, "wet");
+  const wet = formatPart(remainingMass.wetKg, "wet mass");
   if (!includeDryMass || !("dryKg" in remainingMass)) return `${lead}: ${wet}`;
   return `${lead}: ${wet}, ${formatPart(remainingMass.dryKg ?? null, remainingMass.dryLabel ?? "dry biochar")}`;
 }

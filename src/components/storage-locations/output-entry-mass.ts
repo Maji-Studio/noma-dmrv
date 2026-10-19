@@ -7,5 +7,5 @@ import type { OutputStockHistoryEntry } from "@/types/output-stock";
  * uses it as is.
  */
 export function outputEntryMass(entry: Pick<OutputStockHistoryEntry, "wetMassKg" | "dryMassKg">): string {
-  return entry.wetMassKg === null ? `${formatMassKg(Math.abs(entry.dryMassKg))} dry` : `${formatMassKg(entry.wetMassKg)} wet`;
+  return entry.wetMassKg === null ? `${formatMassKg(Math.abs(entry.dryMassKg))} dry` : `${formatMassKg(entry.wetMassKg)} wet mass`;
 }
