@@ -1,0 +1,52 @@
+---
+// Get started: the walkthrough form first, then self-hosting on GitHub. No stage; calm and focused.
+import { GITHUB_URL } from "../config.js";
+import SiteShell from "../components/site/SiteShell.astro";
+import GridFrame from "../components/site/GridFrame.astro";
+import Button from "../components/site/Button.astro";
+import WalkthroughForm from "../components/site/get-started/WalkthroughForm.astro";
+const COVER = [
+  ["The trace", "From a field back to its feedstock, and from a production run forward to its fields."],
+  ["Bins and stock", "Wet and dry mass through split and mix bins, draw by draw."],
+  ["Evidence and reporting", "What each removal needs, and what is still missing."],
+  ["How you run it", "Self-hosted on your own infrastructure, or run by us."],
+];
+const SPEC = [["Licence", "MIT"], ["Built with", "Next.js and PostgreSQL"], ["Setup", "Instructions in the repository"]];
+---
+<SiteShell
+  current="get-started"
+  title="Get started | noma"
+  description="Book a walkthrough of noma with an example like your operation, or self-host the open-source code from GitHub."
+>
+  <GridFrame class="gsp-intro" pad="none" flush aria-labelledby="page-title">
+    <div class="gsp-intro-in">
+      <p class="t-category">Get started</p>
+      <h1 id="page-title" class="t-display">Walk through noma with us.</h1>
+      <p class="t-lead">We’ll walk through the trace and the records behind it, using an example like your operation.</p>
+    </div>
+  </GridFrame>
+
+  <GridFrame class="gsp-book" pad="none" flush aria-labelledby="book-title">
+    <div class="gf-cells gsp-cells">
+      <section class="gsp-form stack" aria-labelledby="book-title">
+        <h2 id="book-title" class="t-h3">Tell us about your operation.</h2>
+        <WalkthroughForm idPrefix="gs" />
+      </section>
+      <aside class="gsp-cover" aria-labelledby="cover-title">
+        <h2 id="cover-title" class="t-h3">What we’ll cover.</h2>
+        <ul>{COVER.map(([title, text]) => <li><b>{title}</b>{text}</li>)}</ul>
+      </aside>
+    </div>
+  </GridFrame>
+
+  <GridFrame class="gsp-self" tone="purple" aria-labelledby="self-title">
+    <div class="gsp-self-in">
+      <h2 id="self-title" class="t-h2">Self-host on GitHub.</h2>
+      <div class="stack">
+        <p class="t-lead">Run the MIT-licensed code on your own infrastructure. Inspect it, adapt it and contribute improvements.</p>
+        <dl class="gsp-spec">{SPEC.map(([k, v]) => <div><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+        <Button href={GITHUB_URL} variant="secondary" external>View on GitHub</Button>
+      </div>
+    </div>
+  </GridFrame>
+</SiteShell>

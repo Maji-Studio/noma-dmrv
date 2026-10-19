@@ -4,13 +4,13 @@
  */
 "use client";
 
-import { WrenchIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui";
+import { FacilityArt, ILLUSTRATION_SIZE } from "@/components/ui/illustrations";
 
 export function SetupInProgressState() {
   return (
     <EmptyState
-      icon={<WrenchIcon size={48} />}
+      icon={<FacilityArt size={ILLUSTRATION_SIZE.empty} />}
       title="Setup in progress"
       description="Your admin is still configuring this facility. It'll appear here once it's ready."
     />

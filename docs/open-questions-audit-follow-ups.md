@@ -40,9 +40,9 @@ two oversized data-access files. Still open:
   narrowed React Query invalidation, and `revalidatePath` on key mutations.
 - **Phase 4 (remainder) — file size.** `src/db/seed-data.ts` remains well over
   the 1000-line cap while the previously flagged oversized forms have been
-  split. Flipping `max-lines` from `warn` to `error` requires finishing
-  `db/seed-modularization` above — **and removing `src/db/seed-data.ts` from the
-  eslint `ignores` array**, which is why the lint does not flag it today.
+  split. `max-lines` is now an error; what remains is finishing
+  `db/seed-modularization` above and then removing `src/db/seed-data.ts` from the
+  eslint `ignores` array.
 ### Structural / cross-cutting
 
 - **Duplicate-hooks factory** (`code/hooks-factory`). The
@@ -122,22 +122,6 @@ Deferred items from the 9-commit + working-tree audit — needing a product/UX
 decision or larger than a review-fix. Execution summary archived in
 [`docs/archive/2026-06-07-whole-repo-audit-snapshot.md`](./archive/2026-06-07-whole-repo-audit-snapshot.md).
 Sizing: (S) small, (M) medium, (L) large.
-
-### Legacy structured telemetry path (`isometric/structured-telemetry-path`) — **deferred**
-
-- The operator workflow now stores each production-run readings CSV unchanged as
-  a `sensor_data` document. It does not parse rows, populate
-  `production_run_readings`, or gate certification on a row count.
-- The older CSV importer, row table, sensor mapping, Parquet transformer, and
-  `DataUploadSubmission` modules remain in the codebase but have no mounted
-  operator entry point.
-- `getProductionRunReadingsList` has no `.limit`, and the legacy reading table
-  has no virtualization.
-- **Resolve via:** confirm the registry evidence contract for production
-  monitoring. If the retained CSV is sufficient, remove the legacy structured
-  pipeline and table. If a sensor-linked bulk upload is required, design that as
-  an explicit certification transform rather than making ordinary file upload
-  depend on parsing.
 
 ### Certification readiness loader lineage fan-out (`perf/overview-lineage-nplus1`) — **deferred**
 

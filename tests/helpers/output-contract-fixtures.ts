@@ -1,11 +1,13 @@
+import { TEST_SITE_POSITION } from "./test-org";
 import type { OrgContext } from "@/lib/auth/server";
+import { formatUtcDate } from "@/lib/date-utils";
 import { randomUUID } from "node:crypto";
-import { eq, inArray, type SQL } from "drizzle-orm";
+import { and, eq, inArray, type SQL } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   biocharProducts, biocharProductSourceAllocations, binMovements, deliveries,
   formulations, orders, outputStockAllocations, outputStockMoistureReadings, outputStockRunAllocations,
-  applicationOutputAllocations, applications, facilities, productionRuns,
+  activityEvents, applicationOutputAllocations, applications, customerLocations, customerLocationFacilityDistances, facilities, productionRuns,
   reactors, storageLocations, users, productIngredientSnapshots, type Delivery,
 } from "@/db/schema";
 
@@ -13,26 +15,36 @@ type Executor = typeof db | DbTransaction;
 type ProductValues = typeof biocharProducts.$inferInsert;
 type OrderValues = typeof orders.$inferInsert;
 type DeliveryValues = typeof deliveries.$inferInsert;
-type ProductFixture = Omit<ProductValues, "placedAt" | "formulationId"> & {
+type ProductFixture = Omit<ProductValues, "placedAt" | "productionDate" | "formulationId" | "massKg" | "moistureContentPercent" | "waterAddedKg" | "storageLocationId" | "sourceBiocharStorageLocationId"> & {
+  productionDate?: string;
+  massKg?: number;
+  moistureContentPercent?: number;
+  waterAddedKg?: number;
+  storageLocationId?: string | null;
+  sourceBiocharStorageLocationId?: string | null;
   placedAt?: Date;
   formulationId?: string | null;
 };
-type OrderFixture = Omit<OrderValues, "formulationId"> & {
+type OrderFixture = Omit<OrderValues, "formulationId" | "customerLocationId"> & {
   formulationId?: string;
+  customerLocationId?: string;
   biocharProductId?: string;
 };
-type DeliveryFixture = Omit<DeliveryValues, "storageLocationId"> & { storageLocationId?: string };
+/** biocharProductId declares allocation provenance only; it is never inserted into deliveries. */
+type DeliveryFixture = Omit<DeliveryValues, "storageLocationId"> & { storageLocationId?: string; biocharProductId?: string };
 const FIXTURE_PLACED_AT = new Date("2025-01-01T00:00:00.000Z");
 /** Fixture source runs end this long before the product they fill is placed. */
 const FIXTURE_RUN_LEAD_MS = 60 * 60 * 1000;
 const sourceByOrder = new Map<string, string>();
 const ownedBins = new Set<string>();
+const ownedCustomerLocations = new Set<string>();
 const ownedRuns = new Set<string>();
 const ownedReactors = new Set<string>();
 const ownedFormulations = new Set<string>();
 const GRAMS_PER_KG = 1_000;
 const GRAMS_PER_TONNE = 1_000_000;
 const PERCENT_SCALE = 100;
+const FIXTURE_PRODUCT_MASS_KG = 100;
 
 /** Consumer fixtures declare facts directly; stock writer tests must use preview/post. */
 async function productFixture(executor: Executor, input: ProductFixture): Promise<ProductValues> {
@@ -46,7 +58,28 @@ async function productFixture(executor: Executor, input: ProductFixture): Promis
     ownedFormulations.add(recipe.id);
   }
   const placedAt = input.placedAt ?? (input.productionDate ? new Date(input.productionDate) : FIXTURE_PLACED_AT);
-  return { ...input, formulationId, placedAt };
+  const sourceRun = input.linkedProductionRunId
+    ? (await executor.select().from(productionRuns).where(eq(productionRuns.id, input.linkedProductionRunId)))[0]
+    : undefined;
+  const productionDate = input.productionDate ?? formatUtcDate(sourceRun?.startTime ?? placedAt);
+  let sourceBiocharStorageLocationId = input.sourceBiocharStorageLocationId ?? sourceRun?.biocharStorageLocationId;
+  let storageLocationId = input.storageLocationId;
+  for (const type of ["biochar_bin", "product_bin"] as const) {
+    if (type === "biochar_bin" ? sourceBiocharStorageLocationId : storageLocationId) continue;
+    const [bin] = await executor.insert(storageLocations).values({
+      organizationId: input.organizationId, facilityId: input.facilityId, type,
+      formulationId: type === "product_bin" ? formulationId : null,
+      code: `E2E-BIN-${randomUUID()}`, name: `E2E Product fixture ${randomUUID()}`,
+    }).returning();
+    ownedBins.add(bin.id);
+    if (type === "biochar_bin") sourceBiocharStorageLocationId = bin.id;
+    else storageLocationId = bin.id;
+  }
+  return { ...input, formulationId, placedAt, productionDate,
+    massKg: input.massKg ?? FIXTURE_PRODUCT_MASS_KG, moistureContentPercent: input.moistureContentPercent ?? 0,
+    waterAddedKg: input.waterAddedKg ?? 0,
+    sourceBiocharStorageLocationId: sourceBiocharStorageLocationId!, storageLocationId: storageLocationId!,
+  };
 }
 export function outputProductFixtureValues(executor: Executor, input: ProductFixture): Promise<ProductValues>;
 export function outputProductFixtureValues(executor: Executor, input: ProductFixture[]): Promise<ProductValues[]>;
@@ -65,7 +98,17 @@ async function orderFixture(executor: Executor, input: OrderFixture): Promise<Or
     sourceByOrder.set(id, biocharProductId);
   }
   if (!formulationId) throw new Error("Fixture order requires a formulation");
-  return { ...values, id, formulationId };
+  let customerLocationId = input.customerLocationId;
+  if (customerLocationId === undefined) {
+    const [location] = await executor.insert(customerLocations).values({
+      ...TEST_SITE_POSITION,
+      organizationId: input.organizationId, customerId: input.customerId,
+      name: `E2E Order destination ${randomUUID()}`,
+    }).returning({ id: customerLocations.id });
+    customerLocationId = location.id;
+    ownedCustomerLocations.add(location.id);
+  }
+  return { ...values, id, formulationId, customerLocationId };
 }
 export function outputOrderFixtureValues(executor: Executor, input: OrderFixture): Promise<OrderValues>;
 export function outputOrderFixtureValues(executor: Executor, input: OrderFixture[]): Promise<OrderValues[]>;
@@ -98,7 +141,12 @@ async function persistFixtureProvenance(executor: Executor, delivery: Delivery, 
   if (!runShares.length) {
     const [reactor] = await executor.insert(reactors).values({ organizationId: product.organizationId, facilityId: product.facilityId, code: `E2E-REACTOR-${randomUUID()}`, identifier: `E2E Fixture reactor ${randomUUID()}`, reactorType: "auger" }).returning();
     ownedReactors.add(reactor.id);
-    const [run] = await executor.insert(productionRuns).values({ organizationId: product.organizationId, facilityId: product.facilityId, reactorId: reactor.id, code: `E2E-RUN-${randomUUID()}`, status: "complete", startTime: new Date(product.placedAt.getTime() - FIXTURE_RUN_LEAD_MS), biocharDryMassKg: delivery.massDryKg }).returning();
+    const [outputBin] = await executor.insert(storageLocations).values({
+      organizationId: product.organizationId, facilityId: product.facilityId,
+      code: `E2E-OUT-${randomUUID()}`, name: `E2E Run output ${randomUUID()}`, type: "biochar_bin",
+    }).returning();
+    ownedBins.add(outputBin.id);
+    const [run] = await executor.insert(productionRuns).values({ biocharStorageLocationId: outputBin.id, biocharMoisturePercent: 0, biocharOutputKg: delivery.massDryKg, organizationId: product.organizationId, facilityId: product.facilityId, reactorId: reactor.id, code: `E2E-RUN-${randomUUID()}`, status: "complete", startTime: new Date(product.placedAt.getTime() - FIXTURE_RUN_LEAD_MS), biocharDryMassKg: delivery.massDryKg }).returning();
     ownedRuns.add(run.id);
     runShares = [{ id: run.id, dry: delivery.massDryKg }];
   }
@@ -144,10 +192,10 @@ async function persistFixtureProvenance(executor: Executor, delivery: Delivery, 
 
 export async function insertOutputDeliveryFixture<T>(executor: Executor, input: DeliveryFixture | DeliveryFixture[], select: (row: Delivery) => T, requireEstablishedSource = false): Promise<T[]> {
   const result: T[] = [];
-  for (const values of Array.isArray(input) ? input : [input]) {
+  for (const { biocharProductId, ...values } of Array.isArray(input) ? input : [input]) {
     const [order] = await executor.select().from(orders).where(eq(orders.id, values.orderId));
     if (!order) throw new Error("Fixture order is missing");
-    const productId = values.biocharProductId ?? sourceByOrder.get(values.orderId);
+    const productId = biocharProductId ?? sourceByOrder.get(values.orderId);
     const [product] = productId ? await executor.select().from(biocharProducts).where(eq(biocharProducts.id, productId)) : [];
     let storageLocationId = values.storageLocationId ?? (product ? await ensureProductBin(executor, product) : undefined);
     if (!storageLocationId) {
@@ -155,7 +203,15 @@ export async function insertOutputDeliveryFixture<T>(executor: Executor, input: 
       ownedBins.add(bin.id);
       storageLocationId = bin.id;
     }
-    const [saved] = await executor.insert(deliveries).values({ ...values, storageLocationId, status: "delivered" }).returning();
+    const [pair] = await executor.select().from(customerLocationFacilityDistances).where(and(
+      eq(customerLocationFacilityDistances.organizationId, values.organizationId),
+      eq(customerLocationFacilityDistances.locationId, order.customerLocationId),
+      eq(customerLocationFacilityDistances.facilityId, values.facilityId),
+    ));
+    const [saved] = await executor.insert(deliveries).values({
+      recordedDistanceKm: pair?.distanceKm ?? null, recordedDistanceSource: pair?.distanceSource ?? null,
+      ...values, storageLocationId, status: "delivered",
+    }).returning();
     await persistFixtureProvenance(executor, saved, productId, requireEstablishedSource);
     result.push(select(saved));
   }
@@ -182,6 +238,17 @@ export async function deleteOutputDeliveryFixtures(executor: Executor, predicate
     }
   }
   return executor.delete(deliveries).where(predicate);
+}
+
+export async function deleteOutputOrderFixtures(executor: Executor, predicate: SQL | undefined) {
+  const rows = await executor.select({ customerLocationId: orders.customerLocationId }).from(orders).where(predicate);
+  const result = await executor.delete(orders).where(predicate);
+  for (const customerLocationId of new Set(rows.map(row => row.customerLocationId))) {
+    if (!ownedCustomerLocations.has(customerLocationId)) continue;
+    const [order] = await executor.select({ id: orders.id }).from(orders).where(eq(orders.customerLocationId, customerLocationId));
+    if (!order) await executor.delete(customerLocations).where(eq(customerLocations.id, customerLocationId));
+  }
+  return result;
 }
 
 export async function cleanupOutputFixtureParents(executor: Executor, facilityId: string) {
@@ -231,6 +298,7 @@ export async function deleteOutputProductFixtures(executor: Executor, predicate:
 
 export async function deleteOutputFacilityFixtures(executor: Executor, predicate: SQL | undefined) {
   const rows = await executor.select({ id: facilities.id }).from(facilities).where(predicate);
+  if (rows.length) await executor.delete(activityEvents).where(inArray(activityEvents.facilityId, rows.map(row => row.id)));
   for (const row of rows) await cleanupOutputFixtureParents(executor, row.id);
   return executor.delete(facilities).where(predicate);
 }
@@ -293,7 +361,7 @@ export async function preparePureOutputProductFixture(executor: Executor, produc
   const [existing] = await executor.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.biocharProductId, product.id));
   if (existing) return { storageLocationId, formulationId: product.formulationId };
   let run = product.linkedProductionRunId ? (await executor.select().from(productionRuns).where(eq(productionRuns.id, product.linkedProductionRunId)))[0] : undefined;
-  let sourceStorageLocationId = run?.biocharStorageLocationId ?? undefined;
+  let sourceStorageLocationId = run?.biocharStorageLocationId ?? product.sourceBiocharStorageLocationId;
   if (!sourceStorageLocationId) {
     const [sourceBin] = await executor.insert(storageLocations).values({ organizationId: product.organizationId, facilityId: product.facilityId, type: "biochar_bin", code: `E2E-SOURCE-${randomUUID()}`, name: `E2E Source ${randomUUID()}` }).returning();
     ownedBins.add(sourceBin.id);

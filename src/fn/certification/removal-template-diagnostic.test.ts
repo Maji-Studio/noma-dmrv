@@ -51,6 +51,7 @@ beforeEach(() => {
     },
     missingDefaultTemplateId: null,
     blueprintsForTemplate: [],
+    unbindableTemplateInputs: [],
     unresolvedBlueprintKeys: [],
     requiredTransportCategories: [],
   });

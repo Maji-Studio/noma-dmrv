@@ -4,7 +4,7 @@ import { isRemovalDeletionLeased } from "./removal-deletion-lease";
  *
  * One module owns the sequence *read latest → tentative decide → mapping
  * lock → re-resolve payload → authoritative re-decide → insert/reset draft*
- * so every pipeline (Removal, GHG Statement, eventually telemetry) inherits
+ * so every pipeline (Removal and GHG Statement) inherits
  * the same defensiveness against concurrent duplicate submits, mid-flight
  * facility repoints, and source-set drift.
  *
@@ -26,6 +26,7 @@ import {
   certifierProjects,
   certifierRemovals,
 } from "@/db/schema/certification";
+import { creditBatches } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
 import { SafeError } from "@/lib/errors";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
@@ -47,6 +48,7 @@ import {
   assertSubmissionInFacility,
   type CertificationSubmissionRow,
 } from "./certification";
+import { withCertificationStatusActivity } from "./certification-status-activity";
 import { acquireFacilityDurabilityLock } from "./facility-durability-lock";
 import { acquireFacilityCertificationBoundaryLock } from "./facility-certification-boundary-lock";
 import { assertSameOrg, requireOrgScope } from "./utils";
@@ -73,8 +75,8 @@ export interface MappingClaimGuard {
   facilityCertificationBoundaryLockHeldBySession?: true;
   provider: CertifierProvider;
   expectedExternalProjectId: string;
-  expectedExternalFacilityId?: string | null;
-  expectedDefaultRemovalTemplateId?: string | null;
+  /** Removals compile against their member batches' pin; a switch must not land between read and claim. */
+  expectedRemovalTemplatePin?: { creditBatchIds: readonly string[]; templateId: string };
   expectedDurabilityOption?: (typeof facilities.$inferSelect)["durabilityOption"];
 }
 
@@ -186,36 +188,6 @@ export async function findPreviousActiveSubmissionId(
     .orderBy(desc(certificationSubmissions.version))
     .limit(1);
   return previous?.id ?? null;
-}
-
-/** Update a terminal poll result only while this remains the current version. */
-export async function recordTerminalStatusIfCurrent(
-  ctx: OrgContext,
-  id: string,
-  args: {
-    status: "accepted" | "rejected";
-    expectedStatus: CertificationSubmissionRow["status"];
-    metadataPatch: Record<string, unknown>;
-  },
-): Promise<boolean> {
-  requireOrgScope(ctx);
-  const updated = await db
-    .update(certificationSubmissions)
-    .set({
-      status: args.status,
-      lockedAt: null,
-      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(args.metadataPatch)}::jsonb`,
-      updatedAt: sql`now()`,
-    })
-    .where(
-      and(
-        eq(certificationSubmissions.id, id),
-        eq(certificationSubmissions.status, args.expectedStatus),
-        eq(certificationSubmissions.organizationId, ctx.organizationId),
-      ),
-    )
-    .returning({ id: certificationSubmissions.id });
-  return updated.length > 0;
 }
 
 // =====================================================================
@@ -330,11 +302,6 @@ export async function claimSubmissionDraft<H>(
       };
     case "resume":
       return resumeDraft(ctx, args, tentativeHash, tx);
-    case "resume-poll-existing":
-    case "resume-re-put":
-      // Only reachable when `dataUploadResume` is passed to the pure core,
-      // which this module never does (telemetry is deferred — see plan).
-      throw new Error(`Unreachable claim kind: ${tentative.kind}`);
     case "create-new-version":
       return createDraft(ctx, args, tx);
   }
@@ -389,11 +356,6 @@ async function resumeDraft<H>(
         // under the resume path — let the caller reload and retry, which
         // re-enters createDraft cleanly.
         return { kind: "blocked", reason: "state-changed" };
-      case "resume-poll-existing":
-      case "resume-re-put":
-        // Only reachable with `dataUploadResume`, which this module never
-        // passes (telemetry is deferred — see plan).
-        throw new Error(`Unreachable claim kind: ${decided.kind}`);
       case "resume":
         break;
     }
@@ -475,22 +437,11 @@ async function createDraft<H>(
           // assumptions this module cannot verify. Callers say "reload
           // and retry".
           return { kind: "blocked", reason: "state-changed" };
-        case "resume-poll-existing":
-        case "resume-re-put":
-          throw new Error(`Unreachable claim kind: ${locked.kind}`);
         case "create-new-version":
           break;
       }
 
       const { reason } = locked;
-      if (
-        reason === "dataupload-orphan-restart" ||
-        reason === "dataupload-rejected-restart"
-      ) {
-        // Only reachable with `dataUploadResume`, which is never passed.
-        throw new Error(`Unreachable create reason: ${reason}`);
-      }
-
       const snapshot = args.buildSnapshot({
         inputs,
         nextVersion: locked.nextVersion,
@@ -620,7 +571,8 @@ async function readLatestSubmission(
 // Locks the facility's certifier mapping row FOR UPDATE and verifies it
 // still matches what the caller read before deciding to submit. Guard arms
 // are checked by presence: a GHG Statement has no template, so it simply
-// omits `expectedDefaultRemovalTemplateId`.
+// omits `expectedRemovalTemplatePin`. Template switches take the boundary lock
+// first, so the pin read here cannot change before the claim commits.
 //
 // The certification-boundary and facility-durability locks are acquired first,
 // followed by the mapping lock, so every submit path shares one order
@@ -662,11 +614,7 @@ async function lockAndVerifyMapping(
   }
 
   const [current] = await executor
-    .select({
-      externalProjectId: certifierProjects.externalProjectId,
-      externalFacilityId: certifierProjects.externalFacilityId,
-      defaultRemovalTemplateId: certifierProjects.defaultRemovalTemplateId,
-    })
+    .select({ externalProjectId: certifierProjects.externalProjectId })
     .from(certifierProjects)
     .where(
       and(
@@ -688,20 +636,33 @@ async function lockAndVerifyMapping(
       "Facility was repointed to a different certifier project mid-submission. Refresh and retry.",
     );
   }
-  if (
-    guard.expectedExternalFacilityId !== undefined &&
-    current.externalFacilityId !== guard.expectedExternalFacilityId
-  ) {
-    throw new SafeError(
-      "Facility was repointed to a different certifier facility mid-submission. Refresh and retry.",
-    );
+  if (guard.expectedRemovalTemplatePin) {
+    await assertRemovalTemplatePinCurrent(ctx, executor, guard.expectedRemovalTemplatePin);
   }
+}
+
+async function assertRemovalTemplatePinCurrent(
+  ctx: OrgContext,
+  executor: DbTransaction,
+  pin: NonNullable<MappingClaimGuard["expectedRemovalTemplatePin"]>,
+): Promise<void> {
+  const rows = pin.creditBatchIds.length
+    ? await executor
+        .select({ removalTemplateId: creditBatches.removalTemplateId })
+        .from(creditBatches)
+        .where(
+          and(
+            inArray(creditBatches.id, [...pin.creditBatchIds]),
+            eq(creditBatches.organizationId, ctx.organizationId),
+          ),
+        )
+    : [];
   if (
-    guard.expectedDefaultRemovalTemplateId !== undefined &&
-    current.defaultRemovalTemplateId !== guard.expectedDefaultRemovalTemplateId
+    rows.length !== pin.creditBatchIds.length ||
+    rows.some((row) => row.removalTemplateId !== pin.templateId)
   ) {
     throw new SafeError(
-      "The facility's default Removal template changed during submission. Refresh and try again.",
+      "A credit batch's Removal template changed during submission. Refresh and try again.",
     );
   }
 }
@@ -777,39 +738,43 @@ async function resetSubmissionToDraftCas(
   lockTtlMs: number,
   requireConfirmedInterruptedMarker = false,
 ): Promise<CertificationSubmissionRow | null> {
-  const [row] = await tx
-    .update(certificationSubmissions)
-    .set({
-      status: "draft",
-      lockedAt: sql`date_trunc('milliseconds', clock_timestamp())`,
-      updatedAt: sql`now()`,
-      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb)
-        - ${SUBMISSION_METADATA_KEYS.lastError}::text
-        - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text`,
-    })
-    .where(
-      and(
-        eq(certificationSubmissions.id, id),
-        eq(certificationSubmissions.organizationId, ctx.organizationId),
-        requireConfirmedInterruptedMarker
-          ? and(
-              eq(certificationSubmissions.status, "draft"),
-              sql`${certificationSubmissions.metadata} ->> ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text = ${SUBMISSION_ATTEMPT_OUTCOMES.interrupted}`,
-              sql`${certificationSubmissions.metadata} ->> ${SUBMISSION_METADATA_KEYS.externalMutation}::text = ${SUBMISSION_EXTERNAL_MUTATIONS.confirmed}`,
-            )
-          : // A fresh lock blocks resumption whatever the status: a rejected
-            // row carries one only while a Removal deletion is cleaning up
-            // the registry records it may have created.
-            or(
-              isNull(certificationSubmissions.lockedAt),
-              lt(
-                certificationSubmissions.lockedAt,
-                sql`now() - ${lockTtlMs} * interval '1 millisecond'`,
+  let row: CertificationSubmissionRow | null = null;
+  await withCertificationStatusActivity(ctx, [id], async (tx) => {
+    const [updated] = await tx
+      .update(certificationSubmissions)
+      .set({
+        status: "draft",
+        lockedAt: sql`date_trunc('milliseconds', clock_timestamp())`,
+        updatedAt: sql`now()`,
+        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb)
+          - ${SUBMISSION_METADATA_KEYS.lastError}::text
+          - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text`,
+      })
+      .where(
+        and(
+          eq(certificationSubmissions.id, id),
+          eq(certificationSubmissions.organizationId, ctx.organizationId),
+          requireConfirmedInterruptedMarker
+            ? and(
+                eq(certificationSubmissions.status, "draft"),
+                sql`${certificationSubmissions.metadata} ->> ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text = ${SUBMISSION_ATTEMPT_OUTCOMES.interrupted}`,
+                sql`${certificationSubmissions.metadata} ->> ${SUBMISSION_METADATA_KEYS.externalMutation}::text = ${SUBMISSION_EXTERNAL_MUTATIONS.confirmed}`,
+              )
+            : // A fresh lock blocks resumption whatever the status: a rejected
+              // row carries one only while a Removal deletion is cleaning up
+              // the registry records it may have created.
+              or(
+                isNull(certificationSubmissions.lockedAt),
+                lt(
+                  certificationSubmissions.lockedAt,
+                  sql`now() - ${lockTtlMs} * interval '1 millisecond'`,
+                ),
               ),
-            ),
-      ),
-    )
-    .returning();
+        ),
+      )
+      .returning();
+    row = updated ?? null;
+  }, tx);
   return row ?? null;
 }
 
@@ -823,80 +788,4 @@ const SUBMISSION_ENTITY_VERSION_CONSTRAINT =
 
 function isEntityVersionUniqueViolation(err: unknown): boolean {
   return isPgUniqueViolation(err, SUBMISSION_ENTITY_VERSION_CONSTRAINT);
-}
-
-// Maps the entity-version 23505 into a SafeError for the telemetry-boundary
-// primitives below, which predate the outcome-shaped contract. Any other
-// error propagates unchanged so genuinely different failures aren't masked.
-async function withUniqueViolationGuard<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (err) {
-    if (isEntityVersionUniqueViolation(err)) {
-      throw new SafeError("Submission already in progress");
-    }
-    throw err;
-  }
-}
-
-// =====================================================================
-// Telemetry boundary — relocated primitives, NOT part of the module's
-// public contract. submit-telemetry.ts keeps the journaled-step recovery
-// choreography from ADR 0006 until it adopts claimSubmissionDraft (the
-// plan's deferred `stepResume` extension). Not re-exported from any barrel.
-// =====================================================================
-
-// TODO(telemetry-migration): module-private once submit-telemetry adopts
-// claimSubmissionDraft — do not add importers.
-export async function insertDraftSubmissionWithMappingLock(
-  ctx: OrgContext,
-  input: InsertDraftSubmissionInput,
-  guard: MappingClaimGuard,
-): Promise<CertificationSubmissionRow> {
-  requireOrgScope(ctx);
-  await assertSubmissionAnchorSameOrg(ctx, input);
-  return db.transaction(async (tx) => {
-    await lockAndVerifyMapping(ctx, tx, guard);
-    await lockSubmissionArtifact(tx, input);
-    // A concurrent local-draft discard can commit after the optimistic anchor
-    // read above. Re-check under the shared artifact lock before telemetry can
-    // create a ledger row and continue to external writes.
-    await assertSubmissionAnchorSameOrg(ctx, input, tx);
-    return withUniqueViolationGuard(() => insertDraftSubmissionRow(ctx, tx, input));
-  });
-}
-
-// TODO(telemetry-migration): module-private once submit-telemetry adopts
-// claimSubmissionDraft — do not add importers.
-export async function resetSubmissionToDraftWithMappingLock(
-  ctx: OrgContext,
-  id: string,
-  guard: MappingClaimGuard,
-  lockTtlMs: number,
-): Promise<CertificationSubmissionRow> {
-  requireOrgScope(ctx);
-  return db.transaction(async (tx) => {
-    await lockAndVerifyMapping(ctx, tx, guard);
-    const [rowToReset] = await tx
-      .select({
-        provider: certificationSubmissions.provider,
-        localEntityType: certificationSubmissions.localEntityType,
-        localEntityId: certificationSubmissions.localEntityId,
-        metadata: certificationSubmissions.metadata,
-      })
-      .from(certificationSubmissions)
-      .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)))
-      .limit(1);
-    if (!rowToReset) throw new SafeError("Submission not found");
-    await lockSubmissionArtifact(tx, rowToReset);
-    const row = await resetSubmissionToDraftCas(
-      tx,
-      ctx,
-      id,
-      lockTtlMs,
-      canReclaimInterruptedSubmission(rowToReset.metadata),
-    );
-    if (!row) throw new SafeError("Submission already in progress");
-    return row;
-  });
 }

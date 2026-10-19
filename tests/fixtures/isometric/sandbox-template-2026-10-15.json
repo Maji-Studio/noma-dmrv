@@ -1,0 +1,495 @@
+{
+  "id": "rvt_1KS4S43VPSBXA26X",
+  "supplier_reference_id": null,
+  "display_name": "Dark Earth Carbon Template (15 Oct)",
+  "project_id": "prj_1K9YJ33RKSBX9FFF",
+  "credit_type": "REMOVAL",
+  "groups": [
+    {
+      "id": "rtg_1KS4S43VPSBXXQ2J",
+      "key": "biomass-feedstock-sourcing",
+      "display_name": "Biomass feedstock sourcing",
+      "description": "Any embodied, energy and transport emissions associated with biomass cultivation and harvesting.",
+      "components": []
+    },
+    {
+      "id": "rtg_1KS4S43VPSBXHBY7",
+      "key": "biomass-feedstock-transport",
+      "display_name": "Biomass feedstock transport",
+      "description": "Transport of biomass including to biomass processing site and all other transport of biomass ahead of production.",
+      "components": [
+        {
+          "id": "rtc_1KVDDYT90SBX77NP",
+          "display_name": "Biomass transportations to processing site via truck",
+          "description": "Transport of biomass from sourcing locations, determined from actuals using prior production.",
+          "blueprint_key": "mass_distance_based_ci_emissions",
+          "ghg_entry_template_id": "rvt_1KS4S43VPSBXA26X",
+          "ghg_entry_template_component_group_id": "rtg_1KS4S43VPSBXHBY7",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "datapoint_id": "dtp_1KS2XWFHTSBX9H29",
+              "display_name": "Emission factor of transport",
+              "type": "fixed",
+              "quantity_kind": "mass_distance_carbon_emission_factor"
+            },
+            {
+              "input_key": "mass_distance",
+              "datapoint_id": null,
+              "display_name": "Mass multiplied by distance",
+              "type": "monitored",
+              "quantity_kind": "mass_distance"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rtg_1KS4S43VPSBX50SW",
+      "key": "biomass-feedstock-processing",
+      "display_name": "Biomass feedstock processing",
+      "description": "Any embodied, energy and transport emissions associated with biomass feedstock processing.",
+      "components": []
+    },
+    {
+      "id": "rtg_1KS4S43VPSBXRNNH",
+      "key": "pyrolysis",
+      "display_name": "Pyrolysis",
+      "description": "Emissions associated with pyrolysis including:\n- Energy use.\n- Maintenance of the project site(s), equipment, vehicles, buildings and infrastructure including activities associated with maintenance, repair, replacement and refurbishment.\n- Use of consumables.\n- Waste processing, including the environmentally responsible disposal of non-solid residues.",
+      "components": [
+        {
+          "id": "rtc_1KVFZ1MY9SBXFWVN",
+          "display_name": "Metered electricity use emissions",
+          "description": null,
+          "blueprint_key": "grid_electricity_use",
+          "ghg_entry_template_id": "rvt_1KS4S43VPSBXA26X",
+          "ghg_entry_template_component_group_id": "rtg_1KS4S43VPSBXRNNH",
+          "inputs": [
+            {
+              "input_key": "electricity_use",
+              "datapoint_id": null,
+              "display_name": "Total electricity usage",
+              "type": "monitored",
+              "quantity_kind": "energy"
+            },
+            {
+              "input_key": "grid_carbon_intensity",
+              "datapoint_id": "dtp_1KS4MRMPESBXJHC5",
+              "display_name": "Electricity grid emission factor",
+              "type": "fixed",
+              "quantity_kind": "energy_carbon_emission_factor"
+            }
+          ]
+        },
+        {
+          "id": "rtc_1KWHFRM4GSBX5Y7A",
+          "display_name": "Generator diesel usage",
+          "description": null,
+          "blueprint_key": "fuel_usage_by_volume",
+          "ghg_entry_template_id": "rvt_1KS4S43VPSBXA26X",
+          "ghg_entry_template_component_group_id": "rtg_1KS4S43VPSBXRNNH",
+          "inputs": [
+            {
+              "input_key": "fuel_combustion_carbon_intensity",
+              "datapoint_id": "dtp_1KWP4ZDD7SBXEXB0",
+              "display_name": "Fuel emission factor",
+              "type": "fixed",
+              "quantity_kind": "volume_carbon_emission_factor"
+            },
+            {
+              "input_key": "volume_of_fuel",
+              "datapoint_id": null,
+              "display_name": "Volume of fuel",
+              "type": "monitored",
+              "quantity_kind": "volume"
+            }
+          ]
+        },
+        {
+          "id": "rtc_1KWP4Y13JSBXV8FB",
+          "display_name": "Startup diesel usage",
+          "description": null,
+          "blueprint_key": "fuel_usage_by_volume",
+          "ghg_entry_template_id": "rvt_1KS4S43VPSBXA26X",
+          "ghg_entry_template_component_group_id": "rtg_1KS4S43VPSBXRNNH",
+          "inputs": [
+            {
+              "input_key": "fuel_combustion_carbon_intensity",
+              "datapoint_id": "dtp_1KWP4ZDD7SBXEXB0",
+              "display_name": "Fuel emission factor",
+              "type": "fixed",
+              "quantity_kind": "volume_carbon_emission_factor"
+            },
+            {
+              "input_key": "volume_of_fuel",
+              "datapoint_id": null,
+              "display_name": "Volume of fuel",
+              "type": "monitored",
+              "quantity_kind": "volume"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rtg_1KS4S43VPSBXCAH6",
+      "key": "direct-emissions",
+      "display_name": "Direct emissions",
+      "description": "Direct emissions released during pyrolysis.",
+      "components": [
+        {
+          "id": "rtc_1M4ZRBJ4GSBXWASX",
+          "display_name": "Pyrolyzer CH₄ emissions",
+          "description": null,
+          "blueprint_key": "ghg_direct_emissions",
+          "ghg_entry_template_id": "rvt_1KS4S43VPSBXA26X",
+          "ghg_entry_template_component_group_id": "rtg_1KS4S43VPSBXCAH6",
+          "inputs": [
+            {
+              "input_key": "concentration",
+              "datapoint_id": null,
+              "display_name": "Concentration of warming species in emitted gas",
+              "type": "monitored",
+              "quantity_kind": "mass_fraction"
+            },
+            {
+              "input_key": "global_warming_potential",
+              "datapoint_id": "dtp_1M4ZRD4V1SBXFZNJ",
+              "display_name": "100-year global warming potential",
+              "type": "fixed",
+              "quantity_kind": "dimensionless"
+            },
+            {
+              "input_key": "mass_flow",
+              "datapoint_id": null,
+              "display_name": "Total mass flow of gas",
+              "type": "monitored",
+              "quantity_kind": "mass"
+            }
+          ]
+        },
+        {
+          "id": "rtc_1M4ZREMX2SBXAY8H",
+          "display_name": "Pyrolyzer CO emissions",
+          "description": null,
+          "blueprint_key": "ghg_direct_emissions",
+          "ghg_entry_template_id": "rvt_1KS4S43VPSBXA26X",
+          "ghg_entry_template_component_group_id": "rtg_1KS4S43VPSBXCAH6",
+          "inputs": [
+            {
+              "input_key": "concentration",
+              "datapoint_id": null,
+              "display_name": "Concentration of warming species in emitted gas",
+              "type": "monitored",
+              "quantity_kind": "mass_fraction"
+            },
+            {
+              "input_key": "global_warming_potential",
+              "datapoint_id": "dtp_1M4ZRFCT5SBXJ7ZV",
+              "display_name": "100-year global warming potential",
+              "type": "fixed",
+              "quantity_kind": "dimensionless"
+            },
+            {
+              "input_key": "mass_flow",
+              "datapoint_id": null,
+              "display_name": "Total mass flow of gas",
+              "type": "monitored",
+              "quantity_kind": "mass"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rtg_1KS4S43VPSBXZZCV",
+      "key": "biochar-processing",
+      "display_name": "Biochar processing",
+      "description": "Emissions associated with biochar processing and characterization including:\n- Energy use.\n- Maintenance of the project site(s), equipment, vehicles, buildings and infrastructure including activities associated with maintenance, repair, replacement and refurbishment.\n- Use of consumables.\n- Waste processing.",
+      "components": []
+    },
+    {
+      "id": "rtg_1KS4S43VPSBXKM8G",
+      "key": "biochar-transport",
+      "display_name": "Biochar transport",
+      "description": "All transport of biochar including to biochar processing site and to the biochar storage site.",
+      "components": [
+        {
+          "id": "rtc_1KVDECAX5SBXEHD0",
+          "display_name": "Biochar transportation to storage site via truck",
+          "description": null,
+          "blueprint_key": "mass_distance_based_ci_emissions",
+          "ghg_entry_template_id": "rvt_1KS4S43VPSBXA26X",
+          "ghg_entry_template_component_group_id": "rtg_1KS4S43VPSBXKM8G",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "datapoint_id": "dtp_1KS4NS15QSBXAV5H",
+              "display_name": "Emission factor of transport",
+              "type": "fixed",
+              "quantity_kind": "mass_distance_carbon_emission_factor"
+            },
+            {
+              "input_key": "mass_distance",
+              "datapoint_id": null,
+              "display_name": "Mass multiplied by distance",
+              "type": "monitored",
+              "quantity_kind": "mass_distance"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rtg_1KS4S43VPSBX7945",
+      "key": "biochar-storage",
+      "display_name": "Biochar storage",
+      "description": "Emissions associated with biochar storage including:\n- Energy use through electricity or fuel consumption.\n- Maintenance of the project site(s), equipment, vehicles, buildings and infrastructure including activities associated with maintenance, repair, replacement and refurbishment.\n- Use of consumables.\n- Waste processing.\n- Land use change emissions associated with application requiring burial.",
+      "components": []
+    },
+    {
+      "id": "rtg_1KS4S43VPSBXTXZT",
+      "key": "co2-stored",
+      "display_name": "CO₂ stored",
+      "description": "The gross amount of CO₂ removed and durably stored from a biochar project over a reporting period.",
+      "components": [
+        {
+          "id": "rtc_1M006YZ5CSBXJSWD",
+          "display_name": "Biochar sequestration, 1000 year durability",
+          "description": null,
+          "blueprint_key": "biochar_sequestration_1000_year_f_durable_max",
+          "ghg_entry_template_id": "rvt_1KS4S43VPSBXA26X",
+          "ghg_entry_template_component_group_id": "rtg_1KS4S43VPSBXTXZT",
+          "inputs": [
+            {
+              "input_key": "inorganic_carbon_contents",
+              "datapoint_id": null,
+              "display_name": "Inorganic carbon content of biochar",
+              "type": "monitored",
+              "quantity_kind": "mass_fraction_dry_basis"
+            },
+            {
+              "input_key": "product_mass",
+              "datapoint_id": null,
+              "display_name": "Mass of product",
+              "type": "monitored",
+              "quantity_kind": "mass"
+            },
+            {
+              "input_key": "s_fraction",
+              "datapoint_id": null,
+              "display_name": "Fraction of reflectance samples above 2% benchmark in each sample",
+              "type": "monitored",
+              "quantity_kind": "dimensionless_ratio"
+            },
+            {
+              "input_key": "total_carbon_contents",
+              "datapoint_id": null,
+              "display_name": "Total carbon content of biochar",
+              "type": "monitored",
+              "quantity_kind": "mass_fraction_dry_basis"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rtg_1KS4S43VPSBXEJVF",
+      "key": "sampling-required-for-mrv",
+      "display_name": "Sampling required for MRV",
+      "description": "Any embodied, energy and transport emissions associated with sampling for MRV purposes, including transportation to collect samples, shipping of samples for laboratory analysis and sample processing.",
+      "components": [
+        {
+          "id": "rtc_1M4ZRPH1RSBXADG2",
+          "display_name": "Mass-distance-based CI emissions samples to EU",
+          "description": null,
+          "blueprint_key": "mass_distance_based_ci_emissions",
+          "ghg_entry_template_id": "rvt_1KS4S43VPSBXA26X",
+          "ghg_entry_template_component_group_id": "rtg_1KS4S43VPSBXEJVF",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "datapoint_id": "dtp_1KS4PCFNYSBXKGYK",
+              "display_name": "Emission factor of transport",
+              "type": "fixed",
+              "quantity_kind": "mass_distance_carbon_emission_factor"
+            },
+            {
+              "input_key": "mass_distance",
+              "datapoint_id": null,
+              "display_name": "Mass multiplied by distance",
+              "type": "monitored",
+              "quantity_kind": "mass_distance"
+            }
+          ]
+        },
+        {
+          "id": "rtc_1M4ZRTZFXSBXS0YP",
+          "display_name": "Sampling consumables",
+          "description": null,
+          "blueprint_key": "mass_based_ci_emissions",
+          "ghg_entry_template_id": "rvt_1KS4S43VPSBXA26X",
+          "ghg_entry_template_component_group_id": "rtg_1KS4S43VPSBXEJVF",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "datapoint_id": "dtp_1M4ZRWMTTSBXCNTB",
+              "display_name": "Carbon emission factor",
+              "type": "fixed",
+              "quantity_kind": "mass_carbon_emission_factor"
+            },
+            {
+              "input_key": "mass",
+              "datapoint_id": null,
+              "display_name": "Mass",
+              "type": "monitored",
+              "quantity_kind": "mass"
+            }
+          ]
+        },
+        {
+          "id": "rtc_1M4ZRJ7EFSBXD6JT",
+          "display_name": "Laboratory analysis electricity use EU",
+          "description": null,
+          "blueprint_key": "grid_electricity_use",
+          "ghg_entry_template_id": "rvt_1KS4S43VPSBXA26X",
+          "ghg_entry_template_component_group_id": "rtg_1KS4S43VPSBXEJVF",
+          "inputs": [
+            {
+              "input_key": "electricity_use",
+              "datapoint_id": null,
+              "display_name": "Total electricity usage",
+              "type": "monitored",
+              "quantity_kind": "energy"
+            },
+            {
+              "input_key": "grid_carbon_intensity",
+              "datapoint_id": "dtp_1M4ZRKFTQSBX0VEF",
+              "display_name": "Electricity grid emission factor",
+              "type": "fixed",
+              "quantity_kind": "energy_carbon_emission_factor"
+            }
+          ]
+        },
+        {
+          "id": "rtc_1M4ZRNBB7SBXVT1E",
+          "display_name": "Laboratory analysis electricity use India",
+          "description": null,
+          "blueprint_key": "grid_electricity_use",
+          "ghg_entry_template_id": "rvt_1KS4S43VPSBXA26X",
+          "ghg_entry_template_component_group_id": "rtg_1KS4S43VPSBXEJVF",
+          "inputs": [
+            {
+              "input_key": "electricity_use",
+              "datapoint_id": null,
+              "display_name": "Total electricity usage",
+              "type": "monitored",
+              "quantity_kind": "energy"
+            },
+            {
+              "input_key": "grid_carbon_intensity",
+              "datapoint_id": "dtp_1M4ZRNN42SBXFEX3",
+              "display_name": "Electricity grid emission factor",
+              "type": "fixed",
+              "quantity_kind": "energy_carbon_emission_factor"
+            }
+          ]
+        },
+        {
+          "id": "rtc_1M4ZRRN6PSBXHQ7C",
+          "display_name": "Mass-distance-based CI emissions samples to India",
+          "description": null,
+          "blueprint_key": "mass_distance_based_ci_emissions",
+          "ghg_entry_template_id": "rvt_1KS4S43VPSBXA26X",
+          "ghg_entry_template_component_group_id": "rtg_1KS4S43VPSBXEJVF",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "datapoint_id": "dtp_1KS4PCFNYSBXKGYK",
+              "display_name": "Emission factor of transport",
+              "type": "fixed",
+              "quantity_kind": "mass_distance_carbon_emission_factor"
+            },
+            {
+              "input_key": "mass_distance",
+              "datapoint_id": null,
+              "display_name": "Mass multiplied by distance",
+              "type": "monitored",
+              "quantity_kind": "mass_distance"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rtg_1KS4S43VPSBX27Q4",
+      "key": "staff-travel",
+      "display_name": "Staff travel",
+      "description": "Flight, car, train or other travel required for the project operations, including contractors and suppliers required on site.",
+      "components": [
+        {
+          "id": "rtc_1M4ZRY1PRSBX7MDA",
+          "display_name": "Staff travel flights",
+          "description": null,
+          "blueprint_key": "distance_based_ci_emissions",
+          "ghg_entry_template_id": "rvt_1KS4S43VPSBXA26X",
+          "ghg_entry_template_component_group_id": "rtg_1KS4S43VPSBX27Q4",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "datapoint_id": "dtp_1M4ZRYREXSBXEY4M",
+              "display_name": "Distance emission factor",
+              "type": "fixed",
+              "quantity_kind": "distance_carbon_emission_factor"
+            },
+            {
+              "input_key": "distance",
+              "datapoint_id": null,
+              "display_name": "Distance traveled",
+              "type": "monitored",
+              "quantity_kind": "distance"
+            }
+          ]
+        },
+        {
+          "id": "rtc_1M4ZRZWZCSBXH6EX",
+          "display_name": "Staff travel local",
+          "description": null,
+          "blueprint_key": "distance_based_ci_emissions",
+          "ghg_entry_template_id": "rvt_1KS4S43VPSBXA26X",
+          "ghg_entry_template_component_group_id": "rtg_1KS4S43VPSBX27Q4",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "datapoint_id": "dtp_1M4ZS1ETESBX4VAJ",
+              "display_name": "Distance emission factor",
+              "type": "fixed",
+              "quantity_kind": "distance_carbon_emission_factor"
+            },
+            {
+              "input_key": "distance",
+              "datapoint_id": null,
+              "display_name": "Distance traveled",
+              "type": "monitored",
+              "quantity_kind": "distance"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rtg_1KS4S43VPSBXNWJS",
+      "key": "surveys",
+      "display_name": "Surveys",
+      "description": "Equipment, energy use and transport associated with surveys e.g. ecological surveys.",
+      "components": []
+    },
+    {
+      "id": "rtg_1KS4S43VPSBX9HEE",
+      "key": "miscellaneous",
+      "display_name": "Miscellaneous",
+      "description": "Any SSRs not captured by other groups.",
+      "components": []
+    }
+  ]
+}

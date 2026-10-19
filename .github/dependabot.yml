@@ -5,10 +5,15 @@
 version: 2
 updates:
   - package-ecosystem: "npm" # covers pnpm-lock.yaml
-    directory: "/"
+    directories: ["/", "/site"]
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 0
+    ignore:
+      # v6 breaks the map worker under Turbopack (#752/#870).
+      # See maps/maplibre-v6 in docs/open-questions-toolchain.md.
+      - dependency-name: "maplibre-gl"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

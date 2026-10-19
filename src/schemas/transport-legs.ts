@@ -1,15 +1,16 @@
+import { expectedVersionSchema } from "./helpers";
 // Transport legs use the Isometric distance-based method (Eq. 3): we record
 // distance + cargo mass per leg; the emission factor lives in the Isometric
 // component blueprint (not stored here). Required fields mirror the DB check
 // `transport_legs_distance_based_requirements` (load mass present).
 
 import { z } from "zod";
+import { modelYearSchema } from "./model-year";
 import { optionalDistanceSource } from "./distance-source";
-import { DEFAULT_TRIP_TYPE, tripTypes } from "./trip-type";
 import {
   latitudeSchema,
   longitudeSchema,
-  optionalPositiveNumber,
+  toNumberOrNull,
   requiredPositiveMassKgSchema,
   toNumberOrUndefined,
 } from "./helpers";
@@ -73,20 +74,13 @@ const baseTransportLegShape = {
   // boundary — explicit/manual legs own their distance and its source).
   distanceSource: optionalDistanceSource,
 
-  // Round-trip vs one-way accounting (issue #316). Defaults to the conservative
-  // round trip (matches the notNull `transport_trip_type` column default); the
-  // stored distanceKm stays one-way and the ×2 is applied at mass-distance
-  // aggregation. Manual legs set it here so an evidenced one-way trip isn't
-  // silently doubled.
-  tripType: z.enum(tripTypes).default(DEFAULT_TRIP_TYPE),
-
-  // Transport details. Vehicle type is metadata that maps to the Isometric
-  // component's emission factor (Eq. 3) — optional, not a blocker.
+  // Vehicle type and model year are Transportation module records, retained in
+  // the evidence ledger. The emission factor is a fixed template input.
   transportMethodType: z
     .enum(transportMethods, { error: () => "Transport method is required" })
     .default("road"),
   vehicleType: z.string().trim().max(255).optional().nullable(),
-  modelYear: optionalPositiveNumber,
+  modelYear: z.preprocess(toNumberOrNull, modelYearSchema),
 
   // Cargo mass moved on this leg (Eq. 3, W_j) — required on every leg so the
   // Certify aggregator can mass-weight distance across a category.
@@ -100,10 +94,6 @@ const baseTransportLegShape = {
   calculationMethodType: z
     .enum(emissionsCalculationMethods)
     .default("distance_based"),
-
-  // Documentation (Isometric §6 verification evidence — optional, attachable later).
-  billOfLading: z.string().trim().max(255).optional().nullable(),
-  weighScaleTicketRef: z.string().trim().max(255).optional().nullable(),
 };
 
 // ============================================
@@ -119,7 +109,9 @@ export type TransportLegFormData = z.infer<typeof transportLegFormSchema>;
 // ============================================
 
 const entityContextShape = {
-  entityType: z.enum(transportEntityTypes),
+  entityType: z.enum(transportEntityTypes).refine((value): boolean => value !== "biochar", {
+    message: "Biochar transport is derived from deliveries. Edit the delivery distance instead.",
+  }),
   entityId: z.string().uuid("Choose a valid record."),
 };
 
@@ -131,6 +123,7 @@ export const createTransportLegSchema = z.object({
 export type CreateTransportLegData = z.infer<typeof createTransportLegSchema>;
 
 export const updateTransportLegSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   id: z.string().uuid("Choose a valid transport leg."),
   ...baseTransportLegShape,
 });
@@ -138,5 +131,8 @@ export const updateTransportLegSchema = z.object({
 export type UpdateTransportLegData = z.infer<typeof updateTransportLegSchema>;
 
 export const deleteTransportLegSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   id: z.string().uuid("Choose a valid transport leg."),
 });
+
+export type DeleteTransportLegData = z.infer<typeof deleteTransportLegSchema>;

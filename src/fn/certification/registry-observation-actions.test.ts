@@ -1,4 +1,10 @@
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", () => ({
+  resolveIsometricClient: vi.fn(async () => ({})),
+}));
+
 import type { OrgContext } from "@/lib/auth/server";
 
 const ORG_CTX = vi.hoisted((): OrgContext => ({
@@ -27,7 +33,6 @@ vi.mock("@/data-access/certifier-ghg-statements", () => ({
   getRemovalsByGhgStatementId: vi.fn(),
 }));
 vi.mock("@/lib/isometric", () => ({
-  getIsometricClientForOrg: vi.fn(async () => ({})),
   getGhgEntry: vi.fn(),
   getGhgStatement: vi.fn(),
 }));
@@ -45,10 +50,9 @@ import {
 import {
   getGhgEntry,
   getGhgStatement,
-  getIsometricClientForOrg,
 } from "@/lib/isometric";
 import { readRemovalDurabilityComponent } from "@/lib/certification/removal-durability-component";
-import { DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import { loadGhgStatementBreakdown } from "./ghg-statement-breakdown";
 import { loadRemovalBreakdown } from "./removal-breakdown";
 
@@ -72,7 +76,7 @@ function registryEntry(id = ENTRY_ID) {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(getIsometricClientForOrg).mockResolvedValue({} as never);
+  vi.mocked(resolveIsometricClient).mockResolvedValue({} as never);
   vi.mocked(getCertifierRemovalById).mockResolvedValue({
     id: REMOVAL_ID,
     startedOn: "2026-01-01",
@@ -118,7 +122,7 @@ describe("Removal RegistryObservation", () => {
       success: true,
       data: { status: "pending", value: null },
     });
-    expect(getIsometricClientForOrg).not.toHaveBeenCalled();
+    expect(resolveIsometricClient).not.toHaveBeenCalled();
     expect(getGhgEntry).not.toHaveBeenCalled();
   });
 
@@ -155,7 +159,7 @@ describe("GHG Statement RegistryObservation", () => {
       success: true,
       data: { status: "pending", value: null },
     });
-    expect(getIsometricClientForOrg).not.toHaveBeenCalled();
+    expect(resolveIsometricClient).not.toHaveBeenCalled();
     expect(getGhgEntry).not.toHaveBeenCalled();
   });
 

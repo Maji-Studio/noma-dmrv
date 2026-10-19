@@ -1,3 +1,5 @@
+import { deleteCustomerLocation, updateCustomerLocation } from "./helpers/customer-location-operations";
+import { findCustomerLocationRegistrations } from "@/data-access/certifier-storage-locations";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
 import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
@@ -26,7 +28,7 @@ import {
 } from "@/data-access/certification";
 import { buildCreateStorageLocationRequest } from "@/lib/isometric/storage-locations";
 import type { OrgContext } from "@/lib/auth/server";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -76,7 +78,7 @@ async function createFixture(): Promise<Fixture> {
       .returning({ id: customerLocations.id });
     const [facility] = await tx
       .insert(facilities)
-      .values({
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-SLC-${runId}`,
         name: `Storage Location Facility ${runId}`,
@@ -85,6 +87,7 @@ async function createFixture(): Promise<Fixture> {
     const [certifierProject] = await tx
       .insert(certifierProjects)
       .values({
+        externalFacilityId: `fcl_test_${facility.id}`,
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         provider: "isometric",
@@ -133,6 +136,7 @@ async function createFixture(): Promise<Fixture> {
         massDryKg: 900,
       }, row => ({ id: row.id }));
     const [application] = await insertOutputApplicationFixture(tx, {
+      fieldSizeHa: 1,
         organizationId: TEST_ORG_ID,
         deliveryId: delivery.id,
         code: `AP-SLC-${runId}`,
@@ -359,7 +363,7 @@ describe("certifier Storage Location data access", () => {
       const runId = crypto.randomUUID().slice(0, 8);
       const [secondFacility] = await db
         .insert(facilities)
-        .values({
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-SLC-P2-${runId}`,
           name: `Storage Location Facility P2 ${runId}`,
@@ -369,6 +373,7 @@ describe("certifier Storage Location data access", () => {
       const [secondProject] = await db
         .insert(certifierProjects)
         .values({
+          externalFacilityId: `fcl_test_${secondFacility.id}`,
           organizationId: TEST_ORG_ID,
           facilityId: secondFacility.id,
           provider: "isometric",
@@ -468,6 +473,7 @@ describe("certifier Storage Location data access", () => {
 
       await expect(
         upsertCertifierProject(ctx, {
+          externalFacilityId: `fcl_test_${fixture.facilityId}`,
           facilityId: fixture.facilityId,
           provider: "isometric",
           externalProjectId: "prj_rebound",
@@ -496,7 +502,7 @@ describe("certifier Storage Location data access", () => {
       const runId = crypto.randomUUID().slice(0, 8);
       const [sharedFacility] = await db
         .insert(facilities)
-        .values({
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-SLC-SHARED-${runId}`,
           name: `Storage Location Shared Facility ${runId}`,
@@ -504,6 +510,7 @@ describe("certifier Storage Location data access", () => {
         .returning({ id: facilities.id });
       sharedFacilityId = sharedFacility.id;
       await upsertCertifierProject(ctx, {
+        externalFacilityId: `fcl_test_${sharedFacility.id}`,
         facilityId: sharedFacility.id,
         provider: "isometric",
         externalProjectId: input.externalProjectId,
@@ -528,6 +535,7 @@ describe("certifier Storage Location data access", () => {
 
       await expect(
         upsertCertifierProject(ctx, {
+          externalFacilityId: `fcl_test_${sharedFacility.id}`,
           facilityId: sharedFacility.id,
           provider: "isometric",
           externalProjectId: `prj_rebound_${runId}`,
@@ -585,4 +593,33 @@ describe("certifier sync events with supplier-reference keys", () => {
         .where(eq(certifierSyncEvents.entityId, entityId));
     }
   });
+});
+
+it("keeps a completed mapping as a delete blocker after its application and delivery are removed", async () => {
+  const fixture = await createFixture();
+  const ctx = makeTestOrgContext();
+  try {
+    const input = await getStorageLocationRegistryInput(ctx, fixture.applicationId);
+    if (!input?.externalProjectId || !input.name) throw new Error("Missing fixture site");
+    const supplierReference = `nm-slc-retained-${fixture.customerLocationId}`;
+    const body = buildCreateStorageLocationRequest({ externalProjectId: input.externalProjectId, name: input.name,
+      latitude: input.latitude, longitude: input.longitude, supplierReferenceId: supplierReference });
+    await persistStorageLocationRegistration(ctx, { customerLocationId: fixture.customerLocationId,
+      certifierProjectId: fixture.certifierProjectId, externalProjectId: input.externalProjectId,
+      externalStorageLocationId: `slc-retained-${fixture.customerLocationId}`, supplierReference,
+      submittedPayload: body, payloadHash: "retained" });
+    await db.transaction(async tx => {
+      expect(await findCustomerLocationRegistrations(ctx, tx, fixture.customerLocationId)).toEqual([{ submittedPayload: body, payloadHash: "retained" }]);
+      expect(await findCustomerLocationRegistrations(FOREIGN_CONTEXT, tx, fixture.customerLocationId)).toEqual([]);
+      await deleteOutputApplicationFixtures(tx, eq(applications.id, fixture.applicationId));
+      await deleteOutputDeliveryFixtures(tx, eq(deliveries.id, fixture.deliveryId));
+      await tx.delete(orders).where(eq(orders.id, fixture.orderId));
+    });
+    await expect(deleteCustomerLocation(ctx, fixture.customerLocationId, 1)).rejects.toMatchObject({
+      code: "conflict", issues: [{ path: ["locationId"] }],
+      message: "Customer location was not deleted because it is registered with Isometric as a storage site. Archive it instead.",
+    });
+    await expect(updateCustomerLocation(ctx, fixture.customerLocationId, { expectedVersion: 1, name: "Moved field" }))
+      .rejects.toMatchObject({ code: "certification_locked", issues: [{ path: ["name"] }] });
+  } finally { await cleanupFixture(fixture); }
 });

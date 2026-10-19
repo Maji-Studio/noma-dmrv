@@ -1,11 +1,17 @@
+import { createTestApplication } from "./helpers/application-writers";
+import { updateOrder } from "@/lib/operations/orders";
+import { runOperationInProcess } from "@/lib/operations/runner";
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { deliveries, outputStockAllocations, orders } from "@/db/schema";
-import { createDelivery, updateDelivery, deleteDelivery } from "@/data-access/deliveries";
-import { createApplication } from "@/data-access/applications";
-import { createOrder, getOrders, updateOrder } from "@/data-access/orders";
+import { deleteDelivery } from "@/data-access/deliveries";
+import { createDelivery } from "./helpers/create-delivery";
+import { updateDelivery } from "@/lib/operations/deliveries";
+
+import { createOrderInTransaction, getOrderWithRelationsById, getOrders } from "@/data-access/orders";
 import { getOrderEntityById } from "@/data-access/entities/orders";
 import { getStockAvailability } from "@/data-access/stock-availability";
 import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
@@ -40,8 +46,8 @@ describe("completed delivery order balance", () => {
   it("uses measured shipment moisture to remove dry solids", async () => {
     const f = await fixture(1000); const delivery = await postDelivery(f, 1000, 40);
     expect(delivery.massDryKg).toBe(600);
-    await expect(updateDelivery(f.ctx, delivery.id, { moistureContentPercent: 5 })).rejects.toThrow("Correct entry");
-    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(400);
+    await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), moistureContentPercent: 5 })).resolves.toMatchObject({ massDryKg: 950, moistureContentPercent: 5 });
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(50);
   });
   it("closes the exact dry remainder across partial measured deliveries", async () => {
     const f = await fixture(2000);
@@ -63,25 +69,25 @@ describe("completed delivery order balance", () => {
   it("keeps an unchanged metadata save from rewriting posted allocation history", async () => {
     const f = await fixture(); const delivery = await postDelivery(f, 50);
     const before = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
-    await updateDelivery(f.ctx, delivery.id, { code: `E2E-RENAMED-${f.tag}`, deliveredWetMassKg: 50 });
+    await updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), code: `E2E-RENAMED-${f.tag}`, deliveredWetMassKg: 50 });
     expect(await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id))).toEqual(before);
   });
   it("blocks explicit stock correction after a downstream application exists", async () => {
     const f = await fixture(); const delivery = await postDelivery(f, 50);
-    await createApplication(f.ctx, { code: `E2E-AP-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), biocharAppliedTons: 0.025, fieldSizeHa: 1, evidenceMethod: "location" });
+    await createTestApplication(f.ctx, { code: `E2E-AP-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), appliedWetMassKg: 25, fieldSizeHa: 1, evidenceMethod: "location" });
     await expect(correction(f, delivery.id, 40)).rejects.toThrow(/application/i);
-    await expect(updateDelivery(f.ctx, delivery.id, { deliveredWetMassKg: 40 })).rejects.toThrow("Correct entry");
+    await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), deliveredWetMassKg: 40 })).rejects.toThrow(/application/i);
   });
   it("allows competing orders without reserving or over-allocating physical stock", async () => {
     const f = await fixture(800);
-    const other = await createOrder(f.ctx, { code: `E2E-OTHER-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.pure.id, orderDate: new Date(STOCK_DATE), quantityKg: 800, packaging: "loose" });
+    const other = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-OTHER-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, customerLocationId: f.location.id, formulationId: f.pure.id, orderDate: new Date(STOCK_DATE), quantityKg: 800, packaging: "loose" }));
     expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(1000);
     await postDelivery(f, 800);
     await expect(postDelivery({ ...f, order: other }, 300)).rejects.toThrow(/Not enough dry biochar/);
   });
   it("locks the order formulation once a completed delivery uses it", async () => {
     const f = await fixture(); const delivery = await postDelivery(f, 50);
-    await expect(updateOrder(f.ctx, f.order.id, { formulationId: f.recipe.id })).rejects.toThrow(delivery.code);
+    await expect(runOperationInProcess(updateOrder, f.ctx, { orderId: f.order.id, expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), formulationId: f.recipe.id })).rejects.toThrow(delivery.code);
     expect((await db.select().from(orders).where(eq(orders.id, f.order.id)))[0].formulationId).toBe(f.pure.id);
   });
   it("counts completed trucks toward the remaining commercial order quantity", async () => {
@@ -89,6 +95,16 @@ describe("completed delivery order balance", () => {
     await expect(postDelivery(f, 50)).rejects.toThrow("Only 40 kg remains on this order");
     const listed = (await getOrders(f.ctx, { facilityId: f.order.facilityId, pageSize: 100 })).items.find(order => order.id === f.order.id);
     expect(listed).toMatchObject({ deliveredWetMassKg: 60, fulfillmentStatus: "partial" });
+  });
+  it("reads one order in the list row shape by id, archived included, while the list hides it", async () => {
+    const f = await fixture(); await postDelivery(f, 60);
+    await db.update(orders).set({ archivedAt: new Date() }).where(and(eq(orders.id, f.order.id), eq(orders.organizationId, f.ctx.organizationId)));
+    const listed = await getOrders(f.ctx, { facilityId: f.order.facilityId, pageSize: 100 });
+    expect(listed.items.map(order => order.id)).not.toContain(f.order.id);
+    await expect(getOrderWithRelationsById(f.ctx, f.order.id)).resolves.toMatchObject({
+      id: f.order.id, facilityId: f.facility.id, archivedAt: expect.any(Date), deliveryCount: 1, deliveredWetMassKg: 60, fulfillmentStatus: "partial",
+    });
+    await expect(getOrderWithRelationsById({ ...f.ctx, organizationId: `foreign-${randomUUID()}` }, f.order.id)).rejects.toThrow("The record could not be found.");
   });
   it("derives fulfillment from delivered wet mass in the list and its status filter", async () => {
     const f = await fixture(); await postDelivery(f, 60);
@@ -142,24 +158,24 @@ describe("completed delivery order balance", () => {
   });
   it("serializes an order shrink against a concurrent completed truck", async () => {
     const f = await fixture(); const input = await deliveryInput(f, 60);
-    const results = await Promise.allSettled([updateOrder(f.ctx, f.order.id, { quantityKg: 50 }), createDelivery(f.ctx, input)]);
+    const results = await Promise.allSettled([runOperationInProcess(updateOrder, f.ctx, { orderId: f.order.id, expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 50 }), createDelivery(f.ctx, input)]);
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
   });
   it("rejects an order shrink below completed delivery mass", async () => {
     const f = await fixture(); await postDelivery(f, 60);
-    await expect(updateOrder(f.ctx, f.order.id, { quantityKg: 59 })).rejects.toThrow("60 kg");
-    await expect(updateOrder(f.ctx, f.order.id, { quantityKg: 60 })).resolves.toMatchObject({ quantityKg: 60 });
+    await expect(runOperationInProcess(updateOrder, f.ctx, { orderId: f.order.id, expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 59 })).rejects.toThrow("60 kg");
+    await expect(runOperationInProcess(updateOrder, f.ctx, { orderId: f.order.id, expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 60 })).resolves.toMatchObject({ quantityKg: 60 });
   });
   it("rounds the actionable commercial minimum upward for fractional mass", async () => {
     const f = await fixture(); await postDelivery(f, 60.05);
-    await expect(updateOrder(f.ctx, f.order.id, { quantityKg: 60 })).rejects.toThrow("60.1 kg");
+    await expect(runOperationInProcess(updateOrder, f.ctx, { orderId: f.order.id, expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 60 })).rejects.toThrow("60.1 kg");
   });
   it("accepts unchanged stock fields on metadata edits but retains history on delete", async () => {
     const f = await fixture(); const delivery = await postDelivery(f, 60);
-    await expect(updateDelivery(f.ctx, delivery.id, { code: `E2E-D-${randomUUID().toUpperCase()}`, orderId: f.order.id, facilityId: f.facility.id,
+    await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), code: `E2E-D-${randomUUID().toUpperCase()}`, orderId: f.order.id, facilityId: f.facility.id,
       storageLocationId: f.bin.id, deliveryDate: new Date(STOCK_TIME), deliveredWetMassKg: 60, moistureContentPercent: 0 })).resolves.toMatchObject({ massDryKg: 60 });
-    await expect(updateOrder(f.ctx, f.order.id, { quantityKg: 100, formulationId: f.pure.id })).resolves.toMatchObject({ quantityKg: 100 });
-    await expect(deleteDelivery(f.ctx, delivery.id)).rejects.toThrow("history");
+    await expect(runOperationInProcess(updateOrder, f.ctx, { orderId: f.order.id, expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 100, formulationId: f.pure.id })).resolves.toMatchObject({ quantityKg: 100 });
+    await expect(deleteDelivery(f.ctx, delivery.id, await labLogisticsVersion(f.ctx, "deliveries", delivery.id))).resolves.toBeUndefined();
   });
 });

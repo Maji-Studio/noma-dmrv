@@ -14,7 +14,6 @@ import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import { Accordion } from "@/components/ui/accordion";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
 import {
   useGhgStatementReports,
@@ -26,7 +25,8 @@ import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import { hasExactGhgEntryMembership } from "@/lib/certification/ghg-statement-breakdown";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
-import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { DetailField, DetailSection } from "@/components/ui/detail-panel";
+import { PeriodStrip } from "./ghg-statement-period-strip";
 import { EnvBanner } from "./env-banner";
 import { GhgStatementCarbonBreakdown } from "./ghg-statement-carbon-breakdown";
 import { GhgStatementWorkflow } from "./ghg-statement-workflow";
@@ -35,6 +35,7 @@ import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
 import { GhgStatementTechnicalDetails } from "./ghg-statement-technical-details";
 import { RegistryRecordLink } from "./registry-record-link";
 import { RemovalBatchesAccordion } from "./removal-batches-accordion";
+import { CertificationStatusBadge } from "./certification-status-badge";
 import { SubmissionStatusBadge } from "./submission-status-badge";
 import { SyncEventList } from "./sync-event-log";
 import {
@@ -45,7 +46,6 @@ import {
 import { Notice } from "@/components/ui/notice";
 
 const ICON_SIZE = 14;
-const SHORT_ID = 8;
 const STALE_DETAIL_WARNING =
   "Statement details could not be refreshed. Showing the last loaded details. Use Refresh before generating or submitting.";
 
@@ -69,15 +69,6 @@ export function canUseGhgStatementRegistryActions(query: {
   return !query.error;
 }
 
-function statementPeriod(item: GhgStatementListItem): string {
-  if (item.remotePeriodMissing) return "No period set";
-  const { reportingPeriodStartOn } = item.statement;
-  const reportingPeriodEndOn = item.effectiveReportingPeriodEndOn;
-  return reportingPeriodStartOn
-    ? formatDateRange(reportingPeriodStartOn, reportingPeriodEndOn)
-    : `Ends ${formatDate(reportingPeriodEndOn)}`;
-}
-
 export function GhgStatementDetailSheet({
   item,
   isProduction,
@@ -85,14 +76,11 @@ export function GhgStatementDetailSheet({
   open,
   onClose,
 }: GhgStatementDetailSheetProps) {
-  const period = statementPeriod(item);
-
   return (
     <SlideOverPanel.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <SlideOverPanel.Content size="default">
         <SlideOverPanel.Header showClose>
           <SlideOverPanel.Title>GHG Statement</SlideOverPanel.Title>
-          <SlideOverPanel.Description>{period}</SlideOverPanel.Description>
         </SlideOverPanel.Header>
 
         <DetailState
@@ -219,29 +207,41 @@ function DetailState({
           <Notice tone="warning">{STALE_DETAIL_WARNING}</Notice>
         )}
 
-        <section
-          aria-labelledby="ghg-statement-status"
-          className="border-y border-[var(--color-border-secondary)] py-12"
-        >
-          <div className="flex items-center justify-between gap-12">
-            <h3
-              id="ghg-statement-status"
-              className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]"
-            >
-              Statement status
-            </h3>
-            <StatusBadge status={derived.value} label={derived.label} />
-          </div>
-        </section>
+        <DetailSection title="Statement status" divider={false}>
+          {item.remotePeriodMissing ? (
+            <DetailField
+              label="Reporting period"
+              value="No period set"
+              valuePresent={false}
+            />
+          ) : (
+            <PeriodStrip
+              start={statement.reportingPeriodStartOn ?? null}
+              end={item.effectiveReportingPeriodEndOn}
+            />
+          )}
+          <DetailField
+            label="Status"
+            // The label paints above the badge's 44px hit area, which reaches 6px
+            // into it, so a press on the label text stays on the label.
+            className="[&>span:first-child]:relative [&>span:first-child]:z-10"
+            value={
+              <CertificationStatusBadge
+                entityType="ghg_statement"
+                entityId={statement.id}
+                status={derived.value}
+                label={derived.label}
+              />
+            }
+            valuePresent
+          />
+        </DetailSection>
 
         {remote && remote.ghg_entry_ids.length > 0 && (
           <GhgStatementCarbonBreakdown query={breakdownQuery} />
         )}
 
-        <section className="flex flex-col gap-8">
-          <h3 className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-            Workflow
-          </h3>
+        <DetailSection title="Workflow">
           <GhgStatementWorkflow
             reportsQuery={reportsQuery}
             created={created}
@@ -264,7 +264,7 @@ function DetailState({
             }
             submitLabel={isResubmit ? "Resubmit" : "Submit"}
           />
-        </section>
+        </DetailSection>
 
         {remote && (
           <p className="body-small text-[var(--color-text-secondary)]">
@@ -303,9 +303,8 @@ function DetailState({
                   entries={linkedRemovals.map(
                     ({ removal, submission, creditBatches }) => ({
                       removalId: removal.id,
-                      label:
-                        submission?.externalId ??
-                        `${removal.id.slice(0, SHORT_ID)}…`,
+                      label: removal.code,
+                      registryId: submission?.externalId ?? null,
                       completedOn: removal.completedOn,
                       creditBatches,
                       badge: (

@@ -1,8 +1,11 @@
+"use client";
+
+import { entityViewHref } from "@/lib/entity-deep-link";
+import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * SampleList component
  * Main sample listing with CRUD operations, stat cards, filters, and DataTable
  */
-"use client";
 
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
 import { useEffect, useState } from "react";
@@ -33,13 +36,16 @@ import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
+import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatDateRange, formatDateTime } from "@/lib/format-utils";
+import { formatDateRange } from "@/lib/format-utils";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   ENTITY_DEEP_LINK_MODE_PARAM,
@@ -52,7 +58,7 @@ import {
   type SampleFilterData,
 } from "@/schemas/samples";
 import type { SampleWithRelations } from "@/data-access/samples";
-import { sampleSheetSections } from "./sample-read-sections";
+import { formatSamplingTime, sampleSheetSections } from "./sample-read-sections";
 import type { TransportLegFormData } from "@/schemas/transport-legs";
 import {
   leaveSampleCreateIntent,
@@ -60,6 +66,7 @@ import {
   SAMPLE_CREATE_CREDIT_BATCH_PARAM,
 } from "@/lib/sample-create-intent";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { ILLUSTRATION_SIZE, SampleVialArt } from "@/components/ui/illustrations";
 
 /** One template for the create-failure banner so its two call sites (post-flush
  * failure and inline retry recount) can never drift apart. Null when resolved. */
@@ -78,7 +85,7 @@ function DurabilityBadge({ durability }: { durability: "200_year" | "1000_year" 
   const is1000Year = durability === "1000_year";
   return (
     <span
-      className={`inline-flex items-center gap-4 px-8 py-2 text-[11px] font-medium uppercase tracking-[0.06em] ${
+      className={`inline-flex items-center gap-4 px-8 py-2 text-[11px] font-medium ${
         is1000Year
           ? "border border-[var(--clr-purple-20)] bg-[var(--clr-purple-10)] text-[var(--clr-purple)]"
           : "border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] text-[var(--color-text-secondary)]"
@@ -96,12 +103,14 @@ function DurabilityBadge({ durability }: { durability: "200_year" | "1000_year" 
 
 function createColumns(
   onEdit: (sample: SampleWithRelations) => void,
-  onDelete: (sampleId: string) => void
+  onDelete: (sampleId: string) => void,
+  locks: RecordLockViews,
+  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<SampleWithRelations>[] {
   return [
     {
       accessorKey: "sampleCode",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">
@@ -113,7 +122,7 @@ function createColumns(
       accessorKey: "samplingTime",
       meta: { nowrap: true },
       header: "Sampling time",
-      cell: ({ row }) => formatDateTime(row.original.samplingTime),
+      cell: ({ row }) => formatSamplingTime(row.original),
     },
     {
       id: "creditBatch",
@@ -159,19 +168,24 @@ function createColumns(
         />
       ),
     },
+    recordLockColumn<SampleWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
+      // A Sample stays fully editable while In use; only a Sent Removal
+      // refuses its edit and delete (#687 item 2), so neither is offered.
       cell: ({ row }) => (
         <div className="flex items-center justify-end">
-          <RowActionsMenu
-            label={`Actions for ${row.original.sampleCode}`}
-            actions={[
-              { label: "Edit", onSelect: () => onEdit(row.original) },
-              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
-            ]}
-          />
+          {isRecordEditable(locks[row.original.id]) && (
+            <RowActionsMenu
+              label={`Actions for ${row.original.sampleCode}`}
+              actions={[
+                { label: "Edit", onSelect: () => onEdit(row.original) },
+                { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
+              ]}
+            />
+          )}
         </div>
       ),
       enableSorting: false,
@@ -195,9 +209,12 @@ type SideSheetState =
 export function SampleList({
   initialCreate = false,
   initialCreditBatchId,
+  hideTransport = false,
 }: {
   initialCreate?: boolean;
   initialCreditBatchId?: string;
+  /** Server flag EMISSIONS_ENTRIES_ENABLED: sample shipping is an emissions entry. */
+  hideTransport?: boolean;
 }) {
   const { facilityId: contextFacilityId } = useFacilityContext();
   const createIntent = useOpenCreateIntent({
@@ -229,6 +246,7 @@ export function SampleList({
 
   const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
   const [deletingSampleId, setDeletingSampleId] = useState<string | null>(null);
+  const [deletingVersion, setDeletingVersion] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -256,6 +274,10 @@ export function SampleList({
     error: creditBatchesError,
   } = useCreditBatches(contextFacilityId || undefined);
   const focusedSample = useSample(focusedSampleId ?? "", !!focusedSampleId);
+
+  if (!sideSheet && deepLinkMode === "edit" && focusedSample.data && focusedSampleId === focusedSample.data.id) {
+    setSideSheet({ mode: "edit", entity: focusedSample.data });
+  }
 
   const createSample = useCreateSample();
   const updateSample = useUpdateSample();
@@ -299,9 +321,13 @@ export function SampleList({
     : null;
   const displaySideSheet =
     sideSheet ?? createIntentSideSheet ?? deepLinkedSideSheet;
-  const activeFocusTarget = sideSheet
-    ? null
-    : parseEntityFocusTarget(deepLinkFocus);
+  const sampleLocks = useRecordLocks("sample", samples.map((sample) => sample.id));
+  // A lock that arrives as Sent keeps an open draft, read-only, with the way
+  // back (`submitBlock`).
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("sample", displaySideSheet?.entity?.id);
+  const activeFocusTarget = displaySideSheet?.entity?.id === focusedSampleId
+    ? parseEntityFocusTarget(deepLinkFocus)
+    : null;
 
   const createWithEvidence = useCreateWithEvidence({
     entityType: "sample",
@@ -429,33 +455,39 @@ export function SampleList({
   };
 
   const handleUpdate = async (data: SampleFormData) => {
-    if (sideSheet?.mode !== "edit") return;
+    // A deep-linked edit sheet (?sample=...&mode=edit) has no local sheet
+    // state, so the target comes from the displayed sheet, not `sideSheet`.
+    if (displaySideSheet?.mode !== "edit") return;
     setFormError(null);
     if (createWithEvidence.guardUpdate(deferredLegs.length > 0)) return;
     try {
       await updateSample.mutateAsync({
-        sampleId: sideSheet.entity.id,
+        sampleId: displaySideSheet.entity.id,
+        expectedVersion: displaySideSheet.entity.version,
         ...data,
       });
-      createWithEvidence.reset();
-      setDeferredLegs([]);
-      setSideSheet(null);
+      closeSideSheet();
       toast.success("Sample updated.");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Sample was not saved. Try again.");
     }
   };
 
-  const handleDelete = (sampleId: string) => setDeletingSampleId(sampleId);
+  const handleDelete = (sampleId: string) => {
+    const row = (samples).find((item) => item.id === sampleId);
+    if (!row) return;
+    setDeletingVersion(row.version);
+    setDeletingSampleId(sampleId);
+  };
   const handleDeleteConfirm = async () => {
-    if (!deletingSampleId) return;
+    if (!deletingSampleId || deletingVersion === null) return;
     setDeleteError(null);
     try {
-      await deleteSample.mutateAsync(deletingSampleId);
+      await deleteSample.mutateAsync({ sampleId: deletingSampleId, expectedVersion: deletingVersion });
       setDeletingSampleId(null);
       toast.success("Sample deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Sample was not deleted. Try again.");
+      setDeleteError(toDeleteErrorMessage(error, "Sample", "Sample was not deleted. Try again."));
     }
   };
 
@@ -537,7 +569,7 @@ export function SampleList({
   const isSubmitting =
     createSample.isPending || updateSample.isPending || isFlushing;
 
-  const columns = createColumns(openEdit, handleDelete);
+  const columns = createColumns(openEdit, handleDelete, sampleLocks.locks, sampleLocks.statusOf);
 
   if (!contextFacilityId) {
     return (
@@ -602,10 +634,11 @@ export function SampleList({
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => entityViewHref("/samples", "sample", row.id, contextFacilityId)}
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<FlaskIcon size={48} />}
+            icon={hasActiveFilters ? <FlaskIcon size={48} /> : <SampleVialArt size={ILLUSTRATION_SIZE.empty} />}
             title={hasActiveFilters ? "No Samples found" : "No Samples yet"}
             description={
               hasActiveFilters
@@ -674,8 +707,10 @@ export function SampleList({
         onModeChange={handleModeChange}
         title={displaySideSheet?.mode === "create" ? "Create Sample" : (displaySideSheet?.entity?.sampleCode ?? "")}
         subtitle={displaySideSheet?.mode === "create" ? undefined : viewSubtitle}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
+        canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit Sample"
-        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity) : undefined}
+        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity, { hideTransport }) : undefined}
       >
         {isResolvingCreateContext ? (
           <div
@@ -704,6 +739,7 @@ export function SampleList({
             deferredLegs={deferredLegs}
             onDeferredLegsChange={handleDeferredLegsChange}
             onRetryDeferredLegs={retryDeferredLegs}
+            hideTransport={hideTransport}
             focusTarget={
               displaySideSheet?.mode === "edit" ? activeFocusTarget : null
             }

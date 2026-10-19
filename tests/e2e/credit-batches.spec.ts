@@ -19,40 +19,6 @@ test.describe("Credit Batches Role-Based Access Control", () => {
 });
 
 test.describe("Credit Batches Form Schema", () => {
-  test("form schema supports all 5 required sections", () => {
-    const requiredFormSections = [
-      "Overview",
-      "Production cohort",
-      "Durability",
-      "GHG Accounting",
-      "Verification",
-    ];
-    expect(requiredFormSections).toHaveLength(5);
-  });
-
-  test("durability option validation - 200-year requires H:Corg ratio", () => {
-    const durability200Year = {
-      durabilityOption: "200_year",
-      requiredFields: ["hToCorgRatio"],
-    };
-    expect(durability200Year.durabilityOption).toBe("200_year");
-    expect(durability200Year.requiredFields).toContain("hToCorgRatio");
-  });
-
-  test("durability option validation - 1000-year requires reflectance and non-reactive carbon", () => {
-    const durability1000Year = {
-      durabilityOption: "1000_year",
-      requiredFields: [
-        "meanRandomReflectancePercent",
-        "meanNonReactiveCarbonPercent",
-      ],
-    };
-    expect(durability1000Year.durabilityOption).toBe("1000_year");
-    expect(durability1000Year.requiredFields).toContain(
-      "meanRandomReflectancePercent"
-    );
-  });
-
   test("credit batches support production-run cohort membership", () => {
     const junctionTable = {
       name: "credit_batch_production_runs",

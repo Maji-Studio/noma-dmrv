@@ -1,8 +1,8 @@
 # Traceability
 
 How the Traceability page resolves and renders chain-of-custody: the credit-batch
-roll-up, the single-application drill-down, and the DAG / Map / Sankey / Trail
-readings. Read this before touching anything under
+roll-up, the single-application drill-down, the DAG / Map / Sankey / Trail
+readings, and the batch Activities segment. Read this before touching anything under
 `src/data-access/chain-of-custody*`, `src/lib/chain-of-custody/`, or
 `src/components/chain-of-custody/`. For "why credit-batch anchored" see
 [ADR 0011](adr/0011-credit-batch-anchored-chain-of-custody.md).
@@ -27,6 +27,20 @@ application → batch directly gives the wrong set.
 If a link is missing the page still renders the available lineage and shows a
 warning card explaining where the rollback stops.
 
+**Roll-forwards** fill the other direction: one per member run, walking run →
+product layers (`biochar_product_source_allocations`) → deliveries (the run's own
+share of each shipped layer from `output_stock_run_allocations`, reversals
+netted, so a blended product never credits one run with another's biochar). The
+facts load inside the consolidated roll-up loader
+(`loadCreditBatchRollups(..., { includeRunForwards: true })`, via
+`credit-batch-run-forward-facts.ts`); `chain-of-custody-roll-forward.ts` only
+projects them. A batch
+with no application yet therefore still renders DAG and Map, ending wherever the
+biochar is now. The client merges roll-forwards **after** the rollbacks and only
+adds nodes and edges the rollbacks lack, so applied masses are never summed with
+drawn or shipped masses. Sankey stays application-scoped and shows a message
+until something is applied.
+
 ## Invariants
 
 - **Credit-batch roll-up and accounting reads go through
@@ -36,8 +50,8 @@ warning card explaining where the rollback stops.
   lineage, and applied-weight facts for shallow consumers such as traceability,
   detail, and certification context; `loadCreditBatchAccounting()` adds sample
   chemistry and CO₂e preview assembly for full accounting consumers.
-  `chain-of-custody-batch.ts` projects the traceability payload from the shallow
-  loader instead of resolving lineage itself. Do not recreate the deleted
+  `chain-of-custody-batch.ts` projects the traceability payload (rollbacks and
+  roll-forwards) from the shallow loader instead of resolving lineage itself. Do not recreate the deleted
   `credit-batch-lineage-facts.ts` or `credit-batch-previews.ts` seams, and do not
   thread preloaded facts through public signatures; either move a projection into
   the consolidated module or call the appropriate loader.
@@ -61,8 +75,8 @@ warning card explaining where the rollback stops.
 
 Header: one **command bar** (`traceability-header.tsx`) — page eyebrow, a
 **credit batch dropdown** (`batch-picker.tsx`), a **production-run filter**
-(`run-picker.tsx`) whose options derive from the loaded batch's lineages, never
-an unscoped fetch, the back-to-roll-up button, the kg/% and view segments, and
+(`run-picker.tsx`) whose options derive from the loaded batch's rollbacks and
+roll-forwards (so runs with nothing applied are listed), never an unscoped fetch, the back-to-roll-up button, the kg/% and view segments, and
 the facility code. The run filter narrows the whole roll-up (DAG, Map, and a
 client-side recomputed Sankey — every figure derives from the filtered lineages)
 and deep-links as `?run=`.
@@ -75,9 +89,10 @@ remembered ids fall through; standalone `?application=` deep links stay
 application-only. With both `?batch=` and `?application=` the page is a drill-down
 inside batch context, with a "Batch roll-up" button back.
 
-- **Credit batch (roll-up)** — segments `DAG | Map | Sankey`:
-  - **DAG** — member runs' lineages merged into one fan-out; nodes/edges dedupe by
-    id so a shared production run appears once. Application cards drill down
+- **Credit batch (roll-up)** — segments `DAG | Map | Sankey | Activities`:
+  - **DAG** — member rollbacks merged into one fan-out, then roll-forwards for
+    whatever they lack; nodes/edges dedupe by id so a shared production run
+    appears once. Application cards drill down
     instead of navigating.
   - **Map** — the merged geo payload (nodes/legs deduped the same way).
   - **Sankey** — honest dry-mass balance, dry kg end to end, every loss an explicit
@@ -87,6 +102,20 @@ inside batch context, with a "Batch roll-up" button back.
     `src/lib/chain-of-custody/sankey.ts`. Rendered on a React Flow canvas; clicking
     a column or exit opens a tooltip with a "See details" link to the backing
     entity route — the Sankey doubles as navigation.
+  - **Activities** (`?view=activity`) — the batch's recorded changes, newest
+    first, grouped by day (consecutive changes by one actor within a minute
+    share one who-and-when header), from `useCreditBatchActivity` (membership and cardinality:
+    [database.md](database.md#activity-events)). Not a lineage reading: it
+    renders before the roll-up loads, for batches with no runs, and hides the
+    run filter. Filters by kind and record type run server side; the summary
+    counts behind the filter options always cover the whole history. Rows link
+    to the record's side sheet where one exists (a document opens its owner),
+    on the facility the record lives at now, which `resolveActivityRecords`
+    reads with the label; deleted records are tombstones with no link. Field names only, never
+    values. Empty and complete lists name `ACTIVITY_RECORDING_STARTED_AT`
+    (`src/config/activity.ts`). The credit batch side sheet's Activity section
+    summarizes the same history and links here. Components:
+    `src/components/activity/`.
 - **Application (drill-down)** — segments `Lineage | Map | Split | Trail`:
   - **Trail** — each custody step with its date, mass figure, and what attests it:
     linked documents (polymorphic `documents` — weigh tickets, COAs, lab reports,
@@ -100,6 +129,8 @@ inside batch context, with a "Batch roll-up" button back.
 | Data Access | `src/data-access/credit-batch-accounting.ts` | Consolidated `loadCreditBatchRollups` (shallow lineage) and `loadCreditBatchAccounting` (full preview) |
 | Data Access | `src/data-access/chain-of-custody.ts` | Upstream lineage for one application |
 | Data Access | `src/data-access/chain-of-custody-batch.ts` | Batch roll-up — loads shallow accounting once and projects via `projectChainOfCustodyFromBatchFacts` |
+| Data Access | `src/data-access/credit-batch-run-forward-facts.ts` | Run-forward facts, loaded only inside `loadCreditBatchRollups` |
+| Data Access | `src/data-access/chain-of-custody-roll-forward.ts` | Projects member runs' roll-forwards (run → products → deliveries) |
 | Data Access | `src/data-access/chain-of-custody-geo.ts` | Geo payload (node coordinates + transport legs) |
 | Data Access | `src/data-access/chain-of-custody-trail.ts` | Trail evidence joins keyed by DAG node id |
 | Pure lib | `src/lib/chain-of-custody/sankey.ts` | `buildBatchSankey` — dedupe + mass-balance aggregation |
@@ -123,6 +154,9 @@ token and contrast rules are owned by [docs/design-system.md](design-system.md).
   focused node's full connected lineage — ancestors + descendants via
   `reachableNodeIds` — stays full strength, everything else dims.
 - Product-to-delivery edges show the selected applications' allocated shares.
+  An edge only a roll-forward reaches shows the member runs' net shipped share
+  instead. Branch % is computed within one mass basis (applied vs recorded); a
+  fan that mixes both shows no %.
   Orders describe requested wet mass; they do not reserve stock or identify a
   product layer. Stock balances come from the output ledger, never from
   subtracting order quantity from product creation mass.
@@ -202,3 +236,12 @@ only for a single product or source. DAG nodes retain physical entity IDs while
 allocated edges sum their contributing source shares. The Sankey retains full
 run quantities as context, labels selected product quantities as allocated
 biochar, and does not present the rest of a run as a current stock balance.
+
+Removal biochar transport uses these saved application wet shares, grouped by
+contributing delivery, with each delivery's current distance and the mandatory
+round-trip factor. Submission, previews and transport evidence-ledger subtotals
+share the same calculation. Product-wide derived transport legs remain useful
+for product views but are not Removal accounting inputs. Later deliveries do
+not change an earlier Removal's applied load; customer-location distance edits
+update every later transport read, including submitted Removals. The submitted
+payload snapshot itself remains immutable.

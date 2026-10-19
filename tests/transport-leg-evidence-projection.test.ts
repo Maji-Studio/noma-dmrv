@@ -1,5 +1,5 @@
-import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Real-DB regression coverage for the transport-leg evidence projections.
  *
@@ -39,7 +39,7 @@ describe("getTransportLegsWithEvidenceForEntities — biochar delivery evidence"
 
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-TEP-${tag}`,
         name: `TEP Facility ${tag}`,
@@ -139,7 +139,7 @@ describe("getTransportLegsWithEvidenceForEntities — biochar delivery evidence"
     }
     await cleanup(() => deleteOutputDeliveryFixtures(db, eq(deliveries.orderId, orderId)));
     if (orderId) {
-      await cleanup(() => db.delete(orders).where(eq(orders.id, orderId)));
+      await cleanup(() => deleteOutputOrderFixtures(db, eq(orders.id, orderId)));
     }
     if (productId) {
       await cleanup(() =>

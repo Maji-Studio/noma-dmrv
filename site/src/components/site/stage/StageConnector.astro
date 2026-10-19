@@ -1,0 +1,21 @@
+---
+/**
+ * StageConnector: a dotted, dashed or solid line that draws in when its Stage plays.
+ * Props:
+ *   variant?: "dotted" | "dashed" | "solid"   default "dotted"
+ *   direction?: "h" | "v"   default "h"
+ *   length?: string        CSS length ("120px", "40%"); omitted = grows to fill its flex parent
+ *   state?: "default" | "dim" | "lit"
+ *   cap?: "none" | "ring" | "dot"   small end cap at the far end (the ring from the keynote refs)
+ *   draw?: boolean         default true; false keeps it static
+ *   index?: number         stagger slot
+ *   delay?: string         extra CSS delay
+ *   duration?: string      draw duration, default var(--dur-draw)
+ *   class?: string
+ *   style?: string         extra inline style (e.g. a position variable)
+ * Compose elbows from an "h" and a "v" connector with consecutive index values.
+ */
+const { variant = "dotted", direction = "h", length, state = "default", cap = "none", draw = true, index = 0, delay, duration, class: className, style: extra } = Astro.props;
+const style = [`--i:${index}`, length && `--len:${length}`, delay && `--delay:${delay}`, duration && `--dur-draw:${duration}`, extra].filter(Boolean).join(";");
+---
+<span class:list={["stg-conn", `stg-conn--${direction}`, `stg-conn--${variant}`, `stg-conn--${state}`, !length && "stg-conn--fill", cap !== "none" && `stg-conn--cap-${cap}`, draw && `stg-draw-${direction}`, className]} style={style} aria-hidden="true"></span>

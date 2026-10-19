@@ -4,14 +4,12 @@
  */
 "use client";
 
-import { formatLocalDate } from "@/lib/date-utils";
-import { nullableNumericValue, numericValue } from "@/lib/form-utils";
+import { toDateInputValue } from "@/lib/date-utils";
 
 import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import type { Order } from "@/db/schema";
-import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
-import { useCustomerLocations } from "@/hooks/use-customers";
+import { useCustomerLocations, useCustomerWithRelations } from "@/hooks/use-customers";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import {
@@ -24,10 +22,17 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, PackageIcon, StorefrontIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm, useWatch } from "react-hook-form";
 
+import { ServerError } from "@/components/forms/server-error";
+import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 import { CustomerLocationDetails } from "./customer-location-details";
+import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
+import { recordInUseFreeFields } from "@/lib/record-lock";
 import { MatchingOutputBins } from "./matching-output-bins";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { CustomerLocationDialog } from "@/components/customers/customer-location-dialog";
+import type { EditableCustomerLocation } from "@/components/customers/customer-location-form";
 
 // ============================================
 // Constants for select options
@@ -68,6 +73,8 @@ interface OrderFormProps {
   errorMessage?: string;
   /** Custom label for the submit button */
   submitLabel?: string;
+  /** The saved order's lock; locked fields are disabled before anyone types. */
+  lock?: RecordLockView;
 }
 
 export function OrderForm({
@@ -77,8 +84,12 @@ export function OrderForm({
   isSubmitting = false,
   errorMessage,
   submitLabel,
+  lock,
 }: OrderFormProps) {
   const isEditMode = !!order;
+  // Fail closed: until the lock answers, fields an In use order holds stay disabled.
+  const locked = (field: string) => isEditMode && isRecordFieldHeld(lock, recordInUseFreeFields("order"), field);
+  const [editingLocation, setEditingLocation] = useState<{ customerId: string; location: EditableCustomerLocation } | null>(null);
   const { facilityId: contextFacilityId, facilities } = useFacilityContext();
   // Organization operating defaults seed create mode only; an existing record
   // always wins. Warmed once per session in FacilityProvider, so this is a
@@ -102,14 +113,10 @@ export function OrderForm({
       customerId: order?.customerId ?? "",
       customerLocationId: order?.customerLocationId ?? "",
       formulationId: order?.formulationId ?? "",
-      orderDate: order?.orderDate
-        ? formatLocalDate(new Date(order.orderDate))
-        : formatLocalDate(new Date()),
+      orderDate: toDateInputValue(order?.orderDate),
       quantityKg: order?.quantityKg ?? undefined,
       packaging:
         (order?.packaging as PackagingType) ?? orgDefaults.defaultPackaging,
-      value: order?.value ?? undefined,
-      currency: order?.currency ?? orgDefaults.defaultCurrency,
     },
   });
 
@@ -132,10 +139,15 @@ export function OrderForm({
   // Get customer locations for selected customer
   const customerLocations = customerLocationsData ?? [];
 
-  const locationOptions = customerLocations.map((l: { id: string; name: string | null }) => ({
-    value: l.id,
-    label: l.name ?? "Unnamed location",
-  }));
+  // An archived customer keeps the order's stored destination, but the order
+  // cannot move to another one or edit the location, so the parent's archive
+  // state is read explicitly rather than inferred from the picker.
+  // The destination stays locked until the read confirms an active customer, so
+  // a slow or failed read cannot open a change the server would refuse.
+  const customerQuery = useCustomerWithRelations(selectedCustomerId ?? "", !!selectedCustomerId);
+  const isCustomerArchived = !!customerQuery.data?.archivedAt;
+  const isCustomerStatusUnknown = !!selectedCustomerId && !customerQuery.data;
+  const isDestinationLocked = isCustomerArchived || isCustomerStatusUnknown;
 
   // Details panel data for the selected location (issue #196). The facility
   // resolves from the form's own facilityId so edit mode shows the order's
@@ -155,19 +167,6 @@ export function OrderForm({
     }
   }, [contextFacilityId, order?.facilityId, setValue, getValues]);
 
-  // Clear stale location when customer changes (skips initial mount so
-  // edit-mode defaults survive)
-  useClearOnDependencyChange(watchedCustomerId, () =>
-    setValue("customerLocationId", "")
-  );
-
-  // Auto-select location when customer has exactly one
-  useEffect(() => {
-    if (customerLocationsData?.length === 1 && !getValues("customerLocationId")) {
-      setValue("customerLocationId", customerLocationsData[0].id);
-    }
-  }, [customerLocationsData, setValue, getValues]);
-
   const defaultSubmitLabel = isEditMode ? "Update order" : "Create order";
 
   const handleFormSubmit = handleSubmit((data) => {
@@ -175,6 +174,7 @@ export function OrderForm({
   });
 
   return (
+    <>
     <form onSubmit={handleFormSubmit} className="space-y-20">
       <FormSpine control={control}>
       {/* Order Information */}
@@ -193,7 +193,7 @@ export function OrderForm({
             <FormInput
               id="orderDate"
               type="date"
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("orderDate")}
               error={!!errors.orderDate}
               {...register("orderDate")}
             />
@@ -208,14 +208,15 @@ export function OrderForm({
         icon={<StorefrontIcon size={14} weight="bold" />}
         fields={["customerId", "customerLocationId"]}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
           <FormEntitySelect
             control={control}
             name="customerId"
             label="Customer"
             entityType="customer"
+            allowEdit
             placeholder="Select customer..."
-            disabled={isSubmitting}
+            disabled={isSubmitting || locked("customerId")}
             required
             // Customers are org-shared, so a lone one is not "the" customer for
             // this order. Require an explicit pick, matching the feedstock
@@ -223,25 +224,38 @@ export function OrderForm({
             autoSelectSingle={false}
           />
 
-          <FormField
+          <FormEntitySelect
             id="customerLocationId"
+            control={control}
+            name="customerLocationId"
+            required
             label="Customer location"
-            error={errors.customerLocationId?.message}
-          >
-            <FormSelect
-              id="customerLocationId"
-              placeholder={
-                selectedCustomerId
-                  ? "Select location..."
-                  : "Select a customer first"
-              }
-              disabled={isSubmitting || !selectedCustomerId}
-              error={!!errors.customerLocationId}
-              options={locationOptions}
-              {...register("customerLocationId")}
-            />
-          </FormField>
+            entityType="customerLocation"
+            selectionLocked={isDestinationLocked}
+            onEditSelected={selectedLocation && selectedCustomerId && !isDestinationLocked && !selectedLocation.archivedAt
+              ? () => setEditingLocation({ customerId: selectedCustomerId, location: selectedLocation })
+              : undefined}
+            placeholder={selectedCustomerId ? "Select location..." : "Select a customer first"}
+            emptyHint={{ message: "Add a location to this customer first." }}
+            disabled={isSubmitting || !selectedCustomerId || locked("customerLocationId")}
+            filterBy={selectedCustomerId ? { customerId: selectedCustomerId } : undefined}
+            dependsOn={watchedCustomerId}
+            autoSelectSingle
+          />
         </div>
+
+        {isCustomerArchived && (
+          <Notice tone="info">
+            This customer is archived, so the customer location stays as stored. Restore the customer to change it.
+          </Notice>
+        )}
+
+        {isCustomerStatusUnknown && customerQuery.isError && (
+          <ServerError
+            message="The customer could not be loaded, so the customer location is locked. Try again."
+            action={<Button size="small" onClick={() => void customerQuery.refetch()}>Try again</Button>}
+          />
+        )}
 
         {selectedLocation && (
           <CustomerLocationDetails
@@ -255,11 +269,26 @@ export function OrderForm({
       <FormSection
         title="Product details"
         icon={<PackageIcon size={14} weight="bold" />}
-        fields={["formulationId", "packaging", "quantityKg", "value", "currency"]}
+        fields={["formulationId", "quantityKg", "packaging"]}
       >
-        <FormEntitySelect control={control} name="formulationId" label="Formulation" entityType="formulation" placeholder="Select formulation..." required disabled={isSubmitting} />
+        <FormEntitySelect control={control} name="formulationId" label="Formulation" entityType="formulation" allowEdit placeholder="Select formulation..." required disabled={isSubmitting || locked("formulationId")} />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
+          <FormField
+            id="packaging"
+            label="Packaging"
+            error={errors.packaging?.message}
+            required
+          >
+            <FormSelect
+              id="packaging"
+              disabled={isSubmitting || locked("packaging")}
+              error={!!errors.packaging}
+              options={packagingOptions}
+              {...register("packaging")}
+            />
+          </FormField>
+
           <FormField
             id="quantityKg"
             label="Requested wet mass (kg)"
@@ -271,67 +300,15 @@ export function OrderForm({
               type="number"
               step="any"
               placeholder="e.g., 1000"
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("quantityKg")}
               error={!!errors.quantityKg}
-              {...register("quantityKg", {
-                setValueAs: numericValue,
-              })}
+              {...register("quantityKg")}
             />
           </FormField>
         </div>
-        {/* Right after the quantity, so the operator compares the request
-            with what the matching bins hold. */}
+        {/* Right after the wet mass field, so the operator
+            compares the request with what the matching bins hold. */}
         <MatchingOutputBins facilityId={watchedFacilityId || ""} formulationId={watchedFormulationId || ""} />
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
-          <FormField
-            id="packaging"
-            label="Packaging"
-            error={errors.packaging?.message}
-            required
-          >
-            <FormSelect
-              id="packaging"
-              disabled={isSubmitting}
-              error={!!errors.packaging}
-              options={packagingOptions}
-              {...register("packaging")}
-            />
-          </FormField>
-
-          <FormField
-            id="value"
-            label="Value"
-            error={errors.value?.message}
-          >
-            <FormInput
-              id="value"
-              type="number"
-              step="any"
-              placeholder="e.g., 50000"
-              disabled={isSubmitting}
-              error={!!errors.value}
-              {...register("value", {
-                setValueAs: nullableNumericValue,
-              })}
-            />
-          </FormField>
-
-          <FormField
-            id="currency"
-            label="Currency"
-            error={errors.currency?.message}
-          >
-            <FormInput
-              id="currency"
-              type="text"
-              placeholder="e.g., TZS"
-              disabled={isSubmitting}
-              error={!!errors.currency}
-              {...register("currency")}
-            />
-          </FormField>
-        </div>
       </FormSection>
       </FormSpine>
 
@@ -344,5 +321,15 @@ export function OrderForm({
         defaultSubmitLabel={defaultSubmitLabel}
       />
     </form>
+    {editingLocation && (
+      <CustomerLocationDialog
+        isOpen
+        onClose={() => setEditingLocation(null)}
+        customerId={editingLocation.customerId}
+        location={editingLocation.location}
+        facility={formFacility}
+      />
+    )}
+    </>
   );
 }

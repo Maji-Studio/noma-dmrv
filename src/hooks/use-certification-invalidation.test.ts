@@ -1,14 +1,19 @@
-import type { QueryClient } from "@tanstack/react-query";
+import { activityKeys } from "./activity-query-keys";
+import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { creditBatchKeys } from "./credit-batch-query-keys";
+import { onboardingKeys } from "./use-onboarding";
+import { SubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 
 const reactQueryMocks = vi.hoisted(() => ({
   useQueries: vi.fn(),
+  useMutation: vi.fn(),
+  useQueryClient: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-query")>();
-  return { ...actual, useQueries: reactQueryMocks.useQueries };
+  return { ...actual, ...reactQueryMocks };
 });
 
 import {
@@ -17,6 +22,8 @@ import {
   getRemovalPreflightRefetchInterval,
   invalidateCertificationReadiness,
   useRemovalPreflightSummaries,
+  useSaveFacilityCertifierMapping,
+  useSubmitGhgStatementToVerifier,
 } from "./use-certification";
 
 describe("certificationKeys", () => {
@@ -29,6 +36,67 @@ describe("certificationKeys", () => {
       "facility-1",
       "removal-1",
     ]);
+  });
+});
+
+describe("useSaveFacilityCertifierMapping", () => {
+  it("invalidates adopted batch rows, previews and activity alongside mapping and onboarding caches", async () => {
+    const queryClient = new QueryClient();
+    reactQueryMocks.useQueryClient.mockReturnValue(queryClient);
+    reactQueryMocks.useMutation.mockClear();
+    const facilityId = "facility-1";
+    const batchId = "batch-1";
+    const affectedKeys = [
+      certificationKeys.facilityMapping(facilityId),
+      certificationKeys.certifyContextForCreditBatch(batchId),
+      onboardingKeys.status(facilityId, "org-1"),
+      creditBatchKeys.list({ facilityId }),
+      creditBatchKeys.detail(batchId),
+      creditBatchKeys.pageModel(batchId),
+      creditBatchKeys.previews([batchId]),
+      activityKeys.creditBatch(batchId),
+      activityKeys.creditBatchSummary(batchId),
+    ];
+    for (const key of affectedKeys) {
+      queryClient.setQueryData(key, { certifier: null, version: 1 });
+      expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+    }
+
+    useSaveFacilityCertifierMapping();
+
+    const [{ onSuccess }] = reactQueryMocks.useMutation.mock.calls[0] as [{
+      onSuccess: (data: unknown, variables: { facilityId: string }) => void;
+    }];
+    await onSuccess({}, { facilityId });
+
+    for (const key of affectedKeys) {
+      expect(queryClient.getQueryState(key)?.isInvalidated, JSON.stringify(key)).toBe(true);
+    }
+    queryClient.clear();
+  });
+});
+
+describe("useSubmitGhgStatementToVerifier", () => {
+  it.each([
+    new Error("Submit failed"),
+    new SubmissionStreamStalledError(),
+  ])("refreshes certification queries after $name", async (error) => {
+    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
+    reactQueryMocks.useQueryClient.mockReturnValue({ invalidateQueries });
+    reactQueryMocks.useMutation.mockClear();
+
+    useSubmitGhgStatementToVerifier();
+
+    const [{ onError }] = reactQueryMocks.useMutation.mock.calls[0] as [{
+      onError: (error: Error) => void;
+    }];
+    await onError(error);
+    expect(invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.details() });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: activityKeys.all });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: certificationKeys.all,
+    });
   });
 });
 
@@ -95,15 +163,20 @@ describe("getRemovalPreflightRefetchInterval", () => {
 });
 
 describe("invalidateCertificationReadiness", () => {
-  it("invalidates certification projections only by default", async () => {
+  it("invalidates certification and activity projections by default", async () => {
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     const queryClient = { invalidateQueries } as unknown as QueryClient;
 
     await invalidateCertificationReadiness(queryClient);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.details() });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: activityKeys.all });
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(1);
+    expect(invalidateQueries).toHaveBeenCalledTimes(4);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: creditBatchKeys.timelineFactsPrefix(),
     });
   });
 
@@ -115,7 +188,7 @@ describe("invalidateCertificationReadiness", () => {
       creditBatchPreviews: true,
     });
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(3);
+    expect(invalidateQueries).toHaveBeenCalledTimes(5);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
     });

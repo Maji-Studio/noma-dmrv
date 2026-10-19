@@ -5,7 +5,8 @@ import type { TransportLeg } from "@/db/schema";
 import {
   aggregateProductionRuns,
   aggregateTransportMassDistance,
-  type ProductionRunWithSamples,
+  transportVehicleAdvisories,
+  type ProductionRunForCertification,
 } from "./aggregation";
 
 function leg(
@@ -13,6 +14,7 @@ function leg(
   overrides: Partial<TransportLeg> = {},
 ): TransportLeg {
   return {
+    version: 1,
     organizationId: TEST_ORG_ID,
     id,
     entityType: "feedstock",
@@ -29,11 +31,8 @@ function leg(
     vehicleType: "truck",
     modelYear: null,
     loadMassKg: 100,
-    tripType: "return",
     calculationMethodType: "distance_based",
     isDerived: false,
-    billOfLading: null,
-    weighScaleTicketRef: null,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
     ...overrides,
@@ -48,80 +47,42 @@ describe("aggregateTransportMassDistance", () => {
     expect(result.warning).toBeNull();
   });
 
-  it("sums Σ(distance × load-mass in tonnes) across one-way legs", () => {
+  it("counts every leg's one-way distance twice (round trip)", () => {
     const result = aggregateTransportMassDistance(
       [
         leg("00000000-0000-0000-0000-000000000001", {
           distanceKm: 100,
           loadMassKg: 50,
-          tripType: "one_way",
         }),
         leg("00000000-0000-0000-0000-000000000002", {
           distanceKm: 200,
           loadMassKg: 100,
-          tripType: "one_way",
         }),
       ],
       "Feedstock",
     );
 
-    // 100 km × 0.05 t + 200 km × 0.1 t = 5 + 20 = 25 t·km (no ×2)
-    expect(result.massDistanceTonneKm).toBeCloseTo(25, 6);
+    // (100 km × 2) × 0.05 t + (200 km × 2) × 0.1 t = 10 + 40 = 50 t·km
+    expect(result.massDistanceTonneKm).toBeCloseTo(50, 6);
     expect(result.warning).toBeNull();
   });
 
-  it("doubles the distance of a Return leg (#316 §4.2 round trip)", () => {
+  it("counts a leg the Mafinga seed used to set one way as a round trip", () => {
+    // The seeded coffee farm delivery: 240 km one way, 800 kg dry biochar.
+    // It used to count 240 km; every leg now counts 480 km.
     const result = aggregateTransportMassDistance(
       [
         leg("00000000-0000-0000-0000-000000000001", {
-          distanceKm: 100,
-          loadMassKg: 50,
-          tripType: "return",
+          entityType: "biochar",
+          distanceKm: 240,
+          loadMassKg: 800,
         }),
       ],
-      "Feedstock",
+      "Biochar",
     );
 
-    // (100 km × 2) × 0.05 t = 10 t·km
-    expect(result.massDistanceTonneKm).toBeCloseTo(10, 6);
-    expect(result.warning).toBeNull();
-  });
-
-  it("treats a null trip type as Return (conservative default)", () => {
-    const result = aggregateTransportMassDistance(
-      [
-        leg("00000000-0000-0000-0000-000000000001", {
-          distanceKm: 100,
-          loadMassKg: 50,
-          tripType: null as unknown as TransportLeg["tripType"],
-        }),
-      ],
-      "Feedstock",
-    );
-
-    // Null → Return → ×2: (100 × 2) × 0.05 = 10 t·km
-    expect(result.massDistanceTonneKm).toBeCloseTo(10, 6);
-  });
-
-  it("mixes Return (×2) and one-way (×1) legs per leg", () => {
-    const result = aggregateTransportMassDistance(
-      [
-        leg("00000000-0000-0000-0000-000000000001", {
-          distanceKm: 100,
-          loadMassKg: 50,
-          tripType: "return",
-        }),
-        leg("00000000-0000-0000-0000-000000000002", {
-          distanceKm: 200,
-          loadMassKg: 100,
-          tripType: "one_way",
-        }),
-      ],
-      "Feedstock",
-    );
-
-    // (100×2)×0.05 + 200×0.1 = 10 + 20 = 30 t·km
-    expect(result.massDistanceTonneKm).toBeCloseTo(30, 6);
+    // (240 km × 2) × 0.8 t = 384 t·km, not the one-way 192 t·km
+    expect(result.massDistanceTonneKm).toBeCloseTo(384, 6);
     expect(result.warning).toBeNull();
   });
 
@@ -132,7 +93,7 @@ describe("aggregateTransportMassDistance", () => {
     );
 
     expect(result.massDistanceTonneKm).toBeNull();
-    expect(result.warning).toContain("00000000-0000-0000-0000-000000000003");
+    expect(result.warning).toBe("Feedstock transport has 1 leg without a load mass (00000000-0000-0000-0000-000000000003). Record a load mass for each leg before submitting.");
   });
 
   it("identifies a leg missing load mass by its named route", () => {
@@ -147,20 +108,98 @@ describe("aggregateTransportMassDistance", () => {
       "Feedstock",
     );
 
-    expect(result.warning).toContain("Farm A to Plant Gate");
+    expect(result.warning).toBe("Feedstock transport has 1 leg without a load mass (Farm A to Plant Gate). Record a load mass for each leg before submitting.");
   });
 
-  it("returns null and warns when legs mix factor fields", () => {
+  it.each([
+    { vehicleType: "tractor" },
+    { modelYear: 2020 },
+    { vehicleType: "tractor", modelYear: 2020 },
+  ])("aggregates mixed vehicle records with advisories: %j", (overrides) => {
+    const legs = [leg("01", { isDerived: true }), leg("02", { isDerived: true, ...overrides })];
+    const result = aggregateTransportMassDistance(legs, "Feedstock");
+    expect(result.massDistanceTonneKm).toBe(4);
+    expect(result.warning).toBeNull();
+    expect(transportVehicleAdvisories(legs, "Feedstock")).toEqual([
+      ...(overrides.vehicleType ? ["Feedstock transport uses more than one vehicle type. Check that the removal template's transport factor covers every vehicle used."] : []),
+      ...(overrides.modelYear ? ["Feedstock transport has different or unrecorded model years. Check that the removal template's transport factor covers every vehicle used."] : []),
+    ]);
+  });
+
+  it.each([
+    { transportMethodType: "rail" },
+    // Defensive check for inconsistent persisted data outside the current enum.
+    { calculationMethodType: "energy_usage" as TransportLeg["calculationMethodType"] },
+    { loadMassKg: null },
+    { loadMassKg: 0 },
+    { loadMassKg: -1 },
+  ] satisfies Partial<TransportLeg>[])("still blocks incompatible methods, modes or missing mass: %j", (overrides) => {
     const result = aggregateTransportMassDistance(
-      [
-        leg("00000000-0000-0000-0000-000000000004", { modelYear: null }),
-        leg("00000000-0000-0000-0000-000000000005", { modelYear: 2020 }),
-      ],
+      [leg("01"), leg("02", { vehicleType: "tractor", ...overrides })],
       "Feedstock",
     );
-
     expect(result.massDistanceTonneKm).toBeNull();
-    expect(result.warning).toContain("mix factor");
+    expect(result.warning).toBe(
+      "transportMethodType" in overrides
+        ? "Feedstock transport legs use different transport modes. Check the recorded modes against the removal template."
+        : "calculationMethodType" in overrides
+          ? "Feedstock transport legs use different calculation methods. Check the recorded methods against the removal template."
+          : "Feedstock transport has 1 leg without a load mass (02). Record a load mass for each leg before submitting.",
+    );
+  });
+
+  it.each(["feedstock", "biochar", "sample"] as const)(
+    "still reports missing vehicle types on manual %s legs",
+    (entityType) => {
+      expect(transportVehicleAdvisories([
+        leg("01", { entityType, vehicleType: null }),
+      ], "Transport")).toEqual([
+        "Transport transport has 1 leg without a vehicle type (01). Record the vehicle type on each leg when it is known.",
+      ]);
+    },
+  );
+
+  it("names only legs missing a vehicle type, with route and ID labels", () => {
+    expect(transportVehicleAdvisories([
+      leg("01", { vehicleType: null, originName: "Farm A", destinationName: "Plant Gate" }),
+      leg("02", { vehicleType: null, originName: "Farm B" }),
+      leg("03"),
+      leg("04", { vehicleType: null, entityType: "biochar", isDerived: true }),
+    ], "Feedstock")).toEqual([
+      "Feedstock transport has 2 legs without a vehicle type (Farm A to Plant Gate, 02). Record the vehicle type on each leg when it is known.",
+    ]);
+  });
+
+  it("still reports a missing vehicle type on derived feedstock legs", () => {
+    expect(transportVehicleAdvisories([
+      leg("01", { vehicleType: null, isDerived: true }),
+    ], "Feedstock")).toEqual([
+      "Feedstock transport has 1 leg without a vehicle type (01). Record the vehicle type on each leg when it is known.",
+    ]);
+  });
+
+  it.each(["feedstock", "biochar", "sample"] as const)(
+    "does not treat a manual %s leg's absent model year as unrecorded",
+    (entityType) => {
+      expect(transportVehicleAdvisories([
+        leg("01", { entityType, isDerived: false }),
+        leg("02", { isDerived: true, modelYear: 2020 }),
+      ], "Feedstock")).toEqual([]);
+    },
+  );
+
+  it("keeps comparing recorded model years on manual legs", () => {
+    expect(transportVehicleAdvisories([
+      leg("01", { modelYear: 2020 }),
+      leg("02", { modelYear: 2021 }),
+    ], "Feedstock")).toEqual([
+      "Feedstock transport has different or unrecorded model years. Check that the removal template's transport factor covers every vehicle used.",
+    ]);
+  });
+
+  it("has no vehicle advisory for empty or matching records", () => {
+    expect(transportVehicleAdvisories([], "Sample")).toEqual([]);
+    expect(transportVehicleAdvisories([leg("01"), leg("02")], "Feedstock")).toEqual([]);
   });
 
   it("reports all legs missing load mass in one warning", () => {
@@ -173,11 +212,8 @@ describe("aggregateTransportMassDistance", () => {
     );
 
     expect(result.massDistanceTonneKm).toBeNull();
-    expect(result.warning).toContain(
-      "00000000-0000-0000-0000-000000000001",
-    );
-    expect(result.warning).toContain(
-      "00000000-0000-0000-0000-000000000002",
+    expect(result.warning).toBe(
+      "Feedstock transport has 2 legs without a load mass (00000000-0000-0000-0000-000000000001, 00000000-0000-0000-0000-000000000002). Record a load mass for each leg before submitting.",
     );
   });
 });
@@ -201,7 +237,7 @@ describe("aggregateProductionRuns production claims", () => {
         preprocessingFuelLiters: 0,
         electricityKwh: 10,
         samples: [],
-      }) as unknown as ProductionRunWithSamples;
+      }) as unknown as ProductionRunForCertification;
 
     const result = aggregateProductionRuns(
       [run("run-a", 500, 5), run("run-b", 700, 7)],
@@ -232,7 +268,7 @@ describe("aggregateProductionRuns production claims", () => {
         preprocessingFuelLiters: 0,
         electricityKwh: 2,
         samples: [],
-      }) as unknown as ProductionRunWithSamples;
+      }) as unknown as ProductionRunForCertification;
 
     const result = aggregateProductionRuns(
       [run("run-applied", 100, 500), run("run-unapplied", 200, 700)],

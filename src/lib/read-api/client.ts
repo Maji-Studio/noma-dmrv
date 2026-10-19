@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { CreditBatchActivityPage, CreditBatchActivitySummary } from "@/data-access/credit-batch-activity";
 
 import type {
   PaginatedFacilities,
@@ -12,10 +13,12 @@ import type { CertifierProjectRow } from "@/data-access/certification";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { OnboardingStatus } from "@/data-access/onboarding";
 import type { DashboardOverview } from "@/data-access/dashboard-overview";
-import type { OnboardingStatusInput, DashboardOverviewInput } from "@/lib/read-models";
+import type { OnboardingStatusInput, DashboardOverviewInput, CreditBatchActivityInput, CreditBatchActivitySummaryInput } from "@/lib/read-models";
 import type { Facility, Organization } from "@/db/schema";
 import { missingRecordMessage } from "@/lib/errors";
 import type { FacilityCertifierSummary } from "@/lib/read-models";
+import type { RecordLocksReadInput } from "@/lib/read-models/record-locks";
+import type { RecordLockViews } from "@/lib/record-lock-view";
 import { facilityIdSchema } from "@/lib/read-models/facility-id";
 import type { FacilityFilterData } from "@/schemas/facilities";
 import type { ProductionRunFilterData } from "@/schemas/production-runs";
@@ -383,4 +386,34 @@ export function getDashboardOverviewRead(
   options?: ReadRequestOptions,
 ): Promise<ActionResult<DashboardOverview>> {
   return requestRead<DashboardOverview>("/api/reads/dashboard/overview", input, options);
+}
+
+export async function getCreditBatchActivityRead(
+  input: CreditBatchActivityInput,
+  options?: ReadRequestOptions,
+): Promise<ActionResult<CreditBatchActivityPage>> {
+  const result = await requestRead<CreditBatchActivityPage>("/api/reads/credit-batches/activity", input, options);
+  return mapReadData(result, wire => ({
+    ...wire,
+    items: wire.items.map(item => decodeDates<CreditBatchActivityPage["items"][number]>(item, ACTIVITY_DATE_FIELDS)),
+  }));
+}
+
+const ACTIVITY_DATE_FIELDS = dateFields<CreditBatchActivityPage["items"][number]>()({ occurredAt: true, registryAt: true });
+
+export async function getCreditBatchActivitySummaryRead(
+  input: CreditBatchActivitySummaryInput, options?: ReadRequestOptions,
+): Promise<ActionResult<CreditBatchActivitySummary>> {
+  const result = await requestRead<CreditBatchActivitySummary>("/api/reads/credit-batches/activity/summary", input, options);
+  return mapReadData(result, wire => ({ ...wire,
+    latest: wire.latest ? decodeDates<CreditBatchActivityPage["items"][number]>(wire.latest, ACTIVITY_DATE_FIELDS) : null,
+  }));
+}
+
+/** Open, In use or Sent for one chunk of ids (no timestamps cross this read). */
+export function getRecordLocksRead(
+  input: RecordLocksReadInput,
+  options?: ReadRequestOptions,
+): Promise<ActionResult<RecordLockViews>> {
+  return requestRead<RecordLockViews>("/api/reads/record-locks", input, options);
 }

@@ -1,0 +1,113 @@
+/* /why principles: the Principle frame and each principle's proof. */
+
+/* Principle: thin numeral and copy left, proof right; --wide stacks the proof under the copy. */
+.pr-in { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--gap); align-items: start; padding: var(--section) var(--frame-pad); }
+.pr-copy { display: grid; gap: var(--space-5); justify-items: start; position: sticky; top: calc(var(--header-h) + var(--space-6)); }
+.pr-n { margin: 0 0 calc(var(--space-2) * -1); font-size: clamp(64px, 7vw, 120px); font-weight: 100; line-height: 0.8; letter-spacing: -0.04em; color: var(--accent); }
+.pr-title { max-width: 14ch; }
+.pr-action { margin-top: var(--space-3); }
+.pr-proof { min-width: 0; }
+.pr--wide .pr-in { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); row-gap: var(--space-8); padding-bottom: 0; }
+.pr--wide .pr-copy { position: static; grid-column: 1 / -1; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--gap); align-items: end; }
+.pr--wide .pr-n { grid-row: 1 / span 2; align-self: start; }
+.pr--wide .pr-proof { grid-column: 1 / -1; margin-inline: calc(var(--frame-pad) * -1); }
+
+/* Shared proof surface: white card on the page, hairline, one hard purple offset. */
+.evp-card, .mx, .own-table { background: var(--paper); border: var(--hairline) solid var(--rule-strong); }
+.mx { box-shadow: var(--space-3) var(--space-3) 0 var(--clr-purple-10); }
+.evp-code, .mx-file { font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-mono); letter-spacing: var(--track-mono); color: var(--ink-2); }
+
+/* 2. EvidenceProof: a record and the removal it feeds, joined by an arrow. */
+.evp { display: grid; grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); gap: var(--space-4); align-items: start; margin: 0; }
+.evp-card { box-shadow: var(--space-2) var(--space-2) 0 var(--clr-purple-10); }
+.evp-card p { margin: 0; }
+.evp-head { display: flex; justify-content: space-between; gap: var(--space-4); padding: var(--space-3) var(--space-5); border-bottom: var(--hairline) solid var(--rule); font-size: var(--fs-small); }
+.evp-files, .evp-checks { list-style: none; margin: 0; padding: var(--space-3) var(--space-5); display: grid; }
+.evp-files li { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: var(--space-3); align-items: center; padding-block: var(--space-3); border-bottom: var(--hairline) solid var(--rule); font-size: var(--fs-small); }
+.evp-files li:last-child { border-bottom: 0; }
+.evp-files svg { width: 16px; height: 16px; fill: none; stroke: var(--accent); stroke-width: 1.2; }
+.evp-meta { font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-mono); color: var(--ink-2); }
+.evp-link { align-self: center; width: 48px; height: 12px; fill: none; stroke: var(--accent); stroke-width: 1.5; }
+.evp-checks { gap: var(--space-2); font-size: var(--fs-small); }
+.evp-checks li { display: flex; align-items: center; gap: var(--space-3); }
+.evp-checks .stg-mark { width: 16px; height: 16px; flex: none; color: var(--ok); }
+.evp-checks .stg-mark-cut { stroke: var(--paper); }
+.evp-checks .is-missing, .evp-checks .is-missing .stg-mark { color: var(--warn); }
+.evp-missing { margin-left: auto; padding: 0 var(--space-2); font-size: var(--fs-caption); border: var(--hairline) solid currentColor; }
+.evp-note { margin: var(--space-6) 0 0; max-width: var(--measure); }
+.evp-foot { padding: var(--space-3) var(--space-5); border-top: var(--hairline) solid var(--rule); font-size: var(--fs-caption); color: var(--warn); }
+
+/* 3. MathExcerpt: the quoted function. */
+.mx { margin: 0; min-width: 0; }
+.mx-bar, .mx-head, .mx-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-3) var(--space-5); padding: var(--space-3) var(--space-5); margin: 0; }
+.mx-bar { border-bottom: var(--hairline) solid var(--rule); }
+.mx:not(.has-js) .mx-nav { display: none; }
+.mx-nav { display: flex; align-items: center; gap: var(--space-2); }
+.mx-arrow { display: grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0; border: var(--hairline) solid var(--rule-strong); background: var(--paper); color: var(--ink); cursor: pointer; transition: background var(--dur-fast); }
+.mx-arrow:hover { background: var(--band-purple); }
+.mx-arrow svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+.mx-count { margin-left: var(--space-3); font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-mono); letter-spacing: var(--track-mono); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+/* With JS the excerpts share one cell, so the frame keeps the tallest one's height and nothing shifts. */
+.mx.has-js .mx-panels { display: grid; grid-template-columns: minmax(0, 1fr); }
+.mx.has-js .mx-panel { grid-area: 1 / 1; min-width: 0; display: flex; flex-direction: column; visibility: hidden; opacity: 0; transition: opacity var(--dur-base) var(--ease-out), visibility 0s var(--dur-base); }
+.mx.has-js .mx-panel.is-on { visibility: visible; opacity: 1; transition: opacity var(--dur-base) var(--ease-out); }
+.mx.has-js .mx-panel pre { flex: 1; }
+.mx:not(.has-js) .mx-panel + .mx-panel { border-top: var(--hairline) solid var(--rule); }
+.mx-head { padding-bottom: 0; }
+.mx-title { font-size: var(--fs-ui); color: var(--ink); }
+.mx-file { overflow-wrap: anywhere; }
+.mx-lic { padding: 0 var(--space-2); font-size: var(--fs-caption); color: var(--accent); border: var(--hairline) solid var(--rule-strong); }
+.mx pre { margin: 0; padding: var(--space-5) 0; overflow-x: auto; font-family: var(--f-mono); font-weight: 500; font-size: 13px; line-height: 1.75; color: var(--ink); }
+.mx code { display: grid; min-width: max-content; }
+.mx-line { display: block; padding-right: var(--space-5); white-space: pre; }
+.mx-line.is-hit { background: var(--band-rose); box-shadow: inset 3px 0 0 var(--accent); }
+.mx-ln { display: inline-block; width: 3.5em; padding-right: 1.25em; text-align: right; color: var(--ink-3); user-select: none; }
+.mx-k { color: var(--accent); }
+.mx-f { color: var(--clr-pink); }
+.mx-n { color: var(--prod); }
+.mx-s { color: var(--ver); }
+.mx-c { color: var(--ink-3); }
+.mx-foot { border-top: var(--hairline) solid var(--rule); font-size: var(--fs-small); color: var(--ink-2); }
+.mx-foot b { font-weight: 300; color: var(--ink); }
+
+/* 4. OwnershipProof: spec sheet. Shared rows span both columns on purple-5; our hosting column on rose. */
+.own { margin: 0; }
+.own-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--fs-small); }
+.own-label { width: 10.5em; }
+.own-table th, .own-table td { padding: var(--space-4) var(--space-5); text-align: left; vertical-align: top; font-weight: 300; border-bottom: var(--hairline) solid var(--rule); }
+.own-table tbody tr:last-child > * { border-bottom: 0; }
+.own-table td + td, .own-table th + th { border-left: var(--hairline) solid var(--rule); }
+.own-table thead th { font-size: var(--fs-h4); letter-spacing: var(--track-h3); }
+.own-table tbody th { color: var(--ink-2); }
+.own-hosted { background: var(--band-rose); }
+.own-table .is-same td { background: var(--band-purple); }
+.own-same-text { font-size: var(--fs-body); }
+.own-same { float: right; margin-left: var(--space-4); padding: 0 var(--space-2); font-weight: 300; font-size: var(--fs-caption); color: var(--accent); border: var(--hairline) solid var(--rule-strong); }
+
+/* 5. Mafinga: photo across the frame, then four places. */
+.maf-figure { position: relative; margin: 0; }
+.maf-figure img { display: block; width: 100%; height: auto; aspect-ratio: 21 / 8; min-height: var(--photo-min); object-fit: cover; object-position: center 60%; }
+.maf-figure .photo-missing { aspect-ratio: 21 / 8; min-height: var(--photo-min); }
+.maf-figure figcaption { position: absolute; right: var(--frame-pad); bottom: var(--space-4); padding: var(--space-1) var(--space-2); background: var(--page); }
+
+@media (max-width: 1000px) {
+  .pr-in, .pr--wide .pr-in { grid-template-columns: minmax(0, 1fr); gap: var(--space-7); }
+  .pr-copy { position: static; }
+  .pr--wide .pr-copy { grid-template-columns: minmax(0, 1fr); }
+  .pr--wide .pr-n { grid-row: auto; }
+}
+@media (max-width: 760px) {
+  .evp { grid-template-columns: minmax(0, 1fr); }
+  .evp-link { justify-self: center; transform: rotate(90deg); }
+  .mx { box-shadow: none; }
+  .mx pre { font-size: var(--fs-small); }
+  .mx-ln { width: 2.6em; padding-right: 0.9em; }
+  .own-label { width: 6.5em; }
+  .own-table { font-size: var(--fs-caption); }
+  .own-table th, .own-table td { padding: var(--space-3); }
+  .own-table thead th { font-size: var(--fs-body); }
+  .own-same-text { font-size: var(--fs-small); }
+  .own-same { display: none; }
+  .maf-figure img, .maf-figure .photo-missing { aspect-ratio: 4 / 3; min-height: 0; }
+  .maf-figure figcaption { position: static; padding: var(--space-3) var(--frame-pad); }
+}

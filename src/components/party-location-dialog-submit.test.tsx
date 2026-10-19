@@ -43,6 +43,7 @@ const harness = vi.hoisted(() => ({
   titles: [] as string[],
 }));
 
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }) }));
 vi.mock("@/components/forms/entity-select/quick-add-dialog-shell", () => ({
   QuickAddDialogShell: ({
     title,
@@ -109,8 +110,7 @@ const customerFormData = customerLocationFormSchema.parse({
   address: "E2E application site",
   gpsLatitude: GPS_LATITUDE,
   gpsLongitude: GPS_LONGITUDE,
-  distanceFromFacilityKm: DISTANCE_KM,
-  distanceSource: "manual",
+  facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: DISTANCE_KM, distanceSource: "manual" }],
   defaultSoilTemperatureC: 25,
   isDefault: true,
 });
@@ -123,8 +123,7 @@ const supplierFormData = supplierLocationFormSchema.parse({
   address: "",
   gpsLatitude: GPS_LATITUDE,
   gpsLongitude: GPS_LONGITUDE,
-  distanceFromFacilityKm: DISTANCE_KM,
-  distanceSource: "manual",
+  facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: DISTANCE_KM, distanceSource: "manual" }],
   isDefault: true,
 });
 
@@ -137,10 +136,10 @@ const customerLocation: EditableCustomerLocation = {
   gpsLatitude: GPS_LATITUDE,
   gpsLongitude: GPS_LONGITUDE,
   address: "E2E application site",
-  distanceFromFacilityKm: DISTANCE_KM,
-  distanceSource: "manual",
+  facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: DISTANCE_KM, distanceSource: "manual" }],
   defaultSoilTemperatureC: 25,
   isDefault: true,
+  version: 1,
   updatedAt: CUSTOMER_LOCATION_UPDATED_AT,
 };
 
@@ -155,10 +154,10 @@ const supplierLocation: SupplierLocation = {
   gpsLatitude: GPS_LATITUDE,
   gpsLongitude: GPS_LONGITUDE,
   address: null,
-  distanceFromFacilityKm: DISTANCE_KM,
-  distanceSource: "manual",
+  facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: DISTANCE_KM, distanceSource: "manual" }],
   isDefault: true,
   createdAt: new Date("2026-01-01T00:00:00Z"),
+  version: 1,
   updatedAt: new Date("2026-01-01T00:00:00Z"),
 };
 
@@ -194,7 +193,7 @@ describe("CustomerLocationDialog submission", () => {
     expect(harness.customerUpdate).toHaveBeenCalledTimes(1);
     expect(harness.customerUpdate).toHaveBeenCalledWith({
       locationId: CUSTOMER_LOCATION_ID,
-      expectedUpdatedAt: CUSTOMER_LOCATION_UPDATED_AT,
+      expectedVersion: 1,
       name: "Updated field",
       country: "Tanzania",
       stateRegion: null,
@@ -202,8 +201,7 @@ describe("CustomerLocationDialog submission", () => {
       address: "E2E application site",
       gpsLatitude: GPS_LATITUDE,
       gpsLongitude: GPS_LONGITUDE,
-      distanceFromFacilityKm: DISTANCE_KM,
-      distanceSource: "manual",
+      facilityDistances: [],
       defaultSoilTemperatureC: 25,
       isDefault: true,
     });
@@ -229,7 +227,7 @@ describe("CustomerLocationDialog submission", () => {
       customerId: CUSTOMER_ID,
       gpsLatitude: GPS_LATITUDE,
       gpsLongitude: GPS_LONGITUDE,
-      distanceSource: "manual",
+      facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: DISTANCE_KM, distanceSource: "manual" }],
     });
     expect(harness.customerCreate.mock.calls[0]?.[0]).not.toHaveProperty(
       "locationId",
@@ -257,13 +255,14 @@ describe("SupplierLocationDialog submission", () => {
     expect(harness.supplierUpdate).toHaveBeenCalledTimes(1);
     expect(harness.supplierUpdate).toHaveBeenCalledWith({
       locationId: SUPPLIER_LOCATION_ID,
-      expectedUpdatedAt: supplierLocation.updatedAt,
+      expectedVersion: 1,
       ...supplierFormData,
+      facilityDistances: [],
     });
     expect(harness.supplierUpdate.mock.calls[0]?.[0]).toMatchObject({
       gpsLatitude: GPS_LATITUDE,
       gpsLongitude: GPS_LONGITUDE,
-      distanceSource: "manual",
+      facilityDistances: [],
     });
   });
 
@@ -287,10 +286,28 @@ describe("SupplierLocationDialog submission", () => {
       supplierId: SUPPLIER_ID,
       gpsLatitude: GPS_LATITUDE,
       gpsLongitude: GPS_LONGITUDE,
-      distanceSource: "manual",
+      facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: DISTANCE_KM, distanceSource: "manual" }],
     });
     expect(harness.supplierCreate.mock.calls[0]?.[0]).not.toHaveProperty(
       "locationId",
     );
   });
+});
+
+it.each(["customer", "supplier"] as const)("%s name-only edit submits no distance rows", async kind => {
+  const onClose = vi.fn();
+  renderToStaticMarkup(kind === "customer"
+    ? <CustomerLocationDialog isOpen onClose={onClose} customerId={CUSTOMER_ID} location={customerLocation} />
+    : <SupplierLocationDialog isOpen onClose={onClose} supplierId={SUPPLIER_ID} location={supplierLocation} />);
+  const data = kind === "customer" ? customerFormData : supplierFormData;
+  const submit = kind === "customer" ? harness.customerOnSubmit : harness.supplierOnSubmit;
+  const update = kind === "customer" ? harness.customerUpdate : harness.supplierUpdate;
+  await submit?.({ ...data, facilityDistances: [
+    ...data.facilityDistances!,
+    { facilityId: SUPPLIER_LOCATION_ID, distanceKm: null, distanceSource: "manual" },
+  ] } as never);
+  expect(update).toHaveBeenCalledWith(expect.objectContaining({
+    name: data.name, facilityDistances: [],
+  }));
+  expect(onClose).toHaveBeenCalledOnce();
 });

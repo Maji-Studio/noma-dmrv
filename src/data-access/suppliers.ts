@@ -3,43 +3,23 @@
  * CRUD operations for suppliers with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, inArray, or, SQL, count } from "drizzle-orm";
+import { isNull, isNotNull, and, asc, desc, eq, ilike, inArray, or, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
-import { isPgForeignKeyViolation } from "@/db/errors";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   suppliers,
   supplierLocations,
-  feedstocks,
-  feedstockDeliveries,
   type Supplier,
   type SupplierLocation,
 } from "@/db/schema";
 import type { SupplierFilterData } from "@/schemas/suppliers";
-import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { formatSupplierLocationDisplay } from "@/lib/supplier-location-display";
-import { assertExpectedVersion } from "./expected-version";
 import {
   findSupplierLocations,
   findSupplierRow,
   SUPPLIER_LOCATION_ORDER,
 } from "./supplier-detail";
 
-/** Entity keys on a supplier's and a supplier location's version conflicts. */
-const SUPPLIER_CONFLICT_ENTITY = "supplier";
-const SUPPLIER_LOCATION_CONFLICT_ENTITY = "supplierLocation";
-
-const SUPPLIER_INTAKE_BLOCKER =
-  "Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier.";
-const SUPPLIER_DELIVERY_BLOCKER =
-  "Supplier was not deleted because feedstock deliveries still use it. Review the linked deliveries or keep this supplier.";
-const SUPPLIER_LOCATION_BLOCKER =
-  "Cannot delete this supplier because it has linked locations. Refresh and try again.";
-const SUPPLIER_DELETE_CONSTRAINTS = [
-  ["feedstocks_supplier_id_suppliers_id_fk", SUPPLIER_INTAKE_BLOCKER],
-  ["feedstock_deliveries_supplier_id_suppliers_id_fk", SUPPLIER_DELIVERY_BLOCKER],
-  ["supplier_locations_supplier_id_suppliers_id_fk", SUPPLIER_LOCATION_BLOCKER],
-] as const;
 
 // ============================================
 // Types
@@ -49,34 +29,6 @@ export type SupplierWithRelations = Supplier & {
   /** Default (or first) structured source-location label for list display. */
   defaultLocationDisplay?: string | null;
 };
-
-interface SupplierCreateFields {
-  code: string;
-  name: string;
-  location?: string | null;
-  gpsLatitude?: number | null;
-  gpsLongitude?: number | null;
-  address?: string | null;
-  contactName?: string | null;
-  contactEmail?: string | null;
-  contactPhone?: string | null;
-  sourceRegion?: string | null;
-  distanceToFacilityKm?: number | null;
-  distanceSource?: DistanceSourceValue | null;
-}
-
-interface SupplierLocationCreateFields {
-  name?: string | null;
-  country: string;
-  stateRegion?: string | null;
-  city?: string | null;
-  gpsLatitude?: number | null;
-  gpsLongitude?: number | null;
-  address?: string | null;
-  distanceFromFacilityKm?: number | null;
-  distanceSource?: DistanceSourceValue | null;
-  isDefault?: boolean;
-}
 
 export interface PaginatedSuppliers {
   items: SupplierWithRelations[];
@@ -92,7 +44,6 @@ export interface PaginatedSuppliers {
 
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
-import { guardSupplierName } from "./unique-name-guards";
 
 // Supplier records are organization-owned. `suppliers.userId` is retained for
 // create-time attribution.
@@ -119,32 +70,6 @@ async function ensureSupplierExists(
   return { id: supplier.id };
 }
 
-async function ensureSupplierLocationExists(
-  ctx: OrgContext,
-  locationId: string
-): Promise<{ id: string; supplierId: string }> {
-  requireOrgScope(ctx);
-
-  const [location] = await db
-    .select({
-      id: supplierLocations.id,
-      supplierId: supplierLocations.supplierId,
-    })
-    .from(supplierLocations)
-    .where(
-      and(
-        eq(supplierLocations.id, locationId),
-        eq(supplierLocations.organizationId, ctx.organizationId),
-      ),
-    );
-
-  if (!location) {
-    throw new SafeError("Supplier location not found");
-  }
-
-  return { id: location.id, supplierId: location.supplierId };
-}
-
 // ============================================
 // Supplier Read Operations
 // ============================================
@@ -161,6 +86,7 @@ export async function getSuppliers(
 
   const {
     search,
+    archived = false,
     location,
     page = 1,
     pageSize = 20,
@@ -170,6 +96,7 @@ export async function getSuppliers(
 
   const conditions: SQL[] = [
     eq(suppliers.organizationId, ctx.organizationId),
+    archived ? isNotNull(suppliers.archivedAt) : isNull(suppliers.archivedAt),
   ];
 
   if (search) {
@@ -221,17 +148,15 @@ export async function getSuppliers(
       code: suppliers.code,
       name: suppliers.name,
       location: suppliers.location,
-      gpsLatitude: suppliers.gpsLatitude,
-      gpsLongitude: suppliers.gpsLongitude,
       address: suppliers.address,
       contactName: suppliers.contactName,
       contactEmail: suppliers.contactEmail,
       contactPhone: suppliers.contactPhone,
       sourceRegion: suppliers.sourceRegion,
-      distanceToFacilityKm: suppliers.distanceToFacilityKm,
-      distanceSource: suppliers.distanceSource,
       createdAt: suppliers.createdAt,
+      version: suppliers.version,
       updatedAt: suppliers.updatedAt,
+      archivedAt: suppliers.archivedAt,
     })
     .from(suppliers)
     .where(whereClause)
@@ -294,6 +219,7 @@ export async function getSupplierById(
   ctx: OrgContext,
   supplierId: string
 ): Promise<Supplier> {
+  requireOrgScope(ctx);
   await ensureSupplierExists(ctx, supplierId);
 
   const supplier = await findSupplierRow(ctx, supplierId);
@@ -305,293 +231,6 @@ export async function getSupplierById(
   return supplier;
 }
 
-// ============================================
-// Supplier Create Operations
-// ============================================
-
-/**
- * Create a new supplier
- */
-export async function createSupplier(
-  ctx: OrgContext,
-  data: SupplierCreateFields
-): Promise<Supplier> {
-  requireOrgScope(ctx);
-
-  // Insert-time code violations stay raw so `withAutoCode` can retry races.
-  const [supplier] = await guardSupplierName(ctx, data.name, () =>
-    db
-      .insert(suppliers)
-      .values({
-        organizationId: ctx.organizationId,
-        userId: ctx.userId,
-        code: data.code,
-        name: data.name,
-        location: data.location ?? null,
-        gpsLatitude: data.gpsLatitude ?? null,
-        gpsLongitude: data.gpsLongitude ?? null,
-        address: data.address ?? null,
-        contactName: data.contactName ?? null,
-        contactEmail: data.contactEmail ?? null,
-        contactPhone: data.contactPhone ?? null,
-        sourceRegion: data.sourceRegion ?? null,
-        distanceToFacilityKm: data.distanceToFacilityKm ?? null,
-        distanceSource: data.distanceSource ?? null,
-      })
-      .returning()
-  );
-
-  return supplier;
-}
-
-export async function createSupplierWithLocations(
-  ctx: OrgContext,
-  data: SupplierCreateFields & { locations: SupplierLocationCreateFields[] }
-): Promise<Supplier> {
-  requireOrgScope(ctx);
-
-  if (data.locations.length === 0) {
-    throw new SafeError("At least one location is required");
-  }
-
-  // Supplier + all initial locations commit (or roll back) together. The
-  // in-transaction pre-check covers an already-committed duplicate code; an
-  // insert-time unique violation (concurrent auto-code collision) propagates
-  // raw so withAutoCode can detect and retry it. Mirrors createFacility.
-  return guardSupplierName(ctx, data.name, () =>
-    db.transaction(async (tx) => {
-    const [existing] = await tx
-      .select({ id: suppliers.id })
-      .from(suppliers)
-      .where(
-        and(
-          eq(suppliers.code, data.code),
-          eq(suppliers.organizationId, ctx.organizationId),
-        ),
-      );
-
-    if (existing) {
-      throw new SafeError("A supplier with this code already exists");
-    }
-
-    const [supplier] = await tx
-      .insert(suppliers)
-      .values({
-        organizationId: ctx.organizationId,
-        userId: ctx.userId,
-        code: data.code,
-        name: data.name,
-        location: data.location ?? null,
-        gpsLatitude: data.gpsLatitude ?? null,
-        gpsLongitude: data.gpsLongitude ?? null,
-        address: data.address ?? null,
-        contactName: data.contactName ?? null,
-        contactEmail: data.contactEmail ?? null,
-        contactPhone: data.contactPhone ?? null,
-        sourceRegion: data.sourceRegion ?? null,
-        distanceToFacilityKm: data.distanceToFacilityKm ?? null,
-        distanceSource: data.distanceSource ?? null,
-      })
-      .returning();
-
-    let defaultIndex = 0;
-    data.locations.forEach((location, index) => {
-      if (location.isDefault === true) defaultIndex = index;
-    });
-
-    await tx.insert(supplierLocations).values(
-      data.locations.map((location, index) => ({
-        organizationId: ctx.organizationId,
-        supplierId: supplier.id,
-        name: location.name ?? null,
-        country: location.country,
-        stateRegion: location.stateRegion ?? null,
-        city: location.city ?? null,
-        gpsLatitude: location.gpsLatitude ?? null,
-        gpsLongitude: location.gpsLongitude ?? null,
-        address: location.address ?? null,
-        distanceFromFacilityKm: location.distanceFromFacilityKm ?? null,
-        distanceSource: location.distanceSource ?? null,
-        isDefault: index === defaultIndex,
-      }))
-    );
-
-    return supplier;
-    })
-  );
-}
-
-// ============================================
-// Supplier Update Operations
-// ============================================
-
-/**
- * Update an existing supplier
- */
-export async function updateSupplier(
-  ctx: OrgContext,
-  supplierId: string,
-  data: {
-    code?: string;
-    name?: string;
-    location?: string | null;
-    gpsLatitude?: number | null;
-    gpsLongitude?: number | null;
-    address?: string | null;
-    contactName?: string | null;
-    contactEmail?: string | null;
-    contactPhone?: string | null;
-    sourceRegion?: string | null;
-    distanceToFacilityKm?: number | null;
-    distanceSource?: "map_estimate" | "manual" | "document" | null;
-    /** `updatedAt` the edit form loaded; refuses a save built on a stale read. */
-    expectedUpdatedAt?: Date;
-  }
-): Promise<Supplier> {
-  await ensureSupplierExists(ctx, supplierId);
-  const { expectedUpdatedAt, ...supplierData } = data;
-
-  // One transaction so the row lock below spans the version check, the code
-  // duplicate probe and the write they guard.
-  return db.transaction(async (tx) => {
-    const [existing] = await tx
-      .select()
-      .from(suppliers)
-      .where(
-        and(
-          eq(suppliers.id, supplierId),
-          eq(suppliers.organizationId, ctx.organizationId),
-        ),
-      )
-      .for("update");
-
-    if (!existing) {
-      throw new SafeError("Supplier not found");
-    }
-    assertExpectedVersion({
-      entity: SUPPLIER_CONFLICT_ENTITY,
-      id: supplierId,
-      expectedUpdatedAt,
-      actualUpdatedAt: existing.updatedAt,
-    });
-
-    // If code is being changed, check for duplicates
-    if (supplierData.code && supplierData.code !== existing.code) {
-      const [duplicate] = await tx
-        .select({ id: suppliers.id })
-        .from(suppliers)
-        .where(
-          and(
-            eq(suppliers.code, supplierData.code),
-            eq(suppliers.organizationId, ctx.organizationId),
-          ),
-        );
-
-      if (duplicate) {
-        throw new SafeError("A supplier with this code already exists");
-      }
-    }
-
-    const [updated] = await guardSupplierName(
-      ctx,
-      supplierData.name ?? existing.name,
-      () =>
-        tx
-          .update(suppliers)
-          .set({
-            ...supplierData,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(suppliers.id, supplierId),
-              eq(suppliers.organizationId, ctx.organizationId),
-            ),
-          )
-          .returning()
-    );
-
-    if (!updated) {
-      throw new SafeError("Supplier not found");
-    }
-
-    return updated;
-  });
-}
-
-// ============================================
-// Supplier Delete Operations
-// ============================================
-
-/**
- * Delete a supplier
- * Refuses linked intakes or deliveries without removing any locations.
- */
-export async function deleteSupplier(
-  ctx: OrgContext,
-  supplierId: string
-): Promise<void> {
-  requireOrgScope(ctx);
-  try {
-    await db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select({ id: suppliers.id })
-        .from(suppliers)
-        .where(and(
-          eq(suppliers.id, supplierId),
-          eq(suppliers.organizationId, ctx.organizationId),
-        ));
-      if (!existing) throw new SafeError("Supplier not found");
-
-      // These are the restrictive references to suppliers. No schema table
-      // references supplier_locations; their own parent FK is handled below.
-      const [intake] = await tx
-        .select({ id: feedstocks.id })
-        .from(feedstocks)
-        .where(and(
-          eq(feedstocks.supplierId, supplierId),
-          eq(feedstocks.organizationId, ctx.organizationId),
-        ))
-        .limit(1);
-      if (intake) throw new SafeError(SUPPLIER_INTAKE_BLOCKER);
-      const [delivery] = await tx
-        .select({ id: feedstockDeliveries.id })
-        .from(feedstockDeliveries)
-        .where(and(
-          eq(feedstockDeliveries.supplierId, supplierId),
-          eq(feedstockDeliveries.organizationId, ctx.organizationId),
-        ))
-        .limit(1);
-      if (delivery) throw new SafeError(SUPPLIER_DELIVERY_BLOCKER);
-
-      // FKs remain the race backstop after prechecks. Any refusal rolls back
-      // every child deletion together with the parent, before error mapping.
-      await tx.delete(supplierLocations).where(and(
-        eq(supplierLocations.supplierId, supplierId),
-        eq(supplierLocations.organizationId, ctx.organizationId),
-      ));
-      const [deleted] = await tx.delete(suppliers).where(and(
-        eq(suppliers.id, supplierId),
-        eq(suppliers.organizationId, ctx.organizationId),
-      )).returning({ id: suppliers.id });
-      if (!deleted) throw new SafeError("Supplier not found");
-    });
-  } catch (error) {
-    for (const [constraint, message] of SUPPLIER_DELETE_CONSTRAINTS) {
-      if (isPgForeignKeyViolation(error, constraint)) throw new SafeError(message);
-    }
-    throw error;
-  }
-}
-
-// ============================================
-// Utility Operations
-// ============================================
-
-// ============================================
-// Supplier Location Operations
-// ============================================
-
 export async function getSupplierLocationsBySupplier(
   ctx: OrgContext,
   supplierId: string
@@ -600,174 +239,4 @@ export async function getSupplierLocationsBySupplier(
   await ensureSupplierExists(ctx, supplierId);
 
   return findSupplierLocations(ctx, supplierId);
-}
-
-export async function createSupplierLocation(
-  ctx: OrgContext,
-  data: {
-    supplierId: string;
-    name?: string | null;
-    country: string;
-    stateRegion?: string | null;
-    city?: string | null;
-    gpsLatitude?: number | null;
-    gpsLongitude?: number | null;
-    address?: string | null;
-    distanceFromFacilityKm?: number | null;
-    distanceSource?: "map_estimate" | "manual" | "document" | null;
-    isDefault?: boolean;
-  }
-): Promise<SupplierLocation> {
-  requireOrgScope(ctx);
-  await ensureSupplierExists(ctx, data.supplierId);
-
-  return db.transaction(async (tx) => {
-    // The supplier's first location is always its default.
-    const [{ value: existingCount }] = await tx
-      .select({ value: count() })
-      .from(supplierLocations)
-      .where(
-        and(
-          eq(supplierLocations.supplierId, data.supplierId),
-          eq(supplierLocations.organizationId, ctx.organizationId),
-        ),
-      );
-    const makeDefault = data.isDefault === true || existingCount === 0;
-
-    // Clear the prior default first so the partial unique index never sees two.
-    if (makeDefault) {
-      await tx
-        .update(supplierLocations)
-        .set({ isDefault: false, updatedAt: new Date() })
-        .where(
-          and(
-            eq(supplierLocations.supplierId, data.supplierId),
-            eq(supplierLocations.organizationId, ctx.organizationId),
-            eq(supplierLocations.isDefault, true)
-          )
-        );
-    }
-
-    const [location] = await tx
-      .insert(supplierLocations)
-      .values({
-        organizationId: ctx.organizationId,
-        supplierId: data.supplierId,
-        name: data.name ?? null,
-        country: data.country,
-        stateRegion: data.stateRegion ?? null,
-        city: data.city ?? null,
-        gpsLatitude: data.gpsLatitude ?? null,
-        gpsLongitude: data.gpsLongitude ?? null,
-        address: data.address ?? null,
-        distanceFromFacilityKm: data.distanceFromFacilityKm ?? null,
-        distanceSource: data.distanceSource ?? null,
-        isDefault: makeDefault,
-      })
-      .returning();
-
-    return location;
-  });
-}
-
-export async function updateSupplierLocation(
-  ctx: OrgContext,
-  locationId: string,
-  data: {
-    name?: string | null;
-    country?: string;
-    stateRegion?: string | null;
-    city?: string | null;
-    gpsLatitude?: number | null;
-    gpsLongitude?: number | null;
-    address?: string | null;
-    distanceFromFacilityKm?: number | null;
-    distanceSource?: "map_estimate" | "manual" | "document" | null;
-    isDefault?: boolean;
-    /** `updatedAt` the edit form loaded; refuses a save built on a stale read. */
-    expectedUpdatedAt?: Date;
-  }
-): Promise<SupplierLocation> {
-  requireOrgScope(ctx);
-  const { supplierId } = await ensureSupplierLocationExists(ctx, locationId);
-  const { expectedUpdatedAt, ...locationData } = data;
-
-  return db.transaction(async (tx) => {
-    const [locked] = await tx
-      .select({ updatedAt: supplierLocations.updatedAt })
-      .from(supplierLocations)
-      .where(
-        and(
-          eq(supplierLocations.id, locationId),
-          eq(supplierLocations.organizationId, ctx.organizationId),
-        ),
-      )
-      .for("update");
-
-    if (!locked) {
-      throw new SafeError("Supplier location not found");
-    }
-    assertExpectedVersion({
-      entity: SUPPLIER_LOCATION_CONFLICT_ENTITY,
-      id: locationId,
-      expectedUpdatedAt,
-      actualUpdatedAt: locked.updatedAt,
-    });
-
-    // Promoting this location to default demotes the supplier's current default.
-    if (data.isDefault === true) {
-      await tx
-        .update(supplierLocations)
-        .set({ isDefault: false, updatedAt: new Date() })
-        .where(
-          and(
-            eq(supplierLocations.supplierId, supplierId),
-            eq(supplierLocations.organizationId, ctx.organizationId),
-            eq(supplierLocations.isDefault, true)
-          )
-        );
-    }
-
-    const [updated] = await tx
-      .update(supplierLocations)
-      .set({
-        ...locationData,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(supplierLocations.id, locationId),
-          eq(supplierLocations.organizationId, ctx.organizationId),
-        ),
-      )
-      .returning();
-
-    if (!updated) {
-      throw new SafeError("Supplier location not found");
-    }
-
-    return updated;
-  });
-}
-
-export async function deleteSupplierLocation(
-  ctx: OrgContext,
-  locationId: string
-): Promise<void> {
-  requireOrgScope(ctx);
-  await ensureSupplierLocationExists(ctx, locationId);
-
-  const deleted = await db
-    .delete(supplierLocations)
-    .where(
-      and(
-        eq(supplierLocations.id, locationId),
-        eq(supplierLocations.organizationId, ctx.organizationId),
-      ),
-    )
-    .returning({ id: supplierLocations.id });
-
-  if (deleted.length === 0) {
-    throw new SafeError("Supplier location not found");
-  }
 }

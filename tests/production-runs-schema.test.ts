@@ -4,7 +4,6 @@ import {
   makeProductionRunFormSchema,
   productionRunFilterSchema,
   productionRunFormSchema,
-  updateProductionRunSchema,
 } from "@/schemas/production-runs";
 
 const originalTz = process.env.TZ;
@@ -26,9 +25,7 @@ const validProductionRunInput = {
       wetMassKg: 100,
     },
   ],
-  feedstockStorageLocationId: "33333333-3333-4333-8333-333333333333",
   biocharStorageLocationId: "44444444-4444-4444-8444-444444444444",
-  feedstockWetMassKg: 100,
   feedstockMoisturePercent: 20,
   biocharOutputKg: 100,
   biocharMoisturePercent: 5,
@@ -42,41 +39,26 @@ const completeProductionRunInput = {
   biocharOutputKg: 10,
 };
 
-describe("production run action feedstock contract", () => {
-  it("rejects legacy feedstock fields on create", () => {
-    const result = createProductionRunSchema.safeParse({
-      ...validProductionRunInput,
-      status: "draft",
-    });
+describe("running end time validation", () => {
+  it.each([
+    ["form", productionRunFormSchema],
+    ["create", createProductionRunSchema],
+  ] as const)("points %s users to Complete or clearing the end time", (_name, schema) => {
+    const input = {
+      ...completeProductionRunInput,
+      status: "running",
+    };
+    const result = schema.safeParse(input);
 
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues.map((issue) => issue.path)).toEqual(
-        expect.arrayContaining([
-          ["feedstockWetMassKg"],
-          ["feedstockStorageLocationId"],
-        ]),
-      );
+      expect(result.error.issues).toContainEqual(expect.objectContaining({
+        path: ["endTime"],
+        message: "Choose Complete or clear the end time for a Running run.",
+      }));
     }
-  });
-
-  it("rejects legacy feedstock fields on update", () => {
-    const result = updateProductionRunSchema.safeParse({
-      productionRunId: "55555555-5555-4555-8555-555555555555",
-      feedstockWetMassKg: 100,
-      feedstockStorageLocationId:
-        "33333333-3333-4333-8333-333333333333",
-    });
-
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues.map((issue) => issue.path)).toEqual(
-        expect.arrayContaining([
-          ["feedstockWetMassKg"],
-          ["feedstockStorageLocationId"],
-        ]),
-      );
-    }
+    expect(schema.safeParse({ ...input, status: "complete" }).success).toBe(true);
+    expect(schema.safeParse({ ...input, endTime: "" }).success).toBe(true);
   });
 });
 
@@ -132,7 +114,7 @@ describe("productionRunFormSchema mass balance", () => {
 });
 
 describe("productionRunFormSchema terminal feedstock requirements", () => {
-  it.each(["draft", "running", "cancelled"] as const)(
+  it.each(["running", "cancelled"] as const)(
     "ignores the untouched starter draw for a %s run",
     (status) => {
       const result = productionRunFormSchema.safeParse({
@@ -503,5 +485,26 @@ describe("productionRunFilterSchema", () => {
     const result = productionRunFilterSchema.parse({ creditBatchId });
 
     expect(result.creditBatchId).toBe(creditBatchId);
+  });
+});
+
+
+describe("complete run output requirements", () => {
+  it.each([null, undefined, ""])("reports inline output errors for empty values: %s", (missing) => {
+    const result = productionRunFormSchema.safeParse({ ...completeProductionRunInput,
+      biocharStorageLocationId: missing, biocharMoisturePercent: missing });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: ["biocharStorageLocationId"], message: "Select a biochar output bin for a complete run." }),
+      expect.objectContaining({ path: ["biocharMoisturePercent"], message: "Enter biochar moisture for a complete run." }),
+    ]));
+  });
+  it("accepts zero biochar moisture", () => {
+    expect(productionRunFormSchema.safeParse({ ...completeProductionRunInput, biocharMoisturePercent: 0 }).success).toBe(true);
+  });
+  it.each(["running", "failed", "cancelled"])("allows empty output for %s", (status) => {
+    expect(productionRunFormSchema.safeParse({ ...completeProductionRunInput, status,
+      endTime: status === "running" ? undefined : completeProductionRunInput.endTime,
+      cancellationReason: "Recorded in error", biocharStorageLocationId: null, biocharMoisturePercent: null }).success).toBe(true);
   });
 });

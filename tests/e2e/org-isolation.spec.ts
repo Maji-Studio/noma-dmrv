@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "../helpers/test-org";
 import * as crypto from "crypto";
 import { eq } from "drizzle-orm";
 import type { Page } from "@playwright/test";
@@ -64,7 +65,7 @@ const test = base.extend<{ orgB: OrgBFixture }>({
         await tx.insert(schema.accounts).values({
           id: ids.account,
           userId: ids.user,
-          accountId: `org-b-${tag}`,
+          accountId: ids.user,
           providerId: "credential",
           password: passwordHash,
         });
@@ -75,11 +76,11 @@ const test = base.extend<{ orgB: OrgBFixture }>({
           role: "member",
         });
         await tx.insert(schema.facilities).values({
+          ...TEST_SITE_POSITION,
           id: ids.facility,
           organizationId: ids.organization,
           code: `ORG-B-FAC-${tag}`,
           name: facilityName,
-          country: "Tanzania",
           timezone: "Africa/Dar_es_Salaam",
         });
         await tx.insert(schema.suppliers).values({
@@ -151,24 +152,20 @@ test("organization domain data is isolated across lists, record URLs, and picker
   ).toBeVisible();
   await expect(orgB.page.getByText(orgABatch.code, { exact: true })).toHaveCount(0);
 
-  const supplierResponse = await orgB.page.goto(
-    `/suppliers/${seededData.supplier.id}`,
-  );
-  expect(supplierResponse?.status()).toBe(404);
-  await expect(
-    orgB.page.getByRole("heading", { name: "Supplier not found", exact: true }),
-  ).toBeVisible();
+  // The supplier detail page is gone: the list's `?supplier=` deep link must
+  // not open another organization's supplier either.
+  await orgB.page.goto(`/suppliers?supplier=${seededData.supplier.id}`);
+  await expect(orgB.page.getByText("Linked supplier could not be opened")).toBeVisible();
+  await expect(orgB.page.getByRole("dialog")).toHaveCount(0);
   await expect(
     orgB.page.getByText(seededData.supplier.name, { exact: true }),
   ).toHaveCount(0);
 
-  const customerResponse = await orgB.page.goto(
-    `/customers/${seededData.customer.id}`,
-  );
-  expect(customerResponse?.status()).toBe(404);
-  await expect(
-    orgB.page.getByRole("heading", { name: "Customer not found", exact: true }),
-  ).toBeVisible();
+  // The customer detail page is gone: the list's `?customer=` deep link must
+  // not open another organization's customer either.
+  await orgB.page.goto(`/customers?customer=${seededData.customer.id}`);
+  await expect(orgB.page.getByText("Linked customer could not be opened")).toBeVisible();
+  await expect(orgB.page.getByRole("dialog")).toHaveCount(0);
   await expect(
     orgB.page.getByText(seededData.customer.name, { exact: true }),
   ).toHaveCount(0);
@@ -184,7 +181,8 @@ test("organization domain data is isolated across lists, record URLs, and picker
     .getByTestId("entity-select-trigger");
 
   await supplierTrigger.click();
-  const options = dialog.getByRole("listbox");
+  // The menu renders in a portal, outside the dialog.
+  const options = orgB.page.getByTestId("entity-select-listbox");
   await expect(options.getByRole("option", { name: new RegExp(orgB.supplier.name) })).toBeVisible();
   await expect(options.getByText(seededData.supplier.name, { exact: true })).toHaveCount(0);
 });

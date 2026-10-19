@@ -1,9 +1,11 @@
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 /**
  * Production Runs React Query Hooks
  * Client-side state management for production run operations
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import type { ConflictRef } from "@/lib/conflict-ref";
 import {
   useMutation,
@@ -15,6 +17,7 @@ import type {
   ProductionRunFilterData,
   CreateProductionRunData,
   UpdateProductionRunData,
+  DeleteProductionRunData,
 } from "@/schemas/production-runs";
 import type {
   PaginatedProductionRuns,
@@ -22,8 +25,6 @@ import type {
 } from "@/data-access/production-runs";
 import {
   getProductionRunByIdFn,
-  getFacilityEnergyTotalsFn,
-  getProductionRunReadingsFn,
   createProductionRunFn,
   updateProductionRunFn,
   deleteProductionRunFn,
@@ -38,9 +39,9 @@ import { facilityKeys } from "@/hooks/use-facilities";
 import { reactorKeys } from "@/hooks/use-reactors";
 import { invalidateOnboardingProgress } from "@/hooks/use-onboarding";
 import { ProductionRunConflictError } from "@/lib/production-runs/overlap-conflict";
-import { isStaleVersionFailure, throwActionError } from "@/lib/stale-version";
+import { StaleVersionError, isStaleVersionFailure, throwActionError } from "@/lib/stale-version";
 
-import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { unwrap, type MutationCallbacks, type OptimisticUpdateOptions } from "./types";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
 
 const EXACT_ID_CHUNK_SIZE = 100;
@@ -78,10 +79,6 @@ export const productionRunKeys = {
   // Prefix that matches every stats variant regardless of facilityId — use for
   // invalidation so a facility-scoped stats query is refetched.
   statsPrefix: () => [...productionRunKeys.all, "stats"] as const,
-  energyTotals: (facilityId: string) =>
-    [...productionRunKeys.all, "energyTotals", facilityId] as const,
-  readings: (productionRunId: string) =>
-    [...productionRunKeys.all, productionRunId, "readings"] as const,
   codeCheck: (code: string, excludeId?: string) =>
     [...productionRunKeys.all, "codeCheck", code, excludeId] as const,
 };
@@ -113,11 +110,7 @@ export function useProductionRuns(
   const results = useQueries({
     queries: requests.map((request) => ({
       queryKey: productionRunKeys.list(request),
-      queryFn: async ({ signal }) => {
-        const result = await getProductionRunsRead(request, { signal });
-        if (!result.success) throw new Error(result.error);
-        return result.data;
-      },
+      queryFn: async ({ signal }) => unwrap(await getProductionRunsRead(request, { signal })),
       staleTime: 30000,
       enabled: options?.enabled,
     })),
@@ -145,13 +138,7 @@ export function useProductionRuns(
 export function useProductionRun(productionRunId: string, enabled = true) {
   return useQuery({
     queryKey: productionRunKeys.detail(productionRunId),
-    queryFn: async () => {
-      const result = await getProductionRunByIdFn(productionRunId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getProductionRunByIdFn(productionRunId)),
     enabled: enabled && !!productionRunId,
     retry: false,
     staleTime: 30000,
@@ -164,53 +151,8 @@ export function useProductionRun(productionRunId: string, enabled = true) {
 export function useProductionRunStats(facilityId?: string, enabled = true) {
   return useQuery({
     queryKey: productionRunKeys.stats(facilityId),
-    queryFn: async ({ signal }) => {
-      const result = await getProductionRunStatsRead(facilityId, { signal });
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async ({ signal }) => unwrap(await getProductionRunStatsRead(facilityId, { signal })),
     enabled,
-    staleTime: 30000,
-  });
-}
-
-/**
- * Hook to fetch facility-wide electricity + diesel totals
- */
-export function useFacilityEnergyTotals(facilityId: string, enabled = true) {
-  return useQuery({
-    queryKey: productionRunKeys.energyTotals(facilityId),
-    queryFn: async () => {
-      const result = await getFacilityEnergyTotalsFn(facilityId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!facilityId,
-    staleTime: 30000,
-  });
-}
-
-/**
- * Hook to fetch production run readings (time-series data)
- */
-export function useProductionRunReadings(
-  productionRunId: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: productionRunKeys.readings(productionRunId),
-    queryFn: async () => {
-      const result = await getProductionRunReadingsFn(productionRunId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!productionRunId,
     staleTime: 30000,
   });
 }
@@ -229,6 +171,7 @@ export function useCreateProductionRun(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.productionRun),
     mutationFn: async (data: CreateProductionRunData) => {
       const result = await createProductionRunFn(data);
       if (!result.success) {
@@ -288,6 +231,7 @@ export function useUpdateProductionRun(
   const { optimistic = true } = options ?? {};
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.productionRun),
     mutationFn: async (data: UpdateProductionRunData) => {
       const result = await updateProductionRunFn(data);
       if (!result.success) {
@@ -362,6 +306,7 @@ export function useUpdateProductionRun(
       return { previousRun, previousLists };
     },
     onSuccess: async (data, variables, context) => {
+      patchListCachesWithSavedRow(queryClient, productionRunKeys.lists(), data);
       const previousFacilityId = context?.previousRun?.facilityId;
       // Update cache with actual server data
       queryClient.setQueryData(productionRunKeys.detail(data.id), data);
@@ -429,23 +374,24 @@ export function useUpdateProductionRun(
  * Supports optimistic updates for immediate UI feedback
  */
 export function useDeleteProductionRun(
-  callbacks?: MutationCallbacks<void, string>,
+  callbacks?: MutationCallbacks<void, DeleteProductionRunData>,
   options?: OptimisticUpdateOptions
 ) {
   const queryClient = useQueryClient();
   const { optimistic = true } = options ?? {};
 
   return useMutation({
-    mutationFn: async (productionRunId: string) => {
-      const result = await deleteProductionRunFn({ productionRunId });
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.productionRun),
+    mutationFn: async (variables: DeleteProductionRunData) => {
+      const result = await deleteProductionRunFn(variables);
       if (!result.success) {
         throwProductionRunActionError(result);
       }
       return;
     },
-    onMutate: async (productionRunId) => {
+    onMutate: async (variables) => {
       if (!optimistic) {
-        await callbacks?.onMutate?.(productionRunId);
+        await callbacks?.onMutate?.(variables);
         return;
       }
 
@@ -456,7 +402,7 @@ export function useDeleteProductionRun(
 
       // Snapshot previous values for rollback (capture facilityId before removing from cache)
       const previousRun = queryClient.getQueryData<ProductionRunWithRelations>(
-        productionRunKeys.detail(productionRunId)
+        productionRunKeys.detail(variables.productionRunId)
       );
       const facilityId = previousRun?.facilityId;
       const previousLists = queryClient.getQueriesData<PaginatedProductionRuns>({
@@ -469,26 +415,23 @@ export function useDeleteProductionRun(
           if (!old) return old;
           return {
             ...old,
-            items: old.items.filter((item) => item.id !== productionRunId),
+            items: old.items.filter((item) => item.id !== variables.productionRunId),
             total: Math.max(0, old.total - 1),
           };
         });
       });
 
-      await callbacks?.onMutate?.(productionRunId);
+      await callbacks?.onMutate?.(variables);
 
       // Return context with snapshots for rollback
       return { previousRun, previousLists, facilityId };
     },
-    onSuccess: async (_, productionRunId, context) => {
+    onSuccess: async (_, variables, context) => {
       const facilityId = (context as { facilityId?: string } | undefined)?.facilityId;
 
       // Remove specific run from cache
       queryClient.removeQueries({
-        queryKey: productionRunKeys.detail(productionRunId),
-      });
-      queryClient.removeQueries({
-        queryKey: productionRunKeys.readings(productionRunId),
+        queryKey: productionRunKeys.detail(variables.productionRunId),
       });
       // Invalidate lists for consistency
       queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
@@ -507,9 +450,9 @@ export function useDeleteProductionRun(
         });
       }
 
-      await callbacks?.onSuccess?.(undefined, productionRunId);
+      await callbacks?.onSuccess?.(undefined, variables);
     },
-    onError: async (error, productionRunId, context) => {
+    onError: async (error, variables, context) => {
       // Rollback to previous values on error
       if (optimistic && context) {
         const { previousRun, previousLists } = context as {
@@ -519,7 +462,7 @@ export function useDeleteProductionRun(
 
         if (previousRun) {
           queryClient.setQueryData(
-            productionRunKeys.detail(productionRunId),
+            productionRunKeys.detail(variables.productionRunId),
             previousRun
           );
         }
@@ -531,13 +474,17 @@ export function useDeleteProductionRun(
         });
       }
 
-      await callbacks?.onError?.(error, productionRunId);
+      if (error instanceof StaleVersionError) {
+        queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: productionRunKeys.detail(variables.productionRunId) });
+      }
+      await callbacks?.onError?.(error, variables);
     },
-    onSettled: async (data, error, productionRunId) => {
+    onSettled: async (data, error, variables) => {
       // Refetch lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
 
-      await callbacks?.onSettled?.(data, error, productionRunId);
+      await callbacks?.onSettled?.(data, error, variables);
     },
   });
 }

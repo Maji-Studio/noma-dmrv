@@ -10,6 +10,9 @@ vi.mock("./matching-output-bins", () => ({
     <div data-stock-facility={facilityId} data-stock-formulation={formulationId}>Matching bins</div>
   ),
 }));
+vi.mock("./order-location-read", () => ({
+  OrderLocationRead: () => <div>Delivery location</div>,
+}));
 vi.mock("@/components/ui/tooltip", () => ({
   InfoHint: ({ children, label }: { children: ReactNode; label: string }) => <span aria-label={label}>{children}</span>,
   Tooltip: ({ children }: { children: ReactNode }) => <span>{children}</span>,
@@ -23,12 +26,12 @@ const order = {
   formulationId: "saved-formulation",
   formulationName: "Saved formulation",
   customerName: "Saved customer",
+  customerId: "saved-customer",
+  customerLocationId: "saved-location",
   customerLocationName: "North field",
   orderDate: new Date("2026-09-21"),
   quantityKg: 130.125,
   packaging: "loose",
-  value: 500,
-  currency: "TZS",
   fulfillmentStatus: "no_deliveries",
   deliveryCount: 0,
   deliveredWetMassKg: 0,
@@ -62,9 +65,12 @@ describe("Order read view levels", () => {
       await switchTo(level);
       const shown = visibleText(renderer.root);
       expect(shown).toContain("Saved formulation");
+      expect(shown).toContain("Delivery location");
       expect(shown).toContain("Requested wet mass (kg)");
       // Save precision: three decimals, not the display default.
       expect(shown).toContain("130.125 kg");
+      expect(shown).not.toContain("Currency");
+      expect(shown).not.toContain("Value");
       expect(shown).toContain("Matching stock");
       expect(shown).toContain("Fulfillment");
       expect(shown).toContain("No deliveries");

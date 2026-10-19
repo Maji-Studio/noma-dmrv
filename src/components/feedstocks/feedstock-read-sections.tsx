@@ -1,21 +1,35 @@
 /** Feedstock delivery side-sheet view mode: the sections config for EntitySideSheet. */
-import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatDate, formatDistanceKm, formatMassKg } from "@/lib/format-utils";
+import { TRANSPORT_EVIDENCE_HINTS } from "@/components/transport-legs/transport-evidence-hints";
+import { formatCalendarDate, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { TransportEvidencePanel, TransportLegsSummary } from "@/components/transport-legs";
-import { resolveCertFieldStatus } from "@/components/forms/cert-field-status";
-import { DEFAULT_TRIP_TYPE, TRIP_TYPE_LABELS } from "@/schemas/trip-type";
-import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
+import { distanceReadFields, isOverrideDistance } from "@/components/transport-legs/distance-override";
+import { TransportDistanceDriftNotice } from "@/components/transport-legs/transport-distance-drift";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
 
-export function feedstockSheetSections(feedstock: FeedstockWithRelations): DetailPanelSection[] {
+/** The derived leg's recorded distance, read beside the record (the drift read). */
+export interface FeedstockRecordedDistance {
+  distanceKm: number | null | undefined;
+  source?: DistanceSourceValue | null;
+  /** The supplier location's current facility distance: what resetting an override returns to. */
+  locationDefaultKm?: number | null;
+  pending: boolean;
+}
+
+export function feedstockSheetSections(
+  feedstock: FeedstockWithRelations,
+  recordedDistance: FeedstockRecordedDistance = { distanceKm: null, pending: false },
+): DetailPanelSection[] {
+  const overrideKm = feedstock.distanceKmOverride;
+  const overridden = isOverrideDistance(overrideKm);
   return [
     {
       title: "Delivery information",
       fields: [
-        { label: "Delivery date", value: formatDate(feedstock.deliveryDate) },
+        { label: "Delivery date", value: formatCalendarDate(feedstock.deliveryDate) },
         { label: "Supplier", value: feedstock.supplierName },
       ],
     },
@@ -23,28 +37,23 @@ export function feedstockSheetSections(feedstock: FeedstockWithRelations): Detai
       title: "Transport details",
       fields: [
         { label: "Vehicle", value: feedstock.vehiclePlateNumber },
-        {
-          label: "Distance (km)",
-          ...certificationDetailField("feedstock", "transportDistanceKm"),
-          // Status from the raw column, not the formatted string — the
-          // "Not recorded" fallback is truthy and would falsely read as satisfied.
-          certifyStatus: resolveCertFieldStatus(
-            true,
-            feedstock.transportDistanceKm !== null,
-          ),
-          value:
-            feedstock.transportDistanceKm !== null
-              ? formatDistanceKm(feedstock.transportDistanceKm)
-              : null,
-        },
-        { label: "Trip type", value: TRIP_TYPE_LABELS[feedstock.transportTripType ?? DEFAULT_TRIP_TYPE] },
-        {
-          label: "Distance source",
-          value: feedstock.transportDistanceSource
-            ? DISTANCE_SOURCE_LABELS[feedstock.transportDistanceSource]
-            : null,
-        },
+        ...distanceReadFields({
+          overrideKm,
+          effectiveKm: overridden ? overrideKm : recordedDistance.distanceKm,
+          note: feedstock.distanceNote,
+          pending: !overridden && recordedDistance.pending,
+          locationName: feedstock.supplierName,
+          derivedSource: recordedDistance.source,
+          locationDefaultKm: recordedDistance.locationDefaultKm,
+        }),
       ],
+      // The saved leg reads in the step that records it, as on the form.
+      content: (
+        <div className="flex flex-col gap-16">
+          <TransportDistanceDriftNotice target={{ entityType: "feedstock", entityId: feedstock.id }} recordCode={feedstock.code} />
+          <TransportLegsSummary entityType="feedstock" entityId={feedstock.id} />
+        </div>
+      ),
     },
     {
       title: "Material",
@@ -52,8 +61,6 @@ export function feedstockSheetSections(feedstock: FeedstockWithRelations): Detai
         { label: "Feedstock type", value: feedstock.feedstockTypeName },
         {
           label: "Total wet mass (kg)",
-          ...certificationDetailField("feedstock", "massWetKg"),
-          certifyStatus: resolveCertFieldStatus(true, feedstock.massWetKg !== null),
           value: formatMassKg(feedstock.massWetKg),
         },
         {
@@ -84,6 +91,7 @@ export function feedstockSheetSections(feedstock: FeedstockWithRelations): Detai
     },
     {
       title: "Transport evidence",
+      hint: TRANSPORT_EVIDENCE_HINTS.feedstock,
       fields: [],
       content: (
         <TransportEvidencePanel
@@ -93,11 +101,6 @@ export function feedstockSheetSections(feedstock: FeedstockWithRelations): Detai
           embedded
         />
       ),
-    },
-    {
-      title: "Derived transport",
-      fields: [],
-      content: <TransportLegsSummary entityType="feedstock" entityId={feedstock.id} />,
     },
   ];
 }

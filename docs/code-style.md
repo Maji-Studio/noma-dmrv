@@ -15,10 +15,10 @@ conventions) · [testing.md](./testing.md) (E2E) · [../TEMPLATE_USAGE.md](../TE
 
 - All files **kebab-case** — `item-form.tsx`, `use-items.ts`.
 - Component exports are **PascalCase**; hook and plain-function exports are **camelCase**.
-- **1000-line cap** per file. It is an ESLint `max-lines` **warn**, not an error — it will
-  not fail a build, so splitting is a review expectation you must honour yourself. Exempt
-  and never to be "fixed" by splitting: `src/lib/isometric/generated/**` and
-  `src/db/seed-data.ts` (see `eslint.config.mjs`).
+- **1000-line cap** per file, enforced as an ESLint `max-lines` **error**, so an oversized
+  file fails `pnpm lint` and CI. Exempt and never to be "fixed" by splitting: `src/lib/isometric/generated/**` and
+  `src/db/seed-data.ts` (see `eslint.config.mjs`). The generated OpenAPI snapshot `openapi/v1.json` is also
+  exempt (Kenji, 2026-10-12): it is pretty-printed at a 1000-character line width and grows with the contract.
 - Feature folders under `src/components/<feature>/` are **flat** with a barrel `index.ts`
   — no `components/` / `dialogs/` / `hooks/` subfolders, even for large features
   (`src/components/credit-batches/` is the reference).
@@ -26,6 +26,8 @@ conventions) · [testing.md](./testing.md) (E2E) · [../TEMPLATE_USAGE.md](../TE
 - **Colocated unit tests:** `*.test.ts` / `*.test.tsx` sit beside the code they test under
   `src/` (vitest, `environment: "node"`, see `vitest.config.ts`). Add one by default for
   schemas and pure logic — E2E is not a substitute.
+
+DOM and portal component tests: see [testing.md](./testing.md).
 
 ## Auth & org scoping — the most violated convention here
 
@@ -48,6 +50,20 @@ organizations, members, invitations, geoRouteCache. The **only** waiver is a
 `// org-scope-ok: <reason>` comment — the reason text is required; a bare marker does not
 match. You will trip this on queries joined off an already-scoped parent. Why:
 [adr/0010-shared-schema-org-column-tenancy.md](./adr/0010-shared-schema-org-column-tenancy.md).
+
+**Server Action boundary:** every export of a `"use server"` file is a public
+action the browser can call with any arguments, so it must never accept an
+`OrgContext` (or any object with `organizationId`, `orgRole` or
+`isPlatformAdmin`), a raw `organizationId`/`orgId`, a `db`/`tx` handle, or a
+`...args: Parameters<…>` passthrough, and it must not apply `requireOrgRole` /
+`requireOrgScope` to anything but the `withAction` callback's context. Put
+trusted-context code in a directive-free module: `src/lib/operations/` for
+migrated writes, `src/lib/read-models/` for reads, or a legacy core under
+src/fn/**/*-core.ts. `pnpm check:server-action-exports` enforces this with
+the TypeScript type checker and has **no** waiver: fix the export instead.
+Inside `"use server"` modules, passing an `OrgContext`-taking function or class
+into an `any`/`unknown`/`Function`/`object` slot, or erasing an object carrying
+such methods, fails closed even for harmless uses and has no waiver.
 
 ## Style
 
@@ -83,6 +99,5 @@ copy-pasteable walkthrough is [../TEMPLATE_USAGE.md](../TEMPLATE_USAGE.md) and t
 
 ## Before you commit
 
-`pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm check:org-scoping` ·
-`pnpm check:spacing-scale` (and `pnpm test:e2e`
-when the change has a UI flow).
+`pnpm verify:static` (every static gate CI's quality-static job runs) · `pnpm test`
+(and `pnpm test:e2e` when the change has a UI flow).

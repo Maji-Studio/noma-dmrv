@@ -10,7 +10,7 @@ sweep requires a DB reset and belongs on **local**, not staging.
 
 Follow `.agents/skills/codex-computer-use/SKILL.md`: substitute the real artifact
 directory for `<ARTIFACT_DIR>`, write the prompt below to that directory, and run Codex
-with computer use from the repository root. gpt-6-astra drives every browser flow; opus is
+with computer use from the repository root. gpt-6.1-sol drives every browser flow; opus is
 used only where Isometric/registry interpretation is needed.
 
 ---
@@ -47,7 +47,7 @@ PREMISE (read carefully — differs from the generic base prompt)
   non-sandbox / production Isometric environment.
 
 MODEL / TOOL ROUTING
-- Drive ALL browser flows with gpt-6-astra via computer use.
+- Drive ALL browser flows with gpt-6.1-sol via computer use.
 - Use opus-5 ONLY for Isometric/registry interpretation (call the isometric MCP `how_to`
   first). Never use opus to click through the UI. Never use Haiku. pnpm only.
 
@@ -56,7 +56,7 @@ Establish and confirm authenticated sessions in the staging app and the sandbox 
 before doing anything. If either fails, STOP and report an environment blocker.
 
 READ FIRST
-.claude/CLAUDE.md, CONTEXT.md, docs/design-system.md, docs/forms.md, docs/architecture.md,
+.claude/CLAUDE.md, GLOSSARY.md, docs/design-system.md, docs/forms.md, docs/architecture.md,
 docs/security.md, .agents/skills/qa/SKILL.md, .agents/skills/codex-computer-use/SKILL.md,
 existing docs/qa ledgers (spot regressions, avoid duplicates). Reproduce independently
 anything you cite from an old ledger.

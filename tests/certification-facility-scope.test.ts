@@ -1,4 +1,5 @@
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { insertRemovalFixture } from "./helpers/removal-fixture";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed regression tests for the resolved-facility scope on the
  * certification submit surface (issue #277).
@@ -56,11 +57,11 @@ async function seedFixture(): Promise<ScopeFixture> {
   return db.transaction(async (tx) => {
     const [facilityA] = await tx
       .insert(facilities)
-      .values({ organizationId: TEST_ORG_ID, code: `FAC-SCP-A-${tag()}`, name: `Scope Facility A ${tag()}` })
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-SCP-A-${tag()}`, name: `Scope Facility A ${tag()}` })
       .returning({ id: facilities.id });
     const [facilityB] = await tx
       .insert(facilities)
-      .values({ organizationId: TEST_ORG_ID, code: `FAC-SCP-B-${tag()}`, name: `Scope Facility B ${tag()}` })
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-SCP-B-${tag()}`, name: `Scope Facility B ${tag()}` })
       .returning({ id: facilities.id });
 
     const [ghgStatementA] = await tx
@@ -68,10 +69,7 @@ async function seedFixture(): Promise<ScopeFixture> {
       .values({ organizationId: TEST_ORG_ID, facilityId: facilityA.id, reportingPeriodEndOn: "2026-06-30" })
       .returning({ id: certifierGhgStatements.id });
 
-    const [removalA] = await tx
-      .insert(certifierRemovals)
-      .values({ organizationId: TEST_ORG_ID, facilityId: facilityA.id })
-      .returning({ id: certifierRemovals.id });
+    const [removalA] = await insertRemovalFixture(tx, { organizationId: TEST_ORG_ID, facilityId: facilityA.id });
 
     const [removalSubmissionA] = await tx
       .insert(certificationSubmissions)

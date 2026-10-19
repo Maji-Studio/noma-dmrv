@@ -24,7 +24,7 @@ import {
 } from "@/lib/biochar-composition";
 import { resolveProductDryBiocharKg } from "@/lib/biochar-mass-accounting";
 import { formatWetDryStock } from "@/lib/mass-moisture";
-import { and, desc, eq, gt, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gt, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { sourceBiocharMassKgSql } from "../biochar-product-source-mass";
 import { requireOrgScope } from "../utils";
 import { buildSourceAllocationAggregate } from "./source-allocation-aggregate";
@@ -40,9 +40,9 @@ function remainingSourceBiocharDryMassKg(
 }
 
 function formatStockSubtitle(
-  massKg: number | null,
-  waterAddedKg: number | null,
-  moisturePercent: number | null,
+  massKg: number,
+  waterAddedKg: number,
+  moisturePercent: number,
   composition: unknown,
   deliveredWetKg: number,
   deliveredDryKg: number,
@@ -51,7 +51,7 @@ function formatStockSubtitle(
   labelVariant?: NonNullable<EntityOption["remainingMass"]>["labelVariant"],
 ): string {
   const remainingWetKg =
-    (massKg ?? 0) + (waterAddedKg ?? 0) - deliveredWetKg;
+    massKg + waterAddedKg - deliveredWetKg;
   const productDryKg = resolveProductDryBiocharKg({
     sourceAllocatedDryMassKg,
     blendMassKg: massKg,
@@ -114,9 +114,9 @@ export function toBiocharProductEntityOption(
     name: string | null;
     productCode: string;
     formulationName: string | null;
-    massKg: number | null;
-    waterAddedKg: number | null;
-    moisturePercent: number | null;
+    massKg: number;
+    waterAddedKg: number;
+    moisturePercent: number;
     composition?: unknown;
     totalDeliveredKg: number;
     totalDeliveredDryKg: number;
@@ -127,7 +127,7 @@ export function toBiocharProductEntityOption(
 ): EntityOption {
   const productLabel = r.formulationName ?? PURE_BIOCHAR_LABEL;
   const remainingWetKg =
-    (r.massKg ?? 0) + (r.waterAddedKg ?? 0) - r.totalDeliveredKg;
+    r.massKg + r.waterAddedKg - r.totalDeliveredKg;
   const productDryKg = resolveProductDryBiocharKg({
     sourceAllocatedDryMassKg: r.sourceAllocatedDryMassKg,
     blendMassKg: r.massKg,
@@ -198,16 +198,9 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
       ),
       0,
     ),
-    // Bin-less (legacy/partial) products stay orderable via their
-    // product-code fallback; products whose bin is archived or not a
-    // product bin stay hidden.
-    or(
-      isNull(biocharProducts.storageLocationId),
-      and(
-        eq(storageLocations.type, "product_bin"),
-        isNull(storageLocations.archivedAt),
-      ),
-    )!,
+    // Products whose bin is archived or not a product bin stay hidden.
+    eq(storageLocations.type, "product_bin"),
+    isNull(storageLocations.archivedAt),
   ];
 
   if (facilityId) {
@@ -254,7 +247,7 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
       eq(sourceAllocationAggregate.biocharProductId, biocharProducts.id),
     )
     .where(and(eq(biocharProducts.organizationId, ctx.organizationId), whereClause))
-    .orderBy(desc(biocharProducts.productionDate))
+    .orderBy(desc(biocharProducts.productionDate), desc(biocharProducts.createdAt), asc(biocharProducts.id))
     .limit(limit);
 
   return results.map((result) =>

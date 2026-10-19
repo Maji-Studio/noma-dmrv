@@ -20,6 +20,7 @@ const activeType: FeedstockType = {
   isometricFeedstockTypeId: "feedstock_type_iso_1",
   archivedAt: null,
   createdAt: new Date("2026-01-01T00:00:00Z"),
+  version: 1,
   updatedAt: new Date("2026-01-01T00:00:00Z"),
 };
 
@@ -82,6 +83,23 @@ vi.mock("@/components/ui", () => ({
     </header>
   ),
   RowActionsMenu: () => null,
+  SplitButton: ({
+    children,
+    menuLabel,
+    items,
+  }: {
+    children?: ReactNode;
+    menuLabel: string;
+    items: Array<{ label: string }>;
+  }) => (
+    <div>
+      <button>{children}</button>
+      <button aria-label={menuLabel} />
+      {items.map((item) => (
+        <span key={item.label}>{item.label}</span>
+      ))}
+    </div>
+  ),
 }));
 vi.mock("@/components/ui/data-table", () => ({
   DataTable: Object.assign(
@@ -123,7 +141,6 @@ vi.mock("./isometric-feedstock-import-dialog", () => ({
 }));
 
 import {
-  FeedstockDeleteConflictNotice,
   FeedstockTypeList,
   shouldShowFeedstockTypeSampling,
 } from "./feedstock-type-list";
@@ -142,9 +159,11 @@ describe("FeedstockTypeList", () => {
   // The only other coverage of this trigger is `@live`-tagged and skipped
   // without sandbox credentials, so PR CI would not catch it disappearing
   // again (it already did once). This case keeps it hermetic.
-  it("renders the Isometric import trigger for a manager on a connected facility", () => {
+  it("renders the split-button menu trigger for a manager on a connected facility", () => {
     const html = renderToStaticMarkup(<FeedstockTypeList canManage />);
 
+    // The import item lives inside the closed split-button menu.
+    expect(html).toContain('aria-label="More ways to add a feedstock type"');
     expect(html).toContain("Import from Isometric");
     expect(html).toContain("New feedstock type");
   });
@@ -154,6 +173,7 @@ describe("FeedstockTypeList", () => {
     try {
       const html = renderToStaticMarkup(<FeedstockTypeList canManage />);
 
+      expect(html).not.toContain("More ways to add a feedstock type");
       expect(html).not.toContain("Import from Isometric");
       expect(html).toContain("New feedstock type");
     } finally {
@@ -164,21 +184,9 @@ describe("FeedstockTypeList", () => {
   it("withholds both header actions from a viewer who cannot manage", () => {
     const html = renderToStaticMarkup(<FeedstockTypeList canManage={false} />);
 
+    expect(html).not.toContain("More ways to add a feedstock type");
     expect(html).not.toContain("Import from Isometric");
     expect(html).not.toContain("New feedstock type");
-  });
-
-  it("offers archive as the actionable delete-conflict resolution", () => {
-    const html = renderToStaticMarkup(
-      <FeedstockDeleteConflictNotice
-        name="Coffee husks"
-        onArchive={vi.fn()}
-        isPending={false}
-      />,
-    );
-
-    expect(html).toContain("is in use and cannot be deleted");
-    expect(html).toContain("Archive instead");
   });
 
   it("gates sampling to connected pyrolysis types with an active facility", () => {

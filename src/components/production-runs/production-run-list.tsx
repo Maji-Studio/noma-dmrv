@@ -39,6 +39,9 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { StatCard } from "@/components/ui/stat-card";
 import { MassPair } from "@/components/ui/mass-pair";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
+import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { isProductionRunOutputLocked, isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
@@ -46,19 +49,20 @@ import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readine
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
-import { toSaveErrorMessage } from "@/lib/stale-version";
+import { StaleVersionError, toDeleteErrorMessage, toSaveErrorMessage } from "@/lib/stale-version";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
 import { productionRunSheetSections, RunStatusBadge } from "./production-run-read-sections";
 import { ProductionIncidentTable } from "./production-incident-table";
 import { ProductionSampleTable } from "./production-sample-table";
 import {
-  type ProductionRunFormData,
+  type CreateProductionRunData,
   type ProductionRunFilterData,
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { ILLUSTRATION_SIZE, ReactorArt } from "@/components/ui/illustrations";
 
 function productionRunDetailHref(run: ProductionRunWithRelations) {
   const params = new URLSearchParams({
@@ -78,12 +82,14 @@ function productionRunDetailHref(run: ProductionRunWithRelations) {
 
 function createColumns(
   onEdit: (run: ProductionRunWithRelations) => void,
-  onDelete: (runId: string) => void
+  onDelete: (runId: string) => void,
+  locks: RecordLockViews,
+  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<ProductionRunWithRelations>[] {
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -143,25 +149,29 @@ function createColumns(
         />
       ),
     },
+    recordLockColumn<ProductionRunWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end">
-          <RowActionsMenu
-            label={`Actions for ${row.original.code}`}
-            actions={[
-              {
-                label: "Open details",
-                href: productionRunDetailHref(row.original),
-              },
-              { label: "Edit", onSelect: () => onEdit(row.original) },
-              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
-            ]}
-          />
-        </div>
-      ),
+      cell: ({ row }) => {
+        const lock = locks[row.original.id];
+        return (
+          <div className="flex items-center justify-end">
+            <RowActionsMenu
+              label={`Actions for ${row.original.code}`}
+              actions={[
+                {
+                  label: "Open details",
+                  href: productionRunDetailHref(row.original),
+                },
+                ...(isRecordEditable(lock) ? [{ label: "Edit", onSelect: () => onEdit(row.original) }] : []),
+                ...(isRecordDeletable(lock) ? [{ label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) }] : []),
+              ]}
+            />
+          </div>
+        );
+      },
       enableSorting: false,
     },
   ];
@@ -217,7 +227,8 @@ export function ProductionRunList() {
     entity: ProductionRunWithRelations | null;
     mode: SideSheetMode;
   } | null>(null);
-  const [deletingRunId, setDeletingRunId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<ProductionRunWithRelations | null>(null);
+  const deletingRunId = deleting?.id;
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -250,6 +261,8 @@ export function ProductionRunList() {
   const toast = useToast();
 
   const runs = runsData?.items ?? [];
+  const runLocks = useRecordLocks("productionRun", runs.map((run) => run.id));
+  const setDeletingRunId = (id: string | null) => setDeleting(runs.find(row => row.id === id) ?? null);
   const totalPages = runsData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -262,7 +275,7 @@ export function ProductionRunList() {
     entityType: "production_run",
     entityNoun: "Production run",
     executeCreate: async (data: ProductionRunSubmitData) => {
-      const run = await createRun.mutateAsync(data as ProductionRunFormData);
+      const run = await createRun.mutateAsync(data as CreateProductionRunData);
       return { entities: [run], result: run };
     },
     setError: setCreateError,
@@ -298,6 +311,7 @@ export function ProductionRunList() {
         // are stripped by the update schema.
         ...data,
         productionRunId: sideSheet.entity.id,
+        expectedVersion: sideSheet.entity.version,
         startTime: startTime instanceof Date ? startTime : new Date(startTime),
         endTime:
           endTime === null
@@ -308,8 +322,7 @@ export function ProductionRunList() {
                 ? endTime
                 : new Date(endTime),
       });
-      createWithEvidence.reset();
-      setSideSheet(null);
+      closeSideSheet();
       toast.success("Production run updated.");
     } catch (error) {
       if (getRunConflict(error)) throw error;
@@ -322,17 +335,18 @@ export function ProductionRunList() {
   const handleDelete = (runId: string) => setDeletingRunId(runId);
 
   const handleDeleteConfirm = async () => {
-    if (!deletingRunId) return;
+    if (!deleting) return;
     setDeleteError(null);
     try {
-      await deleteRun.mutateAsync(deletingRunId);
+      await deleteRun.mutateAsync({ productionRunId: deleting.id, expectedVersion: deleting.version });
       if (focusedRunId === deletingRunId) {
         setFocusedRunId(null);
       }
       setDeletingRunId(null);
       toast.success("Production run deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Production run was not deleted. Try again.");
+      if (error instanceof StaleVersionError) setDeleting(null);
+      setDeleteError(toDeleteErrorMessage(error, `Production run ${deleting.code}`, "Production run was not deleted. Try again."));
     }
   };
 
@@ -367,7 +381,7 @@ export function ProductionRunList() {
     creditBatchFilter ||
     affectedRunIds.length > 0;
 
-  const columns = createColumns(openEdit, handleDelete);
+  const columns = createColumns(openEdit, handleDelete, runLocks.locks, runLocks.statusOf);
 
   useEffect(() => {
     if (!focusedRunId) {
@@ -409,6 +423,7 @@ export function ProductionRunList() {
       ? ({ entity: focusedRun.data, mode: "view" } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("productionRun", displaySideSheet?.entity?.id);
 
   const confirmCreateClose = () =>
     createWithEvidence.confirmClose(displaySideSheet?.mode === "create");
@@ -511,10 +526,11 @@ export function ProductionRunList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={productionRunDetailHref}
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<FireIcon size={48} />}
+            icon={creditBatchFilter || hasActiveFilters ? <FireIcon size={48} /> : <ReactorArt size={ILLUSTRATION_SIZE.empty} />}
             title={
               creditBatchFilter
                 ? "No production runs in this credit batch"
@@ -568,7 +584,6 @@ export function ProductionRunList() {
               aria-label="Filter production runs by status"
             >
               <option value="">All statuses</option>
-              <option value="draft">Draft</option>
               <option value="running">Running</option>
               <option value="complete">Complete</option>
               <option value="failed">Failed</option>
@@ -608,6 +623,8 @@ export function ProductionRunList() {
         onModeChange={handleModeChange}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: !isProductionRunOutputLocked(sheetLock) })}
+        canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit production run"
         size="wide"
         sections={sideSheetEntity ? productionRunSheetSections(sideSheetEntity, facilities) : undefined}
@@ -615,6 +632,7 @@ export function ProductionRunList() {
         <ProductionRunForm
           key={sideSheetEntity?.id ?? "create"}
           productionRun={sideSheetEntity ?? undefined}
+          lock={sheetLock}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={attemptCloseSideSheet}
           isSubmitting={createRun.isPending || updateRun.isPending || isFlushing}
@@ -624,7 +642,7 @@ export function ProductionRunList() {
         >
           {sideSheetEntity && sideSheetMode === "edit" ? (
             <>
-              <ProductionSampleTable productionRunId={sideSheetEntity.id} />
+              <ProductionSampleTable facilityId={sideSheetEntity.facilityId} productionRunId={sideSheetEntity.id} />
               <ProductionIncidentTable
                 productionRunId={sideSheetEntity.id}
                 facilityId={sideSheetEntity.facilityId}

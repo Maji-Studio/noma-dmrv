@@ -185,4 +185,52 @@ describe("ProductCompositionPreview", () => {
     );
     expect(text(html)).toContain("Saved with the product.");
   });
+
+  describe("mass flow", () => {
+    const biochar = { label: "Biochar", parts: [
+      { label: "Dry biochar", massKg: 270, kind: "biochar" as const },
+      { label: "Water in biochar", massKg: 30, kind: "water" as const },
+    ] };
+    const manure = { label: "Chicken manure", parts: [
+      { label: "Chicken manure solids", massKg: 210, kind: "ingredient" as const },
+      { label: "Water in chicken manure", massKg: 90, kind: "water" as const },
+    ] };
+    const noWater = { label: "Water added", parts: [{ label: "Water added", massKg: 0, kind: "addedWater" as const }] };
+    const components = [
+      { label: "Dry biochar", massKg: 270, kind: "biochar" as const },
+      { label: "Chicken manure solids", massKg: 210, kind: "ingredient" as const },
+      { label: "Water", massKg: 120, kind: "water" as const },
+      { label: "Water added", massKg: 0, kind: "addedWater" as const },
+    ];
+
+    it("draws each input flowing into the product in place of the bar, and names every part beside the product with its share", () => {
+      const html = renderToStaticMarkup(
+        <ProductCompositionPreview wetMassKg={600} components={components} sources={[biochar, manure, noWater]} />,
+      );
+
+      expect(html).toContain("data-mass-flow");
+      expect(html).not.toContain('data-segment="dry-biochar"');
+      expect(text(html)).toContain("Biochar300 kg wet");
+      expect(text(html)).toContain("Chicken manure300 kg wet");
+      expect(text(html)).toContain("Wet biochar product600 kg");
+      // No water was added, so it is not an input.
+      expect(text(html)).not.toContain("Water added0 kg");
+      // Regrouped by kind: the biochar's water and the manure's pool as one part.
+      expect(text(html)).toContain("Dry biochar270 kg (45%)");
+      expect(text(html)).toContain("Chicken manure solids210 kg (35%)");
+      expect(text(html)).toContain("Water120 kg (20%)");
+      // The parts are named in the flow, so no key repeats them.
+      expect(text(html)).not.toContain("Dry biochar 270 kg");
+    });
+
+    it("keeps the bar while any part of an input is unknown", () => {
+      const unknown = { ...manure, parts: [manure.parts[0], { ...manure.parts[1], massKg: null }] };
+      const html = renderToStaticMarkup(
+        <ProductCompositionPreview wetMassKg={600} components={components} sources={[biochar, unknown, noWater]} />,
+      );
+
+      expect(html).not.toContain("data-mass-flow");
+      expect(html).toContain('data-segment="dry-biochar"');
+    });
+  });
 });

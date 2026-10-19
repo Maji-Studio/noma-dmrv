@@ -5,35 +5,53 @@
  */
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useController, useForm } from "react-hook-form";
+import type { FacilityDistanceInput } from "@/schemas/facility-distances";
+import { PartyFacilityDistances } from "@/components/party-facility-distances";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  DistanceCalcField,
   FormActions,
   FormField,
   FormInput,
   FormSection,
   FormTextarea,
   PositionPicker,
-  makeCertFieldStatus,
 } from "@/components/forms";
-import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   supplierLocationFormSchema,
   type SupplierLocationFormData,
 } from "@/schemas/suppliers";
 import type { SupplierLocation } from "@/db/schema/parties";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
-import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import { facilityDistanceDefaults } from "@/lib/facility-distance-defaults";
+import { useFacilityContext } from "@/hooks/use-facility-context";
+import { Notice } from "@/components/ui/notice";
 import { resolveLocationCountry } from "@/lib/location-defaults";
 
 // ============================================
 // Component
 // ============================================
 
+/** Fields the form pre-fills from: a saved location or a pending one. */
+export type SupplierLocationInitialValues = Pick<SupplierLocation, "country"> &
+  Partial<
+    Pick<
+      SupplierLocation,
+      | "name"
+      | "stateRegion"
+      | "city"
+      | "gpsLatitude"
+      | "gpsLongitude"
+      | "address"
+      | "isDefault"
+    >
+  > & { facilityDistances?: FacilityDistanceInput[] };
+
 interface SupplierLocationFormProps {
   /** Existing location data for editing (undefined for create mode) */
-  location?: SupplierLocation;
+  location?: SupplierLocationInitialValues;
+  /** Start "default" checked for a new location (the party's first). */
+  initialIsDefault?: boolean;
   /** Prefix field IDs when the form opens above another form with overlapping IDs. */
   idPrefix?: string;
   /** Form submission handler */
@@ -54,6 +72,7 @@ function fieldId(idPrefix: string | undefined, fieldName: string): string {
 
 export function SupplierLocationForm({
   location,
+  initialIsDefault = false,
   idPrefix,
   onSubmit,
   onCancel,
@@ -62,6 +81,9 @@ export function SupplierLocationForm({
   submitLabel,
 }: SupplierLocationFormProps) {
   const isEditMode = !!location;
+  const { facilities } = useFacilityContext();
+  // The default moves only by setting another location as default.
+  const isCurrentDefault = location?.isDefault === true;
   const { defaults: organizationDefaults } = useOrganizationDefaultValues();
   const defaultValues = {
     name: location?.name ?? "",
@@ -74,31 +96,35 @@ export function SupplierLocationForm({
     gpsLatitude: location?.gpsLatitude ?? undefined,
     gpsLongitude: location?.gpsLongitude ?? undefined,
     address: location?.address ?? "",
-    distanceFromFacilityKm: location?.distanceFromFacilityKm ?? undefined,
-    distanceSource: location?.distanceSource ?? null,
-    isDefault: location?.isDefault ?? false,
+    facilityDistances: facilityDistanceDefaults(facilities, location?.facilityDistances),
+    isDefault: location?.isDefault ?? initialIsDefault,
   };
 
   const {
     control,
+    getValues,
     register,
     handleSubmit,
-    watch,
-    setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(supplierLocationFormSchema),
     defaultValues,
   });
-  const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
   const defaultSubmitLabel = isEditMode ? "Update location" : "Add location";
 
-  // Preprocessed Zod fields have `unknown` input types — narrow the watches.
-  const gpsLatitude = watch("gpsLatitude") as number | null | undefined;
-  const gpsLongitude = watch("gpsLongitude") as number | null | undefined;
-  const distanceFromFacilityKm = watch("distanceFromFacilityKm") as number | null | undefined;
-  const distanceSource = watch("distanceSource");
+  // Preprocessed Zod fields have `unknown` input types — narrow the values.
+  const { field: gpsLatitudeField } = useController({
+    control,
+    name: "gpsLatitude",
+  });
+  const { field: gpsLongitudeField } = useController({
+    control,
+    name: "gpsLongitude",
+  });
+  const { field: facilityDistancesField } = useController({ control, name: "facilityDistances" });
+  const gpsLatitude = gpsLatitudeField.value as number | null | undefined;
+  const gpsLongitude = gpsLongitudeField.value as number | null | undefined;
   const nameId = fieldId(idPrefix, "name");
   const countryId = fieldId(idPrefix, "country");
   const stateRegionId = idPrefix
@@ -109,18 +135,13 @@ export function SupplierLocationForm({
   const positionIdPrefix = fieldId(idPrefix, "gps");
   const distanceId = idPrefix
     ? fieldId(idPrefix, "distance")
-    : "distanceFromFacilityKm";
+    : "facilityDistances";
   const defaultId = idPrefix ? fieldId(idPrefix, "default") : "isDefault";
 
-  // CALC endpoints: this source location → the globally selected facility.
-  const { selectedFacility } = useFacilityContext();
+  // Each facility row estimates its route from this source location.
   const locationPoint =
     gpsLatitude != null && gpsLongitude != null
       ? { lat: gpsLatitude, lng: gpsLongitude }
-      : null;
-  const facilityPoint =
-    selectedFacility?.gpsLatitude != null && selectedFacility?.gpsLongitude != null
-      ? { lat: selectedFacility.gpsLatitude, lng: selectedFacility.gpsLongitude }
       : null;
 
   const handleFormSubmit = handleSubmit((data) => {
@@ -135,6 +156,7 @@ export function SupplierLocationForm({
       }}
       className="space-y-20"
     >
+      {isEditMode && <Notice tone="info">Saving fills a missing distance; never changes a recorded one.</Notice>}
       {/* Location Details Section */}
       <FormSection title="Location details" divider={false}>
         <FormField
@@ -226,8 +248,8 @@ export function SupplierLocationForm({
           latitude={gpsLatitude ?? null}
           longitude={gpsLongitude ?? null}
           onPositionChange={({ lat, lng }) => {
-            setValue("gpsLatitude", lat ?? undefined, { shouldDirty: true, shouldValidate: true });
-            setValue("gpsLongitude", lng ?? undefined, { shouldDirty: true, shouldValidate: true });
+            gpsLatitudeField.onChange(lat);
+            gpsLongitudeField.onChange(lng);
           }}
           latitudeError={errors.gpsLatitude?.message}
           longitudeError={errors.gpsLongitude?.message}
@@ -237,48 +259,41 @@ export function SupplierLocationForm({
 
       {/* Logistics Section */}
       <FormSection title="Logistics">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <DistanceCalcField
-            id={distanceId}
-            label="One-way distance to facility (per leg, km)"
-            error={errors.distanceFromFacilityKm?.message}
-            certifyRequired={isCertifyFormField("supplierLocation", "distanceFromFacilityKm")}
-            certifyStatus={certStatus("distanceFromFacilityKm")}
-            helperText="One-way road distance from this source location to the facility. Return trips are doubled at emissions time (set the trip type on each feedstock delivery)."
-            disabled={isSubmitting}
-            distanceKm={distanceFromFacilityKm}
-            distanceSource={distanceSource}
-            onDistanceChange={(km, source) => {
-              // `null` is the explicit clear; `undefined` would read as
-              // "field omitted" and leave the stored distance in place.
-              setValue("distanceFromFacilityKm", km, {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
-              setValue("distanceSource", source, { shouldDirty: true });
-            }}
-            origin={locationPoint}
-            destination={facilityPoint}
-            originLabel="source location position"
-            destinationLabel="selected facility"
-          />
-        </div>
+        <PartyFacilityDistances
+          isEditMode={isEditMode}
+          savedValue={location?.facilityDistances}
+          idPrefix={distanceId}
+          value={facilityDistancesField.value as FacilityDistanceInput[] | undefined}
+          getValue={() => getValues("facilityDistances") as FacilityDistanceInput[] | undefined}
+          onChange={facilityDistancesField.onChange}
+          locationPoint={locationPoint}
+          disabled={isSubmitting}
+          error={errors.facilityDistances?.message}
+          rowErrors={errors.facilityDistances}
+        />
 
-        <label
-          htmlFor={defaultId}
-          className="flex items-center gap-12 cursor-pointer"
-        >
-          <input
-            type="checkbox"
-            id={defaultId}
-            className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
-            disabled={isSubmitting}
-            {...register("isDefault")}
-          />
-          <span className="body-medium text-[var(--color-text-primary)]">
-            Set as default source location
-          </span>
-        </label>
+        <div className="flex flex-col gap-4">
+          <label
+            htmlFor={defaultId}
+            className="flex items-center gap-12 cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              id={defaultId}
+              className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
+              disabled={isSubmitting || isCurrentDefault}
+              {...register("isDefault")}
+            />
+            <span className="body-medium text-[var(--color-text-primary)]">
+              Set as default source location
+            </span>
+          </label>
+          {isCurrentDefault ? (
+            <p className="body-caption text-[var(--color-text-tertiary)]">
+              To change the default, set another location as default.
+            </p>
+          ) : null}
+        </div>
       </FormSection>
 
       <FormActions

@@ -36,7 +36,7 @@ describe("CreditBatchSamplingControl", () => {
 
     expect(html).toMatch(/<input[^>]*disabled=""[^>]*value="unsampled"/);
     // The eligibility explanation now lives behind the ⓘ hint on the legend.
-    expect(html).toContain("About sampling eligibility");
+    expect(html).toContain("More about Sampling");
   });
 
   it("enables unsampled when computed eligibility is satisfied", () => {
@@ -53,7 +53,7 @@ describe("CreditBatchSamplingControl", () => {
 
     expect(html).toContain('value="unsampled"');
     expect(html).not.toMatch(/<input[^>]*disabled=""[^>]*value="unsampled"/);
-    expect(html).toContain("About sampling eligibility");
+    expect(html).toContain("More about Sampling");
   });
 
   it("shows the existing choice read-only in edit mode", () => {

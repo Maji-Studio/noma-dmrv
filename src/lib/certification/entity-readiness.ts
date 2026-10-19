@@ -1,4 +1,6 @@
+import { deliveryProofBlocker } from "./submission-readiness";
 import {
+  certifyFieldConditionApplies,
   getCertifyFieldDescriptors,
   type CertifyEntityKind,
   type CertifyFieldDescriptor,
@@ -26,10 +28,27 @@ export type EntityCertifyWarning = Omit<EntityCertifyGap, "kind">;
 
 export type EntityReadinessRecord = object;
 
+export const REMOVAL_FIELD_CHECK_SCOPE =
+  "Fields complete checks this record's own fields and, for deliveries, proof of delivery. Removal submission also checks linked production runs, Samples, transport legs, delivery distances and the order’s customer location.";
+
 const TERMINAL_STATUS_BY_ENTITY: Partial<Record<CertifyEntityKind, string[]>> = {
   productionRun: ["complete"],
   feedstock: ["complete"],
   delivery: ["delivered"],
+};
+
+const LIFECYCLE_DETAIL_BY_ENTITY: Partial<Record<CertifyEntityKind, string>> = {
+  feedstock: "Complete the feedstock material record",
+  delivery: "Set status to delivered for transport accounting",
+};
+
+const FIELD_PURPOSE_BY_ENTITY: Partial<Record<CertifyEntityKind, string>> = {
+  feedstock: "feedstock transport calculations",
+  delivery: "biochar transport calculations",
+  application: "applied biochar accounting",
+  supplier: "the default feedstock transport distance",
+  supplierLocation: "the default feedstock transport distance",
+  customerLocation: "the default delivery transport distance",
 };
 
 function fieldValue(
@@ -44,22 +63,6 @@ function isPresent(value: unknown): boolean {
   if (typeof value === "string") return value.trim().length > 0;
   if (typeof value === "number") return Number.isFinite(value);
   return true;
-}
-
-function conditionApplies(
-  descriptor: CertifyFieldDescriptor,
-  entity: EntityReadinessRecord,
-): boolean {
-  if (!descriptor.condition) return true;
-  if ("allOf" in descriptor.condition) {
-    return descriptor.condition.allOf.every(
-      (condition) =>
-        fieldValue(entity, condition.field) === condition.equals,
-    );
-  }
-  return (
-    fieldValue(entity, descriptor.condition.field) === descriptor.condition.equals
-  );
 }
 
 function descriptorFields(descriptor: CertifyFieldDescriptor): readonly string[] {
@@ -96,7 +99,10 @@ function descriptorSatisfied(
   );
 }
 
-function fieldGap(descriptor: CertifyFieldDescriptor): EntityCertifyGap {
+function fieldGap(
+  descriptor: CertifyFieldDescriptor,
+  entityKind: CertifyEntityKind,
+): EntityCertifyGap {
   const fields =
     descriptor.satisfaction?.mode === "anyOf" ||
     descriptor.satisfaction?.mode === "allOf"
@@ -104,10 +110,11 @@ function fieldGap(descriptor: CertifyFieldDescriptor): EntityCertifyGap {
       : descriptor.satisfaction?.mode === "equals"
         ? [descriptor.satisfaction.field]
         : descriptorFields(descriptor);
-  const requirement =
-    descriptor.condition != null
+  const requirement = descriptor.gapDetail ?? (FIELD_PURPOSE_BY_ENTITY[entityKind]
+    ? `Record ${descriptor.label.toLowerCase()} for ${FIELD_PURPOSE_BY_ENTITY[entityKind]}`
+    : descriptor.condition != null
       ? `${descriptor.label} is required for ${descriptor.condition.label}`
-      : `${descriptor.label} is required to certify`;
+      : `${descriptor.label} is required to certify`);
 
   return {
     kind: "field",
@@ -133,7 +140,8 @@ function lifecycleGap(
     key: "lifecycleState",
     label: "Lifecycle state",
     fields: ["status"],
-    detail: `Status must be ${terminalStates.join(" or ")} to certify`,
+    detail: LIFECYCLE_DETAIL_BY_ENTITY[entityKind] ??
+      `Status must be ${terminalStates.join(" or ")} to certify`,
   };
 }
 
@@ -143,11 +151,14 @@ export function deriveEntityCertifyReadiness(
   lifecycleState?: string | null,
 ): EntityCertifyReadiness {
   const gaps: EntityCertifyGap[] = [];
-  // No entity kind produces warnings today: application evidence was the only
-  // producer and it stopped being a readiness concern. The channel is kept as
-  // the seam for the next non-blocking entity warning, so a warning can be
-  // surfaced without re-threading it through every caller.
   const warnings: EntityCertifyWarning[] = [];
+  if (entityKind === "delivery") {
+    const detail = deliveryProofBlocker({
+      deliveryCode: String(fieldValue(entity, "code") ?? ""),
+      proofOfDeliveryCount: Number(fieldValue(entity, "proofOfDeliveryCount")),
+    });
+    if (detail) gaps.push({ kind: "field", key: "proofOfDelivery", label: "Proof of delivery", fields: [], detail });
+  }
   const effectiveLifecycleState =
     lifecycleState ?? (fieldValue(entity, "status") as string | null | undefined);
 
@@ -166,9 +177,13 @@ export function deriveEntityCertifyReadiness(
   }
 
   for (const descriptor of getCertifyFieldDescriptors(entityKind)) {
-    if (!conditionApplies(descriptor, entity)) continue;
+    if (!certifyFieldConditionApplies(descriptor, entity)) continue;
     if (descriptorSatisfied(descriptor, entity)) continue;
-    gaps.push(fieldGap(descriptor));
+    if (descriptor.advisory) {
+      warnings.push({ ...fieldGap(descriptor, entityKind), detail: descriptor.advisory });
+    } else {
+      gaps.push(fieldGap(descriptor, entityKind));
+    }
   }
 
   return {

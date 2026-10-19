@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", () => ({
+  resolveIsometricClient: vi.fn(async () => mocks.client),
+}));
+
 import type { Logger } from "@/lib/log";
 import type {
   CreateMeasurementSampleRequest,
@@ -19,15 +24,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/data-access/certification", () => ({
   appendSubmissionJournal: mocks.appendSubmissionJournal,
 }));
-
-vi.mock("@/lib/isometric/client", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@/lib/isometric/client")>();
-  return {
-    ...actual,
-    getIsometricClientForOrg: vi.fn(async () => mocks.client),
-  };
-});
 
 vi.mock("./registry-create", () => ({
   supplierRefLookup: (

@@ -1,3 +1,5 @@
+import type { RemovalBlocker } from "./removal-blockers";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 /**
  * Removal readiness classifier — the single pure decision behind every
  * "can this removal be submitted, and if not why?" surface: the Overview work
@@ -11,9 +13,10 @@
  * (`templateResolved` + `analyzeCoverage` + `submitReady`), now extracted and
  * unit-tested — Stage 4 migrates the panel/pre-flight onto it.
  */
+import type { SubmissionLineageBlocker } from "./submission-readiness";
+import { formatUnbindableTemplateInputsText, type UnbindableTemplateInput } from "@/lib/isometric/template-binding-coverage";
 
 import {
-  BLOCKING_SUBMISSION_STATUSES,
   deriveRemovalStatus,
   type LocalSubmissionStatus,
 } from "./status";
@@ -22,6 +25,7 @@ import {
   type ProductionReadinessGap,
 } from "./production-readiness";
 import { CERT_REQUIREMENT_META } from "./requirement-labels";
+import type { RemovalTemplateBlocker, RemovalTemplateBlockerCode } from "./removal-template-blockers";
 import { pluralize } from "@/lib/copy-utils";
 import {
   describeFeedstockTypeMappingGap,
@@ -40,8 +44,11 @@ export interface TransportCoverageFact {
   category: TransportCategory;
   /** Transport legs found for this category across the removal's members. */
   count: number;
+  missingEntityIds?: readonly string[];
+  /** Repair targets belonging to this existing transport check. */
+  lineageIssues?: SubmissionLineageBlocker[];
   /** A per-leg uniformity/completeness warning from aggregation, if any. */
-  hasAggregationWarning: boolean;
+  aggregationWarning: string | null;
 }
 
 export interface RemovalReadinessFacts {
@@ -53,12 +60,13 @@ export interface RemovalReadinessFacts {
   hasMapping: boolean;
   /** The organization has encrypted Isometric credentials configured. */
   hasOrgCredentials: boolean;
-  /** The facility's default removal template resolved on Isometric. */
-  hasDefaultTemplate: boolean;
-  /** Set when a configured template id no longer exists on Isometric. */
-  missingDefaultTemplateId: string | null;
+  /** The member batches' pinned Removal template resolved on Isometric. */
+  hasRemovalTemplate: boolean;
+  templateBlockers?: RemovalTemplateBlocker[];
+  emissionLineBlockers?: RemovalBlocker[];
   /** Template blueprint keys with no matching component blueprint. */
   unresolvedBlueprintKeys: string[];
+  unbindableTemplateInputs: UnbindableTemplateInput[];
   /** Declared pyrolysis feedstock types missing their Isometric registry id. */
   feedstockTypeMappingGaps: FeedstockTypeMappingGap[];
   /** Production runs resolved from member-batch lineage — false ⇒ nothing to submit. */
@@ -67,8 +75,12 @@ export interface RemovalReadinessFacts {
   productionReadinessGap?: ProductionReadinessGap | null;
   /** Coverage facts for the template's required transport categories only. */
   requiredTransport: TransportCoverageFact[];
+  /** Non-blocking review of vehicle records across required transport categories. */
+  transportVehicleAdvisories?: string[];
   /** Compact labels from per-entity certifier-readiness checks. */
   entityReadinessGaps?: string[];
+  /** Structured submission checks with affected records and fix targets. */
+  submissionLineageIssues?: SubmissionLineageBlocker[];
   /** Documents discovered by the same lineage walk as the Sources panel. */
   supportingDocumentCount?: number;
   /** Supporting documents with an existing Isometric Source mirror. */
@@ -79,6 +91,9 @@ export interface RemovalReadinessFacts {
    * eligibility are submission-ready. Surfaced so readiness predicts the gate.
    */
   durabilityGateBlockers?: string[];
+  /** Registry capabilities shared with the measurement-sample builder. */
+  durabilityConfigurationBlockers?: string[];
+  templateTierBlocker?: string | null;
   /**
    * Production-run ends, Sample times, or application dates that still lie in the
    * future, already phrased as blocker sentences. Computed SERVER-SIDE (this
@@ -95,6 +110,8 @@ export interface RemovalReadiness {
   reasons: string[];
   /** Non-blocking conditions operators should see before submission. */
   advisories: string[];
+  /** Vehicle review warnings, separate from automatic evidence work. */
+  transportVehicleAdvisories: string[];
 }
 
 const NOT_LINKED_REASON = "Facility not linked to an Isometric project";
@@ -104,7 +121,7 @@ const ORG_CREDENTIALS_LABEL = "Organization Isometric credentials present";
 const TRANSPORT_COVERAGE_LABEL = "Transport coverage complete";
 const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_REASON_PREVIEW_LIMIT = 3;
-const ENTITY_READINESS_CHECK_DISPLAY_LIMIT = 5;
+export const ENTITY_READINESS_CHECK_DISPLAY_LIMIT = 5;
 const DURABILITY_LABEL = "Sampling & durability eligibility met";
 const EVIDENCE_LABEL = "Registry value sources linked";
 const MEASUREMENT_DATES_LABEL = "Production and application dates";
@@ -155,32 +172,38 @@ function describeCategories(categories: TransportCategory[]): string {
 // template chain resolves cleanly. Shared by the classifier and the pre-flight
 // checklist so the two never phrase the same blocker differently.
 function templateBlockerReason(facts: RemovalReadinessFacts): string | null {
-  if (facts.missingDefaultTemplateId) {
-    return `Default removal template ${facts.missingDefaultTemplateId} is no longer available`;
-  }
-  if (!facts.hasDefaultTemplate) {
-    return "No default Removal template selected for this facility";
+  if (facts.templateBlockers?.length) return facts.templateBlockers.map((blocker) => blocker.message).join(" ");
+  if (!facts.hasRemovalTemplate) {
+    return REMOVAL_TEMPLATE_BLOCKERS.unpinnedTemplate;
   }
   if (facts.unresolvedBlueprintKeys.length > 0) {
     const n = facts.unresolvedBlueprintKeys.length;
     return `Template references ${n} unresolved blueprint${n === 1 ? "" : "s"}`;
   }
+  if (facts.unbindableTemplateInputs.length > 0) {
+    return formatUnbindableTemplateInputsText(facts.unbindableTemplateInputs);
+  }
+  // Coverage derives from the same line decision, so this only catches line
+  // blockers coverage has no wording for.
+  if (facts.emissionLineBlockers?.length) return [...new Set(facts.emissionLineBlockers.map((blocker) => blocker.message))].join(" ");
   return null;
 }
 
 function templateResolvesCleanly(facts: RemovalReadinessFacts): boolean {
   return (
-    facts.hasDefaultTemplate &&
-    !facts.missingDefaultTemplateId &&
-    facts.unresolvedBlueprintKeys.length === 0
+    facts.hasRemovalTemplate &&
+    !facts.templateBlockers?.length &&
+    !facts.emissionLineBlockers?.length &&
+    facts.unresolvedBlueprintKeys.length === 0 &&
+    facts.unbindableTemplateInputs.length === 0
   );
 }
 
 // Transport-coverage gaps, phrased exactly as the classifier's blocker reasons.
 function transportGapReasons(required: TransportCoverageFact[]): string[] {
-  const missing = required.filter((t) => t.count === 0).map((t) => t.category);
+  const missing = required.filter((t) => t.count === 0 || (t.missingEntityIds?.length ?? 0) > 0).map((t) => t.category);
   const incomplete = required
-    .filter((t) => t.count > 0 && t.hasAggregationWarning)
+    .filter((t) => t.count > 0 && t.aggregationWarning !== null)
     .map((t) => t.category);
   const reasons: string[] = [];
   if (missing.length > 0) {
@@ -226,32 +249,35 @@ function evidenceAdvisories(facts: RemovalReadinessFacts): string[] {
 export function deriveRemovalReadiness(
   facts: RemovalReadinessFacts,
 ): RemovalReadiness {
+  const transportVehicleAdvisories = facts.transportVehicleAdvisories ?? [];
   const advisories = evidenceAdvisories(facts);
-  if (facts.lockInFlight) return { state: "inProgress", reasons: [], advisories };
+  const advisoryFields = { advisories, transportVehicleAdvisories };
+  if (facts.lockInFlight) return { state: "inProgress", reasons: [], ...advisoryFields };
 
   // Status drives the high end. A latest superseded row is non-terminal: it is
   // a retired attempt for which `claimSubmissionDraft` will mint a fresh
   // version. A removal is done only at submitted (no remote lifecycle exists;
   // see status.ts).
   const status = deriveRemovalStatus({ local: facts.local, lockInFlight: false });
-  if (status.isTerminal) return { state: "submitted", reasons: [], advisories };
+  if (status.isTerminal) return { state: "submitted", reasons: [], ...advisoryFields };
 
   // Not submitted yet (null / draft / rejected) → evaluate preconditions.
   if (!facts.hasMapping) {
     // Without a project link every downstream fact is empty; one clear reason.
-    return { state: "blocked", reasons: [NOT_LINKED_REASON], advisories };
+    return { state: "blocked", reasons: [NOT_LINKED_REASON], ...advisoryFields };
   }
 
   if (!facts.hasOrgCredentials) {
     return {
       state: "blocked",
       reasons: [NO_ORG_CREDENTIALS_REASON],
-      advisories,
+      ...advisoryFields,
     };
   }
 
-  const reasons: string[] = [];
+  const reasons: string[] = [...(facts.submissionLineageIssues?.map((issue) => issue.detail) ?? [])];
 
+  if (facts.templateTierBlocker) reasons.push(facts.templateTierBlocker);
   const templateReason = templateBlockerReason(facts);
   if (templateReason) reasons.push(templateReason);
 
@@ -295,11 +321,12 @@ export function deriveRemovalReadiness(
   // Durability sampling/eligibility — the same fail-closed gate the submit
   // pipeline throws on (D3). Surfacing it here means a removal can't read
   // "ready" then bounce at submit on an unsampled run or out-of-spec chemistry.
+  reasons.push(...(facts.durabilityConfigurationBlockers ?? []));
   reasons.push(...durabilityBlockerReasons(facts.durabilityGateBlockers ?? []));
 
   return reasons.length > 0
-    ? { state: "blocked", reasons, advisories }
-    : { state: "ready", reasons: [], advisories };
+    ? { state: "blocked", reasons, ...advisoryFields }
+    : { state: "ready", reasons: [], ...advisoryFields };
 }
 
 // ---------------------------------------------------------------------------
@@ -458,6 +485,7 @@ export type RemovalRequirementKey =
 
 export interface RemovalRequirementCheck {
   key: RemovalRequirementKey;
+  lineageIssues?: SubmissionLineageBlocker[];
   /** Affirmative label — what's true when the check is met. */
   label: string;
   /**
@@ -474,6 +502,9 @@ export interface RemovalRequirementCheck {
   fixTarget?: RemovalFixTarget;
   /** Local record to open when the fix target supports an exact edit link. */
   fixTargetId?: string;
+  transportCategory?: TransportCategory;
+  /** Removal template blocker codes behind an unmet template check, for its fix links. */
+  templateBlockerCodes?: RemovalTemplateBlockerCode[];
   status: "met" | "unmet" | "skipped" | "warning";
   /** The blocker text when unmet, or context when met/skipped. */
   detail?: string;
@@ -498,7 +529,7 @@ function withRequirementMeta(
 /**
  * The New-Removal wizard's requirements step shows only the checks that are NOT
  * a single batch's concern (design doc §3): facility setup (project mapping +
- * default template) and the cross-batch transport uniformity that can only be
+ * pinned template) and the cross-batch transport uniformity that can only be
  * judged once batches are pooled into a removal, plus any production or entity
  * readiness blockers that can appear when an existing removal is resumed.
  * Transport-leg presence remains a batch-health concern. Pure projection of the
@@ -512,60 +543,60 @@ export function buildRemovalRequirementsChecklist(
   const templateClean =
     credentialsConfigured && templateResolvesCleanly(facts);
 
-  const uniformity = ((): RemovalRequirementCheckBase => {
+  const uniformity = ((): RemovalRequirementCheckBase[] => {
     // Uniformity is only meaningful once the template chain resolves and legs
     // are actually present (presence is the batch's concern, not this step's).
     if (!linked || !templateClean) {
-      return {
+      return [{
         key: "transportUniformity",
         label: TRANSPORT_UNIFORMITY_LABEL,
         status: "skipped",
-      };
+      }];
     }
-    const mixed = facts.requiredTransport
-      .filter((t) => t.count > 0 && t.hasAggregationWarning)
-      .map((t) => t.category);
-    return mixed.length === 0
-      ? {
-          key: "transportUniformity",
-          label: TRANSPORT_UNIFORMITY_LABEL,
-          status: "met",
-        }
-      : {
+    const blocked = facts.requiredTransport.filter(
+      (t): t is TransportCoverageFact & { aggregationWarning: string } =>
+        t.count > 0 && t.aggregationWarning !== null,
+    );
+    return blocked.length === 0
+      ? [{ key: "transportUniformity", label: TRANSPORT_UNIFORMITY_LABEL, status: "met" }]
+      : blocked.map((t) => ({
           key: "transportUniformity",
           label: TRANSPORT_UNIFORMITY_LABEL,
           status: "unmet",
-          detail: `Mixed method or factor across ${describeCategories(mixed)} transport legs`,
-        };
+          transportCategory: t.category,
+          detail: t.aggregationWarning,
+        }));
   })();
 
-  const transport = ((): RemovalRequirementCheckBase => {
+  const transport = ((): RemovalRequirementCheckBase[] => {
     if (!linked || !templateClean) {
-      return {
+      return [{
         key: "transport",
         label: TRANSPORT_COVERAGE_LABEL,
         status: "skipped",
-      };
+      }];
     }
     const missing = facts.requiredTransport
-      .filter((category) => category.count === 0)
+      .filter((category) => category.count === 0 || (category.missingEntityIds?.length ?? 0) > 0)
       .map((category) => category.category);
     return missing.length === 0
-      ? {
+      ? [{
           key: "transport",
           label: TRANSPORT_COVERAGE_LABEL,
           status: "met",
-        }
-      : {
+        }]
+      : missing.map((category) => ({
           key: "transport",
           label: TRANSPORT_COVERAGE_LABEL,
           status: "unmet",
-          detail: `Missing ${describeCategories(missing)} transport legs`,
-        };
+          transportCategory: category,
+          lineageIssues: facts.requiredTransport.find(fact => fact.category === category)?.lineageIssues,
+          detail: `Missing ${category} transport legs`,
+        }));
   })();
 
   const entityReadiness = ((): RemovalRequirementCheckBase => {
-    const gaps = facts.entityReadinessGaps ?? [];
+    const gaps = [...(facts.submissionLineageIssues?.map((issue) => issue.detail) ?? []), ...(facts.entityReadinessGaps ?? [])];
     return gaps.length === 0
       ? {
           key: "entityReadiness",
@@ -576,6 +607,7 @@ export function buildRemovalRequirementsChecklist(
           key: "entityReadiness",
           label: ENTITY_READINESS_LABEL,
           status: "unmet",
+          lineageIssues: facts.submissionLineageIssues,
           detail: gaps
             .slice(0, ENTITY_READINESS_CHECK_DISPLAY_LIMIT)
             .join(" · "),
@@ -600,7 +632,7 @@ export function buildRemovalRequirementsChecklist(
     if (!facts.hasSubmittableRuns) {
       return { key: "durability", label: DURABILITY_LABEL, status: "skipped" };
     }
-    const blockers = facts.durabilityGateBlockers ?? [];
+    const blockers = [...(facts.templateTierBlocker ? [facts.templateTierBlocker] : []), ...(facts.durabilityConfigurationBlockers ?? []), ...(facts.durabilityGateBlockers ?? [])];
     return blockers.length === 0
       ? { key: "durability", label: DURABILITY_LABEL, status: "met" }
       : {
@@ -646,9 +678,12 @@ export function buildRemovalRequirementsChecklist(
         !linked || !credentialsConfigured
           ? undefined
           : (templateBlockerReason(facts) ?? undefined),
+      ...(linked && credentialsConfigured && facts.templateBlockers?.length
+        ? { templateBlockerCodes: facts.templateBlockers.map((blocker) => blocker.code) }
+        : {}),
     },
-    transport,
-    uniformity,
+    ...transport,
+    ...uniformity,
     production,
     measurementDatesCheck(facts),
     feedstockTypeMapping,
@@ -659,24 +694,4 @@ export function buildRemovalRequirementsChecklist(
   return checks
     .filter((check): check is RemovalRequirementCheckBase => check !== null)
     .map(withRequirementMeta);
-}
-
-/**
- * Whether a removal's credit-batch membership can still be changed. Mirrors the
- * server guard (`assertRemovalAllowsCreditBatchMutation`):
- * a removal with a live (`draft`/`submitted`/`accepted`) or in-flight ledger
- * row is frozen — regrouping it would change what an existing Isometric Removal
- * represents (ADR 0003). The server is authoritative; this only gates the UI so
- * blocked controls aren't offered.
- */
-export function canRegroupRemoval({
-  local,
-  lockInFlight,
-}: {
-  local: LocalSubmissionStatus | null;
-  lockInFlight: boolean;
-}): boolean {
-  if (lockInFlight) return false;
-  if (local === null) return true;
-  return !BLOCKING_SUBMISSION_STATUSES.includes(local);
 }

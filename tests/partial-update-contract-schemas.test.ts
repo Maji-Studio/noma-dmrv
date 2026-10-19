@@ -8,11 +8,11 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { updateApplicationSchema } from "@/schemas/applications";
+import { updateApplicationInput } from "@/schemas/application-input";
 import { updateCustomerLocationSchema } from "@/schemas/customers";
 import { updateFeedstockSchema } from "@/schemas/feedstocks";
 import { updateOrderSchema } from "@/schemas/orders";
-import { updateSupplierLocationSchema, updateSupplierSchema } from "@/schemas/suppliers";
+import { updateSupplierLocationSchema } from "@/schemas/suppliers";
 import {
   clearableNumber,
   clearablePositiveNumber,
@@ -24,7 +24,6 @@ const FEEDSTOCK_ID = "11111111-1111-4111-8111-111111111111";
 const ORDER_ID = "22222222-2222-4222-8222-222222222222";
 const APPLICATION_ID = "33333333-3333-4333-8333-333333333333";
 const LOCATION_ID = "44444444-4444-4444-8444-444444444444";
-const SUPPLIER_ID = "55555555-5555-4555-8555-555555555555";
 
 function parsed<T>(schema: { parse: (input: unknown) => T }, input: unknown): T {
   return schema.parse(input);
@@ -65,6 +64,7 @@ describe("updateFeedstockSchema transport distance", () => {
   it("leaves an omitted distance undefined so the derived leg keeps its value", () => {
     const result = parsed(updateFeedstockSchema, {
       feedstockId: FEEDSTOCK_ID,
+      expectedVersion: 1,
       notes: "Unrelated edit",
     });
 
@@ -76,69 +76,69 @@ describe("updateFeedstockSchema transport distance", () => {
     expect(
       parsed(updateFeedstockSchema, {
         feedstockId: FEEDSTOCK_ID,
+      expectedVersion: 1,
         transportDistanceKm: "",
       }).transportDistanceKm,
     ).toBeNull();
     expect(
       parsed(updateFeedstockSchema, {
         feedstockId: FEEDSTOCK_ID,
+      expectedVersion: 1,
         transportDistanceKm: null,
       }).transportDistanceKm,
     ).toBeNull();
   });
 
-  it("keeps a populated distance and a zero distance", () => {
+  it("keeps a populated distance and the legacy zero input", () => {
     expect(
       parsed(updateFeedstockSchema, {
         feedstockId: FEEDSTOCK_ID,
+      expectedVersion: 1,
         transportDistanceKm: "85.5",
       }).transportDistanceKm,
     ).toBe(85.5);
     expect(
-      parsed(updateFeedstockSchema, {
+      updateFeedstockSchema.safeParse({
         feedstockId: FEEDSTOCK_ID,
+        expectedVersion: 1,
         transportDistanceKm: 0,
-      }).transportDistanceKm,
-    ).toBe(0);
+      }).success,
+    ).toBe(true);
   });
 });
 
-describe("updateOrderSchema value", () => {
-  it("separates omitted, cleared and zero", () => {
-    expect(
-      parsed(updateOrderSchema, { orderId: ORDER_ID }).value,
-    ).toBeUndefined();
-    expect(
-      parsed(updateOrderSchema, { orderId: ORDER_ID, value: null }).value,
-    ).toBeNull();
-    expect(parsed(updateOrderSchema, { orderId: ORDER_ID, value: 0 }).value).toBe(0);
-    expect(
-      parsed(updateOrderSchema, { orderId: ORDER_ID, value: 50_000 }).value,
-    ).toBe(50_000);
+describe("updateOrderSchema removed price fields", () => {
+  it("strips removed price keys from an order edit", () => {
+    const result = parsed(updateOrderSchema, { expectedVersion: 1,
+      orderId: ORDER_ID,
+      value: null,
+    });
+    expect(result).not.toHaveProperty("value");
+    expect(result).not.toHaveProperty("currency");
   });
 });
 
-describe("updateApplicationSchema soil temperature", () => {
+describe("updateApplicationInput soil temperature", () => {
   it("separates omitted, cleared and zero", () => {
     expect(
-      parsed(updateApplicationSchema, { applicationId: APPLICATION_ID })
+      parsed(updateApplicationInput, { expectedVersion: 1, applicationId: APPLICATION_ID })
         .soilTemperatureC,
     ).toBeUndefined();
     expect(
-      parsed(updateApplicationSchema, {
+      parsed(updateApplicationInput, { expectedVersion: 1,
         applicationId: APPLICATION_ID,
         soilTemperatureC: null,
       }).soilTemperatureC,
     ).toBeNull();
     // Zero °C is a real soil temperature, not a missing one.
     expect(
-      parsed(updateApplicationSchema, {
+      parsed(updateApplicationInput, { expectedVersion: 1,
         applicationId: APPLICATION_ID,
         soilTemperatureC: 0,
       }).soilTemperatureC,
     ).toBe(0);
     expect(
-      parsed(updateApplicationSchema, {
+      parsed(updateApplicationInput, { expectedVersion: 1,
         applicationId: APPLICATION_ID,
         soilTemperatureC: 25,
       }).soilTemperatureC,
@@ -148,12 +148,12 @@ describe("updateApplicationSchema soil temperature", () => {
 
 describe("customer and supplier location patches", () => {
   it("leaves an omitted distance and soil temperature untouched", () => {
-    const result = parsed(updateCustomerLocationSchema, {
+    const result = parsed(updateCustomerLocationSchema, { expectedVersion: 1,
       locationId: LOCATION_ID,
       isDefault: true,
     });
 
-    expect(result.distanceFromFacilityKm).toBeUndefined();
+    expect(result.facilityDistances).toBeUndefined();
     expect(result.defaultSoilTemperatureC).toBeUndefined();
     expect(result.stateRegion).toBeUndefined();
     expect(result.city).toBeUndefined();
@@ -161,47 +161,37 @@ describe("customer and supplier location patches", () => {
 
   it("clears a customer-location distance on empty input and keeps zero", () => {
     expect(
-      parsed(updateCustomerLocationSchema, {
+      parsed(updateCustomerLocationSchema, { expectedVersion: 1,
         locationId: LOCATION_ID,
-        distanceFromFacilityKm: "",
+        facilityDistances: [{ facilityId: LOCATION_ID, distanceKm: "", distanceSource: "manual" }],
         defaultSoilTemperatureC: "",
       }),
     ).toMatchObject({
-      distanceFromFacilityKm: null,
+      facilityDistances: [{ facilityId: LOCATION_ID, distanceKm: null, distanceSource: "manual" }],
       defaultSoilTemperatureC: null,
     });
     expect(
-      parsed(updateCustomerLocationSchema, {
+      parsed(updateCustomerLocationSchema, { expectedVersion: 1,
         locationId: LOCATION_ID,
-        distanceFromFacilityKm: 0,
+        facilityDistances: [{ facilityId: LOCATION_ID, distanceKm: 1, distanceSource: "manual" }],
         defaultSoilTemperatureC: 0,
       }),
     ).toMatchObject({
-      distanceFromFacilityKm: 0,
+      facilityDistances: [{ facilityId: LOCATION_ID, distanceKm: 1, distanceSource: "manual" }],
       defaultSoilTemperatureC: 0,
     });
   });
 
   it("applies the same contract to supplier distances", () => {
     expect(
-      parsed(updateSupplierSchema, { supplierId: SUPPLIER_ID })
-        .distanceToFacilityKm,
+      parsed(updateSupplierLocationSchema, { expectedVersion: 1, locationId: LOCATION_ID })
+        .facilityDistances,
     ).toBeUndefined();
     expect(
-      parsed(updateSupplierSchema, {
-        supplierId: SUPPLIER_ID,
-        distanceToFacilityKm: null,
-      }).distanceToFacilityKm,
-    ).toBeNull();
-    expect(
-      parsed(updateSupplierLocationSchema, { locationId: LOCATION_ID })
-        .distanceFromFacilityKm,
-    ).toBeUndefined();
-    expect(
-      parsed(updateSupplierLocationSchema, {
+      parsed(updateSupplierLocationSchema, { expectedVersion: 1,
         locationId: LOCATION_ID,
-        distanceFromFacilityKm: "",
-      }).distanceFromFacilityKm,
+        facilityDistances: [{ facilityId: LOCATION_ID, distanceKm: "", distanceSource: "manual" }],
+      }).facilityDistances?.[0]?.distanceKm,
     ).toBeNull();
   });
 });

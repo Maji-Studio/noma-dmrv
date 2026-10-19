@@ -6,7 +6,7 @@ import type {
 import {
   CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
   DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-} from "@/lib/isometric/transformers/measurement-sample";
+} from "@/lib/isometric/storage-blueprints";
 import { buildRemovalTemplateDiagnostic } from "./removal-template-diagnostic";
 
 function template(

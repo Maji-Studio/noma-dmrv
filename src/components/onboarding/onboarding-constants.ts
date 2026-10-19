@@ -1,10 +1,10 @@
 /**
- * Onboarding constants — the Setup steps (CONTEXT.md: "Setup step"), their
+ * Onboarding constants — the Setup steps (GLOSSARY.md: "Setup step"), their
  * copy, and the deep-link targets that open each entity's create surface.
  *
  * Setup steps are NOT stored flags. Done-ness is computed from record
  * existence in `use-setup-steps.ts`; this file only holds the static metadata
- * (order, labels, copy) and the browser-storage keys the guide/wizard persist
+ * (order, labels, copy) and the browser-storage keys the guide persist
  * to. Order is the Phase-1 traceability chain:
  * Facility → Reactor → Registry → Supplier → Feedstock → Production run →
  * Credit batch.
@@ -139,29 +139,12 @@ const ROUTE_SEGMENT: Record<
 };
 
 /**
- * Prefix — see `onboardingWizardDismissedKey`. Session-scoped so a dismiss
- * never outlives the login session or leaks across organizations in the same
- * tab: it suppresses auto-open until the tab closes or the user logs in again,
- * whichever comes first.
- */
-export const ONBOARDING_WIZARD_DISMISSED_KEY =
-  "noma:onboarding-wizard-dismissed";
-
-/**
  * Prefix — see `onboardingGuideCollapsedKey`. Persistent (localStorage):
  * collapse the getting-started guide to a slim strip, per user per
  * organization.
  */
 export const ONBOARDING_GUIDE_COLLAPSED_KEY =
   "noma:onboarding-guide-collapsed";
-
-/** sessionStorage key for a wizard dismiss, scoped to one login session + org. */
-export function onboardingWizardDismissedKey(
-  sessionId: string,
-  organizationId: string | null | undefined,
-): string {
-  return `${ONBOARDING_WIZARD_DISMISSED_KEY}:${sessionId}:${organizationId ?? "none"}`;
-}
 
 /** localStorage key for the guide-collapse preference, scoped per user + org. */
 export function onboardingGuideCollapsedKey(

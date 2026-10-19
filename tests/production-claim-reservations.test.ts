@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 /**
  * DB-backed coverage for the pre-POST whole-batch production claim reservation.
  * Competing Removal submissions must serialize on the credit-batch row, while
@@ -7,7 +8,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { markSubmissionSubmitted } from "@/data-access/certification";
 import { markSubmissionInterrupted } from "@/data-access/certification-submissions";
-import { deleteDocumentWithCertificationSafety } from "@/data-access/documents";
+import { deleteDocumentApp } from "@/lib/operations/documents";
+import { runOperationInProcess } from "@/lib/operations/runner";
+const deleteViaApp = (ctx: Parameters<typeof runOperationInProcess>[1], documentId: string) => runOperationInProcess(deleteDocumentApp, ctx, { documentId, expectedVersion: 1 });
 import { requestRemovalEvidenceRefresh } from "@/data-access/removal-evidence-refresh";
 import {
   rejectSubmissionAndReleaseProductionClaims,
@@ -15,6 +18,7 @@ import {
 } from "@/data-access/production-claim-reservations";
 import { db } from "@/db";
 import {
+  activityEvents,
   certificationSubmissions,
   certifierRemovals,
   creditBatches,
@@ -25,7 +29,7 @@ import {
 } from "@/db/schema";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { SUBMISSION_EXTERNAL_MUTATIONS } from "@/lib/certification/submission-metadata";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -40,6 +44,7 @@ const createdSubmissionIds: string[] = [];
 const POST_EXPIRY_OFFSET_MS = 1_000;
 
 interface Fixture {
+  facilityId: string;
   batchId: string;
   removalAId: string;
   removalBId: string;
@@ -59,6 +64,7 @@ afterAll(async () => {
       .where(inArray(certificationSubmissions.id, createdSubmissionIds));
   }
   if (createdBatchIds.length > 0) {
+    await db.delete(activityEvents).where(inArray(activityEvents.creditBatchId, createdBatchIds));
     await db
       .delete(creditBatches)
       .where(inArray(creditBatches.id, createdBatchIds));
@@ -88,7 +94,7 @@ async function createFixture(): Promise<Fixture> {
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-PCR-${tag}`,
         name: `PCR Facility ${tag}`,
@@ -117,13 +123,10 @@ async function createFixture(): Promise<Fixture> {
       })
       .returning({ id: productionProcesses.id });
 
-    const [removalA, removalB] = await tx
-      .insert(certifierRemovals)
-      .values([
+    const [removalA, removalB] = await insertRemovalFixture(tx, [
         { organizationId: TEST_ORG_ID, facilityId: facility.id },
         { organizationId: TEST_ORG_ID, facilityId: facility.id },
-      ])
-      .returning({ id: certifierRemovals.id });
+      ]);
     createdRemovalIds.push(removalA.id, removalB.id);
 
     const [batch] = await tx
@@ -142,6 +145,7 @@ async function createFixture(): Promise<Fixture> {
       .returning({ id: creditBatches.id });
     createdBatchIds.push(batch.id);
     return {
+      facilityId: facility.id,
       batchId: batch.id,
       removalAId: removalA.id,
       removalBId: removalB.id,
@@ -201,7 +205,7 @@ describe("production-emissions claim reservations", () => {
     const draft = await insertDraft(fixture.removalAId, 1);
     const ctx = makeTestOrgContext(TEST_USER_ID);
     const args = { removalId: fixture.removalAId, submissionId: draft.id };
-    const [document] = await db.insert(documents).values({ organizationId: TEST_ORG_ID, fileUrl: "https://example.com/evidence.pdf", documentType: "pdf", entityType: "application", entityId: fixture.removalAId, fileName: "reviewed-evidence.pdf", mimeType: "application/pdf" }).returning();
+    const [document] = await db.insert(documents).values({ organizationId: TEST_ORG_ID, fileUrl: "https://example.com/evidence.pdf", documentType: "pdf", entityType: "facility", entityId: fixture.facilityId, fileName: "reviewed-evidence.pdf", mimeType: "application/pdf" }).returning();
     const reconcile = vi.fn(async () => [{ documentId: document.id }]);
     await expect(requestRemovalEvidenceRefresh(ctx, args, reconcile)).rejects.toThrow("Only an interrupted attempt");
     expect(reconcile).not.toHaveBeenCalled();
@@ -216,7 +220,7 @@ describe("production-emissions claim reservations", () => {
     expect(saved.payloadSnapshot).toEqual({ fixture: "production-claim-reservation" });
     expect(saved.status).toBe("draft");
     expect(saved.metadata).toMatchObject({ evidenceRefreshCandidates: [{ documentId: document.id }] });
-    await expect(deleteDocumentWithCertificationSafety(ctx, document.id)).rejects.toThrow("reviewed certification evidence");
+    await expect(deleteViaApp(ctx, document.id)).rejects.toThrow("reviewed certification evidence");
     await db.update(certificationSubmissions).set({ externalId: "rmv-already-created" }).where(eq(certificationSubmissions.id, draft.id));
     await expect(requestRemovalEvidenceRefresh(ctx, args, reconcile)).rejects.toThrow("Only an interrupted attempt");
     expect(reconcile).toHaveBeenCalledTimes(1);
@@ -228,9 +232,9 @@ describe("production-emissions claim reservations", () => {
     const draft = await insertDraft(fixture.removalAId, 1);
     const ctx = makeTestOrgContext(TEST_USER_ID);
     await db.update(certificationSubmissions).set({ metadata: { lastAttemptOutcome: "interrupted", externalMutation: "none" } }).where(eq(certificationSubmissions.id, draft.id));
-    const [document] = await db.insert(documents).values({ organizationId: TEST_ORG_ID, fileUrl: "https://example.com/evidence.pdf", documentType: "pdf", entityType: "application", entityId: fixture.removalAId, fileName: "review-race.pdf" }).returning();
+    const [document] = await db.insert(documents).values({ organizationId: TEST_ORG_ID, fileUrl: "https://example.com/evidence.pdf", documentType: "pdf", entityType: "facility", entityId: fixture.facilityId, fileName: "review-race.pdf" }).returning();
     await expect(requestRemovalEvidenceRefresh(ctx, { removalId: fixture.removalAId, submissionId: draft.id }, async () => {
-      await deleteDocumentWithCertificationSafety(ctx, document.id);
+      await deleteViaApp(ctx, document.id);
       return [{ documentId: document.id }];
     })).rejects.toThrow();
     const [saved] = await db.select().from(certificationSubmissions).where(eq(certificationSubmissions.id, draft.id));
@@ -277,6 +281,22 @@ describe("production-emissions claim reservations", () => {
       errorMessage: "Definitive pre-POST refusal.",
     });
     expect(await readReservation(fixture.batchId)).toBeNull();
+    const history = await db.select().from(activityEvents).where(eq(activityEvents.creditBatchId, fixture.batchId))
+      .orderBy(activityEvents.sequence);
+    // A resume keeps the same reservation, so only reserve and release record activity.
+    expect(history).toHaveLength(2);
+    for (const event of history) expect(event).toMatchObject({
+      entityType: "credit_batch", entityId: fixture.batchId, creditBatchId: fixture.batchId,
+      action: "updated", source: "form", actorUserId: ctx.userId,
+    });
+    expect(history[0].changedFields).toEqual(["productionEmissionsClaimReservedBySubmissionId"]);
+    expect(history[1].changedFields).toEqual(["productionEmissionsClaimReservedBySubmissionId"]);
+    expect(history[0].changes).toEqual({ productionEmissionsClaimReservedBySubmissionId: { from: null, to: winner.id } });
+    expect(history[1].changes).toEqual({ productionEmissionsClaimReservedBySubmissionId: { from: winner.id, to: null } });
+    await rejectSubmissionAndReleaseProductionClaims(ctx, {
+      submissionId: winner.id, expectedLockedAt: winner.lockedAt, errorMessage: "Repeated refusal",
+    });
+    expect(await db.select().from(activityEvents).where(eq(activityEvents.creditBatchId, fixture.batchId))).toHaveLength(history.length);
     const [rejected] = await db
       .select({ status: certificationSubmissions.status })
       .from(certificationSubmissions)

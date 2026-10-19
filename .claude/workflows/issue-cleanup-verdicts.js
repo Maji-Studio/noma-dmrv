@@ -132,7 +132,7 @@ Your cluster "${c.key}": issues ${c.issues.map((n) => '#' + n).join(', ')}.
    ${extractCmd(c.issues)}
 2. Get dedup/shipped context (recently closed issues + last 100 merged PRs):
    ${contextCmd}
-3. Read CONTEXT.md (domain glossary) and skim docs/adr/ filenames and docs/open-questions.md for decisions that supersede issues in your cluster.
+3. Read GLOSSARY.md (domain glossary) and skim docs/adr/ filenames and docs/open-questions.md for decisions that supersede issues in your cluster.
 4. For EVERY issue, verify its claims against the actual code (Grep/Read under src/, tests/e2e/) — never trust the issue body's description of the code. Then assign exactly one verdict:
    - close-implemented: the requested behavior already exists. Evidence MUST cite file:line and, when findable, the PR/commit that shipped it.
    - close-obsolete: superseded by an ADR, redesign, or newer issue. Evidence MUST cite the superseding ref.

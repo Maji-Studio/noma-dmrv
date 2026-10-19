@@ -97,7 +97,7 @@ B-0412 is emptied: 843.2 ÷ 0.70 = 1,204.6 kg wet. B-0419 takes the remaining 29
 
 | PR | Scope | Depends on |
 | --- | --- | --- |
-| A · docs | This plan, ADR 0029 amendment, ADR 0030, CONTEXT.md terms, open-questions update | — |
+| A · docs | This plan, ADR 0029 amendment, ADR 0030, GLOSSARY.md terms, open-questions update | — |
 | B · time | Timestamp columns, planner instants, native date-time inputs, house-style display. Staging reset notice. | A |
 | C · split engine | `stock_mode` column; planner operator order with per-layer readings, "untick" and overdraw errors; `basis_snapshot.policy`; correction replay of the saved order. Pure planner tests first. | B |
 | D · readings | Readings table; reset on save; estimated moisture; "Moisture updated" history row; before → after preview block; required, unprefilled moisture everywhere with the one-line hint and ⓘ; the 5-point warning; ingredient moisture without prefill. | C |

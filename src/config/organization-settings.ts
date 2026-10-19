@@ -3,6 +3,7 @@
  *
  * These values mirror the column defaults on `organization_settings`
  * (`@/db/schema/settings`), which in turn mirror the literals they replaced.
+ * `defaultTimezone` has no column default and is null until chosen.
  * Keeping them in `@/config` rather than in data-access means a client
  * component can render the same fallback the server would resolve, without
  * importing the schema.
@@ -12,35 +13,25 @@
  * only deliberately.
  */
 import type { ApplicationEvidenceMethod } from "@/schemas/applications";
-import type { CurrencyCode } from "@/schemas/credit-batches";
-import type { Timezone } from "@/schemas/facilities";
 import type { PackagingType } from "@/schemas/orders";
-import type { TripTypeValue } from "@/schemas/trip-type";
 
 export interface OrganizationDefaults {
-  defaultCurrency: CurrencyCode;
   /** `null` = the organization has not named a country. */
   defaultCountry: string | null;
   /**
-   * IANA zone. Stays a plain `string` because the column is free text and a
-   * seeded or hand-edited row may hold a zone the picker does not offer —
-   * narrowing the read type here would be a claim the database does not make.
-   * Consumers that need the narrow type guard against the offered list.
+   * IANA zone. `null` = the organization has not chosen one; no zone is assumed
+   * for it, because a wrong day attribution is worse than an empty field. Stays
+   * a plain `string` because the column is free text and a seeded or hand-edited
+   * row may hold a zone the picker does not offer.
    */
-  defaultTimezone: string;
-  defaultTripType: TripTypeValue;
+  defaultTimezone: string | null;
   defaultEvidenceMethod: ApplicationEvidenceMethod;
   defaultPackaging: PackagingType;
 }
 
-/** Exported narrow so a picker can use it as a fallback without re-guarding. */
-export const DEFAULT_ORGANIZATION_TIMEZONE: Timezone = "UTC";
-
 export const DEFAULT_ORGANIZATION_SETTINGS: OrganizationDefaults = {
-  defaultCurrency: "TZS",
   defaultCountry: null,
-  defaultTimezone: DEFAULT_ORGANIZATION_TIMEZONE,
-  defaultTripType: "return",
+  defaultTimezone: null,
   defaultEvidenceMethod: "location",
   defaultPackaging: "loose",
 };

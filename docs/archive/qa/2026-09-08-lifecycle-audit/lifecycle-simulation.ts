@@ -1,17 +1,17 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "../../../../tests/helpers/feedstock-fixture";
 /** Point-in-time observations, not regression specifications. No remote calls. */
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { facilities, feedstockTypes, storageLocations, binMovements, feedstocks, suppliers, supplierLocations, feedstockDeliveries } from "@/db/schema";
+import { facilities, feedstockTypes, storageLocations, binMovements, feedstocks } from "@/db/schema";
 import { updateStorageLocation } from "@/data-access/storage-locations";
 import { getStorageLocationLaneSummary } from "@/data-access/storage-location-lane-summary";
 import { createFeedstockType as quickCreateFeedstockType } from "@/data-access/quick-add";
 import { createFeedstockType as canonicalCreateFeedstockType, updateFeedstockType } from "@/data-access/feedstock-types";
-import { deleteSupplier } from "@/data-access/suppliers";
-import { updateFeedstock } from "@/data-access/feedstocks";
+import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import { updateFacility } from "@/data-access/facility-mutations";
 import { updateFeedstockTypeSchema } from "@/schemas/feedstock-types";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "../../../../tests/helpers/test-org";
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "../../../../tests/helpers/test-org";
 
 const BIN_STOCK_KG = 25;
 const context = makeTestOrgContext();
@@ -25,7 +25,7 @@ beforeAll(() => ensureTestOrg());
 
 async function fixture() {
   const tag = crypto.randomUUID();
-  const [facility] = await db.insert(facilities).values({
+  const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, timezone: "UTC",
     organizationId: TEST_ORG_ID, code: `AUD-${tag}`, name: `Audit ${tag}`, country: "CHE",
   }).returning();
   const [type] = await db.insert(feedstockTypes).values({
@@ -57,7 +57,7 @@ describe("baseline defect observations (passing means reproduced)", () => {
     try {
       const before = await getStorageLocationLaneSummary(context, { facilityId: f.facility.id, archived: false });
       expect(before.feedstock_bin.onHandKg).toBe(BIN_STOCK_KG);
-      await updateStorageLocation(context, f.bin.id, { type: "biochar_bin" });
+      await updateStorageLocation(context, f.bin.id, { expectedVersion: f.bin.version, type: "biochar_bin" });
       const after = await getStorageLocationLaneSummary(context, { facilityId: f.facility.id, archived: false });
       expect(after.feedstock_bin.onHandKg).toBe(0);
       expect(after.biochar_bin.onHandKg).toBe(0);
@@ -74,7 +74,7 @@ describe("baseline defect observations (passing means reproduced)", () => {
       category: "mineral", usage: "blend",
     }).returning();
     try {
-      const updated = await updateStorageLocation(context, f.bin.id, { feedstockTypeId: other.id });
+      const updated = await updateStorageLocation(context, f.bin.id, { expectedVersion: f.bin.version, feedstockTypeId: other.id });
       expect(updated.feedstockTypeId).toBe(other.id);
       const summary = await getStorageLocationLaneSummary(context, { facilityId: f.facility.id, archived: false });
       expect(summary.feedstock_bin.onHandKg).toBe(BIN_STOCK_KG);
@@ -88,11 +88,11 @@ describe("baseline defect observations (passing means reproduced)", () => {
   it("F02: partial feedstock-type update persists an invalid category/usage pair", async () => {
     const f = await fixture();
     try {
-      const input = updateFeedstockTypeSchema.parse({ feedstockTypeId: f.type.id, usage: "blend" });
+      const input = updateFeedstockTypeSchema.parse({ feedstockTypeId: f.type.id, expectedVersion: f.type.version, usage: "blend" });
       const updated = await updateFeedstockType(context, input);
       expect(updated.usage).toBe("blend");
       expect(updated.category).toBe("forestry");
-      expect(updateFeedstockTypeSchema.safeParse({ feedstockTypeId: f.type.id, usage: "blend", category: "forestry" }).success).toBe(false);
+      expect(updateFeedstockTypeSchema.safeParse({ feedstockTypeId: f.type.id, expectedVersion: f.type.version, usage: "blend", category: "forestry" }).success).toBe(false);
       console.log("F02: partial payload saved forestry/blend; equivalent complete payload rejected");
     } finally { await cleanup(f); }
   });
@@ -100,8 +100,8 @@ describe("baseline defect observations (passing means reproduced)", () => {
   it("F03: a stale facility form silently overwrites a newer country change", async () => {
     const f = await fixture();
     try {
-      await updateFacility(context, f.facility.id, { country: "USA" });
-      const saved = await updateFacility(context, f.facility.id, { name: `${f.facility.name} edited`, country: f.facility.country });
+      const firstEdit = await updateFacility(context, f.facility.id, { expectedVersion: f.facility.version, country: "USA" });
+      const saved = await updateFacility(context, f.facility.id, { expectedVersion: firstEdit.version, name: `${f.facility.name} edited`, country: f.facility.country });
       expect(saved.country).toBe("CHE");
       console.log("F03: operator A saved USA; stale operator B echoed CHE; final country=CHE, no conflict");
     } finally { await cleanup(f); }
@@ -111,11 +111,11 @@ describe("baseline defect observations (passing means reproduced)", () => {
 async function intakeFixture() {
   const f = await fixture();
   await db.delete(binMovements).where(eq(binMovements.storageLocationId, f.bin.id));
-  const [intake] = await db.insert(feedstocks).values({
+  const [intake] = await db.insert(feedstocks).values(await feedstockFixtureValues(db, {
     organizationId: TEST_ORG_ID, code: `AUD-${crypto.randomUUID()}`,
     facilityId: f.facility.id, feedstockTypeId: f.type.id, storageLocationId: f.bin.id,
     massWetKg: 100, massDryKg: 90, moistureContentPercent: 10, status: "complete",
-  }).returning();
+  })).returning();
   return { ...f, intake };
 }
 
@@ -123,24 +123,25 @@ describe("feedstock baseline observations", () => {
   it("F06: reducing intake below recorded withdrawal creates negative stock", async () => {
     const f = await intakeFixture();
     try {
-      await db.insert(binMovements).values({ organizationId: TEST_ORG_ID,
+      await db.insert(binMovements).values({ occurredAt: new Date("2026-01-01T00:00:00.000Z"), organizationId: TEST_ORG_ID,
         storageLocationId: f.bin.id, lane: "feedstock", movementType: "loss",
         massDeltaKg: -80, reason: "Disposable audit withdrawal fixture" });
       const before = await getStorageLocationLaneSummary(context, { facilityId: f.facility.id, archived: false });
       expect(before.feedstock_bin.onHandKg).toBe(20);
-      await updateFeedstock(context, f.intake.id, { massWetKg: 50, massDryKg: 45 });
+      await db.transaction((tx) => updateFeedstockInTransaction(context, tx, f.intake.id, { expectedVersion: f.intake.version, massWetKg: 50 }));
       const after = await getStorageLocationLaneSummary(context, { facilityId: f.facility.id, archived: false });
       expect(after.feedstock_bin.onHandKg).toBe(-30);
       console.log("F06: 100 kg intake - 80 kg loss = 20 kg; edit intake to 50 kg succeeds; final stock=-30 kg");
     } finally {
       await db.delete(feedstocks).where(eq(feedstocks.id, f.intake.id));
+      await cleanupFeedstockFixtureParents(db);
       await cleanup(f);
     }
   });
   it("F07: moisture-only update leaves stored dry mass inconsistent", async () => {
     const f = await intakeFixture();
     try {
-      await updateFeedstock(context, f.intake.id, { moistureContentPercent: 50 });
+      await db.transaction((tx) => updateFeedstockInTransaction(context, tx, f.intake.id, { expectedVersion: f.intake.version, moistureContentPercent: 50 }));
       const [saved] = await db.select().from(feedstocks).where(eq(feedstocks.id, f.intake.id));
       expect(saved.massWetKg).toBe(100);
       expect(saved.moistureContentPercent).toBe(50);
@@ -148,32 +149,15 @@ describe("feedstock baseline observations", () => {
       console.log("F07: saved wet=100 kg moisture=50% dry=90 kg; consistent derived dry would be 50 kg");
     } finally {
       await db.delete(feedstocks).where(eq(feedstocks.id, f.intake.id));
+      await cleanupFeedstockFixtureParents(db);
       await cleanup(f);
     }
   });
 });
 
 describe("supplier deletion baseline observation", () => {
-  it("F08: a restrictive FK failure leaves the supplier but deletes its locations", async () => {
-    const f = await fixture();
-    const [supplier] = await db.insert(suppliers).values({ organizationId: TEST_ORG_ID,
-      code: `AUD-${crypto.randomUUID()}`, name: `Audit ${crypto.randomUUID()}` }).returning();
-    await db.insert(supplierLocations).values({ organizationId: TEST_ORG_ID,
-      supplierId: supplier.id, name: "Disposable source location", country: "CHE" });
-    const [delivery] = await db.insert(feedstockDeliveries).values({ organizationId: TEST_ORG_ID,
-      code: `AUD-${crypto.randomUUID()}`, facilityId: f.facility.id, supplierId: supplier.id,
-      deliveryDate: new Date("2026-09-01T12:00:00Z") }).returning();
-    try {
-      await expect(deleteSupplier(context, supplier.id)).rejects.toThrow();
-      expect(await db.select().from(suppliers).where(eq(suppliers.id, supplier.id))).toHaveLength(1);
-      expect(await db.select().from(supplierLocations).where(eq(supplierLocations.supplierId, supplier.id))).toHaveLength(0);
-      console.log("F08: delete rejected by feedstock_deliveries FK; supplier remains; locations were deleted");
-    } finally {
-      await db.delete(feedstockDeliveries).where(eq(feedstockDeliveries.id, delivery.id));
-      await db.delete(supplierLocations).where(eq(supplierLocations.supplierId, supplier.id));
-      await db.delete(suppliers).where(eq(suppliers.id, supplier.id));
-      await cleanup(f);
-    }
+  it.skip("F08: a restrictive FK failure leaves the supplier but deletes its locations", () => {
+    // F08 used the retired feedstock_deliveries table.
   });
 });
 

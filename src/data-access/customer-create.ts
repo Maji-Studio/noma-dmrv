@@ -1,97 +1,28 @@
-/**
- * Customer create writers.
- *
- * A customer and the locations captured on its create form are one operator
- * intent, so they commit together or not at all. The transaction-accepting
- * primitives below are the single implementation: `customers.ts` wraps them for
- * the single-record create paths, and `createCustomerWithLocations` reuses them
- * inside one transaction for the compound create.
- */
-
+/** Shared transaction-local customer location insert primitive. */
 import { and, count, eq } from "drizzle-orm";
-import { db, type DbTransaction } from "@/db";
-import {
-  customers,
-  customerLocations,
-  type Customer,
-  type CustomerLocation,
-} from "@/db/schema";
+import type { DbTransaction } from "@/db";
+import { customers, customerLocations, type CustomerLocation } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { SafeError } from "@/lib/errors";
-import type { DistanceSourceValue } from "@/schemas/distance-source";
-import { guardCustomerName } from "./unique-name-guards";
+import type { CaptureActivity } from "@/lib/activity-changes";
+import type { LocationDistanceFillResult } from "./location-distance-fill";
+import type { FacilityDistanceInput } from "@/schemas/facility-distances";
+import { partyArchived, partyNotFound } from "@/lib/party-domain-errors";
+import { upsertLocationFacilityDistances, withLocationFacilityDistances } from "./location-facility-distances";
+import { lockLocationFacilities } from "./party-reference-guards";
+import { nextVersion } from "./row-version";
 import { requireOrgScope } from "./utils";
-
-/**
- * Locations are identified by their GPS position, and the country column is
- * NOT NULL, so an unstated country is stored as this placeholder rather than
- * blocking the write.
- */
-const UNKNOWN_COUNTRY = "UNKNOWN";
-
-/** Any executor that can run a customer write: the pool or an open transaction. */
-type CustomerWriteExecutor = typeof db | DbTransaction;
-
-export interface CustomerInsertInput {
-  code: string;
-  name: string;
-  cropType?: string | null;
-  address?: string | null;
-  contactEmail?: string | null;
-  contactPhone?: string | null;
-}
 
 export interface CustomerLocationInsertInput {
   name: string;
-  country?: string;
+  country: string;
   stateRegion?: string | null;
   city?: string | null;
-  gpsLatitude?: number | null;
-  gpsLongitude?: number | null;
+  gpsLatitude: number;
+  gpsLongitude: number;
   address?: string | null;
-  distanceFromFacilityKm?: number | null;
-  distanceSource?: DistanceSourceValue | null;
+  facilityDistances?: FacilityDistanceInput[];
   defaultSoilTemperatureC?: number | null;
   isDefault?: boolean;
-}
-
-export interface CreateCustomerWithLocationsInput {
-  customer: CustomerInsertInput;
-  locations: CustomerLocationInsertInput[];
-}
-
-export interface CreatedCustomerWithLocations {
-  customer: Customer;
-  locations: CustomerLocation[];
-}
-
-/**
- * Insert one customer row through `executor`. Pass the pool for a standalone
- * create, or an open transaction to commit alongside other writes.
- */
-export async function insertCustomer(
-  ctx: OrgContext,
-  executor: CustomerWriteExecutor,
-  data: CustomerInsertInput,
-): Promise<Customer> {
-  requireOrgScope(ctx);
-
-  const [customer] = await guardCustomerName(ctx, data.name, () =>
-    executor
-      .insert(customers)
-      .values({
-        organizationId: ctx.organizationId,
-        code: data.code,
-        name: data.name,
-        cropType: data.cropType ?? null,
-        address: data.address ?? null,
-        contactEmail: data.contactEmail ?? null,
-        contactPhone: data.contactPhone ?? null,
-      })
-      .returning(),
-  );
-
-  return customer;
 }
 
 /**
@@ -105,47 +36,60 @@ export async function createCustomerLocationInTransaction(
   tx: DbTransaction,
   customerId: string,
   data: CustomerLocationInsertInput,
-): Promise<CustomerLocation> {
+  captureLocation?: CaptureActivity,
+): Promise<{ location: CustomerLocation; fill: LocationDistanceFillResult }> {
   requireOrgScope(ctx);
 
+  await lockLocationFacilities(ctx, tx, data.facilityDistances, []);
   const [customer] = await tx
-    .select({ id: customers.id })
+    .select({ id: customers.id, code: customers.code, archivedAt: customers.archivedAt })
     .from(customers)
     .where(
       and(
         eq(customers.id, customerId),
         eq(customers.organizationId, ctx.organizationId),
       ),
-    );
+    )
+    // Match deletion and location updates: parent before children.
+    .for("no key update");
 
   if (!customer) {
-    throw new SafeError("Customer not found");
+    throw partyNotFound("customer");
   }
 
-  // The customer's first location is always its default.
-  const [{ value: existingCount }] = await tx
+  if (customer.archivedAt) throw partyArchived("customer", customer.code);
+
+  // A customer without a default takes the new location as its default. Archived
+  // rows never hold the default (customer_locations_default_active), so a customer
+  // left with only archived locations gets one here.
+  const [{ value: defaultCount }] = await tx
     .select({ value: count() })
     .from(customerLocations)
     .where(
       and(
         eq(customerLocations.customerId, customerId),
         eq(customerLocations.organizationId, ctx.organizationId),
+        eq(customerLocations.isDefault, true),
       ),
     );
-  const makeDefault = data.isDefault === true || existingCount === 0;
+  const makeDefault = data.isDefault === true || defaultCount === 0;
 
   // Clear the prior default first so the partial unique index never sees two.
   if (makeDefault) {
-    await tx
+    const siblings = await tx.select().from(customerLocations).where(and(
+      eq(customerLocations.customerId, customerId), eq(customerLocations.organizationId, ctx.organizationId), eq(customerLocations.isDefault, true),
+    ));
+    const demoted = await tx
       .update(customerLocations)
-      .set({ isDefault: false, updatedAt: new Date() })
+      .set({ version: nextVersion(customerLocations.version), isDefault: false, updatedAt: new Date() })
       .where(
         and(
           eq(customerLocations.customerId, customerId),
           eq(customerLocations.organizationId, ctx.organizationId),
           eq(customerLocations.isDefault, true),
         ),
-      );
+      ).returning();
+    for (const sibling of demoted) captureLocation?.(sibling.id, siblings.find(row => row.id === sibling.id)!, sibling);
   }
 
   const [location] = await tx
@@ -154,81 +98,17 @@ export async function createCustomerLocationInTransaction(
       organizationId: ctx.organizationId,
       customerId,
       name: data.name,
-      country: data.country ?? UNKNOWN_COUNTRY,
+      country: data.country,
       stateRegion: data.stateRegion ?? null,
       city: data.city ?? null,
-      gpsLatitude: data.gpsLatitude ?? null,
-      gpsLongitude: data.gpsLongitude ?? null,
+      gpsLatitude: data.gpsLatitude,
+      gpsLongitude: data.gpsLongitude,
       address: data.address ?? null,
-      distanceFromFacilityKm: data.distanceFromFacilityKm ?? null,
-      distanceSource: data.distanceSource ?? null,
       defaultSoilTemperatureC: data.defaultSoilTemperatureC ?? null,
       isDefault: makeDefault,
     })
     .returning();
 
-  return location;
-}
-
-/**
- * Create a customer and every location captured on its create form in ONE
- * transaction. A failure on any location rolls the customer back too, so the
- * operator never keeps a half-saved customer after the form reports a failure.
- *
- * Locations are inserted in order because each one reads the customer's current
- * default to decide whether it becomes the new default.
- */
-export async function createCustomerWithLocations(
-  ctx: OrgContext,
-  input: CreateCustomerWithLocationsInput,
-): Promise<CreatedCustomerWithLocations> {
-  requireOrgScope(ctx);
-
-  return db.transaction(async (tx) => {
-    const customer = await insertCustomer(ctx, tx, input.customer);
-
-    const inserted: CustomerLocation[] = [];
-    for (const location of input.locations) {
-      inserted.push(
-        await createCustomerLocationInTransaction(ctx, tx, customer.id, location),
-      );
-    }
-
-    return {
-      customer,
-      locations: await readBackInInsertOrder(ctx, tx, customer.id, inserted),
-    };
-  });
-}
-
-/**
- * Re-read the locations just inserted, keeping the caller's insertion order.
- *
- * An `INSERT ... RETURNING` row is a snapshot taken before any later location
- * demotes it, so a row collected earlier in the loop can still claim
- * `isDefault: true` after it was demoted. Callers seed these rows into the
- * location detail cache, so they must carry the committed state.
- */
-async function readBackInInsertOrder(
-  ctx: OrgContext,
-  tx: DbTransaction,
-  customerId: string,
-  inserted: CustomerLocation[],
-): Promise<CustomerLocation[]> {
-  if (inserted.length < 2) {
-    return inserted;
-  }
-
-  const rows = await tx
-    .select()
-    .from(customerLocations)
-    .where(
-      and(
-        eq(customerLocations.customerId, customerId),
-        eq(customerLocations.organizationId, ctx.organizationId),
-      ),
-    );
-
-  const byId = new Map(rows.map((row) => [row.id, row]));
-  return inserted.map((row) => byId.get(row.id) ?? row);
+  const fill = await upsertLocationFacilityDistances(ctx, tx, "customer", location.id, data.facilityDistances);
+  return { location: (await withLocationFacilityDistances(ctx, "customer", [location], tx))[0], fill };
 }

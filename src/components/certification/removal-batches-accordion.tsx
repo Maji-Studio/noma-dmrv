@@ -21,8 +21,10 @@ import { formatDate, formatDateRange } from "@/lib/format-utils";
 
 export interface RemovalAccordionEntry {
   removalId: string;
-  /** Registry id (rmv_…) or a short local id fallback. */
+  /** Removal code (RM-…), led with like credit batch rows lead with CB-…. */
   label: string;
+  /** Registry id (rmv_…), shown as secondary text once submitted. */
+  registryId?: string | null;
   completedOn: string | null;
   creditBatches: RemovalCreditBatchSummary[];
   /** Optional status badge rendered in the trigger (statement detail view). */
@@ -55,6 +57,11 @@ export function RemovalBatchesAccordion({
                 <span className="body-small font-mono text-[var(--color-text-primary)] truncate">
                   {entry.label}
                 </span>
+                {entry.registryId && (
+                  <span className="body-caption font-mono text-[var(--color-text-tertiary)] truncate">
+                    {entry.registryId}
+                  </span>
+                )}
                 {entry.completedOn && (
                   <span className="body-caption text-[var(--color-text-tertiary)] shrink-0">
                     {formatDate(entry.completedOn)}
@@ -77,7 +84,7 @@ export function RemovalBatchesAccordion({
               </Link>
 
               <div className="flex flex-col gap-6">
-                <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+                <span className="body-small text-[var(--color-text-secondary)]">
                   Credit batches ({entry.creditBatches.length})
                 </span>
                 {entry.creditBatches.length === 0 ? (

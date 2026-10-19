@@ -7,12 +7,16 @@
  * it inside the form at both levels. Every `*-form.tsx` is either covered here or
  * listed in `NOT_SHEET_FORMS` with its reason; a new form fails the inventory.
  *
+ * The same render seam hosts the required marker guards at the end of the file
+ * (see `form-required-markers-harness.tsx`).
+ *
  * Data hooks are neutralised at the React Query seam, so every query reads as
  * settled and empty and no server action runs. That is enough for parity: a
  * form can only differ between the levels through a level reader, and those
  * are the primitives exercised with data in `form-detail-parity.test.tsx`.
  */
-import type { ReactElement, ReactNode } from "react";
+import { NuqsTestingAdapter } from "nuqs/adapters/testing";
+import type { ComponentProps, ReactElement, ReactNode } from "react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
@@ -65,10 +69,20 @@ vi.mock("@/hooks/use-facility-context", () => ({
 }));
 
 import { renderBothLevels, sourceFiles } from "./form-detail-parity-harness";
+import { DistanceOverrideField } from "@/components/transport-legs/distance-override-field";
+import { FieldPositionField } from "@/components/applications/field-position-field";
+import { ApplicationEvidencePanel } from "@/components/applications/application-evidence-panel";
+import { RequiredMarker } from "./required-marker";
+import { FormEntitySelect } from "./entity-select/form-entity-select";
+import { FormField } from "./form-field";
+import { ChoiceCardGroup } from "./choice-card-group";
+import { EventTimeInput } from "./event-time-input";
+import { change, conditionalRequired, requiredMarkers } from "./form-required-markers-harness";
 import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
 import { FeedstockForm } from "@/components/feedstocks/feedstock-form";
 import { OutputStockForm } from "@/components/storage-locations/output-stock-form";
 import { StorageLocationForm } from "@/components/storage-locations/storage-location-form";
+import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import { ProductionRunForm } from "@/components/production-runs/production-run-form";
 import { ProductionIncidentForm } from "@/components/production-runs/production-incident-form";
 import { ProductionSampleForm } from "@/components/production-runs/production-sample-form";
@@ -105,11 +119,13 @@ const NOT_SHEET_FORMS: Record<string, string> = {
   "components/organizations/invitation-bootstrap-form.tsx": "onboarding page, no detail toggle",
   "components/settings/organization-defaults-form.tsx": "settings page, no detail toggle",
   "components/admin/emission-estimates-form.tsx": "admin page, no detail toggle",
+  "components/api-keys/api-key-form.tsx": "settings dialog, no detail toggle",
+  "components/emissions/manual-entry-form.tsx": "emissions line drawer, no detail toggle",
 };
 
 function ProductionSampleFormHarness() {
   const deferredAttachments = useDeferredAttachments();
-  return <ProductionSampleForm productionRunId="run" onSubmit={noop} deferredAttachments={deferredAttachments} onRetryDeferredAttachment={async () => undefined} onRemoveDeferredAttachment={noop} />;
+  return <ProductionSampleForm facilityId="facility" productionRunId="run" onSubmit={noop} deferredAttachments={deferredAttachments} onRetryDeferredAttachment={async () => undefined} onRemoveDeferredAttachment={noop} />;
 }
 
 type FormCase = { file: string; name: string; element: ReactElement; shows?: string };
@@ -117,10 +133,10 @@ type FormCase = { file: string; name: string; element: ReactElement; shows?: str
 /** Every sheet form in create mode, with only the props it requires. */
 const CREATE_CASES: FormCase[] = [
   { file: "components/feedstocks/feedstock-form.tsx", name: "feedstock delivery", element: <FeedstockForm onSubmit={noop} /> },
-  { file: "components/storage-locations/output-stock-form.tsx", name: "output stock loss", element: <OutputStockForm storageLocationId="bin" facilityId="facility" kind="loss" onCancel={noop} onRecorded={noop} />, shows: "Preview bin" },
+  { file: "components/storage-locations/output-stock-form.tsx", name: "output stock loss", element: <OutputStockForm storageLocationId="bin" facilityId="facility" onCancel={noop} onRecorded={noop} />, shows: "Preview bin" },
   { file: "components/storage-locations/storage-location-form.tsx", name: "storage bin", element: <StorageLocationForm onSubmit={noop} /> },
   { file: "components/production-runs/production-run-form.tsx", name: "production run", element: <ProductionRunForm onSubmit={noop} /> },
-  { file: "components/production-runs/production-incident-form.tsx", name: "production incident", element: <ProductionIncidentForm productionRunId="run" onSubmit={noop} /> },
+  { file: "components/production-runs/production-incident-form.tsx", name: "production incident", element: <ProductionIncidentForm facilityId="facility" productionRunId="run" onSubmit={noop} /> },
   { file: "components/production-runs/production-sample-form.tsx", name: "production sample", element: <ProductionSampleFormHarness /> },
   // Its stock previews render only once bins are picked, which props cannot preset;
   // the stock blocks themselves are covered in form-detail-parity.test.tsx.
@@ -148,11 +164,7 @@ const CREATE_CASES: FormCase[] = [
 const EDIT_CASES: FormCase[] = [
   { file: "components/feedstocks/feedstock-form.tsx", name: "feedstock delivery (edit)", element: <FeedstockForm onSubmit={noop} feedstock={as({
     id: "feedstock", facilityId: "facility", deliveryDate: DAY, supplierId: "supplier", supplierName: "Supplier", feedstockTypeId: "type", feedstockTypeName: "Maize cobs",
-    massWetKg: 1000, moistureContentPercent: 20, massDryKg: 800, storageLocationId: "bin", transportDistanceKm: 20, transportTripType: "one_way", notes: null,
-  })} /> },
-  { file: "components/storage-locations/output-stock-form.tsx", name: "output stock correction (edit)", shows: "Preview bin", element: <OutputStockForm storageLocationId="bin" facilityId="facility" kind="count" onCancel={noop} onRecorded={noop} original={as({
-    id: "00000000-0000-4000-8000-000000000001", deliveryId: null, kind: "count", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded",
-    correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 80, afterDryKg: 0, allocations: [],
+    massWetKg: 1000, moistureContentPercent: 20, massDryKg: 800, storageLocationId: "bin", transportDistanceKm: 20, notes: null,
   })} /> },
   { file: "components/production-runs/production-run-form.tsx", name: "production run (edit)", element: <ProductionRunForm onSubmit={noop} productionRun={as({
     id: "run", facilityId: "facility", reactorId: "reactor", status: "complete", startTime: DAY, endTime: DAY, feedstockDraws: [{ storageLocationId: "bin", storageLocationName: "Feedstock bin", wetMassKg: 1000 }],
@@ -163,10 +175,10 @@ const EDIT_CASES: FormCase[] = [
     formulationId: "formulation", storageLocationId: "destination", sourceBiocharStorageLocationId: "source", composition: { ingredients: [] },
   })} /> },
   { file: "components/orders/order-form.tsx", name: "order (edit)", element: <OrderForm onSubmit={noop} order={as({
-    id: "order", facilityId: "facility", customerId: "customer", customerLocationId: "location", formulationId: "formulation", orderDate: DAY, quantityKg: 2000, packaging: "loose", value: 500, currency: "TZS",
+    id: "order", facilityId: "facility", customerId: "customer", customerLocationId: "location", formulationId: "formulation", orderDate: DAY, quantityKg: 2000, packaging: "loose",
   })} /> },
   { file: "components/deliveries/delivery-form.tsx", name: "delivery (edit)", element: <DeliveryForm onSubmit={noop} delivery={as({
-    id: "delivery", facilityId: "facility", orderId: "order", storageLocationId: "bin", deliveryDate: DAY, deliveredWetMassKg: 100, moistureContentPercent: 20, status: "delivered", tripType: "one_way",
+    id: "delivery", facilityId: "facility", orderId: "order", storageLocationId: "bin", deliveryDate: DAY, deliveredWetMassKg: 100, moistureContentPercent: 20, status: "delivered",
   })} /> },
   { file: "components/applications/application-form.tsx", name: "application (edit)", element: <ApplicationForm onSubmit={noop} application={as({
     id: "application", deliveryId: "delivery", applicationDate: DAY, biocharAppliedTons: 5, fieldSizeHa: 1.5, evidenceMethod: "location",
@@ -180,8 +192,8 @@ const EDIT_CASES: FormCase[] = [
   { file: "components/customers/customer-form.tsx", name: "customer (edit)", element: <CustomerForm onSubmit={noop} customerId="customer" customer={as({ id: "customer", name: "Customer", cropType: "Maize" })} /> },
   { file: "components/suppliers/supplier-form.tsx", name: "supplier (edit)", element: <SupplierForm onSubmit={noop} supplierId="supplier" supplier={as({ id: "supplier", name: "Supplier" })} /> },
   { file: "components/facilities/facility-form.tsx", name: "facility (edit)", element: <FacilityForm onSubmit={noop} facility={as({ id: "facility", name: "Mafinga", country: "TZ", timezone: "Africa/Dar_es_Salaam", durabilityOption: "200_year" })} /> },
-  { file: "components/reactors/reactor-form.tsx", name: "reactor (edit)", element: <ReactorForm onSubmit={noop} reactor={as({ id: "reactor", facilityId: "facility", identifier: "R-1", reactorType: "kon_tiki", nominalThroughputTph: 0.5 })} /> },
-  { file: "components/feedstock-types/feedstock-type-form.tsx", name: "feedstock type (edit)", element: <FeedstockTypeForm onSubmit={noop} feedstockType={as({ id: "type", name: "Maize cobs", code: "FT-001", category: "agricultural_residue", usage: "pyrolysis" })} /> },
+  { file: "components/reactors/reactor-form.tsx", name: "reactor (edit)", element: <ReactorForm onSubmit={noop} reactor={as({ id: "reactor", facilityId: "facility", identifier: "R-1", reactorType: "batch", nominalThroughputTph: 0.5 })} /> },
+  { file: "components/feedstock-types/feedstock-type-form.tsx", name: "feedstock type (edit)", element: <FeedstockTypeForm onSubmit={noop} feedstockType={as({ id: "type", name: "Maize cobs", code: "FT-001", category: "agricultural", usage: "pyrolysis" })} /> },
   { file: "components/storage-locations/storage-location-form.tsx", name: "storage bin (edit)", element: <StorageLocationForm onSubmit={noop} storageLocation={as({ id: "bin", facilityId: "facility", type: "product_bin", stockMode: "mix", name: "Mix bin", formulationId: "formulation" })} /> },
   { file: "components/formulations/formulation-form.tsx", name: "formulation (edit)", element: <FormulationForm onSubmit={noop} formulation={as({ id: "formulation", name: "Mix", description: null, biocharRatio: 0.6, ingredients: [{ feedstockTypeId: "manure", ratio: 0.4, feedstockType: { name: "Manure" } }] })} /> },
 ];
@@ -194,6 +206,21 @@ beforeAll(() => {
 afterAll(() => { vi.unstubAllGlobals(); });
 
 describe("sheet form detail level parity", () => {
+  it.each([
+    ["biochar_bin", "split", true], ["product_bin", "split", true],
+    ["biochar_bin", "mix", false], ["product_bin", "mix", false], ["feedstock_bin", "split", false],
+  ] as const)("shows default draw order only for split output bins (%s, %s)", async (type, stockMode, shown) => {
+    const { simple, detailed } = await renderBothLevels(<StorageLocationForm onSubmit={noop}
+      storageLocation={as({ id: "bin", facilityId: "facility", type, stockMode, drawOrder: "newest_first", name: "Bin" })} />);
+    for (const view of [simple, detailed]) {
+      expect(view.items.includes("field:Default draw order")).toBe(shown);
+      if (shown) {
+        expect(view.text).toContain("Oldest first");
+        expect(view.text).toContain("Newest first");
+      }
+    }
+  });
+
   it("covers every sheet form, or names why a form is not one", () => {
     const forms = sourceFiles().map(file => file.path).filter(path => path.endsWith("-form.tsx"));
     const covered = new Set([...CREATE_CASES, ...EDIT_CASES].map(entry => entry.file));
@@ -202,11 +229,124 @@ describe("sheet form detail level parity", () => {
     expect(new Set(CREATE_CASES.map(entry => entry.file)).size).toBe(covered.size);
   });
 
+  it.each([
+    {
+      name: "formulation", file: "components/formulations/formulation-form.tsx",
+      sections: ["section:(untitled)", "section:Blend composition by volume", "section:(untitled)"],
+      createFields: ["field:Formulation name", "field:Volume share", "field:Description"],
+      editFields: ["field:Formulation name", "field:Volume share", "field:Blend material", "field:Volume share", "field:Description"],
+    },
+    {
+      name: "reactor", file: "components/reactors/reactor-form.tsx",
+      sections: ["section:(untitled)", "section:Reactor configuration"],
+      createFields: ["field:Identifier", "field:Reactor type", "field:Nominal throughput (tph)"],
+      editFields: ["field:Identifier", "field:Reactor type", "field:Nominal throughput (tph)"],
+    },
+    {
+      name: "credit batch", file: "components/credit-batches/credit-batch-form.tsx",
+      sections: ["section:Batch definition", "section:(untitled)"],
+      createFields: ["field:Feedstock type", "field:Start date", "field:End date", "field:Notes"],
+      editFields: ["field:Feedstock type", "field:Start date", "field:End date", "field:Notes"],
+    },
+  ])("keeps $name create/edit sections and fields in order without generic headings or the auto-fill cue", async ({ file, sections, createFields, editFields }) => {
+    for (const { cases, fields } of [{ cases: CREATE_CASES, fields: createFields }, { cases: EDIT_CASES, fields: editFields }]) {
+      const formCase = cases.find(entry => entry.file === file)!;
+      const { simple, detailed } = await renderBothLevels(formCase.element);
+      for (const level of [simple, detailed]) {
+        expect(level.items.filter(item => item.startsWith("section:"))).toEqual(sections);
+        expect(level.items.filter(item => item.startsWith("field:"))).toEqual(fields);
+        for (const removed of ["Required information", "Additional information", "Auto-fills the remaining share"]) {
+          expect(level.text).not.toContain(removed);
+        }
+      }
+    }
+  });
+
   it.each([...CREATE_CASES, ...EDIT_CASES])("$name form shows the same inputs, sections and actions at both levels", async ({ element, shows }) => {
-    const { simple, detailed } = await renderBothLevels(element);
+    const { simple, detailed } = await renderBothLevels(<NuqsTestingAdapter>{element}</NuqsTestingAdapter>);
     expect(simple.items.some(item => item.startsWith("input:"))).toBe(true);
     if (shows) expect(simple.text).toContain(shows);
     expect(detailed.items).toEqual(simple.items);
     expect(detailed.text).toEqual(simple.text);
+  });
+});
+
+/**
+ * Fields that refuse an empty submit without carrying the star, each with the
+ * reason: the rule is one of several fields, so no single input is required.
+ */
+const REFUSES_EMPTY_WITHOUT_STAR: Record<string, string[]> = {
+  "production sample": ["weightGrams"], // at least one measured value, any field
+};
+
+describe("required markers match what a form needs to submit", () => {
+  it.each(CREATE_CASES)("$name form stars every field an empty submit refuses", async ({ name, element }) => {
+    const { starred, failing, markerCount } = await requiredMarkers(<NuqsTestingAdapter>{element}</NuqsTestingAdapter>);
+    // Every star renders the shared RequiredMarker.
+    expect(markerCount).toBeGreaterThanOrEqual(starred.length);
+    const allowed = REFUSES_EMPTY_WITHOUT_STAR[name] ?? [];
+    const unstarred = failing.filter(id => !starred.includes(id) && !allowed.includes(id));
+    expect(unstarred).toEqual([]);
+    // The exemptions stay honest: an exempt field still refuses an empty submit.
+    for (const id of allowed) expect(failing).toContain(id);
+  });
+
+  it.each([
+    ["running", ["reactorId", "startDate", "startTime", "feedstockDraws.0.storageLocationId", "feedstockDraws.0.wetMassKg"]],
+    ["complete", ["reactorId", "startDate", "startTime", "endDate", "endTime", "feedstockDraws.0.storageLocationId", "feedstockDraws.0.wetMassKg", "feedstockMoisturePercent", "biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"]],
+    ["failed", ["reactorId", "startDate", "startTime", "endDate", "endTime", "feedstockDraws.0.storageLocationId", "feedstockDraws.0.wetMassKg", "feedstockMoisturePercent"]],
+    ["cancelled", ["reactorId", "cancellationReason", "startDate", "startTime", "feedstockDraws.0.storageLocationId", "feedstockDraws.0.wetMassKg"]],
+  ] as const)("production run stars the fields a %s run needs, and no others", async (status, expected) => {
+    const run = as<ProductionRunWithRelations>({ id: "run", facilityId: "facility", reactorId: "reactor", status, startTime: DAY, endTime: DAY, feedstockDraws: [{ storageLocationId: "bin", storageLocationName: "Feedstock bin", wetMassKg: 1000 }], feedstocks: [], totalFeedstockWetMassKg: 1000 });
+    const { starred } = await requiredMarkers(<NuqsTestingAdapter><ProductionRunForm onSubmit={noop} productionRun={run} /></NuqsTestingAdapter>, { submit: false });
+    expect([...starred].sort()).toEqual([...expected].sort());
+  });
+});
+
+const NOW_ISO = "2026-09-01T10:00:00.000Z";
+const UUID_A = "11111111-1111-4111-8111-111111111111";
+const UUID_B = "22222222-2222-4222-8222-222222222222";
+type Case = { name: string; target: Parameters<typeof conditionalRequired>[1]; element: ReactElement; empty?: Parameters<typeof conditionalRequired>[2] };
+const application = (overrides: object) => as<NonNullable<ComponentProps<typeof ApplicationForm>["application"]>>({ id: "application", deliveryId: UUID_A, applicationDate: DAY, biocharAppliedTons: 5, fieldSizeHa: 1.5, evidenceMethod: "location", ...overrides });
+const delivery = (overrides: object) => as<NonNullable<ComponentProps<typeof DeliveryForm>["delivery"]>>({ id: "delivery", facilityId: "facility", orderId: UUID_A, storageLocationId: UUID_B, deliveryDate: DAY, deliveredWetMassKg: 100, moistureContentPercent: 20, status: "delivered", ...overrides });
+const CONDITIONAL_CASES: Case[] = [
+  { name: "cancellation reason", target: "cancellationReason", element: <ProductionRunForm onSubmit={noop} productionRun={as<ProductionRunWithRelations>({ id: "run", facilityId: "facility", reactorId: "reactor", status: "cancelled", startTime: DAY, endTime: null, cancellationReason: null, feedstockDraws: [], feedstocks: [], totalFeedstockWetMassKg: 0 })} /> },
+  { name: "delivery wet mass", target: "deliveredWetMassKg", element: <DeliveryForm onSubmit={noop} delivery={delivery({ deliveredWetMassKg: null })} /> },
+  { name: "nutrient share", target: "phosphorusPercent", element: <SampleForm onSubmit={noop} sample={as({ id: "sample", creditBatchId: UUID_A, samplingTime: DAY, analysisDate: DAY, labName: "Lab", totalCarbonPercent: 80, organicCarbonPercent: 75, durabilityOption: "200_year", nutrientClaimEnabled: true })} /> },
+  { name: "override distance", target: "distanceKmOverride", element: <DeliveryForm onSubmit={noop} delivery={delivery({})} />,
+    empty: async root => { await change(() => root.findAllByType(DistanceOverrideField)[0]!.props.onOverride()); } },
+  { name: "application GPS, set manually", target: "gps-latitude", element: <ApplicationForm onSubmit={noop} application={application({ gpsLatitude: 1, gpsLongitude: 2 })} />,
+    empty: async root => {
+      await change(() => root.findByType(FieldPositionField).props.onModeChange("manual"));
+      await change(() => root.findByType(FieldPositionField).props.onPositionChange({ lat: null, lng: null }));
+    } },
+  { name: "application GIS reference", target: root => ({ starred: root.findAllByType(RequiredMarker).length > 0 && root.findByType(ApplicationEvidencePanel).props.mode === "boundary", error: root.findByType(ApplicationEvidencePanel).props.error }), element: <ApplicationForm onSubmit={noop} application={application({ evidenceMethod: "boundary", gisBoundary: null, gpsLatitude: 1, gpsLongitude: 2 })} /> },
+  { name: "storage bin feedstock type", target: root => { const field = root.findAll(node => node.type === FormEntitySelect && node.props.name === "feedstockTypeId")[0]!.findByType(FormField); return { starred: Boolean(field.props.required), error: field.props.error }; }, element: <StorageLocationForm onSubmit={noop} storageLocation={as({ id: "bin", facilityId: "facility", type: "feedstock_bin", name: "Feedstock bin", feedstockTypeId: null })} /> },
+  { name: "storage bin merge time", target: "mergedAt", element: <StorageLocationForm onSubmit={noop} storageLocation={as({ id: "bin", facilityId: UUID_A, type: "biochar_bin", stockMode: "split", drawOrder: "newest_first", name: "Biochar bin" })} />,
+    empty: async root => {
+      await change(() => root.findAllByType(ChoiceCardGroup).find(node => node.props.id === "stockMode")!.props.onChange({ target: { value: "mix", name: "stockMode" }, type: "change" }));
+      await change(() => root.findAllByType(EventTimeInput)[0]!.findByType("input").props.onChange({ target: { value: "" } }));
+    } },
+  { name: "biochar product moisture", target: "moistureContentPercent", element: <BiocharProductForm onSubmit={noop} product={as({
+    id: "product", facilityId: UUID_A, placedAt: NOW_ISO, massKg: 350, waterAddedKg: 50, moistureContentPercent: null, formulationId: UUID_A, storageLocationId: UUID_B,
+    sourceBiocharStorageLocationId: UUID_A, composition: { ingredients: [] },
+  })} /> },
+];
+
+/**
+ * Starts from a valid fixture and empties one conditionally required field, so
+ * the empty-submit guard's blind spot (Zod aborts a superRefine after an
+ * invalid_type issue; handler checks run after validation) cannot hide it.
+ * Not in this table, each covered by a focused test instead: the over-allocation
+ * justification and the ingredient moisture (conditional-required-markers.test.tsx,
+ * the forms need bins and formulations the query seam cannot supply) and the
+ * output stock moisture (shown only once the stock preview picks a single reading).
+ */
+describe("a conditionally required field carries the star and the error together", () => {
+  it.each(CONDITIONAL_CASES)("$name", async ({ target, element, empty }) => {
+    const result = await conditionalRequired(<NuqsTestingAdapter>{element}</NuqsTestingAdapter>, target, empty);
+    expect(result.starred).toBe(true);
+    expect(result.error).toBeTruthy();
+    expect(result.markerCount).toBeGreaterThan(0);
   });
 });

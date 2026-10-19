@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
+import { ENTITY_READINESS_CHECK_DISPLAY_LIMIT, type RemovalRequirementCheck } from "@/lib/certification/readiness";
 import { SubmissionChecks } from "./submission-checks";
 
 vi.mock("next/link", () => ({
@@ -38,6 +38,53 @@ function withUnmet(
 }
 
 describe("SubmissionChecks", () => {
+  it("links template pin blockers to each batch's Switch template and line blockers to the review", () => {
+    const html = renderToStaticMarkup(<SubmissionChecks
+      checks={withUnmet("template", { templateBlockerCodes: ["mixedTemplatePins", "templateLinesNeedReview"] })}
+      facilityId="facility-1"
+      creditBatches={[{ id: "batch-1", code: "CB-1" }, { id: "batch-2", code: "CB-2" }]}
+    />);
+    expect(html).toContain('href="/credit-batches?facility=facility-1&amp;batch=batch-1&amp;focus=removal-template"');
+    expect(html).toContain(">Switch template on CB-2</a>");
+    expect(html).toContain('href="/certification/settings?section=removal-templates&amp;facility=facility-1"');
+    expect(html).toContain(">Review template lines</a>");
+    expect(html).not.toContain(">Open settings</a>");
+  });
+
+  it.each([
+    ["feedstock", "/feedstocks", "Review feedstock transport"],
+    ["biochar", "/deliveries", "Review biochar transport"],
+    ["sample", "/samples", "Review sample transport"],
+  ] as const)("links %s transport blockers to their repair list", (category, path, label) => {
+    const html = renderToStaticMarkup(<SubmissionChecks
+      checks={withUnmet("transportUniformity", { transportCategory: category })}
+      facilityId="facility-1"
+    />);
+    expect(html).toContain(`href="${path}?facility=facility-1"`);
+    expect(html).toContain(`>${label}</a>`);
+  });
+
+  it("renders every category and repair link when transport keys repeat", () => {
+    const categories = ["feedstock", "biochar", "sample"] as const;
+    const checks = categories.flatMap((category) =>
+      (["transport", "transportUniformity"] as const).map((key) => ({
+        key,
+        label: "Transport check",
+        requirementLabel: "Transport check",
+        status: "unmet" as const,
+        transportCategory: category,
+        detail: `${category} ${key} needs attention`,
+      })),
+    );
+    const html = renderToStaticMarkup(
+      <SubmissionChecks checks={checks} facilityId="facility-1" />,
+    );
+    for (const check of checks) expect(html).toContain(check.detail);
+    for (const path of ["/feedstocks", "/deliveries", "/samples"]) {
+      expect(html.match(new RegExp(`href="${path}\\?facility=facility-1"`, "g"))).toHaveLength(2);
+    }
+  });
+
   it("lists only what the operator must fix, with passed checks reduced to a count", () => {
     const html = renderToStaticMarkup(
       <SubmissionChecks
@@ -50,9 +97,8 @@ describe("SubmissionChecks", () => {
 
     expect(html).toContain("What to fix");
     expect(html).toContain("8 checks passed");
-    expect(html).toMatch(
-      /<button[^>]*>[\s\S]*What to fix[\s\S]*<\/button>/,
-    );
+    expect(html).toMatch(/<h3[^>]*>\s*What to fix\s*<\/h3>/);
+    expect(html).not.toContain("<button");
     expect(html).toContain("Removal template resolved");
     expect(html).toContain("No default Removal template is selected.");
     expect(html).toContain(
@@ -180,5 +226,39 @@ describe("SubmissionChecks", () => {
     expect(html).toContain("8 checks passed");
     expect(html).not.toContain("Registry value sources linked");
     expect(html).not.toContain("2 files will upload on submit");
+  });
+  it("keeps the location repair link on the single feedstock transport check", () => {
+    const html = renderToStaticMarkup(<SubmissionChecks
+      checks={withUnmet("transport", { transportCategory: "feedstock", lineageIssues: [{
+        detail: "Missing transport distance", fixTarget: "feedstocks",
+        record: { id: "feedstock-one", code: "FS-1", href: "/suppliers?location=location-one&mode=edit" },
+      }] })} facilityId="facility-1"
+    />);
+    expect(html).toContain('href="/suppliers?location=location-one&amp;mode=edit"');
+    expect(html).toContain("Edit location distances");
+  });
+
+  it("links missing proof to the delivery evidence section", () => {
+    const html = renderToStaticMarkup(<SubmissionChecks
+      checks={withUnmet("entityReadiness", { lineageIssues: [{
+        detail: "Delivery D-0012 has no proof of delivery.", fixTarget: "deliveryEvidence",
+        record: { id: "delivery-1", code: "D-0012" },
+      }] })} facilityId="facility-1"
+    />);
+    expect(html).toContain("delivery=delivery-1&amp;mode=edit&amp;focus=transport-evidence");
+    expect(html).toContain("Review D-0012 evidence");
+  });
+
+  it("caps proof links and names each delivery", () => {
+    const lineageIssues = Array.from({ length: ENTITY_READINESS_CHECK_DISPLAY_LIMIT + 1 }, (_, index) => ({
+      detail: "Missing proof", fixTarget: "deliveryEvidence" as const,
+      record: { id: `delivery-${index}`, code: `D-${index}` },
+    }));
+    const html = renderToStaticMarkup(<SubmissionChecks
+      checks={withUnmet("entityReadiness", { lineageIssues })} facilityId="facility-1"
+    />);
+    expect(html.match(/focus=transport-evidence/g)).toHaveLength(ENTITY_READINESS_CHECK_DISPLAY_LIMIT);
+    expect(html).toContain("Review D-0 evidence");
+    expect(html).not.toContain(`Review D-${ENTITY_READINESS_CHECK_DISPLAY_LIMIT} evidence`);
   });
 });

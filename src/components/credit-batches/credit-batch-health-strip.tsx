@@ -23,6 +23,7 @@ import {
   ArrowSquareOutIcon,
   CheckCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
+import { Notice } from "@/components/ui/notice";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { SectionLabel } from "@/components/forms";
 import { InfoHint, Tooltip } from "@/components/ui/tooltip";
@@ -33,7 +34,6 @@ import { formatDate } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import {
   batchHealthFixLinkFor,
-  compactBatchHealthDetail,
   resolveBatchHealthFixTarget,
 } from "@/lib/certification/batch-health-links";
 import { cn } from "@/lib/utils";
@@ -41,7 +41,6 @@ import { cn } from "@/lib/utils";
 /** Stagger between open-row entrance reveals (ms). */
 const ROW_STAGGER_MS = 60;
 const AFFECTED_RECORD_PREVIEW_LIMIT = 4;
-const OPEN_CHECK_DETAIL_MAX_CHARS = 120;
 
 function AffectedRecordChips({
   check,
@@ -167,10 +166,7 @@ function OpenCheckRow({
         </span>
         {check.detail && (
           <span className="body-caption text-[var(--color-text-secondary)]">
-            {compactBatchHealthDetail(
-              check.detail.replace(/^Missing:\s*/i, ""),
-              OPEN_CHECK_DETAIL_MAX_CHARS,
-            )}
+            {check.detail.replace(/^Missing:\s*/i, "")}
           </span>
         )}
         <AffectedRecordChips
@@ -298,6 +294,9 @@ export function CreditBatchHealthStrip({
           feedstockName={feedstockName}
         />
       )}
+      {health?.warnings?.map((warning) => (
+        <Notice key={warning} tone="warning">{warning}</Notice>
+      ))}
     </section>
   );
 }

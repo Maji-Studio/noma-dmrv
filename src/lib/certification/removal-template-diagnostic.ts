@@ -1,3 +1,4 @@
+import type { LineSources, LineContract } from "@/lib/isometric/template-observations/line-sources";
 import type {
   IsometricComponentBlueprint,
   IsometricGhgEntryTemplate,
@@ -15,11 +16,13 @@ import {
 import {
   classifySequestration1000YearComponent,
   isSequestrationBlueprintFamily,
-} from "@/lib/isometric/transformers/measurement-sample";
+  isStorageBlueprintKey,
+} from "@/lib/isometric/storage-blueprints";
 import {
   getSequestrationInputBinding,
   SEQUESTRATION_COMPONENT_INPUT_BINDINGS,
 } from "@/lib/isometric/transformers/sequestration-binding";
+import { lookupSourceFact } from "@/lib/isometric/semantic-binding-catalog";
 import { encodeMeasurementProperty } from "@/lib/isometric/utils/measurement-property";
 import {
   attachRemovalCompilationToDiagnostic,
@@ -121,6 +124,7 @@ export interface RemovalTemplateDiagnosticModel {
 }
 
 export interface BuildRemovalTemplateDiagnosticArgs {
+  lineSources?: LineSources;
   template: IsometricGhgEntryTemplate;
   blueprints?: readonly IsometricComponentBlueprint[];
   compilation?: RemovalTemplateDiagnosticCompilation | null;
@@ -128,20 +132,6 @@ export interface BuildRemovalTemplateDiagnosticArgs {
 
 const GHG_ENTRY_INPUT_PATH =
   "/ghg-entries.ghg_entry_template_components[].inputs[]";
-
-const SOURCE_LABELS: Partial<Record<string, string>> = {
-  weightedOrganicCarbonPercent: "Sample organic carbon, applied-mass weighted",
-  totalBiocharDryMassKg: "Attribution-scaled dry applied biochar mass",
-  totalFeedstockDryMassKg: "Production-run dry feedstock mass",
-  totalStartupDieselLitres: "Production-run startup diesel",
-  totalGensetDieselLitres: "Production-run generator and preprocessing diesel",
-  totalDieselLitres: "Production-run total diesel",
-  totalElectricityKwh: "Production-run electricity",
-  feedstockTransportMassDistanceTonneKm:
-    "Feedstock transport mass-distance",
-  biocharTransportMassDistanceTonneKm: "Biochar transport mass-distance",
-  sampleTransportMassDistanceTonneKm: "Sample transport mass-distance",
-};
 
 const STATUS_PRIORITY: Record<RemovalTemplateDiagnosticStatus, number> = {
   mapped: 0,
@@ -162,7 +152,7 @@ function readableKey(key: string): string {
 }
 
 function sourceLabel(source: string): string {
-  return SOURCE_LABELS[source] ?? readableKey(source);
+  return lookupSourceFact(source)?.provenance ?? readableKey(source);
 }
 
 export const IDENTITY_TRANSFORM_LABEL = "Unchanged";
@@ -231,6 +221,7 @@ function inputRaw(args: {
 }
 
 function buildOrdinaryInputs(args: {
+  contract?: LineContract;
   template: IsometricGhgEntryTemplate;
   group: IsometricGhgEntryTemplate["groups"][number];
   component: IsometricGhgEntryTemplate["groups"][number]["components"][number];
@@ -253,6 +244,7 @@ function buildOrdinaryInputs(args: {
       groupKey: group.key,
       componentBlueprintKey: component.blueprint_key,
       componentDisplayName: component.display_name,
+      lineContract: args.contract,
       inputKey: input.input_key,
     });
     const expected = {
@@ -328,7 +320,7 @@ function buildOrdinaryInputs(args: {
       group.key,
       component.blueprint_key,
       input.input_key,
-      component.display_name,
+      args.contract,
     );
     if (periodTuple) {
       return {
@@ -376,7 +368,7 @@ function buildOrdinaryInputs(args: {
     let resolvedSource: string;
     try {
       resolvedSource = String(
-        resolveDatapointSource(mapping, component.display_name),
+        resolveDatapointSource(mapping, args.contract),
       );
     } catch {
       return {
@@ -422,6 +414,7 @@ function buildOrdinaryInputs(args: {
 }
 
 function buildSequestrationInputs(args: {
+  contract?: LineContract;
   template: IsometricGhgEntryTemplate;
   group: IsometricGhgEntryTemplate["groups"][number];
   component: IsometricGhgEntryTemplate["groups"][number]["components"][number];
@@ -486,6 +479,7 @@ function buildSequestrationInputs(args: {
       groupKey: group.key,
       componentBlueprintKey: component.blueprint_key,
       componentDisplayName: component.display_name,
+      lineContract: args.contract,
       inputKey,
     });
 
@@ -615,12 +609,14 @@ export function buildRemovalTemplateDiagnostic(
       const blueprint = blueprintByKey.get(component.blueprint_key);
       const inputs = isSequestrationBlueprintFamily(component.blueprint_key)
         ? buildSequestrationInputs({
+            contract: args.lineSources?.[component.id],
             template: args.template,
             group,
             component,
             blueprint,
           })
         : buildOrdinaryInputs({
+            contract: args.lineSources?.[component.id],
             template: args.template,
             group,
             component,
@@ -642,11 +638,7 @@ export function buildRemovalTemplateDiagnostic(
   const optionalTargets = optionalNotPresent(args.template);
   const storageComponentCount = args.template.groups
     .flatMap((group) => group.components)
-    .filter(
-      (component) =>
-        component.blueprint_key === "carbon_rich_substance_sequestration" ||
-        isSequestrationBlueprintFamily(component.blueprint_key),
-    ).length;
+    .filter((component) => isStorageBlueprintKey(component.blueprint_key)).length;
   const templateIssues: string[] = [];
   if (args.template.credit_type !== "REMOVAL") {
     templateIssues.push(

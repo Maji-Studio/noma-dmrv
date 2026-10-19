@@ -19,6 +19,8 @@ import { LIST_PAGE_SIZE_OPTIONS } from "@/config/list-controls";
 import type { StorageLocationLaneSummary } from "@/data-access/storage-location-lane-summary";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { useRecordLocks } from "@/hooks/use-record-locks";
+import { isRecordDeletable, isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
 import { formatMass } from "@/lib/format-utils";
 import {
   ArchiveIcon,
@@ -39,6 +41,7 @@ import {
   type StorageBinTypeFilter,
 } from "./bin-display";
 import { StorageBinTile, type BinRowAction } from "./storage-bin-tile";
+import { ILLUSTRATION_SIZE, StorageBinArt } from "@/components/ui/illustrations";
 
 /** Placeholder tiles while the first page loads — roughly one grid row on a
  *  laptop, enough to show the shape without pretending to know the count. */
@@ -89,7 +92,6 @@ export interface StorageBinBoardProps {
   onArchive: (binId: string) => void;
   onRestore: (binId: string) => void;
   onDelete: (binId: string) => void;
-  onRecordLoss?: (bin: StorageLocationWithFacility) => void;
   onReconcile: (bin: StorageLocationWithFacility) => void;
 }
 
@@ -142,8 +144,9 @@ function binRowActions(
   bin: StorageLocationWithFacility,
   handlers: Pick<
     StorageBinBoardProps,
-    "onEdit" | "onArchive" | "onRestore" | "onDelete" | "onReconcile" | "onRecordLoss"
+    "onEdit" | "onArchive" | "onRestore" | "onDelete" | "onReconcile"
   >,
+  lock: RecordLockView | undefined,
 ): BinRowAction[] {
   if (bin.archivedAt != null) {
     return [
@@ -155,28 +158,33 @@ function binRowActions(
     ];
   }
   return [
-    ...(bin.type !== "feedstock_bin" && handlers.onRecordLoss ? [{ label: "Record loss", onSelect: () => handlers.onRecordLoss?.(bin) }] : []),
     {
-      label: "Reconcile stock",
+      label: "Adjust stock",
       icon: <ArrowsClockwiseIcon size={16} />,
       onSelect: () => handlers.onReconcile(bin),
     },
-    {
-      label: "Edit",
-      icon: <PencilSimpleIcon size={16} />,
-      onSelect: () => handlers.onEdit(bin),
-    },
+    // Edit and Delete wait for the lock read to answer.
+    ...(isRecordEditable(lock)
+      ? [{
+          label: "Edit",
+          icon: <PencilSimpleIcon size={16} />,
+          onSelect: () => handlers.onEdit(bin),
+        }]
+      : []),
     {
       label: "Archive",
       icon: <ArchiveIcon size={16} />,
       onSelect: () => handlers.onArchive(bin.id),
     },
-    {
-      label: "Delete permanently",
-      icon: <TrashIcon size={16} />,
-      destructive: true,
-      onSelect: () => handlers.onDelete(bin.id),
-    },
+    // A bin with stock history is archived, never deleted.
+    ...(isRecordDeletable(lock)
+      ? [{
+          label: "Delete permanently",
+          icon: <TrashIcon size={16} />,
+          destructive: true,
+          onSelect: () => handlers.onDelete(bin.id),
+        }]
+      : []),
   ];
 }
 
@@ -201,6 +209,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
     onView,
     onReconcile,
   } = props;
+  const binLocks = useRecordLocks("storageLocation", bins.map((bin) => bin.id));
 
   return (
     <div className="flex flex-col gap-16 lg:flex-row lg:items-start lg:gap-24">
@@ -259,7 +268,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
         {/* The select shows a value ("Recent activity"), not what it acts on,
             so this one control does need a label. */}
         <label className="flex flex-col gap-6">
-          <span className="label-micro text-[var(--color-text-tertiary)]">Sort by</span>
+          <span className="body-small font-medium text-[var(--color-text-secondary)]">Sort by</span>
           <select
             value={sortValue}
             onChange={(event) => onSortChange(event.target.value)}
@@ -306,7 +315,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
         ) : bins.length === 0 ? (
           <EmptyState
             padding="md"
-            icon={<WarehouseIcon size={40} />}
+            icon={hasActiveFilters || showArchived ? <WarehouseIcon size={40} /> : <StorageBinArt size={ILLUSTRATION_SIZE.empty} />}
             title={
               hasActiveFilters
                 ? showArchived
@@ -359,7 +368,8 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
               <StorageBinTile
                 key={bin.id}
                 bin={bin}
-                actions={binRowActions(bin, props)}
+                actions={binRowActions(bin, props, binLocks.locks[bin.id])}
+                lock={binLocks.locks[bin.id]}
                 onView={onView}
                 onReconcile={onReconcile}
               />
@@ -421,7 +431,7 @@ function RailFilter({
             <meta.Icon size={16} weight="bold" />
           </span>
         )}
-        <span className={`label-micro ${isActive ? "" : "opacity-80"}`}>
+        <span className={`body-small font-medium ${isActive ? "" : "opacity-80"}`}>
           {binTypeFilterLabel(filter)}
         </span>
       </span>

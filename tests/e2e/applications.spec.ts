@@ -9,6 +9,11 @@
 import type { Page } from "@playwright/test";
 import { test, expect, type SeededChainData } from "./fixtures";
 import {
+  ACTION_LABEL_PREFIX,
+  creditBatchRows,
+  expectNoEntityOptions,
+  getCreatedActionCode,
+  getListedActionCodes,
   selectEntity,
   selectFirstCreditBatchProductionRun,
   selectFirstEntity,
@@ -16,6 +21,7 @@ import {
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
 import { fillStockMoisture } from "./helpers/stock-moisture";
+import { chooseRunStatus } from "./helpers/run-status";
 
 const PRODUCTION_RUN_DATE = "2025-06-15";
 
@@ -26,11 +32,12 @@ async function createProductionRunForCreditBatch(
 ) {
   await page.goto(`/production-runs?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
+  const existingRunCodes = await getListedActionCodes(page);
 
   await page.click('button:has-text("New production run")');
   await waitForSideSheet(page);
 
-  await page.selectOption('select[name="status"]', "running");
+  await chooseRunStatus(page, "running");
   await selectEntity(
     page,
     "Reactor",
@@ -61,22 +68,25 @@ async function createProductionRunForCreditBatch(
     .locator('button:has-text("Create production run")')
     .click();
   await waitForSideSheetClose(page);
+  const createdRunCode = await getCreatedActionCode(page, existingRunCodes);
 
   // A post-create list refetch can re-render the row and detach the menu's
   // "Edit" item mid-click, so retry the open->Edit sequence instead of waiting
   // for network idle (CI dev servers may never settle within budget).
   await expect(async () => {
     await page
-      .locator("tbody tr")
-      .first()
-      .getByRole("button", { name: /Actions for/ })
+      .locator("tbody")
+      .getByRole("button", {
+        name: `${ACTION_LABEL_PREFIX}${createdRunCode}`,
+        exact: true,
+      })
       .click({ timeout: 5000 });
     await page.getByRole("menuitem", { name: "Edit" }).click({ timeout: 5000 });
   }).toPass({ timeout: 30000 });
   await waitForSideSheet(page);
   await page.fill('input[name="endDate"]', date);
   await page.fill('input[name="endTime"]', "12:00");
-  await page.selectOption('select[name="status"]', "complete");
+  await chooseRunStatus(page, "complete");
   await page
     .locator('[role="dialog"]')
     .getByRole("button", { name: "Save changes" })
@@ -105,14 +115,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
 
     // Wait for customer locations to load (cascading from customer selection)
-    await page.waitForSelector(
-      'select[name="customerLocationId"]:not([disabled])',
-      { timeout: 8000 }
-    );
-    await page.selectOption(
-      'select[name="customerLocationId"]',
-      seededData.customerLocation.id
-    );
+    await selectEntity(page, "Customer location", seededData.customerLocation.id, seededData.customerLocation.name);
 
     await selectEntity(
       page,
@@ -134,7 +137,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     // Applications require a delivered delivery (issue #284)
     // The order picker is a FormEntitySelect (custom dropdown) — pick the first option
     await selectFirstEntity(page, "Order");
-    await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
+    await selectEntity(page, "Actual source bin", seededData.productStorageLocation.id, seededData.productStorageLocation.name);
     await page.fill('input[name="deliveredWetMassKg"]', "10000");
     await fillStockMoisture(page, "delivery", "10");
 
@@ -151,17 +154,10 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.fill('input[name="applicationDate"]', today);
 
     // Select the first available delivery
-    const deliverySelect = page.locator('select[name="deliveryId"]');
-    const deliveryOptions = deliverySelect.locator("option:not([value=''])");
-    const firstDeliveryValue = await deliveryOptions
-      .first()
-      .getAttribute("value");
-    if (firstDeliveryValue) {
-      await deliverySelect.selectOption(firstDeliveryValue);
-    }
+    await selectFirstEntity(page, "Delivery");
 
     // Fill required and optional fields
-    await page.fill('input[name="biocharAppliedTons"]', "5000");
+    await page.fill('input[name="biocharAppliedKg"]', "5000");
     await expect(
       page.locator('input[name="biocharAppliedDryTons"]'),
     ).toHaveCount(0);
@@ -212,7 +208,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await expect(
       page.locator('input[name="biocharAppliedDryTons"]'),
     ).toHaveCount(0);
-    await page.fill('input[name="biocharAppliedTons"]', "4000");
+    await page.fill('input[name="biocharAppliedKg"]', "4000");
     await page
       .locator('[role="dialog"]')
       .getByRole("button", { name: "Update application" })
@@ -235,14 +231,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
 
     await page.fill('input[name="orderDate"]', today);
     await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
-    await page.waitForSelector(
-      'select[name="customerLocationId"]:not([disabled])',
-      { timeout: 8000 }
-    );
-    await page.selectOption(
-      'select[name="customerLocationId"]',
-      seededData.customerLocation.id
-    );
+    await selectEntity(page, "Customer location", seededData.customerLocation.id, seededData.customerLocation.name);
     await selectEntity(
       page,
       "Formulation", seededData.formulation.id, seededData.formulation.name
@@ -259,7 +248,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.waitForLoadState("networkidle");
     await page.click('button:has-text("New application")');
     await waitForSideSheet(page);
-    await expect(page.locator('select[name="deliveryId"] option:not([value=""])')).toHaveCount(0);
+    await expectNoEntityOptions(page, "Delivery");
     await page.locator('[role="dialog"]').getByRole("button", { name: "Create application", exact: true }).click();
     await expect(page.locator("#deliveryId-error")).toBeVisible();
     await expect(page.locator('[role="dialog"]')).toBeVisible();
@@ -275,7 +264,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
       PRODUCTION_RUN_DATE,
     );
 
-    await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
+    await page.goto(`/credit-batches?facility=${seededData.facility.id}&view=list`);
     await page.waitForLoadState("networkidle");
 
     await page.click('button:has-text("New credit batch")');
@@ -295,6 +284,6 @@ test.describe("Application + Credit Batch UI CRUD", () => {
 
     // Verify credit batch appears in list
     await page.waitForLoadState("networkidle");
-    await expect(page.locator("article").first()).toBeVisible({ timeout: 10000 });
+    await expect(creditBatchRows(page).first()).toBeVisible({ timeout: 10000 });
   });
 });

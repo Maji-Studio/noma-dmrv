@@ -2,7 +2,7 @@
  * Shared types for the production-runs data-access layer.
  */
 
-import type { ProductionRun, Sample } from "@/db/schema";
+import type { ProductionRun } from "@/db/schema";
 import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 
 export interface ProductionRunFeedstockWithDetails {
@@ -45,13 +45,13 @@ export interface ProductionRunWithRelations {
   biocharMoisturePercent: number | null;
   biocharDryMassKg: number | null;
   biocharStorageLocationId: string | null;
-  feedstockStorageLocationId: string | null;
   feedstockWetMassKg: number | null;
   feedstockMoisturePercent: number | null;
   feedstockMassDryKg: number | null;
   /** True only when an uploaded sensor-data document is saved for this run. */
   hasReadingsFile: boolean;
   createdAt: Date;
+  version: number;
   updatedAt: Date;
   // Relations
   facilityCode: string | null;
@@ -61,8 +61,6 @@ export interface ProductionRunWithRelations {
   operatorName: string | null;
   biocharStorageLocationCode: string | null;
   biocharStorageLocationName: string | null;
-  feedstockStorageLocationCode: string | null;
-  feedstockStorageLocationName: string | null;
   // M:M feedstocks
   feedstocks: ProductionRunFeedstockWithDetails[];
   // Canonical explicit source-bin withdrawals
@@ -86,27 +84,8 @@ export interface ProductionRunStats {
   totalFeedstockWetKg: number;
   runningCount: number;
   completedCount: number;
-  draftCount: number;
 }
 
-export interface FacilityEnergyTotals {
-  runCount: number;
-  electricityKwh: number | null;
-  gensetLitres: number | null;
-  startupLitres: number | null;
-}
-
-export interface ProductionRunReadingRecord {
-  id: string;
-  productionRunId: string;
-  timestamp: Date;
-  temperatureC: number | null;
-  pressureBar: number | null;
-  gasFlowRate: number | null;
-  createdAt: Date;
-}
-
-export type ProductionRunWithSamples = ProductionRun & {
+export type ProductionRunForCertification = ProductionRun & {
   hasReadingsFile: boolean;
-  samples: Sample[];
 };

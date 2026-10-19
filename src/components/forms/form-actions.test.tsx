@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MapControls } from "@/components/map";
-import { FormActions } from "./form-actions";
+import { FormActions, reserveStickyFooterSpace } from "./form-actions";
 
 describe("FormActions", () => {
   it("renders an action error inside the sticky footer immediately above the buttons", () => {
@@ -66,11 +66,87 @@ describe("FormActions", () => {
     expect(markup).not.toContain("Cancel");
   });
 
+  it("hides an unnecessary submit action without leaving an empty footer", () => {
+    const markup = renderToStaticMarkup(<FormActions showSubmit={false} submitLabel="Save keys" />);
+    expect(markup).not.toContain("Save keys");
+    expect(markup).not.toContain("border-t");
+  });
+
+  it("renders secondary submit actions with the outline style", () => {
+    const markup = renderToStaticMarkup(<FormActions submitLabel="Link project" submitVariant="default" />);
+    expect(markup).toContain("bg-transparent");
+    expect(markup).not.toContain("text-white");
+  });
+
   it("keeps Cancel as the default secondary action label", () => {
     const markup = renderToStaticMarkup(
       <FormActions submitLabel="Save record" onCancel={() => undefined} />,
     );
 
     expect(markup).toContain("Cancel");
+  });
+});
+
+describe("reserveStickyFooterSpace", () => {
+  type FakeNode = {
+    parentElement: FakeNode | null;
+    overflowY: string;
+    offsetHeight: number;
+    style: { scrollPaddingBottom: string };
+  };
+  const node = (parentElement: FakeNode | null, overflowY = "visible"): FakeNode => ({
+    parentElement,
+    overflowY,
+    offsetHeight: 0,
+    style: { scrollPaddingBottom: "" },
+  });
+
+  let resize: () => void = () => undefined;
+  const disconnect = vi.fn();
+  const stubDom = () => {
+    vi.stubGlobal("getComputedStyle", (el: FakeNode) => ({ overflowY: el.overflowY }));
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          resize = callback;
+        }
+        observe() {}
+        disconnect = disconnect;
+      },
+    );
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    disconnect.mockClear();
+  });
+
+  it("reserves the footer height plus clearance on the nearest scroll container", () => {
+    stubDom();
+    const scrollport = node(node(null, "auto"), "auto");
+    scrollport.style.scrollPaddingBottom = "4px";
+    const footer = node(node(scrollport));
+
+    const cleanup = reserveStickyFooterSpace(footer as unknown as HTMLElement);
+    footer.offsetHeight = 81;
+    resize();
+    expect(scrollport.style.scrollPaddingBottom).toBe("89px");
+
+    // An action error makes the row taller; the reservation follows.
+    footer.offsetHeight = 140;
+    resize();
+    expect(scrollport.style.scrollPaddingBottom).toBe("148px");
+
+    cleanup?.();
+    expect(disconnect).toHaveBeenCalledOnce();
+    expect(scrollport.style.scrollPaddingBottom).toBe("4px");
+  });
+
+  it("does nothing without a scroll container", () => {
+    stubDom();
+    const footer = node(node(null));
+
+    expect(reserveStickyFooterSpace(footer as unknown as HTMLElement)).toBeUndefined();
   });
 });

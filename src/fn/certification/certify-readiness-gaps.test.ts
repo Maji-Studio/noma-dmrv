@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import type { TransportLeg } from "@/db/schema";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
@@ -15,6 +15,7 @@ function labSample(
     id,
     sampleCode,
     organicCarbonPercent: 78,
+    moistureContentPercent: 10,
     hToCOrgRatio: 0.32,
     oToCOrgRatio: 0.14,
     ...overrides,
@@ -27,6 +28,7 @@ function batchWithSamples(
   return {
     id: "00000000-0000-4000-a000-0000000000b1",
     code: "CB-001",
+    sampling: "sampled",
     durabilityOption: "200_year",
     samples,
   } as unknown as CreditBatchWithSamples;
@@ -36,7 +38,7 @@ function productionRun(
   id: string,
   code: string,
   electricityKwh: number | null,
-): ProductionRunWithSamples {
+): ProductionRunForCertification {
   return {
     id,
     code,
@@ -51,10 +53,17 @@ function productionRun(
     preprocessingFuelLiters: 3,
     electricityKwh,
     samples: [],
-  } as unknown as ProductionRunWithSamples;
+  } as unknown as ProductionRunForCertification;
 }
 
 describe("buildEntityReadinessResult", () => {
+  it("reports moisture on the same Sample walk used by submission and keeps documents advisory", () => {
+    const batch = { ...batchWithSamples([labSample("s1", "S-001", { moistureContentPercent: null })]), creditBatchCode: "CB-001", hasLabReport: false };
+    const result = buildEntityReadinessResult([], [batch], { feedstock: [], biochar: [], sample: [] }, []);
+    expect(result.gaps).toEqual(["Sample S-001: Sample moisture"]);
+    expect(result.warnings).toEqual(["Credit batch CB-001 has no lab report document. Upload a lab report to one of its Samples. You can still submit the Removal."]);
+  });
+
   it("keeps the ready-batch fixture ready when Application evidence is absent", () => {
     const fixtureRun = productionRun("fixture-run", "PR-FIXTURE", 50);
 
@@ -158,12 +167,10 @@ describe("buildEntityReadinessResult", () => {
     expect(result.warnings).toEqual([]);
   });
 
-  // O:Corg is an UNCONDITIONAL sample descriptor, deliberately symmetric with
-  // H:Corg (Soil Module §3.3 Table 2 checks pooled H/C_org AND O/C_org for every
-  // tier). Readiness walks every sample of every member batch, so one extra
-  // sample without oxygen blocks the batch even when three usable replicates
-  // already satisfy the §8.3.1 minimum. That is the intended fail-closed
-  // behaviour on a registry path, not an accident — this test pins it.
+  // Soil Module §3.3 Table 2 checks pooled H/C_org AND O/C_org on every tier
+  // (QA 2026-07-25 F-6). On sampled batches, an extra Sample without oxygen
+  // blocks even when three usable replicates satisfy the §8.3.1 minimum.
+  // Scope matches durability-submission-gates.ts, which skips unsampled batches.
   it("blocks a batch that already has three usable replicates when an extra sample is missing O:Corg", () => {
     const result = buildEntityReadinessResult(
       [],
@@ -224,4 +231,11 @@ describe("buildEntityReadinessResult", () => {
     expect(result.issues).toEqual([]);
     expect(result.warnings).toEqual([]);
   });
+});
+
+it("keeps missing histogram evidence advisory for sampled 1,000-year batches", () => {
+  const batch = { ...batchWithSamples([]), creditBatchCode: "CB-001", durabilityOption: "1000_year" as const, hasReflectanceHistogram: false };
+  const result = buildEntityReadinessResult([], [batch], { feedstock: [], biochar: [], sample: [] }, []);
+  expect(result.gaps).toEqual([]);
+  expect(result.warnings).toEqual(["Credit batch CB-001 has no reflectance histogram document. Upload a reflectance histogram to one of its Samples. You can still submit the Removal."]);
 });

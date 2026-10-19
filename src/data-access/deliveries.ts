@@ -3,9 +3,9 @@
  * CRUD operations for deliveries with auth guards, pagination, and filtering
  */
 
+import { getDeliveryProofCounts } from "./delivery-proof";
 import { db } from "@/db";
 import {
-  biocharProducts,
   customerLocations,
   customers,
   deliveries,
@@ -18,22 +18,26 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import type { DeliveryFilterData, DeliveryStatus } from "@/schemas/deliveries";
 import { and, asc, count, desc, eq, gte, ilike, isNull, lte, sql, SQL } from "drizzle-orm";
-import {
-  effectiveDeliveryDistanceKm,
-  effectiveDeliveryDistanceSource,
-} from "./delivery-distance-projections";
+import { effectiveDeliveryDistance } from "./delivery-distance-projections";
 import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
 export interface DeliveryWithRelations extends Delivery {
   status: DeliveryStatus;
   orderCode: string | null;
   facilityName: string | null;
   customerName: string | null;
-  biocharProductCode: string | null;
+  /** The order's customer location: where the goods went. */
+  destinationName: string | null;
+  /** Route ends for the transport map: the facility, then the destination. */
+  facilityGpsLatitude: number | null;
+  facilityGpsLongitude: number | null;
+  destinationGpsLatitude: number | null;
+  destinationGpsLongitude: number | null;
   driverName: string | null;
   vehicleName: string | null;
   effectiveDistanceKm: number | null;
   effectiveDistanceSource: "map_estimate" | "manual" | "document" | null;
   transportEvidenceDocumentCount: number;
+  proofOfDeliveryCount: number;
 }
 
 export interface PaginatedDeliveries {
@@ -49,6 +53,12 @@ export interface DeliveryDetail extends Delivery {
   effectiveDistanceSource: "map_estimate" | "manual" | "document" | null;
   transportEvidenceDocumentCount: number;
   customerName: string | null;
+  destinationName: string | null;
+  /** Route ends for the transport map: the facility, then the destination. */
+  facilityGpsLatitude: number | null;
+  facilityGpsLongitude: number | null;
+  destinationGpsLatitude: number | null;
+  destinationGpsLongitude: number | null;
   order: {
     id: string;
     code: string;
@@ -59,10 +69,6 @@ export interface DeliveryDetail extends Delivery {
     id: string;
     code: string;
     name: string;
-  } | null;
-  biocharProduct: {
-    id: string;
-    code: string;
   } | null;
   driver: {
     id: string;
@@ -88,7 +94,6 @@ export type DeliveryColumnAvailability = {
   distanceKmOverride: boolean;
   distanceSource: boolean;
   distanceNote: boolean;
-  tripType: boolean;
   archivedAt: boolean;
 };
 
@@ -106,7 +111,6 @@ export async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAva
             'distance_km_override',
             'distance_source',
             'distance_note',
-            'trip_type',
             'archived_at'
           )
       `)
@@ -117,7 +121,6 @@ export async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAva
           distanceKmOverride: columns.has("distance_km_override"),
           distanceSource: columns.has("distance_source"),
           distanceNote: columns.has("distance_note"),
-          tripType: columns.has("trip_type"),
           archivedAt: columns.has("archived_at"),
         };
       });
@@ -133,8 +136,6 @@ function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
     code: deliveries.code,
     facilityId: deliveries.facilityId,
     orderId: deliveries.orderId,
-    customerLocationId: deliveries.customerLocationId,
-    biocharProductId: deliveries.biocharProductId,
     storageLocationId: deliveries.storageLocationId,
     biocharStorageInventoryId: deliveries.biocharStorageInventoryId,
     deliveryDate: deliveries.deliveryDate,
@@ -145,6 +146,8 @@ function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
     distanceKmOverride: columns.distanceKmOverride
       ? deliveries.distanceKmOverride
       : sql<number | null>`null`.as("distance_km_override"),
+    recordedDistanceKm: deliveries.recordedDistanceKm,
+    recordedDistanceSource: deliveries.recordedDistanceSource,
     distanceSource: columns.distanceSource
       ? deliveries.distanceSource
       : sql<"map_estimate" | "manual" | "document" | null>`null`.as(
@@ -153,9 +156,6 @@ function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
     distanceNote: columns.distanceNote
       ? deliveries.distanceNote
       : sql<string | null>`null`.as("distance_note"),
-    tripType: columns.tripType
-      ? deliveries.tripType
-      : sql<"return" | "one_way">`'return'`.as("trip_type"),
     driverId: deliveries.driverId,
     vehicleId: deliveries.vehicleId,
     archivedAt: columns.archivedAt
@@ -163,6 +163,7 @@ function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
       : sql<Date | null>`null`.as("archived_at"),
     createdAt: deliveries.createdAt,
     updatedAt: deliveries.updatedAt,
+      version: deliveries.version,
   };
 }
 
@@ -270,11 +271,13 @@ export async function getDeliveries(
       orderCode: orders.code,
       facilityName: facilities.name,
       customerName: customers.name,
-      biocharProductCode: biocharProducts.code,
+      destinationName: customerLocations.name,
+      facilityGpsLatitude: facilities.gpsLatitude,
+      facilityGpsLongitude: facilities.gpsLongitude,
+      destinationGpsLatitude: customerLocations.gpsLatitude,
+      destinationGpsLongitude: customerLocations.gpsLongitude,
       driverName: drivers.name,
       vehicleName: vehicles.name,
-      effectiveDistanceKm: effectiveDeliveryDistanceKm(deliveryColumns),
-      effectiveDistanceSource: effectiveDeliveryDistanceSource(deliveryColumns),
       transportEvidenceDocumentCount: transportEvidenceDocumentCount(
         ctx.organizationId,
         "delivery",
@@ -290,12 +293,11 @@ export async function getDeliveries(
       and(
         eq(
           customerLocations.id,
-          sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+          orders.customerLocationId,
         ),
         eq(customerLocations.organizationId, ctx.organizationId),
       ),
     )
-    .leftJoin(biocharProducts, and(eq(deliveries.biocharProductId, biocharProducts.id), eq(biocharProducts.organizationId, ctx.organizationId)))
     .leftJoin(drivers, and(eq(deliveries.driverId, drivers.id), eq(drivers.organizationId, ctx.organizationId)))
     .leftJoin(vehicles, and(eq(deliveries.vehicleId, vehicles.id), eq(vehicles.organizationId, ctx.organizationId)))
     .where(whereClause)
@@ -303,8 +305,9 @@ export async function getDeliveries(
     .limit(pageSize)
     .offset(offset);
 
+  const proofCounts = await getDeliveryProofCounts(ctx, deliveryList.map((delivery) => delivery.id));
   return {
-    items: deliveryList,
+    items: deliveryList.map((delivery) => ({ ...delivery, ...effectiveDeliveryDistance(delivery), proofOfDeliveryCount: proofCounts.get(delivery.id) ?? 0 })),
     total,
     page,
     pageSize,
@@ -330,14 +333,16 @@ export async function getDeliveryWithRelations(
       orderDate: orders.orderDate,
       orderQuantityKg: orders.quantityKg,
       customerName: customers.name,
+      destinationName: customerLocations.name,
+      facilityGpsLatitude: facilities.gpsLatitude,
+      facilityGpsLongitude: facilities.gpsLongitude,
+      destinationGpsLatitude: customerLocations.gpsLatitude,
+      destinationGpsLongitude: customerLocations.gpsLongitude,
       facilityCode: facilities.code,
       facilityName: facilities.name,
-      biocharProductCode: biocharProducts.code,
       driverName: drivers.name,
       vehicleName: vehicles.name,
       vehicleIdentifier: vehicles.identifier,
-      effectiveDistanceKm: effectiveDeliveryDistanceKm(deliveryColumns),
-      effectiveDistanceSource: effectiveDeliveryDistanceSource(deliveryColumns),
       transportEvidenceDocumentCount: transportEvidenceDocumentCount(
         ctx.organizationId,
         "delivery",
@@ -352,13 +357,12 @@ export async function getDeliveryWithRelations(
       and(
         eq(
           customerLocations.id,
-          sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+          orders.customerLocationId,
         ),
         eq(customerLocations.organizationId, ctx.organizationId),
       ),
     )
     .leftJoin(facilities, and(eq(deliveries.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
-    .leftJoin(biocharProducts, and(eq(deliveries.biocharProductId, biocharProducts.id), eq(biocharProducts.organizationId, ctx.organizationId)))
     .leftJoin(drivers, and(eq(deliveries.driverId, drivers.id), eq(drivers.organizationId, ctx.organizationId)))
     .leftJoin(vehicles, and(eq(deliveries.vehicleId, vehicles.id), eq(vehicles.organizationId, ctx.organizationId)))
     .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
@@ -373,8 +377,6 @@ export async function getDeliveryWithRelations(
     code: deliveryRow.code,
     facilityId: deliveryRow.facilityId,
     orderId: deliveryRow.orderId,
-    customerLocationId: deliveryRow.customerLocationId,
-    biocharProductId: deliveryRow.biocharProductId,
     storageLocationId: deliveryRow.storageLocationId,
     biocharStorageInventoryId: deliveryRow.biocharStorageInventoryId,
     deliveryDate: deliveryRow.deliveryDate,
@@ -384,18 +386,24 @@ export async function getDeliveryWithRelations(
     moistureContentPercent: deliveryRow.moistureContentPercent,
     distanceKmOverride: deliveryRow.distanceKmOverride,
     distanceSource: deliveryRow.distanceSource,
+    recordedDistanceKm: deliveryRow.recordedDistanceKm,
+    recordedDistanceSource: deliveryRow.recordedDistanceSource,
     distanceNote: deliveryRow.distanceNote,
-    tripType: deliveryRow.tripType,
     driverId: deliveryRow.driverId,
     vehicleId: deliveryRow.vehicleId,
     archivedAt: deliveryRow.archivedAt,
     createdAt: deliveryRow.createdAt,
     updatedAt: deliveryRow.updatedAt,
-    effectiveDistanceKm: deliveryRow.effectiveDistanceKm,
-    effectiveDistanceSource: deliveryRow.effectiveDistanceSource,
+    version: deliveryRow.version,
+    ...effectiveDeliveryDistance(deliveryRow),
     transportEvidenceDocumentCount:
       deliveryRow.transportEvidenceDocumentCount,
     customerName: deliveryRow.customerName,
+    destinationName: deliveryRow.destinationName,
+    facilityGpsLatitude: deliveryRow.facilityGpsLatitude,
+    facilityGpsLongitude: deliveryRow.facilityGpsLongitude,
+    destinationGpsLatitude: deliveryRow.destinationGpsLatitude,
+    destinationGpsLongitude: deliveryRow.destinationGpsLongitude,
     order: deliveryRow.orderId
       ? {
           id: deliveryRow.orderId,
@@ -409,12 +417,6 @@ export async function getDeliveryWithRelations(
           id: deliveryRow.facilityId,
           code: deliveryRow.facilityCode ?? "",
           name: deliveryRow.facilityName ?? "",
-        }
-      : null,
-    biocharProduct: deliveryRow.biocharProductId
-      ? {
-          id: deliveryRow.biocharProductId,
-          code: deliveryRow.biocharProductCode ?? "",
         }
       : null,
     driver: deliveryRow.driverId
@@ -434,10 +436,7 @@ export async function getDeliveryWithRelations(
 }
 
 // ============================================
-// Create Operations
+// Mutation exports
 // ============================================
 
-/**
- * Create a new delivery
- */
-export { createDelivery, deleteDelivery, updateDelivery } from './delivery-output-writes';
+export { deleteDelivery, type CreatedDelivery, type UpdatedDelivery } from './delivery-output-writes';

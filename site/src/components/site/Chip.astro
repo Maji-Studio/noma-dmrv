@@ -1,0 +1,10 @@
+---
+/**
+ * Chip: small square label. Use it for "Upcoming" on every planned feature.
+ * Props:
+ *   class?: string   merged
+ * Label: default slot, defaults to "Upcoming".
+ */
+const { class: className } = Astro.props;
+---
+<span class:list={["chip", className]}><slot>Upcoming</slot></span>

@@ -12,6 +12,11 @@
  * terminal-state transition.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", () => ({
+  resolveIsometricClient: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
+}));
+
 import { makeTestOrgContext } from "./helpers/test-org";
 
 import type {
@@ -35,7 +40,10 @@ vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-ghg-statements");
 vi.mock("@/data-access/ghg-statement-reports");
-vi.mock("@/fn/certification/ghg-statement-reports", () => ({
+vi.mock("@/fn/certification/stored-ghg-statement-report-core", () => ({
+  verifyStoredGhgStatementReport: vi.fn(),
+}));
+vi.mock("@/fn/certification/ghg-statement-report-core", () => ({
   assertGhgStatementReportFresh: vi.fn(),
   // Mints a fresh capability token and returns the link carrying it.
   issueVerifierReportUrl: vi.fn(
@@ -84,7 +92,6 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
   return {
     ...actual,
-    getIsometricClientForOrg: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
     createGhgStatement: vi.fn(),
     getGhgStatement: vi.fn(),
     submitGhgStatement: vi.fn(),
@@ -99,7 +106,7 @@ import * as ledger from "@/data-access/certification";
 import * as ledgerClaim from "@/data-access/certification-submissions";
 import * as ghgDA from "@/data-access/certifier-ghg-statements";
 import * as reportDA from "@/data-access/ghg-statement-reports";
-import * as reportActions from "@/fn/certification/ghg-statement-reports";
+import * as reportActions from "@/fn/certification/ghg-statement-report-core";
 import { makeClaimSubmissionDraftFake } from "./fixtures/fake-claim";
 import * as facilitiesDA from "@/data-access/facilities";
 import * as authServer from "@/lib/auth/server";

@@ -1,3 +1,7 @@
+import { transportLegKeys } from "./use-transport-legs";
+import { chainOfCustodyKeys } from "./use-chain-of-custody";
+import { feedstockKeys } from "./use-feedstocks";
+import { invalidateCertificationReadiness } from "./use-certification";
 /**
  * Suppliers React Query Hooks
  * Client-side state management for supplier operations
@@ -6,6 +10,7 @@
 
 import {
   keepPreviousData,
+  queryOptions,
   type QueryClient,
   useMutation,
   useQuery,
@@ -20,7 +25,6 @@ import type {
 
 import type {
   SupplierFilterData,
-  CreateSupplierData,
   CreateSupplierWithLocationsData,
   UpdateSupplierData,
   CreateSupplierLocationData,
@@ -33,19 +37,20 @@ import type {
 import {
   getSuppliersFn,
   getSupplierByIdFn,
-  createSupplierFn,
   createSupplierWithLocationsFn,
   updateSupplierFn,
   deleteSupplierFn,
+  archiveSupplierFn,
+  restoreSupplierFn,
   getSupplierLocationsBySupplierFn,
   createSupplierLocationFn,
   updateSupplierLocationFn,
   deleteSupplierLocationFn,
 } from "@/fn/suppliers";
 
-import { throwActionError } from "@/lib/stale-version";
+import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
-import { patchListCachesWithSavedRow } from "./list-cache-utils";
+import { patchArrayListCacheByExactKeyWithSavedRow, patchListCachesWithSavedRow } from "./list-cache-utils";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { supplierKeys } from "./supplier-query-keys";
 import { entityKeys, invalidateEntityTypeQueries } from "./entity-query-keys";
@@ -86,7 +91,7 @@ export function useSuppliers(filters?: Partial<SupplierFilterData>) {
     queryFn: async () => {
       const result = await getSuppliersFn(filters);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -102,66 +107,37 @@ export function useSuppliers(filters?: Partial<SupplierFilterData>) {
 /**
  * Hook to fetch a single supplier by ID
  */
-export function useSupplier(supplierId: string, enabled = true) {
-  return useQuery({
+export function supplierQueryOptions(supplierId: string) {
+  return queryOptions({
     queryKey: supplierKeys.detail(supplierId),
     queryFn: async () => {
       const result = await getSupplierByIdFn(supplierId);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
-    enabled: enabled && !!supplierId,
+    enabled: !!supplierId,
     staleTime: SUPPLIER_DETAIL_STALE_TIME_MS,
   });
+}
+
+export function useSupplier(supplierId: string, enabled = true) {
+  return useQuery({
+    ...supplierQueryOptions(supplierId),
+    enabled: enabled && !!supplierId,
+  });
+}
+
+/** Read one supplier from the server now, bypassing the cache, for a sheet that needs its current row. */
+export function useFetchSupplier() {
+  const queryClient = useQueryClient();
+  return (supplierId: string) => queryClient.fetchQuery({ ...supplierQueryOptions(supplierId), staleTime: 0 });
 }
 
 // ============================================
 // Supplier Mutation Hooks
 // ============================================
-
-/**
- * Hook to create a new supplier
- * Supports optional callbacks for custom behavior
- */
-export function useCreateSupplier(
-  callbacks?: MutationCallbacks<Supplier, CreateSupplierData>
-) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (data: CreateSupplierData) => {
-      const result = await createSupplierFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    onMutate: async (variables) => {
-      await callbacks?.onMutate?.(variables);
-    },
-    onSuccess: async (data, variables) => {
-      seedCreatedSupplierCaches(queryClient, data);
-
-      // Invalidate all supplier lists
-      queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
-      // Invalidate locations in case a new location was added
-      queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
-      // Invalidate options for dropdowns
-      queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
-      invalidateOnboardingProgress(queryClient);
-
-      await callbacks?.onSuccess?.(data, variables);
-    },
-    onError: async (error, variables) => {
-      await callbacks?.onError?.(error, variables);
-    },
-    onSettled: async (data, error, variables) => {
-      await callbacks?.onSettled?.(data, error, variables);
-    },
-  });
-}
 
 export function useCreateSupplierWithLocations(
   callbacks?: MutationCallbacks<Supplier, CreateSupplierWithLocationsData>
@@ -172,7 +148,7 @@ export function useCreateSupplierWithLocations(
     mutationFn: async (data: CreateSupplierWithLocationsData) => {
       const result = await createSupplierWithLocationsFn(data);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -315,6 +291,9 @@ export function useUpdateSupplier(
         });
       }
 
+      if (error instanceof StaleVersionError) {
+        void queryClient.invalidateQueries({ queryKey: supplierKeys.all });
+      }
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {
@@ -333,23 +312,24 @@ export function useUpdateSupplier(
  * Supports optimistic updates for immediate UI feedback
  */
 export function useDeleteSupplier(
-  callbacks?: MutationCallbacks<void, string>,
+  callbacks?: MutationCallbacks<void, { supplierId: string; expectedVersion: number }>,
   options?: OptimisticUpdateOptions
 ) {
   const queryClient = useQueryClient();
   const { optimistic = true } = options ?? {};
 
   return useMutation({
-    mutationFn: async (supplierId: string) => {
-      const result = await deleteSupplierFn({ supplierId });
+    mutationFn: async (variables: { supplierId: string; expectedVersion: number }) => {
+      const result = await deleteSupplierFn(variables);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return;
     },
-    onMutate: async (supplierId) => {
+    onMutate: async (variables) => {
+      const supplierId = variables.supplierId;
       if (!optimistic) {
-        await callbacks?.onMutate?.(supplierId);
+        await callbacks?.onMutate?.(variables);
         return;
       }
 
@@ -378,12 +358,13 @@ export function useDeleteSupplier(
         });
       });
 
-      await callbacks?.onMutate?.(supplierId);
+      await callbacks?.onMutate?.(variables);
 
       // Return context with snapshots for rollback
       return { previousSupplier, previousLists };
     },
-    onSuccess: async (_, supplierId) => {
+    onSuccess: async (_, variables) => {
+      const supplierId = variables.supplierId;
       // Remove specific supplier from cache
       queryClient.removeQueries({ queryKey: supplierKeys.detail(supplierId) });
       // Invalidate lists for consistency
@@ -399,9 +380,11 @@ export function useDeleteSupplier(
       // Feedstock and delivery pickers read the supplier through EntitySelect.
       invalidateEntityTypeQueries(queryClient, SUPPLIER_ENTITY_TYPE);
 
-      await callbacks?.onSuccess?.(undefined, supplierId);
+      await callbacks?.onSuccess?.(undefined, variables);
     },
-    onError: async (error, supplierId, context) => {
+    onError: async (error, variables, context) => {
+      if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: supplierKeys.all });
+      const supplierId = variables.supplierId;
       // Rollback to previous values on error
       if (optimistic && context) {
         const { previousSupplier, previousLists } = context as {
@@ -423,15 +406,63 @@ export function useDeleteSupplier(
         });
       }
 
-      await callbacks?.onError?.(error, supplierId);
+      await callbacks?.onError?.(error, variables);
     },
-    onSettled: async (data, error, supplierId) => {
-      // Refetch lists to ensure consistency
+    onSettled: async (data, error, variables) => {
+            // Refetch lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
 
-      await callbacks?.onSettled?.(data, error, supplierId);
+      await callbacks?.onSettled?.(data, error, variables);
     },
   });
+}
+
+type SupplierVersionVariables = { supplierId: string; expectedVersion: number };
+
+/** Archive and restore share one shape: a version-checked flip of `archivedAt`. */
+function useSupplierLifecycle(
+  action: (variables: SupplierVersionVariables) => ReturnType<typeof archiveSupplierFn>,
+  callbacks?: MutationCallbacks<Supplier, SupplierVersionVariables>,
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (variables: SupplierVersionVariables) => {
+      const result = await action(variables);
+      if (!result.success) throwActionError(result);
+      return result.data;
+    },
+    onSuccess: async (data, variables) => {
+      // Merge the saved row (with its new version) into every list cache and
+      // the detail cache before the refetch, so an open sheet never saves
+      // against the version it read before this change.
+      patchListCachesWithSavedRow<SupplierWithRelations>(queryClient, supplierKeys.lists(), data);
+      queryClient.setQueryData<Supplier>(supplierKeys.detail(data.id), (old) => (old ? { ...old, ...data } : data));
+      invalidateEntityTypeQueries(queryClient, SUPPLIER_ENTITY_TYPE);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: supplierKeys.lists() }),
+        queryClient.invalidateQueries({ queryKey: supplierKeys.options() }),
+      ]);
+      await callbacks?.onSuccess?.(data, variables);
+    },
+    onError: async (error, variables) => {
+      if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: supplierKeys.all });
+      await callbacks?.onError?.(error, variables);
+    },
+    onSettled: async (data, error, variables) => {
+      await callbacks?.onSettled?.(data, error, variables);
+    },
+  });
+}
+
+/** Hook to archive a supplier: pickers hide it, stored records keep it. */
+export function useArchiveSupplier(callbacks?: MutationCallbacks<Supplier, SupplierVersionVariables>) {
+  return useSupplierLifecycle(archiveSupplierFn, callbacks);
+}
+
+/** Hook to restore an archived supplier. */
+export function useRestoreSupplier(callbacks?: MutationCallbacks<Supplier, SupplierVersionVariables>) {
+  return useSupplierLifecycle(restoreSupplierFn, callbacks);
 }
 
 // ============================================
@@ -454,7 +485,7 @@ export function useSupplierLocationsBySupplier(
     queryKey: supplierKeys.supplierLocations(supplierId),
     queryFn: async () => {
       const result = await getSupplierLocationsBySupplierFn(supplierId);
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     enabled: !!supplierId && enabled,
@@ -468,13 +499,19 @@ export function useCreateSupplierLocation(callbacks?: MutationCallbacks<Supplier
   return useMutation({
     mutationFn: async (data: CreateSupplierLocationData) => {
       const result = await createSupplierLocationFn(data);
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
-    onSuccess: (data, variables) => {
+    onSuccess: async (data, variables) => {
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(variables.supplierId) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.detail(variables.supplierId) });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: transportLegKeys.all }),
+        queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all }),
+        queryClient.invalidateQueries({ queryKey: feedstockKeys.all }),
+        invalidateCertificationReadiness(queryClient, { creditBatchPreviews: true }),
+      ]);
       callbacks?.onSuccess?.(data, variables);
     },
     onError: (error, variables) => {
@@ -494,33 +531,45 @@ export function useUpdateSupplierLocation(supplierId: string, callbacks?: Mutati
       if (!result.success) throwActionError(result);
       return result.data;
     },
-    onSuccess: (data, variables) => {
+    onSuccess: async (data, variables) => {
+      patchArrayListCacheByExactKeyWithSavedRow<SupplierLocation>(queryClient, supplierKeys.supplierLocations(supplierId), data);
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(supplierId) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.detail(supplierId) });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: transportLegKeys.all }),
+        queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all }),
+        queryClient.invalidateQueries({ queryKey: feedstockKeys.all }),
+        invalidateCertificationReadiness(queryClient, { creditBatchPreviews: true }),
+      ]);
       callbacks?.onSuccess?.(data, variables);
     },
     onError: (error, variables) => {
+      if (error instanceof StaleVersionError) {
+        void queryClient.invalidateQueries({ queryKey: supplierKeys.all });
+      }
       callbacks?.onError?.(error instanceof Error ? error : new Error("Location was not saved. Try again."), variables);
     },
   });
 }
 
-export function useDeleteSupplierLocation(supplierId: string, callbacks?: MutationCallbacks<void, string>) {
+export function useDeleteSupplierLocation(supplierId: string, callbacks?: MutationCallbacks<void, { locationId: string; expectedVersion: number }>) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (locationId: string) => {
-      const result = await deleteSupplierLocationFn({ locationId });
-      if (!result.success) throw new Error(result.error);
+    mutationFn: async (variables: { locationId: string; expectedVersion: number }) => {
+      const result = await deleteSupplierLocationFn(variables);
+      if (!result.success) throwActionError(result);
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(supplierId) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.detail(supplierId) });
+      queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       callbacks?.onSuccess?.(undefined, variables);
     },
     onError: (error, variables) => {
+      if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: supplierKeys.all });
       callbacks?.onError?.(error instanceof Error ? error : new Error("Location was not deleted. Try again."), variables);
     },
   });

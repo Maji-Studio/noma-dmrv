@@ -1,0 +1,172 @@
+/* noma landing tokens. Values mirror src/app/globals.css (the app's design system); the
+   landing page adds --page (light rose). Fonts are the app's own GT Flexa files. Light only, like the app. */
+@font-face { font-family: "GT Flexa"; src: url("../../../src/styles/fonts/GT-Flexa-Standard-Light.woff2") format("woff2"); font-weight: 300; font-display: swap; }
+@font-face { font-family: "GT Flexa"; src: url("../../../src/styles/fonts/GT-Flexa-Standard-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "GT Flexa"; src: url("../../../src/styles/fonts/GT-Flexa-Standard-Thin.woff2") format("woff2"); font-weight: 100; font-display: swap; }
+@font-face { font-family: "GT Flexa Mono"; src: url("../../../src/styles/fonts/GT-Flexa-Mono-Medium.woff2") format("woff2"); font-weight: 500; font-display: swap; }
+
+:root {
+  /* app palette (globals.css) */
+  --clr-dark-purple: #0f021a;
+  --clr-purple: #480b73;
+  --clr-pink: #a6216e;
+  --clr-rose: #ffb2d2;
+  --clr-orange: #ff8359;
+  --clr-red: #e54552;
+  --bg-app: #fff9f7;
+
+  /* landing */
+  --page: #fff2f7;
+  --paper: #ffffff;
+  --ink: #0f021a;
+  --ink-2: rgba(15, 2, 26, 0.68);
+  --ink-3: rgba(15, 2, 26, 0.64);          /* secondary small text stays AA on paper and rose */
+  --hair: rgba(15, 2, 26, 0.12);
+  --hair-2: rgba(15, 2, 26, 0.24);
+  --hair-strong: rgba(15, 2, 26, 0.86);
+  --sea: rgba(72, 11, 115, 0.045);
+  --accent: #480b73;
+
+  /* domain colours (acc-prod / acc-infra / acc-dist in the app) */
+  --prod: #bc4519; --prod-bg: #ffe8df;
+  --infra: #480b73; --infra-bg: #efe4f7;
+  --dist: #a6216e; --dist-bg: #fce3ef;
+  --ver: #17744a; --ver-bg: #dff0e7;
+  --ok: #17744a; --ok-bg: rgba(23, 116, 74, 0.1);
+  --warn: #bc4519; --warn-bg: rgba(188, 69, 25, 0.1);
+  --off-bg: rgba(15, 2, 26, 0.05);
+
+  /* bin layers */
+  --l1: #bc4519; --l2: #ff8359; --l3: #ffb2d2;
+
+  /* map */
+  --map-land: #fbf1ee; --map-line: rgba(72, 11, 115, 0.13);
+  /* home hero map: the MapLibre canvas reads these at runtime (home/hero-map/map.js) */
+  --hero-map-sea: #f7e3ed;
+  --hero-map-land: var(--paper);
+  --hero-map-boundary: rgba(72, 11, 115, 0.28);
+  --hero-map-detail: rgba(72, 11, 115, 0.07);
+
+  /* app tints (globals.css) used by the editorial site */
+  --clr-purple-5: rgba(72, 11, 115, 0.05);
+  --clr-purple-10: rgba(72, 11, 115, 0.1);
+  --clr-purple-20: rgba(72, 11, 115, 0.2);
+  --clr-purple-30: rgba(72, 11, 115, 0.3);
+  --clr-purple-40: rgba(72, 11, 115, 0.4);
+  --clr-rose-20: rgba(255, 178, 210, 0.2);
+  --clr-rose-40: rgba(255, 178, 210, 0.4);
+  --clr-dark-purple-70: rgba(15, 2, 26, 0.7);
+
+  /* editorial site (src/components/site). Plan: src/components/site/README.md */
+  --rule: var(--clr-purple-20);             /* hairline grid frame and section rules */
+  --rule-strong: var(--clr-purple-40);
+  --hairline: 1px;
+  --cross: var(--clr-purple-40);            /* cross marks where frame rules meet */
+  --cross-size: 11px;
+  --band-rose: var(--clr-rose-20);
+  --band-purple: var(--clr-purple-5);
+  --cta: var(--clr-purple);                 /* square block CTA */
+  --cta-hover: var(--clr-dark-purple);
+  --cta-ink: var(--paper);
+  --link: var(--clr-purple);
+  --link-rule: var(--clr-purple-30);
+  --r-square: 0;
+
+  --wrap: 1600px;                           /* content max width (Kenji 2026-09-30); text keeps --measure */
+  --gutter: clamp(12px, 4vw, 72px);        /* page edge to frame line */
+  --frame-pad: clamp(16px, 4.5vw, 72px);    /* frame line to content */
+  --section: clamp(72px, 8vw, 136px);
+  --gap: clamp(28px, 6vw, 96px);
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px;
+  --space-6: 32px; --space-7: 48px; --space-8: 64px; --space-9: 96px;
+  --measure: 52ch;                          /* about 70 real characters in GT Flexa */
+  --tap: 44px;
+  --logo: 48px;                             /* the noma mark in header and footer */
+  --header-h: 84px;
+  --btn-h: 56px;
+  --index-h: 52px;
+  --hatch-line: var(--clr-purple-10);      /* accordion showcase frame: faint diagonal hatch */
+  --hatch-gap: 8px;
+  --hatch: repeating-linear-gradient(-45deg, var(--hatch-line) 0 var(--hairline), transparent var(--hairline) var(--hatch-gap));
+  --photo-min: 360px;
+
+  /* type scale: GT Flexa Light 300 display, tight tracking */
+  --fs-display: clamp(46px, 6.6vw, 108px);
+  --fs-hero: clamp(42px, 4.6vw, 80px);       /* home hero headline, on the panel over the map */
+  --fs-h2: clamp(34px, 4.4vw, 68px);
+  --fs-h3: clamp(24px, 2.2vw, 32px);
+  --fs-h4: clamp(20px, 1.55vw, 26px);       /* accordion item titles */
+  --fs-stage: clamp(40px, 4.45vw, 72px);    /* 64px at 1440: a stage is one keynote slide */
+  --fs-lead: clamp(18px, 1.45vw, 22px);
+  --fs-body: 18px;
+  --fs-ui: 15px;
+  --fs-small: 14px;
+  --fs-caption: 12px;
+  --fs-micro: 10px;
+  --fs-mono: 12px;
+  --fs-brand: 28px;
+  --track-brand: -0.04em;
+  --lh-display: 1.01;
+  --lh-heading: 1.06;
+  --lh-body: 1.6;
+  --track-display: -0.06em;
+  --track-h2: -0.05em;
+  --track-h3: -0.03em;
+  --track-mono: 0.04em;
+
+  /* stage: dark keynote bands. Everything dim, ONE element lit. */
+  --stage: var(--clr-dark-purple);
+  --stage-raise: rgba(255, 249, 247, 0.035); /* row and band fills */
+  --stage-band: rgba(255, 249, 247, 0.06);
+  --stage-grid: rgba(255, 249, 247, 0.08);   /* frame lines carried into the stage */
+  --stage-line: rgba(255, 249, 247, 0.3);    /* thin grey outlines */
+  --stage-line-dim: rgba(255, 249, 247, 0.16);
+  --stage-ink: #fff9f7;
+  --stage-ink-2: rgba(255, 249, 247, 0.74);
+  --stage-ink-3: rgba(255, 249, 247, 0.52);  /* dim labels, still AA on --stage */
+  --stage-lit: var(--clr-rose);              /* the single lit accent */
+  --stage-lit-fill: rgba(72, 11, 115, 0.62);
+  --stage-lit-glow: rgba(255, 178, 210, 0.28);
+  --stage-stroke: 1.5px;
+  --stage-dash: 6px;
+  --stage-dot: 2px;
+  --stage-pad: clamp(56px, min(6.7vw, 10.7vh), 96px); /* 96px at 1440x900, shorter screens pad less */
+  --stage-row-h: 44px;
+  --stage-icon-w: 44px;
+  --stage-mark: 20px;
+  --stage-dot-size: 14px;
+  --stage-dot-sm: 10px;
+  --stage-cap: 9px;
+  --stage-halo: 5px;
+  --stage-pulse: 20px;
+  --stage-bleed: 12px;                       /* room for caps and halos when a line is clipped */
+  --fs-stage-label: clamp(12px, 1.05vw, 14px);
+
+  /* motion: one orchestrated moment per page */
+  --dur-fast: 160ms;
+  --dur-base: 320ms;
+  --dur-draw: 900ms;
+  --dur-stage: 2600ms;                       /* one stage's full playhead */
+  --stagger: 200ms;
+  --stagger-slow: 300ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-draw: cubic-bezier(0.65, 0, 0.35, 1);
+
+  --f-sans: "GT Flexa", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "GT Flexa Mono", ui-monospace, Menlo, Consolas, monospace;
+  --r: 6px;
+  color-scheme: light;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--f-sans); font-weight: 300; font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, h4 { font-weight: 700; line-height: 1.1; text-wrap: balance; margin: 0; }
+p { margin: 0; }
+b, strong { font-weight: 700; }
+img, svg { max-width: 100%; }
+a { color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }

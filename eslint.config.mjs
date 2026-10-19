@@ -5,17 +5,14 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
-  // Enforce the 1000-line file-size cap (CLAUDE.md). Set to "warn" so it
-  // surfaces existing violations without blocking the build; flip to "error"
-  // once the current offenders are split (architecture audit, Phase 4).
-  // Generated Isometric types and the seed script are exempt — they are not
-  // hand-maintained code.
+  // Enforce the 1000-line file-size cap (CLAUDE.md). Generated Isometric
+  // types and the seed script are exempt — they are not hand-maintained code.
   {
     files: ["src/**/*.{ts,tsx}"],
     ignores: ["src/lib/isometric/generated/**", "src/db/seed-data.ts"],
     rules: {
       "max-lines": [
-        "warn",
+        "error",
         { max: 1000, skipBlankLines: false, skipComments: false },
       ],
     },
@@ -45,12 +42,37 @@ const eslintConfig = defineConfig([
         {
           paths: [
             {
+              // The root loads the whole barrel and dominated unit-test import time; use date-fns/<fn>.
+              name: "date-fns",
+              message: "use date-fns/<fn> subpaths",
+            },
+            {
               name: "@phosphor-icons/react",
               message:
                 "Import icon components from '@phosphor-icons/react/dist/ssr' (hook-free, works in Server Components). Only the `Icon`/`IconProps`/`IconWeight` types come from this entry, and only via `import type`.",
               allowTypeImports: true,
             },
           ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/{fn,app,data-access,hooks,components}/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            "@/lib/isometric",
+            "@/lib/isometric/index",
+            "@/lib/isometric/client-env",
+          ].map((name) => ({
+            name,
+            importNames: ["getIsometricClientFromEnv"],
+            message:
+              "Environment credentials are scripts-only. Use resolveIsometricClient(ctx) from '@/data-access/certifier-credentials'.",
+          })),
         },
       ],
     },
@@ -68,6 +90,8 @@ const eslintConfig = defineConfig([
     // errors that belong to generated code in a checkout nobody is editing.
     "**/.next/**",
     ".claude/worktrees/**",
+    // The public landing site is its own Astro package with its own checks.
+    "site/**",
     // Untracked QA run tooling (only markdown reports are committed —
     // docs/organization.md); driver scripts are throwaway, not lintable code.
     "docs/qa/artifacts/**",

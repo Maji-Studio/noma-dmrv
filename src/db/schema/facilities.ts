@@ -1,6 +1,6 @@
 import { relations, sql } from 'drizzle-orm';
-import { check, doublePrecision, foreignKey, pgTable, text, timestamp, unique, uniqueIndex, uuid, real, jsonb } from 'drizzle-orm/pg-core';
-import { outputStockMode, storageLocationType, durabilityOption } from './common';
+import { integer, check, doublePrecision, foreignKey, pgTable, text, timestamp, unique, uniqueIndex, uuid, real, jsonb } from 'drizzle-orm/pg-core';
+import { REACTOR_TYPES, outputDrawOrder, outputStockMode, storageLocationType, durabilityOption } from './common';
 import { organizations } from './auth';
 
 // ============================================
@@ -11,16 +11,17 @@ export const facilities = pgTable(
   'facilities',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    version: integer('version').notNull().default(1),
     organizationId: text('organization_id')
       .notNull()
       .references(() => organizations.id),
     code: text('code').notNull(),
     name: text('name').notNull(),
     location: text('location'),
-    gpsLatitude: doublePrecision('gps_latitude'),
-    gpsLongitude: doublePrecision('gps_longitude'),
-    timezone: text('timezone').notNull().default('UTC'),
-    country: text('country').notNull().default('UNKNOWN'),
+    gpsLatitude: doublePrecision('gps_latitude').notNull(),
+    gpsLongitude: doublePrecision('gps_longitude').notNull(),
+    timezone: text('timezone').notNull(),
+    country: text('country').notNull(),
     address: text('address'),
     contactEmail: text('contact_email'),
     contactPhone: text('contact_phone'),
@@ -74,6 +75,7 @@ export const reactors = pgTable(
   'reactors',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    version: integer('version').notNull().default(1),
     organizationId: text('organization_id')
       .notNull()
       .references(() => organizations.id),
@@ -82,7 +84,7 @@ export const reactors = pgTable(
     facilityId: uuid('facility_id')
       .notNull(),
     // Isometric Protocol: Reactor design requirements (Section 9.2)
-    reactorType: text('reactor_type').notNull(), // fixed-bed, auger, rotary-kiln
+    reactorType: text('reactor_type', { enum: REACTOR_TYPES }).notNull(),
     // Sampling is not a reactor property; each credit batch stores its own
     // sampled/unsampled choice within a facility/feedstock process (ADR 0022).
     nominalThroughputTph: real('nominal_throughput_tph'),
@@ -93,6 +95,9 @@ export const reactors = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    check('reactors_reactor_type_valid', sql`${table.reactorType} in (${sql.join(
+      REACTOR_TYPES.map((reactorType) => sql.raw(`'${reactorType}'`)), sql`, `,
+    )})`),
     unique('reactors_organization_id_code_unique').on(table.organizationId, table.code),
     foreignKey({
       columns: [table.facilityId, table.organizationId],
@@ -119,6 +124,7 @@ export const storageLocations = pgTable(
   'storage_locations',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    version: integer('version').notNull().default(1),
     organizationId: text('organization_id')
       .notNull()
       .references(() => organizations.id),
@@ -128,8 +134,8 @@ export const storageLocations = pgTable(
     capacityKg: real('capacity_kg'),
     storageMethod: text('storage_method'),
     storageDescription: text('storage_description'),
-    supplierReferenceId: text('supplier_reference_id'),
-    // Enforces "one feedstock type per bin" — set on first intake, validated on subsequent
+    // Enforces "one feedstock type per bin": set at creation; a bin without a type gets one on its first intake.
+    // Validated on each intake.
     // No FK reference to avoid circular import with feedstock.ts; enforced at application layer
     feedstockTypeId: uuid('feedstock_type_id'),
     // Product bins only: enforces "one formulation per bin" so product bins stay clean.
@@ -140,6 +146,8 @@ export const storageLocations = pgTable(
     // Output bins only in practice: split (default, separate sub-bins) or mix
     // (one pile drawn pro rata). Feedstock bins stay split and ignore it.
     stockMode: outputStockMode('stock_mode').default('split').notNull(),
+    // Split output bins draw in this order unless the operator supplies an order.
+    drawOrder: outputDrawOrder('draw_order').default('oldest_first').notNull(),
     facilityId: uuid('facility_id')
       .notNull(),
     // Stamped by the facility archive cascade; NULL = active

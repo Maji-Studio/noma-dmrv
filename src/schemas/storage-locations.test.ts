@@ -49,6 +49,16 @@ describe("storage-bin validation copy", () => {
   });
 });
 
+describe("updateStorageLocationSchema", () => {
+  it("drops a facility, because a bin never changes facility through the update action", () => {
+    const parsed = updateStorageLocationSchema.parse({ expectedVersion: 1,
+      storageLocationId: RELATED_ID,
+      facilityId: FACILITY_ID,
+    });
+    expect(parsed).not.toHaveProperty("facilityId");
+  });
+});
+
 describe("stock mode", () => {
   const base = { name: "Pile", facilityId: FACILITY_ID };
   it("lets only biochar and product bins hold one mixed pile", () => {
@@ -60,7 +70,24 @@ describe("stock mode", () => {
   });
 
   it("does not flag an update that leaves the type out", () => {
-    expect(updateStorageLocationSchema.safeParse({ storageLocationId: FACILITY_ID, stockMode: "mix" }).success).toBe(true);
-    expect(updateStorageLocationSchema.safeParse({ storageLocationId: FACILITY_ID, type: "feedstock_bin", stockMode: "mix" }).success).toBe(false);
+    expect(updateStorageLocationSchema.safeParse({ expectedVersion: 1, storageLocationId: FACILITY_ID, stockMode: "mix" }).success).toBe(true);
+    expect(updateStorageLocationSchema.safeParse({ expectedVersion: 1, storageLocationId: FACILITY_ID, type: "feedstock_bin", stockMode: "mix" }).success).toBe(false);
+  });
+});
+
+describe("default draw order", () => {
+  const create = { name: "North bay", facilityId: FACILITY_ID, type: "biochar_bin", stockMode: "split" };
+  const update = { storageLocationId: RELATED_ID, expectedVersion: 1 };
+  it.each(["oldest_first", "newest_first"])("carries %s through create and update", (drawOrder) => {
+    expect(storageLocationFormSchema.parse({ ...create, drawOrder }).drawOrder).toBe(drawOrder);
+    expect(updateStorageLocationSchema.parse({ ...update, drawOrder }).drawOrder).toBe(drawOrder);
+  });
+  it("allows omission for seeds and partial updates but rejects null and unknown orders", () => {
+    expect(storageLocationFormSchema.parse(create).drawOrder).toBeUndefined();
+    expect(updateStorageLocationSchema.parse(update).drawOrder).toBeUndefined();
+    for (const drawOrder of [null, "random"]) {
+      expect(storageLocationFormSchema.safeParse({ ...create, drawOrder }).success).toBe(false);
+      expect(updateStorageLocationSchema.safeParse({ ...update, drawOrder }).success).toBe(false);
+    }
   });
 });

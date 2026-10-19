@@ -11,6 +11,7 @@ const SUPPLIER_ID = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
 const CUSTOMER_LOCATION_ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const SUPPLIER_LOCATION_ID = "11111111-2222-4333-8444-555555555555";
 
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }) }));
 vi.mock("@/components/forms/entity-select/quick-add-dialog-shell", () => ({
   QuickAddDialogShell: ({
     children,
@@ -62,7 +63,7 @@ vi.mock("@/hooks/use-organization-settings", () => ({
 }));
 
 vi.mock("@/hooks/use-facility-context", () => ({
-  useFacilityContext: () => ({ selectedFacility: null }),
+  useFacilityContext: () => ({ selectedFacility: null, facilities: [] }),
 }));
 
 const customerLocation: EditableCustomerLocation = {
@@ -74,10 +75,10 @@ const customerLocation: EditableCustomerLocation = {
   address: "Field A",
   gpsLatitude: -6.8,
   gpsLongitude: 39.28,
-  distanceFromFacilityKm: 12.5,
-  distanceSource: "manual",
+  facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: 12.5, distanceSource: "manual" }],
   defaultSoilTemperatureC: 25,
   isDefault: true,
+  version: 1,
   updatedAt: new Date("2026-01-01T00:00:00.000Z"),
 };
 
@@ -92,10 +93,10 @@ const supplierLocation: SupplierLocation = {
   address: null,
   gpsLatitude: -6.8,
   gpsLongitude: 39.28,
-  distanceFromFacilityKm: 12.5,
-  distanceSource: "manual",
+  facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: 12.5, distanceSource: "manual" }],
   isDefault: true,
   createdAt: new Date("2026-01-01T00:00:00Z"),
+  version: 1,
   updatedAt: new Date("2026-01-01T00:00:00Z"),
 };
 

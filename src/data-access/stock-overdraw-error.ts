@@ -6,7 +6,7 @@ import {
 
 /** SafeError subtype so server actions can attach field-level metadata. */
 export class StockOverdrawError extends SafeError {
-  constructor(message: string) {
+  constructor(message: string, readonly details?: { storageLocationId: string; availableWetKg: number; requestedWetKg: number }) {
     super(message);
     this.name = "StockOverdrawError";
   }
@@ -14,6 +14,7 @@ export class StockOverdrawError extends SafeError {
 
 export function overdrawError(
   material: StockMaterial,
+  details?: StockOverdrawError["details"],
 ): StockOverdrawError {
-  return new StockOverdrawError(binStockOverdrawMessage(material));
+  return new StockOverdrawError(binStockOverdrawMessage(material), details);
 }

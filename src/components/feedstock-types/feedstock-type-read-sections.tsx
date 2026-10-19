@@ -1,6 +1,9 @@
 /** Feedstock type side-sheet view mode: the sections config for EntitySideSheet. */
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { FeedstockType } from "@/db/schema";
+import { IsometricLink } from "@/components/certification/isometric-link";
+import { isometricRegistry } from "@/lib/isometric/links";
+import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { FeedstockTypeSampling } from "./feedstock-type-sampling";
 
 /** "wood_chips" → "Wood Chips". */
@@ -15,7 +18,16 @@ export function titleCase(value: string) {
 export function feedstockTypeSheetSections(
   feedstockType: FeedstockType,
   sampling: { facilityId: string; canManage: boolean } | null,
+  hasIsometricCertifier: boolean,
+  /** Registry environment for the Certify link; sandbox when unknown. */
+  isProduction = false,
 ): DetailPanelSection[] {
+  const isometricHref = feedstockType.isometricFeedstockTypeId
+    ? isometricRegistry.feedstockType({
+        environment: isProduction ? "production" : "sandbox",
+        isometricFeedstockTypeId: feedstockType.isometricFeedstockTypeId,
+      })
+    : null;
   return [
     {
       title: "Catalogue",
@@ -25,7 +37,18 @@ export function feedstockTypeSheetSections(
         { label: "Category", value: titleCase(feedstockType.category) },
         { label: "Usage", value: feedstockType.usage === "blend" ? "Blend" : "Pyrolysis" },
         { label: "State", value: feedstockType.archivedAt ? "Archived" : "Active" },
-        { label: "Isometric feedstock ID", value: feedstockType.isometricFeedstockTypeId },
+        {
+          label: "Isometric feedstock type",
+          ...(hasIsometricCertifier
+            ? certificationDetailField("feedstockType", "isometricFeedstockTypeId", feedstockType)
+            : { certifyRequired: false }),
+          value: feedstockType.isometricFeedstockTypeId ? (
+            <span className="inline-flex items-center gap-4">
+              <span className="font-mono">{feedstockType.isometricFeedstockTypeId}</span>
+              {isometricHref && <IsometricLink href={isometricHref} />}
+            </span>
+          ) : null,
+        },
         { label: "Registry URL", value: feedstockType.registryUrl },
         { label: "Description", value: feedstockType.description },
       ],

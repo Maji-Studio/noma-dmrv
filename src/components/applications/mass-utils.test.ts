@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { ApplicationDeliveryOption } from "./mass-utils";
 import {
+  applicationStockCues,
+  applicationTonsToKg,
   formatApplicationDeliveryHelperText,
   formatApplicationDeliveryOptionLabel,
   getApplicationDeliveryMassLabel,
@@ -71,6 +73,62 @@ describe("application delivery option mass", () => {
   });
 });
 
+describe("application stock cues", () => {
+  it("shows one figure on create: what is available from this delivery", () => {
+    expect(
+      applicationStockCues({
+        delivery: delivery({ alreadyAppliedWetKg: 50, alreadyAppliedDryKg: 45 }),
+        availableKg: 800,
+        isEditMode: false,
+      }),
+    ).toEqual({
+      deliveryCue: undefined,
+      appliedMassCue: "800 kg available from this delivery",
+    });
+  });
+
+  it("falls back to the delivery's remaining stock when availability is unknown", () => {
+    expect(
+      applicationStockCues({
+        delivery: delivery({ deliveredWetMassKg: null }),
+        availableKg: null,
+        isEditMode: false,
+      }),
+    ).toEqual({
+      deliveryCue: "Remaining now: wet not recorded, 820 kg dry biochar",
+      appliedMassCue: undefined,
+    });
+  });
+
+  it("shows one figure on edit: what is available to this application", () => {
+    // 1,000 kg delivered, this application already holds 400 kg of it.
+    expect(
+      applicationStockCues({
+        delivery: delivery({
+          deliveredWetMassKg: 1_000,
+          alreadyAppliedWetKg: 400,
+          alreadyAppliedDryKg: 180,
+        }),
+        availableKg: 1_000,
+        isEditMode: true,
+      }),
+    ).toEqual({
+      deliveryCue: undefined,
+      appliedMassCue: "1,000 kg available to this application",
+    });
+  });
+
+  it("gives no cues before a delivery is chosen", () => {
+    expect(
+      applicationStockCues({
+        delivery: undefined,
+        availableKg: null,
+        isEditMode: false,
+      }),
+    ).toEqual({ deliveryCue: undefined, appliedMassCue: undefined });
+  });
+});
+
 describe("application delivery option day", () => {
   const originalTz = process.env.TZ;
   afterEach(() => {
@@ -94,4 +152,8 @@ describe("application delivery option day", () => {
     );
     expect(label).toContain("May 17, 2026");
   });
+});
+
+it("seeds exactly 4001 kg from the stored 4.001 tonnes", () => {
+  expect(applicationTonsToKg(4.001)).toBe(4001);
 });

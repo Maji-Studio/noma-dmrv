@@ -1,3 +1,5 @@
+import { StaleVersionError, throwActionError } from "@/lib/stale-version";
+import { patchArrayListCachesByPrefixWithSavedRow } from "./list-cache-utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createTransportLegFn,
@@ -11,13 +13,15 @@ import {
 import type { TransportLegWithEvidence } from "@/data-access/transport-legs";
 import type {
   CreateTransportLegData,
+  DeleteTransportLegData,
   TransportEntityTypeValue,
   UpdateTransportLegData,
 } from "@/schemas/transport-legs";
 import type { TransportLeg } from "@/db/schema";
-import type { MutationCallbacks } from "./types";
+import { unwrap, type MutationCallbacks } from "./types";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
-import { certificationKeys } from "./use-certification";
+import { invalidateCertificationReadiness } from "./use-certification";
+import { chainOfCustodyKeys } from "./use-chain-of-custody";
 
 // ============================================
 // Query Keys
@@ -42,11 +46,7 @@ export function useTransportLegsForEntity(
     queryKey: transportLegKeys.byEntity(entityType, entityId ?? ""),
     queryFn: async (): Promise<TransportLegWithEvidence[]> => {
       if (!entityId) return [];
-      const result = await getTransportLegsForEntityFn({ entityType, entityId });
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
+      return unwrap(await getTransportLegsForEntityFn({ entityType, entityId }));
     },
     enabled: options?.enabled !== false && !!entityId,
     staleTime: 30000,
@@ -62,13 +62,8 @@ export function useCreateTransportLeg(
 ) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: CreateTransportLegData): Promise<TransportLeg> => {
-      const result = await createTransportLegFn(input);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    mutationFn: async (input: CreateTransportLegData): Promise<TransportLeg> =>
+      unwrap(await createTransportLegFn(input)),
     onSuccess: async (data, variables) => {
       await queryClient.invalidateQueries({
         queryKey: transportLegKeys.byEntity(
@@ -77,9 +72,10 @@ export function useCreateTransportLeg(
         ),
       });
       await queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      await queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       // Leg distance/provenance edits change certification readiness; leaving
       // the certification family fresh shows pre-mutation readiness for 30s.
-      await queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      await invalidateCertificationReadiness(queryClient);
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
@@ -98,18 +94,20 @@ export function useUpdateTransportLeg(
     mutationFn: async (input: UpdateTransportLegData): Promise<TransportLeg> => {
       const result = await updateTransportLegFn(input);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
     onSuccess: async (data, variables) => {
+      patchArrayListCachesByPrefixWithSavedRow(queryClient, transportLegKeys.byEntity(entityType, entityId), data);
       await queryClient.invalidateQueries({
         queryKey: transportLegKeys.byEntity(entityType, entityId),
       });
       await queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      await queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       // Leg distance/provenance edits change certification readiness; leaving
       // the certification family fresh shows pre-mutation readiness for 30s.
-      await queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      await invalidateCertificationReadiness(queryClient);
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
@@ -121,14 +119,14 @@ export function useUpdateTransportLeg(
 export function useDeleteTransportLeg(
   entityType: TransportEntityTypeValue,
   entityId: string,
-  callbacks?: MutationCallbacks<void, { id: string }>,
+  callbacks?: MutationCallbacks<void, DeleteTransportLegData>,
 ) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { id: string }): Promise<void> => {
+    mutationFn: async (input: DeleteTransportLegData): Promise<void> => {
       const result = await deleteTransportLegFn(input);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
     },
     onSuccess: async (data, variables) => {
@@ -136,12 +134,16 @@ export function useDeleteTransportLeg(
         queryKey: transportLegKeys.byEntity(entityType, entityId),
       });
       await queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      await queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       // Leg distance/provenance edits change certification readiness; leaving
       // the certification family fresh shows pre-mutation readiness for 30s.
-      await queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      await invalidateCertificationReadiness(queryClient);
       await callbacks?.onSuccess?.(data, variables);
     },
-    onError: callbacks?.onError,
+    onError: (error, variables) => {
+      if (error instanceof StaleVersionError) queryClient.invalidateQueries({ queryKey: transportLegKeys.byEntity(entityType, entityId) });
+      return callbacks?.onError?.(error, variables);
+    },
     onMutate: callbacks?.onMutate,
     onSettled: callbacks?.onSettled,
   });

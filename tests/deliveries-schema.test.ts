@@ -40,7 +40,7 @@ describe("delivery moisture precision", () => {
   it.each([-1, 100, 101])(
     "rejects out-of-range moisture at the update boundary (%s)",
     (moistureContentPercent) => {
-      const result = updateDeliverySchema.safeParse({
+      const result = updateDeliverySchema.safeParse({ expectedVersion: 1,
         deliveryId: UUID_A,
         moistureContentPercent,
       });
@@ -75,7 +75,7 @@ describe("delivery wet mass", () => {
       }).success,
     ).toBe(false);
     expect(
-      updateDeliverySchema.safeParse({
+      updateDeliverySchema.safeParse({ expectedVersion: 1,
         deliveryId: UUID_A,
         deliveredWetMassKg: 0,
       }).success,
@@ -119,7 +119,7 @@ describe("delivery wet mass", () => {
   });
 
   it("rejects an upcoming status in a partial update", () => {
-    const result = updateDeliverySchema.safeParse({ deliveryId: UUID_A, status: "upcoming" });
+    const result = updateDeliverySchema.safeParse({ expectedVersion: 1, deliveryId: UUID_A, status: "upcoming" });
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues).toEqual(
@@ -152,17 +152,37 @@ describe("delivery wet mass", () => {
 
   it("defers delivered status/mass validation until a partial update is merged", () => {
     expect(
-      updateDeliverySchema.safeParse({
+      updateDeliverySchema.safeParse({ expectedVersion: 1,
         deliveryId: UUID_A,
         status: "delivered",
       }).success,
     ).toBe(true);
     expect(
-      updateDeliverySchema.safeParse({
+      updateDeliverySchema.safeParse({ expectedVersion: 1,
         deliveryId: UUID_A,
         status: "delivered",
         deliveredWetMassKg: null,
       }).success,
     ).toBe(true);
   });
+});
+
+describe("delivery action instant and distance contract", () => {
+  it.each(["2026-10-14", "2026-10-14T12:00:00", 0, null])("refuses ambiguous instant %s", deliveryDate => {
+    expect(updateDeliverySchema.safeParse({ deliveryId: UUID_A, expectedVersion: 1, deliveryDate }).success).toBe(false);
+  });
+  it("decodes explicit offsets to native Date", () => {
+    expect(updateDeliverySchema.parse({ deliveryId: UUID_A, expectedVersion: 1, deliveryDate: "2026-10-14T12:00:00+02:00" }).deliveryDate).toEqual(new Date("2026-10-14T10:00:00Z"));
+  });
+  it("refuses zero distance and sub-gram mass on partial updates", () => {
+    expect(updateDeliverySchema.safeParse({ deliveryId: UUID_A, expectedVersion: 1, distanceKmOverride: 0 }).success).toBe(false);
+    expect(updateDeliverySchema.safeParse({ deliveryId: UUID_A, expectedVersion: 1, deliveredWetMassKg: 5e-324 }).success).toBe(false);
+  });
+});
+
+it("shows required delivery date copy when the date is cleared", () => {
+  const result = createDeliverySchema.safeParse({ ...POSTING_FIELDS, orderId: UUID_A, facilityId: UUID_B,
+    deliveryDate: "", deliveredWetMassKg: 1, moistureContentPercent: 20 });
+  expect(result.success).toBe(false);
+  if (!result.success) expect(result.error.issues).toContainEqual(expect.objectContaining({ path: ["deliveryDate"], message: "Delivery date is required" }));
 });

@@ -3,6 +3,10 @@ import { config } from "dotenv";
 
 // Load test environment variables (only .env.test, never .env.local)
 config({ path: ".env.test" });
+// Local spec collection needs test mode, while CI must build and serve the production bundle unchanged.
+if (!process.env.CI) {
+  (process.env as Record<string, string | undefined>).NODE_ENV ??= "test";
+}
 
 // Validate that tests only target localhost to prevent accidentally running against staging/production
 const baseURL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100";
@@ -62,7 +66,11 @@ export default defineConfig({
   // was timing out tests waiting for first page render. Locally we keep the dev
   // server for fast iteration and `reuseExistingServer`.
   webServer: {
-    command: process.env.CI ? "pnpm build && pnpm start -p 3100" : "pnpm dev:manual",
+    // Locally the port follows NEXT_PUBLIC_APP_URL, so a worktree from
+    // scripts/worktree.sh starts (or reuses) its own server, not :3100.
+    command: process.env.CI
+      ? "pnpm build && pnpm start -p 3100"
+      : `pnpm exec next dev -p ${new URL(baseURL).port || "3100"}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: process.env.CI ? 300000 : 120000, // 5 min for CI build, 2 min local

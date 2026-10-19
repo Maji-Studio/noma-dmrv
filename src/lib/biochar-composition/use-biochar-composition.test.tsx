@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { useForm, type UseFormReturn } from "react-hook-form";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { IngredientBin } from "./types";
 import {
   useBiocharComposition,
@@ -40,6 +40,28 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/hooks/use-formulations", () => ({
   useFormulation: () => ({ data: mocks.formulation, isLoading: false }),
 }));
+
+const initialFormulation = mocks.formulation;
+const editedFormulation = {
+  ...initialFormulation,
+  ingredients: [
+    initialFormulation.ingredients[0],
+    {
+      id: "line-3",
+      feedstockTypeId: "feedstock-type-3",
+      feedstockType: {
+        id: "feedstock-type-3",
+        name: "Added recipe line",
+        category: "mineral",
+      },
+      ratio: 0.1,
+    },
+  ],
+};
+
+beforeEach(() => {
+  mocks.formulation = initialFormulation;
+});
 
 beforeAll(() => {
   (
@@ -94,14 +116,15 @@ function Harness({
 async function renderHarness(allocationFrozen: boolean) {
   let capture: HarnessCapture | undefined;
   let renderer: ReactTestRenderer | undefined;
+  const onCapture = (next: HarnessCapture) => {
+    capture = next;
+  };
 
   await act(async () => {
     renderer = create(
       <Harness
         allocationFrozen={allocationFrozen}
-        onCapture={(next) => {
-          capture = next;
-        }}
+        onCapture={onCapture}
       />,
     );
   });
@@ -110,6 +133,13 @@ async function renderHarness(allocationFrozen: boolean) {
     get capture() {
       if (!capture) throw new Error("Hook harness did not capture a result");
       return capture;
+    },
+    rerender: async () => {
+      await act(async () => {
+        renderer?.update(
+          <Harness allocationFrozen={allocationFrozen} onCapture={onCapture} />,
+        );
+      });
     },
     unmount: async () => {
       await act(async () => renderer?.unmount());
@@ -120,6 +150,20 @@ async function renderHarness(allocationFrozen: boolean) {
 describe("useBiocharComposition", () => {
   it("keeps exact persisted ingredient rows and metadata while allocation is frozen", async () => {
     const harness = await renderHarness(true);
+
+    expect(harness.capture.form.getValues("ingredientBins")).toEqual(
+      persistedRows,
+    );
+    expect(harness.capture.composition.rows).toHaveLength(1);
+    expect(harness.capture.composition.rows[0]).toMatchObject({
+      formulationIngredientId: "line-1",
+      feedstockTypeName: "Recorded compost name",
+      feedstockTypeCategory: "recorded-category",
+      ratio: 0.2,
+    });
+
+    mocks.formulation = editedFormulation;
+    await harness.rerender();
 
     expect(harness.capture.form.getValues("ingredientBins")).toEqual(
       persistedRows,
@@ -154,6 +198,47 @@ describe("useBiocharComposition", () => {
         formulationIngredientId: "line-2",
         feedstockTypeId: "feedstock-type-2",
         feedstockTypeName: "New recipe line",
+        feedstockTypeCategory: "mineral",
+        ratio: 0.1,
+        storageLocationId: null,
+        massKg: null,
+        massDryKg: null,
+        moistureContentPercent: null,
+      },
+    ]);
+
+    await harness.unmount();
+  });
+
+  it("reconciles changed ingredients for the same formulation and keeps entered mass", async () => {
+    const harness = await renderHarness(false);
+
+    await act(async () => {
+      harness.capture.form.setValue("ingredientBins.0.massKg", 50);
+    });
+
+    mocks.formulation = editedFormulation;
+    await harness.rerender();
+
+    expect(
+      harness.capture.composition.rows.map((row) => row.formulationIngredientId),
+    ).toEqual(["line-1", "line-3"]);
+    expect(harness.capture.form.getValues("ingredientBins")).toEqual([
+      {
+        formulationIngredientId: "line-1",
+        feedstockTypeId: "feedstock-type-1",
+        feedstockTypeName: "Live compost name",
+        feedstockTypeCategory: "live-category",
+        ratio: 0.4,
+        storageLocationId: "bin-1",
+        massKg: 50,
+        massDryKg: 20,
+        moistureContentPercent: 20,
+      },
+      {
+        formulationIngredientId: "line-3",
+        feedstockTypeId: "feedstock-type-3",
+        feedstockTypeName: "Added recipe line",
         feedstockTypeCategory: "mineral",
         ratio: 0.1,
         storageLocationId: null,

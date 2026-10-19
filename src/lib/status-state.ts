@@ -21,8 +21,11 @@ export const DEFAULT_STATUS_STATE: StatusStateClass = "neutral";
 export const ENTITY_STATUS_STATES = {
   // Neutral / inactive
   draft: "neutral",
+  disabled: "neutral",
+  expired: "neutral",
   superseded: "neutral",
   cancelled: "neutral",
+  archived: "neutral",
   missing_data: "neutral",
   no_deliveries: "neutral",
   method_a: "neutral",
@@ -36,6 +39,7 @@ export const ENTITY_STATUS_STATES = {
   method_b: "in-progress",
 
   // Successful / complete
+  active: "success",
   complete: "success",
   delivered: "success",
   applied: "success",
@@ -96,3 +100,14 @@ export function getStatusState(status: string): StatusStateClass {
 export function getStatusStateColor(status: string): string {
   return STATUS_STATE_COLOR_TOKENS[getStatusState(status)];
 }
+
+/**
+ * Record lock chip (ADR 0035), the same on every list and sheet. Open and In
+ * use stay calm: Open is an outline, In use the neutral fill. Only Sent stands
+ * out, in the purple of a submitted Removal.
+ */
+export const RECORD_LOCK_CHIP_CLASSES: Record<"open" | "inUse" | "sent", string> = {
+  open: "bg-[var(--color-background-white)] text-[var(--color-text-secondary)] border-[var(--color-border-primary)]",
+  inUse: STATUS_STATE_BADGE_CLASSES.neutral,
+  sent: STATUS_STATE_BADGE_CLASSES["in-progress"],
+};

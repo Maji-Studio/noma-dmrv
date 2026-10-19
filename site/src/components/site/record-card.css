@@ -1,0 +1,41 @@
+/* Record card (RecordCard.astro, record-card.js): one record as a station drawing, then its label and code,
+   one line, and what the record holds (plain items, or label and value pairs with the label dimmed). The card lays itself out by its own width (a container query):
+   drawing beside the text from 440px, stacked under that. Tones: paper by default, .rc--stage on the dark
+   stage. .rc--float gives it a surface of its own (hover cards, map popups), with --rc-accent on the top
+   edge. A card that floats needs a set width: as a size container it no longer sizes to its content.
+   .is-active runs the drawing's loops; .is-plotting plots it in and fades the text in (contour-art.css).
+   Sizing, set by the owner on the card or any ancestor: --rc-art-h (drawing height beside the text),
+   --rc-art-stack-h (stacked; default from the drawing's aspect), --rc-art-stroke (raise it for small
+   drawings so strokes stay about a pixel), --rc-pad (text padding when stacked), and beside the text
+   --rc-art-fr (the drawing's share against the text's 4fr) and --rc-row-pad. */
+.rc {
+  --rc-ink: var(--ink); --rc-ink-2: var(--ink-2); --rc-ink-3: var(--ink-3); --rc-lit: var(--accent); --rc-rule: var(--rule);
+  --rc-accent-w: 3px;
+  container-type: inline-size;
+  color: var(--rc-ink); font-family: var(--f-sans); letter-spacing: 0; text-transform: none;
+}
+.rc--stage { --rc-ink: var(--stage-ink); --rc-ink-2: var(--stage-ink-2); --rc-ink-3: var(--stage-ink-3); --rc-lit: var(--stage-lit); --rc-rule: var(--stage-grid); }
+.rc--float { background: var(--paper); border: var(--hairline) solid var(--rule-strong); border-top: var(--rc-accent-w) solid var(--rc-accent, var(--accent)); box-shadow: 0 var(--space-2) var(--space-6) var(--clr-purple-10); }
+
+.rc-in { display: grid; }
+.rc-art { aspect-ratio: 480 / 330; height: var(--rc-art-stack-h, auto); justify-self: stretch; /* a grid item with an aspect ratio would otherwise shrink to it */ padding: var(--space-4); border-bottom: var(--hairline) solid var(--rc-rule); color: var(--rc-ink-2); }
+.rc-art svg { stroke-width: var(--rc-art-stroke, 1.3); }
+.rc-text { display: grid; gap: var(--space-3); align-content: start; padding: var(--rc-pad, var(--space-5)); }
+.rc-head { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin: 0; font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-stage-label); letter-spacing: var(--track-mono); text-transform: uppercase; }
+.rc-label { color: var(--rc-lit); }
+.rc-code { color: var(--rc-ink-3); }
+.rc-line { margin: 0; font-weight: 300; font-size: var(--fs-ui); line-height: 1.45; color: var(--rc-ink-2); }
+.rc-holds { display: grid; gap: var(--space-2); list-style: none; margin: 0; padding: 0; font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-mono); letter-spacing: var(--track-mono); text-transform: uppercase; color: var(--rc-ink-3); }
+.rc-holds li { display: flex; gap: var(--space-3); align-items: baseline; }
+.rc-holds li > .rc-key { color: var(--rc-ink-3); white-space: nowrap; }
+.rc-holds li:has(> .rc-key) { color: var(--rc-ink-2); }
+.rc-holds li::before { content: ""; flex: none; width: var(--space-1); height: var(--space-1); border-radius: 50%; background: var(--rc-ink-3); transform: translateY(-0.2em); }
+.rc.is-plotting .rc-text { animation: rc-fade var(--dur-base) var(--ease-out) both; }
+@keyframes rc-fade { from { opacity: 0; } }
+
+@container (min-width: 440px) {
+  .rc-in:has(> .rc-art) { grid-template-columns: minmax(0, var(--rc-art-fr, 5fr)) minmax(0, 4fr); }
+  .rc-art { aspect-ratio: auto; height: var(--rc-art-h, 180px); border-bottom: 0; border-right: var(--hairline) solid var(--rc-rule); }
+  .rc-text { align-content: center; padding: var(--rc-row-pad, var(--space-6)); }
+}
+@media (prefers-reduced-motion: reduce) { .rc.is-plotting .rc-text { animation: none; } }

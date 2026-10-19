@@ -2,12 +2,13 @@
  * Formulation options for searchable entity selection.
  */
 
-import { and, ilike, or, eq, type SQL } from "drizzle-orm";
+import { and, ilike, or, eq, isNull, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { formulations } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "../utils";
+import { ARCHIVED_OPTION_SUBTITLE } from "@/lib/archived-option";
 
 export async function getFormulationsEntity(ctx: OrgContext, params: {
   search?: string;
@@ -34,7 +35,7 @@ export async function getFormulationsEntity(ctx: OrgContext, params: {
       biocharRatio: formulations.biocharRatio,
     })
     .from(formulations)
-    .where(and(eq(formulations.organizationId, ctx.organizationId), whereClause))
+    .where(and(eq(formulations.organizationId, ctx.organizationId), isNull(formulations.archivedAt), whereClause))
     .limit(limit);
 
   return results.map((r) => ({
@@ -53,6 +54,7 @@ export async function getFormulationEntityById(ctx: OrgContext, id: string): Pro
       code: formulations.code,
       name: formulations.name,
       biocharRatio: formulations.biocharRatio,
+      archivedAt: formulations.archivedAt,
     })
     .from(formulations)
     .where(and(eq(formulations.id, id), eq(formulations.organizationId, ctx.organizationId)))
@@ -64,6 +66,7 @@ export async function getFormulationEntityById(ctx: OrgContext, id: string): Pro
     id: result.id,
     code: result.code,
     name: result.name,
-    subtitle: result.biocharRatio !== null ? `${Math.round(result.biocharRatio * 100)}% biochar by volume` : undefined,
+    ...(result.archivedAt ? { archived: true } : {}),
+    subtitle: result.archivedAt ? ARCHIVED_OPTION_SUBTITLE : result.biocharRatio !== null ? `${Math.round(result.biocharRatio * 100)}% biochar by volume` : undefined,
   };
 }

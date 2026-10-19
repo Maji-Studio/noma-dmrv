@@ -1,3 +1,4 @@
+import { deletedProductIds } from '../output-stock-active-movements';
 import { getIngredientMoistureBasis } from '../ingredient-moisture-basis';
 import { getOutputBinStocks, getOutputBinStockView, type OutputBinStock } from '../output-stock';
 /** Storage-location options with live inventory subtitles. */
@@ -29,6 +30,7 @@ import {
   inArray,
   isNull,
   ne,
+  notInArray,
   or,
   sql,
   type SQL,
@@ -172,7 +174,7 @@ function buildInventoryAggregates(
     ) AS ingredient(value)`,
     sql`true`,
   )
-  .where(eq(biocharProducts.organizationId, ctx.organizationId))
+  .where(and(eq(biocharProducts.organizationId, ctx.organizationId), notInArray(biocharProducts.id, deletedProductIds(ctx, executor))))
   .groupBy(sql`ingredient.value ->> 'storageLocationId'`)
   .as("ingredient_consumption_agg");
 
@@ -249,11 +251,13 @@ export async function getStorageLocations(ctx: OrgContext, params: {
   feedstockTypeUsage?: "pyrolysis" | "blend";
   /** Show product bins reserved for this formulation, plus unassigned (empty) bins. */
   formulationId?: string;
+  /** Delivery draws require an exact match, excluding unassigned bins. */
+  strictFormulation?: boolean;
   /** Show only pure-biochar product bins (formulation unset). For pure-biochar products. */
   pureProductOnly?: boolean;
   limit: number;
 }): Promise<EntityOption[]> {
-  const { search, facilityId, type, feedstockTypeId, feedstockTypeUsage, formulationId, pureProductOnly, limit } =
+  const { search, facilityId, type, feedstockTypeId, feedstockTypeUsage, formulationId, strictFormulation, pureProductOnly, limit } =
     params;
   requireOrgScope(ctx);
 
@@ -319,7 +323,7 @@ export async function getStorageLocations(ctx: OrgContext, params: {
     conditions.push(
       and(
         eq(storageLocations.type, "product_bin"),
-        or(
+        strictFormulation ? eq(storageLocations.formulationId, formulationId) : or(
           sql`${storageLocations.formulationId} IS NULL`,
           eq(storageLocations.formulationId, formulationId)
         )!

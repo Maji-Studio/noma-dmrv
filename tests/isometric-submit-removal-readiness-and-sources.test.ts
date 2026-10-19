@@ -1,3 +1,6 @@
+import { buildSubmissionLineageBlockers } from "@/fn/certification/certify-lineage-blockers";
+import { deriveRemovalReadiness } from "@/lib/certification/readiness";
+import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 /**
  * Pre-submit readiness and supporting-Source gates for `submitRemoval`.
  *
@@ -7,27 +10,36 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "./helpers/test-org";
 import {
+  APPLICATION_ID,
   ORIGINAL_BIOCHAR_MASS_KG,
   REMOVAL_ID,
   USER_ID,
   fakeExternalIds,
+  isometricClientFake,
   makeContext,
   makeInventorySourceDocument,
   makeResolvedInventorySource,
   storedRows,
 } from "./fixtures/submit-removal-orchestrator";
 import * as ledger from "@/data-access/certification";
+import * as ledgerClaim from "@/data-access/certification-submissions";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
 import * as biocharApplications from "@/fn/certification/biochar-applications";
 import * as biocharApplicationsDA from "@/data-access/certifier-biochar-applications";
-import * as sources from "@/fn/certification/sources";
+import * as sources from "@/fn/certification/source-candidates";
+import * as sourcesMirror from "@/fn/certification/sources-mirror-core";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { compileRemovalSubmission } from "@/fn/certification/removal-submission-build";
+import { prepareRemovalSubmission } from "@/fn/certification/removal-submission-prepare";
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import * as isometric from "@/lib/isometric";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
+import * as reviewHash from "@/lib/certification/removal-review-hash";
 import { classifyRemovalSourceCandidate } from "@/lib/certification/removal-source-bindings";
 import * as sourceVerification from "@/lib/isometric/source-binding-verification";
+
+const CHANGED_FIELD_SIZE_HA = 2;
 
 vi.mock("@/lib/isometric/source-binding-verification", () => ({
   verifyRemovalSourceBindings: vi.fn(),
@@ -52,7 +64,40 @@ function attemptSummaryEvents() {
     );
 }
 
+async function compileForReview(ctx: ReturnType<typeof makeContext>) {
+  const preparation = prepareRemovalSubmission(ctx);
+  expect(preparation.blockers).toEqual([]);
+  const compilation = await compileRemovalSubmission({
+    orgCtx: makeTestOrgContext(USER_ID),
+    removalId: REMOVAL_ID,
+    ctx,
+    prepared: preparation.prepared!,
+  });
+  expect(compilation.blockers).toEqual([]);
+  return compilation.transportPlan!;
+}
+
 describe("submitRemoval — entity readiness gate", () => {
+  it("agrees with readiness before and after adding delivery proof", async () => {
+    const ctx = makeContext();
+    ctx.lineages[0].delivery.proofOfDeliveryCount = 0;
+    ctx.submissionLineageBlockers = buildSubmissionLineageBlockers(ctx.lineages, [], {}, []);
+    const reason = "Delivery D-0012 has no proof of delivery. Attach a delivery receipt, bill of lading or delivery photo before submitting.";
+    expect(deriveRemovalReadiness(toRemovalReadinessFacts(ctx))).toMatchObject({ state: "blocked", reasons: [reason] });
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(ctx);
+    await expect(submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID })).rejects.toThrow(reason);
+    expect(isometric.createGhgEntry).not.toHaveBeenCalled();
+    expect(isometric.createDatapoint).not.toHaveBeenCalled();
+
+    ctx.lineages[0].delivery.proofOfDeliveryCount = 1;
+    ctx.submissionLineageBlockers = buildSubmissionLineageBlockers(ctx.lineages, [], {}, []);
+    expect(deriveRemovalReadiness(toRemovalReadinessFacts(ctx)).state).toBe("ready");
+    vi.mocked(isometric.createDatapoint).mockImplementation(fakeExternalIds("dp") as never);
+    vi.mocked(isometric.createGhgEntry).mockImplementation(fakeExternalIds("rmv") as never);
+    await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID });
+    expect(isometric.createGhgEntry).toHaveBeenCalledOnce();
+  });
+
   it("preflights every Biochar Application before any registry or claim mutation", async () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
       makeContext(),
@@ -118,7 +163,7 @@ describe("submitRemoval — entity readiness gate", () => {
     expect(
       evidenceLedgers.ensureEvidenceLedgersFromContext,
     ).not.toHaveBeenCalled();
-    expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
+    expect(resolveIsometricClient).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
   });
 
@@ -141,7 +186,7 @@ describe("submitRemoval — entity readiness gate", () => {
     expect(
       evidenceLedgers.ensureEvidenceLedgersFromContext,
     ).not.toHaveBeenCalled();
-    expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
+    expect(resolveIsometricClient).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
     expect(attemptSummaryEvents()).toHaveLength(1);
     expect(attemptSummaryEvents()[0]?.[1]).toMatchObject({
@@ -232,7 +277,8 @@ describe("submitRemoval — Source binding gate", () => {
       removalId: REMOVAL_ID,
       ctx,
       prepared: {
-        defaultTemplate: ctx.defaultTemplate!,
+        removalTemplate: ctx.removalTemplate!,
+        lineSources: ctx.lineSources,
         blueprintsByKey: new Map(
           ctx.blueprintsForTemplate.map((blueprint) => [
             blueprint.key,
@@ -433,7 +479,7 @@ describe("submitRemoval — Source binding gate", () => {
           : [],
     );
     vi.mocked(
-      sources.mirrorCandidateSourcesForSubmission,
+      sourcesMirror.mirrorCandidateSourcesForSubmission,
     ).mockImplementation(async () => {
       prepared = true;
     });
@@ -443,7 +489,8 @@ describe("submitRemoval — Source binding gate", () => {
       removalId: REMOVAL_ID,
       ctx,
       prepared: {
-        defaultTemplate: ctx.defaultTemplate!,
+        removalTemplate: ctx.removalTemplate!,
+        lineSources: ctx.lineSources,
         blueprintsByKey: new Map(
           ctx.blueprintsForTemplate.map((blueprint) => [
             blueprint.key,
@@ -477,7 +524,7 @@ describe("submitRemoval — Source binding gate", () => {
     ).resolves.toMatchObject({ externalId: "rem_1" });
 
     expect(
-      sources.mirrorCandidateSourcesForSubmission,
+      sourcesMirror.mirrorCandidateSourcesForSubmission,
     ).toHaveBeenCalledWith(
       expect.any(Object),
       {
@@ -545,33 +592,159 @@ describe("submitRemoval — Source binding gate", () => {
     });
   });
 
-  it("recompiles and refuses a Source set that becomes partial under mirror locks", async () => {
+  it("catches a document unlink in the in-lock re-resolution before snapshot insert or POST", async () => {
+    const ctx = makeContext();
+    const candidates = ["doc-1", "doc-2"].map(makeInventorySourceDocument);
+    const resolved = candidates.map((candidate, index) =>
+      makeResolvedInventorySource(candidate.documentId, `src-${index + 1}`),
+    );
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
-      makeContext(),
+      ctx,
     );
     vi.mocked(
       sources.collectCandidateSourceDocumentsForRemoval,
-    ).mockResolvedValue(
-      ["doc-1", "doc-2"].map(makeInventorySourceDocument),
+    ).mockResolvedValue(candidates);
+    vi.mocked(sources.resolveSourceBindingCandidates).mockResolvedValue(resolved);
+    const reviewed = await compileForReview(ctx);
+    const expectedCompilationHash = reviewPayloadHash(reviewed.semanticPayload);
+    vi.mocked(sources.resolveSourceBindingCandidates).mockClear();
+    vi.mocked(sources.resolveSourceBindingCandidates).mockImplementation(
+      async (_orgCtx, args, tx) => {
+        expect(args.candidates).toEqual(candidates);
+        expect(storedRows).toHaveLength(0);
+        // Both pre-lock compilations see a complete mapping. The unlink
+        // commits before resolve reads through the claim transaction.
+        return tx ? resolved.slice(0, 1) : resolved;
+      },
     );
-    vi.mocked(sources.resolveSourceBindingCandidates)
-      .mockResolvedValueOnce([
-        makeResolvedInventorySource("doc-1", "src-1"),
-        makeResolvedInventorySource("doc-2", "src-2"),
-      ])
-      .mockResolvedValueOnce([
-        makeResolvedInventorySource("doc-1", "src-1"),
-      ]);
 
     await expect(
       submitRemoval({
         orgCtx: makeTestOrgContext(USER_ID),
         removalId: REMOVAL_ID,
+        expectedCompilationHash,
       }),
     ).rejects.toThrow(/Only 1 of 2 supporting files/i);
 
+    expect(ledgerClaim.claimSubmissionDraft).toHaveBeenCalledWith(
+      makeTestOrgContext(USER_ID),
+      expect.objectContaining({ mirrorDocumentIds: ["doc-1", "doc-2"] }),
+    );
+    expect(vi.mocked(sources.resolveSourceBindingCandidates).mock.calls.map(
+      ([, , tx]) => tx !== undefined,
+    )).toEqual([false, false, true]);
     expect(storedRows).toHaveLength(0);
     expect(isometric.createDatapoint).not.toHaveBeenCalled();
     expect(isometric.createGhgEntry).not.toHaveBeenCalled();
+    expect(isometricClientFake.post).not.toHaveBeenCalled();
+  });
+
+  it("re-checks the reviewed hash on a successful in-lock Source rebuild", async () => {
+    const ctx = makeContext();
+    const candidate = makeInventorySourceDocument("doc-1");
+    const original = makeResolvedInventorySource("doc-1", "src-original");
+    const replacement = makeResolvedInventorySource("doc-1", "src-replacement");
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(ctx);
+    vi.mocked(sources.collectCandidateSourceDocumentsForRemoval).mockResolvedValue([candidate]);
+    vi.mocked(sources.resolveSourceBindingCandidates).mockResolvedValue([original]);
+    const reviewed = await compileForReview(ctx);
+    const expectedCompilationHash = reviewPayloadHash(reviewed.semanticPayload);
+    const hashCheck = vi.spyOn(reviewHash, "reviewPayloadHash");
+    vi.mocked(sources.resolveSourceBindingCandidates).mockClear();
+    let sourceReplaced = false;
+    vi.mocked(sources.resolveSourceBindingCandidates).mockImplementation(
+      async (_orgCtx, _args, tx) => {
+        if (tx) {
+          expect(storedRows).toHaveLength(0);
+          sourceReplaced = true;
+        }
+        return [sourceReplaced ? replacement : original];
+      },
+    );
+    vi.mocked(isometric.createDatapoint).mockImplementation(fakeExternalIds("dp") as never);
+    vi.mocked(isometric.createGhgEntry).mockImplementation(fakeExternalIds("rmv") as never);
+
+    await submitRemoval({
+      orgCtx: makeTestOrgContext(USER_ID),
+      removalId: REMOVAL_ID,
+      expectedCompilationHash,
+    });
+
+    // Registry-assigned IDs do not change reviewed content. The final hash
+    // comparison must nevertheless use the rebuilt artifact, not tentative.
+    const rebuiltSemantic = hashCheck.mock.lastCall![0];
+    expect(rebuiltSemantic.sourceIds).toEqual([replacement.sourceId]);
+    expect(hashCheck).toHaveLastReturnedWith(expectedCompilationHash);
+    expect(storedRows[0]).toMatchObject({
+      status: "submitted",
+      payloadHash: isometric.payloadHash(rebuiltSemantic),
+      payloadSnapshot: {
+        semantic: { sourceIds: [replacement.sourceId] },
+        transport: {
+          datapointBodies: expect.arrayContaining([
+            expect.objectContaining({
+              body: expect.objectContaining({ source_ids: [replacement.sourceId] }),
+            }),
+          ]),
+        },
+      },
+    });
+    expect(isometric.createDatapoint).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ source_ids: [replacement.sourceId] }),
+    );
+    expect(isometric.createGhgEntry).toHaveBeenCalledOnce();
+  });
+
+  it("refuses an in-lock rebuild whose application facts no longer match the reviewed hash", async () => {
+    const ctx = makeContext();
+    const candidate = makeInventorySourceDocument("doc-1");
+    const original = makeResolvedInventorySource("doc-1", "src-original");
+    const replacement = makeResolvedInventorySource("doc-1", "src-replacement");
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(ctx);
+    vi.mocked(sources.collectCandidateSourceDocumentsForRemoval).mockResolvedValue([candidate]);
+    vi.mocked(sources.resolveSourceBindingCandidates).mockResolvedValue([original]);
+    const reviewed = await compileForReview(ctx);
+    const expectedCompilationHash = reviewPayloadHash(reviewed.semanticPayload);
+    const hashCheck = vi.spyOn(reviewHash, "reviewPayloadHash");
+    const applicationInputs = await biocharApplicationsDA.getBiocharApplicationRegistryInputs(
+      makeTestOrgContext(USER_ID),
+      [APPLICATION_ID],
+    );
+    const changedApplicationInputs = applicationInputs.map((input) => ({
+      ...input,
+      fieldSizeHa: CHANGED_FIELD_SIZE_HA,
+    }));
+    vi.mocked(sources.resolveSourceBindingCandidates).mockImplementation(
+      async (_orgCtx, _args, tx) => {
+        if (!tx) return [original];
+        expect(storedRows).toHaveLength(0);
+        // Replacing a Source forces a strict rebuild. A concurrent application
+        // edit also changes the reviewed content that rebuild reads.
+        vi.mocked(biocharApplicationsDA.getBiocharApplicationRegistryInputs)
+          .mockResolvedValue(changedApplicationInputs);
+        return [replacement];
+      },
+    );
+
+    await expect(submitRemoval({
+      orgCtx: makeTestOrgContext(USER_ID),
+      removalId: REMOVAL_ID,
+      expectedCompilationHash,
+    })).rejects.toThrow(
+      "This Removal's data changed after you reviewed it. Reload the Removal and check the updated summary before submitting.",
+    );
+
+    expect(hashCheck).toHaveLastReturnedWith(expect.not.stringMatching(expectedCompilationHash));
+    expect(hashCheck.mock.lastCall![0]).toMatchObject({
+      sourceIds: [replacement.sourceId],
+      biocharApplicationIntents: [expect.objectContaining({
+        fieldSizeHa: changedApplicationInputs[0].fieldSizeHa,
+      })],
+    });
+    expect(storedRows).toHaveLength(0);
+    expect(isometric.createDatapoint).not.toHaveBeenCalled();
+    expect(isometric.createGhgEntry).not.toHaveBeenCalled();
+    expect(isometricClientFake.post).not.toHaveBeenCalled();
   });
 });

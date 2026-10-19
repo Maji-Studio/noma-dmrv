@@ -34,10 +34,6 @@ const GAP = 8;
 // ── Number formatting (DM Mono, tabular) ─────────────────────────────────────
 const nf2 = (n: number): string =>
   n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-// 4dp for the applied-biochar share so the printed operands trace the scaled
-// subtotal without hiding the fraction behind 2dp rounding.
-const nf4 = (n: number): string =>
-  n.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 const nfi = (n: number): string => n.toLocaleString("en-US");
 
 // Chrome (page, masthead, claim frame, section head, table frame, apparatus,
@@ -73,6 +69,7 @@ const styles = {
   routeArrow: { color: C.ink40 },
   geo: { fontFamily: MONO, fontSize: 6.5, color: C.ink40, marginTop: 2 },
   qtyUnit: { color: C.ink40, fontSize: 7 },
+  oneWay: { fontFamily: MONO, fontSize: 6.5, color: C.ink40, marginTop: 2, textAlign: "right" },
   modeText: { fontFamily: MONO, fontSize: 8 },
   veh: { fontFamily: SANS, fontSize: 7, color: C.ink40, marginTop: 1 },
   prov: {
@@ -179,9 +176,14 @@ function legRow(leg: LedgerCategory["legs"][number], isLast: boolean): ReactElem
   return v([styles.tr, isLast && styles.trLast], { wrap: false },
     t([styles.legRef, { width: COL.leg }], leg.ref),
     routeCell(leg),
-    h(Text, { style: [styles.qty, { width: COL.distance, paddingLeft: 4 }] },
-      nfi(leg.distanceKm),
-      h(Text, { style: styles.qtyUnit }, leg.roundTrip ? " km · rt" : " km")),
+    // Counted round trip on top (it feeds the t·km), the entered one-way
+    // distance under it so the doubling is visible on the row.
+    v({ width: COL.distance, paddingLeft: 4 }, {},
+      h(Text, { style: styles.qty },
+        nfi(leg.distanceKm),
+        h(Text, { style: styles.qtyUnit }, " km · rt")),
+      t(styles.oneWay, `${nfi(leg.oneWayDistanceKm)} one way`),
+    ),
     h(Text, { style: [styles.qty, { width: COL.mass, paddingLeft: GAP }] },
       leg.massMissing ? MISSING_VALUE.notRecorded : nfi(leg.loadMassKg),
       leg.massMissing ? "" : h(Text, { style: styles.qtyUnit }, " kg")),
@@ -201,7 +203,7 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
     v([styles.rule, { backgroundColor: CAT_COLOR[cat.key] }], {}),
     t(styles.sectionName, cat.name),
     t(styles.sectionTag, cat.tag),
-    t(styles.sectionEqn, "distance × mass ÷ 1000 = t·km"),
+    t(styles.sectionEqn, "round-trip distance × mass ÷ 1000 = t·km"),
   );
   const th = v(styles.th, {},
     t([styles.thText, { width: COL.leg }], "Leg"),
@@ -213,10 +215,6 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
     t([styles.thText, { width: COL.tkm, textAlign: "right", paddingLeft: GAP }], "t·km"),
   );
   const rows = cat.legs.map((leg, i) => legRow(leg, i === cat.legs.length - 1));
-  // §8.6.2 delivery bucket (ADR 0020): a scaled category shows its arithmetic
-  // explicitly — raw leg sum, × applied share, then the submitted subtotal —
-  // so the per-leg rows still reconcile to the registry scalar. ("§" avoided
-  // in rendered text: the bundled font subset may lack the glyph, like U+2192.)
   const footRow = (
     label: string,
     value: string,
@@ -251,39 +249,7 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
             { ...operandRow, ...stackedRow },
           ),
         ];
-  const foot = cat.scaling
-    ? v({}, {},
-        ...roundingRows,
-        footRow(
-          `Leg sum: ${cat.key} · ${formatCount(cat.legs.length, "leg")}`,
-          nf2(cat.scaling.rawSubtotalTkm),
-          "t·km",
-          operandRow,
-        ),
-        footRow(
-          "× applied share: delivery emissions · Biochar Protocol 8.6.2",
-          `× ${nf4(cat.scaling.appliedFraction)}`,
-          null,
-          { ...operandRow, ...stackedRow },
-        ),
-        ...(cat.scaling.displayAdjustmentTkm == null
-          ? []
-          : [
-              footRow(
-                "Scaling adjustment: displayed values to submission value",
-                nf2(cat.scaling.displayAdjustmentTkm),
-                "t·km",
-                { ...operandRow, ...stackedRow },
-              ),
-            ]),
-        footRow(
-          `Subtotal: ${cat.key} · submission value`,
-          nf2(cat.subtotalTkm),
-          "t·km",
-          stackedRow,
-        ),
-      )
-    : roundingRows.length > 0
+  const foot = roundingRows.length > 0
       ? v({}, {},
           ...roundingRows,
           footRow(
@@ -301,23 +267,16 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
   return v(styles.section, {}, header, v(styles.table, {}, th, ...rows, foot));
 }
 
-function apparatus(model: LedgerModel): ReactElement {
-  const hasScaling = model.categories.some((c) => c.scaling);
+function apparatus(): ReactElement {
   const note = v(styles.noteCol, {},
     t(styles.noteH, "Method note"),
     t(styles.noteBody,
       "Each leg's contribution is distance × mass, summed per category into the single " +
-      "mass and distance value prepared for Isometric Certify. The emission factor (per the " +
-      "Transportation module's component for the declared mode and vehicle class) is applied " +
-      "by the registry, not in this ledger. noma prepares distance and mass; Certify computes " +
+      "mass and distance value prepared for Isometric Certify. The removal template's fixed transport factor is applied " +
+      "by the registry. Vehicle type and model year are Transportation module records. noma prepares distance and mass; Certify computes " +
       "the sum of (distance × mass) over legs, times that factor. This sheet shows the " +
       "per-leg breakdown behind each prepared value. The per-leg bills of lading remain attached " +
-      "as Sources on the Removal." +
-      (hasScaling
-        ? " Biochar distribution is delivery-bucket scoped under Biochar Protocol 8.6.2. " +
-          "The prepared value is the leg sum × the applied-biochar share, shown explicitly " +
-          "in that category's subtotal."
-        : ""),
+      "as Sources on the Removal.",
     ),
   );
   const legendRow = (k: string, d: string) =>
@@ -359,7 +318,7 @@ function buildDocument(model: LedgerModel): ReactElement {
       masthead(model),
       claimBand(model),
       ...sections,
-      apparatus(model),
+      apparatus(),
       footer(model),
     ),
   );

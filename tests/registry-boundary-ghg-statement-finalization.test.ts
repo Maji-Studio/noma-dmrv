@@ -1,6 +1,12 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", async (importOriginal) =>
+  (await import("./fixtures/fake-registry")).fakeCredentialsModule(importOriginal),
+);
+
 import { eq, inArray } from "drizzle-orm";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 vi.mock("@/lib/isometric/client", async (importOriginal) => {
   const actual =
@@ -99,7 +105,7 @@ async function createFixture(): Promise<string> {
   const runId = crypto.randomUUID().slice(0, FIXTURE_UUID_SUFFIX_LENGTH);
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `GGS Finalization Facility ${runId}`,
       code: `FAC-GF-${runId}`,
@@ -107,19 +113,17 @@ async function createFixture(): Promise<string> {
     .returning({ id: facilities.id });
   createdFacilityIds.push(facility.id);
   await db.insert(certifierProjects).values({
+    externalFacilityId: `fcl_test_${facility.id}`,
     organizationId: TEST_ORG_ID,
     facilityId: facility.id,
     provider: "isometric",
     externalProjectId: `prj_ggs_final_${runId}`,
   });
-  const [removal] = await db
-    .insert(certifierRemovals)
-    .values({
+  const [removal] = await insertRemovalFixture(db, {
       organizationId: TEST_ORG_ID,
       facilityId: facility.id,
       completedOn: "2026-03-15",
-    })
-    .returning({ id: certifierRemovals.id });
+    });
   await db.insert(certificationSubmissions).values({
     organizationId: TEST_ORG_ID,
     provider: "isometric",

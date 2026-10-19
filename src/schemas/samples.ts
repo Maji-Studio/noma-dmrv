@@ -1,3 +1,5 @@
+import { optionalCalendarDateSchema } from "./helpers";
+import { expectedVersionSchema } from "./helpers";
 /**
  * Samples Validation Schemas
  * Zod schemas for lab sample tracking forms, server actions, and filtering
@@ -7,6 +9,7 @@
  */
 
 import { z } from "zod";
+import { offsetInstantSchema } from "./event-instant";
 import {
   optionalNumber,
   optionalPercent,
@@ -14,6 +17,7 @@ import {
   RATIO_INPUT_MAX,
   RATIO_MAX_MESSAGE,
   requiredNumber,
+  toIntOrNull,
 } from "./helpers";
 
 // ============================================
@@ -22,6 +26,7 @@ import {
 
 const PERCENT_RANGE_MESSAGE = "Enter a value from 0 to 100";
 const NON_NEGATIVE_NUMBER_MESSAGE = "Must be a non-negative number";
+const R0_MEASUREMENT_COUNT_INTEGER_MESSAGE = "Enter a whole number of readings.";
 const PH_MIN = 0;
 const PH_MAX = 14;
 const PH_RANGE_MESSAGE = `Must be between ${PH_MIN} and ${PH_MAX}`;
@@ -30,6 +35,45 @@ export const ORGANIC_CARBON_EXCEEDS_TOTAL_MESSAGE =
   `Organic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points. Correct the carbon values.`;
 export const COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE =
   `Organic plus inorganic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points. Correct the carbon values.`;
+
+/**
+ * Practical upper bounds for the unbounded physical inputs. Their columns are
+ * `real`, which overflows near 3.4e38, so an absurd value must fail as a field
+ * error rather than a database overflow. Generous for any lab sample.
+ */
+export const SAMPLE_PHYSICAL_INPUT_MAX = {
+  weightGrams: 1_000_000,
+  volumeMl: 1_000_000,
+  bulkDensityKgPerM3: 10_000,
+  // Grams per kilogram cannot exceed the kilogram itself.
+  saltContentGPerKg: 1_000,
+} as const;
+
+export type SamplePhysicalInputField = keyof typeof SAMPLE_PHYSICAL_INPUT_MAX;
+
+/** Non-negative and at most the field's practical maximum. */
+export function samplePhysicalNumber(field: SamplePhysicalInputField) {
+  const max = SAMPLE_PHYSICAL_INPUT_MAX[field];
+  return z.number().finite().min(0, NON_NEGATIVE_NUMBER_MESSAGE).max(max, `Enter a value up to ${max.toLocaleString("en-US")}`);
+}
+
+export const SAMPLING_TIME_REQUIRED_MESSAGE = "Enter the sampling time.";
+const SAMPLING_TIME_OFFSET_MESSAGE =
+  "Enter the sampling time with a time zone offset, as in 2026-10-12T09:30:00Z.";
+
+/**
+ * When the sample was taken. Server actions take a native Date; a string must
+ * be an instant with an explicit offset (round 7 Q51). The form resolves its
+ * facility wall clock to that instant with `EventTimeInput`, so a time is
+ * never read in the browser's zone.
+ */
+const samplingTimeSchema = z.union([
+  z.date(),
+  z.string()
+    .min(1, SAMPLING_TIME_REQUIRED_MESSAGE)
+    .pipe(offsetInstantSchema(SAMPLING_TIME_OFFSET_MESSAGE))
+    .transform((value) => new Date(value)),
+], { error: SAMPLING_TIME_REQUIRED_MESSAGE });
 
 const percentNumber = z
   .number()
@@ -46,9 +90,8 @@ const requiredPercent = requiredNumber("This field is required").pipe(
   percentNumber,
 );
 
-const optionalNonNegativeNumber = optionalNumber.pipe(
-  nonNegativeNumber.nullable().optional(),
-).optional();
+const optionalPhysicalNumber = (field: SamplePhysicalInputField) =>
+  optionalNumber.pipe(samplePhysicalNumber(field).nullable().optional()).optional();
 
 // hToCOrgRatio / oToCOrgRatio are atomic ratios (not 0–1 fractions) backed by
 // the `fraction` DB family (numeric(7,6)) — cap at the column's ceiling so an
@@ -168,30 +211,16 @@ export const sampleFormSchema = z
     // (issue #309). The batch pools biochar across its member runs, so the
     // sample never anchors on a production run.
     creditBatchId: z.string().min(1, "Select a credit batch.").uuid("Choose a valid credit batch."),
-    samplingTime: z.union([
-      z.date(),
-      z.string().transform((val, ctx) => {
-        const date = new Date(val);
-        if (isNaN(date.getTime())) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
-          return z.NEVER;
-        }
-        return date;
-      }),
-    ]),
+    samplingTime: samplingTimeSchema,
 
     // Lab info (optional)
     labName: z.string().max(200).optional().nullable().or(z.literal("")),
     labAccreditation: z.string().max(200).optional().nullable().or(z.literal("")),
-    analysisDate: z.union([
-      z.date(),
-      z.string().transform((val) => (val ? new Date(val) : null)),
-      z.null(),
-    ]).optional().nullable(),
+    analysisDate: optionalCalendarDateSchema(),
 
     // Sample weight/volume
-    weightGrams: optionalNonNegativeNumber,
-    volumeMl: optionalNonNegativeNumber,
+    weightGrams: optionalPhysicalNumber("weightGrams"),
+    volumeMl: optionalPhysicalNumber("volumeMl"),
 
     // === Section 2: Carbon Analysis ===
     totalCarbonPercent: requiredPercent,
@@ -215,9 +244,9 @@ export const sampleFormSchema = z
     moistureContentPercent: optionalPercentInput,
 
     // === Section 5: Physical ===
-    bulkDensityKgPerM3: optionalNonNegativeNumber,
+    bulkDensityKgPerM3: optionalPhysicalNumber("bulkDensityKgPerM3"),
     ph: optionalPh,
-    saltContentGPerKg: optionalNonNegativeNumber,
+    saltContentGPerKg: optionalPhysicalNumber("saltContentGPerKg"),
 
     // === Section 6: Stability ===
     // H:C org ratio - can be calculated from totalHydrogenPercent / organicCarbonPercent
@@ -226,40 +255,25 @@ export const sampleFormSchema = z
 
     // === Section 7: 1000-Year Durability (conditional) ===
     // Not user-selected: the form derives it from the chosen credit batch's
-    // declared tier (issue #309) and keeps it in form state so the conditional
-    // 1000-year validation below still applies.
-    durabilityOption: z.enum(["200_year", "1000_year"]).default("200_year"),
+    // declared tier (issue #309) and keeps it in form state for durability
+    // field visibility and certification-readiness indicators.
+    durabilityOption: z.enum(["200_year", "1000_year"]).nullable().default(null),
 
-    // R₀ reflectance (required for 1000-year)
+    // Optional mean R₀; s_fraction remains a certification input.
     randomReflectanceR0Percent: optionalPercentInput,
     // Proportion of the sample's ISO 7404-5 R₀ readings at or above 2%.
     // Stored/submitted as 0–1; the form presents it as a percentage.
     sReflectanceFraction: optionalFraction,
-    r0MeasurementCount: z.union([
-      z.number().int().min(0).max(PG_INTEGER_MAX, "Measurement count is too large"),
-      z.string()
-        .transform((val) => (val === "" ? null : parseInt(val, 10)))
-        .pipe(
-          z.number().int().min(0).max(PG_INTEGER_MAX, "Measurement count is too large").nullable(),
-        ),
-      z.null(),
-    ]).optional().nullable(),
-    r0AnalysisDate: z.union([
-      z.date(),
-      z.string().transform((val) => (val ? new Date(val) : null)),
-      z.null(),
-    ]).optional().nullable(),
-    r0HistogramFileUrl: z.string().max(2000).optional().nullable().or(z.literal("")),
+    r0MeasurementCount: z.preprocess(
+      toIntOrNull,
+      z.number({ error: R0_MEASUREMENT_COUNT_INTEGER_MESSAGE }).int(R0_MEASUREMENT_COUNT_INTEGER_MESSAGE).min(0).max(PG_INTEGER_MAX, "Measurement count is too large").nullable(),
+    ).optional(),
+    r0AnalysisDate: optionalCalendarDateSchema(),
 
-    // TGA non-reactive carbon (required for 1000-year)
+    // Optional TGA non-reactive carbon
     reactiveCarbonPercent: optionalPercentInput,
     residualCarbonPercent: optionalPercentInput,
-    tgaAnalysisDate: z.union([
-      z.date(),
-      z.string().transform((val) => (val ? new Date(val) : null)),
-      z.null(),
-    ]).optional().nullable(),
-    tgaThermogramFileUrl: z.string().max(2000).optional().nullable().or(z.literal("")),
+    tgaAnalysisDate: optionalCalendarDateSchema(),
 
     // === Nutrient Claims (from sampleConditionSchema) ===
     nutrientClaimEnabled: z.boolean().default(false),
@@ -271,34 +285,6 @@ export const sampleFormSchema = z
   })
   .superRefine((value, ctx) => {
     carbonReconciliationSuperRefine(value, ctx);
-
-    // Conditional validation for 1000-year durability
-    if (value.durabilityOption === "1000_year") {
-      if (value.randomReflectanceR0Percent == null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["randomReflectanceR0Percent"],
-          message: "R₀ reflectance is required for 1000-year durability",
-        });
-      }
-
-      if (value.sReflectanceFraction == null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["sReflectanceFraction"],
-          message:
-            "R₀ readings at or above 2% are required for 1000-year durability",
-        });
-      }
-
-      if (value.residualCarbonPercent == null && value.reactiveCarbonPercent == null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["residualCarbonPercent"],
-          message: "TGA non-reactive carbon data is required for 1000-year durability",
-        });
-      }
-    }
 
     // Conditional validation for nutrient claims
     if (value.nutrientClaimEnabled) {
@@ -336,6 +322,7 @@ export const createSampleSchema = sampleFormSchema;
  * All fields optional except sampleId
  */
 export const updateSampleSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   sampleId: z.string().uuid("Choose a valid Sample."),
   sampleCode: z
     .string()
@@ -344,26 +331,12 @@ export const updateSampleSchema = z.object({
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
   creditBatchId: z.string().uuid("Choose a valid credit batch.").optional(),
-  samplingTime: z.union([
-    z.date(),
-    z.string().transform((val, ctx) => {
-      const date = new Date(val);
-      if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
-        return z.NEVER;
-      }
-      return date;
-    }),
-  ]).optional(),
+  samplingTime: samplingTimeSchema.optional(),
   labName: z.string().max(200).optional().nullable(),
   labAccreditation: z.string().max(200).optional().nullable(),
-  analysisDate: z.union([
-    z.date(),
-    z.string().transform((val) => (val ? new Date(val) : null)),
-    z.null(),
-  ]).optional().nullable(),
-  weightGrams: nonNegativeNumber.optional().nullable(),
-  volumeMl: nonNegativeNumber.optional().nullable(),
+  analysisDate: optionalCalendarDateSchema(),
+  weightGrams: samplePhysicalNumber("weightGrams").optional().nullable(),
+  volumeMl: samplePhysicalNumber("volumeMl").optional().nullable(),
   totalCarbonPercent: percentNumber.optional(),
   organicCarbonPercent: percentNumber.optional(),
   inorganicCarbonPercent: percentNumber.optional().nullable(),
@@ -373,21 +346,19 @@ export const updateSampleSchema = z.object({
   totalSulfurPercent: percentNumber.optional().nullable(),
   ashContentPercent: percentNumber.optional().nullable(),
   moistureContentPercent: percentNumber.optional().nullable(),
-  bulkDensityKgPerM3: nonNegativeNumber.optional().nullable(),
+  bulkDensityKgPerM3: samplePhysicalNumber("bulkDensityKgPerM3").optional().nullable(),
   ph: z.number().min(PH_MIN, PH_RANGE_MESSAGE).max(PH_MAX, PH_RANGE_MESSAGE).optional().nullable(),
-  saltContentGPerKg: nonNegativeNumber.optional().nullable(),
+  saltContentGPerKg: samplePhysicalNumber("saltContentGPerKg").optional().nullable(),
   hToCOrgRatio: nonNegativeRatio.optional().nullable(),
   oToCOrgRatio: nonNegativeRatio.optional().nullable(),
-  durabilityOption: z.enum(["200_year", "1000_year"]).optional(),
+  durabilityOption: z.enum(["200_year", "1000_year"]).nullable().optional(),
   randomReflectanceR0Percent: percentNumber.optional().nullable(),
   sReflectanceFraction: z.number().min(0).max(1).optional().nullable(),
   r0MeasurementCount: z.number().int().min(0).max(PG_INTEGER_MAX, "Measurement count is too large").optional().nullable(),
-  r0AnalysisDate: z.union([z.date(), z.string(), z.null()]).optional().nullable(),
-  r0HistogramFileUrl: z.string().max(2000).optional().nullable(),
+  r0AnalysisDate: optionalCalendarDateSchema(),
   reactiveCarbonPercent: percentNumber.optional().nullable(),
   residualCarbonPercent: percentNumber.optional().nullable(),
-  tgaAnalysisDate: z.union([z.date(), z.string(), z.null()]).optional().nullable(),
-  tgaThermogramFileUrl: z.string().max(2000).optional().nullable(),
+  tgaAnalysisDate: optionalCalendarDateSchema(),
   nutrientClaimEnabled: z.boolean().optional(),
   phosphorusPercent: percentNumber.optional().nullable(),
   potassiumPercent: percentNumber.optional().nullable(),
@@ -400,6 +371,7 @@ export const updateSampleSchema = z.object({
  * Schema for deleting a sample
  */
 export const deleteSampleSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   sampleId: z.string().uuid("Choose a valid Sample."),
 });
 
@@ -456,34 +428,6 @@ export type SampleFilterData = z.infer<typeof sampleFilterSchema>;
 // ============================================
 
 /**
- * Calculate H:C org ratio from hydrogen and organic carbon percentages
- */
-export function calculateHToCOrgRatio(
-  hydrogenPercent: number | null | undefined,
-  organicCarbonPercent: number | null | undefined
-): number | null {
-  if (hydrogenPercent == null || organicCarbonPercent == null || organicCarbonPercent === 0) {
-    return null;
-  }
-  // Atomic ratio: (H% / 1.008) / (Corg% / 12.011)
-  return (hydrogenPercent / 1.008) / (organicCarbonPercent / 12.011);
-}
-
-/**
- * Calculate O:C org ratio from oxygen and organic carbon percentages
- */
-export function calculateOToCOrgRatio(
-  oxygenPercent: number | null | undefined,
-  organicCarbonPercent: number | null | undefined
-): number | null {
-  if (oxygenPercent == null || organicCarbonPercent == null || organicCarbonPercent === 0) {
-    return null;
-  }
-  // Atomic ratio: (O% / 15.999) / (Corg% / 12.011)
-  return (oxygenPercent / 15.999) / (organicCarbonPercent / 12.011);
-}
-
-/**
  * Format durability option for display
  */
 export function formatDurabilityOption(option: "200_year" | "1000_year"): string {
@@ -493,3 +437,5 @@ export function formatDurabilityOption(option: "200_year" | "1000_year"): string
   };
   return labels[option];
 }
+
+export type DeleteSampleData = z.infer<typeof deleteSampleSchema>;

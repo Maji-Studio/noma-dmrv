@@ -8,7 +8,7 @@
  * defaults that every member's forms need.
  */
 import { eq } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { organizationSettings } from "@/db/schema/settings";
 import {
   DEFAULT_ORGANIZATION_SETTINGS,
@@ -22,14 +22,13 @@ export type { OrganizationDefaults };
 
 export async function getOrganizationDefaults(
   ctx: OrgContext,
+  executor: Pick<DbTransaction, "select"> = db,
 ): Promise<OrganizationDefaults> {
   requireOrgScope(ctx);
-  const [row] = await db
+  const [row] = await executor
     .select({
-      defaultCurrency: organizationSettings.defaultCurrency,
       defaultCountry: organizationSettings.defaultCountry,
       defaultTimezone: organizationSettings.defaultTimezone,
-      defaultTripType: organizationSettings.defaultTripType,
       defaultEvidenceMethod: organizationSettings.defaultEvidenceMethod,
       defaultPackaging: organizationSettings.defaultPackaging,
     })
@@ -40,13 +39,8 @@ export async function getOrganizationDefaults(
   if (!row) return { ...DEFAULT_ORGANIZATION_SETTINGS };
 
   return {
-    // The column is free text (ISO 4217) to match `orders.currency`, so it is
-    // narrowed here rather than by the database.
-    defaultCurrency:
-      row.defaultCurrency as OrganizationDefaults["defaultCurrency"],
     defaultCountry: row.defaultCountry,
     defaultTimezone: row.defaultTimezone,
-    defaultTripType: row.defaultTripType,
     defaultEvidenceMethod: row.defaultEvidenceMethod,
     defaultPackaging: row.defaultPackaging,
   };
@@ -67,10 +61,8 @@ export async function upsertOrganizationDefaults(
       set: { ...input, updatedAt: new Date() },
     })
     .returning({
-      defaultCurrency: organizationSettings.defaultCurrency,
       defaultCountry: organizationSettings.defaultCountry,
       defaultTimezone: organizationSettings.defaultTimezone,
-      defaultTripType: organizationSettings.defaultTripType,
       defaultEvidenceMethod: organizationSettings.defaultEvidenceMethod,
       defaultPackaging: organizationSettings.defaultPackaging,
     });
@@ -80,11 +72,8 @@ export async function upsertOrganizationDefaults(
   }
 
   return {
-    defaultCurrency:
-      row.defaultCurrency as OrganizationDefaults["defaultCurrency"],
     defaultCountry: row.defaultCountry,
     defaultTimezone: row.defaultTimezone,
-    defaultTripType: row.defaultTripType,
     defaultEvidenceMethod: row.defaultEvidenceMethod,
     defaultPackaging: row.defaultPackaging,
   };

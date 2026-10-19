@@ -1,15 +1,18 @@
+import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
+import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import { describe, expect, it } from "vitest";
 import {
-  deriveFacilitySetupGaps,
+  deriveFacilitySetupGaps, deriveFacilityConnectionGaps,
   facilityBlueprintLabel,
 } from "./facility-setup-gaps";
-import { DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 
 const COMPLETE = {
   hasOrgCredentials: true,
-  mapping: { id: "map_1" },
+  mapping: { id: "map_1", externalFacilityId: "fcl_1" },
   defaultTemplate: { id: "rvt_1" },
   missingDefaultTemplateId: null,
+  unbindableTemplateInputs: [],
   unresolvedBlueprintKeys: [] as string[],
 };
 
@@ -49,6 +52,14 @@ describe("deriveFacilitySetupGaps", () => {
         defaultTemplate: null,
       }),
     ).toEqual([{ kind: "credentials" }]);
+  });
+
+  it.each([null, "", "   ", undefined])("reports a missing external facility id (%s) before template gaps", (externalFacilityId) => {
+    expect(deriveFacilitySetupGaps({
+      ...COMPLETE,
+      mapping: { externalFacilityId },
+      defaultTemplate: null,
+    })).toEqual([{ kind: "external_facility_id" }]);
   });
 
   it("reports an unset default template", () => {
@@ -91,5 +102,29 @@ describe("facilityBlueprintLabel", () => {
     expect(facilityBlueprintLabel("future_blueprint_key")).toBe(
       "future blueprint key",
     );
+  });
+});
+
+it("reports unbindable inputs after blueprint resolution", () => {
+  const inputs = findUnbindableTemplateInputs(unsupportedTemplate());
+  expect(deriveFacilitySetupGaps({ ...COMPLETE, unbindableTemplateInputs: inputs })).toEqual([{ kind: "template_unbindable", inputs }]);
+});
+
+describe("grouping connection prerequisites", () => {
+  it.each([
+    { defaultTemplate: null },
+    { missingDefaultTemplateId: "deleted" },
+    { unresolvedBlueprintKeys: ["unknown"] },
+    { unbindableTemplateInputs: findUnbindableTemplateInputs(unsupportedTemplate()) },
+  ])("ignores default-template setup advice (%j)", (override) => {
+    expect(deriveFacilityConnectionGaps({ ...COMPLETE, ...override })).toEqual([]);
+    expect(deriveFacilitySetupGaps({ ...COMPLETE, ...override })).not.toEqual([]);
+  });
+  it.each([
+    [{ ...COMPLETE, hasOrgCredentials: false }, "credentials"],
+    [{ ...COMPLETE, mapping: null }, "project_link"],
+    [{ ...COMPLETE, mapping: { externalFacilityId: " " } }, "external_facility_id"],
+  ] as const)("retains connection gates", (facts, kind) => {
+    expect(deriveFacilityConnectionGaps(facts)).toEqual([{ kind }]);
   });
 });

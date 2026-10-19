@@ -9,7 +9,7 @@ submission unit) and ADR 0011 (credit-batch-anchored chain of custody).
 > even though its own justification leaned on Isometric's **production batch** (which is
 > *one feedstock under consistent conditions*). The §5 domain questions never covered
 > feedstock-per-batch, so it fell through. ADR 0016 closes that gap: a credit batch is the
-> production runs of **one feedstock** at one facility within ≤ 1 month — making it a genuine
+> production runs of **one feedstock** at one facility within less than one month — making it a genuine
 > protocol production batch (the lab-sampling unit). A facility running several feedstocks in
 > a month therefore has several **concurrent** credit batches, one per feedstock. Everything
 > below — run-membership, derived applications, the 12-month clock, produced-vs-applied
@@ -41,7 +41,7 @@ stockpiling limit (`G-6VWJ-0`, biochar-storage-soil-environments v1.3), and (2)
 use, and is it too early to submit?" Both are anchored on *production*, not application.
 
 Isometric's own model reinforces this: the **production batch is the atomic accounting
-unit** (≤ 1 month; carbon sampling, dry-weight, and loss allocation attach to it —
+unit** (less than one month; carbon sampling, dry-weight, and loss allocation attach to it —
 Protocol v1.3 §8.3.1), while crediting is **ex-post and applied-mass-scoped** (§8.1, §8.4,
 §8.6.2). The Certify API even joins `BiocharApplication.production_batch_id` to
 `ghg_entry_id` — production cohort → application → credit-bearing entry.
@@ -49,7 +49,7 @@ Protocol v1.3 §8.3.1), while crediting is **ex-post and applied-mass-scoped** (
 ## Decision
 
 A **credit batch is a production cohort**: the production runs of one **feedstock**
-(feedstock scoping added by ADR 0016) at one facility within a ≤ 1-month window.
+(feedstock scoping added by ADR 0016) at one facility within a window of less than one month under Isometric.
 **Production runs are the membership primitive** (strict — one run belongs to at most one
 batch, which is where #93's no-double-counting attaches). The
 batch's date window means **production period**. **Member applications are derived** from

@@ -1,3 +1,4 @@
+import type { BatchEmissionLine } from "./emission-lines";
 /**
  * Per-credit-batch health classifier — the pure decision behind "is this batch
  * complete enough to group into a removal, and if not, what's missing?" It is
@@ -15,12 +16,17 @@
  * overview hint can never disagree on whether a batch is "ready".
  */
 
+import type { SubmissionLineageBlocker } from "./submission-readiness";
 import type { TransportCategory } from "./readiness";
 import {
   defaultProductionReadinessGap,
   type ProductionReadinessGap,
 } from "./production-readiness";
 import { CERT_REQUIREMENT_META } from "./requirement-labels";
+import {
+  removalTemplateBlockerDestination,
+  type RemovalTemplateBlocker,
+} from "./removal-template-blockers";
 import {
   describeFeedstockTypeMappingGap,
   type FeedstockTypeMappingGap,
@@ -31,6 +37,8 @@ export type BatchHealthState =
   | "incomplete"; // one or more checks unmet (see `checks`)
 
 export type BatchHealthCheckKey =
+  | "emissions"
+  | "template"
   | "carbon" // carbon & durability lab inputs resolved
   | "facilityEmissions" // facility emission-estimate inputs resolved
   | "feedstockTypeMapping" // declared pyrolysis feedstock type linked to Isometric
@@ -39,8 +47,14 @@ export type BatchHealthCheckKey =
   | "entityReadiness"; // certifier-required entity fields on the batch's own lineage
 
 export type BatchHealthFixTarget =
+  | "emissions"
+  | "certificationTemplates"
+  | "creditBatchTemplate"
+  | "templateLineReview"
   | "batchDetails"
+  | "orders"
   | "deliveries"
+  | "deliveryEvidence"
   | "deliveryDistances"
   | "feedstocks"
   | "feedstockTypes"
@@ -81,6 +95,7 @@ export interface BatchHealthCheck {
 }
 
 export interface BatchHealthAffectedRecord {
+  href?: string;
   id: string;
   code: string;
   missing: string[];
@@ -107,11 +122,13 @@ type BatchHealthCheckBase = Omit<
 
 export interface BatchTransportFact {
   category: TransportCategory;
-  /** At least one transport leg present for this category in the batch lineage. */
+  /** Required category coverage, including every lineage feedstock. */
   present: boolean;
 }
 
 export interface BatchHealthFacts {
+  emissionLines?: BatchEmissionLine[] | null;
+  warnings?: string[];
   /**
    * Raw carbon and durability lab-input blockers (sample carbon content,
    * H/C_org, O/C_org, total carbon, s_fraction, and replicate coverage).
@@ -133,6 +150,8 @@ export interface BatchHealthFacts {
    * operator resolves them from the batch's cards before grouping.
    */
   entityReadinessGaps: string[];
+  submissionLineageBlockers?: SubmissionLineageBlocker[];
+  durabilityConfigurationBlockers?: string[];
   /** The same gaps grouped by the one workflow where each issue is resolved. */
   entityReadinessIssues?: BatchEntityReadinessIssue[];
   /** The batch's application lineage resolves at least one production run. */
@@ -145,6 +164,7 @@ export interface BatchHealthFacts {
    * transport coverage is only evaluable once this is true.
    */
   facilitySetupComplete: boolean;
+  templateBlockers?: RemovalTemplateBlocker[];
   /**
    * Transport coverage for the categories the facility's default template
    * requires. Empty when the template requires none — or when facility setup is
@@ -154,6 +174,7 @@ export interface BatchHealthFacts {
 }
 
 export interface BatchHealth {
+  warnings?: string[];
   state: BatchHealthState;
   /** Count of `unmet` checks; `skipped` checks do not count. */
   issueCount: number;
@@ -168,10 +189,6 @@ const TRANSPORT_LABEL = "Transport legs present";
 const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_PREVIEW_LIMIT = 3;
 const MERGED_CHECK_SEPARATOR = " · ";
-
-function describeCategories(categories: TransportCategory[]): string {
-  return categories.join(", ");
-}
 
 function carbonCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
   const missingInputs = Array.from(
@@ -252,55 +269,56 @@ function feedstockTypeMappingCheck(
   };
 }
 
-function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
+function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase[] {
   // Transport coverage is derived from application → delivery → product → run
   // lineage. Until that lineage exists, an empty transport result is only a
   // downstream symptom of the production gap and has no honest destination.
   if (!facts.hasSubmittableRuns) {
-    return {
+    return [{
       key: "transport",
       label: TRANSPORT_LABEL,
       status: "skipped",
       detail: "Link production data before reviewing transport coverage",
-    };
+    }];
   }
   // Required categories come from the facility's default template; without a
   // resolved facility setup we cannot know them, so the check is not yet
   // evaluable. The wizard surfaces the facility-setup gap separately, so a
   // `skipped` transport check must NOT block batch readiness.
   if (!facts.facilitySetupComplete) {
-    return {
+    return [{
       key: "transport",
       label: TRANSPORT_LABEL,
       status: "skipped",
       detail: "Complete facility setup to evaluate transport coverage",
-    };
+    }];
   }
   if (facts.requiredTransport.length === 0) {
-    return {
+    return [{
       key: "transport",
       label: TRANSPORT_LABEL,
       status: "met",
       detail: "This template requires no transport legs.",
-    };
+    }];
   }
   const missing = facts.requiredTransport
     .filter((t) => !t.present)
     .map((t) => t.category);
   return missing.length === 0
-    ? { key: "transport", label: TRANSPORT_LABEL, status: "met" }
-    : {
+    ? [{ key: "transport", label: TRANSPORT_LABEL, status: "met" }]
+    : missing.map((category) => ({
         key: "transport",
         label: TRANSPORT_LABEL,
         status: "unmet",
-        detail: `Missing ${describeCategories(missing)} transport legs`,
-        fixTarget: "deliveries",
-      };
+        detail: `Missing ${category} transport legs`,
+        fixTarget: category === "feedstock" ? "feedstocks" : "deliveries",
+      }));
 }
 
 function resolutionDestination(check: BatchHealthCheck): string {
   switch (check.fixTarget) {
     case "deliveries":
+    case "deliveryEvidence":
     case "deliveryDistances":
       return "deliveries";
     case "productionRuns":
@@ -362,6 +380,11 @@ function mergeUnmetChecksByDestination(
     const existing = merged[existingIndex];
     merged[existingIndex] = {
       ...existing,
+      fixTarget: destination === "deliveries"
+        ? existing.fixTarget === "deliveryEvidence" && check.fixTarget === "deliveryEvidence"
+          ? "deliveryEvidence"
+          : "deliveries"
+        : existing.fixTarget,
       label: mergeCheckText(existing.label, check.label) ?? existing.label,
       requirementLabel:
         mergeCheckText(existing.requirementLabel, check.requirementLabel) ??
@@ -415,6 +438,30 @@ function entityReadinessChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] 
   }];
 }
 
+function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
+  const lineageChecks: BatchHealthCheckBase[] = (facts.submissionLineageBlockers ?? []).map((blocker) => ({
+    key: blocker.fixTarget === "feedstocks" ? "transport" : "entityReadiness",
+    issueKey: `submission-${blocker.fixTarget}`,
+    label: "Submission requirements complete",
+    requirementLabel: "Resolve submission blockers",
+    status: "unmet",
+    detail: blocker.detail,
+    fixTarget: blocker.fixTarget,
+    affectedRecords: [{ ...blocker.record, missing: [blocker.detail] }],
+  }));
+  const blockers = facts.durabilityConfigurationBlockers ?? [];
+  if (blockers.length > 0) lineageChecks.push({
+    key: "entityReadiness",
+    issueKey: "submission-batchDetails",
+    label: "Submission requirements complete",
+    requirementLabel: "Resolve submission blockers",
+    status: "unmet",
+    detail: [...new Set(blockers)].join(MERGED_CHECK_SEPARATOR),
+    fixTarget: "batchDetails",
+  });
+  return lineageChecks;
+}
+
 /**
  * Folds a batch's data-completeness facts into one verdict + an itemised
  * checklist. A batch is "ready" (selectable into a removal) when no `unmet`
@@ -427,14 +474,31 @@ function entityReadinessChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] 
  * uniformity) live in `deriveRemovalReadiness`, not here.
  */
 export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
+  const emissionIssues = new Map(facts.emissionLines
+    ?.filter((line) => line.blocker?.fixTarget === "emissions")
+    .map((line) => [line.componentId, line]));
   const checks = mergeUnmetChecksByDestination(
     [
+      // A pin problem is fixed on the batch; a line problem in the template review.
+      ...(facts.templateBlockers ?? []).map((blocker): BatchHealthCheckBase => ({
+        key: "template", label: "Removal template reviewed", status: "unmet", detail: blocker.message,
+        fixTarget: removalTemplateBlockerDestination(blocker.code),
+      })),
+      ...(facts.emissionLines != null ? [{
+        key: "emissions" as const, label: "Emissions", fixTarget: "emissions" as const,
+        status: emissionIssues.size ? "unmet" as const : "met" as const,
+        detail: [...emissionIssues.values()].map((line) => line.blocker?.code === "entryMissingEvidence"
+          ? `Add a file for ${line.displayName}.` : `Check the manual entry on ${line.displayName}.`).join(" ") || undefined,
+      }] : []),
+      // Template line blockers (no source, unassigned, needs setup) are
+      // facility-level and stay in Removal readiness, like the rest of coverage.
       carbonCheck(facts),
       ...facilityEmissionsChecks(facts),
       feedstockTypeMappingCheck(facts),
       productionCheck(facts),
-      transportCheck(facts),
+      ...transportCheck(facts),
       ...entityReadinessChecks(facts),
+      ...submissionChecks(facts),
     ].map(withRequirementMeta),
   );
   const issueCount = checks.filter((c) => c.status === "unmet").length;
@@ -442,6 +506,7 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
     state: issueCount > 0 ? "incomplete" : "ready",
     issueCount,
     checks,
+    warnings: facts.warnings ?? [],
   };
 }
 

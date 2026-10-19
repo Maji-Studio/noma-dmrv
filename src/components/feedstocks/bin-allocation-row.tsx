@@ -46,12 +46,13 @@ export function BinAllocationRow({
 }: BinAllocationRowProps) {
   return (
     <div className="flex items-start gap-12">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-12 flex-1">
+      <div className="flex flex-col gap-y-12 flex-1">
         <FormEntitySelect
           control={control}
           name={`allocations.${index}.storageLocationId`}
           label="Storage bin"
           entityType="storageLocation"
+          allowEdit
           placeholder="Select bin..."
           disabled={disabled}
           required
@@ -62,6 +63,7 @@ export function BinAllocationRow({
             ...(feedstockTypeId ? { feedstockTypeId } : {}),
           }}
           dependsOn={[feedstockTypeId, facilityId]}
+          allowCreate={Boolean(onCreateNew)}
           onCreateNew={onCreateNew}
         />
 

@@ -12,16 +12,17 @@ const thousandYearSample = {
 };
 
 describe("1000-year Sample input", () => {
-  it("requires the per-sample fraction of R₀ readings at or above 2%", () => {
-    const result = createSampleSchema.safeParse(thousandYearSample);
-    expect(result.success).toBe(false);
-    expect(result.error?.issues).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path:["sReflectanceFraction"], message:expect.stringMatching(/R₀ readings.*2%/) }),
-    ]));
+  it.each([undefined, null])("allows saving without s_fraction (%s), which is required at certification", (sReflectanceFraction) => {
+    expect(createSampleSchema.safeParse({ ...thousandYearSample, sReflectanceFraction }).success).toBe(true);
   });
 
   it("accepts a 0–1 s_fraction and rejects values outside that range", () => {
     expect(createSampleSchema.safeParse({ ...thousandYearSample, sReflectanceFraction:0.92 }).success).toBe(true);
     expect(createSampleSchema.safeParse({ ...thousandYearSample, sReflectanceFraction:1.01 }).success).toBe(false);
+  });
+
+  it.each(["randomReflectanceR0Percent", "residualCarbonPercent"])("allows saving without %s", (field) => {
+    const result = createSampleSchema.safeParse({ ...thousandYearSample, [field]: null });
+    expect(result.success).toBe(true);
   });
 });

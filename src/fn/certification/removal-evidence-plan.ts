@@ -12,7 +12,7 @@ import {
   resolveSourceBindingCandidates,
   type CandidateSourceDocument,
   type ResolvedSourceBindingCandidate,
-} from "./sources";
+} from "./source-candidates";
 
 type BoundCandidate<T extends { binding: unknown }> = T & {
   binding: NonNullable<T["binding"]>;
@@ -147,6 +147,7 @@ export async function planRemovalEvidence(args: {
     sourceBindingPlan: buildRemovalSourceBindingPlan({
       candidates: datapointSourceCandidates,
       template,
+      lineSources: ctx.lineSources,
       ...membership,
     }),
     // The semantic plan includes pending files with placeholder Source IDs. The
@@ -159,6 +160,7 @@ export async function planRemovalEvidence(args: {
           sourceId: sourceIdByDocumentId.get(candidate.documentId) ?? "",
         })),
       template,
+      lineSources: ctx.lineSources,
       ...membership,
     }),
   };

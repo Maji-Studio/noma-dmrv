@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { feedstocks, biocharProducts, productionRunFeedstockDraws, binMovements } from '@/db/schema';
 import type { DbTransaction } from '@/db';
 import type { OrgContext } from '@/lib/auth/server';
 import { PgDialect } from 'drizzle-orm/pg-core';
@@ -14,10 +15,16 @@ import { resolveCompositionIngredientMassBasis } from './biochar-product-composi
 
 const ctx: OrgContext = { organizationId: 'org', userId: 'user', orgRole: 'owner', isPlatformAdmin: false };
 function reader(intakes: unknown[], products: unknown[] = [], draws: unknown[] = [], movements: unknown[] = [], conditions: SQL[] = []) {
-  const results = [intakes, products, draws, movements];
+  const results = new Map<unknown, unknown[]>([[feedstocks, intakes], [biocharProducts, products], [productionRunFeedstockDraws, draws], [binMovements, movements]]);
   return { select: vi.fn(() => {
-    const rows = results.shift();
-    const query = { from: () => query, innerJoin: () => query, where: (condition: SQL) => { conditions.push(condition); return Promise.resolve(rows); } };
+    let table: unknown;
+    let predicate: SQL;
+    const query = { from: (value: unknown) => { table = value; return query; }, innerJoin: () => query,
+      where: (condition: SQL) => { predicate = condition; return query; },
+      then: (resolve: (rows: unknown[]) => unknown) => {
+        conditions.push(predicate);
+        return Promise.resolve(results.get(table) ?? []).then(resolve);
+      } };
     return query;
   }) } as unknown as DbTransaction;
 }
@@ -45,7 +52,7 @@ describe('remaining ingredient moisture', () => {
   it('round-trips repeating moisture through the production schema without rounding the solids ratio', async () => {
     const basis = await getIngredientMoistureBasis(ctx, 'bin', undefined, reader([{ wet: 150, dry: 140 }]));
     expect(basis?.moisturePercent).toBe(6.666667);
-    const parsed = updateProductionRunSchema.parse({
+    const parsed = updateProductionRunSchema.parse({ expectedVersion: 1,
       productionRunId: '00000000-0000-4000-8000-000000000001', feedstockMoisturePercent: basis?.moisturePercent,
     });
     expect(parsed.feedstockMoisturePercent).toBe(basis?.moisturePercent);

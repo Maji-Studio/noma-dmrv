@@ -13,6 +13,7 @@ vi.mock("@/lib/auth/server", () => ({
 }));
 
 vi.mock("@/data-access/certifier-credentials", () => ({
+  verifyIsometricCredentialsForOrganization: vi.fn(),
   upsertCertifierCredentials: vi.fn(),
   getCertifierCredentialsStatus: vi.fn(),
   deleteCertifierCredentials: vi.fn(),
@@ -23,11 +24,8 @@ vi.mock("@/fn/action-errors", async (importOriginal) => ({
   logActionError: vi.fn(),
 }));
 
-// Saving is also the connection test, so the action calls Isometric with the
-// keys it just stored. The registry itself is out of scope here.
+// Data-access owns the connection check; the action formats its errors.
 vi.mock("@/lib/isometric", () => ({
-  getIsometricClientForOrg: vi.fn(),
-  listProjects: vi.fn(),
   IsometricApiError: class IsometricApiError extends Error {
     constructor(
       message: string,
@@ -43,11 +41,12 @@ vi.mock("@/lib/isometric", () => ({
 
 import {
   getCertifierCredentialsStatus,
+  verifyIsometricCredentialsForOrganization,
   upsertCertifierCredentials,
 } from "@/data-access/certifier-credentials";
 import { setOrgCertifierCredentialsFn } from "@/fn/certifier-credentials";
 import { requireOrgContext } from "@/lib/auth/server";
-import { getIsometricClientForOrg, listProjects } from "@/lib/isometric";
+import { SafeError } from "@/lib/errors";
 import {
   CERTIFIER_CREDENTIAL_MASK,
   certifierCredentialsRotationSchema,
@@ -72,12 +71,7 @@ beforeEach(() => {
     accessTokenLast4: "1234",
     updatedAt: new Date("2026-07-11T10:00:00.000Z"),
   });
-  vi.mocked(getIsometricClientForOrg).mockResolvedValue(
-    {} as Awaited<ReturnType<typeof getIsometricClientForOrg>>,
-  );
-  vi.mocked(listProjects).mockResolvedValue([
-    { id: "prj_1" },
-  ] as Awaited<ReturnType<typeof listProjects>>);
+  vi.mocked(verifyIsometricCredentialsForOrganization).mockResolvedValue(1);
 });
 
 describe("setOrgCertifierCredentialsFn", () => {
@@ -113,6 +107,10 @@ describe("setOrgCertifierCredentialsFn", () => {
       clientSecret: CLIENT_SECRET,
       provider: "isometric",
     });
+    expect(verifyIsometricCredentialsForOrganization).toHaveBeenCalledWith(
+      ORG_CONTEXT,
+      ORGANIZATION_ID,
+    );
     expect(result.success).toBe(true);
     expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN);
     expect(JSON.stringify(result)).not.toContain(CLIENT_SECRET);
@@ -125,10 +123,46 @@ describe("setOrgCertifierCredentialsFn", () => {
     });
   });
 
+  it("verifies a selected organization's credentials for a Platform Admin", async () => {
+    const ctx = { ...ORG_CONTEXT, orgRole: null, isPlatformAdmin: true } as const;
+    vi.mocked(requireOrgContext).mockResolvedValue(ctx);
+    const selectedOrgId = "org_selected";
+
+    const result = await setOrgCertifierCredentialsFn({
+      organizationId: selectedOrgId,
+      accessToken: ACCESS_TOKEN,
+      clientSecret: CLIENT_SECRET,
+    });
+
+    expect(result.success).toBe(true);
+    expect(verifyIsometricCredentialsForOrganization)
+      .toHaveBeenCalledWith(ctx, selectedOrgId);
+    expect(result).toMatchObject({
+      success: true,
+      data: { verification: { ok: true, projectCount: 1 } },
+    });
+  });
+
+  it("does not verify credentials when a non-admin's cross-org save is rejected", async () => {
+    const message = "You can only manage credentials for your active Organization.";
+    vi.mocked(upsertCertifierCredentials).mockRejectedValueOnce(new SafeError(message));
+
+    const result = await setOrgCertifierCredentialsFn({
+      organizationId: "org_selected",
+      accessToken: ACCESS_TOKEN,
+      clientSecret: CLIENT_SECRET,
+    });
+
+    expect(result).toEqual({ success: false, error: message });
+    expect(upsertCertifierCredentials).toHaveBeenCalledOnce();
+    expect(verifyIsometricCredentialsForOrganization).not.toHaveBeenCalled();
+    expect(getCertifierCredentialsStatus).not.toHaveBeenCalled();
+  });
+
   it("stores the keys even when the connection check fails, and says so", async () => {
     // The write comes first on purpose: a registry outage must not cost the
     // operator the keys they just pasted.
-    vi.mocked(listProjects).mockRejectedValue(new Error("boom"));
+    vi.mocked(verifyIsometricCredentialsForOrganization).mockRejectedValueOnce(new Error("boom"));
 
     const result = await setOrgCertifierCredentialsFn({
       organizationId: ORGANIZATION_ID,
@@ -177,7 +211,7 @@ describe("setOrgCertifierCredentialsFn", () => {
       clientSecret: CLIENT_SECRET,
     });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: "That is the placeholder for a stored key, not a key.",
     });
@@ -189,7 +223,7 @@ describe("setOrgCertifierCredentialsFn", () => {
       organizationId: ORGANIZATION_ID,
     });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: "Enter an access token or a client secret to save.",
     });

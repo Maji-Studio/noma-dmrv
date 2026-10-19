@@ -1,3 +1,4 @@
+import { expectedVersionSchema } from "./helpers";
 /**
  * Biochar Products Validation Schemas
  * Zod schemas for biochar product forms, server actions, and filtering
@@ -22,6 +23,7 @@ import { orderedSourcesSchema } from "./output-stock";
 // Constants
 // ============================================
 
+export const INGREDIENT_MOISTURE_REQUIRED = "Enter the measured moisture for every ingredient added.";
 export const MOISTURE_MIN = 0;
 export const MOISTURE_MAX = 100;
 export const DUPLICATE_FORMULATION_INGREDIENT_MESSAGE =
@@ -45,6 +47,9 @@ export type BiocharProductStatus = typeof biocharProductStatusValues[number];
  * entity dispatcher (server) so the magic value lives in one place.
  */
 export const PURE_PRODUCT_BIN_FILTER = "pure" as const;
+
+/** Delivery-source bins must match the order formulation exactly. */
+export const STRICT_FORMULATION_MATCH = "strict" as const;
 
 // ============================================
 // Ingredient Bin Schema (shared between form and update)
@@ -75,6 +80,7 @@ const ingredientBinBaseSchema = z.object({
 type IngredientMassFields = {
   massKg: number;
   massDryKg?: number | null;
+  moistureContentPercent?: number | null;
 };
 
 function ingredientDryMassRefinement(
@@ -128,9 +134,18 @@ function uniqueFormulationIngredientsRefinement(
   });
 }
 
-const ingredientBinsFormSchema = z
+/** Shared by entry and frozen edit, so array-level rules apply to both. */
+const ingredientBinsBaseFormSchema = z
   .array(ingredientBinFormSchema)
   .superRefine(uniqueFormulationIngredientsRefinement);
+/** New ingredients must carry moisture; frozen edits keep saved legacy nulls. */
+const ingredientBinsFormSchema = ingredientBinsBaseFormSchema.superRefine((ingredients, ctx) => {
+  ingredients.forEach((ingredient, index) => {
+    if (ingredient.massKg > 0 && ingredient.moistureContentPercent == null) {
+      ctx.addIssue({ code: "custom", path: [index, "moistureContentPercent"], message: INGREDIENT_MOISTURE_REQUIRED });
+    }
+  });
+});
 const ingredientBinsUpdateSchema = z
   .array(ingredientBinUpdateSchema)
   .superRefine(uniqueFormulationIngredientsRefinement);
@@ -148,7 +163,7 @@ export type IngredientBin = z.infer<typeof ingredientBinFormSchema>;
 export const biocharProductFormSchema = z.object({
   // Required fields
   facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
-  // Optional: empty = pure-biochar product (no amendment blend)
+  // Required even for Pure biochar (no amendment blend).
   formulationId: z.uuid("Choose a valid formulation."),
   placedAt: stockEventInstantSchema("Enter the mixing and placement time."),
   idempotencyKey: z.string().min(1),
@@ -205,6 +220,11 @@ export const biocharProductEntrySchema = biocharProductFormSchema.superRefine((v
   }
 });
 
+/** Frozen allocations retain their saved ingredient moisture, including legacy nulls. */
+export const biocharProductFrozenEditSchema = biocharProductEntrySchema.safeExtend({
+  ingredientBins: ingredientBinsBaseFormSchema.optional(),
+});
+
 // ============================================
 // Server Action Schemas - Biochar Product
 // ============================================
@@ -219,6 +239,7 @@ export const createBiocharProductSchema = biocharProductEntrySchema;
  * All fields optional except productId
  */
 export const updateBiocharProductSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   productId: z.string().uuid("Choose a valid biochar product."),
   code: z
     .string()
@@ -249,6 +270,7 @@ export const updateBiocharProductSchema = z.object({
  * Schema for deleting a biochar product
  */
 export const deleteBiocharProductSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   productId: z.string().uuid("Choose a valid biochar product."),
 });
 
@@ -298,3 +320,5 @@ export type BiocharProductFormData = z.infer<typeof biocharProductFormSchema>;
 export type CreateBiocharProductData = z.infer<typeof createBiocharProductSchema>;
 export type UpdateBiocharProductData = z.infer<typeof updateBiocharProductSchema>;
 export type BiocharProductFilterData = z.infer<typeof biocharProductFilterSchema>;
+
+export type DeleteBiocharProductData = z.infer<typeof deleteBiocharProductSchema>;

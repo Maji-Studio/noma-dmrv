@@ -36,6 +36,11 @@ export const createItemSchema = itemFormSchema.extend({ projectId: z.uuid() });
 
 When form and update variants share a repeated object shape (ingredient bins, allocations), extract a base schema and `.extend()` per variant — the form variant adds the preprocessors, the server variant does not.
 
+For integer row-version preconditions, use `expectedVersionSchema` from
+`@/schemas/helpers` on update and delete schemas. It requires the positive
+integer loaded with the record and tells the operator to reload when it is
+missing or invalid. Every edit form uses this integer mechanism. See [architecture.md](./architecture.md#expected-version-checks-on-edit-forms).
+
 ### Zod 4 string formats
 
 Format checks are **top-level**, not chained. The chained forms still compile but emit a deprecation diagnostic.
@@ -47,6 +52,13 @@ Format checks are **top-level**, not chained. The chained forms still compile bu
 | `z.string().url()` | `z.url()` |
 | `z.string().datetime()` | `z.iso.datetime()` |
 | `z.string().date()` | `z.iso.date()` |
+
+New UUID inputs use `uuidSchema(message?)` from `@/schemas/helpers`, not bare
+`z.uuid()`: it lowercases the id, so ids compare and fingerprint the same way
+rows come back, and the published schema is unchanged. Keep
+`.uuid(msg).toLowerCase()` on existing chains such as
+`z.string().min(1, …).uuid(…)`: piping a chained check through `uuidSchema`
+drops `format: uuid` from the OpenAPI document.
 
 `z.iso.datetime()` accepts UTC `Z` only by default — exactly what `Date.prototype.toISOString()` emits. Pass `{ offset: true }` for numeric offsets, `{ local: true }` for none. Validate timestamp **format** at parse time rather than guarding `Number.isNaN(new Date(x).getTime())` downstream.
 
@@ -125,8 +137,7 @@ folding to `null` wiped a manual distance on every unrelated edit.
 **The server derives values it owns rather than trusting the patch.** Feedstock
 dry mass is derived from the *effective* wet mass and moisture (patch value
 falling back to the stored row) inside the same locked transaction, so a
-moisture-only edit yields the right dry mass. A client-sent `massDryKg` is
-advisory and is refused when it disagrees materially with the derivation.
+moisture-only edit yields the right dry mass. `massDryKg` is not a PATCH input.
 Cross-field rules work the same way: `updateFeedstockType` re-validates the
 merged category/usage pair against the stored row, because a refine on the
 patch alone never fires when only one half of the pair is present.
@@ -138,6 +149,12 @@ Masses are backed by `numeric(14,3)` columns. A hand-rolled `z.number().positive
 Same reasoning for `PG_INTEGER_MAX` on integer columns, and `RATIO_INPUT_MAX` (9.999999) for ratio fields backed by `numeric(7,6)` whose domain exceeds `[0, 1]` (H:C org, O:C org). True 0–1 fractions keep their own `.max(1)`.
 
 ### GPS coordinates
+
+Facilities, supplier locations and customer locations require a GPS pair to
+save. Updates may omit the pair to preserve it, but cannot clear it or supply
+only one coordinate. Supplier and customer creation requires at least one
+location. Their optional one-way site distances must be greater than zero
+when entered; empty values clear the distance.
 
 `latitudeSchema` / `longitudeSchema` (optional, nullable) and `requiredLatitudeSchema` / `requiredLongitudeSchema` (with the required-vs-invalid message distinction built in) all expect a **number**, so form schemas wrap them:
 
@@ -163,14 +180,20 @@ Prefer the `PositionPicker` component (map preview + address search + manual lat
 
 ## Dates
 
-For a new or changed `<input type="date">` whose value is parsed into a `Date`,
-use `requiredDateOnly` / `optionalDateOnly` from `@/schemas/helpers`. They parse
-`"YYYY-MM-DD"` at **local** midnight, because `new Date("YYYY-MM-DD")` parses as
-**UTC** midnight, which can render as the adjacent day and walk a stored date on
-an edit/save round-trip. `z.iso.date()` validates a string but does not produce
-a `Date`.
+Use `calendarDateSchema` from `@/schemas/helpers` for business dates persisted
+as **UTC-midnight date-only values**, such as the feedstock delivery date. It
+accepts strict `YYYY-MM-DD` strings and real calendar days only, decodes them to
+a UTC-midnight `Date`, and publishes as `format: date`. Server re-validation
+accepts a `Date` only at UTC midnight. Use `toDateInputValue` for defaults of
+these persisted UTC date-only values.
 
-Several established application/order/delivery/credit-batch schemas still use
+Use `requiredDateOnly` / `optionalDateOnly` where a date is combined with a
+facility time, as in production runs. They parse `"YYYY-MM-DD"` at **local**
+midnight, because `new Date("YYYY-MM-DD")` parses as **UTC** midnight, which can
+render as the adjacent day and walk a stored date on an edit/save round-trip.
+`z.iso.date()` validates a string but does not produce a `Date`.
+
+Several established application/delivery/credit-batch schemas still use
 `z.coerce.date()` while their components protect the default side with
 `formatLocalDate`. Treat those as legacy contracts: do not mass-change their
 output types, but when changing one, trace its component, action, data-access,
@@ -178,7 +201,7 @@ and database column and migrate the round trip deliberately. The
 production-run schemas are the current reference for the local date-only
 helpers.
 
-Defaults have the mirror-image hazard. **Never `toISOString()`** for a form default — use `@/lib/date-utils`:
+For local date and time defaults, **never use `toISOString()`**. Use `@/lib/date-utils`:
 
 ```typescript
 date: formatLocalDate(new Date()),          // "2026-03-03"  → <input type="date">
@@ -186,6 +209,16 @@ startTime: formatLocalDateTime(new Date()), // "2026-03-03T14:30" → datetime-l
 ```
 
 `toDateInputValue`, `parseLocalDateString`, and the facility-timezone display helpers (`formatFacilityTime`, `formatFacilityDate`, `formatTimezoneLabel` — all timestamps are stored UTC) also live in `src/lib/date-utils.ts`.
+
+Timezone fields use `requiredTimezoneSchema()` / `optionalTimezoneSchema()` / `ianaTimezoneSchema()` from `@/schemas/timezone` (the one valid-IANA-zone check, backed by the `@vvo/tzdb` catalogue in `@/lib/timezones`) and the `TimezoneCombobox`, never a hand-listed enum. No timezone has a default: facility fields start empty and required, and the organization default may stay unset.
+
+**Incident and in-process measurement times** use `EventTimeInput` and the
+parent production run's facility clock. Their shared schemas use
+`createEventInstantSchema(<field message>)` so a cleared time gets a plain
+message. Writers resolve `{ date, time }` through
+`resolveEventInstant` with the saved parent run's facility zone. Offset-free
+datetime strings are refused. A measurement needs at least one recorded value
+(zero counts), with the empty-record error on Weight.
 
 **Output stock event times** (product placed, delivery, loss, count) are entered
 and shown on the facility clock, like production runs
@@ -197,25 +230,46 @@ and shown on the facility clock, like production runs
   not shifted: the field value stays empty, the typed time stays visible, and
   the input says why under itself (`eventTimeRefusal`).
 - `useFacilityClock(facilityId)` (`src/hooks/use-facility-context.ts`) gives
-  `{ timeZone, hint }`; pass `hint` as the `FormField` `helperText`.
+  `{ timeZone, hint }`; pass `hint` as the `FormField` `cue` (which clock the
+  time is on is a unit the operator needs while typing).
 - `stockEventInstantSchema()` (`@/schemas/helpers`) validates the wire value.
 - Read surfaces format it on the same clock; see
   [design-system.md](./design-system.md#date-and-time-display).
 
+A lab sample's sampling time uses the same picker on the clock of its credit
+batch's facility (round 7 Q51): the zone comes from the batch durability
+summary, with the context facility's clock until that loads. The server
+action schema takes a `Date` or an instant with an explicit offset, never a
+bare wall clock.
+
 ## Components
 
-All from the `@/components/forms` barrel (`src/components/forms/index.ts`) — read it for the full surface; TypeScript carries the prop signatures. Only the non-obvious contracts are documented here.
+New or touched leaf and shared components should import from `@/components/forms/<file>` because the barrel loads every entity editor, increasing unit-test import cost. Move existing barrel imports in those components as they are edited. Full forms may keep using the `@/components/forms` barrel (`src/components/forms/index.ts`); read it for the full surface and TypeScript prop signatures, with only non-obvious contracts documented here.
 
-- **`FormField`** — `hint` (ⓘ icon) is for explanatory prose; `helperText` is for **short**, always-visible cues and auto-collapses into the hint treatment past `INLINE_HELPER_MAX_CHARS`. Long text in `helperText` is a mistake. Keep existing short cues ("Typically 1 to 2% for biochar"); do not blank them to tidy a form. The label row is `min-h-24` (the ⓘ hit area), so a one-line label reads at the same height with or without a CERT chip or hint.
-- **`FormError` / `ServerError`** — field-level vs server-level; both carry `role="alert"`. For server validation targeting a field, use RHF `setError('root.serverError', …)`.
+- **`FormField`** — three kinds of help, one rule: **the ⓘ holds explanations; a `cue` stays visible only for a unit, a limit or a consequence** the operator needs while typing.
+  - `hint` and `helperText` both render behind the ⓘ beside the label (hint first), whatever their length. They also reach screen readers as the control's description. Definitions, examples, "why we ask", plain scope notes ("Seeds new orders.") and typical ranges ("0 to 100% of wet mass", "Only an empty bin can switch to split.") go here.
+  - `cue` is one visible `body-caption` line under the control: "Minimum 8 characters", "-90 to 90", "Facility time: Africa/Dar es Salaam", "1,200 kg available from this delivery", "Seeds new facilities. Existing facilities keep their own." (organization defaults timezone), "Applies to new Sources across the organization." (registry default visibility), "Annual average for this application site" (soil temperature). It is tagged by hand at the call site; never move an explanation into it to make it visible. Exception: exactly the last three examples above (the timezone and default-visibility scope notes and the soil temperature definition) stay visible as cues by product decision; no other explanation may be a cue. An error or warning replaces it while shown.
+  - `cueAction` ({ label, onClick, disabled?, ariaLabel? }) puts one tertiary text action at the right of the cue row, for a shortcut that fills the control from the cue's figure ("Add all" beside "1,000 kg available from this delivery"). It stays mounted whenever `cue` has text, even while an error or warning replaces the cue's message, so a click that follows the input's blur still lands. Compute the value with `wholeStockDrawKg` (`@/lib/stock-overdraw`), set it with `shouldDirty`, `shouldTouch` and `shouldValidate`, and omit the action (do not dim it) when the field is locked.
+  - `unit` renders a suffix inside the end of the control ("kg", "%", "km"), so the label drops its "(kg)". The label keeps the unit for screen readers. Use it only for a single input; the read-view value already carries the unit, so the read label drops it too.
+  - The label row is `min-h-24` (the ⓘ hit area), so a one-line label reads at the same height with or without a CERT chip or ⓘ. The ⓘ is a sibling of the `<label>`, never inside it.
+- **`FormError` / `ServerError`** — field-level vs server-level; both carry `role="alert"`. Set server validation issues on fields only when every issue maps to a rendered field, and focus the first field. Otherwise use RHF `setError('root.serverError', …)` and the shared `ServerError` banner. See the delivery form (`src/components/deliveries/delivery-form.tsx`) and `deliveryActionFieldIssues` (`src/lib/delivery-action-errors.ts`) for the reference.
 - **`FormSelect`**, **`FormInput`**, **`FormTextarea`** — styled primitives; spread `{...register(name)}`.
-- **`ChoiceCardGroup`**, **`SegmentedControl`** — native-radio choice controls, spread `{...register(name)}` like `FormSelect`. When to use which, and the sizing and a11y contract: [design-system.md](./design-system.md#choice-controls--srccomponentsforms). Evidence method is the card reference (`application-evidence-panel.tsx`), loss / count the segmented one (`bin-reconcile-sheet.tsx`).
+  Use `EntitySelect` / `FormEntitySelect` for lists of user data, including
+  customer locations, deliveries and registry projects or templates. Keep
+  native `FormSelect` for hard-coded lists such as enums, units and roles.
+- **`ChoiceCardGroup`**, **`SegmentedControl`** — native-radio choice controls, spread `{...register(name)}` like `FormSelect`. When to use which, and the sizing and a11y contract: [design-system.md](./design-system.md#choice-controls--srccomponentsforms). Evidence method is the card reference (`application-evidence-panel.tsx`). The bin stock sheet opens Lost mass directly and has no loss / count selector.
 - **`MassMoistureFields`** — the canonical wet-mass + moisture pair for an unmixed material, with the live `MoistureSplit` bar spanning both. It owns the labels, wet-basis hint, range helper, and derived readout. A blended biochar product is the exception: pair standalone `WetMassField` and `MoistureField` controls with `ProductCompositionPreview`, because finished-product moisture does not split tracked dry biochar from ingredients and water. The standalone fields also cover lab samples with no paired mass and bin stock-takes whose counted mass is recorded separately. Each takes the caller's `register(...)` result so `setValueAs` stays with the owning form. Pass `materialLabel` ("Biochar", "Feedstock") to qualify canonical labels, and `step="any"` for a column backed by `real` instead of the exact `numeric` families. Vocabulary and precision come from `@/lib/mass-moisture` — see [design-system.md](./design-system.md#wet-mass-moisture-dry-mass). (`DryMassInput` and its "Dry: 237.5 kg" caption are gone.)
-- **`DistanceCalcField`** — derived transport-leg distance.
+- **`DistanceCalcField`** — derived transport-leg distance. It and similar derived-with-provenance fields (distance plus `distanceSource`) are wired with `useController`, one per field, written through `field.onChange(...)`; never `watch` / `useWatch` plus `setValue`. Pass `null` to clear, not `undefined`: `useController` falls back to the default value on `undefined`, so a cleared saved value reappears. A provenance select bound to a controller field spreads `{...field}` instead of `register`, as `transport-leg-form.tsx` does. Reference: `src/components/customers/customer-location-fields.tsx`.
+- **`DistanceOverrideField`** (`src/components/transport-legs/distance-override-field.tsx`) — the feedstock and delivery One-way distance, two-state per GLOSSARY "Distance override": the location's facility distance read-only, or an override (distance, source, note). One outline `Button` (`variant="default"`, 40px) sits outside the input, to its right, and wraps below it on a narrow sheet: "Override" unlocks entry, "Reset to default" returns to the location default. Provenance ("From {location}. Source: …", "Override. Location default is 42 km.") reads behind the label's ⓘ, never as a visible state label; the only caption is an actionable one (no location distance, with its repair link). The form owns the mode and maps it with `distanceOverridePatch` (`distance-override.ts`): a derived or unchanged value is omitted, `null` clears an override, a positive number sets one. Never send a derived distance back as data. Read views mirror it with `distanceReadFields` (same ⓘ text) and show drift with `TransportDistanceDriftNotice`; edit forms show it as the compact `DistanceDriftAction` under the input, disabled while the form has unsaved edits, and reopen on the refreshed version.
 - **`PositionPicker`** (+ `PositionValue`, `PickerAccent`) — lat/lng entry.
 - **`FormFileUpload`** — see [File upload](#file-upload).
 
 Notes/description/address textareas inside a grid always span full width: wrap in `md:col-span-2` (2-col grids) or `md:col-span-3`.
+
+A dropdown takes the full width of the form, and its menu is as wide as the
+field. It never shares a row with another field or action. Where a legacy
+layout still forces sharing, the important dropdown sits on the left. Table
+toolbars, filters and pagination are exempt.
 
 Free-form **Notes** fields are always the final editable field before
 `FormActions`. Put derived previews or selectable cohorts immediately after the
@@ -231,12 +285,16 @@ A `SectionLabel` title over a `space-y-16` field stack, with a `pt-16` hairline 
 
 - `divider` (default `true`) — the first section of a plain form passes `divider={false}`. **`divider` is ignored entirely inside a `FormSpine`**, which owns its own rail chrome; that is why the spine example below omits it.
 - `hint` / `certifyRequired` forward to `SectionLabel`; `actions` adds right-aligned header chrome (an "Add" button, a badge).
+- Omit `title` for a group whose field labels already identify it. The section
+  keeps its divider and field spacing without an empty heading row. Read views
+  mirror this: a `DetailPanelSection` without a title requires a stable `id`
+  for its React key. Titled sections may also supply an `id`.
 
 ### Vertical rhythm
 
 - **`space-y-20`** — all side-sheet forms (top-level `<form>`), sectioned or not. `FormSection` owns intra-section rhythm; nothing else sets section spacing.
 - **`space-y-24`** — full-page and auth forms only.
-- Field grids inside sections: `grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20`.
+- Field grids inside sections: `grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20` for inputs only; a dropdown gets its own `grid-cols-1` row (see the dropdown rule above).
 - Controls in a field-grid row top-align independently. `FormField`'s fixed
   `min-h-24` label row keeps one-line labels level; a wrapped label still shifts
   only its own control down. Do not "fix" that with per-field label heights,
@@ -251,7 +309,7 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
 
 - Never stack a parent dialog or step-flow footer beneath `FormActions`. The
   embedded form owns the one action row. Give its secondary action the
-  context-specific label (for example, `cancelLabel="Skip setup"`) and omit the
+  context-specific label (for example, `cancelLabel="Not now"`) and omit the
   parent footer for that step.
 - Submission-level server/action/root errors go through `errorMessage`; `FormActions` renders the shared `ServerError` immediately above the buttons inside the same sticky footer. Do not render the same error in a parent sheet or earlier in the form.
 - Nested inline forms (child-entity editors, transport legs) pass `sticky={false}`.
@@ -260,6 +318,12 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
   signal that sees programmatic `setValue` from custom widgets. Inside a sheet
   the Cancel *click* routes through the sheet's guarded cancel; the caller's
   `onCancel` still decides whether a Cancel button renders at all.
+- `FormDialog` also reads `control` and the submitting state to guard every
+  dismissal path. Multiple forms in one dialog register independently. Keep
+  controls mounted after a failed save; reset RHF defaults after success.
+  `showSubmit={false}` hides a premature or unnecessary action while keeping
+  dirty tracking active; `submitVariant="default"` uses the outline style for
+  a secondary action such as linking a registry project.
 - When the actions render **inside an owning parent form**, pass `submitType="button"` + `onSubmitClick` — nesting `<form>` elements is invalid HTML.
 - `formId` is the escape hatch when extension content must render between the fields and the CTA: the CTA lives outside the `<form>` and points back at it by id.
 - `submitDisabled` gates on an unmet precondition (e.g. an unchecked acknowledgement).
@@ -293,13 +357,24 @@ The read-mode `sections` passed to `EntitySideSheet` must mirror the form's sect
 - Field-less sections render as plain numbered orientation steps — use them for previews and recaps, not required input.
 - Conditional sections may mount/unmount; numbering derives from rendered order and stays contiguous.
 
+### Required stars
+
+A red star on a label means the save refuses the field empty. The rules:
+
+- Star what the schema or the submit handler rejects when empty. Do not star a field that merely feels important, or one a blank value defaults.
+- A field required only in one state shows the star only in that state (cancellation reason when cancelled, nutrient shares while claims are on, the override distance while Override is on, the GIS reference for that evidence method).
+- A field needed for certification but not for saving gets the CERT chip below, never a star.
+- `FormField` takes `required`. Anything drawn outside a FormField (a picker label, a legend, a readout) uses `RequiredMarker` from `@/components/forms/required-marker`, imported by file path, never through the barrel. For a fieldset control (`SegmentedControl`, `ChoiceCardGroup`) also pass `required`, which adds "Required" to the sr-only legend that names the group. Do not add `aria-required`: the control would announce it twice.
+- The star adds "Required" to the label, so locate a starred field in specs with a regex or by role and a prefix match, not by exact name.
+- The guard lives at the end of `src/components/forms/form-detail-parity-forms.test.tsx`: every sheet form is submitted empty and any field that shows an error must carry a star. Its limit: Zod 4 aborts an object `superRefine` after an `invalid_type` issue and handler checks run after validation, so an empty submit never reaches a conditional requirement. Those go in its second table, which starts from a valid fixture, empties one field and asserts the star and the error together. A new conditional requirement gets a row there.
+
 ### CERT chip status
 
-`FormField` accepts `certifyStatus`; the section's `certifyRequired` controls whether the chip shows. The chip reflects the record's **saved** state, frozen — it does not flip while the user types:
+A field with `certifyRequired` carries the CERT chip on its label row (`CertificationFieldTag`), in Simple and Detailed alike. It explains itself on hover and to screen readers ("Required for certification"); there is no sheet legend. `FormField` accepts `certifyStatus`; the section's `certifyRequired` controls whether the chip shows. The chip reflects the record's **saved** state, frozen — it does not flip while the user types:
 
-- create mode → `neutral` (no claim)
-- edit mode, saved value present → `satisfied` (green)
-- edit mode, saved value missing → `missing` (orange)
+- create mode → `neutral` (neutral chip, no claim)
+- edit mode, saved value present → `satisfied` (green chip with a check)
+- edit mode, saved value missing → `missing` (orange chip with a warning mark)
 
 Derive it with `makeCertFieldStatus(savedValues)`, passing the form's `defaultValues` in edit mode (or `undefined` while creating):
 
@@ -351,6 +426,40 @@ Do not store raw uploaded GeoJSON in the JSONB column or infer a complete
 boundary evidence path from the presence of one file alone.
 
 ## Entity select
+
+Pass `allowEdit` to `EntitySelect` or `FormEntitySelect` to offer **Edit <name>**
+beside **Add new**. `EntityEditDialog` loads a fresh record on each open and
+renders the entity's existing form in `QuickAddDialogShell`. The opened record
+and version stay fixed while editing, including after a stale-save refusal.
+The shared shell stops portalled form submits from reaching the entry form.
+Nested dialogs use the shared modal stack; Escape closes only the top layer.
+
+The label uses the selected entity's name; `editLabel` overrides it. Editing
+leaves the selected value unchanged. With `selectionLocked` and a selection, only
+Edit is available. `disabled` prevents all interaction, including Edit.
+`onEditSelected` remains available for custom edit flows and takes precedence
+over the built-in handler. Archived records open read-only, without Reconcile or
+stock actions.
+
+Supported types are storage bins, formulations, suppliers, customers, feedstock
+types, reactors, orders, vehicles, operators and drivers. Feedstock-type Edit
+requires the server-resolved management permission (Owner, Admin or Platform
+Admin). Facility and Credit batch pickers deliberately have no Edit row. Driver
+is supported by the shared dialog but currently has no form picker.
+The order form's Customer location picker uses `onEditSelected` to open
+`CustomerLocationDialog` for the selected location.
+
+`SELECT_SEARCH_MIN_OPTIONS` in `src/config/forms.ts` is 5: search shows from
+6 options. `alwaysShowSearch` and `hideSearch` remain explicit overrides.
+Caller-owned lists pass `options`, `isLoading` and an `Error` via `loadError`.
+`error` is a boolean for field-invalid styling only; a load failure shows the
+load-failure message without marking the field invalid.
+This mode filters names, codes and subtitles locally and makes no entity
+queries. `optionLabel` names its search box. An option's `disabled` flag keeps
+it visible but skips it for click, keyboard and automatic selection.
+Server-backed lists show a refine-search hint when the result limit is reached.
+Bin allocation and production draw rows give the bin picker its own full row,
+with mass below it.
 
 `emptyToNull` coerces the `""` an `EntitySelect` sends when nothing is picked, before the UUID check:
 
@@ -432,7 +541,9 @@ A derived block is a `CompositionCard` (`@/components/forms`) that sits flat
 under the inputs that drive it, with no tint and no frame: a sentence case
 caption with its one-sentence definition behind an ⓘ `hint`, an optional
 `headline`, the picture as `children`, and one action row holding the block's
-own `actions` (a stock history, a fix such as "Balance to 100%"). All of that
+own `actions` (a fix such as "Balance to 100%"). Stock history lives on the
+storage bin and its own loss, count and correction form, never on the block of a
+form that only draws from a bin. All of that
 shows at both levels. Detailed adds the `detail` rows (explanation such as a
 ledger, never decision info) and Show calculation, which opens `calculation`:
 arithmetic the block does not already show. Omit it and no control renders. Do
@@ -441,8 +552,7 @@ not draw proportions from an incomplete or zero basis.
 Before any input, a form's moisture split and product composition are
 explanation of what will appear, so only Detailed draws their unresolved
 state (`<DetailedOnly unless={started}>`, which keeps one wrapper so the block
-never remounts when the first value arrives). The product composition also draws once a source bin is chosen,
-because its stock history is an action. Explanation parts stay mounted behind
+never remounts when the first value arrives). Explanation parts stay mounted behind
 `hidden`, so an open disclosure survives a level switch.
 
 `DerivedHeadline` is the block's one figure, at most one per block: a caption
@@ -465,8 +575,9 @@ stock family presents wet first. Only presentation changes.
   loss, count, delivery load). Headline "Wet stock in bin, estimate" as
   "≈ 1,420 → 1,110 kg", with the entry as its caption ("310 kg wet removed at
   22.7% moisture", "Counted 2,650 kg wet at 27.4% moisture", "1,190 kg wet
-  loaded at 16% moisture"). Before is each batch at its latest reading; after
-  applies this entry's readings. The picture is the entered wet mass split into
+  loaded at 16% moisture"). Before is each batch's wet stock, wet mass added
+  less wet mass taken out from its last count; after takes this entry's wet
+  mass out, or for a count, sets each batch to the count. The picture is the entered wet mass split into
   solids and water, then any notice, then the moisture reset block. The dry biochar before and after pair is a
   Detailed `detail` row (the calculation); the entered figures and the FIFO
   batch draw sit behind Show calculation. Without a moisture there is no estimate, and the dry pair takes
@@ -474,9 +585,13 @@ stock family presents wet first. Only presentation changes.
   not labelled an estimate.
 - **Order availability** (`OutputStockAvailability` in `MatchingOutputBins`,
   right after the requested wet mass field). Headline "Available wet stock,
-  estimate" at each batch's latest moisture reading, since an order has no
-  departure moisture yet, with available dry stock as a secondary line under it at
-  both levels; the batch bar and key as the picture.
+  estimate", each batch's wet mass added less wet mass taken out from its last
+  count, since an order has no departure moisture yet, with available dry stock as a secondary line under it at
+  both levels; the batch bar and key as the picture. On the order form and
+  read sheet the bins collapse into one tappable "Available stock" row
+  (wet estimate first, dry secondary) that opens a "Matching stock" modal with
+  these cards. The row's wet figure sums only the bins that have an estimate and
+  says "in N of M bins" when some do not; it never switches to dry.
 - A wet estimate is computed at a moisture, not weighed: its label always says
   "estimate", and it reads in whole kilograms.
 
@@ -489,18 +604,25 @@ check, never a value:
 
 - Pass `estimate` and the watched `reading` to `MoistureField` (or the
   `moisture` props of `MassMoistureFields`). The field then shows "Estimated
-  moisture: 29.4%" under the input, the basis ("From the reading on …") behind
+  moisture: 29.4%" under the input, the basis ("From the count on …") behind
   the ⓘ, and an advisory warning when the reading differs by more than
   `MOISTURE_READING_WARNING_POINTS` (`@/config/output-stock`). It never blocks.
+- The product, delivery and stock forms (loss, count, correction) share `useOutputDrawDraft`
+  (`src/hooks/use-output-draw-draft.ts`): readings gate, preview, estimate and
+  the one save gate (`gate()`, which also fails on `isFetching` and `error`).
+  Read the submit guard and `submitDisabled` from it, never re-derive them. A
+  failed save is not retried in the form; the mutation hooks invalidate
+  `outputStockKeys.all`, which refreshes the previews.
 - For an output bin, `useOutputMoistureEstimate(bin, facility, occurredAt,
-  preview?.moistureEstimate)` supplies the estimate: the bin at the entry's time
-  from each batch's latest reading, or the live preview's own (which leaves out
-  the entry a correction replaces). Ingredient bins keep wet stock, so their
+  preview?.moistureEstimate)` supplies the estimate: the bin at the entry's time,
+  each batch at the moisture it was added with or last counted at, or the live
+  preview's own (which leaves out the entry a correction replaces). Ingredient bins keep wet stock, so their
   estimate is the weighted remaining intake basis.
-- A reading resets the estimate of the batch it was taken from. The movement
-  block shows that as `MoistureResetChange`: the remaining stock at its previous
-  estimate, an arrow, then at the reading, as two blocks rather than a sentence.
-  Stock history repeats it as its own "Moisture updated" row.
+- Only a count resets the estimate. The movement block shows that as
+  `MoistureResetChange`: the remaining stock at its previous estimate, an arrow,
+  then at the reading, as two blocks rather than a sentence. Stock history
+  repeats it as its own "Moisture updated" row. A delivery, loss or product draw
+  takes its wet mass from the wet stock and leaves the moisture unchanged.
 
 ### Stock change in bin selectors
 
@@ -512,6 +634,16 @@ unblocked projection with a finite, non-zero mass; pass `available={false}`
 while the preview refetches or has failed. The biochar product form's biochar,
 ingredient and product bin selectors are the reference; they replace separate
 per-bin stock blocks above the form.
+
+**One stock figure per draw field.** When the mass field's cue states what can
+be drawn ("N kg available in this bin", "N kg available to this run", "N kg
+available to this application"), the picker drops its "Remaining now" line:
+`EntitySelect` `showRemainingMass={false}`, decided by
+`pickerShowsRemainingStock` in `src/lib/stock-overdraw.ts`. The line comes back
+whenever the cue is not on screen: availability unknown, or a mass error other
+than the over-draw error (which already states the figure). The cue is wet
+only; this is the one exception to "Dry figures are data", and the dry balance
+stays on the bin's View sheet and in the product composition.
 
 Do not add a switch to a short form or a surface already served by an effective
 accordion or history dialog. Verify narrow header layout, radio keyboard

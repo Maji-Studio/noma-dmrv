@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { grams, kilograms, splitGrams } from './exact';
-import { planOutputStock, SubBinOverdrawError, UntickSubBinError, type OutputStockLayer } from './planner';
+import { layersHoldMaterial, planOutputStock, SubBinOverdrawError, UntickSubBinError, type OutputStockLayer } from './planner';
 const DAY = '2026-09-14T10:00:00.000Z';
 function layer(id: string, dry: string, ingredients = '0', sequence = BigInt(1)): OutputStockLayer {
   return { id, placedAt: DAY, postingSequence: sequence, establishedDryBiocharKg: dry, ingredientDrySolidsKg: ingredients, remainingDryBiocharKg: dry,
@@ -10,6 +10,17 @@ const mixes = () => [layer('A', '900', '200'), layer('B', '600', '120', BigInt(2
 const wet = (layers: OutputStockLayer[], wetKg: number, moisturePercent: number) => planOutputStock(layers, DAY, { kind: 'wet', wetKg, moisturePercent });
 const rain = () => wet(mixes(), 2000, 30);
 describe('issue 756 exact FIFO', () => {
+  it('draws newest physical stock first, breaking time ties by posting sequence', () => {
+    const older = { ...layer('older', '100', '0', BigInt(3)), placedAt: '2026-09-13T10:00:00.000Z' };
+    const plan = planOutputStock([layer('first', '100'), older, layer('newest', '100', '0', BigInt(2))], DAY,
+      { kind: 'wet', wetKg: 150, moisturePercent: 0 }, 'lifo');
+    expect(plan.allocations.map(a => [a.layerId, a.dryKg])).toEqual([['newest', '100.000'], ['first', '50.000']]);
+  });
+  it('keeps an explicit sub-bin order over a newest-first policy', () => {
+    const plan = planOutputStock(mixes(), DAY, { kind: 'ordered', wetKg: 100,
+      sources: [{ layerId: 'A', moisturePercent: 0 }] }, 'lifo');
+    expect(plan.allocations.map(a => a.layerId)).toEqual(['A']);
+  });
   it('rain load and half mixed application', () => {
     const plan = rain();
     expect(plan.allocations.map(a => a.dryKg)).toEqual(['900.000', '250.000']);
@@ -236,5 +247,24 @@ describe('split bins: operator order with a reading per sub-bin', () => {
   it('asks to untick an empty sub-bin', () => {
     const empty = { ...layer('empty', '10', '0', BigInt(3)), remainingDryBiocharKg: '0', runs: [{ productionRunId: 'empty', establishedDryKg: '10', remainingDryKg: '0' }] };
     expect(() => ordered([...bays(), empty], 5, [{ layerId: 'empty', moisturePercent: 0 }])).toThrow(UntickSubBinError);
+  });
+});
+describe('layersHoldMaterial', () => {
+  const EXTREME_INGREDIENT_KG = '999.999';
+  const EXTREME_DRAW_WET_KG = 600;
+  it('is false for no layers and for emptied layers', () => {
+    expect(layersHoldMaterial([])).toBe(false);
+    expect(layersHoldMaterial([{ ...layer('gone', '10'), remainingDryBiocharKg: '0', runs: [{ productionRunId: 'gone', establishedDryKg: '10', remainingDryKg: '0' }] }])).toBe(false);
+  });
+  it('is true while dry biochar remains', () => {
+    expect(layersHoldMaterial([layer('A', '10')])).toBe(true);
+  });
+  it('is true when solids outlast a 0.000 kg dry biochar balance, and a zero count clears it', () => {
+    const extreme = layer('X', '0.001', EXTREME_INGREDIENT_KG);
+    const { remainingLayers } = wet([extreme], EXTREME_DRAW_WET_KG, 0);
+    expect(remainingLayers[0].remainingDryBiocharKg).toBe('0.000');
+    expect(layersHoldMaterial(remainingLayers)).toBe(true);
+    const counted = planOutputStock(remainingLayers, DAY, { kind: 'count', wetKg: 0 });
+    expect(layersHoldMaterial(counted.remainingLayers)).toBe(false);
   });
 });

@@ -1,3 +1,4 @@
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import {
   getStorageLocationRegistration,
   withCertifierExternalProjectLocks,
@@ -21,7 +22,6 @@ import {
   getBiocharApplication,
   type IsometricBiocharApplication,
 } from "@/lib/isometric/biochar-applications";
-import { getIsometricClientForOrg } from "@/lib/isometric/client";
 import { isMissingIsometricResource } from "@/lib/isometric/error-utils";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import type { Logger } from "@/lib/log";
@@ -213,9 +213,7 @@ async function ensureBiocharApplication(args: {
         );
       }
 
-      const client = await getIsometricClientForOrg(
-        args.orgCtx.organizationId,
-      );
+      const client = await resolveIsometricClient(args.orgCtx);
       const remoteClaimContext = {
         log: args.log,
         applicationId: args.intent.applicationId,

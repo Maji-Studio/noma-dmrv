@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assertProductionRunOutcome,
+  assertProductionRunCreateStatus,
   assertProductionRunTransition,
   DRY_MASS_BALANCE_MESSAGE,
   getProductionRunOutcomeViolations,
@@ -22,6 +23,7 @@ function makeOutcomeInput(
     endTimePresent: true,
     cancellationReason: null,
     biocharOutputKg: 20,
+    biocharStorageLocationId: "output-bin-id",
     biocharMoisturePercent: 0,
     feedstockWetMassKg: 100,
     feedstockMoisturePercent: 20,
@@ -31,12 +33,19 @@ function makeOutcomeInput(
 }
 
 describe("production-run lifecycle", () => {
+  it.each(["running", "complete"] as const)("allows %s on create", (status) => {
+    expect(() => assertProductionRunCreateStatus(status)).not.toThrow();
+  });
+
+  it.each(["failed", "cancelled"] as const)("refuses %s on create independently of saved-run transitions", (status) => {
+    expect(() => assertProductionRunTransition("running", status)).not.toThrow();
+    expect(() => assertProductionRunCreateStatus(status)).toThrow("A new production run can only start as Running or Complete.");
+  });
+
   it.each([
-    ["draft", "running"],
-    ["draft", "complete"],
-    ["draft", "cancelled"],
     ["running", "complete"],
     ["running", "failed"],
+    ["running", "cancelled"],
     ["complete", "running"],
     ["failed", "running"],
     ["cancelled", "cancelled"],
@@ -45,7 +54,6 @@ describe("production-run lifecycle", () => {
   });
 
   it.each([
-    ["draft", "failed"],
     ["complete", "cancelled"],
     ["failed", "complete"],
     ["cancelled", "running"],
@@ -174,20 +182,44 @@ describe("production-run lifecycle", () => {
       );
     });
 
+    it.each([null, undefined])("requires biochar moisture when complete: %s", (moisture) => {
+      const input = makeOutcomeInput({ biocharMoisturePercent: moisture });
+      expect(getProductionRunOutcomeViolations(input)).toContainEqual({ code: "complete-output-moisture-required" });
+      expect(() => assertProductionRunOutcome(input)).toThrow("Enter biochar moisture for a complete run.");
+    });
+
+    it("accepts zero biochar moisture when complete", () => {
+      expect(() => assertProductionRunOutcome(makeOutcomeInput({ biocharMoisturePercent: 0 }))).not.toThrow();
+    });
+
+    it.each(["running", "failed", "cancelled"] as const)("allows missing output bin and moisture when %s", (status) => {
+      const terminal = status === "failed";
+      const input = makeOutcomeInput({ status, endTime: terminal ? END_TIME : null, endTimePresent: terminal,
+        cancellationReason: "Recorded in error", biocharStorageLocationId: null, biocharMoisturePercent: null });
+      expect(getProductionRunOutcomeViolations(input)).toEqual([]);
+      expect(() => assertProductionRunOutcome(input)).not.toThrow();
+    });
+
+    it.each([null, undefined, ""])("requires an output bin when complete: %s", (bin) => {
+      const input = { ...makeOutcomeInput(), biocharStorageLocationId: bin };
+      expect(getProductionRunOutcomeViolations(input)).toContainEqual({ code: "complete-output-bin-required" });
+      expect(() => assertProductionRunOutcome(input)).toThrow("Select a biochar output bin for a complete run.");
+    });
+
     it.each([
       {
         label: "source bin",
-        formFeedstock: { storageLocationId: null },
+        formFeedstock: { drawCount: 0 },
         overrides: {},
       },
       {
         label: "wet mass",
-        formFeedstock: { storageLocationId: "bin-id" },
+        formFeedstock: { drawCount: 1 },
         overrides: { feedstockWetMassKg: null },
       },
       {
         label: "moisture",
-        formFeedstock: { storageLocationId: "bin-id" },
+        formFeedstock: { drawCount: 1 },
         overrides: { feedstockMoisturePercent: null },
       },
     ] as const)("reports missing form-input feedstock when $label is absent", ({
@@ -210,7 +242,7 @@ describe("production-run lifecycle", () => {
 
     it("distinguishes form inputs from allocated consumption", () => {
       const formInput = makeOutcomeInput({
-        feedstock: { basis: "form-inputs", storageLocationId: null },
+        feedstock: { basis: "form-inputs", drawCount: 0 },
       });
       const consumedMassInput = makeOutcomeInput({
         feedstock: { basis: "consumed-mass", consumedFeedstockWetKg: 100 },
@@ -231,6 +263,8 @@ describe("production-run lifecycle", () => {
           endTime: null,
           endTimePresent: false,
           biocharOutputKg: 0,
+          biocharStorageLocationId: null,
+          biocharMoisturePercent: null,
           feedstock: { basis: "consumed-mass", consumedFeedstockWetKg: 0 },
         }),
       );
@@ -238,6 +272,8 @@ describe("production-run lifecycle", () => {
       expect(violations).toEqual([
         { code: "terminal-end-required", status: "complete" },
         { code: "complete-output-required" },
+        { code: "complete-output-bin-required" },
+        { code: "complete-output-moisture-required" },
         {
           code: "feedstock-required",
           status: "complete",
@@ -248,7 +284,6 @@ describe("production-run lifecycle", () => {
 
     it.each([
       makeOutcomeInput(),
-      makeOutcomeInput({ status: "draft", endTime: null, endTimePresent: false }),
       makeOutcomeInput({ status: "running", endTime: null, endTimePresent: false }),
       makeOutcomeInput({
         status: "cancelled",
@@ -270,7 +305,7 @@ describe("production-run lifecycle", () => {
       ],
       [{ biocharOutputKg: 0 }, "positive biochar output"],
       [{ endTime: null, endTimePresent: false }, "needs an end time"],
-      [{ status: "running" }, "cannot have an end time"],
+      [{ status: "running" }, "Choose Complete or clear the end time for a Running run."],
       [
         {
           status: "cancelled",

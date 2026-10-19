@@ -7,11 +7,13 @@
  * the server posts; a saved product keeps the dry allocation recorded at
  * creation, whatever the moisture field says now.
  */
+import type { ProductFlowSource } from "@/components/ui/product-composition-preview";
 import type { IngredientBin } from "@/lib/biochar-composition";
 import { splitWetMass } from "@/lib/mass-moisture";
 import {
   ingredientComponents,
   productCompositionComponents,
+  productFlowSources,
   sourceComponents,
   type CompositionComponent,
 } from "./product-composition-components";
@@ -28,6 +30,8 @@ export interface FormProductComposition {
    */
   wetProductKg: number | null;
   components: CompositionComponent[];
+  /** The same parts grouped by the input they came from, for the mass flow. */
+  sources: ProductFlowSource[];
 }
 
 function finiteNonNegative(value: unknown): number | null {
@@ -69,13 +73,15 @@ export function formProductComposition({
       : null;
 
   const source = sourceComponents({ wetKg: massKg, dryKg: sourceDryKg, addedWaterKg });
-  const parts = ingredients.flatMap((ingredient) =>
-    ingredientComponents(ingredient, { frozen: allocationFrozen }),
-  );
+  const grouped = ingredients.map((ingredient) => ({
+    label: ingredient.feedstockTypeName,
+    parts: ingredientComponents(ingredient, { frozen: allocationFrozen }),
+  }));
 
   return {
     sourceDryKg,
     wetProductKg,
-    components: productCompositionComponents(source, parts),
+    components: productCompositionComponents(source, grouped.flatMap((ingredient) => ingredient.parts)),
+    sources: productFlowSources(source, grouped),
   };
 }

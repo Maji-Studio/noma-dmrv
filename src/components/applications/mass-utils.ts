@@ -1,15 +1,17 @@
+import { roundKg } from "@/lib/calculations/mass-dry";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
-import { DEFAULT_FACILITY_TIMEZONE } from "@/lib/date-utils";
+import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { formatDayString, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryStock } from "@/lib/mass-moisture";
 import { formatRemainingMass } from "@/components/forms/entity-select/remaining-mass";
-import type { SoilTemperatureSource } from "@/schemas/applications";
 import type { DeliveryStatus } from "@/schemas/deliveries";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import {
+  formatStockLimitKg,
+  pickerShowsRemainingStock,
+} from "@/lib/stock-overdraw";
 
-/** The only source a delivery-derived prefill can assert (approved global dataset). */
-export const SOIL_TEMPERATURE_SOURCE_GLOBAL =
-  "global_database" satisfies SoilTemperatureSource;
+import { SOIL_TEMPERATURE_SOURCE_GLOBAL } from "@/lib/application-guidance";
 
 export interface ApplicationDeliveryOption {
   id: string;
@@ -18,6 +20,7 @@ export interface ApplicationDeliveryOption {
   deliveryDate: Date | string;
   /** The delivery's calendar day on its facility clock ("YYYY-MM-DD"). */
   deliveryDay?: string | null;
+  facilityTimezone?: string | null;
   orderCode: string | null;
   formulationName: string | null;
   productBinName: string | null;
@@ -102,15 +105,7 @@ export function applicationTonsToKg(value: number | null | undefined): number | 
     return null;
   }
 
-  return value * KG_PER_TONNE;
-}
-
-export function applicationKgToTons(value: number | null | undefined): number | null {
-  if (value == null) {
-    return null;
-  }
-
-  return value / KG_PER_TONNE;
+  return roundKg(value * KG_PER_TONNE);
 }
 
 /** Kept as a named re-export so the application surfaces keep one import site. */
@@ -124,7 +119,7 @@ export const formatKg = formatMassKg;
 export function formatApplicationDeliveryDay(delivery: Pick<ApplicationDeliveryOption, "deliveryDate" | "deliveryDay">): string {
   return delivery.deliveryDay
     ? formatDayString(delivery.deliveryDay)
-    : formatFacilityDay(delivery.deliveryDate, DEFAULT_FACILITY_TIMEZONE);
+    : formatFacilityDay(delivery.deliveryDate, UNKNOWN_FACILITY_TIMEZONE);
 }
 
 export function getApplicationDeliveryMassLabel(delivery: ApplicationDeliveryOption): string | null {
@@ -169,6 +164,48 @@ export function formatApplicationDeliveryHelperText(delivery: ApplicationDeliver
     wetKg: remainingWetKg,
     dryKg: remainingDryKg,
   });
+}
+
+export interface ApplicationStockCues {
+  /** Below the delivery picker: the delivery's remaining stock, only while the applied mass cue is hidden. */
+  deliveryCue: string | undefined;
+  /** Below the applied mass: what this application may draw. */
+  appliedMassCue: string | undefined;
+}
+
+/**
+ * The stock figure the application form shows. The applied mass cue states
+ * what this application may draw (on edit it adds back this application's own
+ * draw), so the delivery's Remaining now line only returns while that cue is
+ * hidden: availability unknown, or an applied mass error in its place.
+ */
+export function applicationStockCues({
+  delivery,
+  availableKg,
+  isEditMode,
+  massError,
+  overdrawError,
+}: {
+  delivery: ApplicationDeliveryOption | undefined;
+  availableKg: number | null;
+  isEditMode: boolean;
+  /** The error the applied mass field shows; it hides the cue. */
+  massError?: string;
+  /** The over-draw error, which states the available figure itself. */
+  overdrawError?: string;
+}): ApplicationStockCues {
+  const showDeliveryCue =
+    delivery !== undefined &&
+    pickerShowsRemainingStock({ availableKg, massError, overdrawError });
+  return {
+    deliveryCue: showDeliveryCue
+      ? formatApplicationDeliveryHelperText(delivery)
+      : undefined,
+    appliedMassCue:
+      availableKg !== null
+        ? `${formatStockLimitKg(availableKg)} available ${isEditMode ? "to this application" : "from this delivery"}`
+        : undefined,
+  };
 }
 
 export function formatApplicationKgFromTons(value: number | null | undefined): string {

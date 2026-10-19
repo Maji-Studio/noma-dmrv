@@ -4,6 +4,8 @@
  * Minimal field requirements for rapid entity creation
  */
 
+import { lockFormulationReference } from "./formulation-reference-guards";
+
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
@@ -12,10 +14,11 @@ import {
   operators,
   vehicles,
   feedstockTypes,
-  formulations,
   storageLocations,
 } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
+import { initialStockMode } from "./output-bin-stock-mode";
+import type { OutputDrawOrder, OutputStockMode } from "@/lib/output-stock/stock-mode";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
@@ -117,8 +120,8 @@ export async function createOperator(
 export interface CreateVehicleData {
   code: string;
   name: string;
-  // vehicleType is the only required vehicle attribute — it selects the
-  // Isometric component emission factor. The rest is optional metadata.
+  // Vehicle type is required as a Transportation module record.
+  // The removal template supplies the fixed transport factor.
   vehicleType: string;
   identifier?: string | null;
   fuelType?: string | null;
@@ -235,6 +238,8 @@ export interface CreateStorageLocationData {
   capacityKg?: number | null;
   feedstockTypeId?: string | null;
   formulationId?: string | null;
+  stockMode?: OutputStockMode;
+  drawOrder?: OutputDrawOrder;
 }
 
 /**
@@ -253,7 +258,7 @@ export async function createStorageLocation(
       await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId, tx);
     }
     if (data.formulationId) {
-      await assertSameOrg(ctx, formulations, data.formulationId, tx);
+      await lockFormulationReference(ctx, tx, data.formulationId);
     }
 
     const [location] = await guardStorageLocationName(ctx, data.name, () =>
@@ -268,6 +273,8 @@ export async function createStorageLocation(
           capacityKg: data.capacityKg ?? null,
           feedstockTypeId: data.feedstockTypeId ?? null,
           formulationId: data.formulationId ?? null,
+          stockMode: initialStockMode(data.type, data.stockMode),
+          drawOrder: data.drawOrder ?? "oldest_first",
         })
         .returning(),
     );

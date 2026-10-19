@@ -26,6 +26,8 @@ import {
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
 import { fillStockMoisture } from "./helpers/stock-moisture";
+import { FIFO_BROWSER_TIME, seedOutputStockBrowserFixture } from "./helpers/output-stock-browser-fixture";
+import { chooseRunStatus } from "./helpers/run-status";
 
 const PRODUCTION_RUNS_URL = "/production-runs";
 const BIOCHAR_PRODUCTS_URL = "/biochar-products";
@@ -35,7 +37,8 @@ const DELIVERIES_URL = "/deliveries";
 const RUN_DATE = "2025-06-15";
 const RUN_START_TIME = "08:00";
 const RUN_END_TIME = "12:00";
-const DELIVERY_DATE = "2027-06-16";
+// After RUN_DATE and in the past: delivery corrections refuse future times (decision 56).
+const DELIVERY_DATE = "2025-06-16";
 
 const BIOCHAR_BIN_STOCK_KG = "100";
 const ORDER_QUANTITY_KG = "200000";
@@ -44,9 +47,8 @@ const FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR =
 const feedstockOverdrawText =
   /^Only .+ of wet feedstock is available\. Reduce the wet mass\.$/;
 const biocharOverdrawText = /Not enough dry biochar in the selected bin/;
-const deliveryOverdrawText = /Not enough dry biochar in the selected bin/;
 
-/** Open the existing draft run form against the seeded 120 kg-wet source bin. */
+/** Open a new run form against the seeded 120 kg-wet source bin. */
 async function openRunFormWithSource(
   page: Page,
   seededData: SeededChainData,
@@ -62,7 +64,7 @@ async function openRunFormWithSource(
   await page.getByRole("button", { name: "New production run" }).click();
   await waitForSideSheet(page);
 
-  await page.selectOption('select[name="status"]', "draft");
+  await chooseRunStatus(page, "running");
   await selectEntity(
     page,
     "Reactor",
@@ -105,7 +107,7 @@ async function openCompleteRunForm(
   await page.getByRole("button", { name: "New production run" }).click();
   await waitForSideSheet(page);
 
-  await page.selectOption('select[name="status"]', "running");
+  await chooseRunStatus(page, "running");
   await selectEntity(
     page,
     "Reactor",
@@ -168,7 +170,7 @@ async function createCompleteRun(
   await editRunByCode(page, runCode, "endTime");
   await page.fill('input[name="endDate"]', RUN_DATE);
   await page.fill('input[name="endTime"]', RUN_END_TIME);
-  await page.selectOption('select[name="status"]', "complete");
+  await chooseRunStatus(page, "complete");
   await saveEdit(page);
   await waitForSideSheetClose(page);
   return runCode;
@@ -221,26 +223,6 @@ async function editRowByText(
   await waitForSideSheet(page);
   await expect(
     page.locator(`[role="dialog"] input[name="${readyInputName}"]`),
-  ).toBeVisible();
-}
-
-/** Open the first list row through its overflow-menu Edit action. */
-async function editFirstRow(page: Page, readyInputName: string) {
-  await expect(async () => {
-    await page
-      .locator("tbody tr")
-      .first()
-      .getByRole("button", { name: /Actions for/ })
-      .click({ timeout: 5000 });
-    await page
-      .getByRole("menuitem", { name: "Edit" })
-      .click({ timeout: 5000 });
-  }).toPass({ timeout: 30000 });
-  await waitForSideSheet(page);
-  await expect(
-    page.locator(
-      `[role="dialog"] input[name="${readyInputName}"]`,
-    ),
   ).toBeVisible();
 }
 
@@ -348,14 +330,7 @@ async function createOrder(page: Page, seededData: SeededChainData, quantityKg =
     seededData.customer.id,
     seededData.customer.name,
   );
-  await page.waitForSelector(
-    'select[name="customerLocationId"]:not([disabled])',
-    { timeout: 8000 },
-  );
-  await page.selectOption(
-    'select[name="customerLocationId"]',
-    seededData.customerLocation.id,
-  );
+  await selectEntity(page, "Customer location", seededData.customerLocation.id, seededData.customerLocation.name);
   await page.selectOption('select[name="packaging"]', "loose");
   await page.fill('input[name="quantityKg"]', quantityKg);
   await selectEntity(
@@ -383,7 +358,7 @@ async function openDeliveredDeliveryForm(
 
   await page.fill('input[name="deliveryDate"]', `${DELIVERY_DATE}T12:00`);
   await selectEntityByText(page, "Order", seededData.customer.name);
-  await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
+  await selectEntity(page, "Actual source bin", seededData.productStorageLocation.id, seededData.productStorageLocation.name);
   await page.fill('input[name="deliveredWetMassKg"]', wetMassKg);
   await fillStockMoisture(page, "delivery", "10");
 }
@@ -394,18 +369,6 @@ async function submitDeliveryCreate(page: Page) {
     .locator('[role="dialog"]')
     .locator('button:has-text("Create delivery")')
     .click();
-}
-
-/** Create a delivered delivery after creating its product-backed order. */
-async function createDeliveredDelivery(
-  page: Page,
-  seededData: SeededChainData,
-  wetMassKg: string,
-) {
-  await createOrder(page, seededData);
-  await openDeliveredDeliveryForm(page, seededData, wetMassKg);
-  await submitDeliveryCreate(page);
-  await waitForSideSheetClose(page);
 }
 
 /** Path 1: createProductionRun feedstock draw from 120 kg wet on hand. */
@@ -574,7 +537,7 @@ test.describe("createBiocharProduct biochar-bin guard", () => {
 
 /** Path 4: posted source measurements cannot be rewritten through ordinary edit. */
 test.describe("updateBiocharProduct source allocation", () => {
-  test("blocks ordinary moisture edits on a posted source allocation", async ({
+  test("disables ordinary moisture edits on a posted source allocation", async ({
     adminPage: page,
     seededData,
   }) => {
@@ -601,13 +564,16 @@ test.describe("updateBiocharProduct source allocation", () => {
       await expect(
         dialog.locator('input[name="massKg"]'),
       ).toBeDisabled();
+      // The form now disables the posted moisture before typing (#1119) and
+      // says why; the server refusal itself is covered by
+      // tests/biochar-product-posted-fields.test.ts.
       const moistureInput = dialog.locator(
         'input[name="moistureContentPercent"]',
       );
-      await expect(moistureInput).toBeEnabled();
-      await moistureInput.fill("5");
-      await saveEdit(page);
-      await expect(dialog.getByRole("alert").filter({ hasText: "Posted product source, composition, placement, and bin are immutable" })).toBeVisible();
+      await expect(moistureInput).toBeDisabled();
+      await expect(moistureInput).toHaveAccessibleDescription(
+        /Fixed once the product is posted to stock\. Record a stock correction in the bin to change it\./,
+      );
     } finally {
       await cleanupProductScenario(
         page,
@@ -659,7 +625,8 @@ test.describe("createDelivery order-balance guard", () => {
     await createOrder(page, seededData, "100");
     await openDeliveredDeliveryForm(page, seededData, "101");
     await submitDeliveryCreate(page);
-    await expect(page.getByRole("alert").filter({ hasText: /order/i })).toBeVisible();
+    await expect(page.locator("#deliveredWetMassKg-error")).toContainText("Only 100 kg remains on this order");
+    await expect(page.locator('[role="alert"]:not(#deliveredWetMassKg-error)').filter({ hasText: /order/i })).toHaveCount(0);
     await expect(page.locator('[role="dialog"]')).toBeVisible();
     await page.fill('input[name="deliveredWetMassKg"]', "100");
     await submitDeliveryCreate(page);
@@ -667,54 +634,51 @@ test.describe("createDelivery order-balance guard", () => {
   });
 });
 
-async function openDeliveryCorrection(page: Page, seededData: SeededChainData) {
-  // Ordinary edit retains stock measurements; the journal owns replacements.
-  await editFirstRow(page, "deliveredWetMassKg");
-  await expect(page.locator('input[name="deliveredWetMassKg"]')).toBeDisabled();
-  await expect(page.locator('input[name="moistureContentPercent"]')).toBeDisabled();
-  await page.goto(`/storage-locations?facility=${seededData.facility.id}`);
-  await waitForFacilityHydration(page, seededData.facility.name);
-  await page.getByPlaceholder("Search by code or name…").fill(seededData.productStorageLocation.code);
-  await page.getByText(seededData.productStorageLocation.name, { exact: true }).first().click();
-  await page.getByRole("button", { name: "Stock history", exact: true }).first().click();
+/** Delivery measurements can be corrected until a later draw depends on them. */
+test("edits delivery mass, links its saved source and locks it after a dependent draw", async ({ adminPage: page, testUsers }) => {
+  const f = await seedOutputStockBrowserFixture(testUsers.admin.id, true);
+  const created = f.delivery!;
+  await page.goto(`/deliveries?facility=${f.facility.id}&delivery=${created.id}`);
+  await waitForFacilityHydration(page, f.facility.name);
+  await page.getByRole("button", { name: "Edit delivery", exact: true }).click();
+  const wet = page.locator('input[name="deliveredWetMassKg"]');
+  await expect(wet).toBeEnabled();
+  await expect(page.locator('input[name="deliveryDate"]')).toBeDisabled();
+  await wet.fill("1900");
+  await fillStockMoisture(page, "delivery", "30");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  const openBin = async () => {
+    await page.goto(`/storage-locations?facility=${f.facility.id}`);
+    await waitForFacilityHydration(page, f.facility.name);
+    await page.getByPlaceholder("Search by code or name…").fill(f.bin.code);
+    await page.getByText(f.bin.name, { exact: true }).first().click();
+  };
+  await openBin();
+  await page.getByRole("button", { name: "History", exact: true }).click();
   const history = page.getByRole("dialog", { name: "Stock history", exact: true });
-  await history.locator("article").filter({ has: page.getByRole("heading", { name: "Delivery", exact: true }) }).getByRole("button", { name: "Correct entry" }).click();
-  await history.locator("#stock-reason").fill("E2E corrected loading measurement");
-  return history;
-}
+  const corrected = history.locator("details").filter({ hasText: "Correction" }).first();
+  await corrected.locator("summary").click();
+  await expect(corrected).toContainText("Original");
+  await expect(corrected).toContainText("Corrected");
+  const link = corrected.getByRole("link", { name: "Open delivery" });
+  await expect(link).toHaveAttribute("href", `/deliveries?facility=${f.facility.id}&delivery=${created.id}`);
+  await link.click();
+  await expect(page.getByRole("dialog")).toContainText(created.code);
 
-/** Path 6: a linked correction restores the original draw before its replacement. */
-test.describe("updateDelivery product-batch guard", () => {
-  test("rejects an edited delivery exceeding total product stock", async ({
-    adminPage: page,
-    seededData,
-  }) => {
-    // The delivery owns 80,000 kg; replacing it with 100,001 kg is still invalid.
-    await createDeliveredDelivery(page, seededData, "80000");
-    const history = await openDeliveryCorrection(page, seededData);
-    await history.locator("#stock-wet").fill("100001");
-    await expect(history.getByRole("button", { name: "Save correction", exact: true })).toBeDisabled();
-
-    await expect(
-      history.getByRole("alert").filter({ hasText: deliveryOverdrawText }),
-    ).toBeVisible({ timeout: 10000 });
-  });
-
-  test("accepts an increased delivery when its old draw is excluded", async ({
-    adminPage: page,
-    seededData,
-  }) => {
-    // 80,000 → 90,000 kg is valid; old + replacement would falsely be 170,000.
-    await createDeliveredDelivery(page, seededData, "80000");
-    const history = await openDeliveryCorrection(page, seededData);
-    await history.locator("#stock-wet").fill("90000");
-    await history.getByRole("button", { name: "Save correction", exact: true }).click();
-    await expect(history.getByText("E2E corrected loading measurement", { exact: true }).first()).toBeVisible();
-    // The original entry stays, marked reversed; its reversal is folded into
-    // the replacement that names it.
-    await expect(history.getByRole("heading", { name: /^Delivery\s*Reversed$/ })).toBeVisible();
-    const replacement = history.locator("article").filter({ hasText: "E2E corrected loading measurement" });
-    await expect(replacement).toContainText("Replacement");
-    await expect(replacement).toContainText(/Reverses the entry recorded /);
-  });
+  await openBin();
+  await page.getByRole("button", { name: "Adjust stock", exact: true }).click();
+  await page.locator("#occurredAt").fill(FIFO_BROWSER_TIME);
+  await page.locator("#stock-wet").fill("10");
+  await fillStockMoisture(page, "stock", "30");
+  await page.locator("#stock-reason").fill("E2E newer stock entry");
+  await page.getByRole("button", { name: "Save lost mass", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.goto(`/deliveries?facility=${f.facility.id}&delivery=${created.id}`);
+  await waitForFacilityHydration(page, f.facility.name);
+  await page.getByRole("button", { name: "Edit delivery", exact: true }).click();
+  await expect(wet).toBeDisabled();
+  await expect(page.locator('input[name="moistureContentPercent"]')).toBeDisabled();
+  await expect(page.getByRole("dialog")).toContainText("Correction blocked by a later lost mass:");
 });

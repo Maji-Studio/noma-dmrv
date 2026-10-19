@@ -1,5 +1,8 @@
 "use client";
 
+import { entityViewHref } from "@/lib/entity-deep-link";
+import { toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
+
 import { useState } from "react";
 import { parseAsString, useQueryState } from "nuqs";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -15,6 +18,8 @@ import type { FeedstockType } from "@/db/schema";
 import { ServerError } from "@/components/forms";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
 import {
   EntitySideSheet,
   type SideSheetMode,
@@ -25,6 +30,7 @@ import {
   EmptyState,
   PageHeader,
   RowActionsMenu,
+  SplitButton,
 } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -49,7 +55,6 @@ import {
 import { FeedstockTypeForm } from "./feedstock-type-form";
 import { feedstockTypeSheetSections, titleCase } from "./feedstock-type-read-sections";
 import { IsometricFeedstockImportDialog } from "./isometric-feedstock-import-dialog";
-import { Notice } from "@/components/ui/notice";
 
 type ArchiveFilter = "all" | "active" | "archived";
 
@@ -95,42 +100,18 @@ export function IsometricLinkedBadge() {
   );
 }
 
-export function FeedstockDeleteConflictNotice({
-  name,
-  onArchive,
-  isPending,
-}: {
-  name: string;
-  onArchive: () => void;
-  isPending: boolean;
-}) {
-  return (
-    <Notice
-      tone="warning"
-      title={`${name} is in use and cannot be deleted.`}
-      action={
-        <Button variant="default" onClick={onArchive} busy={isPending}>
-          <ArchiveIcon size={16} weight="bold" />
-          Archive instead
-        </Button>
-      }
-    >
-      Archive it instead. Historical records keep the type, while active pickers hide it.
-    </Notice>
-  );
-}
-
 function createColumns(params: {
   canManage: boolean;
   onEdit: (feedstockType: FeedstockType) => void;
   onArchive: (feedstockType: FeedstockType) => void;
-  onUnarchive: (feedstockType: FeedstockType) => void;
+  onRestore: (feedstockType: FeedstockType) => void;
   onDelete: (feedstockType: FeedstockType) => void;
 }): ColumnDef<FeedstockType>[] {
-  const { canManage, onEdit, onArchive, onUnarchive, onDelete } = params;
+  const { canManage, onEdit, onArchive, onRestore, onDelete } = params;
   const columns: ColumnDef<FeedstockType>[] = [
     {
       accessorKey: "name",
+      meta: { recordLink: true },
       header: "Name",
       cell: ({ row }) => (
         <MutedValue archived={!!row.original.archivedAt}>
@@ -205,7 +186,7 @@ function createColumns(params: {
             actions={[
               { label: "Edit", onSelect: () => onEdit(row.original) },
               row.original.archivedAt
-                ? { label: "Unarchive", onSelect: () => onUnarchive(row.original) }
+                ? { label: "Restore", onSelect: () => onRestore(row.original) }
                 : { label: "Archive", onSelect: () => onArchive(row.original) },
               {
                 label: "Delete",
@@ -237,6 +218,8 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>("all");
   const [deletingType, setDeletingType] = useState<FeedstockType | null>(null);
   const [deleteConflict, setDeleteConflict] = useState<FeedstockType | null>(null);
+  // An archive refused from the in-use dialog shows inside it, where the operator is looking.
+  const [conflictArchiveError, setConflictArchiveError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
@@ -246,6 +229,8 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     !!facilityId,
   );
   const hasRegistryConnection = Boolean(certifierSummary.data?.mapping);
+  const hasIsometricCertifier =
+    certifierSummary.data?.mapping?.provider === "isometric";
   const feedstockTypesQuery = useFeedstockTypeList();
   const createFeedstockType = useCreateFeedstockType();
   const updateFeedstockType = useUpdateFeedstockType();
@@ -258,16 +243,17 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
   const deepLinkedFeedstockType = focusedFeedstockTypeId
     ? feedstockTypes.find((type) => type.id === focusedFeedstockTypeId) ?? null
     : null;
-  const deepLinkedSideSheet = deepLinkedFeedstockType
-    ? {
-        entity: deepLinkedFeedstockType,
-        mode:
-          deepLinkMode === ENTITY_DEEP_LINK_EDIT_MODE && canManage
-            ? ("edit" as const)
-            : ("view" as const),
-      }
-    : null;
-  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  // Keep the loaded row with the draft, even if the list refetches.
+  const [deepLinkSnapshotId, setDeepLinkSnapshotId] = useState<string | null>(null);
+  if (!focusedFeedstockTypeId && deepLinkSnapshotId) setDeepLinkSnapshotId(null);
+  if (focusedFeedstockTypeId && deepLinkedFeedstockType && !sideSheet && deepLinkSnapshotId !== focusedFeedstockTypeId) {
+    setDeepLinkSnapshotId(focusedFeedstockTypeId);
+    setSideSheet({
+      entity: deepLinkedFeedstockType,
+      mode: deepLinkMode === ENTITY_DEEP_LINK_EDIT_MODE && canManage ? "edit" : "view",
+    });
+  }
+  const displaySideSheet = sideSheet;
   const filteredFeedstockTypes = feedstockTypes.filter((feedstockType) => {
     if (archiveFilter === "active" && feedstockType.archivedAt) return false;
     if (archiveFilter === "archived" && !feedstockType.archivedAt) return false;
@@ -329,6 +315,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     try {
       await updateFeedstockType.mutateAsync({
         feedstockTypeId: editing.id,
+        expectedVersion: editing.version,
         ...data,
       });
       setSideSheet(null);
@@ -342,31 +329,34 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
 
   const handleArchive = async (entity: FeedstockType) => {
     try {
-      await archiveFeedstockType.mutateAsync(entity.id);
+      await archiveFeedstockType.mutateAsync({ feedstockTypeId: entity.id, expectedVersion: entity.version });
       setDeleteConflict(null);
+      setConflictArchiveError(null);
       toast.success("Feedstock type archived");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "The feedstock type was not archived. Try again.");
+      const message = toArchiveRestoreErrorMessage(error, `Feedstock type ${entity.code}`, "archive", "The feedstock type was not archived. Try again.");
+      if (deleteConflict?.id === entity.id) setConflictArchiveError(message);
+      else toast.error(message);
     }
   };
 
-  const handleUnarchive = async (entity: FeedstockType) => {
+  const handleRestore = async (entity: FeedstockType) => {
     try {
-      await unarchiveFeedstockType.mutateAsync(entity.id);
-      toast.success("Feedstock type unarchived");
+      await unarchiveFeedstockType.mutateAsync({ feedstockTypeId: entity.id, expectedVersion: entity.version });
+      toast.success("Feedstock type restored");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "The feedstock type was not restored. Try again.");
+      toast.error(toArchiveRestoreErrorMessage(error, `Feedstock type ${entity.code}`, "restore", "The feedstock type was not restored. Try again."));
     }
   };
 
   const handleDeleteConfirm = async () => {
     if (!deletingType) return;
     try {
-      await deleteFeedstockType.mutateAsync(deletingType.id);
+      await deleteFeedstockType.mutateAsync({ feedstockTypeId: deletingType.id, expectedVersion: deletingType.version });
       toast.success("Feedstock type deleted.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Feedstock type was not deleted. Try again.";
-      if (message.toLowerCase().includes("archive it instead")) {
+      const message = toDeleteErrorMessage(error, `Feedstock type ${deletingType.code}`, "Feedstock type was not deleted. Try again.");
+      if (isInUseDeleteRefusal(message)) {
         setDeleteConflict(deletingType);
       } else {
         toast.error(message);
@@ -380,7 +370,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     canManage,
     onEdit: openEdit,
     onArchive: handleArchive,
-    onUnarchive: handleUnarchive,
+    onRestore: handleRestore,
     onDelete: setDeletingType,
   });
 
@@ -399,7 +389,12 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     facilityId,
   });
   const detailSections = sideSheetEntity
-    ? feedstockTypeSheetSections(sideSheetEntity, showSampling && facilityId ? { facilityId, canManage } : null)
+    ? feedstockTypeSheetSections(
+        sideSheetEntity,
+        showSampling && facilityId ? { facilityId, canManage } : null,
+        hasIsometricCertifier,
+        certifierSummary.data?.isProduction ?? false,
+      )
     : undefined;
 
   return (
@@ -410,18 +405,27 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
         subtitle="Organization-wide catalogue for pyrolysis feedstocks and blend materials"
         actions={
           canManage ? (
-            <div className="flex flex-wrap gap-12">
-              {hasRegistryConnection && (
-                <Button variant="default" onClick={() => setImportOpen(true)}>
-                  <SealCheckIcon size={20} weight="bold" />
-                  Import from Isometric
-                </Button>
-              )}
+            hasRegistryConnection ? (
+              <SplitButton
+                onClick={openCreate}
+                menuLabel="More ways to add a feedstock type"
+                items={[
+                  {
+                    label: "Import from Isometric",
+                    icon: <SealCheckIcon size={20} weight="bold" />,
+                    onSelect: () => setImportOpen(true),
+                  },
+                ]}
+              >
+                <PlusIcon size={20} weight="bold" />
+                New feedstock type
+              </SplitButton>
+            ) : (
               <Button variant="primary" onClick={openCreate}>
                 <PlusIcon size={20} weight="bold" />
                 New feedstock type
               </Button>
-            </div>
+            )
           ) : undefined
         }
       />
@@ -451,10 +455,18 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       </div>
 
       {deleteConflict && (
-        <FeedstockDeleteConflictNotice
-          name={deleteConflict.name}
-          onArchive={() => handleArchive(deleteConflict)}
+        <InUseDeleteDialog
+          label={deleteConflict.code}
+          onArchive={() => {
+            setConflictArchiveError(null);
+            void handleArchive(deleteConflict);
+          }}
+          onClose={() => {
+            setDeleteConflict(null);
+            setConflictArchiveError(null);
+          }}
           isPending={archiveFeedstockType.isPending}
+          errorMessage={conflictArchiveError}
         />
       )}
 
@@ -462,6 +474,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
         columns={columns}
         data={filteredFeedstockTypes}
         onRowClick={openView}
+        getRowHref={(row) => entityViewHref("/feedstock-types", FEEDSTOCK_TYPE_QUERY_PARAM, row.id, facilityId)}
         enableSorting
         enableFiltering
         enablePagination

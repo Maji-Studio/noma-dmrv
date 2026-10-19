@@ -1,0 +1,40 @@
+import { z } from "zod";
+import { distanceSources } from "@/schemas/distance-source";
+
+const nullableId = z.uuid().nullable();
+export const feedstockRepresentationSchema = z.object({
+  id: z.uuid().describe("Feedstock identifier, UUID."),
+  code: z.string().describe("Human-readable feedstock code, plain text."),
+  version: z.number().int().positive().describe("Positive integer row version for concurrency checks."),
+  facilityId: z.uuid().describe("Receiving facility identifier, UUID."),
+  status: z.enum(["missing_data", "complete"]).describe("Intake completeness: missing_data lacks required measurements; complete contributes to bin stock."),
+  deliveryDate: z.iso.date().describe("Facility-local delivery business date, YYYY-MM-DD."),
+  supplierId: z.uuid().describe("Supplier identifier, UUID."),
+  vehicleId: nullableId.describe("Vehicle identifier, UUID, or null when unspecified."),
+  feedstockTypeId: z.uuid().describe("Feedstock type identifier, UUID."),
+  storageLocationId: z.uuid().describe("Receiving bin identifier, UUID."),
+  deliveryGroupId: nullableId.describe("Shared intake group identifier, UUID, or null for an ungrouped delivery."),
+  massWetKg: z.number().describe("Allocated wet/as-received mass in kilograms."),
+  massDryKg: z.number().describe("Derived dry mass in kilograms."),
+  moistureContentPercent: z.number().describe("Water as percent of wet mass, 0 inclusive to 100 exclusive, not a fraction."),
+  overrideJustification: z.string().nullable().describe("Override justification, plain text, or null when absent."),
+  distanceKmOverride: z.number().nullable().describe("One-way distance override in kilometres; the server counts the round trip. Null uses the recorded supplier-location distance. Stored as 32-bit floating-point real, about 6 significant decimal digits."),
+  distanceSource: z.literal([...distanceSources, null]).describe("Distance provenance, or null when unspecified."),
+  distanceNote: z.string().nullable().describe("Distance evidence note, or null when unspecified."),
+  notes: z.string().nullable().describe("Operator notes, untrusted plain text, or null when absent."),
+  createdAt: z.iso.datetime().describe("Creation event instant in UTC (RFC 3339)."),
+  updatedAt: z.iso.datetime().describe("Last update event instant in UTC (RFC 3339)."),
+});
+export type FeedstockRepresentation = z.infer<typeof feedstockRepresentationSchema>;
+export type FeedstockRepresentationInput = Omit<FeedstockRepresentation, "createdAt" | "updatedAt" | "deliveryDate"> & {
+  createdAt: Date | string; updatedAt: Date | string; deliveryDate: Date | string;
+};
+
+/** Both database reads and stored JSON outcomes use this exact projection. */
+export function representFeedstock(row: FeedstockRepresentationInput): FeedstockRepresentation {
+  return feedstockRepresentationSchema.parse({
+    ...row,
+    deliveryDate: (row.deliveryDate instanceof Date ? row.deliveryDate.toISOString() : row.deliveryDate).split("T")[0],
+    createdAt: new Date(row.createdAt).toISOString(), updatedAt: new Date(row.updatedAt).toISOString(),
+  });
+}

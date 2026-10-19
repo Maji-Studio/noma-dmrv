@@ -6,22 +6,16 @@
  */
 
 import { z } from "zod";
-import { feedstocks as feedstocksTable } from "@/db/schema";
-import { generateNextCodes } from "@/data-access/code-generator";
 import { requireOrgFacility } from "@/data-access/utils";
 import {
-  createFeedstock,
-  deleteFeedstock,
   getFeedstocks as getFeedstocksData,
   getFeedstockById as getFeedstockByIdData,
   getFeedstockStats as getFeedstockStatsData,
-  updateFeedstock,
   type PaginatedFeedstocks,
   type FeedstockWithRelations,
   type FeedstockStats,
   type CreateFeedstockResult,
 } from "@/data-access/feedstocks";
-import { requireOrgContext } from "@/lib/auth/server";
 import {
   createFeedstockSchema,
   deleteFeedstockSchema,
@@ -29,40 +23,10 @@ import {
   feedstockFilterSchema,
   feedstockStatsFilterSchema,
 } from "@/schemas/feedstocks";
-import { resolveDistanceSource } from "@/schemas/distance-source";
+import { logFeedstockDelivery, updateFeedstock, deleteFeedstock } from "@/lib/operations/feedstocks";
+import { runOperationInProcess } from "@/lib/operations/runner";
+import { withAction } from "./with-action";
 import type { ActionResult } from "@/types/actions";
-import {
-  formatZodActionError,
-  toActionFailure,
-  toLoggedActionError,
-  type ActionFailure,
-} from "./action-errors";
-
-function feedstockActionError(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): string {
-  return toLoggedActionError(error, fallbackMessage, {
-    message: "feedstock action failed",
-    context: { op },
-  });
-}
-
-/**
- * Failure shape for the write paths. Unlike the read helper above it keeps an
- * `ActionConflictError`'s `conflict`, so a bin-stock refusal can link the bin.
- */
-function feedstockActionFailure(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): ActionFailure {
-  return toActionFailure(error, {
-    fallbackMessage,
-    log: { message: "feedstock action failed", context: { op } },
-  });
-}
 
 // ============================================
 // List/Query Operations
@@ -71,9 +35,7 @@ function feedstockActionFailure(
 export async function getFeedstocksFn(
   filters?: Partial<z.infer<typeof feedstockFilterSchema>>
 ): Promise<ActionResult<PaginatedFeedstocks>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedFilters = filters
       ? feedstockFilterSchema.parse(filters)
       : undefined;
@@ -82,51 +44,30 @@ export async function getFeedstocksFn(
     }
     const data = await getFeedstocksData(ctx, validatedFilters);
 
-    return { success: true, data };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error, "Invalid filter parameters"),
-      };
-    }
-    return {
-      success: false,
-      error: feedstockActionError(
-        error,
-        "Failed to load feedstocks",
-        "feedstock:list",
-      ),
-    };
-  }
+    return data;
+  }, {
+    fallbackMessage: "Failed to load feedstocks",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: "feedstock action failed", context: { op: "feedstock:list" } },
+  });
 }
 
 export async function getFeedstockByIdFn(
   feedstockId: string
 ): Promise<ActionResult<FeedstockWithRelations>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const data = await getFeedstockByIdData(ctx, feedstockId);
-    return { success: true, data };
-  } catch (error) {
-    return {
-      success: false,
-      error: feedstockActionError(
-        error,
-        "Failed to load feedstock",
-        "feedstock:get",
-      ),
-    };
-  }
+    return data;
+  }, {
+    fallbackMessage: "Failed to load feedstock",
+    log: { message: "feedstock action failed", context: { op: "feedstock:get" } },
+  });
 }
 
 export async function getFeedstockStatsFn(
   scope?: Partial<z.infer<typeof feedstockStatsFilterSchema>>
 ): Promise<ActionResult<FeedstockStats>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedScope = scope
       ? feedstockStatsFilterSchema.parse(scope)
       : undefined;
@@ -134,23 +75,12 @@ export async function getFeedstockStatsFn(
       await requireOrgFacility(ctx, validatedScope.facilityId);
     }
     const data = await getFeedstockStatsData(ctx, validatedScope);
-    return { success: true, data };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error, "Invalid filter parameters"),
-      };
-    }
-    return {
-      success: false,
-      error: feedstockActionError(
-        error,
-        "Failed to load feedstock stats",
-        "feedstock:stats",
-      ),
-    };
-  }
+    return data;
+  }, {
+    fallbackMessage: "Failed to load feedstock stats",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: "feedstock action failed", context: { op: "feedstock:stats" } },
+  });
 }
 
 // ============================================
@@ -160,102 +90,26 @@ export async function getFeedstockStatsFn(
 export async function createFeedstockFn(
   input: z.infer<typeof createFeedstockSchema>
 ): Promise<ActionResult<CreateFeedstockResult>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const data = createFeedstockSchema.parse(input);
-
-    // Generate sequential codes for each allocation in one batch
-    const codesFn = (count: number) =>
-      generateNextCodes(ctx, "FS", feedstocksTable, feedstocksTable.code, count);
-
-    const result = await createFeedstock(
-      ctx,
-      {
-        ...data,
-        transportDistanceSource: resolveDistanceSource(
-          data.transportDistanceKm,
-          data.transportDistanceSource,
-        ),
-      },
-      codesFn,
-    );
-
-    return { success: true, data: result };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: feedstockActionError(
-        error,
-        "Failed to create feedstock",
-        "feedstock:create",
-      ),
-    };
-  }
+  return withAction((ctx) => runOperationInProcess(logFeedstockDelivery, ctx, input), {
+    fallbackMessage: "Failed to create feedstock",
+    log: { message: "feedstock action failed", context: { op: "feedstock:create" } },
+  });
 }
-
-// ============================================
-// Update Operation
-// ============================================
 
 export async function updateFeedstockFn(
   input: z.infer<typeof updateFeedstockSchema>
 ): Promise<ActionResult<FeedstockWithRelations>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const {
-      feedstockId,
-      transportDistanceKm,
-      transportDistanceSource,
-      transportTripType,
-      ...updateData
-    } = updateFeedstockSchema.parse(input);
-    const data = await updateFeedstock(ctx, feedstockId, {
-      ...updateData,
-      transportDistanceKm,
-      transportDistanceSource: resolveDistanceSource(
-        transportDistanceKm,
-        transportDistanceSource,
-      ),
-      transportTripType,
-    });
-
-    return { success: true, data };
-  } catch (error) {
-    return feedstockActionFailure(
-      error,
-      "Failed to update feedstock",
-      "feedstock:update",
-    );
-  }
+  return withAction((ctx) => runOperationInProcess(updateFeedstock, ctx, input), {
+    fallbackMessage: "Failed to update feedstock",
+    log: { message: "feedstock action failed", context: { op: "feedstock:update" } },
+  });
 }
-
-// ============================================
-// Delete Operation
-// ============================================
 
 export async function deleteFeedstockFn(
   input: z.infer<typeof deleteFeedstockSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const { feedstockId } = deleteFeedstockSchema.parse(input);
-    await deleteFeedstock(ctx, feedstockId);
-
-    return { success: true, data: undefined };
-  } catch (error) {
-    return feedstockActionFailure(
-      error,
-      "Failed to delete feedstock",
-      "feedstock:delete",
-    );
-  }
+  return withAction((ctx) => runOperationInProcess(deleteFeedstock, ctx, input), {
+    fallbackMessage: "Failed to delete feedstock",
+    log: { message: "feedstock action failed", context: { op: "feedstock:delete" } },
+  });
 }

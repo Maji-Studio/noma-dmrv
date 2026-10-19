@@ -14,8 +14,12 @@
  * - User IDs: LIKE 'e2e-%'
  * - User emails: LIKE '%@e2e.local'
  * - Project names: LIKE 'E2E Test Project%'
+ * - Credential fixture organizations: ID LIKE 'e2e-credentials-org-%'
  */
 import { Pool } from "pg";
+import { DEC_ORG_ID } from "@/db/org-defaults";
+import { isLocalHost } from "../helpers/local-host";
+import { E2E_CERTIFIER_ORG_ID_PREFIX } from "./fixtures/certifier-credentials";
 
 export default async function globalTeardown() {
   const databaseUrl =
@@ -25,12 +29,14 @@ export default async function globalTeardown() {
   const url = new URL(databaseUrl);
   const dbName = url.pathname.replace(/^\//, "");
   const hostname = url.hostname;
-  const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
-  const isTestDb = dbName.includes("_test") || dbName.includes("_e2e");
-  if (!isLocalHost && !isTestDb) {
+  // Locally the sweep runs against the dev server's DB (prefix-scoped
+  // deletes), so the name is not checked; a remote host never is allowed.
+  // pg lets a host/hostaddr query parameter override the URL's host.
+  const hostOverridden = url.searchParams.has("host") || url.searchParams.has("hostaddr");
+  if (!isLocalHost(hostname) || hostOverridden) {
     console.error(
-      `[global-teardown] ABORTED: database "${dbName}" on host "${hostname}" does not look like a test database. ` +
-      `Host must be localhost/127.0.0.1, or DB name must contain "_test" or "_e2e".`
+      `[global-teardown] ABORTED: database "${dbName}" is on host "${hostname}". ` +
+      `The E2E sweep only runs against a local database.`
     );
     process.exit(1);
   }
@@ -46,15 +52,66 @@ export default async function globalTeardown() {
     try {
       await client.query("BEGIN");
 
+      // API-key specs use the seeded organization and the shared name prefixes.
+      // Deleting the plugin row cascades to api_key_owners, even if its user is gone.
+      await client.query(`
+        DELETE FROM api_keys
+        WHERE reference_id = $1
+          AND (name LIKE 'E2E %' OR name LIKE 'UI %' OR name LIKE 'Chain %')
+      `, [DEC_ORG_ID]);
+
       // Freeze fixture lineage before deleting parents. UI-created codes are automatic.
       await client.query(`CREATE TEMP TABLE e2e_scope_facilities ON COMMIT DROP AS SELECT id FROM facilities WHERE code LIKE 'E2E-%' OR name LIKE 'UI %' OR name LIKE 'Chain %' OR name LIKE 'Duplicate Test %'`);
       await client.query(`CREATE TEMP TABLE e2e_scope_bins ON COMMIT DROP AS SELECT id FROM storage_locations WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities)`);
-      await client.query(`CREATE TEMP TABLE e2e_scope_runs ON COMMIT DROP AS SELECT id FROM production_runs WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities) OR biochar_storage_location_id IN (SELECT id FROM e2e_scope_bins) OR feedstock_storage_location_id IN (SELECT id FROM e2e_scope_bins) OR reactor_id IN (SELECT id FROM reactors WHERE code LIKE 'E2E-%' OR identifier LIKE 'UI %' OR identifier LIKE 'Chain %')`);
+      await client.query(`CREATE TEMP TABLE e2e_scope_runs ON COMMIT DROP AS SELECT id FROM production_runs WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities) OR biochar_storage_location_id IN (SELECT id FROM e2e_scope_bins) OR id IN (SELECT production_run_id FROM production_run_feedstock_draws WHERE storage_location_id IN (SELECT id FROM e2e_scope_bins)) OR reactor_id IN (SELECT id FROM reactors WHERE code LIKE 'E2E-%' OR identifier LIKE 'UI %' OR identifier LIKE 'Chain %')`);
       await client.query(`CREATE TEMP TABLE e2e_scope_products ON COMMIT DROP AS SELECT id FROM biochar_products WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities) OR storage_location_id IN (SELECT id FROM e2e_scope_bins) OR source_biochar_storage_location_id IN (SELECT id FROM e2e_scope_bins) OR formulation_id IN (SELECT id FROM formulations WHERE code LIKE 'E2E-%') OR id IN (SELECT biochar_product_id FROM product_ingredient_snapshots WHERE source_storage_location_id IN (SELECT id FROM e2e_scope_bins)) OR linked_production_run_id IN (SELECT id FROM e2e_scope_runs) OR id IN (SELECT biochar_product_id FROM biochar_product_source_allocations WHERE production_run_id IN (SELECT id FROM e2e_scope_runs))`);
       await client.query(`CREATE TEMP TABLE e2e_scope_orders ON COMMIT DROP AS SELECT id FROM orders WHERE code LIKE 'E2E-%' OR formulation_id IN (SELECT id FROM formulations WHERE code LIKE 'E2E-%') OR facility_id IN (SELECT id FROM e2e_scope_facilities)`);
-      await client.query(`CREATE TEMP TABLE e2e_scope_deliveries ON COMMIT DROP AS SELECT id FROM deliveries WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities) OR storage_location_id IN (SELECT id FROM e2e_scope_bins) OR biochar_product_id IN (SELECT id FROM e2e_scope_products) OR order_id IN (SELECT id FROM e2e_scope_orders) OR id IN (SELECT delivery_id FROM output_stock_allocations WHERE biochar_product_id IN (SELECT id FROM e2e_scope_products))`);
+      await client.query(`CREATE TEMP TABLE e2e_scope_deliveries ON COMMIT DROP AS SELECT id FROM deliveries WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities) OR storage_location_id IN (SELECT id FROM e2e_scope_bins) OR order_id IN (SELECT id FROM e2e_scope_orders) OR id IN (SELECT delivery_id FROM output_stock_allocations WHERE biochar_product_id IN (SELECT id FROM e2e_scope_products))`);
       await client.query(`CREATE TEMP TABLE e2e_scope_applications ON COMMIT DROP AS SELECT id FROM applications WHERE code LIKE 'E2E-%' OR delivery_id IN (SELECT id FROM e2e_scope_deliveries) OR id IN (SELECT application_id FROM application_output_allocations WHERE biochar_product_id IN (SELECT id FROM e2e_scope_products) OR production_run_id IN (SELECT id FROM e2e_scope_runs))`);
       await client.query(`CREATE TEMP TABLE e2e_scope_output_allocations ON COMMIT DROP AS SELECT id FROM output_stock_allocations WHERE source_storage_location_id IN (SELECT id FROM e2e_scope_bins) OR biochar_product_id IN (SELECT id FROM e2e_scope_products) OR target_biochar_product_id IN (SELECT id FROM e2e_scope_products) OR delivery_id IN (SELECT id FROM e2e_scope_deliveries) OR production_run_id IN (SELECT id FROM e2e_scope_runs)`);
+      await client.query(`CREATE TEMP TABLE e2e_scope_credit_batches ON COMMIT DROP AS SELECT id FROM credit_batches WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities)`);
+      await client.query(`CREATE TEMP TABLE e2e_scope_feedstocks ON COMMIT DROP AS SELECT id FROM feedstocks WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities)`);
+      await client.query(`CREATE TEMP TABLE e2e_scope_samples ON COMMIT DROP AS SELECT id FROM samples WHERE sample_code LIKE 'E2E-%' OR production_run_id IN (SELECT id FROM e2e_scope_runs) OR credit_batch_id IN (SELECT id FROM e2e_scope_credit_batches)`);
+      await client.query(`
+        CREATE TEMP TABLE e2e_scope_transport_legs ON COMMIT DROP AS
+        SELECT id FROM transport_legs
+        WHERE (entity_type = 'feedstock' AND entity_id IN (SELECT id FROM e2e_scope_feedstocks))
+           OR (entity_type = 'biochar' AND entity_id IN (SELECT id FROM e2e_scope_products))
+           OR (entity_type = 'sample' AND entity_id IN (SELECT id FROM e2e_scope_samples))
+      `);
+      await client.query(`
+        CREATE TEMP TABLE e2e_scope_documents ON COMMIT DROP AS
+        SELECT id FROM documents
+        WHERE (entity_type = 'credit_batch' AND entity_id IN (SELECT id FROM e2e_scope_credit_batches))
+           OR (entity_type = 'production_run' AND entity_id IN (SELECT id FROM e2e_scope_runs))
+           OR (entity_type = 'biochar_product' AND entity_id IN (SELECT id FROM e2e_scope_products))
+           OR (entity_type = 'application' AND entity_id IN (SELECT id FROM e2e_scope_applications))
+           OR (entity_type = 'delivery' AND entity_id IN (SELECT id FROM e2e_scope_deliveries))
+           OR (entity_type = 'order' AND entity_id IN (SELECT id FROM e2e_scope_orders))
+           OR (entity_type = 'feedstock' AND entity_id IN (SELECT id FROM e2e_scope_feedstocks))
+           OR (entity_type = 'sample' AND entity_id IN (SELECT id FROM e2e_scope_samples))
+           OR (entity_type = 'transport_leg' AND entity_id IN (SELECT id FROM e2e_scope_transport_legs))
+           OR (entity_type = 'facility' AND entity_id IN (SELECT id FROM e2e_scope_facilities))
+           OR (entity_type = 'reactor' AND entity_id IN (SELECT id FROM reactors WHERE code LIKE 'E2E-%' OR identifier LIKE 'UI %' OR identifier LIKE 'Chain %' OR facility_id IN (SELECT id FROM e2e_scope_facilities)))
+           OR (entity_type = 'production_incident' AND entity_id IN (SELECT id FROM incident_reports WHERE production_run_id IN (SELECT id FROM e2e_scope_runs)))
+           OR (entity_type = 'production_sample' AND entity_id IN (SELECT id FROM production_samples WHERE production_run_id IN (SELECT id FROM e2e_scope_runs)))
+      `);
+      // Sweep actorless and UI-created fixture history too.
+      await client.query(`
+        DELETE FROM activity_events
+        WHERE actor_user_id LIKE 'e2e-%'
+           OR facility_id IN (SELECT id FROM e2e_scope_facilities)
+           OR credit_batch_id IN (SELECT id FROM e2e_scope_credit_batches)
+           OR (entity_type = 'credit_batch' AND entity_id IN (SELECT id::text FROM e2e_scope_credit_batches))
+           OR (entity_type = 'document' AND entity_id IN (SELECT id::text FROM e2e_scope_documents))
+           OR (entity_type = 'transport_leg' AND entity_id IN (SELECT id::text FROM e2e_scope_transport_legs))
+           OR production_run_id IN (SELECT id FROM e2e_scope_runs)
+           OR (entity_type = 'production_run' AND entity_id IN (SELECT id::text FROM e2e_scope_runs))
+           OR (entity_type = 'biochar_product' AND entity_id IN (SELECT id::text FROM e2e_scope_products))
+           OR (entity_type = 'order' AND entity_id IN (SELECT id::text FROM e2e_scope_orders))
+           OR (entity_type = 'delivery' AND entity_id IN (SELECT id::text FROM e2e_scope_deliveries))
+           OR (entity_type = 'application' AND entity_id IN (SELECT id::text FROM e2e_scope_applications))
+      `);
       await client.query(`DELETE FROM application_output_allocations WHERE application_id IN (SELECT id FROM e2e_scope_applications) OR delivery_id IN (SELECT id FROM e2e_scope_deliveries) OR biochar_product_id IN (SELECT id FROM e2e_scope_products) OR production_run_id IN (SELECT id FROM e2e_scope_runs)`);
       await client.query(`DELETE FROM output_stock_run_allocations WHERE allocation_id IN (SELECT id FROM e2e_scope_output_allocations)`);
       await client.query(`DELETE FROM output_stock_allocations WHERE id IN (SELECT id FROM e2e_scope_output_allocations)`);
@@ -86,9 +143,7 @@ export default async function globalTeardown() {
                      OR identifier LIKE 'UI %'
                      OR identifier LIKE 'Chain %'
                 )
-             OR feedstock_storage_location_id IN (
-                  SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
-                )
+             OR id IN (SELECT id FROM e2e_scope_runs)
              OR biochar_storage_location_id IN (
                   SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
                 )
@@ -133,9 +188,7 @@ export default async function globalTeardown() {
                      OR identifier LIKE 'UI %'
                      OR identifier LIKE 'Chain %'
                 )
-             OR feedstock_storage_location_id IN (
-                  SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
-                )
+             OR id IN (SELECT id FROM e2e_scope_runs)
              OR biochar_storage_location_id IN (
                   SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
                 )
@@ -167,9 +220,7 @@ export default async function globalTeardown() {
                            OR identifier LIKE 'UI %'
                            OR identifier LIKE 'Chain %'
                       )
-                   OR feedstock_storage_location_id IN (
-                        SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
-                      )
+                   OR id IN (SELECT id FROM e2e_scope_runs)
                    OR biochar_storage_location_id IN (
                         SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
                       )
@@ -195,9 +246,7 @@ export default async function globalTeardown() {
                      OR identifier LIKE 'UI %'
                      OR identifier LIKE 'Chain %'
                 )
-             OR feedstock_storage_location_id IN (
-                  SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
-                )
+             OR id IN (SELECT id FROM e2e_scope_runs)
              OR biochar_storage_location_id IN (
                   SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
                 )
@@ -319,9 +368,7 @@ export default async function globalTeardown() {
                        OR identifier LIKE 'UI %'
                        OR identifier LIKE 'Chain %'
                   )
-               OR feedstock_storage_location_id IN (
-                    SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
-                  )
+               OR id IN (SELECT id FROM e2e_scope_runs)
                OR biochar_storage_location_id IN (
                     SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
                   )
@@ -345,9 +392,7 @@ export default async function globalTeardown() {
                      OR identifier LIKE 'UI %'
                      OR identifier LIKE 'Chain %'
                 )
-             OR feedstock_storage_location_id IN (
-                  SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
-                )
+             OR id IN (SELECT id FROM e2e_scope_runs)
              OR biochar_storage_location_id IN (
                   SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
                 )
@@ -371,9 +416,7 @@ export default async function globalTeardown() {
              OR identifier LIKE 'UI %'
              OR identifier LIKE 'Chain %'
         )
-        OR feedstock_storage_location_id IN (
-          SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
-        )
+        OR id IN (SELECT id FROM e2e_scope_runs)
         OR biochar_storage_location_id IN (
           SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
         )
@@ -390,30 +433,7 @@ export default async function globalTeardown() {
                    OR name LIKE 'Chain %'
                    OR name LIKE 'Duplicate Test %'
               )
-           OR feedstock_delivery_id IN (
-                SELECT id FROM feedstock_deliveries
-                WHERE code LIKE 'E2E-%'
-                   OR facility_id IN (
-                        SELECT id FROM facilities
-                        WHERE code LIKE 'E2E-%'
-                           OR name LIKE 'UI %'
-                           OR name LIKE 'Chain %'
-                           OR name LIKE 'Duplicate Test %'
-                      )
-              )
-      `);
 
-      // ─── Feedstock deliveries ───
-      await client.query(`
-        DELETE FROM feedstock_deliveries
-        WHERE code LIKE 'E2E-%'
-           OR facility_id IN (
-                SELECT id FROM facilities
-                WHERE code LIKE 'E2E-%'
-                   OR name LIKE 'UI %'
-                   OR name LIKE 'Chain %'
-                   OR name LIKE 'Duplicate Test %'
-              )
       `);
 
       // ─── Formulations ───
@@ -569,6 +589,18 @@ export default async function globalTeardown() {
         )
       `);
 
+      // ─── Facility emission factors (FK to facilities) ───
+      await client.query(`
+        DELETE FROM facility_emission_factors
+        WHERE facility_id IN (
+          SELECT id FROM facilities
+          WHERE code LIKE 'E2E-%'
+             OR name LIKE 'UI %'
+             OR name LIKE 'Chain %'
+             OR name LIKE 'Duplicate Test %'
+        )
+      `);
+
       // ─── Facilities ───
       await client.query(`
         DELETE FROM facilities
@@ -588,6 +620,17 @@ export default async function globalTeardown() {
 
       // Users
       await client.query(`DELETE FROM users WHERE id LIKE 'e2e-%' OR email LIKE '%@e2e.local'`);
+
+      // Self-service credential fixtures create no memberships or other children.
+      // Credentials must go before their organization (no cascade).
+      await client.query(`
+        DELETE FROM certifier_credentials
+        WHERE organization_id LIKE $1 || '%'
+      `, [E2E_CERTIFIER_ORG_ID_PREFIX]);
+      await client.query(`
+        DELETE FROM organizations
+        WHERE id LIKE $1 || '%'
+      `, [E2E_CERTIFIER_ORG_ID_PREFIX]);
 
       await client.query("COMMIT");
       console.log("[global-teardown] E2E test data cleanup complete.");

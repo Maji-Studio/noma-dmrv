@@ -9,20 +9,16 @@ const customerFormSource = readFileSync(
   new URL("./customers/customer-form.tsx", import.meta.url),
   "utf8",
 );
+const customerSavedLocationsSource = readFileSync(
+  new URL("./customers/customer-saved-locations.tsx", import.meta.url),
+  "utf8",
+);
 const supplierLocationFormSource = readFileSync(
   new URL("./suppliers/supplier-location-form.tsx", import.meta.url),
   "utf8",
 );
 const customerLocationFormSource = readFileSync(
   new URL("./customers/customer-location-form.tsx", import.meta.url),
-  "utf8",
-);
-const supplierDetailSource = readFileSync(
-  new URL("./suppliers/supplier-detail.tsx", import.meta.url),
-  "utf8",
-);
-const customerDetailSource = readFileSync(
-  new URL("./customers/customer-detail.tsx", import.meta.url),
   "utf8",
 );
 const transportLegsEditorSource = readFileSync(
@@ -36,7 +32,7 @@ const transportLegFormSource = readFileSync(
 
 describe.each([
   ["supplier", supplierFormSource, "SupplierLocationDialog"],
-  ["customer", customerFormSource, "CustomerLocationDialog"],
+  ["customer", customerSavedLocationsSource, "CustomerLocationDialog"],
 ])("%s location management", (_entity, source, dialogName) => {
   it("offers an edit action for each persisted location", () => {
     expect(source).toContain("setEditingLocation(loc)");
@@ -50,6 +46,22 @@ describe.each([
 });
 
 describe.each([
+  ["supplier", supplierFormSource],
+  ["customer", customerFormSource],
+])("%s pending location management", (_entity, source) => {
+  it("offers an edit action for locations added before the party is saved", () => {
+    expect(source).toContain("setEditingLocationIndex(index)");
+    expect(source).toContain("aria-label={`Edit ${");
+  });
+
+  it("prefills the dialog and replaces the selected pending location", () => {
+    expect(source).toContain("location={editingLocation}");
+    expect(source).toContain("onUpdate(editingLocationIndex,");
+    expect(source).toContain('editingLocation ? "Edit location" : "Add location"');
+  });
+});
+
+describe.each([
   ["supplier", supplierLocationFormSource],
   ["customer", customerLocationFormSource],
 ])("%s location dialog submission", (_entity, source) => {
@@ -57,47 +69,6 @@ describe.each([
     expect(source).toContain("event.stopPropagation()");
   });
 });
-
-describe.each([
-  [
-    "supplier",
-    supplierDetailSource,
-    "SupplierLocationDialog",
-    "SupplierLocationForm",
-    "useCreateSupplierLocation",
-    "useUpdateSupplierLocation",
-  ],
-  [
-    "customer",
-    customerDetailSource,
-    "CustomerLocationDialog",
-    "CustomerLocationForm",
-    "useCreateCustomerLocation",
-    "useUpdateCustomerLocation",
-  ],
-])(
-  "%s detail location management",
-  (
-    _entity,
-    source,
-    dialogName,
-    formName,
-    createMutationName,
-    updateMutationName,
-  ) => {
-    it("opens the existing location dialog with the selected location", () => {
-      expect(source).toContain(`<${dialogName}`);
-      expect(source).toContain("location={editingLocation}");
-      expect(source).toContain("setIsLocationDialogOpen(true)");
-    });
-
-    it("does not render or mutate the child location inline", () => {
-      expect(source).not.toContain(`<${formName}`);
-      expect(source).not.toContain(createMutationName);
-      expect(source).not.toContain(updateMutationName);
-    });
-  },
-);
 
 describe("transport leg editor dialog", () => {
   it("renders the shared centered dialog around the transport leg form", () => {

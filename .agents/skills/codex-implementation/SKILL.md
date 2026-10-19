@@ -1,9 +1,9 @@
 ---
 name: codex-implementation
-description: Ask Codex CLI (gpt-6-astra at low reasoning effort) to implement scoped code changes in the current repository, then have Claude inspect the resulting diff and verification. This is how the Codex model is invoked for implementation work. Use when the user asks to delegate implementation to Codex/gpt-6-astra, when the model-selection rubric routes bulk/mechanical work to the Codex model, or when a bounded task would benefit from another coding agent producing a patch.
+description: Ask Codex CLI (gpt-6.1-sol at high reasoning effort) to implement scoped code changes in the current repository, then have Claude inspect the resulting diff and verification. This is how the Codex model is invoked for implementation work. Use when the shared model policy (`~/.claude/model-selection.md`) routes implementation to Codex, which by default covers non-UI work.
 ---
 
-Delegate a **bounded** implementation task to the Codex CLI (gpt-6-astra, low reasoning, explicitly selected below), then bring the diff
+Delegate a **bounded** implementation task to the Codex CLI (gpt-6.1-sol, high reasoning, explicitly selected below), then bring the diff
 back for Claude to review and verify. Claude remains responsible for scoping the task,
 reviewing the diff, running or checking verification, and explaining the final result. Do not
 let Codex commit, push, deploy, or edit global config. Codex output is **evidence, not
@@ -15,10 +15,11 @@ authority**.
   ```bash
   CODEX="$(command -v codex || echo "$HOME/Library/pnpm/bin/codex")"
   ```
-  Last resort: the ChatGPT.app bundle at `/Applications/ChatGPT.app/Contents/Resources/codex`.
-  (The old `/Applications/Codex.app/Contents/Resources/codex` path no longer exists.)
-- If the CLI reports `"requires a newer version of Codex"`, upgrade with
-  `pnpm add -g @openai/codex@latest` and retry.
+  Both `~/.local/bin/codex` (standalone, first on PATH) and the pnpm global must be
+  codex-cli 0.159.2 or newer for gpt-6.1-sol.
+- If the CLI reports `"requires a newer version of Codex"` or `"model is not supported"`,
+  upgrade with `codex update` (standalone) and `pnpm add -g @openai/codex@<latest version>`
+  (pnpm may hold back the newest release unless you name it), then retry.
 - Codex runs can exceed the Bash tool's 10-minute timeout. Either pass an explicit longer
   `timeout` to the Bash tool, or run the command in the background and poll for `$REPORT`.
 - If `codex` is not installed or the command fails, report the error and offer to do the
@@ -41,7 +42,7 @@ authority**.
 4. **Run with repo write access:**
    ```bash
    "$CODEX" exec \
-     -m gpt-6-astra -c 'model_reasoning_effort="low"' \
+     -m gpt-6.1-sol -c 'model_reasoning_effort="high"' \
      -C "$PWD" \
      --add-dir "$ARTIFACT_DIR" \
      -s workspace-write \
@@ -51,7 +52,7 @@ authority**.
    Use `-s workspace-write` by default. Use `-s danger-full-access` only when the task truly
    needs machine-level access (app launch, simulators, package-manager global state).
 5. **Inspect** `git status` and `git diff` after Codex exits.
-6. **Verify yourself** with the cheapest reliable checks: `pnpm lint`, `pnpm typecheck`,
+6. **Verify yourself** with the cheapest reliable checks: `pnpm verify:static`,
    focused tests. Never trust the exit code of `cmd | tail` (pipefail gotcha) — a masked
    failure can look green.
 7. **Report** what Codex changed, what Claude verified, and remaining risks.
@@ -69,9 +70,10 @@ authority**.
 ## Repo-specific constraints to inject into every prompt
 
 - **pnpm only** — never npm/yarn.
-- Respect the **layered architecture** (components → hooks → fn → data-access → db); `fn/`
-  files have `"use server"` + Zod validation; every `data-access/` function calls an auth
-  guard.
+- Respect the **layered architecture** (components → hooks → fn → data-access → db). Server
+  Action files in `fn/` have `"use server"` + Zod validation; non-action helpers there (e.g.
+  `with-action.ts`, `*-core.ts`) must NOT carry the directive. Normal `data-access/` functions
+  call an auth guard and filter on `organizationId`; keep explicit `// org-scope-ok:` seams.
 - **Never read or edit `.env*` files** (sole exception: the codex-computer-use sign-in flow
   reads `ADMIN_EMAIL`/`ADMIN_PASSWORD` from `.env.local` — that skill covers it); never log
   PII (log IDs, not emails/names).
@@ -81,7 +83,7 @@ authority**.
 ## Example Prompt
 
 ```text
-Repository: /Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv (branch: <current>)
+Repository: <task worktree from scripts/worktree.sh new, never the main checkout> (branch: <current>)
 Artifact directory: <ARTIFACT_DIR> (write your report to report.md here)
 
 Goal: <one-sentence goal>.
@@ -92,12 +94,12 @@ Acceptance criteria:
 
 Constraints:
 - pnpm only; follow the layered architecture (components → hooks → fn → data-access → db).
-- fn/ files use "use server" + Zod; every data-access function calls an auth guard.
+- Server Action files in fn/ use "use server" + Zod; non-action helpers (with-action.ts, *-core.ts) must not; normal data-access functions call an auth guard and keep org-scope-ok seams.
 - Do not read or edit .env* files; do not log PII; kebab-case files; no file over 1000 lines.
 - Do not commit, push, deploy, edit global config, or touch staging/main.
 - Follow existing patterns in <reference files>; do not change <files to avoid>.
 
-Verification: run `pnpm lint` and `pnpm typecheck`; run <focused test> if relevant.
+Verification: run `pnpm verify:static`; run <focused test> if relevant.
 
 Report format: files changed, verification results, and any unresolved questions.
 ```

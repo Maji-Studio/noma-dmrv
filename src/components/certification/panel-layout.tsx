@@ -17,7 +17,7 @@ export function Field({
 }) {
   return (
     <dl className="flex flex-col gap-2">
-      <dt className="body-caption text-[var(--color-text-tertiary)] uppercase tracking-wide">
+      <dt className="body-caption text-[var(--color-text-tertiary)]">
         {label}
       </dt>
       <dd className="flex flex-col gap-2">{children}</dd>

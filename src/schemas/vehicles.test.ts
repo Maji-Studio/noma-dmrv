@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { VEHICLE_TYPE_OPTIONS, formatVehicleType } from "./vehicles";
+import { FUEL_TYPE_OPTIONS, VEHICLE_TYPE_OPTIONS, vehicleFormSchema, formatVehicleType, selectOptionsForStoredValue } from "./vehicles";
 
 describe("formatVehicleType", () => {
   it("maps every stored slug to its option label", () => {
@@ -18,5 +18,39 @@ describe("formatVehicleType", () => {
 
   it("returns an empty string for blank input", () => {
     expect(formatVehicleType("   ")).toBe("");
+  });
+});
+
+describe("selectOptionsForStoredValue", () => {
+  it("maps a stored fuel type to its option in any case", () => {
+    const field = selectOptionsForStoredValue(FUEL_TYPE_OPTIONS, "diesel", { ignoreCase: true });
+    expect(field.value).toBe("Diesel");
+    expect(field.options).toBe(FUEL_TYPE_OPTIONS);
+  });
+
+  it("keeps a stored value no option matches as an extra option", () => {
+    const field = selectOptionsForStoredValue(FUEL_TYPE_OPTIONS, "LPG", { ignoreCase: true });
+    expect(field.value).toBe("LPG");
+    expect(field.options.at(-1)).toEqual({ value: "LPG", label: "LPG" });
+  });
+
+  it("keeps a vehicle type exactly as stored when only its case differs", () => {
+    const field = selectOptionsForStoredValue(VEHICLE_TYPE_OPTIONS, "Truck", { ignoreCase: false });
+    expect(field.value).toBe("Truck");
+    expect(field.options.map((option) => option.value)).toContain("Truck");
+  });
+
+  it("leaves a blank value blank", () => {
+    expect(selectOptionsForStoredValue(FUEL_TYPE_OPTIONS, null, { ignoreCase: true }).value).toBe("");
+  });
+});
+
+describe("vehicle model year", () => {
+  const nextYear = new Date().getFullYear() + 1;
+  it.each([1899, 2020.5, 99999999999, nextYear + 1])("rejects %s", (modelYear) => {
+    expect(vehicleFormSchema.shape.modelYear.safeParse(modelYear).success).toBe(false);
+  });
+  it.each([1900, nextYear, null, undefined])("accepts %s", (modelYear) => {
+    expect(vehicleFormSchema.shape.modelYear.safeParse(modelYear).success).toBe(true);
   });
 });

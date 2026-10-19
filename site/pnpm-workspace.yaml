@@ -1,0 +1,9 @@
+packages:
+  - "."
+
+# Standalone on purpose: joining the root workspace pulls the app's Vitest onto Vite 8 (docs/site.md).
+minimumReleaseAge: 4320
+
+allowBuilds:
+  esbuild: true
+  sharp: true

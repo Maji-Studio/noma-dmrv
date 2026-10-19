@@ -1,9 +1,10 @@
 /** Application side-sheet view mode: the sections config for EntitySideSheet. */
+import { MIX_BIN_CREDIT_HOLD_NOTICE } from "@/lib/application-guidance";
 import { ApplicationAllocationShares } from "./application-allocation-shares";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatDate } from "@/lib/format-utils";
+import { formatCalendarDate } from "@/lib/format-utils";
 import { formatApplicationEvidenceMethod, formatApplicationMethod, formatSoilTemperatureSource, type ApplicationEvidenceMethod, type ApplicationMethod, type SoilTemperatureSource } from "@/schemas/applications";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import { ApplicationStorageLocationSync } from "./application-storage-location-sync";
@@ -22,9 +23,6 @@ export interface ApplicationSheetContext {
   durabilityOption: string;
 }
 
-/** Mix-bin biochar is recorded as usual but feeds no credit batch until the PDD covers mixing (ADR 0030). */
-const MIX_BIN_CREDIT_HOLD_NOTICE = "Not in a credit batch: this biochar was drawn from a mix bin. Mix-bin biochar is held out of credit batches until the project design document (PDD) covers mixing.";
-
 /** "-8.1, 35.2", or null when either coordinate is missing. */
 function formatFieldPosition(
   latitude: number | null,
@@ -39,7 +37,7 @@ export function applicationSheetSections(application: ApplicationListItem, conte
     {
       title: "Application details",
       fields: [
-        { label: "Application date", value: formatDate(application.applicationDate) },
+        { label: "Application date", value: formatCalendarDate(application.applicationDate) },
         {
           label: "Delivery source",
           value: context.delivery
@@ -51,7 +49,7 @@ export function applicationSheetSections(application: ApplicationListItem, conte
             : null,
         },
         {
-          label: "Biochar product applied (kg)",
+          label: "Biochar product applied",
           ...certificationDetailField("application", "biocharAppliedTons"),
           value: application.biocharAppliedTons != null
             ? formatApplicationKgFromTons(application.biocharAppliedTons)
@@ -109,6 +107,9 @@ export function applicationSheetSections(application: ApplicationListItem, conte
       ],
       content: (
         <ApplicationEvidencePanel
+          applicationId={application.id}
+          // The Supporting evidence panel below carries the sheet's one lock notice.
+          hideLockNotice
           mode={(application.evidenceMethod ?? "location") as ApplicationEvidenceMethod}
           boundary={application.gisBoundary ?? null}
           readOnly
@@ -117,7 +118,7 @@ export function applicationSheetSections(application: ApplicationListItem, conte
     },
     {
       title: "Supporting evidence",
-      fields: context.lock.data ? [{ label: "Certification", value: "Application fields are locked by certification. Supporting uploads are saved separately; including new evidence requires a Removal evidence review." }] : context.lock.isPending ? [{ label: "Certification", value: "Checking whether Application fields can be edited." }] : [],
+      fields: context.lock.isPending ? [{ label: "Certification", value: "Checking whether Application fields can be edited." }] : [],
       content: (
         <>
           {context.lock.error && (

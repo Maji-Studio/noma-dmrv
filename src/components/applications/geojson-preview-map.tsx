@@ -22,6 +22,9 @@ import type {
 } from "@/lib/geojson/types";
 
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
+const DEFAULT_BASEMAP_STYLE_URL = MAPTILER_KEY
+  ? maptilerStyleUrl(MAPTILER_KEY)
+  : undefined;
 const SAT_SOURCE_ID = `${OWN_LAYER_PREFIX}sat`;
 const SAT_LAYER_ID = `${OWN_LAYER_PREFIX}sat-layer`;
 const DATA_SOURCE_ID = `${OWN_LAYER_PREFIX}boundary`;
@@ -43,14 +46,24 @@ function tokenColor(name: string, fallback: string): string {
   return value || fallback;
 }
 
+type MapRenderState = "loading" | "ready" | "error";
+
 export interface GeoJsonPreviewMapProps {
   collection: GisBoundaryCollection;
   bbox: GisBoundaryBbox;
+  /**
+   * Basemap style URL. Defaults to the MapTiler style when
+   * NEXT_PUBLIC_MAPTILER_KEY is set, otherwise no map renders. The E2E map
+   * smoke page (src/app/e2e/map-smoke) passes a fixture style so CI can
+   * render real vector tiles without a key.
+   */
+  basemapStyleUrl?: string;
 }
 
 export default function GeoJsonPreviewMap({
   collection,
   bbox,
+  basemapStyleUrl = DEFAULT_BASEMAP_STYLE_URL,
 }: GeoJsonPreviewMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -58,16 +71,20 @@ export default function GeoJsonPreviewMap({
   const pendingRef = useRef({ collection, bbox });
   const [satOn, setSatOn] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
+  // Settles on the first idle after load: "ready" when every tile rendered,
+  // "error" when a tile or source failed on the way. Exposed as
+  // data-map-state for the E2E map smoke test.
+  const [mapState, setMapState] = useState<MapRenderState>("loading");
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !MAPTILER_KEY) return;
+    if (!container || !basemapStyleUrl) return;
 
     let map: maplibregl.Map;
     try {
       map = new maplibregl.Map({
         container,
-        style: maptilerStyleUrl(MAPTILER_KEY),
+        style: basemapStyleUrl,
         center: DEFAULT_MAP_CENTER,
         zoom: DEFAULT_MAP_ZOOM,
         attributionControl: { compact: true },
@@ -87,11 +104,13 @@ export default function GeoJsonPreviewMap({
     };
     const loadTimer = setTimeout(failIfUnloaded, STYLE_LOAD_TIMEOUT_MS);
     let styleParsed = false;
+    let renderFailed = false;
     map.once("styledata", () => {
       styleParsed = true;
     });
     map.on("error", () => {
       if (!styleParsed) failIfUnloaded();
+      else renderFailed = true;
     });
 
     map.once("load", () => {
@@ -132,6 +151,7 @@ export default function GeoJsonPreviewMap({
 
       loadedRef.current = true;
       fitTo(map, pendingRef.current.bbox, false);
+      map.once("idle", () => setMapState(renderFailed ? "error" : "ready"));
     });
 
     return () => {
@@ -140,7 +160,7 @@ export default function GeoJsonPreviewMap({
       mapRef.current = null;
       map.remove();
     };
-  }, []);
+  }, [basemapStyleUrl]);
 
   useEffect(() => {
     pendingRef.current = { collection, bbox };
@@ -161,7 +181,7 @@ export default function GeoJsonPreviewMap({
     map.setLayoutProperty(SAT_LAYER_ID, "visibility", next ? "visible" : "none");
   };
 
-  if (!MAPTILER_KEY || mapFailed) {
+  if (!basemapStyleUrl || mapFailed) {
     return (
       <div className="flex h-full items-center justify-center bg-[var(--color-background-light)] px-16 text-center">
         <span className="body-caption text-[var(--color-text-tertiary)]">
@@ -177,6 +197,7 @@ export default function GeoJsonPreviewMap({
         ref={containerRef}
         className="h-full w-full bg-[var(--color-background-white)]"
         data-testid="geojson-preview-map"
+        data-map-state={mapState}
       />
       <MapControls
         onZoomIn={() => mapRef.current?.zoomIn()}

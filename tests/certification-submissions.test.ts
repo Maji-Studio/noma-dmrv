@@ -1,4 +1,8 @@
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { insertRemovalFixture } from "./helpers/removal-fixture";
+import { activityEvents } from "@/db/schema/activity";
+import { listEntityActivity } from "@/data-access/activity-events";
+import { masterDataVersion } from "./helpers/master-data-version";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed tests for `claimSubmissionDraft` (the submission-ledger claim
  * module). Per ADR 0008 these run against real Postgres — the module's
@@ -15,8 +19,6 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   claimSubmissionDraft,
-  insertDraftSubmissionWithMappingLock,
-  resetSubmissionToDraftWithMappingLock,
   type ClaimOutcome,
   type ClaimSubmissionDraftArgs,
   type MappingClaimGuard,
@@ -29,6 +31,9 @@ import {
   certifierRemovals,
 } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
+import { creditBatches } from "@/db/schema/credits";
+import { feedstockTypes } from "@/db/schema/feedstock";
+import { productionProcesses } from "@/db/schema/production-processes";
 import { acquireFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
 import { markSubmissionRejected } from "@/data-access/certification";
 import { updateFacility } from "@/data-access/facilities";
@@ -51,6 +56,10 @@ const createdEntityIds: string[] = [];
 
 afterAll(async () => {
   if (createdEntityIds.length > 0) {
+    await db.delete(activityEvents).where(and(
+      eq(activityEvents.organizationId, TEST_ORG_ID),
+      inArray(activityEvents.entityId, createdEntityIds),
+    ));
     await db
       .delete(certificationSubmissions)
       .where(inArray(certificationSubmissions.localEntityId, createdEntityIds));
@@ -89,7 +98,7 @@ async function createFixture(
   const externalProjectId = `prj_claim_${runId}`;
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Claim Test Facility ${runId}`,
       code: `FAC-CL-${runId}`,
@@ -98,6 +107,7 @@ async function createFixture(
     .returning({ id: facilities.id });
   createdFacilityIds.push(facility.id);
   await db.insert(certifierProjects).values({
+    externalFacilityId: `fcl_test_${facility.id}`,
     organizationId: TEST_ORG_ID,
     facilityId: facility.id,
     provider: PROVIDER,
@@ -108,14 +118,11 @@ async function createFixture(
   const localEntityId =
     entityType === "removal"
       ? (
-          await db
-            .insert(certifierRemovals)
-            .values({
+          await insertRemovalFixture(db, {
               organizationId: TEST_ORG_ID,
               facilityId: facility.id,
               provider: PROVIDER,
             })
-            .returning({ id: certifierRemovals.id })
         )[0].id
       : (
           await db
@@ -242,9 +249,83 @@ async function whileHoldingMappingLock(
 }
 
 
+async function withPinnedBatch(
+  facilityId: string,
+  removalTemplateId: string,
+  run: (creditBatchId: string) => Promise<void>,
+): Promise<void> {
+  const runId = crypto.randomUUID().slice(0, 8);
+  const [feedstockType] = await db.insert(feedstockTypes).values({
+    organizationId: TEST_ORG_ID, code: `FT-CL-${runId}`, category: "forestry", name: `Claim pin ${runId}`, usage: "pyrolysis",
+  }).returning({ id: feedstockTypes.id });
+  const [process] = await db.insert(productionProcesses).values({
+    organizationId: TEST_ORG_ID, facilityId, feedstockTypeId: feedstockType.id,
+  }).returning({ id: productionProcesses.id });
+  const [batch] = await db.insert(creditBatches).values({
+    organizationId: TEST_ORG_ID, facilityId, code: `CB-CL-${runId}`, feedstockTypeId: feedstockType.id,
+    productionProcessId: process.id, startDate: "2026-09-01", endDate: "2026-09-30", removalTemplateId,
+  }).returning({ id: creditBatches.id });
+  try {
+    await run(batch.id);
+  } finally {
+    await db.delete(creditBatches).where(eq(creditBatches.id, batch.id));
+    await db.delete(productionProcesses).where(eq(productionProcesses.id, process.id));
+    await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockType.id));
+  }
+}
+
 beforeAll(() => ensureTestOrg());
 
 describe("claimSubmissionDraft — create path", () => {
+  it("throws when a member batch's Removal template pin changed under the lock", async () => {
+    const fixture = await createFixture();
+    await withPinnedBatch(fixture.facilityId, "rvt_pinned", async (creditBatchId) => {
+      await db
+        .update(creditBatches)
+        .set({ removalTemplateId: "rvt_other" })
+        .where(eq(creditBatches.id, creditBatchId));
+
+      await expect(
+        claimSubmissionDraft(
+          makeTestOrgContext(USER_ID),
+          baseArgs(fixture, {
+            guard: {
+              ...fixture.guard,
+              expectedRemovalTemplatePin: { creditBatchIds: [creditBatchId], templateId: "rvt_pinned" },
+            },
+          }),
+        ),
+      ).rejects.toMatchObject({
+        message: expect.stringMatching(/template changed/i),
+      });
+      expect(await listRows(fixture.key)).toHaveLength(0);
+    });
+  });
+
+  it("ignores the facility default Removal template", async () => {
+    const fixture = await createFixture();
+    await withPinnedBatch(fixture.facilityId, "rvt_pinned", async (creditBatchId) => {
+      await db
+        .update(certifierProjects)
+        .set({ defaultRemovalTemplateId: "rvt_other" })
+        .where(eq(certifierProjects.facilityId, fixture.facilityId));
+
+      // A default change only affects batches created afterwards.
+      const outcome = await claimSubmissionDraft(
+        makeTestOrgContext(USER_ID),
+        baseArgs(fixture, {
+          guard: {
+            ...fixture.guard,
+            expectedRemovalTemplatePin: { creditBatchIds: [creditBatchId], templateId: "rvt_pinned" },
+          },
+        }),
+      );
+
+      expect(outcome).toMatchObject({ kind: "claimed", resumed: false });
+      expect(await listRows(fixture.key)).toHaveLength(1);
+    });
+  });
+
   it("claims a v=1 draft on first submit and persists the built snapshot", async () => {
     const fixture = await createFixture();
 
@@ -470,7 +551,7 @@ describe("claimSubmissionDraft — concurrency (the GHG drift regression)", () =
       const tierEditPromise = updateFacility(
         makeTestOrgContext(USER_ID),
         fixture.facilityId,
-        { durabilityOption: "1000_year" },
+        { expectedVersion: await masterDataVersion(makeTestOrgContext(USER_ID), "facilities", fixture.facilityId), durabilityOption: "1000_year" },
       );
       tierEditPromise.then(
         () => {
@@ -528,46 +609,43 @@ describe("claimSubmissionDraft — concurrency (the GHG drift regression)", () =
     expect(await listRows(fixture.key)).toHaveLength(0);
   });
 
-  it("refuses telemetry continuation when local-draft discard wins the artifact race", async () => {
+  it("refuses a Removal claim when local-draft discard wins the artifact race", async () => {
     const fixture = await createFixture();
     const ctx = makeTestOrgContext(USER_ID);
-    let telemetryContinued = false;
-    let claimPromise!: Promise<unknown>;
+    let claimContinued = false;
+    let claimPromise!: Promise<ClaimOutcome>;
+    let markAnchorRead!: () => void;
+    const anchorRead = new Promise<void>((resolve) => {
+      markAnchorRead = resolve;
+    });
 
     await db.transaction(async (tx) => {
       await acquireFacilityDurabilityLock(ctx, tx, fixture.facilityId);
-      claimPromise = insertDraftSubmissionWithMappingLock(
+      claimPromise = claimSubmissionDraft(
         ctx,
-        {
-          ...fixture.key,
-          submissionType: "dataUpload",
-          version: 1,
-          payloadSnapshot: { semantic: {} },
-          payloadHash: "hash:telemetry",
-        },
-        fixture.guard,
-      ).then((row) => {
-        telemetryContinued = true;
-        return row;
+        baseArgs(fixture, {
+          hashOf: (inputs) => {
+            // Hashing follows the optimistic anchor read. Discard must win
+            // after that read to exercise the re-check under the artifact lock.
+            markAnchorRead();
+            return hashOf(inputs);
+          },
+        }),
+      ).then((outcome) => {
+        claimContinued = true;
+        return outcome;
       });
       claimPromise.catch(() => {});
 
-      // The telemetry claim passes its optimistic anchor read, then parks on
-      // the facility lock. Discard commits before telemetry can take the
-      // shared artifact lock and perform its authoritative anchor re-check.
-      await sleep(PARK_DELAY_MS);
+      await anchorRead;
       await expect(
-        discardLocalRemovalDraft(
-          ctx,
-          fixture.facilityId,
-          fixture.key.localEntityId,
-        ),
+        discardLocalRemovalDraft(ctx, fixture.facilityId, fixture.key.localEntityId),
       ).resolves.toEqual({ releasedSliceCount: 0 });
     });
 
     await expect(claimPromise).rejects.toThrow(/not found in this organization/i);
-    expect(telemetryContinued).toBe(false);
-    expect(await listRows({ ...fixture.key, submissionType: "dataUpload" })).toEqual([]);
+    expect(claimContinued).toBe(false);
+    expect(await listRows(fixture.key)).toEqual([]);
   });
 });
 
@@ -622,6 +700,22 @@ describe("claimSubmissionDraft — in-lock re-resolution", () => {
 });
 
 describe("claimSubmissionDraft — resume", () => {
+  it("records rejected to draft when another user retries the same payload", async () => {
+    const fixture = await createFixture("ghgStatement");
+    const seeded = await seedRow(fixture.key, {
+      version: 1, status: "rejected", payloadHash: "hash:v-original",
+    });
+    const retryCtx = makeTestOrgContext("retrying-user");
+    const outcome = await claimSubmissionDraft(retryCtx, baseArgs(fixture));
+    expect(outcome).toMatchObject({ kind: "claimed", resumed: true, row: { id: seeded.id, status: "draft" } });
+    const history = await listEntityActivity(retryCtx, "ghg_statement", seeded.localEntityId);
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      fromStatus: "rejected", toStatus: "draft", actorUserId: retryCtx.userId,
+      submissionRef: { submissionId: seeded.id },
+    });
+  });
+
   it("CAS-resumes a TTL-stale draft without calling resolve or buildSnapshot", async () => {
     const fixture = await createFixture();
     const staleLockedAt = new Date(Date.now() - STALE_LOCK_OFFSET_MS);
@@ -666,6 +760,7 @@ describe("claimSubmissionDraft — resume", () => {
     expect(outcome.row.lockedAt!.getTime()).toBeGreaterThan(
       staleLockedAt.getTime(),
     );
+    expect(await listEntityActivity(makeTestOrgContext(USER_ID), "removal", seeded.localEntityId)).toEqual([]);
     // The stored payloadSnapshot stays authoritative on resume.
     expect(resolveCalled).toBe(false);
     expect(buildSnapshotCalled).toBe(false);
@@ -726,46 +821,6 @@ describe("claimSubmissionDraft — resume", () => {
         metadata: { externalMutation: "confirmed", retained: true },
       },
     });
-  });
-
-  it("atomically resets a fresh interrupted telemetry draft exactly once", async () => {
-    const fixture = await createFixture();
-    const telemetryKey = { ...fixture.key, submissionType: "dataUpload" };
-    const seeded = await seedRow(telemetryKey, {
-      version: 1,
-      status: "draft",
-      payloadHash: "hash:v-original",
-      lockedAt: new Date(),
-      metadata: {
-        lastAttemptOutcome: "interrupted",
-        externalMutation: "confirmed",
-      },
-    });
-
-    const attempts = await Promise.allSettled([
-      resetSubmissionToDraftWithMappingLock(
-        makeTestOrgContext(USER_ID),
-        seeded.id,
-        fixture.guard,
-        LOCK_TTL_MS,
-      ),
-      resetSubmissionToDraftWithMappingLock(
-        makeTestOrgContext(USER_ID),
-        seeded.id,
-        fixture.guard,
-        LOCK_TTL_MS,
-      ),
-    ]);
-
-    expect(attempts.filter((attempt) => attempt.status === "fulfilled")).toHaveLength(1);
-    expect(attempts.filter((attempt) => attempt.status === "rejected")).toHaveLength(1);
-    const [stored] = await listRows(telemetryKey);
-    expect(stored).toMatchObject({
-      id: seeded.id,
-      status: "draft",
-      metadata: { externalMutation: "confirmed" },
-    });
-    expect(stored.metadata).not.toHaveProperty("lastAttemptOutcome");
   });
 
   it("resolves to existing — not a draft revert — when the row flips to submitted while parked in the resume path", async () => {

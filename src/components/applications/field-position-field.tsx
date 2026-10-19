@@ -1,19 +1,22 @@
 "use client";
 
-import { FormField, FormSelect, PositionPicker } from "@/components/forms";
-import type { PositionValue } from "@/components/forms";
+import { FormError } from "@/components/forms/form-error";
+import { FormField } from "@/components/forms/form-field";
+import { RequiredMarker } from "@/components/forms/required-marker";
+import { PositionPicker, type PositionValue } from "@/components/forms/position-picker";
+import { SegmentedControl } from "@/components/forms/segmented-control";
 
 export type FieldPositionMode = "derive" | "manual";
 
 const MODE_OPTIONS: readonly { value: FieldPositionMode; label: string }[] = [
-  { value: "derive", label: "Derive from customer" },
+  { value: "derive", label: "From customer" },
   { value: "manual", label: "Set manually" },
 ];
 
-const MODE_HELPER: Record<FieldPositionMode, string> = {
-  derive: "Follows the delivery destination, and updates if you change it.",
-  manual: "Search an address, click the map, or type the coordinates.",
-};
+/** Deriving has a consequence the operator needs to see: the position moves with the delivery. */
+const DERIVE_CUE = "Follows the delivery destination, and updates if you change it.";
+/** Entering by hand only needs an explanation, behind the ⓘ. */
+const MANUAL_HELPER = "Search an address, click the map, or type the coordinates.";
 
 export interface DerivedPosition {
   gpsLatitude: number;
@@ -61,6 +64,7 @@ export function FieldPositionField({
   latitudeError,
   longitudeError,
   disabled = false,
+  required = false,
   mode,
   onModeChange,
   onPositionChange,
@@ -73,6 +77,8 @@ export function FieldPositionField({
   latitudeError?: string;
   longitudeError?: string;
   disabled?: boolean;
+  /** The pin is needed to save: true while the evidence method is Customer location. */
+  required?: boolean;
   mode: FieldPositionMode;
   onModeChange: (mode: FieldPositionMode) => void;
   onPositionChange: (position: PositionValue) => void;
@@ -84,19 +90,17 @@ export function FieldPositionField({
         <FormField
           id="fieldPositionMode"
           label="Field position"
-          helperText={MODE_HELPER[mode]}
+          cue={mode === "derive" ? DERIVE_CUE : undefined}
+          helperText={mode === "manual" ? MANUAL_HELPER : undefined}
         >
-          <FormSelect
+          <SegmentedControl
             id="fieldPositionMode"
+            legend="Field position"
             disabled={disabled}
             options={MODE_OPTIONS}
             value={mode}
-            onChange={(event) =>
-              applyFieldPositionMode(
-                event.target.value as FieldPositionMode,
-                onModeChange,
-                onDerive,
-              )
+            onValueChange={(next) =>
+              applyFieldPositionMode(next as FieldPositionMode, onModeChange, onDerive)
             }
           />
         </FormField>
@@ -105,6 +109,7 @@ export function FieldPositionField({
           <div className="flex flex-col gap-4">
             <span className="body-small text-[var(--color-text-secondary)]">
               Customer location
+              {required && <RequiredMarker />}
             </span>
             <span className="body-small font-medium text-[var(--color-text-primary)]">
               {derived
@@ -120,6 +125,7 @@ export function FieldPositionField({
                   : "Choose a delivery in step 1 and the position follows its destination."}
               </span>
             )}
+            <FormError id="derivedPosition-error" message={latitudeError ?? longitudeError} />
           </div>
         )}
       </div>
@@ -135,6 +141,7 @@ export function FieldPositionField({
           latitudeError={latitudeError}
           longitudeError={longitudeError}
           disabled={disabled}
+          required={required}
         />
       )}
     </div>

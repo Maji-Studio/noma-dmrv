@@ -5,51 +5,34 @@
  * Server-side functions for delivery CRUD operations
  */
 
+import { DomainError } from "@/lib/domain-errors";
 import {
-  CODE_CONFLICT_MESSAGES,
-  withAutoCode,
-} from "@/data-access/code-generator";
-import {
-  createDelivery,
-  deleteDelivery,
   getDeliveries as getDeliveriesData,
   getDeliveryWithRelations as getDeliveryWithRelationsData,
-  updateDelivery,
+  type CreatedDelivery,
   type DeliveryDetail,
   type PaginatedDeliveries,
+  type UpdatedDelivery,
 } from "@/data-access/deliveries";
+import { recordDeliveryForUi, updateDelivery, deletePostedDelivery } from "@/lib/operations/deliveries";
 import {
   getDeliveryStats as getDeliveryStatsData,
   type DeliveryStats,
 } from "@/data-access/delivery-stats";
 import { requireOrgFacility } from "@/data-access/utils";
-import { deliveries as deliveriesTable, type Delivery } from "@/db/schema";
-import { requireOrgContext } from "@/lib/auth/server";
 import {
   createDeliverySchema,
+  deliveryOperationInput,
+  deliveryOperationFieldAliases,
   deleteDeliverySchema,
   deliveryFilterSchema,
   resolveDeliveryDistanceSource,
   updateDeliverySchema,
 } from "@/schemas/deliveries";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import { withAction } from "./with-action";
 import type { ActionResult } from "@/types/actions";
 import { z } from "zod";
-import {
-  formatZodActionError,
-  toLoggedActionError,
-} from "./action-errors";
-
-function deliveryActionError(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): string {
-  return toLoggedActionError(error, fallbackMessage, {
-    message: "delivery action failed",
-    context: { op },
-  });
-}
 
 const deliveryStatsFilterSchema = z.object({
   facilityId: z.string().uuid().optional(),
@@ -68,9 +51,7 @@ const deliveryStatsFilterSchema = z.object({
 export async function getDeliveriesFn(
   filters?: Partial<z.infer<typeof deliveryFilterSchema>>
 ): Promise<ActionResult<PaginatedDeliveries>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedFilters = filters
       ? deliveryFilterSchema.parse(filters)
       : undefined;
@@ -79,23 +60,12 @@ export async function getDeliveriesFn(
     }
     const deliveries = await getDeliveriesData(ctx, validatedFilters);
 
-    return { success: true, data: deliveries };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error, "Invalid filter parameters"),
-      };
-    }
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to load deliveries",
-        "delivery:list",
-      ),
-    };
-  }
+    return deliveries;
+  }, {
+    fallbackMessage: "Failed to load deliveries",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: "delivery action failed", context: { op: "delivery:list" } },
+  });
 }
 
 /**
@@ -104,21 +74,13 @@ export async function getDeliveriesFn(
 export async function getDeliveryWithRelationsFn(
   deliveryId: string
 ): Promise<ActionResult<DeliveryDetail>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const delivery = await getDeliveryWithRelationsData(ctx, deliveryId);
-    return { success: true, data: delivery };
-  } catch (error) {
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to load delivery details",
-        "delivery:detail",
-      ),
-    };
-  }
+    return delivery;
+  }, {
+    fallbackMessage: "Failed to load delivery details",
+    log: { message: "delivery action failed", context: { op: "delivery:detail" } },
+  });
 }
 
 /**
@@ -132,25 +94,17 @@ export async function getDeliveryStatsFn(
     toDate?: Date;
   }
 ): Promise<ActionResult<DeliveryStats>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedFilters = deliveryStatsFilterSchema.parse(filters);
     if (validatedFilters?.facilityId) {
       await requireOrgFacility(ctx, validatedFilters.facilityId);
     }
     const stats = await getDeliveryStatsData(ctx, validatedFilters);
-    return { success: true, data: stats };
-  } catch (error) {
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to load delivery stats",
-        "delivery:stats",
-      ),
-    };
-  }
+    return stats;
+  }, {
+    fallbackMessage: "Failed to load delivery stats",
+    log: { message: "delivery action failed", context: { op: "delivery:stats" } },
+  });
 }
 
 // ============================================
@@ -162,41 +116,20 @@ export async function getDeliveryStatsFn(
  */
 export async function createDeliveryFn(
   data: z.infer<typeof createDeliverySchema>
-): Promise<ActionResult<Delivery>> {
+): Promise<ActionResult<CreatedDelivery>> {
   return withAction(async (ctx) => {
-    const delivery = await withAutoCode(
-      ctx,
-      "DL",
-      deliveriesTable,
-      deliveriesTable.code,
-      data.code,
-      async (code) => {
-        const validated = createDeliverySchema.parse({ ...data, code });
-        return createDelivery(ctx, {
-          code,
-          orderId: validated.orderId,
-          facilityId: validated.facilityId,
-          deliveryDate: validated.deliveryDate,
-          storageLocationId: validated.storageLocationId,
-          idempotencyKey: validated.idempotencyKey,
-          basisFingerprint: validated.basisFingerprint,
-          driverId: validated.driverId ?? null,
-          vehicleId: validated.vehicleId ?? null,
-          status: validated.status,
-          deliveredWetMassKg: validated.deliveredWetMassKg ?? null,
-          moistureContentPercent: validated.moistureContentPercent,
-          sources: validated.sources,
-          distanceKmOverride: validated.distanceKmOverride ?? null,
-          distanceSource: resolveDeliveryDistanceSource(
-            validated.distanceKmOverride ?? null,
-            validated.distanceSource,
-          ),
-          distanceNote: validated.distanceNote || null,
-          tripType: validated.tripType ?? undefined,
+    let delivery: CreatedDelivery;
+    try {
+      ({ delivery } = await runOperationInProcess(recordDeliveryForUi, ctx, deliveryOperationInput(createDeliverySchema.parse(data))));
+    } catch (error) {
+      if (error instanceof DomainError) {
+        throw new DomainError(error.code, error.message, {
+          ...error,
+          issues: error.issues.map(issue => ({ ...issue, path: issue.path.map((part, index) => index === 0 && typeof part === "string" ? (deliveryOperationFieldAliases as Readonly<Record<string, string>>)[part] ?? part : part) })),
         });
-      },
-      CODE_CONFLICT_MESSAGES.delivery,
-    );
+      }
+      throw error;
+    }
 
     return delivery;
   }, {
@@ -214,13 +147,17 @@ export async function createDeliveryFn(
  */
 export async function updateDeliveryFn(
   data: z.infer<typeof updateDeliverySchema>
-): Promise<ActionResult<Delivery>> {
-  try {
-    const ctx = await requireOrgContext();
+): Promise<ActionResult<UpdatedDelivery>> {
+  return withAction(async (ctx) => {
 
     const validated = updateDeliverySchema.parse(data);
 
     const delivery = await updateDelivery(ctx, validated.deliveryId, {
+      expectedVersion: validated.expectedVersion,
+      sources: validated.sources,
+      correctsMovementId: validated.correctsMovementId,
+      idempotencyKey: validated.idempotencyKey,
+      basisFingerprint: validated.basisFingerprint,
       code: validated.code,
       orderId: validated.orderId,
       facilityId: validated.facilityId,
@@ -236,27 +173,11 @@ export async function updateDeliveryFn(
         validated.distanceKmOverride,
         validated.distanceSource,
       ),
-      distanceNote: validated.distanceNote || null,
-      tripType: validated.tripType ?? undefined,
+      distanceNote: validated.distanceNote === "" ? null : validated.distanceNote,
     });
 
-    return { success: true, data: delivery };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to update delivery",
-        "delivery:update",
-      ),
-    };
-  }
+    return delivery;
+  }, { fallbackMessage: "Failed to update delivery", log: { message: "delivery action failed", context: { op: "delivery:update" } } });
 }
 
 // ============================================
@@ -269,27 +190,11 @@ export async function updateDeliveryFn(
 export async function deleteDeliveryFn(
   data: z.infer<typeof deleteDeliverySchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = deleteDeliverySchema.parse(data);
-    await deleteDelivery(ctx, validated.deliveryId);
+    await runOperationInProcess(deletePostedDelivery, ctx, validated);
 
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to delete delivery",
-        "delivery:delete",
-      ),
-    };
-  }
+    return;
+  }, { fallbackMessage: "Failed to delete delivery", log: { message: "delivery action failed", context: { op: "delivery:delete" } } });
 }

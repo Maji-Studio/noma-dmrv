@@ -17,6 +17,8 @@ interface FormEntitySelectProps<
 > {
   /** React Hook Form control object */
   control: Control<TFieldValues>;
+  /** Preserve a caller's existing field id. */
+  id?: string;
   /** Field name in the form */
   name: TName;
   /** Label for the field */
@@ -29,6 +31,7 @@ interface FormEntitySelectProps<
   helperText?: string;
   /** Whether the field is disabled */
   disabled?: boolean;
+  selectionLocked?: EntitySelectProps["selectionLocked"];
   /** Whether to allow creating new entities inline */
   allowCreate?: boolean;
   /** Label for the quick-add button */
@@ -63,9 +66,13 @@ interface FormEntitySelectProps<
    * // Multiple dependencies: bin clears when feedstock type OR facility changes
    * <FormEntitySelect dependsOn={[watchedFeedstockTypeId, watchedFacilityId]} ... />
    */
-  dependsOn?: string | null | (string | null | undefined)[];
+  dependsOn?: EntitySelectProps["dependsOn"];
   /** Empty-list hint naming the upstream prerequisite (see EntitySelectProps). */
   emptyHint?: EntitySelectProps["emptyHint"];
+  /** Also available when selection is locked with selectionLocked. */
+  allowEdit?: boolean;
+  onEditSelected?: EntitySelectProps["onEditSelected"];
+  editLabel?: string;
 }
 
 export function FormEntitySelect<
@@ -73,12 +80,14 @@ export function FormEntitySelect<
   TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>
 >({
   control,
+  id: suppliedId,
   name,
   label,
   entityType,
   placeholder,
   helperText,
   disabled = false,
+  selectionLocked = false,
   allowCreate = false,
   createLabel,
   onCreateNew,
@@ -92,8 +101,12 @@ export function FormEntitySelect<
   showRemainingDryMass = true,
   dependsOn,
   emptyHint,
+  allowEdit,
+  onEditSelected,
+  editLabel,
 }: FormEntitySelectProps<TFieldValues, TName>) {
-  const id = useId();
+  const generatedId = useId();
+  const id = suppliedId ?? generatedId;
   const { field, fieldState } = useController({ control, name });
 
   useClearOnDependencyChange(dependsOn, field.onChange);
@@ -110,23 +123,29 @@ export function FormEntitySelect<
         id={id}
         entityType={entityType}
         value={field.value}
+        onBlur={field.onBlur}
         onChange={(value) => {
           field.onChange(value);
           onChange?.(value);
         }}
         placeholder={placeholder}
         disabled={disabled}
+        selectionLocked={selectionLocked}
         error={!!fieldState.error}
         allowCreate={allowCreate}
         createLabel={createLabel}
         onCreateNew={onCreateNew}
         filterBy={filterBy}
+        dependsOn={dependsOn}
         excludeIds={excludeIds}
         autoSelectSingle={autoSelectSingle ?? required}
         alwaysShowSearch={alwaysShowSearch}
         hideSearch={hideSearch}
         showRemainingDryMass={showRemainingDryMass}
         emptyHint={emptyHint}
+        allowEdit={allowEdit}
+        onEditSelected={onEditSelected}
+        editLabel={editLabel}
       />
     </FormField>
   );

@@ -1,5 +1,5 @@
 import { preparePureOutputProductFixture } from "./helpers/output-contract-fixtures";
-import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 /**
  * Integration coverage for the storage-location lane summary (DR-002 /
  * PB-26-001).
@@ -23,7 +23,7 @@ import { deliveries, orders } from "@/db/schema/logistics";
 import { customers } from "@/db/schema/parties";
 import { biocharProducts } from "@/db/schema/products";
 import { storageLocations } from "@/db/schema";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 const BLEND_MASS_KG = 3_000;
 const WATER_ADDED_KG = 1_000;
@@ -53,7 +53,7 @@ beforeAll(async () => {
   fixture = await db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         name: `Lane Facility ${runId}`,
         code: `FAC-LANE-${runId}`,
@@ -134,7 +134,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!fixture) return;
   await deleteOutputDeliveryFixtures(db, inArray(deliveries.id, [fixture.deliveryId]));
-  await db.delete(orders).where(inArray(orders.id, [fixture.orderId]));
+  await deleteOutputOrderFixtures(db, inArray(orders.id, [fixture.orderId]));
   await deleteOutputProductFixtures(db, inArray(biocharProducts.id, [fixture.productId]));
   await db
     .delete(storageLocations)

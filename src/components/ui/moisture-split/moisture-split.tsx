@@ -100,6 +100,12 @@ interface MoistureSplitProps {
    * arithmetic rather than beside the bar.
    */
   note?: string;
+  /**
+   * `detail` only. Width of the bar as a share of its row (default 100), so
+   * several splits stacked in one picture can be drawn to a common mass scale.
+   * The key line below keeps the full row.
+   */
+  barWidthPercent?: number;
   className?: string;
 }
 
@@ -253,10 +259,12 @@ function SplitBar({
   split,
   height,
   addedWaterState,
+  widthPercent = PERCENT_SCALE,
 }: {
   split: MassSplit;
   height: string;
   addedWaterState: AddedWaterState | null;
+  widthPercent?: number;
 }) {
   const widths = segmentWidths(split, addedWaterState);
 
@@ -272,7 +280,8 @@ function SplitBar({
             )
           : describeMassSplit(split)
       }
-      className={`flex w-full overflow-hidden border border-[var(--color-border-secondary)] ${height}`}
+      className={`flex overflow-hidden border border-[var(--color-border-secondary)] ${height}`}
+      style={{ width: `${widthPercent}%` }}
     >
       <div
         aria-hidden="true"
@@ -385,11 +394,12 @@ function formatSplitArithmetic({
   return `${base} Added water raises the wet mass and leaves dry mass unchanged: ${formatSplitMass(split.wetKg)} + ${formatSplitMass(addedWaterState.addedWaterKg)} = ${formatSplitMass(addedWaterState.finalSplit.wetKg)}.`;
 }
 
-function UnresolvedBar({ height }: { height: string }) {
+function UnresolvedBar({ height, widthPercent = PERCENT_SCALE }: { height: string; widthPercent?: number }) {
   return (
     <div
       aria-hidden="true"
-      className={`moisture-water-hatch w-full border border-dashed border-[var(--color-border-secondary)] ${height}`}
+      className={`moisture-water-hatch border border-dashed border-[var(--color-border-secondary)] ${height}`}
+      style={{ width: `${widthPercent}%` }}
     />
   );
 }
@@ -406,6 +416,7 @@ export function MoistureSplit({
   dryLabel,
   finalMoistureLabel,
   note,
+  barWidthPercent,
   className = "",
 }: MoistureSplitProps) {
   const detailed = useFormDetailLevel() === "detailed";
@@ -432,6 +443,7 @@ export function MoistureSplit({
       <div className={`flex flex-col gap-6 ${className}`}>
         <UnresolvedBar
           height={variant === "compact" ? COMPACT_BAR_HEIGHT : BAR_HEIGHT}
+          widthPercent={variant === "compact" ? undefined : barWidthPercent}
         />
         <p
           className="body-caption text-[var(--color-text-tertiary)]"
@@ -502,6 +514,7 @@ export function MoistureSplit({
           split={split}
           height={BAR_HEIGHT}
           addedWaterState={addedWaterState}
+          widthPercent={barWidthPercent}
         />
         <SplitKey
           split={split}

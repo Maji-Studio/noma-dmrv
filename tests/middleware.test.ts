@@ -36,4 +36,69 @@ describe("Auth middleware", () => {
 
     expect(response.status).toBe(200);
   });
+
+  it("lets the MCP route authenticate its own requests, without a session lookup", async () => {
+    getSessionMock.mockClear();
+
+    const { updateSession } = await import("@/lib/auth/middleware");
+    const response = await updateSession(
+      new NextRequest("http://localhost:3100/api/mcp", { method: "POST" }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(getSessionMock).not.toHaveBeenCalled();
+  });
+
+  it.each(["/api/mcpx", "/api/mcp/tools"])(
+    "keeps %s behind the session",
+    async (path) => {
+      getSessionMock.mockResolvedValueOnce(null);
+
+      const { updateSession } = await import("@/lib/auth/middleware");
+      const response = await updateSession(new NextRequest(`http://localhost:3100${path}`));
+
+      expect(response.status).toBe(401);
+    },
+  );
+});
+
+describe("REST proxy carve-out", () => {
+  it.each(["/api/v1", "/api/v1/", "/api/v1/me", "/api/v1/openapi.json", "/api/v1/llms.txt"])("passes %s without session lookup", async (path) => {
+    getSessionMock.mockClear();
+    const { updateSession } = await import("@/lib/auth/middleware");
+    expect((await updateSession(new NextRequest(`http://localhost:3100${path}`))).status).toBe(200);
+    expect(getSessionMock).not.toHaveBeenCalled();
+  });
+  it("ignores an unverified cookie before lookup", async () => {
+    getSessionMock.mockReset();
+    getSessionMock.mockResolvedValue({ user: { emailVerified: false } });
+    const { updateSession } = await import("@/lib/auth/middleware");
+    const response = await updateSession(new NextRequest("http://localhost:3100/api/v1/me", { headers: { cookie: "better-auth.session_token=unverified" } }));
+    expect(response.status).toBe(200);
+    expect(getSessionMock).not.toHaveBeenCalled();
+  });
+  it.each(["/api/v1x", "/api/v10/me"])("does not carve out %s", async (path) => {
+    getSessionMock.mockReset();
+    getSessionMock.mockResolvedValue(null);
+    const { updateSession } = await import("@/lib/auth/middleware");
+    expect((await updateSession(new NextRequest(`http://localhost:3100${path}`))).status).toBe(401);
+    expect(getSessionMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe("cron proxy boundary", () => {
+  it.each(["/api/cron/purge-api-records", "/api/cron/sweep-document-uploads"])("passes %s before looking up a session", async (path) => {
+    getSessionMock.mockReset();
+    const { updateSession } = await import("@/lib/auth/middleware");
+    const response = await updateSession(new NextRequest(`http://localhost${path}`));
+    expect(response.status).toBe(200);
+    expect(getSessionMock).not.toHaveBeenCalled();
+  });
+  it.each(["/api/cron/sweep-document-uploads/", "/api/cron/sweep-document-uploads/child", "/api/cron/sweep-document-uploadsx", "/api/cron", "/api/cron/purge-api-recordsx", "/api/cron/purge-api-records/", "/api/cron/purge-api-records/child"])("protects %s", async (path) => {
+    getSessionMock.mockReset();
+    getSessionMock.mockResolvedValue(null);
+    const { updateSession } = await import("@/lib/auth/middleware");
+    expect((await updateSession(new NextRequest(`http://localhost${path}`))).status).toBe(401);
+    expect(getSessionMock).toHaveBeenCalledOnce();
+  });
 });

@@ -7,17 +7,16 @@
  *
  * Reconciliation contract: each category's `subtotalTkm` equals the scalar
  * submitted to the registry. Feedstock/sample (PRODUCTION bucket) submit the
- * raw leg-sum; biochar (DELIVERY bucket, §8.6.2/ADR 0020) submits leg-sum ×
- * the applied-biochar share, so for a partially-applied removal the model
- * carries the raw sum + fraction in `scaling` and the PDF renders the
- * multiplication explicitly — the per-leg rows still reconcile.
+ * raw leg-sum. Biochar rows carry the Removal's immutable application wet
+ * mass per delivery, so no global applied-share scaling is needed.
  */
+import { SafeError } from "@/lib/errors";
 import type { TransportLeg } from "@/db/schema";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
-import { roundTripDistanceFactor } from "@/schemas/trip-type";
+import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 import {
   aggregateTransportMassDistance,
-  clampFactor,
+  aggregateBiocharTransportMassDistance,
   type TransportLegsByCategory,
 } from "@/lib/isometric/utils/aggregation";
 import type {
@@ -34,13 +33,6 @@ export interface BuildLedgerModelArgs {
   facilityName: string | null;
   externalProjectId: string | null;
   generatedAtIso: string;
-  /**
-   * Removal-wide applied-biochar share (§8.6.2 DELIVERY bucket, ADR 0020) —
-   * pass `appliedBiocharFraction(ctx.runSummary)` so the biochar subtotal
-   * matches the submitted scalar. Omitted / ≥1 ⇒ full application (raw sums,
-   * pre-#349 model shape).
-   */
-  appliedBiocharFraction?: number;
 }
 
 const CATEGORY_META: Record<
@@ -64,7 +56,6 @@ const CATEGORY_META: Record<
 };
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
-const round4 = (n: number): number => Math.round(n * 10_000) / 10_000;
 
 function geoOf(lat: number | null, lng: number | null): string | null {
   if (lat == null || lng == null) return null;
@@ -91,11 +82,10 @@ function buildLeg(leg: TransportLeg, ref: string): LedgerLeg {
   const loadMassKg =
     leg.loadMassKg != null && leg.loadMassKg > 0 ? leg.loadMassKg : 0;
   const massMissing = loadMassKg === 0;
-  // Round-trip legs (#316, §4.2) carry the doubled distance into the t·km so the
-  // per-leg row reconciles to the category subtotal, which
-  // `aggregateTransportMassDistance` also doubles.
-  const factor = roundTripDistanceFactor(leg.tripType);
-  const effectiveDistanceKm = leg.distanceKm * factor;
+  // Every leg counts its round trip (issue #852), so the row carries the
+  // doubled distance into the t·km and reconciles to the category subtotal,
+  // which `aggregateTransportMassDistance` also doubles.
+  const effectiveDistanceKm = countedRoundTripKm(leg.distanceKm);
   const tkm = round2(effectiveDistanceKm * kgToTonnes(loadMassKg));
   const vehicle =
     leg.vehicleType && leg.modelYear
@@ -107,9 +97,9 @@ function buildLeg(leg: TransportLeg, ref: string): LedgerLeg {
     destinationName: leg.destinationName,
     originGeo: geoOf(leg.originGpsLatitude, leg.originGpsLongitude),
     destinationGeo: geoOf(leg.destinationGpsLatitude, leg.destinationGpsLongitude),
+    oneWayDistanceKm: leg.distanceKm,
     distanceKm: effectiveDistanceKm,
     loadMassKg,
-    roundTrip: factor > 1,
     mode: capitalize(leg.transportMethodType),
     vehicle,
     basis: basisOf(leg),
@@ -121,14 +111,15 @@ function buildLeg(leg: TransportLeg, ref: string): LedgerLeg {
 function buildCategory(
   key: LedgerCategoryKey,
   legs: TransportLeg[],
-  // DELIVERY-bucket share — only the biochar category receives one (§8.6.2).
-  appliedFraction?: number,
 ): LedgerCategory {
   const meta = CATEGORY_META[key];
   const builtLegs = legs.map((leg, i) =>
     buildLeg(leg, `${meta.refPrefix}-${String(i + 1).padStart(2, "0")}`),
   );
-  const canonical = aggregateTransportMassDistance(legs, meta.name);
+  const canonical = key === "biochar"
+    ? aggregateBiocharTransportMassDistance(legs)
+    : aggregateTransportMassDistance(legs, meta.name);
+  if (key === "biochar" && canonical.warning) throw new SafeError(canonical.warning);
   const rawTkm = canonical.massDistanceTonneKm ?? 0;
   const canonicalRawSubtotalTkm = round2(rawTkm);
   const displayedRowSumTkm = round2(
@@ -147,37 +138,14 @@ function buildCategory(
       : {}),
   };
 
-  // Mirror the submit pipeline exactly: `enrichWithTransportLegs` scales the
-  // raw sum by the clamped fraction. A fraction ≥ 1 (or none) is full
-  // application — keep the raw subtotal AND omit `scaling` so the content
-  // hash of fully-applied ledgers is unchanged.
-  const fraction = clampFactor(appliedFraction);
-  if (appliedFraction == null || fraction >= 1) {
-    return { ...base, subtotalTkm: canonicalRawSubtotalTkm };
-  }
-  const subtotalTkm = round2(rawTkm * fraction);
-  const displayedScaledSubtotalTkm = round2(
-    canonicalRawSubtotalTkm * round4(fraction),
-  );
-  const displayAdjustmentTkm = round2(
-    subtotalTkm - displayedScaledSubtotalTkm,
-  );
-  return {
-    ...base,
-    subtotalTkm,
-    scaling: {
-      rawSubtotalTkm: canonicalRawSubtotalTkm,
-      appliedFraction: fraction,
-      ...(displayAdjustmentTkm !== 0 ? { displayAdjustmentTkm } : {}),
-    },
-  };
+  return { ...base, subtotalTkm: canonicalRawSubtotalTkm };
 }
 
 export function buildLedgerModel(args: BuildLedgerModelArgs): LedgerModel {
   const { legsByCategory } = args;
   const categories: LedgerCategory[] = [
     buildCategory("feedstock", legsByCategory.feedstock),
-    buildCategory("biochar", legsByCategory.biochar, args.appliedBiocharFraction),
+    buildCategory("biochar", legsByCategory.biochar),
     buildCategory("sample", legsByCategory.sample),
   ];
   const totalTkm = round2(

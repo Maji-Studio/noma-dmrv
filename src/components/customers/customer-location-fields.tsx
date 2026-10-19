@@ -1,17 +1,17 @@
 "use client";
 
+
+import type { FacilityDistanceInput } from "@/schemas/facility-distances";
+import { PartyFacilityDistances } from "@/components/party-facility-distances";
 import { useController, type UseFormReturn } from "react-hook-form";
 import {
-  DistanceCalcField,
   FormField,
   FormInput,
   FormSection,
   FormTextarea,
   PositionPicker,
-  type CertFieldStatus,
 } from "@/components/forms";
-import { useFacilityContext } from "@/hooks/use-facility-context";
-import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import type { Facility } from "@/db/schema";
 import type {
   CustomerLocationFormData,
   CustomerLocationFormInput,
@@ -25,9 +25,14 @@ type CustomerLocationFormApi = UseFormReturn<
 
 interface CustomerLocationFieldsProps {
   form: CustomerLocationFormApi;
+  /** Contextual editors restrict distances to this facility; standalone forms show all active facilities. */
+  facility?: Facility;
   isSubmitting?: boolean;
+  /** The edited location is the party's default; it stays checked until another is set. */
+  isCurrentDefault?: boolean;
   idPrefix?: string;
-  certStatus?: (fieldName: string) => CertFieldStatus;
+  isEditMode?: boolean;
+  savedDistances?: FacilityDistanceInput[];
 }
 
 function fieldId(idPrefix: string | undefined, fieldName: string): string {
@@ -36,9 +41,12 @@ function fieldId(idPrefix: string | undefined, fieldName: string): string {
 
 export function CustomerLocationFields({
   form,
+  facility,
   isSubmitting = false,
+  isCurrentDefault = false,
   idPrefix,
-  certStatus = () => "neutral",
+  isEditMode,
+  savedDistances,
 }: CustomerLocationFieldsProps) {
   const {
     register,
@@ -55,35 +63,14 @@ export function CustomerLocationFields({
     control,
     name: "gpsLongitude",
   });
-  const { field: distanceFromFacilityField } = useController({
-    control,
-    name: "distanceFromFacilityKm",
-  });
-  const { field: distanceSourceField } = useController({
-    control,
-    name: "distanceSource",
-  });
+  const { field: facilityDistancesField } = useController({ control, name: "facilityDistances" });
   const gpsLatitude = gpsLatitudeField.value as number | null | undefined;
   const gpsLongitude = gpsLongitudeField.value as number | null | undefined;
-  const distanceFromFacilityKm = distanceFromFacilityField.value as
-    | number
-    | null
-    | undefined;
-  const distanceSource = distanceSourceField.value;
 
-  // CALC endpoints: the globally selected facility → this destination site.
-  const { selectedFacility } = useFacilityContext();
+  // Each facility row estimates its route to this site.
   const locationPoint =
     gpsLatitude != null && gpsLongitude != null
       ? { lat: gpsLatitude, lng: gpsLongitude }
-      : null;
-  const facilityPoint =
-    selectedFacility?.gpsLatitude != null &&
-    selectedFacility?.gpsLongitude != null
-      ? {
-          lat: selectedFacility.gpsLatitude,
-          lng: selectedFacility.gpsLongitude,
-        }
       : null;
 
   const nameId = fieldId(idPrefix, "name");
@@ -95,7 +82,7 @@ export function CustomerLocationFields({
   const soilTemperatureId = fieldId(idPrefix, "soil-temperature");
   const distanceId = idPrefix
     ? fieldId(idPrefix, "distance")
-    : "distanceFromFacilityKm";
+    : "facilityDistances";
   const defaultId = idPrefix ? fieldId(idPrefix, "default") : "isDefault";
 
   return (
@@ -190,8 +177,8 @@ export function CustomerLocationFields({
           latitude={gpsLatitude ?? null}
           longitude={gpsLongitude ?? null}
           onPositionChange={({ lat, lng }) => {
-            gpsLatitudeField.onChange(lat ?? undefined);
-            gpsLongitudeField.onChange(lng ?? undefined);
+            gpsLatitudeField.onChange(lat);
+            gpsLongitudeField.onChange(lng);
           }}
           latitudeError={errors.gpsLatitude?.message}
           longitudeError={errors.gpsLongitude?.message}
@@ -219,48 +206,43 @@ export function CustomerLocationFields({
       </FormSection>
 
       <FormSection title="Logistics">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <DistanceCalcField
-            id={distanceId}
-            label="One-way distance from facility (per leg, km)"
-            error={errors.distanceFromFacilityKm?.message}
-            certifyRequired={isCertifyFormField(
-              "customerLocation",
-              "distanceFromFacilityKm",
-            )}
-            certifyStatus={certStatus("distanceFromFacilityKm")}
-            helperText="One-way road distance to this site. Return trips are doubled at emissions time; set the trip type on each delivery."
-            disabled={isSubmitting}
-            distanceKm={distanceFromFacilityKm}
-            distanceSource={distanceSource}
-            onDistanceChange={(km, source) => {
-              // `null` is the explicit clear; `undefined` would read as
-              // "field omitted" and leave the stored distance in place.
-              distanceFromFacilityField.onChange(km);
-              distanceSourceField.onChange(source);
-            }}
-            origin={facilityPoint}
-            destination={locationPoint}
-            originLabel="selected facility"
-            destinationLabel="application site position"
-          />
-        </div>
+        <PartyFacilityDistances
+          isEditMode={isEditMode}
+          savedValue={savedDistances}
+          fromFacility
+          idPrefix={distanceId}
+          value={facilityDistancesField.value as FacilityDistanceInput[] | undefined}
+          getValue={() => form.getValues("facilityDistances") as FacilityDistanceInput[] | undefined}
+          onChange={facilityDistancesField.onChange}
+          locationPoint={locationPoint}
+          disabled={isSubmitting}
+          error={errors.facilityDistances?.message}
+          rowErrors={errors.facilityDistances}
+          facility={facility}
+        />
 
-        <label
-          htmlFor={defaultId}
-          className="flex items-center gap-12 cursor-pointer"
-        >
-          <input
-            type="checkbox"
-            id={defaultId}
-            className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
-            disabled={isSubmitting}
-            {...register("isDefault")}
-          />
-          <span className="body-medium text-[var(--color-text-primary)]">
-            Set as default destination
-          </span>
-        </label>
+        <div className="flex flex-col gap-4">
+          <label
+            htmlFor={defaultId}
+            className="flex items-center gap-12 cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              id={defaultId}
+              className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
+              disabled={isSubmitting || isCurrentDefault}
+              {...register("isDefault")}
+            />
+            <span className="body-medium text-[var(--color-text-primary)]">
+              Set as default destination
+            </span>
+          </label>
+          {isCurrentDefault ? (
+            <p className="body-caption text-[var(--color-text-tertiary)]">
+              To change the default, set another location as default.
+            </p>
+          ) : null}
+        </div>
       </FormSection>
     </>
   );

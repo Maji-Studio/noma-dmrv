@@ -26,11 +26,15 @@ export type OutputStockRequest =
   | { kind: 'ordered'; wetKg: Decimal; sources: readonly OrderedSource[] };
 export interface OrderedSource { layerId: string; moisturePercent: Decimal }
 /**
- * How a removal is attributed to layers: oldest first, or, in a mix bin, from
+ * How a removal is attributed to layers: oldest or newest first, or, in a mix bin, from
  * every layer present in proportion to its remaining solids (ADR 0030). A split
  * bin's sub-bin order is the `ordered` request, not a policy.
  */
-export type DrawPolicy = 'fifo' | 'pro_rata';
+export const DRAW_POLICIES = ['fifo', 'lifo', 'pro_rata'] as const;
+export type DrawPolicy = typeof DRAW_POLICIES[number];
+export const OPERATOR_ORDER_POLICY = 'operator_order';
+export const ALLOCATION_POLICIES = [...DRAW_POLICIES, OPERATOR_ORDER_POLICY] as const;
+export type AllocationPolicy = typeof ALLOCATION_POLICIES[number];
 /** The policy a mix draw's allocations are saved with; the credit hold matches on it. */
 export const PRO_RATA_POLICY = 'pro_rata' satisfies DrawPolicy;
 
@@ -38,9 +42,27 @@ export const PRO_RATA_POLICY = 'pro_rata' satisfies DrawPolicy;
 export class UntickSubBinError extends RangeError {
   constructor(public readonly layerId: string) { super('Load never reaches this sub-bin; untick it'); }
 }
-/** The last sub-bin's measured solids exceed what its records hold; a count comes first. */
+/**
+ * The last sub-bin's measured solids exceed what its records hold; a count comes first.
+ * Carries the sub-bin's solids and what the load asks of it, and the same pair
+ * across every chosen sub-bin (the emptied ones give their whole solids).
+ */
 export class SubBinOverdrawError extends RangeError {
-  constructor(public readonly layerId: string) { super('Measured solids exceed the sub-bin'); }
+  constructor(public readonly layerId: string, readonly solids: SubBinOverdrawSolids) { super('Measured solids exceed the sub-bin'); }
+}
+export interface SubBinOverdrawSolids {
+  /** Exact solids the last sub-bin holds, kg. */
+  availableKg: Rational;
+  /** Exact solids the load leaves for the last sub-bin, kg. */
+  requestedKg: Rational;
+  /** Exact solids every chosen sub-bin holds, kg. */
+  selectedAvailableKg: Rational;
+  /** Exact solids of the whole load across the chosen sub-bins, kg. */
+  selectedRequestedKg: Rational;
+}
+/** The measured solids exceed the solids the eligible layers hold (kg, exact). */
+export class InsufficientSolidsError extends RangeError {
+  constructor(readonly availableSolidsKg: Rational, readonly requestedSolidsKg: Rational) { super('Insufficient exact dry solids'); }
 }
 
 /** Grid (per kg) a split draw's partial solids and a mix draw's shares are floored to: 1e-9 kg, one microgram. */
@@ -54,6 +76,17 @@ function floorToGrid(value: Rational): Rational {
 export function layerRemainingSolidsKg(layer: OutputStockLayer): Rational {
   const established = grams(layer.establishedDryBiocharKg);
   return layer.remainingSolidsKg ?? divide(rational(grams(layer.remainingDryBiocharKg), GRAMS_PER_KG), rational(established, established + grams(layer.ingredientDrySolidsKg)));
+}
+
+/**
+ * True when the layers still hold physical material: a positive dry-biochar
+ * gram balance, or exact solids above zero. Ingredient solids can outlast a
+ * display balance of 0.000 kg dry biochar, so the gram figure alone under-reads
+ * a blend. A count of zero clears both exactly. Archive and stock-mode changes
+ * share this one test of emptiness.
+ */
+export function layersHoldMaterial(layers: readonly OutputStockLayer[]): boolean {
+  return layers.some(layer => grams(layer.remainingDryBiocharKg) > BigInt(0) || (layer.remainingSolidsKg?.numerator ?? BigInt(0)) > BigInt(0));
 }
 
 /** Only canonical ISO 8601 UTC instants (`Date#toISOString`) are accepted, so string order is time order. */
@@ -73,7 +106,7 @@ function wetSolids(wetKg: Decimal, moisturePercent: Decimal | undefined): Ration
 }
 
 /**
- * Pure FIFO. Capacity is checked as an exact rational BEFORE any gram rounding.
+ * Ordered stock planning. Capacity is checked as an exact rational BEFORE any gram rounding.
  * Cumulative layer consumption rounds half-up, while exact physical solids
  * residuals survive every posting. Full layers and final run remainders close
  * exactly. Run weights use frozen remaining provenance, never live source data.
@@ -82,7 +115,7 @@ function wetSolids(wetKg: Decimal, moisturePercent: Decimal | undefined): Ration
  */
 export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt: string, request: OutputStockRequest, policy: DrawPolicy = 'fifo') {
   const at = canonicalInstant(occurredAt);
-  if (request.kind === 'ordered' && policy !== 'fifo') throw new RangeError('A mix bin has no sub-bin order');
+  if (request.kind === 'ordered' && policy === 'pro_rata') throw new RangeError('A mix bin has no sub-bin order');
   const ids = new Set<string>();
   const sequences = new Set<bigint>();
   const prepared = layers.map(layer => {
@@ -113,6 +146,7 @@ export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt:
     }
     return { layer, placedAt, established, remaining, fraction, capacity, runs };
   }).sort((a, b) => a.placedAt.localeCompare(b.placedAt) || (a.layer.postingSequence < b.layer.postingSequence ? -1 : 1));
+  if (policy === 'lifo') prepared.reverse();
   const eligible = prepared.filter(p => p.placedAt <= at);
   const expectedSolidsKg = eligible.reduce((sum, p) => add(sum, p.capacity), rational(BigInt(0)));
   type Prepared = (typeof prepared)[number];
@@ -139,6 +173,7 @@ export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt:
     let wetLeft = decimal(request.wetKg);
     if (wetLeft.numerator <= BigInt(0)) throw new RangeError('Draw must be positive');
     const byId = new Map(eligible.map(p => [p.layer.id, p]));
+    let emptiedSolidsKg = rational(BigInt(0));
     if (!request.sources.length) throw new RangeError('Choose at least one sub-bin');
     if (new Set(request.sources.map(source => source.layerId)).size !== request.sources.length ||
       request.sources.some(source => !byId.has(source.layerId))) {
@@ -154,9 +189,11 @@ export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt:
         wetLeft = subtract(wetLeft, wetKg);
         if (wetLeft.numerator <= BigInt(0)) throw new UntickSubBinError(request.sources[index + 1].layerId);
         draw(p, p.capacity, wetKg, source.moisturePercent);
+        emptiedSolidsKg = add(emptiedSolidsKg, p.capacity);
       } else {
         const exactSolidsKg = multiply(wetLeft, fraction);
-        if (compare(exactSolidsKg, p.capacity) > BigInt(0)) throw new SubBinOverdrawError(source.layerId);
+        if (compare(exactSolidsKg, p.capacity) > BigInt(0)) throw new SubBinOverdrawError(source.layerId, { availableKg: p.capacity, requestedKg: exactSolidsKg,
+          selectedAvailableKg: add(emptiedSolidsKg, p.capacity), selectedRequestedKg: add(emptiedSolidsKg, exactSolidsKg) });
         // Emptied sub-bins pass their readings into this remainder's denominator. Rounding
         // the last partial draw down to a fixed grid keeps later exact balances bounded.
         const solidsKg = compare(exactSolidsKg, p.capacity) === BigInt(0) ? p.capacity : floorToGrid(exactSolidsKg);
@@ -171,7 +208,7 @@ export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt:
     if (!count && measured.numerator <= BigInt(0)) throw new RangeError('Draw must be positive');
     discrepancySolidsKg = count ? subtract(measured, expectedSolidsKg) : rational(BigInt(0));
     const requested = count ? subtract(expectedSolidsKg, measured) : measured;
-    if (compare(requested, expectedSolidsKg) > BigInt(0)) throw new RangeError('Insufficient exact dry solids');
+    if (compare(requested, expectedSolidsKg) > BigInt(0)) throw new InsufficientSolidsError(expectedSolidsKg, requested);
     let left = requested.numerator > BigInt(0) ? requested : rational(BigInt(0));
     const readingPercent = request.kind === 'wet' ? request.moisturePercent : null;
     const take = (p: Prepared, solidsKg: Rational) =>

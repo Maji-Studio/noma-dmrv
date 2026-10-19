@@ -1,30 +1,24 @@
 "use server";
 
+import { withAction } from "./with-action";
+
 /**
  * Samples Server Actions
  * Server-side functions for sample CRUD operations
  */
 
 import { z } from "zod";
-import { samples } from "@/db/schema";
-import { withAutoCode } from "@/data-access/code-generator";
-import { getCreditBatchById } from "@/data-access/credit-batches";
-import { getFacilityById } from "@/data-access/facilities";
 import { requireOrgFacility } from "@/data-access/utils";
 import {
-  createSample,
-  deleteSample,
   getSamples as getSamplesData,
   getSampleById as getSampleByIdData,
   getSampleStats as getSampleStatsData,
-  updateSample,
   type PaginatedSamples,
   type SampleWithRelations,
   type SampleStats,
 } from "@/data-access/samples";
-import { requireOrgContext } from "@/lib/auth/server";
-import { formatFacilityDate } from "@/lib/date-utils";
-import { SafeError } from "@/lib/errors";
+import { deleteLabSample, recordLabSample, updateLabSample } from "@/lib/operations/lab-samples";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import {
   createSampleSchema,
   deleteSampleSchema,
@@ -32,39 +26,10 @@ import {
   sampleFilterSchema,
 } from "@/schemas/samples";
 import type { ActionResult } from "@/types/actions";
-import {
-  formatZodActionError,
-  toLoggedActionError,
-} from "./action-errors";
 
-function sampleActionError(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): string {
-  return toLoggedActionError(error, fallbackMessage, {
-    message: "sample action failed",
-    context: { op },
-  });
-}
-
-async function assertSampleNotBeforeBatchWindow(
-  ctx: Awaited<ReturnType<typeof requireOrgContext>>,
-  creditBatchId: string,
-  samplingTime: Date,
-): Promise<void> {
-  const batch = await getCreditBatchById(ctx, creditBatchId, {
-    skipPreview: true,
-  });
-  if (!batch) throw new SafeError("Credit batch not found");
-
-  const facility = await getFacilityById(ctx, batch.facilityId);
-  const samplingDay = formatFacilityDate(samplingTime, facility.timezone);
-  if (samplingDay < batch.startDate) {
-    throw new SafeError(
-      `Sample date ${samplingDay} is before credit batch ${batch.code}'s production window, ${batch.startDate} to ${batch.endDate}. Choose a date within or after the production window.`,
-    );
-  }
+/** Keep the per-operation log context the legacy actions emitted. */
+function logFor(op: string) {
+  return { message: "sample action failed", context: { op } };
 }
 
 // ============================================
@@ -77,9 +42,7 @@ async function assertSampleNotBeforeBatchWindow(
 export async function getSamplesFn(
   filters?: Partial<z.infer<typeof sampleFilterSchema>>
 ): Promise<ActionResult<PaginatedSamples>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedFilters = filters
       ? sampleFilterSchema.parse(filters)
       : undefined;
@@ -88,23 +51,12 @@ export async function getSamplesFn(
     }
     const samples = await getSamplesData(ctx, validatedFilters);
 
-    return { success: true, data: samples };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error, "Invalid filter parameters"),
-      };
-    }
-    return {
-      success: false,
-      error: sampleActionError(
-        error,
-        "Failed to load samples",
-        "sample:list",
-      ),
-    };
-  }
+    return samples;
+  }, {
+    fallbackMessage: "Failed to load samples",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: logFor("sample:list"),
+  });
 }
 
 /**
@@ -113,21 +65,13 @@ export async function getSamplesFn(
 export async function getSampleByIdFn(
   sampleId: string
 ): Promise<ActionResult<SampleWithRelations>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const sample = await getSampleByIdData(ctx, sampleId);
-    return { success: true, data: sample };
-  } catch (error) {
-    return {
-      success: false,
-      error: sampleActionError(
-        error,
-        "Failed to load sample",
-        "sample:get",
-      ),
-    };
-  }
+    return sample;
+  }, {
+    fallbackMessage: "Failed to load sample",
+    log: logFor("sample:get"),
+  });
 }
 
 /**
@@ -137,9 +81,7 @@ export async function getSampleStatsFn(
   creditBatchId?: string,
   facilityId?: string,
 ): Promise<ActionResult<SampleStats>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedCreditBatchId = creditBatchId
       ? z.string().uuid().parse(creditBatchId)
       : undefined;
@@ -154,17 +96,11 @@ export async function getSampleStatsFn(
       validatedCreditBatchId,
       validatedFacilityId,
     );
-    return { success: true, data: stats };
-  } catch (error) {
-    return {
-      success: false,
-      error: sampleActionError(
-        error,
-        "Failed to load sample stats",
-        "sample:stats",
-      ),
-    };
-  }
+    return stats;
+  }, {
+    fallbackMessage: "Failed to load sample stats",
+    log: logFor("sample:stats"),
+  });
 }
 
 // ============================================
@@ -172,101 +108,52 @@ export async function getSampleStatsFn(
 // ============================================
 
 /**
- * Create a new sample
+ * Create a new sample through `record_lab_sample`, as the API does. The
+ * server generates the code and calculates H/C_org and O/C_org; the form's
+ * own preview of them is not sent. Form-only fields (durability tier mirror,
+ * nutrient toggle, file URLs without an input) stay behind.
  */
 export async function createSampleFn(
   data: z.infer<typeof createSampleSchema>
 ): Promise<ActionResult<SampleWithRelations>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const sample = await withAutoCode(
-      ctx,
-      "SAM",
-      samples,
-      samples.sampleCode,
-      undefined,
-      async (sampleCode) => {
-        const validated = createSampleSchema.parse({ ...data, sampleCode });
-        const samplingTime =
-          validated.samplingTime instanceof Date
-            ? validated.samplingTime
-            : new Date(validated.samplingTime);
-        await assertSampleNotBeforeBatchWindow(
-          ctx,
-          validated.creditBatchId,
-          samplingTime,
-        );
-        return createSample(ctx, {
-          sampleCode,
-          creditBatchId: validated.creditBatchId,
-          samplingTime,
-          labName: validated.labName || null,
-          labAccreditation: validated.labAccreditation || null,
-          analysisDate: validated.analysisDate
-            ? validated.analysisDate instanceof Date
-              ? validated.analysisDate
-              : new Date(validated.analysisDate)
-            : null,
-          weightGrams: validated.weightGrams ?? null,
-          volumeMl: validated.volumeMl ?? null,
-          totalCarbonPercent: validated.totalCarbonPercent as number,
-          organicCarbonPercent: validated.organicCarbonPercent as number,
-          inorganicCarbonPercent: validated.inorganicCarbonPercent ?? null,
-          totalHydrogenPercent: validated.totalHydrogenPercent ?? null,
-          totalNitrogenPercent: validated.totalNitrogenPercent ?? null,
-          totalOxygenPercent: validated.totalOxygenPercent ?? null,
+  return withAction(async (ctx) => {
+    const validated = createSampleSchema.parse(data);
+    const result = await runOperationInProcess(recordLabSample, ctx, {
+      creditBatchId: validated.creditBatchId,
+      samplingTime: validated.samplingTime,
+      labName: validated.labName || null,
+      labAccreditation: validated.labAccreditation || null,
+      analysisDate: validated.analysisDate ?? null,
+      weightGrams: validated.weightGrams ?? null,
+      volumeMl: validated.volumeMl ?? null,
+      totalCarbonPercent: validated.totalCarbonPercent,
+      organicCarbonPercent: validated.organicCarbonPercent,
+      inorganicCarbonPercent: validated.inorganicCarbonPercent ?? null,
+      totalHydrogenPercent: validated.totalHydrogenPercent ?? null,
+      totalNitrogenPercent: validated.totalNitrogenPercent ?? null,
+      totalOxygenPercent: validated.totalOxygenPercent ?? null,
       totalSulfurPercent: validated.totalSulfurPercent ?? null,
       ashContentPercent: validated.ashContentPercent ?? null,
       moistureContentPercent: validated.moistureContentPercent ?? null,
       bulkDensityKgPerM3: validated.bulkDensityKgPerM3 ?? null,
       ph: validated.ph ?? null,
       saltContentGPerKg: validated.saltContentGPerKg ?? null,
-      hToCOrgRatio: validated.hToCOrgRatio ?? null,
       oToCOrgRatio: validated.oToCOrgRatio ?? null,
       randomReflectanceR0Percent: validated.randomReflectanceR0Percent ?? null,
       sReflectanceFraction: validated.sReflectanceFraction ?? null,
       r0MeasurementCount: validated.r0MeasurementCount ?? null,
-      r0AnalysisDate: validated.r0AnalysisDate
-        ? validated.r0AnalysisDate instanceof Date
-          ? validated.r0AnalysisDate
-          : new Date(validated.r0AnalysisDate)
-        : null,
-      r0HistogramFileUrl: validated.r0HistogramFileUrl || null,
+      r0AnalysisDate: validated.r0AnalysisDate ?? null,
       reactiveCarbonPercent: validated.reactiveCarbonPercent ?? null,
       residualCarbonPercent: validated.residualCarbonPercent ?? null,
-      tgaAnalysisDate: validated.tgaAnalysisDate
-        ? validated.tgaAnalysisDate instanceof Date
-          ? validated.tgaAnalysisDate
-          : new Date(validated.tgaAnalysisDate)
-        : null,
-      tgaThermogramFileUrl: validated.tgaThermogramFileUrl || null,
+      tgaAnalysisDate: validated.tgaAnalysisDate ?? null,
       phosphorusPercent: validated.phosphorusPercent ?? null,
       potassiumPercent: validated.potassiumPercent ?? null,
       magnesiumPercent: validated.magnesiumPercent ?? null,
       calciumPercent: validated.calciumPercent ?? null,
       ironPercent: validated.ironPercent ?? null,
-        });
-      }
-    );
-
-    return { success: true, data: sample };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: sampleActionError(
-        error,
-        "Failed to create sample",
-        "sample:create",
-      ),
-    };
-  }
+    });
+    return result.sample;
+  }, { fallbackMessage: "Failed to create sample", log: logFor("sample:create") });
 }
 
 // ============================================
@@ -274,44 +161,24 @@ export async function createSampleFn(
 // ============================================
 
 /**
- * Update an existing sample
+ * Update an existing sample through `update_lab_sample`. Omitted fields keep
+ * their stored value and null clears one; the ratios are recalculated from
+ * the merged row.
  */
 export async function updateSampleFn(
   data: z.infer<typeof updateSampleSchema>
 ): Promise<ActionResult<SampleWithRelations>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = updateSampleSchema.parse(data);
-
-    if (validated.creditBatchId !== undefined || validated.samplingTime !== undefined) {
-      const existing = await getSampleByIdData(ctx, validated.sampleId);
-      const creditBatchId = validated.creditBatchId ?? existing.creditBatchId;
-      const samplingTime = validated.samplingTime ?? existing.samplingTime;
-      if (creditBatchId != null) {
-        await assertSampleNotBeforeBatchWindow(ctx, creditBatchId, samplingTime);
-      }
-    }
-
-    const sample = await updateSample(ctx, validated.sampleId, {
-      sampleCode: validated.sampleCode,
+    const result = await runOperationInProcess(updateLabSample, ctx, {
+      labSampleId: validated.sampleId,
+      expectedVersion: validated.expectedVersion,
+      code: validated.sampleCode,
       creditBatchId: validated.creditBatchId,
-      samplingTime: validated.samplingTime
-        ? validated.samplingTime instanceof Date
-          ? validated.samplingTime
-          : new Date(validated.samplingTime)
-        : undefined,
+      samplingTime: validated.samplingTime,
       labName: validated.labName,
       labAccreditation: validated.labAccreditation,
-      analysisDate: validated.analysisDate
-        ? validated.analysisDate instanceof Date
-          ? validated.analysisDate
-          : typeof validated.analysisDate === "string"
-          ? new Date(validated.analysisDate)
-          : null
-        : validated.analysisDate === null
-        ? null
-        : undefined,
+      analysisDate: validated.analysisDate,
       weightGrams: validated.weightGrams,
       volumeMl: validated.volumeMl,
       totalCarbonPercent: validated.totalCarbonPercent,
@@ -326,57 +193,22 @@ export async function updateSampleFn(
       bulkDensityKgPerM3: validated.bulkDensityKgPerM3,
       ph: validated.ph,
       saltContentGPerKg: validated.saltContentGPerKg,
-      hToCOrgRatio: validated.hToCOrgRatio,
       oToCOrgRatio: validated.oToCOrgRatio,
       randomReflectanceR0Percent: validated.randomReflectanceR0Percent,
       sReflectanceFraction: validated.sReflectanceFraction,
       r0MeasurementCount: validated.r0MeasurementCount,
-      r0AnalysisDate: validated.r0AnalysisDate
-        ? validated.r0AnalysisDate instanceof Date
-          ? validated.r0AnalysisDate
-          : typeof validated.r0AnalysisDate === "string"
-          ? new Date(validated.r0AnalysisDate)
-          : null
-        : validated.r0AnalysisDate === null
-        ? null
-        : undefined,
-      r0HistogramFileUrl: validated.r0HistogramFileUrl,
+      r0AnalysisDate: validated.r0AnalysisDate,
       reactiveCarbonPercent: validated.reactiveCarbonPercent,
       residualCarbonPercent: validated.residualCarbonPercent,
-      tgaAnalysisDate: validated.tgaAnalysisDate
-        ? validated.tgaAnalysisDate instanceof Date
-          ? validated.tgaAnalysisDate
-          : typeof validated.tgaAnalysisDate === "string"
-          ? new Date(validated.tgaAnalysisDate)
-          : null
-        : validated.tgaAnalysisDate === null
-        ? null
-        : undefined,
-      tgaThermogramFileUrl: validated.tgaThermogramFileUrl,
+      tgaAnalysisDate: validated.tgaAnalysisDate,
       phosphorusPercent: validated.phosphorusPercent,
       potassiumPercent: validated.potassiumPercent,
       magnesiumPercent: validated.magnesiumPercent,
       calciumPercent: validated.calciumPercent,
       ironPercent: validated.ironPercent,
     });
-
-    return { success: true, data: sample };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: sampleActionError(
-        error,
-        "Failed to update sample",
-        "sample:update",
-      ),
-    };
-  }
+    return result.sample;
+  }, { fallbackMessage: "Failed to update sample", log: logFor("sample:update") });
 }
 
 // ============================================
@@ -384,32 +216,16 @@ export async function updateSampleFn(
 // ============================================
 
 /**
- * Delete a sample
+ * Delete a sample through `delete_lab_sample`.
  */
 export async function deleteSampleFn(
   data: z.infer<typeof deleteSampleSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = deleteSampleSchema.parse(data);
-    await deleteSample(ctx, validated.sampleId);
-
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: sampleActionError(
-        error,
-        "Failed to delete sample",
-        "sample:delete",
-      ),
-    };
-  }
+    await runOperationInProcess(deleteLabSample, ctx, {
+      labSampleId: validated.sampleId,
+      expectedVersion: validated.expectedVersion,
+    });
+  }, { fallbackMessage: "Failed to delete sample", log: logFor("sample:delete") });
 }

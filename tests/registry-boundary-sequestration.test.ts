@@ -1,3 +1,4 @@
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 /**
  * Fixture-driven registry boundary for the explicit 1000-year sequestration
  * bind. The real measurement-sample and GHG-entry wrappers run against the
@@ -5,6 +6,10 @@
  * with its successful create arm.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", async (importOriginal) =>
+  (await import("./fixtures/fake-registry")).fakeCredentialsModule(importOriginal),
+);
 
 vi.mock("@/lib/isometric/client", async (importOriginal) => {
   const actual =
@@ -47,12 +52,12 @@ vi.mock("@/fn/certification/registry-create", async (importOriginal) => {
 import { submitDurabilityMeasurementSamples } from "@/fn/certification/durability-measurement-samples";
 import { appendSubmissionJournal } from "@/data-access/certification";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
+import { build1000YearSequestrationSample } from "@/lib/isometric/transformers/measurement-sample";
 import {
-  build1000YearSequestrationSample,
   CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
   DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
   UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-} from "@/lib/isometric/transformers/measurement-sample";
+} from "@/lib/isometric/storage-blueprints";
 import {
   assertSequestrationTemplateBindings,
   assertSequestrationTemplateSelectable,
@@ -63,7 +68,6 @@ import {
 import {
   createDatapoint,
   createGhgEntry,
-  getIsometricClientForOrg,
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
 import type { Logger } from "@/lib/log";
@@ -276,8 +280,8 @@ describe("1000-year sequestration registry boundary", () => {
       label: `Sample sample-boundary-${index + 1}`,
     }));
 
-    const client = await getIsometricClientForOrg(
-      "org-boundary-sequestration",
+    const client = await resolveIsometricClient(
+      makeTestOrgContext("user-boundary-sequestration"),
     );
     const directDatapoints = buildDirectSequestrationDatapoints({
       template: template(),

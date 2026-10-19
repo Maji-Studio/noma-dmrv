@@ -79,7 +79,7 @@ which ADR 0004 does not describe.
   is counted (`ReconcileRegistryGhgStatementsResult.skippedCount`) and surfaced
   in the sync toast, so "synced 0" is distinguishable from "nothing to do".
 - `cert_submissions_external_unique` becomes a *partial* index excluding
-  `ghg_statement`. Removals, telemetry, and documents keep the original global
+  `ghg_statement`. Removals and documents keep the original global
   rule — a Removal belongs to exactly one facility, so nothing legitimate
   collides there.
 - Migration `0093` is index-only and non-destructive to data: it drops and

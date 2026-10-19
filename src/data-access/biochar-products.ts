@@ -1,4 +1,3 @@
-import { lockBinStocks } from './lock-bin-stocks';
 /**
  * Biochar Products Data Access Layer
  * CRUD operations for biochar products with auth guards, pagination, filtering, and relations
@@ -99,10 +98,6 @@ export interface PaginatedBiocharProducts {
 // ============================================
 
 import { SafeError } from "@/lib/errors";
-import {
-  compositionAllocationChanged
-} from "./biochar-product-composition";
-import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { requireOrgScope } from "./utils";
 
 // ============================================
@@ -213,9 +208,9 @@ export async function getBiocharProducts(
       densityKgM3: biocharProducts.densityKgM3,
       waterAddedKg: biocharProducts.waterAddedKg,
       storageLocationId: biocharProducts.storageLocationId,
-      expiresAt: biocharProducts.expiresAt,
       archivedAt: biocharProducts.archivedAt,
       createdAt: biocharProducts.createdAt,
+      version: biocharProducts.version,
       updatedAt: biocharProducts.updatedAt,
       // Facility relation
       facilityCode: facilities.code,
@@ -274,12 +269,13 @@ export async function getBiocharProducts(
       eq(allocationAggregate.biocharProductId, biocharProducts.id),
     )
     .where(whereClause)
-    .orderBy(orderFn(sortColumn))
+    .orderBy(orderFn(sortColumn), orderFn(biocharProducts.createdAt), asc(biocharProducts.id))
     .limit(pageSize)
     .offset(offset);
 
   // Transform to BiocharProductWithRelations
   const items: BiocharProductWithRelations[] = productList.map((row) => ({
+    version: row.version,
     id: row.id,
     organizationId: row.organizationId,
     code: row.code,
@@ -300,7 +296,6 @@ export async function getBiocharProducts(
     densityKgM3: row.densityKgM3,
     waterAddedKg: row.waterAddedKg,
     storageLocationId: row.storageLocationId,
-    expiresAt: row.expiresAt,
     archivedAt: row.archivedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -384,9 +379,9 @@ export async function getBiocharProductById(
       densityKgM3: biocharProducts.densityKgM3,
       waterAddedKg: biocharProducts.waterAddedKg,
       storageLocationId: biocharProducts.storageLocationId,
-      expiresAt: biocharProducts.expiresAt,
       archivedAt: biocharProducts.archivedAt,
       createdAt: biocharProducts.createdAt,
+      version: biocharProducts.version,
       updatedAt: biocharProducts.updatedAt,
       facilityCode: facilities.code,
       facilityName: facilities.name,
@@ -447,6 +442,7 @@ export async function getBiocharProductById(
   }
 
   return {
+    version: row.version,
     id: row.id,
     organizationId: row.organizationId,
     code: row.code,
@@ -467,7 +463,6 @@ export async function getBiocharProductById(
     densityKgM3: row.densityKgM3,
     waterAddedKg: row.waterAddedKg,
     storageLocationId: row.storageLocationId,
-    expiresAt: row.expiresAt,
     archivedAt: row.archivedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -518,36 +513,6 @@ export { createBiocharProduct } from "./biochar-product-create";
 // Biochar Product Update Operations
 // ============================================
 
-/**
- * Update an existing biochar product
- */
-export async function updateBiocharProduct(ctx: OrgContext, productId: string, data: {
-  code?: string; facilityId?: string; formulationId?: string | null; placedAt?: string;
-  status?: 'draft' | 'testing' | 'ready' | 'sold'; linkedProductionRunId?: string | null;
-  storageLocationId?: string | null; massKg?: number | null; moistureContentPercent?: number | null;
-  densityKgM3?: number | null; waterAddedKg?: number | null; composition?: Record<string, unknown>;
-}): Promise<BiocharProduct> {
-  requireOrgScope(ctx);
-  return db.transaction(async tx => {
-    const [product] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId)));
-    if (!product) throw new SafeError('Biochar product not found');
-    await lockBinStocks(ctx, tx, [product.storageLocationId, product.sourceBiocharStorageLocationId]);
-    await assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'biocharProduct', entityId: productId }, 'update');
-    const placementChanged = data.placedAt !== undefined && new Date(data.placedAt).getTime() !== product.placedAt.getTime();
-    if (placementChanged || (['facilityId', 'formulationId', 'linkedProductionRunId', 'storageLocationId', 'massKg', 'moistureContentPercent', 'waterAddedKg'] as const).some(key => data[key] !== undefined && data[key] !== product[key])) {
-      throw new SafeError('Posted product source, composition, placement, and bin are immutable. Use an explicit stock correction.');
-    }
-    if (data.composition && compositionAllocationChanged(product.composition as Record<string, unknown>, data.composition)) throw new SafeError('Posted ingredient moisture and dry solids are immutable.');
-    const [saved] = await tx.update(biocharProducts).set({ code: data.code, status: data.status, densityKgM3: data.densityKgM3, updatedAt: new Date() }).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).returning();
-    return saved;
-  });
-}
-export async function deleteBiocharProduct(ctx: OrgContext, productId: string): Promise<void> {
-  requireOrgScope(ctx);
-  await db.transaction(async tx => {
-    await assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'biocharProduct', entityId: productId }, 'delete');
-    const [product] = await tx.select({ id: biocharProducts.id }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId)));
-    if (!product) throw new SafeError('Biochar product not found');
-    throw new SafeError('Posted products retain their source allocations and history. Use an explicit stock correction.');
-  });
-}
+export { updateBiocharProduct, updateBiocharProductInTransaction, type UpdateBiocharProductInput } from "./biochar-product-update";
+
+export { deleteBiocharProduct, deleteBiocharProductInTransaction } from './biochar-product-delete';

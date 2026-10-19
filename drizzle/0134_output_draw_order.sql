@@ -1,0 +1,2 @@
+CREATE TYPE "public"."output_draw_order" AS ENUM('oldest_first', 'newest_first');--> statement-breakpoint
+ALTER TABLE "storage_locations" ADD COLUMN "draw_order" "output_draw_order" DEFAULT 'oldest_first' NOT NULL;

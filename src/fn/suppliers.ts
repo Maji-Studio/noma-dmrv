@@ -1,75 +1,38 @@
 "use server";
 
+import { withAction } from "./with-action";
+
 /**
  * Suppliers Server Actions
  * Server-side functions for supplier CRUD operations
  */
 
+import { createSupplier, updateSupplier, deleteSupplier, archiveSupplier, restoreSupplier } from "@/lib/operations/suppliers";
+import { addSupplierLocation, updateSupplierLocation, deleteSupplierLocation } from "@/lib/operations/supplier-locations";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import { z } from "zod";
-import { type Supplier, type SupplierLocation, suppliers } from "@/db/schema";
+import { type Supplier, type SupplierLocation } from "@/db/schema";
 import {
-  CODE_CONFLICT_MESSAGES,
-  withAutoCode,
-} from "@/data-access/code-generator";
-import {
-  createSupplier,
-  createSupplierWithLocations,
-  deleteSupplier,
   getSuppliers as getSuppliersData,
   getSupplierById as getSupplierByIdData,
-  updateSupplier,
   getSupplierLocationsBySupplier as getSupplierLocationsBySupplierData,
-  createSupplierLocation,
-  updateSupplierLocation,
-  deleteSupplierLocation,
   type PaginatedSuppliers,
 } from "@/data-access/suppliers";
-import { requireOrgContext } from "@/lib/auth/server";
+import { DomainError } from "@/lib/domain-errors";
+import { validationFailed } from "@/lib/operations/errors";
 import {
-  createSupplierSchema,
   createSupplierWithLocationsSchema,
-  deleteSupplierSchema,
   updateSupplierSchema,
   supplierFilterSchema,
   createSupplierLocationSchema,
   updateSupplierLocationSchema,
   deleteSupplierLocationSchema,
 } from "@/schemas/suppliers";
-import { resolveDistanceSource } from "@/schemas/distance-source";
+import { supplierVersionInput } from "@/schemas/supplier-input";
 import type { ActionResult } from "@/types/actions";
-import {
-  type ActionFailure,
-  formatZodActionError,
-  toActionFailure,
-  toLoggedActionError,
-} from "./action-errors";
 
-/**
- * Failure shape for the write paths. Unlike the read helper below it keeps an
- * `ActionConflictError`'s `conflict`, so the form can tell an expected-version
- * refusal from an ordinary save failure and hold on to the operator's draft.
- */
-function supplierActionFailure(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): ActionFailure {
-  return toActionFailure(error, {
-    fallbackMessage,
-    log: { message: "supplier action failed", context: { op } },
-  });
-}
-
-function supplierActionError(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): string {
-  return toLoggedActionError(error, fallbackMessage, {
-    message: "supplier action failed",
-    context: { op },
-  });
-}
+const LOG_MESSAGE = "supplier action failed";
+const supplierIdSchema = z.string().uuid("Invalid supplier ID");
 
 // ============================================
 // Supplier List/Query Operations
@@ -81,31 +44,18 @@ function supplierActionError(
 export async function getSuppliersFn(
   filters?: Partial<z.infer<typeof supplierFilterSchema>>
 ): Promise<ActionResult<PaginatedSuppliers>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedFilters = filters
       ? supplierFilterSchema.parse(filters)
       : undefined;
     const suppliers = await getSuppliersData(ctx, validatedFilters);
 
-    return { success: true, data: suppliers };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error, "Invalid filter parameters"),
-      };
-    }
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to load suppliers",
-        "supplier:list",
-      ),
-    };
-  }
+    return suppliers;
+  }, {
+    fallbackMessage: "Failed to load suppliers",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: LOG_MESSAGE, context: { op: "supplier:list" } },
+  });
 }
 
 /**
@@ -114,150 +64,50 @@ export async function getSuppliersFn(
 export async function getSupplierByIdFn(
   supplierId: string
 ): Promise<ActionResult<Supplier>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const supplier = await getSupplierByIdData(ctx, supplierId);
-    return { success: true, data: supplier };
-  } catch (error) {
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to load supplier",
-        "supplier:get",
-      ),
-    };
-  }
+    return supplier;
+  }, {
+    fallbackMessage: "Failed to load supplier",
+    log: { message: LOG_MESSAGE, context: { op: "supplier:get" } },
+  });
 }
 
 // ============================================
 // Supplier Create Operations
 // ============================================
 
-/**
- * Create a new supplier
- */
-export async function createSupplierFn(
-  data: z.infer<typeof createSupplierSchema>
-): Promise<ActionResult<Supplier>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const validated = createSupplierSchema.parse(data);
-
-    const supplier = await withAutoCode(
-      ctx,
-      "SUP",
-      suppliers,
-      suppliers.code,
-      undefined,
-      (code) =>
-        createSupplier(ctx, {
-          code,
-          name: validated.name,
-          location: validated.location || null,
-          gpsLatitude: validated.gpsLatitude ?? null,
-          gpsLongitude: validated.gpsLongitude ?? null,
-          address: validated.address || null,
-          contactName: validated.contactName || null,
-          contactEmail: validated.contactEmail || null,
-          contactPhone: validated.contactPhone || null,
-          sourceRegion: validated.sourceRegion || null,
-          distanceToFacilityKm: validated.distanceToFacilityKm ?? null,
-          distanceSource: resolveDistanceSource(
-            validated.distanceToFacilityKm ?? null,
-            validated.distanceSource,
-          ),
-        }),
-      CODE_CONFLICT_MESSAGES.supplier,
-    );
-
-    return { success: true, data: supplier };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to create supplier",
-        "supplier:create",
-      ),
-    };
-  }
-}
-
 export async function createSupplierWithLocationsFn(
   data: z.infer<typeof createSupplierWithLocationsSchema>
 ): Promise<ActionResult<Supplier>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = createSupplierWithLocationsSchema.parse(data);
 
-    const supplier = await withAutoCode(
-      ctx,
-      "SUP",
-      suppliers,
-      suppliers.code,
-      undefined,
-      (code) =>
-        createSupplierWithLocations(ctx, {
-          code,
-          name: validated.supplier.name,
-          location: validated.supplier.location || null,
-          gpsLatitude: validated.supplier.gpsLatitude ?? null,
-          gpsLongitude: validated.supplier.gpsLongitude ?? null,
-          address: validated.supplier.address || null,
-          contactName: validated.supplier.contactName || null,
-          contactEmail: validated.supplier.contactEmail || null,
-          contactPhone: validated.supplier.contactPhone || null,
-          sourceRegion: validated.supplier.sourceRegion || null,
-          distanceToFacilityKm: validated.supplier.distanceToFacilityKm ?? null,
-          distanceSource: resolveDistanceSource(
-            validated.supplier.distanceToFacilityKm ?? null,
-            validated.supplier.distanceSource,
-          ),
-          locations: validated.locations.map((location) => ({
-            name: location.name || null,
-            country: location.country,
-            stateRegion: location.stateRegion || null,
-            city: location.city || null,
-            gpsLatitude: location.gpsLatitude,
-            gpsLongitude: location.gpsLongitude,
-            address: location.address || null,
-            distanceFromFacilityKm: location.distanceFromFacilityKm ?? null,
-            distanceSource: resolveDistanceSource(
-              location.distanceFromFacilityKm ?? null,
-              location.distanceSource,
-            ),
-            isDefault: location.isDefault,
-          })),
-        })
-    );
-
-    return { success: true, data: supplier };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to create supplier",
-        "supplier:create-with-locations",
-      ),
-    };
-  }
+      const result = await runOperationInProcess(createSupplier, ctx, {
+        name: validated.supplier.name,
+        location: validated.supplier.location || null,
+        address: validated.supplier.address || null,
+        contactName: validated.supplier.contactName || null,
+        contactEmail: validated.supplier.contactEmail || null,
+        contactPhone: validated.supplier.contactPhone || null,
+        sourceRegion: validated.supplier.sourceRegion || null,
+        locations: validated.locations.map(location => ({
+          name: location.name || null,
+          country: location.country,
+          stateRegion: location.stateRegion || null,
+          city: location.city || null,
+          gpsLatitude: location.gpsLatitude,
+          gpsLongitude: location.gpsLongitude,
+          address: location.address || null,
+          facilityDistances: location.facilityDistances,
+          isDefault: location.isDefault,
+        })),
+      });
+      return result.supplier;
+  }, {
+    fallbackMessage: "Failed to create supplier",
+    log: { message: LOG_MESSAGE, context: { op: "supplier:create-with-locations" } },
+  });
 }
 
 // ============================================
@@ -270,34 +120,25 @@ export async function createSupplierWithLocationsFn(
 export async function updateSupplierFn(
   data: z.infer<typeof updateSupplierSchema>
 ): Promise<ActionResult<Supplier>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = updateSupplierSchema.parse(data);
 
-    const supplier = await updateSupplier(ctx, validated.supplierId, {
-      expectedUpdatedAt: validated.expectedUpdatedAt,
+    const supplier = await runOperationInProcess(updateSupplier, ctx, {
+      supplierId: validated.supplierId,
+      expectedVersion: validated.expectedVersion,
       code: validated.code,
       name: validated.name,
       location: validated.location,
-      gpsLatitude: validated.gpsLatitude,
-      gpsLongitude: validated.gpsLongitude,
       address: validated.address,
       contactName: validated.contactName,
       contactEmail: validated.contactEmail,
       contactPhone: validated.contactPhone,
       sourceRegion: validated.sourceRegion,
-      distanceToFacilityKm: validated.distanceToFacilityKm,
-      distanceSource: resolveDistanceSource(
-        validated.distanceToFacilityKm,
-        validated.distanceSource,
-      ),
     });
 
-    return { success: true, data: supplier };
-  } catch (error) {
-    return supplierActionFailure(error, "Failed to update supplier", "supplier:update");
-  }
+    return supplier;
+  }, { fallbackMessage: "Failed to update supplier", log: { message: LOG_MESSAGE, context: { op: "supplier:update" } } });
 }
 
 // ============================================
@@ -308,31 +149,15 @@ export async function updateSupplierFn(
  * Delete a supplier
  */
 export async function deleteSupplierFn(
-  data: z.infer<typeof deleteSupplierSchema>
+  data: z.infer<typeof supplierVersionInput>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
-    const validated = deleteSupplierSchema.parse(data);
-    await deleteSupplier(ctx, validated.supplierId);
+    const validated = supplierVersionInput.parse(data);
+    await runOperationInProcess(deleteSupplier, ctx, validated);
 
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to delete supplier",
-        "supplier:delete",
-      ),
-    };
-  }
+    return undefined;
+  }, { fallbackMessage: "Failed to delete supplier", log: { message: LOG_MESSAGE, context: { op: "supplier:delete" } } });
 }
 
 // ============================================
@@ -342,82 +167,30 @@ export async function deleteSupplierFn(
 export async function getSupplierLocationsBySupplierFn(
   supplierId: string
 ): Promise<ActionResult<SupplierLocation[]>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const parsed = z.string().uuid("Invalid supplier ID").safeParse(supplierId);
+  return withAction(async (ctx) => {
+    const parsed = supplierIdSchema.safeParse(supplierId);
     if (!parsed.success) {
-      return { success: false, error: parsed.error.issues[0].message };
+      throw new DomainError("validation_failed", parsed.error.issues[0].message, {
+        issues: validationFailed(parsed.error).issues,
+      });
     }
 
     const locations = await getSupplierLocationsBySupplierData(ctx, supplierId);
-    return { success: true, data: locations };
-  } catch (error) {
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to load supplier locations",
-        "supplier-location:list",
-      ),
-    };
-  }
+    return locations;
+  }, {
+    fallbackMessage: "Failed to load supplier locations",
+    log: { message: LOG_MESSAGE, context: { op: "supplier-location:list" } },
+  });
 }
 
 export async function createSupplierLocationFn(
   data: z.infer<typeof createSupplierLocationSchema>
 ): Promise<ActionResult<SupplierLocation>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = createSupplierLocationSchema.parse(data);
 
-    const location = await createSupplierLocation(ctx, {
+    const location = await runOperationInProcess(addSupplierLocation, ctx, {
       supplierId: validated.supplierId,
-      name: validated.name || null,
-      country: validated.country,
-      stateRegion: validated.stateRegion || null,
-      city: validated.city || null,
-      gpsLatitude: validated.gpsLatitude ?? null,
-      gpsLongitude: validated.gpsLongitude ?? null,
-      address: validated.address || null,
-      distanceFromFacilityKm: validated.distanceFromFacilityKm,
-      distanceSource: resolveDistanceSource(
-        validated.distanceFromFacilityKm ?? null,
-        validated.distanceSource,
-      ),
-      isDefault: validated.isDefault,
-    });
-
-    return { success: true, data: location };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to create supplier location",
-        "supplier-location:create",
-      ),
-    };
-  }
-}
-
-export async function updateSupplierLocationFn(
-  data: z.infer<typeof updateSupplierLocationSchema>
-): Promise<ActionResult<SupplierLocation>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const validated = updateSupplierLocationSchema.parse(data);
-
-    const location = await updateSupplierLocation(ctx, validated.locationId, {
-      expectedUpdatedAt: validated.expectedUpdatedAt,
       name: validated.name || null,
       country: validated.country,
       stateRegion: validated.stateRegion || null,
@@ -425,44 +198,69 @@ export async function updateSupplierLocationFn(
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
       address: validated.address || null,
-      distanceFromFacilityKm: validated.distanceFromFacilityKm,
-      distanceSource: resolveDistanceSource(
-        validated.distanceFromFacilityKm,
-        validated.distanceSource,
-      ),
+      facilityDistances: validated.facilityDistances,
       isDefault: validated.isDefault,
     });
 
-    return { success: true, data: location };
-  } catch (error) {
-    return supplierActionFailure(error, "Failed to update supplier location", "supplier-location:update");
-  }
+    return location;
+  }, {
+    fallbackMessage: "Failed to create supplier location",
+    log: { message: LOG_MESSAGE, context: { op: "supplier-location:create" } },
+  });
+}
+
+export async function updateSupplierLocationFn(
+  data: z.infer<typeof updateSupplierLocationSchema>
+): Promise<ActionResult<SupplierLocation>> {
+  return withAction(async (ctx) => {
+
+    const validated = updateSupplierLocationSchema.parse(data);
+
+    const location = await runOperationInProcess(updateSupplierLocation, ctx, {
+      supplierId: validated.supplierId,
+      locationId: validated.locationId,
+      expectedVersion: validated.expectedVersion,
+      name: validated.name === undefined ? undefined : validated.name || null,
+      country: validated.country,
+      stateRegion: validated.stateRegion === undefined ? undefined : validated.stateRegion || null,
+      city: validated.city === undefined ? undefined : validated.city || null,
+      gpsLatitude: validated.gpsLatitude,
+      gpsLongitude: validated.gpsLongitude,
+      address: validated.address === undefined ? undefined : validated.address || null,
+      facilityDistances: validated.facilityDistances,
+      isDefault: validated.isDefault,
+    });
+
+    return location;
+  }, { fallbackMessage: "Failed to update supplier location", log: { message: "supplier-location action failed", context: { op: "supplier-location:update" } } });
 }
 
 export async function deleteSupplierLocationFn(
   data: z.infer<typeof deleteSupplierLocationSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = deleteSupplierLocationSchema.parse(data);
-    await deleteSupplierLocation(ctx, validated.locationId);
+    await runOperationInProcess(deleteSupplierLocation, ctx, validated);
 
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to delete supplier location",
-        "supplier-location:delete",
-      ),
-    };
-  }
+    return undefined;
+  }, { fallbackMessage: "Failed to delete supplier location", log: { message: "supplier-location action failed", context: { op: "supplier-location:delete" } } });
+}
+
+export async function archiveSupplierFn(
+  data: z.infer<typeof supplierVersionInput>
+): Promise<ActionResult<Supplier>> {
+  return withAction(async (ctx) => {
+    const validated = supplierVersionInput.parse(data);
+    return runOperationInProcess(archiveSupplier, ctx, validated);
+  }, { fallbackMessage: "Failed to archive supplier", log: { message: LOG_MESSAGE, context: { op: "supplier:archive" } } });
+}
+
+export async function restoreSupplierFn(
+  data: z.infer<typeof supplierVersionInput>
+): Promise<ActionResult<Supplier>> {
+  return withAction(async (ctx) => {
+    const validated = supplierVersionInput.parse(data);
+    return runOperationInProcess(restoreSupplier, ctx, validated);
+  }, { fallbackMessage: "Failed to restore supplier", log: { message: LOG_MESSAGE, context: { op: "supplier:restore" } } });
 }

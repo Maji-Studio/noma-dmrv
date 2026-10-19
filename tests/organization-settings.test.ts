@@ -41,10 +41,8 @@ describe.sequential("organization operating defaults", () => {
   it("round-trips a saved set of defaults", async () => {
     const ctx = makeTestOrgContext();
     const values = {
-      defaultCurrency: "KES" as const,
       defaultCountry: "Kenya",
       defaultTimezone: "Africa/Nairobi",
-      defaultTripType: "one_way" as const,
       defaultEvidenceMethod: "boundary" as const,
       defaultPackaging: "bagged" as const,
     };
@@ -59,11 +57,11 @@ describe.sequential("organization operating defaults", () => {
     const ctx = makeTestOrgContext();
     await upsertOrganizationDefaults(ctx, {
       ...DEFAULT_ORGANIZATION_SETTINGS,
-      defaultCurrency: "USD",
+      defaultPackaging: "bagged",
     });
     await upsertOrganizationDefaults(ctx, {
       ...DEFAULT_ORGANIZATION_SETTINGS,
-      defaultCurrency: "EUR",
+      defaultPackaging: "loose",
     });
 
     const rows = await db
@@ -73,13 +71,12 @@ describe.sequential("organization operating defaults", () => {
 
     expect(rows).toHaveLength(1);
     await expect(getOrganizationDefaults(ctx)).resolves.toMatchObject({
-      defaultCurrency: "EUR",
+      defaultPackaging: "loose",
     });
   });
 
   it("keeps an unset country null rather than storing a placeholder", async () => {
-    // Facility and party rows persist `'UNKNOWN'` today. A default nobody chose
-    // should not look chosen, so the organization-level field stays null.
+    // A default nobody chose should not look chosen, so the field stays null.
     const ctx = makeTestOrgContext();
     await upsertOrganizationDefaults(ctx, {
       ...DEFAULT_ORGANIZATION_SETTINGS,
@@ -88,6 +85,19 @@ describe.sequential("organization operating defaults", () => {
 
     await expect(getOrganizationDefaults(ctx)).resolves.toMatchObject({
       defaultCountry: null,
+    });
+  });
+
+  it("stores no timezone when the organization has not chosen one", async () => {
+    const ctx = makeTestOrgContext();
+    await upsertOrganizationDefaults(ctx, {
+      ...DEFAULT_ORGANIZATION_SETTINGS,
+      defaultTimezone: null,
+    });
+
+    expect(DEFAULT_ORGANIZATION_SETTINGS.defaultTimezone).toBeNull();
+    await expect(getOrganizationDefaults(ctx)).resolves.toMatchObject({
+      defaultTimezone: null,
     });
   });
 

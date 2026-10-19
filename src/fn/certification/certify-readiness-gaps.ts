@@ -1,10 +1,12 @@
+import { sampleDocumentWarnings } from "@/lib/certification/sample-document-warnings";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import type {
   BatchEntityReadinessIssue,
   BatchHealthAffectedRecord,
   BatchHealthFixTarget,
 } from "@/lib/certification/batch-health";
-import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import { transportRepairDestination } from "@/lib/isometric/semantic-binding-catalog";
+import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import type { TransportCategory } from "./certify-context-core";
 import type { TransportLegsByCategory } from "./shared";
@@ -47,7 +49,7 @@ function addIssueRecord(
 }
 
 export function buildEntityReadinessResult(
-  runs: ProductionRunWithSamples[],
+  runs: ProductionRunForCertification[],
   batchesWithSamples: CreditBatchWithSamples[],
   transportLegs: TransportLegsByCategory,
   requiredTransportCategories: readonly TransportCategory[],
@@ -68,8 +70,7 @@ export function buildEntityReadinessResult(
     );
     addIssueRecord(issues, issueConfig, { ...record, missing });
   };
-  // Inert until an entity kind produces warnings again. See the warning channel
-  // note in `deriveEntityCertifyReadiness`.
+  // Preserve non-blocking warnings separately from submission gaps.
   const addEntityWarnings = (
     entityLabel: string,
     readinessWarnings: ReturnType<
@@ -99,6 +100,7 @@ export function buildEntityReadinessResult(
   }
 
   for (const batch of batchesWithSamples) {
+    warnings.push(...sampleDocumentWarnings(batch));
     for (const sample of batch.samples) {
       const readiness = deriveEntityCertifyReadiness("sample", {
         ...sample,
@@ -134,12 +136,7 @@ export function buildEntityReadinessResult(
         {
           key: `${category}-transport-evidence`,
           label: `${category[0]?.toUpperCase()}${category.slice(1)} transport evidence`,
-          fixTarget:
-            category === "feedstock"
-              ? "feedstocks"
-              : category === "sample"
-                ? "labSamples"
-                : "deliveries",
+          fixTarget: transportRepairDestination(category),
         },
         readiness.gaps,
       );

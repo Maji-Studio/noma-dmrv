@@ -11,12 +11,15 @@ loadEnv({ path: ".env.local", override: false });
 import { and, eq } from "drizzle-orm";
 import { DEC_ORG_ID } from "@/db/org-defaults";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
-import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
+import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
+import { normalizeTemplateDefinition, resolveLineSources } from "@/lib/isometric/template-observations";
 import * as schema from "../../../src/db/schema";
 import { createDbConnection } from "./db";
 
 /** The sandbox project every gated scenario links facilities to. */
 export const SANDBOX_PROJECT_ID = process.env.ISOMETRIC_DEMO_PROJECT_ID;
+export const SANDBOX_FACILITY_ID = process.env.ISOMETRIC_DEMO_FACILITY_ID;
 
 export const CERTIFICATION_PROTOCOL_SLUG = "biochar";
 export const CERTIFICATION_PROTOCOL_VERSION = "1.1";
@@ -30,23 +33,13 @@ export interface SeededMapping {
   cleanup: () => Promise<void>;
 }
 
-/** The per-facility emission-estimate config a live submit needs. */
-export interface FacilityEmissionConfigSeed {
-  gensetEnergyYieldKwhPerLitre: number;
-}
-
-/** Plausible default genset yield for the live create-to-submit path. */
-export const DEFAULT_FACILITY_EMISSION_CONFIG: FacilityEmissionConfigSeed = {
-  gensetEnergyYieldKwhPerLitre: 3,
-};
-
 /** Link a facility to an Isometric project and return its cleanup. */
 export async function seedCertifierMapping(
   facilityId: string,
   opts: {
     externalProjectId: string;
+    externalFacilityId?: string;
     defaultRemovalTemplateId?: string | null;
-    emissionConfig?: FacilityEmissionConfigSeed;
   },
 ): Promise<SeededMapping> {
   const { db, pool } = createDbConnection();
@@ -59,7 +52,7 @@ export async function seedCertifierMapping(
       protocolSlug: CERTIFICATION_PROTOCOL_SLUG,
       protocolVersion: CERTIFICATION_PROTOCOL_VERSION,
       defaultRemovalTemplateId: opts.defaultRemovalTemplateId ?? null,
-      ...(opts.emissionConfig ?? {}),
+      externalFacilityId: opts.externalFacilityId ?? `fcl_e2e_${facilityId.replaceAll("-", "")}`,
     });
   } finally {
     await pool.end();
@@ -125,7 +118,20 @@ function templateHasUnboundFixedInput(template: RawRemovalTemplate): boolean {
   );
 }
 
-/** Resolve a sandbox removal template whose fixed inputs are all bound. */
+/**
+ * A fresh observation compiles only when every line has a settled contract
+ * that binds, the same coverage submission runs (entry-only lines block).
+ */
+function templateCompilesOnFirstRead(template: RawRemovalTemplate): boolean {
+  const ghgTemplate = template as unknown as IsometricGhgEntryTemplate;
+  const lineSources = resolveLineSources({ definition: normalizeTemplateDefinition(ghgTemplate) });
+  if (Object.values(lineSources).some((contract) => contract.origin === "proposed")) return false;
+  return findUnbindableTemplateInputs(ghgTemplate, {
+    lineSources,
+  }).length === 0;
+}
+
+/** Resolve a sandbox removal template that the submission compiler accepts. */
 export async function fetchSubmittableSandboxRemovalTemplate(
   projectId: string,
 ): Promise<{ id: string; componentBlueprintKeys: string[] } | null> {
@@ -158,7 +164,7 @@ export async function fetchSubmittableSandboxRemovalTemplate(
     }
     const json = (await response.json()) as { nodes?: RawRemovalTemplate[] };
     for (const node of json.nodes ?? []) {
-      if (node.id && !templateHasUnboundFixedInput(node)) {
+      if (node.id && !templateHasUnboundFixedInput(node) && templateCompilesOnFirstRead(node)) {
         return {
           id: node.id,
           componentBlueprintKeys: (node.groups ?? []).flatMap((group) =>

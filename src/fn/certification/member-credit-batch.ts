@@ -10,6 +10,7 @@ import type {
 export interface MemberCreditBatch {
   id: string;
   code: string;
+  removalTemplateId: string | null;
   startDate: string;
   endDate: string;
   appliedWeightTons: number;
@@ -17,6 +18,8 @@ export interface MemberCreditBatch {
   appliedDryWeightTons: number;
   durabilityOption: DurabilityOption;
   sampling: CreditBatchSampling;
+  hasLabReport?: boolean;
+  hasReflectanceHistogram?: boolean;
   feedstockType: CreditBatchFeedstockTypeFact;
   productionRunCount: number;
   applicationCount: number;
@@ -32,6 +35,7 @@ export function toMemberCreditBatch(
   return {
     id: batch.id,
     code: batch.code,
+    removalTemplateId: batch.removalTemplateId,
     startDate: batch.startDate,
     endDate: batch.endDate,
     appliedWeightTons: accounting.appliedWeightTons,
@@ -54,12 +58,15 @@ export function toMemberCreditBatchView(
   return {
     id: batch.id,
     code: batch.code,
+    removalTemplateId: batch.removalTemplateId,
     startDate: batch.startDate,
     endDate: batch.endDate,
     appliedWeightTons: batch.appliedWeightTons,
     appliedDryWeightTons: batch.appliedDryWeightTons,
     durabilityOption: batch.durabilityOption,
     sampling: batch.sampling,
+    hasLabReport: batch.hasLabReport,
+    hasReflectanceHistogram: batch.hasReflectanceHistogram,
     feedstockType: batch.feedstockType,
     productionRunCount: batch.productionRunCount,
     applicationCount: batch.applicationCount,

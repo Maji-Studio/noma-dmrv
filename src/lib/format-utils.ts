@@ -10,13 +10,17 @@
  * rule lives with the vocabulary in `@/lib/copy-utils`.
  */
 
-import { format, isValid, parseISO } from "date-fns";
+import { format } from "date-fns/format";
+import { isValid } from "date-fns/isValid";
+import { parseISO } from "date-fns/parseISO";
+import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatFacilityTime, parseLocalDateString, SHORT_MONTH_NAMES } from "@/lib/date-utils";
+import { formatFacilityTime, formatUtcDate, parseLocalDateString, SHORT_MONTH_NAMES } from "@/lib/date-utils";
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_FORMAT = "MMM d, yyyy";
-const DATE_TIME_FORMAT = "MMM d, yyyy, HH:mm";
+const TIME_FORMAT = "HH:mm";
+const DATE_TIME_FORMAT = `MMM d, yyyy, ${TIME_FORMAT}`;
 const FACILITY_DATE_TIME_WITH_OFFSET_FORMAT = "yyyy-MM-dd HH:mm xxx";
 const SAME_YEAR_RANGE_START_FORMAT = "MMM d";
 const KG_PER_TONNE = 1000;
@@ -72,6 +76,14 @@ export function formatDayString(day: string | null | undefined): string {
   return `${monthName} ${dayOfMonth}, ${year}`;
 }
 
+/** Business dates still persisted as UTC-midnight timestamps, such as order and intake dates. */
+export function formatCalendarDate(value: DateValue): string {
+  if (!value) return MISSING_VALUE.notRecorded;
+  if (typeof value === "string" && DATE_ONLY_PATTERN.test(value)) return formatDayString(value);
+  const date = typeof value === "string" ? parseISO(value) : value;
+  return isValid(date) ? formatDayString(formatUtcDate(date)) : MISSING_VALUE.notAvailable;
+}
+
 /**
  * Format a date and time for user-facing display using a 24-hour clock.
  * Returns "Not recorded" for null or undefined and "Not available" for a value
@@ -81,6 +93,17 @@ export function formatDateTime(value: DateValue): string {
   if (!value) return MISSING_VALUE.notRecorded;
   const date = parseDateValue(value);
   return date ? format(date, DATE_TIME_FORMAT) : MISSING_VALUE.notAvailable;
+}
+
+/**
+ * Format the time of day on a 24-hour clock ("14:30"), on the viewer's clock.
+ * Returns "Not recorded" for null or undefined and "Not available" for a value
+ * it cannot parse.
+ */
+export function formatTime(value: DateValue): string {
+  if (!value) return MISSING_VALUE.notRecorded;
+  const date = parseDateValue(value);
+  return date ? format(date, TIME_FORMAT) : MISSING_VALUE.notAvailable;
 }
 
 /**
@@ -173,6 +196,11 @@ export function formatMassKg(kg: number | null | undefined, opts?: { digits?: nu
   return `${kg.toLocaleString(undefined, { maximumFractionDigits: opts?.digits ?? MASS_KG_MAX_FRACTION_DIGITS })} kg`;
 }
 
+/** Whether a mass displays as zero at formatMassKg's default precision. */
+export function massKgRoundsToZero(kg: number): boolean {
+  return formatMassKg(kg) === formatMassKg(0);
+}
+
 /**
  * Format a 0–100 percentage for display — one decimal by default, trailing
  * ".0" trimmed, "Not recorded" for null. Lab analytics that need more resolution pass
@@ -253,6 +281,45 @@ export function formatDistanceKm(km: number | null | undefined): string {
   if (km == null) return MISSING_VALUE.notRecorded;
   return `${roundKmDisplay(km)} km`;
 }
+
+/**
+ * A leg's one-way distance with the round trip it counts in emissions, e.g.
+ * "240 km one way · 480 km round trip counted". Every leg counts its round
+ * trip (`@/lib/calculations/round-trip`), so wherever a leg distance is shown
+ * the counted figure sits beside what the operator entered.
+ */
+export function formatLegDistanceKm(oneWayKm: number | null | undefined): string {
+  if (oneWayKm == null) return MISSING_VALUE.notRecorded;
+  return `${formatDistanceKm(oneWayKm)} one way · ${formatRoundTripKm(oneWayKm)}`;
+}
+
+/**
+ * The compact pair for chips and rails where the full sentence does not fit:
+ * "240 km · 480 km counted". Pair it with `formatLegDistanceKm` as the
+ * accessible name so screen readers still hear "one way" and "round trip".
+ */
+export function formatLegDistanceCompactKm(oneWayKm: number | null | undefined): string {
+  if (oneWayKm == null) return MISSING_VALUE.notRecorded;
+  return `${formatDistanceKm(oneWayKm)} · ${formatDistanceKm(countedRoundTripKm(oneWayKm))} counted`;
+}
+
+/** Just the counted part, "480 km round trip counted", for a one-way figure shown elsewhere. */
+export function formatRoundTripKm(oneWayKm: number): string {
+  return `${formatDistanceKm(countedRoundTripKm(oneWayKm))} round trip counted`;
+}
+
+/** Static cue for a one-way distance field: the counted round trip once a value exists. */
+export function oneWayDistanceCue(
+  oneWayKm: number | null | undefined,
+  emptyCue: string,
+): string {
+  return oneWayKm != null && Number.isFinite(oneWayKm) && oneWayKm > 0
+    ? formatRoundTripKm(oneWayKm)
+    : emptyCue;
+}
+
+export const ONE_WAY_EACH_DELIVERY_CUE = "One way. Each delivery counts the round trip.";
+export const ONE_WAY_CUE = "One way";
 
 export const BYTES_PER_KB = 1024;
 export const BYTES_PER_MB = 1024 * 1024;

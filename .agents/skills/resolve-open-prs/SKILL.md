@@ -29,16 +29,19 @@ Completion: every open PR is in exactly one bucket — queued, flagged (draft / 
 
 ## Phase 2 — Per-PR cycle
 
-Run the full cycle for each queued PR in order. After every merge, `staging` has moved — the next PR's cycle starts again at Sync.
+Run the full cycle for each queued PR in order. `staging` merges go through a GitHub merge queue that squashes and retests each PR on top of the latest `staging`, so a branch that is only behind needs no sync.
 
-1. **Sync** — `gh pr checkout <n>`; if behind, merge `origin/staging` into the branch and resolve conflicts; push. Confirm `git branch --show-current` is the PR branch before any commit.
+1. **Sync** — `gh pr checkout <n>`; confirm `git branch --show-current` is the PR branch before any commit. Read `gh pr view <n> --json mergeStateStatus`; GitHub computes it lazily and often returns `UNKNOWN` right after `staging` moves, so re-query until it settles. Merge `origin/staging` into the branch only when it reports `DIRTY` (a conflict, which also hides CI), or still `UNKNOWN` after a minute; resolve and push. `BEHIND` is fine.
 2. **Resolve comments** — one resolver subagent handles every unresolved thread and PR-level comment: verify against the code first; fix valid findings with the **minimal** change (one commit per addressed comment — mechanical fixes may go through the codex-implementation skill); decline false positives and gold-plating with a one-line written reason; reply to each thread and resolve it; push.
 3. **Panel** — run the `pr-review-panel` workflow (`.claude/workflows/pr-review-panel.js`) with `args: {pr, base, head}`. It runs a gpt-6-astra (codex) reviewer and a fresh Claude reviewer in parallel, then a single adversarial verifier that dedupes and confirms — only **confirmed** findings come back. Fix them (codex-implementation for mechanical work), commit, push. If the fixes were substantial, re-run the panel once; **max two rounds** — remaining low-severity nits after round two are judgment calls recorded in the report, not new rounds.
-4. **Gate** — `pnpm lint` + `pnpm typecheck` + focused tests green (read real output, not piped exit codes); `gh pr checks <n> --watch` until green; give CodeRabbit up to ~10 min to land if it reviews this PR, then triage its comments like step 2. Never merge on red.
-5. **Merge into `staging`** — squash ordinary feature, fix, refactor, chore, docs, and test PRs so `staging` keeps one commit per PR; title `<type>: <imperative, lowercase>` under 70 chars:
+4. **Gate** — `pnpm verify:static` + focused tests green (read real output, not piped exit codes); `gh pr checks <n> --watch` until green; give CodeRabbit up to ~10 min to land if it reviews this PR, then triage its comments like step 2. Never merge on red.
+5. **Merge into `staging`** — enqueue the reviewed head; the queue squashes, so `staging` keeps one commit per PR (title `<type>: <imperative, lowercase>` under 70 chars):
    ```bash
-   gh pr merge <n> --squash --delete-branch
+   gh pr view <n> --json id -q .id   # read the node id first
+   gh api graphql -f query='mutation($id:ID!,$sha:GitObjectID!){enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$sha}){mergeQueueEntry{state position}}}' \
+     -f id=<node id> -f sha=<sha>
    ```
+   Not `gh pr merge`: on a queued branch it calls `enablePullRequestAutoMerge`, which this repo disallows. The mutation only enqueues, and `expectedHeadOid` refuses a head that moved after review. Poll `gh pr view <n> --json state` until `MERGED` (about 10 min with green checks), then delete the head branch (`git push origin --delete <headRefName>`, only when `gh pr view <n> --json isCrossRepository,headRefName` shows a same-repo head that is not `staging` or `main`) and, if the PR was worked in a worktree, tear it down (`scripts/worktree.sh teardown <name>`); deleting the head of a still-queued PR closes it unmerged. If the PR stays `OPEN` but has left the queue (`gh pr view` lacks the field, so check `isInMergeQueue` via `gh api graphql`), find out why before fixing: `DIRTY` means a conflict, so go back to Sync; otherwise read this PR's group runs (`gh run list --event merge_group --json headBranch,conclusion,databaseId`, filtered to heads starting `gh-readonly-queue/staging/pr-<n>-`). Fix, and enqueue again.
 
 Completion per PR: merged, or parked with a written blocker. A parked PR never silently blocks the queue — record the blocker and move on.
 

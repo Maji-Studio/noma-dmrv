@@ -10,6 +10,7 @@ import {
 import { StorageError } from "@/lib/storage/types";
 
 const STORAGE_KEY = "org/org-1/sample/sample-1/report/file.pdf";
+const SHORT_TIMEOUT_MS = 1_000;
 
 // Only the HTTP-backed provider reads through fetch. local-fs reads its own
 // files from disk so server-side readers never depend on the app's HTTP route.
@@ -74,7 +75,27 @@ describe.each(PROVIDERS)("$name getObject", ({ create }) => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("aborts stalled reads at the named deadline and clears the timer", async () => {
+  it.each([
+    0,
+    NaN,
+    Infinity,
+    -1,
+    1.5,
+    STORAGE_GET_OBJECT_TIMEOUT_MS + 1,
+  ])("rejects invalid timeout %s before fetching or scheduling a deadline", async (timeoutMs) => {
+    vi.useFakeTimers();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    await expect(create().getObject({ key: STORAGE_KEY }, timeoutMs)).rejects.toThrow(RangeError);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([
+    { label: "default", timeoutMs: undefined, deadlineMs: STORAGE_GET_OBJECT_TIMEOUT_MS },
+    { label: "custom", timeoutMs: SHORT_TIMEOUT_MS, deadlineMs: SHORT_TIMEOUT_MS },
+  ])("aborts stalled reads at the $label deadline and clears the timer", async ({ timeoutMs, deadlineMs }) => {
     vi.useFakeTimers();
     vi.spyOn(globalThis, "fetch").mockImplementation(
       (_input, init): Promise<Response> =>
@@ -91,11 +112,11 @@ describe.each(PROVIDERS)("$name getObject", ({ create }) => {
         }),
     );
 
-    const read = create().getObject({ key: STORAGE_KEY });
+    const read = create().getObject({ key: STORAGE_KEY }, timeoutMs);
     const rejection = expect(read).rejects.toEqual(
       new StorageError("Stored object read timed out", "get_object_timeout"),
     );
-    await vi.advanceTimersByTimeAsync(STORAGE_GET_OBJECT_TIMEOUT_MS);
+    await vi.advanceTimersByTimeAsync(deadlineMs);
     await rejection;
     expect(vi.getTimerCount()).toBe(0);
   });

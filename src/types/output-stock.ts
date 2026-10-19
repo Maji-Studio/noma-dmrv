@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 import type { MoistureBasis } from '@/lib/output-stock/moisture-estimate';
-import type { OutputStockMode } from '@/lib/output-stock/stock-mode';
+import type { OutputDrawOrder, OutputStockMode } from '@/lib/output-stock/stock-mode';
 import type { orderedSourceSchema } from '@/schemas/output-stock';
 /** Serializable operator read models; exact fractions remain inside the ledger. */
 export interface OutputStockAllocationView {
@@ -25,6 +25,7 @@ export interface OutputStockPreviewInput {
 }
 
 export interface OutputStockPreview {
+  expectedProductVersions: Record<string, number>;
   basisFingerprint: string;
   storageLocationId: string;
   binName: string;
@@ -41,12 +42,12 @@ export interface OutputStockPreview {
   removedWetKg: number | null;
   /** The moisture this movement's wet figures are at: the reading, or a split draw's overall 1 − solids ÷ wet. */
   movementMoisturePercent: number | null;
-  /** Wet stock estimated from each batch's latest reading, before and after this movement's readings. */
+  /** Wet stock, wet in less wet out from each batch's last count, before and after this movement. */
   beforeEstimatedWetKg: number | null;
   afterEstimatedWetKg: number | null;
   /** The bin's estimate before this movement: the hint beside a moisture field. */
   moistureEstimate?: OutputMoistureEstimate | null;
-  /** What this movement's readings reset: the same remaining stock at its previous estimate, then at the reading. */
+  /** What a count's readings reset: the same remaining stock at its previous estimate, then at the count. Removals reset nothing. */
   moistureReset?: OutputMoistureReset | null;
   /** The bin's stock mode at this movement's time; a merged bin is split before its merge. */
   stockMode?: OutputStockMode;
@@ -67,7 +68,7 @@ export interface OutputStockPreview {
 export interface OutputMoistureEstimate {
   moisturePercent: number | null;
   wetKg: number | null;
-  /** Where the estimate comes from: the latest reading, or the moisture recorded when the batch was added. */
+  /** Where the estimate comes from: the last count, or the moisture recorded when the batch was added. */
   basis: MoistureBasis | null;
 }
 
@@ -79,12 +80,15 @@ export interface OutputMoistureReset {
 }
 
 export interface OutputStockPostInput extends OutputStockPreviewInput {
+  expectedProductVersions: Record<string, number>;
   basisFingerprint: string;
   idempotencyKey: string;
   reason: string;
 }
 
 export interface OutputStockHistoryEntry {
+  /** Null while this loss or delivery is latest; omitted for other kinds. */
+  editLockedReason?: string | null;
   id: string;
   kind: string;
   eventKind?: 'delivery' | 'loss' | 'count' | 'production_draw';
@@ -100,10 +104,15 @@ export interface OutputStockHistoryEntry {
   afterDryKg: number;
   correctsMovementId: string | null;
   deliveryId: string | null;
+  /** The form this movement came from, when it has one. */
+  source?: { entity: 'productionRun' | 'biocharProduct' | 'delivery' | 'application'; id: string };
+  /** Frozen changes for the chart; null means the wet or solids basis is unresolved. */
+  wetDeltaKg?: number | null;
+  solidsDeltaKg?: number | null;
   allocations: OutputStockAllocationView[];
   /** Split draws: the sub-bins and readings the entry was posted with. */
   sources?: { layerId: string; moisturePercent: number }[];
-  /** "Moisture updated" entries: the movement whose readings reset the estimate, and the change. */
+  /** "Moisture updated" entries: the count whose readings reset the estimate, and the change. */
   measuredByMovementId?: string;
   moistureReset?: OutputMoistureReset;
 }
@@ -126,7 +135,7 @@ export interface OutputSubBin {
   placedAt: string;
   dryMassKg: number;
   solidsKg: number;
-  /** Wet stock at the sub-bin's latest moisture; null when nothing dates it. */
+  /** The sub-bin's wet stock, wet in less wet out from its last count; null when nothing dates it. */
   wetEstimateKg: number | null;
   moisturePercent: number | null;
   basis: MoistureBasis | null;
@@ -136,14 +145,17 @@ export interface OutputSubBin {
 
 export interface OutputSubBins {
   stockMode: OutputStockMode;
-  /** Oldest first: the order a draw takes them in unless the operator changes it. */
+  /** The bin's default draw order: where the picker starts unless the operator changes it. */
+  drawOrder: OutputDrawOrder;
+  /** Split bins follow `drawOrder`; mix bins keep chronological batch display. */
   subBins: OutputSubBin[];
 }
 
 export interface OutputSubBinsInput {
   storageLocationId: string;
   facilityId: string;
-  occurredAt: string;
+  /** The entry's time. Omitted means now, taken on the server once the read's snapshot is fixed. */
+  occurredAt?: string;
   /** A correction reads the sub-bins as they were before the entry it replaces. */
   correctsMovementId?: string;
   kind?: OutputStockPreviewInput['kind'];
@@ -155,7 +167,7 @@ export interface MatchingOutputBin {
   name: string;
   /** Null when the bin's layers do not resolve. */
   dryMassKg: number | null;
-  /** Wet stock at each batch's latest reading; null when the bin's layers do not resolve. */
+  /** Wet stock, wet in less wet out from each batch's last count; null when the bin's layers do not resolve. */
   estimatedWetMassKg: number | null;
 }
 

@@ -15,14 +15,14 @@ import type { EntityOption } from "./types";
 interface FeedstockTypeQuickAddDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (entity: EntityOption) => void;
+  onSuccess?: (entity: EntityOption) => void;
   defaultUsage?: FeedstockTypeUsage;
 }
 
 export function FeedstockTypeQuickAddDialog({
   isOpen,
   onClose,
-  onSuccess,
+  onSuccess = () => undefined,
   defaultUsage,
 }: FeedstockTypeQuickAddDialogProps) {
   const hint =
@@ -63,6 +63,8 @@ export function FeedstockTypeQuickAddDialog({
         defaultUsage={defaultUsage}
         lockUsage={Boolean(defaultUsage)}
         hint={hint}
+        stickyActions={false}
+        guardDialogCancel
       />
     </QuickAddDialogShell>
   );

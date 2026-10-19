@@ -14,7 +14,9 @@
  */
 "use client";
 
+import { MultilineDetail } from "../multiline-detail";
 import Link from "next/link";
+import { formatUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import {
   ArrowSquareOutIcon,
   CaretDownIcon,
@@ -54,6 +56,7 @@ interface SelectBatchesStepProps {
  */
 export function setupGapCopy(gap: FacilitySetupGap): {
   message: string;
+  lines?: string[];
   action: { label: string; toSettings: true } | null;
 } {
   switch (gap.kind) {
@@ -62,6 +65,11 @@ export function setupGapCopy(gap: FacilitySetupGap): {
         message:
           "This facility isn't linked to an Isometric project yet. Link it before grouping batches.",
         action: { label: "Link facility in certification settings", toSettings: true },
+      };
+    case "external_facility_id":
+      return {
+        message: "This facility is linked, but its Isometric facility ID is not set.",
+        action: { label: "Set Isometric facility ID in certification settings", toSettings: true },
       };
     case "credentials":
       return {
@@ -80,6 +88,14 @@ export function setupGapCopy(gap: FacilitySetupGap): {
         message: `The configured Removal template (${gap.templateId}) is no longer available in the registry. Select another template.`,
         action: { label: "Re-select template in certification settings", toSettings: true },
       };
+    case "template_unbindable": {
+      const { lead, lines } = formatUnbindableTemplateInputs(gap.inputs);
+      return {
+        message: lead,
+        lines,
+        action: { label: "Review certification settings", toSettings: true },
+      };
+    }
     case "blueprint_keys": {
       const labels = gap.keys.map(facilityBlueprintLabel);
       return {
@@ -211,9 +227,9 @@ function IncompleteCard({
                 )}
               </span>
               {check.detail && (
-                <span className="body-caption text-[var(--color-text-tertiary)]">
-                  {check.detail}
-                </span>
+                <div className="body-caption text-[var(--color-text-tertiary)]">
+                  <MultilineDetail>{check.detail}</MultilineDetail>
+                </div>
               )}
               {/* New tab: the fix opens alongside so this readiness workspace
                   stays put — the operator resolves the gap and returns here. */}
@@ -284,7 +300,7 @@ export function SelectBatchesStep({
           return (
             <Notice
               key={gap.kind}
-              tone="warning"
+              tone={gap.kind === "template_unbindable" ? "error" : "warning"}
               action={
                 copy.action && (
                   <Link
@@ -298,6 +314,11 @@ export function SelectBatchesStep({
               }
             >
               {copy.message}
+              {copy.lines && (
+                <ul className="list-disc pl-16">
+                  {copy.lines.map((line) => <li key={line}>{line}</li>)}
+                </ul>
+              )}
             </Notice>
           );
         })}

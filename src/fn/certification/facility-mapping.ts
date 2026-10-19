@@ -1,5 +1,6 @@
 "use server";
 
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { env } from "@/config/env";
 import {
   deleteCertifierProject,
@@ -14,9 +15,9 @@ import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgRole } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import {
-  getIsometricClientForOrg,
   IsometricApiError,
   listProjects,
+  listComponentBlueprints,
   listGhgEntryTemplates,
   type IsometricProject,
   type IsometricGhgEntryTemplate,
@@ -31,6 +32,8 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
+import { loadRemovalTemplateFacts } from "./removal-template-facts";
+
 export interface FacilityCertifierMapping {
   mapping: CertifierProjectRow | null;
   availableProjects: IsometricProject[];
@@ -51,7 +54,7 @@ export async function loadFacilityCertifierMapping(
 ): Promise<ActionResult<FacilityCertifierMapping>> {
   return withAction(async (orgCtx) => {
     await requireOrgFacility(orgCtx, facilityId);
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    const client = await resolveIsometricClient(orgCtx);
     const [mapping, projectCatalog, allLinkedFacilities] = await Promise.all([
       getCertifierProjectByFacility(orgCtx, facilityId, ISOMETRIC_PROVIDER),
       listProjectsWithConfiguration(client),
@@ -108,9 +111,8 @@ export async function saveFacilityCertifierMapping(
   return withAction(async (orgCtx) => {
     requireOrgRole(orgCtx, "admin");
     const parsed = saveMappingSchema.parse(input);
-    // certifier_projects.facilityId has no FK to facilities(id), so an org
-    // admin could otherwise insert a row pairing their organizationId with a
-    // foreign facility UUID (cross-org squatting on externalFacilityId).
+    // Check facility ownership before registry reads. The composite FK and
+    // upsert organization guard also enforce it at the persistence boundary.
     await requireOrgFacility(orgCtx, parsed.facilityId);
 
     if (
@@ -122,7 +124,7 @@ export async function saveFacilityCertifierMapping(
       );
     }
 
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    const client = await resolveIsometricClient(orgCtx);
     let projects;
     try {
       projects = await listProjects(client);
@@ -155,6 +157,10 @@ export async function saveFacilityCertifierMapping(
         );
       }
       assertSequestrationTemplateSelectable(selectedTemplate);
+      await loadRemovalTemplateFacts(orgCtx, {
+        client, externalProjectId: parsed.externalProjectId, template: selectedTemplate,
+        blueprints: await listComponentBlueprints(client),
+      });
     }
 
     return upsertCertifierProject(orgCtx, {
@@ -163,7 +169,7 @@ export async function saveFacilityCertifierMapping(
       externalProjectId: parsed.externalProjectId,
       protocolSlug: parsed.protocolSlug,
       defaultRemovalTemplateId: parsed.defaultRemovalTemplateId ?? null,
-      externalFacilityId: parsed.externalFacilityId ?? null,
+      externalFacilityId: parsed.externalFacilityId,
     });
   });
 }
@@ -183,14 +189,13 @@ export async function loadIsometricProjectTemplates(
   externalProjectId: string,
 ): Promise<ActionResult<IsometricGhgEntryTemplate[]>> {
   return withAction(async (orgCtx) => {
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    const client = await resolveIsometricClient(orgCtx);
     return listGhgEntryTemplates(client, externalProjectId);
   });
 }
 
 // Org Owner/Admin-only: this per-facility emission-estimate config feeds the
-// reference soil temperature submitted with every 200-year removal (the
-// genset yield is a vestigial local estimate since issue #319).
+// reference soil temperature submitted with every 200-year removal.
 export async function saveFacilityEmissionConfig(
   input: FacilityEmissionConfigFormData,
 ): Promise<ActionResult<CertifierProjectRow>> {
@@ -200,7 +205,6 @@ export async function saveFacilityEmissionConfig(
     return updateFacilityEmissionConfig(orgCtx, {
       facilityId: parsed.facilityId,
       provider: ISOMETRIC_PROVIDER,
-      gensetEnergyYieldKwhPerLitre: parsed.gensetEnergyYieldKwhPerLitre ?? null,
       defaultSoilTemperatureC: parsed.defaultSoilTemperatureC ?? null,
       defaultSoilTemperatureSource: parsed.defaultSoilTemperatureSource ?? null,
     });

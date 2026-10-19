@@ -22,12 +22,11 @@ import {
   packagingType,
   transportEntityType,
   transportMethod,
-  transportTripType,
 } from './common';
 import { facilities, storageLocations } from './facilities';
 import { massKg, percent } from './numeric-families';
 import { customerLocations, customers, drivers } from './parties';
-import { biocharProducts, formulations } from './products';
+import { formulations } from './products';
 import { biocharStorageInventory } from './storage-inventory';
 
 // ============================================
@@ -35,6 +34,7 @@ import { biocharStorageInventory } from './storage-inventory';
 // ============================================
 
 export const vehicles = pgTable('vehicles', {
+  version: integer('version').notNull().default(1),
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text('organization_id')
     .notNull()
@@ -45,12 +45,12 @@ export const vehicles = pgTable('vehicles', {
   // (distance-based, Eq. 3). Optional so a vehicle can be recorded with just a
   // name + type. See vehicleType note below.
   identifier: text('identifier'),
-  // Required: selects the Isometric component emission factor (Eq. 3); the only
-  // vehicle field the certified transport calc actually depends on.
+  // Required fleet record requested by the Transportation module.
+  // The emission factor is a fixed template input, not selected by this type.
   vehicleType: text('vehicle_type').notNull(), // e.g., "truck", "tractor"
   fuelType: text('fuel_type'), // e.g., "Diesel" — metadata only
   fuelConsumptionLPerKm: real('fuel_consumption_l_per_km'), // e.g., 0.3 L/km — metadata only, never submitted
-  modelYear: integer('model_year'), // factor-uniformity hedge, not submitted
+  modelYear: integer('model_year'), // Transportation module record copied onto feedstock legs
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
@@ -63,6 +63,7 @@ export const vehicles = pgTable('vehicles', {
 // ============================================
 
 export const orders = pgTable('orders', {
+  version: integer('version').notNull().default(1),
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text('organization_id')
     .notNull()
@@ -77,13 +78,12 @@ export const orders = pgTable('orders', {
     .notNull()
     .references(() => customers.id),
   customerLocationId: uuid('customer_location_id')
+    .notNull()
     .references(() => customerLocations.id),
   // --- Order Details ---
   formulationId: uuid('formulation_id').notNull().references(() => formulations.id),
   quantityKg: real('quantity_kg').notNull(),
   packaging: packagingType('packaging').notNull(),
-  value: real('value'),
-  currency: text('currency').notNull().default('TZS'), // ISO 4217 code
 
   // Stamped by the facility archive cascade; NULL = active
   archivedAt: timestamp('archived_at'),
@@ -107,6 +107,7 @@ export const orders = pgTable('orders', {
 export const deliveries = pgTable(
   'deliveries',
   {
+    version: integer('version').notNull().default(1),
     id: uuid('id').primaryKey().defaultRandom(),
     organizationId: text('organization_id')
       .notNull()
@@ -121,40 +122,32 @@ export const deliveries = pgTable(
     orderId: uuid('order_id')
       .notNull(),
 
-    // Optional override when delivery destination differs from order destination.
-    customerLocationId: uuid('customer_location_id').references(
-      () => customerLocations.id
-    ),
-
     // Per-delivery road-distance override (km) for the distribution transport
-    // leg. Defaults to the destination customer location's distance; set here
+    // leg. Falls back to the frozen recorded distance; set here
     // only when this trip's routing differs. Mirrors the feedstock-side
     // transportDistanceKm override.
     distanceKmOverride: real('distance_km_override'),
+    // Facility-pair snapshot captured on save, or filled later only while missing.
+    recordedDistanceKm: real('recorded_distance_km'),
+    // Provenance captured with the recorded distance.
+    recordedDistanceSource: distanceSource('recorded_distance_source'),
     // Provenance of the effective trip distance. Usually null when no distance
     // override is stored; `document` may be persisted alone when this delivery
-    // has trip-specific evidence for the inherited customer-location distance.
+    // has trip-specific evidence for the recorded distance.
     distanceSource: distanceSource('distance_source'),
     distanceNote: text('distance_note'),
-    // Round-trip vs one-way accounting for the distribution transport leg
-    // (issue #316, §4.2). `return` (default) doubles the one-way distance at
-    // aggregation; `one_way` requires an evidenced onward destination.
-    tripType: transportTripType('trip_type').notNull().default('return'),
 
-    // --- Product Batch ---
-    biocharProductId: uuid('biochar_product_id').references(
-      () => biocharProducts.id
-    ),
+    // --- Product bin; drawn products resolve through output stock allocations ---
     storageLocationId: uuid('storage_location_id').notNull().references(
       () => storageLocations.id
     ),
     // Specific product-in-bin record this delivery draws from.
-    // Drives quantityKgRemaining decrement and expiry check at delivery creation.
+    // Legacy inventory reference; current draws use output stock allocations.
     biocharStorageInventoryId: uuid('biochar_storage_inventory_id').references(
       () => biocharStorageInventory.id
     ),
     moistureContentPercent: percent('moisture_content_percent'),
-    deliveredWetMassKg: massKg('delivered_wet_mass_kg'),
+    deliveredWetMassKg: massKg('delivered_wet_mass_kg').notNull(),
     // Server-authoritative dry biochar allocated from the linked product.
     massDryKg: massKg('mass_dry_kg'),
 
@@ -197,8 +190,8 @@ export const deliveries = pgTable(
       sql`${table.massDryKg} is null or ${table.deliveredWetMassKg} is null or ${table.massDryKg} <= ${table.deliveredWetMassKg}`
     ),
     check(
-      'deliveries_distance_km_override_non_negative',
-      sql`${table.distanceKmOverride} is null or ${table.distanceKmOverride} >= 0`
+      'deliveries_distance_km_override_positive',
+      sql`${table.distanceKmOverride} is null or ${table.distanceKmOverride} > 0`
     ),
   ]
 );
@@ -211,13 +204,14 @@ export const deliveries = pgTable(
 export const transportLegs = pgTable(
   'transport_legs',
   {
+    version: integer('version').notNull().default(1),
     id: uuid('id').primaryKey().defaultRandom(),
     organizationId: text('organization_id')
       .notNull()
       .references(() => organizations.id),
 
     // Polymorphic reference to the entity being transported.
-    entityType: transportEntityType('entity_type').notNull(), // feedstock | biochar | sample | delivery
+    entityType: transportEntityType('entity_type').notNull(), // feedstock | biochar | sample
     entityId: uuid('entity_id').notNull(),
 
     // --- Route Details ---
@@ -227,6 +221,8 @@ export const transportLegs = pgTable(
     destinationGpsLatitude: doublePrecision('destination_gps_latitude'),
     destinationGpsLongitude: doublePrecision('destination_gps_longitude'),
     destinationName: text('destination_name'),
+    // One-way road distance. Every leg counts its round trip (×2) at the
+    // mass-distance aggregation seam (`@/lib/calculations/round-trip`).
     distanceKm: real('distance_km').notNull(),
     // Provenance of distanceKm. On a derived leg this is inherited from the
     // level that won the distance-priority resolution (NOT a blanket
@@ -236,17 +232,12 @@ export const transportLegs = pgTable(
 
     // --- Transport Details ---
     transportMethodType: transportMethod('transport_method').notNull(), // road | rail | ship | pipeline | aircraft
-    vehicleType: text('vehicle_type'), // e.g., "Class 8 heavy-duty truck" — selects the Isometric component EF (Eq. 3)
+    vehicleType: text('vehicle_type'), // e.g., "Class 8 heavy-duty truck" — Transportation module record, retained in the evidence ledger
     modelYear: integer('model_year'),
 
     // --- Load Details (Isometric: Distance-Based Method, Eq. 3 — W_j, the cargo mass) ---
     loadMassKg: massKg('load_mass_kg'),
 
-    // Round-trip vs one-way accounting (issue #316, §4.2 ruling). The stored
-    // distanceKm stays ONE-WAY per leg; `return` (default, conservative) applies
-    // the ×2 multiplier in `aggregateTransportMassDistance`, `one_way` (evidenced
-    // onward destination) does not. Orthogonal to distanceSource / isDerived.
-    tripType: transportTripType('trip_type').notNull().default('return'),
 
     // --- Method (distance-based only — see ADR/changes; the emission factor
     // lives in the Isometric component blueprint, NOT here: we submit distance +
@@ -256,10 +247,6 @@ export const transportLegs = pgTable(
         .notNull()
         .default('distance_based'),
     isDerived: boolean('is_derived').notNull().default(false),
-
-    // --- Documentation ---
-    billOfLading: text('bill_of_lading'),
-    weighScaleTicketRef: text('weigh_scale_ticket_ref'),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -330,15 +317,6 @@ export const deliveriesRelations = relations(deliveries, ({ one }) => ({
   order: one(orders, {
     fields: [deliveries.orderId],
     references: [orders.id],
-  }),
-  customerLocation: one(customerLocations, {
-    fields: [deliveries.customerLocationId],
-    references: [customerLocations.id],
-    relationName: 'deliveryLocationOverride',
-  }),
-  biocharProduct: one(biocharProducts, {
-    fields: [deliveries.biocharProductId],
-    references: [biocharProducts.id],
   }),
   storageLocation: one(storageLocations, {
     fields: [deliveries.storageLocationId],

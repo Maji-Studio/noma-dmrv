@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 // The hook module pulls in the server action barrel; the mapping under test is
 // pure, so stub the actions rather than loading the server layer.
 vi.mock("@/fn/bin-movements", () => ({
-  getBinMovementsFn: vi.fn(),
+  getFeedstockBinStockFn: vi.fn(),
   recordLossFn: vi.fn(),
   recordStockTakeFn: vi.fn(),
 }));
@@ -26,6 +26,15 @@ describe("throwRecordLossError", () => {
     expect(() =>
       throwRecordLossError({ error: "Not enough stock", field: "lossMassKg" }),
     ).toThrow(RecordLossFieldError);
+  });
+
+  it("maps a loss-time validation issue to occurredAt", () => {
+    expect(() => throwRecordLossError({
+      error: "Loss was not saved",
+      issues: [{ path: ["occurredAt"], code: "validation_failed", message: "Check the date and time" }],
+    })).toThrow(expect.objectContaining({
+      name: "RecordLossFieldError", field: "occurredAt", message: "Check the date and time",
+    }));
   });
 
   it("carries the conflict payload so the form can rotate its key", () => {

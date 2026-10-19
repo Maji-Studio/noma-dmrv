@@ -1,3 +1,4 @@
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import type { OrgContext } from "@/lib/auth/server";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import {
@@ -13,7 +14,6 @@ import { logger, type Logger } from "@/lib/log";
 import {
   createDatapoint,
   createGhgEntry,
-  getIsometricClientForOrg,
   payloadHash,
   reconcileDatapoint,
   reconcileRemoval,
@@ -28,7 +28,6 @@ import {
 } from "@/lib/isometric/transformers/sequestration-binding";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
 import {
-  assertSupportedDurabilityConfiguration,
   DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
   DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE,
   submitDurabilityMeasurementSamples,
@@ -55,24 +54,19 @@ import type { BiocharApplicationIntent } from "./biochar-application-intents";
 import { readRemovalReportingWindow } from "./removal-reporting-window";
 import {
   assertRemovalRegistryConnection,
-  prepareRemovalSubmission,
-  REMOVAL_PREPARATION_BLOCKERS,
-  type RemovalPreparationBlocker,
+  requirePreparedRemovalSubmission,
 } from "./removal-submission-prepare";
 import {
-  assertDefaultRemovalTemplateConfigured,
   finalizeRemovalSubmission,
+  pinnedRemovalTemplateId,
   removalReportingWindowNeedsRecovery,
   recoverSubmittedRemoval,
   recordRemovalConfirmedIdentity,
   reconcileRemovalRegistryArtifacts,
 } from "./removal-submission-finalization";
 import {
-  assertEntityReadinessGapsResolved,
-  buildRemovalSubmissionBuild,
   compileRemovalSubmission,
   materializeRemovalSubmissionSnapshot,
-  removalTemplateTierCompatibilityBlocker,
 } from "./removal-submission-build";
 import { assertClaimedRemovalPayloadFresh } from "./removal-submission-freshness";
 import { checkProtocolVersionAtSubmit } from "./protocol-version-preflight";
@@ -87,12 +81,10 @@ import {
   safeRemovalSubmissionError,
   type RemovalExternalMutation,
 } from "./removal-submission-failure";
-import {
-  mirrorCandidateSourcesForSubmission,
-  resolveSourceBindingCandidates,
-} from "./sources";
+import { resolveSourceBindingCandidates } from "./source-candidates";
+import { mirrorCandidateSourcesForSubmission } from "./sources-mirror-core";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
-import { describeFeedstockTypeMappingGap } from "@/lib/certification/feedstock-type-mapping";
+import { collectContextRemovalBlockers, evaluateRemovalBlockers } from "./removal-blockers-gate";
 import type { SubmissionProgressReporter } from "@/lib/certification/submission-progress";
 import {
   appendSyncEventBestEffort,
@@ -107,7 +99,7 @@ import {
 const REMOVAL_CLAIM_BLOCKED_MESSAGES: Record<ClaimBlockedReason, string> = {
   "in-flight": "A submission for this Removal is already in progress.",
   "rejected-with-external":
-    "This Removal was rejected by the verifier. Resolve the rejection in the Isometric registry before retrying.",
+    "This Removal submission failed after data reached Isometric. Delete or resume the Removal, or review its records in Isometric.",
   // Removal policy is `supersede`; invalid-changed-hash is unreachable but
   // kept so future policy changes are explicit.
   "invalid-changed-hash":
@@ -189,30 +181,6 @@ export async function submitRemoval(
   }
 }
 
-/**
- * Submit's blocker precedence: prepare's template-shape blockers (not a
- * REMOVAL template, out of date, empty) win first, then the submit-only
- * tier↔template guard, then prepare's durability-availability blocker last.
- * The tier guard must never be masked by durability support being off,
- * since a tier mismatch stays actionable once durability support ships
- * while the availability message alone would not tell the operator to fix
- * it (PR #840 review thread PRRT_kwDORRVpZc6nImrB).
- */
-export function firstSubmitBlockerMessage(
-  preparationBlockers: RemovalPreparationBlocker[],
-  tierBlocker: string | null,
-): string | null {
-  const structuralBlocker = preparationBlockers.find(
-    (blocker) => blocker.code !== "durabilityUnavailable",
-  );
-  if (structuralBlocker) return structuralBlocker.message;
-  if (tierBlocker) return tierBlocker;
-  const durabilityBlocker = preparationBlockers.find(
-    (blocker) => blocker.code === "durabilityUnavailable",
-  );
-  return durabilityBlocker?.message ?? null;
-}
-
 async function submitRemovalCore(
   args: SubmitRemovalArgs,
   attempt: RemovalSubmitAttempt,
@@ -235,7 +203,7 @@ async function submitRemovalCore(
   log.info("removal submit started");
   onProgress?.({ step: "removal.checking_data", state: "active" });
 
-  const ctx = await loadRemovalSubmissionContext(orgCtx, removalId);
+  const ctx = await loadRemovalSubmissionContext(orgCtx, removalId, { refreshEnrichment: true });
   assertRemovalRegistryConnection(ctx);
   if (
     ctx.latestSubmission?.status === "submitted" &&
@@ -246,9 +214,9 @@ async function submitRemovalCore(
     })
   ) {
     assertProductionConfirmed(confirmProduction);
-    assertDefaultRemovalTemplateConfigured(ctx.mapping.defaultRemovalTemplateId);
+    const templateId = pinnedRemovalTemplateId(ctx.memberBatches);
     attempt.externalMutation = "confirmed";
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    const client = await resolveIsometricClient(orgCtx);
     onProgress?.({ step: "removal.checking_data", state: "complete" });
     onProgress?.({ step: "removal.creating", state: "reused" });
     await recoverSubmittedRemoval({
@@ -259,7 +227,7 @@ async function submitRemovalCore(
       row: ctx.latestSubmission,
       externalRemovalId: ctx.latestSubmission.externalId,
       externalProjectId: ctx.mapping.externalProjectId,
-      templateId: ctx.mapping.defaultRemovalTemplateId,
+      templateId,
       reportingWindow: readRemovalReportingWindow(ctx.latestSubmission),
       biocharApplicationIntents: readRemovalBiocharApplicationIntents(
         ctx.latestSubmission,
@@ -271,81 +239,17 @@ async function submitRemovalCore(
     onProgress?.({ step: "removal.complete", state: "complete" });
     return { removalId, externalId: ctx.latestSubmission.externalId, version: ctx.latestSubmission.version };
   }
-  if (ctx.feedstockTypeMappingGaps.length > 0) {
-    throw new SafeError(
-      ctx.feedstockTypeMappingGaps
-        .map(describeFeedstockTypeMappingGap)
-        .join(" "),
-    );
-  }
-  // Fail before the submit-phase client, evidence-ledger generation/mirroring,
-  // local ledger claims, or registry writes. Context loading may already make
-  // read-only registry calls to resolve the configured project and template.
-  // The build layer repeats this assertion as a defensive seam for callers that
-  // prepare a submission outside this orchestrator.
-  assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
-  // Template gates shared with Review and the claimed-draft freshness check.
-  // Read non-throwing so the submit-only tier guard below can run on the
-  // resolved template before prepare's own durability-availability blocker
-  // gets to refuse: see firstSubmitBlockerMessage.
-  const preparation = prepareRemovalSubmission(ctx);
-  if (!preparation.prepared) {
-    throw new SafeError(
-      preparation.blockers[0]?.message ??
-        REMOVAL_PREPARATION_BLOCKERS.noTemplate,
-    );
-  }
-  const prepared = preparation.prepared;
-  const {
-    defaultTemplate,
-    blueprintsByKey,
-    externalProjectId,
-    hasDurabilityComponents,
-  } = prepared;
-
-  // Phase 4 template↔tier guard (ADR 0021): the removal template's sequestration
-  // blueprint must match the facility's durability tier — a 200-year facility
-  // submits against a `biochar_sequestration_200_year_*` template, a 1000-year
-  // facility against the current sampled 1,000-year component. Fail closed EARLY with an
-  // actionable message on a mismatch (or an unknown sequestration variant),
-  // rather than letting resolveTemplateInputs silently skip the component or the
-  // generic staging gate below misdescribe a template↔tier misconfiguration as
-  // "staged but not live". The tier is a single facility-scoped value (ADR 0021),
-  // read here from the durability data plane.
-  //
-  // Checked ahead of prepare's durability-availability blocker: when a
-  // production template mismatches the facility tier AND durability support
-  // is off, the operator must still learn about the tier mismatch, which
-  // will keep blocking submission once durability support ships (PR #840
-  // review thread PRRT_kwDORRVpZc6nImrB).
-  const facilityTier = ctx.batchesWithSamples[0]?.durabilityOption ?? null;
-  const tierBlocker = removalTemplateTierCompatibilityBlocker(
-    ctx,
-    defaultTemplate,
-  );
-  const submitBlockerMessage = firstSubmitBlockerMessage(
-    preparation.blockers,
-    tierBlocker,
-  );
-  if (submitBlockerMessage) throw new SafeError(submitBlockerMessage);
-
-  // Durability evidence comes through measurement samples; each binding then
-  // declares whether its GHG input consumes a sample-response datapoint or an
-  // orchestrator-posted direct datapoint.
-  if (hasDurabilityComponents) {
-    assertSupportedDurabilityConfiguration(ctx.batchesWithSamples);
-  }
-
+  // Preserve the user-input confirmation boundary between the context prefix
+  // and the member/tier/build checks. Both passes use the same pure collector.
+  const contextBlockers = collectContextRemovalBlockers(ctx, { beforeConfirmation: true });
+  if (contextBlockers.length) throw new SafeError(contextBlockers[0].message);
   assertProductionConfirmed(confirmProduction);
-
-  if (ctx.memberBatches.length === 0) {
-    throw new SafeError("This Removal has no credit batches.");
-  }
-  if (!facilityTier) {
-    throw new SafeError(
-      "Facility durability tier could not be resolved. Reload and retry.",
-    );
-  }
+  const blockers = await evaluateRemovalBlockers({ orgCtx, removalId, ctx });
+  if (blockers.length) throw new SafeError(blockers[0].message);
+  const prepared = requirePreparedRemovalSubmission(ctx);
+  const { removalTemplate, blueprintsByKey, externalProjectId, hasDurabilityComponents } = prepared;
+  // The gate refuses an unresolved tier; this narrows the mapping claim guard.
+  const facilityTier = ctx.batchesWithSamples[0]!.durabilityOption;
 
   const productionClaimBatchIds = ctx.memberBatchClaims
     .filter((batch) =>
@@ -357,21 +261,13 @@ async function submitRemovalCore(
     facilityId: ctx.facilityId,
     provider: ISOMETRIC_PROVIDER,
     expectedExternalProjectId: externalProjectId,
-    expectedDefaultRemovalTemplateId: ctx.mapping.defaultRemovalTemplateId,
+    expectedRemovalTemplatePin: {
+      creditBatchIds: ctx.memberBatches.map((batch) => batch.id),
+      templateId: removalTemplate.id,
+    },
     expectedDurabilityOption: facilityTier,
   };
 
-  // Run the complete aggregation, durability, transport, reporting-window,
-  // and template-input validation before generating or mirroring evidence.
-  // Supplying an explicit empty Source set keeps this preflight free of the
-  // candidate-document walk; its build output is intentionally discarded.
-  await buildRemovalSubmissionBuild({
-    orgCtx,
-    removalId,
-    ctx,
-    prepared,
-    sourceIds: [],
-  });
   onProgress?.({ step: "removal.checking_data", state: "complete" });
   onProgress?.({ step: "removal.preparing_evidence", state: "active" });
 
@@ -385,7 +281,7 @@ async function submitRemovalCore(
     mapping: ctx.mapping,
     log,
   });
-  const client = await getIsometricClientForOrg(orgCtx.organizationId);
+  const client = await resolveIsometricClient(orgCtx);
 
   // Everything below may create or update Isometric Sources before the
   // submission ledger draft exists. Persist that the registry boundary is
@@ -517,7 +413,7 @@ async function submitRemovalCore(
     buildSnapshot: ({ inputs, nextVersion, supersedePreviousId }) =>
       materializeRemovalSubmissionSnapshot({
         compiled: inputs,
-        template: defaultTemplate,
+        template: removalTemplate,
         externalProjectId,
         removalId,
         nextVersion,
@@ -634,7 +530,7 @@ async function submitRemovalCore(
           row: claimed.row,
           transport,
           fixed: effectiveFixed,
-          template: defaultTemplate,
+          template: removalTemplate,
           blueprintsByKey,
           reportingWindow: {
             startedOn: reportingWindow.startedOn,

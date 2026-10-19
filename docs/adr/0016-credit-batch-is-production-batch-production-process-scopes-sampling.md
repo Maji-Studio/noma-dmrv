@@ -20,8 +20,8 @@ amended 2026-07-04 (feedstock declared)
 > legacy provenance only (nullable, never written). The sample also **inherits the batch's
 > declared durability tier** instead of carrying its own selection. This strengthens, not
 > changes, this ADR's grain decision: the "both links stay populated / derive the batch from
-> the run" mechanics below describe the pre-amendment write path and now apply only to the
-> batch-side back-fill of legacy run-linked rows.
+> the run" mechanics below describe the pre-amendment write path. Membership edits now
+> preserve each Sample's direct batch attachment, including legacy run-linked rows.
 >
 > **Amendment (2026-07-04, feedstock declared):** the batch's feedstock type flips from
 > **derived** to **declared**. It is now chosen on the credit-batch form up front (a required
@@ -53,6 +53,19 @@ amended 2026-07-04 (feedstock declared)
 > Biochar Protocol rules against the pinned v1.1 interpretation set. The
 > Certify project was observed on v1.1 on this date. Historical v1.2/v1.3
 > citations below do not change this ADR's production-batch/process grain.
+
+## Current conservative rules
+
+Kenji's #942 q7 decision retains the one-calendar-month credit-batch cap and
+7 °C soil-temperature floor as noma's own conservative rules. They are not
+requirements attributed to the pinned Biochar v1.1 interpretation. Historical
+Biochar v1.3 citations and protocol quotations below retain their original
+context; they do not change that attribution. The production-window validator
+requires `end < start + one calendar month` under Isometric, with month-end
+clamping (#1098).
+The member-run span, from earliest start to latest end, must also be less than
+one month before Isometric submission. Other certifiers have no month cap (D14).
+The soil-temperature calculations keep their existing behavior.
 
 ## Context
 
@@ -92,7 +105,7 @@ feedstock)** spanning reactors.
 ## Decision
 
 1. **The credit batch is the protocol production batch** — the lab-characterisation /
-   sampling unit. It carries **one feedstock** and is capped at **≤ 1 month when the certifier
+   sampling unit. It carries **one feedstock** and is capped at **less than one month when the certifier
    is Isometric**. Several credit batches run concurrently (one per feedstock). Lab **Samples**
    attach **per credit batch** (`samples.creditBatchId`), ≥ 3 per *sampled* credit batch;
    their mass-weighted mean + std-dev characterise the batch. The in-process per-run
@@ -104,12 +117,12 @@ feedstock)** spanning reactors.
    **(facility, feedstock)** — a campaign spanning many monthly credit batches and, per the
    protocol, **spanning reactors** (reactor identity is not part of the boundary). It owns
    `sampling_method` (moved **off** `reactors`), an `established_at`, and the baseline state.
-   `credit_batches` gains `feedstockTypeId` and a `productionProcessId` FK (a batch is one
-   ≤1-month slice of its process). A feedstock change, pyrolysis-condition change, or 3σ
+   `credit_batches` gains `feedstockTypeId` and a `productionProcessId` FK (an Isometric batch spans
+   less than one month of its process). A feedstock change, pyrolysis-condition change, or 3σ
    deviation opens a **new** process and resets the baseline to zero.
 
 3. **`production_processes` is registry-agnostic.** It is a generic production campaign; the
-   Isometric-specific behaviour (the ≤1-month cap, the ≥30-sample baseline, the Method-B
+   Isometric integration behaviour (the noma cap of less than one month, the ≥30-sample baseline, the Method-B
    unlock, the unsampled estimate) is a set of **conditional gates** applied only when
    `certifier = 'isometric'`. No registry branding in the schema — the same separation already
    used for certifier-validated feedstock types.
@@ -128,7 +141,7 @@ Because DEC runs **Method A everywhere** with stable conditions, this branch shi
 
 - **Ships now:** the `production_processes` entity + (facility, feedstock) keying;
   `sampling_method` moved onto it; `credit_batches.feedstockTypeId` + `productionProcessId`;
-  the ≤1-month Isometric cap; `samples` re-pointed to the credit batch; ≥3-per-sampled-batch
+  the noma cap of less than one month; `samples` re-pointed to the credit batch; ≥3-per-sampled-batch
   characterisation; per-process grouping of eligibility.
 - **Deferred to a future ADR tied to the super-admin Method-B unlock (e.g. ADR 0017):** the
   live Method-B compute — the 30-sample baseline counter, the μ − σ/√n unsampled estimate, the
@@ -169,9 +182,9 @@ Because DEC runs **Method A everywhere** with stable conditions, this branch shi
 - `getMethodBEligibilityByReactor` → per-process (dormant under Method A; closes the
   cross-feedstock over-credit bug when Method B unlocks). Cadence / replicate / eligibility
   gates move from run-grain to credit-batch-grain, grouped by process.
-- ≤1-month enforcement on credit batches at three layers (Zod + server + DB check) when the
+- Enforcement of less than one month on credit batches at three layers (Zod + server + DB check) when the
   certifier is Isometric.
-- **Glossary (CONTEXT.md):** "Credit batch", "Sample", "Replicate", "Method A / Method B"
+- **Glossary (GLOSSARY.md):** "Credit batch", "Sample", "Replicate", "Method A / Method B"
   updated, and "Production process" added (done 2026-06-19).
 - No production data yet → **reseed, don't migrate** (project convention). The hand-written
   trigger migrations `0052` (Method-B baseline) / `0053` (200-yr completeness) re-point to the

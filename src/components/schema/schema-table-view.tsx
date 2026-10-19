@@ -500,7 +500,7 @@ function ColumnsTable({
                   return (
                     <th
                       key={header.id}
-                      className={`body-caption-fit-bold py-[10px] px-[12px] ${
+                      className={`body-small font-medium text-[var(--color-text-secondary)] py-[10px] px-[12px] ${
                         isPkOrBool ? "text-center w-[70px]" : "text-left"
                       } ${isSortable ? "cursor-pointer select-none" : ""}`}
                       onClick={header.column.getToggleSortingHandler()}

@@ -1,17 +1,15 @@
 /**
  * Credit Batch Form Schema Tests (pure — no database)
  *
- * Covers the ADR 0016 ≤1-month production-batch window enforced by the form's
- * superRefine. This form only creates Isometric credit batches, so the cap
- * applies unconditionally here (the certifier-conditional nuance lives at the
- * server + DB layers).
+ * Covers the ADR 0016 less-than-one-month production-batch window enforced by the form's
+ * superRefine, including the certifier context supplied by its callers.
  */
 import { describe, expect, it } from "vitest";
 import {
   getCreditBatchProductionWindowBounds,
   getCreditBatchProductionWindowIssue,
 } from "@/lib/credit-batch-production-window";
-import { creditBatchFormSchema } from "@/schemas/credit-batches";
+import { creditBatchFormSchema, creditBatchFormSchemaForCertifier } from "@/schemas/credit-batches";
 
 const validBase = {
   facilityId: "11111111-1111-4111-8111-111111111111",
@@ -19,10 +17,34 @@ const validBase = {
   feedstockTypeId: "33333333-3333-4333-8333-333333333333",
   productionRunIds: ["22222222-2222-4222-8222-222222222222"],
   durabilityOption: "200_year" as const,
-  hToCorgRatio: 0.4,
 };
 
 describe("creditBatchFormSchema — production window", () => {
+  it.each(["puro_earth", "verra", null] as const)("exempts %s from the Isometric month cap", (certifier) => {
+    expect(creditBatchFormSchemaForCertifier(certifier).safeParse({
+      ...validBase,
+      startDate: "2026-01-01",
+      endDate: "2026-04-30",
+    }).success).toBe(true);
+  });
+
+  it("still rejects reversed dates for an uncertified batch", () => {
+    const result = creditBatchFormSchemaForCertifier(null).safeParse({
+      ...validBase,
+      startDate: "2026-05-10",
+      endDate: "2026-05-01",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toMatchObject([{ path: ["endDate"], message: "End date must be after start date" }]);
+    }
+  });
+
+  it("states the last allowed end date", () => {
+    expect(getCreditBatchProductionWindowIssue("2026-01-01", "2026-02-02"))
+      .toBe("Choose an end date on or before Jan 31, 2026. Isometric credit batches must cover less than one month.");
+  });
+
   it("accepts a window under one month", () => {
     const result = creditBatchFormSchema.safeParse({
       ...validBase,
@@ -41,7 +63,7 @@ describe("creditBatchFormSchema — production window", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       const issue = result.error.issues.find((i) => i.path[0] === "endDate");
-      expect(issue?.message).toMatch(/at most one month/i);
+      expect(issue?.message).toMatch(/less than one month/i);
     }
   });
 

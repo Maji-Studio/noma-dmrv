@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   aggregateProductionRuns,
   enrichWithTransportLegs,
-  type ProductionRunWithSamples,
+  type ProductionRunForCertification,
 } from "@/lib/isometric";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type { RemovalRunSummary } from "@/lib/certification/mass-accounting";
@@ -38,15 +38,14 @@ function lineage(
   } as ChainOfCustodyData;
 }
 
-function run(id: string): ProductionRunWithSamples {
-  return { id, code: id.toUpperCase() } as ProductionRunWithSamples;
+function run(id: string): ProductionRunForCertification {
+  return { id, code: id.toUpperCase() } as ProductionRunForCertification;
 }
 
 const RUN_SUMMARY = {
   runCount: 1,
   appliedDryKg: 1_000,
   totalBiocharOutputKg: 2_000,
-  deliveryBiocharOutputKg: 2_000,
 } satisfies RemovalRunSummary;
 
 describe("buildRemovalLedgerPreview", () => {
@@ -71,6 +70,7 @@ describe("buildRemovalLedgerPreview", () => {
           creditBatchId: "batch-2",
           code: "CB-2",
           claimedByRemovalId: "removal-previous",
+          claimingRemovalCode: "RM-26-001",
           productionRunIds: ["run-2"],
           applicationIds: ["application-1", "application-2"],
           applicationSlices: [
@@ -95,6 +95,7 @@ describe("buildRemovalLedgerPreview", () => {
       expect.any(Map),
       { productionRunIds: new Set(["run-1"]) },
     );
+    expect(preview.claims[1].claimingRemovalCode).toBe("RM-26-001");
     expect(preview.claims.map((claim) => claim.contribution)).toEqual([
       "production-and-delivery",
       "delivery-only",
@@ -127,6 +128,7 @@ describe("buildRemovalLedgerPreview", () => {
         creditBatchId: "batch-1",
         code: "CB-1",
         claimedByRemovalId: "removal-previous",
+          claimingRemovalCode: "RM-26-001",
         productionRunIds: ["run-1"],
         applicationIds: ["application-1"],
       }],

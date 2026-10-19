@@ -1,6 +1,12 @@
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FormDetailProvider } from "../form-detail-context";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+it("guards the Base UI version used by the EntitySelect navigation adapter", () => {
+  const { version } = JSON.parse(readFileSync("node_modules/@base-ui/react/package.json", "utf8"));
+  expect(version, "Revisit the EntitySelect navigation adapter and its interaction tests before upgrading @base-ui/react.").toBe("1.1.0");
+});
 
 const entityState = vi.hoisted(() => ({
   options: [] as Array<{
@@ -220,6 +226,31 @@ describe("EntitySelect selected-value display", () => {
     expect(html).not.toContain("dry mass");
   });
 
+  it("leaves the remaining stock caption to the form when it shows its own figure", () => {
+    entityState.selected = {
+      id: "bin-1",
+      code: "BIN-01",
+      name: "North feedstock bin",
+      remainingMass: { wetKg: 1_000, dryKg: 800 },
+    };
+    entityState.selectedPending = false;
+
+    const html = renderToStaticMarkup(
+      <EntitySelect
+        entityType="storageLocation"
+        value="bin-1"
+        onChange={() => undefined}
+        aria-describedby="field-helper"
+        showRemainingMass={false}
+      />,
+    );
+
+    expect(html).toContain("North feedstock bin");
+    expect(html).not.toContain("Remaining now");
+    // The caption is gone, so the control must not point at it.
+    expect(html).not.toContain("-remaining-mass");
+  });
+
   it("uses list stock when its successful query is fresher while keeping the detail label", () => {
     entityState.options = [
       {
@@ -412,7 +443,7 @@ describe("EntitySelect label association", () => {
       renderLabelled().match(/<button[^>]*role="combobox"[^>]*>/)?.[0] ?? "";
 
     expect(trigger).toContain('aria-label="Select reactor"');
-    expect(trigger).not.toContain(" id=");
+    expect(trigger).not.toContain('id="reactor-field"');
   });
 });
 

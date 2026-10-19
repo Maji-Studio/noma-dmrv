@@ -9,7 +9,7 @@ import {
   type CreditBatchChemistry,
   type CreditBatchLineageFacts,
 } from "./credit-batch-accounting";
-import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import { CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION } from "@/lib/calculations/biochar-removal";
 import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "@/lib/certification/preview-gaps";
 
@@ -28,6 +28,7 @@ function application(): BatchLineageApplicationFact {
     soilTemperatureC: null,
     facility: { id: "facility-1", code: "Facility 1", name: "Facility" },
     delivery: {
+      proofOfDeliveryCount: 1,
       id: "delivery-1",
       code: "Delivery 1",
       status: "delivered",
@@ -40,7 +41,7 @@ function application(): BatchLineageApplicationFact {
       id: "product-1",
       code: "Product 1",
       status: "ready",
-      productionDate: new Date("2026-07-02T00:00:00.000Z"),
+      productionDate: "2026-07-02",
       massKg: 4_000,
       moistureContentPercent: 50,
       formulationName: null,

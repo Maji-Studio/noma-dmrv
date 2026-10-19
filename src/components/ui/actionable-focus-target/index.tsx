@@ -8,7 +8,8 @@ interface ActionableFocusTargetProps {
   target: EntityFocusTarget;
   activeTarget?: string | null;
   children: ReactNode;
-  actionLabel?: string;
+  /** `null` hides the callout line, for a target whose content already says why. */
+  actionLabel?: string | null;
   className?: string;
 }
 
@@ -44,8 +45,8 @@ export function ActionableFocusTarget({
       )}
       data-focus-target={target}
     >
-      {active && (
-        <p className="label-micro mb-10 text-[var(--st-wait)]" role="status">
+      {active && actionLabel !== null && (
+        <p className="body-small font-medium mb-10 text-[var(--st-wait)]" role="status">
           {actionLabel}
         </p>
       )}

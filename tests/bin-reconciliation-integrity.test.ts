@@ -1,3 +1,8 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
+import { updateOrder } from "@/lib/operations/orders";
+import { runOperationInProcess } from "@/lib/operations/runner";
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
+import { productionVersion } from "./helpers/production-version";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -19,10 +24,10 @@ import {
   createBiocharProduct,
   deleteBiocharProduct,
 } from "@/data-access/biochar-products";
-import { createDelivery } from "@/data-access/deliveries";
-import { updateOrder } from "@/data-access/orders";
+import { createDelivery } from "./helpers/create-delivery";
+
 import { createProductionRun } from "@/data-access/production-runs";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -79,21 +84,25 @@ async function postedFixture(stockKg = 100) { const f = await postedStockFixture
 afterEach(async () => { for (const f of postedFixtures.splice(0)) await cleanupPostedStock(f); });
 
 describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS }, () => {
-  it("keeps posted ingredient withdrawals when product deletion races a stock-take", async () => {
+  it.each([false, true])("serializes product deletion with an ingredient stock-take (count first: %s)", async (countFirst) => {
     const f = await postedFixture(0);
     const [bin] = await db.insert(storageLocations).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id,
       code: `E2E-ING-${f.tag}`, name: `E2E Ingredient ${f.tag}`, type: "feedstock_bin", feedstockTypeId: f.ingredientType.id }).returning();
-    await db.insert(feedstocks).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id, code: `E2E-FS-${f.tag}`,
-      status: "complete", storageLocationId: bin.id, feedstockTypeId: f.ingredientType.id, massWetKg: 100, massDryKg: 100, moistureContentPercent: 0, deliveryDate: new Date("2026-09-01") });
+    await db.insert(feedstocks).values(await feedstockFixtureValues(db, { organizationId: f.ctx.organizationId, facilityId: f.facility.id, code: `E2E-FS-${f.tag}`,
+      status: "complete", storageLocationId: bin.id, feedstockTypeId: f.ingredientType.id, massWetKg: 100, massDryKg: 100, moistureContentPercent: 0, deliveryDate: new Date("2026-09-01") }));
     await db.update(storageLocations).set({ formulationId: f.recipe.id }).where(eq(storageLocations.id, f.bin.id));
     const product = await postProduct(f, { formulationId: f.recipe.id, massKg: 100, composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, storageLocationId: bin.id, massKg: 30, moistureContentPercent: 0 }] } });
+    const count = () => recordStockTakeMovement(f.ctx, { storageLocationId: bin.id, lane: "feedstock", countedMassKg: 50, countedWetMassKg: 50, moistureRatioUsed: 0, reason: "E2E concurrent count" });
+    if (countFirst) await count();
     const [deletion, stockTake] = await Promise.allSettled([
-      deleteBiocharProduct(f.ctx, product.id),
-      recordStockTakeMovement(f.ctx, { storageLocationId: bin.id, lane: "feedstock", countedMassKg: 50, countedWetMassKg: 50, moistureRatioUsed: 0, reason: "E2E concurrent count" }),
+      deleteBiocharProduct(f.ctx, product.id, await productionVersion(f.ctx, "biocharProducts", product.id)),
+      countFirst ? Promise.resolve() : count(),
     ]);
-    expect(deletion.status).toBe("rejected"); expect(stockTake.status).toBe("fulfilled");
+    if (countFirst) expect(deletion.status).toBe("rejected");
+    expect(stockTake.status).toBe("fulfilled");
+    if (deletion.status === "rejected") expect(deletion.reason).toMatchObject({ code: "certification_locked" });
     expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory.currentWetMassKg).toBe(50);
-    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(70);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(deletion.status === "fulfilled" ? 0 : 70);
   });
 
   it("serializes a stock-take against a concurrent production-run feedstock draw", async () => {
@@ -102,7 +111,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     const runCode = `PR-TAKE-RUN-${tag}`;
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-TAKE-RUN-${tag}`,
         name: `Stock Take Run Facility ${tag}`,
@@ -141,7 +150,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
       .returning({ id: storageLocations.id });
     const [feedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
@@ -151,7 +160,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
         massDryKg: INITIAL_FEEDSTOCK_DRY_MASS_KG,
         massWetKg: INITIAL_FEEDSTOCK_DRY_MASS_KG,
         moistureContentPercent: 0,
-      })
+      }))
       .returning({ id: feedstocks.id });
 
     let releaseWriteBarrier = () => {};
@@ -180,7 +189,8 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
         signalWriteBarrierReady();
         await releaseWriteBarrierPromise;
       });
-      await writeBarrierReady;
+      // A failed lock acquisition must reach cleanup instead of leaving readiness pending.
+      await Promise.race([writeBarrierReady, writeBarrierTransaction]);
 
       concurrentResults = Promise.allSettled([
         recordStockTakeFn({
@@ -198,9 +208,8 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
           status: "running",
           startTime: new Date("2026-07-03T08:00:00Z"),
           endTime: null,
-          feedstockWetMassKg: INITIAL_FEEDSTOCK_DRY_MASS_KG,
+          feedstockDraws: [{ storageLocationId: bin.id, wetMassKg: INITIAL_FEEDSTOCK_DRY_MASS_KG }],
           feedstockMoisturePercent: 0,
-          feedstockStorageLocationId: bin.id,
         }),
       ]);
 
@@ -297,6 +306,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
         .delete(binMovements)
         .where(eq(binMovements.storageLocationId, bin.id));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstock.id));
+      await cleanupFeedstockFixtureParents(db);
       await db.delete(storageLocations).where(eq(storageLocations.id, bin.id));
       await db
         .delete(feedstockTypes)
@@ -347,7 +357,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
   it("rejects changing a used order formulation without moving delivery provenance", async () => {
     const f = await postedFixture(); const delivery = await postDelivery(f, 60);
     const before = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
-    await expect(updateOrder(f.ctx, f.order.id, { formulationId: f.recipe.id })).rejects.toThrow(delivery.code);
+    await expect(runOperationInProcess(updateOrder, f.ctx, { orderId: f.order.id, expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), formulationId: f.recipe.id })).rejects.toThrow(delivery.code);
     expect(await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id))).toEqual(before);
   });
 
@@ -357,8 +367,8 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     const input = { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: "2026-09-14T12:00:00.000Z", kind: "delivery" as const, wetMassKg: 80, moisturePercent: 0, correctsMovementId: allocation.movementId };
     const preview = await previewOutputStock(f.ctx, input);
     const results = await Promise.allSettled([
-      postOutputStock(f.ctx, { ...input, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID(), reason: "E2E correction race" }),
-      updateOrder(f.ctx, f.order.id, { quantityKg: 70 }),
+      postOutputStock(f.ctx, { ...input, expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID(), reason: "E2E correction race" }),
+      runOperationInProcess(updateOrder, f.ctx, { orderId: f.order.id, expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 70 }),
     ]);
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter(result => result.status === "rejected")).toHaveLength(1);

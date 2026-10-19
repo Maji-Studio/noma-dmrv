@@ -1,8 +1,18 @@
+import {
+  TRANSPORT_CATEGORIES,
+  TRANSPORT_SOURCE_FACTS,
+} from "@/lib/isometric/semantic-binding-catalog";
+import {
+  projectInputTuplesBySource,
+  type BindingInputTuple,
+  type InputTuplesBySource,
+} from "@/lib/isometric/semantic-binding-projections";
 import type { AggregatedProductionData } from "@/lib/isometric/utils/aggregation";
 
 export type CertifyEntityKind =
   | "productionRun"
   | "sample"
+  | "feedstockType"
   | "feedstock"
   | "transportLeg"
   | "facilityEmissionConfig"
@@ -16,30 +26,29 @@ export type CertifyFieldKind = "entered" | "derived";
 
 export type AggregatedProductionSource = keyof AggregatedProductionData;
 
-export interface CertifyInputTuple {
-  groupKey: string;
-  blueprintKey: string;
-  inputKey: string;
-}
-
+// A field names only the aggregated facts it feeds. Which removal-template
+// inputs those facts reach is owned by the semantic binding catalog and
+// resolved by `resolveCertifyFieldInputTuples`.
 export interface CertifySourceMapping {
   source: AggregatedProductionSource;
-  inputTuples?: readonly CertifyInputTuple[];
 }
 
-export type CertifyFieldCondition =
+type CertifyFieldComparison =
   | {
       field: string;
       equals: string | number | boolean | null;
-      label: string;
+      notEquals?: never;
     }
   | {
-      allOf: readonly {
-        field: string;
-        equals: string | number | boolean | null;
-      }[];
-      label: string;
+      field: string;
+      notEquals: string | number | boolean | null;
+      equals?: never;
     };
+
+export type CertifyFieldCondition = (
+  | CertifyFieldComparison
+  | { allOf: readonly CertifyFieldComparison[] }
+) & { label: string };
 
 export type CertifyFieldSatisfaction =
   | { mode: "field" }
@@ -60,14 +69,14 @@ export interface CertifyFieldDescriptor {
   condition?: CertifyFieldCondition;
   satisfaction?: CertifyFieldSatisfaction;
   mappings?: readonly CertifySourceMapping[];
+  advisory?: string;
+  gapDetail?: string;
 }
 
 export const AGGREGATED_PRODUCTION_DATA_KEYS = [
   "weightedOrganicCarbonPercent",
   "weightedHToCorgRatio",
   "weightedOToCorgRatio",
-  "weightedAshPercent",
-  "weightedMoisturePercent",
   "totalBiocharDryMassKg",
   "totalFeedstockDryMassKg",
   "totalStartupDieselLitres",
@@ -83,55 +92,28 @@ export const AGGREGATED_PRODUCTION_DATA_KEYS = [
   "warnings",
 ] as const satisfies readonly AggregatedProductionSource[];
 
-const tuple = (
-  groupKey: string,
-  blueprintKey: string,
-  inputKey: string,
-): CertifyInputTuple => ({ groupKey, blueprintKey, inputKey });
-
-const mapping = (
-  source: AggregatedProductionSource,
-  inputTuples?: readonly CertifyInputTuple[],
-): CertifySourceMapping => ({ source, inputTuples });
+const mapping = (source: AggregatedProductionSource): CertifySourceMapping => ({
+  source,
+});
 
 // Pyrolysis energy: one grid-electricity datapoint plus diesel volume via
 // `fuel_usage_by_volume` (ADR 0015, amended by #319 then the generator/startup
 // diesel split — docs/isometric/changes.md). The Dark Earth template declares
 // two `fuel_usage_by_volume` components (generator + preprocessing vs. startup)
-// sharing one fixed volumetric EF; datapoint.ts resolves each to its own
-// source. `dieselFuelVolumeMapping` links the shared input tuple for badge
+// sharing one fixed volumetric EF; the catalog resolves each to its own
+// source. `dieselFuelVolumeMapping` names the combined litres for badge
 // traceability — the per-field source (startup vs. genset litres) is set on
 // each descriptor.
-const electricityMapping = mapping("totalElectricityKwh", [
-  tuple("pyrolysis", "grid_electricity_use", "electricity_use"),
-]);
+const electricityMapping = mapping("totalElectricityKwh");
 
-const dieselFuelVolumeMapping = mapping("totalDieselLitres", [
-  tuple("pyrolysis", "fuel_usage_by_volume", "volume_of_fuel"),
-]);
+const dieselFuelVolumeMapping = mapping("totalDieselLitres");
 
 // Each transport category submits a single `mass_distance` (tonne·km) datapoint
 // = Σⱼ(distⱼ × massⱼ). Both a leg's distance AND its load mass feed that figure,
 // so the transportLeg.distanceKm and .loadMassKg fields share these mappings.
-const transportMassDistanceMappings = [
-  mapping("feedstockTransportMassDistanceTonneKm", [
-    tuple(
-      "biomass-feedstock-transport",
-      "mass_distance_based_ci_emissions",
-      "mass_distance",
-    ),
-  ]),
-  mapping("biocharTransportMassDistanceTonneKm", [
-    tuple("biochar-transport", "mass_distance_based_ci_emissions", "mass_distance"),
-  ]),
-  mapping("sampleTransportMassDistanceTonneKm", [
-    tuple(
-      "sampling-required-for-mrv",
-      "mass_distance_based_ci_emissions",
-      "mass_distance",
-    ),
-  ]),
-] as const;
+const transportMassDistanceMappings = TRANSPORT_CATEGORIES.map((category) =>
+  mapping(TRANSPORT_SOURCE_FACTS[category]),
+);
 
 export const CERTIFY_FIELD_REGISTRY: Record<
   CertifyEntityKind,
@@ -154,15 +136,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       key: "feedstockWetMassKg",
       label: "Feedstock wet mass",
       kind: "entered",
-      mappings: [
-        mapping("totalFeedstockDryMassKg", [
-          tuple(
-            "biomass-feedstock-transport",
-            "specific_volume_based_emissions",
-            "feedstock_mass",
-          ),
-        ]),
-      ],
+      mappings: [mapping("totalFeedstockDryMassKg")],
     },
     {
       key: "feedstockMoisturePercent",
@@ -174,16 +148,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       key: "biocharOutputKg",
       label: "Biochar wet mass",
       kind: "entered",
-      mappings: [
-        mapping("totalBiocharDryMassKg", [
-          tuple("co2-stored", "carbon_rich_substance_sequestration", "product_mass"),
-          tuple(
-            "biochar-transport",
-            "specific_volume_based_emissions",
-            "feedstock_mass",
-          ),
-        ]),
-      ],
+      mappings: [mapping("totalBiocharDryMassKg")],
     },
     {
       key: "biocharMoisturePercent",
@@ -224,6 +189,13 @@ export const CERTIFY_FIELD_REGISTRY: Record<
   ],
   sample: [
     {
+      key: "moistureContentPercent",
+      label: "Sample moisture",
+      kind: "entered",
+      condition: { field: "sampling", notEquals: "unsampled", label: "sampled batches" },
+    },
+    {
+      // durability-readiness.ts runs the 1,000-year replicate gate only for sampled batches.
       key: "totalCarbonPercent",
       label: "Total carbon",
       kind: "entered",
@@ -236,6 +208,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       },
     },
     {
+      // Same sampled 1,000-year replicate gate in durability-readiness.ts as total carbon.
       key: "inorganicCarbonPercent",
       label: "Measured inorganic carbon",
       kind: "entered",
@@ -248,19 +221,19 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       },
     },
     {
+      // durability-submission-gates.ts skips chemistry only for explicit unsampled batches.
       key: "organicCarbonPercent",
       label: "Organic carbon",
       kind: "entered",
-      mappings: [
-        mapping("weightedOrganicCarbonPercent", [
-          tuple("co2-stored", "carbon_rich_substance_sequestration", "carbon_content"),
-        ]),
-      ],
+      condition: { field: "sampling", notEquals: "unsampled", label: "sampled batches" },
+      mappings: [mapping("weightedOrganicCarbonPercent")],
     },
     {
+      // durability-submission-gates.ts skips chemistry only for explicit unsampled batches.
       key: "hToCOrgRatio",
       label: "H:Corg ratio",
       kind: "entered",
+      condition: { field: "sampling", notEquals: "unsampled", label: "sampled batches" },
       formFields: [
         "totalHydrogenPercent",
         "organicCarbonPercent",
@@ -274,92 +247,54 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       mappings: [mapping("weightedHToCorgRatio")],
     },
     {
-      // Unconditional, like H:Corg: the Soil Module §3.3 Table 2 eligibility
-      // check is universal (pooled mean H/C_org < 0.5 AND O/C_org < 0.2), not
-      // tier-specific. Without this descriptor a sample missing oxygen badged
-      // "chemistry complete" while the usable-replicate gate
-      // (biochar-eligibility.ts, durability-submission-gates.ts) refused to
-      // count it toward the §8.3.1 ≥3 minimum (QA 2026-07-25 F-6).
+      // Like H:Corg, Soil Module §3.3 Table 2 checks pooled mean H/C_org < 0.5
+      // AND O/C_org < 0.2 on every tier. Missing oxygen cannot count toward the §8.3.1 ≥3 usable
+      // replicates (QA 2026-07-25 F-6). durability-submission-gates.ts skips
+      // only explicit unsampled batches, including their incidental Samples.
       key: "oToCOrgRatio",
       label: "O:Corg ratio",
       kind: "entered",
+      condition: { field: "sampling", notEquals: "unsampled", label: "sampled batches" },
       mappings: [mapping("weightedOToCorgRatio")],
     },
     {
-      key: "tgaNonReactiveCarbonData",
-      label: "TGA non-reactive carbon data",
-      kind: "entered",
-      formFields: ["reactiveCarbonPercent", "residualCarbonPercent"],
-      condition: {
-        field: "durabilityOption",
-        equals: "1000_year",
-        label: "1000-year durability",
-      },
-      satisfaction: {
-        mode: "anyOf",
-        fields: ["reactiveCarbonPercent", "residualCarbonPercent"],
-        label: "Reactive or residual carbon percent",
-      },
-    },
-    {
-      key: "randomReflectanceR0Percent",
-      label: "R0 reflectance",
-      kind: "entered",
-      condition: {
-        field: "durabilityOption",
-        equals: "1000_year",
-        label: "1000-year durability",
-      },
-    },
-    {
+      // Same sampled 1,000-year replicate gate in durability-readiness.ts as TC and IC.
       key: "sReflectanceFraction",
       label: "R₀ readings at or above 2%",
       kind: "entered",
       condition: {
-        field: "durabilityOption",
-        equals: "1000_year",
-        label: "1000-year durability",
+        allOf: [
+          { field: "durabilityOption", equals: "1000_year" },
+          { field: "sampling", equals: "sampled" },
+        ],
+        label: "sampled 1,000-year durability",
       },
     },
   ],
   feedstock: [
     {
-      // Form field `totalWetMassKg` persists as `massWetKg`; `satisfaction`
-      // checks the entity column while `formFields` drives the form badge.
-      // The wet mass becomes the auto-derived feedstock leg's load mass
-      // (data-access/transport-legs.ts → syncFeedstockTransportLeg).
-      key: "massWetKg",
-      label: "Feedstock wet mass",
-      kind: "entered",
-      formFields: ["totalWetMassKg"],
-      satisfaction: {
-        mode: "anyOf",
-        fields: ["massWetKg"],
-        label: "Feedstock wet mass",
-      },
-      mappings: [mapping("feedstockTransportMassDistanceTonneKm")],
-    },
-    {
       key: "transportLeg",
+      gapDetail: "Record a transport leg with a positive distance and load mass",
       label: "Feedstock transport leg",
       kind: "derived",
-      // The derived leg's distance resolves form override → supplier default
-      // location → supplier-level distance; badge the form-side override.
+      // Any usable leg covers this feedstock, including a manually recorded leg.
       formFields: ["transportDistanceKm"],
       satisfaction: {
-        mode: "anyOf",
-        fields: ["transportDistanceKm"],
-        label: "Transport distance",
+        mode: "equals",
+        field: "hasUsableTransportLeg",
+        value: true,
+        label: "Usable transport leg",
       },
       mappings: [mapping("feedstockTransportMassDistanceTonneKm")],
     },
     {
       key: "transportDistanceProvenance",
+      gapDetail: "Record how the transport distance was obtained",
       label: "Transport distance provenance",
       kind: "derived",
       satisfaction: {
         mode: "anyOf",
-        fields: ["transportDistanceSource"],
+        fields: ["transportDistanceSource", "transportLegDistanceSource"],
         label: "Transport distance provenance",
       },
     },
@@ -378,24 +313,30 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       mappings: transportMassDistanceMappings,
     },
   ],
-  // Issue #319 removed the litres→kWh genset conversion — diesel submits by
-  // volume with the EF bound on the Isometric template, so no facility
-  // emission-config field is emissions-affecting anymore. The genset-yield
-  // column/admin form stay (vestigial local estimate) but carry no certify
-  // badge.
-  facilityEmissionConfig: [],
+  facilityEmissionConfig: [
+    {
+      key: "defaultSoilTemperatureC",
+      label: "Reference soil temperature",
+      kind: "entered",
+      condition: { field: "durabilityOption", equals: "200_year", label: "200-year durability" },
+    },
+  ],
+  feedstockType: [
+    {
+      key: "isometricFeedstockTypeId",
+      label: "Isometric feedstock type",
+      kind: "entered",
+      condition: { field: "usage", equals: "pyrolysis", label: "pyrolysis usage" },
+    },
+  ],
   // The kinds below stay out of the Removal submission's entity-readiness
   // walk (which covers production runs, samples, and transport legs); their
   // descriptors drive form/detail badges and the list readiness pills.
   delivery: [
     {
-      // The biochar product wet mass is the submitted value. It becomes the
-      // auto-derived biochar distribution leg's load mass
-      // (data-access/transport-legs.ts → syncLockedBiocharProductTransportLeg).
       key: "deliveredWetMassKg",
       label: "Biochar product wet mass",
       kind: "entered",
-      mappings: [mapping("biocharTransportMassDistanceTonneKm")],
     },
   ],
   application: [
@@ -404,9 +345,12 @@ export const CERTIFY_FIELD_REGISTRY: Record<
     // dry biochar is allocated proportionally from the selected delivery's
     // tracked dry biochar. Delivery moisture is independent evidence.
     {
+      // Frozen applied wet mass feeds delivery transport via
+      // data-access/biochar-delivery-transport.ts → loadBiocharDeliveryTransportLegs.
       key: "biocharAppliedTons",
       label: "Biochar product applied",
       kind: "entered",
+      mappings: [mapping("biocharTransportMassDistanceTonneKm")],
     },
     {
       key: "biocharAppliedDryTons",
@@ -414,14 +358,9 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       kind: "derived",
     },
     {
-      // Soil temperature feeds ONLY the 200-year (Woolf 2021) durable fraction;
-      // 1000-year removals derive durability from petrographic reflectance +
-      // TGA non-reactive carbon and never submit it (ADR 0021). The condition
-      // scopes the certify marker/readiness gap to 200-year facilities so a
-      // 1000-year application is not mis-flagged for a missing soil temperature.
-      // `durabilityOption` is join-derived onto the application row in
-      // data-access/applications.ts.
+      // Site values are advisory; submission uses the facility reference.
       key: "soilTemperatureC",
+      advisory: "Record the site annual average for comparison with the facility reference temperature. Submission uses the facility reference.",
       label: "Soil temperature",
       kind: "entered",
       condition: {
@@ -435,32 +374,47 @@ export const CERTIFY_FIELD_REGISTRY: Record<
     {
       // Stored default distance for the auto-derived biochar distribution
       // leg (a per-delivery `distanceKmOverride` beats it when set).
-      key: "distanceFromFacilityKm",
-      label: "Distance from facility",
+      key: "facilityDistances",
+      label: "Facility distances",
       kind: "entered",
       mappings: [mapping("biocharTransportMassDistanceTonneKm")],
     },
   ],
-  supplier: [
-    {
-      // Supplier-level fallback distance for the auto-derived feedstock leg.
-      key: "distanceToFacilityKm",
-      label: "Distance to facility",
-      kind: "entered",
-      mappings: [mapping("feedstockTransportMassDistanceTonneKm")],
-    },
-  ],
+  supplier: [],
   supplierLocation: [
     {
       // Default-location distance — the preferred stored level for the
       // auto-derived feedstock leg.
-      key: "distanceFromFacilityKm",
-      label: "Distance from facility",
+      key: "facilityDistances",
+      label: "Facility distances",
       kind: "entered",
       mappings: [mapping("feedstockTransportMassDistanceTonneKm")],
     },
   ],
 } as const;
+
+const INPUT_TUPLES_BY_SOURCE: InputTuplesBySource = projectInputTuplesBySource();
+
+/**
+ * The removal-template inputs a certify field feeds, resolved through the
+ * semantic binding catalog from the facts its mappings name.
+ */
+export function resolveCertifyFieldInputTuples(
+  descriptor: CertifyFieldDescriptor,
+  tuplesBySource: InputTuplesBySource = INPUT_TUPLES_BY_SOURCE,
+): BindingInputTuple[] {
+  const seen = new Set<string>();
+  const tuples: BindingInputTuple[] = [];
+  for (const { source } of descriptor.mappings ?? []) {
+    for (const tuple of tuplesBySource[source as keyof InputTuplesBySource] ?? []) {
+      const key = `${tuple.groupKey}/${tuple.blueprintKey}/${tuple.inputKey}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      tuples.push(tuple);
+    }
+  }
+  return tuples;
+}
 
 export function getCertifyFieldDescriptors(
   entityKind: CertifyEntityKind,
@@ -478,8 +432,11 @@ export function getCertifyFieldDescriptor(
 export function isCertifyFormField(
   entityKind: CertifyEntityKind,
   fieldName: string,
+  entity?: object,
 ): boolean {
-  return CERTIFY_FIELD_REGISTRY[entityKind].some((field) => {
+  return getCertifyFieldDescriptors(entityKind).some((field) => {
+    if (field.advisory) return false;
+    if (entity && !certifyFieldConditionApplies(field, entity)) return false;
     // Derived descriptors badge only the explicitly-named form inputs that
     // feed the derivation; entered descriptors default to their own key.
     const formFields =
@@ -491,8 +448,11 @@ export function isCertifyFormField(
 export function isCertifyEntityField(
   entityKind: CertifyEntityKind,
   fieldName: string,
+  entity?: object,
 ): boolean {
-  return CERTIFY_FIELD_REGISTRY[entityKind].some((field) => {
+  return getCertifyFieldDescriptors(entityKind).some((field) => {
+    if (field.advisory) return false;
+    if (entity && !certifyFieldConditionApplies(field, entity)) return false;
     const satisfactionFields =
       field.satisfaction?.mode === "anyOf" ||
       field.satisfaction?.mode === "allOf"
@@ -511,6 +471,24 @@ export function isCertifyEntityField(
 export function certificationDetailField(
   entityKind: CertifyEntityKind,
   fieldName: string,
+  entity?: object,
 ): { certifyRequired: boolean } {
-  return { certifyRequired: isCertifyEntityField(entityKind, fieldName) };
+  return { certifyRequired: isCertifyEntityField(entityKind, fieldName, entity) };
+}
+
+/** Shared applicability rule for readiness and contextual form and detail chips. */
+export function certifyFieldConditionApplies(
+  descriptor: CertifyFieldDescriptor,
+  entity: object,
+): boolean {
+  const values = entity as Record<string, unknown>;
+  if (!descriptor.condition) return true;
+  const applies = (condition: CertifyFieldComparison) =>
+    "notEquals" in condition
+      ? values[condition.field] !== condition.notEquals
+      : values[condition.field] === condition.equals;
+  if ("allOf" in descriptor.condition) {
+    return descriptor.condition.allOf.every(applies);
+  }
+  return applies(descriptor.condition);
 }

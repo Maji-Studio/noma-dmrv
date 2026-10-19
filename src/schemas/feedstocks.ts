@@ -4,19 +4,20 @@
  */
 
 import { z } from "zod";
-import { optionalDistanceSource } from "./distance-source";
-import { optionalTripType } from "./trip-type";
+import { DISTANCE_NOTE_MAX_LENGTH, DISTANCE_NOTE_MAX_MESSAGE, optionalDistanceSource } from "./distance-source";
 import { exceedsMassWithTolerance } from "@/lib/calculations/mass-dry";
 import {
-  clearablePositiveNumber,
+  calendarDateSchema,
   emptyToNull,
-  expectedUpdatedAtSchema,
-  massKgSchema,
+  expectedVersionSchema,
   optionalPositiveNumber,
+  clearablePositiveNumber,
+  pipeToCanonicalNumber,
   positiveMassKgSchema,
   requiredNumber,
   requiredPositiveMassKgSchema,
   storedPercentSchema,
+  uuidSchema,
 } from "./helpers";
 
 // ============================================
@@ -35,32 +36,23 @@ const ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE =
 // since the only way to hold one is a deliberate pre-fix entry and there is no
 // production data to grandfather. `updateFeedstockSchema` below applies the
 // same positive bound to a wet mass that is present, so the invariant holds at
-// the server boundary too; `mass_wet_kg` stays nullable in the database, and a
-// null (never a zero) is what `determineFeedstockStatus` reports as
-// `missing_data`.
+// the server boundary too. The database requires all intake measurements.
 const requiredPositiveMass = requiredPositiveMassKgSchema(
   "Required",
   "Enter a valid number.",
   "Must be greater than 0",
 );
 
-const requiredMoisturePercent = requiredNumber().pipe(
+const requiredMoisturePercent = pipeToCanonicalNumber(
+  requiredNumber(),
   storedPercentSchema()
-    .min(MOISTURE_MIN, "Moisture must be between 0 and 100")
-    .max(MOISTURE_MAX, "Moisture must be between 0 and 100")
+    .min(MOISTURE_MIN, "Moisture must be at least 0 and below 100")
+    .lt(MOISTURE_MAX, "Moisture must be below 100"),
 );
 
-const deliveryDateSchema = z.union([
-  z.date(),
-  z.string().transform((val, ctx) => {
-    const date = new Date(val);
-    if (isNaN(date.getTime())) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
-      return z.NEVER;
-    }
-    return date;
-  }),
-]);
+// A business date: the day the truck arrived, never an instant (section 3.2
+// of the data-entry API plan). Strict so `2026-02-31` cannot roll into March.
+const deliveryDateSchema = calendarDateSchema().describe("Facility-local delivery business date, YYYY-MM-DD, never an instant.");
 
 // ============================================
 // Bin Allocation Schema
@@ -70,8 +62,9 @@ export const binAllocationSchema = z.object({
   storageLocationId: z
     .string()
     .min(1, "Select a storage bin.")
-    .uuid("Choose a valid storage bin."),
-  allocatedWetMassKg: requiredPositiveMass,
+    .uuid("Choose a valid storage bin.").toLowerCase()
+    .describe("Receiving storage bin identifier, UUID."),
+  allocatedWetMassKg: requiredPositiveMass.describe("Wet mass allocated to this bin in kilograms."),
 });
 
 export type BinAllocation = z.infer<typeof binAllocationSchema>;
@@ -85,53 +78,52 @@ export const feedstockFormSchema = z.object({
   facilityId: z
     .string()
     .min(1, "Select a facility.")
-    .uuid("Choose a valid facility."),
-  // Optional only for editing legacy records created before delivery dates.
-  // The create schema below restores the required constraint.
-  deliveryDate: deliveryDateSchema.optional(),
+    .uuid("Choose a valid facility.").toLowerCase()
+    .describe("Receiving facility identifier, UUID."),
+  deliveryDate: deliveryDateSchema.describe("Facility-local delivery business date, YYYY-MM-DD, never an instant."),
   supplierId: z
     .string()
     .min(1, "Select a supplier.")
-    .uuid("Choose a valid supplier."),
+    .uuid("Choose a valid supplier.").toLowerCase()
+    .describe("Supplier identifier, UUID."),
 
   // Optional transport
-  vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  // Road distance (km) for the feedstock transport leg — autofills from the
-  // supplier's distance-to-facility, overridable per delivery. Both fields are
-  // transient (not feedstock columns) — they flow into the derived transport
-  // leg at sync time.
-  transportDistanceKm: optionalPositiveNumber,
-  transportDistanceSource: optionalDistanceSource,
-  // Round-trip vs one-way accounting for the feedstock transport leg (#316).
-  // Transient (not a feedstock column) — flows into the derived leg at sync.
-  transportTripType: optionalTripType,
+  vehicleId: emptyToNull.or(uuidSchema()).nullable().optional().describe("Vehicle identifier, UUID, or null when unspecified."),
+  // Explicit override; derived distance remains on the transport leg.
+  transportDistanceKm: optionalPositiveNumber.describe("Explicit positive transport distance override in kilometres; null returns to the current location distance. Legacy zero is accepted as a clear."),
+  distanceNote: z.string().max(DISTANCE_NOTE_MAX_LENGTH, DISTANCE_NOTE_MAX_MESSAGE).nullable().optional().describe("Distance override note, untrusted plain text, or null when absent."),
+  transportDistanceSource: optionalDistanceSource.describe("Distance evidence: map_estimate is a mapped route, manual is operator-entered, document is documented evidence; null when unspecified."),
 
   // --- Material ---
   feedstockTypeId: z
     .string()
     .min(1, "Select a feedstock type.")
-    .uuid("Choose a valid feedstock type."),
-  totalWetMassKg: requiredPositiveMass,
-  moisturePercent: requiredMoisturePercent,
+    .uuid("Choose a valid feedstock type.").toLowerCase()
+    .describe("Feedstock type identifier, UUID."),
+  totalWetMassKg: requiredPositiveMass.describe("Declared delivery wet mass in kilograms."),
+  moisturePercent: requiredMoisturePercent.describe("Water as percent of wet mass, 0 inclusive to 100 exclusive, not a fraction."),
 
   // --- Bin Allocations ---
   allocations: z
     .array(binAllocationSchema)
-    .min(1, "At least one bin allocation is required"),
+    .min(1, "At least one bin allocation is required")
+    .describe("Bin allocations; over-allocation requires overrideJustification."),
 
   // --- Override ---
   overrideJustification: z
     .string()
     .max(2000, "Justification must be less than 2000 characters")
     .optional()
-    .or(z.literal("")),
+    .or(z.literal(""))
+    .describe("Override justification, plain text."),
 
   // --- Documentation ---
   notes: z
     .string()
     .max(2000, "Notes must be less than 2000 characters")
     .optional()
-    .or(z.literal("")),
+    .or(z.literal(""))
+    .describe("Operator notes, untrusted plain text."),
 }).superRefine((value, ctx) => {
   const allocatedWetMassKg = value.allocations.reduce(
     (sum, allocation) => sum + allocation.allocatedWetMassKg,
@@ -159,41 +151,31 @@ export const createFeedstockSchema = feedstockFormSchema.safeExtend({
 });
 
 export const updateFeedstockSchema = z.object({
-  feedstockId: z.string().uuid("Choose a valid feedstock."),
-  expectedUpdatedAt: expectedUpdatedAtSchema,
-  facilityId: z.string().uuid().optional(),
-  deliveryDate: z.union([
-    z.date(),
-    z.string().transform((val, ctx) => {
-      const date = new Date(val);
-      if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
-        return z.NEVER;
-      }
-      return date;
-    }),
-  ]).optional(),
-  supplierId: z.string().uuid().optional(),
-  vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  feedstockId: uuidSchema("Choose a valid feedstock.").describe("Target feedstock identifier, UUID."),
+  expectedVersion: expectedVersionSchema.describe("Positive integer row version loaded before this write."),
+  facilityId: uuidSchema().optional().describe("Receiving facility identifier, UUID."),
+  deliveryDate: calendarDateSchema().optional().describe("Facility-local delivery business date, YYYY-MM-DD, never an instant."),
+  supplierId: uuidSchema().optional().describe("Supplier identifier, UUID."),
+  vehicleId: emptyToNull.or(uuidSchema()).nullable().optional().describe("Vehicle identifier, UUID, or null when unspecified."),
   // Clearable, not optional-null: `syncFeedstockTransportLeg` preserves the
   // leg's stored distance only when this key is absent, so an omitted patch
   // must stay `undefined` instead of collapsing to an explicit clear.
-  transportDistanceKm: clearablePositiveNumber,
-  transportDistanceSource: optionalDistanceSource,
-  transportTripType: optionalTripType,
-  feedstockTypeId: z.string().uuid().optional(),
-  massWetKg: positiveMassKgSchema("Must be greater than 0").optional(),
-  moistureContentPercent: storedPercentSchema().min(0).max(100).optional(),
-  // Non-negative, not positive: dry mass is derived, and a 100% moisture
-  // intake legitimately derives to zero.
-  massDryKg: massKgSchema().optional(),
-  storageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  overrideJustification: z.string().max(2000).optional().nullable().or(z.literal("")),
-  notes: z.string().max(2000).optional().nullable().or(z.literal("")),
+  transportDistanceKm: clearablePositiveNumber.describe("Explicit positive transport distance override in kilometres; null returns to the current location distance. Legacy zero is accepted as a clear. On an already derived record, null and zero preserve the recorded leg, even when the location pair is missing."),
+  distanceNote: z.string().max(DISTANCE_NOTE_MAX_LENGTH, DISTANCE_NOTE_MAX_MESSAGE).nullable().optional().describe("Distance override note, untrusted plain text, or null when absent."),
+  transportDistanceSource: optionalDistanceSource.describe("Distance evidence: map_estimate is a mapped route, manual is operator-entered, document is documented evidence; null when unspecified."),
+  feedstockTypeId: uuidSchema().optional().describe("Feedstock type identifier, UUID."),
+  massWetKg: positiveMassKgSchema("Must be greater than 0").optional().describe("Allocated wet mass in kilograms."),
+  moistureContentPercent: storedPercentSchema().min(MOISTURE_MIN).lt(MOISTURE_MAX).optional().describe("Water as percent of wet mass, 0 inclusive to 100 exclusive, not a fraction."),
+  storageLocationId: uuidSchema().optional().describe("Receiving bin identifier, UUID; omitted keeps the current bin."),
+  overrideJustification: z.string().max(2000).optional().nullable().or(z.literal(""))
+    .describe("Override justification, plain text."),
+  notes: z.string().max(2000).optional().nullable().or(z.literal(""))
+    .describe("Operator notes, untrusted plain text."),
 });
 
 export const deleteFeedstockSchema = z.object({
-  feedstockId: z.string().uuid("Choose a valid feedstock."),
+  expectedVersion: expectedVersionSchema.describe("Positive integer row version loaded before this write."),
+  feedstockId: uuidSchema("Choose a valid feedstock.").describe("Target feedstock identifier, UUID."),
 });
 
 // ============================================
@@ -241,3 +223,5 @@ export type FeedstockFilterData = z.infer<typeof feedstockFilterSchema>;
 export type FeedstockStatsFilterData = z.infer<
   typeof feedstockStatsFilterSchema
 >;
+
+export type DeleteFeedstockData = z.infer<typeof deleteFeedstockSchema>;

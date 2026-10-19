@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { add, decimal, grams, kilograms, rationalToNumber, type Rational } from './exact';
-import { estimateStock, planReadings, withReadings, type LayerMoistureBasis } from './moisture-estimate';
+import { estimateStock, planReadings, planWetRemovals, withMovement, type LayerMoistureBasis } from './moisture-estimate';
 import { planOutputStock, type OutputStockLayer, type OutputStockRequest } from './planner';
 
 const T0 = '2026-09-01T08:00:00.000Z';
@@ -14,13 +14,16 @@ function batch(id: string, solidsKg: string, sequence: number, placedAt = T0): O
 /** The batch's moisture basis: the solids and wet mass recorded when it was added. */
 function basis(layer: OutputStockLayer, wetKg: string): LayerMoistureBasis {
   const solids = decimal(String(layer.establishedDryBiocharKg));
-  return { layerId: layer.id, placedAt: layer.placedAt, remainingSolidsKg: solids, recorded: { solidsKg: solids, wetKg: decimal(wetKg) }, readings: [] };
+  return { layerId: layer.id, placedAt: layer.placedAt, remainingSolidsKg: solids, recorded: { solidsKg: solids, wetKg: decimal(wetKg) }, readings: [], removals: [] };
 }
 const drawn = (layers: readonly OutputStockLayer[], at: string, request: OutputStockRequest) => planOutputStock(layers, at, request, 'pro_rata');
 const kg = (value: Rational | undefined) => rationalToNumber(value!);
 /** Moisture bases with the plan's remaining solids, as the preview reads them after a draw. */
 const afterDraw = (bases: LayerMoistureBasis[], remaining: readonly OutputStockLayer[]) =>
   bases.map(b => ({ ...b, remainingSolidsKg: remaining.find(l => l.id === b.layerId)!.remainingSolidsKg ?? b.remainingSolidsKg }));
+/** The bases after a posted removal: remaining solids, and the wet mass it took from each batch. */
+const afterRemoval = (bases: LayerMoistureBasis[], request: OutputStockRequest, plan: ReturnType<typeof drawn>, at: string, sequence: number) =>
+  withMovement(afterDraw(bases, plan.remainingLayers), { readings: planReadings(request, plan, at), removals: planWetRemovals(plan) }, at, BigInt(sequence));
 
 describe('mix bins: the plan worked example, to the gram', () => {
   // 1,636.8 kg solids in batch shares of 45%, 35% and 20%, all at 31.8% (2,400 kg wet).
@@ -44,28 +47,22 @@ describe('mix bins: the plan worked example, to the gram', () => {
     expect(plan.allocations.reduce((sum, a) => sum + kg(a.wetShareKg ?? undefined), 0)).toBeCloseTo(1000, 9);
   });
 
-  it('resets the whole pile to the reading: 31.8% / 1,325 kg becomes 26.7% / 1,233 kg', () => {
+  it('takes 1,000 kg from the wet stock and keeps the pile at 31.8%: 2,400 kg becomes 1,400 kg', () => {
     const plan = drawn(pile(), AT, delivery);
-    const readings = planReadings(delivery, plan, AT, 'pro_rata');
-    expect(readings.map(r => [r.layerId, r.moisturePercent])).toEqual([['B-0412', 26.7], ['B-0419', 26.7], ['B-0426', 26.7]]);
-    const remaining = afterDraw(bases(), plan.remainingLayers);
-    const before = estimateStock(remaining, AT);
-    expect(before.solidsKg).toBeCloseTo(903.8, 9);
-    expect(before.moisturePercent).toBeCloseTo(31.8, 9);
-    expect(before.wetKg).toBeCloseTo(1325.22, 2);
-    const after = estimateStock(withReadings(remaining, readings, AT, BigInt(10)), AT);
-    expect(after.moisturePercent).toBeCloseTo(26.7, 9);
-    expect(after.wetKg).toBeCloseTo(1233.02, 2);
+    expect(planReadings(delivery, plan, AT)).toEqual([]);
+    const after = estimateStock(afterRemoval(bases(), delivery, plan, AT, 10), AT);
+    expect(after.solidsKg).toBeCloseTo(903.8, 9);
+    expect(after.moisturePercent).toBeCloseTo(31.8, 9);
+    expect(after.wetKg).toBeCloseTo(1400, 9);
   });
 
-  it('a later batch of 600 kg wet at 35% brings the pile to 1,833.0 kg wet at 29.4%', () => {
+  it('a later batch of 600 kg wet at 35% brings the pile to 2,000 kg wet at 32.8%', () => {
     const plan = drawn(pile(), AT, delivery);
-    const reset = withReadings(afterDraw(bases(), plan.remainingLayers), planReadings(delivery, plan, AT, 'pro_rata'), AT, BigInt(10));
     const added = { ...basis(batch('B-0433', '390', 4, '2026-09-16T10:00:00.000Z'), '600') };
-    const estimate = estimateStock([...reset, added], '2026-09-17T10:00:00.000Z');
+    const estimate = estimateStock([...afterRemoval(bases(), delivery, plan, AT, 10), added], '2026-09-17T10:00:00.000Z');
     expect(estimate.solidsKg).toBeCloseTo(1293.8, 9);
-    expect(estimate.wetKg).toBeCloseTo(1833.02, 2);
-    expect(estimate.moisturePercent).toBeCloseTo(29.417, 3);
+    expect(estimate.wetKg).toBeCloseTo(2000, 9);
+    expect(estimate.moisturePercent).toBeCloseTo(32.797, 3);
   });
 });
 
@@ -78,10 +75,10 @@ describe('mix bins: why timing matters', () => {
   it('removed at 10:00 before a 14:00 addition, it takes 700.0 kg and the pile ends at 31.8%', () => {
     const plan = drawn([pile], AT, removal(30));
     expect(plan.drawnDryKg).toBe('700.000');
-    const reset = withReadings(afterDraw([pileBasis], plan.remainingLayers), planReadings(removal(30), plan, AT, 'pro_rata'), AT, BigInt(2));
     const addition = basis(batch('Q', '50', 3, '2026-09-15T14:00:00.000Z'), '100');
-    const estimate = estimateStock([...reset, addition], '2026-09-15T15:00:00.000Z');
+    const estimate = estimateStock([...afterRemoval([pileBasis], removal(30), plan, AT, 2), addition], '2026-09-15T15:00:00.000Z');
     expect(estimate.moisturePercent).toBeCloseTo(31.818, 3);
+    expect(estimate.wetKg).toBeCloseTo(1100, 9);
   });
 
   it('with the addition at 09:00, the pile reads 30.95% and the removal takes 690.5 kg', () => {
@@ -198,18 +195,18 @@ describe('mix bins: pro-rata invariants', () => {
 });
 
 describe('mix bins: readings', () => {
-  it('a reading resets every batch in the pile, even one too small to share in the draw', () => {
+  it('a removal records no reading, even from a pile it takes from every batch', () => {
     const layers = [batch('A', '1000', 1), batch('dust', '0.001', 2), batch('late', '10', 3, '2026-09-16T10:00:00.000Z')];
     // 1 g of solids: the dust's share is below the planner's microgram grid.
     const request = { kind: 'wet', wetKg: 0.00125, moisturePercent: 20 } as const;
     const plan = drawn(layers, AT, request);
     expect(plan.allocations.map(a => a.layerId)).toEqual(['A']);
-    expect(planReadings(request, plan, AT, 'pro_rata').map(r => r.layerId)).toEqual(['A', 'dust']);
+    expect(planReadings(request, plan, AT)).toEqual([]);
   });
 
   it('a count resets the pile at the counted moisture', () => {
     const layers = [batch('A', '600', 1), batch('B', '400', 2)];
     const request = { kind: 'count', wetKg: 900, moisturePercent: 10 } as const;
-    expect(planReadings(request, drawn(layers, AT, request), AT, 'pro_rata').map(r => [r.layerId, r.moisturePercent])).toEqual([['A', 10], ['B', 10]]);
+    expect(planReadings(request, drawn(layers, AT, request), AT).map(r => [r.layerId, r.moisturePercent])).toEqual([['A', 10], ['B', 10]]);
   });
 });

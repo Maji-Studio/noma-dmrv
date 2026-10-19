@@ -100,7 +100,7 @@ database operation.
 ## Documentation
 
 - [Architecture](docs/architecture.md)
-- [Domain glossary](CONTEXT.md)
+- [Domain glossary](GLOSSARY.md)
 - [Adding a feature](TEMPLATE_USAGE.md)
 - [Authentication and organization scope](docs/auth.md)
 - [Database](docs/database.md)

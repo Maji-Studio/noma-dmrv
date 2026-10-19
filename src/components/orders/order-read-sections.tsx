@@ -10,9 +10,10 @@ import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import type { OrderWithRelations } from "@/data-access/orders";
 import { pluralize } from "@/lib/copy-utils";
-import { formatDate, formatMassKg } from "@/lib/format-utils";
+import { formatCalendarDate, formatMassKg } from "@/lib/format-utils";
 import { ORDER_FULFILLMENT_DISPLAY } from "@/lib/orders/fulfillment";
 import { MatchingOutputBins } from "./matching-output-bins";
+import { OrderLocationRead } from "./order-location-read";
 
 /** "1,200 of 2,000 kg wet": delivered wet mass against the requested wet mass. */
 function formatDeliveredMass(order: Pick<OrderWithRelations, "deliveredWetMassKg" | "quantityKg">): string {
@@ -32,7 +33,7 @@ export function orderSheetSections(order: OrderWithRelations): DetailPanelSectio
   return [
     {
       title: "Order information",
-      fields: [{ label: "Order date", value: formatDate(order.orderDate) }],
+      fields: [{ label: "Order date", value: formatCalendarDate(order.orderDate) }],
     },
     {
       title: "Customer details",
@@ -40,6 +41,14 @@ export function orderSheetSections(order: OrderWithRelations): DetailPanelSectio
         { label: "Customer", value: order.customerName },
         { label: "Customer location", value: order.customerLocationName },
       ],
+      // Address, delivery route and map, where the form shows them.
+      content: (
+        <OrderLocationRead
+          customerId={order.customerId}
+          customerLocationId={order.customerLocationId}
+          facilityId={order.facilityId}
+        />
+      ),
     },
     {
       title: "Product details",
@@ -50,8 +59,6 @@ export function orderSheetSections(order: OrderWithRelations): DetailPanelSectio
           value: formatMassKg(order.quantityKg, { digits: MASS_KG_STORAGE_DECIMALS }),
         },
         { label: "Packaging", value: <span className="capitalize">{order.packaging}</span> },
-        { label: "Value", value: order.value },
-        { label: "Currency", value: order.currency },
       ],
     },
     ...(order.formulationId

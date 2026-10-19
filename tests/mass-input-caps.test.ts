@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { updateApplicationSchema } from "@/schemas/applications";
+import { updateApplicationInput } from "@/schemas/application-input";
 import { deliveryFormSchema } from "@/schemas/deliveries";
 import { storageLocationQuickAddSchema } from "@/schemas/quick-add";
 import {
@@ -9,9 +9,7 @@ import {
 import { createTransportLegSchema } from "@/schemas/transport-legs";
 import {
   MASS_INPUT_MAX_KG,
-  MASS_INPUT_MAX_TONNES,
   MASS_MAX_KG_MESSAGE,
-  MASS_MAX_TONNES_MESSAGE,
 } from "@/schemas/helpers";
 
 const UUID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
@@ -81,10 +79,10 @@ describe("mass input caps", () => {
     }
   });
 
-  it("rejects a tonne-denominated application mass above the shared cap", () => {
-    const result = updateApplicationSchema.safeParse({
+  it("rejects a kg-denominated application mass above the shared cap", () => {
+    const result = updateApplicationInput.safeParse({ expectedVersion: 1,
       applicationId: UUID,
-      biocharAppliedTons: MASS_INPUT_MAX_TONNES + 1,
+      appliedWetMassKg: MASS_INPUT_MAX_KG + 1,
     });
 
     expect(result.success).toBe(false);
@@ -92,8 +90,8 @@ describe("mass input caps", () => {
       expect(result.error.issues).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            path: ["biocharAppliedTons"],
-            message: MASS_MAX_TONNES_MESSAGE,
+            path: ["appliedWetMassKg"],
+            message: MASS_MAX_KG_MESSAGE,
           }),
         ]),
       );
@@ -108,7 +106,7 @@ describe("mass input caps", () => {
         facilityId: UUID,
         capacityKg: MASS_INPUT_MAX_KG + 1,
       }),
-      updateStorageLocationSchema.safeParse({
+      updateStorageLocationSchema.safeParse({ expectedVersion: 1,
         storageLocationId: UUID,
         capacityKg: MASS_INPUT_MAX_KG + 1,
       }),
@@ -148,7 +146,7 @@ describe("mass input caps", () => {
 
   it("rejects transport load mass above the shared kg cap", () => {
     const result = createTransportLegSchema.safeParse({
-      entityType: "biochar",
+      entityType: "feedstock",
       entityId: UUID,
       distanceKm: 10,
       transportMethodType: "road",
@@ -171,7 +169,7 @@ describe("mass input caps", () => {
 
   it("accepts transport load mass exactly at the shared kg cap", () => {
     const result = createTransportLegSchema.safeParse({
-      entityType: "biochar",
+      entityType: "feedstock",
       entityId: UUID,
       distanceKm: 10,
       transportMethodType: "road",

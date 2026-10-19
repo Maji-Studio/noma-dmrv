@@ -1,3 +1,10 @@
+import { removalLineBlockerMessage } from "@/lib/certification/removal-blockers";
+import { deriveBatchEmissionLines, type BatchEmissionLine } from "@/lib/certification/emission-lines";
+import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
+import { withTemplateOrder } from "@/lib/isometric/template-observations/template-order";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
+import { type LineSources } from "@/lib/isometric/template-observations/line-sources";
+import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 import { pluralize } from "@/lib/copy-utils";
 import { SafeError } from "@/lib/errors";
 import type {
@@ -10,7 +17,7 @@ import {
   buildCreateDatapointRequest,
   lookupInputMapping,
 } from "@/lib/isometric/transformers/datapoint";
-import { isSequestrationBlueprintFamily } from "@/lib/isometric/transformers/measurement-sample";
+import { isSequestrationBlueprintFamily } from "@/lib/isometric/storage-blueprints";
 import {
   sourceIdsForDatapointTarget,
   type RemovalSourceBindingPlanEntry,
@@ -35,6 +42,9 @@ export interface ResolvedTemplateInputs {
 
 export function resolveTemplateInputs(args: {
   template: IsometricGhgEntryTemplate;
+  lineSources: LineSources;
+  enrichmentComplete?: boolean;
+  emissionLines?: BatchEmissionLine[] | null;
   blueprintsByKey: Map<string, IsometricComponentBlueprint>;
   agg: AggregatedProductionData;
   externalProjectId: string;
@@ -45,6 +55,7 @@ export function resolveTemplateInputs(args: {
 }): ResolvedTemplateInputs {
   const {
     template,
+    lineSources,
     blueprintsByKey,
     agg,
     externalProjectId,
@@ -54,6 +65,12 @@ export function resolveTemplateInputs(args: {
     omitProductionComponents,
   } = args;
 
+  // Keep compilation capability guards until PR 4 supplies entry contributions.
+  const lineDecisions = [...(args.emissionLines ?? []), ...deriveBatchEmissionLines({
+    definition: normalizeTemplateDefinition(template), lineSources: withTemplateOrder(template, lineSources), problems: [],
+    enrichmentComplete: args.enrichmentComplete ?? true, automaticFigures: {}, entries: [],
+  })];
+
   const monitored: ResolvedMonitoredInput[] = [];
   const fixed: ResolvedFixedInput[] = [];
   const datapointBodyByKey = new Map<string, CreateDatapointRequest>();
@@ -62,6 +79,9 @@ export function resolveTemplateInputs(args: {
 
   for (const group of template.groups) {
     for (const component of group.components) {
+      const lineContract = ownValue(lineSources, component.id);
+      const blocker = lineDecisions.find((line) => line.componentId === component.id && line.blocker)?.blocker;
+      if (blocker) throw new SafeError(removalLineBlockerMessage(blocker));
       const monitoredMappings = component.inputs
         .filter((input) => input.type === "monitored")
         .map((input) =>
@@ -69,6 +89,7 @@ export function resolveTemplateInputs(args: {
             group.key,
             component.blueprint_key,
             input.input_key,
+            lineContract,
           ),
         )
         .filter((mapping) => mapping != null);
@@ -116,6 +137,7 @@ export function resolveTemplateInputs(args: {
           groupKey: group.key,
           componentBlueprintKey: component.blueprint_key,
           componentDisplayName: component.display_name,
+          lineContract,
           rtcInput,
           blueprintInput,
           agg,
@@ -151,7 +173,7 @@ export function resolveTemplateInputs(args: {
       new Set(unboundFixedInputs.map((input) => input.component)),
     ).join(", ");
     throw new SafeError(
-      `Removal template "${template.display_name}" has ${unboundFixedInputs.length} fixed ${pluralize(unboundFixedInputs.length, "value")} missing in ${components}. Set each value in the Isometric template editor before submitting.`,
+      `Removal template "${template.display_name}" has ${unboundFixedInputs.length} fixed ${pluralize(unboundFixedInputs.length, "value")} missing in ${components}. ${REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint}`,
     );
   }
 

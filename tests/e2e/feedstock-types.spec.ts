@@ -4,7 +4,7 @@
  * Covers the Infrastructure catalogue page that replaced the old
  * /certification/production-processes surface (ADR 0022):
  * - navigation: Feedstock Types under Infrastructure, Production Processes gone
- * - UI CRUD lifecycle: create → edit → archive → unarchive → delete (unused)
+ * - UI CRUD lifecycle: create → edit → archive → restore → delete (unused)
  *   The lifecycle ends in deletion so the spec leaves no rows behind (feedstock
  *   type codes are auto-generated and would escape the E2E- teardown sweep).
  * - sampling gating: without an Isometric registry connection the detail panel
@@ -12,6 +12,7 @@
  */
 import { test, expect } from "./fixtures";
 import { waitForSideSheet, waitForSideSheetClose } from "./fixtures";
+import { clickRowMenuItem } from "./fixtures/page-helpers";
 
 test.describe("Feedstock Types navigation", () => {
   test("sidebar lists Feedstock Types under Infrastructure and has no Production Processes entry", async ({
@@ -45,7 +46,7 @@ test.describe("Feedstock Types navigation", () => {
 });
 
 test.describe("Feedstock Types UI CRUD", () => {
-  test("admin can create, edit, archive, unarchive, and delete an unused type", async ({
+  test("admin can create, edit, archive, restore, and delete an unused type", async ({
     adminPage: page,
   }) => {
     const uniqueName = `E2E FT Walnut Shells ${Date.now()}`;
@@ -57,7 +58,7 @@ test.describe("Feedstock Types UI CRUD", () => {
     // ── Create ────────────────────────────────────────────────────────────
     await page.click('button:has-text("New feedstock type")');
     await waitForSideSheet(page);
-    await page.selectOption("#usage", "pyrolysis");
+    await page.getByRole("radio", { name: "Pyrolysis", exact: true }).locator("..").click();
     await page.fill("#name", uniqueName);
     await page.selectOption("#category", "agricultural");
     await page
@@ -72,16 +73,17 @@ test.describe("Feedstock Types UI CRUD", () => {
     await expect(row).toContainText("Agricultural");
     await expect(row).toContainText("Active");
 
-    const openRowActions = async (name: string) => {
-      await page
-        .locator("table tbody tr", { hasText: name })
-        .getByRole("button", { name: /Actions for/ })
-        .click();
-    };
+    const rowAction = (name: string, item: string) =>
+      clickRowMenuItem(
+        page,
+        page
+          .locator("table tbody tr", { hasText: name })
+          .getByRole("button", { name: /Actions for/ }),
+        item,
+      );
 
     // ── Edit ──────────────────────────────────────────────────────────────
-    await openRowActions(uniqueName);
-    await page.getByRole("menuitem", { name: "Edit" }).click();
+    await rowAction(uniqueName, "Edit");
     await waitForSideSheet(page);
     await page.fill("#name", editedName);
     await page
@@ -93,8 +95,7 @@ test.describe("Feedstock Types UI CRUD", () => {
     await expect(editedRow).toBeVisible({ timeout: 10000 });
 
     // ── Archive ───────────────────────────────────────────────────────────
-    await openRowActions(editedName);
-    await page.getByRole("menuitem", { name: "Archive" }).click();
+    await rowAction(editedName, "Archive");
     await expect(editedRow).toContainText("Archived", { timeout: 10000 });
     // Archived rows render muted values (opacity treatment via data-archived).
     await expect(
@@ -114,14 +115,12 @@ test.describe("Feedstock Types UI CRUD", () => {
       "all",
     );
 
-    // ── Unarchive ─────────────────────────────────────────────────────────
-    await openRowActions(editedName);
-    await page.getByRole("menuitem", { name: "Unarchive" }).click();
+    // ── Restore ─────────────────────────────────────────────────────────
+    await rowAction(editedName, "Restore");
     await expect(editedRow).toContainText("Active", { timeout: 10000 });
 
     // ── Delete (unused → allowed, and cleans up this spec's row) ─────────
-    await openRowActions(editedName);
-    await page.getByRole("menuitem", { name: "Delete" }).click();
+    await rowAction(editedName, "Delete");
     await page
       .getByRole("button", { name: /^Delete/ })
       .last()

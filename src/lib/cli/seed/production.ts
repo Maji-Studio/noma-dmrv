@@ -5,7 +5,8 @@ import { createSampleFn } from "@/fn/samples";
 import { createFeedstockSchema } from "@/schemas/feedstocks";
 import { createProductionRunSchema, makeProductionRunFormSchema } from "@/schemas/production-runs";
 import { createCreditBatchSchema } from "@/schemas/credit-batches";
-import { createSampleSchema, calculateHToCOrgRatio, calculateOToCOrgRatio } from "@/schemas/samples";
+import { createSampleSchema } from "@/schemas/samples";
+import { deriveSampleRatios } from "@/lib/calculations/sample-ratios";
 import { combineDateAndTime } from "@/lib/date-utils";
 import { DELIVERIES, PERIOD, RUN, RUN_DATES, SAMPLE, SAMPLE_DATES, TIME_ZONE } from "./constants";
 import { unwrap, type SeedCounts } from "./actions";
@@ -20,7 +21,7 @@ export async function seedProduction(infra: Infrastructure, counts: SeedCounts) 
       facilityId, deliveryDate: delivery.date, supplierId: infra.suppliers[forestry ? 0 : 1].id,
       feedstockTypeId: forestry ? infra.forestry.id : infra.manure.id,
       vehicleId: infra.vehicle.id, transportDistanceKm: delivery.distanceKm,
-      transportDistanceSource: "manual", transportTripType: "one_way",
+      transportDistanceSource: "manual",
       totalWetMassKg: delivery.massKg, moisturePercent: delivery.moisture,
       allocations: [{ storageLocationId: forestry ? infra.forestryBin.id : infra.manureBin.id, allocatedWetMassKg: delivery.massKg }],
     })));
@@ -54,12 +55,12 @@ export async function seedProduction(infra: Infrastructure, counts: SeedCounts) 
     sampling: "sampled", productionRunIds: runIds,
   })));
   counts.add("credit batches");
+  const { hToCOrgRatio, oToCOrgRatio } = deriveSampleRatios({ ...SAMPLE, oToCOrgRatio: null });
   for (const date of SAMPLE_DATES) {
     await unwrap(`create sample ${date}`, createSampleFn(createSampleSchema.parse({
       ...SAMPLE, creditBatchId: batch.id, samplingTime: combineDateAndTime(date, RUN.endTime, TIME_ZONE),
       analysisDate: date, durabilityOption: infra.facility.durabilityOption,
-      hToCOrgRatio: calculateHToCOrgRatio(SAMPLE.totalHydrogenPercent, SAMPLE.organicCarbonPercent),
-      oToCOrgRatio: calculateOToCOrgRatio(SAMPLE.totalOxygenPercent, SAMPLE.organicCarbonPercent),
+      hToCOrgRatio, oToCOrgRatio,
       r0AnalysisDate: date, tgaAnalysisDate: date,
     })));
     counts.add("lab samples");

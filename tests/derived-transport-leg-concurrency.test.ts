@@ -1,3 +1,8 @@
+import { customerLocationFacilityDistances } from "@/db/schema";
+import { updateOrder } from "@/lib/operations/orders";
+import { runOperationInProcess } from "@/lib/operations/runner";
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
+import { masterDataVersion } from "./helpers/master-data-version";
 import { preparePureOutputProductFixture, ensureOutputFixtureActor } from "./helpers/output-contract-fixtures";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues } from "./helpers/output-contract-fixtures";
@@ -13,11 +18,12 @@ import {
   orders,
   transportLegs,
 } from "@/db/schema";
-import { updateCustomerLocation } from "@/data-access/customers";
-import { createDelivery, updateDelivery } from "@/data-access/deliveries";
-import { updateOrder } from "@/data-access/orders";
+import { updateCustomerLocation } from "./helpers/customer-location-operations";
+import { createDelivery } from "./helpers/create-delivery";
+import { updateDelivery } from "@/lib/operations/deliveries";
+
 import { syncBiocharProductTransportLegs } from "@/data-access/transport-legs";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -88,7 +94,7 @@ describe(
       const tag = `${tagPrefix}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
       const [facility] = await db
         .insert(facilities)
-        .values({
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-${tag}`,
           name: `Transport Sync Facility ${tag}`,
@@ -110,15 +116,15 @@ describe(
         .insert(customerLocations)
         .values(
           locationDistances.map((distance, index) => ({
+            ...TEST_SITE_POSITION,
             organizationId: TEST_ORG_ID,
             customerId: customer.id,
             name: `Transport Sync Site ${tag}-${index}`,
-            distanceFromFacilityKm: distance,
-            distanceSource: "manual" as const,
           })),
         )
         .returning({ id: customerLocations.id });
       const locationIds = locations.map((location) => location.id);
+      await db.insert(customerLocationFacilityDistances).values(locations.map((location, index) => ({ organizationId: TEST_ORG_ID, locationId: location.id, facilityId: facility.id, distanceKm: locationDistances[index], distanceSource: "manual" as const })));
       created.customerLocationIds.push(...locationIds);
 
       const recipe = await outputProductFixtureValues(db, { organizationId: TEST_ORG_ID, facilityId: facility.id, code: "unused", massKg: 1_000 });
@@ -245,11 +251,11 @@ describe(
       try {
         await barrierReady;
         updates = Promise.allSettled([
-          updateDelivery(ctx, first.id, {
+          updateDelivery(ctx, first.id, { expectedVersion: await labLogisticsVersion(ctx, "deliveries", first.id),
             distanceKmOverride: 30,
             distanceSource: "manual",
           }),
-          updateDelivery(ctx, second.id, {
+          updateDelivery(ctx, second.id, { expectedVersion: await labLogisticsVersion(ctx, "deliveries", second.id),
             distanceKmOverride: 70,
             distanceSource: "manual",
           }),
@@ -371,7 +377,7 @@ describe(
         locationUpdatePromise = updateCustomerLocation(
           ctx,
           fixture.locationIds[0],
-          { distanceFromFacilityKm: 55, distanceSource: "manual" },
+          { expectedVersion: await masterDataVersion(ctx, "customerLocations", fixture.locationIds[0]), facilityDistances: [{ facilityId: fixture.facilityId, distanceKm: 55, distanceSource: "manual" }] },
         );
 
         await expect
@@ -423,7 +429,7 @@ describe(
             eq(transportLegs.isDerived, true),
           ));
 
-        expect(derived).toEqual({ distanceKm: 55, loadMassKg: 100 });
+        expect(derived).toEqual({ distanceKm: 10, loadMassKg: 100 });
       } finally {
         releaseBarrier();
         await barrierTransaction.catch(() => undefined);
@@ -432,30 +438,26 @@ describe(
       }
     });
 
-    it("keeps inherited delivery legs unchanged when an order repoint is rejected", async () => {
+    it("keeps the order formulation and inherited delivery legs unchanged when a formulation repoint is rejected", async () => {
       const fixture = await createFixture("REPOINT", [20], 3);
-      const inherited = await createDelivered(
+      await createDelivered(
         fixture,
         "REPOINT-INHERITED",
         fixture.productIds[0],
         100,
       );
-      const explicit = await createDelivered(
+      await createDelivered(
         fixture,
-        "REPOINT-EXPLICIT",
+        "REPOINT-SECOND",
         fixture.productIds[2],
         50,
       );
-      await db
-        .update(deliveries)
-        .set({ biocharProductId: null })
-        .where(eq(deliveries.id, inherited.id));
 
+      const [orderBefore] = await db.select().from(orders).where(eq(orders.id, fixture.orderId));
       const otherRecipe = await outputProductFixtureValues(db, { organizationId: TEST_ORG_ID, facilityId: fixture.facilityId, code: "unused" });
       await expect(
-        updateOrder(ctx, fixture.orderId, {
-          formulationId: otherRecipe.formulationId,
-        }),
+        runOperationInProcess(updateOrder, ctx, { orderId: fixture.orderId, expectedVersion: await labLogisticsVersion(ctx, "orders", fixture.orderId),
+          formulationId: otherRecipe.formulationId, }),
       ).rejects.toThrow(
         /Order relationship is used by delivery/,
       );
@@ -478,14 +480,11 @@ describe(
       ]));
       expect(legs.find((leg) => leg.entityId === fixture.productIds[1])).toBeUndefined();
 
-      const [explicitAfter] = await db
-        .select({ biocharProductId: deliveries.biocharProductId })
-        .from(deliveries)
-        .where(eq(deliveries.id, explicit.id));
-      expect(explicitAfter.biocharProductId).toBeNull();
+      const [orderAfter] = await db.select().from(orders).where(eq(orders.id, fixture.orderId));
+      expect(orderAfter).toEqual(orderBefore);
     });
 
-    it("updates inherited order distance without replacing a delivery location override", async () => {
+    it("keeps same-product deliveries at other destinations when a customer location changes", async () => {
       const fixture = await createFixture("LOCATION", [20, 60, 100], 1);
       const inherited = await createDelivered(
         fixture,
@@ -493,24 +492,34 @@ describe(
         fixture.productIds[0],
         100,
       );
-      const explicit = await createDelivered(
-        fixture,
-        "LOCATION-EXPLICIT",
+      const [secondOrder] = await db
+        .insert(orders)
+        .values(await outputOrderFixtureValues(db, {
+          organizationId: TEST_ORG_ID,
+          facilityId: fixture.facilityId,
+          customerId: fixture.customerId,
+          customerLocationId: fixture.locationIds[2],
+          biocharProductId: fixture.productIds[0],
+          code: `OR-LOCATION-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+          orderDate: new Date("2026-07-18T00:00:00Z"),
+          quantityKg: 500,
+          packaging: "bagged",
+        }))
+        .returning({ id: orders.id });
+      created.orderIds.push(secondOrder.id);
+      const otherDestination = await createDelivered(
+        { ...fixture, orderId: secondOrder.id },
+        "LOCATION-OTHER-DESTINATION",
         fixture.productIds[0],
         100,
       );
-      await db
-        .update(deliveries)
-        .set({ customerLocationId: fixture.locationIds[2] })
-        .where(eq(deliveries.id, explicit.id));
       await db.transaction((tx) =>
         syncBiocharProductTransportLegs(ctx, tx, [fixture.productIds[0]]),
       );
 
-      await expect(updateOrder(ctx, fixture.orderId, {
-        customerLocationId: fixture.locationIds[1],
-      })).rejects.toThrow(/Order relationship is used by delivery/);
-      await updateCustomerLocation(ctx, fixture.locationIds[0], { distanceFromFacilityKm: 60, distanceSource: "manual" });
+      await expect(runOperationInProcess(updateOrder, ctx, { orderId: fixture.orderId, expectedVersion: await labLogisticsVersion(ctx, "orders", fixture.orderId),
+        customerLocationId: fixture.locationIds[1], })).rejects.toThrow(/Order relationship is used by delivery/);
+      await updateCustomerLocation(ctx, fixture.locationIds[0], { expectedVersion: await masterDataVersion(ctx, "customerLocations", fixture.locationIds[0]), facilityDistances: [{ facilityId: fixture.facilityId, distanceKm: 60, distanceSource: "manual" }] });
 
       const [derived] = await db
         .select({
@@ -522,15 +531,17 @@ describe(
           eq(transportLegs.entityId, fixture.productIds[0]),
           eq(transportLegs.isDerived, true),
         ));
-      expect(derived).toEqual({ distanceKm: 80, loadMassKg: 200 });
+      expect(derived).toEqual({ distanceKm: 60, loadMassKg: 200 });
 
       const deliveryLocations = await db
-        .select({ id: deliveries.id, customerLocationId: deliveries.customerLocationId })
+        .select({ id: deliveries.id, customerLocationId: orders.customerLocationId })
         .from(deliveries)
-        .where(inArray(deliveries.id, [inherited.id, explicit.id]));
+        .innerJoin(orders, eq(deliveries.orderId, orders.id))
+        .where(inArray(deliveries.id, [inherited.id, otherDestination.id]));
+      expect(deliveryLocations).toHaveLength(2);
       expect(deliveryLocations).toEqual(expect.arrayContaining([
-        { id: inherited.id, customerLocationId: null },
-        { id: explicit.id, customerLocationId: fixture.locationIds[2] },
+        { id: inherited.id, customerLocationId: fixture.locationIds[0] },
+        { id: otherDestination.id, customerLocationId: fixture.locationIds[2] },
       ]));
     });
   },

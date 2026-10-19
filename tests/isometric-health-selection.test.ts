@@ -15,14 +15,16 @@ const collectionTimeoutMs = 60_000;
 // Collection only: no dotenv reads, application imports, API calls or DB tests.
 // The write suite sits beside the health suite so a broadened selection would
 // collect it; the sentinel models another integration suite without its DB code.
-test("health command collects only the read-only health file even with telemetry enabled", () => {
+test("health command collects only the read-only health file", () => {
   const directory = realpathSync(mkdtempSync(join(tmpdir(), "isometric-health-selection-")));
   try {
     mkdirSync(join(directory, "tests/helpers"), { recursive: true });
     symlinkSync(join(root, "node_modules"), join(directory, "node_modules"));
-    for (const file of [healthSuite, writeSuite, sandboxEnvHelper]) {
+    for (const file of [healthSuite, sandboxEnvHelper]) {
       writeFileSync(join(directory, file), readFileSync(join(root, file)));
     }
+    writeFileSync(join(directory, writeSuite),
+      'import { it } from "vitest"; it("sandbox write path sentinel", () => { throw new Error("collection only"); });');
     writeFileSync(join(directory, "tests/unrelated.integration.test.ts"),
       'import { it } from "vitest"; it("DB sentinel must not be selected", () => { throw new Error("collection only"); });');
     writeFileSync(join(directory, "dotenv-stub.ts"), 'export const config = () => ({});');
@@ -44,7 +46,6 @@ test("health command collects only the read-only health file even with telemetry
       ISOMETRIC_CLIENT_SECRET: "collection-only",
       ISOMETRIC_ACCESS_TOKEN: "collection-only",
       ISOMETRIC_DEMO_PROJECT_ID: "collection-only",
-      ISOMETRIC_DEMO_FACILITY_ID: "collection-only",
       ISOMETRIC_KNOWN_GHG_ENTRY_SUPPLIER_REF: "collection-only",
     };
     const vitest = join(root, "node_modules/.bin/vitest");
@@ -56,13 +57,13 @@ test("health command collects only the read-only health file even with telemetry
     const collected = list(collect);
     assert.ok(collected.length > 0, "must collect real read checks");
     assert.deepEqual([...new Set(collected.map((entry) => entry.file))], [join(directory, healthSuite)]);
-    assert.ok(collected.every((entry) => !entry.name.includes("write path")), "must exclude telemetry writes");
+    assert.ok(collected.every((entry) => !entry.name.includes("write path")), "must exclude write suites");
     assert.ok(collected.some((entry) => entry.name.includes("lists projects")));
     assert.ok(collected.some((entry) => entry.name.includes("mass-weighted")));
 
-    // The excluded file really holds the write path, so the exclusion above is not vacuous.
+    // Explicit selection must collect the write sentinel, so exclusion is not vacuous.
     const writes = list(`RUN_ISOMETRIC_SANDBOX_TESTS=1 "$1" list ${writeSuite} --json`);
-    assert.ok(writes.some((entry) => entry.name.includes("write path")), "write suite must hold the telemetry write");
+    assert.ok(writes.some((entry) => entry.name.includes("write path")), "write sentinel must be collected when selected");
 
     assert.throws(() => list(collect, { ...env, ISOMETRIC_CLIENT_SECRET: "" }),
       "explicit opt-in without credentials must fail collection");
@@ -151,7 +152,8 @@ test("actual summary shell fails for every incomplete required outcome", () => {
 // validation first; no request can be made with this deliberately empty pair.
 test("coverage CLI boots in a clean CI environment and fails closed without registry credentials", () => {
   const coverage = steps.find((step) => step.id === "coverage");
-  assert.ok(coverage?.env);
+  assert.ok(coverage);
+  assert.equal(coverage.env, undefined);
   const directory = mkdtempSync(join(tmpdir(), "isometric-health-coverage-"));
   try {
     mkdirSync(join(directory, "tests/fixtures"), { recursive: true });
@@ -167,7 +169,6 @@ test("coverage CLI boots in a clean CI environment and fails closed without regi
         PATH: process.env.PATH,
         TSX_TSCONFIG_PATH: join(root, "tsconfig.json"),
         ISOMETRIC_ENVIRONMENT: "sandbox",
-        ...coverage.env,
       },
       encoding: "utf8",
       timeout: collectionTimeoutMs,

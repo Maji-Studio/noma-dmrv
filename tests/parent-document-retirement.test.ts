@@ -1,3 +1,7 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
+import { masterDataVersion } from "./helpers/master-data-version";
+import { productionVersion } from "./helpers/production-version";
 import { deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures } from "./helpers/output-contract-fixtures";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, inArray, isNull } from "drizzle-orm";
@@ -22,7 +26,8 @@ import {
   storageObjectDeletions,
   transportLegs,
 } from "@/db/schema";
-import { deleteFeedstock } from "@/data-access/feedstocks";
+import { deleteFeedstock } from "@/lib/operations/feedstocks";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import { deleteDelivery } from "@/data-access/deliveries";
 import { deleteProductionIncident } from "@/data-access/production-incidents";
 import { deleteProductionRun } from "@/data-access/production-runs";
@@ -39,7 +44,7 @@ import {
   insertManagedDocument,
   insertRemovalSnapshot,
 } from "./helpers/document-retirement";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -121,10 +126,10 @@ describe("parent document retirement", () => {
 
       await deleteReactor(
         makeTestOrgContext(TEST_USER_ID),
-        fixture.reactorId,
+        fixture.reactorId, await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "reactors", fixture.reactorId),
       );
 
-      expect(provider.deleteCalls).toEqual([managedKey]);
+      expect(provider.deleteCalls.filter((key) => [managedKey, otherOrgKey, otherPendingKey].includes(key))).toEqual([managedKey]);
       expect(provider.objects.has(managedKey)).toBe(false);
       expect(provider.objects.has(otherOrgKey)).toBe(true);
       expect(provider.objects.has(otherPendingKey)).toBe(true);
@@ -183,7 +188,7 @@ describe("parent document retirement", () => {
       });
 
       await expect(
-        deleteReactor(makeTestOrgContext(TEST_USER_ID), fixture.reactorId),
+        deleteReactor(makeTestOrgContext(TEST_USER_ID), fixture.reactorId, await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "reactors", fixture.reactorId)),
       ).rejects.toThrow(/certification provider/);
 
       expect(provider.deleteCalls).toEqual([]);
@@ -204,11 +209,11 @@ describe("parent document retirement", () => {
     }
   });
 
-  it("preflights delivery and derived-leg evidence together before deleting storage", async () => {
+  it("preserves delivery and derived-leg evidence when the posted stock entry is missing", async () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-DEL-${tag}`,
         name: `Delivery evidence facility ${tag}`,
@@ -225,6 +230,7 @@ describe("parent document retirement", () => {
     const [location] = await db
       .insert(customerLocations)
       .values({
+        ...TEST_SITE_POSITION,
         organizationId: TEST_ORG_ID,
         customerId: customer.id,
         name: `Delivery evidence site ${tag}`,
@@ -298,8 +304,8 @@ describe("parent document retirement", () => {
       });
 
       await expect(
-        deleteDelivery(makeTestOrgContext(TEST_USER_ID), delivery.id),
-      ).rejects.toThrow(/posted deliveries|bin history/i);
+        deleteDelivery(makeTestOrgContext(TEST_USER_ID), delivery.id, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "deliveries", delivery.id)),
+      ).rejects.toThrow("Posted delivery stock entry was not found.");
 
       expect(provider.deleteCalls).toEqual([]);
       expect(provider.objects.has(deliveryKey)).toBe(true);
@@ -346,7 +352,7 @@ describe("parent document retirement", () => {
 
       try {
         await expect(
-          deleteEntity(makeTestOrgContext(TEST_USER_ID), entityId),
+          deleteEntity(makeTestOrgContext(TEST_USER_ID), entityId, 1),
         ).rejects.toThrow(/not found/i);
         expect(provider.deleteCalls).toEqual([]);
         expect(provider.objects.has(key)).toBe(true);
@@ -389,7 +395,7 @@ describe("parent document retirement", () => {
 
     try {
       await expect(
-        deleteProductionRun(makeTestOrgContext(TEST_USER_ID), run.id),
+        deleteProductionRun(makeTestOrgContext(TEST_USER_ID), run.id, await productionVersion(makeTestOrgContext(TEST_USER_ID), "productionRuns", run.id)),
       ).rejects.toThrow();
 
       expect(provider.deleteCalls).toEqual([]);
@@ -434,6 +440,7 @@ describe("parent document retirement", () => {
             makeTestOrgContext(TEST_USER_ID),
             tx,
             [{ entityType: "reactor", entityId: fixture.reactorId }],
+            "form",
           );
           throw new Error("Injected failure after outbox enqueue");
         }),
@@ -493,7 +500,7 @@ describe("parent document retirement", () => {
       );
       provider.failKey = keys[1];
 
-      await deleteReactor(ctx, fixture.reactorId);
+      await deleteReactor(ctx, fixture.reactorId, await masterDataVersion(ctx, "reactors", fixture.reactorId));
 
       expect(
         await db.select().from(reactors).where(eq(reactors.id, fixture.reactorId)),
@@ -518,7 +525,7 @@ describe("parent document retirement", () => {
       provider.failKey = null;
       expect(
         await processPendingStorageObjectDeletions(ctx),
-      ).toEqual({ completed: 0, failed: 0 });
+      ).toEqual({ completed: 0, failed: 0, deferred: 0 });
       await db
         .update(storageObjectDeletions)
         .set({ lastAttemptAt: RETRY_BACKOFF_ELAPSED_AT })
@@ -529,13 +536,13 @@ describe("parent document retirement", () => {
           ),
         );
       const retryResult = await processPendingStorageObjectDeletions(ctx);
-      expect(retryResult).toEqual({ completed: 1, failed: 0 });
+      expect(retryResult).toEqual({ completed: 1, failed: 0, deferred: 0 });
       expect(provider.objects.has(keys[0])).toBe(false);
       expect(provider.objects.has(keys[1])).toBe(false);
       const callsAfterRetry = provider.deleteCalls.length;
       expect(
         await processPendingStorageObjectDeletions(ctx),
-      ).toEqual({ completed: 0, failed: 0 });
+      ).toEqual({ completed: 0, failed: 0, deferred: 0 });
       expect(provider.deleteCalls).toHaveLength(callsAfterRetry);
     } finally {
       await db
@@ -587,6 +594,7 @@ describe("parent document retirement", () => {
       ).resolves.toEqual({
         completed: 1,
         failed: DELETION_BATCH_SIZE,
+        deferred: 0,
       });
       expect(provider.deleteCalls).toEqual([validKey]);
       expect(provider.objects.has(validKey)).toBe(false);
@@ -651,7 +659,7 @@ describe("parent document retirement", () => {
 
       await expect(
         processPendingStorageObjectDeletions(ctx),
-      ).resolves.toEqual({ completed: DELETION_BATCH_SIZE, failed: 0 });
+      ).resolves.toEqual({ completed: DELETION_BATCH_SIZE, failed: 0, deferred: 0 });
       expect(provider.deleteCalls[0]).toBe(newKey);
       expect(provider.objects.has(newKey)).toBe(false);
       const remainingRetries = await db
@@ -676,7 +684,7 @@ describe("parent document retirement", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-DERIVED-${tag}`,
         name: `Derived leg facility ${tag}`,
@@ -685,6 +693,7 @@ describe("parent document retirement", () => {
     const [feedstockType] = await db
       .insert(feedstockTypes)
       .values({
+        usage: "pyrolysis",
         organizationId: TEST_ORG_ID,
         code: `FT-DERIVED-${tag}`,
         name: `Derived leg feedstock ${tag}`,
@@ -693,14 +702,14 @@ describe("parent document retirement", () => {
       .returning({ id: feedstockTypes.id });
     const [feedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
         code: `FS-DERIVED-${tag}`,
         status: "missing_data",
         massDryKg: 0,
-      })
+      }))
       .returning({ id: feedstocks.id });
     const [leg] = await db
       .insert(transportLegs)
@@ -779,6 +788,7 @@ describe("parent document retirement", () => {
       await db.delete(documents).where(eq(documents.id, documentId));
       await db.delete(transportLegs).where(eq(transportLegs.id, leg.id));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstock.id));
+      await cleanupFeedstockFixtureParents(db);
       await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockType.id));
       await deleteOutputFacilityFixtures(db, eq(facilities.id, facility.id));
     }
@@ -788,7 +798,7 @@ describe("parent document retirement", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-NEST-${tag}`,
         name: `Nested evidence facility ${tag}`,
@@ -797,6 +807,7 @@ describe("parent document retirement", () => {
     const [feedstockType] = await db
       .insert(feedstockTypes)
       .values({
+        usage: "pyrolysis",
         organizationId: TEST_ORG_ID,
         code: `FT-NEST-${tag}`,
         name: `Nested evidence feedstock ${tag}`,
@@ -805,14 +816,14 @@ describe("parent document retirement", () => {
       .returning({ id: feedstockTypes.id });
     const [feedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
         code: `FS-NEST-${tag}`,
         status: "missing_data",
         massDryKg: 0,
-      })
+      }))
       .returning({ id: feedstocks.id });
     const [leg] = await db
       .insert(transportLegs)
@@ -851,7 +862,6 @@ describe("parent document retirement", () => {
         organizationId: TEST_ORG_ID,
         productionRunId: run.id,
         incidentTime: new Date("2026-07-01T11:00:00Z"),
-        incidentDate: new Date("2026-07-01T11:00:00Z"),
         description: "Nested evidence test incident",
         severity: "low",
       })
@@ -866,8 +876,8 @@ describe("parent document retirement", () => {
         insertManagedDocument(provider, "production_incident", incident.id, `production_incident/${incident.id}/pdf/${tag}.pdf`),
       ]);
 
-      await deleteFeedstock(makeTestOrgContext(TEST_USER_ID), feedstock.id);
-      await deleteProductionRun(makeTestOrgContext(TEST_USER_ID), run.id);
+      await runOperationInProcess(deleteFeedstock, makeTestOrgContext(TEST_USER_ID), { feedstockId: feedstock.id, expectedVersion: 1 });
+      await deleteProductionRun(makeTestOrgContext(TEST_USER_ID), run.id, await productionVersion(makeTestOrgContext(TEST_USER_ID), "productionRuns", run.id));
 
       expect(
         await db.select().from(documents).where(inArray(documents.entityId, entityIds)),
@@ -885,6 +895,7 @@ describe("parent document retirement", () => {
       await db.delete(productionRuns).where(eq(productionRuns.id, run.id));
       await db.delete(reactors).where(eq(reactors.id, reactor.id));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstock.id));
+      await cleanupFeedstockFixtureParents(db);
       await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockType.id));
       await deleteOutputFacilityFixtures(db, eq(facilities.id, facility.id));
     }

@@ -4,6 +4,12 @@ Status: accepted (2026-07-03) · Issue #349 · Partially supersedes
 [ADR 0003](./0003-removal-as-submission-unit.md) (narrows its
 "applied-biochar scoping" clause)
 
+> **Proposed amendment 2026-10-15**: [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
+> keeps the production claim and the follow-up omission, and adds a claim per
+> emissions entry: a follow-up Removal keeps a production component when it has
+> unsent entries for it, and sends only those. The text below stays in force
+> until ADR 0032 is accepted and implemented.
+
 > **Amended 2026-07-24 — version-citation correction.** The v1.3 labels in the
 > historical Context below do not match noma's Biochar Protocol v1.2
 > interpretation pin. The Certify project was separately observed on v1.1 on
@@ -45,7 +51,7 @@ applications cover.
 and End-of-Life phases only; GHGAM §4.1 keeps operational emissions
 per-period, and the front-load is §8.6.2-clean because all of a credit
 batch's production operations occur within the batch's reporting period
-(the batch is ≤ 1 month by ADR 0016, and the entry's window spans production
+(the batch is less than one month by ADR 0016, and the entry's window spans production
 start → latest application).
 
 ## Decision
@@ -59,7 +65,7 @@ start → latest application).
      electricity, feedstock transport, sample transport. Submit **full run
      totals**, no applied-mass weighting.
    - **delivery** — biochar transport (mass·distance and its mass input).
-     Scales with the applied share of this removal.
+     Uses the per-delivery applied wet load.
    - **stored** — sequestered product mass and carbon content. Ex-post
      applied-scoped, unchanged from ADR 0003.
 2. **Front-load on the claiming entry.** The removal that first submits a
@@ -88,20 +94,17 @@ start → latest application).
    shared lock TTL and has no possible external mutation. Successful submission
    converts the reservation to the permanent Removal claim in the ledger
    transaction.
-4. **Uniform delivery fraction.** Biochar transport scales by one
-   removal-wide fraction (`appliedDryKg / deliveryBiocharOutputKg`, the shared
-   `appliedBiocharFraction` definition). The denominator includes only member
-   runs represented by this Removal's Applications; unapplied runs pulled in
-   for whole-batch production front-loading cannot dilute delivery. The legs are already
-   lineage-scoped to the removal's applications; scaling each leg by the
-   same fraction is an honest, documented approximation. The transport
-   evidence-ledger PDF derives its biochar subtotal from the same fraction
-   and renders the "leg sum × applied share" arithmetic explicitly, so the
-   Source-mirrored ledger always reconciles to the submitted scalar.
-   Exact per-delivery transport allocation remains separate work. The
-   application-by-batch junction now freezes the applied mass used by each
-   Removal, but the current registry input remains one removal-wide transport
-   scalar.
+4. **Per-delivery application loads (#1021).** Biochar transport sums each
+   contributing delivery's immutable application wet mass multiplied by its
+   current one-way distance and the mandatory round-trip factor. The accounting
+   loader resolves application × product × source-run allocations within the
+   Removal's captured application-by-credit-batch membership. It does not
+   divide by production output or include other deliveries of the product.
+   Submission, previews and the evidence ledger use the same calculation;
+   the ledger shows one attributed wet-load row per delivery. Missing distance
+   or mass blocks the figure instead of silently dropping a delivery. Customer
+   location distance edits affect every later transport read, including submitted
+   Removals. The submitted payload snapshot itself remains immutable.
 5. **`bucket` lives on `INPUT_MAPPING`, not the blueprint.** A deliberate
    deviation from "attribute on the blueprint": the remote OpenAPI blueprint
    types have no attribute mechanism, so the classification rides noma's

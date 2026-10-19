@@ -1,26 +1,28 @@
+import { withLocationFacilityDistances } from "./location-facility-distances";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { customers, customerLocations, type Customer } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import type { DistanceSourceValue } from "@/schemas/distance-source";
+import type { FacilityDistance } from "@/schemas/facility-distances";
 import { requireOrgScope } from "./utils";
 
 export interface CustomerDetail extends Customer {
   locations: Array<{
     id: string;
-    name: string | null;
+    name: string;
     country: string;
     stateRegion: string | null;
     city: string | null;
-    gpsLatitude: number | null;
-    gpsLongitude: number | null;
+    gpsLatitude: number;
+    gpsLongitude: number;
     address: string | null;
-    distanceFromFacilityKm: number | null;
-    distanceSource: DistanceSourceValue | null;
+    facilityDistances: FacilityDistance[];
     defaultSoilTemperatureC: number | null;
     isDefault: boolean;
     createdAt: Date;
+    version: number;
     updatedAt: Date;
+    archivedAt: Date | null;
   }>;
 }
 
@@ -59,12 +61,12 @@ export async function findCustomerWithRelations(
       gpsLatitude: customerLocations.gpsLatitude,
       gpsLongitude: customerLocations.gpsLongitude,
       address: customerLocations.address,
-      distanceFromFacilityKm: customerLocations.distanceFromFacilityKm,
-      distanceSource: customerLocations.distanceSource,
       defaultSoilTemperatureC: customerLocations.defaultSoilTemperatureC,
       isDefault: customerLocations.isDefault,
       createdAt: customerLocations.createdAt,
+      version: customerLocations.version,
       updatedAt: customerLocations.updatedAt,
+      archivedAt: customerLocations.archivedAt,
     })
     .from(customerLocations)
     .where(
@@ -75,5 +77,5 @@ export async function findCustomerWithRelations(
     )
     .orderBy(sql`${customerLocations.name} asc nulls last`);
 
-  return { ...customer, locations };
+  return { ...customer, locations: await withLocationFacilityDistances(ctx, "customer", locations) };
 }

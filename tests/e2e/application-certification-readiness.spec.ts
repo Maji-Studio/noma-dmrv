@@ -10,8 +10,9 @@
 import { and, eq } from "drizzle-orm";
 import type { Page } from "@playwright/test";
 import * as schema from "../../src/db/schema";
-import { test, expect, type SeededChainData } from "./fixtures";
+import { test, expect } from "./fixtures";
 import {
+  chainSeedRefs,
   type SeededReadyBatch,
   seedUngroupedReadyBatchWithChain,
 } from "./fixtures/certification-helpers";
@@ -56,21 +57,6 @@ const GIS_BOUNDARY: GisBoundary = {
   notes: [],
 };
 
-function chainRefs(seededData: SeededChainData) {
-  return {
-    facilityId: seededData.facility.id,
-    reactorId: seededData.reactor.id,
-    formulationId: seededData.formulation.id,
-    feedstockId: seededData.feedstock.id,
-    feedstockStorageLocationId: seededData.feedstockStorageLocation.id,
-    biocharStorageLocationId: seededData.biocharStorageLocation.id,
-    productStorageLocationId: seededData.productStorageLocation.id,
-    customerId: seededData.customer.id,
-    customerLocationId: seededData.customerLocation.id,
-    vehicleId: seededData.vehicle.id,
-  };
-}
-
 /**
  * Strip every evidence document from the Application and put it on the boundary
  * method with a valid GIS reference. Under the current rule the GIS reference is
@@ -113,9 +99,14 @@ async function expectRemovalReadyWithoutApplicationEvidence(
     `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
   );
   const checklist = page.getByTestId("batch-health-strip");
+  // The fixture links a fake registry project, so the batch stays unpinned
+  // (plan 2026-10-15 §4.2). That template check is the only open issue.
+  await expect(checklist.getByText("1 issue open")).toBeVisible({
+    timeout: COLD_COMPILE_TIMEOUT_MS,
+  });
   await expect(
-    checklist.getByText("All batch data checks passed"),
-  ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
+    checklist.getByText("Choose a Removal template for this credit batch."),
+  ).toBeVisible();
   await expect(
     checklist.getByText("Application evidence", { exact: true }),
   ).toHaveCount(0);
@@ -139,7 +130,7 @@ test.describe("application evidence and certification readiness", () => {
 
     try {
       batch = await seedUngroupedReadyBatchWithChain(
-        chainRefs(seededData),
+        chainSeedRefs(seededData),
         `READINESS-${testRunId}`,
       );
       await clearEvidenceDocumentsAndSetBoundary(batch);
@@ -152,10 +143,15 @@ test.describe("application evidence and certification readiness", () => {
       );
 
       // The applications list badge must agree with the Removal checklist.
+      // The list pill checks the application's own fields, so it reads
+      // "Fields complete" rather than claiming certification.
       await page.goto(`/applications?facility=${facilityId}`);
       const row = page.locator("tr", { hasText: batch.applicationCode });
       await expect(row).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
-      await expect(row.getByLabel("Ready for certification")).toBeVisible();
+      await expect(row.getByLabel("Fields complete")).toBeVisible();
+      await expect(
+        row.getByRole("button", { name: /Incomplete application fields/ }),
+      ).toHaveCount(0);
     } finally {
       await batch?.cleanup();
     }

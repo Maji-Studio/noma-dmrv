@@ -71,6 +71,7 @@ function lineageFor(fixture: ContractFixture): ChainOfCustodyData {
       href: `/applications/${APPLICATION_ID}`,
     } as ChainOfCustodyData["application"],
     delivery: {
+      proofOfDeliveryCount: 1,
       id: "delivery",
       code: "DL",
       status: null,

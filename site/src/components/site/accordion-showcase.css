@@ -1,0 +1,107 @@
+/* AccordionShowcase (AccordionShowcase.astro). Light editorial: hairlines, square corners, a hatched frame.
+   Base rules are the no-JS layout: one column, every item open, each visual under its copy.
+   [data-acc-ready] (set by accordion-showcase.js) switches on the closed states; from 900px up the visuals
+   move into one hatched frame on the right and cross-fade. Motion comes from tokens; the global reduced
+   motion rule in tokens.css turns every transition here off, so items switch instantly. */
+.acc {
+  --acc-bar: 2px;                                   /* open item's accent bar */
+  --acc-chev: 16px;
+  --acc-inset-x: var(--gap);                        /* frame to column edges (desktop) */
+  --acc-inset-y: clamp(var(--space-5), 3.5vw, var(--space-8));
+  --acc-tail: var(--space-8);                       /* room under the last item */
+  --acc-stack-max: 520px;                           /* a stacked visual (mobile, no JS) is square and stops here */
+  --acc-art-pad: clamp(var(--space-5), 3vw, var(--space-8));
+  --acc-cross: linear-gradient(var(--cross), var(--cross));
+  --acc-cross-at: calc(var(--cross-size) / 2 - var(--hairline) / 2);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.acc-head { display: grid; gap: var(--space-5); align-content: start; padding: var(--section) var(--space-6) var(--space-8) var(--frame-pad); border-bottom: var(--hairline) solid var(--rule); }
+.acc-head .t-h2 { max-width: 12ch; }
+.acc-rail, .acc-frame { display: none; }
+
+/* Headers */
+.acc-h { margin: 0; font: inherit; }
+.acc-h:not(.is-first) { border-top: var(--hairline) solid var(--rule); }
+.acc-btn {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); width: 100%; min-height: var(--btn-h);
+  padding: var(--space-5) var(--space-6) var(--space-5) var(--frame-pad); border: 0; background: none; color: var(--ink);
+  font-size: var(--fs-h4); font-weight: 300; letter-spacing: var(--track-h3); line-height: 1.2; text-align: left; cursor: default;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.acc-btn:focus-visible { outline-offset: -4px; }
+.acc-chev { display: none; flex: none; width: var(--acc-chev); height: var(--acc-chev); fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: square; transition: transform var(--dur-base) var(--ease-out); }
+
+/* Panels and stacked visuals: a 0fr/1fr grid row animates the height; the clip hides what is past it. */
+.acc-panel, .acc-visual { display: grid; grid-template-rows: 1fr; }
+.acc-clip { min-height: 0; overflow: hidden; }
+.acc-copy { display: grid; gap: var(--space-4); align-content: start; padding: 0 var(--space-6) var(--space-6) var(--frame-pad); }
+.acc-copy > .t-body { font-size: var(--fs-ui); line-height: var(--lh-body); }
+.acc-copy > .tl { margin-top: calc(var(--space-2) * -1); }
+.acc-art {
+  position: relative; display: grid; place-items: center; max-width: var(--acc-stack-max); aspect-ratio: 1 / 1;
+  margin: var(--space-2) var(--frame-pad) var(--space-7); padding: var(--acc-art-pad); background: var(--hatch);
+}
+.acc-art > * { width: 100%; min-width: 0; }
+
+/* Cross marks at the four corners of a hatched frame. */
+.acc-frame::after, .acc-art::after {
+  content: ""; position: absolute; inset: calc(var(--cross-size) / -2); pointer-events: none;
+  background:
+    var(--acc-cross) left var(--acc-cross-at) top 0 / var(--hairline) var(--cross-size) no-repeat,
+    var(--acc-cross) left 0 top var(--acc-cross-at) / var(--cross-size) var(--hairline) no-repeat,
+    var(--acc-cross) right var(--acc-cross-at) top 0 / var(--hairline) var(--cross-size) no-repeat,
+    var(--acc-cross) right 0 top var(--acc-cross-at) / var(--cross-size) var(--hairline) no-repeat,
+    var(--acc-cross) left var(--acc-cross-at) bottom 0 / var(--hairline) var(--cross-size) no-repeat,
+    var(--acc-cross) left 0 bottom var(--acc-cross-at) / var(--cross-size) var(--hairline) no-repeat,
+    var(--acc-cross) right var(--acc-cross-at) bottom 0 / var(--hairline) var(--cross-size) no-repeat,
+    var(--acc-cross) right 0 bottom var(--acc-cross-at) / var(--cross-size) var(--hairline) no-repeat;
+}
+
+/* Enhanced: one item open at a time. */
+.acc[data-acc-ready] .acc-btn { color: var(--ink-2); cursor: pointer; }
+.acc[data-acc-ready] .acc-btn:hover, .acc[data-acc-ready] .acc-btn[aria-expanded="true"] { color: var(--ink); }
+.acc[data-acc-ready] .acc-chev { display: block; }
+.acc[data-acc-ready] .acc-h[data-open] .acc-chev { transform: rotate(180deg); }
+.acc[data-acc-ready] :is(.acc-h, .acc-panel, .acc-visual)[data-open] { box-shadow: inset var(--acc-bar) 0 0 var(--accent); }
+.acc[data-acc-ready] :is(.acc-panel, .acc-visual) {
+  grid-template-rows: 0fr; visibility: hidden;
+  transition: grid-template-rows var(--dur-base) var(--ease-out), visibility 0s linear var(--dur-base);
+}
+.acc[data-acc-ready] :is(.acc-panel, .acc-visual)[data-open] { grid-template-rows: 1fr; visibility: visible; transition: grid-template-rows var(--dur-base) var(--ease-out); }
+.acc[data-acc-ready] .acc-visual.is-last { border-bottom: var(--hairline) solid var(--rule); }
+.acc[data-acc-still] :is(.acc-btn, .acc-chev, .acc-panel, .acc-visual) { transition: none !important; } /* first render */
+
+/* Desktop: heading and accordion in the left third, the visuals stacked in one frame on the right. */
+@media (min-width: 900px) {
+  .acc[data-acc-ready] {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 5fr);
+    grid-template-rows: auto repeat(var(--acc-n), auto auto) minmax(var(--acc-tail), 1fr);
+  }
+  .acc[data-acc-ready] > .acc-head { grid-area: 1 / 1; }
+  .acc[data-acc-ready] > :is(.acc-h, .acc-panel) { grid-column: 1; grid-row: var(--r); }
+  .acc[data-acc-ready] > .acc-panel.is-last { border-bottom: var(--hairline) solid var(--rule); }
+  .acc[data-acc-ready] > :is(.acc-rail, .acc-frame, .acc-visual) { grid-area: 1 / 2 / -1 / 3; }
+
+  /* The column rule, and two guides that run the frame's edges through the whole section. */
+  .acc[data-acc-ready] > .acc-rail {
+    display: block; border-left: var(--hairline) solid var(--rule);
+    background:
+      linear-gradient(var(--rule), var(--rule)) left var(--acc-inset-x) top 0 / var(--hairline) 100% no-repeat,
+      linear-gradient(var(--rule), var(--rule)) right var(--acc-inset-x) top 0 / var(--hairline) 100% no-repeat;
+  }
+  .acc[data-acc-ready] > :is(.acc-frame, .acc-visual) { align-self: start; margin: var(--acc-inset-y) var(--acc-inset-x); aspect-ratio: var(--acc-ratio, 1 / 1); }
+  .acc[data-acc-ready] > .acc-frame { display: block; position: relative; background: var(--hatch); }
+
+  /* Visuals cross-fade in the frame; the right-hand one stays on the last opened item. */
+  .acc[data-acc-ready] > .acc-visual,
+  .acc[data-acc-ready] > .acc-visual[data-open] {
+    position: relative; grid-template-rows: 1fr; opacity: 0; visibility: hidden; box-shadow: none; border-bottom: 0;
+    transition: opacity var(--dur-base) var(--ease-out), visibility 0s linear var(--dur-base);
+  }
+  .acc[data-acc-ready] > .acc-visual[data-shown] { opacity: 1; visibility: visible; transition: opacity var(--dur-base) var(--ease-out); }
+  .acc[data-acc-ready] > .acc-visual > .acc-clip { overflow: visible; }
+  .acc[data-acc-ready] .acc-visual .acc-art { height: 100%; max-width: none; aspect-ratio: auto; margin: 0; background: none; }
+  .acc[data-acc-ready] .acc-visual .acc-art::after { content: none; }
+}

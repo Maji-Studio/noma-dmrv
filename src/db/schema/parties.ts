@@ -1,7 +1,7 @@
+import type { FacilityDistance } from "@/schemas/facility-distances";
 import { relations, sql } from 'drizzle-orm';
-import { boolean, check, doublePrecision, index, pgTable, real, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { integer, boolean, check, doublePrecision, index, pgTable, real, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { organizations, users } from './auth';
-import { distanceSource } from './common';
 
 // ============================================
 // Suppliers - Biomass/feedstock suppliers
@@ -11,6 +11,7 @@ export const suppliers = pgTable(
   'suppliers',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    version: integer('version').notNull().default(1),
     organizationId: text('organization_id')
       .notNull()
       .references(() => organizations.id),
@@ -18,35 +19,18 @@ export const suppliers = pgTable(
     code: text('code').notNull(),
     name: text('name').notNull(),
     location: text('location'),
-    gpsLatitude: doublePrecision('gps_latitude'),
-    gpsLongitude: doublePrecision('gps_longitude'),
     address: text('address'),
     contactName: text('contact_name'),
     contactEmail: text('contact_email'),
     contactPhone: text('contact_phone'),
     sourceRegion: text('source_region'),
-    // Road distance (km) from this supplier to the delivery facility. Autofills
-    // a feedstock transport leg's distance (overridable). Stored, not computed.
-    distanceToFacilityKm: real('distance_to_facility_km'),
-    // Provenance of distanceToFacilityKm (null when no distance stored).
-    distanceSource: distanceSource('distance_source'),
+    // Archived parties keep their name and code reserved so a restore can't collide.
+    archivedAt: timestamp('archived_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex('suppliers_organization_id_code_unique').on(table.organizationId, table.code),
-    check(
-      'suppliers_gps_latitude_range',
-      sql`${table.gpsLatitude} is null or (${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90)`
-    ),
-    check(
-      'suppliers_gps_longitude_range',
-      sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
-    ),
-    check(
-      'suppliers_distance_to_facility_km_non_negative',
-      sql`${table.distanceToFacilityKm} is null or ${table.distanceToFacilityKm} >= 0`
-    ),
     // Supplier name is unique per organization, case- and whitespace-insensitive
     // (issue #252, ADR 0010). Reuse a retired name by renaming the old record.
     uniqueIndex('suppliers_organization_id_name_unique').on(
@@ -64,6 +48,7 @@ export const customers = pgTable(
   'customers',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    version: integer('version').notNull().default(1),
     organizationId: text('organization_id')
       .notNull()
       .references(() => organizations.id),
@@ -73,6 +58,8 @@ export const customers = pgTable(
     address: text('address'),
     contactEmail: text('contact_email'),
     contactPhone: text('contact_phone'),
+    // Archived parties keep their name and code reserved so a restore can't collide.
+    archivedAt: timestamp('archived_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -95,31 +82,30 @@ export const customerLocations = pgTable(
   'customer_locations',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    version: integer('version').notNull().default(1),
     organizationId: text('organization_id')
       .notNull()
       .references(() => organizations.id),
     customerId: uuid('customer_id')
       .notNull()
       .references(() => customers.id),
-    name: text('name'),
-    country: text('country').notNull().default('UNKNOWN'),
+    name: text('name').notNull(),
+    country: text('country').notNull(),
     stateRegion: text('state_region'),
     city: text('city'),
-    gpsLatitude: doublePrecision('gps_latitude'),
-    gpsLongitude: doublePrecision('gps_longitude'),
+    gpsLatitude: doublePrecision('gps_latitude').notNull(),
+    gpsLongitude: doublePrecision('gps_longitude').notNull(),
     address: text('address'),
-    // Road distance (km) from the origin facility to this customer location.
-    // Stored as operational route metadata; certifier transport is recorded on
-    // cargo entities, not deliveries.
-    distanceFromFacilityKm: real('distance_from_facility_km'),
-    // Provenance of distanceFromFacilityKm (null when no distance stored).
-    distanceSource: distanceSource('distance_source'),
     // Conservative default for the Isometric 200-year soil durability equation.
     // New applications can prefill from this site value while staying editable.
     defaultSoilTemperatureC: real('default_soil_temperature_c'),
     // Marks the customer's primary destination. At most one per customer
     // (enforced by the partial unique index below).
     isDefault: boolean('is_default').notNull().default(false),
+    // Archived locations leave the order destination picker and cannot be a
+    // new order destination; existing orders, deliveries and storage-site
+    // registrations keep them.
+    archivedAt: timestamp('archived_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -143,12 +129,13 @@ export const customerLocations = pgTable(
       sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
     ),
     check(
-      'customer_locations_distance_from_facility_km_non_negative',
-      sql`${table.distanceFromFacilityKm} is null or ${table.distanceFromFacilityKm} >= 0`
-    ),
-    check(
       'customer_locations_default_soil_temperature_c_range',
       sql`${table.defaultSoilTemperatureC} is null or (${table.defaultSoilTemperatureC} >= -50 and ${table.defaultSoilTemperatureC} <= 60)`
+    ),
+    // Backstop for archive: the default location is always an active one.
+    check(
+      'customer_locations_default_active',
+      sql`not ${table.isDefault} or ${table.archivedAt} is null`
     ),
   ]
 );
@@ -161,6 +148,7 @@ export const supplierLocations = pgTable(
   'supplier_locations',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    version: integer('version').notNull().default(1),
     organizationId: text('organization_id')
       .notNull()
       .references(() => organizations.id),
@@ -168,17 +156,12 @@ export const supplierLocations = pgTable(
       .notNull()
       .references(() => suppliers.id),
     name: text('name'),
-    country: text('country').notNull().default('UNKNOWN'),
+    country: text('country').notNull(),
     stateRegion: text('state_region'),
     city: text('city'),
-    gpsLatitude: doublePrecision('gps_latitude'),
-    gpsLongitude: doublePrecision('gps_longitude'),
+    gpsLatitude: doublePrecision('gps_latitude').notNull(),
+    gpsLongitude: doublePrecision('gps_longitude').notNull(),
     address: text('address'),
-    // Road distance (km) from this supplier location to the delivery facility.
-    // Per-location override of the supplier-level default distance.
-    distanceFromFacilityKm: real('distance_from_facility_km'),
-    // Provenance of distanceFromFacilityKm (null when no distance stored).
-    distanceSource: distanceSource('distance_source'),
     // Marks the supplier's primary source. At most one per supplier
     // (enforced by the partial unique index below).
     isDefault: boolean('is_default').notNull().default(false),
@@ -186,6 +169,7 @@ export const supplierLocations = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    unique('supplier_locations_id_organization_id_unique').on(table.id, table.organizationId),
     index('supplier_locations_organization_id_idx').on(table.organizationId),
     index('supplier_locations_supplier_id_idx').on(table.supplierId),
     // One default location per supplier (partial — only default rows are unique).
@@ -200,10 +184,6 @@ export const supplierLocations = pgTable(
       'supplier_locations_gps_longitude_range',
       sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
     ),
-    check(
-      'supplier_locations_distance_from_facility_km_non_negative',
-      sql`${table.distanceFromFacilityKm} is null or ${table.distanceFromFacilityKm} >= 0`
-    ),
   ]
 );
 
@@ -212,6 +192,7 @@ export const supplierLocations = pgTable(
 // ============================================
 
 export const drivers = pgTable('drivers', {
+  version: integer('version').notNull().default(1),
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text('organization_id')
     .notNull()
@@ -231,6 +212,7 @@ export const drivers = pgTable('drivers', {
 // ============================================
 
 export const operators = pgTable('operators', {
+  version: integer('version').notNull().default(1),
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text('organization_id')
     .notNull()
@@ -280,9 +262,9 @@ export type Supplier = typeof suppliers.$inferSelect;
 export type NewSupplier = typeof suppliers.$inferInsert;
 export type Customer = typeof customers.$inferSelect;
 export type NewCustomer = typeof customers.$inferInsert;
-export type CustomerLocation = typeof customerLocations.$inferSelect;
+export type CustomerLocation = typeof customerLocations.$inferSelect & { facilityDistances: FacilityDistance[] };
 export type NewCustomerLocation = typeof customerLocations.$inferInsert;
-export type SupplierLocation = typeof supplierLocations.$inferSelect;
+export type SupplierLocation = typeof supplierLocations.$inferSelect & { facilityDistances: FacilityDistance[] };
 export type NewSupplierLocation = typeof supplierLocations.$inferInsert;
 export type Driver = typeof drivers.$inferSelect;
 export type NewDriver = typeof drivers.$inferInsert;

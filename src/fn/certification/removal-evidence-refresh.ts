@@ -1,11 +1,12 @@
 "use server";
 
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { z } from "zod";
 import { requireOrgRole } from "@/lib/auth/server";
 import { requestRemovalEvidenceRefresh } from "@/data-access/removal-evidence-refresh";
 import { getCertifierRemovalById } from "@/data-access/certifier-removals";
 import { withFacilityDurabilitySessionLock } from "@/data-access/facility-durability-lock";
-import { getIsometricClientForOrg, reconcileRemoval } from "@/lib/isometric";
+import { reconcileRemoval } from "@/lib/isometric";
 import { SafeError } from "@/lib/errors";
 import { withAction } from "../with-action";
 import { loadCandidateDocumentsForRemovalForUser } from "./source-candidates";
@@ -22,7 +23,7 @@ export async function refreshInterruptedRemovalEvidence(input: unknown) {
     if (!removal) throw new SafeError("Removal not found.");
     return withFacilityDurabilitySessionLock(ctx, removal.facilityId, () =>
       requestRemovalEvidenceRefresh(ctx, parsed, async (submission) => {
-        const client = await getIsometricClientForOrg(ctx.organizationId);
+        const client = await resolveIsometricClient(ctx);
         const remote = await reconcileRemoval(client, {
           supplierRefId: readRemovalTransport(submission).removalSupplierRef,
         });

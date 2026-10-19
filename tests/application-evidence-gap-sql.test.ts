@@ -1,6 +1,6 @@
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
-import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 /**
  * Integration coverage for the evidence-gap SQL — the fail-CLOSED certify
  * readiness signal.
@@ -35,7 +35,7 @@ import {
   APPLICATION_EVIDENCE_FIXTURES,
   type ApplicationEvidenceFixture,
 } from "./helpers/application-evidence-fixtures";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -115,6 +115,7 @@ async function seedDeliveryChain(
   const [feedstockType] = await dbc
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Gap Feedstock ${runId}`,
       code: `FT-GAP-${runId}`,
@@ -124,7 +125,7 @@ async function seedDeliveryChain(
 
   const [facility] = await dbc
     .insert(facilities)
-    .values({ organizationId: TEST_ORG_ID, name: `Gap Facility ${runId}`, code: `FAC-GAP-${runId}` })
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, name: `Gap Facility ${runId}`, code: `FAC-GAP-${runId}` })
     .returning({ id: facilities.id });
 
   const [productionProcess] = await dbc
@@ -218,6 +219,7 @@ async function seedApplicationsAndDocuments(
 
   for (const [index, spec] of APP_SPECS.entries()) {
     const [application] = await insertOutputApplicationFixture(dbc, {
+      fieldSizeHa: 1,
         organizationId: TEST_ORG_ID,
         code: `AP-GAP-${runId}-${index}`,
         deliveryId: chain.deliveryId,
@@ -264,7 +266,7 @@ async function cleanupFixture(target: Fixture): Promise<void> {
       await deleteOutputApplicationFixtures(tx, inArray(applications.id, applicationIds));
     }
     await deleteOutputDeliveryFixtures(tx, eq(deliveries.id, target.deliveryId));
-    await tx.delete(orders).where(eq(orders.id, target.orderId));
+    await deleteOutputOrderFixtures(tx, eq(orders.id, target.orderId));
     await deleteOutputProductFixtures(tx, eq(biocharProducts.id, target.productId));
     await tx.delete(productionRuns).where(eq(productionRuns.id, target.productionRunId));
     await tx.delete(reactors).where(eq(reactors.id, target.reactorId));
@@ -297,6 +299,7 @@ function lineageFor(app: SeededApplication): ChainOfCustodyData {
       href: `/applications/${app.id}`,
     },
     delivery: {
+      proofOfDeliveryCount: 1,
       id: "del",
       code: "DL",
       status: null,

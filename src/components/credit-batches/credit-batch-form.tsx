@@ -5,7 +5,7 @@
  * Form sections:
  * 1. Batch definition — feedstock, startDate, endDate
  * 2. Production cohort — automatic production runs in the production window
- * 3. Additional information — notes always trail the operational fields
+ * 3. Notes always trail the operational fields
  * Facility durability and registry/accounting values are intentionally absent:
  * neither is a batch input.
  */
@@ -18,7 +18,8 @@ import { useFeedstockTypeList } from "@/hooks/use-feedstock-types";
 import { useMethodBEligibility } from "@/hooks/use-production-processes";
 
 import { useEffect } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm, useWatch, type Resolver } from "react-hook-form";
+import type { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   FormActions,
@@ -30,7 +31,7 @@ import {
   FormTextarea,
 } from "@/components/forms";
 import {
-  creditBatchFormSchema,
+  creditBatchFormSchemaForCertifier,
   type CreditBatchFormData,
 } from "@/schemas/credit-batches";
 import type { CreditBatch } from "@/db/schema/credits";
@@ -41,6 +42,11 @@ import { MethodBPrerequisitesSetup } from "./method-b-prerequisites-setup";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { CreditBatchProductionRunsPreview } from "./credit-batch-production-runs-preview";
 import { Notice } from "@/components/ui/notice";
+import type { RecordLockView } from "@/lib/record-lock-view";
+import { isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
+
+type CreditBatchFormInput = z.input<ReturnType<typeof creditBatchFormSchemaForCertifier>>;
+type CreditBatchFormResolver = Resolver<CreditBatchFormInput, unknown, CreditBatchFormData>;
 
 function parseWatchedDate(value: unknown): Date | null {
   if (value == null || value === "") {
@@ -83,6 +89,15 @@ interface CreditBatchFormProps {
   stickyActions?: boolean;
   /** Owner/admin capability, computed on the server by the page. */
   canManage?: boolean;
+  /** Create mode only: the values the form opens with instead of today's date. */
+  defaultValues?: { feedstockTypeId?: string; startDate?: string; endDate?: string };
+  /**
+   * Create mode only: the window to propose once a feedstock is picked, as
+   * `YYYY-MM-DD`. Applied only while the operator has not edited a date.
+   */
+  windowForFeedstock?: (feedstockTypeId: string) => { startDate: string; endDate: string } | null;
+  /** The saved batch's lock: a Removal holding its slices fixes its definition. */
+  lock?: RecordLockView;
 }
 
 export function CreditBatchForm({
@@ -95,8 +110,14 @@ export function CreditBatchForm({
   submitLabel,
   stickyActions = true,
   canManage = false,
+  defaultValues,
+  windowForFeedstock,
+  lock,
 }: CreditBatchFormProps) {
   const isEditMode = !!creditBatch;
+  // Fail closed: the definition stays fixed until the lock answers, so a
+  // lock that arrives Held can never meet an edited membership.
+  const membershipLocked = isEditMode && (!lock || isCreditBatchMembershipLocked(lock));
   const { facilityId: contextFacilityId } = useFacilityContext();
 
   const {
@@ -104,15 +125,15 @@ export function CreditBatchForm({
     handleSubmit,
     control,
     trigger,
-    formState: { errors },
+    formState: { errors, isSubmitted, dirtyFields },
     setValue,
-  } = useForm({
-    resolver: zodResolver(creditBatchFormSchema),
+  } = useForm<CreditBatchFormInput, unknown, CreditBatchFormData>({
+    resolver: resolveBatch,
     defaultValues: {
       facilityId: creditBatch?.facilityId ?? contextFacilityId ?? "",
-      feedstockTypeId: creditBatch?.feedstockTypeId ?? "",
-      startDate: toDateInputValue(creditBatch?.startDate),
-      endDate: toDateInputValue(creditBatch?.endDate),
+      feedstockTypeId: creditBatch?.feedstockTypeId ?? defaultValues?.feedstockTypeId ?? "",
+      startDate: toDateInputValue(creditBatch?.startDate ?? defaultValues?.startDate),
+      endDate: toDateInputValue(creditBatch?.endDate ?? defaultValues?.endDate),
       sampling: creditBatch?.sampling ?? "sampled",
       productionRunIds: creditBatch?.productionRunIds ?? [],
       siteManagementNotes: creditBatch?.siteManagementNotes ?? "",
@@ -134,12 +155,21 @@ export function CreditBatchForm({
   const watchedSampling = useWatch({ control, name: "sampling" });
   const watchedProductionRunIds = useWatch({ control, name: "productionRunIds" });
   const effectiveFacilityId = watchedFacilityId || contextFacilityId || "";
+  const certifierSummary = useFacilityCertifierSummary(effectiveFacilityId, !!effectiveFacilityId);
+  const certifier = certifierSummary.data === undefined
+    ? "isometric"
+    : certifierSummary.data.mapping?.provider ?? null;
+
+  // RHF replaces its resolver option each render. Resolve only when RHF calls
+  // us, after the watched facility and its summary have been read.
+  function resolveBatch(
+    ...args: Parameters<CreditBatchFormResolver>
+  ): ReturnType<CreditBatchFormResolver> {
+    return zodResolver(creditBatchFormSchemaForCertifier(certifier))(...args);
+  }
+
   const declaredFeedstockTypeId = watchedFeedstockTypeId || "";
   const selectedSampling = watchedSampling === "unsampled" ? "unsampled" : "sampled";
-  const certifierSummary = useFacilityCertifierSummary(
-    effectiveFacilityId,
-    !!effectiveFacilityId,
-  );
   const feedstockTypesQuery = useFeedstockTypeList();
   const selectedFeedstockType = feedstockTypesQuery.data?.find(
     (feedstockType) => feedstockType.id === declaredFeedstockTypeId,
@@ -147,10 +177,12 @@ export function CreditBatchForm({
   const showSamplingControl =
     Boolean(certifierSummary.data?.mapping) &&
     selectedFeedstockType?.usage === "pyrolysis";
+  const startDate = parseWatchedDate(watchedStartDate);
   const methodBEligibility = useMethodBEligibility(
     effectiveFacilityId,
     declaredFeedstockTypeId,
     showSamplingControl && !isEditMode,
+    startDate ?? undefined,
   );
   const displayedSampling =
     isEditMode ||
@@ -159,9 +191,16 @@ export function CreditBatchForm({
       ? selectedSampling
       : "sampled";
 
-  const startDate = parseWatchedDate(watchedStartDate);
   const endDate = parseWatchedDate(watchedEndDate);
   const hasBothDates = startDate != null && endDate != null && endDate >= startDate;
+
+  // ResolvedErrorRevalidator covers value changes, but not policy query updates.
+  // Recheck only surfaced errors or a submitted form when the policy changes.
+  const shouldRevalidateEndDate = isSubmitted || Boolean(errors.endDate);
+  useEffect(() => {
+    if (hasBothDates && shouldRevalidateEndDate) void trigger("endDate");
+  }, [certifier, effectiveFacilityId, hasBothDates, shouldRevalidateEndDate, trigger]);
+
   // The cohort is scoped by BOTH the window and the declared feedstock type
   // (ADR 0016 amendment): runs load only once both are set.
   const isCohortReady = hasBothDates && declaredFeedstockTypeId !== "";
@@ -290,7 +329,7 @@ export function CreditBatchForm({
       (showSamplingControl && methodBEligibility.data?.unsampledAllowed)
         ? data.sampling
         : "sampled";
-    onSubmit({ ...data, sampling } as CreditBatchFormData);
+    onSubmit({ ...data, sampling });
   });
 
   return (
@@ -305,11 +344,23 @@ export function CreditBatchForm({
             name="feedstockTypeId"
             label="Feedstock type"
             entityType="feedstockType"
+            allowEdit
             placeholder="Select feedstock type..."
-            disabled={isSubmitting}
+            disabled={isSubmitting || membershipLocked}
             required
             filterBy={{ usage: "pyrolysis" }}
-            onChange={() => onClearServerError?.()}
+            onChange={(value) => {
+              onClearServerError?.();
+              // A new batch proposes the feedstock's next free month, until
+              // the operator has typed a date of their own.
+              const proposed = !isEditMode && value && !dirtyFields.startDate && !dirtyFields.endDate
+                ? windowForFeedstock?.(String(value))
+                : null;
+              if (proposed) {
+                setValue("startDate", proposed.startDate as never);
+                setValue("endDate", proposed.endDate as never);
+              }
+            }}
           />
         </div>
 
@@ -331,6 +382,7 @@ export function CreditBatchForm({
           prerequisitesSetup={
             methodBEligibility.data?.productionProcessId ? (
               <MethodBPrerequisitesSetup
+                key={methodBEligibility.data.productionProcessId}
                 processId={methodBEligibility.data.productionProcessId}
                 agreedBaselineSize={methodBEligibility.data.agreedBaselineSize}
               />
@@ -342,12 +394,13 @@ export function CreditBatchForm({
           <FormField
             id="startDate"
             label="Start date"
+            required
             error={errors.startDate?.message}
           >
             <FormInput
               id="startDate"
               type="date"
-              disabled={isSubmitting}
+              disabled={isSubmitting || membershipLocked}
               error={!!errors.startDate}
               {...register("startDate", {
                 onChange: () => onClearServerError?.(),
@@ -358,12 +411,13 @@ export function CreditBatchForm({
           <FormField
             id="endDate"
             label="End date"
+            required
             error={errors.endDate?.message}
           >
             <FormInput
               id="endDate"
               type="date"
-              disabled={isSubmitting}
+              disabled={isSubmitting || membershipLocked}
               error={!!errors.endDate}
               {...register("endDate", {
                 onChange: () => onClearServerError?.(),
@@ -384,6 +438,7 @@ export function CreditBatchForm({
         isError={productionRunOptionsErrored}
         onRetry={() => refetchProductionRunOptions()}
         isRetrying={productionRunOptionsFetching}
+        summary={<CohortInputLedger runs={selectedRuns} />}
       />
 
       {errors.productionRunIds?.message && (
@@ -408,11 +463,8 @@ export function CreditBatchForm({
         </Notice>
       )}
 
-      {/* ── Cohort input ledger (live front-loaded production inputs) ── */}
-      <CohortInputLedger runs={selectedRuns} />
-
       {/* Free-form notes trail the operational inputs and their live preview. */}
-      <FormSection title="Additional information">
+      <FormSection>
         <FormField
           id="siteManagementNotes"
           label="Notes"

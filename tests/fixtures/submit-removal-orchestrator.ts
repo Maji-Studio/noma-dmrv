@@ -1,20 +1,21 @@
+import { reviewedTemplateSources } from "../helpers/template-line-sources";
 import { beforeEach, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", () => ({
+  resolveIsometricClient: vi.fn(async () => isometricClientFake),
+}));
 
 import type {
   CertificationSubmissionRow,
   CertifierProjectRow,
 } from "@/data-access/certification";
 import type { InsertDraftSubmissionInput } from "@/data-access/certification-submissions";
-import type {
-  IsometricComponentBlueprint,
-  IsometricGhgEntryTemplate,
-} from "@/lib/isometric";
+import type { IsometricComponentBlueprint } from "@/lib/isometric";
 import type {
   ProductionRun,
   Sample,
 } from "@/db/schema";
 import { evaluateDurabilitySubmissionGates } from "@/lib/certification/durability-submission-gates";
-import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
 import {
   getMetadataValue,
   SUBMISSION_ATTEMPT_OUTCOMES,
@@ -72,8 +73,11 @@ vi.mock("@/fn/certification/biochar-applications", () => ({
 // Removal submission fails closed unless every candidate document has a
 // validated mirrored Source ID. Tests that exercise missing/partial mirrors
 // override these healthy defaults.
-vi.mock("@/fn/certification/sources", async () => {
+vi.mock("@/fn/certification/source-candidates", async (importOriginal) => {
   return {
+    ...(await importOriginal<
+      typeof import("@/fn/certification/source-candidates")
+    >()),
     collectCandidateDocumentIdsForRemoval: vi.fn(async () => ["doc-test-1"]),
     resolveSourceIdsForRemoval: vi.fn(async () => ["src-test-1"]),
     collectCandidateSourceDocumentsForRemoval: vi.fn(async () => [
@@ -105,22 +109,22 @@ vi.mock("@/fn/certification/sources", async () => {
         sourceId: `src-${candidate.documentId}`,
       })),
     ),
-    mirrorCandidateSourcesForSubmission: vi.fn(),
   };
 });
+vi.mock("@/fn/certification/sources-mirror-core", () => ({
+  mirrorCandidateSourcesForSubmission: vi.fn(),
+}));
 vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
   return {
     ...actual,
-    getIsometricClientForOrg: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
     createDatapoint: vi.fn(),
     createGhgEntry: vi.fn(),
     reconcileDatapoint: vi.fn(),
     reconcileRemoval: vi.fn(),
   };
 });
-// The production-batch step (#630) resolves its client from the client module
-// directly, not the barrel above, so the HTTP boundary is faked here too.
+// All orchestrator steps share the client returned by the credential resolver.
 const isometricClientFake = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
@@ -128,14 +132,6 @@ const isometricClientFake = vi.hoisted(() => ({
   paginate: vi.fn(),
   paginateAll: vi.fn(),
 }));
-vi.mock("@/lib/isometric/client", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@/lib/isometric/client")>();
-  return {
-    ...actual,
-    getIsometricClientForOrg: vi.fn(async () => isometricClientFake),
-  };
-});
 // The Phase 3 measurement-samples flag is a build-time const (false while the
 // two sandbox confirms are pending). Tests that exercise the durability path
 // expose it through a mutable getter and stub the POST-ing submitter.
@@ -166,13 +162,22 @@ import * as productionClaimReservations from "@/data-access/production-claim-res
 import * as biocharApplications from "@/fn/certification/biochar-applications";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
-import * as sources from "@/fn/certification/sources";
+import * as sources from "@/fn/certification/source-candidates";
+import * as sourcesMirror from "@/fn/certification/sources-mirror-core";
 import * as isometric from "@/lib/isometric";
 import { makeClaimSubmissionDraftFake } from "./fake-claim";
+import { makeTemplate, TEMPLATE_ID } from "./submit-removal-templates";
 
 export {
   isometricClientFake,
 };
+export {
+  make1000YearSequestrationTemplate,
+  makeSequestrationTemplate,
+  makeTemplate,
+  RTC_PRODUCT_MASS_ID,
+  TEMPLATE_ID,
+} from "./submit-removal-templates";
 
 // ---------------------------------------------------------------------------
 // Constants used by the fakes + assertions.
@@ -185,8 +190,6 @@ export const CREDIT_BATCH_ID = "cb-test-1";
 export const APPLICATION_ID = "app-test-1";
 export const PRODUCTION_RUN_ID = "pr-test-1";
 export const EXTERNAL_PROJECT_ID = "prj_test_1";
-export const TEMPLATE_ID = "rvt_test_1";
-export const RTC_PRODUCT_MASS_ID = "rtc-product-mass";
 
 export const EXTERNAL_FACILITY_ID = "fcl_test_1";
 export const EXTERNAL_FEEDSTOCK_TYPE_ID = "ftt_test_1";
@@ -270,121 +273,9 @@ export function newLedgerRow(
 }
 
 // ---------------------------------------------------------------------------
-// Domain fixtures — a one-component template and a single production run.
-// Choosing `product_mass` keeps the test independent of transport legs and
-// the per-stage energy split (which need their own fixtures).
+// Domain fixtures — templates live in ./submit-removal-templates; a single
+// production run and mapping follow.
 // ---------------------------------------------------------------------------
-
-export function makeTemplate(): IsometricGhgEntryTemplate {
-  return {
-    id: TEMPLATE_ID,
-    name: "Test removal template",
-    display_name: "Test removal template",
-    // submitRemoval refuses non-REMOVAL templates (credit_type guard).
-    credit_type: "REMOVAL",
-    groups: [
-      {
-        id: "grp-1",
-        key: "co2-stored",
-        name: "CO2 stored",
-        components: [
-          {
-            id: RTC_PRODUCT_MASS_ID,
-            blueprint_key: "carbon_rich_substance_sequestration",
-            display_name: "Sequestered biochar",
-            inputs: [
-              {
-                type: "monitored",
-                input_key: "product_mass",
-                datapoint_id: null,
-                display_name: "Product mass",
-                quantity_kind: "mass",
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  } as unknown as IsometricGhgEntryTemplate;
-}
-
-// A template that routes durability through the unverified 200-year
-// measurement-samples path. submitRemoval keeps it fail-closed until the
-// remaining H/C unit and binding contract is confirmed.
-export function makeSequestrationTemplate(): IsometricGhgEntryTemplate {
-  return {
-    id: TEMPLATE_ID,
-    name: "Durability template",
-    display_name: "Durability template",
-    credit_type: "REMOVAL",
-    groups: [
-      {
-        id: "grp-seq",
-        key: "co2-stored",
-        name: "Durable storage",
-        components: [
-          {
-            id: "rtc-seq",
-            blueprint_key: "biochar_sequestration_200_year_c_org",
-            display_name: "200-year sequestration",
-            inputs: [
-              {
-                type: "monitored",
-                input_key: "h_c_molar_ratios",
-                datapoint_id: null,
-                display_name: "H/C molar ratios",
-                quantity_kind: "dimensionless_ratio",
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  } as unknown as IsometricGhgEntryTemplate;
-}
-
-export function make1000YearSequestrationTemplate(): IsometricGhgEntryTemplate {
-  const base = makeSequestrationTemplate();
-  return {
-    ...base,
-    name: "1000-year durability template",
-    display_name: "1000-year durability template",
-    groups: base.groups.map((group) => ({
-      ...group,
-      components: group.components.map((component) => ({
-        ...component,
-        blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-        display_name: "1000-year sequestration",
-        inputs: [
-          {
-            type: "monitored",
-            input_key: "total_carbon_contents",
-            quantity_kind: "mass_fraction_dry_basis",
-            datapoint_id: null,
-          },
-          {
-            type: "monitored",
-            input_key: "inorganic_carbon_contents",
-            quantity_kind: "mass_fraction_dry_basis",
-            datapoint_id: null,
-          },
-          {
-            type: "monitored",
-            input_key: "product_mass",
-            quantity_kind: "mass",
-            datapoint_id: null,
-          },
-          {
-            type: "monitored",
-            input_key: "s_fraction",
-            quantity_kind: "dimensionless_ratio",
-            datapoint_id: null,
-          },
-        ],
-      })),
-    })),
-  } as unknown as IsometricGhgEntryTemplate;
-}
 
 function makeBlueprints(): IsometricComponentBlueprint[] {
   return [
@@ -408,6 +299,7 @@ function makeBlueprints(): IsometricComponentBlueprint[] {
 function makeMapping(): CertifierProjectRow {
   return {
     id: "cert-proj-1",
+    externalFacilityId: EXTERNAL_FACILITY_ID,
     facilityId: FACILITY_ID,
     provider: "isometric",
     externalProjectId: EXTERNAL_PROJECT_ID,
@@ -416,11 +308,6 @@ function makeMapping(): CertifierProjectRow {
     defaultRemovalTemplateId: TEMPLATE_ID,
     webhookSecret: null,
     metadata: null,
-    // Vestigial emission-estimate config: issue #319 removed the litres→kWh
-    // genset conversion (diesel submits by volume, EF template-side), so the
-    // submission path no longer reads this column. Kept in the fixture because
-    // it still exists on CertifierProjectRow.
-    gensetEnergyYieldKwhPerLitre: 3.375,
     defaultSoilTemperatureC: 24.2,
     defaultSoilTemperatureSource: "Test dataset (annual mean)",
     createdAt: new Date(),
@@ -507,7 +394,6 @@ export function makeBatchesWithSamples(
       endDate: "2026-01-31",
       facilityTimezone: "UTC",
       sampling: "sampled",
-      declaredHToCorgRatio: null,
       durabilityOption: "200_year" as const,
       runs: runs.map((r) => ({
         id: r.id,
@@ -561,12 +447,14 @@ export function makeContext(
     reportingWindowCompletedOn: storedRemovalCompletedOn,
     mapping: makeMapping(),
     project: { id: EXTERNAL_PROJECT_ID, name: "Test project" } as never,
-    defaultTemplate: makeTemplate(),
-    missingDefaultTemplateId: null,
+    removalTemplate: makeTemplate(),
+    templateBlockers: [],
     blueprintsForTemplate: makeBlueprints(),
+    unbindableTemplateInputs: [],
     unresolvedBlueprintKeys: [],
     memberBatches: [{
       id: CREDIT_BATCH_ID,
+      removalTemplateId: makeTemplate().id,
       code: "CB-TEST-001",
       startDate: "2026-07-01",
       endDate: "2026-07-31",
@@ -591,6 +479,7 @@ export function makeContext(
         legIds: [],
         firstLegEntityId: null,
         aggregationWarning: null,
+        vehicleAdvisories: [],
       },
       biochar: {
         count: 0,
@@ -598,6 +487,7 @@ export function makeContext(
         legIds: [],
         firstLegEntityId: null,
         aggregationWarning: null,
+        vehicleAdvisories: [],
       },
       sample: {
         count: 0,
@@ -605,6 +495,7 @@ export function makeContext(
         legIds: [],
         firstLegEntityId: null,
         aggregationWarning: null,
+        vehicleAdvisories: [],
       },
     },
     requiredTransportCategories: [],
@@ -616,7 +507,6 @@ export function makeContext(
     runSummary: {
       runCount: 1,
       totalBiocharOutputKg: biocharMassKg,
-      deliveryBiocharOutputKg: biocharMassKg,
       appliedDryKg: biocharMassKg,
     },
     latestSubmission: latest,
@@ -656,6 +546,9 @@ export function makeContext(
       warnings: [],
     },
     ...overrides,
+    lineSources: overrides.lineSources ?? reviewedTemplateSources(overrides.removalTemplate ?? makeTemplate()),
+    submissionLineageBlockers: overrides.submissionLineageBlockers ?? [],
+    durabilityConfigurationBlockers: overrides.durabilityConfigurationBlockers ?? [],
     entityReadinessGaps: overrides.entityReadinessGaps ?? [],
     supportingDocuments: overrides.supportingDocuments ?? {
       total: 1,
@@ -682,7 +575,7 @@ export function makeLineage(args: {
       applicationDate: args.applicationDate ?? new Date("2026-04-05T00:00:00Z"),
       biocharAppliedDryTons: biocharMassKg / 1000,
     } as never,
-    delivery: { id: "del-1" } as never,
+    delivery: { id: "del-1", code: "D-0012", customerLocationId: "location-1", proofOfDeliveryCount: 1 } as never,
     order: null,
     biocharProduct: { id: "bp-1" } as never,
     productionRun: { id: PRODUCTION_RUN_ID } as never,
@@ -706,6 +599,7 @@ export function makeFreshScope(overrides: {
     memberBatches: [
       {
         id: CREDIT_BATCH_ID,
+      removalTemplateId: makeTemplate().id,
         code: "CB-TEST-001",
         productionRunIds: overrides.productionRunIds ?? [PRODUCTION_RUN_ID],
         applicationIds: overrides.applicationIds ?? [APPLICATION_ID],
@@ -925,7 +819,7 @@ beforeEach(() => {
     makeResolvedInventorySource("doc-test-1", "src-test-1"),
   ]);
   vi.mocked(
-    sources.mirrorCandidateSourcesForSubmission,
+    sourcesMirror.mirrorCandidateSourcesForSubmission,
   ).mockResolvedValue(undefined);
   // §8.6.2 fresh-read re-assert (production-claim-gate): after the draft
   // claim, submitRemoval re-reads the removal scope (claims + lineage
@@ -959,6 +853,7 @@ beforeEach(() => {
       totalDryMassKg: ORIGINAL_BIOCHAR_MASS_KG,
       runsMissingDryMass: 0,
       runsMissingEndTime: 0,
+      latestEndingRunCode: "RUN-LAST",
     },
   ]);
   vi.mocked(

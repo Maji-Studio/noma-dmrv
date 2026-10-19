@@ -10,7 +10,6 @@ export const feedstockStatus = pgEnum('feedstock_status', [
 ]);
 
 export const productionRunStatus = pgEnum('production_run_status', [
-  'draft',
   'running',
   'complete',
   'failed',
@@ -43,6 +42,36 @@ export const creditBatchStatus = pgEnum('credit_batch_status', [
 // Type Enums
 // ============================================
 
+export const REACTOR_TYPES = [
+  'fixed-bed',
+  'auger',
+  'rotary-kiln',
+  'batch',
+  'continuous',
+] as const;
+
+export const PYROLYSIS_FEEDSTOCK_CATEGORIES = [
+  'forestry',
+  'agricultural',
+  'industrial',
+  'municipal',
+  'invasive',
+] as const;
+
+export const BLEND_FEEDSTOCK_CATEGORIES = [
+  'compost',
+  'mineral',
+  'lime',
+  'binder',
+  'amendment',
+  'other',
+] as const;
+
+export const FEEDSTOCK_CATEGORIES = [
+  ...PYROLYSIS_FEEDSTOCK_CATEGORIES,
+  ...BLEND_FEEDSTOCK_CATEGORIES,
+] as const;
+
 export const storageLocationType = pgEnum('storage_location_type', [
   'feedstock_bin',
   'biochar_bin',
@@ -54,6 +83,12 @@ export const storageLocationType = pgEnum('storage_location_type', [
  * every batch or run sits apart as a sub-bin. Mix: one well-mixed pile.
  */
 export const outputStockMode = pgEnum('output_stock_mode', ['split', 'mix']);
+
+/**
+ * The default order for split-bin draws. Operators can override it per draw;
+ * each allocation saves the resolved policy (ADR 0029 addendum).
+ */
+export const outputDrawOrder = pgEnum('output_draw_order', ['oldest_first', 'newest_first']);
 
 export const feedstockTypeUsage = pgEnum('feedstock_type_usage', [
   'pyrolysis',
@@ -95,6 +130,7 @@ export const documentationType = pgEnum('documentation_type', [
   'bill_of_lading',
   'other_transport_evidence',
   'lab_report',
+  'reflectance_histogram',
   'delivery_receipt',
   'invoice',
   'pdd',
@@ -207,17 +243,6 @@ export const distanceSource = pgEnum('distance_source', [
   'document', // backed by classified transport evidence
 ]);
 
-// Transport trip type (Isometric GHG Accounting Module v1.1, "Transportation
-// Emissions" — Distance-Based Method). `return` = full round trip assumed
-// (vehicle returns empty / next destination unknown — the conservative
-// protocol default); `one_way` = evidenced onward destination, distance
-// counted one-way only. Drives the ×2 round-trip multiplier at the
-// mass-distance aggregation seam (issue #316). Orthogonal to distanceSource.
-export const transportTripType = pgEnum('transport_trip_type', [
-  'return',
-  'one_way',
-]);
-
 // Emissions calculation method (Transportation Emissions Accounting Module v1.1)
 // Section 3.2: Energy Usage Method (preferred), Section 3.3: Distance-Based Method
 export const emissionsCalculationMethod = pgEnum('emissions_calculation_method', [
@@ -230,22 +255,6 @@ export const emissionsCalculationMethod = pgEnum('emissions_calculation_method',
 // ============================================
 // Isometric Compliance Enums
 // ============================================
-
-// Electricity sourcing category (Energy Use Accounting Module §5.3, EC1–EC5)
-export const electricitySourceCategory = pgEnum('electricity_source_category', [
-  'ec1_grid_average',
-  'ec2_ppa',
-  'ec3_eac',
-  'ec4_cod',
-  'ec5_direct_connection',
-]);
-
-// Feedstock eligibility status (Biomass Feedstock Accounting Module — >25% ineligible cap)
-export const feedstockEligibilityStatus = pgEnum('feedstock_eligibility_status', [
-  'eligible',
-  'ineligible',
-  'conditional',
-]);
 
 export const certifierProvider = pgEnum('certifier_provider', [
   'isometric',
@@ -273,5 +282,44 @@ export const certificationSubmissionStatus = pgEnum(
 
 // (The `project_emission_category` pgEnum lived here for the ADR 0005
 // LCA journal; removed per ADR 0018. The category strings survive as
-// self-contained literals in PERIOD_INPUT_TUPLES,
-// src/lib/isometric/transformers/datapoint.ts.)
+// self-contained literals on the project-scope roles of the semantic binding
+// catalog, src/lib/isometric/semantic-binding-catalog.ts.)
+
+// ============================================
+// Activity History
+// ============================================
+
+export const ACTIVITY_ENTITY_TYPES = [
+  "emission_entry",
+  "emission_line_comment",
+  "removal",
+  "ghg_statement",
+  "production_run",
+  "biochar_product",
+  "lab_sample",
+  "order",
+  "delivery",
+  "application",
+  "credit_batch",
+  "document",
+  "transport_leg",
+  "feedstock",
+  "bin_movement",
+  "supplier",
+  "supplier_location",
+  "customer",
+  "customer_location",
+  "formulation",
+] as const;
+
+export const ACTIVITY_ACTIONS = ["created", "updated", "deleted", "status_changed"] as const;
+export const ACTIVITY_SOURCES = ["form", "rest", "mcp", "registry", "system", "script"] as const;
+export const ACTORLESS_ACTIVITY_SOURCES = ["system", "registry", "script"] as const;
+// Registry events default to the triggering user.
+export const DEFAULT_ACTORLESS_ACTIVITY_SOURCES = ["system", "script"] as const;
+
+export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];
+
+export function isActivityEntityType(value: string): value is ActivityEntityType {
+  return ACTIVITY_ENTITY_TYPES.some((entityType) => entityType === value);
+}

@@ -1,0 +1,64 @@
+name: Site
+
+# The marketing site (site/) is a standalone pnpm package that ci.yml never
+# installs, type-checks or builds (docs/site.md). This workflow runs only when
+# the site, the app fonts it reads, or this file change.
+on:
+  pull_request:
+    paths:
+      - "site/**"
+      - "src/styles/fonts/**"
+      - ".github/workflows/site.yml"
+  push:
+    branches: [main, staging]
+    paths:
+      - "site/**"
+      - "src/styles/fonts/**"
+      - ".github/workflows/site.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        # Version comes from packageManager in site/package.json.
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          package_json_file: site/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Root-relative files referenced from site/src must exist in site/public;
+      # the gitignored Mafinga photo is the one allowlisted exception.
+      - name: Public asset references
+        run: pnpm check:assets
+
+      - name: Astro check
+        run: pnpm check
+
+      - name: Build
+        run: pnpm build

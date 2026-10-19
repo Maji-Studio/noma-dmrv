@@ -1,10 +1,14 @@
+import { updateOrder } from "@/lib/operations/orders";
+import { runOperationInProcess } from "@/lib/operations/runner";
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
+import { productionVersion } from "./helpers/production-version";
 import { afterEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { biocharProducts, outputStockAllocations, productionRuns, storageLocations } from "@/db/schema";
-import { updateOrder } from "@/data-access/orders";
+
 import { updateBiocharProduct } from "@/data-access/biochar-products";
-import { updateFormulation } from "@/data-access/formulations";
+import { updateFormulationInTransaction } from "@/data-access/formulation-writes";
 import { updateProductionRun } from "@/data-access/production-runs";
 import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
 import { cleanupPostedStock, postedStockFixture, postDelivery, postMeasurement } from "./helpers/posted-output-stock-fixture";
@@ -17,7 +21,7 @@ describe("stock-reducing update guards", () => {
   it("prevents a used order from changing formulation without reassigning saved product sources", async () => {
     const f = await fixture(); const delivery = await postDelivery(f, 500);
     const before = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
-    await expect(updateOrder(f.ctx, f.order.id, { formulationId: f.recipe.id })).rejects.toThrow(delivery.code);
+    await expect(runOperationInProcess(updateOrder, f.ctx, { orderId: f.order.id, expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), formulationId: f.recipe.id })).rejects.toThrow(delivery.code);
     expect(await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id))).toEqual(before);
     expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(500);
   });
@@ -26,14 +30,14 @@ describe("stock-reducing update guards", () => {
     const [target] = await db.insert(storageLocations).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id,
       code: `E2E-TARGET-${f.tag}`, name: `E2E Target ${f.tag}`, type: "product_bin", formulationId: f.pure.id }).returning();
     if (!f.product) throw new Error("Expected posted product");
-    await expect(updateBiocharProduct(f.ctx, f.product.id, { storageLocationId: target.id })).rejects.toThrow("immutable");
+    await expect(updateBiocharProduct(f.ctx, f.product.id, { expectedVersion: await productionVersion(f.ctx, "biocharProducts", f.product.id), storageLocationId: target.id })).rejects.toThrow("immutable");
     expect(await getOutputBinAllLayersDryKg(f.ctx, target.id)).toBe(0);
     expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(1000);
   });
   it("requires explicit stock loss instead of reducing posted creation mass", async () => {
     const f = await fixture(); await postDelivery(f, 800);
     if (!f.product) throw new Error("Expected posted product");
-    await expect(updateBiocharProduct(f.ctx, f.product.id, { massKg: 200 })).rejects.toThrow("immutable");
+    await expect(updateBiocharProduct(f.ctx, f.product.id, { expectedVersion: await productionVersion(f.ctx, "biocharProducts", f.product.id), massKg: 200 })).rejects.toThrow("immutable");
     const loss = await postMeasurement(f, { kind: "loss", wetMassKg: 100 });
     expect(loss.preview.afterDryKg).toBe(100);
     expect((await db.select().from(biocharProducts).where(eq(biocharProducts.id, f.product.id)))[0].massKg).toBe(1000);
@@ -41,13 +45,13 @@ describe("stock-reducing update guards", () => {
   it("does not recalculate source mass from a formulation volume share", async () => {
     const f = await fixture(); if (!f.product) throw new Error("Expected posted product");
     const before = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.targetBiocharProductId, f.product.id));
-    await expect(updateFormulation(f.ctx, f.pure.id, { biocharRatio: 0.9 })).resolves.toMatchObject({ biocharRatio: 0.9 });
+    await expect(db.transaction(async tx => updateFormulationInTransaction(f.ctx, tx, { formulationId: f.pure.id, expectedVersion: f.pure.version, biocharRatio: 0.9 }))).resolves.toMatchObject({ biocharRatio: 0.9 });
     expect(await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.targetBiocharProductId, f.product.id))).toEqual(before);
     expect((await db.select().from(biocharProducts).where(eq(biocharProducts.id, f.product.id)))[0].biocharRatio).toBe(1);
   });
   it("rejects reducing a production run after its biochar has been posted downstream", async () => {
     const f = await fixture(); const run = f.runs[0];
-    await expect(updateProductionRun(f.ctx, run.id, { biocharOutputKg: 100 })).rejects.toThrow();
+    await expect(updateProductionRun(f.ctx, run.id, { expectedVersion: await productionVersion(f.ctx, "productionRuns", run.id), biocharOutputKg: 100 })).rejects.toThrow();
     expect((await db.select().from(productionRuns).where(eq(productionRuns.id, run.id)))[0].biocharOutputKg).toBe(1000);
     expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(1000);
   });

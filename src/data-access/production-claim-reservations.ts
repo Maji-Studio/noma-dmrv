@@ -1,3 +1,6 @@
+import { recordActivityChange } from "./activity-events";
+import { toActivityEntityType } from "@/lib/activity-entity-type";
+import { nextVersion } from "./row-version";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -77,13 +80,7 @@ export async function reserveProductionEmissionsClaims(
 
   await db.transaction(async (tx) => {
     const batches = await tx
-      .select({
-        id: creditBatches.id,
-        claimedByRemovalId:
-          creditBatches.productionEmissionsClaimedByRemovalId,
-        reservedBySubmissionId:
-          creditBatches.productionEmissionsClaimReservedBySubmissionId,
-      })
+      .select()
       .from(creditBatches)
       .where(
         and(
@@ -104,8 +101,8 @@ export async function reserveProductionEmissionsClaims(
         [
           args.submissionId,
           ...batches.flatMap((batch) =>
-            batch.reservedBySubmissionId
-              ? [batch.reservedBySubmissionId]
+            batch.productionEmissionsClaimReservedBySubmissionId
+              ? [batch.productionEmissionsClaimReservedBySubmissionId]
               : [],
           ),
         ],
@@ -166,12 +163,12 @@ export async function reserveProductionEmissionsClaims(
       ));
     const blocked = batches.filter((batch) => {
       if (
-        batch.claimedByRemovalId != null &&
-        batch.claimedByRemovalId !== args.removalId
+        batch.productionEmissionsClaimedByRemovalId != null &&
+        batch.productionEmissionsClaimedByRemovalId !== args.removalId
       ) {
         return true;
       }
-      const ownerId = batch.reservedBySubmissionId;
+      const ownerId = batch.productionEmissionsClaimReservedBySubmissionId;
       return ownerId != null &&
         ownerId !== args.submissionId &&
         !canTransferReservation(ownerById.get(ownerId), nowMs) &&
@@ -185,7 +182,7 @@ export async function reserveProductionEmissionsClaims(
 
     const reserved = await tx
       .update(creditBatches)
-      .set({
+      .set({ version: nextVersion(creditBatches.version),
         productionEmissionsClaimReservedBySubmissionId: args.submissionId,
         updatedAt: sql`now()`,
       })
@@ -195,12 +192,16 @@ export async function reserveProductionEmissionsClaims(
           eq(creditBatches.organizationId, ctx.organizationId),
         ),
       )
-      .returning({ id: creditBatches.id });
+      .returning();
     if (reserved.length !== ids.length) {
       throw new SafeError(
         "Production-input reservation changed while submitting. Reload and retry.",
       );
     }
+    for (const batch of reserved) await recordActivityChange(ctx, tx, {
+      entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
+      action: "updated", source: "form",
+    }, batches.find(row => row.id === batch.id)!, batch, { skipEmpty: true });
   });
 }
 
@@ -250,9 +251,10 @@ export async function rejectSubmissionAndReleaseProductionClaims(
         expectedLockedAt: args.expectedLockedAt,
       });
     }
-    await tx
+    // Lock order: submission, then reserved credit batches.
+    const released = await tx
       .update(creditBatches)
-      .set({
+      .set({ version: nextVersion(creditBatches.version),
         productionEmissionsClaimReservedBySubmissionId: null,
         updatedAt: sql`now()`,
       })
@@ -264,6 +266,11 @@ export async function rejectSubmissionAndReleaseProductionClaims(
           ),
           eq(creditBatches.organizationId, ctx.organizationId),
         ),
-      );
+      )
+      .returning();
+    for (const batch of released) await recordActivityChange(ctx, tx, {
+      entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
+      action: "updated", source: "form",
+    }, { ...batch, productionEmissionsClaimReservedBySubmissionId: args.submissionId }, batch, { skipEmpty: true });
   });
 }

@@ -1,9 +1,11 @@
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   createProductionRun,
+  updateProductionRun,
   getProductionRunById,
 } from "@/data-access/production-runs";
 import { getEntities } from "@/data-access/entities";
@@ -34,7 +36,7 @@ describe("createProductionRun — feedstock type usage gate", () => {
 beforeAll(async () => {
     const [facility] = await db
       .insert(facilities)
-      .values({ organizationId: TEST_ORG_ID, code: `FAC-PRG-${tag}`, name: `PRG Facility ${tag}` })
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-PRG-${tag}`, name: `PRG Facility ${tag}` })
       .returning({ id: facilities.id });
     facilityId = facility.id;
 
@@ -68,7 +70,7 @@ beforeAll(async () => {
         organizationId: TEST_ORG_ID,
         code: `FT-PRG-B-${tag}`,
         name: `PRG Blend ${tag}`,
-        category: "ingredient",
+        category: "compost",
         usage: "blend",
       })
       .returning({ id: feedstockTypes.id });
@@ -101,7 +103,7 @@ beforeAll(async () => {
 
     const insertedFeedstocks = await db
       .insert(feedstocks)
-      .values([
+      .values(await feedstockFixtureValues(db, [
         {
           organizationId: TEST_ORG_ID,
           code: `FS-PRG-P-${tag}`,
@@ -124,7 +126,7 @@ beforeAll(async () => {
           moistureContentPercent: 20,
           storageLocationId: blendBinId,
         },
-      ])
+      ]))
       .returning({ id: feedstocks.id });
     createdFeedstockIds.push(...insertedFeedstocks.map((feedstock) => feedstock.id));
   });
@@ -157,6 +159,7 @@ beforeAll(async () => {
       await cleanup(() =>
         db.delete(feedstocks).where(inArray(feedstocks.id, createdFeedstockIds)),
       );
+      await cleanupFeedstockFixtureParents(db);
     }
     if (pyrolysisBinId || blendBinId) {
       await cleanup(() =>
@@ -181,7 +184,7 @@ beforeAll(async () => {
   });
 
   // These fixtures share one reactor and are torn down only in afterAll, so each
-  // run needs its own non-overlapping window or the reactor-overlap guard (#259)
+  // run needs its own start and the first run must be closed before the next, or (#259)
   // would preempt the feedstock-type assertions being tested here.
   let runWindowSeq = 0;
   function baseRunInput(codeSuffix: string, feedstockStorageLocationId: string) {
@@ -189,13 +192,12 @@ beforeAll(async () => {
     runWindowSeq++;
     const pad = (n: number) => String(n).padStart(2, "0");
     const startTime = new Date(`2026-01-15T${pad(startHour)}:00:00Z`);
-    const endTime = new Date(`2026-01-15T${pad(startHour + 2)}:00:00Z`);
     return {
       code: `PR-PRG-${codeSuffix}-${tag}`,
       facilityId,
       reactorId,
       startTime,
-      endTime,
+      endTime: null,
       feedstockDraws: [{ storageLocationId: feedstockStorageLocationId, wetMassKg: 50 }],
       feedstockMoisturePercent: 20,
     };
@@ -207,6 +209,10 @@ beforeAll(async () => {
       baseRunInput("ALLOW", pyrolysisBinId),
     );
     createdRunIds.push(run.id);
+    expect(run.status).toBe("running");
+    await updateProductionRun(makeTestOrgContext(TEST_USER_ID), run.id, {
+      expectedVersion: run.version, status: "failed", endTime: new Date("2026-01-15T10:00:00Z"),
+    });
 
     expect(run.feedstockDraws).toEqual([
       expect.objectContaining({

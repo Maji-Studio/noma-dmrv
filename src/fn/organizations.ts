@@ -27,6 +27,7 @@ import {
   type ResultWithWarning,
 } from "@/fn/action-errors";
 import { saveOrgPreference } from "@/fn/org-preference";
+import { withAction } from "@/fn/with-action";
 import { env } from "@/config/env";
 import {
   cancelInvitationAsPlatformAdmin,
@@ -49,6 +50,8 @@ import {
   inviteMemberSchema,
   orgRoleSchema,
 } from "@/schemas/organizations";
+
+const LOG_MESSAGE = "organization action failed";
 
 /**
  * Run a body producing an ActionResult, mapping thrown errors. SafeError and
@@ -87,7 +90,7 @@ async function toWarnableResult<T>(
     if (apiMessage) {
       return { success: false, error: apiMessage };
     }
-    logActionError(error, { message: "organization action failed" });
+    logActionError(error, { message: LOG_MESSAGE });
     return { success: false, error: toActionError(error, fallback) };
   }
 }
@@ -114,20 +117,22 @@ function buildAcceptUrl(invitationId: string): string {
 // --- Reads ----------------------------------------------------------------
 
 export async function listMembersFn(): Promise<ActionResult<OrgMemberRow[]>> {
-  return toResult(async () => {
-    const ctx = await requireOrgContext();
-    return listOrgMembers(ctx);
-  }, "Failed to load members.");
+  return withAction(async (ctx) => listOrgMembers(ctx), {
+    fallbackMessage: "Failed to load members.",
+    log: { message: LOG_MESSAGE, context: { op: "organization:list-members" } },
+  });
 }
 
 export async function listInvitationsFn(): Promise<
   ActionResult<OrgInvitationRow[]>
 > {
-  return toResult(async () => {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
     requireOrgRole(ctx, "admin");
     return listOrgInvitations(ctx);
-  }, "Failed to load invitations.");
+  }, {
+    fallbackMessage: "Failed to load invitations.",
+    log: { message: LOG_MESSAGE, context: { op: "organization:list-invitations" } },
+  });
 }
 
 export async function listOrganizationsFn(): Promise<

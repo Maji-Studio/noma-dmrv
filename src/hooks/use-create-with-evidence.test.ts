@@ -13,6 +13,31 @@ function attachmentWithStatus(
 }
 
 describe("runCreateWithEvidenceChoreography", () => {
+  it.each([true, false])("uses the form callback to suppress handled create errors: %s", async (handled) => {
+    const error = new Error("Refused");
+    const onError = vi.fn<(error: unknown) => boolean>(() => handled);
+    const setError = vi.fn();
+    const flushMany = vi.fn();
+    await runCreateWithEvidenceChoreography({
+      input: { onError },
+      entityType: "delivery",
+      entityNoun: "Delivery",
+      executeCreate: async () => { throw error; },
+      flushMany,
+      clearAttachments: vi.fn(),
+      retainCreatedEntityIds: vi.fn(),
+      setFlushing: vi.fn(),
+      setError,
+      getCreateErrorMessage: (error, input) => input.onError(error) ? null : "Refused",
+      openEditOnFailure: vi.fn(),
+      closeOnSuccess: vi.fn(),
+      onSuccess: vi.fn(),
+    });
+    expect(onError).toHaveBeenCalledWith(error);
+    expect(setError).toHaveBeenLastCalledWith(handled ? null : "Refused");
+    expect(flushMany).not.toHaveBeenCalled();
+  });
+
   it("clears, runs the post-flush callback, closes, and toasts in order", async () => {
     const events: string[] = [];
 

@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/.cache/
 
 # next.js
 /.next/
@@ -46,6 +47,9 @@ next-env.d.ts
 # testing
 playwright-report
 test-results
+api-fuzz-report/
+.schemathesis/
+.storage-api-fuzz/
 
 # pdf
 .tmp_pdf
@@ -55,6 +59,7 @@ test-results
 # claude code
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+.claude/worktrees/
 
 # local-fs storage provider (dev/test only)
 .storage/
@@ -65,6 +70,7 @@ test-results
 /.codex/scratch/
 /.pnpm-store/
 /output/
+/outputs/
 # QA run artifacts: only markdown reports are tracked; screenshots, videos,
 # raw driver output, and scripts stay local (docs/organization.md)
 docs/archive/qa/artifacts/**
@@ -73,3 +79,6 @@ docs/archive/qa/artifacts/**
 docs/archive/qa/artifacts/**/video/
 docs/archive/qa/artifacts/**/runtime/
 docs/archive/qa/artifacts/**/screenshots/
+
+# python
+__pycache__/

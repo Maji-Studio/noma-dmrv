@@ -1,8 +1,8 @@
 /**
  * FacilityIsometricConnector
- * Lightweight inline registry connector for the facility edit form: shows the
- * facility's Isometric link status and lets an admin pick a project and
- * connect in place. Deliberately minimal — only the project link
+ * Registry connector for the facility edit form: one row with the facility's
+ * Isometric link status and a Manage button that opens a modal where an admin
+ * picks a project and connects. Deliberately minimal — only the project link
  * (`externalProjectId`) is editable here; template / facility-id / protocol
  * binding stays in Certification → Settings (linked in the header). Saving
  * goes through the same admin-gated `saveFacilityCertifierMapping` action as
@@ -20,11 +20,11 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui";
+import { Button, Modal } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
-import { FormField, FormInput, FormSelect, ServerError } from "@/components/forms";
+import { EntitySelect, FormField, FormInput, ServerError } from "@/components/forms";
 import {
   useFacilityCertifierMapping,
   useFacilityCertifierSummary,
@@ -35,6 +35,7 @@ import {
   DEFAULT_PROTOCOL_LABEL,
   DEFAULT_PROTOCOL_SLUG,
 } from "@/config/certification";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { EnvBanner } from "./env-banner";
 import { Notice } from "@/components/ui/notice";
 
@@ -48,6 +49,7 @@ interface FacilityIsometricConnectorProps {
   facilityId: string;
 }
 
+/** Status row plus the modal that holds the connect controls. */
 export function FacilityIsometricConnector({
   facilityId,
 }: FacilityIsometricConnectorProps) {
@@ -62,7 +64,80 @@ export function FacilityIsometricConnector({
     facilityId,
     viewerCanManage,
   );
+  // Owned here so the modal can refuse to close while a save is in flight.
   const saveMutation = useSaveFacilityCertifierMapping();
+  const [isOpen, setIsOpen] = useState(false);
+  const titleId = useId();
+
+  if (!viewerCanManage) return null;
+
+  const projectLabel = connectedProjectLabel(data);
+  const status = isLoading
+    ? "Loading…"
+    : error || !data
+      ? MISSING_VALUE.notAvailable
+      : projectLabel
+        ? `Connected to ${projectLabel}`
+        : MISSING_VALUE.notSet;
+
+  return (
+    <div className="flex items-center justify-between gap-12">
+      <div className="min-w-0">
+        <p className="body-small font-medium text-[var(--color-text-secondary)]">
+          Registry connection
+        </p>
+        <p className="body-small truncate text-[var(--color-text-primary)]">
+          {status}
+        </p>
+      </div>
+      <Button type="button" variant="default" onClick={() => setIsOpen(true)}>
+        Manage
+      </Button>
+      <Modal
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        dismissible={!saveMutation.isPending}
+        ariaLabelledBy={titleId}
+        width="md"
+      >
+        <ConnectorBody
+          facilityId={facilityId}
+          titleId={titleId}
+          saveMutation={saveMutation}
+        />
+      </Modal>
+    </div>
+  );
+}
+
+type FacilityCertifierMappingData = NonNullable<
+  ReturnType<typeof useFacilityCertifierMapping>["data"]
+>;
+
+/** The connected project's name (its id when the name is unknown), or null when none is linked. */
+function connectedProjectLabel(
+  data: FacilityCertifierMappingData | undefined,
+): string | null {
+  const mapping = data?.mapping;
+  if (!mapping) return null;
+  return (
+    data.availableProjects.find((p) => p.id === mapping.externalProjectId)
+      ?.name ?? mapping.externalProjectId
+  );
+}
+
+function ConnectorBody({
+  facilityId,
+  titleId,
+  saveMutation,
+}: FacilityIsometricConnectorProps & {
+  titleId: string;
+  saveMutation: ReturnType<typeof useSaveFacilityCertifierMapping>;
+}) {
+  const { data, isLoading, error } = useFacilityCertifierMapping(
+    facilityId,
+    true,
+  );
   const toast = useToast();
 
   // null = untouched (select shows the currently-connected project).
@@ -78,11 +153,11 @@ export function FacilityIsometricConnector({
   // minimal connector must gather it. Advanced binding stays in Settings.
   const [facilityIdInput, setFacilityIdInput] = useState("");
 
-  if (!viewerCanManage) return null;
-
   const header = (
-    <div className="flex items-center justify-between gap-12">
-      <h3 className="title-chapter-title">Isometric Certify</h3>
+    <div className="flex flex-col gap-4 pr-40">
+      <h2 id={titleId} className="title-heading-3">
+        Isometric Certify
+      </h2>
       <Link
         href={settingsHref(facilityId)}
         className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
@@ -119,8 +194,10 @@ export function FacilityIsometricConnector({
     return (
       <ConnectorShell header={header}>
         <FormField id="isometric-project" label="Isometric project">
-          <FormSelect
+          <EntitySelect
             id="isometric-project"
+            optionLabel="Isometric project"
+            onChange={() => {}}
             placeholder="Isometric not configured"
             options={[]}
             disabled
@@ -138,9 +215,6 @@ export function FacilityIsometricConnector({
   const selected = selectedProjectId ?? currentProjectId;
   const isDirty = !!selected && selected !== currentProjectId;
 
-  const connectedProjectName = mapping
-    ? (availableProjects.find((p) => p.id === currentProjectId)?.name ?? null)
-    : null;
 
   // Other facilities already linked to the selected project → sharing needs an
   // explicit opt-in before save (parity with FacilityCertifierDialog).
@@ -161,8 +235,9 @@ export function FacilityIsometricConnector({
     !!(mapping.defaultRemovalTemplateId || mapping.externalFacilityId);
 
   const projectOptions = availableProjects.map((project) => ({
-    value: project.id,
-    label: `${project.name}: ${project.id}`,
+    id: project.id,
+    code: project.id,
+    name: `${project.name}: ${project.id}`,
   }));
 
   const trimmedFacilityId = facilityIdInput.trim();
@@ -176,8 +251,10 @@ export function FacilityIsometricConnector({
     (isProduction && !confirmProduction) ||
     saveMutation.isPending;
 
-  const handleSelect = (value: string) => {
-    setSelectedProjectId(value);
+  const handleSelect = (value: string | undefined) => {
+    const projectId = value ?? "";
+    if (projectId === selected) return;
+    setSelectedProjectId(projectId);
     setAcknowledgeSharedProject(false);
     setConfirmProduction(false);
     setServerError(null);
@@ -216,7 +293,7 @@ export function FacilityIsometricConnector({
         <p className="body-small text-[var(--color-text-secondary)]">
           Connected to{" "}
           <span className="body-small-bold text-[var(--color-text-primary)]">
-            {connectedProjectName ?? currentProjectId}
+            {connectedProjectLabel(data)}
           </span>{" "}
           ·{" "}
           <a
@@ -245,15 +322,16 @@ export function FacilityIsometricConnector({
           No projects found on Isometric for this account.
         </p>
       ) : (
-        <div className="flex items-end gap-12">
-          <div className="flex-1">
-            <FormField id="isometric-project" label="Isometric project">
-              <FormSelect
+        <div className="flex flex-col items-start gap-12">
+          <div className="w-full">
+            <FormField id="isometric-project" label="Isometric project" required>
+              <EntitySelect
                 id="isometric-project"
+                optionLabel="Isometric project"
                 placeholder="Select a project"
                 options={projectOptions}
                 value={selected}
-                onChange={(event) => handleSelect(event.target.value)}
+                onChange={handleSelect}
                 disabled={saveMutation.isPending}
               />
             </FormField>
@@ -277,7 +355,8 @@ export function FacilityIsometricConnector({
         <FormField
           id="isometric-facility-id"
           label="Isometric facility ID"
-          hint="Needed to register production batches and submit reactor telemetry. Create the facility in Isometric Certify, then paste its fcl_… ID here."
+          required
+          hint="Needed to register production batches. Create the facility in Isometric Certify, then paste its fcl_… ID here."
         >
           <FormInput
             id="isometric-facility-id"
@@ -291,8 +370,8 @@ export function FacilityIsometricConnector({
 
       {!mapping && availableProjects.length > 0 && (
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          New connections use the {DEFAULT_PROTOCOL_LABEL} protocol by default.
-          Change it in Certification → Settings after connecting.
+          New connections use the {DEFAULT_PROTOCOL_LABEL} protocol. See the
+          versions in Certification → Settings.
         </p>
       )}
 
@@ -358,7 +437,7 @@ function ConnectorShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-16 border-t border-[var(--color-border-secondary)] pt-20">
+    <div className="flex flex-col gap-16">
       {header}
       {children}
     </div>

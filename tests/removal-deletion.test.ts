@@ -1,3 +1,6 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
+import { activityEvents } from "@/db/schema/activity";
+import { listEntityActivity } from "@/data-access/activity-events";
 import { deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { createRemovalDeletionFixture, insertLedgerRow, type Fixture } from "./helpers/removal-deletion-fixture";
 import { REMOVAL_DELETION_LEASE_KEY } from "@/lib/certification/removal-deletion-lease";
@@ -23,6 +26,11 @@ import {
  * Requires a real Postgres (`.env.test`).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", async (importOriginal) =>
+  (await import("./fixtures/fake-registry")).fakeCredentialsModule(importOriginal),
+);
+
 import { and, eq, inArray, sql } from "drizzle-orm";
 vi.mock("@/lib/isometric/client", async (importOriginal) => {
   const actual =
@@ -97,11 +105,16 @@ afterAll(async () => {
     await chain.cleanup();
   }
   if (createdBatchIds.length > 0) {
+    await db.delete(activityEvents).where(inArray(activityEvents.creditBatchId, createdBatchIds));
     await db
       .delete(creditBatches)
       .where(inArray(creditBatches.id, createdBatchIds));
   }
   if (createdRemovalIds.length > 0) {
+    await db.delete(activityEvents).where(and(
+      eq(activityEvents.organizationId, TEST_ORG_ID),
+      inArray(activityEvents.entityId, createdRemovalIds),
+    ));
     await db
       .delete(certificationSubmissions)
       .where(inArray(certificationSubmissions.localEntityId, createdRemovalIds));
@@ -228,6 +241,14 @@ describe("deleteRemoval", () => {
     expect(await removalExists(fixture.removalId)).toBe(false);
     const row = await ledgerRow(submissionId);
     expect(row.status).toBe("rejected");
+    const history = await listEntityActivity(makeTestOrgContext(), "removal", fixture.removalId);
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      action: "status_changed", fromStatus: "draft", toStatus: "rejected",
+      fromRemote: null, toRemote: null, source: "form", registryAt: null,
+      actorUserId: makeTestOrgContext().userId,
+      submissionRef: { provider: "isometric", submissionType: "removal", submissionId, version: SUBMISSION_VERSION },
+    });
     expect(row.lockedAt).toBeNull();
     expect(row.externalId).toBe(entry.id);
     const metadata = row.metadata as Record<string, unknown>;
@@ -244,6 +265,12 @@ describe("deleteRemoval", () => {
       .from(creditBatches)
       .where(eq(creditBatches.id, fixture.creditBatchId));
     expect(batch.reserved).toBeNull();
+    const batchHistory = await listEntityActivity(makeTestOrgContext(), "credit_batch", fixture.creditBatchId);
+    expect(batchHistory).toHaveLength(1);
+    expect(batchHistory[0]).toMatchObject({
+      creditBatchId: fixture.creditBatchId, action: "updated", source: "form",
+      changedFields: ["productionEmissionsClaimReservedBySubmissionId"], actorUserId: makeTestOrgContext().userId,
+    });
     const events = await db
       .select({
         operation: certifierSyncEvents.operation,
@@ -307,7 +334,10 @@ describe("deleteRemoval", () => {
       status: "draft",
       externalId: entry.id,
       metadata: interruptedMetadata(),
+      reserveBatch: true,
     });
+    await db.update(creditBatches).set({ productionEmissionsClaimedByRemovalId: fixture.removalId })
+      .where(eq(creditBatches.id, fixture.creditBatchId));
     const sampleId = `sample-${fixture.runId}`;
     const measurementReference = buildMeasurementSampleReference({
       removalId: fixture.removalId,
@@ -392,6 +422,13 @@ describe("deleteRemoval", () => {
     expect(await registrationRowsFor(submissionId)).toEqual([]);
     expect(await registrationRowsFor(priorSubmissionId)).toEqual([]);
     expect(await removalExists(fixture.removalId)).toBe(false);
+    const batchHistory = await listEntityActivity(makeTestOrgContext(), "credit_batch", fixture.creditBatchId);
+    expect(batchHistory).toHaveLength(1);
+    expect(batchHistory[0]).toMatchObject({
+      creditBatchId: fixture.creditBatchId, action: "updated", source: "form",
+      changedFields: ["productionEmissionsClaimReservedBySubmissionId", "productionEmissionsClaimedByRemovalId", "removalAssignment"],
+      actorUserId: makeTestOrgContext().userId,
+    });
     const row = await ledgerRow(submissionId);
     expect((row.metadata as { deletion: unknown }).deletion).toMatchObject({
       deletedBiocharApplicationIds: [remoteApplication.id],
@@ -717,9 +754,9 @@ it.each([false, true])("rechecks the lease after the optimistic submission read 
 
 it("serializes concurrent retained-batch finalizers and preserves the last Removal for retry", async () => {
   const first = await createFixture();
-  const [other] = await db.insert(certifierRemovals).values({
+  const [other] = await insertRemovalFixture(db, {
     organizationId: TEST_ORG_ID, facilityId: first.facilityId, provider: "isometric",
-  }).returning({ id: certifierRemovals.id });
+  });
   createdRemovalIds.push(other.id);
   const fixtures = [first, { ...first, removalId: other.id }];
   const chain = await createBiocharApplicationChain({ ...first, tag: first.runId });

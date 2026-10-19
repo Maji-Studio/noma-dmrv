@@ -1,6 +1,5 @@
+export { getIsometricClientFromEnv } from "./client-env";
 export {
-  getIsometricClientForOrg,
-  getIsometricClientFromEnv,
   IsometricApiError,
   type IsometricClient,
   type IsometricRequestOptions,
@@ -25,6 +24,7 @@ export {
 } from "./feedstock-types";
 export {
   createDatapoint,
+  getDatapoint,
   patchDatapoint,
   createGhgEntry,
   deleteGhgEntry,
@@ -118,7 +118,7 @@ export {
   aggregateTransportMassDistance,
   enrichWithTransportLegs,
   type AggregatedProductionData,
-  type ProductionRunWithSamples,
+  type ProductionRunForCertification,
   type TransportLegsByCategory,
 } from "./utils/aggregation";
 export {

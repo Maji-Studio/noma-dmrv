@@ -4,14 +4,11 @@ import {
   latitudeSchema,
   longitudeSchema,
   MASS_INPUT_MAX_KG,
-  MASS_INPUT_MAX_TONNES,
   MASS_KG_INPUT_STEP,
+  MASS_KG_PRECISION_MESSAGE,
   MASS_MAX_KG_MESSAGE,
-  MASS_MAX_TONNES_MESSAGE,
   MASS_MIN_KG_MESSAGE,
-  MASS_MIN_TONNES_MESSAGE,
-  MASS_TONNES_INPUT_STEP,
-  expectedUpdatedAtSchema,
+  calendarDateSchema,
   requiredNumber,
 } from "./helpers";
 import { gisBoundarySchema } from "./gis-boundary";
@@ -19,6 +16,10 @@ import {
   FIELD_SIZE_POSITIVE_MESSAGE,
   FIELD_SIZE_REQUIRED_MESSAGE,
   isPositiveApplicationFieldSize,
+  FIELD_SIZE_MAX_MESSAGE,
+  FIELD_SIZE_MIN_MESSAGE,
+  MAX_FIELD_SIZE_HA,
+  MIN_FIELD_SIZE_HA,
 } from "@/lib/application-field-size";
 
 // ============================================
@@ -74,17 +75,23 @@ const positiveFieldSizeHaSchema = requiredNumber(
   FIELD_SIZE_REQUIRED_MESSAGE,
   "Enter a valid field size",
 )
-  .refine(isPositiveApplicationFieldSize, FIELD_SIZE_POSITIVE_MESSAGE);
+  .refine(isPositiveApplicationFieldSize, FIELD_SIZE_POSITIVE_MESSAGE)
+  .refine((value) => value >= MIN_FIELD_SIZE_HA, FIELD_SIZE_MIN_MESSAGE)
+  .refine((value) => value <= MAX_FIELD_SIZE_HA, FIELD_SIZE_MAX_MESSAGE);
 
 function applicationEvidenceSuperRefine(
   data: {
     evidenceMethod?: ApplicationEvidenceMethod;
     gpsLatitude?: number | null;
     gpsLongitude?: number | null;
+    gisBoundary?: unknown;
   },
   ctx: z.RefinementCtx,
 ): void {
   gpsPairSuperRefine(data, ctx);
+  if (data.evidenceMethod === "boundary" && !data.gisBoundary) {
+    ctx.addIssue({ code: "custom", path: ["gisBoundary"], message: "Add a boundary file, or choose Customer location." });
+  }
   if (
     data.evidenceMethod === "location" &&
     data.gpsLatitude == null &&
@@ -108,6 +115,7 @@ export const applicationEvidenceStateSchema = z
     evidenceMethod: z.enum(applicationEvidenceMethods),
     gpsLatitude: latitudeSchema,
     gpsLongitude: longitudeSchema,
+    gisBoundary: gisBoundarySchema.nullable().optional(),
   })
   .superRefine(applicationEvidenceSuperRefine);
 
@@ -130,20 +138,14 @@ export const applicationEvidenceStateSchema = z
  */
 const applicationFormBaseSchema = z.object({
   // === Section 1: Application Details ===
-  applicationDate: z.coerce.date({ error: "Application date is required" }),
+  applicationDate: calendarDateSchema("Application date is required"),
   deliveryId: z.string().min(1, "Select a delivery.").uuid("Choose a valid delivery."),
-  // Hand-rolled rather than `positiveMassKgSchema()` on purpose: the field is
-  // entered in kg but stored in tonnes, and seeding the edit form multiplies
-  // the stored tonnes back by 1000, which yields float artefacts (4.001 t →
-  // 4001.0000000000005 kg) that the family's `multipleOf(0.001)` guard would
-  // reject on an untouched edit. The family's cap is applied here directly,
-  // and its gram resolution as an explicit floor: the value is divided by
-  // 1000 into a `numeric(14,6)` tonnes column, so a smaller positive entry
-  // would persist as zero.
-  biocharAppliedTons: z
+  // The form and operation take kg. Only the transaction writer stores tonnes.
+  biocharAppliedKg: z
     .number({ error: "Biochar product applied (kg) is required" })
     .min(MASS_KG_INPUT_STEP, MASS_MIN_KG_MESSAGE)
-    .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE),
+    .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE)
+    .multipleOf(MASS_KG_INPUT_STEP, MASS_KG_PRECISION_MESSAGE),
   // === Section 2: Field Details ===
   fieldSizeHa: positiveFieldSizeHaSchema,
   fieldIdentifier: z
@@ -185,68 +187,6 @@ export const applicationFormSchema = applicationFormBaseSchema.superRefine(
   },
 );
 
-const applicationCreateBaseSchema = applicationFormBaseSchema.extend({
-  biocharAppliedTons: z
-    .number({ error: "Biochar product applied is required" })
-    .min(MASS_TONNES_INPUT_STEP, MASS_MIN_TONNES_MESSAGE)
-    .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE),
-});
-
-// ============================================
-// Server Action Schemas
-// ============================================
-
-/**
- * Schema for creating an application (server action)
- */
-export const createApplicationSchema = applicationCreateBaseSchema.superRefine(
-  (data, ctx) => {
-    applicationEvidenceSuperRefine(data, ctx);
-  },
-);
-
-/**
- * Schema for updating an application (server action)
- * GPS pair and evidence-method invariants are deferred until updateApplication
- * validates the payload merged with the saved evidence state.
- * Fields stay `.optional()` so a partial patch can omit them, but a value that
- * is present has to clear the same bounds as the create path.
- */
-export const updateApplicationSchema = z.object({
-  applicationId: z.string().uuid("Choose a valid application."),
-  expectedUpdatedAt: expectedUpdatedAtSchema,
-  code: z
-    .string()
-    .min(1)
-    .max(50)
-    .regex(/^[A-Z0-9-]+$/)
-    .optional(),
-  applicationDate: z.coerce.date().optional(),
-  deliveryId: z.string().uuid().optional(),
-  biocharAppliedTons: z
-    .number()
-    .min(MASS_TONNES_INPUT_STEP, MASS_MIN_TONNES_MESSAGE)
-    .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE)
-    .optional(),
-  fieldSizeHa: positiveFieldSizeHaSchema.optional(),
-  fieldIdentifier: z.string().max(255).optional().nullable(),
-  cropType: z.string().max(100).optional().nullable(),
-  gpsLatitude: latitudeSchema,
-  gpsLongitude: longitudeSchema,
-  applicationMethodType: z.enum(applicationMethods).optional().nullable(),
-  evidenceMethod: z.enum(applicationEvidenceMethods).optional(),
-  gisBoundary: gisBoundarySchema.optional().nullable(),
-  soilTemperatureSource: z.enum(soilTemperatureSources).optional().nullable(),
-  soilTemperatureC: z.number().min(-50).max(60).optional().nullable(),
-});
-
-/**
- * Schema for deleting an application
- */
-export const deleteApplicationSchema = z.object({
-  applicationId: z.string().uuid("Choose a valid application."),
-});
-
 // ============================================
 // Type Inference
 // ============================================
@@ -255,8 +195,7 @@ export type ApplicationFormData = z.infer<typeof applicationFormSchema>;
 export type ApplicationEvidenceState = z.infer<
   typeof applicationEvidenceStateSchema
 >;
-export type CreateApplicationData = z.infer<typeof createApplicationSchema>;
-export type UpdateApplicationData = z.infer<typeof updateApplicationSchema>;
+
 // ============================================
 // Validation Helpers
 // ============================================
@@ -279,6 +218,17 @@ export function formatApplicationMethod(method: ApplicationMethod): string {
   };
   return labels[method];
 }
+
+/** One-line consequence of each evidence method, shared by every card that offers the choice. */
+export const APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS: Record<
+  ApplicationEvidenceMethod,
+  string
+> = {
+  location:
+    "Use the application GPS coordinates from the delivery's customer location.",
+  boundary: "The field boundary as a GeoJSON file, drawn on a map.",
+  visual: "Geotagged photos of each application stage.",
+};
 
 export function formatApplicationEvidenceMethod(method: ApplicationEvidenceMethod): string {
   const labels: Record<ApplicationEvidenceMethod, string> = {

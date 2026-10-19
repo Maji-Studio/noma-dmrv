@@ -173,7 +173,7 @@ Applications show dry kilograms and percentage per product batch, plus source-ru
 
 ## Related work
 
-- ADR 0029 records the accepted accounting boundary; CONTEXT.md records the vocabulary.
+- ADR 0029 records the accepted accounting boundary; GLOSSARY.md records the vocabulary.
 - #34 remains the backlog for all bin-to-bin transfers. Preserve source provenance and atomic two-bin stock changes when it is picked up; detailed transfer ordering is not settled here.
 - #33 owns facility-wide history and CSV; #200 is now a separate manual whole-record lock feature, not the definition of this correction flow.
 - PDD methodology/evidence validation remains a registry-facing follow-up before credit use. Arrival/application moisture, unknown-origin additions, and historical replay remain out of scope.

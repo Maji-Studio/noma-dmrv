@@ -82,7 +82,7 @@ phase('Review')
 const [codexReview, claudeReview] = await parallel([
   () =>
     agent(
-      `You are a thin wrapper around the Codex CLI — do NOT review the code yourself. Read .claude/skills/codex-review/SKILL.md and follow its invocation rules exactly (binary lookup, Mode B custom prompt via stdin, artifact dir). Review target for the prompt's first line: "Target: the diff of branch ${head} against ${base} (git diff ${base}...${head})."
+      `You are a thin wrapper around the Codex CLI — do NOT review the code yourself. Read .claude/skills/codex-review/SKILL.md and follow its invocation rules exactly (binary lookup, Mode B custom prompt via stdin, artifact dir), but select -m gpt-6-astra -c 'model_reasoning_effort="medium"': PR reviews run on gpt-6-astra, not the skill's gpt-6.1-sol default. Review target for the prompt's first line: "Target: the diff of branch ${head} against ${base} (git diff ${base}...${head})."
 ${target}
 ${context ? `Task context to include in the codex prompt: ${context}` : ''}
 Codex can run long: pass an explicit 600000ms timeout to Bash, and if it still times out, re-run in the background and poll for the report file. When the report arrives, translate its findings into the structured output verbatim — raw and UNVERIFIED, do not filter or confirm them. If codex is unavailable or errors after one retry, return findings: [] and explain in summary.`,

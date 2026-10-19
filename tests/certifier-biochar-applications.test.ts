@@ -34,7 +34,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { buildCreateBiocharApplicationRequest } from "@/lib/isometric/biochar-applications";
 import { buildCreateStorageLocationRequest } from "@/lib/isometric/storage-locations";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -74,7 +74,7 @@ beforeAll(async () => {
   ids.foreignSubmission = foreignSubmission.id;
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       code: `FAC-BCA-${tag}`,
       name: `Biochar Application Facility ${tag}`,
@@ -117,6 +117,7 @@ beforeAll(async () => {
   const [project] = await db
     .insert(certifierProjects)
     .values({
+      externalFacilityId: `fcl_test_${facility.id}`,
       organizationId: TEST_ORG_ID,
       facilityId: facility.id,
       provider: "isometric",
@@ -292,6 +293,14 @@ afterAll(async () => {
 });
 
 describe("certifier Biochar Application data access", () => {
+  it("loads the order destination within the active organization", async () => {
+    const ctx = makeTestOrgContext();
+    expect(await getBiocharApplicationRegistryInputs(ctx, [ids.application])).toEqual([
+      expect.objectContaining({ customerLocationId: ids.location }),
+    ]);
+    expect(await getBiocharApplicationRegistryInputs(foreignCtx, [ids.application])).toEqual([]);
+  });
+
   it("loads operator facts and journals identity only within the active organization", async () => {
     const ctx = makeTestOrgContext();
     await expect(

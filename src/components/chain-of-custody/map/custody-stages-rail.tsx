@@ -29,7 +29,7 @@ import type {
   ChainGeoNode,
   ChainOfCustodyGeoData,
 } from "@/data-access/chain-of-custody-geo";
-import { formatDistanceKm, formatMass } from "@/lib/format-utils";
+import { formatLegDistanceCompactKm, formatLegDistanceKm, formatMass } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
@@ -88,12 +88,12 @@ const ACCENT_SITE = "var(--acc-dist)";
 const ACCENT_SITE_INK = "var(--acc-dist-ink)";
 const ACCENT_PENDING = "var(--clr-dark-purple-30)";
 
-/** The viewer's micro caps idiom (section labels, eyebrows, meta lines). */
+/** The viewer's small label idiom (section labels, meta lines): sentence case. */
 const MICRO_CAPS =
-  "font-mono text-[9.5px] font-medium uppercase tracking-[0.1em]";
+  "text-[9.5px] font-medium";
 /** The milestone title idiom — one step up from a rail section label. */
 const MILESTONE_TITLE =
-  "font-mono text-[12.5px] font-medium uppercase tracking-[0.04em]";
+  "text-[12.5px] font-medium";
 
 const ROW_HOVER_TINT = "bg-[var(--clr-dark-purple-1)]";
 const HAIRLINE = "border-b border-[var(--clr-dark-purple-10)]";
@@ -107,7 +107,7 @@ const SUB_ROW_CLASS =
   "flex w-full min-w-0 flex-1 cursor-pointer items-center gap-8 py-10 pr-16 " +
   "text-left transition-colors hover:bg-[var(--clr-dark-purple-1)]";
 const SUB_NAME_CLASS =
-  "min-w-0 flex-1 truncate font-mono text-[11px] font-medium uppercase tracking-[0.02em]";
+  "min-w-0 flex-1 truncate text-[11px] font-medium";
 const METRIC_CLASS =
   "flex shrink-0 items-center gap-6 whitespace-nowrap font-mono text-[10px] font-medium tracking-[0.02em]";
 
@@ -239,9 +239,9 @@ const THREAD_CLASS =
 function DistanceMetric({ legs, ink }: { legs: ChainGeoLeg[]; ink: string }) {
   if (legs.length === 0) return null;
   return (
-    <span className={METRIC_CLASS} style={{ color: ink }}>
+    <span className={METRIC_CLASS} style={{ color: ink }} aria-label={formatLegDistanceKm(totalLegDistanceKm(legs))}>
       <TruckIcon size={TRUCK_ICON_PX} className="shrink-0" aria-hidden="true" />
-      {formatDistanceKm(totalLegDistanceKm(legs))}
+      {formatLegDistanceCompactKm(totalLegDistanceKm(legs))}
     </span>
   );
 }
@@ -303,7 +303,7 @@ function MilestoneBand({
         <span className={cn(MILESTONE_TITLE, state.complete ? INK_STRONG : INK_MUTED)}>
           {title}
         </span>
-        <span className={cn(MICRO_CAPS, "truncate font-normal tracking-[0.07em]", state.complete ? INK_MUTED : INK_FAINT)}>
+        <span className={cn(MICRO_CAPS, "truncate font-normal", state.complete ? INK_MUTED : INK_FAINT)}>
           {state.meta}
         </span>
       </span>
@@ -361,7 +361,7 @@ function SubGlyph({ accent }: { accent: string | null }) {
 /** Trailing micro note on a sub-row: the gap it has, or why it is unplottable. */
 function SubNote({ text, tone }: { text: string; tone: string }) {
   return (
-    <span className={cn(MICRO_CAPS, "shrink-0 whitespace-nowrap font-normal tracking-[0.06em]", tone)}>
+    <span className={cn(MICRO_CAPS, "shrink-0 whitespace-nowrap font-normal", tone)}>
       {text}
     </span>
   );
@@ -422,8 +422,8 @@ function LegSubRow({
           {legOuterName(leg)}
         </span>
         {suffix ? <SubNote text={suffix} tone={INK_FAINT} /> : null}
-        <span className={METRIC_CLASS} style={{ color: accentInk }}>
-          {formatDistanceKm(leg.distanceKm)}
+        <span className={METRIC_CLASS} style={{ color: accentInk }} aria-label={formatLegDistanceKm(leg.distanceKm)}>
+          {formatLegDistanceCompactKm(leg.distanceKm)}
         </span>
       </button>
       {leg.outerHref ? (
@@ -482,7 +482,7 @@ function buildNoPositionEntries(
       nodeId: legAnchorNodeId(geo, leg),
       legId: leg.id,
       code: leg.outerCode ?? legOuterName(leg),
-      detail: `${formatDistanceKm(leg.distanceKm)} leg, endpoint missing`,
+      detail: `${formatLegDistanceKm(leg.distanceKm)} leg, endpoint missing`,
     });
   }
 
@@ -517,7 +517,7 @@ function NotOnMapCluster({
           >
             <SubGlyph accent={null} />
             <MapPinIcon size={KIND_ICON_PX} className="shrink-0 text-[var(--clr-dark-purple-30)]" aria-hidden />
-            <span className={cn(SUB_NAME_CLASS, INK_MUTED)}>{entry.code}</span>
+            <span className={cn(SUB_NAME_CLASS, "font-mono", INK_MUTED)}>{entry.code}</span>
             <SubNote text={entry.detail} tone="text-[var(--clr-dark-purple-30)]" />
           </button>
         );
@@ -629,7 +629,7 @@ export function CustodyStagesRail({
         accent={ACCENT_FACILITY_INK}
         completeIcon={MapPinIcon}
         metric={
-          <span className={cn(MICRO_CAPS, "shrink-0 whitespace-nowrap font-normal tracking-[0.08em]", INK_MUTED)}>{inbound.length} in · {outbound.length} out</span>
+          <span className={cn(MICRO_CAPS, "shrink-0 whitespace-nowrap font-normal", INK_MUTED)}>{inbound.length} in · {outbound.length} out</span>
         }
       />
 

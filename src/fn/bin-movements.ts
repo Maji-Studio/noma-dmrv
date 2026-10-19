@@ -13,28 +13,25 @@
  * ratio, so the persisted delta and snapshot columns cannot disagree.
  */
 
+import { getFeedstockBinStock } from "@/data-access/feedstock-bin-ledger";
+import { uuidSchema } from "@/schemas/helpers";
+import { withAction } from "./with-action";
+import type { DomainIssue } from "@/lib/domain-errors";
 import type { ConflictRef } from "@/lib/conflict-ref";
 import { z } from "zod";
-import { requireOrgContext } from "@/lib/auth/server";
 import {
   createBinMovement,
-  getBinMovements as getBinMovementsData,
   recordStockTakeMovement,
   StockTakeIncreaseError,
-  type BinMovementWithActor,
 } from "@/data-access/bin-movements";
 import type { BinMovement } from "@/db/schema";
 import {
   recordLossSchema,
   recordStockTakeSchema,
 } from "@/schemas/bin-movements";
-import type { ActionResult } from "@/types/actions";
-import { ActionConflictError } from "@/lib/errors";
 import { StockOverdrawError } from "@/data-access/bin-stock-guards";
-import {
-  formatZodActionError,
-  toLoggedActionError,
-} from "./action-errors";
+
+const LOG_MESSAGE = "bin movement action failed";
 
 export type RecordLossActionResult =
   | { success: true; data: BinMovement }
@@ -42,46 +39,13 @@ export type RecordLossActionResult =
       success: false;
       error: string;
       field?: "lossMassKg";
+      issues?: DomainIssue[];
       conflict?: ConflictRef;
     };
 
 export type RecordStockTakeActionResult =
   | { success: true; data: BinMovement }
   | { success: false; error: string; field?: "countedMassKg" };
-
-function binMovementActionError(
-  error: unknown,
-  fallbackMessage: string,
-  op: string
-): string {
-  return toLoggedActionError(error, fallbackMessage, {
-    message: "bin movement action failed",
-    context: { op },
-  });
-}
-
-// ============================================
-// Read
-// ============================================
-
-export async function getBinMovementsFn(
-  storageLocationId: string
-): Promise<ActionResult<BinMovementWithActor[]>> {
-  try {
-    const ctx = await requireOrgContext();
-    const movements = await getBinMovementsData(ctx, storageLocationId);
-    return { success: true, data: movements };
-  } catch (error) {
-    return {
-      success: false,
-      error: binMovementActionError(
-        error,
-        "Failed to load reconciliation history",
-        "bin-movement:list"
-      ),
-    };
-  }
-}
 
 // ============================================
 // Create (append-only)
@@ -90,9 +54,7 @@ export async function getBinMovementsFn(
 export async function recordStockTakeFn(
   data: z.infer<typeof recordStockTakeSchema>
 ): Promise<RecordStockTakeActionResult> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = recordStockTakeSchema.parse(data);
 
     const movement = await recordStockTakeMovement(ctx, {
@@ -104,44 +66,28 @@ export async function recordStockTakeFn(
       moistureRatioUsed: validated.moistureRatioUsed ?? null,
     });
 
-    return { success: true, data: movement };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    if (error instanceof StockTakeIncreaseError) {
-      return {
-        success: false,
-        error: error.message,
-        field: "countedMassKg",
-      };
-    }
-    return {
-      success: false,
-      error: binMovementActionError(
-        error,
-        "Failed to record stock-take",
-        "bin-movement:stock-take"
-      ),
-    };
-  }
+    return movement;
+  }, {
+    fallbackMessage: "Failed to record stock-take",
+    log: { message: LOG_MESSAGE, context: { op: "bin-movement:stock-take" } },
+    mapError: (error) =>
+      error instanceof StockTakeIncreaseError
+        ? { success: false as const, error: error.message, field: "countedMassKg" as const }
+        : undefined,
+  });
 }
 
 export async function recordLossFn(
   data: z.infer<typeof recordLossSchema>
 ): Promise<RecordLossActionResult> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = recordLossSchema.parse(data);
 
     const movement = await createBinMovement(ctx, {
       storageLocationId: validated.storageLocationId,
       lane: validated.lane,
       movementType: "loss",
+      occurredAt: new Date(validated.occurredAt),
       // Losses are stored as a negative delta.
       massDeltaKg: -validated.lossMassKg,
       reason: validated.reason,
@@ -149,31 +95,20 @@ export async function recordLossFn(
       idempotencyKey: validated.idempotencyKey,
     });
 
-    return { success: true, data: movement };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    if (error instanceof StockOverdrawError) {
-      return { success: false, error: error.message, field: "lossMassKg" };
-    }
-    if (error instanceof ActionConflictError) {
-      return {
-        success: false,
-        error: error.message,
-        conflict: error.conflict,
-      };
-    }
-    return {
-      success: false,
-      error: binMovementActionError(
-        error,
-        "Failed to record loss",
-        "bin-movement:loss"
-      ),
-    };
-  }
+    return movement;
+  }, {
+    fallbackMessage: "Failed to record loss",
+    log: { message: LOG_MESSAGE, context: { op: "bin-movement:loss" } },
+    mapError: (error) =>
+      error instanceof StockOverdrawError
+        ? { success: false as const, error: error.message, field: "lossMassKg" as const }
+        : undefined,
+  });
+}
+
+/** The pooled feedstock stock card and its complete movement history. */
+export async function getFeedstockBinStockFn(storageLocationId: string) {
+  return withAction(async (ctx) => getFeedstockBinStock(ctx, uuidSchema().parse(storageLocationId)), {
+    log: { message: LOG_MESSAGE, context: { op: "bin-movement:stock" } },
+  });
 }

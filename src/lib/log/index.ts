@@ -1,12 +1,13 @@
-import { env } from "@/config/env";
+import { emptyToUndefined } from "@/config/env-validation";
+import { z } from "zod";
 import { REDACTED } from "./sanitize";
 
 /**
  * Minimal structured server-side logger.
  *
  * Emits newline-delimited JSON to stdout/stderr (which Vercel captures), with
- * level filtering, child bindings, and field redaction. Intentionally
- * dependency-free: pino is the obvious choice, but Next.js 16's Turbopack has an
+ * level filtering, child bindings, and field redaction. No logging-library
+ * dependency: pino is the obvious choice, but Next.js 16's Turbopack has an
  * open, unresolved bug (vercel/next.js#93849) where a `serverExternalPackages`
  * package's hashed alias isn't resolvable at Vercel's serverless runtime —
  * independent of transport config and not catchable by local testing. A ~50-line
@@ -22,20 +23,20 @@ import { REDACTED } from "./sanitize";
  * Prefer passing IDs (userId, removalId) over PII regardless — redact is the
  * backstop, not the primary control.
  */
-type Level = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
+const LEVELS = ["trace", "debug", "info", "warn", "error", "fatal"] as const;
+type Level = (typeof LEVELS)[number];
 
-const LEVEL_ORDER: Record<Level, number> = {
-  trace: 10,
-  debug: 20,
-  info: 30,
-  warn: 40,
-  error: 50,
-  fatal: 60,
-};
+const LEVEL_STEP = 10;
+const LEVEL_ORDER = Object.fromEntries(
+  LEVELS.map((level, index) => [level, (index + 1) * LEVEL_STEP]),
+) as Record<Level, number>;
 const SILENT = Number.POSITIVE_INFINITY;
 
 const isProd = process.env.NODE_ENV === "production";
-const configured = env.LOG_LEVEL ?? (isProd ? "info" : "debug");
+const configured = z.preprocess(
+  emptyToUndefined,
+  z.enum([...LEVELS, "silent"]).optional(),
+).parse(process.env.LOG_LEVEL) ?? (isProd ? "info" : "debug");
 const threshold = configured === "silent" ? SILENT : LEVEL_ORDER[configured];
 
 // Case-insensitive key match (covers `email`, `Authorization`, `X-Client-Secret`,

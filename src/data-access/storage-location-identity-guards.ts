@@ -1,16 +1,19 @@
+import { DomainError } from '@/lib/domain-errors';
+import { recordLocks, withRecordLockGuidance } from '@/lib/record-lock';
 /**
  * Stocked-bin identity guard (issue #767).
  *
  * A bin's `type` and `feedstockTypeId` decide which material lane every stock
- * derivation reads for it. Changing either one on a bin that still holds
+ * derivation reads for it, and its `facilityId` scopes which layers those
+ * derivations count. Changing any of them on a bin that still holds
  * material, or that already carries stock history, silently re-points that
  * history at a lane nobody reads, so the mass disappears from every bin and
  * facility summary without a single movement row to explain it.
  *
  * The guard runs inside the caller's transaction while it holds the bin's
  * stock lock, mirroring `archiveStorageLocation`. Rename, code, capacity and
- * every other metadata field stay editable on a stocked bin: only the two
- * identity columns are fenced.
+ * every other metadata field stay editable on a stocked bin: only the identity
+ * columns are fenced.
  *
  * The empty-bin-with-history case is deliberately refused as well. Whether an
  * emptied bin may be repurposed is an open product decision (#767 / #313), and
@@ -19,7 +22,6 @@
 
 import type { DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
-import { SafeError } from "@/lib/errors";
 import { laneForStorageType } from "@/schemas/bin-movements";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import { deriveBinLaneAvailableKg, hasNonZeroStock } from "./bin-stock-guards";
@@ -35,11 +37,13 @@ import { requireOrgScope } from "./utils";
  */
 const STORAGE_TYPE_FIELD = "Storage type";
 const FEEDSTOCK_TYPE_FIELD = "Feedstock type";
+const FACILITY_FIELD = "Facility";
 
 /** The bin identity columns a stock derivation reads. */
 interface BinIdentity {
   type: StorageLocationType;
   feedstockTypeId: string | null;
+  facilityId: string;
 }
 
 /**
@@ -74,13 +78,14 @@ function changedIdentityField(
   if (current.feedstockTypeId !== next.feedstockTypeId) {
     return FEEDSTOCK_TYPE_FIELD;
   }
+  if (current.facilityId !== next.facilityId) return FACILITY_FIELD;
   return null;
 }
 
 /**
- * Refuse a `type` or `feedstockTypeId` change on a bin that still holds stock
+ * Refuse a `type`, `feedstockTypeId` or `facilityId` change on a bin that still holds stock
  * or already carries stock history. Call it under the bin's stock lock, after
- * re-reading the effective row; it returns without a query when neither
+ * re-reading the effective row; it returns without a query when no
  * identity column moves.
  */
 export async function assertBinIdentityChangeAllowed(
@@ -94,6 +99,7 @@ export async function assertBinIdentityChangeAllowed(
   const changedField = changedIdentityField(bin, next);
   if (!changedField) return;
 
+  const lock = recordLocks.storageLocation({ removals: [], dependents: [{ kind: 'stockEntry', id: bin.id }] });
   const availableKg = await deriveBinLaneAvailableKg(
     ctx,
     tx,
@@ -101,11 +107,11 @@ export async function assertBinIdentityChangeAllowed(
     laneForStorageType(bin.type),
   );
   if (hasNonZeroStock(availableKg)) {
-    throw new SafeError(stockBlocksMessage(changedField));
+    throw new DomainError("certification_locked", withRecordLockGuidance(stockBlocksMessage(changedField), lock));
   }
 
   const references = await countStorageLocationReferences(ctx, tx, bin.id);
   if (hasStorageLocationReferences(references)) {
-    throw new SafeError(historyBlocksMessage(changedField));
+    throw new DomainError("certification_locked", withRecordLockGuidance(historyBlocksMessage(changedField), lock));
   }
 }

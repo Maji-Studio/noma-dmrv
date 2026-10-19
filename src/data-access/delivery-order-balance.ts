@@ -1,36 +1,48 @@
+import { orderFulfillmentExpression } from "./order-fulfillment-sql";
 import { db, type DbTransaction } from "@/db";
 import { sumNumeric } from "@/db/aggregate";
 import { deliveries, orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { deliveryOrderBalanceMessage } from "@/lib/delivery-order-balance";
-import { SafeError } from "@/lib/errors";
-import { formatStockMinimumKg, isStockOverdraw } from "@/lib/stock-overdraw";
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { deliveryBalanceExceeded, deliveryReferenceNotFound } from "@/lib/delivery-domain-errors";
+import { publishOrderBalanceKg } from "@/lib/delivery-order-balance";
+import { decimal, subtract } from "@/lib/output-stock/exact";
+import { orderQuantityBelowAllocated } from "@/lib/order-domain-errors";
+import { isStockOverdraw } from "@/lib/stock-overdraw";
+import { and, count, eq, isNull, ne, sql } from "drizzle-orm";
 import { requireOrgScope } from "./utils";
 
 type QueryExecutor = typeof db | DbTransaction;
 
-async function deriveAllocatedWetKg(
+export async function readDeliveryOrderAllocation(
   ctx: OrgContext,
   dbOrTx: QueryExecutor,
   orderId: string,
-  excludeDeliveryId?: string,
-): Promise<number> {
+  options: { excludeDeliveryId?: string; orderQuantityKg?: number; includeArchived?: boolean } = {},
+) {
+  requireOrgScope(ctx);
+  const { excludeDeliveryId, orderQuantityKg, includeArchived = false } = options;
   const conditions = [
     eq(deliveries.orderId, orderId),
     eq(deliveries.organizationId, ctx.organizationId),
-    isNull(deliveries.archivedAt),
   ];
+  if (!includeArchived) conditions.push(isNull(deliveries.archivedAt));
   if (excludeDeliveryId) {
     conditions.push(ne(deliveries.id, excludeDeliveryId));
   }
 
   const [row] = await dbOrTx
-    .select({ allocatedWetKg: sumNumeric(deliveries.deliveredWetMassKg) })
+    .select({ allocatedWetKg: sumNumeric(deliveries.deliveredWetMassKg), deliveryCount: count(),
+      // Cast back through real, exactly as the app's stored order column is
+      // cast to numeric. Never compute the fulfillment boundary in JS floats.
+      fulfillmentStatus: orderQuantityKg === undefined ? sql<null>`null` : orderFulfillmentExpression(sql`${orderQuantityKg}::real`, count(), sumNumeric(deliveries.deliveredWetMassKg)), })
     .from(deliveries)
     .where(and(...conditions));
 
-  return Number(row?.allocatedWetKg ?? 0);
+  return { allocatedWetKg: Number(row?.allocatedWetKg ?? 0), deliveryCount: row?.deliveryCount ?? 0, fulfillmentStatus: row?.fulfillmentStatus ?? null };
+}
+
+async function deriveAllocatedWetKg(ctx: OrgContext, dbOrTx: QueryExecutor, orderId: string, excludeDeliveryId?: string): Promise<number> {
+  return (await readDeliveryOrderAllocation(ctx, dbOrTx, orderId, { excludeDeliveryId })).allocatedWetKg;
 }
 
 export async function assertOrderQuantityCoversAllocations(
@@ -45,9 +57,7 @@ export async function assertOrderQuantityCoversAllocations(
     params.orderId,
   );
   if (isStockOverdraw(allocatedWetKg, params.orderQuantityKg)) {
-    throw new SafeError(
-      `Order quantity cannot be less than the ${formatStockMinimumKg(allocatedWetKg)} already allocated to deliveries.`,
-    );
+    throw orderQuantityBelowAllocated(allocatedWetKg);
   }
 }
 
@@ -94,7 +104,7 @@ export async function assertDeliveryWithinOrderBalance(
     Number(params.orderQuantityKg) - allocatedWetKg,
   );
   if (isStockOverdraw(params.requestedWetKg, availableKg)) {
-    throw new SafeError(deliveryOrderBalanceMessage(availableKg));
+    throw deliveryBalanceExceeded(publishOrderBalanceKg(subtract(decimal(params.orderQuantityKg), decimal(allocatedWetKg))), params.requestedWetKg);
   }
 }
 
@@ -117,7 +127,7 @@ export async function lockDeliveryOrderAndAssertBalance(
       eq(orders.organizationId, ctx.organizationId),
     ))
     .for("update");
-  if (!order) throw new SafeError("Order not found");
+  if (!order) throw deliveryReferenceNotFound(["orderId"], "Order");
 
   await assertDeliveryWithinOrderBalance(ctx, tx, {
     ...params,

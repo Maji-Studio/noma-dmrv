@@ -1,0 +1,18 @@
+---
+// Home: a short tour. Each block links deeper into /product and /why (anchor ids in src/config.js).
+import SiteShell from "../components/site/SiteShell.astro";
+import HomeHero from "../components/site/home/HomeHero.astro";
+import TraceStage from "../components/site/home/TraceStage.astro";
+import AskSection from "../components/site/home/AskSection.astro";
+import ProofBlock from "../components/site/home/ProofBlock.astro";
+import NextAndOpen from "../components/site/home/NextAndOpen.astro";
+import GetStartedBand from "../components/site/GetStartedBand.astro";
+---
+<SiteShell current="home" title="noma, trace your biochar from feedstock to application">
+  <HomeHero />
+  <TraceStage />
+  <AskSection />
+  <ProofBlock />
+  <NextAndOpen />
+  <GetStartedBand />
+</SiteShell>

@@ -1,4 +1,7 @@
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
+import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed tests for the credit-batch ↔ lab-sample linking write paths.
  * Since issue #309 a Sample anchors on ONE credit batch directly — the batch's
@@ -8,11 +11,7 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
  *
  *   1. Sample side — `createSample` links the given batch (and rejects an
  *      unknown one); `updateSample` can move a sample to another batch.
- *   2. Batch side (legacy rows) — pre-re-grain samples carry a
- *      `productionRunId`; `createCreditBatch`/`updateCreditBatch` still
- *      back-fill those onto the batch via run membership, and re-point
- *      (unlink removed runs' samples, link added runs') on a membership
- *      change. Batch-anchored samples (null run link) are never re-pointed.
+ *   2. Membership edits preserve the Sample's batch attachment.
  *
  * Requires a running database (uses DATABASE_URL from .env.test or test
  * defaults), mirroring tests/credit-batch-validation.test.ts.
@@ -20,7 +19,7 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { facilities, reactors } from "@/db/schema/facilities";
+import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import { feedstockTypes, feedstocks } from "@/db/schema/feedstock";
 import {
   productionRuns,
@@ -54,10 +53,8 @@ let facilityId: string;
 // Independent runs (all single-feedstock, in the June window) so each test
 // owns its own runs — a run belongs to at most one batch (unique constraint).
 let runDerive: string;
-let runBackfill: string;
 let runReA: string;
 let runReB: string;
-let runReC: string;
 let runUpdate: string;
 let runMoveB: string;
 // A spare run on the MAIN (200-year) facility — the "move from" batch in the
@@ -70,8 +67,6 @@ const baseBatchData = {
   certifier: "isometric" as const,
   // Durability tier is inherited from the facility (ADR 0021), no longer a batch
   // field — the main test facility is explicitly 200-year below.
-  hToCorgRatio: 0.4,
-  currency: "TZS" as const,
   // Feedstock type is now DECLARED (ADR 0016 amendment) and guarded against the
   // member runs. Set in beforeAll to the single seeded type all runs share.
   feedstockTypeId: "",
@@ -101,31 +96,6 @@ async function makeSample(
   return sample.id;
 }
 
-/**
- * Insert a LEGACY pre-re-grain sample row directly: run-linked, with the batch
- * link as it stood (the batch-side back-fill/re-point paths only act on these).
- */
-async function insertLegacySample(
-  productionRunId: string,
-  code: string,
-  creditBatchId: string | null = null,
-): Promise<string> {
-  const [row] = await db
-    .insert(samples)
-    .values({
-      organizationId: TEST_ORG_ID,
-      sampleCode: code,
-      productionRunId,
-      creditBatchId,
-      samplingTime: new Date("2025-06-15T10:00:00Z"),
-      totalCarbonPercent: 80,
-      organicCarbonPercent: 78,
-    })
-    .returning({ id: samples.id });
-  createdIds.samples.push(row.id);
-  return row.id;
-}
-
 async function batchIdOfSample(sampleId: string): Promise<string | null> {
   const [row] = await db
     .select({ creditBatchId: samples.creditBatchId })
@@ -141,7 +111,7 @@ beforeAll(async () => {
 
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Sample-Link Facility ${runId}`,
       code: `FAC-SL-${runId}`,
@@ -168,6 +138,7 @@ beforeAll(async () => {
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Sample-Link Woodchips ${runId}`,
       code: `FT-SL-${runId}`,
@@ -179,25 +150,24 @@ beforeAll(async () => {
 
   const [feedstock] = await db
     .insert(feedstocks)
-    .values({
+    .values(await feedstockFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `FS-SL-${runId}`,
       facilityId,
       feedstockTypeId: feedstockType.id,
       massDryKg: 9000,
-    })
+    }))
     .returning({ id: feedstocks.id });
   createdIds.feedstocks.push(feedstock.id);
 
+  const outputBinId = await createProductionRunOutputBin(TEST_ORG_ID, facilityId);
   const runRows = await db
     .insert(productionRuns)
     .values(
       [
         ["derive", "2025-01-15"],
-        ["backfill", "2025-05-15"],
         ["reA", "2025-06-10"],
         ["reB", "2025-06-11"],
-        ["reC", "2025-06-12"],
         ["update", "2025-02-15"],
         ["moveB", "2025-03-15"],
         ["tierFrom", "2025-04-15"],
@@ -205,21 +175,19 @@ beforeAll(async () => {
         organizationId: TEST_ORG_ID,
         code: `PR-SL-${tag}-${runId}`,
         facilityId,
-        status:
-          tag === "reC" ? ("running" as const) : ("complete" as const),
+        status: "complete" as const,
         reactorId: reactor.id,
         startTime: new Date(`${date}T08:00:00Z`),
-        endTime: tag === "reC" ? null : new Date(`${date}T12:00:00Z`),
+        endTime: new Date(`${date}T12:00:00Z`),
+        biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
         biocharDryMassKg: 4000,
       })),
     )
     .returning({ id: productionRuns.id });
   [
     runDerive,
-    runBackfill,
     runReA,
     runReB,
-    runReC,
     runUpdate,
     runMoveB,
     runTierFrom,
@@ -272,8 +240,10 @@ afterAll(async () => {
       await tx
         .delete(feedstocks)
         .where(inArray(feedstocks.id, createdIds.feedstocks));
+      await cleanupFeedstockFixtureParents(tx);
     }
     if (createdIds.facilities.length > 0) {
+      await tx.delete(storageLocations).where(inArray(storageLocations.facilityId, createdIds.facilities));
       // createCreditBatch find-or-creates a production_processes row per
       // (facility, feedstockType) — untracked, so clear it by facility.
       await tx
@@ -292,6 +262,7 @@ afterAll(async () => {
         .where(inArray(feedstockTypes.id, createdIds.feedstockTypes));
     }
   });
+  await cleanupFeedstockFixtureParents(db);
 });
 
 
@@ -325,7 +296,9 @@ describe("Sample side — anchor directly on the credit batch (issue #309)", () 
         organicCarbonPercent: 78,
       }),
     ).rejects.toThrow(
-      "Credit batch was not found in this Organization.",
+      // The writer reads the batch under its lock; the Server Action always showed this copy
+      // ("Credit batch not found", as SafeError normalizes it).
+      "Credit batch was not found.",
     );
   });
 
@@ -349,7 +322,7 @@ describe("Sample side — anchor directly on the credit batch (issue #309)", () 
     });
     createdIds.creditBatches.push(batchB.id);
 
-    await updateSample(makeTestOrgContext(TEST_USER_ID), sampleId, { creditBatchId: batchB.id });
+    await updateSample(makeTestOrgContext(TEST_USER_ID), sampleId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", sampleId), creditBatchId: batchB.id });
     expect(await batchIdOfSample(sampleId)).toBe(batchB.id);
   });
 });
@@ -366,7 +339,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     // main test facility is 200-year. Both batches here inherit 1000-year.
     const [tier1000Facility] = await db
       .insert(facilities)
-      .values({
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         name: `Sample-Link 1000yr Facility ${suffix}`,
         code: `FAC-SL-K-${suffix}`,
@@ -389,16 +362,17 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
 
     const [tier1000Feedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         code: `FS-SL-K-${suffix}`,
         facilityId: tier1000Facility.id,
         feedstockTypeId: baseBatchData.feedstockTypeId,
         massDryKg: 9000,
-      })
+      }))
       .returning({ id: feedstocks.id });
     createdIds.feedstocks.push(tier1000Feedstock.id);
 
+    const outputBinId = await createProductionRunOutputBin(TEST_ORG_ID, tier1000Facility.id);
     const [kRun] = await db
       .insert(productionRuns)
       .values({
@@ -406,6 +380,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
         code: `PR-SL-k-tier1000-${suffix}`,
         facilityId: tier1000Facility.id,
         status: "complete",
+        biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
         reactorId: tier1000Reactor.id,
         startTime: new Date("2025-06-20T08:00:00Z"),
         endTime: new Date("2025-06-20T12:00:00Z"),
@@ -454,31 +429,17 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     };
   }
 
-  it("createSample rejects a 1000-year batch sample missing R₀ — regardless of the client-sent tier", async () => {
-    await expect(
-      createSample(makeTestOrgContext(TEST_USER_ID), {
-        sampleCode: `S-SL-NO-R0-${Date.now()}`,
-        creditBatchId: tier1000BatchId,
-        samplingTime: new Date("2025-06-15T10:00:00Z"),
-        totalCarbonPercent: 80,
-        organicCarbonPercent: 78,
-      }),
-    ).rejects.toThrow(/R₀ reflectance is required/);
-  });
-
-  it("createSample rejects a 1000-year batch sample with R₀ but no TGA data", async () => {
-    await expect(
-      createSample(makeTestOrgContext(TEST_USER_ID), {
-        sampleCode: `S-SL-NO-TGA-${Date.now()}`,
-        creditBatchId: tier1000BatchId,
-        samplingTime: new Date("2025-06-15T10:00:00Z"),
-        totalCarbonPercent: 80,
-        organicCarbonPercent: 78,
-        randomReflectanceR0Percent: 2.1,
-      }),
-    ).rejects.toThrow(
-      /TGA non-reactive carbon is required for a Sample on a 1000-year credit batch/,
-    );
+  it("createSample allows missing mean R₀ and TGA on a 1000-year batch", async () => {
+    const sample = await createSample(makeTestOrgContext(TEST_USER_ID), {
+      sampleCode: `S-SL-OPTIONAL-${Date.now()}`,
+      creditBatchId: tier1000BatchId,
+      samplingTime: new Date("2025-06-15T10:00:00Z"),
+      totalCarbonPercent: 80,
+      organicCarbonPercent: 78,
+    });
+    createdIds.samples.push(sample.id);
+    expect(sample.randomReflectanceR0Percent).toBeNull();
+    expect(sample.residualCarbonPercent).toBeNull();
   });
 
   it("createSample accepts a 1000-year batch sample carrying R₀ + TGA evidence", async () => {
@@ -492,7 +453,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     expect(sample.sReflectanceFraction).toBe(0.92);
   });
 
-  it("createSample rejects a 1000-year batch sample missing s_fraction", async () => {
+  it("createSample saves a 1000-year batch sample missing s_fraction", async () => {
     const action = createSample(makeTestOrgContext(TEST_USER_ID), {
       sampleCode: `S-SL-NO-S-FRACTION-${Date.now()}`,
       creditBatchId: tier1000BatchId,
@@ -505,18 +466,18 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
       createdIds.samples.push(sample.id);
       return sample;
     });
-    await expect(action).rejects.toThrow(/R₀ readings.*2%/);
+    await expect(action).resolves.toMatchObject({ creditBatchId: tier1000BatchId, sReflectanceFraction: null });
   });
 
-  it("updateSample rejects moving an evidence-less sample onto a 1000-year batch", async () => {
+  it("updateSample allows moving a Sample without optional evidence onto a 1000-year batch", async () => {
     const sampleId = await makeSample(fromBatchId, `S-SL-TMOVE-${Date.now()}`);
     await expect(
-      updateSample(makeTestOrgContext(TEST_USER_ID), sampleId, { creditBatchId: tier1000BatchId }),
-    ).rejects.toThrow(/R₀ reflectance is required/);
-    expect(await batchIdOfSample(sampleId)).toBe(fromBatchId);
+      updateSample(makeTestOrgContext(TEST_USER_ID), sampleId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", sampleId), creditBatchId: tier1000BatchId }),
+    ).resolves.toBeDefined();
+    expect(await batchIdOfSample(sampleId)).toBe(tier1000BatchId);
   });
 
-  it("updateSample rejects nulling out R₀ in place on a 1000-year batch sample", async () => {
+  it("updateSample allows clearing mean R₀ on a 1000-year batch Sample", async () => {
     const sample = await createSample(makeTestOrgContext(TEST_USER_ID), {
       sampleCode: `S-SL-TNULL-${Date.now()}`,
       creditBatchId: tier1000BatchId,
@@ -525,10 +486,10 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     createdIds.samples.push(sample.id);
 
     await expect(
-      updateSample(makeTestOrgContext(TEST_USER_ID), sample.id, {
+      updateSample(makeTestOrgContext(TEST_USER_ID), sample.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", sample.id),
         randomReflectanceR0Percent: null,
       }),
-    ).rejects.toThrow(/R₀ reflectance is required/);
+    ).resolves.toBeDefined();
   });
 
   it("updateSample still allows unrelated edits on a compliant 1000-year batch sample", async () => {
@@ -539,7 +500,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     });
     createdIds.samples.push(sample.id);
 
-    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), sample.id, {
+    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), sample.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", sample.id),
       labName: "Tier Lab",
     });
     expect(updated.labName).toBe("Tier Lab");
@@ -552,81 +513,27 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
       ...completeEvidence(),
     });
     createdIds.samples.push(sample.id);
-    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), sample.id, {
+    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), sample.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", sample.id),
       sReflectanceFraction: 0.94,
     });
     expect(updated.sReflectanceFraction).toBe(0.94);
   });
 });
 
-describe("Batch side — back-fill and re-point LEGACY run-linked samples", () => {
-  it("createCreditBatch back-fills a pre-existing legacy sample on its member run", async () => {
-    // Legacy sample created BEFORE the batch exists → starts unlinked.
-    const sampleId = await insertLegacySample(
-      runBackfill,
-      `S-SL-BACKFILL-${Date.now()}`,
-    );
-    expect(await batchIdOfSample(sampleId)).toBeNull();
-
-    const batch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
-      ...batchDataForMonth("2025-05"),
-      code: `CB-SL-BACKFILL-${Date.now().toString(36)}`,
-      facilityId,
-      productionRunIds: [runBackfill],
-    });
-    createdIds.creditBatches.push(batch.id);
-
-    // Forming the batch links the run's existing sample to it.
-    expect(await batchIdOfSample(sampleId)).toBe(batch.id);
-  });
-
-  it("updateCreditBatch unlinks a removed run's legacy sample and links an added run's", async () => {
+describe("Batch membership preserves sample attachment", () => {
+  it("keeps batch Samples when the member runs change", async () => {
     const batch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
       ...batchDataForMonth("2025-06"),
-      code: `CB-SL-REPOINT-${Date.now().toString(36)}`,
+      code: `CB-SL-PRESERVE-${Date.now().toString(36)}`,
       facilityId,
       productionRunIds: [runReA, runReB],
     });
     createdIds.creditBatches.push(batch.id);
-
-    await db
-      .update(productionRuns)
-      .set({
-        startTime: new Date("2025-07-11T08:00:00Z"),
-        endTime: new Date("2025-07-11T12:00:00Z"),
-      })
-      .where(eq(productionRuns.id, runReB));
-    await db
-      .update(productionRuns)
-      .set({
-        status: "complete",
-        endTime: new Date("2025-06-12T12:00:00Z"),
-      })
-      .where(eq(productionRuns.id, runReC));
-
-    const sampleA = await insertLegacySample(
-      runReA,
-      `S-SL-REA-${Date.now()}`,
-      batch.id,
-    );
-    const sampleB = await insertLegacySample(
-      runReB,
-      `S-SL-REB-${Date.now()}`,
-      batch.id,
-    );
-    // A pre-existing unlinked legacy sample on a run NOT yet in the batch.
-    const sampleC = await insertLegacySample(runReC, `S-SL-REC-${Date.now()}`);
-    expect(await batchIdOfSample(sampleA)).toBe(batch.id);
-    expect(await batchIdOfSample(sampleB)).toBe(batch.id);
-    expect(await batchIdOfSample(sampleC)).toBeNull();
-
-    // Drop runReB, add runReC.
+    const sampleId = await makeSample(batch.id, `S-SL-PRESERVE-${Date.now()}`);
     await updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, {
-      productionRunIds: [runReA, runReC],
+      expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "creditBatches", batch.id),
+      productionRunIds: [],
     });
-
-    expect(await batchIdOfSample(sampleA)).toBe(batch.id); // kept
-    expect(await batchIdOfSample(sampleB)).toBeNull(); // removed run → unlinked
-    expect(await batchIdOfSample(sampleC)).toBe(batch.id); // added run → linked
+    expect(await batchIdOfSample(sampleId)).toBe(batch.id);
   });
 });

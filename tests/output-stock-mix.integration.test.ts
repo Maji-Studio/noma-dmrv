@@ -1,10 +1,12 @@
+import { createTestApplication } from "./helpers/application-writers";
+import { masterDataVersion } from "./helpers/master-data-version";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { binMovements, outputStockAllocations, outputStockMoistureReadings, storageLocations } from "@/db/schema";
-import { createApplication } from "@/data-access/applications";
-import { createDelivery } from "@/data-access/delivery-output-writes";
+
+import { createDelivery } from "./helpers/create-delivery";
 import { getMixBinHeldApplicationIds } from "@/data-access/mix-bin-credit-hold";
 import { getOutputStockHistory } from "@/data-access/output-stock-history";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
@@ -25,8 +27,8 @@ async function twoBatches() {
   return { ...f, p1, p2 };
 }
 type Fixture = Awaited<ReturnType<typeof twoBatches>>;
-const setMode = (f: Fixture, stockMode: "split" | "mix", mergedAt?: Date) =>
-  updateStorageLocation(f.ctx, f.bin.id, { stockMode, mergedAt });
+const setMode = async (f: Fixture, stockMode: "split" | "mix", mergedAt?: Date) =>
+  updateStorageLocation(f.ctx, f.bin.id, { expectedVersion: await masterDataVersion(f.ctx, "storageLocations", f.bin.id), stockMode, mergedAt });
 const allocationsOf = async (movementId: string) => (await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.movementId, movementId)))
   .map(a => ({ layer: a.biocharProductId, dry: a.dryMassKg, policy: a.basisSnapshot.policy, reading: a.basisSnapshot.readingPercent }));
 async function mixDelivery(f: Fixture, wetMassKg: number, moisturePercent: number) {
@@ -37,17 +39,21 @@ async function mixDelivery(f: Fixture, wetMassKg: number, moisturePercent: numbe
 }
 
 describe("mix bin draws in PostgreSQL", () => {
-  it("draws every batch pro-rata, saves the policy, and resets the whole pile's moisture", async () => {
+  it("draws every batch pro-rata, saves the policy, and keeps the pile's moisture", async () => {
     const f = await twoBatches();
     await setMode(f, "mix", new Date("2026-09-12T00:00:00.000Z"));
+    const pile = () => previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "loss", wetMassKg: 1, moisturePercent: 0 });
+    const before = (await pile()).moistureEstimate!;
     // 350 kg wet at 20% is 280 kg solids: 4/7 from P1 and 3/7 from P2.
     const delivery = await mixDelivery(f, 350, 20);
     expect(delivery.massDryKg).toBe(280);
     const rows = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
     expect(rows.map(r => [r.biocharProductId, r.dryMassKg, r.basisSnapshot.policy, r.basisSnapshot.readingPercent]).sort())
       .toEqual([[f.p1.id, "160.000", "pro_rata", "20"], [f.p2.id, "120.000", "pro_rata", "20"]].sort());
-    const readings = await db.select().from(outputStockMoistureReadings).where(eq(outputStockMoistureReadings.movementId, rows[0].movementId));
-    expect(readings.map(r => [r.biocharProductId, r.moisturePercent]).sort()).toEqual([[f.p1.id, 20], [f.p2.id, 20]].sort());
+    expect(await db.select().from(outputStockMoistureReadings).where(eq(outputStockMoistureReadings.movementId, rows[0].movementId))).toEqual([]);
+    const after = (await pile()).moistureEstimate!;
+    expect(after.wetKg).toBeCloseTo(before.wetKg! - 350, 6);
+    expect(after.moisturePercent).toBeCloseTo(before.moisturePercent!, 9);
   });
 
   it("plans an entry timed before the merge as split and one after it as pro-rata", async () => {
@@ -87,7 +93,7 @@ describe("mix bin draws in PostgreSQL", () => {
     const [original] = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
     const preview = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "delivery", wetMassKg: 350, moisturePercent: 0, correctsMovementId: original.movementId });
     expect(preview.blockingMessage).toMatch(/^Correction blocked by the switch to split at /);
-    const app = await createApplication(f.ctx, { code: `E2E-MIX-AP-C-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), biocharAppliedTons: 0.1, fieldSizeHa: 1, evidenceMethod: "location" });
+    const app = await createTestApplication(f.ctx, { code: `E2E-MIX-AP-C-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), appliedWetMassKg: 100, fieldSizeHa: 1, evidenceMethod: "location" });
     expect(await getMixBinHeldApplicationIds(f.ctx, db, [app.id])).toEqual(new Set([app.id]));
   });
 
@@ -111,15 +117,24 @@ describe("mix bin draws in PostgreSQL", () => {
   it("refuses to switch to split while a movement is recorded for later than now", async () => {
     const f = await twoBatches();
     await setMode(f, "mix", new Date("2026-09-12T00:00:00.000Z"));
-    await postMeasurement(f, { kind: "count", wetMassKg: 0, moisturePercent: null, occurredAt: new Date(Date.now() + 86_400_000).toISOString() });
+    const count = await postMeasurement(f, { kind: "count", wetMassKg: 0, moisturePercent: null });
+    // Future movements are refused since decision 56; one saved before that still guards the switch.
+    await db.update(binMovements).set({ occurredAt: new Date(Date.now() + 86_400_000) })
+      .where(and(eq(binMovements.organizationId, f.ctx.organizationId), eq(binMovements.id, count.movementId)));
     await expect(setMode(f, "split")).rejects.toThrow(/^This bin has a movement recorded for .*Switch it to split after that time\.$/);
   });
 
   it("changes a never-stocked bin's mode without leaving a movement", async () => {
     const f = await postedStockFixture({ stockKg: 0 });
     fixtures.push(f);
-    expect((await updateStorageLocation(f.ctx, f.bin.id, { stockMode: "mix", mergedAt: new Date() })).stockMode).toBe("mix");
+    expect((await updateStorageLocation(f.ctx, f.bin.id, { expectedVersion: await masterDataVersion(f.ctx, "storageLocations", f.bin.id), stockMode: "mix", mergedAt: new Date() })).stockMode).toBe("mix");
     expect(await db.select().from(binMovements).where(eq(binMovements.storageLocationId, f.bin.id))).toEqual([]);
+  });
+
+  it("requires a merge time even for a never-stocked bin", async () => {
+    const f = await postedStockFixture({ stockKg: 0 });
+    fixtures.push(f);
+    await expect(updateStorageLocation(f.ctx, f.bin.id, { expectedVersion: await masterDataVersion(f.ctx, "storageLocations", f.bin.id), stockMode: "mix" })).rejects.toThrow("Enter when the batches were merged.");
   });
 
   it("refuses a merge in the future", async () => {
@@ -135,7 +150,7 @@ describe("mix bin draws in PostgreSQL", () => {
     await setMode(f, "mix", new Date("2026-09-12T00:00:00.000Z"));
     const loss = await postMeasurement(f, { kind: "loss", wetMassKg: 10, moisturePercent: 0 });
     const backdated = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: "2026-09-14T06:00:00.000Z", kind: "loss", wetMassKg: 5, moisturePercent: 0 });
-    expect(backdated.calculatedWithout).toEqual([{ id: loss.movementId, occurredAt: STOCK_TIME, label: expect.stringMatching(/^Stock loss \(Sep 14, 2026, /) }]);
+    expect(backdated.calculatedWithout).toEqual([{ id: loss.movementId, occurredAt: STOCK_TIME, label: expect.stringMatching(/^Lost mass \(Sep 14, 2026, /) }]);
     const later = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: "2026-09-14T18:00:00.000Z", kind: "loss", wetMassKg: 5, moisturePercent: 0 });
     expect(later.calculatedWithout).toEqual([]);
   });
@@ -154,13 +169,13 @@ describe("mix bin credit hold", () => {
   it("holds out an application drawn from a mix bin, and not one from a split bin", async () => {
     const split = await twoBatches();
     const splitDelivery = await mixDelivery(split, 100, 0);
-    const splitApp = await createApplication(split.ctx, { code: `E2E-MIX-AP-S-${split.tag}`, deliveryId: splitDelivery.id, applicationDate: new Date(STOCK_DATE), biocharAppliedTons: 0.1, fieldSizeHa: 1, evidenceMethod: "location" });
+    const splitApp = await createTestApplication(split.ctx, { code: `E2E-MIX-AP-S-${split.tag}`, deliveryId: splitDelivery.id, applicationDate: new Date(STOCK_DATE), appliedWetMassKg: 100, fieldSizeHa: 1, evidenceMethod: "location" });
     expect(await getMixBinHeldApplicationIds(split.ctx, db, [splitApp.id])).toEqual(new Set());
 
     const mix = await twoBatches();
     await setMode(mix, "mix", new Date("2026-09-12T00:00:00.000Z"));
     const mixed = await mixDelivery(mix, 100, 0);
-    const mixApp = await createApplication(mix.ctx, { code: `E2E-MIX-AP-M-${mix.tag}`, deliveryId: mixed.id, applicationDate: new Date(STOCK_DATE), biocharAppliedTons: 0.1, fieldSizeHa: 1, evidenceMethod: "location" });
+    const mixApp = await createTestApplication(mix.ctx, { code: `E2E-MIX-AP-M-${mix.tag}`, deliveryId: mixed.id, applicationDate: new Date(STOCK_DATE), appliedWetMassKg: 100, fieldSizeHa: 1, evidenceMethod: "location" });
     expect(await getMixBinHeldApplicationIds(mix.ctx, db, [mixApp.id])).toEqual(new Set([mixApp.id]));
   });
 
@@ -172,7 +187,7 @@ describe("mix bin credit hold", () => {
     const preview = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "delivery", wetMassKg: 100, moisturePercent: 0 });
     const delivery = await createDelivery(f.ctx, { code: `E2E-MIX-D-${f.tag}`, facilityId: f.facility.id, orderId: f.order.id, storageLocationId: f.bin.id,
       deliveryDate: new Date(STOCK_TIME), deliveredWetMassKg: 100, moistureContentPercent: 0, idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint });
-    const app = await createApplication(f.ctx, { code: `E2E-MIX-AP-P-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), biocharAppliedTons: 0.1, fieldSizeHa: 1, evidenceMethod: "location" });
+    const app = await createTestApplication(f.ctx, { code: `E2E-MIX-AP-P-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), appliedWetMassKg: 100, fieldSizeHa: 1, evidenceMethod: "location" });
     expect(await getMixBinHeldApplicationIds(f.ctx, db, [app.id])).toEqual(new Set([app.id]));
   });
 });

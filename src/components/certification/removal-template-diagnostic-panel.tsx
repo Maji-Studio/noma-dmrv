@@ -51,7 +51,7 @@ function MappingOverview({
   }
   return (
     <div className="sm:col-span-2 lg:col-span-4">
-      <p className="label-micro text-[var(--color-text-tertiary)]">
+      <p className="body-small font-medium text-[var(--color-text-primary)]">
         Mapping overview
       </p>
       <div
@@ -166,13 +166,13 @@ export function RemovalTemplateDiagnosticPanel({
     <div className="flex flex-col gap-20">
       <section className="grid gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <p className="label-micro text-[var(--color-text-tertiary)]">
+          <p className="body-small font-medium text-[var(--color-text-secondary)]">
             Environment
           </p>
           <p className="body-small capitalize">{data.environment}</p>
         </div>
         <div>
-          <p className="label-micro text-[var(--color-text-tertiary)]">
+          <p className="body-small font-medium text-[var(--color-text-secondary)]">
             Project link
           </p>
           <p className="body-small">
@@ -184,7 +184,7 @@ export function RemovalTemplateDiagnosticPanel({
           </p>
         </div>
         <div>
-          <p className="label-micro text-[var(--color-text-tertiary)]">
+          <p className="body-small font-medium text-[var(--color-text-secondary)]">
             Active Removal template
           </p>
           <p className="body-small">
@@ -216,7 +216,7 @@ export function RemovalTemplateDiagnosticPanel({
           )}
         </div>
         <div>
-          <p className="label-micro text-[var(--color-text-tertiary)]">
+          <p className="body-small font-medium text-[var(--color-text-secondary)]">
             Aggregate status
           </p>
           {data.diagnostic ? (

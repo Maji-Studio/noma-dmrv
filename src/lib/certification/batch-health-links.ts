@@ -10,34 +10,34 @@ import {
   FEEDSTOCK_TYPE_EDIT_LABEL,
 } from "@/lib/entity-deep-link";
 import { sampleCreateHref } from "@/lib/sample-create-intent";
-import { certificationEmissionEstimatesHref } from "./links";
+import { creditBatchDeepLinkHref, creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
+import { certificationEmissionEstimatesHref, certificationRemovalTemplatesHref } from "./links";
+
+export const BATCH_DETAILS_FIX_LABEL = "Edit details";
+
+/** The facility's credit batch list, where a repair with no single batch lands. */
+export function creditBatchListHref(facilityId: string): string {
+  return `/credit-batches?${new URLSearchParams({ facility: facilityId })}`;
+}
 
 export interface BatchHealthFixLink {
   label: string;
   href: string;
 }
 
-export const NEXT_ACTION_DETAIL_MAX_CHARS = 180;
-
 // Note: the problem-phrased "open check headline" was retired in Phase 0 — every
 // readiness surface now renders the one neutral `BatchHealthCheck.requirementLabel`
 // (see `requirement-labels.ts`), so the batch page and the removal wizard can't
 // phrase the same gap differently.
 
-export function compactBatchHealthDetail(
-  detail: string,
-  maxChars: number = NEXT_ACTION_DETAIL_MAX_CHARS,
-): string {
-  if (detail.length <= maxChars) {
-    return detail;
-  }
-  return `${detail.slice(0, maxChars).trimEnd()}…`;
-}
-
 export function fallbackBatchHealthFixTarget(
   key: BatchHealthCheckKey,
 ): BatchHealthFixTarget {
   switch (key) {
+    case "emissions":
+      return "emissions";
+    case "template":
+      return "certificationTemplates";
     case "carbon":
       // Carbon & durability inputs (organic carbon %, H:Corg ratio) are lab
       // sample measurements — they live on the run's samples, NOT the batch
@@ -70,6 +70,11 @@ export function batchHealthFixLinkFor(
   creditBatchId?: string,
 ): BatchHealthFixLink {
   const target = resolveBatchHealthFixTarget(check);
+  const locationHref = check.affectedRecords?.[0]?.href;
+  if ((target === "deliveryDistances" || target === "feedstocks") && locationHref &&
+      check.affectedRecords?.every(record => record.href === locationHref)) {
+    return { label: "Edit location distances", href: locationHref };
+  }
   const affectedIds = check.affectedRecords?.map((record) => record.id) ?? [];
   const affectedCount = affectedIds.length;
   const query = (
@@ -83,9 +88,19 @@ export function batchHealthFixLinkFor(
     return params.toString();
   };
   switch (target) {
+    case "emissions":
+      return { label: "Review emissions", href: creditBatchId ? creditBatchDeepLinkHref(creditBatchId, facilityId) : `/credit-batches?${query(undefined, false)}` };
+    case "certificationTemplates":
+      return { label: "Review Removal templates", href: certificationRemovalTemplatesHref(facilityId) };
+    case "creditBatchTemplate":
+      return creditBatchId
+        ? { label: "Switch template", href: creditBatchRemovalTemplateHref(creditBatchId, facilityId) }
+        : { label: "Review credit batches", href: `/credit-batches?${query(undefined, false)}` };
+    case "templateLineReview":
+      return { label: "Review template lines", href: certificationRemovalTemplatesHref(facilityId) };
     case "batchDetails":
       return {
-        label: "Edit details",
+        label: BATCH_DETAILS_FIX_LABEL,
         href: "#batch-details",
       };
     case "labSamples":
@@ -155,6 +170,19 @@ export function batchHealthFixLinkFor(
         href: buildFeedstockTypeEditDeepLink(facilityId, feedstockTypeId),
       };
     }
+    case "orders":
+      return {
+        label: "Review orders",
+        href: `/orders?${query(undefined, false)}`,
+      };
+    case "deliveryEvidence":
+      if (affectedCount === 1) return {
+        label: `Review ${check.affectedRecords![0].code} evidence`,
+        href: buildEntityDeepLink({
+          path: "/deliveries", facilityId, entityQueryKey: "delivery",
+          entityId: affectedIds[0], focus: ENTITY_FOCUS_TARGETS.transportEvidence,
+        }),
+      };
     case "deliveries":
     case "deliveryDistances":
       return {

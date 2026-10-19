@@ -1,10 +1,14 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MISSING_VALUE } from "./copy-utils";
 import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import {
   formatCo2e,
+  formatCalendarDate,
   formatDayString,
   formatDistanceKm,
+  formatLegDistanceCompactKm,
+  formatLegDistanceKm,
+  formatRoundTripKm,
   formatFacilityDateTime,
   formatFacilityDateTimeWithOffset,
   formatFileSize,
@@ -12,6 +16,7 @@ import {
   formatMassKg,
   formatPercent,
   formatTonnes,
+  massKgRoundsToZero,
 } from "./format-utils";
 
 describe("missing-value routing", () => {
@@ -41,6 +46,24 @@ describe("missing-value routing", () => {
     expect(formatMass(0)).toBe("0 kg");
     expect(formatDistanceKm(0)).toBe("0 km");
     expect(formatPercent(0)).toBe("0%");
+  });
+});
+
+describe("formatLegDistanceKm", () => {
+  it("shows the one-way distance with the round trip it counts", () => {
+    expect(formatLegDistanceKm(240)).toBe("240 km one way · 480 km round trip counted");
+    expect(formatRoundTripKm(18)).toBe("36 km round trip counted");
+  });
+
+  it("reads Not recorded when no distance is set", () => {
+    expect(formatLegDistanceKm(null)).toBe(MISSING_VALUE.notRecorded);
+  });
+});
+
+describe("formatLegDistanceCompactKm", () => {
+  it("pairs the one-way distance with the counted round trip for chips", () => {
+    expect(formatLegDistanceCompactKm(240)).toBe("240 km · 480 km counted");
+    expect(formatLegDistanceCompactKm(undefined)).toBe(MISSING_VALUE.notRecorded);
   });
 });
 
@@ -114,6 +137,28 @@ describe("formatDayString", () => {
   });
 });
 
+describe("formatCalendarDate", () => {
+  const originalTz = process.env.TZ;
+  beforeEach(() => {
+    process.env.TZ = "America/Los_Angeles";
+  });
+  afterEach(() => {
+    if (originalTz === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTz;
+  });
+
+  it.each(["2026-07-06", "2026-07-06T00:00:00.000Z", new Date("2026-07-06T00:00:00.000Z")])(
+    "renders a persisted business date on its UTC calendar: %s",
+    value => expect(formatCalendarDate(value)).toBe("Jul 6, 2026"),
+  );
+
+  it("preserves missing and invalid date feedback", () => {
+    expect(formatCalendarDate(null)).toBe(MISSING_VALUE.notRecorded);
+    expect(formatCalendarDate(undefined)).toBe(MISSING_VALUE.notRecorded);
+    expect(formatCalendarDate("invalid")).toBe(MISSING_VALUE.notAvailable);
+  });
+});
+
 describe("formatMass", () => {
   it("rounds kilograms and converts larger masses to tonnes", () => {
     expect(formatMass(999.6)).toBe("1,000 kg");
@@ -156,5 +201,18 @@ describe("formatMassKg explicit storage precision", () => {
     expect(formatMassKg(125.125, { digits: MASS_KG_STORAGE_DECIMALS })).toBe("125.125 kg");
     expect(formatMassKg(125.125)).toBe("125.1 kg");
     expect(formatMassKg(0.001, { digits: MASS_KG_STORAGE_DECIMALS })).toBe("0.001 kg");
+  });
+});
+
+describe("massKgRoundsToZero", () => {
+  it.each([
+    [0, true],
+    [0.03, true],
+    [0.05, false],
+    [0.06, false],
+    [7.5, false],
+  ])("matches the default mass display for %s kg", (kg, roundsToZero) => {
+    expect(massKgRoundsToZero(kg)).toBe(roundsToZero);
+    expect(formatMassKg(kg) === formatMassKg(0)).toBe(roundsToZero);
   });
 });

@@ -55,6 +55,7 @@ vi.mock("@/components/ui/delete-confirm-dialog", () => ({
 
 vi.mock("@/components/ui/tooltip", () => ({
   Tooltip: ({ children }: { children: ReactNode }) => children,
+  InfoHint: () => null,
 }));
 
 vi.mock("@/components/forms", () => ({
@@ -85,7 +86,7 @@ vi.mock("@/lib/certification/readiness", () => ({
   deriveRemovalReadiness: () => ({
     state: "ready",
     reasons: [],
-    advisories: [],
+    advisories: [], transportVehicleAdvisories: [],
   }),
 }));
 

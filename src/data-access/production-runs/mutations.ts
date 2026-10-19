@@ -1,20 +1,21 @@
+import { readRecordDependents } from "../record-lock-dependents";
+import { assertRecordLockFields } from "@/lib/record-lock-fields";
+import { recordLocks } from "@/lib/record-lock";
+import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 /**
  * Production-run create / update / delete operations, including bin-based
  * feedstock allocation and storage-location validation.
  */
 
 import { db, type DbTransaction } from "@/db";
+import { assertRunOperator } from "../production-run-input";
+import { runReferenceNotFound } from "@/lib/production-run-domain-errors";
 import { isPgCheckViolation } from "@/db/errors";
 import {
-  creditBatches,
   creditBatchProductionRuns,
   facilities,
-  incidentReports,
-  operators,
-  productionRunFeedstockDraws,
-  productionRunFeedstocks,
-  productionRunReadings,
   productionRuns,
+  productionRunFeedstockDraws,
   reactors,
   storageLocations,
 } from "@/db/schema";
@@ -23,23 +24,22 @@ import {
   computeClampedDryMass,
   deriveMassDryKg,
 } from "@/lib/calculations/mass-dry";
-import { conflictCode, type ConflictRef } from "@/lib/conflict-ref";
 import { SafeError } from "@/lib/errors";
 import {
   assertProductionRunOutcome,
   assertProductionRunTransition,
+  assertProductionRunCreateStatus,
   statusOccupiesReactor,
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
 import { and, eq, isNull } from "drizzle-orm";
 import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
-import { assertExpectedVersion } from "../expected-version";
+import { assertRowVersion, nextVersion } from "../row-version";
 import {
   CODE_CONFLICT_MESSAGES,
   withUniqueCodeGuard,
 } from "../code-generator";
 import { attachProductionRunToMatchingCreditBatch } from "../credit-batch-membership";
-import { retireDocumentsForEntities } from "../documents";
 import { lockActiveFacilityReference } from "../facility-reference-guards";
 import { lockBinStocks } from "../lock-bin-stocks";
 import {
@@ -49,8 +49,7 @@ import {
   lockProductionRunUpdateStock,
 } from "../production-run-stock-locks";
 import { assertRunAdditionAfterSplit } from "../output-bin-stock-mode";
-import { processPendingStorageObjectDeletions } from "../storage-object-deletions";
-import { assertSameOrg, requireOrgScope } from "../utils";
+import { requireOrgScope } from "../utils";
 import {
   getProductionRunFeedstockDrawStorageIds,
   getProductionRunFeedstockDrawTotal,
@@ -78,17 +77,21 @@ const END_AFTER_START_CONSTRAINT = "production_runs_end_after_start";
 const END_AFTER_START_MESSAGE = "End time must be after the start time";
 const PREFLIGHT_OUTCOME_VIOLATIONS = [
   "end-not-after-start",
+  "running-end-forbidden",
   "dry-mass-balance-exceeded",
+  "terminal-end-required",
+  "feedstock-required",
+  "complete-output-required",
+  "complete-output-bin-required",
+  "complete-output-moisture-required",
 ] as const;
 
-export class ProductionRunDependencyError extends SafeError {
-  readonly conflict: ConflictRef;
-
-  constructor(message: string, conflict: ConflictRef) {
-    super(message);
-    this.name = "ProductionRunDependencyError";
-    this.conflict = conflict;
-  }
+async function readRunDrawSnapshot(ctx: OrgContext, tx: DbTransaction, productionRunId: string) {
+  requireOrgScope(ctx);
+  return tx.select({ storageLocationId: productionRunFeedstockDraws.storageLocationId, wetMassKg: productionRunFeedstockDraws.wetMassKg })
+    .from(productionRunFeedstockDraws)
+    .where(and(eq(productionRunFeedstockDraws.productionRunId, productionRunId), eq(productionRunFeedstockDraws.organizationId, ctx.organizationId)))
+    .orderBy(productionRunFeedstockDraws.storageLocationId);
 }
 
 /**
@@ -101,6 +104,7 @@ async function validateBiocharStorageLocation(
   facilityId: string,
   label: string,
 ) {
+  requireOrgScope(ctx);
   const [loc] = await tx
     .select({ id: storageLocations.id, facilityId: storageLocations.facilityId, type: storageLocations.type })
     .from(storageLocations)
@@ -112,16 +116,33 @@ async function validateBiocharStorageLocation(
       ),
     );
 
-  if (!loc) throw new SafeError(`${label} storage bin not found`);
+  if (!loc) throw runReferenceNotFound(`${label} storage bin not found`, ["biocharStorageLocationId"]);
   if (loc.facilityId !== facilityId) throw new SafeError(`${label} bin does not belong to the selected facility`);
   if (loc.type !== "biochar_bin") throw new SafeError("Selected storage bin is not a biochar bin");
+}
+
+/** Recheck the reactor after the facility lock, serializing against facility moves. */
+async function lockReactorFacilityReference(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  reactorId: string,
+  facilityId: string,
+): Promise<void> {
+  requireOrgScope(ctx);
+  const [reactor] = await tx.select({ facilityId: reactors.facilityId })
+    .from(reactors)
+    .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)))
+    .for("share");
+  if (!reactor) throw runReferenceNotFound("Reactor not found", ["reactorId"]);
+  if (reactor.facilityId !== facilityId) throw new SafeError("Reactor does not belong to the selected facility");
 }
 
 /**
  * Create a new production run with bin-based feedstock allocation
  */
-export async function createProductionRun(
+export async function createProductionRunInTransaction(
   ctx: OrgContext,
+  tx: DbTransaction,
   data: {
     code: string;
     facilityId: string;
@@ -132,10 +153,6 @@ export async function createProductionRun(
     endTime: Date | null;
     operatorId?: string | null;
     feedstockDraws?: ProductionRunFeedstockDrawInput[];
-    /** @deprecated Compatibility input; converted immediately to one draw. */
-    feedstockWetMassKg?: number | null;
-    /** @deprecated Compatibility input; converted immediately to one draw. */
-    feedstockStorageLocationId?: string | null;
     feedstockMoisturePercent?: number | null;
     feedingRateKgHr?: number | null;
     residenceTimeMinutes?: number | null;
@@ -152,44 +169,40 @@ export async function createProductionRun(
   requireOrgScope(ctx);
   const now = options.now ?? new Date();
   assertProductionRunTimesNotFuture(data, now);
-  if (data.operatorId) await assertSameOrg(ctx, operators, data.operatorId);
+  if (data.operatorId) await assertRunOperator(ctx, tx, data.operatorId);
 
   // Verify facility exists and is active (no new children under an archived parent)
-  const [facility] = await db
-    .select({ id: facilities.id })
+  const [facility] = await tx
+    .select({ id: facilities.id, archivedAt: facilities.archivedAt })
     .from(facilities)
-    .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)));
+    .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId)));
 
   if (!facility) {
-    throw new SafeError("Facility not found or archived");
+    throw runReferenceNotFound("Facility not found or archived", ["facilityId"]);
   }
 
+  if (facility.archivedAt) throw new SafeError("Facility not found or archived");
+
   // Verify reactor exists and belongs to facility
-  const [reactor] = await db
+  const [reactor] = await tx
     .select({ id: reactors.id, facilityId: reactors.facilityId })
     .from(reactors)
     .where(and(eq(reactors.id, data.reactorId), eq(reactors.organizationId, ctx.organizationId)));
 
   if (!reactor) {
-    throw new SafeError("Reactor not found");
+    throw runReferenceNotFound("Reactor not found", ["reactorId"]);
   }
 
   if (reactor.facilityId !== data.facilityId) {
     throw new SafeError("Reactor does not belong to the selected facility");
   }
 
-  const status = data.status ?? "draft";
+  const status = data.status ?? "running";
   const feedstockDraws = normalizeProductionRunFeedstockDraws(
-    data.feedstockDraws ??
-      (data.feedstockStorageLocationId && data.feedstockWetMassKg
-        ? [{
-            storageLocationId: data.feedstockStorageLocationId,
-            wetMassKg: data.feedstockWetMassKg,
-          }]
-        : []),
+    data.feedstockDraws ?? [],
   );
   const feedstockWetMassKg = sumProductionRunFeedstockDraws(feedstockDraws);
-  assertProductionRunTransition("draft", status);
+  assertProductionRunCreateStatus(status);
   assertProductionRunOutcome(
     {
       status,
@@ -198,6 +211,7 @@ export async function createProductionRun(
       endTimePresent: data.endTime !== null,
       cancellationReason: data.cancellationReason,
       biocharOutputKg: data.biocharOutputKg,
+      biocharStorageLocationId: data.biocharStorageLocationId,
       biocharMoisturePercent: data.biocharMoisturePercent,
       feedstockWetMassKg,
       feedstockMoisturePercent: data.feedstockMoisturePercent,
@@ -221,12 +235,11 @@ export async function createProductionRun(
   // Create production run + M:M allocation in a transaction
   let run: typeof productionRuns.$inferSelect;
   try {
-    run = await db.transaction(async (tx) => {
     await lockActiveFacilityReference(ctx, tx, data.facilityId);
+    await lockReactorFacilityReference(ctx, tx, data.reactorId, data.facilityId);
 
     await lockBinStocks(ctx, tx, [
       ...feedstockDraws.map((draw) => draw.storageLocationId),
-      data.feedstockStorageLocationId,
       data.biocharStorageLocationId,
     ]);
 
@@ -244,14 +257,8 @@ export async function createProductionRun(
       await validateBiocharStorageLocation(ctx, tx, data.biocharStorageLocationId, data.facilityId, "Biochar");
       await assertRunAdditionAfterSplit(ctx, tx, { status, biocharStorageLocationId: data.biocharStorageLocationId, facilityId: data.facilityId, endTime: data.endTime ?? null });
     }
-    if (data.feedstockStorageLocationId && feedstockDraws.length === 0) {
-      await validateProductionRunFeedstockDrawSources(
-        ctx,
-        tx,
-        [{ storageLocationId: data.feedstockStorageLocationId }],
-        data.facilityId,
-      );
-    }
+
+    await options.snapshotStock?.(tx, [...feedstockDraws.map((draw) => draw.storageLocationId), data.biocharStorageLocationId]);
 
     const [created] = await tx
       .insert(productionRuns)
@@ -278,7 +285,6 @@ export async function createProductionRun(
         biocharMoisturePercent: data.biocharMoisturePercent ?? null,
         biocharDryMassKg: biocharDryMass,
         biocharStorageLocationId: data.biocharStorageLocationId ?? null,
-        feedstockStorageLocationId: null,
       })
       .returning();
 
@@ -295,13 +301,14 @@ export async function createProductionRun(
 
     // Unfiltered: window + dry-mass are eligible here but always pre-caught by
     // the PREFLIGHT_OUTCOME_VIOLATIONS check above over the same inputs — keep
-    // that preflight scope or cancelled/draft runs start failing dry-mass here.
+    // that preflight scope or non-terminal runs start failing dry-mass here.
     assertProductionRunOutcome({
       status,
       startTime: data.startTime,
       endTime: data.endTime,
       endTimePresent: data.endTime !== null,
       biocharOutputKg: data.biocharOutputKg ?? null,
+      biocharStorageLocationId: data.biocharStorageLocationId,
       biocharMoisturePercent: data.biocharMoisturePercent,
       feedstockWetMassKg,
       feedstockMoisturePercent: data.feedstockMoisturePercent,
@@ -311,8 +318,9 @@ export async function createProductionRun(
 
     await attachProductionRunToMatchingCreditBatch(ctx, tx, created.id);
 
-    return created;
-    });
+    const savedDraws = await readRunDrawSnapshot(ctx, tx, created.id);
+    options.capture?.(created.id, null, { ...created, feedstockDraws: savedDraws });
+    run = created;
   } catch (error) {
     if (isPgCheckViolation(error, END_AFTER_START_CONSTRAINT)) {
       throw new SafeError(END_AFTER_START_MESSAGE);
@@ -327,30 +335,27 @@ export async function createProductionRun(
     throw error;
   }
 
-  return getProductionRunById(ctx, run.id);
+  return getProductionRunById(ctx, run.id, tx);
 }
 
 /**
  * Update an existing production run
  */
-export async function updateProductionRun(
+export async function updateProductionRunInTransaction(
   ctx: OrgContext,
+  tx: DbTransaction,
   productionRunId: string,
   data: {
     code?: string;
     facilityId?: string;
     reactorId?: string;
     status?: ProductionRunStatus;
-    expectedUpdatedAt?: Date;
+    expectedVersion: number;
     cancellationReason?: string | null;
     startTime?: Date;
     endTime?: Date | null;
     operatorId?: string | null;
     feedstockDraws?: ProductionRunFeedstockDrawInput[];
-    /** @deprecated Compatibility input; converted immediately to draw rows. */
-    feedstockWetMassKg?: number | null;
-    /** @deprecated Compatibility input; converted immediately to draw rows. */
-    feedstockStorageLocationId?: string | null;
     feedstockMoisturePercent?: number | null;
     feedingRateKgHr?: number | null;
     residenceTimeMinutes?: number | null;
@@ -375,54 +380,20 @@ export async function updateProductionRun(
     },
     now,
   );
-  if (data.operatorId) await assertSameOrg(ctx, operators, data.operatorId);
+  if (data.operatorId) await assertRunOperator(ctx, tx, data.operatorId);
 
   // Verify run exists
-  const [existing] = await db
+  const [existing] = await tx
     .select()
     .from(productionRuns)
     .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
 
   if (!existing) {
-    throw new SafeError("Production run not found");
+    throw runReferenceNotFound("Production run not found");
   }
   const existingFeedstockStorageLocationIds =
-    await getProductionRunFeedstockDrawStorageIds(ctx, db, productionRunId);
-  let inputFeedstockDraws = data.feedstockDraws;
-  if (
-    inputFeedstockDraws === undefined &&
-    (data.feedstockStorageLocationId !== undefined ||
-      data.feedstockWetMassKg !== undefined)
-  ) {
-    if (existingFeedstockStorageLocationIds.length > 1) {
-      throw new SafeError(
-        "This run draws from several bins. Send feedstockDraws to change its feedstock.",
-      );
-    }
-    const storageLocationId =
-      data.feedstockStorageLocationId !== undefined
-        ? data.feedstockStorageLocationId
-        : existingFeedstockStorageLocationIds.length === 1
-          ? existingFeedstockStorageLocationIds[0]
-          : existing.feedstockStorageLocationId;
-    if (
-      storageLocationId === null &&
-      data.feedstockWetMassKg !== undefined &&
-      data.feedstockWetMassKg !== null
-    ) {
-      throw new SafeError(
-        "A feedstock source bin is required to change the wet mass.",
-      );
-    }
-    const wetMassKg =
-      data.feedstockWetMassKg !== undefined
-        ? data.feedstockWetMassKg
-        : existing.feedstockWetMassKg;
-    inputFeedstockDraws =
-      storageLocationId && wetMassKg && wetMassKg > 0
-        ? [{ storageLocationId, wetMassKg: Number(wetMassKg) }]
-        : [];
-  }
+    await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
+  const inputFeedstockDraws = data.feedstockDraws;
   const normalizedFeedstockDraws =
     inputFeedstockDraws === undefined
       ? undefined
@@ -431,14 +402,15 @@ export async function updateProductionRun(
   // Moving the run to another facility requires that facility to be active
   // (no children move under an archived parent — mirrors createProductionRun).
   if (data.facilityId && data.facilityId !== existing.facilityId) {
-    const [facility] = await db
-      .select({ id: facilities.id })
+    const [facility] = await tx
+      .select({ id: facilities.id, archivedAt: facilities.archivedAt })
       .from(facilities)
-      .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)));
+      .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId)));
 
     if (!facility) {
-      throw new SafeError("Facility not found or archived");
+      throw runReferenceNotFound("Facility not found or archived", ["facilityId"]);
     }
+    if (facility.archivedAt) throw new SafeError("Facility not found or archived");
   }
 
   // Compute effective facility once — used for reactor + storage bin validation
@@ -447,13 +419,13 @@ export async function updateProductionRun(
   // Verify reactor belongs to the facility when reactor or facility changes
   const effectiveReactorId = data.reactorId !== undefined ? data.reactorId : existing.reactorId;
   if (effectiveReactorId && (data.reactorId !== undefined || data.facilityId !== undefined)) {
-    const [reactor] = await db
+    const [reactor] = await tx
       .select({ facilityId: reactors.facilityId })
       .from(reactors)
       .where(and(eq(reactors.id, effectiveReactorId), eq(reactors.organizationId, ctx.organizationId)));
 
     if (!reactor) {
-      throw new SafeError("Reactor not found");
+      throw runReferenceNotFound("Reactor not found", ["reactorId"]);
     }
 
     if (reactor.facilityId !== targetFacilityId) {
@@ -461,7 +433,7 @@ export async function updateProductionRun(
     }
   }
 
-  // Preserve the original pre-transaction ordering for window and dry-mass
+  // Preserve the original pre-lock ordering for window and dry-mass
   // errors while routing both rules through the lifecycle decision function.
   const effectiveStartTime = data.startTime ?? existing.startTime;
   const effectiveEndTime =
@@ -500,7 +472,6 @@ export async function updateProductionRun(
   if (normalizedFeedstockDraws !== undefined) {
     updateData.feedstockWetMassKg =
       normalizedFeedstockDraws.length > 0 ? effectiveFeedstockWetMassKg : null;
-    updateData.feedstockStorageLocationId = null;
   }
   if (data.feedstockMoisturePercent !== undefined) updateData.feedstockMoisturePercent = data.feedstockMoisturePercent;
 
@@ -521,6 +492,7 @@ export async function updateProductionRun(
           ? data.cancellationReason
           : existing.cancellationReason,
       biocharOutputKg: effectiveBiocharWet,
+      biocharStorageLocationId: data.biocharStorageLocationId !== undefined ? data.biocharStorageLocationId : existing.biocharStorageLocationId,
       biocharMoisturePercent: effectiveBiocharMoisture,
       feedstockWetMassKg: effectiveWetMass,
       feedstockMoisturePercent: effectiveMoisture,
@@ -560,9 +532,13 @@ export async function updateProductionRun(
       productionRuns,
       productionRuns.code,
       CODE_CONFLICT_MESSAGES.productionRun,
-      () => db.transaction(async (tx) => {
+      async () => {
     if (data.facilityId !== undefined) {
       await lockActiveFacilityReference(ctx, tx, data.facilityId);
+    }
+
+    if (effectiveReactorId && (data.reactorId !== undefined || data.facilityId !== undefined)) {
+      await lockReactorFacilityReference(ctx, tx, effectiveReactorId, targetFacilityId);
     }
 
     await lockProductionRunUpdateStock(
@@ -586,16 +562,16 @@ export async function updateProductionRun(
       .for("update");
 
     if (!locked) {
-      throw new SafeError("Production run not found");
+      throw runReferenceNotFound("Production run not found");
     }
-    const lockedFeedstockStorageLocationIds =
-      await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
-    assertExpectedVersion({
+    assertRowVersion({
       entity: PRODUCTION_RUN_CONFLICT_ENTITY,
       id: productionRunId,
-      expectedUpdatedAt: data.expectedUpdatedAt,
-      actualUpdatedAt: locked.updatedAt,
+      expectedVersion: data.expectedVersion,
+      actualVersion: locked.version,
     });
+    const lockedFeedstockStorageLocationIds =
+      await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
     assertProductionRunStockSnapshot(
       {
         feedstockStorageLocationIds: existingFeedstockStorageLocationIds,
@@ -608,7 +584,20 @@ export async function updateProductionRun(
       { ...data, feedstockDraws: normalizedFeedstockDraws },
     );
 
-    await assertProductionRunOutputBasisChange(ctx, tx, productionRunId, locked, data);
+    await options.snapshotStock?.(tx, [
+      ...(normalizedFeedstockDraws !== undefined || data.facilityId !== undefined || data.status !== undefined
+        ? [...lockedFeedstockStorageLocationIds, ...(normalizedFeedstockDraws?.map((draw) => draw.storageLocationId) ?? [])] : []),
+      locked.biocharStorageLocationId, data.biocharStorageLocationId,
+    ]);
+
+    const recordLock = recordLocks.productionRun({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "productionRun", entityId: productionRunId }) });
+    try {
+      await assertProductionRunOutputBasisChange(ctx, tx, productionRunId, locked, data);
+    } catch (error) {
+      if (error instanceof SafeError) assertRecordLockFields(recordLock, locked, data, error.message);
+      throw error;
+    }
+    assertRecordLockFields(recordLock, locked, data);
 
     const lockedTargetStatus = data.status ?? locked.status;
     const lockedTargetStartTime = data.startTime ?? locked.startTime;
@@ -623,6 +612,10 @@ export async function updateProductionRun(
       data.cancellationReason !== undefined
         ? data.cancellationReason
         : locked.cancellationReason;
+    const effectiveBiocharStorageId =
+      data.biocharStorageLocationId !== undefined
+        ? data.biocharStorageLocationId
+        : locked.biocharStorageLocationId;
 
     assertProductionRunTransition(locked.status, lockedTargetStatus);
     assertProductionRunOutcome(
@@ -633,6 +626,7 @@ export async function updateProductionRun(
         endTimePresent: lockedTargetEndTime !== null,
         cancellationReason: lockedTargetCancellationReason,
         biocharOutputKg: lockedTargetBiocharOutput,
+        biocharStorageLocationId: effectiveBiocharStorageId,
         biocharMoisturePercent:
           data.biocharMoisturePercent !== undefined
             ? data.biocharMoisturePercent
@@ -689,12 +683,12 @@ export async function updateProductionRun(
       }
     }
 
-    await assertCanMutateCertifiedLineage(
+    await withFeedstockErrors(() => assertCanMutateCertifiedLineage(
       ctx,
       tx,
       { entityType: "productionRun", entityId: productionRunId },
       "update",
-    );
+    ), "certification_locked");
 
     // A cancelled run frees its slot, so only an occupying run needs this guard.
     if (statusOccupiesReactor(lockedTargetStatus)) {
@@ -706,10 +700,12 @@ export async function updateProductionRun(
       });
     }
 
-    const effectiveBiocharStorageId =
-      data.biocharStorageLocationId !== undefined
-        ? data.biocharStorageLocationId
-        : locked.biocharStorageLocationId;
+    if (
+      effectiveBiocharStorageId &&
+      (data.biocharStorageLocationId !== undefined || data.facilityId !== undefined)
+    ) {
+      await validateBiocharStorageLocation(ctx, tx, effectiveBiocharStorageId, lockedTargetFacilityId, "Biochar");
+    }
     const biocharStockState =
       await deriveProductionRunUpdateBiocharStockState(
         ctx,
@@ -729,12 +725,6 @@ export async function updateProductionRun(
       );
     }
 
-    if (
-      effectiveBiocharStorageId &&
-      (data.biocharStorageLocationId !== undefined || data.facilityId !== undefined)
-    ) {
-      await validateBiocharStorageLocation(ctx, tx, effectiveBiocharStorageId, lockedTargetFacilityId, "Biochar");
-    }
     await assertRunAdditionAfterSplit(ctx, tx, { status: lockedTargetStatus, biocharStorageLocationId: effectiveBiocharStorageId, facilityId: lockedTargetFacilityId, endTime: lockedTargetEndTime }, locked);
 
     const transactionUpdateData = { ...updateData };
@@ -771,10 +761,11 @@ export async function updateProductionRun(
       );
     }
 
-    await tx
+    const previousDraws = await readRunDrawSnapshot(ctx, tx, productionRunId);
+    const [saved] = await tx
       .update(productionRuns)
-      .set(transactionUpdateData)
-      .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
+      .set({ ...transactionUpdateData, version: nextVersion(productionRuns.version) })
+      .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId))).returning();
 
     await assertProductionRunBiocharStockNotOverdrawn(
       ctx,
@@ -790,19 +781,23 @@ export async function updateProductionRun(
       });
     }
 
+    const savedDraws = feedstockDrawsChanged
+      ? await readRunDrawSnapshot(ctx, tx, productionRunId)
+      : previousDraws;
+    options.capture?.(productionRunId, { ...locked, feedstockDraws: previousDraws }, { ...saved, feedstockDraws: savedDraws });
+
     const consumedFeedstockWetKg =
       await getProductionRunFeedstockDrawTotal(ctx, tx, productionRunId);
 
-    // Unfiltered: window + dry-mass are eligible here but always pre-caught by
-    // the locked PREFLIGHT_OUTCOME_VIOLATIONS re-check above over the same
-    // merged inputs — keep that preflight scope or cancelled/draft runs start
-    // failing dry-mass here.
+    // Recheck all outcome rules after allocation. Only untouched feedstock
+    // prerequisites are exempt for existing records, as in both preflights.
     assertProductionRunOutcome({
       status: lockedTargetStatus,
       startTime: lockedTargetStartTime,
       endTime: lockedTargetEndTime,
       endTimePresent: lockedTargetEndTime !== null,
       biocharOutputKg: lockedTargetBiocharOutput,
+      biocharStorageLocationId: effectiveBiocharStorageId,
       biocharMoisturePercent:
         data.biocharMoisturePercent !== undefined
           ? data.biocharMoisturePercent
@@ -828,7 +823,7 @@ export async function updateProductionRun(
       tx,
       productionRunId,
     );
-      }),
+      },
     );
   } catch (error) {
     if (isPgCheckViolation(error, END_AFTER_START_CONSTRAINT)) {
@@ -844,157 +839,29 @@ export async function updateProductionRun(
     throw error;
   }
 
-  return getProductionRunById(ctx, productionRunId);
+  return getProductionRunById(ctx, productionRunId, tx);
 }
 
-/**
- * Delete a production run
- * Will fail if the run has dependent biochar products or credit batches.
- */
-export async function deleteProductionRun(
+export { deleteProductionRunInTransaction, deleteProductionRun, ProductionRunDependencyError } from "./delete";
+
+/** Compatibility entry points for internal callers that own no transaction. */
+export async function createProductionRun(
   ctx: OrgContext,
-  productionRunId: string
-): Promise<void> {
+  data: Parameters<typeof createProductionRunInTransaction>[2],
+  options: ProductionRunMutationOptions = {},
+): Promise<ProductionRunWithRelations> {
   requireOrgScope(ctx);
+  assertProductionRunTimesNotFuture(data, options.now ?? new Date());
+  return db.transaction((tx) => createProductionRunInTransaction(ctx, tx, data, options));
+}
 
-  // Verify run exists
-  const [existing] = await db
-    .select({
-      id: productionRuns.id,
-      biocharStorageLocationId: productionRuns.biocharStorageLocationId,
-    })
-    .from(productionRuns)
-    .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Production run not found");
-  }
-  const existingFeedstockStorageLocationIds =
-    await getProductionRunFeedstockDrawStorageIds(ctx, db, productionRunId);
-
-  // Run all four deletes in one transaction so the child-row deletes roll back
-  // if the final productionRuns delete fails. Foreign-key constraints remain
-  // the race-safe backstop for dependent records; without the transaction the
-  // removable children would already be gone, leaving a half-deleted run.
-  await db.transaction(async (tx) => {
-    await lockBinStocks(ctx, tx, [
-      ...existingFeedstockStorageLocationIds,
-      existing.biocharStorageLocationId,
-    ]);
-
-    const [locked] = await tx
-      .select({
-        id: productionRuns.id,
-        biocharOutputKg: productionRuns.biocharOutputKg,
-        biocharStorageLocationId: productionRuns.biocharStorageLocationId,
-      })
-      .from(productionRuns)
-      .where(and(
-        eq(productionRuns.id, productionRunId),
-        eq(productionRuns.organizationId, ctx.organizationId),
-      ))
-      .for("update");
-
-    if (!locked) {
-      throw new SafeError("Production run not found");
-    }
-    const lockedFeedstockStorageLocationIds =
-      await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
-    assertProductionRunStockSnapshot(
-      {
-        feedstockStorageLocationIds: existingFeedstockStorageLocationIds,
-        biocharStorageLocationId: existing.biocharStorageLocationId,
-      },
-      {
-        feedstockStorageLocationIds: lockedFeedstockStorageLocationIds,
-        biocharStorageLocationId: locked.biocharStorageLocationId,
-      },
-      {
-        feedstockDraws: existingFeedstockStorageLocationIds.map(
-          (storageLocationId) => ({ storageLocationId }),
-        ),
-        biocharOutputKg: locked.biocharOutputKg,
-      },
-    );
-
-    await assertCanMutateCertifiedLineage(
-      ctx,
-      tx,
-      { entityType: "productionRun", entityId: productionRunId },
-      "delete",
-    );
-
-    const dependentProduct = await getProductionRunDependentProduct(
-      ctx,
-      tx,
-      productionRunId,
-    );
-    const [dependentCreditBatch] = await tx
-      .select({ id: creditBatches.id, code: creditBatches.code })
-      .from(creditBatchProductionRuns)
-      .innerJoin(
-        creditBatches,
-        and(
-          eq(creditBatchProductionRuns.creditBatchId, creditBatches.id),
-          eq(creditBatches.organizationId, ctx.organizationId),
-        ),
-      )
-      .where(and(
-        eq(creditBatchProductionRuns.productionRunId, productionRunId),
-        eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
-      ))
-      .limit(1);
-
-    if (dependentProduct || dependentCreditBatch) {
-      const dependentKinds = [
-        dependentProduct ? "biochar products" : null,
-        dependentCreditBatch ? "credit batches" : null,
-      ].filter((kind): kind is string => kind != null);
-      const dependent = dependentProduct
-        ? { entity: "biocharProduct", ...dependentProduct }
-        : { entity: "creditBatch", ...dependentCreditBatch! };
-      const conflict = { ...dependent, code: conflictCode(dependent.code) };
-      throw new ProductionRunDependencyError(
-        `This production run cannot be deleted because dependent ${dependentKinds.join(" and ")} exist. Remove those records first.`,
-        conflict,
-      );
-    }
-
-    const productionIncidents = await tx
-      .select({ id: incidentReports.id })
-      .from(incidentReports)
-      .where(
-        and(
-          eq(incidentReports.productionRunId, productionRunId),
-          eq(incidentReports.organizationId, ctx.organizationId),
-        ),
-      );
-    await tx
-      .delete(productionRunFeedstocks)
-      .where(and(eq(productionRunFeedstocks.productionRunId, productionRunId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
-
-    await tx
-      .delete(productionRunFeedstockDraws)
-      .where(and(eq(productionRunFeedstockDraws.productionRunId, productionRunId), eq(productionRunFeedstockDraws.organizationId, ctx.organizationId)));
-
-    await tx
-      .delete(productionRunReadings)
-      .where(and(eq(productionRunReadings.productionRunId, productionRunId), eq(productionRunReadings.organizationId, ctx.organizationId)));
-
-    await tx
-      .delete(incidentReports)
-      .where(and(eq(incidentReports.productionRunId, productionRunId), eq(incidentReports.organizationId, ctx.organizationId)));
-
-    await tx
-      .delete(productionRuns)
-      .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
-    await retireDocumentsForEntities(ctx, tx, [
-      { entityType: "production_run", entityId: productionRunId },
-      ...productionIncidents.map((incident) => ({
-        entityType: "production_incident" as const,
-        entityId: incident.id,
-      })),
-    ]);
-  });
-  await processPendingStorageObjectDeletions(ctx);
+export async function updateProductionRun(
+  ctx: OrgContext,
+  id: string,
+  data: Parameters<typeof updateProductionRunInTransaction>[3],
+  options: ProductionRunMutationOptions = {},
+): Promise<ProductionRunWithRelations> {
+  requireOrgScope(ctx);
+  assertProductionRunTimesNotFuture({ startTime: data.startTime, endTime: data.endTime }, options.now ?? new Date());
+  return db.transaction((tx) => updateProductionRunInTransaction(ctx, tx, id, data, options));
 }

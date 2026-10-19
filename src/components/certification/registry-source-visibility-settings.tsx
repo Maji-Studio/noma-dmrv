@@ -101,7 +101,7 @@ function RegistrySourceVisibilityForm({
         id="registry-source-visibility"
         label="Default visibility"
         error={errors.sourceVisibility?.message}
-        helperText="Applies to new Sources across the organization."
+        cue="Applies to new Sources across the organization."
       >
         <FormSelect
           id="registry-source-visibility"

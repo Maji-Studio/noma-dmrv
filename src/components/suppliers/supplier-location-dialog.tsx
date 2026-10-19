@@ -13,6 +13,7 @@ import {
 } from "@/hooks/use-suppliers";
 import type { SupplierLocation } from "@/db/schema/parties";
 import { toSaveErrorMessage } from "@/lib/stale-version";
+import { facilityDistanceChanges } from "@/lib/facility-distance-changes";
 import type { SupplierLocationFormData } from "@/schemas/suppliers";
 import { SupplierLocationForm } from "./supplier-location-form";
 
@@ -27,6 +28,8 @@ interface SupplierLocationDialogProps {
   onClose: () => void;
   supplierId: string;
   location?: SupplierLocation;
+  /** True when the party has no saved locations yet, so "default" starts checked. */
+  isFirstLocation?: boolean;
 }
 
 // ============================================
@@ -38,6 +41,7 @@ export function SupplierLocationDialog({
   onClose,
   supplierId,
   location,
+  isFirstLocation = false,
 }: SupplierLocationDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const createLocation = useCreateSupplierLocation();
@@ -59,11 +63,14 @@ export function SupplierLocationDialog({
           locationId: location.id,
           // The version the dialog opened on, so a concurrent edit is refused
           // instead of silently overwritten (#768).
-          expectedUpdatedAt: location.updatedAt,
+          expectedVersion: location.version,
           ...data,
+          facilityDistances: facilityDistanceChanges(data.facilityDistances, location.facilityDistances),
         });
       } else {
-        await createLocation.mutateAsync({ supplierId, ...data });
+        await createLocation.mutateAsync({ supplierId, ...data,
+          facilityDistances: facilityDistanceChanges(data.facilityDistances),
+        });
       }
       handleClose();
     } catch (err) {
@@ -95,6 +102,7 @@ export function SupplierLocationDialog({
       <SupplierLocationForm
         idPrefix={SUPPLIER_LOCATION_DIALOG_ID_PREFIX}
         location={location}
+        initialIsDefault={isFirstLocation}
         onSubmit={handleSubmit}
         onCancel={handleClose}
         isSubmitting={

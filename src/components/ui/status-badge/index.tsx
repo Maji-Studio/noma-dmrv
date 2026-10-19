@@ -11,7 +11,7 @@ import * as React from "react"
  * Status Badge Component
  *
  * Color-coded status badge component with variants for:
- * - Production run status: draft, running, complete, failed, cancelled
+ * - Production run status: running, complete, failed, cancelled
  * - Delivery status: delivered
  * - Application status: delivered, applied
  * - Credit batch status: draft, pending, verified, issued, rejected
@@ -43,12 +43,16 @@ const statusBadgeVariants = cva(
 
 // Status display labels (maps status value to human-readable text)
 const statusLabels = {
+  active: "Active",
+  disabled: "Disabled",
+  expired: "Expired",
   draft: "Draft",
   superseded: "Superseded",
   running: "Running",
   complete: "Complete",
   failed: "Failed",
   cancelled: "Cancelled",
+  archived: "Archived",
   void: "Void",
   method_a: "Method A",
   method_b: "Method B",
@@ -58,6 +62,7 @@ const statusLabels = {
   ready: "Ready",
   sold: "Sold",
   pending: "Pending",
+  missing_data: "Missing data",
   verified: "Verified",
   issued: "Issued",
   rejected: "Rejected",

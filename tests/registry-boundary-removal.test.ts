@@ -1,4 +1,6 @@
-import {
+import { insertRemovalFixture } from "./helpers/removal-fixture";
+import { reviewedTemplateSources } from "./helpers/template-line-sources";
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -39,6 +41,11 @@ import {
  * tests/certification-submissions.test.ts.
  */
 import { beforeAll, afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", async (importOriginal) =>
+  (await import("./fixtures/fake-registry")).fakeCredentialsModule(importOriginal),
+);
+
 import { eq, inArray } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
@@ -66,7 +73,10 @@ vi.mock(
 vi.mock("@/fn/certification/ensure-evidence-ledgers", () => ({
   ensureEvidenceLedgersFromContext: vi.fn(async () => undefined),
 }));
-vi.mock("@/fn/certification/sources", () => ({
+vi.mock("@/fn/certification/source-candidates", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@/fn/certification/source-candidates")
+  >()),
   collectCandidateDocumentIdsForRemoval: vi.fn(async () => [
     "doc-boundary-1",
   ]),
@@ -77,6 +87,8 @@ vi.mock("@/fn/certification/sources", () => ({
   resolveSourceBindingCandidates: vi.fn(async () => [
     { ...makeBoundarySourceDocument(), sourceId: "src-boundary-1" },
   ]),
+}));
+vi.mock("@/fn/certification/sources-mirror-core", () => ({
   // submitRemoval mirrors pending candidates before compiling the strict
   // artifact; the boundary fixtures already resolve every candidate, so the
   // mirror is a no-op here.
@@ -97,7 +109,8 @@ import { productionProcesses } from "@/db/schema/production-processes";
 import type { CertifierProjectRow } from "@/data-access/certification";
 import { discardLocalRemovalDraft } from "@/data-access/certifier-removals";
 import * as certifyContext from "@/fn/certification/certify-context-core";
-import * as sources from "@/fn/certification/sources";
+import * as sources from "@/fn/certification/source-candidates";
+import * as sourcesMirror from "@/fn/certification/sources-mirror-core";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { SafeError } from "@/lib/errors";
 import {
@@ -192,7 +205,7 @@ async function createFixture(): Promise<Fixture> {
   const isometricFeedstockTypeId = `${ISOMETRIC_FEEDSTOCK_TYPE_ID}_${runId}`;
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Boundary Facility ${runId}`,
       code: `FAC-BD-${runId}`,
@@ -201,16 +214,14 @@ async function createFixture(): Promise<Fixture> {
     .returning({ id: facilities.id });
   createdFacilityIds.push(facility.id);
   await db.insert(certifierProjects).values({
+    externalFacilityId: `fcl_test_${facility.id}`,
     organizationId: TEST_ORG_ID,
     facilityId: facility.id,
     provider: "isometric",
     externalProjectId,
     defaultRemovalTemplateId: TEMPLATE_ID,
   });
-  const [removal] = await db
-    .insert(certifierRemovals)
-    .values({ organizationId: TEST_ORG_ID, facilityId: facility.id, provider: "isometric" })
-    .returning({ id: certifierRemovals.id });
+  const [removal] = await insertRemovalFixture(db, { organizationId: TEST_ORG_ID, facilityId: facility.id, provider: "isometric" });
   createdRemovalIds.push(removal.id);
   // A real member credit batch (with its FK chain): the §8.6.2 claim stamp
   // inside the REAL markSubmissionSubmitted is rowcount-backstopped, so the
@@ -243,6 +254,7 @@ async function createFixture(): Promise<Fixture> {
       startDate: "2026-01-01",
       endDate: "2026-01-31",
       certifier: "isometric",
+      removalTemplateId: makeTemplate().id,
     })
     .returning({ id: creditBatches.id });
   createdBatchIds.push(batch.id);
@@ -266,6 +278,7 @@ async function createFixture(): Promise<Fixture> {
 function makeMapping(fixture: Fixture): CertifierProjectRow {
   return {
     id: "cert-proj-boundary",
+    externalFacilityId: `fcl_test_${fixture.facilityId}`,
     facilityId: fixture.facilityId,
     provider: "isometric",
     externalProjectId: fixture.externalProjectId,
@@ -274,7 +287,6 @@ function makeMapping(fixture: Fixture): CertifierProjectRow {
     defaultRemovalTemplateId: TEMPLATE_ID,
     webhookSecret: null,
     metadata: null,
-    gensetEnergyYieldKwhPerLitre: 3.375,
     defaultSoilTemperatureC: 24.2,
     defaultSoilTemperatureSource: "Test dataset (annual mean)",
     createdAt: new Date(),
@@ -355,6 +367,7 @@ function makeContext(
     legIds: [],
     firstLegEntityId: null,
     aggregationWarning: null,
+    vehicleAdvisories: [],
   };
   return {
     facilityId: fixture.facilityId,
@@ -364,12 +377,15 @@ function makeContext(
     reportingWindowCompletedOn: null,
     mapping: makeMapping(fixture),
     project: { id: fixture.externalProjectId, name: "Boundary project" } as never,
-    defaultTemplate: makeTemplate(),
-    missingDefaultTemplateId: null,
+    removalTemplate: makeTemplate(),
+    templateBlockers: [],
+    lineSources: reviewedTemplateSources(makeTemplate()),
     blueprintsForTemplate: makeBlueprints(),
+    unbindableTemplateInputs: [],
     unresolvedBlueprintKeys: [],
     memberBatches: [{
       id: fixture.creditBatchId,
+      removalTemplateId: makeTemplate().id,
       code: "CB-BD-001",
       startDate: "2026-07-01",
       endDate: "2026-07-31",
@@ -394,6 +410,8 @@ function makeContext(
     },
     requiredTransportCategories: [],
     hasSubmittableRuns: true,
+    submissionLineageBlockers: [],
+    durabilityConfigurationBlockers: [],
     entityReadinessGaps: [],
     // Eligible run, ≥3 in-spec replicates → no D3 blockers (mirrors what
     // buildRemovalContext would precompute; submitRemoval blocks on this field).
@@ -405,7 +423,6 @@ function makeContext(
     runSummary: {
       runCount: 1,
       totalBiocharOutputKg: biocharMassKg,
-      deliveryBiocharOutputKg: biocharMassKg,
       appliedDryKg: biocharMassKg,
     },
     latestSubmission: null,
@@ -441,7 +458,6 @@ function makeContext(
         creditBatchCode: "CB-BD-001",
         facilityTimezone: "UTC",
         sampling: "sampled",
-        declaredHToCorgRatio: null,
         durabilityOption: "200_year" as const,
         runs: [{ id: PRODUCTION_RUN_ID, code: "PR-BD-1", biocharDryMassKg: biocharMassKg }],
         samples: makeRun(biocharMassKg).samples,
@@ -570,7 +586,7 @@ describe("submitRemoval boundary — discard interlock", () => {
     const mirrorRelease = new Promise<void>((resolve) => {
       releaseMirror = resolve;
     });
-    vi.mocked(sources.mirrorCandidateSourcesForSubmission).mockImplementationOnce(
+    vi.mocked(sourcesMirror.mirrorCandidateSourcesForSubmission).mockImplementationOnce(
       async () => {
         signalMirrorEntered?.();
         await mirrorRelease;

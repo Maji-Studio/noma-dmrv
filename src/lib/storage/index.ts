@@ -70,4 +70,4 @@ export type {
   StoredObject,
 } from "./types";
 export { StorageError } from "./types";
-export { buildStorageKey, extractExtension, isSafeStorageKey } from "./keys";
+export { buildUploadKey, buildFinalStorageKey, buildStorageKey, extractExtension, isSafeStorageKey } from "./keys";

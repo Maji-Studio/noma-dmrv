@@ -51,7 +51,7 @@ available, skip this practice and report `no spec available`.
 ## Deep Correctness
 
 Apply the base branch's `.greptile/rules.md`, scoped rules from
-`.greptile/config.json`, `CONTEXT.md`, and the canonical files selected from
+`.greptile/config.json`, `GLOSSARY.md`, and the canonical files selected from
 `.greptile/files.json`.
 
 Trace changed behavior through callers, validation, server actions,

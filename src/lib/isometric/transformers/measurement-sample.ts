@@ -10,8 +10,9 @@
  *   - soil temp → a `biochar_soil` sample, property `{temperature}`, the
  *     facility's operator-declared reference value (Phase 2 / ADR 0013).
  *
- * The measurement properties, blueprint keys, and units below were confirmed by
- * the live coverage-check (plan §4, sandbox template rvt_1KS4S43VPSBXA26X).
+ * The measurement properties and units below were confirmed by the live
+ * coverage-check (plan §4, sandbox template rvt_1KS4S43VPSBXA26X). Blueprint
+ * keys and durability-tier selection live in `../storage-blueprints.ts`.
  *
  * ─── ⚠️ SANDBOX-GATED — keep the 200-year path behind this confirm ───────────
  *   The H/C ×100 UNIT TRANSFORM — the blueprint declares `h_c_molar_ratios`
@@ -33,9 +34,12 @@ import type {
   PerBatchDurabilityDatapoint,
   ValueWithStdDev,
 } from "../utils/durability-aggregation";
-import type { CreditBatchSampling } from "@/schemas/credit-batches";
 import { CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS } from "@/schemas/samples";
 import { SafeError } from "@/lib/errors";
+import {
+  SEQUESTRATION_BLUEPRINT_SAMPLED,
+  unboundStorageInputTransform,
+} from "../storage-blueprints";
 
 type CreateMeasurementSampleRequest =
   components["schemas"]["CreateMeasurementSampleRequest"];
@@ -56,113 +60,6 @@ export const SOIL_TEMPERATURE_MEASUREMENT_PROPERTY: IsometricMeasurementProperty
     quantity_kind: "temperature",
     qualifier: null,
   };
-
-/** Sampled-batch sequestration blueprint (registry takes the mean of the list). */
-export const SEQUESTRATION_BLUEPRINT_SAMPLED =
-  "biochar_sequestration_200_year_c_org";
-
-/** Unsampled-batch (Method B) blueprint (registry uses a Winsorized mean ± SE). */
-export const SEQUESTRATION_BLUEPRINT_UNSAMPLED =
-  "biochar_sequestration_200_year_unsampled";
-
-/** Historical three-input component. Read/reconciliation only; never select it for a new template. */
-export const DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR =
-  "biochar_sequestration_1000_year";
-
-/** Current sampled 1,000-year component with paired total/inorganic carbon lists. */
-export const CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR =
-  "biochar_sequestration_1000_year_f_durable_max";
-
-/** Method-B 1,000-year component. Noma deliberately does not support this path. */
-export const UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR =
-  "biochar_sequestration_1000_year_unsampled";
-
-export const SEQUESTRATION_1000_YEAR_COMPONENT_CONTRACTS = {
-  deprecated: {
-    blueprintKey: DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-    inputKeys: ["carbon_contents", "product_mass", "s_fraction"],
-  },
-  current: {
-    blueprintKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-    inputKeys: [
-      "total_carbon_contents",
-      "inorganic_carbon_contents",
-      "s_fraction",
-      "product_mass",
-    ],
-  },
-} as const;
-
-export type Sequestration1000YearComponentClassification =
-  | "current"
-  | "deprecated"
-  | "unsupported-unsampled"
-  | null;
-
-export function classifySequestration1000YearComponent(
-  blueprintKey: string,
-): Sequestration1000YearComponentClassification {
-  if (blueprintKey === CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR) {
-    return "current";
-  }
-  if (blueprintKey === DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR) {
-    return "deprecated";
-  }
-  if (blueprintKey === UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR) {
-    return "unsupported-unsampled";
-  }
-  return null;
-}
-
-/**
- * Every sequestration blueprint key we recognise (200-year sampled + Method-B
- * unsampled, and 1000-year). These components are NOT fed by the legacy
- * aggregation→datapoint loop — `resolveTemplateInputs` and
- * `buildCreateGhgEntryRequest` skip them (see `isSequestrationBlueprintFamily`),
- * and the measurement-samples step carries their inputs instead. `submitRemoval`
- * uses this set to detect a durability template and apply the environment/path
- * availability gate.
- */
-export const SEQUESTRATION_BLUEPRINT_KEYS: ReadonlySet<string> = new Set([
-  SEQUESTRATION_BLUEPRINT_SAMPLED,
-  SEQUESTRATION_BLUEPRINT_UNSAMPLED,
-  CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-  DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-]);
-
-export function isSequestrationBlueprintKey(blueprintKey: string): boolean {
-  return SEQUESTRATION_BLUEPRINT_KEYS.has(blueprintKey);
-}
-
-/**
- * Prefix predicate recognising ANY biochar sequestration blueprint — including a
- * future/unknown variant we don't yet carry inputs for. `resolveTemplateInputs`
- * skips every sequestration component with this (not the datapoint loop, which
- * would throw a misleading missing-INPUT_MAPPING error); the submit-time
- * template↔tier guard then fails closed on any component NOT in the facility
- * tier's expected set (`expectedSequestrationBlueprintKeys`).
- */
-export function isSequestrationBlueprintFamily(blueprintKey: string): boolean {
-  return blueprintKey.startsWith("biochar_sequestration_");
-}
-
-/**
- * A facility's durability tier → the sequestration blueprint key(s) its Isometric
- * removal template must carry (ADR 0021). 200-year has two (lab-sampled +
- * Method-B unsampled); 1000-year has one. The submit-time guard rejects a
- * template whose sequestration component is outside this set for the facility
- * tier, with an actionable "re-author the template / change the tier" message.
- */
-export function expectedSequestrationBlueprintKeys(
-  tier: "200_year" | "1000_year",
-): ReadonlySet<string> {
-  return tier === "1000_year"
-    ? new Set([CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR])
-    : new Set([
-        SEQUESTRATION_BLUEPRINT_SAMPLED,
-        SEQUESTRATION_BLUEPRINT_UNSAMPLED,
-      ]);
-}
 
 /** Blueprint unit for `h_c_molar_ratios`. */
 export const H_C_MOLAR_RATIO_UNIT = "%";
@@ -212,10 +109,11 @@ export const PRODUCT_MASS_UNIT = "kg";
  * input is a 0–1 mass fraction (mirrors the legacy `carbon_content /100`
  * transform). ⚠️ Sandbox-gated — confirm the declared unit before the live flip.
  */
-export const CARBON_CONTENT_FRACTION_SCALE = 1 / 100;
-
 export function toCarbonContentFraction(percent: number): number {
-  return percent * CARBON_CONTENT_FRACTION_SCALE;
+  return unboundStorageInputTransform(
+    SEQUESTRATION_BLUEPRINT_SAMPLED,
+    "total_carbon_contents",
+  ).apply(percent);
 }
 
 // ── ⚠️ Sandbox-gated H/C unit transform (confirm #2) ─────────────────────────
@@ -225,26 +123,11 @@ export function toCarbonContentFraction(percent: number): number {
  * dimensionless molar ratio (~0.5). ×100 is the most likely transform but is
  * UNCONFIRMED against the sandbox — keep the live submit path behind this.
  */
-export const H_C_MOLAR_RATIO_PERCENT_SCALE = 100;
-
 export function toHcMolarRatioPercent(ratio: number): number {
-  return ratio * H_C_MOLAR_RATIO_PERCENT_SCALE;
-}
-
-// ── D6 blueprint selection — the blueprint IS the Method A/B distinction ──────
-
-/**
- * Select the sequestration blueprint for a batch: a lab-sampled batch submits to
- * the `_c_org` blueprint; an unsampled batch (only valid under Method B, where
- * the registry derives its carbon + durable fraction from historically sampled
- * batches) submits to `_unsampled` (D6).
- */
-export function selectSequestrationBlueprintKey(args: {
-  sampling: CreditBatchSampling;
-}): string {
-  return args.sampling === "sampled"
-    ? SEQUESTRATION_BLUEPRINT_SAMPLED
-    : SEQUESTRATION_BLUEPRINT_UNSAMPLED;
+  return unboundStorageInputTransform(
+    SEQUESTRATION_BLUEPRINT_SAMPLED,
+    "h_c_molar_ratios",
+  ).apply(ratio);
 }
 
 // ── Measurement-sample body builders ─────────────────────────────────────────
@@ -405,9 +288,9 @@ export function buildBiocharUnsampledBatchSample(args: {
 // and caps the calculated durable fraction at 0.95. Each request represents one
 // independently analysed Sample; product mass travels as one direct Datapoint.
 //
-// The explicit datapoint↔input binding is implemented in
-// `sequestration-binding.ts` from the verified Certify response/component
-// contract. The sandbox-only feature flag remains the operator kill-switch.
+// The explicit datapoint↔input binding is declared in the semantic binding
+// catalog (`../semantic-binding-catalog.ts`) from the verified Certify
+// response/component contract. The sandbox-only feature flag remains the operator kill-switch.
 
 /** Total carbon content, dry basis — the current `total_carbon_contents` list input. */
 export const TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY: IsometricMeasurementProperty =

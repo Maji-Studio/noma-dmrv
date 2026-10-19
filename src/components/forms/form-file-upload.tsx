@@ -342,6 +342,9 @@ export function FormFileUpload({
         multiple={multiple}
         disabled={disabled}
         className="sr-only"
+        // The drop zone button above opens this input, so the input itself
+        // stays out of the tab order: otherwise it is a second, invisible stop.
+        tabIndex={-1}
         onChange={(e) => {
           handleFiles(e.target.files);
           if (deferred) e.target.value = "";

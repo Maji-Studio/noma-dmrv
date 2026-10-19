@@ -14,13 +14,13 @@ export const SUPPLIERS = [
 ] as const;
 export const SUPPLIER_LOCATION = {
   name: "Mafinga Airport source", country: "Tanzania", stateRegion: "Iringa", city: "Mafinga",
-  gpsLatitude: -8.32, gpsLongitude: 35.29, isDefault: true, distanceSource: "manual",
+  gpsLatitude: -8.32, gpsLongitude: 35.29, isDefault: true,
 } as const;
 export const CUSTOMER = { name: "Demo Mbeya Coffee Farm", cropType: "Coffee" };
 export const CUSTOMER_LOCATION = {
   name: "Demo coffee field", country: "Tanzania", stateRegion: "Mbeya", city: "Mbeya",
-  gpsLatitude: -8.91, gpsLongitude: 33.46, distanceFromFacilityKm: 240,
-  distanceSource: "manual", isDefault: true,
+  gpsLatitude: -8.91, gpsLongitude: 33.46, distanceKm: 240,
+  isDefault: true,
 } as const;
 export const FORMULATION = { name: "Chicken manure 50/50", biocharPercent: 50, ingredientPercent: 50 };
 export const DELIVERIES = [
@@ -48,12 +48,12 @@ export const PRODUCT_DATES = ["2026-09-15", "2026-09-18"] as const;
 export const PRODUCT_TIME = "10:00";
 /** The manure intake reads 30%; the operator measures the same for the ingredient added. */
 export const PRODUCT = { biocharWetKg: 300, ingredientWetKg: 300, ingredientMoisturePercent: 30, moisturePercent: 10, waterAddedKg: 0 };
-export const ORDER = { date: "2026-09-20", quantityKg: 1000, packaging: "loose", currency: "TZS" } as const;
+export const ORDER = { date: "2026-09-20", quantityKg: 1000, packaging: "loose" } as const;
 export const SHIPMENT = { date: "2026-09-22", time: "09:00", wetMassKg: 1000, moisturePercent: 20 };
 export const EQUIPMENT = {
   reactor: { identifier: "Mafinga reactor 1", reactorType: "batch", nominalThroughputTph: 0.125 },
   driver: { name: "Demo driver" }, operator: { name: "Demo operator" },
-  vehicle: { name: "Demo truck", identifier: "DEMO-MAFINGA", vehicleType: "truck", fuelType: "diesel", fuelConsumptionLPerKm: 0.3 },
+  vehicle: { name: "Demo truck", identifier: "DEMO-MAFINGA", vehicleType: "truck", fuelType: "Diesel", fuelConsumptionLPerKm: 0.3 },
 } as const;
 export const PERIOD = { start: "2026-09-01", end: "2026-09-30" };
 export const CSV = { intervalMinutes: 5, minutesPerHour: 60, hours: 8, millisecondsPerMinute: 60_000, temperatureC: 550, temperatureSwingC: 15, pressureBar: 1.02, pressureSwingBar: 0.01, oscillationRows: 6 };

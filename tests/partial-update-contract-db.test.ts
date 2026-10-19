@@ -1,10 +1,14 @@
+import { supplierLocationFacilityDistances } from "@/db/schema";
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
+import { TEST_SITE_POSITION } from "./helpers/test-org";
+import { masterDataVersion } from "./helpers/master-data-version";
 /**
  * The partial-update contract against the real database (issue #770).
  *
  *  - `updateFeedstockType` judges the merged category/usage pair, so a patch
  *    naming only one half cannot land a combination the form would reject.
  *  - `updateFeedstock` owns the dry mass: a moisture-only edit re-derives it,
- *    and a client-supplied figure that disagrees is refused instead of
+ *    and a client-supplied figure is stripped instead of
  *    persisting an impossible wet/moisture/dry triple.
  *  - An unrelated feedstock edit leaves a manually entered transport distance
  *    on the derived leg alone.
@@ -24,13 +28,13 @@ import {
   organizations,
   storageLocations,
   suppliers,
+  supplierLocations,
   transportLegs,
   users,
 } from "@/db/schema";
-import { updateFeedstock } from "@/data-access/feedstocks";
+import { updateFeedstock } from "@/lib/operations/feedstocks";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import { updateFeedstockType } from "@/data-access/feedstock-types";
-import { resolveDistanceSource } from "@/schemas/distance-source";
-import { updateFeedstockSchema } from "@/schemas/feedstocks";
 import type { OrgContext } from "@/lib/auth/server";
 
 const INTAKE_WET_KG = 100;
@@ -45,8 +49,6 @@ const SUPPLIER_DISTANCE_KM = 42;
 const CATEGORY_USAGE_MESSAGE =
   "Feedstock type was not saved because its category and usage disagree. " +
   "Review Category and Usage.";
-const MASS_DISAGREEMENT_MESSAGE =
-  "Feedstock was not saved because its mass values disagree. Review wet mass and moisture.";
 
 const ORG_PREFIX = "e2e-patch-contract-org-";
 
@@ -84,7 +86,7 @@ async function seedFixture(): Promise<Fixture> {
 
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId,
       code: `E2E-PC-F-${tag}`,
       name: `E2E Patch contract ${tag}`,
@@ -108,10 +110,14 @@ async function seedFixture(): Promise<Fixture> {
       organizationId,
       code: `E2E-PC-S-${tag}`,
       name: `E2E Patch contract supplier ${tag}`,
-      distanceToFacilityKm: SUPPLIER_DISTANCE_KM,
-      distanceSource: "manual" as const,
     })
     .returning({ id: suppliers.id });
+
+  const [sourceLocation] = await db.insert(supplierLocations).values({
+    organizationId, supplierId: supplier.id, ...TEST_SITE_POSITION,
+    isDefault: true,
+  }).returning();
+  await db.insert(supplierLocationFacilityDistances).values({ organizationId, locationId: sourceLocation.id, facilityId: facility.id, distanceKm: SUPPLIER_DISTANCE_KM, distanceSource: "manual" });
 
   const [bin] = await db
     .insert(storageLocations)
@@ -128,7 +134,7 @@ async function seedFixture(): Promise<Fixture> {
 
   const [feedstock] = await db
     .insert(feedstocks)
-    .values({
+    .values(await feedstockFixtureValues(db, {
       organizationId,
       code: `E2E-PC-FS-${tag}`,
       facilityId: facility.id,
@@ -139,7 +145,7 @@ async function seedFixture(): Promise<Fixture> {
       massWetKg: INTAKE_WET_KG,
       moistureContentPercent: INTAKE_MOISTURE_PERCENT,
       storageLocationId: bin.id,
-    })
+    }))
     .returning({ id: feedstocks.id });
 
   return {
@@ -163,46 +169,30 @@ async function cleanup(fixture: Fixture): Promise<void> {
       "feedstocks",
       "storage_locations",
       "feedstock_types",
+      "supplier_locations",
       "suppliers",
       "facilities",
     ]) {
       await tx.execute(
         sql`delete from ${sql.identifier(table)} where organization_id = ${organizationId}`,
       );
+      if (table === "feedstocks") await cleanupFeedstockFixtureParents(tx);
     }
     await tx.delete(organizations).where(eq(organizations.id, organizationId));
     await tx.delete(users).where(eq(users.id, fixture.ctx.userId));
   });
+  await cleanupFeedstockFixtureParents(db);
 }
 
-/**
- * Mirror `updateFeedstockFn`: parse the patch with the action schema, then
- * hand the rest to data access. Going through the schema is the point — the
- * omitted-vs-cleared distinction is established there.
- */
+/** Exercise the same operation and decoder as the in-process action. */
 async function applyFeedstockPatch(
   fixture: Fixture,
   input: Record<string, unknown>,
 ) {
-  const {
-    feedstockId,
-    transportDistanceKm,
-    transportDistanceSource,
-    transportTripType,
-    ...updateData
-  } = updateFeedstockSchema.parse({
+  return runOperationInProcess(updateFeedstock, fixture.ctx, {
     feedstockId: fixture.feedstockId,
+    expectedVersion: (await db.select({ version: feedstocks.version }).from(feedstocks).where(eq(feedstocks.id, fixture.feedstockId)))[0].version,
     ...input,
-  });
-
-  return updateFeedstock(fixture.ctx, feedstockId, {
-    ...updateData,
-    transportDistanceKm,
-    transportDistanceSource: resolveDistanceSource(
-      transportDistanceKm,
-      transportDistanceSource,
-    ),
-    transportTripType,
   });
 }
 
@@ -254,7 +244,7 @@ describe("partial-update contract (database)", () => {
     // "forestry" is a pyrolysis category, so flipping usage alone to blend
     // leaves the row in a combination the create form would reject.
     await expect(
-      updateFeedstockType(fixture.ctx, {
+      updateFeedstockType(fixture.ctx, { expectedVersion: await masterDataVersion(fixture.ctx, "feedstockTypes", fixture.feedstockTypeId),
         feedstockTypeId: fixture.feedstockTypeId,
         usage: "blend",
       }),
@@ -270,7 +260,7 @@ describe("partial-update contract (database)", () => {
     fixture = await seedFixture();
 
     await expect(
-      updateFeedstockType(fixture.ctx, {
+      updateFeedstockType(fixture.ctx, { expectedVersion: await masterDataVersion(fixture.ctx, "feedstockTypes", fixture.feedstockTypeId),
         feedstockTypeId: fixture.feedstockTypeId,
         category: "compost",
       }),
@@ -284,7 +274,7 @@ describe("partial-update contract (database)", () => {
   it("accepts a patch that moves both halves of the pair together", async () => {
     fixture = await seedFixture();
 
-    await updateFeedstockType(fixture.ctx, {
+    await updateFeedstockType(fixture.ctx, { expectedVersion: await masterDataVersion(fixture.ctx, "feedstockTypes", fixture.feedstockTypeId),
       feedstockTypeId: fixture.feedstockTypeId,
       category: "compost",
       usage: "blend",
@@ -300,7 +290,7 @@ describe("partial-update contract (database)", () => {
     fixture = await seedFixture();
     const renamed = `E2E Patch contract renamed ${fixture.tag}`;
 
-    await updateFeedstockType(fixture.ctx, {
+    await updateFeedstockType(fixture.ctx, { expectedVersion: await masterDataVersion(fixture.ctx, "feedstockTypes", fixture.feedstockTypeId),
       feedstockTypeId: fixture.feedstockTypeId,
       name: renamed,
     });
@@ -326,31 +316,28 @@ describe("partial-update contract (database)", () => {
     });
   });
 
-  it("refuses a dry mass that disagrees with the wet mass and moisture", async () => {
-    fixture = await seedFixture();
-
-    await expect(
-      applyFeedstockPatch(fixture, {
-        massWetKg: INTAKE_WET_KG,
-        moistureContentPercent: REVISED_MOISTURE_PERCENT,
-        massDryKg: DISAGREEING_DRY_KG,
-      }),
-    ).rejects.toThrow(MASS_DISAGREEMENT_MESSAGE);
-
-    expect(await readFeedstockMasses(fixture)).toMatchObject({
-      massWetKg: INTAKE_WET_KG,
-      moistureContentPercent: INTAKE_MOISTURE_PERCENT,
-      massDryKg: INTAKE_DRY_KG,
-    });
-  });
-
-  it("accepts a dry mass that agrees with the derivation", async () => {
+  it("ignores client-supplied dry mass through the in-process operation", async () => {
     fixture = await seedFixture();
 
     await applyFeedstockPatch(fixture, {
       massWetKg: INTAKE_WET_KG,
       moistureContentPercent: REVISED_MOISTURE_PERCENT,
+      massDryKg: DISAGREEING_DRY_KG,
+    });
+
+    expect(await readFeedstockMasses(fixture)).toMatchObject({
+      massWetKg: INTAKE_WET_KG,
+      moistureContentPercent: REVISED_MOISTURE_PERCENT,
       massDryKg: REVISED_DRY_KG,
+    });
+  });
+
+  it("derives dry mass when wet mass and moisture change", async () => {
+    fixture = await seedFixture();
+
+    await applyFeedstockPatch(fixture, {
+      massWetKg: INTAKE_WET_KG,
+      moistureContentPercent: REVISED_MOISTURE_PERCENT,
     });
 
     expect(await readFeedstockMasses(fixture)).toMatchObject({

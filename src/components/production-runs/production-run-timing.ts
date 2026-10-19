@@ -18,13 +18,13 @@ import {
   NonexistentLocalTimeError,
   facilityTimeHelperText,
 } from "@/lib/date-utils";
-import { makeProductionRunFormSchema } from "@/schemas/production-runs";
+import { makeProductionRunFormSchema, type ProductionRunStatus } from "@/schemas/production-runs";
 
 /** date-fns pattern matching what `<input type="time">` accepts and emits. */
 export const TIME_INPUT_FORMAT = "HH:mm";
 
-export const buildProductionRunResolver = (timeZone: string) =>
-  zodResolver(makeProductionRunFormSchema(timeZone));
+export const buildProductionRunResolver = (timeZone: string, savedStatus?: ProductionRunStatus) =>
+  zodResolver(makeProductionRunFormSchema(timeZone, undefined, savedStatus));
 
 export type ProductionRunResolver = ReturnType<typeof buildProductionRunResolver>;
 
@@ -166,7 +166,7 @@ export function buildProductionRunWindow(input: {
  *
  * `ProductionRunWithRelations` does not carry the facility's zone, so editing a
  * run whose facility is missing from the context list falls back to
- * `DEFAULT_FACILITY_TIMEZONE`. That fallback is stated in the UI rather
+ * `UNKNOWN_FACILITY_TIMEZONE`. That fallback is stated in the UI rather
  * than applied silently — a silently-wrong default is what caused QA F-2.
  */
 export function productionRunTimezoneHelperText(

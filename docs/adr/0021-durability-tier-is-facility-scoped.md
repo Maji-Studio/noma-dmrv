@@ -15,7 +15,7 @@ pre-filled an independently-editable per-batch toggle.
 
 - **Per production process (physically correct).** Tier eligibility is set by
   feedstock + pyrolysis conditions — exactly the boundary of a *production
-  process* (CONTEXT.md) — so a facility running a high-temperature coffee-husk
+  process* (GLOSSARY.md) — so a facility running a high-temperature coffee-husk
   process (1000-year-capable) and a woodchip process (200-year) could differ.
   Rejected as **too complex to manage** for the current product stage.
 - **Per credit batch (the prior model).** Maximum flexibility, but nothing tied

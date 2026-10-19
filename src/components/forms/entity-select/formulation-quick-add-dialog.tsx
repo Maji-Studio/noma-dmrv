@@ -21,13 +21,13 @@ import type { EntityOption } from "./types";
 interface FormulationQuickAddDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (entity: EntityOption) => void;
+  onSuccess?: (entity: EntityOption) => void;
 }
 
 export function FormulationQuickAddDialog({
   isOpen,
   onClose,
-  onSuccess,
+  onSuccess = () => undefined,
 }: FormulationQuickAddDialogProps) {
   const { error, isSubmitting, handleSubmit } = useQuickAddSubmit<FormulationFormData>({
     entityType: "formulation",

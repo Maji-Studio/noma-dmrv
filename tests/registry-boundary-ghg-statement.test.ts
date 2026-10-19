@@ -1,4 +1,5 @@
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { insertRemovalFixture } from "./helpers/removal-fixture";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Boundary tests for the GHG Statement create pipeline against the fake
  * registry. The orphan-reconciliation boundary cases live in the focused
@@ -21,6 +22,11 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
  * tests/certification-submissions.test.ts.
  */
 import { beforeAll, afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", async (importOriginal) =>
+  (await import("./fixtures/fake-registry")).fakeCredentialsModule(importOriginal),
+);
+
 import { eq, inArray } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
@@ -143,10 +149,11 @@ async function createFixture(
   const externalProjectId = `prj_ggs_bd_${runId}`;
   const [facility] = await db
     .insert(facilities)
-    .values({ organizationId: TEST_ORG_ID, name: `GGS Boundary Facility ${runId}`, code: `FAC-GB-${runId}` })
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, name: `GGS Boundary Facility ${runId}`, code: `FAC-GB-${runId}` })
     .returning({ id: facilities.id });
   createdFacilityIds.push(facility.id);
   await db.insert(certifierProjects).values({
+    externalFacilityId: `fcl_test_${facility.id}`,
     organizationId: TEST_ORG_ID,
     facilityId: facility.id,
     provider: "isometric",
@@ -159,10 +166,7 @@ async function createFixture(
     // facility's open removals — an already-submitted removal (latest ledger
     // row carries an externalId) completed inside the window. Seed one so
     // creates get past the guard to the registry boundary under test.
-    const [removal] = await db
-      .insert(certifierRemovals)
-      .values({ organizationId: TEST_ORG_ID, facilityId: facility.id, completedOn: IN_WINDOW_COMPLETED_ON })
-      .returning({ id: certifierRemovals.id });
+    const [removal] = await insertRemovalFixture(db, { organizationId: TEST_ORG_ID, facilityId: facility.id, completedOn: IN_WINDOW_COMPLETED_ON });
     removalId = removal.id;
     externalRemovalId = `rmv_ggs_bd_${runId}`;
     await db.insert(certificationSubmissions).values({

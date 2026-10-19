@@ -1,0 +1,33 @@
+/* Station line drawings (ContourArt.astro), shared by TraceStage and the home hero. The owner sets size and
+   colour; an ancestor's .is-plotting draws the contour in once, and .is-active runs the loop overlays
+   written into each SVG by scripts/export-contours.mjs. The overlays fade in as the plot finishes: trucks
+   roll (wheel spokes turn, the lane line scrolls past at the same speed, about 2 m/s), the kiln smokes,
+   grains fall into the hoppers and the bag, the spreader's granules drift. Lengths are SVG user units
+   (the lane dash period is one metre). Loops run only under .is-active: every loop's animation shorthand
+   ends in --contour-play (a plain animation-play-state rule would lose to the shorthands, which reset it). */
+.contour-art { --dur-plot: 1400ms; --ease-draw: linear; --contour-play: paused; }
+.is-active .contour-art { --contour-play: running; }
+.contour-art svg { display: block; width: 100%; height: 100%; }
+.is-plotting .contour-art .contour { stroke-dasharray: 1; animation: contour-plot var(--dur-plot) var(--ease-draw) both; }
+@keyframes contour-plot { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+
+.contour-art :is(.fx-kerb, .fx-lane, .fx-spin, .fx-stream, .fx-smoke, .fx-spray) { opacity: 0; transition: opacity var(--dur-base) var(--ease-out); }
+.is-active .contour-art :is(.fx-kerb, .fx-lane, .fx-spin, .fx-stream, .fx-smoke, .fx-spray) { opacity: 1; transition-delay: calc(var(--dur-plot) * 0.6); }
+.is-active .contour-art .fx-kerb { opacity: 0.5; }
+.contour-art .fx-lane { stroke-dasharray: 14 12; animation: contour-lane 0.5s linear infinite var(--contour-play); }
+.contour-art .fx-spin { vector-effect: non-scaling-stroke; stroke-width: 1.6; transform-box: view-box; transform-origin: 0 0; animation: contour-spin 2.2s linear infinite var(--contour-play); }
+.contour-art .fx-stream { stroke-width: 3; stroke-dasharray: 0 9; animation: contour-fall 0.5s linear infinite var(--contour-play); }
+.contour-art .fx-smoke circle { vector-effect: non-scaling-stroke; transform-box: fill-box; transform-origin: center; animation: contour-puff 3s linear infinite var(--contour-play); }
+.contour-art .fx-smoke circle:nth-child(2) { animation-delay: -1s; }
+.contour-art .fx-smoke circle:nth-child(3) { animation-delay: -2s; }
+.contour-art .fx-spray > * { stroke-width: 2; animation: contour-spray 1.6s linear infinite var(--contour-play); }
+.contour-art .fx-spray > use { animation-delay: -0.8s; }
+@keyframes contour-lane { to { stroke-dashoffset: 26; } }
+@keyframes contour-spin { to { transform: rotate(-360deg); } }
+@keyframes contour-fall { to { stroke-dashoffset: -9; } }
+@keyframes contour-puff { 0% { transform: translate(0, 0) scale(0.4); opacity: 0; } 15% { opacity: 0.8; } 100% { transform: translate(12px, -64px) scale(2.2); opacity: 0; } }
+@keyframes contour-spray { 0% { transform: translate(-4px, -4px); opacity: 0; } 25% { opacity: 1; } 100% { transform: translate(6px, 8px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .contour-art * { animation: none !important; }
+  .contour-art .fx-smoke { display: none; }
+}

@@ -33,7 +33,6 @@ function batch(
     samples,
     runs: [],
     sampling: "sampled",
-    declaredHToCorgRatio: null,
     durabilityOption: "200_year",
   };
 }
@@ -63,6 +62,28 @@ describe("buildDurabilityGates facility-local sampling day", () => {
     expect(result.blockers).toContain(
       "Sample SAM-1 was taken on 2026-01-14, before credit batch CB-1's production window, 2026-01-15 to 2026-01-31. Correct the Sample date before submitting (§8.3.1).",
     );
+  });
+});
+
+describe("buildDurabilityGates paired submission (Q54)", () => {
+  it("names the loaded Sample whose H/C_org would be submitted without O/C_org", () => {
+    const adverse = {
+      ...sample("SAM-4", "2026-01-20T08:00:00.000Z", "run-4"),
+      hToCOrgRatio: 1.2,
+      oToCOrgRatio: null,
+    } as Sample;
+    const result = buildDurabilityGates([
+      batch("UTC", [
+        sample("SAM-1", "2026-01-20T08:00:00.000Z", "run-1"),
+        adverse,
+        sample("SAM-2", "2026-01-20T08:00:00.000Z", "run-2"),
+        sample("SAM-3", "2026-01-20T08:00:00.000Z", "run-3"),
+      ]),
+    ]);
+
+    expect(result.blockers).toEqual([
+      "Credit batch CB-1 has 1 Sample with H/C_org but no O/C_org: SAM-4. Eligibility is judged only on Samples with both ratios, so this H/C_org goes unchecked. Record the O/C_org or correct the Sample before submitting.",
+    ]);
   });
 });
 

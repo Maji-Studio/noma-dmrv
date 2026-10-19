@@ -1,7 +1,12 @@
+import { assertProtectedChangesLocked, changesProtectedStorageLocationField, lockStorageLocationRecordsWithoutWaiting, readStorageLocationRecordLock } from './storage-location-record-lock';
+import { assertRecordLockFields } from '@/lib/record-lock-fields';
 /**
  * Storage Locations Data Access Layer
  * CRUD operations for storage locations with auth guards, pagination, and filtering
  */
+
+import { lockFormulationReference } from "./formulation-reference-guards";
+import { lockActiveFacilityReference } from "./facility-reference-guards";
 
 import { and, asc, desc, eq, ilike, isNotNull, isNull, or, sql, SQL, count } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -21,7 +26,7 @@ import {
   type StorageLocationSortKey,
   type StorageLocationType,
 } from "@/schemas/storage-locations";
-import { assertExpectedVersion } from "./expected-version";
+import { assertRowVersion, nextVersion } from "./row-version";
 import { storageLocationLastActivityAt } from "./storage-location-activity";
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
@@ -35,8 +40,10 @@ import {
 } from "./bin-stock-guards";
 import { laneForStorageType } from "@/schemas/bin-movements";
 import { assertBinIdentityChangeAllowed } from "./storage-location-identity-guards";
+import { layersHoldMaterial } from "@/lib/output-stock";
+import { readOutputBinAllLayers } from "./output-stock";
 import { applyStockModeChange, initialStockMode } from "./output-bin-stock-mode";
-import type { OutputStockMode } from "@/lib/output-stock/stock-mode";
+import type { OutputDrawOrder, OutputStockMode } from "@/lib/output-stock/stock-mode";
 import {
   countStorageLocationReferences,
   storageLocationBlockers,
@@ -167,13 +174,14 @@ export async function getStorageLocations(
       capacityKg: storageLocations.capacityKg,
       storageMethod: storageLocations.storageMethod,
       storageDescription: storageLocations.storageDescription,
-      supplierReferenceId: storageLocations.supplierReferenceId,
       feedstockTypeId: storageLocations.feedstockTypeId,
       formulationId: storageLocations.formulationId,
       stockMode: storageLocations.stockMode,
+      drawOrder: storageLocations.drawOrder,
       facilityId: storageLocations.facilityId,
       archivedAt: storageLocations.archivedAt,
       createdAt: storageLocations.createdAt,
+      version: storageLocations.version,
       updatedAt: storageLocations.updatedAt,
       facilityCode: facilities.code,
       facilityName: facilities.name,
@@ -264,13 +272,14 @@ export async function getStorageLocationWithFacility(
       capacityKg: storageLocations.capacityKg,
       storageMethod: storageLocations.storageMethod,
       storageDescription: storageLocations.storageDescription,
-      supplierReferenceId: storageLocations.supplierReferenceId,
       feedstockTypeId: storageLocations.feedstockTypeId,
       formulationId: storageLocations.formulationId,
       stockMode: storageLocations.stockMode,
+      drawOrder: storageLocations.drawOrder,
       facilityId: storageLocations.facilityId,
       archivedAt: storageLocations.archivedAt,
       createdAt: storageLocations.createdAt,
+      version: storageLocations.version,
       updatedAt: storageLocations.updatedAt,
       facilityCode: facilities.code,
       facilityName: facilities.name,
@@ -328,80 +337,67 @@ export async function createStorageLocation(
     feedstockTypeId?: string | null;
     formulationId?: string | null;
     stockMode?: OutputStockMode;
+    drawOrder?: OutputDrawOrder;
     storageMethod?: string | null;
     storageDescription?: string | null;
-    supplierReferenceId?: string | null;
   }
 ): Promise<StorageLocation> {
   requireOrgScope(ctx);
 
-  // Verify facility exists and is active (no new children under an archived parent)
-  const [facility] = await db
-    .select({ id: facilities.id })
-    .from(facilities)
-    .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)));
+  return db.transaction(async (tx) => {
+    await lockActiveFacilityReference(ctx, tx, data.facilityId);
 
-  if (!facility) {
-    throw new SafeError("Facility not found or archived");
-  }
+    if (data.feedstockTypeId) {
+      const [feedstockType] = await tx
+        .select({ id: feedstockTypes.id })
+        .from(feedstockTypes)
+        .where(and(eq(feedstockTypes.id, data.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
 
-  if (data.feedstockTypeId) {
-    const [feedstockType] = await db
-      .select({ id: feedstockTypes.id })
-      .from(feedstockTypes)
-      .where(and(eq(feedstockTypes.id, data.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
-
-    if (!feedstockType) {
-      throw new SafeError("Feedstock type not found");
+      if (!feedstockType) {
+        throw new SafeError("Feedstock type not found");
+      }
     }
-  }
 
-  // The Zod create schema enforces this for form/fn flows; repeat it here so
-  // direct data-access callers (seeds, scripts) can't create a bin the update
-  // path's invariant check would then refuse to touch.
-  if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
-    throw new SafeError(
-      "Feedstock bins must be restricted to one feedstock type"
+    // The Zod create schema enforces this for form/fn flows; repeat it here so
+    // direct data-access callers (seeds, scripts) can't create a bin the update
+    // path's invariant check would then refuse to touch.
+    if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
+      throw new SafeError(
+        "Feedstock bins must be restricted to one feedstock type"
+      );
+    }
+
+    // A formulation only makes sense on a product bin; ignore it for other types.
+    const formulationId = data.type === "product_bin" ? data.formulationId ?? null : null;
+    if (formulationId) {
+      await lockFormulationReference(ctx, tx, formulationId);
+    }
+
+    const [storageLocation] = await guardStorageLocationName(ctx, data.name, () =>
+      tx
+        .insert(storageLocations)
+        .values({
+          organizationId: ctx.organizationId,
+          code: data.code,
+          name: data.name,
+          type: data.type,
+          facilityId: data.facilityId,
+          capacityKg: data.capacityKg ?? null,
+          // Only meaningful on feedstock bins, like formulationId below.
+          feedstockTypeId: isFeedstockBinType(data.type)
+            ? data.feedstockTypeId ?? null
+            : null,
+          formulationId,
+          stockMode: initialStockMode(data.type, data.stockMode),
+          drawOrder: data.drawOrder ?? "oldest_first",
+          storageMethod: data.storageMethod ?? null,
+          storageDescription: data.storageDescription ?? null,
+        })
+        .returning()
     );
-  }
 
-  // A formulation only makes sense on a product bin; ignore it for other types.
-  const formulationId = data.type === "product_bin" ? data.formulationId ?? null : null;
-  if (formulationId) {
-    const [formulation] = await db
-      .select({ id: formulations.id })
-      .from(formulations)
-      .where(and(eq(formulations.id, formulationId), eq(formulations.organizationId, ctx.organizationId)));
-
-    if (!formulation) {
-      throw new SafeError("Formulation not found");
-    }
-  }
-
-  const [storageLocation] = await guardStorageLocationName(ctx, data.name, () =>
-    db
-      .insert(storageLocations)
-      .values({
-        organizationId: ctx.organizationId,
-        code: data.code,
-        name: data.name,
-        type: data.type,
-        facilityId: data.facilityId,
-        capacityKg: data.capacityKg ?? null,
-        // Only meaningful on feedstock bins, like formulationId below.
-        feedstockTypeId: isFeedstockBinType(data.type)
-          ? data.feedstockTypeId ?? null
-          : null,
-        formulationId,
-        stockMode: initialStockMode(data.type, data.stockMode),
-        storageMethod: data.storageMethod ?? null,
-        storageDescription: data.storageDescription ?? null,
-        supplierReferenceId: data.supplierReferenceId ?? null,
-      })
-      .returning()
-  );
-
-  return storageLocation;
+    return storageLocation;
+  });
 }
 
 // ============================================
@@ -457,12 +453,12 @@ export async function updateStorageLocation(
     formulationId?: string | null;
     /** Split to mix posts a merge at `mergedAt`; mix to split needs an empty bin. */
     stockMode?: OutputStockMode;
+    drawOrder?: OutputDrawOrder;
     mergedAt?: Date;
     storageMethod?: string | null;
     storageDescription?: string | null;
-    supplierReferenceId?: string | null;
-    /** `updatedAt` the edit form loaded; refuses a save built on a stale read. */
-    expectedUpdatedAt?: Date;
+    /** `version` the edit form loaded; refuses a save built on a stale read. */
+    expectedVersion: number;
   }
 ): Promise<StorageLocation> {
   requireOrgScope(ctx);
@@ -470,8 +466,15 @@ export async function updateStorageLocation(
   return db.transaction(async (tx) => {
     // Read before locking: `lockBinStock` reports an archived bin in stock
     // vocabulary, and an edit needs the restore instruction instead.
-    await readEditableStorageLocation(ctx, tx, storageLocationId);
+    const preview = await readEditableStorageLocation(ctx, tx, storageLocationId);
     await lockBinStock(ctx, tx, storageLocationId);
+    // Lane or scope changes must not land under a Sent lineage, so they hold
+    // its artifacts (taken without waiting) to commit. Free-field saves take
+    // no artifact locks and keep the advisory Sent refusal.
+    const lineageLocked = changesProtectedStorageLocationField(preview, data);
+    const recordLock = lineageLocked
+      ? await lockStorageLocationRecordsWithoutWaiting(ctx, tx, storageLocationId)
+      : await readStorageLocationRecordLock(ctx, tx, storageLocationId);
     // `FOR UPDATE` on the bin row itself: the advisory lock above serializes
     // stock writes, but archive and restore change `updatedAt` without taking
     // it, so only the row lock makes the version check below race-free.
@@ -481,12 +484,15 @@ export async function updateStorageLocation(
       storageLocationId,
       { forUpdate: true },
     );
-    assertExpectedVersion({
+    assertRowVersion({
       entity: STORAGE_LOCATION_CONFLICT_ENTITY,
       id: storageLocationId,
-      expectedUpdatedAt: data.expectedUpdatedAt,
-      actualUpdatedAt: existing.updatedAt,
+      expectedVersion: data.expectedVersion,
+      actualVersion: existing.version,
     });
+    assertProtectedChangesLocked(lineageLocked, existing, data);
+
+    if (recordLock.level === 'sent') assertRecordLockFields(recordLock, existing, data);
 
     // If code is being changed, check for duplicates
     if (data.code && data.code !== existing.code) {
@@ -549,9 +555,11 @@ export async function updateStorageLocation(
       ? effectiveFeedstockTypeId ?? null
       : null;
 
-    // These two columns select the bin's material lane, so a stocked bin keeps
-    // the setup its recorded stock and history were written against. The guard
-    // compares the two identities itself and returns when neither moved.
+    // These columns select the bin's material lane and facility scope, so a
+    // stocked bin keeps the setup its recorded stock and history were written
+    // against. The guard compares the identities itself and returns when none
+    // moved. The update action no longer carries facilityId; this data-access
+    // input keeps it so any future caller still meets the guard.
     await assertBinIdentityChangeAllowed(
       ctx,
       tx,
@@ -559,10 +567,12 @@ export async function updateStorageLocation(
         id: storageLocationId,
         type: existing.type as StorageLocationType,
         feedstockTypeId: existing.feedstockTypeId,
+        facilityId: existing.facilityId,
       },
       {
         type: effectiveType as StorageLocationType,
         feedstockTypeId: normalizedFeedstockTypeId,
+        facilityId: data.facilityId ?? existing.facilityId,
       },
     );
 
@@ -573,15 +583,8 @@ export async function updateStorageLocation(
             : existing.formulationId) ?? null
         : null;
 
-    if (normalizedFormulationId) {
-      const [formulation] = await tx
-        .select({ id: formulations.id })
-        .from(formulations)
-        .where(and(eq(formulations.id, normalizedFormulationId), eq(formulations.organizationId, ctx.organizationId)));
-
-      if (!formulation) {
-        throw new SafeError("Formulation not found");
-      }
+    if (normalizedFormulationId && normalizedFormulationId !== existing.formulationId) {
+      await lockFormulationReference(ctx, tx, normalizedFormulationId);
     }
 
     // Don't let a product bin's formulation be re-pointed while it still holds
@@ -608,12 +611,14 @@ export async function updateStorageLocation(
       }
     }
 
+    assertRecordLockFields(recordLock, existing, data);
     const stockMode = await applyStockModeChange(ctx, tx, existing, { type: effectiveType as StorageLocationType, stockMode: data.stockMode, mergedAt: data.mergedAt });
 
-    const dataWithoutNormalized = { ...data };
+    const dataWithoutNormalized: Partial<typeof data> = { ...data };
+    delete dataWithoutNormalized.expectedVersion;
     delete dataWithoutNormalized.formulationId;
     delete dataWithoutNormalized.feedstockTypeId;
-    delete dataWithoutNormalized.expectedUpdatedAt;
+
     delete dataWithoutNormalized.stockMode;
     delete dataWithoutNormalized.mergedAt;
     // A rename OR a facility move can collide with the per-facility name index.
@@ -625,6 +630,7 @@ export async function updateStorageLocation(
           .update(storageLocations)
           .set({
             ...dataWithoutNormalized,
+            version: nextVersion(storageLocations.version),
             feedstockTypeId: normalizedFeedstockTypeId,
             formulationId: normalizedFormulationId,
             stockMode,
@@ -654,20 +660,28 @@ export async function updateStorageLocation(
 // Archive Operations
 // ============================================
 
+function archiveResidualMaterialMessage(code: string): string {
+  return `Cannot archive storage bin ${code} while it still holds material. Record a stock count of zero to clear what is left, then archive it.`;
+}
+
 /**
  * Archive one storage bin without disturbing its operational history.
  */
 export async function archiveStorageLocation(
   ctx: OrgContext,
   storageLocationId: string,
+  expectedVersion: number,
 ): Promise<StorageLocation> {
   requireOrgScope(ctx);
 
   return db.transaction(async (tx) => {
     await lockBinStock(ctx, tx, storageLocationId);
+
     const [existing] = await tx
       .select({
+        version: storageLocations.version,
         id: storageLocations.id,
+        code: storageLocations.code,
         type: storageLocations.type,
         archivedAt: storageLocations.archivedAt,
       })
@@ -677,32 +691,39 @@ export async function archiveStorageLocation(
           eq(storageLocations.id, storageLocationId),
           eq(storageLocations.organizationId, ctx.organizationId),
         ),
-      );
+      ).for("update");
 
     if (!existing) {
       throw new SafeError("Storage bin not found");
     }
+    assertRowVersion({ entity: STORAGE_LOCATION_CONFLICT_ENTITY, id: storageLocationId, expectedVersion, actualVersion: existing.version });
     if (existing.archivedAt) {
       throw new SafeError("Storage bin is already archived");
     }
 
     const lane = laneForStorageType(existing.type);
-    const availableKg = await deriveBinLaneAvailableKg(
-      ctx,
-      tx,
-      storageLocationId,
-      lane,
-    );
+    // Output bins read their layers once: the dry biochar balance, and whether
+    // ingredient solids outlast a 0.000 kg balance (a zero count clears both).
+    const outputState =
+      lane === "feedstock"
+        ? null
+        : await readOutputBinAllLayers(ctx, storageLocationId, tx);
+    const availableKg = outputState
+      ? Number(outputState.allLayersDryKg)
+      : await deriveBinLaneAvailableKg(ctx, tx, storageLocationId, lane);
     if (hasNonZeroStock(availableKg)) {
       throw new SafeError(
-        `Cannot archive this storage bin while it has ${formatKg(availableKg)} on hand. Reconcile or draw the bin down to zero first.`,
+        `Cannot archive storage bin ${existing.code} while it has ${formatKg(availableKg)} on hand. Reconcile or draw the bin down to zero first.`,
       );
+    }
+    if (outputState && layersHoldMaterial(outputState.layers)) {
+      throw new SafeError(archiveResidualMaterialMessage(existing.code));
     }
 
     const archivedAt = new Date();
     const [archived] = await tx
       .update(storageLocations)
-      .set({ archivedAt, updatedAt: archivedAt })
+      .set({ version: nextVersion(storageLocations.version), archivedAt, updatedAt: archivedAt })
       .where(
         and(
           eq(storageLocations.id, storageLocationId),
@@ -726,12 +747,15 @@ export async function archiveStorageLocation(
 export async function restoreStorageLocation(
   ctx: OrgContext,
   storageLocationId: string,
+  expectedVersion: number,
 ): Promise<StorageLocation> {
   requireOrgScope(ctx);
 
   return db.transaction(async (tx) => {
+
     const [existing] = await tx
       .select({
+        version: storageLocations.version,
         id: storageLocations.id,
         archivedAt: storageLocations.archivedAt,
         facilityArchivedAt: facilities.archivedAt,
@@ -755,6 +779,7 @@ export async function restoreStorageLocation(
     if (!existing) {
       throw new SafeError("Storage bin not found");
     }
+    assertRowVersion({ entity: STORAGE_LOCATION_CONFLICT_ENTITY, id: storageLocationId, expectedVersion, actualVersion: existing.version });
     if (!existing.archivedAt) {
       throw new SafeError("Storage bin is not archived");
     }
@@ -766,7 +791,7 @@ export async function restoreStorageLocation(
 
     const [restored] = await tx
       .update(storageLocations)
-      .set({ archivedAt: null, updatedAt: new Date() })
+      .set({ version: nextVersion(storageLocations.version), archivedAt: null, updatedAt: new Date() })
       .where(
         and(
           eq(storageLocations.id, storageLocationId),
@@ -794,33 +819,33 @@ export async function restoreStorageLocation(
  */
 export async function deleteStorageLocation(
   ctx: OrgContext,
-  storageLocationId: string
+  storageLocationId: string,
+  expectedVersion: number
 ): Promise<void> {
   requireOrgScope(ctx);
+  return db.transaction(async (tx) => {
+    const [versioned] = await tx.select({ version: storageLocations.version })
+      .from(storageLocations)
+      .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
+      .for("update");
+    if (!versioned) throw new SafeError("Storage bin not found");
+    assertRowVersion({ entity: STORAGE_LOCATION_CONFLICT_ENTITY, id: storageLocationId, expectedVersion, actualVersion: versioned.version });
 
-  // Verify storage bin exists
-  const [existing] = await db
-    .select({ id: storageLocations.id })
-    .from(storageLocations)
-    .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Storage bin not found");
-  }
-
-  const blockers = storageLocationBlockers(
-    await countStorageLocationReferences(ctx, db, storageLocationId),
-  );
-
-  if (blockers.length > 0) {
-    throw new SafeError(
-      `Cannot delete this storage bin while it has ${blockers.join(", ")}. Move or remove those records first.`
+    const blockers = storageLocationBlockers(
+      await countStorageLocationReferences(ctx, tx, storageLocationId),
     );
-  }
 
-  await db
-    .delete(storageLocations)
-    .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
+    if (blockers.length > 0) {
+      throw new SafeError(
+        `Cannot delete this storage bin while it has ${blockers.join(", ")}. Move or remove those records first.`
+      );
+    }
+
+    await tx
+      .delete(storageLocations)
+      .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
+
+  });
 }
 
 // ============================================

@@ -1,0 +1,42 @@
+---
+/**
+ * WhyIntro: the /why hero. A statement (carbon removal runs on trust), who noma is built for (id "who",
+ * Home links to it) and, on the right, the page index: the five principles from WHY_PRINCIPLES, numbered,
+ * each linking to its section. No props.
+ */
+import { WHY_PRINCIPLES } from "../../../config.js";
+import GridFrame from "../GridFrame.astro";
+import Button from "../Button.astro";
+import "./why.css";
+const AUDIENCES = [
+  { name: "Biochar producers", role: "Prove what you produced" },
+  { name: "Carbon and MRV managers", role: "Report with nothing missing" },
+  { name: "Verifiers", role: "Check any figure at its source" },
+];
+---
+<GridFrame class="why-intro" pad="none" flush aria-labelledby="page-title">
+  <div class="why-intro-in">
+    <div class="why-intro-copy">
+      <p class="t-category">Why noma</p>
+      <h1 id="page-title" class="t-display why-intro-title">Carbon removal runs on trust. We build for it.</h1>
+      <p class="t-lead">A removal is only as credible as the records behind it. Five principles shape every part of noma, and you can check each one yourself.</p>
+      <div id="who" class="why-for">
+        <h2 class="why-for-label">Built for</h2>
+        <ul class="why-for-list">
+          {AUDIENCES.map((a) => (
+            <li><span class="why-for-name">{a.name}</span><span class="why-for-role">{a.role}</span></li>
+          ))}
+        </ul>
+      </div>
+      <Button href="/get-started">Book a walkthrough</Button>
+    </div>
+    <nav class="why-index" aria-label="Principles">
+      <p class="why-index-head">Five principles</p>
+      <ol class="why-index-list">
+        {WHY_PRINCIPLES.map((p, i) => (
+          <li><a href={`#${p.id}`}><span class="why-index-n">{i + 1}</span><span class="why-index-label">{p.label}</span></a></li>
+        ))}
+      </ol>
+    </nav>
+  </div>
+</GridFrame>

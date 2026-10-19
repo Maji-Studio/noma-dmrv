@@ -70,8 +70,9 @@ export async function assertSameOrg(
 export async function requireOrgFacility(
   ctx: OrgContext,
   facilityId: string,
+  executor: Executor = db,
 ): Promise<void> {
-  await assertSameOrg(ctx, facilities, facilityId);
+  await assertSameOrg(ctx, facilities, facilityId, executor);
 }
 
 /** "credit_batches" → "Credit batch" — user-facing entity name for errors. */

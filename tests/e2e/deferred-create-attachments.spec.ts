@@ -76,6 +76,8 @@ async function fillMinimalFeedstock(
     seededData.feedstockType.id,
     seededData.feedstockType.name,
   );
+  // The seeded supplier location has no facility distance: enter one as an override.
+  await page.getByRole("button", { name: "Override the one-way distance" }).click();
   await page.fill('input[name="transportDistanceKm"]', "40");
   await page.fill('input[name="totalWetMassKg"]', "100");
   await page.fill('input[name="moisturePercent"]', "25");
@@ -149,7 +151,7 @@ test.describe("Deferred create attachments", () => {
     await expect(dialog.getByText("Drop files here or click to upload")).toHaveCount(0);
   });
 
-  test("sample create attaches a lab report and a transport leg in the same Save", async ({
+  test("sample create attaches a lab report, reflectance histogram and transport leg in the same Save", async ({
     adminPage: page,
     seededData,
     cleanupTestData,
@@ -166,14 +168,23 @@ test.describe("Deferred create attachments", () => {
     const parentDialog = page.getByRole("dialog", { name: "Create Sample" });
 
     await selectFirstEntity(page, "Credit Batch");
+    const samplingTime = parentDialog.locator('input[name="samplingTime"]');
+    await expect(samplingTime).toBeEnabled();
+    await expect(samplingTime).toHaveValue("");
+    // This fixture's facility uses UTC.
+    await samplingTime.fill(new Date().toISOString().slice(0, 16));
     await page.fill('input[name="totalCarbonPercent"]', "75");
     await page.fill('input[name="organicCarbonPercent"]', "70");
 
-    // Deferred lab report.
+    // Deferred Sample evidence retains each selected classification.
     await parentDialog
       .locator("#sample-deferred-documents-upload")
       .setInputFiles(pdf("lab-report-deferred.pdf"));
     await expect(parentDialog.getByText("lab-report-deferred.pdf")).toBeVisible();
+    await parentDialog.getByRole("radio", { name: "Reflectance histogram" }).locator("..").click();
+    await expect(parentDialog.getByRole("radio", { name: "Reflectance histogram" })).toBeChecked();
+    await parentDialog.locator("#sample-deferred-documents-upload").setInputFiles(pdf("reflectance-histogram.pdf"));
+    await expect(parentDialog.getByText("reflectance-histogram.pdf")).toBeVisible();
 
     // Deferred transport leg via the nested dialog (no sample exists yet).
     await parentDialog
@@ -206,6 +217,15 @@ test.describe("Deferred create attachments", () => {
       timeout: 15000,
     });
     await expect(sampleDialog.getByText("12 km").first()).toBeVisible();
+    await expect(sampleDialog.getByText("reflectance-histogram.pdf")).toBeVisible();
+    const histogramEntry = sampleDialog.getByRole("listitem").filter({
+      has: page.getByText("reflectance-histogram.pdf", { exact: true }),
+    });
+    await expect(histogramEntry.getByText(/^Reflectance histogram ·/)).toBeVisible();
+    const labReportEntry = sampleDialog.getByRole("listitem").filter({
+      has: page.getByText("lab-report-deferred.pdf", { exact: true }),
+    });
+    await expect(labReportEntry.getByText(/^Lab report ·/)).toBeVisible();
     await expect(
       sampleDialog.getByLabel("Delete lab-report-deferred.pdf"),
     ).toHaveCount(0);

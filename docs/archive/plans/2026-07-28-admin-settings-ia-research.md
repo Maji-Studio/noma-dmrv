@@ -45,9 +45,11 @@ describe the app *before* them and are now history.
   (the three configuration surfaces), `docs/design-system.md` +
   `docs/code-style.md` (the spacing-scale gate).
 
-Still open, tracked in [`open-questions.md`](../open-questions.md):
-`tenancy/organization-rename`, `certification/credential-removal`,
-`tenancy/starter-feedstock-catalog`, `data-quality/plausibility-overrides`.
+Still open, tracked in Architecture open questions:
+[`tenancy/organization-rename`](../../open-questions-architecture.md#an-organization-cannot-be-renamed-tenancyorganization-rename-opened-2026-07-28),
+[`certification/credential-removal`](../../open-questions-architecture.md#registry-credentials-can-be-replaced-but-not-removed-certificationcredential-removal-opened-2026-07-28),
+[`tenancy/starter-feedstock-catalog`](../../open-questions-architecture.md#new-organizations-still-inherit-dark-earth-carbons-feedstock-catalog-tenancystarter-feedstock-catalog-opened-2026-07-28),
+[`data-quality/plausibility-overrides`](../../open-questions-architecture.md#adr-0026s-org-level-plausibility-overrides-are-unbuilt-data-qualityplausibility-overrides-opened-2026-07-28).
 Migration item 4's remaining half — one shared constant for
 `DEFAULT_LIST_PAGE_SIZE` versus the twelve schemas hardcoding `.default(20)`,
 and deriving `DEFAULT_MAP_CENTER` from the org's first facility — was **not**

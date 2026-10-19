@@ -1,0 +1,56 @@
+---
+/**
+ * AskSection: Home's "Ask your records." Three questions, one per audience (producers, carbon managers,
+ * verifiers), as three open cells. Each cell is the question, its answer drawn from illustrative records
+ * (AskAnswer) on the hatch, a line on how noma answers it, and a link deeper into /product or /why.
+ * The cells share subgrid rows, so the drawings and links line up across the row. One column under 900px.
+ * The registry note sits under the cells (submission is not available yet). No props.
+ */
+import GridFrame from "../GridFrame.astro";
+import TextLink from "../TextLink.astro";
+import AskAnswer from "./AskAnswer.astro";
+import "./ask-section.css";
+
+const REGISTRY_NOTE = "The registry workflow is being developed against Isometric’s data model. Production submission is not available yet.";
+const QUESTIONS = [
+  {
+    id: "bin", who: "Producers ask", title: "What’s in this bin?",
+    text: "Each draw comes off the bin’s stock as dry biochar, so the bin always shows what is left, layer by layer, and the water in it.",
+    link: "See bins and stock", href: "/product#bins",
+    alt: "Bin A after its last draw: 410 kg of dry biochar left, 170 kg placed on 10 September and 240 kg on 12 September, holding 72 kg of water. A dashed line marks the level before the draw.",
+  },
+  {
+    id: "missing", who: "Carbon managers ask", title: "What is this removal still missing?",
+    text: "Each removal lists the records and evidence behind it, and shows what is missing before you prepare a submission.",
+    link: "See evidence and reporting", href: "/product#evidence",
+    alt: "Removal on the coffee field, 270 kg of dry biochar applied. Traced to feedstock, moisture at every draw, transport counted both ways, and field boundary and photos are in place. The lab result for PR-002 is missing.",
+  },
+  {
+    id: "number", who: "Verifiers ask", title: "Where does this number come from?",
+    text: "Open any figure and follow it back: the weighbridge, the moisture, the share of each production run. The calculations are in the open-source code.",
+    link: "Read the code", href: "/why#open-source",
+    alt: "270 kg of dry biochar on the coffee field, followed back: delivery DL-001, 318 kg net less 15% moisture; biochar product BP-001, 270 of its 540 kg dry from the mix bin; 135 kg each from production runs PR-001 and PR-002.",
+  },
+];
+---
+<GridFrame class="ask" pad="none" flush aria-labelledby="ask-title">
+  <div class="ask-head">
+    <h2 id="ask-title" class="t-h2">Ask your records.</h2>
+    <div class="stack-tight">
+      <p class="t-lead">The plant records the work once. Producers, carbon managers and verifiers each get their answer from the same records.</p>
+      <TextLink href="/why#who">Who noma is for</TextLink>
+    </div>
+  </div>
+  <div class="gf-cells ask-cells" style="--cols:3">
+    {QUESTIONS.map((q) => (
+      <article aria-labelledby={`ask-${q.id}`}>
+        <p class="ask-who">{q.who}</p>
+        <h3 id={`ask-${q.id}`} class="t-h3">{q.title}</h3>
+        <div class="ask-art" role="img" aria-label={q.alt}><AskAnswer kind={q.id} /></div>
+        <p class="t-body t-muted">{q.text}</p>
+        <TextLink href={q.href}>{q.link}</TextLink>
+      </article>
+    ))}
+  </div>
+  <p class="t-caption ask-note">Illustrative records. {REGISTRY_NOTE}</p>
+</GridFrame>

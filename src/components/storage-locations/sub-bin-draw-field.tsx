@@ -1,6 +1,6 @@
 /**
  * Where a split-bin load came from, on the form itself: one collapsed line
- * ("Oldest first · Change") and, under it, a moisture reading per sub-bin the
+ * ("Oldest first · Change", or the bin's other default order) and, under it, a moisture reading per sub-bin the
  * load reaches. A row appears as the weight grows past the sub-bin before it.
  * Change opens the dialog that ticks and orders sub-bins; readings never go
  * there, so every required field stays visible and validated on the form.
@@ -18,6 +18,7 @@ import { STORED_PERCENT_INPUT_STEP } from "@/schemas/helpers";
 import type { OutputSubBin } from "@/types/output-stock";
 import { formatWetEstimate } from "./stock-preview-shared";
 import { SubBinOrderDialog } from "./sub-bin-order-dialog";
+import { OUTPUT_DRAW_ORDER_LABELS } from "@/schemas/storage-locations";
 import { Notice } from "@/components/ui/notice";
 
 const PERCENT_MAX = 100;
@@ -49,8 +50,9 @@ function readingError(raw: string | undefined, showErrors: boolean): string | un
 export function SubBinDrawField({ draw, timeZone, idPrefix, disabled, showErrors = false }: Props) {
   const [changing, setChanging] = useState(false);
   const byId = new Map(draw.subBins.map(subBin => [subBin.layerId, subBin]));
+  const defaultOrderLabel = OUTPUT_DRAW_ORDER_LABELS[draw.query.data?.drawOrder ?? "oldest_first"];
   // With one sub-bin there is no order to choose: the line names it.
-  const summary = draw.subBins.length === 1 ? draw.subBins[0].code : draw.order ? draw.ordered.map(s => s.code).join(" → ") : "Oldest first";
+  const summary = draw.subBins.length === 1 ? draw.subBins[0].code : draw.order ? draw.ordered.map(s => s.code).join(" → ") : defaultOrderLabel;
   return (
     <div className="space-y-16">
       <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
@@ -97,6 +99,7 @@ export function SubBinDrawField({ draw, timeZone, idPrefix, disabled, showErrors
         onClose={() => setChanging(false)}
         subBins={draw.subBins}
         order={draw.order}
+        defaultOrderLabel={defaultOrderLabel}
         onApply={draw.setOrder}
         timeZone={timeZone}
       />
@@ -126,7 +129,7 @@ function ReadingRow({ id, subBin, aside, raw, onChange, timeZone, disabled, show
         required
         error={error}
         warning={guidance.warning}
-        helperText={guidance.helperText}
+        cue={guidance.cue}
         hint={guidance.basisText ? <>{guidance.basisText} {MOISTURE_BASIS_HINT}</> : MOISTURE_BASIS_HINT}
         aside={aside}
       >

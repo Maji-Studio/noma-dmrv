@@ -1,3 +1,5 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 /**
  * Feedstock loss idempotency against a real database (issue #773).
  *
@@ -65,7 +67,7 @@ async function seedFeedstockBin() {
 
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId,
       code: `E2E-LOSS-F-${tag}`,
       name: `E2E Loss facility ${tag}`,
@@ -74,6 +76,7 @@ async function seedFeedstockBin() {
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId,
       code: `E2E-LOSS-T-${tag}`,
       name: `E2E Loss feedstock ${tag}`,
@@ -91,7 +94,7 @@ async function seedFeedstockBin() {
       type: "feedstock_bin",
     })
     .returning();
-  await db.insert(feedstocks).values({
+  await db.insert(feedstocks).values(await feedstockFixtureValues(db, {
     organizationId,
     facilityId: facility.id,
     feedstockTypeId: feedstockType.id,
@@ -100,7 +103,7 @@ async function seedFeedstockBin() {
     status: "complete",
     massDryKg: AVAILABLE_STOCK_KG,
     massWetKg: AVAILABLE_STOCK_KG,
-  });
+  }));
 
   mocks.ctx = {
     userId,
@@ -131,6 +134,7 @@ afterAll(async () => {
     await db
       .delete(feedstocks)
       .where(eq(feedstocks.organizationId, organizationId));
+    await cleanupFeedstockFixtureParents(db);
     await db
       .delete(storageLocations)
       .where(eq(storageLocations.organizationId, organizationId));
@@ -158,7 +162,7 @@ describe("feedstock loss idempotency", () => {
       lane: "feedstock" as const,
       idempotencyKey,
       reason: "Spoiled load",
-      lossMassKg: LOSS_KG,
+      occurredAt: "2026-10-15T10:00:00.000Z", lossMassKg: LOSS_KG,
     };
 
     const first = await recordLossFn(loss);
@@ -170,6 +174,9 @@ describe("feedstock loss idempotency", () => {
     if (!replay.success) return;
     expect(replay.data.id).toBe(first.data.id);
     expect(Number(replay.data.massDeltaKg)).toBe(-LOSS_KG);
+    expect(replay.data.occurredAt?.toISOString()).toBe(loss.occurredAt);
+    const changedTime = await recordLossFn({ ...loss, occurredAt: "2026-10-15T09:00:00.000Z" });
+    expect(changedTime).toMatchObject({ success: false, conflict: { entity: "storageLocation", id: binId } });
     expect(await movementsFor(organizationId, binId)).toHaveLength(1);
 
     const changed = await recordLossFn({ ...loss, lossMassKg: CHANGED_LOSS_KG });
@@ -196,14 +203,14 @@ describe("feedstock loss idempotency", () => {
       lane: "feedstock",
       idempotencyKey: randomUUID(),
       reason: "Transfer spill",
-      lossMassKg: LOSS_KG,
+      occurredAt: "2026-10-15T10:00:00.000Z", lossMassKg: LOSS_KG,
     });
     const second = await recordLossFn({
       storageLocationId: binId,
       lane: "feedstock",
       idempotencyKey: randomUUID(),
       reason: "Transfer spill",
-      lossMassKg: OTHER_LOSS_KG,
+      occurredAt: "2026-10-15T10:00:00.000Z", lossMassKg: OTHER_LOSS_KG,
     });
 
     expect(first.success).toBe(true);
@@ -225,7 +232,7 @@ describe("feedstock loss idempotency", () => {
       lane: "feedstock" as const,
       idempotencyKey: randomUUID(),
       reason: "Double submit",
-      lossMassKg: LOSS_KG,
+      occurredAt: "2026-10-15T10:00:00.000Z", lossMassKg: LOSS_KG,
     };
 
     const [left, right] = await Promise.all([

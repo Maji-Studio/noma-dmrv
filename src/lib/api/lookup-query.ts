@@ -1,0 +1,27 @@
+import type { ApiContext } from "@/lib/auth/api-context";
+import { decodeCursor, encodeCursor, type CursorPosition } from "./cursor";
+import { parseApiQuery } from "./query";
+import { DomainError } from "@/lib/domain-errors";
+import { API_TEXT_PATTERN } from "./input-text";
+import { canonicalUuid } from "./canonical-uuid";
+
+export { lookupListSchema, lookupGetSchema, facilityLookupListSchema, facilityLookupGetSchema, supplierLocationListSchema } from "./query-schemas";
+
+export function lookupIdentifier(idOrCode: string) {
+  if (!API_TEXT_PATTERN.test(idOrCode)) throw new DomainError("not_found", "Resource was not found.");
+  const id = canonicalUuid(idOrCode);
+  return id ? { id } : { code: idOrCode };
+}
+
+export async function readLookupPage<Filters extends Record<string, string | boolean | undefined>, Output>(
+  ctx: ApiContext, resource: string, query: { filters: Filters; limit: number; cursor?: string },
+  read: (ctx: ApiContext, query: { filters: Filters; limit: number; cursor?: CursorPosition }) => Promise<{ data: Output[]; nextPosition: CursorPosition | null }>,
+) {
+  const { limit, cursor, filters } = query;
+  const binding = { organizationId: ctx.organizationId, resource, filters };
+  const position = cursor === undefined ? undefined : decodeCursor(cursor, binding);
+  const page = await read(ctx, { filters, limit, cursor: position });
+  return { data: page.data, nextCursor: page.nextPosition ? encodeCursor(page.nextPosition, binding) : null };
+}
+
+export { parseApiQuery };

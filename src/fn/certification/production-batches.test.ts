@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", () => ({
+  resolveIsometricClient: vi.fn(async () => mocks.client),
+}));
+
 import type { OrgContext } from "@/lib/auth/server";
 import { MASS_COMPARISON_EPSILON_KG } from "@/lib/calculations/mass-dry";
 import type { Logger } from "@/lib/log";
@@ -32,15 +37,6 @@ vi.mock("@/data-access/certifier-production-batches", () => ({
   upsertProductionBatchRegistration: mocks.upsertProductionBatchRegistration,
   replaceMissingProductionBatchRegistration: mocks.replaceMissingProductionBatchRegistration,
 }));
-
-vi.mock("@/lib/isometric/client", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@/lib/isometric/client")>();
-  return {
-    ...actual,
-    getIsometricClientForOrg: vi.fn(async () => mocks.client),
-  };
-});
 
 vi.mock("./shared", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./shared")>();
@@ -112,6 +108,7 @@ function registryInput(
     totalDryMassKg: 2_000,
     runsMissingDryMass: 0,
     runsMissingEndTime: 0,
+    latestEndingRunCode: "RUN-LAST",
     ...patch,
   };
 }
@@ -185,6 +182,16 @@ beforeEach(() => {
 });
 
 describe("ensureProductionBatchesForCreditBatches", () => {
+  it.each([false, true])("refuses a one-month run span before registry access (registered: %s)", async (registered) => {
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([registryInput({
+      endedAt: "2026-04-01T07:15:00.000Z",
+    })]);
+    if (registered) mocks.getProductionBatchRegistrations.mockResolvedValue([await upsertReturning(PRODUCTION_BATCH_ID)(orgCtx, { supplierReference: await currentSupplierRef() })]);
+    await expect(ensure()).rejects.toThrow("Production run RUN-LAST ends on or after");
+    expect(mocks.client.get).not.toHaveBeenCalled();
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+
   it("recovers a missing registered batch before binding durability measurements", async () => {
     const missingId = "ptb_1M203VTR2SBXHRRC";
     const supplierReference = await currentSupplierRef();
