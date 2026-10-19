@@ -1,5 +1,8 @@
+import type { BatchEmissionContext } from "./batch-emission-context";
 import { deriveBatchEmissionLines, type BatchEmissionLine } from "@/lib/certification/emission-lines";
+import { withRemovedEntryComponents } from "@/lib/certification/emission-line-definition";
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
+import { withTemplateOrder } from "@/lib/isometric/template-observations/template-order";
 import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import type { LineSources } from "@/lib/isometric/template-observations/line-sources";
@@ -8,10 +11,12 @@ import type { FacilityCertifierFacts } from "./facility-certifier-facts";
 
 /** Only freshly listed templates may compile. Stored observations never substitute for a deleted template. */
 export function resolveRemovalTemplate(
-  batches: readonly { removalTemplateId: string | null }[],
+  batches: readonly { id?: string; removalTemplateId: string | null }[],
   facilityFacts: FacilityCertifierFacts,
+  batchFacts: BatchEmissionContext = {},
 ) {
   const unresolved = (code: "unpinnedTemplate" | "mixedTemplatePins" | "templateNotFound") => ({
+    emissionLinesByBatchId: {} as Record<string, BatchEmissionLine[]>,
     emissionLines: null as BatchEmissionLine[] | null,
     removalTemplate: null as IsometricGhgEntryTemplate | null, lineSources: {} as LineSources,
     templateBlockers: [removalTemplateBlocker(code)],
@@ -29,13 +34,23 @@ export function resolveRemovalTemplate(
   if (facts.lineSourceProblems.length) {
     templateBlockers.push(removalTemplateBlocker("templateLinesNeedReview"));
   }
-  const emissionLines = facts.observation ? deriveBatchEmissionLines({
-    definition: normalizeTemplateDefinition(facts.template), lineSources: facts.observation.lineSources,
+  const derive = (batchId?: string) => deriveBatchEmissionLines({
+    definition: withRemovedEntryComponents(normalizeTemplateDefinition(facts.template),
+      batchId ? batchFacts[batchId]?.entries ?? [] : [],
+      batchId ? batchFacts[batchId]?.previousObservations ?? new Map() : new Map()),
+    lineSources: withTemplateOrder(facts.template, facts.observation!.lineSources),
     problems: facts.lineSourceProblems, enrichmentComplete: facts.enrichmentProblems.length === 0,
-    automaticFigures: {}, entries: [],
-  }) : null;
+    automaticFigures: batchId ? batchFacts[batchId]?.automaticFigures ?? {} : {},
+    entries: batchId ? batchFacts[batchId]?.entries ?? [] : [],
+  });
+  const emissionLinesByBatchId: Record<string, BatchEmissionLine[]> = {};
+  if (facts.observation) for (const batch of batches) {
+    if (batch.id) emissionLinesByBatchId[batch.id] = derive(batch.id);
+  }
+  const emissionLines = !facts.observation ? null : Object.keys(emissionLinesByBatchId).length
+    ? Object.values(emissionLinesByBatchId).flat() : derive();
   return {
-    emissionLines,
+    emissionLines, emissionLinesByBatchId,
     removalTemplate: facts.template, lineSources: facts.observation?.lineSources ?? {}, templateBlockers,
     blueprintsForTemplate: facts.blueprintsForTemplate, unresolvedBlueprintKeys: facts.unresolvedBlueprintKeys,
     unbindableTemplateInputs: facts.unbindableTemplateInputs, requiredTransportCategories: facts.requiredTransportCategories,

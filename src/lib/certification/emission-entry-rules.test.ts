@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   normalizedEntryValues,
+  resolveEmissionEntryDate,
+  validateEntryDate,
   emissionEntryCounts,
   validateEmissionEntry,
   multiplyEntryDecimals,
@@ -40,6 +42,14 @@ const value: EntryValueInput = {
   magnitude: "0.100000000000000001",
   unit: "kWh",
 };
+it("does not require entry confirmation when display order is captured or changed", () => {
+  const previous = observation();
+  const current = observation();
+  current.lineSources.line.templateOrder = { groupPosition: 8, position: 2 };
+  expect(emissionEntryCounts(previous, current, "line")).toMatchObject({ counts: true });
+  previous.lineSources.line.templateOrder = { groupPosition: 1, position: 0 };
+  expect(emissionEntryCounts(previous, current, "line")).toMatchObject({ counts: true });
+});
 function args() {
   return {
     observation: observation(),
@@ -218,4 +228,31 @@ it("still allows confirmation for a fixed-factor change with unchanged entry uni
   expect(emissionEntryCounts(before, after, "line")).toMatchObject({
     counts: false, canConfirm: true, reason: "Confirm this entry for the changed template line.",
   });
+});
+
+describe("entry date defaults", () => {
+  const defaults = {
+    entryPolicy: "additive" as const, batchStartDate: "2026-10-01", batchEndDate: null,
+    timezone: "America/Los_Angeles", now: new Date("2026-10-16T01:00:00Z"),
+  };
+  it("uses facility today, caps ended batches and never defaults before the start", () => {
+    expect(resolveEmissionEntryDate(defaults)).toBe("2026-10-15");
+    expect(resolveEmissionEntryDate({ ...defaults, batchEndDate: "2026-10-10" })).toBe("2026-10-10");
+    expect(resolveEmissionEntryDate({ ...defaults, batchStartDate: "2026-10-20" })).toBe("2026-10-20");
+  });
+  it("preserves explicit additive dates for existing validation", () => {
+    expect(resolveEmissionEntryDate({ ...defaults, occurredOn: "2026-09-01" })).toBe("2026-09-01");
+    expect(() => validateEmissionEntry({ ...args(), occurredOn: "2026-09-01" })).toThrow("before");
+  });
+  it.each([undefined, "2099-01-01", "2020-01-01"])("single ignores the supplied date %s", (occurredOn) => {
+    expect(resolveEmissionEntryDate({ ...defaults, entryPolicy: "single", occurredOn })).toBe("2026-10-01");
+  });
+});
+
+it("accepts a clamped future batch start only as a server-defaulted date", () => {
+  const date = { occurredOn: "2026-10-20", batchStartDate: "2026-10-20", timezone: "UTC",
+    now: new Date("2026-10-16T12:00:00Z") };
+  expect(() => validateEntryDate({ ...date, dateDefaulted: true })).not.toThrow();
+  expect(() => validateEntryDate(date)).toThrow("future");
+  expect(() => validateEntryDate({ ...date, occurredOn: "2026-10-21", dateDefaulted: true })).toThrow("future");
 });

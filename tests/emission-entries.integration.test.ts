@@ -34,6 +34,7 @@ import {
 } from "@/data-access/document-writes";
 import { deleteDocumentInTransaction } from "@/data-access/document-mutations";
 import { createTransportLeg } from "@/data-access/transport-legs";
+import { loadFacilityEmissionsOverview } from "@/lib/read-models/facility-emissions-overview";
 import { loadBatchEmissionLines } from "@/lib/read-models/batch-emission-lines";
 import {
   createLineageFixture,
@@ -800,5 +801,75 @@ it("uses the read model blocker for an unpinned batch", async () => {
   } finally {
     await db.update(creditBatches).set({ removalTemplateId: templateId })
       .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, lineage.batchId)));
+  }
+});
+
+it("defaults additive dates to an ended batch and fixes single-line dates through updates", async () => {
+  const [original] = await db.select().from(creditBatches).where(eq(creditBatches.id, lineage.batchId));
+  const [batch] = await db.insert(creditBatches).values({
+    ...original, id: crypto.randomUUID(), code: `CB-DATES-${crypto.randomUUID()}`,
+    startDate: "2026-06-01", endDate: "2026-06-30", productionEmissionsClaimedByRemovalId: null,
+  }).returning();
+  const ids: string[] = [];
+  try {
+    const additive = await createEmissionEntry(ctx, { creditBatchId: batch.id, componentId: "energy",
+      values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "1", unit: "kWh" }],
+    });
+    ids.push(additive.id);
+    expect(additive.occurredOn).toBe("2026-06-30");
+    const single = await createEmissionEntry(ctx, { creditBatchId: batch.id, componentId: "meter",
+      occurredOn: "2099-01-01",
+      values: ["initial_readout", "final_readout"].map((inputKey) => ({ inputKey, quantityKind: "energy", magnitude: "1", unit: "kWh" })),
+    });
+    ids.push(single.id);
+    expect(single.occurredOn).toBe("2026-06-01");
+    const updated = await updateEmissionEntry(ctx, { id: single.id, expectedVersion: single.version,
+      occurredOn: "2020-01-01", note: "Date stays fixed",
+    });
+    expect(updated).toMatchObject({ occurredOn: "2026-06-01", contentRevision: single.contentRevision });
+    await expect(createEmissionEntry(ctx, { creditBatchId: batch.id, componentId: "energy", occurredOn: "2026-05-31",
+      values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "1", unit: "kWh" }],
+    })).rejects.toThrow("before the credit batch start");
+  } finally {
+    if (ids.length) {
+      await db.delete(emissionEntryValues).where(inArray(emissionEntryValues.entryId, ids));
+      await db.delete(emissionEntries).where(inArray(emissionEntries.id, ids));
+    }
+    await db.delete(creditBatches).where(eq(creditBatches.id, batch.id));
+  }
+});
+
+it("scopes the facility overview, excludes archived batches and ignores entries when disabled", async () => {
+  const [original] = await db.select().from(creditBatches).where(eq(creditBatches.id, lineage.batchId));
+  const [batch] = await db.insert(creditBatches).values({
+    ...original, id: crypto.randomUUID(), code: `CB-OVERVIEW-${crypto.randomUUID()}`,
+    productionEmissionsClaimedByRemovalId: null,
+  }).returning();
+  let entryId: string | undefined;
+  try {
+    const entry = await createEmissionEntry(ctx, { creditBatchId: batch.id, componentId: "energy", occurredOn: "2026-06-13",
+      values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "1", unit: "kWh" }],
+    });
+    entryId = entry.id;
+    const overview = await loadFacilityEmissionsOverview(ctx, lineage.facilityId);
+    expect(overview.batches.find((row) => row.creditBatchId === batch.id)).toMatchObject({
+      status: batch.status, lastEntryOn: "2026-06-13", entriesThisMonth: 1,
+      lineCounts: { total: 2, open: 2, fileMissing: 1, notRecorded: 1 },
+    });
+    await expect(loadFacilityEmissionsOverview({ ...ctx, organizationId: otherOrg }, lineage.facilityId)).rejects.toThrow();
+    flag.enabled = false;
+    const disabled = await loadFacilityEmissionsOverview(ctx, lineage.facilityId);
+    expect(disabled.batches.find((row) => row.creditBatchId === batch.id)).toMatchObject({
+      entriesThisMonth: 0, lastEntryOn: null, lineCounts: { fileMissing: 0, notRecorded: 2 },
+    });
+    await db.update(creditBatches).set({ archivedAt: new Date() }).where(eq(creditBatches.id, batch.id));
+    expect((await loadFacilityEmissionsOverview(ctx, lineage.facilityId)).batches.some((row) => row.creditBatchId === batch.id)).toBe(false);
+  } finally {
+    flag.enabled = true;
+    if (entryId) {
+      await db.delete(emissionEntryValues).where(eq(emissionEntryValues.entryId, entryId));
+      await db.delete(emissionEntries).where(eq(emissionEntries.id, entryId));
+    }
+    await db.delete(creditBatches).where(eq(creditBatches.id, batch.id));
   }
 });

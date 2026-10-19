@@ -41,7 +41,7 @@ const ROUTES = [
   "/suppliers",
   "/storage-locations",
   "/formulations",
-  "/energy",
+  "/emissions",
   "/certification",
   "/certification/settings",
   "/certification/removals",

@@ -1,4 +1,5 @@
 import type { PgTable } from "drizzle-orm/pg-core";
+import { emissionLineComments } from "@/db/schema/emission-line-comments";
 import { emissionEntries, formulations, suppliers, supplierLocations, customers, customerLocations, feedstocks, productionRuns, biocharProducts, samples, orders, deliveries, applications, documents, transportLegs, creditBatches, binMovements, certifierRemovals, certifierGhgStatements } from "@/db/schema";
 
 export type ActivityFieldPolicy = "value" | "name" | "ignore" | { link: string };
@@ -14,6 +15,11 @@ export const activityCoordinatePairs: Readonly<Record<string, readonly (readonly
 
 /** Explicit column decisions. New columns must be classified before they ship. */
 export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
+  emission_line_comment: { table: emissionLineComments, fields: {
+    id: "ignore", organizationId: "ignore", creditBatchId: { link: "credit_batch" },
+    componentId: "value", body: "value", createdBy: "ignore", updatedBy: "ignore",
+    version: "ignore", createdAt: "ignore", updatedAt: "ignore",
+  } },
   emission_entry: { table: emissionEntries, fields: {
     id: "ignore",
     organizationId: "ignore",
