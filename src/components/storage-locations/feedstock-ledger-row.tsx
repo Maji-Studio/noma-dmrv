@@ -8,6 +8,7 @@
 import { Button } from "@/components/ui";
 import { Notice } from "@/components/ui/notice";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { reversalCaption } from "@/lib/loss-correction-messages";
 import { formatFacilityTime } from "@/lib/date-utils";
 import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
@@ -59,7 +60,7 @@ export function FeedstockLedgerRow({ entry, corrected, timeZone, facilityId, onE
       amount={amount} after={formatMassKg(entry.afterWetKg)} struck={reversed}>
       {entry.reversedBy && (
         <p className="body-caption text-[var(--color-text-secondary)]">
-          {replaced ? `Replaced by the correction recorded ${formatFacilityDateTime(entry.reversedBy.recordedAt, timeZone)}.` : `Deleted ${formatFacilityDateTime(entry.reversedBy.recordedAt, timeZone)}${entry.reversedBy.actorName ? ` by ${entry.reversedBy.actorName}` : ""}.`} It no longer counts toward the stock.
+          {reversalCaption({ recordedAt: entry.reversedBy.recordedAt, actorName: entry.reversedBy.actorName, replaced }, timeZone)}
         </p>
       )}
       <StockSourceLink facilityId={facilityId} source={entry.sourceId && (entry.kind === "intake" || entry.kind === "run_draw" || entry.kind === "ingredient_draw")

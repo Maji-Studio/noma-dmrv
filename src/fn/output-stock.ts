@@ -7,7 +7,8 @@ import type { OutputStockPostInput, OutputStockPreviewInput, OutputSubBinsInput 
 import { recordOutputStockMovement } from '@/lib/operations/output-stock';
 import { runOperationInProcess } from '@/lib/operations/runner';
 import { z } from 'zod';
-import { correctOutputStockEntry } from '@/lib/operations/output-stock-form-edits';
+import { correctOutputStockEntry, deleteOutputStockLoss } from '@/lib/operations/output-stock-form-edits';
+import { removeLossSchema, type RemoveLossData } from '@/schemas/bin-movements';
 import { withAction } from './with-action';
 
 export async function previewOutputStockFn(input: OutputStockPreviewInput) {
@@ -30,4 +31,11 @@ export async function postOutputStockFn(input: OutputStockPostInput) {
 }
 export async function getOutputSubBinsFn(input: OutputSubBinsInput) {
   return withAction(ctx => getOutputSubBins(ctx, outputSubBinsSchema.parse(input)));
+}
+
+export async function removeOutputLossFn(data: RemoveLossData) {
+  return withAction(ctx => runOperationInProcess(deleteOutputStockLoss, ctx, removeLossSchema.parse(data)), {
+    fallbackMessage: 'Failed to remove Lost mass',
+    log: { message: 'Failed to remove Lost mass', context: { op: 'output-stock:remove-loss' } },
+  });
 }
