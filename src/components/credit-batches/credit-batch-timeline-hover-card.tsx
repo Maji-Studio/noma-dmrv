@@ -29,11 +29,11 @@ const POINTER_CLOSE_REASONS = new Set(["trigger-hover", "trigger-focus"]);
 /** Tonnes below this read as zero in the "not in a Removal" line. */
 const NEGLIGIBLE_TONNES = 0.005;
 
-/** Submitted has no badge of its own; Running shares its in-progress tone. */
+/** The badge's status; its colors come from the timeline's own tone (STATE_TONE). */
 const STATE_BADGE: Record<TimelineState, StatusValue> = {
-  blocking: "failed",
-  ready: "ready",
-  submitted: "running",
+  blocking: "pending",
+  ready: "running",
+  submitted: "complete",
   issued: "issued",
 };
 
@@ -72,7 +72,7 @@ function HoverCardBody({ batch }: { batch: HoverCardBatch }) {
       <div className="flex flex-col gap-10 px-16 pt-16 pb-12">
         <div className="flex items-center justify-between gap-12">
           <span className="body-medium font-medium tabular-nums">{batch.code}</span>
-          {state && <StatusBadge status={STATE_BADGE[state]} label={STATE_TONE[state].title} size="small" />}
+          {state && <StatusBadge status={STATE_BADGE[state]} label={STATE_TONE[state].title} size="small" className={STATE_TONE[state].badge} />}
         </div>
         <div className={cn("flex flex-col gap-4 body-small", MUTED)}>
           <span className="inline-flex items-center gap-6">

@@ -179,7 +179,7 @@ export function deriveTimelineState(input: {
   blockingCount: number;
 } | null): TimelineState | null {
   if (!input) return null;
-  // A failed verification (a failed step after the Removal was submitted) needs work.
+  // A failed verification (a failed step after the Removal was submitted) is Open.
   if (input.lifecycleFailed && input.lifecycleStepIndex >= SUBMITTED_STEP_INDEX) return "blocking";
   if (!input.lifecycleFailed && input.lifecycleStepIndex >= ISSUED_STEP_INDEX) return "issued";
   if (!input.lifecycleFailed && input.lifecycleStepIndex >= SUBMITTED_STEP_INDEX) return "submitted";

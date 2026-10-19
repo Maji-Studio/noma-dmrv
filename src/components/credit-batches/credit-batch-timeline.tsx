@@ -218,7 +218,7 @@ export function CreditBatchTimeline({
   };
 
   const inYear = timelineBatches.filter((batch) => placeOnYear(batch, year));
-  const needWork = inYear.filter((batch) => viewOf(batch).state === "blocking").length;
+  const openCount = inYear.filter((batch) => viewOf(batch).state === "blocking").length;
   const todayPct = monthIndexIn(year, today) >= 0 ? dayPercentOfYear(today) : null;
 
   return (
@@ -253,7 +253,7 @@ export function CreditBatchTimeline({
           <YearSwitcher year={year} years={years} today={today} onChange={setYear} />
           <p className={cn("pl-8 body-small", MUTED)}>
             {`${inYear.length} credit ${inYear.length === 1 ? "batch" : "batches"}`}
-            {needWork > 0 && `, ${needWork} ${needWork === 1 ? "needs" : "need"} work`}
+            {openCount > 0 && `, ${openCount} open`}
           </p>
         </div>
         <StateLegend />

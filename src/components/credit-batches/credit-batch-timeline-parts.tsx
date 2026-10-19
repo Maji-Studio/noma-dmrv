@@ -7,7 +7,7 @@
 import { CaretLeftIcon, CaretRightIcon, CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { dayPercentOfYear, daysInMonths, monthIndexIn, type TimelineState } from "@/lib/credit-batches/timeline";
-import { getStatusState, type StatusStateClass } from "@/lib/status-state";
+import { STATUS_STATE_BADGE_CLASSES, type StatusStateClass } from "@/lib/status-state";
 import { cn } from "@/lib/utils";
 
 export const MUTED = "text-[var(--color-text-secondary)]";
@@ -16,22 +16,23 @@ const LEGEND_MARK_PX = 10;
 
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/** The semantic status each timeline state stands for; its tone comes from `getStatusState` (status-state.ts). */
-export const STATE_STATUS: Record<TimelineState, string> = {
-  blocking: "failed",
-  ready: "ready",
-  submitted: "submitted",
-  issued: "issued",
-};
-
-type Tone = { solid: string; tint: string; edge: string; text: string };
+type Tone = { solid: string; tint: string; edge: string; text: string; badge: string };
 
 const TONE_BY_STATE_CLASS: Record<StatusStateClass, Tone> = {
-  neutral: { solid: "bg-[var(--st-off)]", tint: "bg-[var(--st-off-bg)]", edge: "border-[var(--st-off)]", text: "text-[var(--st-off)]" },
-  "in-progress": { solid: "bg-[var(--st-run)]", tint: "bg-[var(--st-run-bg)]", edge: "border-[var(--st-run)]", text: "text-[var(--st-run)]" },
-  success: { solid: "bg-[var(--st-ok)]", tint: "bg-[var(--st-ok-bg)]", edge: "border-[var(--st-ok)]", text: "text-[var(--st-ok)]" },
-  warning: { solid: "bg-[var(--st-wait)]", tint: "bg-[var(--st-wait-bg)]", edge: "border-[var(--st-wait)]", text: "text-[var(--st-wait)]" },
-  error: { solid: "bg-[var(--st-bad)]", tint: "bg-[var(--st-bad-bg)]", edge: "border-[var(--st-bad)]", text: "text-[var(--st-bad)]" },
+  neutral: { solid: "bg-[var(--st-off)]", tint: "bg-[var(--st-off-bg)]", edge: "border-[var(--st-off)]", text: "text-[var(--st-off)]", badge: STATUS_STATE_BADGE_CLASSES.neutral },
+  "in-progress": { solid: "bg-[var(--st-run)]", tint: "bg-[var(--st-run-bg)]", edge: "border-[var(--st-run)]", text: "text-[var(--st-run)]", badge: STATUS_STATE_BADGE_CLASSES["in-progress"] },
+  success: { solid: "bg-[var(--st-ok)]", tint: "bg-[var(--st-ok-bg)]", edge: "border-[var(--st-ok)]", text: "text-[var(--st-ok)]", badge: STATUS_STATE_BADGE_CLASSES.success },
+  warning: { solid: "bg-[var(--st-wait)]", tint: "bg-[var(--st-wait-bg)]", edge: "border-[var(--st-wait)]", text: "text-[var(--st-wait)]", badge: STATUS_STATE_BADGE_CLASSES.warning },
+  error: { solid: "bg-[var(--st-bad)]", tint: "bg-[var(--st-bad-bg)]", edge: "border-[var(--st-bad)]", text: "text-[var(--st-bad)]", badge: STATUS_STATE_BADGE_CLASSES.error },
+};
+
+/** Issued is the finished state, so it reads in ink rather than a status color. */
+const INK_TONE: Tone = {
+  solid: "bg-[var(--ink)]",
+  tint: "bg-[var(--clr-dark-purple-10)]",
+  edge: "border-[var(--ink)]",
+  text: "text-[var(--ink)]",
+  badge: "bg-[var(--clr-dark-purple-10)] text-[var(--ink)] border-[var(--clr-dark-purple-60)]",
 };
 
 const STATE_TITLE: Record<TimelineState, string> = {
@@ -42,17 +43,22 @@ const STATE_TITLE: Record<TimelineState, string> = {
 };
 
 /** The tone of a bar whose state has not loaded. */
-export const UNKNOWN_TONE = TONE_BY_STATE_CLASS[getStatusState("unknown")];
+export const UNKNOWN_TONE = TONE_BY_STATE_CLASS.neutral;
 
-/** Solid, tint and edge per state, for bars, hover cards and the legend. */
+/**
+ * Solid, tint, edge and badge per state, for bars, hover cards and the legend.
+ * The timeline keeps its own scale (Kenji, 2026-10-19) so each step of the
+ * lifecycle has one color: Open orange, Ready purple, Submitted green, Issued
+ * ink. Other screens keep the shared mapping in status-state.ts.
+ */
 export const STATE_TONE: Record<TimelineState, Tone & { title: string }> = {
-  blocking: { ...TONE_BY_STATE_CLASS[getStatusState(STATE_STATUS.blocking)], title: STATE_TITLE.blocking },
-  ready: { ...TONE_BY_STATE_CLASS[getStatusState(STATE_STATUS.ready)], title: STATE_TITLE.ready },
-  submitted: { ...TONE_BY_STATE_CLASS[getStatusState(STATE_STATUS.submitted)], title: STATE_TITLE.submitted },
-  issued: { ...TONE_BY_STATE_CLASS[getStatusState(STATE_STATUS.issued)], title: STATE_TITLE.issued },
+  blocking: { ...TONE_BY_STATE_CLASS.warning, title: STATE_TITLE.blocking },
+  ready: { ...TONE_BY_STATE_CLASS["in-progress"], title: STATE_TITLE.ready },
+  submitted: { ...TONE_BY_STATE_CLASS.success, title: STATE_TITLE.submitted },
+  issued: { ...INK_TONE, title: STATE_TITLE.issued },
 };
 
-/** Ready and Issued share the success tone, so Issued also carries a check mark. */
+/** Issued also carries a check mark, so the finished state reads without color. */
 export function StateMark({ state, size }: { state: TimelineState; size: number }) {
   return state === "issued" ? (
     <CheckCircleIcon size={size} weight="fill" className={cn("shrink-0", STATE_TONE.issued.text)} aria-hidden />

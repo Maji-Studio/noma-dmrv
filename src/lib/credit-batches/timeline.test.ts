@@ -139,7 +139,7 @@ describe("deriveTimelineState", () => {
   it("is issued when credits are issued", () => {
     expect(deriveTimelineState({ ...base, lifecycleStepIndex: 3 })).toBe("issued");
   });
-  it("needs work when verification failed, even with no missing data", () => {
+  it("is open when verification failed, even with no missing data", () => {
     expect(deriveTimelineState({ ...base, lifecycleStepIndex: 2, lifecycleFailed: true })).toBe("blocking");
   });
   it("keeps the data readiness for a rejected or interrupted Removal", () => {
