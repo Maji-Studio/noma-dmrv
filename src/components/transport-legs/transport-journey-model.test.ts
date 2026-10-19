@@ -50,7 +50,7 @@ describe("buildJourney", () => {
     ).toBe(true);
   });
 
-  it("keeps a missing load visible on its leg, alone or among others", () => {
+  it("never claims a shared load when a leg has none, alone or among others", () => {
     expect(buildJourney([leg({ loadMassKg: null })]).loadOnLegs).toBe(true);
     const allMissing = buildJourney([
       leg({ loadMassKg: null }),
