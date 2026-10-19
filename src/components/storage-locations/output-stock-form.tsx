@@ -43,7 +43,7 @@ export function OutputStockForm({ storageLocationId, facilityId, correction, onC
       correctsMovementId: correction?.id,
       wetMassKg: correction?.wetMassKg ?? undefined,
       moisturePercent: correction?.moisturePercent ?? null,
-      reason: correction?.reason ?? "",
+      reason: "",
     },
   });
   const values = useWatch({ control });
@@ -94,8 +94,8 @@ export function OutputStockForm({ storageLocationId, facilityId, correction, onC
         {preview.error && <Notice tone="error">{preview.error.message}</Notice>}
         {preview.data && <OutputStockPreview variant="movement" preview={preview.data} entry={{ kind: "loss", wetMassKg: input?.wetMassKg }} moreInfo={<OutputStockHistory compact triggerLabel="Stock history" storageLocationId={storageLocationId} facilityId={facilityId} />} renderBlocker={blocker => blocker.entity === "binMovement" ? <OutputStockHistory key={blocker.id} storageLocationId={storageLocationId} facilityId={facilityId} movementId={blocker.id} triggerLabel={`Open ${blocker.code}`} /> : undefined} />}
       </FormSection>
-      <FormSection title="Reason" fields={["reason"]}>
-        <FormField id="stock-reason" label="Reason" required error={errors.reason?.message}>
+      <FormSection title={correction ? "Why corrected" : "Reason"} fields={["reason"]}>
+        <FormField id="stock-reason" label={correction ? "Why corrected" : "Reason"} required error={errors.reason?.message}>
           <FormTextarea disabled={mutation.isPending} id="stock-reason" {...register("reason")} />
         </FormField>
       </FormSection>
