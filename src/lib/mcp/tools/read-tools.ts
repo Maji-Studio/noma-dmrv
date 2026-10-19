@@ -110,10 +110,10 @@ function listSummary(singular: string, plural: string) {
 
 /** The generic closes over each schema so parsed input stays typed at its reader. */
 function defineRead<S extends z.ZodType>(
-  config: Omit<ReadTool, "kind" | "input" | "execute"> & { input: S },
+  config: Omit<ReadTool, "kind" | "input" | "execute" | "requiredScopes"> & { input: S },
   read: (ctx: ApiContext, input: z.output<S>) => Promise<Record<string, unknown>>,
 ): ReadTool {
-  return { ...config, kind: "read", description: `${config.description} ${UNTRUSTED_TEXT}`,
+  return { ...config, requiredScopes: () => config.scope ? [config.scope] : [], kind: "read", description: `${config.description} ${UNTRUSTED_TEXT}`,
     execute: (ctx, raw) => read(ctx, parseQueryInput(raw, config.input)) };
 }
 

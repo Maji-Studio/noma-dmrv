@@ -10,4 +10,4 @@ export const GET = apiRoute<Params>("api.v1.reactors.get", "reactors:read", asyn
   const data = await readReactor(request, ctx, idOrCode);
   headers.set("ETag", reactorEtag(data));
   return Response.json({ data }, { headers });
-});
+}, { audience: "rest" });

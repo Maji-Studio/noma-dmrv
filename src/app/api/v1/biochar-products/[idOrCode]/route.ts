@@ -14,6 +14,6 @@ export const GET = apiRoute<Params>("api.v1.biochar-products.get", "biochar-prod
   const data = await readBiocharProduct(ctx, idOrCode);
   headers.set("ETag", biocharProductEtag(data));
   return Response.json({ data }, { headers });
-});
+}, { audience: "rest" });
 export const PATCH = apiRoute<Params>("api.v1.biochar-products.update", "biochar-products:write", (request, context, { idOrCode }) =>
-  updateBiocharProductResponse(request, context, idOrCode));
+  updateBiocharProductResponse(request, context, idOrCode), { audience: "rest" });
