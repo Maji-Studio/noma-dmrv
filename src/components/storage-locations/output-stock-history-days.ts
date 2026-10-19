@@ -2,31 +2,19 @@
  * The output bin's history as days: each day with the stock at its end, each
  * entry with what it changed per part (dry biochar, each ingredient's solids,
  * the water the records estimate, wet mass as the total) and the stock after.
- * Figures replay the entries' frozen changes in physical time, like the stock
- * chart, so a back-dated entry lands on its own day. A figure without an
- * honest value is left out, never shown as zero or as a placeholder.
+ * Figures come from the replay the stock chart reads (`replayStock`), so a
+ * back-dated entry lands on its own day and both views agree. A figure without
+ * an honest value is left out, never shown as zero or as a placeholder.
  */
 import { DRY_BIOCHAR_LABEL, ingredientSolidsLabel } from "@/components/biochar-products/product-composition-components";
 import { STOCK_PART_MIN_KG } from "@/config/output-stock";
 import { formatFacilityDay, massKgRoundsToZero } from "@/lib/format-utils";
 import { ESTIMATED_WATER_LABEL } from "@/lib/output-stock/labels";
+import { liveChartEntries, replayStock, stockOrder, type StockState } from "@/lib/output-stock/stock-replay";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
-import { liveChartEntries } from "./stock-level-series";
 
 /** Wet mass as the parts table's total row. */
 export const WET_MASS_LABEL = "Wet mass";
-
-/** Kinds that move no stock: a mode change, or a reading's row that folds into its movement. */
-const NO_STOCK_KINDS = new Set(["merge", "split", "moisture_update"]);
-
-/** The bin's stock at one point of the replay. Wet and solids turn unknown once an entry has no figure for them. */
-export interface StockState {
-  dryKg: number;
-  solidsKg: number | null;
-  wetKg: number | null;
-  /** Ingredient solids by material, in the order they first entered. */
-  ingredients: ReadonlyMap<string, number>;
-}
 
 export interface HistoryPart {
   label: string;
@@ -65,32 +53,6 @@ export interface HistoryDay {
   rows: HistoryRow[];
 }
 
-const EMPTY: StockState = { dryKg: 0, solidsKg: 0, wetKg: 0, ingredients: new Map() };
-
-function chronological(a: OutputStockHistoryEntry, b: OutputStockHistoryEntry): number {
-  return a.occurredAt.localeCompare(b.occurredAt) || a.recordedAt.localeCompare(b.recordedAt);
-}
-
-/** A batch added without a moisture reading has no wet basis, so the stock's wet mass turns unknown from it on. */
-function wetChange(entry: OutputStockHistoryEntry): number | null {
-  if (entry.kind === "intake" && entry.moisturePercent === null) return null;
-  return entry.wetDeltaKg ?? null;
-}
-
-/** The stock after one entry counts. */
-export function applyEntry(state: StockState, entry: OutputStockHistoryEntry): StockState {
-  const wet = wetChange(entry);
-  const solids = entry.solidsDeltaKg ?? null;
-  const ingredients = new Map(state.ingredients);
-  for (const part of entry.ingredientSolidsDeltas ?? []) ingredients.set(part.name, (ingredients.get(part.name) ?? 0) + part.solidsKg);
-  return {
-    dryKg: state.dryKg - entry.dryMassKg,
-    solidsKg: state.solidsKg === null || solids === null ? null : state.solidsKg + solids,
-    wetKg: state.wetKg === null || wet === null ? null : state.wetKg + wet,
-    ingredients,
-  };
-}
-
 /** Rounding left over after a bin empties reads as nothing, never as a negative mass. */
 function settled(kg: number): number {
   return Math.abs(kg) < STOCK_PART_MIN_KG ? 0 : kg;
@@ -125,7 +87,6 @@ export function entryParts(before: StockState, after: StockState, entry: OutputS
 export function buildHistoryDays(entries: readonly OutputStockHistoryEntry[], timeZone: string, movementId?: string): HistoryDay[] {
   const ids = new Set(entries.map((entry) => entry.id));
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
-  const live = new Set(liveChartEntries(entries).map((entry) => entry.id));
   const reversedIds = new Set(entries.filter((entry) => entry.kind === "reversal" && entry.correctsMovementId !== null && ids.has(entry.correctsMovementId)).map((entry) => entry.correctsMovementId));
   const replacementFor = new Map(entries.filter((entry) => entry.kind !== "reversal" && entry.correctsMovementId).map((entry) => [entry.correctsMovementId as string, entry]));
   const originalKind = (entry: OutputStockHistoryEntry, seen = new Set<string>()): string => {
@@ -140,12 +101,8 @@ export function buildHistoryDays(entries: readonly OutputStockHistoryEntry[], ti
     || (entry.kind === "moisture_update" && !!entry.measuredByMovementId && ids.has(entry.measuredByMovementId));
 
   const days = new Map<string, HistoryDay>();
-  let state = EMPTY;
-  for (const entry of [...entries].sort(chronological)) {
+  for (const { entry, moves: counts, before, after: state } of replayStock(entries)) {
     const day = formatFacilityDay(entry.occurredAt, timeZone);
-    const before = state;
-    const counts = live.has(entry.id) && !NO_STOCK_KINDS.has(entry.kind);
-    if (counts) state = applyEntry(state, entry);
     const group = days.get(day) ?? { day, end: state, rows: [] };
     group.end = state;
     days.set(day, group);
@@ -192,7 +149,7 @@ export function entrySentence(row: Pick<HistoryRow, "entry" | "kind" | "replaces
  * usual cause, and the line says so only when it is true.
  */
 export function noWetMassReason(entries: readonly OutputStockHistoryEntry[]): { lead: string; action: string } {
-  const lastAdded = liveChartEntries(entries).filter((entry) => entry.kind === "intake").sort(chronological).at(-1);
+  const lastAdded = liveChartEntries(entries).filter((entry) => entry.kind === "intake").sort(stockOrder).at(-1);
   const subject = lastAdded && lastAdded.moisturePercent === null ? "The last batch added" : "A batch in the bin";
   return { lead: `${subject} has no moisture reading, so there is no wet mass. Record one when `, action: "adding stock" };
 }

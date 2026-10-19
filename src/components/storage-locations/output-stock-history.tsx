@@ -109,7 +109,7 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
               <DayHeader day={day} />
               {day.rows.map((row) => isModeChange(row.entry) || row.entry.kind === "moisture_update"
                 ? <HistoryBreak key={row.entry.id} entry={row.entry} timeZone={clock.timeZone} facilityId={facilityId} />
-                : <HistoryEntry key={row.entry.id} row={row} defaultOpen={!!movementId} timeZone={clock.timeZone} facilityId={facilityId} onEdit={setEditing} />)}
+                : <HistoryEntry key={row.entry.id} row={row} defaultOpen={!!movementId} linked={!movementId} timeZone={clock.timeZone} facilityId={facilityId} onEdit={setEditing} />)}
             </section>
           ))}
         </div>}

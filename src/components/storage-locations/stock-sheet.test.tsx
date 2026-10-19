@@ -54,7 +54,9 @@ it("keeps old counts and corrections readable, folds reversals, groups days and 
   expect(markup).toContain("Switched to mix");
   expect(markup).not.toMatch(/Not available|Unknown until/);
   expect(renderer.root.findAllByType("details")).toHaveLength(4);
-  expect(renderer.root.findAllByType("a").map(link => link.props.href)).toEqual([stockSourceHref({ entity: "delivery", id: "delivery-id" }, FACILITY_ID)]);
+  // The correction and the entry it replaced link to each other.
+  expect(renderer.root.findAllByType("a").map(link => link.props.href)).toEqual([stockSourceHref({ entity: "delivery", id: "delivery-id" }, FACILITY_ID),
+    "#output-movement-loss", "#output-movement-fixed"]);
   // One day heading for the loss and correction, one for the following day's actions, each with the stock at day end.
   expect(renderer.root.findAllByType("h4").map(text)).toHaveLength(2);
   expect(renderer.root.findAllByType("h4").every(node => text(node).includes("at day end"))).toBe(true);
@@ -62,7 +64,7 @@ it("keeps old counts and corrections readable, folds reversals, groups days and 
 });
 
 it("leads with the dry biochar and links adding stock when the last batch added has no moisture reading", async () => {
-  state.output = [entry({ id: "product", kind: "intake", moisturePercent: null, wetMassKg: 0, dryMassKg: -120, wetDeltaKg: 0, solidsDeltaKg: 120 })];
+  state.output = [entry({ id: "product", kind: "intake", moisturePercent: null, wetMassKg: 0, dryMassKg: -120, wetDeltaKg: null, solidsDeltaKg: 120 })];
   state.balance = { beforeEstimatedWetKg: null, beforeDryKg: 120, lane: "product" };
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<OutputStockHistory storageLocationId={BIN_ID} facilityId={FACILITY_ID} triggerLabel="History" />); });

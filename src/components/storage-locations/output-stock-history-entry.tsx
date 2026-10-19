@@ -20,6 +20,7 @@ import { LedgerFacts } from "./stock-ledger";
 import { StockChip } from "./stock-figures";
 import { StockSourceLink } from "./stock-source-link";
 import { formatWetEstimate } from "./stock-preview-shared";
+import type { ReactNode } from "react";
 
 const CARET_ICON_PX = 14;
 const TIME_FORMAT = "HH:mm";
@@ -45,6 +46,31 @@ function signedKg(kg: number, format: (kg: number) => string = formatMassKg): st
   return `${kg > 0 ? "+" : "−"}${format(Math.abs(kg))}`;
 }
 
+/** The element id an entry renders with: the target of links between entries. */
+function entryElementId(entryId: string): string {
+  return `output-movement-${entryId}`;
+}
+
+/** Opens another entry of the same history, scrolls to it and moves focus to it. */
+function openEntry(entryId: string) {
+  const target = document.getElementById(entryElementId(entryId));
+  if (!(target instanceof HTMLDetailsElement)) return;
+  target.open = true;
+  target.scrollIntoView({ block: "nearest" });
+  target.querySelector("summary")?.focus({ preventScroll: true });
+}
+
+/** A reference to another entry: a link when that entry is in the list, else its text. */
+function EntryLink({ entryId, linked, children }: { entryId: string; linked: boolean; children: ReactNode }) {
+  if (!linked) return <>{children}</>;
+  return (
+    <a href={`#${entryElementId(entryId)}`} className="underline underline-offset-4"
+      onClick={(event) => { event.preventDefault(); openEntry(entryId); }}>
+      {children}
+    </a>
+  );
+}
+
 export function isModeChange(entry: OutputStockHistoryEntry): boolean {
   return entry.kind in MODE_CHANGE_CAPTIONS;
 }
@@ -52,7 +78,7 @@ export function isModeChange(entry: OutputStockHistoryEntry): boolean {
 /** A mode change, or another row that moves no stock: a line in the list, not an entry that opens. */
 export function HistoryBreak({ entry, timeZone, facilityId }: { entry: OutputStockHistoryEntry; timeZone: string; facilityId: string }) {
   return (
-    <div id={`output-movement-${entry.id}`} className={`grid grid-cols-[40px_minmax(0,1fr)] gap-8 ${RULE} py-10 body-caption ${SECONDARY}`}>
+    <div id={entryElementId(entry.id)} className={`grid grid-cols-[40px_minmax(0,1fr)] gap-8 ${RULE} py-10 body-caption ${SECONDARY}`}>
       <span className={`tabular-nums ${MUTED}`}>{formatFacilityTime(new Date(entry.occurredAt), timeZone, TIME_FORMAT)}</span>
       <span className="flex min-w-0 flex-col">
         <span><span className="font-medium text-[var(--color-text-primary)]">{outputStockEventLabel(entry.kind)}.</span> {MODE_CHANGE_CAPTIONS[entry.kind]}</span>
@@ -94,22 +120,24 @@ function PartsTable({ row, subject }: { row: HistoryRow; subject: string }) {
   );
 }
 
-function facts(row: HistoryRow, timeZone: string) {
+function facts(row: HistoryRow, timeZone: string, linked: boolean) {
   const { entry, replaces } = row;
   const recordedLater = entry.recordedAt.slice(0, 16) !== entry.occurredAt.slice(0, 16);
   const batches = entry.allocations.map((allocation) => allocation.code);
   return [
     ...(batches.length > 0 ? [{ label: batches.length === 1 ? "Batch" : "Batches", value: batches.join(", ") }] : []),
     ...(entry.moisturePercent !== null ? [{ label: "Moisture", value: formatMoisturePercent(entry.moisturePercent) }] : []),
-    ...(replaces ? [{ label: "Replaces", value: `${entryAmount(replaces, row.kind, formatMassKg)}, ${formatFacilityDateTime(replaces.occurredAt, timeZone)}` }] : []),
+    ...(replaces ? [{ label: "Replaces", value: <EntryLink entryId={replaces.id} linked={linked}>{`${entryAmount(replaces, row.kind, formatMassKg)}, ${formatFacilityDateTime(replaces.occurredAt, timeZone)}`}</EntryLink> }] : []),
     ...(entry.reason && entry.kind !== "intake" ? [{ label: replaces ? "Why corrected" : "Reason", value: entry.reason }] : []),
     { label: "Recorded", value: `${recordedLater ? formatFacilityDateTime(entry.recordedAt, timeZone) : "At the time"}${entry.actorName ? ` by ${entry.actorName}` : ""}` },
   ];
 }
 
-export function HistoryEntry({ row, defaultOpen, timeZone, facilityId, onEdit }: {
+export function HistoryEntry({ row, defaultOpen, linked, timeZone, facilityId, onEdit }: {
   row: HistoryRow;
   defaultOpen: boolean;
+  /** True when every entry is in the list, so references between entries can link. */
+  linked: boolean;
   timeZone: string;
   facilityId: string;
   onEdit: (entry: OutputStockHistoryEntry) => void;
@@ -118,7 +146,7 @@ export function HistoryEntry({ row, defaultOpen, timeZone, facilityId, onEdit }:
   const struck = status !== "counts";
   const subject = `${outputStockEventLabel(row.kind).toLowerCase()} on ${formatFacilityDateTime(entry.occurredAt, timeZone)}`;
   return (
-    <details id={`output-movement-${entry.id}`} open={defaultOpen} className={`group ${RULE}`}>
+    <details id={entryElementId(entry.id)} open={defaultOpen} className={`group ${RULE}`}>
       <summary className="grid min-h-44 cursor-pointer list-none grid-cols-[40px_minmax(0,1fr)_14px] items-start gap-8 py-10 hover:bg-[var(--clr-dark-purple-5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] [&::-webkit-details-marker]:hidden">
         <span className={`pt-2 body-caption tabular-nums ${MUTED}`}>{formatFacilityTime(new Date(entry.occurredAt), timeZone, TIME_FORMAT)}</span>
         <span className="flex flex-wrap items-center gap-6 body-small font-medium tabular-nums">
@@ -130,12 +158,14 @@ export function HistoryEntry({ row, defaultOpen, timeZone, facilityId, onEdit }:
       <div className="flex flex-col gap-10 pb-16 sm:pl-48">
         {struck && (
           <p className={`body-caption ${SECONDARY}`}>
-            {row.replacedBy ? `Replaced by the correction recorded ${formatFacilityDateTime(row.replacedBy.recordedAt, timeZone)}.` : "Reversed."} It no longer counts toward the stock.
+            {row.replacedBy
+              ? <>Replaced by <EntryLink entryId={row.replacedBy.id} linked={linked}>the correction recorded {formatFacilityDateTime(row.replacedBy.recordedAt, timeZone)}</EntryLink>.</>
+              : "Reversed."} It no longer counts toward the stock.
           </p>
         )}
         <PartsTable row={row} subject={subject} />
         {row.moistureEntry?.moistureReset && <MoistureResetChange reset={row.moistureEntry.moistureReset} />}
-        <LedgerFacts facts={facts(row, timeZone)} />
+        <LedgerFacts facts={facts(row, timeZone, linked)} />
         {row.kind === "loss" && !struck && (entry.editLockedReason === null
           ? <Button type="button" variant="noOutline" className="self-start" onClick={() => onEdit(entry)}>Edit</Button>
           : entry.editLockedReason ? <Notice tone="info">{entry.editLockedReason}</Notice> : null)}
