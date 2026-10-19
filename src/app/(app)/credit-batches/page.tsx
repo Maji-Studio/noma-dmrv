@@ -27,6 +27,7 @@ export default async function CreditBatchesPage({
       canManage={canManage}
       emissionsEntriesEnabled={emissionsEntriesEnabled()}
       initialCreate={isCreateIntentValue(query[CREATE_INTENT_PARAM])}
+      initialView={query.view === "list" ? "list" : "timeline"}
     />
   );
 }

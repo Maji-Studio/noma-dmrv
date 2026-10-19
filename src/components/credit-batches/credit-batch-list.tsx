@@ -3,12 +3,13 @@
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * CreditBatchList component
- * Card grid layout with operational filters, pagination, and a derived
- * cross-artifact lifecycle. The dormant credit_batches.status column is not
- * rendered; progress comes from data readiness, Removal submission, and the
- * linked GHG Statement's verifier status.
+ * The Timeline (default) or the List: compact rows with folded filters,
+ * pagination, the timeline's lifecycle state and the dry applied biochar. The
+ * dormant credit_batches.status column is not rendered; progress comes from
+ * data readiness, Removal submission, and the linked GHG Statement's verifier
+ * status.
  *
- * Clicking a card opens the unified side sheet in view mode (deep-linkable via
+ * Clicking a row opens the unified side sheet in view mode (deep-linkable via
  * `?batch=<id>`, mirroring the production-run list) — there is no separate
  * detail page; `/credit-batches/[id]` redirects here.
  */
@@ -36,7 +37,11 @@ import {
 } from "@/components/ui";
 import { ServerError } from "@/components/forms";
 import { CreditBatchForm } from "./credit-batch-form";
-import { CreditBatchCard } from "./credit-batch-card";
+import { CreditBatchListRow, CreditBatchListRows } from "./credit-batch-list-rows";
+import {
+  CreditBatchTimeline,
+  type NewBatchRequest,
+} from "./credit-batch-timeline";
 import { CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE, creditBatchUpdatePatch, isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
 import { RecordUsedBy, recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
@@ -58,11 +63,18 @@ import {
   useCreditBatch,
   useCreditBatchCo2eStoredPreviews,
   useCreditBatchProductionRunOptions,
+  useCreditBatchTimelineFacts,
   useCreateCreditBatch,
   useUpdateCreditBatch,
   useDeleteCreditBatch,
 } from "@/hooks/use-credit-batches";
 import { formatDateRange } from "@/lib/format-utils";
+import { creditBatchStateOf } from "@/lib/credit-batches/batch-state";
+import { formatFacilityDate } from "@/lib/date-utils";
+import {
+  defaultNewBatchWindow,
+  monthWindow,
+} from "@/lib/credit-batches/timeline";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { CREDIT_BATCH_DEEP_LINK_PARAM } from "@/lib/credit-batch-links";
 import {
@@ -72,7 +84,7 @@ import {
 import { useCreditBatchHealthSummaries } from "@/hooks/use-certification";
 import type { CreditBatchFormData } from "@/schemas/credit-batches";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useListPagination } from "@/hooks/use-list-pagination";
 import { SelectFacilityEmptyState } from "@/components/navigation";
@@ -115,16 +127,22 @@ export function hydrateCo2ePreview(
 // Component
 // ============================================
 
+export type CreditBatchListView = "timeline" | "list";
+
 export function CreditBatchList({
   canManage = false,
   initialCreate = false,
+  initialView = "timeline",
   emissionsEntriesEnabled = false,
 }: {
   canManage?: boolean;
   initialCreate?: boolean;
+  initialView?: CreditBatchListView;
   /** Server flag EMISSIONS_ENTRIES_ENABLED; mounts the Emissions panel. */
   emissionsEntriesEnabled?: boolean;
 }) {
+  const [view, setView] = useState<CreditBatchListView>(initialView);
+  const [createDefaults, setCreateDefaults] = useState<NewBatchRequest | null>(null);
   // Filter & pagination state
   const [searchQuery, setSearchQuery] = useState("");
   const [startDateFilter, setStartDateFilter] = useState("");
@@ -158,6 +176,9 @@ export function CreditBatchList({
   const createIntent = useOpenCreateIntent({ initialOpen: initialCreate });
 
   const { facilityId: contextFacilityId } = useFacilityContext();
+  // The facility's day: what the timeline marks and "New credit batch" proposes windows from.
+  const { timeZone } = useFacilityClock(contextFacilityId);
+  const today = formatFacilityDate(new Date(), timeZone);
   const { currentPage, pageSize, setCurrentPage, setPageSize } =
     useListPagination(contextFacilityId);
 
@@ -193,9 +214,12 @@ export function CreditBatchList({
   // Card pills need only the visible page. A readiness filter necessarily
   // widens the request to the date/feedstock candidate set so filtering stays
   // accurate without walking every batch on ordinary list loads.
-  const healthBatchIds = readinessFilter === "all"
-    ? visibleFacetIds
-    : facetFilteredItems.map((batch) => batch.id);
+  // The timeline loads its own readiness for the year it shows.
+  const healthBatchIds = view === "timeline"
+    ? []
+    : readinessFilter === "all"
+      ? visibleFacetIds
+      : facetFilteredItems.map((batch) => batch.id);
   // The sheet's lifecycle rail needs the focused batch's summary even when it
   // is not on the visible page (deep link straight into the sheet).
   const sheetBatchId = sideSheet?.entity?.id ?? focusedBatchId;
@@ -366,8 +390,20 @@ export function CreditBatchList({
     setDeletingBatchId(null);
   };
 
-  const openCreate = () => {
+  // The window a new credit batch opens with: the picked slot, or this month
+  // until a feedstock is chosen (the form then proposes that feedstock's month).
+  const windowForFeedstock = (feedstockTypeId: string) => {
+    const window = defaultNewBatchWindow(
+      allItems
+        .filter((batch) => batch.feedstockTypeId === feedstockTypeId)
+        .map((batch) => ({ start: batch.startDate, end: batch.endDate })),
+      today,
+    );
+    return { startDate: window.start, endDate: window.end };
+  };
+  const openCreate = (request?: NewBatchRequest) => {
     createIntent.clear();
+    setCreateDefaults(request ?? null);
     void setFocusedBatchId(null);
     setCreateError(null);
     setUpdateError(null);
@@ -389,6 +425,7 @@ export function CreditBatchList({
     void setFocusedBatchId(null);
     void setDeepLinkFocus(null);
     setSideSheet(null);
+    setCreateDefaults(null);
     setCreateError(null);
     setUpdateError(null);
   };
@@ -458,7 +495,13 @@ export function CreditBatchList({
     displaySideSheet?.entity ?? null,
     co2eStoredPreviews,
   );
-  const batchLocks = useRecordLocks("creditBatch", paginatedItems.map((batch) => batch.id));
+  const pageBatchIds = paginatedItems.map((batch) => batch.id);
+  const batchLocks = useRecordLocks("creditBatch", pageBatchIds);
+  // Dry applied biochar for the visible rows only; the timeline loads its own year.
+  const factsQuery = useCreditBatchTimelineFacts(
+    contextFacilityId ?? undefined,
+    view === "list" ? pageBatchIds : [],
+  );
   const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("creditBatch", viewEntity?.id);
   const membershipLocked = isCreditBatchMembershipLocked(sheetLock);
   const runOptionsQuery = useCreditBatchProductionRunOptions({
@@ -537,6 +580,14 @@ export function CreditBatchList({
   const sideSheetOpen = !!displaySideSheet || createIntent.isOpen;
   const sideSheetMode = displaySideSheet?.mode ?? "create";
   const sideSheetEntity = viewEntity;
+  const thisMonth = monthWindow(today);
+  const createFormDefaults = createDefaults
+    ? {
+        feedstockTypeId: createDefaults.feedstockTypeId,
+        startDate: createDefaults.start,
+        endDate: createDefaults.end,
+      }
+    : { startDate: thisMonth.start, endDate: thisMonth.end };
 
   const sideSheetTitle =
     sideSheetMode === "create" ? "Create credit batch" : sideSheetEntity?.code ?? "";
@@ -558,140 +609,191 @@ export function CreditBatchList({
         title="Credit Batches"
         subtitle="Carbon credit batches for verification and registry"
         actions={
-          <Button variant="primary" onClick={openCreate}>
+          <Button variant="primary" onClick={() => openCreate()}>
             <PlusIcon size={20} weight="bold" />
             New credit batch
           </Button>
         }
       />
 
-      {/* Compact operational summary */}
-      <div className="flex flex-wrap items-center gap-x-20 gap-y-8 border-y border-[var(--color-border-tertiary)] py-12">
-        <span className="inline-flex items-center gap-6 body-small font-medium text-[var(--color-text-primary)]">
-          <CertificateIcon size={16} weight="bold" aria-hidden />
-          {listLoading
-            ? "Loading batches…"
-            : readinessResultsUnavailable
-              ? "Readiness unavailable"
-              : `${totalFiltered} ${totalFiltered === 1 ? "batch" : "batches"}`}
-        </span>
-        {hasCompleteCo2eSummary && totalCo2e != null && (
-          <span className="inline-flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
-            <LeafIcon size={16} weight="bold" aria-hidden />
-            {`${totalCo2e.toFixed(2)} t estimated CO₂e stored`}
-          </span>
-        )}
-      </div>
-
-      <CreditBatchFilters
-        search={searchQuery}
-        startDate={startDateFilter}
-        endDate={endDateFilter}
-        readiness={readinessFilter}
-        feedstocks={feedstockOptions}
-        selectedFeedstockIds={selectedFeedstockIds}
-        hasActiveFilters={hasActiveFilters}
-        onSearchChange={(value) => {
-          setSearchQuery(value);
-          setCurrentPage(1);
-        }}
-        onStartDateChange={(value) => {
-          setStartDateFilter(value);
-          setCurrentPage(1);
-        }}
-        onEndDateChange={(value) => {
-          setEndDateFilter(value);
-          setCurrentPage(1);
-        }}
-        onReadinessChange={(value) => {
-          setReadinessFilter(value);
-          setCurrentPage(1);
-        }}
-        onAddFeedstock={(id) => {
-          setSelectedFeedstockIds((current) => [...current, id]);
-          setCurrentPage(1);
-        }}
-        onRemoveFeedstock={(id) => {
-          setSelectedFeedstockIds((current) =>
-            current.filter((feedstockId) => feedstockId !== id),
-          );
-          setCurrentPage(1);
-        }}
-        onClear={clearFilters}
-      />
-
-      {healthError && (
-        <Notice
-          tone="warning"
-          action={
-            <Button
-              variant="weak"
-              size="small"
-              busy={healthFetching}
-              onClick={() => void refetchHealth()}
-            >
-              Retry
-            </Button>
-          }
-        >
-          {readinessErrorMessage(readinessFilter)}
-        </Notice>
+      {allItems.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-x-20 gap-y-8">
+          <div className="flex items-center gap-8" role="group" aria-label="Credit batch view">
+            {(["timeline", "list"] as const).map((option) => (
+              <Button
+                key={option}
+                variant={view === option ? "primary" : "weak"}
+                size="small"
+                aria-pressed={view === option}
+                onClick={() => setView(option)}
+              >
+                {option === "timeline" ? "Timeline" : "List"}
+              </Button>
+            ))}
+          </div>
+          {/* Compact operational summary of the listed batches. */}
+          {view === "list" && (
+            <div className="flex flex-wrap items-center gap-x-20 gap-y-4">
+              <span className="inline-flex items-center gap-6 body-small font-medium text-[var(--color-text-primary)]">
+                <CertificateIcon size={16} weight="bold" aria-hidden />
+                {listLoading
+                  ? "Loading batches…"
+                  : readinessResultsUnavailable
+                    ? "Readiness unavailable"
+                    : `${totalFiltered} ${totalFiltered === 1 ? "batch" : "batches"}`}
+              </span>
+              {hasCompleteCo2eSummary && totalCo2e != null && (
+                <span className="inline-flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
+                  <LeafIcon size={16} weight="bold" aria-hidden />
+                  {`${totalCo2e.toFixed(2)} t estimated CO₂e stored`}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
-      {/* Card Grid or Empty State */}
-      {readinessResultsUnavailable ? null : listLoading ? (
-        <div
-          className="bg-[var(--panel-bg)] [border:var(--panel-border)] p-32 body-small text-[var(--color-text-tertiary)]"
-          aria-busy="true"
-        >
-          Loading credit batches…
-        </div>
-      ) : paginatedItems.length === 0 ? (
-        <EmptyState
-          padding="lg"
-          icon={hasActiveFilters ? <CertificateIcon size={48} /> : <CreditBatchArt size={ILLUSTRATION_SIZE.empty} />}
-          title={
-            hasActiveFilters
-              ? "No credit batches found"
-              : "No credit batches yet"
-          }
-          description={
-            hasActiveFilters ? "Try adjusting or clearing the filters." : undefined
-          }
-          action={
-            !hasActiveFilters ? (
-              <Button variant="primary" onClick={openCreate}>
-                <PlusIcon size={18} weight="bold" />
-                Create your first credit batch
-              </Button>
-            ) : undefined
-          }
+      {view === "timeline" && allItems.length > 0 && contextFacilityId ? (
+        <CreditBatchTimeline
+          batches={allItems}
+          facilityId={contextFacilityId}
+          today={today}
+          onOpenBatch={openView}
+          onNewBatch={openCreate}
         />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-24 xl:grid-cols-2 2xl:grid-cols-3">
-            {paginatedItems.map((batch) => (
-              <CreditBatchCard
-                key={batch.id}
-                creditBatch={batch}
-                health={healthError ? undefined : batchHealthSummaries[batch.id]}
-                isHealthLoading={healthLoading && !healthError}
-                onView={openView}
-                onEdit={openEdit}
-                onDelete={handleDelete}
-                lock={batchLocks.locks[batch.id]}
-              />
-            ))}
-          </div>
+        <CreditBatchFilters
+          search={searchQuery}
+          startDate={startDateFilter}
+          endDate={endDateFilter}
+          readiness={readinessFilter}
+          feedstocks={feedstockOptions}
+          selectedFeedstockIds={selectedFeedstockIds}
+          hasActiveFilters={hasActiveFilters}
+          onSearchChange={(value) => {
+            setSearchQuery(value);
+            setCurrentPage(1);
+          }}
+          onStartDateChange={(value) => {
+            setStartDateFilter(value);
+            setCurrentPage(1);
+          }}
+          onEndDateChange={(value) => {
+            setEndDateFilter(value);
+            setCurrentPage(1);
+          }}
+          onReadinessChange={(value) => {
+            setReadinessFilter(value);
+            setCurrentPage(1);
+          }}
+          onAddFeedstock={(id) => {
+            setSelectedFeedstockIds((current) => [...current, id]);
+            setCurrentPage(1);
+          }}
+          onRemoveFeedstock={(id) => {
+            setSelectedFeedstockIds((current) =>
+              current.filter((feedstockId) => feedstockId !== id),
+            );
+            setCurrentPage(1);
+          }}
+          onClear={clearFilters}
+        />
 
-          <ListPagination
-            page={safeCurrentPage}
-            pageCount={totalPages}
-            pageSize={pageSize}
-            onPageChange={setCurrentPage}
-            onPageSizeChange={setPageSize}
-            className="border-t border-[var(--color-border-tertiary)] pt-16 md:px-0"
+        {healthError && (
+          <Notice
+            tone="warning"
+            action={
+              <Button
+                variant="weak"
+                size="small"
+                busy={healthFetching}
+                onClick={() => void refetchHealth()}
+              >
+                Retry
+              </Button>
+            }
+          >
+            {readinessErrorMessage(readinessFilter)}
+          </Notice>
+        )}
+
+        {factsQuery.error && (
+          <Notice
+            tone="warning"
+            action={
+              <Button
+                variant="weak"
+                size="small"
+                busy={factsQuery.isFetching}
+                onClick={() => void factsQuery.refetch()}
+              >
+                Retry
+              </Button>
+            }
+          >
+            The applied biochar of each credit batch could not be loaded.
+          </Notice>
+        )}
+
+        {/* Rows or Empty State */}
+        {readinessResultsUnavailable ? null : listLoading ? (
+          <div
+            className="bg-[var(--panel-bg)] [border:var(--panel-border)] p-32 body-small text-[var(--color-text-tertiary)]"
+            aria-busy="true"
+          >
+            Loading credit batches…
+          </div>
+        ) : paginatedItems.length === 0 ? (
+          <EmptyState
+            padding="lg"
+            icon={hasActiveFilters ? <CertificateIcon size={48} /> : <CreditBatchArt size={ILLUSTRATION_SIZE.empty} />}
+            title={
+              hasActiveFilters
+                ? "No credit batches found"
+                : "No credit batches yet"
+            }
+            description={
+              hasActiveFilters ? "Try adjusting or clearing the filters." : undefined
+            }
+            action={
+              !hasActiveFilters ? (
+                <Button variant="primary" onClick={() => openCreate()}>
+                  <PlusIcon size={18} weight="bold" />
+                  Create your first credit batch
+                </Button>
+              ) : undefined
+            }
           />
+        ) : (
+          <>
+            <CreditBatchListRows>
+              {paginatedItems.map((batch) => (
+                <CreditBatchListRow
+                  key={batch.id}
+                  creditBatch={batch}
+                  view={creditBatchStateOf(healthError ? undefined : batchHealthSummaries[batch.id])}
+                  readinessStatus={healthError ? "failed" : healthLoading ? "loading" : "ready"}
+                  facts={factsQuery.data[batch.id]}
+                  factsStatus={factsQuery.error ? "failed" : factsQuery.isLoading ? "loading" : "ready"}
+                  lock={batchLocks.locks[batch.id]}
+                  onView={openView}
+                  onEdit={openEdit}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </CreditBatchListRows>
+
+            <ListPagination
+              page={safeCurrentPage}
+              pageCount={totalPages}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+              className="border-t border-[var(--color-border-tertiary)] pt-16 md:px-0"
+            />
+          </>
+        )}
         </>
       )}
 
@@ -775,7 +877,12 @@ export function CreditBatchList({
         }
       >
         <CreditBatchForm
-          key={sideSheetEntity?.id ?? "create"}
+          key={
+            sideSheetEntity?.id ??
+            `create:${createDefaults?.feedstockTypeId ?? ""}:${createDefaults?.start ?? ""}`
+          }
+          defaultValues={sideSheetEntity ? undefined : createFormDefaults}
+          windowForFeedstock={windowForFeedstock}
           creditBatch={sideSheetEntity ?? undefined}
           onSubmit={
             sideSheetEntity && sideSheetMode === "edit"
