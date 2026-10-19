@@ -8,6 +8,7 @@ import { getProductionRunsEntity } from "@/data-access/entities/production-runs"
 import { getDashboardOverview } from "@/data-access/dashboard-overview";
 import { formatDate } from "@/lib/format-utils";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
+import { addDaysIso } from "@/lib/date-utils";
 import { facilityCalendarFixture } from "./helpers/facility-calendar-fixture";
 import { ensureTestOrg, makeTestOrgContext } from "./helpers/test-org";
 
@@ -16,6 +17,9 @@ const ISO_MONTH_LENGTH = 7;
 const FEEDSTOCK_DRY_KG = 1000;
 const BIOCHAR_DRY_KG = 200;
 const DASHBOARD_NOW = "2025-09-30T22:30:00.000Z";
+const WEEK_DAYS = 7;
+const WEEK_FIXTURE_START_DAY = "2025-09-17";
+const WEEK_FIXTURE_END_DAY = "2025-10-02";
 const CASES = [
   { label: "DAR", zone: "Africa/Dar_es_Salaam", start: "2025-09-30T22:00:00.000Z", day: "2025-10-01" },
   { label: "LA", zone: "America/Los_Angeles", start: "2025-10-01T06:00:00.000Z", day: "2025-09-30" },
@@ -55,6 +59,45 @@ describe("production run facility-local display dates", () => {
       expect(dashboard.massFlow).toEqual(expect.arrayContaining([
         { key: "intoRuns", tonnes: kgToTonnes(FEEDSTOCK_DRY_KG) },
         { key: "produced", tonnes: kgToTonnes(BIOCHAR_DRY_KG) },
+      ]));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("compares exactly seven local days of measured runs in each week", async () => {
+    const facility = await f.facility("KPI-WEEK-BOUNDS", "Africa/Dar_es_Salaam");
+    const runIds: string[] = [];
+    // Previous: Sep 18-24. Current: Sep 25-Oct 1. Include both outer neighbors.
+    for (let day = WEEK_FIXTURE_START_DAY; day <= WEEK_FIXTURE_END_DAY; day = addDaysIso(day, 1)) {
+      const run = await f.run(facility.id, `WEEK-${day}`, `${day}T00:00:00+03:00`);
+      runIds.push(run.id);
+    }
+    await db.update(productionRuns).set({
+      feedstockMassDryKg: FEEDSTOCK_DRY_KG,
+      biocharDryMassKg: BIOCHAR_DRY_KG,
+    }).where(and(
+      eq(productionRuns.organizationId, ctx.organizationId),
+      inArray(productionRuns.id, runIds),
+    ));
+
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(DASHBOARD_NOW));
+    try {
+      const dashboard = await getDashboardOverview(ctx, facility.id, "week");
+      // Equal per-day masses and zero deltas also require seven previous runs.
+      expect(dashboard.kpis).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          key: "feedstockProcessed",
+          value: kgToTonnes(FEEDSTOCK_DRY_KG * WEEK_DAYS),
+          detail: `dry mass into ${WEEK_DAYS} runs`,
+          deltaPercent: 0,
+        }),
+        expect.objectContaining({
+          key: "biocharProduced",
+          value: kgToTonnes(BIOCHAR_DRY_KG * WEEK_DAYS),
+          deltaPercent: 0,
+        }),
       ]));
     } finally {
       vi.useRealTimers();

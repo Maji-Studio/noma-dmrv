@@ -23,7 +23,7 @@ import {
   productionRuns,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { formatFacilityDate, formatUtcDate, UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
+import { addDaysIso, formatFacilityDate, formatUtcDate, UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
@@ -208,10 +208,11 @@ export async function getDashboardOverview(
     .from(facilities)
     .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
   const timezone = facility?.timezone ?? UNKNOWN_FACILITY_TIMEZONE;
-  const localDay = (ms: number) => formatFacilityDate(new Date(ms), timezone);
-  const startDay = bounds.startMs == null ? null : localDay(bounds.startMs);
-  const previousStartDay = bounds.previousStartMs == null ? null : localDay(bounds.previousStartMs);
-  const nowDay = localDay(bounds.nowMs);
+  const nowDay = formatFacilityDate(new Date(bounds.nowMs), timezone);
+  const periodDays = range === "week" ? WEEK_DAYS : MONTH_DAYS;
+  // Include today in the N calendar days, independently of instant bounds.
+  const startDay = range === "all" ? null : addDaysIso(nowDay, -(periodDays - 1));
+  const previousStartDay = startDay == null ? null : addDaysIso(startDay, -periodDays);
   const inCurrentDayPeriod = (day: string) =>
     (startDay == null || day >= startDay) && day <= nowDay;
   const inPreviousDayPeriod = (day: string) =>
