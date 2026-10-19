@@ -109,6 +109,19 @@ inside Removal deletion. Drift is surfaced for operator review. Both
 Storage Location and Biochar Application synchronization follow the configured
 Isometric environment.
 
+## GraphQL evidence read (outside OpenAPI)
+
+`POST /graphql` at the Certify origin is wired through
+`src/lib/isometric/biochar-application-source-readback.ts:readBiocharApplicationSources`,
+consumed by `src/fn/certification/biochar-application-source-readback.ts` on
+submission and Removal summary refresh. It reads
+`project.biocharSpreadEvents(filter: { idIn: $ids }).biocharSpreadEventSources`.
+Verified on the sandbox (2026-10-19): both Certify authentication headers are
+required, the REST Biochar Application id (`bse_...`) is the
+`BiocharSpreadEvent.id`, and the Source list matches the `source_ids` sent on
+create. This call is not generated from REST types; see
+[open questions](../open-questions-isometric.md).
+
 ## Present in generated types but not wired
 
 The following operation families have no current application call site:

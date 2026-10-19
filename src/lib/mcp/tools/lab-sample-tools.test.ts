@@ -1,3 +1,4 @@
+import { apiKeyContext } from "../../../../tests/helpers/api-context";
 import { beforeEach, expect, it, vi } from "vitest";
 import { LAB_SAMPLE_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { representationEtag } from "@/lib/api/etag";
@@ -35,9 +36,9 @@ const row = representLabSample({
 } as Parameters<typeof representLabSample>[0]);
 const written = { sample: row, warnings: [H_TO_C_NOTICE, WARNING] };
 const context = {
-  ctx: { userId: "user", credentialId: "credential", organizationId: "org", orgRole: "admin", scopes: ["lab-samples:write", "lab-samples:read", "lab-samples:delete", "credit-batches:read"] },
+  ctx: apiKeyContext({ userId: "user", credentialId: "credential", organizationId: "org", orgRole: "admin", scopes: ["lab-samples:write", "lab-samples:read", "lab-samples:delete", "credit-batches:read"] }),
   deadlineAt: 0, requestId: "request", instance: "/api/mcp", headers: new Headers(),
-} as unknown as ApiRouteContext;
+} satisfies ApiRouteContext;
 const create = { creditBatchId: BATCH, samplingTime: CLOCK, totalCarbonPercent: 80, organicCarbonPercent: 75 };
 const target = { labSampleId: ID, expectedVersion: 1 };
 const args = (name: string) => name === "record_lab_sample" ? create : name === "update_lab_sample" ? { ...target, labName: "Lab" } : target;

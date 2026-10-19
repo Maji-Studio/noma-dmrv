@@ -18,6 +18,14 @@ describe("formatSamplingTime", () => {
   });
 });
 
+describe("Sample read-view Transport section", () => {
+  const sample = { id: "sample", creditBatchCode: "CB-1", samplingTime: new Date("2026-09-10T08:00:00Z"), facilityTimezone: "UTC" } as unknown as SampleWithRelations;
+  it("shows Transport by default and hides it behind the emissions gate", () => {
+    expect(sampleSheetSections(sample).map((section) => section.title)).toContain("Transport");
+    expect(sampleSheetSections(sample, { hideTransport: true }).map((section) => section.title)).not.toContain("Transport");
+  });
+});
+
 describe("Sample read-view certification chips", () => {
   it.each([
     { durabilityOption: "200_year", sampling: "sampled", chemistryRequired: true },

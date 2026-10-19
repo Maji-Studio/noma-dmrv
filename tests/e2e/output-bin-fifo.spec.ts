@@ -44,7 +44,7 @@ test.describe("Output-bin conserved FIFO", () => {
       const f = await seedOutputStockBrowserFixture(testUsers.admin.id);
       await openBin(page, f);
       await page.getByRole("button", { name: "Edit storage bin", exact: true }).click();
-      const order = page.getByRole("group", { name: "Default draw order", exact: true });
+      const order = page.getByRole("group", { name: /^Default draw order/ });
       await expect(order).toBeVisible();
       await expect(order.getByRole("radio", { name: /^Oldest first/ })).toBeChecked();
       await evidence(page, info, `default-draw-order-before-${viewport.name}`);
@@ -255,7 +255,9 @@ test.describe("Output-bin conserved FIFO", () => {
     await loss.getByRole("button", { name: "Edit", exact: true }).click();
     const edit = page.getByRole("dialog", { name: "Edit lost mass", exact: true });
     await expect(edit.locator("#stock-wet")).toHaveValue("120");
-    await expect(edit.locator("#stock-reason")).toHaveValue("E2E FIFO spill");
+    await expect(edit.getByText("Why corrected", { exact: true }).first()).toBeVisible();
+    await expect(edit.locator("#stock-reason")).toHaveValue("");
+    await edit.locator("#stock-reason").fill("E2E FIFO scale misread");
     await edit.locator("#stock-wet").fill("60");
     await edit.getByRole("button", { name: "Save changes", exact: true }).click();
     await expect(edit).toHaveCount(0);

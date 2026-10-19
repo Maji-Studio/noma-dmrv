@@ -32,6 +32,7 @@ import {
   evaluateReplicateCount,
   evaluateRunEligibility,
   isUsableNumber,
+  isUsableRatio,
   MINIMUM_REPLICATES_PER_BATCH,
 } from "@/lib/calculations/biochar-eligibility";
 import {
@@ -348,8 +349,8 @@ function buildReplicate(
         : null,
     samplingDay: samplingDayOf(s.samplingTime, facilityTimezone),
     labName: s.labName ?? null,
-    hToCorg: isUsableNumber(s.hToCOrgRatio) ? s.hToCOrgRatio : null,
-    oToCorg: isUsableNumber(s.oToCOrgRatio) ? s.oToCOrgRatio : null,
+    hToCorg: isUsableRatio(s.hToCOrgRatio) ? s.hToCOrgRatio : null,
+    oToCorg: isUsableRatio(s.oToCOrgRatio) ? s.oToCOrgRatio : null,
     totalCarbonPercent: isUsableNumber(s.totalCarbonPercent)
       ? s.totalCarbonPercent
       : null,

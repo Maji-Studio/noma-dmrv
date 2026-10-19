@@ -23,6 +23,7 @@ import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { invalidateOnboardingProgress } from "./use-onboarding";
+import { chainOfCustodyKeys } from "./use-chain-of-custody";
 
 // ============================================
 // Query Keys
@@ -267,6 +268,7 @@ export function useUpdateFacility(
     onSuccess: async (data, variables) => {
       // Update cache with actual server data
       queryClient.setQueryData(facilityKeys.detail(data.id), data);
+      queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
 
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({

@@ -7,7 +7,7 @@ import { requireEmissionsEntriesEnabled } from "@/lib/certification/emissions-en
 import { requireOrgScope } from "./utils";
 import { nextVersion } from "./row-version";
 
-export async function lockEmissionEntry(ctx: OrgContext, tx: DbTransaction, id: string) {
+export async function lockEmissionEntry(ctx: OrgContext, tx: DbTransaction, id: string, options: { includeDeleted?: boolean } = {}) {
   requireOrgScope(ctx);
   requireEmissionsEntriesEnabled();
   const [entry] = await tx
@@ -17,16 +17,16 @@ export async function lockEmissionEntry(ctx: OrgContext, tx: DbTransaction, id: 
       and(
         eq(emissionEntries.organizationId, ctx.organizationId),
         eq(emissionEntries.id, id),
-        isNull(emissionEntries.deletedAt),
+        options.includeDeleted ? undefined : isNull(emissionEntries.deletedAt),
       ),
     )
     .for("update");
   if (!entry) throw new DomainError("not_found", "Emissions entry was not found.");
   return entry;
 }
-export async function lockWritableEmissionEntry(ctx: OrgContext, tx: DbTransaction, id: string) {
+export async function lockWritableEmissionEntry(ctx: OrgContext, tx: DbTransaction, id: string, options: { includeDeleted?: boolean } = {}) {
   requireOrgScope(ctx);
-  const entry = await lockEmissionEntry(ctx, tx, id);
+  const entry = await lockEmissionEntry(ctx, tx, id, options);
   if (entry.sentByRemovalId || entry.sendReservedBySubmissionId)
     throw new DomainError(
       "certification_locked",

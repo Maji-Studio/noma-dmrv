@@ -33,7 +33,6 @@ BETTER_AUTH_SECRET="op://Environment Variables/noma-dmrv env local/BETTER_AUTH_S
 CRON_SECRET="op://Environment Variables/noma-dmrv env local/CRON_SECRET"
 ADMIN_EMAIL="op://Environment Variables/noma-dmrv env local/ADMIN_EMAIL"
 ADMIN_PASSWORD="op://Environment Variables/noma-dmrv env local/ADMIN_PASSWORD"
-ALLOW_SELF_SIGNUP="op://Environment Variables/noma-dmrv env local/ALLOW_SELF_SIGNUP"
 # Required true for e2e auth fixtures (Better Auth rate-limits sign-in)
 DISABLE_RATE_LIMIT="op://Environment Variables/noma-dmrv env local/DISABLE_RATE_LIMIT"
 

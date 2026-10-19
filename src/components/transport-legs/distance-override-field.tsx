@@ -213,6 +213,7 @@ export function DistanceOverrideField({
           hint={provenance}
           helperText={hint}
           error={overriding ? errors?.distanceKm : undefined}
+          required={overriding}
           certifyRequired={certifyRequired}
           certifyStatus={certifyStatus}
         >

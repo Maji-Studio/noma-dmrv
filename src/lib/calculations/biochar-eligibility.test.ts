@@ -5,6 +5,8 @@ import {
   O_TO_C_ORG_ELIGIBILITY_MAX,
   evaluateReplicateCount,
   evaluateRunEligibility,
+  isUsableNumber,
+  isUsableRatio,
 } from "./biochar-eligibility";
 
 describe("protocol thresholds (module §3 Table 2, §4)", () => {
@@ -167,5 +169,39 @@ describe("evaluateReplicateCount (module §4 — ≥3 per run)", () => {
 
   it("meets the minimum above 3 replicates", () => {
     expect(evaluateReplicateCount(5).meetsMinimum).toBe(true);
+  });
+});
+
+
+describe("negative ratios", () => {
+  it("keeps zero usable without changing the general number predicate", () => {
+    expect(isUsableRatio(0)).toBe(true);
+    expect(isUsableNumber(-1)).toBe(true);
+    for (const value of [-1, NaN, Infinity, -Infinity, null, undefined]) {
+      expect(isUsableRatio(value)).toBe(false);
+    }
+    expect(evaluateRunEligibility([{ hToCOrgRatio: 0, oToCOrgRatio: 0 }]))
+      .toMatchObject({ eligible: true, usableReplicateCount: 1 });
+  });
+
+  it("cannot confirm eligibility from negative means", () => {
+    expect(evaluateRunEligibility([{ hToCOrgRatio: -0.3, oToCOrgRatio: -0.1 }]))
+      .toMatchObject({ eligible: null, meanHToCOrgRatio: null, meanOToCOrgRatio: null,
+        usableReplicateCount: 0, outlierReplicateIndexes: [], unpairedHToCReplicateIndexes: [] });
+  });
+
+  it("treats each negative ratio exactly like a missing ratio", () => {
+    const negative = [
+      { hToCOrgRatio: -1, oToCOrgRatio: 0.3 },
+      { hToCOrgRatio: 0.6, oToCOrgRatio: -1 },
+      { hToCOrgRatio: 0.6, oToCOrgRatio: 0.1 },
+    ];
+    expect(evaluateRunEligibility(negative)).toEqual(evaluateRunEligibility([
+      { hToCOrgRatio: null, oToCOrgRatio: 0.3 },
+      { hToCOrgRatio: 0.6, oToCOrgRatio: null },
+      negative[2],
+    ]));
+    expect(evaluateRunEligibility(negative)).toMatchObject({ eligible: false,
+      meanHToCOrgRatio: 0.6, usableReplicateCount: 1, unpairedHToCReplicateIndexes: [1] });
   });
 });

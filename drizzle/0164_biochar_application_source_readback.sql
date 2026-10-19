@@ -1,0 +1,3 @@
+CREATE TYPE "public"."certifier_biochar_application_source_readback_status" AS ENUM('not_checked', 'confirmed', 'unconfirmed', 'mismatch');--> statement-breakpoint
+ALTER TABLE "certifier_biochar_applications" ADD COLUMN "source_readback_status" "certifier_biochar_application_source_readback_status" DEFAULT 'not_checked' NOT NULL;--> statement-breakpoint
+ALTER TABLE "certifier_biochar_applications" ADD COLUMN "source_readback_checked_at" timestamp;

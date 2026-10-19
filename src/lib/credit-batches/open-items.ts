@@ -2,10 +2,11 @@ import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
   O_TO_C_ORG_ELIGIBILITY_MAX,
-  isUsableNumber,
+  isUsableRatio,
 } from "@/lib/calculations/biochar-eligibility";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import type { BatchHealth } from "@/lib/certification/batch-health";
+import { certCheckLabel } from "@/lib/certification/requirement-labels";
 import {
   batchHealthFixLinkFor,
   resolveBatchHealthFixTarget,
@@ -15,19 +16,32 @@ import type {
   DurabilitySummaryReplicate,
 } from "@/lib/certification/durability-batch-summary";
 import type { BatchEmissionLine } from "@/lib/certification/emission-lines";
+import type { SampleDocumentWarningKey } from "@/lib/certification/sample-document-warnings";
+import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { formatTonnes } from "@/lib/format-utils";
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
+
+// Five kg rounds up to the smallest visible amount at two-decimal tonne precision.
+export const MIN_VISIBLE_NOT_APPLIED_DRY_KG = 5;
+
+/** Overview rows a health check lands on: the Removal template block and the batch details. */
+export const CREDIT_BATCH_TEMPLATE_ROW = ENTITY_FOCUS_TARGETS.removalTemplate;
+export const CREDIT_BATCH_DETAILS_ROW = "batch-details";
 
 export interface CreditBatchOpenItem {
   id: string;
   title: string;
   detail?: string;
+  /** The protocol reasoning behind a requirement, shown behind an ⓘ. */
+  why?: string;
   target:
     | { tab: "overview" | "production" | "samples" | "emissions" | "removals"; rowId?: string }
     | { href: string };
 }
 
 export interface CreditBatchOpenItemsInput {
+  facilityId: string;
+  creditBatchId: string;
   health?: BatchHealth;
   durability?: DurabilityBatchSummary;
   emissionLines?: readonly BatchEmissionLine[];
@@ -36,11 +50,11 @@ export interface CreditBatchOpenItemsInput {
 
 function outlierTitle(replicate: DurabilitySummaryReplicate): string {
   const limits: string[] = [];
-  if (isUsableNumber(replicate.hToCorg) && replicate.hToCorg >= H_TO_C_ORG_ELIGIBILITY_MAX) {
+  if (isUsableRatio(replicate.hToCorg) && replicate.hToCorg >= H_TO_C_ORG_ELIGIBILITY_MAX) {
     const comparison = replicate.hToCorg === H_TO_C_ORG_ELIGIBILITY_MAX ? "at" : "above";
     limits.push(`H/Corg ${comparison} the ${H_TO_C_ORG_ELIGIBILITY_MAX} limit`);
   }
-  if (isUsableNumber(replicate.oToCorg) && replicate.oToCorg >= O_TO_C_ORG_ELIGIBILITY_MAX) {
+  if (isUsableRatio(replicate.oToCorg) && replicate.oToCorg >= O_TO_C_ORG_ELIGIBILITY_MAX) {
     const comparison = replicate.oToCorg === O_TO_C_ORG_ELIGIBILITY_MAX ? "at" : "above";
     limits.push(`O/Corg ${comparison} the ${O_TO_C_ORG_ELIGIBILITY_MAX} limit`);
   }
@@ -48,6 +62,22 @@ function outlierTitle(replicate: DurabilitySummaryReplicate): string {
     ? `Sample ${replicate.sampleCode}: ${limits.join(" and ")}`
     : `Sample ${replicate.sampleCode} is outside the durability limits`;
 }
+
+/** Non-blocking Sample document gaps, worded as Check items on the Samples tab. */
+const DOCUMENT_WARNING_ITEMS: Record<SampleDocumentWarningKey, CreditBatchOpenItem> = {
+  labReport: {
+    id: "document:lab-report",
+    title: "No lab report on any Sample",
+    detail: "Upload a lab report to one of its Samples. You can still submit the Removal.",
+    target: { tab: "samples" },
+  },
+  reflectanceHistogram: {
+    id: "document:reflectance-histogram",
+    title: "No reflectance histogram on any Sample",
+    detail: "Upload a reflectance histogram to one of its Samples. You can still submit the Removal.",
+    target: { tab: "samples" },
+  },
+};
 
 export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
   const blocking: CreditBatchOpenItem[] = [];
@@ -62,26 +92,30 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       target = { tab: "samples" };
     } else if (fix === "emissions") {
       target = { tab: "emissions" };
-    } else if ([
-      "creditBatchTemplate",
-      "batchDetails",
-    ].includes(fix)) {
-      target = { tab: "overview" };
+    } else if (fix === "creditBatchTemplate") {
+      target = { tab: "overview", rowId: CREDIT_BATCH_TEMPLATE_ROW };
+    } else if (fix === "batchDetails") {
+      target = { tab: "overview", rowId: CREDIT_BATCH_DETAILS_ROW };
     } else {
       target = {
         href: batchHealthFixLinkFor(
           healthCheck,
-          input.pageModel?.facilityId ?? "",
-          input.pageModel?.creditBatchId,
+          input.facilityId,
+          input.creditBatchId,
         ).href,
       };
     }
     blocking.push({
       id: `health:${healthCheck.key}:${healthCheck.issueKey ?? fix}`,
-      title: healthCheck.requirementLabel,
+      title: certCheckLabel(healthCheck),
       detail: healthCheck.detail,
+      ...(healthCheck.whyDetail ? { why: healthCheck.whyDetail } : {}),
       target,
     });
+  }
+
+  for (const key of new Set(input.health?.documentWarnings ?? [])) {
+    check.push(DOCUMENT_WARNING_ITEMS[key]);
   }
 
   const outlierCodes = new Set<string>();
@@ -110,8 +144,8 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       const target: CreditBatchOpenItem["target"] = settingsFix
         ? { href: batchHealthFixLinkFor(
             { key: "emissions", fixTarget },
-            input.pageModel?.facilityId ?? "",
-            input.pageModel?.creditBatchId,
+            input.facilityId,
+            input.creditBatchId,
           ).href }
         : { tab: "emissions", rowId: line.componentId };
       check.push({
@@ -124,7 +158,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
   }
 
   const statement = input.pageModel?.milestones.ghgStatement;
-  if (statement?.status === "in-verification") {
+  if (statement?.status.kind === "in-verification") {
     waiting.push({
       id: `verification:${statement.id}`,
       title: `GHG Statement ${ghgStatementPeriodLabel(statement)}: In verification`,
@@ -132,7 +166,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     });
   }
   const notAppliedDryKg = input.pageModel?.mass.notAppliedDryKg;
-  if (notAppliedDryKg != null && notAppliedDryKg > 0) {
+  if (notAppliedDryKg != null && notAppliedDryKg >= MIN_VISIBLE_NOT_APPLIED_DRY_KG) {
     waiting.push({
       id: "not-applied",
       title: `${formatTonnes(kgToTonnes(notAppliedDryKg))} produced but not applied yet`,

@@ -18,6 +18,26 @@ Deferred work lives here, never as a `TODO` in code.
 - `src/lib/credit-batches/open-items.ts:buildCreditBatchOpenItems`: Open-item problem
   wording for unmet checks, shared with the New Removal wizard; Kenji to decide; #1136.
 
+## Credit batch page panels (2026-10-18) - **deferred**
+
+- `src/components/credit-batches/credit-batch-page-parts.tsx:PAGE_PANEL` is a
+  feature-local panel surface (border and paper). Moving the page's panels onto
+  the shared `Card` surface (`--panel-bg`, `--panel-border`, `--panel-shadow`)
+  is a visual change that needs its own design check; #1156 review.
+
+## Credit batch timeline follow-ups (#1153) - **deferred**
+
+- `src/data-access/credit-batch-timeline-facts.ts:listCreditBatchTimelineFacts`
+  repeats the produced, applied and not-in-a-Removal dry-mass rule of
+  `src/data-access/credit-batch-page-model.ts:getCreditBatchPageModel`, over a
+  slice query without the page model's `applications` and `deliveries` joins.
+  Extract one shared helper so the hover card and the batch page cannot
+  disagree on credit-bearing mass.
+- `src/components/credit-batches/credit-batch-timeline.tsx:CreditBatchTimeline`
+  gives (+) slots a 44px minimum but not batch bars: a batch of a few days is a
+  bar a few pixels wide. Needs a design decision for bars whose 44px hit areas
+  would overlap.
+
 ## Emissions entry dates (2026-10-16) - **deferred**
 
 - `src/lib/read-models/batch-emission-lines.ts:loadBatchEmissionLines` does not

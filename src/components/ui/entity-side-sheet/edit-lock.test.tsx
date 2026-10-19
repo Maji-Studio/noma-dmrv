@@ -31,7 +31,7 @@ const PENDING: SubmitBlock = { reason: "Checking whether this record can change.
 function renderSheet(block: SubmitBlock | null) {
   return create(
     <EntitySideSheet open mode="edit" onModeChange={() => undefined} onOpenChange={() => undefined} title="ORD-1"
-      editNotice={<p>Sent with Removal Jan 1 to Mar 31, 2026, so every field is locked.</p>} submitBlock={block}>
+      editNotice={<p>Nothing can be changed, because this was sent to Isometric with Removal Jan 1 to Mar 31, 2026.</p>} submitBlock={block}>
       <DraftForm />
     </EntitySideSheet>,
   );
@@ -54,7 +54,7 @@ describe("EntitySideSheet record lock in edit mode", () => {
     // The form stays mounted (RHF keeps the draft) inside a disabled fieldset.
     expect(renderer.root.findAllByType("input")).toHaveLength(1);
     expect(renderer.root.findByType("fieldset").props.disabled).toBe(true);
-    expect(text()).toContain("Sent with Removal Jan 1 to Mar 31, 2026, so every field is locked.");
+    expect(text()).toContain("Nothing can be changed, because this was sent to Isometric with Removal Jan 1 to Mar 31, 2026.");
     expect(buttonsNamed("Save changes")).toHaveLength(0);
     expect(buttonsNamed("Back to view")).toHaveLength(1);
   });

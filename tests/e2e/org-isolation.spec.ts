@@ -137,9 +137,9 @@ test("organization domain data is isolated across lists, record URLs, and picker
     orgB.page.getByText(seededData.supplier.name, { exact: true }),
   ).toHaveCount(0);
 
-  // The retired detail route resolves the batch before redirecting into the
-  // list's view sheet. A cross-org batch id must return the canonical 404 and
-  // reveal nothing about the foreign batch (not even its code).
+  // The credit batch page resolves the batch in the active organization. A
+  // cross-org batch id must return the canonical 404 and reveal nothing about
+  // the foreign batch (not even its code).
   const creditBatchResponse = await orgB.page.goto(
     `/credit-batches/${orgABatch.id}`,
   );

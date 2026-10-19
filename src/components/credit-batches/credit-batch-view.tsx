@@ -1,13 +1,10 @@
 /**
- * Credit-batch side-sheet view mode — the sections config for EntitySideSheet.
+ * Credit-batch side-sheet view mode, the sections config for EntitySideSheet.
  *
- * One question drives the order: is this batch ready to become credits, and
- * what needs fixing if not? Certification progress leads, then the batch's
- * identity (mirroring the edit form's section titles), the member production
- * runs closed by the carbon estimate they produce, notes, and the batch's
- * recorded activity (which fetches its own summary). The interactive
- * certification checklist and lab-sample panels mount below via
- * `viewModeChildren` because they fetch their own data.
+ * The sheet is a preview of the batch page (`/credit-batches/[id]`), which
+ * holds the open items, Samples and activity. Certification progress leads,
+ * then the batch's identity (mirroring the edit form's section titles), the
+ * member production runs closed by the carbon estimate they produce, and notes.
  */
 import { CompositionCard, DerivedHeadline } from "@/components/forms";
 import Link from "next/link";
@@ -26,6 +23,7 @@ import { CreditBatchLifecycleSteps } from "./credit-batch-lifecycle";
 import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
 import { SheetLinkRow, SheetLinkRows } from "@/components/ui/sheet-link-row";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { APPLIED_DRY_LABEL } from "@/lib/credit-batches/batch-page";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { computeCohortInputTotals } from "./cohort-input-ledger";
@@ -36,7 +34,7 @@ import {
   productionRunDeepLinkHref,
 } from "@/lib/certification/links";
 import { Notice } from "@/components/ui/notice";
-import { CreditBatchActivitySection } from "@/components/activity";
+import { CreditBatchEmissionsPanel } from "./credit-batch-emissions-panel";
 
 /** Names the figure, so the headline needs no label of its own. */
 const CARBON_ESTIMATE_TITLE = "Carbon estimate, before project emissions";
@@ -52,7 +50,7 @@ const DURABILITY_PERCENT_DIGITS = 1;
  * Why the estimate is missing, as one caption under the empty figure. Setup
  * gaps come first because they block every other input.
  */
-function carbonEstimateGap(missingInputs: readonly string[]): string | null {
+export function carbonEstimateGap(missingInputs: readonly string[]): string | null {
   if (missingInputs.includes("facilityCertifierProject")) return "No certifier project is linked to this facility.";
   if (missingInputs.includes("isometricCertifier")) return "Estimates are available for Isometric projects only.";
   if (missingInputs.includes(STORED_CO2E_PREVIEW_REVERIFICATION_GAP)) return "Paused for 200-year batches until the soil storage module is re-verified.";
@@ -150,7 +148,7 @@ function formatDurabilityPercent(fraction: number): string {
   return `${(fraction * PERCENT_SCALE).toFixed(DURABILITY_PERCENT_DIGITS)}%`;
 }
 
-function durabilityLabel(value: CreditBatchWithRelations["durabilityOption"]) {
+export function durabilityLabel(value: CreditBatchWithRelations["durabilityOption"]) {
   return value === "200_year" ? "200 years" : "1,000 years";
 }
 
@@ -274,6 +272,10 @@ interface CreditBatchSheetSectionsOptions extends CreditBatchRunsContentProps {
   locked?: boolean;
   /** The deep-link focus target the sheet was opened with. */
   activeFocusTarget?: string | null;
+  /** Applied dry biochar (kg) from the page model; undefined while it loads, null when it failed. */
+  appliedDryKg?: number | null;
+  /** The server's EMISSIONS_ENTRIES_ENABLED flag; set it to mount the Emissions panel between Production runs and Notes. */
+  emissionsEntriesEnabled?: boolean;
 }
 
 export function creditBatchSheetSections({
@@ -288,6 +290,8 @@ export function creditBatchSheetSections({
   canManage = false,
   locked = false,
   activeFocusTarget,
+  appliedDryKg,
+  emissionsEntriesEnabled,
 }: CreditBatchSheetSectionsOptions): DetailPanelSection[] {
   const removalId = creditBatch.productionEmissionsClaimedByRemovalId ?? healthSummary?.removalId ?? null;
   const removalCode = creditBatch.productionEmissionsClaimedByRemovalId
@@ -346,8 +350,11 @@ export function creditBatchSheetSections({
         { label: "Start date", value: formatDate(creditBatch.startDate) },
         { label: "End date", value: formatDate(creditBatch.endDate) },
         {
-          label: "Applied biochar",
-          value: formatTonnes(creditBatch.appliedWeightTons),
+          // Dry, from the page model's slices, as on the batch page.
+          label: APPLIED_DRY_LABEL,
+          value: appliedDryKg == null ? null : formatTonnes(kgToTonnes(appliedDryKg)),
+          pending: appliedDryKg === undefined,
+          emptySituation: "notAvailable" as const,
         },
         ...(durabilityResult?.fDurable != null
           ? [{ label: "Durability estimate (capped)", value: formatDurabilityPercent(durabilityResult.fDurable) }]
@@ -389,19 +396,24 @@ export function creditBatchSheetSections({
         </div>
       ),
     },
+    ...(emissionsEntriesEnabled === undefined
+      ? []
+      : [
+          {
+            id: "emissions",
+            fields: [],
+            content: (
+              <CreditBatchEmissionsPanel
+                creditBatchId={creditBatch.id}
+                facilityId={creditBatch.facilityId}
+                enabled={emissionsEntriesEnabled}
+              />
+            ),
+          },
+        ]),
     {
       id: "notes",
       fields: [{ label: "Notes", value: creditBatch.siteManagementNotes }],
-    },
-    {
-      title: "Activity",
-      fields: [],
-      content: (
-        <CreditBatchActivitySection
-          creditBatchId={creditBatch.id}
-          facilityId={creditBatch.facilityId}
-        />
-      ),
     },
   ];
 }

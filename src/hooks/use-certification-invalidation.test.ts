@@ -7,6 +7,7 @@ import { SubmissionStreamStalledError } from "@/lib/certification/submission-pro
 
 const reactQueryMocks = vi.hoisted(() => ({
   useQueries: vi.fn(),
+  useQuery: vi.fn(),
   useMutation: vi.fn(),
   useQueryClient: vi.fn(),
 }));
@@ -21,6 +22,7 @@ import {
   getRemovalCertifyRefetchInterval,
   getRemovalPreflightRefetchInterval,
   invalidateCertificationReadiness,
+  useFacilityCertifierSummary,
   useRemovalPreflightSummaries,
   useSaveFacilityCertifierMapping,
   useSubmitGhgStatementToVerifier,
@@ -91,7 +93,7 @@ describe("useSubmitGhgStatementToVerifier", () => {
       onError: (error: Error) => void;
     }];
     await onError(error);
-    expect(invalidateQueries).toHaveBeenCalledTimes(3);
+    expect(invalidateQueries).toHaveBeenCalledTimes(4);
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.details() });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: activityKeys.all });
     expect(invalidateQueries).toHaveBeenCalledWith({
@@ -171,9 +173,12 @@ describe("invalidateCertificationReadiness", () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.details() });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: activityKeys.all });
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(3);
+    expect(invalidateQueries).toHaveBeenCalledTimes(4);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: creditBatchKeys.timelineFactsPrefix(),
     });
   });
 
@@ -185,7 +190,7 @@ describe("invalidateCertificationReadiness", () => {
       creditBatchPreviews: true,
     });
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(invalidateQueries).toHaveBeenCalledTimes(5);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
     });
@@ -194,6 +199,24 @@ describe("invalidateCertificationReadiness", () => {
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: creditBatchKeys.details(),
+    });
+  });
+});
+
+describe("useFacilityCertifierSummary", () => {
+  it("refetches on mount by default", () => {
+    reactQueryMocks.useQuery.mockClear();
+    useFacilityCertifierSummary("facility-1");
+    expect(reactQueryMocks.useQuery.mock.calls[0][0]).not.toHaveProperty("refetchOnMount");
+  });
+
+  it("only reads the cache when asked to", () => {
+    reactQueryMocks.useQuery.mockClear();
+    useFacilityCertifierSummary("facility-1", true, { readCacheOnly: true });
+    expect(reactQueryMocks.useQuery.mock.calls[0][0]).toMatchObject({
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
     });
   });
 });

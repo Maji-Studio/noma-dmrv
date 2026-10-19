@@ -9,6 +9,7 @@ import {
   formatStockLimitKg,
   isStockOverdraw,
   pickerShowsRemainingStock,
+  wholeStockDrawKg,
 } from "@/lib/stock-overdraw";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 
@@ -63,6 +64,8 @@ export function ProductionRunFeedstockDrawRow({
       : null,
   );
   const availableKg = availability?.availableKg ?? null;
+  const wholeDrawKg =
+    availableKg !== null ? wholeStockDrawKg(availableKg) : null;
   const stockError =
     typeof wetMassKg === "number" &&
     availableKg != null &&
@@ -145,6 +148,16 @@ export function ProductionRunFeedstockDrawRow({
             label="Wet mass (kg)"
             error={resolvedWetMassError}
             cue={availableKg != null ? `${formatStockLimitKg(availableKg)} available ${productionRunId ? "to this run" : "in this bin"}` : undefined}
+            cueAction={
+              wholeDrawKg !== null
+                ? {
+                    label: "Add all",
+                    ariaLabel: `Add all stock to feedstock source ${index + 1}`,
+                    disabled,
+                    onClick: () => onWetMassChange(wholeDrawKg),
+                  }
+                : undefined
+            }
             hint="As-received weight from this bin, water included."
             required
           >

@@ -19,8 +19,8 @@ export type IsometricBiocharApplication =
     // Certify accepts `source_ids` on create but its documented response and
     // GET readback omit them (verified against the public OpenAPI on
     // 2026-09-08). When a response does carry them, the reviewed set is
-    // compared exactly; when it omits them, the accepted create request is
-    // the attachment contract. See issue #737 for an authoritative readback.
+    // compared exactly. GraphQL independently checks the authoritative set
+    // after confirmation, including when REST omits the field.
     // Typed as the untrusted wire value: `sourceSetMismatchMessage` narrows.
     source_ids?: unknown;
   };
@@ -262,8 +262,8 @@ export function biocharApplicationMismatchMessage(
 /**
  * Compares the reviewed Source set against the registry readback when the
  * readback exposes one. Certify's documented Biochar Application response
- * omits `source_ids`, so an omitted or null field is not drift: the accepted
- * create request already carried the reviewed set. Any other non-array value
+ * omits `source_ids`, so an omitted or null field is not REST drift. The
+ * authoritative set check uses the project GraphQL readback. Any non-array value
  * is an unexpected response shape and is reported as drift, never trusted.
  */
 function sourceSetMismatchMessage(

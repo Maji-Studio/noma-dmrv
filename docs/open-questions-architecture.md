@@ -6,6 +6,41 @@ these areas; the entry rules and invariants live in
 
 ## Architecture
 
+### OAuth connection follow-ups
+
+- **`api/activity-client-name`:** `src/lib/operations/runner.ts:runOperation`
+  records `oauthClientId`, but Activity does not display the connected app's name.
+  Add an organization-scoped label read without storing names in audit values.
+- **`api/oauth-client-admin-ui`:** `src/lib/auth/oauth-provider.ts:createOAuthProvider`
+  permits Platform Admin server-side creation only. Add a guarded client admin
+  screen for registration and disabling; preserve the closed HTTP endpoints.
+- **`api/oauth-purge-batches`:** `src/data-access/oauth-purge.ts` deletes expired
+  attempts, tokens and assertions in one statement each, unlike the bounded
+  batches of the other purge helpers. Volumes are small before production; batch
+  it before connections are on in production (PR #1161 review round 2).
+- **`api/dpop`:** `src/lib/auth/oauth-request-policy.ts:guardOAuthTokenInput`
+  refuses proofs and `src/lib/auth/oauth-context.ts:resolveOAuthContext` refuses
+  sender-bound rows. Full DPoP needs proof, nonce and replay validation before
+  advertising or accepting it.
+- **`api/chat-file-attachments`:** `src/lib/operations/document-guidance.ts:DOCUMENT_GUIDANCE`
+  directs agents without HTTP PUT to noma. Decision 128 defers chat attachments;
+  any Claude sandbox upload or ChatGPT file hand-off needs a separate verified
+  path, including fetch restrictions for server-side downloads.
+- **`api/mobile-oauth-client`:** register the native public client in **Phase 8**
+  (decision 126), using `src/lib/auth/oauth-provider.ts:createOAuthProvider` and
+  `src/lib/auth/oauth-config.ts:deriveOAuthConfig`. Settle its native redirect
+  and link it to REST only.
+- **claude.ai metadata and refresh:**
+  `src/lib/auth/oauth-cimd.ts:createOAuthCimdPlugins` uses the client's metadata
+  cache policy. Removing an identity can cause provider `invalid_client` on
+  refresh.
+  Record claude.ai's metadata `Cache-Control` and its reaction to that refusal
+  in c8, alongside client versions in [plan section 28](./plans/2026-10-06-data-entry-api.md#28-oauth-track-results-2026-10-19).
+- **Shared Disconnect touch target:**
+  `src/components/oauth/connected-app-list.tsx:ConnectedAppList` uses the shared
+  `src/components/ui/button/index.tsx:Button` at 40px. Resolve the shared target size
+  against the design system's 44px minimum without a one-off OAuth override.
+
 ### Party write adapters per kind (`api/party-write-adapters`, opened 2026-10-17)
 
 - **Anchor:** `src/lib/mcp/tools/party-tools.ts:partyWriteTools`,
@@ -205,7 +240,9 @@ these areas; the entry rules and invariants live in
   is **not** dead: both delete surfaces read it as `registryBoundaryOpened`
   for the confirmation copy (`src/lib/certification/removal-external-mutation.ts`,
   consumed by `src/fn/certification/removals-hub.ts` and the certify
-  context); issue #746 decides whether it also becomes a role gate.
+  context), and it is also the role gate: once it is set, deleting needs
+  `REMOVAL_REGISTRY_DELETION_MIN_ROLE` (`src/lib/certification/removal-deletion-role.ts`,
+  issue #746).
 - **To resolve:** retire `discardLocalRemovalDraft` and port the three
   fixtures onto `claimRemovalDeletion` (which takes the same Removal row and
   artifact locks), or record why the discard seam stays. The marker and its
@@ -572,23 +609,12 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   rotation window. Cheap now, expensive to retrofit (M). See
   [`docs/security.md`](./security.md).
 
-### Drop the `ALLOW_SELF_SIGNUP` flag (`auth/drop-self-signup-flag`, opened 2026-07-20)
+### Platform Admin cross-organization deep link (`tenancy/admin-deep-link`, opened 2026-10-19)
 
-- **Decided:** public self-signup is not a supported configuration. The product
-  is B2B invite-only, so the flag has exactly one correct value and is a tunable
-  that is never tuned.
-- **Current state:** `false` in every environment — `.env.example:28`,
-  `tests/setup.ts:21`, `.github/workflows/e2e.yml:35`,
-  `.github/workflows/e2e-live.yml:41` — feeding
-  `disableSignUp: !env.ALLOW_SELF_SIGNUP` (`src/lib/auth/better-auth.ts:171`).
-- **Simplification (S):** hardcode `disableSignUp: true`, delete
-  `ALLOW_SELF_SIGNUP` from `src/config/env.ts:64` and the four environment
-  declarations, and rewrite `tests/auth-config.test.ts:6` to assert the constant
-  rather than the env round-trip. Removes a config surface whose only failure
-  mode is someone setting it to `true`.
-- **Why it hasn't been done:** no urgency — the flag is fail-closed and every
-  environment already pins it. Worth folding into the next auth-area change
-  rather than as its own PR.
+- Platform Admin cross-organization deep link: a link to a record in another
+  organization shows Not found; later, noma could name the owning organization
+  and offer to switch. Non-members keep the 404
+  (`tests/e2e/org-isolation.spec.ts`). Parked 2026-10-19 (#372).
 
 ### Does the app-shell scrollport deserve a permanent E2E guard? (`e2e/scrollport-guard`, opened 2026-07-29)
 

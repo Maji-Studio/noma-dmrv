@@ -1,4 +1,5 @@
 export const creditBatchKeys = {
+  emissionsOverview: (facilityId: string) => ["creditBatches", "emissionsOverview", facilityId] as const,
   emissionLines: (facilityId: string, creditBatchId: string) => ["creditBatches", "emissionLines", facilityId, creditBatchId] as const,
   all: ["creditBatches"] as const,
   lists: () => [...creditBatchKeys.all, "list"] as const,
@@ -7,6 +8,9 @@ export const creditBatchKeys = {
   details: () => [...creditBatchKeys.all, "detail"] as const,
   detail: (id: string) => [...creditBatchKeys.details(), id] as const,
   pageModel: (id: string) => [...creditBatchKeys.detail(id), "pageModel"] as const,
+  timelineFactsPrefix: () => [...creditBatchKeys.all, "timelineFacts"] as const,
+  timelineFacts: (facilityId: string, ids: string[]) =>
+    [...creditBatchKeys.timelineFactsPrefix(), facilityId, ids] as const,
   previewsPrefix: () => [...creditBatchKeys.all, "previews"] as const,
   previews: (ids: string[]) => [...creditBatchKeys.previewsPrefix(), ids] as const,
   productionRunOptionsPrefix: () =>
