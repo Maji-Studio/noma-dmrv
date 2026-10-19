@@ -135,7 +135,7 @@ it.each([
     ...patch, expectedVersion: batch.version, siteManagementNotes: "Must roll back",
   })).rejects.toMatchObject({
     name: "ActionConflictError",
-    message: expect.stringContaining("Lab electricity, 2026-06-13"),
+    message: expect.stringContaining("Lab electricity on Jun 13, 2026"),
     conflict: { entity: "credit_batch", id: batch.id, code: batch.code },
   });
   expect(await stored()).toEqual(before);
