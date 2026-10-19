@@ -17,6 +17,7 @@ import {
   deleteApplicationFn,
 } from "@/fn/applications";
 import { creditBatchKeys } from "@/hooks/use-credit-batches";
+import { chainOfCustodyKeys } from "./use-chain-of-custody";
 import { invalidateCertificationReadiness } from "@/hooks/use-certification";
 import type { ApplicationFormData } from "@/schemas/applications";
 import type { ApplicationListOptions } from "@/data-access/applications";
@@ -113,6 +114,7 @@ export function useCreateApplication() {
       // membership isn't known here, so invalidate the whole credit-batch
       // scope rather than guessing a single detail key.
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.all });
+      queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       invalidateCertificationReadiness(queryClient);
     },
   });
@@ -147,6 +149,9 @@ export function useUpdateApplication() {
       // batch's derived figures; batch membership isn't known here, so
       // invalidate the whole credit-batch scope rather than guessing.
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.all });
+      // Batch membership is not returned by the write; refresh application
+      // geography and every batch/run projection that may include it.
+      queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       invalidateCertificationReadiness(queryClient);
     },
   });
@@ -180,6 +185,7 @@ export function useDeleteApplication() {
       // it belonged to; batch membership isn't known here, so invalidate
       // the whole credit-batch scope rather than guessing.
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.all });
+      queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       invalidateCertificationReadiness(queryClient);
     },
   });
