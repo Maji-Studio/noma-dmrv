@@ -57,6 +57,23 @@ afterAll(async () => {
 });
 
 describe("org-scoped template observations", () => {
+  it("refreshes display positions on the same fingerprint row and preserves them through review", async () => {
+    const value = template();
+    const component = value.groups[0].components[0];
+    component.id = `order_${tag}`;
+    value.groups.unshift({ ...value.groups[0], id: "empty-order-group", components: [] });
+    const first = await observe(value);
+    expect(first.lineSources[component.id].templateOrder).toEqual({ groupPosition: 1, position: 0 });
+    value.groups.reverse();
+    const second = await observe(value);
+    expect(second).toMatchObject({ id: first.id, definition: first.definition,
+      fullFingerprint: first.fullFingerprint, semanticFingerprint: first.semanticFingerprint, version: first.version + 1 });
+    expect(second.lineSources[component.id].templateOrder).toEqual({ groupPosition: 0, position: 0 });
+    const { scope, entryPolicy, automaticSource } = second.lineSources[component.id];
+    const reviewed = await reviewLineContracts(ctx, { observationId: second.id, expectedVersion: second.version,
+      assignments: { [component.id]: { scope, entryPolicy, automaticSource } } });
+    expect(reviewed.lineSources[component.id].templateOrder).toEqual({ groupPosition: 0, position: 0 });
+  });
   it("inserts once and only bumps lastObservedAt on an unchanged read", async () => {
     const value = template();
     const first = await observe(value);

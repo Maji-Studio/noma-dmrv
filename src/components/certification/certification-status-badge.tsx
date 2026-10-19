@@ -5,6 +5,8 @@
  * (Removals list, removal detail sheet, GHG Statements list, statement detail
  * sheet) renders this, so the history opens the same way everywhere.
  *
+ * The history opens on mouse hover, press, or Enter/Space on the focused badge.
+ *
  * The caller still derives the status: list and sheet surfaces fold in
  * readiness and live registry state the history does not.
  */
@@ -37,6 +39,7 @@ export function CertificationStatusBadge({
   return (
     <Popover
       title="Status history"
+      openOnHover
       trigger={
         <button
           type="button"

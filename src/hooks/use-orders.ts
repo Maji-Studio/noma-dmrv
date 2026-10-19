@@ -1,4 +1,5 @@
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 /**
  * Orders React Query Hooks
@@ -106,6 +107,7 @@ export function useCreateOrder(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.order),
     mutationFn: async (data: CreateOrderData) => unwrap(await createOrderFn(data)),
     onMutate: async (variables) => {
       await callbacks?.onMutate?.(variables);
@@ -139,6 +141,7 @@ export function useUpdateOrder(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.order),
     mutationFn: async (data: UpdateOrderData) => {
       const result = await updateOrderFn(data);
       if (!result.success) {
@@ -259,6 +262,7 @@ export function useDeleteOrder(callbacks?: MutationCallbacks<void, DeleteOrderDa
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.order),
     mutationFn: async (variables: DeleteOrderData) => {
       const result = await deleteOrderFn(variables);
       if (!result.success) {

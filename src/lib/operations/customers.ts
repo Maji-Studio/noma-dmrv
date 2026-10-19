@@ -1,8 +1,10 @@
+import { processPendingStorageObjectDeletions } from "@/data-access/storage-object-deletions";
+import type { DeletedCustomer } from "@/data-access/customer-writes";
 import { CODE_CONFLICT_MESSAGES, withAutoCodes } from "@/data-access/code-generator";
 import { createCustomerInTransaction, updateCustomerInTransaction, deleteCustomerInTransaction, archiveCustomerInTransaction, restoreCustomerInTransaction, type CreatedCustomerWithLocations } from "@/data-access/customer-writes";
 import { lockPartyFacilities } from "@/data-access/party-reference-guards";
 import { customers, type Customer } from "@/db/schema";
-import { createCustomerInput, updateCustomerInput, customerVersionInput } from "@/schemas/customer-input";
+import { createCustomerInput, updateCustomerInput, customerVersionInput, deleteCustomerInput } from "@/schemas/customer-input";
 import { recordPartyLocationActivity } from "./party-activity";
 import type { Operation } from "./runner";
 
@@ -23,11 +25,18 @@ export const updateCustomer: Operation<typeof updateCustomerInput, Customer> = {
   describe: (input, output) => ({ outcome: "updated", entityType: "customer", entityIds: [output.id], versionBefore: input.expectedVersion, versionAfter: output.version }),
   execute: ({ ctx, tx, activity }, input) => updateCustomerInTransaction(ctx, tx, input, activity.capture),
 };
-export const deleteCustomer: Operation<typeof customerVersionInput, void> = {
-  id: "delete_customer", input: customerVersionInput, supportsDryRun: true,
+export const deleteCustomer: Operation<typeof deleteCustomerInput, Pick<DeletedCustomer, "customer" | "cascade" | "warnings">> = {
+  id: "delete_customer", input: deleteCustomerInput, supportsDryRun: true,
   describe: input => ({ outcome: "deleted", entityType: "customer", entityIds: [input.customerId], versionBefore: input.expectedVersion, versionAfter: null }),
   execute: async (scope, input) => {
-    await deleteCustomerInTransaction(scope.ctx, scope.tx, input, scope.activity.capture, recordPartyLocationActivity(scope, "customer"));
+    const result = await deleteCustomerInTransaction(scope.ctx, scope.tx, input, scope.activity.capture, recordPartyLocationActivity(scope, "customer"), scope.source);
+    for (const order of result.orders) {
+      scope.activity.capture(order.id, order, null);
+      scope.activity.link({ facilityId: order.facilityId }, order.id);
+      scope.activity.extra({ outcome: "deleted", entityType: "order", entityIds: [order.id], versionBefore: order.version, versionAfter: null });
+    }
+    scope.afterCommit(async () => { await processPendingStorageObjectDeletions(scope.ctx); });
+    return { customer: result.customer, cascade: result.cascade, warnings: result.warnings };
   },
 };
 

@@ -39,6 +39,7 @@ export interface ProductionBatchRegistryInput {
   startedAt: string | null;
   /** Latest physical completion instant across the batch's member runs. */
   endedAt: string | null;
+  latestEndingRunCode: string | null;
   /** Isometric project id (`prj_…`) for the batch's facility. */
   externalProjectId: string | null;
   /** Operator-pasted Isometric facility id (`fcl_…`) for the batch's facility. */
@@ -112,6 +113,7 @@ export async function getProductionBatchRegistryInputs(
   const runRows = await db
     .select({
       creditBatchId: creditBatchProductionRuns.creditBatchId,
+      code: productionRuns.code,
       biocharDryMassKg: productionRuns.biocharDryMassKg,
       startTime: productionRuns.startTime,
       endTime: productionRuns.endTime,
@@ -135,6 +137,7 @@ export async function getProductionBatchRegistryInputs(
   const unweighedRunsByBatch = new Map<string, number>();
   const earliestStartByBatch = new Map<string, Date>();
   const latestEndByBatch = new Map<string, Date>();
+  const latestRunCodeByBatch = new Map<string, string>();
   const openRunsByBatch = new Map<string, number>();
   for (const row of runRows) {
     const earliestStart = earliestStartByBatch.get(row.creditBatchId);
@@ -150,6 +153,7 @@ export async function getProductionBatchRegistryInputs(
       const latestEnd = latestEndByBatch.get(row.creditBatchId);
       if (!latestEnd || row.endTime > latestEnd) {
         latestEndByBatch.set(row.creditBatchId, row.endTime);
+        latestRunCodeByBatch.set(row.creditBatchId, row.code);
       }
     }
     if (row.biocharDryMassKg === null) {
@@ -173,6 +177,7 @@ export async function getProductionBatchRegistryInputs(
     startedAt:
       earliestStartByBatch.get(batch.id)?.toISOString() ?? null,
     endedAt: latestEndByBatch.get(batch.id)?.toISOString() ?? null,
+    latestEndingRunCode: latestRunCodeByBatch.get(batch.id) ?? null,
     externalProjectId: batch.externalProjectId,
     externalFacilityId: batch.externalFacilityId,
     isometricFeedstockTypeId: batch.isometricFeedstockTypeId,

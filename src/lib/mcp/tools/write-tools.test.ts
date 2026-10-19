@@ -1,3 +1,4 @@
+import { apiKeyContext } from "../../../../tests/helpers/api-context";
 import { beforeEach, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { API_FEEDSTOCK_MAX_ALLOCATIONS, API_IDEMPOTENCY_KEY_MAX_LENGTH, FEEDSTOCK_REPRESENTATION_REVISION } from "@/config/api-rest";
@@ -45,11 +46,12 @@ const VERSION = 4;
 const MASS_KG = 100;
 const DEADLINE_MS = 10_000;
 const context = {
-  ctx: { credentialId: "credential", organizationId: "organization", userId: "user", orgRole: "admin", scopes: [] },
+  ctx: apiKeyContext({ credentialId: "credential", organizationId: "organization", userId: "user", orgRole: "admin", scopes: [] }),
   deadlineAt: Date.now() + DEADLINE_MS, requestId: "request", instance: "/api/mcp", headers: new Headers(),
 } as unknown as ApiRouteContext;
 const row = {
   id: UUID, code: "FS-26-0231", version: VERSION, facilityId: UUID, status: "complete",
+  distanceKmOverride: null, distanceSource: null, distanceNote: null,
   deliveryDate: "2026-10-06", supplierId: UUID, vehicleId: null, feedstockTypeId: UUID,
   storageLocationId: UUID, deliveryGroupId: null, massWetKg: MASS_KG, massDryKg: 70,
   moistureContentPercent: 30, gpsLatitude: null, gpsLongitude: null, overrideJustification: null,
@@ -174,5 +176,8 @@ it.each(["supplier", "customer"] as const)("registers the master-data %s writes 
   expect(allWriteTools.filter(tool => tool.scope?.startsWith(`${kind}s:`)).map(tool => [tool.name, tool.scope])).toEqual([
     [`create_${kind}`, `${kind}s:write`], [`update_${kind}`, `${kind}s:write`],
     [`delete_${kind}`, `${kind}s:delete`], [`archive_${kind}`, `${kind}s:write`], [`restore_${kind}`, `${kind}s:write`],
+    [`add_${kind}_location`, `${kind}s:write`], [`update_${kind}_location`, `${kind}s:write`],
+    [`delete_${kind}_location`, `${kind}s:delete`],
+    ...(kind === "customer" ? [["archive_customer_location", "customers:write"], ["restore_customer_location", "customers:write"]] : []),
   ]);
 });

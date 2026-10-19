@@ -1,6 +1,6 @@
 import { CUSTOMER_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { withCurrentOnStale } from "@/lib/api/customer-write-checks";
-import { representationCheckedDelete, representationCheckedTransition, representationCheckedUpdate } from "@/lib/api/customer-write-operations";
+import { representationCheckedTransition, representationCheckedUpdate } from "@/lib/api/customer-write-operations";
 import { createCustomerApi } from "@/lib/operations/customer-api";
 import { customerRepresentationSchema } from "@/lib/representations/customers";
 import { updateCustomerApiInput, customerVersionInput } from "@/schemas/customer-input";
@@ -17,7 +17,6 @@ export const customerWriteTools = partyWriteTools("customer", {
   representation: customerRepresentationSchema,
   locationRepresentation: customerLocationRepresentationSchema,
   checkedUpdate: representationCheckedUpdate,
-  checkedDelete: representationCheckedDelete,
   checkedTransition: representationCheckedTransition,
   withCurrentOnStale,
 });

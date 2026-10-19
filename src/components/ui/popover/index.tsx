@@ -5,11 +5,14 @@
  * `<Popover trigger={<button …/>} title="Status history">{body}</Popover>`
  *
  * Unlike `InfoHint` (a tooltip that must also open on a tap), a popover opens
- * on press only, so Base UI's own trigger handling covers click, tap, Enter
- * and Space. No open state is kept here, and there is no manual toggle that a
- * "trigger-press" close request could undo. Escape, an outside press, the
- * close button or a second press on the trigger closes it. The body mounts
- * only while open, so a query inside it fetches on open.
+ * on press by default, so Base UI's own trigger handling covers click, tap,
+ * Enter and Space. `openOnHover` adds mouse hover on top: Base UI ignores touch
+ * pointers for hover, so a tap still toggles by press, and a press on a
+ * hover-opened popover keeps it open. No open state is kept here, and there
+ * is no manual toggle that a "trigger-press" close request could undo.
+ * Escape, an outside press, the close button or a second press on the trigger
+ * closes it. The body mounts only while open, so a query inside it fetches on
+ * open.
  *
  * Self-contained: the popup is portaled above sheets and dialogs. A clickable
  * table row or card it sits in ignores presses inside the portal
@@ -26,6 +29,10 @@ const SIDE_OFFSET_PX = 6;
 // Keep a 16px gutter to the viewport edge on phones.
 const COLLISION_PADDING_PX = 16;
 const CLOSE_ICON_SIZE = 16;
+// Hover timing: a short open delay avoids popping while the pointer crosses a
+// table; a close delay lets it travel from the trigger into the popup.
+const HOVER_OPEN_DELAY_MS = 200;
+const HOVER_CLOSE_DELAY_MS = 150;
 
 type Side = "top" | "bottom" | "left" | "right";
 type Align = "start" | "center" | "end";
@@ -44,6 +51,8 @@ interface PopoverProps {
   align?: Align;
   /** Extra classes for the popup, e.g. a different width. */
   className?: string;
+  /** Also open while a mouse hovers the trigger (desktop). Default: press only. */
+  openOnHover?: boolean;
 }
 
 function Popover({
@@ -53,10 +62,16 @@ function Popover({
   side = "bottom",
   align = "start",
   className,
+  openOnHover = false,
 }: PopoverProps) {
   return (
     <BasePopover.Root>
-      <BasePopover.Trigger render={trigger} />
+      <BasePopover.Trigger
+        render={trigger}
+        openOnHover={openOnHover}
+        delay={HOVER_OPEN_DELAY_MS}
+        closeDelay={HOVER_CLOSE_DELAY_MS}
+      />
       <BasePopover.Portal>
         {/* Portaled transient controls must stay above sheets and dialogs. */}
         <BasePopover.Positioner

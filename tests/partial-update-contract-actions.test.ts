@@ -22,23 +22,18 @@ vi.mock("@/lib/auth/server", () => ({
   }),
 }));
 
-vi.mock("@/data-access/customers", () => ({
-  createCustomer: vi.fn(),
-  deleteCustomer: vi.fn(),
-  getCustomers: vi.fn(),
-  getCustomerWithRelations: vi.fn(),
-  getCustomerLocations: vi.fn(),
-  updateCustomer: vi.fn(),
-  createCustomerLocation: (...args: unknown[]) =>
-    mockCreateCustomerLocation(...args),
-  updateCustomerLocation: (...args: unknown[]) =>
-    mockUpdateCustomerLocation(...args),
-  deleteCustomerLocation: vi.fn(),
+vi.mock("@/lib/operations/customer-locations", () => ({
+  addCustomerLocation: { id: "add_customer_location" },
+  updateCustomerLocation: { id: "update_customer_location" },
+  deleteCustomerLocation: { id: "delete_customer_location" },
 }));
-
-vi.mock("@/data-access/code-generator", () => ({
-  CODE_CONFLICT_MESSAGES: { customer: "A customer with this code already exists." },
-  withAutoCode: vi.fn(),
+vi.mock("@/lib/operations/customers", () => ({}));
+vi.mock("@/data-access/customers", () => ({}));
+vi.mock("@/lib/operations/runner", () => ({
+  runOperationInProcess: (operation: { id: string }, ctx: unknown, input: Record<string, unknown>) =>
+    operation.id === "add_customer_location"
+      ? mockCreateCustomerLocation(ctx, input)
+      : mockUpdateCustomerLocation(ctx, input.locationId, input),
 }));
 
 import {

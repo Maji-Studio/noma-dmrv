@@ -24,6 +24,9 @@ import type { StorageLocationFormData } from "@/schemas/storage-locations";
 import { useState } from "react";
 import { StorageLocationForm } from "./storage-location-form";
 import { storageLocationSheetSections } from "./storage-location-read-sections";
+import { recordLockSheetProps } from "@/components/record-locks";
+import { useRecordLock } from "@/hooks/use-record-locks";
+import { isRecordEditable } from "@/lib/record-lock-view";
 
 export type StorageBinSheetState =
   | { mode: "create"; entity: null }
@@ -47,6 +50,7 @@ export function StorageBinSheet({
   const createStorageLocation = useCreateStorageLocation();
   const updateStorageLocation = useUpdateStorageLocation();
   const toast = useToast();
+  const { lock, status: lockStatus, retry: retryLock, retrying: lockRetrying } = useRecordLock("storageLocation", state?.entity?.id);
 
   const close = () => {
     onStateChange(null);
@@ -109,8 +113,9 @@ export function StorageBinSheet({
       // small, on the line beneath.
       title={state?.mode === "create" ? "Create storage bin" : state?.entity?.name ?? ""}
       subtitle={state?.mode === "create" ? undefined : state?.entity?.code}
+      {...recordLockSheetProps({ lock, status: lockStatus, retry: retryLock, retrying: lockRetrying, subject: "storageBin" })}
       editLabel="Edit storage bin"
-      canEdit={state?.entity?.archivedAt == null}
+      canEdit={state?.entity?.archivedAt == null && isRecordEditable(lock)}
       sections={
         state?.mode === "view" && state.entity
           ? storageLocationSheetSections(state.entity, onReconcile)
@@ -120,6 +125,7 @@ export function StorageBinSheet({
       <StorageLocationForm
         key={editingEntity?.id ?? "create"}
         storageLocation={editingEntity as StorageLocation | undefined}
+        lock={lock}
         onSubmit={state?.mode === "edit" ? handleUpdate : handleCreate}
         onCancel={close}
         isSubmitting={isSubmitting}

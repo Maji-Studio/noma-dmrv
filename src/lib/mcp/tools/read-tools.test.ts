@@ -52,8 +52,16 @@ it("uses the same list input schemas and passes all parsed filters to the REST r
 it("accepts a customer UUID or code and sends the parent and pagination to REST's reader", async () => {
   for (const idOrCode of [ID, "C-1"]) {
     await named("find_customer_locations").execute(ctx, { idOrCode, q: "Site", limit: 1, cursor: "cursor" });
-    expect(mocks.locations).toHaveBeenLastCalledWith(ctx, { q: "Site", limit: 1, cursor: "cursor" }, idOrCode);
+    expect(mocks.locations).toHaveBeenLastCalledWith(ctx, { q: "Site", limit: 1, cursor: "cursor", archived: false }, idOrCode);
   }
+});
+it("passes the archived destination filter to the shared REST reader", async () => {
+  for (const archived of [true, false]) {
+    await named("find_customer_locations").execute(ctx, { idOrCode: ID, archived, limit: 1 });
+    expect(mocks.locations).toHaveBeenLastCalledWith(ctx, { limit: 1, archived }, ID);
+  }
+  expect(named("find_customer_locations").description).toContain("archived=true");
+  expect(named("find_customer_locations").description).toContain("detail read");
 });
 it("wraps get in the REST item envelope and passes the balance envelope through unchanged", async () => {
   expect(await named("get_order").execute(ctx, { idOrCode: ID.toUpperCase() })).toEqual({ data: await mocks.order() });

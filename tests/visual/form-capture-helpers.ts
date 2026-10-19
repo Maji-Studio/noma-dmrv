@@ -97,7 +97,8 @@ export async function menuItem(page: Page, menuLabel: string, item: string | Reg
 /** Opens a storage bin's read sheet from its tile on /storage-locations. */
 export async function openBinSheet(page: Page, ctx: CaptureContext, binName: string): Promise<Locator> {
   await gotoRoute(page, ctx, "storage-locations");
-  await page.getByRole("button", { name: binName, exact: true }).first().click();
+  // The tile is an article named for the bin; its material heading is the link.
+  await page.getByRole("article", { name: binName, exact: true }).first().locator("[data-row-link], h3 button").first().click();
   const sheet = lastSheet(page);
   await expect(sheet).toBeVisible({ timeout: OPEN_TIMEOUT_MS });
   await settle(page, sheet);

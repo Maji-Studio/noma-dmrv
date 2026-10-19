@@ -1,9 +1,9 @@
 import { readApiCustomer } from "@/lib/read-models/api-customers";
-import { representCustomerLocation } from "@/lib/representations/customer-locations";
+import { readApiCustomerLocation } from "@/lib/read-models/api-customer-locations";
 import type { CustomerRepresentation } from "@/lib/representations/customers";
 import type { CustomerLocationRepresentation } from "@/lib/representations/customer-locations";
 import { createCustomerApiInput, updateCustomerApiInput, customerVersionInput } from "@/schemas/customer-input";
-import { createCustomer, updateCustomer, archiveCustomer, restoreCustomer } from "./customers";
+import { createCustomer, updateCustomer, archiveCustomer, restoreCustomer, deleteCustomer } from "./customers";
 import type { Operation } from "./runner";
 
 type CustomerOutput = { customer: CustomerRepresentation };
@@ -16,7 +16,11 @@ export const createCustomerApi: Operation<typeof createCustomerApiInput, Custome
   execute: async (scope, input) => {
     const result = await createCustomer.execute(scope, input);
     return { customer: await readApiCustomer(scope.ctx, { id: result.customer.id }, scope.tx),
-      locations: result.locations.map(row => representCustomerLocation({ ...row, siteDescription: row.address })) };
+      locations: await Promise.all(result.locations.map(async row => {
+        const location = await readApiCustomerLocation(scope.ctx, result.customer.id, row.id, scope.tx);
+        if (!location) throw new Error("Created customer location was not found.");
+        return location;
+      })) };
   },
 };
 export const updateCustomerApi: Operation<typeof updateInput, CustomerOutput> = {
@@ -41,5 +45,16 @@ export const restoreCustomerApi: Operation<typeof customerVersionInput, Customer
   execute: async (scope, input) => {
     const row = await restoreCustomer.execute(scope, input);
     return { customer: await readApiCustomer(scope.ctx, { id: row.id }, scope.tx) };
+  },
+};
+
+/** Preserve the pre-delete customer alongside the cascade for preview and replay. */
+export const deleteCustomerApi: Operation<typeof deleteCustomer.input, CustomerOutput & Pick<Awaited<ReturnType<typeof deleteCustomer.execute>>, "cascade" | "warnings">> = {
+  ...deleteCustomer,
+  describe: input => ({ outcome: "deleted", entityType: "customer", entityIds: [input.customerId], versionBefore: input.expectedVersion, versionAfter: null }),
+  execute: async (scope, input) => {
+    const customer = await readApiCustomer(scope.ctx, { id: input.customerId }, scope.tx);
+    const { cascade, warnings } = await deleteCustomer.execute(scope, input);
+    return { customer, cascade, warnings };
   },
 };

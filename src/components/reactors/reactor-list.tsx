@@ -55,7 +55,7 @@ function createColumns(
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -70,14 +70,7 @@ function createColumns(
       accessorKey: "facilityName",
       header: "Facility",
       cell: ({ row }) => (
-        <div className="flex flex-col">
-          <span>{row.original.facilityName || MISSING_VALUE.notAvailable}</span>
-          {row.original.facilityCode && (
-            <span className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
-              {row.original.facilityCode}
-            </span>
-          )}
-        </div>
+        <span>{row.original.facilityName || MISSING_VALUE.notAvailable}</span>
       ),
     },
     {

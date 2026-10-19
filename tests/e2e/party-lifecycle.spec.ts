@@ -105,11 +105,11 @@ test.describe("Supplier archive and restore", () => {
     await rowAction(page, supplier.code, "Delete");
     await page.getByRole("dialog").getByRole("button", { name: /^Delete/ }).last().click();
 
-    await expect(page.getByText(`${supplier.code} is in use and cannot be deleted.`)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+    await expect(page.getByRole("dialog").getByText(`${supplier.code} is in use`)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
     await expect(page.getByText("Archive it instead. Existing records keep it, while pickers hide it.")).toBeVisible();
-    await page.getByRole("button", { name: "Archive instead" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Archive instead" }).click();
     await expect(page.getByText(`Supplier ${supplier.code} archived. Restore it from the archived view.`)).toBeVisible();
-    await expect(page.getByText(`${supplier.code} is in use and cannot be deleted.`)).toHaveCount(0);
+    await expect(page.getByRole("dialog").getByText(`${supplier.code} is in use`)).toHaveCount(0);
   });
 
   test("a feedstock keeping an archived supplier shows it, and the picker opens a read-only View with Restore", async ({ adminPage: page, seededData }) => {
@@ -177,25 +177,86 @@ test.describe("Customer archive and restore", () => {
     }
   });
 
-  test("deleting a customer with orders offers Archive instead", async ({ adminPage: page, seededData }) => {
+  test("deleting a customer whose orders have deliveries offers Archive instead before anything is confirmed", async ({ adminPage: page, seededData }) => {
+    const { customer, facility, customerLocation, formulation, productStorageLocation } = seededData;
     const { db, pool } = createDbConnection();
     try {
-      await db.insert(schema.orders).values({
-        organizationId: DEC_ORG_ID, code: `E2E-OR-LC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, facilityId: seededData.facility.id,
-        orderDate: new Date(), customerId: seededData.customer.id, customerLocationId: seededData.customerLocation.id,
-        formulationId: seededData.formulation.id, quantityKg: 100, packaging: "loose",
+      const [order] = await db.insert(schema.orders).values({
+        organizationId: DEC_ORG_ID, code: `E2E-OR-LC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, facilityId: facility.id,
+        orderDate: new Date(), customerId: customer.id, customerLocationId: customerLocation.id,
+        formulationId: formulation.id, quantityKg: 100, packaging: "loose",
+      }).returning({ id: schema.orders.id });
+      await db.insert(schema.deliveries).values({
+        organizationId: DEC_ORG_ID, code: `E2E-DL-LC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, facilityId: facility.id,
+        deliveryDate: new Date(), orderId: order!.id, storageLocationId: productStorageLocation.id, deliveredWetMassKg: 10,
       });
     } finally {
       await pool.end();
     }
-    const { customer, facility } = seededData;
     await openList(page, "customers", facility.id, customer.code);
     await rowAction(page, customer.code, "Delete");
-    await page.getByRole("dialog").getByRole("button", { name: /^Delete/ }).last().click();
 
-    await expect(page.getByText(`${customer.code} is in use and cannot be deleted.`)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
-    await page.getByRole("button", { name: "Archive instead" }).click();
+    // The dry run refuses while the dialog opens, so the operator never sees a Delete button that cannot work.
+    await expect(page.getByRole("dialog").getByText(`${customer.code} is in use`)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+    await expect(page.getByRole("dialog").getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
+    await page.getByRole("dialog").getByRole("button", { name: "Archive instead" }).click();
     await expect(page.getByText(`Customer ${customer.code} archived. Restore it from the archived view.`)).toBeVisible();
+  });
+
+  test("deleting a customer lists its orders without deliveries and deletes them with it", async ({ adminPage: page, seededData }) => {
+    const { customer, facility, customerLocation, formulation } = seededData;
+    const { db, pool } = createDbConnection();
+    const orderCode = `E2E-OR-LC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+    try {
+      await db.insert(schema.orders).values({
+        organizationId: DEC_ORG_ID, code: orderCode, facilityId: facility.id,
+        orderDate: new Date(), customerId: customer.id, customerLocationId: customerLocation.id,
+        formulationId: formulation.id, quantityKg: 100, packaging: "loose",
+      });
+      await openList(page, "customers", facility.id, customer.code);
+      await rowAction(page, customer.code, "Delete");
+
+      const dialog = page.getByRole("dialog");
+      await expect(dialog.getByText("This order is deleted too")).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+      await expect(dialog.getByRole("link", { name: `Open order ${orderCode}` })).toHaveAttribute("href", new RegExp(`^/orders\\?facility=${facility.id}&order=`));
+      await dialog.getByRole("button", { name: "Delete", exact: true }).click();
+
+      await expect(page.getByText(`Customer deleted. Also deleted 1 order without deliveries: ${orderCode}.`)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+      expect(await db.select({ id: schema.customers.id }).from(schema.customers).where(eq(schema.customers.id, customer.id))).toHaveLength(0);
+      expect(await db.select({ id: schema.orders.id }).from(schema.orders).where(eq(schema.orders.code, orderCode))).toHaveLength(0);
+    } finally {
+      await pool.end();
+    }
+  });
+
+  test("an order added while the dialog is open is shown for confirmation before anything is deleted", async ({ adminPage: page, seededData }) => {
+    const { customer, facility, customerLocation, formulation } = seededData;
+    const { db, pool } = createDbConnection();
+    const firstCode = `E2E-OR-LC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+    const lateCode = `E2E-OR-LC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+    const orderValues = (code: string) => ({
+      organizationId: DEC_ORG_ID, code, facilityId: facility.id, orderDate: new Date(), customerId: customer.id,
+      customerLocationId: customerLocation.id, formulationId: formulation.id, quantityKg: 100, packaging: "loose" as const,
+    });
+    try {
+      await db.insert(schema.orders).values(orderValues(firstCode));
+      await openList(page, "customers", facility.id, customer.code);
+      await rowAction(page, customer.code, "Delete");
+      const dialog = page.getByRole("dialog");
+      await expect(dialog.getByText(firstCode)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+
+      await db.insert(schema.orders).values(orderValues(lateCode));
+      await dialog.getByRole("button", { name: "Delete", exact: true }).click();
+      await expect(dialog.getByText("The orders deleted with this customer changed. Review the list and delete again.")).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+      await expect(dialog.getByText(lateCode)).toBeVisible();
+      expect(await db.select({ id: schema.customers.id }).from(schema.customers).where(eq(schema.customers.id, customer.id))).toHaveLength(1);
+
+      await dialog.getByRole("button", { name: "Delete", exact: true }).click();
+      await expect(page.getByText(/^Customer deleted\. Also deleted 2 orders without deliveries/)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+      expect(await db.select({ id: schema.orders.id }).from(schema.orders).where(eq(schema.orders.customerId, customer.id))).toHaveLength(0);
+    } finally {
+      await pool.end();
+    }
   });
 });
 

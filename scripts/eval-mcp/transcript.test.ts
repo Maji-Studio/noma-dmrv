@@ -100,3 +100,13 @@ it.each(["structured", "wrapped-text", "plain-text"])("retains archived party co
   const parsed = parseTranscript([use, event].map(value => JSON.stringify(value)).join("\n"));
   expect(parsed.calls[0]).toMatchObject({ partyResult: body, isError: true });
 });
+
+it.each(["get_order", "get_customer_location", "find_customer_locations"])("retains grounded destination facts from %s", name => {
+  const row = { id: "field", name: "North Block", defaultSoilTemperatureC: 23.5, archivedAt: "2026-10-17" };
+  const body = { data: name.startsWith("find_") ? [row] : row };
+  const events = [
+    { type: "assistant", message: { content: [{ type: "tool_use", id: "read", name: `mcp__noma__${name}`, input: {} }] } },
+    { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "read", content: [{ type: "text", text: JSON.stringify({ structuredContent: body }) }] }] } },
+  ];
+  expect(parseTranscript(events.map(event => JSON.stringify(event)).join("\n")).calls[0]).toMatchObject({ partyRows: [row], isError: false });
+});

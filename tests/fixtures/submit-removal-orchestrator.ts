@@ -853,6 +853,7 @@ beforeEach(() => {
       totalDryMassKg: ORIGINAL_BIOCHAR_MASS_KG,
       runsMissingDryMass: 0,
       runsMissingEndTime: 0,
+      latestEndingRunCode: "RUN-LAST",
     },
   ]);
   vi.mocked(

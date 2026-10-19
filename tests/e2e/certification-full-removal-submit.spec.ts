@@ -200,7 +200,7 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       await dialog.getByRole("button", { name: "Done" }).click();
       await expect(page.getByRole("dialog")).toHaveCount(0);
       const removalRow = page
-        .getByRole("button")
+        .getByRole("row")
         .filter({ hasText: code })
         .filter({ hasText: "Submitted" });
       await expect(removalRow).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { DISTANCE_NOTE_MAX_LENGTH } from "./distance-source";
+import { DELIVERY_DISTANCE_NOTE_MAX_LENGTH } from "./delivery-input";
 import {
   createFeedstockSchema,
   feedstockFormSchema,
@@ -53,4 +55,26 @@ it("requires moisture below 100 on create and update", () => {
 });
 it("strips dry mass from the in-process PATCH schema", () => {
   expect(updateFeedstockSchema.parse({ ...patch, massDryKg: 90 })).not.toHaveProperty("massDryKg");
+});
+
+it("coerces positive distance overrides and preserves omitted versus cleared patches", () => {
+  expect(updateFeedstockSchema.parse(patch).transportDistanceKm).toBeUndefined();
+  for (const transportDistanceKm of [null, ""]) {
+    expect(updateFeedstockSchema.parse({ ...patch, transportDistanceKm }).transportDistanceKm).toBeNull();
+  }
+  expect(updateFeedstockSchema.parse({ ...patch, transportDistanceKm: "25.5", distanceNote: "Alternate route" }))
+    .toMatchObject({ transportDistanceKm: 25.5, distanceNote: "Alternate route" });
+  expect(updateFeedstockSchema.parse({ ...patch, transportDistanceKm: 0 }).transportDistanceKm).toBe(0);
+  expect(createFeedstockSchema.parse({ ...validForm, deliveryDate: "2026-10-15", transportDistanceKm: 0 }).transportDistanceKm).toBe(0);
+  for (const transportDistanceKm of [-1, Infinity, "invalid"]) {
+    expect(updateFeedstockSchema.safeParse({ ...patch, transportDistanceKm }).success).toBe(false);
+    expect(createFeedstockSchema.safeParse({ ...validForm, deliveryDate: "2026-10-15", transportDistanceKm }).success).toBe(false);
+  }
+});
+
+it("limits the distance note like a delivery's", () => {
+  expect(DISTANCE_NOTE_MAX_LENGTH).toBe(DELIVERY_DISTANCE_NOTE_MAX_LENGTH);
+  expect(updateFeedstockSchema.safeParse({ ...patch, distanceNote: "a".repeat(DISTANCE_NOTE_MAX_LENGTH) }).success).toBe(true);
+  expect(updateFeedstockSchema.safeParse({ ...patch, distanceNote: "a".repeat(DISTANCE_NOTE_MAX_LENGTH + 1) }).success).toBe(false);
+  expect(feedstockFormSchema.safeParse({ ...validForm, deliveryDate: "2026-10-15", distanceNote: "a".repeat(DISTANCE_NOTE_MAX_LENGTH + 1) }).success).toBe(false);
 });

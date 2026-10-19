@@ -108,6 +108,7 @@ function registryInput(
     totalDryMassKg: 2_000,
     runsMissingDryMass: 0,
     runsMissingEndTime: 0,
+    latestEndingRunCode: "RUN-LAST",
     ...patch,
   };
 }
@@ -181,6 +182,16 @@ beforeEach(() => {
 });
 
 describe("ensureProductionBatchesForCreditBatches", () => {
+  it.each([false, true])("refuses a one-month run span before registry access (registered: %s)", async (registered) => {
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([registryInput({
+      endedAt: "2026-04-01T07:15:00.000Z",
+    })]);
+    if (registered) mocks.getProductionBatchRegistrations.mockResolvedValue([await upsertReturning(PRODUCTION_BATCH_ID)(orgCtx, { supplierReference: await currentSupplierRef() })]);
+    await expect(ensure()).rejects.toThrow("Production run RUN-LAST ends on or after");
+    expect(mocks.client.get).not.toHaveBeenCalled();
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+
   it("recovers a missing registered batch before binding durability measurements", async () => {
     const missingId = "ptb_1M203VTR2SBXHRRC";
     const supplierReference = await currentSupplierRef();

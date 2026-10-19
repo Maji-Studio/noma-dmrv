@@ -1,17 +1,7 @@
+import { oauthRoleCeiling } from "./oauth-scopes";
 import type { OrgRole } from "./server";
-
-export const API_SCOPES = [
-  "applications:read", "applications:write", "applications:delete",
-  "production-runs:read", "production-runs:write", "production-runs:delete", "reactors:read",
-  "biochar-products:read", "biochar-products:write", "formulations:read", "formulations:write", "formulations:delete",
-  "feedstocks:read", "feedstocks:write", "feedstocks:delete",
-  "facilities:read", "suppliers:read", "suppliers:write", "suppliers:delete", "feedstock-types:read",
-  "storage-locations:read", "vehicles:read", "drivers:read",
-  "deliveries:read", "deliveries:write",
-  "customers:read", "customers:write", "customers:delete", "orders:read", "orders:write", "orders:delete",
-  "lab-samples:read", "lab-samples:write", "lab-samples:delete", "credit-batches:read",
-] as const;
-export type ApiScope = typeof API_SCOPES[number];
+import { API_SCOPES, type ApiScope } from "./api-scope-values";
+export { API_SCOPES, type ApiScope } from "./api-scope-values";
 export type ApiPermissions = Record<string, string[]>;
 
 export function toApiPermissions(scopes: readonly ApiScope[]): ApiPermissions {
@@ -49,8 +39,8 @@ export function canOwnApiKey(role: string | null | undefined): role is "owner" |
 }
 
 /** Operation-specific domain permissions must still be checked by the runner. */
-export function hasRoleAndScope(
-  context: { orgRole: OrgRole | null; scopes: readonly ApiScope[] }, scope: ApiScope,
+export function principalAllows(
+  context: { orgRole: OrgRole | null; scopes: readonly ApiScope[]; principal: { kind: "api-key" | "oauth" } }, scope: ApiScope,
 ): boolean {
-  return canOwnApiKey(context.orgRole) && hasScope(context, scope);
+  return (context.principal.kind === "oauth" ? oauthRoleCeiling(context.orgRole).has(scope) : canOwnApiKey(context.orgRole)) && hasScope(context, scope);
 }

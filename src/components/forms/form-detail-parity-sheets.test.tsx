@@ -39,6 +39,7 @@ vi.mock("@/components/storage-locations/feedstock-bin-balance", () => ({ Feedsto
 // This render-only check inspects tooltip triggers; interaction has its own DOM test.
 vi.mock("@/components/storage-locations/sub-bin-card", async (importOriginal) => ({ ...await importOriginal<typeof import("@/components/storage-locations/sub-bin-card")>(), DetailsTooltip: ({ trigger }: { trigger: ReactNode }) => trigger }));
 vi.mock("@/components/transport-legs", () => ({ TransportLegsSummary: stub("Transport legs"), TransportRoutePreview: stub("Transport route"), TransportEvidencePanel: stub("Transport evidence") }));
+vi.mock("@/components/transport-legs/transport-distance-drift", () => ({ TransportDistanceDriftNotice: stub("Distance drift") }));
 vi.mock("@/components/ui/entity-detail-value", () => ({ EntityDetailValue: stub("Manure store") }));
 vi.mock("@/components/feedstock-types/feedstock-type-sampling", () => ({ FeedstockTypeSampling: stub("Feedstock sampling") }));
 vi.mock("@/components/production-runs/production-incident-table", () => ({ ProductionIncidentTable: stub("Incidents") }));

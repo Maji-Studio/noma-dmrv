@@ -6,9 +6,10 @@ import { getCertifierProjectByFacility } from "@/data-access/certification";
 import { requireOrgFacility } from "@/data-access/utils";
 import { listGhgEntryTemplates, type IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { loadRemovalTemplateFacts } from "./removal-template-facts";
+import { observeRemovalTemplate } from "./observe-removal-template";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { normalizeTemplateDefinition, resolveLineSources } from "@/lib/isometric/template-observations";
-import { loadRemovalTemplateReviewPreview, reviewRemovalTemplateLines, switchCreditBatchRemovalTemplate } from "./removal-template-review";
+import { loadRemovalTemplateReviewEntry, loadRemovalTemplateReviewPreview, reviewRemovalTemplateLines, switchCreditBatchRemovalTemplate } from "./removal-template-review";
 
 const ctx = vi.hoisted((): OrgContext => ({ userId: "review-user", organizationId: "review-org", orgRole: "owner", isPlatformAdmin: false }));
 vi.mock("../with-action", async () => {
@@ -16,7 +17,9 @@ vi.mock("../with-action", async () => {
   return mockWithAction(ctx);
 });
 vi.mock("@/data-access/credit-batches", () => ({ getCreditBatchById: vi.fn() }));
-vi.mock("@/data-access/removal-template-observations", () => ({ reviewLineContracts: vi.fn(), getPreviousTemplateObservation: vi.fn() }));
+vi.mock("@/data-access/removal-template-observations", () => ({ reviewLineContracts: vi.fn(), getPreviousTemplateObservation: vi.fn(), getLatestTemplateObservation: vi.fn(async () => null) }));
+vi.mock("@/lib/isometric/template-observations/load-enrichment", () => ({ loadTemplateEnrichment: vi.fn(async () => ({})) }));
+vi.mock("./observe-removal-template", () => ({ observeRemovalTemplate: vi.fn() }));
 vi.mock("@/data-access/credit-batch-removal-template", () => ({ switchCreditBatchRemovalTemplate: vi.fn(), listPinnedRemovalTemplateIds: vi.fn() }));
 vi.mock("@/data-access/certification", () => ({ getCertifierProjectByFacility: vi.fn() }));
 vi.mock("@/data-access/certifier-credentials", () => ({ resolveIsometricClient: vi.fn(async () => ({})) }));
@@ -90,4 +93,24 @@ it("refuses a cross-org facility before reading registry facts", async () => {
 it("refuses a preview target absent from the facility project", async () => {
   expect((await loadRemovalTemplateReviewPreview({ facilityId: id, removalTemplateId: "other-project-template" })).success).toBe(false);
   expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
+});
+
+describe("loadRemovalTemplateReviewEntry", () => {
+  it("shows a template no batch uses yet, proposals included, without observing it", async () => {
+    const result = await loadRemovalTemplateReviewEntry({ facilityId: id, removalTemplateId: fixture.id });
+    if (!result.success) throw new Error("expected a read");
+    expect(result.data).toMatchObject({ templateId: fixture.id, observation: null, preview: true, availability: "listed" });
+    expect(result.data.lines.length).toBeGreaterThan(0);
+    expect(result.data.enrichment).toEqual({});
+    expect(observeRemovalTemplate).not.toHaveBeenCalled();
+    expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
+    expect(requireOrgFacility).toHaveBeenCalledWith(ctx, id);
+  });
+
+  it("refuses a cross-org facility and a template the project does not list", async () => {
+    vi.mocked(requireOrgFacility).mockRejectedValueOnce(new Error("Facility not found"));
+    expect((await loadRemovalTemplateReviewEntry({ facilityId: id, removalTemplateId: fixture.id })).success).toBe(false);
+    expect(listGhgEntryTemplates).not.toHaveBeenCalled();
+    expect((await loadRemovalTemplateReviewEntry({ facilityId: id, removalTemplateId: "other-project-template" })).success).toBe(false);
+  });
 });

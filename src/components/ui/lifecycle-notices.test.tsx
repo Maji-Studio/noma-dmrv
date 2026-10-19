@@ -1,20 +1,11 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ArchivedRecordNotice, DeleteConflictNotice, isInUseDeleteRefusal } from "./lifecycle-notices";
+import { ArchivedRecordNotice, isInUseDeleteRefusal } from "./lifecycle-notices";
 
 afterEach(cleanup);
 
 describe("lifecycle notices", () => {
-  it("offers Archive instead with one sentence pattern for every kind of row", () => {
-    const onArchive = vi.fn();
-    render(<DeleteConflictNotice label="SUP-0007" onArchive={onArchive} isPending={false} />);
-    expect(screen.getByText("SUP-0007 is in use and cannot be deleted.")).toBeTruthy();
-    expect(screen.getByText("Archive it instead. Existing records keep it, while pickers hide it.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Archive instead" }));
-    expect(onArchive).toHaveBeenCalledOnce();
-  });
-
   it("shows the archived banner with Restore", () => {
     const onRestore = vi.fn();
     render(<ArchivedRecordNotice onRestore={onRestore} isPending={false}>This supplier is archived.</ArchivedRecordNotice>);

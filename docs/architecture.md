@@ -320,6 +320,16 @@ runtime.
   (including `0`, 5s–5m, and `Infinity`). Read the neighbouring hook and match
   its intent instead of repeating the global values mechanically.
 - Invalidate related keys after every mutation.
+- Record locks (Open, In use, Sent; [ADR 0035](./adr/0035-record-locks-follow-dependencies-and-registry-lineage.md))
+  refresh through the `MutationCache` in `src/app/providers.tsx`, not per
+  hook. A mutation hook that can change a lineage declares it with
+  `meta: recordLockMeta(RECORD_LOCK_TOUCHES.<family>)`
+  (`src/hooks/record-lock-query-keys.ts`). After a successful write, only the
+  mounted lock reads of those kinds refetch; registry writes declare
+  `registry` and refresh every kind. A new write that adds or removes a
+  dependency, or changes a Removal or GHG Statement, must declare its family,
+  or the fail-closed screens keep showing a stale lock. The read itself is
+  `/api/reads/record-locks` (below).
 - A Server Component that has already authorized and loaded a record seeds the
   client cache with `createServerHydrationState`
   (`src/lib/react-query/server-hydration.ts`) and renders the page inside

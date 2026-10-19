@@ -89,7 +89,7 @@ describe("updateFeedstockSchema transport distance", () => {
     ).toBeNull();
   });
 
-  it("keeps a populated distance and a zero distance", () => {
+  it("keeps a populated distance and the legacy zero input", () => {
     expect(
       parsed(updateFeedstockSchema, {
         feedstockId: FEEDSTOCK_ID,
@@ -98,12 +98,12 @@ describe("updateFeedstockSchema transport distance", () => {
       }).transportDistanceKm,
     ).toBe(85.5);
     expect(
-      parsed(updateFeedstockSchema, {
+      updateFeedstockSchema.safeParse({
         feedstockId: FEEDSTOCK_ID,
-      expectedVersion: 1,
+        expectedVersion: 1,
         transportDistanceKm: 0,
-      }).transportDistanceKm,
-    ).toBe(0);
+      }).success,
+    ).toBe(true);
   });
 });
 

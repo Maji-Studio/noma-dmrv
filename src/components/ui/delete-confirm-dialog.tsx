@@ -7,20 +7,27 @@
  */
 "use client";
 
-import { useId } from "react";
+import { useId, type ComponentProps, type ReactNode } from "react";
 import { ServerError } from "@/components/forms/server-error";
 import { Button, Modal } from "@/components/ui";
 
 interface DeleteConfirmDialogProps {
   isOpen: boolean;
   title: string;
-  message: string;
+  /** Plain text, or a lead line plus a quieter second line. */
+  message: ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
   isPending?: boolean;
   errorMessage?: string;
   confirmLabel?: string;
   pendingLabel?: string;
+  /** What else the delete takes with it, shown under the message. */
+  children?: ReactNode;
+  /** Holds Delete while the dialog is still loading what it removes. */
+  confirmDisabled?: boolean;
+  /** Modal width token; confirmations stay `sm`, dialogs with a list use `md`. */
+  width?: ComponentProps<typeof Modal>["width"];
 }
 
 export function DeleteConfirmDialog({
@@ -33,6 +40,9 @@ export function DeleteConfirmDialog({
   errorMessage,
   confirmLabel = "Delete",
   pendingLabel = "Deleting...",
+  children,
+  confirmDisabled = false,
+  width = "sm",
 }: DeleteConfirmDialogProps) {
   const id = useId();
   const titleId = `${id}-delete-dialog-title`;
@@ -43,22 +53,32 @@ export function DeleteConfirmDialog({
       onClose={onCancel}
       ariaLabelledBy={titleId}
       ariaDescribedBy={descId}
-      width="sm"
+      width={width}
     >
       <div className="flex flex-col gap-24">
         <div className="flex flex-col gap-12">
           <h2 id={titleId} className="title-heading-3">
             {title}
           </h2>
-          <p
+          <div
             id={descId}
             className="body-medium text-[var(--color-text-secondary)]"
           >
             {message}
-          </p>
+          </div>
+          {children}
         </div>
         <ServerError message={errorMessage} />
-        <div className="flex gap-16 justify-end">
+        <div className="flex gap-16 justify-start">
+          <Button
+            size="large"
+            variant="default"
+            className="bg-[var(--color-signal-red)] text-white border-[var(--color-signal-red)] hover:opacity-90"
+            onClick={onConfirm}
+            disabled={isPending || confirmDisabled}
+          >
+            {isPending ? pendingLabel : confirmLabel}
+          </Button>
           <Button
             size="large"
             variant="default"
@@ -66,15 +86,6 @@ export function DeleteConfirmDialog({
             disabled={isPending}
           >
             Cancel
-          </Button>
-          <Button
-            size="large"
-            variant="default"
-            className="bg-[var(--color-signal-red)] text-white border-[var(--color-signal-red)] hover:opacity-90"
-            onClick={onConfirm}
-            disabled={isPending}
-          >
-            {isPending ? pendingLabel : confirmLabel}
           </Button>
         </div>
       </div>

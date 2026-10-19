@@ -1,3 +1,4 @@
+import { loadFacilityEmissionEntryFlows } from "./emission-entry-energy";
 import { effectiveDeliveryDistance } from "./delivery-distance-projections";
 /**
  * The energy read (ADR 0031): everything the attribution in
@@ -291,6 +292,7 @@ export async function getEnergyInputs(
   return {
     timeZone,
     inputs: {
+      emissionEntryFlows: await loadFacilityEmissionEntryFlows(ctx, facilityId),
       runs: runRows.map((run) => ({
         id: run.id,
         code: run.code,

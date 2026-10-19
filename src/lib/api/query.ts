@@ -35,3 +35,7 @@ export function parseQueryInput<S extends z.ZodType>(values: unknown, schema: S)
 export const mutationQuerySchema = z.strictObject({
   dryRun: z.enum(["true", "false"]).optional().transform((value) => value === "true").describe("true validates and previews the write then rolls back; false commits the write (default)."),
 });
+
+export const customerDeleteQuerySchema = mutationQuerySchema.extend({
+  cascadeFingerprint: z.string().optional().describe("Optional fingerprint from the delete dry run. A changed order set answers 409 cascade_changed with a fresh preview when available."),
+});

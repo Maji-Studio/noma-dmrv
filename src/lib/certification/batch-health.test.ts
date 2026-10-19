@@ -9,6 +9,7 @@ import {
 import { CERT_REQUIREMENT_META } from "./requirement-labels";
 import { batchHealthFixLinkFor } from "./batch-health-links";
 import { removalTemplateBlocker } from "./removal-template-blockers";
+import { deriveBatchEmissionLines } from "./emission-lines";
 
 // A fully-healthy batch: no missing carbon inputs, production linked, facility
 // set up, and every required transport category present.
@@ -373,8 +374,10 @@ describe("deriveBatchHealth", () => {
   });
 });
 
-it("only evidence gaps fail emissions; line review and setup gaps stay in Removal readiness", () => {
+it("evidence gaps fail emissions; template review and setup gaps stay in Removal readiness", () => {
   const line = { componentId: "line", displayName: "Line", groupKey: "pyrolysis", blueprintKey: "grid_electricity_use",
+    groupName: "Pyrolysis", groupPosition: 0, position: 0,
+    description: null, entryPolicy: "additive" as const, records: null,
     contract: { scope: "operating" as const, entryPolicy: "additive" as const, origin: "reviewed" as const },
     automaticFigure: null, entries: [], total: null };
   const missingEvidence = { ...line, state: "missingEvidence" as const,
@@ -383,14 +386,38 @@ it("only evidence gaps fail emissions; line review and setup gaps stay in Remova
   expect(health.issueCount).toBe(1);
   expect(health.checks.find((check) => check.key === "emissions")).toMatchObject({ status: "unmet", fixTarget: "emissions", detail: "Add a file for Line." });
   expect(health.checks.some((check) => check.key === "template")).toBe(false);
-  for (const state of ["needsReview", "needsSetup", "empty", "missingEvidence"] as const) {
+  for (const code of ["lineNeedsReview", "lineNeedsSetup", "lineHasNoSource"] as const) {
+    const state = code === "lineNeedsSetup" ? "needsSetup" : "needsReview";
     const result = deriveBatchHealth(facts({ emissionLines: [{ ...line, state,
-      blocker: { code: "lineHasNoSource", message: "Review the line.", fixTarget: "templateLineReview" } }] }));
-    // Template-level blockers arrive as templateBlockers; a line blocker alone
-    // never makes the batch incomplete (batch-health.ts header).
+      blocker: { code, message: "Review the line.", fixTarget: "templateLineReview" } }] }));
+    // Facility/template setup stays outside batch-local emissions health.
     expect(result.issueCount).toBe(0);
     expect(result.checks.find((check) => check.key === "emissions")?.status).toBe("met");
     expect(result.checks.some((check) => check.key === "template")).toBe(false);
   }
   expect(deriveBatchHealth(facts({ emissionLines: null })).checks.some((check) => check.key === "emissions")).toBe(false);
+});
+
+it.each(["stopped counting", "unit mismatch"])("fails emissions for entries with %s and names each line once", (problem) => {
+  const lines = deriveBatchEmissionLines({
+    definition: { groups: [{ id: "g", key: "pyrolysis", displayName: "Pyrolysis", description: "", components:
+      ["review", "file"].map(id => ({ id, displayName: id === "review" ? "Lab electricity" : "Travel",
+        description: null, blueprintKey: "grid_electricity_use",
+        inputs: [{ key: "electricity_use", type: "monitored", quantityKind: "energy" }] })),
+    }] },
+    lineSources: Object.fromEntries(["review", "file"].map(id => [id, { scope: "operating", entryPolicy: "additive", origin: "reviewed" }])),
+    problems: [], enrichmentComplete: true, automaticFigures: {}, entries: [
+      { componentId: "review", kind: "value", counts: problem !== "stopped counting", unitMismatch: problem === "unit mismatch",
+        hasEvidence: true, total: { magnitude: "1", unit: "kWh" } },
+      { componentId: "file", kind: "value", counts: true, hasEvidence: false, total: { magnitude: "1", unit: "kWh" } },
+    ],
+  });
+  expect(lines[0].blocker).toMatchObject({ code: "lineNeedsReview", fixTarget: "emissions" });
+  const health = deriveBatchHealth(facts({ emissionLines: [...lines, ...lines] }));
+  expect(health.state).toBe("incomplete");
+  expect(health.issueCount).toBe(1);
+  expect(checkFor(health, "emissions")).toMatchObject({ status: "unmet", fixTarget: "emissions",
+    detail: "Check the manual entry on Lab electricity. Add a file for Travel." });
+  expect(checkFor(health, "emissions").detail).not.toMatch(/[\u2013\u2014]/);
+  expect(deriveBatchHealth(facts({ emissionLines: [] })).state).toBe("ready");
 });

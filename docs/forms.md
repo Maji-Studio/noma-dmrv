@@ -148,6 +148,34 @@ Masses are backed by `numeric(14,3)` columns. A hand-rolled `z.number().positive
 
 Same reasoning for `PG_INTEGER_MAX` on integer columns, and `RATIO_INPUT_MAX` (9.999999) for ratio fields backed by `numeric(7,6)` whose domain exceeds `[0, 1]` (H:C org, O:C org). True 0–1 fractions keep their own `.max(1)`.
 
+### Native number constraints
+
+A number input's native `min`, `max` and `step` come from the Zod schema that
+validates it, never from hand-typed numbers. Build a lookup once at module
+level and spread it onto the input:
+
+```typescript
+const numberBounds = numberInputConstraintsFor(sampleFormSchema);
+<FormInput id="totalCarbonPercent" type="number" {...numberBounds("totalCarbonPercent")} … />
+```
+
+`numberInputConstraintsFor` (`@/lib/number-input-constraints`) unwraps
+preprocess pipes, nullables and `"" | number` unions, reads array elements
+(`"ingredients.sharePercent"`) and throws on an unknown path. `step` is the
+schema's `multipleOf`, 1 for an integer, else `"any"`; an exclusive bound
+(`.positive()`) becomes the next step, or the bound itself with `"any"`. For a
+lone field schema use `numberInputConstraints(latitudeSchema)`. A form may set
+`step` after the spread when its display precision differs (formulation
+shares). `number-input-bounds-coverage.test.ts` fails on a number input with no
+bounds spread and no `min`.
+
+The native attributes give the spinner its range and expose min and max to
+assistive tech. They do not block a save: `FormActions`' submit sets
+`formNoValidate` on click (`skipNativeChecksUnlessUnparsed`), so the schema's
+messages explain a refusal. The exception is a number input holding text the
+browser cannot parse ("1e"): it reports an empty value the schema would read as
+cleared, so the browser's own check stays on and blocks the save.
+
 ### GPS coordinates
 
 Facilities, supplier locations and customer locations require a GPS pair to
@@ -249,6 +277,7 @@ New or touched leaf and shared components should import from `@/components/forms
 - **`FormField`** — three kinds of help, one rule: **the ⓘ holds explanations; a `cue` stays visible only for a unit, a limit or a consequence** the operator needs while typing.
   - `hint` and `helperText` both render behind the ⓘ beside the label (hint first), whatever their length. They also reach screen readers as the control's description. Definitions, examples, "why we ask", plain scope notes ("Seeds new orders.") and typical ranges ("0 to 100% of wet mass", "Only an empty bin can switch to split.") go here.
   - `cue` is one visible `body-caption` line under the control: "Minimum 8 characters", "-90 to 90", "Facility time: Africa/Dar es Salaam", "1,200 kg available from this delivery", "Seeds new facilities. Existing facilities keep their own." (organization defaults timezone), "Applies to new Sources across the organization." (registry default visibility), "Annual average for this application site" (soil temperature). It is tagged by hand at the call site; never move an explanation into it to make it visible. Exception: exactly the last three examples above (the timezone and default-visibility scope notes and the soil temperature definition) stay visible as cues by product decision; no other explanation may be a cue. An error or warning replaces it while shown.
+  - `cueAction` ({ label, onClick, disabled?, ariaLabel? }) puts one tertiary text action at the right of the cue row, for a shortcut that fills the control from the cue's figure ("Add all" beside "1,000 kg available from this delivery"). It stays mounted whenever `cue` has text, even while an error or warning replaces the cue's message, so a click that follows the input's blur still lands. Compute the value with `wholeStockDrawKg` (`@/lib/stock-overdraw`), set it with `shouldDirty`, `shouldTouch` and `shouldValidate`, and omit the action (do not dim it) when the field is locked.
   - `unit` renders a suffix inside the end of the control ("kg", "%", "km"), so the label drops its "(kg)". The label keeps the unit for screen readers. Use it only for a single input; the read-view value already carries the unit, so the read label drops it too.
   - The label row is `min-h-24` (the ⓘ hit area), so a one-line label reads at the same height with or without a CERT chip or ⓘ. The ⓘ is a sibling of the `<label>`, never inside it.
 - **`FormError` / `ServerError`** — field-level vs server-level; both carry `role="alert"`. Set server validation issues on fields only when every issue maps to a rendered field, and focus the first field. Otherwise use RHF `setError('root.serverError', …)` and the shared `ServerError` banner. See the delivery form (`src/components/deliveries/delivery-form.tsx`) and `deliveryActionFieldIssues` (`src/lib/delivery-action-errors.ts`) for the reference.
@@ -259,6 +288,7 @@ New or touched leaf and shared components should import from `@/components/forms
 - **`ChoiceCardGroup`**, **`SegmentedControl`** — native-radio choice controls, spread `{...register(name)}` like `FormSelect`. When to use which, and the sizing and a11y contract: [design-system.md](./design-system.md#choice-controls--srccomponentsforms). Evidence method is the card reference (`application-evidence-panel.tsx`). The bin stock sheet opens Lost mass directly and has no loss / count selector.
 - **`MassMoistureFields`** — the canonical wet-mass + moisture pair for an unmixed material, with the live `MoistureSplit` bar spanning both. It owns the labels, wet-basis hint, range helper, and derived readout. A blended biochar product is the exception: pair standalone `WetMassField` and `MoistureField` controls with `ProductCompositionPreview`, because finished-product moisture does not split tracked dry biochar from ingredients and water. The standalone fields also cover lab samples with no paired mass and bin stock-takes whose counted mass is recorded separately. Each takes the caller's `register(...)` result so `setValueAs` stays with the owning form. Pass `materialLabel` ("Biochar", "Feedstock") to qualify canonical labels, and `step="any"` for a column backed by `real` instead of the exact `numeric` families. Vocabulary and precision come from `@/lib/mass-moisture` — see [design-system.md](./design-system.md#wet-mass-moisture-dry-mass). (`DryMassInput` and its "Dry: 237.5 kg" caption are gone.)
 - **`DistanceCalcField`** — derived transport-leg distance. It and similar derived-with-provenance fields (distance plus `distanceSource`) are wired with `useController`, one per field, written through `field.onChange(...)`; never `watch` / `useWatch` plus `setValue`. Pass `null` to clear, not `undefined`: `useController` falls back to the default value on `undefined`, so a cleared saved value reappears. A provenance select bound to a controller field spreads `{...field}` instead of `register`, as `transport-leg-form.tsx` does. Reference: `src/components/customers/customer-location-fields.tsx`.
+- **`DistanceOverrideField`** (`src/components/transport-legs/distance-override-field.tsx`) — the feedstock and delivery One-way distance, two-state per GLOSSARY "Distance override": the location's facility distance read-only, or an override (distance, source, note). One outline `Button` (`variant="default"`, 40px) sits outside the input, to its right, and wraps below it on a narrow sheet: "Override" unlocks entry, "Reset to default" returns to the location default. Provenance ("From {location}. Source: …", "Override. Location default is 42 km.") reads behind the label's ⓘ, never as a visible state label; the only caption is an actionable one (no location distance, with its repair link). The form owns the mode and maps it with `distanceOverridePatch` (`distance-override.ts`): a derived or unchanged value is omitted, `null` clears an override, a positive number sets one. Never send a derived distance back as data. Read views mirror it with `distanceReadFields` (same ⓘ text) and show drift with `TransportDistanceDriftNotice`; edit forms show it as the compact `DistanceDriftAction` under the input, disabled while the form has unsaved edits, and reopen on the refreshed version.
 - **`PositionPicker`** (+ `PositionValue`, `PickerAccent`) — lat/lng entry.
 - **`FormFileUpload`** — see [File upload](#file-upload).
 
@@ -325,6 +355,7 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
 - When the actions render **inside an owning parent form**, pass `submitType="button"` + `onSubmitClick` — nesting `<form>` elements is invalid HTML.
 - `formId` is the escape hatch when extension content must render between the fields and the CTA: the CTA lives outside the `<form>` and points back at it by id.
 - `submitDisabled` gates on an unmet precondition (e.g. an unchecked acknowledgement).
+- The submit skips the browser's constraint bubbles except for unparsed number text (see [Native number constraints](#native-number-constraints)); a nested `submitType="button"` is untouched.
 
 ### FormSpine
 
@@ -354,6 +385,17 @@ The read-mode `sections` passed to `EntitySideSheet` must mirror the form's sect
 - The marker is the **step number** and stays a number through every state — orientation, never a completion claim. The spine deliberately says nothing about whether a section is "done": a green completion tick conflated process progress with certification readiness and read as misleading. Readiness is a field-level concern carried by the CERT chips.
 - Field-less sections render as plain numbered orientation steps — use them for previews and recaps, not required input.
 - Conditional sections may mount/unmount; numbering derives from rendered order and stays contiguous.
+
+### Required stars
+
+A red star on a label means the save refuses the field empty. The rules:
+
+- Star what the schema or the submit handler rejects when empty. Do not star a field that merely feels important, or one a blank value defaults.
+- A field required only in one state shows the star only in that state (cancellation reason when cancelled, nutrient shares while claims are on, the override distance while Override is on, the GIS reference for that evidence method).
+- A field needed for certification but not for saving gets the CERT chip below, never a star.
+- `FormField` takes `required`. Anything drawn outside a FormField (a picker label, a legend, a readout) uses `RequiredMarker` from `@/components/forms/required-marker`, imported by file path, never through the barrel. For a fieldset control (`SegmentedControl`, `ChoiceCardGroup`) also pass `required`, which adds "Required" to the sr-only legend that names the group. Do not add `aria-required`: the control would announce it twice.
+- The star adds "Required" to the label, so locate a starred field in specs with a regex or by role and a prefix match, not by exact name.
+- The guard lives at the end of `src/components/forms/form-detail-parity-forms.test.tsx`: every sheet form is submitted empty and any field that shows an error must carry a star. Its limit: Zod 4 aborts an object `superRefine` after an `invalid_type` issue and handler checks run after validation, so an empty submit never reaches a conditional requirement. Those go in its second table, which starts from a valid fixture, empties one field and asserts the star and the error together. A new conditional requirement gets a row there.
 
 ### CERT chip status
 

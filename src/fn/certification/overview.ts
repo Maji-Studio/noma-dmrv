@@ -1,5 +1,6 @@
 "use server";
 
+import { getRemovalCodes } from "@/data-access/removal-codes";
 import { z } from "zod";
 import { getRecordLocksForTargets } from "@/data-access/record-certification-lock";
 import type { RecordLock } from "@/lib/record-lock";
@@ -77,6 +78,8 @@ export interface CreditBatchHealthSummary {
   issueCount: number;
   /** The latest Removal containing this batch, or null before its first one. */
   removalId: string | null;
+  removalCode: string | null;
+  productionEmissionsClaimedByRemovalCode: string | null;
   /** The Removal's own registry-submission status. */
   removalStatus: DerivedStatus | null;
   recordLock?: RecordLock;
@@ -312,6 +315,7 @@ export async function loadCreditBatchHealthSummaries(
       throw new SafeError("Batch does not belong to requested facility");
     }
 
+    const claimCodes = await getRemovalCodes(orgCtx, batchFacilityRows.flatMap(row => row.productionEmissionsClaimedByRemovalId ? [row.productionEmissionsClaimedByRemovalId] : []));
     const batchRowById = new Map(
       ids.map((batchId) => {
         const rows = batchFacilityRows.filter((row) => row.id === batchId);
@@ -387,6 +391,8 @@ export async function loadCreditBatchHealthSummaries(
         state: health.state,
         issueCount: health.issueCount,
         removalId,
+        removalCode: batchRow?.removalCode ?? null,
+        productionEmissionsClaimedByRemovalCode: claimCodes.get(batchRow?.productionEmissionsClaimedByRemovalId ?? "") ?? null,
         removalStatus: removalId
           ? deriveSubmissionStatus(
               removalSubmission,

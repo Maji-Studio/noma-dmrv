@@ -22,6 +22,7 @@ export interface CustomerDetail extends Customer {
     createdAt: Date;
     version: number;
     updatedAt: Date;
+    archivedAt: Date | null;
   }>;
 }
 
@@ -65,6 +66,7 @@ export async function findCustomerWithRelations(
       createdAt: customerLocations.createdAt,
       version: customerLocations.version,
       updatedAt: customerLocations.updatedAt,
+      archivedAt: customerLocations.archivedAt,
     })
     .from(customerLocations)
     .where(

@@ -30,6 +30,7 @@ import {
   useDeleteRemoval,
   useRemovalCompilation,
 } from "@/hooks/use-certification";
+import { useRemovalDeleteAccess } from "@/hooks/use-removal-delete-access";
 import {
   canDeleteRemovalRow,
   removalDeletionTouchesRegistry,
@@ -109,7 +110,9 @@ export function SubmitStep({
     allowsRemovalSubmission(readiness.state) && compilationReady === true;
   // Anything short of "Submission complete" may be deleted. Once a ledger
   // row exists the server removes whatever the attempt created on Isometric
-  // before releasing the batches. No role gate yet (issue #746).
+  // before releasing the batches; from then on only viewers at the role floor
+  // may delete it (issue #746).
+  const deleteAccess = useRemovalDeleteAccess(facilityId, removalId);
   const deleteFacts = {
     local: ctx.latestSubmission?.status ?? null,
     lockInFlight: ctx.latestSubmission
@@ -121,11 +124,14 @@ export function SubmitStep({
     hasFinalizedSubmission: ctx.hasFinalizedSubmission,
     registryBoundaryOpened: ctx.registryBoundaryOpened,
   };
-  const hasRegistryHistory = removalDeletionTouchesRegistry(deleteFacts);
+  const hasRegistryHistory = removalDeletionTouchesRegistry(
+    deleteFacts,
+    deleteAccess,
+  );
   const canDeleteRemoval =
     ctx.linkedGhgStatement === null &&
     !submitMutation.isPending &&
-    canDeleteRemovalRow(deleteFacts);
+    canDeleteRemovalRow(deleteFacts, deleteAccess);
   const deleteCopy = removalDeletionCopy(hasRegistryHistory);
 
   const deleteDialog = (
@@ -259,7 +265,10 @@ export function SubmitStep({
           updates={progressUpdates}
           isResubmission={attemptIsResubmission}
         />
-        <div className="flex flex-wrap items-center justify-end gap-12">
+        <div className="flex flex-wrap items-center justify-start gap-12">
+          <Button variant="primary" onClick={onDone}>
+            Done
+          </Button>
           {viewUrl && (
             <a
               href={viewUrl}
@@ -271,9 +280,6 @@ export function SubmitStep({
               <ArrowSquareOutIcon size={ACTION_ICON_SIZE} aria-hidden />
             </a>
           )}
-          <Button variant="primary" onClick={onDone}>
-            Done
-          </Button>
         </div>
       </div>
     );
@@ -304,14 +310,7 @@ export function SubmitStep({
           isResubmission={attemptIsResubmission}
         />
         {terminalError && <ServerError message={terminalError} />}
-        <div className="flex flex-wrap items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
-          <span className="body-caption text-[var(--color-text-tertiary)]">
-            {submitMutation.isPending
-              ? "noma is submitting the Removal to Isometric."
-              : submissionStalled
-                ? "Registry work may still be continuing. Close this dialog and refresh the page to reconcile its status."
-                : "Completed registry operations are preserved for a safe retry."}
-          </span>
+        <div className="flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] pt-16">
           {!submitMutation.isPending && (
             <div className="flex items-center gap-12">
               {submissionStalled ? (
@@ -338,6 +337,13 @@ export function SubmitStep({
               )}
             </div>
           )}
+          <span className="body-caption text-[var(--color-text-tertiary)]">
+            {submitMutation.isPending
+              ? "noma is submitting the Removal to Isometric."
+              : submissionStalled
+                ? "Registry work may still be continuing. Close this dialog and refresh the page to reconcile its status."
+                : "Completed registry operations are preserved for a safe retry."}
+          </span>
         </div>
         {confirmDialog}
       </div>
@@ -391,18 +397,7 @@ export function SubmitStep({
           alert is only for what the last submit attempt returned. */}
       {submitError && <ServerError message={submitError} />}
 
-      <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
-        {canDeleteRemoval ? (
-          <Button
-            variant="default"
-            onClick={() => setDeleteConfirmOpen(true)}
-            disabled={submitMutation.isPending}
-          >
-            {deleteCopy.actionLabel}
-          </Button>
-        ) : (
-          <span />
-        )}
+      <div className="flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] pt-16">
         {requirementsMet ? (
           submitButton
         ) : (
@@ -412,6 +407,15 @@ export function SubmitStep({
             </span>
           </Tooltip>
         )}
+        {canDeleteRemoval ? (
+          <Button
+            variant="default"
+            onClick={() => setDeleteConfirmOpen(true)}
+            disabled={submitMutation.isPending}
+          >
+            {deleteCopy.actionLabel}
+          </Button>
+        ) : null}
       </div>
 
       {confirmDialog}

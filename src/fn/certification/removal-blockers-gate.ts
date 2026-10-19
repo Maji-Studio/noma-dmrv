@@ -1,3 +1,5 @@
+import { getProductionBatchRegistryInputs } from "@/data-access/certifier-production-batches";
+import { getCreditBatchProductionSpanIssue } from "@/lib/credit-batch-production-span";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import { describeFeedstockTypeMappingGap } from "@/lib/certification/feedstock-type-mapping";
@@ -69,6 +71,12 @@ export async function evaluateRemovalBlockers(args: {
   if (blockers.length) return blockers;
   const { prepared } = prepareRemovalSubmission(args.ctx);
   if (!prepared) return [legacyBlocker(REMOVAL_PREPARATION_BLOCKERS.noTemplate, "creditBatchTemplate")];
+  const inputs = await getProductionBatchRegistryInputs(args.orgCtx, args.ctx.memberBatches.map(batch => batch.id));
+  for (const input of inputs) {
+    const issue = getCreditBatchProductionSpanIssue(input);
+    if (issue) blockers.push(legacyBlocker(issue, "batchDetails"));
+  }
+  if (blockers.length) return blockers;
   try {
     await buildRemovalSubmissionBuild({ ...args, prepared, sourceIds: [] });
   } catch (error) {

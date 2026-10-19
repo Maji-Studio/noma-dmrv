@@ -1,6 +1,8 @@
 "use client";
 
+import { FormError } from "@/components/forms/form-error";
 import { FormField } from "@/components/forms/form-field";
+import { RequiredMarker } from "@/components/forms/required-marker";
 import { PositionPicker, type PositionValue } from "@/components/forms/position-picker";
 import { SegmentedControl } from "@/components/forms/segmented-control";
 
@@ -62,6 +64,7 @@ export function FieldPositionField({
   latitudeError,
   longitudeError,
   disabled = false,
+  required = false,
   mode,
   onModeChange,
   onPositionChange,
@@ -74,6 +77,8 @@ export function FieldPositionField({
   latitudeError?: string;
   longitudeError?: string;
   disabled?: boolean;
+  /** The pin is needed to save: true while the evidence method is Customer location. */
+  required?: boolean;
   mode: FieldPositionMode;
   onModeChange: (mode: FieldPositionMode) => void;
   onPositionChange: (position: PositionValue) => void;
@@ -104,6 +109,7 @@ export function FieldPositionField({
           <div className="flex flex-col gap-4">
             <span className="body-small text-[var(--color-text-secondary)]">
               Customer location
+              {required && <RequiredMarker />}
             </span>
             <span className="body-small font-medium text-[var(--color-text-primary)]">
               {derived
@@ -119,6 +125,7 @@ export function FieldPositionField({
                   : "Choose a delivery in step 1 and the position follows its destination."}
               </span>
             )}
+            <FormError id="derivedPosition-error" message={latitudeError ?? longitudeError} />
           </div>
         )}
       </div>
@@ -134,6 +141,7 @@ export function FieldPositionField({
           latitudeError={latitudeError}
           longitudeError={longitudeError}
           disabled={disabled}
+          required={required}
         />
       )}
     </div>

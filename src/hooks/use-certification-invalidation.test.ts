@@ -52,6 +52,7 @@ describe("useSaveFacilityCertifierMapping", () => {
       onboardingKeys.status(facilityId, "org-1"),
       creditBatchKeys.list({ facilityId }),
       creditBatchKeys.detail(batchId),
+      creditBatchKeys.pageModel(batchId),
       creditBatchKeys.previews([batchId]),
       activityKeys.creditBatch(batchId),
       activityKeys.creditBatchSummary(batchId),
@@ -90,7 +91,10 @@ describe("useSubmitGhgStatementToVerifier", () => {
       onError: (error: Error) => void;
     }];
     await onError(error);
-    expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
+    expect(invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.details() });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: activityKeys.all });
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
     });
   });
@@ -164,11 +168,15 @@ describe("invalidateCertificationReadiness", () => {
     const queryClient = { invalidateQueries } as unknown as QueryClient;
 
     await invalidateCertificationReadiness(queryClient);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.details() });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: activityKeys.all });
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(2);
+    expect(invalidateQueries).toHaveBeenCalledTimes(4);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: creditBatchKeys.timelineFactsPrefix(),
     });
   });
 
@@ -180,7 +188,7 @@ describe("invalidateCertificationReadiness", () => {
       creditBatchPreviews: true,
     });
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(invalidateQueries).toHaveBeenCalledTimes(5);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
     });

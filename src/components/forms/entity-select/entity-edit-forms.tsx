@@ -13,6 +13,8 @@ import { ReactorForm } from "@/components/reactors/reactor-form";
 import { useUpdateReactor } from "@/hooks/use-reactors";
 import type { CreateReactorData } from "@/schemas/reactors";
 import { OrderForm } from "@/components/orders/order-form";
+import { RecordLockFormFrame } from "@/components/record-locks/record-lock-sheet-props";
+import { useRecordLock } from "@/hooks/use-record-locks";
 import { useUpdateOrder } from "@/hooks/use-orders";
 import type { OrderFormData } from "@/schemas/orders";
 import { SupplierForm } from "@/components/suppliers/supplier-form";
@@ -87,10 +89,16 @@ export function ReactorEditFormDialog(props: EditProps<"reactor">) {
 
 export function OrderEditFormDialog(props: EditProps<"order">) {
   const update = useUpdateOrder();
+  // The same lock as the order sheet: held fields disabled, Save off until it answers.
+  const { lock, status, retry, retrying } = useRecordLock("order", props.isOpen ? props.record.id : null);
   return <PickerEditFormDialog {...props} title="Edit order" testId="order-edit-dialog"
     isPending={update.isPending}
     save={(data: OrderFormData, record) => update.mutateAsync({ ...data, orderId: record.id, expectedVersion: record.version })}
-    renderForm={(record, { key, ...formProps }) => <OrderForm key={key} {...formProps} order={record} />} />;
+    renderForm={(record, { key, ...formProps }) => (
+      <RecordLockFormFrame lock={lock} status={status} retry={retry} retrying={retrying}>
+        <OrderForm key={key} {...formProps} order={record} lock={lock} />
+      </RecordLockFormFrame>
+    )} />;
 }
 
 export function SupplierEditFormDialog(props: EditProps<"supplier">) {

@@ -30,7 +30,7 @@
  * resolves it in Isometric. Consistently with that, payload validation gates
  * only the batches that still need a POST — a registered batch whose local
  * facts have gone invalid can be reused after remote identity and mapping
- * verification.
+ * verification. The strict month span guard always runs, including on reuse.
  */
 
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
@@ -44,6 +44,7 @@ import {
 } from "@/data-access/certifier-production-batches";
 import type { OrgContext } from "@/lib/auth/server";
 import { MASS_COMPARISON_EPSILON_KG } from "@/lib/calculations/mass-dry";
+import { assertCreditBatchRunSpansUnderOneMonth } from "@/lib/credit-batch-production-span";
 import { SafeError } from "@/lib/errors";
 import {
   buildCreateProductionBatchRequest,
@@ -200,6 +201,7 @@ export async function ensureProductionBatchesForCreditBatches(
     existingRows.map((row) => [row.creditBatchId, row]),
   );
 
+  assertCreditBatchRunSpansUnderOneMonth(inputs);
   const client = await resolveIsometricClient(args.orgCtx);
 
   // Live identities retain their registered payload; missing identities require

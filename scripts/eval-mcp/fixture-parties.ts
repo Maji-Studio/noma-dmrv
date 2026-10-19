@@ -1,5 +1,10 @@
+import { partyLocationFixturePlan } from "./fixture-party-locations";
+import { createFormulation } from "@/lib/operations/formulations";
+import { recordOrder } from "@/lib/operations/orders";
+import { archiveCustomerLocation } from "@/lib/operations/customer-locations";
+import { formatFacilityDate } from "@/lib/date-utils";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, customers, customerLocations, customerLocationFacilityDistances, facilities, feedstocks, members, orders,
   suppliers, supplierLocations, supplierLocationFacilityDistances, users } from "@/db/schema";
@@ -10,10 +15,11 @@ import { archiveSupplier, createSupplier } from "@/lib/operations/suppliers";
 import { archiveCustomer, createCustomer } from "@/lib/operations/customers";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { createIntakeFixture, type IntakeFixture } from "../../tests/helpers/operation-fixture";
-import { PARTY_CASES, PARTY_CUSTOMER_NAME, PARTY_PICKUP, PARTY_SUPPLIER_NAME, type PartyCaseId } from "./config";
+import { PARTY_CASES, PARTY_ORDER_CODE, PARTY_CUSTOMER_NAME, PARTY_PICKUP, PARTY_SUPPLIER_NAME, type PartyCaseId } from "./config";
 import { cleanupDeliveryFixture } from "./fixture-delivery";
 import type { PartyRow, PartySnapshot, PartyTarget } from "./score-parties";
 
+const ORDER_QUANTITY_KG = 100;
 const scriptOptions = { activitySource: "script" as const };
 export interface PartyEvalFixture extends IntakeFixture { key: string; target: PartyTarget }
 export async function seedPartyFixture(caseId: PartyCaseId): Promise<PartyEvalFixture> {
@@ -25,8 +31,10 @@ export async function seedPartyFixture(caseId: PartyCaseId): Promise<PartyEvalFi
     const [facility] = await db.select().from(facilities).where(eq(facilities.organizationId, ctx.organizationId));
     const locations = [{ name: "Existing pickup", country: "Tanzania", gpsLatitude: PARTY_PICKUP.gpsLatitude, gpsLongitude: PARTY_PICKUP.gpsLongitude }];
     let partyId = "";
+    let locationId: string | undefined;
+    const plan = partyLocationFixturePlan(caseId);
     let name = PARTY_SUPPLIER_NAME;
-    if (caseId !== "supplier-with-pickup" && caseId !== "customer-and-field" && caseId !== "customer-restore") {
+    if (!plan && caseId !== "supplier-with-pickup" && caseId !== "customer-and-field" && caseId !== "customer-restore") {
       const { supplier } = await runOperationInProcess(createSupplier, ctx, { name, locations }, scriptOptions);
       partyId = supplier.id;
       if (caseId !== "supplier-already-exists") await runOperationInProcess(archiveSupplier, ctx, { supplierId: partyId, expectedVersion: supplier.version }, scriptOptions);
@@ -37,13 +45,35 @@ export async function seedPartyFixture(caseId: PartyCaseId): Promise<PartyEvalFi
       partyId = customer.id;
       await runOperationInProcess(archiveCustomer, ctx, { customerId: partyId, expectedVersion: customer.version }, scriptOptions);
     }
+    if (plan?.kind === "supplier") {
+      const result = await runOperationInProcess(createSupplier, ctx, { name, locations: plan.locations }, scriptOptions);
+      partyId = result.supplier.id; locationId = result.locations[0].id;
+    } else if (plan?.kind === "customer") {
+      name = PARTY_CUSTOMER_NAME;
+      const result = await runOperationInProcess(createCustomer, ctx, { name, locations: plan.locations }, scriptOptions);
+      partyId = result.customer.id;
+      const field = result.locations.find(row => row.name === "North Block")!;
+      locationId = field.id;
+      if (plan.order) {
+        const formulation = await runOperationInProcess(createFormulation, ctx, { name: "Pure biochar", biocharRatio: 1 }, scriptOptions);
+        const order = await runOperationInProcess(recordOrder, ctx, { facilityId: facility.id,
+          customerId: partyId, customerLocationId: locationId, formulationId: formulation.id,
+          orderDate: formatFacilityDate(new Date(), facility.timezone), quantityKg: ORDER_QUANTITY_KG }, scriptOptions);
+        // The server generates order codes; the prompt names a fixed one, so the fixture sets it.
+        await db.update(orders).set({ code: PARTY_ORDER_CODE })
+          .where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.id, order.id)));
+      }
+      if (plan.archive) await runOperationInProcess(archiveCustomerLocation, ctx, {
+        customerId: partyId, locationId, expectedVersion: field.version,
+      }, scriptOptions);
+    }
     if (caseId === "supplier-archived-intake") {
       await createFeedstockType(ctx, { code: "RICE", name: "Rice husk", category: "agricultural", usage: "pyrolysis" });
     }
     const definition = PARTY_CASES.find(({ id }) => id === caseId)!;
     const credential = await createApiKey(ctx, { name: "MCP evaluation", scopes: [...definition.scopes], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS });
     return { ...fixture, key: credential.key, target: {
-      partyId, name, facilityId: facility.id, facilityName: facility.name, before: await readPartySnapshot(fixture),
+      partyId, locationId, name, facilityId: facility.id, facilityName: facility.name, before: await readPartySnapshot(fixture),
     } };
   } catch (error) {
     try { await cleanupPartyFixture(fixture); }

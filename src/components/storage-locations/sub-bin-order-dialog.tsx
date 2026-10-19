@@ -124,12 +124,12 @@ export function SubBinOrderDialog({ isOpen, onClose, subBins, order, defaultOrde
         )}
         {draft.length === 0 && <p role="alert" className="body-caption text-[var(--color-status-error)]">Tick at least one sub-bin.</p>}
         <p aria-live="polite" className="sr-only">{announcement}</p>
-        <div className="flex flex-wrap items-center justify-between gap-8">
-          <Button type="button" variant="noOutline" disabled={isDefaultOrder(draft, subBins)} onClick={() => { setDraft(subBins.map(s => s.layerId)); setAnnouncement(`Every sub-bin is back in the load, ${defaultOrderLabel.toLowerCase()}.`); }}>{`Reset to ${defaultOrderLabel.toLowerCase()}`}</Button>
+        <div className="flex flex-wrap items-center justify-start gap-8">
           <div className="flex gap-8">
-            <Button type="button" variant="weak" onClick={onClose}>Cancel</Button>
             <Button type="button" variant="primary" disabled={draft.length === 0} onClick={apply}>Use this order</Button>
+            <Button type="button" variant="weak" onClick={onClose}>Cancel</Button>
           </div>
+          <Button type="button" variant="noOutline" disabled={isDefaultOrder(draft, subBins)} onClick={() => { setDraft(subBins.map(s => s.layerId)); setAnnouncement(`Every sub-bin is back in the load, ${defaultOrderLabel.toLowerCase()}.`); }}>{`Reset to ${defaultOrderLabel.toLowerCase()}`}</Button>
         </div>
       </div>
     </Modal>

@@ -20,6 +20,94 @@ route handlers do not import the database. The shared REST problem builder
 lives at `lib/api/problem.ts`. See [auth.md](./auth.md#api-credentials) for
 credential and denial contracts.
 
+### OAuth for API callers
+
+Use an OAuth connection for an app acting as a member, or an Owner/Admin API key
+for scripts and internal agents. Send one `Authorization: Bearer <credential>`;
+cookies and `x-api-key` never authenticate. [Auth](./auth.md#oauth-connections)
+owns generation checks and denial precedence; [security](./security.md#oauth-provider-and-client-controls)
+owns deployment gates and the exact client allowlist. The provider stays off
+until the staging connector proof.
+
+[OAuth config](../src/lib/auth/oauth-config.ts) derives the issuer and audiences
+from the `NEXT_PUBLIC_APP_URL` origin. For origin `<origin>`:
+
+| Purpose | URL |
+|---|---|
+| Issuer | `<origin>/api/auth` |
+| Authorization / token | `<origin>/api/auth/oauth2/authorize` / `<origin>/api/auth/oauth2/token` |
+| Authorization server discovery | `<origin>/.well-known/oauth-authorization-server/api/auth` |
+| REST audience / protected-resource metadata | `<origin>/api/v1` / `<origin>/.well-known/oauth-protected-resource/api/v1` |
+| MCP audience / protected-resource metadata | `<origin>/api/mcp` / `<origin>/.well-known/oauth-protected-resource/api/mcp` |
+| Root protected-resource metadata (MCP alias) | `<origin>/.well-known/oauth-protected-resource` |
+
+[Discovery](../src/lib/auth/oauth-discovery.ts) is public with GET CORS `*` and
+300-second caching, and returns 404 when the flag is off. There is no OpenID or
+JWKS document. Use authorization code with S256 PKCE. Request one `resource`
+for the chosen transport on authorization and token exchange; a missing resource
+can use the client's single linked resource. CIMD clients link to MCP only.
+REST and MCP tokens are not interchangeable: the other audience gives 401
+`credential_audience_mismatch`.
+
+[Grantable scopes](../src/lib/auth/oauth-scopes.ts) are the API `:read` and
+`:write` set, never `:delete`. Unknown or delete scopes give `invalid_scope`.
+Owner, Admin and Member have the same OAuth ceiling; domain guards still apply.
+Start with reads. A missing authorize scope defaults to registered read scopes
+plus `offline_access`. Request `offline_access` to keep the connection through
+rotating refresh tokens; consent preserves it without a checkbox. Access tokens
+last one hour; 30 days without API use ends the connection. Refresh is not use.
+
+With `OAUTH_PROVIDER_ENABLED=true`, 401 challenges include the audience's
+`resource_metadata` and read scopes; OAuth bearer denials add
+`error="invalid_token"`. Missing grantable scopes return 403 `missing_scope`
+with `error="insufficient_scope"` and the union of current and required scopes
+in `WWW-Authenticate`. Re-authorize with that union for step-up consent. MCP lists
+grantable writes before they are allowed, then checks argument-dependent scopes
+before dispatch. Deletes stay hidden. Keys keep their scope-filtered tool list
+and existing scope refusals. With the flag off, 401s carry only the bare Bearer
+challenge. See [MCP tools](#mcp-tools-on-api-keys).
+
+Admission applies to both credential kinds. A pre-resolution IP bucket allows
+300 requests per minute, or 6,000 for configured connector egress ranges
+(initially Anthropic `160.79.104.0/21`). After resolution, a per-credential
+`admit` bucket allows 720 per minute and charges before scope, method or body
+refusals. Read/write credential and organization buckets still apply. Values
+live in [rate-limit config](../src/config/api-rate-limits.ts); revisit the
+connector tier after the proof.
+
+#### Connected apps
+
+At `/settings/connected-apps`, each member sees and disconnects their own
+connections in the active organization. Owners and Admins also have All members
+and may disconnect anyone's connection. A Platform Admin needs real membership.
+Disconnect ends the generation immediately; records it saved stay. Reconnecting
+creates a new generation and idempotency namespace. The picker chooses the
+connection's organization without switching the browser's active organization.
+See [management guards](../src/data-access/oauth-grants.ts).
+
+#### Connecting Claude and ChatGPT
+
+Run this c8 proof on staging after merge, enabling OAuth there only (plan decision
+129). Use `https://staging.app.noma.maji.studio/api/mcp`. Prove Claude first;
+ChatGPT follows once its CIMD `private_key_jwt` path has a verified fix or
+workaround (decision 122). Allowlist Claude's exact client identity,
+`https://claude.ai/oauth/mcp-oauth-client-metadata`, in `OAUTH_CIMD_CLIENT_IDS`
+for the proof. Add ChatGPT only after verifying its exact identity. Dynamic
+registration is off.
+
+1. Add the connector by URL and connect. Sign in, pick the organization (use a
+   person with two eligible memberships to exercise the picker), and allow reads
+   only.
+2. Call `whoami` and a `find_*` tool. Confirm the selected organization and reads.
+3. Ask for a write. Confirm 403 `insufficient_scope`, accept the step-up consent,
+   then confirm the intended write succeeds.
+4. Disconnect in noma Settings, Connected apps. Confirm the next call fails and
+   the app asks to reconnect.
+5. Record client versions, results and blockers in [plan section 28](./plans/2026-10-06-data-entry-api.md#28-oauth-track-results-2026-10-19).
+   Record claude.ai metadata `Cache-Control`, its reaction to `invalid_client`
+   on refresh, concurrent refresh behavior and connector rate-limit observations.
+   Never retain raw codes, tokens or signed storage URLs in proof artifacts.
+
 ### Lab samples on the runner
 
 Lab sample create, update (including a move to another credit batch) and delete
@@ -113,6 +201,21 @@ including missing upload bytes and a lineage that changes while locks are
 acquired. MCP carries the same flag. A byte inspection refusal is 422
 `validation_failed` and commits the failed state; retrying that failed row
 returns 409 with its stored reason.
+
+### Uploading from Claude
+
+Decision 92 keeps the presigned upload path: a shell-capable agent requests an
+upload, PUTs bytes without the API bearer, then confirms with its credential.
+Decision 128 defers file attachments from chat apps. Tell the person to attach
+the file to the record in noma. Never put bytes into a tool call.
+
+A future claude.ai sandbox upload would need outbound network access to the
+exact hostname in `upload.url`, set in Claude's network access domain allowlist.
+For Spaces this is the configured bucket/region endpoint host, not the noma app
+host; [storage config](./storage.md#bucket-and-prefix-convention) determines it.
+Do not assume that host or setting has been verified with the real connector.
+ChatGPT file hand-off would need a separate server-side fetch path. Both remain
+[follow-ups](./open-questions-architecture.md#oauth-connection-follow-ups).
 
 ### Operation effects and API bookkeeping
 
@@ -225,12 +328,18 @@ versions answer `replay_unavailable`. The claim path deletes expired records
 lazily before reclaiming their keys.
 
 `src/lib/api/guards.ts:preAuthGuard` charges the pre-authentication IP limit
-first. Routes then resolve the credential with `resolveApiContext` (including
-organization API access), and call `src/lib/api/guards.ts:postAuthGuard`: the
-write kill switch precedes credential and organization limits, charged in that
+first: 300 requests per minute, or 6,000 for configured connector egress CIDRs
+when forwarding headers come through Vercel. Routes then resolve the credential
+with `resolveApiContext` (including organization API access) and charge its
+admit bucket before body parsing, scope checks or method refusals. The admit
+capacity and refill budget are `API_ADMIT_RATE_LIMIT`, the credential read plus
+write budgets (600 + 120 = 720 requests per minute), so admission preserves
+combined throughput. Refused requests still consume admission.
+After scope checks, `src/lib/api/guards.ts:postAuthGuard` applies the write kill
+switch before credential and organization operation limits, charged in that
 order with separate read/write budgets. Dry runs count as writes. PostgreSQL
 token buckets are debited outside the operation transaction; rollback never
-refunds them. Limits come from `src/config/api-rate-limits.ts:API_RATE_LIMITS`.
+refunds them. Limits come from `src/config/api-rate-limits.ts`.
 
 `GET /api/cron/purge-api-records` verifies a bearer `CRON_SECRET`, then purges
 expired idempotency records and idle rate-limit buckets in bounded batches.
@@ -241,7 +350,7 @@ Staging is Preview and relies on lazy claim expiry; see
 ### Feedstock REST adapter
 
 `lib/api/route.ts` records the deadline, runs `preAuthGuard`, resolves the
-credential, checks role/scope through `admitApiRequest`, then runs
+credential, charges credential admission, checks role/scope through `admitApiRequest`, then runs
 `postAuthGuard` before the handler. GET and HEAD use read budgets (including
 `/api/v1/me`); all other methods, including dry runs, use write budgets. Guard
 denials return directly. Admitted responses, including problems, carry the
@@ -258,7 +367,16 @@ representations plus the next position. REST and MCP share parsed-input readers 
 cursors bind the resource, organization and filters, but not page size. The
 representation deliberately contains only feedstock-owned fields and reference
 ids, without joined transport data or entity names. Feedstock representation
-revision 2 removes intake GPS fields; date, supplier, wet mass, moisture and bin
+revision 3 adds nullable `distanceKmOverride`, `distanceSource` and `distanceNote`.
+Input names remain `transportDistanceKm` and `transportDistanceSource`: omission
+preserves the override and recorded leg, a positive distance sets an override,
+and null clears it and captures the current supplier-location facility distance.
+Legacy zero remains accepted as a clear, so the v1 input contract stays additive;
+zero is never persisted as an override. On an already derived record, null and
+zero preserve the recorded leg, including when the location pair is missing.
+Only clearing an existing override or changing the route captures the current
+location distance. Clearing an override also clears its note.
+Revision 2 removed intake GPS fields; date, supplier, wet mass, moisture and bin
 are non-null. Moisture is below 100%. PATCH cannot clear the bin or supply derived
 `massDryKg`. Supplier-location and driver
 ids are not feedstock columns. Percent values use 0 to 100. Business dates use
@@ -329,8 +447,8 @@ no locations. Supplier locations have no code or archive column.
 ### Master data on REST and MCP
 
 [Master data writes](./api-master-data.md) owns supplier, customer and formulation
-operations on REST and MCP: scopes, locations on create, name uniqueness,
-archive/restore, archived list filters, delete blockers and write preconditions.
+operations on REST and MCP: scopes, location writes and detail reads, archive
+semantics, registration fences, distance warnings and customer-delete previews.
 
 ### Customers and orders on REST and MCP
 
@@ -341,17 +459,9 @@ See [master-data read fields and archived filters](./api-master-data.md#supplier
 locations include required names and coordinates plus `facilityDistances`, an array
 of `{ facilityId, distanceKm, distanceSource }`. Supplier locations expose the
 same array, replacing the customer scalar distance and adding supplier facility
-distances. These list-only location endpoints do not emit revision ETags. Missing
-pairs are absent from the array. Distances are positive one-way kilometres; GPS-derived values carry
-`map_estimate`. These REST/MCP location endpoints remain read-only. App location
-writes upsert supplied facility pairs and leave omitted arrays/pairs unchanged;
-each supplied pair requires `distanceKm`. A null value removes a pair; empty
-form input normalizes to null, while an omitted key is rejected.
-Pair saves fill missing delivery snapshots and feedstock transport distances in
-the same transaction, skipping certification-locked lineage. Non-null recorded
-distances remain unchanged. Delivery snapshots store the pair independently of
-an override; effective distance is override ?? recorded. Clearing an override
-restores the snapshot, and provenance-only edits do not refresh it. Orders expose
+distances. Lists have no ETags; location detail reads and writes use the location
+version. See [party locations](./api-master-data.md#party-locations) for distance
+inputs, archived destinations, defaults, fills and delete refusals. Orders expose
 list and id-or-code reads under `orders:read`. Both read scopes are on by default.
 Storage locations expose `formulationId` at representation revision 3 and
 accept `type` and `formulationId` list filters.
@@ -602,6 +712,8 @@ use Zod's output JSON Schema conversion. Strict query schemas live in
 map is shared by resource adapters and the document generator. Descriptions belong in
 Zod schemas. Transport headers and possible statuses are declared in the generator.
 The generator imports no runtime credentials, environment or database modules.
+Its OAuth security scheme uses origin-relative issuer endpoints, S256 PKCE and
+the shared grantable scope set; delete operations remain API-key only.
 
 `GET /api/v1/openapi.json` and `GET /api/v1/llms.txt` are public, bypass credential
 resolution and rate-limit guards, and cache publicly for 300 seconds. OpenAPI
@@ -641,14 +753,18 @@ requires the method/path (or `components`) and change description on each line.
 ### MCP tools on API keys
 
 `src/app/api/mcp/route.ts` serves stateless JSON-RPC POSTs through the pinned
-`mcp-handler` and MCP server SDK. GET and DELETE return 405. Origin validation
-runs first; requests without Origin pass. The shared `lib/api/route.ts`
+`mcp-handler` and MCP server SDK. GET and DELETE authenticate before returning
+405 with `Allow: POST` (decision 132); missing credentials return 401. These
+method refusals charge the pre-authentication IP and credential admit buckets
+only, with no read or write operation debit. POST Origin validation runs first;
+requests without Origin pass. The shared `lib/api/route.ts`
 admission wrapper starts the deadline before authentication, assigns a request
-id and applies the same API-key resolver and rate-limit buckets as REST.
+id and applies the same bearer resolver and rate-limit buckets as REST.
 After authentication, the preparation hook bounds the body to `API_BODY_MAX_BYTES`
 and returns HTTP 413 `payload_too_large` if it exceeds that limit. JSON-RPC
 batch arrays return HTTP 400 `batch_not_supported`. Both refusals use
-`application/problem+json` and precede authenticated rate limiting and dispatch.
+`application/problem+json` and follow credential admission but precede operation
+rate limiting and dispatch.
 `lib/mcp/server.ts` classifies calls to write tools as writes, including dry runs;
 other admitted MCP requests count as reads.
 
@@ -658,10 +774,15 @@ get_feedstock. Each request captures its resolved context in a fresh server.
 and delete_feedstock through the same operation runner as REST. Each write needs
 one requestKey reused on retry; dryRun previews may omit it. Updates and deletes
 take expectedVersion from get_feedstock. Activity audit rows record source `mcp`.
-Existing tools keep their single `hasRoleAndScope` scope check. Document tools
-use `visible(ctx)` to appear when the role floor and any supported owner's
-scope allow them, then `authorize(ctx, args)` checks the selected owner before
-execution. A missing owner scope returns an `isError` `missing_scope` problem.
+API keys discover tools allowed by their scopes. OAuth discovery uses the live
+role ceiling, allowing clients to discover grantable writes; deletes remain
+hidden and return "Unknown tool." OAuth calls missing a grantable scope return
+HTTP 403 with an `insufficient_scope` challenge before dispatch and operation
+rate limiting. The dispatcher also checks every required scope before execution
+and returns an `isError` `missing_scope` problem as a backstop. Document tools
+use `visible(ctx)` for owner-sensitive discovery, then `authorize(ctx, args)`
+checks the selected owner. Missing or unknown document owner types stay inside
+MCP argument validation; document reads return `invalid_query`.
 `find_documents` and `get_document_download_url` use the owner's read scope;
 `request_document_upload` and `confirm_document_upload` use its write scope.
 The upload request requires `requestKey`; confirmation takes neither a key nor

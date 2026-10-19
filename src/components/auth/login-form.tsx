@@ -1,5 +1,6 @@
 "use client";
 
+import { OAUTH_RESTART_MESSAGE } from "@/config/oauth";
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -10,6 +11,7 @@ import { Button } from "@/components/ui";
 import { loginSchema, type LoginFormData } from "@/schemas/auth";
 import { FormField, FormInput, ServerError } from "@/components/forms";
 import { Notice } from "@/components/ui/notice";
+import { followOAuthContinuation } from "@/lib/auth/oauth-continuation";
 
 const DEFAULT_SIGN_IN_PATH = "/dashboard";
 
@@ -58,6 +60,12 @@ export function LoginForm() {
     const result = await signIn(data.email, data.password);
 
     if (result.success) {
+      if (result.redirectUrl) {
+        if (!followOAuthContinuation(result.redirectUrl, searchParams)) {
+          setServerError(OAUTH_RESTART_MESSAGE);
+        }
+        return;
+      }
       router.push(getSafeSignInPath(searchParams.get("from")));
     } else {
       setServerError(

@@ -324,7 +324,7 @@ function ConnectorBody({
       ) : (
         <div className="flex flex-col items-start gap-12">
           <div className="w-full">
-            <FormField id="isometric-project" label="Isometric project">
+            <FormField id="isometric-project" label="Isometric project" required>
               <EntitySelect
                 id="isometric-project"
                 optionLabel="Isometric project"
@@ -355,6 +355,7 @@ function ConnectorBody({
         <FormField
           id="isometric-facility-id"
           label="Isometric facility ID"
+          required
           hint="Needed to register production batches. Create the facility in Isometric Certify, then paste its fcl_… ID here."
         >
           <FormInput
@@ -369,8 +370,8 @@ function ConnectorBody({
 
       {!mapping && availableProjects.length > 0 && (
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          New connections use the {DEFAULT_PROTOCOL_LABEL} protocol by default.
-          Change it in Certification → Settings after connecting.
+          New connections use the {DEFAULT_PROTOCOL_LABEL} protocol. See the
+          versions in Certification → Settings.
         </p>
       )}
 

@@ -15,6 +15,8 @@ import {
 } from "react-hook-form";
 import { Button } from "@/components/ui";
 import { FormDialogContext } from "@/components/ui/form-dialog-context";
+import { Notice } from "@/components/ui/notice";
+import { useSubmitBlock } from "@/components/ui/submit-block-context";
 import { cn } from "@/lib/utils";
 import {
   useSideSheetActions,
@@ -107,6 +109,8 @@ export function FormActions<
   const sheetActions = useSideSheetActions();
   const dialogActions = React.useContext(FormDialogContext);
   const inSheet = sticky && sheetActions !== null;
+  const block = useSubmitBlock();
+  const blockedReasonId = React.useId();
   const inDialog = guardDialogCancel && dialogActions !== null;
   const handleCancel = onCancel
     ? inSheet
@@ -123,7 +127,9 @@ export function FormActions<
       {control && inSheet && (
         <SheetDirtyBridge control={control} reportDirty={sheetActions.reportDirty} />
       )}
-    {(showSubmit || handleCancel || errorMessage) && <div
+    {/* A read-only form (a lock that arrived Sent) offers no actions here; its
+        container keeps the way back and the lock line says why. */}
+    {!block?.readOnly && (showSubmit || handleCancel || errorMessage) && <div
       ref={sticky ? reserveStickyFooterSpace : undefined}
       className={cn(
         "flex flex-col gap-16 border-t border-[var(--color-border-secondary)]",
@@ -137,13 +143,31 @@ export function FormActions<
       )}
     >
       <ServerError message={errorMessage} action={errorAction} />
+      {/* Why Save is off sits above the buttons, in the tone of the block. */}
+      {showSubmit && block && (
+        <Notice
+          tone={block.tone}
+          id={blockedReasonId}
+          action={block.retry ? (
+            <Button type="button" variant="default" size="small" busy={block.retry.running} onClick={block.retry.run}>
+              {block.retry.label}
+            </Button>
+          ) : undefined}
+        >
+          {block.reason}
+        </Notice>
+      )}
       <div className="flex items-center justify-start gap-16">
         {showSubmit && <Button
           type={submitType}
           variant={submitVariant}
           form={formId}
-          onClick={onSubmitClick}
-          disabled={isSubmitting || submitDisabled}
+          onClick={(event) => {
+            if (submitType === "submit") skipNativeChecksUnlessUnparsed(event.currentTarget);
+            onSubmitClick?.();
+          }}
+          disabled={isSubmitting || submitDisabled || !!block}
+          aria-describedby={block ? blockedReasonId : undefined}
         >
           {isSubmitting ? submittingLabel : submitLabel ?? defaultSubmitLabel}
         </Button>}
@@ -155,6 +179,21 @@ export function FormActions<
       </div>
     </div>}
     </>
+  );
+}
+
+/**
+ * Lets the schema's own messages explain a refusal: the browser's constraint
+ * bubbles (from the native min, max and step the inputs carry) are skipped.
+ * The one exception is a number input holding text the browser cannot parse
+ * ("1e"): it reports an empty value, which the schema would read as a cleared
+ * field, so the browser's check stays on and blocks the save. Runs on click,
+ * which Enter-key submission also fires, before the form validates.
+ */
+export function skipNativeChecksUnlessUnparsed(submitter: HTMLButtonElement) {
+  const elements = submitter.form ? Array.from(submitter.form.elements) : [];
+  submitter.formNoValidate = !elements.some(
+    (element) => element instanceof HTMLInputElement && element.validity.badInput,
   );
 }
 

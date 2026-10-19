@@ -69,8 +69,14 @@ export function TemplateReviewPreview({ facilityId, removalTemplateId, creditBat
       tone="warning"
       title={needsReviewCount > 0 ? needsReviewTitle(needsReviewCount) : TEMPLATE_NOT_FULLY_READ_TITLE}
       action={
-        <Link href={certificationRemovalTemplatesHref(facilityId)} className="body-small underline underline-offset-2">
-          Open Removal templates
+        // A new tab, so this dialog and its unsaved choice stay open.
+        <Link
+          href={certificationRemovalTemplatesHref(facilityId, removalTemplateId)}
+          target="_blank"
+          rel="noreferrer"
+          className="body-small underline underline-offset-2"
+        >
+          Review lines in a new tab
         </Link>
       }
     >

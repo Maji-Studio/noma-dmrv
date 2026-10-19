@@ -1,4 +1,6 @@
+import { getCreditBatchPageModelFn } from "@/fn/credit-batch-page-model";
 import type { ActionResult } from "@/types/actions";
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import type { DeleteCreditBatchData } from "@/schemas/credit-batches";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { patchArrayListCachesByPrefixWithSavedRow } from "./list-cache-utils";
@@ -16,11 +18,13 @@ import {
   updateCreditBatchFn,
   deleteCreditBatchFn,
 } from "@/fn/credit-batches";
+import { loadCreditBatchTimelineFactsFn } from "@/fn/credit-batch-timeline-facts";
 import { getCreditBatchesRead } from "@/lib/read-api/client";
 import type {
   CreditBatchFormData,
   UpdateCreditBatchData,
 } from "@/schemas/credit-batches";
+import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
 import type { CreditBatchCo2eStoredPreview } from "@/data-access/credit-batches";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 import { invalidateCertificationReadiness } from "./use-certification";
@@ -33,6 +37,8 @@ export { creditBatchKeys } from "./credit-batch-query-keys";
 // fresh without re-fetching on every mount.
 const CREDIT_BATCH_STALE_TIME_MS = 30_000;
 const CREDIT_BATCH_PREVIEW_CHUNK_SIZE = 50;
+/** Matches the server's per-request cap for timeline facts. */
+const CREDIT_BATCH_TIMELINE_CHUNK_SIZE = 200;
 
 function chunkIds(ids: string[], size: number): string[][] {
   const chunks: string[][] = [];
@@ -69,6 +75,29 @@ export function useCreditBatch(id: string) {
     enabled: !!id,
     staleTime: CREDIT_BATCH_STALE_TIME_MS,
   });
+}
+
+/** Produced, applied and Removal facts for the timeline's hover cards, one request per facility. */
+export function useCreditBatchTimelineFacts(facilityId: string | undefined, batchIds: string[]) {
+  const sortedIds = [...batchIds].sort();
+  const results = useQueries({
+    queries: chunkIds(sortedIds, CREDIT_BATCH_TIMELINE_CHUNK_SIZE).map((ids) => ({
+      queryKey: creditBatchKeys.timelineFacts(facilityId ?? "", ids),
+      queryFn: async () => unwrap(await loadCreditBatchTimelineFactsFn(facilityId ?? "", ids)),
+      enabled: !!facilityId,
+      staleTime: CREDIT_BATCH_STALE_TIME_MS,
+    })),
+  });
+  return {
+    data: results.reduce<Record<string, CreditBatchTimelineFacts>>(
+      (facts, result) => Object.assign(facts, result.data ?? {}),
+      {},
+    ),
+    isLoading: results.some((result) => result.isLoading),
+    isFetching: results.some((result) => result.isFetching),
+    error: results.find((result) => result.error)?.error ?? null,
+    refetch: () => Promise.all(results.map((result) => result.refetch())),
+  };
 }
 
 export function useCreditBatchCo2eStoredPreviews(batchIds: string[]) {
@@ -147,6 +176,7 @@ export function useCreateCreditBatch() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.creditBatch),
     // The batch and the warning are two facts about one committed write: the
     // batch is saved either way, and `warning` says its accounting roll-up did
     // not load with it (issue #769).
@@ -182,6 +212,7 @@ export function useUpdateCreditBatch() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.creditBatch),
     mutationFn: async (data: UpdateCreditBatchData): Promise<Awaited<ReturnType<typeof updateCreditBatchFn>>> => {
       const result = await updateCreditBatchFn(data);
       if (!result.success) throwActionError(result);
@@ -213,6 +244,7 @@ export function useDeleteCreditBatch() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.creditBatch),
     mutationFn: async (data: DeleteCreditBatchData): Promise<ActionResult<void>> => {
       const result = await deleteCreditBatchFn(data);
       if (!result.success) throwActionError(result);
@@ -228,5 +260,14 @@ export function useDeleteCreditBatch() {
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
       invalidateCertificationReadiness(queryClient);
     },
+  });
+}
+
+export function useCreditBatchPageModel(creditBatchId: string) {
+  return useQuery({
+    queryKey: creditBatchKeys.pageModel(creditBatchId),
+    queryFn: async () => unwrap(await getCreditBatchPageModelFn(creditBatchId)),
+    enabled: !!creditBatchId,
+    staleTime: CREDIT_BATCH_STALE_TIME_MS,
   });
 }

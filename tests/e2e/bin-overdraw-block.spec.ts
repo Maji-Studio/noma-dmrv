@@ -537,7 +537,7 @@ test.describe("createBiocharProduct biochar-bin guard", () => {
 
 /** Path 4: posted source measurements cannot be rewritten through ordinary edit. */
 test.describe("updateBiocharProduct source allocation", () => {
-  test("blocks ordinary moisture edits on a posted source allocation", async ({
+  test("disables ordinary moisture edits on a posted source allocation", async ({
     adminPage: page,
     seededData,
   }) => {
@@ -564,13 +564,16 @@ test.describe("updateBiocharProduct source allocation", () => {
       await expect(
         dialog.locator('input[name="massKg"]'),
       ).toBeDisabled();
+      // The form now disables the posted moisture before typing (#1119) and
+      // says why; the server refusal itself is covered by
+      // tests/biochar-product-posted-fields.test.ts.
       const moistureInput = dialog.locator(
         'input[name="moistureContentPercent"]',
       );
-      await expect(moistureInput).toBeEnabled();
-      await moistureInput.fill("5");
-      await saveEdit(page);
-      await expect(dialog.getByRole("alert").filter({ hasText: "Posted product source, composition, placement, and bin are immutable" })).toBeVisible();
+      await expect(moistureInput).toBeDisabled();
+      await expect(moistureInput).toHaveAccessibleDescription(
+        /Fixed once the product is posted to stock\. Record a stock correction in the bin to change it\./,
+      );
     } finally {
       await cleanupProductScenario(
         page,
@@ -640,7 +643,7 @@ test("edits delivery mass, links its saved source and locks it after a dependent
   await page.getByRole("button", { name: "Edit delivery", exact: true }).click();
   const wet = page.locator('input[name="deliveredWetMassKg"]');
   await expect(wet).toBeEnabled();
-  await expect(page.locator('input[name="deliveryDate"]')).toBeDisabled();
+  await expect(page.locator('input[name="deliveryDate"]')).toBeEnabled();
   await wet.fill("1900");
   await fillStockMoisture(page, "delivery", "30");
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
@@ -677,5 +680,6 @@ test("edits delivery mass, links its saved source and locks it after a dependent
   await page.getByRole("button", { name: "Edit delivery", exact: true }).click();
   await expect(wet).toBeDisabled();
   await expect(page.locator('input[name="moistureContentPercent"]')).toBeDisabled();
+  await expect(page.locator('input[name="deliveryDate"]')).toBeDisabled();
   await expect(page.getByRole("dialog")).toContainText("Correction blocked by a later lost mass:");
 });

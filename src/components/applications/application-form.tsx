@@ -11,6 +11,8 @@
  */
 "use client";
 
+import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
+import { recordInUseFreeFields } from "@/lib/record-lock";
 import { FACILITY_REFERENCE_TEMPERATURE_NOTICE } from "@/lib/application-guidance";
 import { nullableNumericValue, numericValue } from "@/lib/form-utils";
 import { formatUtcDate, toDateInputValue } from "@/lib/date-utils";
@@ -61,8 +63,13 @@ import {
   deliveryStockOverdrawMessage,
   formatStockLimitKg,
   isStockOverdraw,
+  wholeStockDrawKg,
 } from "@/lib/stock-overdraw";
 import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(applicationFormSchema);
 
 // ============================================
 // Constants for select options
@@ -117,6 +124,8 @@ function AppliedMassSplit({
 // ============================================
 
 interface ApplicationFormProps {
+  /** The saved application's lock: a Removal slice fixes its delivery and applied mass. */
+  lock?: RecordLockView;
   /** Existing application data for editing (undefined for create mode) */
   application?: Application;
   /** Available deliveries for selection */
@@ -152,8 +161,12 @@ export function ApplicationForm({
   submitLabel,
   durabilityOption = "200_year",
   deferredAttachments,
+  lock,
 }: ApplicationFormProps) {
   const isEditMode = !!application;
+  // A Removal slice refuses delivery and applied mass changes (`assertMutableSlices`).
+  // Fail closed: until the lock answers, fields an In use application holds stay disabled.
+  const locked = (field: string) => isEditMode && isRecordFieldHeld(lock, recordInUseFreeFields("application"), field);
   const { defaults: organizationDefaults } = useOrganizationDefaultValues();
   // Soil temperature feeds only the 200-year durable fraction; 1000-year
   // removals derive durability from petrographic reflectance + TGA.
@@ -353,6 +366,8 @@ export function ApplicationForm({
     errors.biocharAppliedKg?.message ??
     applicationStockError ??
     routedServerError.inlineError;
+  const wholeAvailableKg =
+    availableKg !== null ? wholeStockDrawKg(availableKg) : null;
   const stockCues = applicationStockCues({
     delivery: selectedDelivery,
     availableKg,
@@ -440,7 +455,7 @@ export function ApplicationForm({
               id="deliveryId"
               optionLabel="delivery"
               placeholder="Select delivery..."
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("deliveryId")}
               error={!!errors.deliveryId}
               options={deliveryOptions}
               value={deliveryField.value}
@@ -468,13 +483,28 @@ export function ApplicationForm({
             certifyStatus={certStatus("biocharAppliedKg")}
             hint="As-received mass at delivery, water included."
             cue={stockCues.appliedMassCue}
+            cueAction={
+              wholeAvailableKg !== null && !locked("appliedWetMassKg")
+                ? {
+                    label: "Add all",
+                    ariaLabel: "Add all to biochar product applied",
+                    disabled: isSubmitting,
+                    onClick: () =>
+                      setValue("biocharAppliedKg", wholeAvailableKg, {
+                        shouldDirty: true,
+                        shouldTouch: true,
+                        shouldValidate: true,
+                      }),
+                  }
+                : undefined
+            }
           >
             <FormInput
               id="biocharAppliedKg"
               type="number"
-              step="any"
+              {...numberBounds("biocharAppliedKg")}
               placeholder="e.g., 5000"
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("appliedWetMassKg")}
               error={!!biocharAppliedError}
               {...register("biocharAppliedKg", {
                 setValueAs: numericValue,
@@ -506,7 +536,7 @@ export function ApplicationForm({
             <FormInput
               id="fieldSizeHa"
               type="number"
-              step="any"
+              {...numberBounds("fieldSizeHa")}
               placeholder="e.g., 2.5"
               disabled={isSubmitting}
               error={!!errors.fieldSizeHa}
@@ -574,6 +604,7 @@ export function ApplicationForm({
           latitudeError={errors.gpsLatitude?.message}
           longitudeError={errors.gpsLongitude?.message}
           disabled={isSubmitting}
+          required={(evidenceMethod ?? "location") === "location"}
         />
 
       </FormSection>
@@ -657,7 +688,7 @@ export function ApplicationForm({
             <FormInput
               id="soilTemperatureC"
               type="number"
-              step="any"
+              {...numberBounds("soilTemperatureC")}
               placeholder="e.g., 25.0"
               disabled={isSubmitting}
               error={!!errors.soilTemperatureC}

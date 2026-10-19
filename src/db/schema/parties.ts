@@ -102,6 +102,10 @@ export const customerLocations = pgTable(
     // Marks the customer's primary destination. At most one per customer
     // (enforced by the partial unique index below).
     isDefault: boolean('is_default').notNull().default(false),
+    // Archived locations leave the order destination picker and cannot be a
+    // new order destination; existing orders, deliveries and storage-site
+    // registrations keep them.
+    archivedAt: timestamp('archived_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -127,6 +131,11 @@ export const customerLocations = pgTable(
     check(
       'customer_locations_default_soil_temperature_c_range',
       sql`${table.defaultSoilTemperatureC} is null or (${table.defaultSoilTemperatureC} >= -50 and ${table.defaultSoilTemperatureC} <= 60)`
+    ),
+    // Backstop for archive: the default location is always an active one.
+    check(
+      'customer_locations_default_active',
+      sql`not ${table.isDefault} or ${table.archivedAt} is null`
     ),
   ]
 );

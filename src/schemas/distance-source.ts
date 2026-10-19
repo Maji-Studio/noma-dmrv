@@ -19,6 +19,10 @@ import { z } from "zod";
 
 export const distanceSources = ["map_estimate", "manual", "document"] as const;
 
+/** One limit for every distance note: feedstock and delivery overrides alike. */
+export const DISTANCE_NOTE_MAX_LENGTH = 500;
+export const DISTANCE_NOTE_MAX_MESSAGE = `Note must be less than ${DISTANCE_NOTE_MAX_LENGTH} characters`;
+
 export type DistanceSourceValue = (typeof distanceSources)[number];
 
 /** Form/action field: the provenance of the sibling distance field. */

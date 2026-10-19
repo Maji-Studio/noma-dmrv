@@ -25,5 +25,10 @@ between reusable route defaults and recorded transport facts.
 Missing distances permit entry but block required transport readiness. Location
 repair links can resolve missing facts without rewriting recorded history.
 Changing a default affects future records; deliberate historical correction
-requires a separate guarded workflow. Multi-facility organizations enter their
+uses the explicit, version-checked refresh from location workflow. Refresh
+refuses overridden records, missing pairs and locked certification lineage,
+and updates the recorded distance and derived transport in one transaction.
+Feedstock overrides persist on the intake row; clearing one deliberately
+captures the current pair. Delivery overrides retain an independent recorded
+pair snapshot and clearing one restores that snapshot. Multi-facility organizations enter their
 pair defaults explicitly rather than inheriting an ambiguous scalar.

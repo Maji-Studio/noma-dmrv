@@ -141,13 +141,30 @@ const PARTY_ARCHIVED_ADD_BUDGET = 6;
 // Minimum path: whoami, active supplier, feedstock type, archived supplier, bin, dry-run intake (six calls).
 const PARTY_ARCHIVED_INTAKE_BUDGET = 8;
 const PARTY_RESTORE_BUDGET = 5;
+const PARTY_LOCATION_WRITE_BUDGET = 5;
+const PARTY_LOCATION_READ_BUDGET = 4;
+// Find customer, find location, refused delete, optional order lookup, plus margin.
+const PARTY_LOCATION_REFUSAL_BUDGET = 6;
 const SUPPLIER_COMMAND_SCOPES = ["suppliers:read", "suppliers:write"];
 export const PARTY_PICKUP = { gpsLatitude: -8.12, gpsLongitude: 36.45, distanceKm: 42 };
 export const PARTY_FIELD = { gpsLatitude: -8.90, gpsLongitude: 33.40, name: "North Block" };
 export const PARTY_SUPPLIER_NAME = "Kilombero Sawmill";
 export const PARTY_CUSTOMER_NAME = "Mbeya Coffee Estate";
 interface PartyPromptTarget { name: string; facilityName: string }
+export const PARTY_LOCATION_CITY = "Morogoro";
+export const PARTY_SOIL_TEMPERATURE_C = 23.5;
+export const PARTY_ORDER_CODE = "ORD-0005";
 export const PARTY_CASES = [
+  { id: "supplier-location-update", budget: PARTY_LOCATION_WRITE_BUDGET, scopes: SUPPLIER_COMMAND_SCOPES,
+    text: () => `Change the city of ${PARTY_SUPPLIER_NAME}’s Existing pickup to ${PARTY_LOCATION_CITY}. Keep everything else.` },
+  { id: "customer-field-missing-gps", budget: PARTY_LOCATION_READ_BUDGET, scopes: ["customers:read", "customers:write"],
+    text: () => `Add a field called East Block to ${PARTY_CUSTOMER_NAME} in Tanzania.` },
+  { id: "customer-location-archive", budget: PARTY_LOCATION_WRITE_BUDGET, scopes: ["customers:read", "customers:write"],
+    text: () => "North Block no longer receives biochar. Archive it." },
+  { id: "customer-location-in-use", budget: PARTY_LOCATION_REFUSAL_BUDGET, scopes: ["customers:read", "customers:delete", "orders:read"],
+    text: () => "Delete the field North Block." },
+  { id: "order-archived-destination", budget: PARTY_LOCATION_READ_BUDGET, scopes: ["orders:read", "customers:read"],
+    text: () => `Which field does order ${PARTY_ORDER_CODE} go to, and what is its default soil temperature?` },
   { id: "supplier-with-pickup", budget: PARTY_CREATE_BUDGET, scopes: ["suppliers:read", "suppliers:write", "facilities:read"],
     text: ({ facilityName }: PartyPromptTarget) => `Add supplier ${PARTY_SUPPLIER_NAME} with a pickup location at -8.12, 36.45 in Tanzania, 42 km by road from ${facilityName}.` },
   { id: "customer-and-field", budget: PARTY_CREATE_BUDGET, scopes: ["customers:read", "customers:write"],

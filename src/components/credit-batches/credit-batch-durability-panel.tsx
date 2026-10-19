@@ -36,7 +36,7 @@ import {
   formatDurabilityStat,
 } from "@/components/certification/durability-readiness";
 import { sampleCreateHref, sampleDetailHref } from "@/lib/sample-create-intent";
-import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
+import { SheetLinkRow, SheetLinkRows } from "@/components/ui/sheet-link-row";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 
 function Section({

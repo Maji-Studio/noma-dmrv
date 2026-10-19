@@ -103,9 +103,10 @@ describe("submitRemoval — reporting window anchored to application date (issue
   it("keeps the draft locked when production-batch binding fails after datapoints were created", async () => {
     prepareDurabilitySubmission();
     const originalError = new Error("production batch binding unavailable");
-    vi.mocked(
-      productionBatchesDA.getProductionBatchRegistryInputs,
-    ).mockRejectedValue(originalError);
+    const inputs = await productionBatchesDA.getProductionBatchRegistryInputs(makeTestOrgContext(USER_ID), []);
+    vi.mocked(productionBatchesDA.getProductionBatchRegistryInputs)
+      .mockResolvedValueOnce(inputs) // Readiness succeeds before the later binding failure.
+      .mockRejectedValue(originalError);
 
     await expect(
       submitRemoval({
@@ -129,6 +130,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
     expect(ledgerClaim.markSubmissionInterrupted).toHaveBeenCalledOnce();
 
     storedRows[0].lockedAt = new Date(0);
+    vi.mocked(productionBatchesDA.getProductionBatchRegistryInputs).mockResolvedValueOnce(inputs);
     await expect(
       submitRemoval({
         orgCtx: makeTestOrgContext(USER_ID),

@@ -36,7 +36,7 @@ vi.mock("@/components/ui/tooltip", () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 vi.mock("./sample-batch-progress", () => ({ SampleBatchProgress: () => null }));
-vi.mock("./sample-trailing-sections", () => ({ SampleEvidenceSection: () => null, SampleTransportSection: () => null }));
+vi.mock("./sample-trailing-sections", () => ({ SampleEvidenceSection: () => null, SampleTransportSection: () => <div data-testid="sample-transport-step" /> }));
 
 const saved = {
   id: "sample", creditBatchId: "00000000-0000-4000-8000-000000000001",
@@ -60,6 +60,14 @@ function input(container: HTMLElement, id: string) {
 
 beforeEach(() => { batch.data = undefined; batch.status = "pending"; });
 afterEach(cleanup);
+
+describe("SampleForm transport step", () => {
+  it.each([[false, 1], [true, 0]])("with hideTransport=%s renders %i Transport steps", (hideTransport, count) => {
+    loadBatch();
+    const { queryAllByTestId } = render(<SampleForm creditBatchId={saved.creditBatchId!} onSubmit={vi.fn()} hideTransport={hideTransport} />);
+    expect(queryAllByTestId("sample-transport-step")).toHaveLength(count);
+  });
+});
 
 describe("SampleForm defaults and batch hydration", () => {
   it("starts sampling time empty and requires an explicit time on create", async () => {

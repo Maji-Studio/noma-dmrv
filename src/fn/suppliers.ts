@@ -8,6 +8,7 @@ import { withAction } from "./with-action";
  */
 
 import { createSupplier, updateSupplier, deleteSupplier, archiveSupplier, restoreSupplier } from "@/lib/operations/suppliers";
+import { addSupplierLocation, updateSupplierLocation, deleteSupplierLocation } from "@/lib/operations/supplier-locations";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { z } from "zod";
 import { type Supplier, type SupplierLocation } from "@/db/schema";
@@ -15,9 +16,6 @@ import {
   getSuppliers as getSuppliersData,
   getSupplierById as getSupplierByIdData,
   getSupplierLocationsBySupplier as getSupplierLocationsBySupplierData,
-  createSupplierLocation,
-  updateSupplierLocation,
-  deleteSupplierLocation,
   type PaginatedSuppliers,
 } from "@/data-access/suppliers";
 import { DomainError } from "@/lib/domain-errors";
@@ -191,7 +189,7 @@ export async function createSupplierLocationFn(
   return withAction(async (ctx) => {
     const validated = createSupplierLocationSchema.parse(data);
 
-    const location = await createSupplierLocation(ctx, {
+    const location = await runOperationInProcess(addSupplierLocation, ctx, {
       supplierId: validated.supplierId,
       name: validated.name || null,
       country: validated.country,
@@ -218,15 +216,17 @@ export async function updateSupplierLocationFn(
 
     const validated = updateSupplierLocationSchema.parse(data);
 
-    const location = await updateSupplierLocation(ctx, validated.locationId, {
+    const location = await runOperationInProcess(updateSupplierLocation, ctx, {
+      supplierId: validated.supplierId,
+      locationId: validated.locationId,
       expectedVersion: validated.expectedVersion,
-      name: validated.name || null,
+      name: validated.name === undefined ? undefined : validated.name || null,
       country: validated.country,
-      stateRegion: validated.stateRegion || null,
-      city: validated.city || null,
+      stateRegion: validated.stateRegion === undefined ? undefined : validated.stateRegion || null,
+      city: validated.city === undefined ? undefined : validated.city || null,
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
-      address: validated.address || null,
+      address: validated.address === undefined ? undefined : validated.address || null,
       facilityDistances: validated.facilityDistances,
       isDefault: validated.isDefault,
     });
@@ -241,7 +241,7 @@ export async function deleteSupplierLocationFn(
   return withAction(async (ctx) => {
 
     const validated = deleteSupplierLocationSchema.parse(data);
-    await deleteSupplierLocation(ctx, validated.locationId, validated.expectedVersion);
+    await runOperationInProcess(deleteSupplierLocation, ctx, validated);
 
     return undefined;
   }, { fallbackMessage: "Failed to delete supplier location", log: { message: "supplier-location action failed", context: { op: "supplier-location:delete" } } });

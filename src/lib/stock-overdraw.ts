@@ -1,3 +1,8 @@
+import {
+  MASS_KG_STORAGE_DECIMALS,
+  MASS_KG_STORAGE_INCREMENT,
+} from "@/config/numeric-storage";
+
 const STOCK_OVERDRAW_EPSILON_KG = 1e-6;
 
 export type StockMaterial = "feedstock" | "biochar" | "product";
@@ -7,6 +12,20 @@ export function isStockOverdraw(
   availableKg: number,
 ): boolean {
   return requestedKg - availableKg > STOCK_OVERDRAW_EPSILON_KG;
+}
+
+/**
+ * The whole remaining stock as a form value, for an "Add all" action: the
+ * largest stored-precision kg value that does not exceed `availableKg`, so the
+ * subtraction's float noise cannot break the field's precision rule or
+ * overdraw. Null when less than one storage increment remains.
+ */
+export function wholeStockDrawKg(availableKg: number): number | null {
+  const increments = Math.floor(
+    (availableKg + STOCK_OVERDRAW_EPSILON_KG) / MASS_KG_STORAGE_INCREMENT,
+  );
+  if (increments < 1) return null;
+  return Number((increments * MASS_KG_STORAGE_INCREMENT).toFixed(MASS_KG_STORAGE_DECIMALS));
 }
 
 export function formatStockKg(kg: number): string {

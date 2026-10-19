@@ -70,6 +70,7 @@ describe("buildRemovalLedgerPreview", () => {
           creditBatchId: "batch-2",
           code: "CB-2",
           claimedByRemovalId: "removal-previous",
+          claimingRemovalCode: "RM-26-001",
           productionRunIds: ["run-2"],
           applicationIds: ["application-1", "application-2"],
           applicationSlices: [
@@ -94,6 +95,7 @@ describe("buildRemovalLedgerPreview", () => {
       expect.any(Map),
       { productionRunIds: new Set(["run-1"]) },
     );
+    expect(preview.claims[1].claimingRemovalCode).toBe("RM-26-001");
     expect(preview.claims.map((claim) => claim.contribution)).toEqual([
       "production-and-delivery",
       "delivery-only",
@@ -126,6 +128,7 @@ describe("buildRemovalLedgerPreview", () => {
         creditBatchId: "batch-1",
         code: "CB-1",
         claimedByRemovalId: "removal-previous",
+          claimingRemovalCode: "RM-26-001",
         productionRunIds: ["run-1"],
         applicationIds: ["application-1"],
       }],

@@ -1,4 +1,5 @@
 "use client";
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { throwActionError } from "@/lib/stale-version";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 
@@ -97,6 +98,7 @@ export function useOutputStockHistory(storageLocationId: string, enabled = true)
 export function usePostOutputStock() {
   const client = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.stock),
     mutationFn: async (input: OutputStockPostInput) => {
       const result = await postOutputStockFn(input);
       if (!result.success) throwActionError(result);

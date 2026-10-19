@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, notExists } from "drizzle-orm";
 import { db } from "@/db";
-import { activityEvents, apiIdempotencyRecords, suppliers, customers, supplierLocations, customerLocations, supplierLocationFacilityDistances, customerLocationFacilityDistances, certifierProjects, certifierStorageLocations, feedstocks } from "@/db/schema";
+import { activityEvents, apiIdempotencyRecords, suppliers, customers, supplierLocations, customerLocations, supplierLocationFacilityDistances, customerLocationFacilityDistances, certifierProjects, certifierStorageLocations, feedstocks, orders } from "@/db/schema";
 import type { ApiScope } from "@/lib/auth/api-scopes";
 import { buildCreateStorageLocationRequest } from "@/lib/isometric/storage-locations";
 import { createApiKey } from "@/data-access/api-keys";
@@ -20,7 +20,7 @@ import { supplierRepresentationSchema } from "@/lib/representations/suppliers";
 import { customerRepresentationSchema } from "@/lib/representations/customers";
 import { createSupplierWithLocationsFn, updateSupplierFn } from "@/fn/suppliers";
 import { createCustomerWithLocationsFn, updateCustomerFn } from "@/fn/customers";
-import { createApiOrderReadFixture, insertReadOrder, removeApiOrderReadFixture, readParams, readRequest } from "./helpers/api-order-read-fixture";
+import { createApiOrderReadFixture, insertReadDelivery, insertReadOrder, removeApiOrderReadFixture, readParams, readRequest } from "./helpers/api-order-read-fixture";
 
 const auth = vi.hoisted(() => ({ session: vi.fn() }));
 vi.mock("@/lib/auth/providers/better-auth-server", async original => ({
@@ -467,7 +467,8 @@ describe.each(["supplier", "customer"] as const)("%s REST writes", kind => {
       meta = { feedstockCodes: [intake.code] };
     } else {
       const order = await insertReadOrder(a, "PARTY-ORDER", { customerId: row.data.id, customerLocationId: row.locations[0].id, archivedAt: archived ? new Date() : null });
-      meta = { orderCodes: [order.code] };
+      const delivery = await insertReadDelivery(a, order.id, order.quantityKg, archived);
+      meta = { deliveryCodes: [delivery.code] };
     }
     const before = await snapshot();
     const refusal = await problem(await mutate(kind, "delete", row.data.id), 409, "conflict", `/${kind}Id`);
@@ -514,6 +515,15 @@ describe.each(["supplier", "customer"] as const)("%s REST writes", kind => {
   });
 });
 
+it("deletes a customer and its order without deliveries", async () => {
+  const row = await saved("customer");
+  const order = await insertReadOrder(a, "PARTY-CASCADE-ORDER", { customerId: row.data.id, customerLocationId: row.locations[0].id });
+  const response = await mutate("customer", "delete", row.data.id);
+  expect(response.status).toBe(204);
+  expect(await db.select().from(customers).where(eq(customers.id, row.data.id))).toEqual([]);
+  expect(await db.select().from(orders).where(eq(orders.id, order.id))).toEqual([]);
+}, TIMEOUT_MS);
+
 it("returns customer site defaults on create and the location list", async () => {
   const defaults = { siteDescription: "Field beside the river", defaultSoilTemperatureC: 24.5 };
   const response = await post("customer", { ...input("customer"), locations: [{ ...location(), ...defaults }] });
@@ -537,4 +547,40 @@ it("refuses customer deletion for a registered storage-site location without rem
   const refusal = await problem(await mutate("customer", "delete", row.data.id), 409, "conflict", "/customerId");
   expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/customerId", meta: { locationIds: [id] } }));
   expect(await snapshot()).toEqual(before);
+}, TIMEOUT_MS);
+
+it.each([false, true])("deletes with a matching cascade fingerprint, omitted: %s", async omitted => {
+  const row = await saved("customer");
+  const order = await insertReadOrder(a, "PARTY-FINGERPRINT", { customerId: row.data.id, customerLocationId: row.locations[0].id });
+  const preview = await mutate("customer", "delete", row.data.id, undefined, INITIAL_ETAG, undefined, "?dryRun=true");
+  expect(preview.status).toBe(200);
+  const body = await preview.json();
+  expect(body.data).toEqual(row.data);
+  expect(body.cascade).toEqual({ orders: [{ id: order.id, code: order.code, facilityId: order.facilityId }], cascadeFingerprint: expect.stringMatching(/^v1:[a-f0-9]{64}$/) });
+  expect(body.warnings).toEqual([expect.stringContaining(order.code)]);
+  const query = omitted ? "" : `?cascadeFingerprint=${encodeURIComponent(body.cascade.cascadeFingerprint)}`;
+  const key = randomUUID();
+  expect((await mutate("customer", "delete", row.data.id, undefined, INITIAL_ETAG, key, query)).status).toBe(204);
+  const replay = await mutate("customer", "delete", row.data.id, undefined, INITIAL_ETAG, key, query);
+  expect(replay.status).toBe(204);
+  expect(replay.headers.get("idempotent-replayed")).toBe("true");
+}, TIMEOUT_MS);
+
+it("returns a fresh cascade preview when an order arrives after the delete dry run", async () => {
+  const row = await saved("customer");
+  const preview = await mutate("customer", "delete", row.data.id, undefined, INITIAL_ETAG, undefined, "?dryRun=true");
+  expect(preview.status).toBe(200);
+  const { cascade } = await preview.json();
+  expect(cascade.orders).toEqual([]);
+  const order = await insertReadOrder(a, "PARTY-LATE-ORDER", { customerId: row.data.id, customerLocationId: row.locations[0].id });
+  const query = `?cascadeFingerprint=${encodeURIComponent(cascade.cascadeFingerprint)}`;
+  await problem(await mutate("customer", "delete", row.data.id, undefined, null, undefined, query), 428, "precondition_required");
+  await problem(await mutate("customer", "delete", row.data.id, undefined, '"99.2"', undefined, query), 412, "stale_version");
+  const before = await snapshot();
+  const key = randomUUID();
+  const refusal = await problem(await mutate("customer", "delete", row.data.id, undefined, INITIAL_ETAG, key, query), 409, "cascade_changed", "/cascadeFingerprint");
+  expect(refusal.preview).toEqual({ orders: [{ id: order.id, code: order.code, facilityId: order.facilityId }], cascadeFingerprint: expect.stringMatching(/^v1:[a-f0-9]{64}$/) });
+  expect(refusal.preview.cascadeFingerprint).not.toBe(cascade.cascadeFingerprint);
+  expect(await snapshot()).toEqual(before);
+  expect((await mutate("customer", "delete", row.data.id, undefined, INITIAL_ETAG, key, `?cascadeFingerprint=${encodeURIComponent(refusal.preview.cascadeFingerprint)}`)).status).toBe(204);
 }, TIMEOUT_MS);

@@ -425,22 +425,7 @@ function GhgStatementSubmitDialogContent({
             {displayedServerError && (
               <ServerError message={displayedServerError} />
             )}
-            <div className="flex flex-wrap items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
-              <span className="body-caption text-[var(--color-text-tertiary)]">
-                {isPending
-                  ? "noma is submitting the GHG Statement to the verifier."
-                  : mutation.isSuccess && reconciledStatus
-                    ? verificationFailed
-                      ? "Isometric status: Verification failed. Update the Removals, close this dialog, then use Refresh on the GHG Statement before resubmitting."
-                      : resultNeedsReview
-                        ? `Isometric status: ${reconciledStatus.label}. Review the submission before trying again.`
-                        : `Isometric status: ${reconciledStatus.label}. The reconciled status is saved in noma.`
-                    : mutation.isSuccess
-                      ? "The reconciled Isometric status is saved in noma."
-                      : submissionStalled
-                        ? "Registry work may still be continuing. Close this dialog, then use Refresh on the GHG Statement before trying again."
-                        : "Completed registry operations are preserved for a safe retry."}
-              </span>
+            <div className="flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] pt-16">
               {!isPending && (
                 <div className="flex items-center gap-12">
                   {mutation.isSuccess && resultNeedsReview ? (
@@ -464,6 +449,13 @@ function GhgStatementSubmitDialogContent({
                     <>
                       <Button
                         type="button"
+                        variant="primary"
+                        onClick={() => void retrySubmission()}
+                      >
+                        Try again
+                      </Button>
+                      <Button
+                        type="button"
                         onClick={() => {
                           mutation.reset();
                           setProgressUpdates([]);
@@ -471,17 +463,25 @@ function GhgStatementSubmitDialogContent({
                       >
                         Review submission
                       </Button>
-                      <Button
-                        type="button"
-                        variant="primary"
-                        onClick={() => void retrySubmission()}
-                      >
-                        Try again
-                      </Button>
                     </>
                   )}
                 </div>
               )}
+              <span className="body-caption text-[var(--color-text-tertiary)]">
+                {isPending
+                  ? "noma is submitting the GHG Statement to the verifier."
+                  : mutation.isSuccess && reconciledStatus
+                    ? verificationFailed
+                      ? "Isometric status: Verification failed. Update the Removals, close this dialog, then use Refresh on the GHG Statement before resubmitting."
+                      : resultNeedsReview
+                        ? `Isometric status: ${reconciledStatus.label}. Review the submission before trying again.`
+                        : `Isometric status: ${reconciledStatus.label}. The reconciled status is saved in noma.`
+                    : mutation.isSuccess
+                      ? "The reconciled Isometric status is saved in noma."
+                      : submissionStalled
+                        ? "Registry work may still be continuing. Close this dialog, then use Refresh on the GHG Statement before trying again."
+                        : "Completed registry operations are preserved for a safe retry."}
+              </span>
             </div>
           </>
         ) : (
@@ -504,25 +504,7 @@ function GhgStatementSubmitDialogContent({
                 }
               }}
               footer={
-                <div className="flex flex-wrap justify-end gap-12">
-                  <Button
-                    type="button"
-                    variant="default"
-                    onClick={onClose}
-                    disabled={submissionPending}
-                  >
-                    Cancel
-                  </Button>
-                  {stepIndex === REVIEW_STEP_INDEX && (
-                    <Button
-                      type="button"
-                      variant="default"
-                      onClick={returnToReportStep}
-                      disabled={submissionPending}
-                    >
-                      Back
-                    </Button>
-                  )}
+                <div className="flex flex-wrap justify-start gap-12">
                   {stepIndex === REPORT_STEP_INDEX ? (
                     <Button
                       type="button"
@@ -557,6 +539,24 @@ function GhgStatementSubmitDialogContent({
                           : "Submit"}
                     </Button>
                   )}
+                  {stepIndex === REVIEW_STEP_INDEX && (
+                    <Button
+                      type="button"
+                      variant="default"
+                      onClick={returnToReportStep}
+                      disabled={submissionPending}
+                    >
+                      Back
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="default"
+                    onClick={onClose}
+                    disabled={submissionPending}
+                  >
+                    Cancel
+                  </Button>
                 </div>
               }
             >

@@ -21,6 +21,8 @@ import { createDatapoint, createGhgEntry } from "@/lib/isometric";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { deriveRemovalReadiness } from "@/lib/certification/readiness";
 
+import * as productionBatches from "@/data-access/certifier-production-batches";
+
 const orgCtx = makeTestOrgContext();
 const mappingGap = { creditBatchId: "batch", creditBatchCode: "CB-1", feedstockTypeId: "type", feedstockTypeName: "Wood" };
 
@@ -54,6 +56,23 @@ async function oldFirstMessage(ctx: ReturnType<typeof makeContext>) {
 }
 
 describe("Removal preflight", () => {
+  it("shows the overlong run span in readiness and refuses submit before registry writes", async () => {
+    const inputs = await productionBatches.getProductionBatchRegistryInputs(orgCtx, []);
+    vi.mocked(productionBatches.getProductionBatchRegistryInputs).mockResolvedValue(inputs.map(input => ({
+      ...input, endedAt: "2026-02-01T00:00:00.000Z", latestEndingRunCode: "RUN-OVER",
+    })));
+    const ctx = makeContext();
+    const blockers = await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx });
+    expect(blockers).toEqual([expect.objectContaining({
+      message: expect.stringContaining("Production run RUN-OVER"), fixTarget: "batchDetails",
+    })]);
+    vi.mocked(loadRemovalSubmissionContext).mockResolvedValue(ctx);
+    await expect(submitRemoval({ orgCtx, removalId: REMOVAL_ID, confirmProduction: true }))
+      .rejects.toThrow("Production run RUN-OVER");
+    expect(createDatapoint).not.toHaveBeenCalled();
+    expect(createGhgEntry).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["happy path", () => makeContext()],
     ["mapping before entity", () => makeContext(undefined, { feedstockTypeMappingGaps: [mappingGap], entityReadinessGaps: ["Record Sample moisture"] })],

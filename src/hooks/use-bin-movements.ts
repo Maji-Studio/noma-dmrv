@@ -7,6 +7,7 @@ import { outputStockKeys } from "./use-output-stock";
  * (and the negative-stock badge) refresh immediately.
  */
 
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { feedstockBinStockKeys } from "./feedstock-bin-stock-keys";
 import type { DomainIssue } from "@/lib/domain-errors";
 import type { ConflictRef } from "@/lib/conflict-ref";
@@ -105,6 +106,7 @@ function useInvalidateAfterMovement() {
 export function useRecordStockTake() {
   const invalidate = useInvalidateAfterMovement();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.stock),
     mutationFn: async (data: RecordStockTakeData) => {
       const result = await recordStockTakeFn(data);
       if (!result.success) {
@@ -122,6 +124,7 @@ export function useRecordStockTake() {
 export function useRecordLoss() {
   const invalidate = useInvalidateAfterMovement();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.stock),
     mutationFn: async (data: RecordLossData) => {
       const result = await recordLossFn(data);
       if (!result.success) {

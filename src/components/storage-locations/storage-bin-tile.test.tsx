@@ -26,4 +26,34 @@ describe('archived storage board tile', () => {
     expect(text).not.toContain('dry biochar');
     await act(async () => renderer.unmount());
   });
+  it('exposes the bin through one link and leaves the tile without a role or tab stop', async () => {
+    const onView = vi.fn();
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<StorageBinTile bin={bin} actions={[]} onView={onView} onReconcile={vi.fn()} />); });
+    const tile = renderer.root.findByType('article');
+    expect(tile.props.role).toBeUndefined();
+    expect(tile.props.tabIndex).toBeUndefined();
+    expect(tile.props.onKeyDown).toBeUndefined();
+    const buttons = renderer.root.findAllByType('button');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]!.props['aria-label']).toMatch(/, Fixture bin$/);
+    const stopPropagation = vi.fn();
+    await act(async () => buttons[0]!.props.onClick({ stopPropagation }));
+    expect(onView).toHaveBeenCalledTimes(1);
+    expect(stopPropagation).toHaveBeenCalled();
+    await act(async () => renderer.unmount());
+  });
+  it('shows the lock chip only once the bin is Sent', async () => {
+    const lockAt = (level: 'open' | 'inUse' | 'sent') => ({ level, heldBy: [], usedBy: [], freeFields: [], howToFree: null, returnedBy: [] });
+    const textFor = async (level: 'open' | 'inUse' | 'sent') => {
+      let renderer!: ReactTestRenderer;
+      await act(async () => { renderer = create(<StorageBinTile bin={bin} lock={lockAt(level)} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
+      const text = JSON.stringify(renderer.toJSON());
+      await act(async () => renderer.unmount());
+      return text;
+    };
+    expect(await textFor('open')).not.toContain('data-record-lock');
+    expect(await textFor('inUse')).not.toContain('data-record-lock');
+    expect(await textFor('sent')).toContain('"data-record-lock":"sent"');
+  });
 });
