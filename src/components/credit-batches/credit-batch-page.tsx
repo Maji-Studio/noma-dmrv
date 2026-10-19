@@ -42,7 +42,7 @@ import {
   CREDIT_BATCH_PAGE_TABS,
   creditBatchPrimaryAction,
   todosLabel,
-  overviewBadgeCount,
+  tabBadge,
   type CreditBatchPageTab,
   type CreditBatchPrimaryAction,
 } from "@/lib/credit-batches/batch-page";
@@ -64,7 +64,7 @@ import { CreditBatchEmissionsTab } from "./credit-batch-emissions-tab";
 import { CreditBatchPageProvider, useCreditBatchPage, type CreditBatchPageContextValue } from "./credit-batch-page-context";
 import { CreditBatchKeyNumbers, CreditBatchPageHeader } from "./credit-batch-page-header";
 import { CreditBatchOverview } from "./credit-batch-page-overview";
-import { CountBadge, FOCUS_RING, MUTED_TEXT } from "./credit-batch-page-parts";
+import { CountBadge, FOCUS_RING, MUTED_TEXT, StatusDot, TODO_TONE } from "./credit-batch-page-parts";
 import { CreditBatchRemovalsTab } from "./credit-batch-page-removals";
 import { CreditBatchActivitiesTab, CreditBatchProductionTab, CreditBatchSamplesTab } from "./credit-batch-page-tabs";
 import { isCreditBatchMembershipLocked, saveCreditBatchEdit } from "./credit-batch-update-patch";
@@ -89,35 +89,40 @@ function revealTab(node: HTMLButtonElement | null) {
 
 function BatchTabs({ tabListRef }: { tabListRef: React.RefObject<HTMLDivElement | null> }) {
   const { batch, tab, go, openItems } = useCreditBatchPage();
-  const badge = overviewBadgeCount(openItems);
   return (
     <div ref={tabListRef} className="flex scroll-mt-24 items-stretch border-b border-[var(--color-border-secondary)]">
       {/* The tab row scrolls inside its bar on phones; the page never scrolls sideways. */}
       <div role="tablist" aria-label="Credit batch sections" className="relative flex min-w-0 flex-1 overflow-x-auto">
-        {CREDIT_BATCH_PAGE_TABS.map((key) => (
-          <button
-            key={key}
-            id={`credit-batch-tab-${key}`}
-            role="tab"
-            type="button"
-            aria-selected={tab === key}
-            aria-controls="credit-batch-tab-panel"
-            ref={tab === key ? revealTab : undefined}
-            onClick={() => go(key)}
-            className={cn(
-              "-mb-px inline-flex h-44 shrink-0 items-center gap-8 border-b-2 px-16 body-medium first:pl-0",
-              FOCUS_RING,
-              tab === key
-                ? "border-[var(--ink)] font-medium"
-                : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]",
-            )}
-          >
-            {CREDIT_BATCH_PAGE_TAB_LABELS[key]}
-            {key === "overview" && badge > 0 && (
-              <CountBadge count={badge} blocking={openItems.blocking.length > 0} label={todosLabel(badge)} />
-            )}
-          </button>
-        ))}
+        {CREDIT_BATCH_PAGE_TABS.map((key) => {
+          const badge = tabBadge(key, openItems);
+          return (
+            <button
+              key={key}
+              id={`credit-batch-tab-${key}`}
+              role="tab"
+              type="button"
+              aria-selected={tab === key}
+              aria-controls="credit-batch-tab-panel"
+              ref={tab === key ? revealTab : undefined}
+              onClick={() => go(key)}
+              className={cn(
+                "-mb-px inline-flex h-44 shrink-0 items-center gap-8 border-b-2 px-16 body-medium first:pl-0",
+                FOCUS_RING,
+                tab === key
+                  ? "border-[var(--ink)] font-medium"
+                  : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]",
+              )}
+            >
+              {CREDIT_BATCH_PAGE_TAB_LABELS[key]}
+              {badge &&
+                (tab === key ? (
+                  <CountBadge count={badge.count} blocking={badge.blocking} label={todosLabel(badge.count)} />
+                ) : (
+                  <StatusDot tone={badge.blocking ? TODO_TONE.blocking : TODO_TONE.check} label={todosLabel(badge.count)} />
+                ))}
+            </button>
+          );
+        })}
       </div>
       {/* Phones reach Traceability through the ⋯ menu; the tab row has no room. */}
       <Link

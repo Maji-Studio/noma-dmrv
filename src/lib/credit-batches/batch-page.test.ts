@@ -7,6 +7,7 @@ import {
   creditBatchPrimaryAction,
   isCreditBatchSent,
   overviewBadgeCount,
+  tabBadge,
 } from "./batch-page";
 import type { CreditBatchOpenItem } from "./open-items";
 
@@ -189,5 +190,41 @@ describe("isCreditBatchSent", () => {
     expect(isCreditBatchSent({ pageModel: model({ removals: [removal({ phase: "submitted", status: SUBMITTED_STATUS })] }), lock: undefined })).toBe(true);
     expect(isCreditBatchSent({ pageModel: model(), lock: SENT_LOCK })).toBe(true);
     expect(isCreditBatchSent({ pageModel: undefined, lock: SENT_LOCK })).toBe(true);
+  });
+});
+
+describe("tabBadge", () => {
+  const item = (id: string, target: CreditBatchOpenItem["target"]): CreditBatchOpenItem => ({ id, title: id, target });
+  const groups = {
+    blocking: [item("b1", { tab: "samples" }), item("b2", { tab: "emissions" })],
+    check: [item("c1", { tab: "emissions" })],
+    waiting: [item("w1", { tab: "removals" })],
+  };
+
+  it("gives Overview the total and each tab its own count", () => {
+    expect(tabBadge("overview", groups)).toEqual({ count: 3, blocking: true });
+    expect(tabBadge("samples", groups)).toEqual({ count: 1, blocking: true });
+    expect(tabBadge("emissions", groups)).toEqual({ count: 2, blocking: true });
+    expect(tabBadge("production", groups)).toBeNull();
+  });
+
+  it("counts href and Overview targets only in the Overview total", () => {
+    const g = { blocking: [item("h", { href: "/settings" }), item("o", { tab: "overview", rowId: "batch-details" })], check: [], waiting: [] };
+    expect(tabBadge("overview", g)).toEqual({ count: 2, blocking: true });
+    for (const tab of ["production", "samples", "emissions", "removals"] as const) expect(tabBadge(tab, g)).toBeNull();
+  });
+
+  it("never counts Waiting items", () => {
+    expect(tabBadge("removals", groups)).toBeNull();
+  });
+
+  it("uses the Check style on a tab with no Blocking item", () => {
+    const g = { blocking: [], check: [item("c", { tab: "samples" })], waiting: [] };
+    expect(tabBadge("samples", g)).toEqual({ count: 1, blocking: false });
+    expect(tabBadge("overview", g)).toEqual({ count: 1, blocking: false });
+  });
+
+  it("never gives Activities a badge", () => {
+    expect(tabBadge("activities", groups)).toBeNull();
   });
 });
