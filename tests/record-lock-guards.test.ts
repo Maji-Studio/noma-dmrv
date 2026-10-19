@@ -274,7 +274,7 @@ it('reads the registry once for N stock entries sharing a statement', async () =
 
 it('membership refusal names an interrupted Removal and tells the operator to resume it', async () => {
   await withLineageFixture(async fixture => {
-    await db.update(certificationSubmissions).set({ status: 'draft' }).where(and(
+    await db.update(certificationSubmissions).set({ status: 'draft', externalId: null, metadata: {} }).where(and(
       eq(certificationSubmissions.organizationId, TEST_ORG_ID), eq(certificationSubmissions.localEntityId, fixture.removalId),
     ));
     await db.transaction(async tx => {

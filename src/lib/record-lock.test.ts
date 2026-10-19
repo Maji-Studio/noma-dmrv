@@ -127,11 +127,12 @@ describe("returned Removals", () => {
 
 describe("interrupted Removals", () => {
   const interrupted = (id: string) => ({ id, label: id, submissions: [{ status: "draft" }], statements: [] });
+  const sentRemoval = (id: string) => ({ id, label: id, submissions: [{ status: "submitted" }], statements: [] });
 
   it("marks the Sent lock interrupted and words the refusal for one Removal", async () => {
     const { withRecordLockGuidance } = await import("./record-lock");
     const lock = recordLocks.feedstock({ dependents: [], removals: [interrupted("REM-1")] });
-    expect(lock).toMatchObject({ level: "sent", interrupted: true });
+    expect(lock).toMatchObject({ level: "sent", interruptedHolders: [{ kind: "removal", id: "REM-1" }] });
     expect(withRecordLockGuidance("No.", lock))
       .toBe("No. Held by Removal REM-1. To edit again, delete or resume that Removal, or review its records in Isometric.");
   });
@@ -144,7 +145,28 @@ describe("interrupted Removals", () => {
   });
 
   it("does not mark a submitted Removal interrupted", () => {
-    const lock = recordLocks.feedstock({ dependents: [], removals: [{ id: "r", submissions: [{ status: "submitted" }], statements: [] }] });
-    expect(lock.interrupted).toBeUndefined();
+    const lock = recordLocks.feedstock({ dependents: [], removals: [sentRemoval("r")] });
+    expect(lock.interruptedHolders).toBeUndefined();
+    expect(lock.howToFree).toBe("If Isometric sends the GHG Statement back, refresh its status to edit again.");
+  });
+
+  it("does not mark a Removal with a rejected attempt and a later submitted one interrupted", () => {
+    const removal = { id: "r", label: "REM-1", submissions: [{ status: "rejected" }, { status: "submitted" }], statements: [] };
+    expect(recordLocks.feedstock({ dependents: [], removals: [removal] }).interruptedHolders).toBeUndefined();
+  });
+
+  it("decides per holder: a mixed lock names only the unfinished Removal", async () => {
+    const { withRecordLockGuidance } = await import("./record-lock");
+    const lock = recordLocks.feedstock({ dependents: [], removals: [sentRemoval("REM-1"), interrupted("REM-2")] });
+    expect(lock.interruptedHolders).toEqual([{ kind: "removal", id: "REM-2", label: "REM-2" }]);
+    expect(lock.howToFree).toBe("To edit again, delete or resume that Removal, and wait for Isometric to send the GHG Statement back.");
+    expect(withRecordLockGuidance("No.", lock)).toBe(
+      "No. Held by Removal REM-1, Removal REM-2. Sending Removal REM-2 to Isometric was started and not finished. To edit again, delete or resume that Removal, and wait for Isometric to send the GHG Statement back.",
+    );
+  });
+
+  it("uses the plural mixed sentence for several unfinished Removals", () => {
+    const lock = recordLocks.feedstock({ dependents: [], removals: [sentRemoval("REM-1"), interrupted("REM-2"), interrupted("REM-3")] });
+    expect(lock.howToFree).toBe("To edit again, delete or resume those Removals, and wait for Isometric to send the GHG Statement back.");
   });
 });

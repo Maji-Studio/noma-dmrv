@@ -163,7 +163,7 @@ function toView(lock: RecordLock, dependents: readonly RecordLockHolder[], links
     statement: resolve([{ kind: "ghgStatement", id: statement.id }])[0],
     statementStatus: statement.status,
   })));
-  return { level: lock.level, heldBy: resolve(lock.heldBy), usedBy: resolve(dependents), freeFields: [...lock.freeFields], howToFree: lock.howToFree, ...(lock.interrupted ? { interrupted: true } : {}), returnedBy };
+  return { level: lock.level, heldBy: resolve(lock.heldBy), usedBy: resolve(dependents), freeFields: [...lock.freeFields], howToFree: lock.howToFree, ...(lock.interruptedHolders?.length ? { interruptedHolders: resolve(lock.interruptedHolders) } : {}), returnedBy };
 }
 
 /**
