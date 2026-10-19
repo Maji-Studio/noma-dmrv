@@ -5,7 +5,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthMiddleware } from "better-auth/api";
 
 const state = vi.hoisted(() => ({ attempt: undefined as undefined | { memberId: string; organizationId: string }, revoked: false, picker: false }));
-vi.mock("@/config/env", () => ({ env: { NEXT_PUBLIC_APP_URL: "http://localhost:3100" } }));
+vi.mock("@/config/env", () => ({ env: { NEXT_PUBLIC_APP_URL: "http://localhost:3100", BETTER_AUTH_SECRET: "unit-oauth-secret-at-least-32-characters" } }));
 vi.mock("@/data-access/oauth-provider", () => ({ findOAuthOfflineGenerations: async () => [], findOAuthAttempt: async () => state.attempt, findOAuthClientResources: async () => [{ resource: "http://localhost:3100/api/mcp" }] }));
 vi.mock("@/data-access/oauth-grant-lifecycle", () => ({
   getOAuthOrganizationSelection: async () => ({ memberships: [{ memberId: "member", organizationId: "org" }], autoSelectOrganizationId: state.picker ? null : "org" }),

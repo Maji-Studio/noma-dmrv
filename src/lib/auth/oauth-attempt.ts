@@ -1,5 +1,6 @@
 import { OAUTH_RESTART_MESSAGE } from "@/config/oauth";
-import { createHash } from "node:crypto";
+import { createHmac } from "node:crypto";
+import { env } from "@/config/env";
 import { getOAuthProviderState } from "@better-auth/oauth-provider";
 import { APIError } from "better-auth/api";
 import { findOAuthAttempt, findOAuthClientResources } from "@/data-access/oauth-provider";
@@ -8,9 +9,11 @@ import { assertGenerationEligible } from "./oauth-eligibility";
 import { parseOAuthScopes } from "./oauth-scopes";
 import { getOAuthConfig } from "./oauth-config";
 
-/** The caller must obtain query from verified provider state or verifyOAuthQueryParams. */
+/** The caller must obtain query from verified provider state or verifyOAuthQueryParams.
+ * Keyed with the auth secret so a stored key cannot be recomputed from a
+ * database copy alone. */
 export function oauthAttemptKey(sessionId: string, query: URLSearchParams, resource: string) {
-  return createHash("sha256").update(JSON.stringify([
+  return createHmac("sha256", env.BETTER_AUTH_SECRET).update(JSON.stringify([
     sessionId, query.get("client_id"), query.get("code_challenge"), resource, query.get("redirect_uri"),
   ])).digest("hex");
 }
