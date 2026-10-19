@@ -2,7 +2,7 @@
  * Figures and wording the stock preview blocks share: the movement block, the
  * load block and the availability block read a bin the same way.
  */
-import type { MassSegment } from "@/components/forms/composition-ledger";
+import { formatCompositionMass, type MassSegment } from "@/components/forms/composition-ledger";
 import { batchAccentFill } from "@/components/ui/segment-bar";
 import type { AffectedStockPreview as Preview, OutputStockBalanceView } from "@/types/output-stock";
 
@@ -38,6 +38,11 @@ export function batchSegments(allocations: readonly OutputStockBalanceView[]): M
 }
 
 /** Whole kilograms without the unit, for the muted before figure of a pair. */
+/** Key figures under a wet headline: batches are tracked dry, so they say so. */
+export function formatDryKeyMass(kg: number | null): string {
+  return `${formatCompositionMass(kg)} dry`;
+}
+
 export function formatWetEstimate(kg: number): string {
   return kg.toLocaleString(undefined, { maximumFractionDigits: WET_ESTIMATE_DIGITS });
 }
@@ -45,7 +50,7 @@ export function formatWetEstimate(kg: number): string {
 /**
  * The wet mass the split bar draws, or null when there is no split to draw.
  *
- * A removal carries the entered wet mass directly. A count does not: the planner
+ * A draw carries the entered wet mass directly. A count does not: the planner
  * nulls `removedWetKg` for it and the counted mass reaches the preview as the
  * after wet estimate, which is the counted figure at the entered moisture. That
  * substitution only holds while the count is accepted in full, so a count that
@@ -96,12 +101,18 @@ export function dryingNotice(preview: Preview, enteredWetKg: number | null): str
     : null;
 }
 
+const OUTPUT_WET_STOCK_HINT = "Wet stock is the wet mass added less the wet mass taken out, at the moisture the bin already had.";
+
 /** The definition the block cannot show as a number. Kept to one hint. */
 export function stockCardHint(preview: Preview): string {
   if (preview.lane === "ingredient") {
     return "Wet stock is the recorded intake less tracked withdrawals. The moisture entered here describes this withdrawal only.";
   }
-  return preview.removedDryKg === 0
-    ? "Dry biochar is the tracked quantity, and drying alone does not change it. Wet stock is an estimate from each batch's latest moisture reading."
-    : "Dry biochar is the tracked quantity. Wet stock is an estimate from each batch's latest moisture reading, and the reading entered here updates the batch it was taken from.";
+  if (preview.removedWetKg === null) {
+    const drying = preview.removedDryKg === 0 ? ", and drying alone does not change it" : "";
+    return `Dry biochar is the tracked quantity${drying}. A count sets the wet stock and moisture of everything it weighed.`;
+  }
+  // A draw that takes nothing was refused; dried biochar is the usual reason the wet stock promised more.
+  if (preview.removedDryKg === 0) return `${OUTPUT_WET_STOCK_HINT} Wet stock reads high when the biochar has dried, and dry biochar limits what can leave.`;
+  return `${OUTPUT_WET_STOCK_HINT} The moisture entered here sets the dry biochar this draw takes, and dry biochar limits what can leave.`;
 }

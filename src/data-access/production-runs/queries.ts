@@ -33,11 +33,9 @@ import {
   storageLocations,
   feedstocks,
   feedstockTypes,
-  samples,
-  type Sample,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { requireOrgScope } from "../utils";
+import { type Executor, requireOrgScope } from "../utils";
 import { SafeError } from "@/lib/errors";
 import { productionRunDateExpr } from "./date-expr";
 import { inCreditBatchProductionRuns } from "../credit-batch-lineage-filter";
@@ -48,8 +46,7 @@ import type {
   ProductionRunWithRelations,
   PaginatedProductionRuns,
   ProductionRunStats,
-  FacilityEnergyTotals,
-  ProductionRunWithSamples,
+  ProductionRunForCertification,
 } from "./types";
 import {
   CANCELLED_PRODUCTION_RUN_STATUS,
@@ -152,7 +149,6 @@ export async function getProductionRuns(
 
   // Alias storage locations for biochar and feedstock joins
   const biocharStorage = alias(storageLocations, "biocharStorage");
-  const feedstockStorage = alias(storageLocations, "feedstockStorage");
 
   // Get production runs with all relations in a single query (no N+1 for storage locations)
   const runList = await db
@@ -177,7 +173,6 @@ export async function getProductionRuns(
       biocharMoisturePercent: productionRuns.biocharMoisturePercent,
       biocharDryMassKg: productionRuns.biocharDryMassKg,
       biocharStorageLocationId: productionRuns.biocharStorageLocationId,
-      feedstockStorageLocationId: productionRuns.feedstockStorageLocationId,
       feedstockWetMassKg: productionRuns.feedstockWetMassKg,
       feedstockMoisturePercent: productionRuns.feedstockMoisturePercent,
       feedstockMassDryKg: productionRuns.feedstockMassDryKg,
@@ -186,6 +181,7 @@ export async function getProductionRuns(
         productionRuns.id,
       ),
       createdAt: productionRuns.createdAt,
+      version: productionRuns.version,
       updatedAt: productionRuns.updatedAt,
       facilityCode: facilities.code,
       facilityName: facilities.name,
@@ -194,15 +190,12 @@ export async function getProductionRuns(
       operatorName: operators.name,
       biocharStorageLocationCode: biocharStorage.code,
       biocharStorageLocationName: biocharStorage.name,
-      feedstockStorageLocationCode: feedstockStorage.code,
-      feedstockStorageLocationName: feedstockStorage.name,
     })
     .from(productionRuns)
     .leftJoin(facilities, and(eq(productionRuns.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
     .leftJoin(reactors, and(eq(productionRuns.reactorId, reactors.id), eq(reactors.organizationId, ctx.organizationId)))
     .leftJoin(operators, and(eq(productionRuns.operatorId, operators.id), eq(operators.organizationId, ctx.organizationId)))
     .leftJoin(biocharStorage, and(eq(productionRuns.biocharStorageLocationId, biocharStorage.id), eq(biocharStorage.organizationId, ctx.organizationId)))
-    .leftJoin(feedstockStorage, and(eq(productionRuns.feedstockStorageLocationId, feedstockStorage.id), eq(feedstockStorage.organizationId, ctx.organizationId)))
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
@@ -289,8 +282,6 @@ export async function getProductionRuns(
       ...run,
       biocharStorageLocationCode: run.biocharStorageLocationCode ?? null,
       biocharStorageLocationName: run.biocharStorageLocationName ?? null,
-      feedstockStorageLocationCode: run.feedstockStorageLocationCode ?? null,
-      feedstockStorageLocationName: run.feedstockStorageLocationName ?? null,
       feedstocks: runFeedstocks,
       feedstockDraws,
       totalFeedstockWetMassKg: feedstockDraws.reduce(
@@ -314,9 +305,11 @@ export async function getProductionRuns(
  */
 async function getProductionRunFeedstocks(
   ctx: OrgContext,
-  productionRunId: string
+  productionRunId: string,
+  executor: Executor = db,
 ): Promise<ProductionRunFeedstockWithDetails[]> {
-  const result = await db
+  requireOrgScope(ctx);
+  const result = await executor
     .select({
       id: productionRunFeedstocks.id,
       feedstockId: productionRunFeedstocks.feedstockId,
@@ -335,8 +328,10 @@ async function getProductionRunFeedstocks(
 async function getProductionRunFeedstockDraws(
   ctx: OrgContext,
   productionRunId: string,
+  executor: Executor = db,
 ): Promise<ProductionRunFeedstockDrawWithDetails[]> {
-  return db
+  requireOrgScope(ctx);
+  return executor
     .select({
       id: productionRunFeedstockDraws.id,
       storageLocationId: productionRunFeedstockDraws.storageLocationId,
@@ -376,11 +371,12 @@ async function getProductionRunFeedstockDraws(
  */
 export async function getProductionRunById(
   ctx: OrgContext,
-  productionRunId: string
+  productionRunId: string,
+  executor: Executor = db,
 ): Promise<ProductionRunWithRelations> {
   requireOrgScope(ctx);
 
-  const [run] = await db
+  const [run] = await executor
     .select({
       id: productionRuns.id,
       code: productionRuns.code,
@@ -402,7 +398,6 @@ export async function getProductionRunById(
       biocharMoisturePercent: productionRuns.biocharMoisturePercent,
       biocharDryMassKg: productionRuns.biocharDryMassKg,
       biocharStorageLocationId: productionRuns.biocharStorageLocationId,
-      feedstockStorageLocationId: productionRuns.feedstockStorageLocationId,
       feedstockWetMassKg: productionRuns.feedstockWetMassKg,
       feedstockMoisturePercent: productionRuns.feedstockMoisturePercent,
       feedstockMassDryKg: productionRuns.feedstockMassDryKg,
@@ -411,6 +406,7 @@ export async function getProductionRunById(
         productionRuns.id,
       ),
       createdAt: productionRuns.createdAt,
+      version: productionRuns.version,
       updatedAt: productionRuns.updatedAt,
       facilityCode: facilities.code,
       facilityName: facilities.name,
@@ -438,13 +434,12 @@ export async function getProductionRunById(
     runFeedstocks,
     feedstockDraws,
     biocharStorageLocation,
-    feedstockStorageLocation,
   ] =
     await Promise.all([
-      getProductionRunFeedstocks(ctx, productionRunId),
-      getProductionRunFeedstockDraws(ctx, productionRunId),
+      getProductionRunFeedstocks(ctx, productionRunId, executor),
+      getProductionRunFeedstockDraws(ctx, productionRunId, executor),
       run.biocharStorageLocationId
-        ? db
+        ? executor
             .select({
               code: storageLocations.code,
               name: storageLocations.name,
@@ -453,26 +448,12 @@ export async function getProductionRunById(
             .where(and(eq(storageLocations.id, run.biocharStorageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
             .then(([loc]) => loc ?? null)
         : null,
-      run.feedstockStorageLocationId
-        ? db
-            .select({
-              code: storageLocations.code,
-              name: storageLocations.name,
-            })
-            .from(storageLocations)
-            .where(and(eq(storageLocations.id, run.feedstockStorageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
-            .then(([loc]) => loc ?? null)
-        : null,
     ]);
 
   return {
     ...run,
     biocharStorageLocationCode: biocharStorageLocation?.code ?? null,
     biocharStorageLocationName: biocharStorageLocation?.name ?? null,
-    feedstockStorageLocationCode:
-      feedstockStorageLocation?.code ?? null,
-    feedstockStorageLocationName:
-      feedstockStorageLocation?.name ?? null,
     feedstocks: runFeedstocks,
     feedstockDraws,
     totalFeedstockWetMassKg: feedstockDraws.reduce(
@@ -558,61 +539,14 @@ export async function getProductionRunStats(
     totalFeedstockWetKg: Number(feedstockStats.totalFeedstockWetKg) || 0,
     runningCount: statusMap["running"] ?? 0,
     completedCount: statusMap["complete"] ?? 0,
-    draftCount: statusMap["draft"] ?? 0,
   };
 }
 
-/**
- * Sum electricity + diesel across every production run for a facility.
- * Aggregates in SQL so the totals are not capped by list pagination.
- */
-export async function getFacilityEnergyTotals(
-  ctx: OrgContext,
-  facilityId: string
-): Promise<FacilityEnergyTotals> {
-  requireOrgScope(ctx);
-
-  const [row] = await db
-    .select({
-      runCount: count(),
-      electricityKwh: sum(productionRuns.electricityKwh),
-      gensetLitres: sum(productionRuns.dieselGensetLiters),
-      operationLitres: sum(productionRuns.dieselOperationLiters),
-      preprocessingLitres: sum(productionRuns.preprocessingFuelLiters),
-    })
-    .from(productionRuns)
-    .where(and(
-      eq(productionRuns.facilityId, facilityId),
-      eq(productionRuns.organizationId, ctx.organizationId),
-      isNull(productionRuns.archivedAt),
-      ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
-    ));
-
-  return {
-    runCount: Number(row.runCount),
-    electricityKwh:
-      row.electricityKwh == null ? null : Number(row.electricityKwh),
-    // Genset ("summarized") = generator diesel + preprocessing fuel; startup =
-    // reactor-startup / plant diesel only. Mirrors the submission split in
-    // aggregation.ts (docs/isometric/changes.md).
-    gensetLitres:
-      row.gensetLitres == null && row.preprocessingLitres == null
-        ? null
-        : (Number(row.gensetLitres) || 0) +
-          (Number(row.preprocessingLitres) || 0),
-    startupLitres:
-      row.operationLitres == null ? null : Number(row.operationLitres),
-  };
-}
-
-// Bulk loader used by the Certify submission orchestrator. Joins the lab-grade
-// `samples` table (carbon %, H/C and O/C ratios, ash) — NOT `productionSamples`,
-// which holds in-process proximate analysis. Runs missing from the lookup are
-// silently dropped; aggregation reports a per-run warning rather than failing.
-export async function getProductionRunsWithSamples(
+// Operational run facts for certification. Lab Samples are loaded by credit batch.
+export async function getProductionRunsForCertification(
   ctx: OrgContext,
   runIds: string[]
-): Promise<ProductionRunWithSamples[]> {
+): Promise<ProductionRunForCertification[]> {
   requireOrgScope(ctx);
   if (runIds.length === 0) return [];
 
@@ -628,28 +562,5 @@ export async function getProductionRunsWithSamples(
     .where(and(inArray(productionRuns.id, runIds), eq(productionRuns.organizationId, ctx.organizationId)));
   if (runs.length === 0) return [];
 
-  const sampleRows = await db
-    .select()
-    .from(samples)
-    .where(
-      and(
-        inArray(samples.productionRunId, runs.map((r) => r.id)),
-        eq(samples.organizationId, ctx.organizationId),
-      )
-    );
-
-  const samplesByRun = new Map<string, Sample[]>();
-  for (const s of sampleRows) {
-    // productionRunId is nullable since ADR 0016 (provenance, not the primary
-    // link). The query filters on it being in `runs`, so it is non-null here;
-    // the guard satisfies the type and skips any commingled-batch sample.
-    if (s.productionRunId == null) continue;
-    const list = samplesByRun.get(s.productionRunId) ?? [];
-    list.push(s);
-    samplesByRun.set(s.productionRunId, list);
-  }
-  return runs.map((r) => ({
-    ...r,
-    samples: samplesByRun.get(r.id) ?? [],
-  }));
+  return runs;
 }

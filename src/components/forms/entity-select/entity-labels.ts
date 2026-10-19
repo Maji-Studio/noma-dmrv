@@ -2,7 +2,7 @@ import type { EntityType } from "./types";
 
 /**
  * Operator-facing name for each entity type, in the canonical form from
- * `CONTEXT.md`. Read as a noun mid-sentence ("Select storage bin…",
+ * `GLOSSARY.md`. Read as a noun mid-sentence ("Select storage bin…",
  * "Create storage bin"), so a select and the quick-add dialog it opens say one
  * name for one thing.
  *
@@ -14,6 +14,7 @@ export const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
   reactor: "reactor",
   supplier: "supplier",
   customer: "customer",
+  customerLocation: "customer location",
   driver: "driver",
   operator: "operator",
   storageLocation: "storage bin",

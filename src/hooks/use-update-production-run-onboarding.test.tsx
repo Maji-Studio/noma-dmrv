@@ -31,7 +31,7 @@ it.each([
   let renderer!: ReactTestRenderer;
   try {
     await act(async () => { renderer = create(<QueryClientProvider client={client}><Harness /></QueryClientProvider>); });
-    await act(async () => { await mutation.mutateAsync({ productionRunId: row.id, facilityId: row.facilityId }); });
+    await act(async () => { await mutation.mutateAsync({ productionRunId: row.id, expectedVersion: 1, facilityId: row.facilityId }); });
     for (const facility of facilities) expect(client.getQueryState(onboardingKeys.status(facility, "org-1"))?.isInvalidated).toBe(affected.includes(facility));
     expect(client.getQueryData(productionRunKeys.detail(row.id))).toEqual(row);
   } finally {

@@ -1,0 +1,746 @@
+{
+  "read_at": "2026-10-15T14:34:20.644Z",
+  "template_id": "rvt_1KS4S43VPSBXA26X",
+  "blueprints": [
+    {
+      "key": "biochar_sequestration_1000_year_f_durable_max",
+      "display_name": "Biochar sequestration, 1000 year durability",
+      "description": "Amount of CO₂ stored via biochar sequestration, given biochar mass and samples evidencing random reflectance properties and carbon content. Applicable to the 1000 year durability option from the Biochar Storage in Soil Environments module based on assessment of biochar permanence according to Sanei et al. (2024). Durable fraction capped at 0.95 per protocol requirements.",
+      "type": "SEQUESTRATION",
+      "inputs": [
+        {
+          "input_key": "inorganic_carbon_contents",
+          "description": "Inorganic carbon content of biochar",
+          "data_shape": "LIST",
+          "quantity_kind": "mass_fraction_dry_basis",
+          "compatible_unit": "mg / kg"
+        },
+        {
+          "input_key": "product_mass",
+          "description": "Mass of product",
+          "data_shape": "SCALAR",
+          "quantity_kind": "mass",
+          "compatible_unit": "kg"
+        },
+        {
+          "input_key": "s_fraction",
+          "description": "Fraction of reflectance samples above 2% benchmark in each sample",
+          "data_shape": "LIST",
+          "quantity_kind": "dimensionless_ratio",
+          "compatible_unit": "%"
+        },
+        {
+          "input_key": "total_carbon_contents",
+          "description": "Total carbon content of biochar",
+          "data_shape": "LIST",
+          "quantity_kind": "mass_fraction_dry_basis",
+          "compatible_unit": "mg / kg"
+        }
+      ],
+      "expressions": [
+        {
+          "key": "num_samples",
+          "template": "length({s_fraction})",
+          "inputs": [
+            {
+              "template_key": "s_fraction",
+              "input_key": "s_fraction",
+              "type": "DATAPOINT",
+              "data_shape": "LIST"
+            }
+          ]
+        },
+        {
+          "key": "s_standard_error",
+          "template": "sqrt(mean({s_fraction}) * complement_of(mean({s_fraction})) / {num_samples})",
+          "inputs": [
+            {
+              "template_key": "num_samples",
+              "input_key": "num_samples",
+              "type": "EXPRESSION_RESULT",
+              "data_shape": "SCALAR"
+            },
+            {
+              "template_key": "s_fraction",
+              "input_key": "s_fraction",
+              "type": "DATAPOINT",
+              "data_shape": "LIST"
+            },
+            {
+              "template_key": "s_fraction",
+              "input_key": "s_fraction",
+              "type": "DATAPOINT",
+              "data_shape": "LIST"
+            }
+          ]
+        },
+        {
+          "key": "durable_fraction_calc",
+          "template": "mean({s_fraction}) - {s_standard_error}",
+          "inputs": [
+            {
+              "template_key": "s_fraction",
+              "input_key": "s_fraction",
+              "type": "DATAPOINT",
+              "data_shape": "LIST"
+            },
+            {
+              "template_key": "s_standard_error",
+              "input_key": "s_standard_error",
+              "type": "EXPRESSION_RESULT",
+              "data_shape": "SCALAR"
+            }
+          ]
+        },
+        {
+          "key": "durable_fraction",
+          "template": "min({durable_fraction_calc}, {max_durable_fraction})",
+          "inputs": [
+            {
+              "template_key": "durable_fraction_calc",
+              "input_key": "durable_fraction_calc",
+              "type": "EXPRESSION_RESULT",
+              "data_shape": "SCALAR"
+            }
+          ]
+        },
+        {
+          "key": "carbon_contents",
+          "template": "{total_carbon_contents} - {inorganic_carbon_contents}",
+          "inputs": [
+            {
+              "template_key": "inorganic_carbon_contents",
+              "input_key": "inorganic_carbon_contents",
+              "type": "DATAPOINT",
+              "data_shape": "LIST"
+            },
+            {
+              "template_key": "total_carbon_contents",
+              "input_key": "total_carbon_contents",
+              "type": "DATAPOINT",
+              "data_shape": "LIST"
+            }
+          ]
+        },
+        {
+          "key": "mean_carbon_content",
+          "template": "mean({carbon_contents})",
+          "inputs": [
+            {
+              "template_key": "carbon_contents",
+              "input_key": "carbon_contents",
+              "type": "EXPRESSION_RESULT",
+              "data_shape": "LIST"
+            }
+          ]
+        },
+        {
+          "key": "output",
+          "template": "{product_mass} * {mean_carbon_content} * {durable_fraction} * {co2e_of_carbon}",
+          "inputs": [
+            {
+              "template_key": "durable_fraction",
+              "input_key": "durable_fraction",
+              "type": "EXPRESSION_RESULT",
+              "data_shape": "SCALAR"
+            },
+            {
+              "template_key": "mean_carbon_content",
+              "input_key": "mean_carbon_content",
+              "type": "EXPRESSION_RESULT",
+              "data_shape": "SCALAR"
+            },
+            {
+              "template_key": "product_mass",
+              "input_key": "product_mass",
+              "type": "DATAPOINT",
+              "data_shape": "SCALAR"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "distance_based_ci_emissions",
+      "display_name": "Distance-based emissions",
+      "description": "Emissions based on multiplying a distance by a carbon emission factor. Applicable to quantifying transportation emissions when only the distance traveled is known, this is acceptable for transportation by passenger car or airplane.",
+      "type": "ACTIVITY",
+      "inputs": [
+        {
+          "input_key": "carbon_intensity",
+          "description": "Distance emission factor",
+          "data_shape": "SCALAR",
+          "quantity_kind": "distance_carbon_emission_factor",
+          "compatible_unit": "kgCO2e / km"
+        },
+        {
+          "input_key": "distance",
+          "description": "Distance traveled",
+          "data_shape": "SCALAR",
+          "quantity_kind": "distance",
+          "compatible_unit": "km"
+        }
+      ],
+      "expressions": [
+        {
+          "key": "output",
+          "template": "{distance} * {carbon_intensity}",
+          "inputs": [
+            {
+              "template_key": "carbon_intensity",
+              "input_key": "carbon_intensity",
+              "type": "DATAPOINT",
+              "data_shape": "SCALAR"
+            },
+            {
+              "template_key": "distance",
+              "input_key": "distance",
+              "type": "DATAPOINT",
+              "data_shape": "SCALAR"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "fuel_usage_by_volume",
+      "display_name": "Fuel usage by volume emissions",
+      "description": "Emissions based on multiplying a fuel volume by the carbon emission factor of combustion.",
+      "type": "ACTIVITY",
+      "inputs": [
+        {
+          "input_key": "fuel_combustion_carbon_intensity",
+          "description": "Fuel emission factor",
+          "data_shape": "SCALAR",
+          "quantity_kind": "volume_carbon_emission_factor",
+          "compatible_unit": "kgCO2e / L"
+        },
+        {
+          "input_key": "volume_of_fuel",
+          "description": "Volume of fuel",
+          "data_shape": "SCALAR",
+          "quantity_kind": "volume",
+          "compatible_unit": "L"
+        }
+      ],
+      "expressions": [
+        {
+          "key": "output",
+          "template": "{volume_of_fuel} * {fuel_combustion_carbon_intensity}",
+          "inputs": [
+            {
+              "template_key": "fuel_combustion_carbon_intensity",
+              "input_key": "fuel_combustion_carbon_intensity",
+              "type": "DATAPOINT",
+              "data_shape": "SCALAR"
+            },
+            {
+              "template_key": "volume_of_fuel",
+              "input_key": "volume_of_fuel",
+              "type": "DATAPOINT",
+              "data_shape": "SCALAR"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "ghg_direct_emissions",
+      "display_name": "GHG direct emissions",
+      "description": "Direct emissions from a pyrolysis process where pyrolysis gases are emitted to the atmosphere or combusted.",
+      "type": "ACTIVITY",
+      "inputs": [
+        {
+          "input_key": "concentration",
+          "description": "Concentration of warming species in emitted gas",
+          "data_shape": "SCALAR",
+          "quantity_kind": "mass_fraction",
+          "compatible_unit": "mg / kg"
+        },
+        {
+          "input_key": "global_warming_potential",
+          "description": "100-year global warming potential",
+          "data_shape": "SCALAR",
+          "quantity_kind": "dimensionless",
+          "compatible_unit": "dimensionless"
+        },
+        {
+          "input_key": "mass_flow",
+          "description": "Total mass flow of gas",
+          "data_shape": "SCALAR",
+          "quantity_kind": "mass",
+          "compatible_unit": "kg"
+        }
+      ],
+      "expressions": [
+        {
+          "key": "output",
+          "template": "{mass_flow} * {concentration} * {global_warming_potential}",
+          "inputs": [
+            {
+              "template_key": "concentration",
+              "input_key": "concentration",
+              "type": "DATAPOINT",
+              "data_shape": "SCALAR"
+            },
+            {
+              "template_key": "global_warming_potential",
+              "input_key": "global_warming_potential",
+              "type": "DATAPOINT",
+              "data_shape": "SCALAR"
+            },
+            {
+              "template_key": "mass_flow",
+              "input_key": "mass_flow",
+              "type": "DATAPOINT",
+              "data_shape": "SCALAR"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "grid_electricity_use",
+      "display_name": "Grid electricity use emissions",
+      "description": "Emissions related to electric energy use. Applicable to quantifying electricity emissions when the quantity of electricity consumed is reported as a single number. If electricity consumption has been measured from a meter, use the component blueprint 'Metered electricity use emissions'.",
+      "type": "ACTIVITY",
+      "inputs": [
+        {
+          "input_key": "electricity_use",
+          "description": "Total electricity usage",
+          "data_shape": "SCALAR",
+          "quantity_kind": "energy",
+          "compatible_unit": "kWh"
+        },
+        {
+          "input_key": "grid_carbon_intensity",
+          "description": "Electricity grid emission factor",
+          "data_shape": "SCALAR",
+          "quantity_kind": "energy_carbon_emission_factor",
+          "compatible_unit": "kgCO2e / kWh"
+        }
+      ],
+      "expressions": [
+        {
+          "key": "output",
+          "template": "{electricity_use} * {grid_carbon_intensity}",
+          "inputs": [
+            {
+              "template_key": "electricity_use",
+              "input_key": "electricity_use",
+              "type": "DATAPOINT",
+              "data_shape": "SCALAR"
+            },
+            {
+              "template_key": "grid_carbon_intensity",
+              "input_key": "grid_carbon_intensity",
+              "type": "DATAPOINT",
+              "data_shape": "SCALAR"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "mass_based_ci_emissions",
+      "display_name": "Mass-based CI emissions",
+      "description": "Emissions based on multiplying a mass by its carbon emission factor. Applicable to quantifying embodied emissions of materials and consumables when the mass consumed is known. This component is generic to any material, for fuel use see the 'Fuel usage by mass emissions' component blueprint .",
+      "type": "ACTIVITY",
+      "inputs": [
+        {
+          "input_key": "carbon_intensity",
+          "description": "Carbon emission factor",
+          "data_shape": "SCALAR",
+          "quantity_kind": "mass_carbon_emission_factor",
+          "compatible_unit": "kgCO2e / kg"
+        },
+        {
+          "input_key": "mass",
+          "description": "Mass",
+          "data_shape": "SCALAR",
+          "quantity_kind": "mass",
+          "compatible_unit": "kg"
+        }
+      ],
+      "expressions": [
+        {
+          "key": "output",
+          "template": "{mass} * {carbon_intensity}",
+          "inputs": [
+            {
+              "template_key": "carbon_intensity",
+              "input_key": "carbon_intensity",
+              "type": "DATAPOINT",
+              "data_shape": "SCALAR"
+            },
+            {
+              "template_key": "mass",
+              "input_key": "mass",
+              "type": "DATAPOINT",
+              "data_shape": "SCALAR"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "mass_distance_based_ci_emissions",
+      "display_name": "Mass-distance-based CI emissions",
+      "description": "Emissions related to transporting a load, based on a distance-mass method. This component should be used when it's impossible to disambiguate the mass transported from the distance traveled. For example, where multiple small trips with different masses and distances are aggregated prior to submitting them to Isometric Certify.",
+      "type": "ACTIVITY",
+      "inputs": [
+        {
+          "input_key": "carbon_intensity",
+          "description": "Emission factor of transport",
+          "data_shape": "SCALAR",
+          "quantity_kind": "mass_distance_carbon_emission_factor",
+          "compatible_unit": "gCO2e / (tonne * km)"
+        },
+        {
+          "input_key": "mass_distance",
+          "description": "Mass multiplied by distance",
+          "data_shape": "SCALAR",
+          "quantity_kind": "mass_distance",
+          "compatible_unit": "tonne * km"
+        }
+      ],
+      "expressions": [
+        {
+          "key": "output",
+          "template": "{mass_distance} * {carbon_intensity}",
+          "inputs": [
+            {
+              "template_key": "carbon_intensity",
+              "input_key": "carbon_intensity",
+              "type": "DATAPOINT",
+              "data_shape": "SCALAR"
+            },
+            {
+              "template_key": "mass_distance",
+              "input_key": "mass_distance",
+              "type": "DATAPOINT",
+              "data_shape": "SCALAR"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "all_blueprint_keys": [
+    "aggregated_sample_transport",
+    "air_sea_co2_uptake",
+    "air_sea_co2_uptake_flux",
+    "air_sea_co2_uptake_mass",
+    "air_sea_co2_uptake_mass_with_adjustment_factors",
+    "area_based_emissions",
+    "biochar_sequestration_1000_year_f_durable_max",
+    "biochar_sequestration_1000_year_low_oxygen_labile",
+    "biochar_sequestration_1000_year_unsampled",
+    "biochar_sequestration_200_year",
+    "biochar_sequestration_200_year_c_org",
+    "biochar_sequestration_200_year_unsampled",
+    "biomass_burial_with_moisture_correction",
+    "biomass_counterfactual_storage",
+    "biomass_injection_from_winsorized_mean",
+    "blended_bio_oil_injection",
+    "calculated_sequestration",
+    "carbon_rich_substance_sequestration",
+    "carbon_rich_substance_sequestration_from_mean",
+    "carbon_rich_substance_sequestration_with_estimate",
+    "carbon_rich_substance_sequestration_with_estimation_wet_basis",
+    "cbam_carbon_retained",
+    "cbam_combustion_energy",
+    "cbam_indirect_emissions",
+    "cbam_mass_balance_input",
+    "cbam_process_output",
+    "cbam_waste_gas_export_credit",
+    "constant_activity_emissions",
+    "constant_loss",
+    "constant_reduction",
+    "constant_removal_counterfactual",
+    "constant_uncertainty_discount",
+    "count_based_emissions",
+    "currency_based_ci_emissions",
+    "dac_mineralized_co2",
+    "dac_sequestration_co2_volume",
+    "dac_sequestration_co2_volume_mixed",
+    "dac_sequestration_constant_co2_mass",
+    "dissolved_carbon_storage_aqueous_phase",
+    "dissolved_carbon_storage_manual_dosing",
+    "dissolved_carbon_storage_mass_inputs",
+    "dissolved_carbon_storage_solid_phase_steady_state",
+    "distance_based_ci_emissions",
+    "distance_based_transport_bcu",
+    "electricity_ratio_based_emissions",
+    "embodied_emissions",
+    "energy_based_ci_emissions",
+    "engineered_enhanced_weathering_carbonic_acid",
+    "enhanced_weathering_sequestration_ticat",
+    "enhanced_weathering_sequestration_ticat_ratio",
+    "ew_cec_loss",
+    "ew_loss_strong_acid_from_fertilizer_use",
+    "feedstock_replacement_emissions",
+    "feedstock_weathering_oae_counterfactual",
+    "fuel_consumption_based_transport",
+    "fuel_usage_by_area",
+    "fuel_usage_by_mass",
+    "fuel_usage_by_mass_bcu",
+    "fuel_usage_by_volume",
+    "fuel_usage_by_volume_bcu",
+    "ghg_direct_emissions",
+    "ghg_leakage_by_energy",
+    "grid_electricity_full_lifecycle_ef",
+    "grid_electricity_full_lifecycle_percent",
+    "grid_electricity_use",
+    "grid_electricity_use_with_recs",
+    "grid_electricity_with_recs_full_lifecycle_percent",
+    "iemt_2025_04_two_plot_ca_mg_non_paired_single_tracer",
+    "iemt_2025_11_modelled",
+    "iemt_2026_01",
+    "iemt_incremental_reporting_period_2026_06_modelled",
+    "ifm_logged_to_protected_sequestration",
+    "lithos_2025_09",
+    "mass_based_ci_emissions",
+    "mass_distance_based_ci_emissions",
+    "mass_ratio_based_emissions",
+    "measured_gas_reduction_cfc",
+    "measured_gas_reduction_ch4",
+    "measured_gas_reduction_hcfc",
+    "measured_gas_reduction_hfc",
+    "metered_energy_based_ci_emissions",
+    "ocean_carbon_storage_river_export",
+    "off_platform_reduction_cfc",
+    "off_platform_reduction_ch4",
+    "off_platform_reduction_hcfc",
+    "off_platform_reduction_hfc",
+    "off_platform_sequestration",
+    "proportional_and_additional_mine_energy_emissions",
+    "river_export_counterfactual",
+    "specific_volume_based_emissions",
+    "time_based_emissions",
+    "time_based_grid_electricity_use",
+    "transport",
+    "volume_based_ci_emissions",
+    "volume_based_emissions_by_area",
+    "volume_distance_based_emissions",
+    "woody_biomass_sequestration",
+    "woody_biomass_sequestration_with_performance_benchmark",
+    "woody_biomass_sequestration_with_performance_benchmark_calculated"
+  ],
+  "datapoints": {
+    "dtp_1KS2XWFHTSBX9H29": {
+      "id": "dtp_1KS2XWFHTSBX9H29",
+      "supplier_reference_id": null,
+      "display_name": "Rigid truck, 7.5-12 t GVW, Diesel, Africa, Asia, WTW",
+      "type": "STANDARD_PUBLISHED_VALUE",
+      "quantity": {
+        "magnitude": 0.27206,
+        "unit": "kgCO2e / kilometer / metric_ton",
+        "standard_deviation": null
+      },
+      "description": null,
+      "source_ids": [
+        "src_1KRGXYQ23SBXKP3E"
+      ],
+      "measured_at": null,
+      "project_id": "prj_1K9YJ33RKSBX9FFF",
+      "locked_status": "locked_library_datapoint",
+      "uncertainty_justification": null
+    },
+    "dtp_1KS4MRMPESBXJHC5": {
+      "id": "dtp_1KS4MRMPESBXJHC5",
+      "supplier_reference_id": null,
+      "display_name": "Electricity emission factor",
+      "type": "REPORTED",
+      "quantity": {
+        "magnitude": 0.531,
+        "unit": "kgCO2e / kilowatt_hour",
+        "standard_deviation": null
+      },
+      "description": null,
+      "source_ids": [],
+      "measured_at": null,
+      "project_id": "prj_1K9YJ33RKSBX9FFF",
+      "locked_status": "not_locked",
+      "uncertainty_justification": null
+    },
+    "dtp_1KWP4ZDD7SBXEXB0": {
+      "id": "dtp_1KWP4ZDD7SBXEXB0",
+      "supplier_reference_id": null,
+      "display_name": "Diesel emission factor",
+      "type": "REPORTED",
+      "quantity": {
+        "magnitude": 2.7,
+        "unit": "kgCO2e / liter",
+        "standard_deviation": 0.14
+      },
+      "description": null,
+      "source_ids": [],
+      "measured_at": null,
+      "project_id": "prj_1K9YJ33RKSBX9FFF",
+      "locked_status": "not_locked",
+      "uncertainty_justification": null
+    },
+    "dtp_1M4ZRD4V1SBXFZNJ": {
+      "id": "dtp_1M4ZRD4V1SBXFZNJ",
+      "supplier_reference_id": null,
+      "display_name": "100-year global warming potential CH4",
+      "type": "REPORTED",
+      "quantity": {
+        "magnitude": 27.9,
+        "unit": "dimensionless",
+        "standard_deviation": null
+      },
+      "description": null,
+      "source_ids": [],
+      "measured_at": null,
+      "project_id": "prj_1K9YJ33RKSBX9FFF",
+      "locked_status": "not_locked",
+      "uncertainty_justification": null
+    },
+    "dtp_1M4ZRFCT5SBXJ7ZV": {
+      "id": "dtp_1M4ZRFCT5SBXJ7ZV",
+      "supplier_reference_id": null,
+      "display_name": "100-year global warming potential CO",
+      "type": "REPORTED",
+      "quantity": {
+        "magnitude": 3,
+        "unit": "dimensionless",
+        "standard_deviation": null
+      },
+      "description": null,
+      "source_ids": [],
+      "measured_at": null,
+      "project_id": "prj_1K9YJ33RKSBX9FFF",
+      "locked_status": "not_locked",
+      "uncertainty_justification": null
+    },
+    "dtp_1KS4NS15QSBXAV5H": {
+      "id": "dtp_1KS4NS15QSBXAV5H",
+      "supplier_reference_id": null,
+      "display_name": "Rigid truck, 12-20 t GVW, Diesel, Africa, Asia, WTW",
+      "type": "STANDARD_PUBLISHED_VALUE",
+      "quantity": {
+        "magnitude": 0.23302,
+        "unit": "kgCO2e / kilometer / metric_ton",
+        "standard_deviation": null
+      },
+      "description": null,
+      "source_ids": [
+        "src_1KRGXYQ23SBXKP3E"
+      ],
+      "measured_at": null,
+      "project_id": "prj_1K9YJ33RKSBX9FFF",
+      "locked_status": "locked_library_datapoint",
+      "uncertainty_justification": null
+    },
+    "dtp_1KS4PCFNYSBXKGYK": {
+      "id": "dtp_1KS4PCFNYSBXKGYK",
+      "supplier_reference_id": null,
+      "display_name": "Air transport of goods, Belly freight (passenger aircraft), long haul (>1500km), Global, WTW",
+      "type": "STANDARD_PUBLISHED_VALUE",
+      "quantity": {
+        "magnitude": 0.936,
+        "unit": "kgCO2e / kilometer / metric_ton",
+        "standard_deviation": null
+      },
+      "description": null,
+      "source_ids": [
+        "src_1KRGXYQ23SBXKP3E"
+      ],
+      "measured_at": null,
+      "project_id": "prj_1K9YJ33RKSBX9FFF",
+      "locked_status": "locked_library_datapoint",
+      "uncertainty_justification": null
+    },
+    "dtp_1M4ZRWMTTSBXCNTB": {
+      "id": "dtp_1M4ZRWMTTSBXCNTB",
+      "supplier_reference_id": null,
+      "display_name": "Plastics general",
+      "type": "REPORTED",
+      "quantity": {
+        "magnitude": 2.9,
+        "unit": "kgCO2e / kilogram",
+        "standard_deviation": null
+      },
+      "description": null,
+      "source_ids": [],
+      "measured_at": null,
+      "project_id": "prj_1K9YJ33RKSBX9FFF",
+      "locked_status": "not_locked",
+      "uncertainty_justification": null
+    },
+    "dtp_1M4ZRKFTQSBX0VEF": {
+      "id": "dtp_1M4ZRKFTQSBX0VEF",
+      "supplier_reference_id": null,
+      "display_name": "Electricity grid emission factor",
+      "type": "REPORTED",
+      "quantity": {
+        "magnitude": 0.553,
+        "unit": "kgCO2e / kilowatt_hour",
+        "standard_deviation": null
+      },
+      "description": null,
+      "source_ids": [],
+      "measured_at": null,
+      "project_id": "prj_1K9YJ33RKSBX9FFF",
+      "locked_status": "not_locked",
+      "uncertainty_justification": null
+    },
+    "dtp_1M4ZRNN42SBXFEX3": {
+      "id": "dtp_1M4ZRNN42SBXFEX3",
+      "supplier_reference_id": null,
+      "display_name": "Electricity grid emission factor",
+      "type": "REPORTED",
+      "quantity": {
+        "magnitude": 0.71,
+        "unit": "kgCO2e / kilowatt_hour",
+        "standard_deviation": null
+      },
+      "description": null,
+      "source_ids": [],
+      "measured_at": null,
+      "project_id": "prj_1K9YJ33RKSBX9FFF",
+      "locked_status": "not_locked",
+      "uncertainty_justification": null
+    },
+    "dtp_1M4ZRYREXSBXEY4M": {
+      "id": "dtp_1M4ZRYREXSBXEY4M",
+      "supplier_reference_id": null,
+      "display_name": "Air passenger, Economy class, Long-haul (> 3700 km), GB, WTW",
+      "type": "STANDARD_PUBLISHED_VALUE",
+      "quantity": {
+        "magnitude": 0.14165,
+        "unit": "kgCO2e / kilometer",
+        "standard_deviation": null
+      },
+      "description": null,
+      "source_ids": [
+        "src_1M4ZRYREXSBXV98Z"
+      ],
+      "measured_at": null,
+      "project_id": "prj_1K9YJ33RKSBX9FFF",
+      "locked_status": "locked_library_datapoint",
+      "uncertainty_justification": null
+    },
+    "dtp_1M4ZS1ETESBX4VAJ": {
+      "id": "dtp_1M4ZS1ETESBX4VAJ",
+      "supplier_reference_id": null,
+      "display_name": "Passenger car, 2l+ engine, Diesel, GB, WTW",
+      "type": "STANDARD_PUBLISHED_VALUE",
+      "quantity": {
+        "magnitude": 0.25975,
+        "unit": "kgCO2e / kilometer",
+        "standard_deviation": null
+      },
+      "description": null,
+      "source_ids": [
+        "src_1M4ZRYREXSBXV98Z"
+      ],
+      "measured_at": null,
+      "project_id": "prj_1K9YJ33RKSBX9FFF",
+      "locked_status": "locked_library_datapoint",
+      "uncertainty_justification": null
+    }
+  }
+}

@@ -1,16 +1,11 @@
 import { getMetadataValue, SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import type { NomaEvidenceRole } from "@/lib/certification/removal-source-bindings";
-import {
-  BLOCKING_SUBMISSION_STATUSES,
-  type LocalSubmissionStatus,
-} from "@/lib/certification/status";
 import { readRemovalCandidateSources } from "./removal-snapshot-readers";
 import type { CandidateSourceDocument } from "./source-candidates";
 
-const SOURCE_FROZEN_SUBMISSION_STATUSES = new Set<LocalSubmissionStatus>(
-  BLOCKING_SUBMISSION_STATUSES,
-);
+const FROZEN_SNAPSHOT_STATUSES = new Set(["draft", "submitted", "accepted"]);
+
 const GENERATED_EVIDENCE_ROLES = new Set<NomaEvidenceRole>([
   "transport_evidence_ledger",
   "durability_evidence_ledger",
@@ -35,7 +30,7 @@ export function filterCandidateSourcesForSubmissionLifecycle(
 ): CandidateSourceDocument[] {
   if (
     !latestSubmission ||
-    !SOURCE_FROZEN_SUBMISSION_STATUSES.has(latestSubmission.status)
+    !FROZEN_SNAPSHOT_STATUSES.has(latestSubmission.status)
   ) {
     return candidates;
   }

@@ -1,11 +1,13 @@
+import { deleteTestApplication } from "./helpers/application-writers";
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
-import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { deleteApplication } from "@/data-access/applications";
+
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { applications, soilTemperatureMeasurements } from "@/db/schema/application";
 import {
@@ -57,6 +59,7 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Delete Test Feedstock ${runId}`,
       code: `FT-DEL-${runId}`,
@@ -66,7 +69,7 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ organizationId: TEST_ORG_ID, name: `Delete Test Facility ${runId}`, code: `FAC-DEL-${runId}` })
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, name: `Delete Test Facility ${runId}`, code: `FAC-DEL-${runId}` })
     .returning({ id: facilities.id });
 
   const [productionProcess] = await db
@@ -179,7 +182,7 @@ async function cleanupDeleteFixture(fixture: DeleteFixture): Promise<void> {
     }
 
     await deleteOutputDeliveryFixtures(tx, eq(deliveries.id, fixture.deliveryId));
-    await tx.delete(orders).where(eq(orders.id, fixture.orderId));
+    await deleteOutputOrderFixtures(tx, eq(orders.id, fixture.orderId));
     await deleteOutputProductFixtures(tx, eq(biocharProducts.id, fixture.productId));
     await tx
       .delete(productionRuns)
@@ -207,6 +210,7 @@ async function createApplicationRecord(
   },
 ): Promise<string> {
   const [application] = await insertOutputApplicationFixture(db, {
+      fieldSizeHa: 1,
       organizationId: TEST_ORG_ID,
       code: `AP-DEL-${suffix}`,
       deliveryId: fixture.deliveryId,
@@ -242,9 +246,6 @@ async function createCreditBatchRecord(
   fixture: DeleteFixture,
   runId: string,
   status: "draft" | "pending" | "verified" | "issued" | "rejected",
-  fields?: {
-    fDurableCalculated?: number | null;
-  },
 ): Promise<string> {
   const [creditBatch] = await db
     .insert(creditBatches)
@@ -258,8 +259,6 @@ async function createCreditBatchRecord(
       startDate: "2025-06-01",
       endDate: "2025-06-30",
       certifier: "isometric",
-      hToCorgRatio: 0.4,
-      fDurableCalculated: fields?.fDurableCalculated ?? null,
     })
     .returning({ id: creditBatches.id });
 
@@ -318,7 +317,6 @@ describe("deleteApplication", () => {
         fixture,
         runId,
         "pending",
-        { fDurableCalculated: 0.85 },
       );
 
       // Derived on read (issue #285): Σ member applications' applied tons —
@@ -328,7 +326,7 @@ describe("deleteApplication", () => {
       });
       expect(batchBefore?.appliedWeightTons).toBe(7);
 
-      await deleteApplication(makeTestOrgContext(TEST_USER_ID), deletedApplicationId);
+      await deleteTestApplication(makeTestOrgContext(TEST_USER_ID), deletedApplicationId, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", deletedApplicationId));
       fixture.applicationIds = fixture.applicationIds.filter((id) => id !== deletedApplicationId);
       fixture.measurementIds = [];
 
@@ -357,15 +355,12 @@ describe("deleteApplication", () => {
         skipPreview: true,
       });
       expect(batchAfter?.appliedWeightTons).toBe(2);
-      // fDurableCalculated is sample-derived (ADR 0013/0016) — an application
-      // delete no longer touches it.
-      expect(batchAfter?.fDurableCalculated).toBe(0.85);
     } finally {
       await cleanupDeleteFixture(fixture);
     }
   });
 
-  it("blocks deletion when the application is linked to an issued credit batch", async () => {
+  it("ignores the retired issued batch status when no Removal holds the application", async () => {
     const runId = `${crypto.randomUUID()}-issued`;
     const fixture = await createDeleteFixture(runId);
 
@@ -375,13 +370,10 @@ describe("deleteApplication", () => {
         biocharAppliedDryTons: 4.5,
         co2eStoredTonnes: 3.6,
       });
-      await createCreditBatchRecord(fixture, runId, "issued", {
-        fDurableCalculated: 0.85,
-      });
+      await createCreditBatchRecord(fixture, runId, "issued");
 
-      await expect(
-        deleteApplication(makeTestOrgContext(TEST_USER_ID), applicationId),
-      ).rejects.toThrow("Cannot delete application linked to verified or issued credit batches");
+      await deleteTestApplication(makeTestOrgContext(TEST_USER_ID), applicationId,
+        await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", applicationId));
 
       const [applicationStillPresent] = await db
         .select({ id: applications.id })
@@ -393,7 +385,7 @@ describe("deleteApplication", () => {
         .from(creditBatchProductionRuns)
         .where(eq(creditBatchProductionRuns.productionRunId, fixture.productionRunId));
 
-      expect(applicationStillPresent).toEqual({ id: applicationId });
+      expect(applicationStillPresent).toBeUndefined();
       expect(remainingLinks).toHaveLength(1);
     } finally {
       await cleanupDeleteFixture(fixture);

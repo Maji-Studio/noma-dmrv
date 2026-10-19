@@ -15,6 +15,7 @@ import type {
   RemovalReadiness,
   RemovalRequirementCheck,
 } from "@/lib/certification/readiness";
+import { legacyBlocker, type RemovalAdvisory, type RemovalBlocker } from "@/lib/certification/removal-blockers";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import type { DurabilityOption } from "@/schemas/credit-batches";
 import { allowsRemovalSubmission } from "./resume-state";
@@ -66,7 +67,11 @@ export interface SubmissionFacts {
   headline: string;
   /** One sentence under the headline. Names the next action when blocked. */
   detail: string;
-  blockers: string[];
+  /** Typed so each blocker can carry its repair link. */
+  blockers: RemovalBlocker[];
+  /** Non-blocking facts the template cannot carry, each with one repair link. */
+  advisories: RemovalAdvisory[];
+  /** Free-text notes that are not typed advisories. */
   warnings: string[];
 }
 
@@ -176,7 +181,7 @@ export function buildSubmissionFacts({
 
   let state: SubmitState = "ready";
   let headline = "Ready to submit";
-  let panelBlockers = blockers;
+  let panelBlockers = compilation?.removalBlockers ?? [];
   // Counts what passed, not what was evaluated: `actionChecks` also holds
   // checks a skipped upstream left unevaluable, which never "passed".
   let detail =
@@ -229,8 +234,11 @@ export function buildSubmissionFacts({
     state = "blocked";
     headline = "Cannot submit yet";
     detail = "Clear the blockers below.";
-    panelBlockers = readiness.reasons;
+    panelBlockers = readiness.reasons.map((reason) => legacyBlocker(reason));
   }
+
+  const advisories = compilation?.submissionAdvisories ?? ctx.submissionAdvisories ?? [];
+  const advisoryMessages = new Set(advisories.map((advisory) => advisory.message));
 
   return {
     batches,
@@ -261,10 +269,12 @@ export function buildSubmissionFacts({
     headline,
     detail,
     blockers: panelBlockers,
-    // The compiler and the context can reach the same advisory independently.
+    advisories,
+    // The compiler and the context can reach the same note independently. An
+    // advisory is shown typed, with its link, so its string is not repeated.
     warnings: [
       ...new Set([...(compilation?.warnings ?? []), ...ctx.submissionWarnings]),
-    ],
+    ].filter((warning) => !advisoryMessages.has(warning)),
   };
 }
 

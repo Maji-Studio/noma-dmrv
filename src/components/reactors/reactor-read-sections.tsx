@@ -6,7 +6,7 @@ import type { ReactorWithRelations } from "@/data-access/reactors";
 export function reactorSheetSections(reactor: ReactorWithRelations): DetailPanelSection[] {
   return [
     {
-      title: "Required information",
+      id: "identifier",
       fields: [
         { label: "Identifier", value: reactor.identifier },
       ],

@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 /**
  * ADR 0023 — a registry GHG statement's local identity is scoped per
  * (organization, facility), not globally.
@@ -19,6 +20,11 @@
  * tests/registry-boundary-ghg-statement.test.ts.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", async (importOriginal) =>
+  (await import("./fixtures/fake-registry")).fakeCredentialsModule(importOriginal),
+);
+
 import { eq, inArray, sql } from "drizzle-orm";
 
 vi.mock("@/lib/isometric/client", async (importOriginal) => {
@@ -60,7 +66,7 @@ import {
   installFakeRegistry,
   type FakeIsometricRegistry,
 } from "./fixtures/fake-registry";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 const OTHER_ORG_ID = "org_test_ghg_identity_other";
 const REPORTING_PERIOD_END = "2026-03-31";
@@ -86,7 +92,7 @@ async function createFacility(
   const runId = crypto.randomUUID().slice(0, 8);
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId,
       name: `GGS Identity ${label} ${runId}`,
       code: `FAC-GI-${runId}`,
@@ -259,12 +265,14 @@ describe("registry statement identity is scoped per (organization, facility)", (
     // The shared-project shape migration 0016 deliberately allows.
     await db.insert(certifierProjects).values([
       {
+        externalFacilityId: `fcl_test_${facilityA}`,
         organizationId: TEST_ORG_ID,
         facilityId: facilityA,
         provider: "isometric" as const,
         externalProjectId,
       },
       {
+        externalFacilityId: `fcl_test_${facilityB}`,
         organizationId: TEST_ORG_ID,
         facilityId: facilityB,
         provider: "isometric" as const,
@@ -348,6 +356,7 @@ describe("registry sync after a shared project is re-pointed", () => {
     const facilityA = await createFacility(TEST_ORG_ID, "Prev");
     const facilityB = await createFacility(TEST_ORG_ID, "Next");
     await db.insert(certifierProjects).values({
+      externalFacilityId: `fcl_test_${facilityA}`,
       organizationId: TEST_ORG_ID,
       facilityId: facilityA,
       provider: "isometric",
@@ -386,6 +395,7 @@ describe("registry sync after a shared project is re-pointed", () => {
       .delete(certifierProjects)
       .where(eq(certifierProjects.facilityId, facilityA));
     await db.insert(certifierProjects).values({
+      externalFacilityId: `fcl_test_${facilityB}`,
       organizationId: TEST_ORG_ID,
       facilityId: facilityB,
       provider: "isometric",
@@ -431,26 +441,25 @@ describe("registry sync after a shared project is re-pointed", () => {
     const neighbour = await createFacility(TEST_ORG_ID, "Neighbour");
     await db.insert(certifierProjects).values([
       {
+        externalFacilityId: `fcl_test_${owner}`,
         organizationId: TEST_ORG_ID,
         facilityId: owner,
         provider: "isometric" as const,
         externalProjectId,
       },
       {
+        externalFacilityId: `fcl_test_${neighbour}`,
         organizationId: TEST_ORG_ID,
         facilityId: neighbour,
         provider: "isometric" as const,
         externalProjectId,
       },
     ]);
-    const [removal] = await db
-      .insert(certifierRemovals)
-      .values({
+    const [removal] = await insertRemovalFixture(db, {
         organizationId: TEST_ORG_ID,
         facilityId: owner,
         completedOn: IN_WINDOW_COMPLETED_ON,
-      })
-      .returning({ id: certifierRemovals.id });
+      });
     const externalRemovalId = `rmv_ggs_sk_${runId}`;
     await db.insert(certificationSubmissions).values({
       organizationId: TEST_ORG_ID,

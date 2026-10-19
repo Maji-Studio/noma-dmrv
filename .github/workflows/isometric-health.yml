@@ -26,6 +26,11 @@ on:
     # same day. Minute 17 avoids the :00 cron pile-up on GH Actions.
     - cron: "17 9 * * *"
   workflow_dispatch:
+    inputs:
+      force_failure:
+        description: "Fail a probe job to verify GitHub issue notifications (skips health checks)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -37,6 +42,7 @@ env:
 
 jobs:
   ping:
+    if: ${{ !inputs.force_failure }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -57,9 +63,8 @@ jobs:
 
       - name: Setup pnpm
         id: pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         id: node
@@ -99,13 +104,6 @@ jobs:
       - name: Live template input coverage (fixture-selected templates)
         id: coverage
         if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.credentials.outcome == 'success' }}
-        # The shared client/logger validate the app env at import time. These
-        # inert values satisfy that schema; fixture mode never connects to a DB
-        # or starts auth. Real registry credentials still come from 1Password.
-        env:
-          DATABASE_URL: postgresql://unused:unused@127.0.0.1:1/unused
-          NEXT_PUBLIC_APP_URL: http://localhost:3100
-          BETTER_AUTH_SECRET: health-check-placeholder-not-an-auth-secret
         run: pnpm isometric:coverage-check -- --source=fixture
 
       # Plan §8 (Thread B2). Regenerates `certify.d.ts` from the pinned
@@ -166,3 +164,28 @@ jobs:
               exit 1
             fi
           done
+
+  notification-probe:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.force_failure }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - name: Force a health failure notification
+        run: exit 1
+
+  notify-failure:
+    needs: [ping, notification-probe]
+    if: >-
+      ${{ always() &&
+          ((github.event_name == 'schedule' &&
+            (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))) ||
+           (github.event_name == 'workflow_dispatch' && inputs.force_failure &&
+            contains(needs.*.result, 'failure'))) }}
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/health-failure-notify.yml
+    with:
+      workflow-file: isometric-health.yml
+      environment: staging / Isometric sandbox

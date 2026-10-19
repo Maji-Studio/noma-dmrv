@@ -1,7 +1,7 @@
 /**
  * Typed wrappers for the Isometric `MeasurementSample` API surface used by the
  * 200-year durability submission path (Phase E). Pure HTTP — no DB, no auth, no
- * ActionResult — mirroring `sensors.ts`. A measurement sample groups datapoints
+ * ActionResult. A measurement sample groups datapoints
  * (H/C_org per production batch, soil temperature per project area) under a
  * `MeasurementTypeKey`; the sequestration blueprint inputs then reference those
  * datapoints.
@@ -233,7 +233,7 @@ export async function createMeasurementSample(
 /**
  * Looks up a measurement sample by its noma-controlled supplier reference for
  * the reconcile path. The `GET /measurement_samples` endpoint exposes no
- * server-side reference filter (unlike `/sensors`), so this paginates and
+ * server-side reference filter, so this paginates and
  * filters client-side. Returns the match or null.
  */
 export function findMeasurementSampleBySupplierRef(

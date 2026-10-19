@@ -6,13 +6,17 @@
 
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { nullableNumericValue } from "@/lib/form-utils";
-import { formatLocalDateTime } from "@/lib/date-utils";
+import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
+import { EventTimeInput } from "@/components/forms/event-time-input";
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { FormField, FormInput, FormFileUpload, FormActions, FormSection, MoistureField } from "@/components/forms";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { FormTextarea } from "@/components/forms/form-textarea";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification-lock";
+import { Notice } from "@/components/ui/notice";
+import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
 import {
   productionSampleFormSchema,
   type ProductionSampleFormData,
@@ -25,6 +29,7 @@ import type { ProductionSampleWithRelations } from "@/data-access/production-sam
 
 interface ProductionSampleFormProps {
   productionRunId: string;
+  facilityId: string;
   sample?: ProductionSampleWithRelations;
   onSubmit: (data: ProductionSampleFormData) => Promise<void> | void;
   onCancel?: () => void;
@@ -37,6 +42,7 @@ interface ProductionSampleFormProps {
 
 export function ProductionSampleForm({
   productionRunId,
+  facilityId,
   sample,
   onSubmit,
   onCancel,
@@ -47,11 +53,15 @@ export function ProductionSampleForm({
   onRemoveDeferredAttachment,
 }: ProductionSampleFormProps) {
   const isEditMode = !!sample;
+  // A saved measurement inherits its run's lineage; once submitted its files cannot change.
+  const locked = useIsRecordCertificationLocked("production_sample", sample?.id);
+  const { timeZone, hint } = useFacilityClock(facilityId);
 
   const {
     register,
     handleSubmit,
     control,
+    trigger,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(productionSampleFormSchema),
@@ -59,7 +69,7 @@ export function ProductionSampleForm({
       const ts = sample?.timestamp ? new Date(sample.timestamp) : new Date();
       return {
       productionRunId,
-      timestamp: formatLocalDateTime(ts),
+      timestamp: ts.toISOString(),
       weightGrams: sample?.weightGrams ?? undefined,
       volumeMl: sample?.volumeMl ?? undefined,
       temperatureC: sample?.temperatureC ?? undefined,
@@ -80,22 +90,24 @@ export function ProductionSampleForm({
 
   return (
     <form className="space-y-20" onSubmit={onFormSubmit}>
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {/* Sample info */}
       <FormSection title="Sample info" divider={false}>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 gap-x-16 gap-y-16">
           <FormField
             id="timestamp"
             label="Timestamp"
+            cue={hint}
             error={errors.timestamp?.message}
             required
           >
-            <FormInput
+            <EventTimeInput
               id="timestamp"
-              type="datetime-local"
+              name="timestamp"
+              control={control}
+              timeZone={timeZone}
               disabled={isSubmitting}
-              error={!!errors.timestamp}
-              {...register("timestamp")}
             />
           </FormField>
 
@@ -111,6 +123,7 @@ export function ProductionSampleForm({
                 <EntitySelect
                   id="production-sample-sampledById"
                   entityType="operator"
+                  allowEdit
                   value={field.value ?? ""}
                   onChange={field.onChange}
                   placeholder="Select operator..."
@@ -139,9 +152,7 @@ export function ProductionSampleForm({
               placeholder="e.g. 250"
               disabled={isSubmitting}
               error={!!errors.weightGrams}
-              {...register("weightGrams", {
-                setValueAs: nullableNumericValue,
-              })}
+              {...register("weightGrams")}
             />
           </FormField>
 
@@ -157,9 +168,7 @@ export function ProductionSampleForm({
               placeholder="e.g. 500"
               disabled={isSubmitting}
               error={!!errors.volumeMl}
-              {...register("volumeMl", {
-                setValueAs: nullableNumericValue,
-              })}
+              {...register("volumeMl")}
             />
           </FormField>
 
@@ -175,9 +184,7 @@ export function ProductionSampleForm({
               placeholder="e.g. 550"
               disabled={isSubmitting}
               error={!!errors.temperatureC}
-              {...register("temperatureC", {
-                setValueAs: nullableNumericValue,
-              })}
+              {...register("temperatureC")}
             />
           </FormField>
         </div>
@@ -193,9 +200,7 @@ export function ProductionSampleForm({
             disabled={isSubmitting}
             placeholder="e.g. 5.2"
             step="any"
-            registration={register("moistureContentPercent", {
-              setValueAs: nullableNumericValue,
-            })}
+            registration={register("moistureContentPercent")}
           />
 
           <FormField
@@ -210,9 +215,7 @@ export function ProductionSampleForm({
               placeholder="e.g. 75.0"
               disabled={isSubmitting}
               error={!!errors.fixedCarbonPercent}
-              {...register("fixedCarbonPercent", {
-                setValueAs: nullableNumericValue,
-              })}
+              {...register("fixedCarbonPercent")}
             />
           </FormField>
 
@@ -228,9 +231,7 @@ export function ProductionSampleForm({
               placeholder="e.g. 15.0"
               disabled={isSubmitting}
               error={!!errors.volatileMatterPercent}
-              {...register("volatileMatterPercent", {
-                setValueAs: nullableNumericValue,
-              })}
+              {...register("volatileMatterPercent")}
             />
           </FormField>
 
@@ -246,9 +247,7 @@ export function ProductionSampleForm({
               placeholder="e.g. 4.8"
               disabled={isSubmitting}
               error={!!errors.ashContentPercent}
-              {...register("ashContentPercent", {
-                setValueAs: nullableNumericValue,
-              })}
+              {...register("ashContentPercent")}
             />
           </FormField>
         </div>
@@ -256,6 +255,7 @@ export function ProductionSampleForm({
 
       {/* Documentation */}
       <FormSection title="Documentation">
+        {locked && <Notice tone="info">{RECORD_FILES_LOCKED_MESSAGE}</Notice>}
 
         {isEditMode && (
           <FailedDeferredAttachments
@@ -263,35 +263,38 @@ export function ProductionSampleForm({
             onRetry={onRetryDeferredAttachment}
             onRemove={onRemoveDeferredAttachment}
             disabled={isSubmitting}
+            retryable={!locked}
           />
         )}
 
-        <FormField
-          id="attachments"
-          label="Attachments"
-          helperText="Upload measurement photos or records"
-        >
-          <FormFileUpload
+        {!locked && (
+          <FormField
             id="attachments"
-            accept="image/*,.pdf,.csv,.xlsx"
-            multiple
-            maxSizeMb={50}
-            disabled={isSubmitting}
-            {...(isEditMode
-              ? {
-                  entityType: "production_sample",
-                  entityId: sample.id,
-                  documentType: "lab_report" as const,
-                }
-              : {
-                  deferred: true,
-                  deferredFiles: deferredAttachments.attachments,
-                  onDeferredAdd: (files: File[]) =>
-                    deferredAttachments.add(files, "lab_report"),
-                  onDeferredRemove: deferredAttachments.remove,
-                })}
-          />
-        </FormField>
+            label="Attachments"
+            helperText="Upload measurement photos or records"
+          >
+            <FormFileUpload
+              id="attachments"
+              accept="image/*,.pdf,.csv,.xlsx"
+              multiple
+              maxSizeMb={50}
+              disabled={isSubmitting}
+              {...(isEditMode
+                ? {
+                    entityType: "production_sample",
+                    entityId: sample.id,
+                    documentType: "lab_report" as const,
+                  }
+                : {
+                    deferred: true,
+                    deferredFiles: deferredAttachments.attachments,
+                    onDeferredAdd: (files: File[]) =>
+                      deferredAttachments.add(files, "lab_report"),
+                    onDeferredRemove: deferredAttachments.remove,
+                  })}
+            />
+          </FormField>
+        )}
 
         <FormField id="notes" label="Notes" error={errors.notes?.message}>
           <FormTextarea

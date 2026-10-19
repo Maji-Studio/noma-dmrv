@@ -1,3 +1,5 @@
+import { supplierLocationFacilityDistances } from "@/db/schema";
+import { cleanupFeedstockFixtureParents } from "../helpers/feedstock-fixture";
 /**
  * Dashboard + credit-batch detail.
  *
@@ -5,9 +7,8 @@
  * with its Overview / Flow / Needs-attention views, the supporting row
  * (needs-attention list, recent activity, certification block), and the
  * Week / Month / All period toggle — all facility-scoped.
- * Credit batch detail: header KPI row (CO₂e stored · lab samples · runs),
- * certification checklist strip, read-only Details card, and the edit form
- * behind the header's "Edit batch" side sheet.
+ * Credit batch detail: certification journey, cohort fields, carbon estimate,
+ * readiness and lab samples, and the edit form in the unified view sheet.
  */
 import { test, expect } from "./fixtures/auth-fixtures";
 import {
@@ -52,13 +53,26 @@ test.describe("Dashboard (Flow Hero)", () => {
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
     await expect(page.getByText(seededData.facility.name).first()).toBeVisible();
 
+    await expect(page.getByRole("region", { name: "Getting started" })).toHaveCount(0);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
     // 4-stat KPI band
     const kpis = page.getByTestId("dashboard-kpis");
     await expect(kpis).toBeVisible();
     await expect(kpis.getByText("Feedstock processed")).toBeVisible();
     await expect(kpis.getByText("Biochar produced")).toBeVisible();
     await expect(kpis.getByText("Applied to soil")).toBeVisible();
-    await expect(kpis.getByText("CO₂e stored")).toBeVisible();
+    await expect(kpis.getByText("Estimated CO₂e stored", { exact: true })).toBeVisible();
+    // The popup has no tooltip role; count its exact text page-wide.
+    const hintCopies = page.getByText(
+      "Dry mass of biochar applied to soil at customer sites.",
+      { exact: true },
+    );
+    const closedCount = await hintCopies.count();
+    await kpis.getByRole("button", { name: "More about Applied to soil" }).click();
+    await expect(hintCopies).toHaveCount(closedCount + 1);
+    await page.keyboard.press("Escape");
+    await expect(hintCopies).toHaveCount(closedCount);
 
     // Traceability hero with the smart-view segmented control
     const hero = page.getByTestId("flow-hero");
@@ -100,7 +114,7 @@ test.describe("Dashboard (Flow Hero)", () => {
 
     try {
       await db.transaction(async (tx) => {
-        await tx.insert(facilities).values({
+        await tx.insert(facilities).values({ country: "Tanzania",  timezone: "UTC",
           id: facilityId,
           organizationId: DEC_ORG_ID,
           code: `E2E-DASH-GAP-${tag}`,
@@ -115,16 +129,16 @@ test.describe("Dashboard (Flow Hero)", () => {
           name: `E2E Dashboard Supplier ${tag}`,
         });
         await tx.insert(supplierLocations).values({
+          gpsLongitude: 35.3,
           id: supplierLocationId,
           organizationId: DEC_ORG_ID,
           supplierId,
-          name: "Incomplete source location",
+          name: "Source location awaiting default selection",
           country: "TZ",
           gpsLatitude: -6.8,
-          distanceFromFacilityKm: 25,
-          distanceSource: "manual",
-          isDefault: true,
+          isDefault: false,
         });
+        await tx.insert(supplierLocationFacilityDistances).values({ organizationId: DEC_ORG_ID, locationId: supplierLocationId, facilityId, distanceKm: 25, distanceSource: "manual" });
         await tx.insert(storageLocations).values({
           id: storageLocationId,
           organizationId: DEC_ORG_ID,
@@ -182,6 +196,14 @@ test.describe("Dashboard (Flow Hero)", () => {
         ],
       );
       await page.goto(`/dashboard?facility=${facilityId}`);
+      const strip = page.getByRole("region", { name: "Getting started" });
+      await expect(strip.getByRole("button", { name: "Register reactor" })).toBeVisible();
+      await strip.getByRole("button", { name: "Register reactor" }).click();
+      const reactorSheet = page.getByRole("dialog", { name: "Create reactor" });
+      await expect(reactorSheet).toBeVisible();
+      await reactorSheet.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(reactorSheet).not.toBeVisible();
+      await expect(page).toHaveURL(new RegExp(`/dashboard\\?facility=${facilityId}`));
       const structuralGaps = page.getByTestId("structural-gap-list");
       await expect(structuralGaps.getByText("Feedstock GPS missing")).toBeVisible();
       await expect(
@@ -201,7 +223,7 @@ test.describe("Dashboard (Flow Hero)", () => {
       await db.transaction(async (tx) => {
         await tx
           .update(supplierLocations)
-          .set({ gpsLongitude: 39.28 })
+          .set({ gpsLongitude: 39.28, isDefault: true })
           .where(eq(supplierLocations.id, supplierLocationId));
         await tx
           .update(transportLegs)
@@ -219,6 +241,7 @@ test.describe("Dashboard (Flow Hero)", () => {
     } finally {
       await db.delete(transportLegs).where(eq(transportLegs.id, transportLegId));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
+      await cleanupFeedstockFixtureParents(db);
       await db
         .delete(supplierLocations)
         .where(eq(supplierLocations.id, supplierLocationId));
@@ -257,8 +280,13 @@ test.describe("Credit batch view sheet (Phase 5)", () => {
     // Sentence case (docs/design-system.md › Label casing); `exact: true` is
     // case-sensitive, so this string must match the UI's casing exactly.
     await expect(sheet.getByText("Feedstock type", { exact: true })).toBeVisible();
-    // This fixture has no calculated preview, so the unavailable metric is hidden.
-    await expect(sheet.getByText("CO₂e stored", { exact: true })).toHaveCount(0);
+    // This fixture has no preview: no summary metric, and an explicit missing figure.
+    await expect(sheet.getByText("Estimated CO₂e stored", { exact: true })).toHaveCount(0);
+    const carbonEstimate = sheet.getByRole("region", {
+      name: "Carbon estimate, before project emissions",
+      exact: true,
+    });
+    await expect(carbonEstimate.getByText("Not available", { exact: true })).toBeVisible();
     await expect(sheet.getByText("Durability", { exact: true })).toBeVisible();
     await expect(
       sheet.getByText("Production runs", { exact: true }),

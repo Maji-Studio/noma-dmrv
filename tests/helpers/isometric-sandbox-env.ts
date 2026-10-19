@@ -1,7 +1,6 @@
 /**
  * Shared opt-in gate for the live Isometric sandbox suites:
  *   - tests/isometric-sandbox-health.integration.test.ts (read-only health checks)
- *   - tests/isometric-sandbox.integration.test.ts (write paths)
  *
  * Opt-in only: suites skip unless `RUN_ISOMETRIC_SANDBOX_TESTS=1`. Once opted
  * in, importing this module throws unless the sandbox env is complete, so a

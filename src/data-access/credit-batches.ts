@@ -1,14 +1,22 @@
+import { readRecordDependents } from './record-lock-dependents';
+import { assertRecordLockFields } from '@/lib/record-lock-fields';
+import { recordLocks } from '@/lib/record-lock';
+import { emissionEntries, emissionEntryValues } from "@/db/schema/emission-entries";
+import { toActivityEntityType } from "@/lib/activity-entity-type";
+import { recordActivityChange } from "./activity-events";
+import { recordMembershipActivity } from "./write-activity";
+import { nextVersion } from "./row-version";
 import {
   and,
   desc,
   eq,
-  inArray,
-  isNotNull,
   isNull,
+  inArray,
   sql,
 } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
+import { retryTransaction } from "@/lib/db/transaction-retry";
 import {
   creditBatchApplications,
   creditBatches,
@@ -18,7 +26,7 @@ import {
 import { facilities } from "@/db/schema/facilities";
 import { samples } from "@/db/schema/production";
 import { feedstockTypes } from "@/db/schema/feedstock";
-import { certifierRemovals } from "@/db/schema/certification";
+import { certifierRemovals, certifierProjects } from "@/db/schema/certification";
 import {
   DURABILITY_TIER_FALLBACK,
   type CreateCreditBatchData,
@@ -38,6 +46,7 @@ import {
   assertNoOverlappingCreditBatchCohort,
   lockCreditBatchDeclarationRuns,
   lockCreditBatchForUpdate,
+  prepareCreditBatchMembershipWrite,
   validateProductionRunIds,
 } from "./credit-batch-membership";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
@@ -51,9 +60,10 @@ import {
   type CreditBatchRollup,
 } from "./credit-batch-accounting";
 import { formatUtcDate } from "@/lib/date-utils";
-import { SafeError } from "@/lib/errors";
-import { assertUnsampledBatchEligibility } from "@/lib/certification/credit-batch-sampling";
-import { retireDocumentsForEntities } from "./documents";
+import { ActionConflictError, SafeError } from "@/lib/errors";
+import { conflictCode } from "@/lib/conflict-ref";
+import { isBatchEligible } from "@/lib/certifier-policy";
+import { retireDocumentsForEntities, retireTombstonedEmissionEntryDocuments } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import {
   assertCreditBatchSlicesAreUnassigned,
@@ -133,14 +143,24 @@ async function resolveCreditBatchCertifier(
   ctx: OrgContext,
   executor: DbTransaction,
   facilityId: string
-): Promise<"isometric" | null> {
+): Promise<{ provider: "isometric" | null; removalTemplateId: string | null }> {
+  requireOrgScope(ctx);
   const provider = await getFacilityCertifierWithExecutor(ctx, executor, facilityId);
   if (provider && provider !== "isometric") {
-    throw new SafeError(
-      "Credit batches currently support only Isometric certifier mappings."
-    );
+    throw new SafeError("Credit batches currently support only Isometric certifier mappings.");
   }
-  return provider === "isometric" ? "isometric" : null;
+  if (!provider) return { provider: null, removalTemplateId: null };
+  const [project] = await executor.select({ removalTemplateId: certifierProjects.defaultRemovalTemplateId })
+    .from(certifierProjects).where(and(
+      eq(certifierProjects.organizationId, ctx.organizationId), eq(certifierProjects.facilityId, facilityId),
+      eq(certifierProjects.provider, provider),
+    )).limit(1);
+  return { provider, removalTemplateId: project?.removalTemplateId ?? null };
+}
+
+export async function getCreditBatchCertifierForFacility(ctx: OrgContext, facilityId: string) {
+  requireOrgScope(ctx);
+  return getFacilityCertifierWithExecutor(ctx, db, facilityId);
 }
 
 /**
@@ -344,72 +364,70 @@ export async function createCreditBatch(
 ): Promise<SavedCreditBatch> {
   requireOrgScope(ctx);
   const { productionRunIds, ...batchData } = data;
-  let resolvedProductionRunIds = productionRunIds ?? [];
   const sampling = data.sampling ?? "sampled";
-  const hasIsometricCredentials =
-    sampling === "unsampled"
-      ? await hasCertifierCredentials(ctx, "isometric")
-      : false;
-
-  const created = await db.transaction(async (tx) => {
-    assertCreditBatchProductionWindow(batchData.startDate, batchData.endDate);
+  const created = await retryTransaction(() => db.transaction(async (tx) => {
+    // Mapping adoption takes UPDATE on the facility before checking its batches.
+    // Hold SHARE before resolving the provider so a concurrent link cannot be missed.
+    await tx.select({ id: facilities.id }).from(facilities)
+      .where(and(eq(facilities.id, batchData.facilityId), eq(facilities.organizationId, ctx.organizationId)))
+      .for("share");
+    const { provider: certifier, removalTemplateId } = await resolveCreditBatchCertifier(ctx, tx, batchData.facilityId);
+    assertCreditBatchProductionWindow(batchData.startDate, batchData.endDate, certifier);
 
     // ADR 0016 (amended 2026-07-04): the credit batch is the protocol production
     // batch (one feedstock), and the feedstock type is now DECLARED on the form,
     // not derived from the runs. Validate the member runs FIRST (existence,
     // facility, window, prior assignment), then GUARD that they all match the
     // declared feedstock type, then find-or-create the (facility, feedstock)
-    // production process this batch is a <=1-month slice of.
+    // production process this batch belongs to.
     const { runIds, lockedRuns } = await lockCreditBatchDeclarationRuns(
       ctx,
       tx,
       {
         facilityId: batchData.facilityId,
         feedstockTypeId: batchData.feedstockTypeId,
+        certifier,
         startDate: batchData.startDate,
         endDate: batchData.endDate,
-        requestedProductionRunIds: resolvedProductionRunIds,
+        requestedProductionRunIds: productionRunIds ?? [],
       },
     );
     await assertNoOverlappingCreditBatchCohort(ctx, tx, {
       facilityId: batchData.facilityId,
       feedstockTypeId: batchData.feedstockTypeId,
+      certifier,
       startDate: batchData.startDate,
       endDate: batchData.endDate,
     });
-    const certifier = await resolveCreditBatchCertifier(ctx, tx, batchData.facilityId);
     const feedstockTypeId = batchData.feedstockTypeId;
     const process = await findOrCreateProductionProcess(
       ctx,
-      { facilityId: batchData.facilityId, feedstockTypeId },
+      {
+        facilityId: batchData.facilityId,
+        feedstockTypeId,
+        startDate: new Date(formatUtcDate(batchData.startDate)),
+      },
       tx,
     );
-    resolvedProductionRunIds = runIds;
     await validateProductionRunIds(
       ctx,
       tx,
       runIds,
       batchData.facilityId,
+      certifier,
       batchData.startDate,
       batchData.endDate,
       undefined,
       lockedRuns,
     );
     await assertDeclaredFeedstockType(ctx, tx, runIds, feedstockTypeId);
-    if (sampling === "unsampled") {
-      if (certifier !== "isometric" || !hasIsometricCredentials) {
-        throw new SafeError(
-          "Unsampled credit batches require an Isometric connection for the organization and facility.",
-        );
-      }
-      const eligibility = await getMethodBEligibilityForProcess(
-        ctx,
-        process,
-        tx,
-        new Date(),
-      );
-      assertUnsampledBatchEligibility(eligibility);
-    }
+    const eligibility = isBatchEligible(sampling === "unsampled" ? {
+      sampling,
+      certifier,
+      hasIsometricCredentials: await hasCertifierCredentials(ctx, "isometric", tx),
+      methodBEligibility: await getMethodBEligibilityForProcess(ctx, process, tx),
+    } : { sampling });
+    if (!eligibility.eligible) throw new SafeError(eligibility.message);
 
     // Insert the credit batch
     const [batch] = await tx
@@ -423,22 +441,8 @@ export async function createCreditBatch(
         startDate: formatUtcDate(batchData.startDate),
         endDate: formatUtcDate(batchData.endDate),
         certifier,
+        removalTemplateId,
         sampling,
-        // durabilityOption is no longer a batch column — inherited from the
-        // facility (ADR 0021).
-        hToCorgRatio: batchData.hToCorgRatio ?? null,
-        meanRandomReflectancePercent:
-          batchData.meanRandomReflectancePercent ?? null,
-        stdRandomReflectance: batchData.stdRandomReflectance ?? null,
-        meanNonReactiveCarbonPercent:
-          batchData.meanNonReactiveCarbonPercent ?? null,
-        stdNonReactiveCarbonPercent:
-          batchData.stdNonReactiveCarbonPercent ?? null,
-        fDurableCalculated: batchData.fDurableCalculated ?? null,
-        bufferPoolPercent: batchData.bufferPoolPercent ?? null,
-        registry: batchData.registry || null,
-        value: batchData.value ?? null,
-        currency: batchData.currency,
         siteManagementNotes: batchData.siteManagementNotes || null,
       })
       .returning();
@@ -451,26 +455,23 @@ export async function createCreditBatch(
           productionRunId,
         }))
       );
-      // Back-fill the member runs' existing lab samples onto this batch so they
-      // characterise it (ADR 0016 — both links stay populated). The per-run
-      // unique constraint means these samples can't already belong elsewhere.
-      await tx
-        .update(samples)
-        .set({ creditBatchId: batch.id, updatedAt: new Date() })
-        .where(and(inArray(samples.productionRunId, runIds), eq(samples.organizationId, ctx.organizationId)));
     }
 
     await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
       creditBatchIds: [batch.id],
     });
 
-    return readCommittedCreditBatch(ctx, tx, batch);
-  });
+    const savedRunIds = await readMemberProductionRunIds(ctx, tx, batch.id);
+    await recordActivityChange(ctx, tx, {
+      entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
+      action: "created", source: "form",
+    }, null, { ...batch, production_runs: savedRunIds });
+    await recordMembershipActivity(ctx, tx, batch.id, [], savedRunIds, { recordBatchEvent: false });
 
-  return describeSavedCreditBatch(ctx, {
-    ...created,
-    memberProductionRunIds: resolvedProductionRunIds,
-  });
+    return { ...(await readCommittedCreditBatch(ctx, tx, batch)), memberProductionRunIds: runIds };
+  }));
+
+  return describeSavedCreditBatch(ctx, created);
 }
 
 /** What a create or update knows about its batch from the write itself. */
@@ -584,66 +585,21 @@ export async function updateCreditBatch(
     updateData.startDate = formatUtcDate(updateFields.startDate);
   if (updateFields.endDate !== undefined)
     updateData.endDate = formatUtcDate(updateFields.endDate);
-  // durabilityOption is inherited from the facility (ADR 0021) — no batch write.
-  if (updateFields.hToCorgRatio !== undefined)
-    updateData.hToCorgRatio = updateFields.hToCorgRatio;
-  if (updateFields.meanRandomReflectancePercent !== undefined)
-    updateData.meanRandomReflectancePercent =
-      updateFields.meanRandomReflectancePercent;
-  if (updateFields.stdRandomReflectance !== undefined)
-    updateData.stdRandomReflectance = updateFields.stdRandomReflectance;
-  if (updateFields.meanNonReactiveCarbonPercent !== undefined)
-    updateData.meanNonReactiveCarbonPercent =
-      updateFields.meanNonReactiveCarbonPercent;
-  if (updateFields.stdNonReactiveCarbonPercent !== undefined)
-    updateData.stdNonReactiveCarbonPercent =
-      updateFields.stdNonReactiveCarbonPercent;
-  if (updateFields.fDurableCalculated !== undefined)
-    updateData.fDurableCalculated = updateFields.fDurableCalculated;
-  if (updateFields.bufferPoolPercent !== undefined)
-    updateData.bufferPoolPercent = updateFields.bufferPoolPercent;
-  if (updateFields.registry !== undefined)
-    updateData.registry = updateFields.registry || null;
-  if (updateFields.value !== undefined) updateData.value = updateFields.value;
-  if (updateFields.currency !== undefined)
-    updateData.currency = updateFields.currency;
   if (updateFields.siteManagementNotes !== undefined)
     updateData.siteManagementNotes = updateFields.siteManagementNotes || null;
 
-  const committed = await db.transaction(async (tx) => {
-    // Discover the current membership without taking a batch/removal lock, then
-    // lock old + prospective + auto-discovered members in one sorted run-row
-    // batch. Every writer follows run -> process scope -> batch ->
-    // removal/certification order; production-run reopen also locks the run
-    // before checking membership.
-    const currentProductionRunIds = shouldRefreshMembership
-      ? await readMemberProductionRunIds(ctx, tx, id)
-      : [];
-    const [declarationSnapshot] = shouldRefreshMembership
-      ? await tx
-          .select({
-            facilityId: creditBatches.facilityId,
-            feedstockTypeId: creditBatches.feedstockTypeId,
-            startDate: creditBatches.startDate,
-            endDate: creditBatches.endDate,
-          })
-          .from(creditBatches)
-          .where(and(
-            eq(creditBatches.id, id),
-            eq(creditBatches.organizationId, ctx.organizationId),
-          ))
-          .limit(1)
-      : [undefined];
-    if (shouldRefreshMembership && !declarationSnapshot) {
-      throw new SafeError("Credit batch not found");
-    }
+  const committed = await retryTransaction(() => db.transaction(async (tx) => {
+    const attemptUpdateData = { ...updateData };
+    const prepared = await prepareCreditBatchMembershipWrite(ctx, tx, id, updateFields, shouldRefreshMembership);
+    const { snapshot: declarationSnapshot, currentProductionRunIds } = prepared;
 
     let resolvedProductionRunIds = productionRunIds;
     let lockedMembershipRuns = [] as Awaited<
       ReturnType<typeof lockCreditBatchDeclarationRuns>
     >["lockedRuns"];
-    if (shouldRefreshMembership && declarationSnapshot) {
+    if (shouldRefreshMembership) {
       const declaration = await lockCreditBatchDeclarationRuns(ctx, tx, {
+        certifier: prepared.certifier,
         facilityId:
           updateFields.facilityId ?? declarationSnapshot.facilityId,
         feedstockTypeId:
@@ -655,54 +611,25 @@ export async function updateCreditBatch(
         requestedProductionRunIds:
           productionRunIds ?? currentProductionRunIds,
         currentProductionRunIds,
+        matchingProductionRunIds: prepared.matchingProductionRunIds,
       });
       resolvedProductionRunIds = declaration.runIds;
       lockedMembershipRuns = declaration.lockedRuns;
     }
 
     const existingBatch = await lockCreditBatchForUpdate(ctx, tx, id, {
+      expectedVersion: data.expectedVersion,
       facilityId: updateFields.facilityId,
       feedstockTypeId: updateFields.feedstockTypeId,
-    });
+    }, prepared);
 
-    if (shouldRefreshMembership) {
-      if (
-        !declarationSnapshot ||
-        existingBatch.facilityId !== declarationSnapshot.facilityId ||
-        existingBatch.feedstockTypeId !==
-          declarationSnapshot.feedstockTypeId ||
-        existingBatch.startDate !== declarationSnapshot.startDate ||
-        existingBatch.endDate !== declarationSnapshot.endDate
-      ) {
-        throw new SafeError(
-          "The credit batch cohort changed while this update was being prepared. Refresh and retry.",
-        );
-      }
-      const lockedCurrentMembership = await tx
-        .select({ productionRunId: creditBatchProductionRuns.productionRunId })
-        .from(creditBatchProductionRuns)
-        .where(and(
-          eq(creditBatchProductionRuns.creditBatchId, id),
-          eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
-        ));
-      const discoveredIds = [...currentProductionRunIds].sort();
-      const lockedIds = lockedCurrentMembership
-        .map((link) => link.productionRunId)
-        .sort();
-      if (
-        discoveredIds.length !== lockedIds.length ||
-        discoveredIds.some((runId, index) => runId !== lockedIds[index])
-      ) {
-        throw new SafeError(
-          "Credit batch membership changed while this update was being prepared. Refresh and retry.",
-        );
-      }
-    }
-
-    await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "update");
+    await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "update", existingBatch.lockedRemovals);
     if (shouldRefreshMembership) {
       await assertCreditBatchSlicesAreUnassigned(ctx, tx, id);
     }
+    assertRecordLockFields(recordLocks.creditBatch({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: 'creditBatch', entityId: id }) }),
+      { ...existingBatch, productionRunIds: currentProductionRunIds },
+      { ...updateFields, startDate: updateData.startDate, endDate: updateData.endDate, productionRunIds });
 
     const targetFacilityId = updateFields.facilityId ?? existingBatch.facilityId;
     // Resolve the effective date window after update
@@ -713,19 +640,25 @@ export async function updateCreditBatch(
       ? formatUtcDate(updateFields.endDate)
       : existingBatch.endDate;
 
-    assertCreditBatchProductionWindow(effectiveStartDate, effectiveEndDate);
+    // Preparation reads the provider before facility locks to discover runs.
+    // Re-resolve after those locks: a concurrent mapping change may have won.
+    const targetCertifier = await resolveCreditBatchCertifier(ctx, tx, targetFacilityId);
+    assertCreditBatchProductionWindow(effectiveStartDate, effectiveEndDate, targetCertifier.provider);
 
     const effectiveFeedstockTypeId =
       updateFields.feedstockTypeId ?? existingBatch.feedstockTypeId;
     await assertNoOverlappingCreditBatchCohort(ctx, tx, {
       facilityId: targetFacilityId,
       feedstockTypeId: effectiveFeedstockTypeId,
+      certifier: targetCertifier.provider,
       startDate: effectiveStartDate,
       endDate: effectiveEndDate,
       excludeCreditBatchId: id,
     });
 
-    updateData.certifier = await resolveCreditBatchCertifier(ctx, tx, targetFacilityId);
+    attemptUpdateData.certifier = targetCertifier.provider;
+    const facilityChanged = targetFacilityId !== existingBatch.facilityId;
+    if (facilityChanged) attemptUpdateData.removalTemplateId = targetCertifier.removalTemplateId;
 
     if (resolvedProductionRunIds !== undefined) {
       await validateProductionRunIds(
@@ -733,6 +666,7 @@ export async function updateCreditBatch(
         tx,
         resolvedProductionRunIds,
         targetFacilityId,
+        targetCertifier.provider,
         effectiveStartDate,
         effectiveEndDate,
         id,
@@ -744,24 +678,27 @@ export async function updateCreditBatch(
 
     // ADR 0016 (amended 2026-07-04): feedstock type is DECLARED, not derived.
     // Re-guard the membership against the effective declared type + refresh the
-    // (facility, feedstock) production process whenever the runs, the facility,
-    // or the declared type changes — any of the three can shift which process
-    // this batch belongs to, or make the member runs mismatch the declaration.
+    // production process using the effective start date when the cohort changes.
+    // Sampling stays fixed at creation, including moves across process epochs.
     const feedstockRunIds = resolvedProductionRunIds;
     if (feedstockRunIds !== undefined) {
       await assertDeclaredFeedstockType(ctx, tx, feedstockRunIds, effectiveFeedstockTypeId);
       const process = await findOrCreateProductionProcess(
         ctx,
-        { facilityId: targetFacilityId, feedstockTypeId: effectiveFeedstockTypeId },
+        {
+          facilityId: targetFacilityId,
+          feedstockTypeId: effectiveFeedstockTypeId,
+          startDate: new Date(effectiveStartDate),
+        },
         tx,
       );
-      updateData.feedstockTypeId = effectiveFeedstockTypeId;
-      updateData.productionProcessId = process.id;
+      attemptUpdateData.feedstockTypeId = effectiveFeedstockTypeId;
+      attemptUpdateData.productionProcessId = process.id;
     }
 
     const [updatedBatch] = await tx
       .update(creditBatches)
-      .set(updateData)
+      .set({ ...attemptUpdateData, version: nextVersion(creditBatches.version) })
       .where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)))
       .returning();
     if (!updatedBatch) {
@@ -786,50 +723,25 @@ export async function updateCreditBatch(
         );
       }
 
-      // Re-point this batch's sample links to match the new member-run set
-      // (ADR 0016): unlink samples whose run left the batch, then link the
-      // current member runs' samples. The per-run unique constraint guarantees a
-      // member run's samples can't already belong to another batch.
-      // Scope the unlink to RUN-BACKED samples — a commingled/batch-level sample
-      // linked directly with a null productionRunId has no run to leave, so it
-      // must survive a membership edit (it'd otherwise vanish from durability
-      // readiness, aggregation, and the source candidate walk).
-      await tx
-        .update(samples)
-        .set({ creditBatchId: null, updatedAt: new Date() })
-        .where(
-          and(
-            eq(samples.creditBatchId, id),
-            isNotNull(samples.productionRunId),
-            eq(samples.organizationId, ctx.organizationId),
-          ),
-        );
-      if (
-        resolvedProductionRunIds &&
-        resolvedProductionRunIds.length > 0
-      ) {
-        await tx
-          .update(samples)
-          .set({ creditBatchId: id, updatedAt: new Date() })
-          .where(and(inArray(samples.productionRunId, resolvedProductionRunIds), eq(samples.organizationId, ctx.organizationId)));
-      }
-
       await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
         creditBatchIds: [id],
       });
     }
 
-    // The member set after this write: the refreshed one when membership was
-    // touched, otherwise the untouched links read under the same transaction.
-    const memberProductionRunIds = shouldRefreshMembership
-      ? (resolvedProductionRunIds ?? [])
-      : await readMemberProductionRunIds(ctx, tx, id);
+    const memberProductionRunIds = await readMemberProductionRunIds(ctx, tx, id);
+    const membershipChanged = shouldRefreshMembership && await recordMembershipActivity(
+      ctx, tx, id, currentProductionRunIds, memberProductionRunIds, { before: existingBatch.row, after: updatedBatch },
+    );
+    if (!membershipChanged) await recordActivityChange(ctx, tx, {
+      entityType: toActivityEntityType("credit_batch"), entityId: id, creditBatchId: id,
+      action: "updated", source: "form",
+    }, existingBatch.row, updatedBatch);
 
     return {
       ...(await readCommittedCreditBatch(ctx, tx, updatedBatch)),
       memberProductionRunIds,
     };
-  });
+  }));
 
   return describeSavedCreditBatch(ctx, committed);
 }
@@ -837,28 +749,49 @@ export async function updateCreditBatch(
 /**
  * Delete a credit batch and its production-run membership links.
  */
-export async function deleteCreditBatch(ctx: OrgContext, id: string): Promise<void> {
+export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVersion: number): Promise<void> {
   requireOrgScope(ctx);
-  await db.transaction(async (tx) => {
-    // Lock the batch so a concurrent regroup/submit can't move it mid-delete.
-    const [batch] = await tx
-      .select({ id: creditBatches.id })
-      .from(creditBatches)
-      .where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)))
-      .for("update")
-      .limit(1);
+  await retryTransaction(() => db.transaction(async (tx) => {
+    const batch = await lockCreditBatchForUpdate(ctx, tx, id, { expectedVersion });
 
-    if (!batch) {
-      throw new SafeError("Credit batch not found");
+    await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "delete", batch.lockedRemovals);
+
+    const [sample] = await tx.select({ id: samples.id, code: samples.sampleCode }).from(samples)
+      .where(and(eq(samples.creditBatchId, id), eq(samples.organizationId, ctx.organizationId))).limit(1);
+    if (sample) {
+      throw new ActionConflictError(
+        `Credit batch ${batch.code} has Samples. Move them to another credit batch or delete them, then delete the batch.`,
+        { entity: "sample", id: sample.id, code: conflictCode(sample.code) },
+      );
     }
 
-    await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "delete");
+    const entries = await tx.select().from(emissionEntries)
+      .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.creditBatchId, id)))
+      .for("update");
+    if (entries.some(entry => !entry.deletedAt || entry.sendReservedBySubmissionId ||
+      entry.sentByRemovalId || entry.confirmedForRemovalId)) {
+      throw new ActionConflictError(
+        "Delete this credit batch's emissions entries before deleting it.",
+        { entity: "credit_batch", id, code: conflictCode(batch.code) },
+      );
+    }
+    const entryIds = entries.map(entry => entry.id);
+    if (entryIds.length) {
+      await retireTombstonedEmissionEntryDocuments(ctx, tx, entryIds);
+      await tx.delete(emissionEntryValues).where(and(
+        eq(emissionEntryValues.organizationId, ctx.organizationId), inArray(emissionEntryValues.entryId, entryIds),
+      ));
+      await tx.delete(emissionEntries).where(and(
+        eq(emissionEntries.organizationId, ctx.organizationId), inArray(emissionEntries.id, entryIds),
+      ));
+    }
 
-    // Clear app-layer sample links, then delete membership links and the batch.
-    await tx
-      .update(samples)
-      .set({ creditBatchId: null, updatedAt: new Date() })
-      .where(and(eq(samples.creditBatchId, id), eq(samples.organizationId, ctx.organizationId)));
+    await recordMembershipActivity(ctx, tx, id, await readMemberProductionRunIds(ctx, tx, id), [], { recordBatchEvent: false });
+    await recordActivityChange(ctx, tx, {
+      entityType: toActivityEntityType("credit_batch"), entityId: id, creditBatchId: id,
+      action: "deleted", source: "form",
+    }, batch.row, null);
+
     await tx
       .delete(creditBatchProductionRuns)
       .where(and(eq(creditBatchProductionRuns.creditBatchId, id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)));
@@ -867,8 +800,8 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string): Promise<vo
 
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "credit_batch", entityId: id },
-    ]);
-  });
+    ], "form");
+  }));
   await processPendingStorageObjectDeletions(ctx);
 }
 

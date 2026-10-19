@@ -1,14 +1,17 @@
+import { invalidateRecordedTransport } from "./transport-distance-query-keys";
 /**
  * Feedstock React Query Hooks
  * Client-side state management for the unified delivery + bin allocation workflow.
  */
 
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   FeedstockFilterData,
   FeedstockStatsFilterData,
   CreateFeedstockData,
   UpdateFeedstockData,
+  DeleteFeedstockData,
 } from "@/schemas/feedstocks";
 import type {
   FeedstockWithRelations,
@@ -22,11 +25,11 @@ import {
   updateFeedstockFn,
   deleteFeedstockFn,
 } from "@/fn/feedstocks";
-import { throwActionError } from "@/lib/stale-version";
+import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { storageLocationKeys } from "./use-storage-locations";
-import type { MutationCallbacks } from "./types";
+import { unwrap, type MutationCallbacks } from "./types";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
-import { certificationKeys } from "./use-certification";
+import { invalidateCertificationReadiness } from "./use-certification";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
 
@@ -58,11 +61,7 @@ export function useFeedstocks(
 ) {
   return useQuery({
     queryKey: feedstockKeys.list(filters),
-    queryFn: async () => {
-      const result = await getFeedstocksFn(filters);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getFeedstocksFn(filters)),
     staleTime: 30000,
     enabled: options?.enabled,
   });
@@ -71,13 +70,22 @@ export function useFeedstocks(
 export function useFeedstock(feedstockId: string, enabled = true) {
   return useQuery({
     queryKey: feedstockKeys.detail(feedstockId),
-    queryFn: async () => {
-      const result = await getFeedstockByIdFn(feedstockId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getFeedstockByIdFn(feedstockId)),
     enabled: enabled && !!feedstockId,
     staleTime: 30000,
+  });
+}
+
+/**
+ * Reads one feedstock fresh, for a sheet that must reopen its form on the
+ * record's new version (after a deliberate refresh from location).
+ */
+export function useFetchFeedstock() {
+  const queryClient = useQueryClient();
+  return (feedstockId: string) => queryClient.fetchQuery({
+    queryKey: feedstockKeys.detail(feedstockId),
+    queryFn: async () => unwrap(await getFeedstockByIdFn(feedstockId)),
+    staleTime: 0,
   });
 }
 
@@ -87,11 +95,7 @@ export function useFeedstockStats(
 ) {
   return useQuery({
     queryKey: feedstockKeys.stats(scope),
-    queryFn: async () => {
-      const result = await getFeedstockStatsFn(scope);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getFeedstockStatsFn(scope)),
     staleTime: 30000,
     enabled: options?.enabled,
   });
@@ -105,11 +109,8 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: CreateFeedstockData) => {
-      const result = await createFeedstockFn(data);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.feedstock),
+    mutationFn: async (data: CreateFeedstockData) => unwrap(await createFeedstockFn(data)),
     onSuccess: async (data, variables) => {
       for (const feedstock of data.feedstocks) {
         queryClient.setQueryData(feedstockKeys.detail(feedstock.id), feedstock);
@@ -123,9 +124,10 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void invalidateRecordedTransport(queryClient);
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void invalidateCertificationReadiness(queryClient);
       invalidateOnboardingProgress(queryClient, variables.facilityId);
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -137,6 +139,7 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.feedstock),
     mutationFn: async (data: UpdateFeedstockData) => {
       const result = await updateFeedstockFn(data);
       // Keeps an expected-version refusal typed so the open edit form can show
@@ -154,22 +157,24 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void invalidateRecordedTransport(queryClient);
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void invalidateCertificationReadiness(queryClient);
       callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
   });
 }
 
-export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, string>) {
+export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, DeleteFeedstockData>) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (feedstockId: string) => {
-      const result = await deleteFeedstockFn({ feedstockId });
-      if (!result.success) throw new Error(result.error);
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.feedstock),
+    mutationFn: async (data: DeleteFeedstockData) => {
+      const result = await deleteFeedstockFn(data);
+      if (!result.success) throwActionError(result);
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: feedstockKeys.lists() });
@@ -180,11 +185,18 @@ export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, string>) 
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void invalidateRecordedTransport(queryClient);
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void invalidateCertificationReadiness(queryClient);
       callbacks?.onSuccess?.(data, variables);
     },
-    onError: callbacks?.onError,
+    onError: (error, variables) => {
+      if (error instanceof StaleVersionError) {
+        queryClient.invalidateQueries({ queryKey: feedstockKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: feedstockKeys.detail(variables.feedstockId) });
+      }
+      return callbacks?.onError?.(error, variables);
+    },
   });
 }

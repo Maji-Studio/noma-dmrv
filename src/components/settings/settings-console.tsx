@@ -18,13 +18,17 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import {
   BuildingsIcon,
+  KeyIcon,
   SlidersHorizontalIcon,
+  TruckIcon,
   UsersIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { PageHeader, SettingsRail, type SettingsSectionMeta } from "@/components/ui";
 import {
   SETTINGS_DEFAULTS_HREF,
+  SETTINGS_API_KEYS_HREF,
   SETTINGS_MEMBERS_HREF,
+  SETTINGS_VEHICLES_AND_CREW_HREF,
 } from "@/lib/settings/links";
 
 /** A rail plus a form pane stops being readable past roughly this width. */
@@ -42,6 +46,8 @@ interface SettingsConsoleProps {
   subtitle: string;
   /** Owner/Admin. Gates the Defaults category — it is Owner/Admin-only. */
   canManageDefaults: boolean;
+  /** Live Owner/Admin membership only. Platform status grants no override. */
+  canManageApiKeys: boolean;
   /** Adds the cross-tenant organization directory to the rail. */
   isPlatformAdmin: boolean;
   children: ReactNode;
@@ -53,6 +59,7 @@ export function SettingsConsole({
   access,
   subtitle,
   canManageDefaults,
+  canManageApiKeys,
   isPlatformAdmin,
   children,
 }: SettingsConsoleProps) {
@@ -75,6 +82,26 @@ export function SettingsConsole({
       tier: "organization",
       label: "Defaults",
       icon: SlidersHorizontalIcon,
+    });
+  }
+
+  // Every member records the deliveries and runs these appear on, so every
+  // member can manage them, as they can create them from a picker.
+  sections.push({
+    key: SETTINGS_VEHICLES_AND_CREW_HREF,
+    href: SETTINGS_VEHICLES_AND_CREW_HREF,
+    tier: "organization",
+    label: "Vehicles and crew",
+    icon: TruckIcon,
+  });
+
+  if (canManageApiKeys || isPlatformAdmin) {
+    sections.push({
+      key: SETTINGS_API_KEYS_HREF,
+      href: SETTINGS_API_KEYS_HREF,
+      tier: "organization",
+      label: "API keys",
+      icon: KeyIcon,
     });
   }
 

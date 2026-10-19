@@ -1,6 +1,8 @@
+import { feedstockFixtureValues } from "./feedstock-fixture";
+import { TEST_SITE_POSITION } from "./test-org";
 import { randomUUID } from 'node:crypto';
 import type { db as database } from '@/db';
-import { facilities, formulations, formulationIngredients, feedstockTypes, storageLocations, reactors, productionRuns, customers, users, organizations } from '@/db/schema';
+import { facilities, formulations, formulationIngredients, feedstockTypes, storageLocations, reactors, productionRuns, feedstocks, productionRunFeedstocks, productionRunFeedstockDraws, customers, customerLocations, users, organizations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 
 /** Real DB parents shared by FIFO integration and browser fixtures. No auth bypass. */
@@ -11,7 +13,7 @@ export async function seedOutputStockParents(db: typeof database, options: { org
   if (!options.organizationId) await db.insert(organizations).values({ id: organizationId, name: `E2E FIFO ${tag}`, slug: `e2e-fifo-${tag.toLowerCase()}` });
   if (!options.userId) await db.insert(users).values({ id: userId, name: 'E2E FIFO operator', email: `fifo-${tag.toLowerCase()}@e2e.local`, emailVerified: true });
   const ctx: OrgContext = { organizationId, userId, orgRole: 'owner', isPlatformAdmin: false };
-  const [facility] = await db.insert(facilities).values({ organizationId, code: `E2E-FIFO-F-${tag}`, name: `E2E FIFO ${tag}` }).returning();
+  const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId, code: `E2E-FIFO-F-${tag}`, name: `E2E FIFO ${tag}` }).returning();
   const [recipe] = await db.insert(formulations).values({ organizationId, code: `E2E-FIFO-M-${tag}`, name: `E2E FIFO mix ${tag}`, biocharRatio: 0.8 }).returning();
   const [pure] = await db.insert(formulations).values({ organizationId, code: `E2E-FIFO-P-${tag}`, name: `E2E Pure ${tag}`, biocharRatio: 1 }).returning();
   const [ingredientType] = await db.insert(feedstockTypes).values({ organizationId, code: `E2E-FIFO-I-${tag}`, name: `E2E Ingredient ${tag}`, category: 'compost', usage: 'blend' }).returning();
@@ -19,10 +21,18 @@ export async function seedOutputStockParents(db: typeof database, options: { org
   const [source] = await db.insert(storageLocations).values({ organizationId, facilityId: facility.id, code: `E2E-FIFO-S-${tag}`, name: `E2E Source ${tag}`, type: 'biochar_bin' }).returning();
   const [bin] = await db.insert(storageLocations).values({ organizationId, facilityId: facility.id, formulationId: recipe.id, code: `E2E-FIFO-B-${tag}`, name: `E2E Mix bin ${tag}`, type: 'product_bin' }).returning();
   const [reactor] = await db.insert(reactors).values({ organizationId, facilityId: facility.id, code: `E2E-FIFO-R-${tag}`, identifier: `E2E Reactor ${tag}`, reactorType: 'auger' }).returning();
+  const [fuelType] = await db.insert(feedstockTypes).values({ organizationId, code: `E2E-FIFO-FUEL-${tag}`, name: `E2E Fuel ${tag}`, category: 'forestry', usage: 'pyrolysis' }).returning();
+  const [fuelBin] = await db.insert(storageLocations).values({ organizationId, facilityId: facility.id, feedstockTypeId: fuelType.id,
+    code: `E2E-FIFO-FUEL-${tag}`, name: `E2E Fuel ${tag}`, type: 'feedstock_bin' }).returning();
+  const [intake] = await db.insert(feedstocks).values(await feedstockFixtureValues(db, { organizationId, facilityId: facility.id, feedstockTypeId: fuelType.id,
+    storageLocationId: fuelBin.id, code: `E2E-FIFO-FS-${tag}`, status: 'complete', massWetKg: 6000, moistureContentPercent: 10, massDryKg: 5400 })).returning();
   const runs = await db.insert(productionRuns).values([
-    { organizationId, facilityId: facility.id, reactorId: reactor.id, code: `E2E-FIFO-R1-${tag}`, status: 'complete' as const, startTime: new Date('2026-09-09T08:00:00Z'), endTime: new Date('2026-09-09T12:00:00Z'), biocharStorageLocationId: source.id, biocharOutputKg: 1000, biocharMoisturePercent: 10, biocharDryMassKg: 900 },
-    { organizationId, facilityId: facility.id, reactorId: reactor.id, code: `E2E-FIFO-R2-${tag}`, status: 'complete' as const, startTime: new Date('2026-09-11T08:00:00Z'), endTime: new Date('2026-09-11T12:00:00Z'), biocharStorageLocationId: source.id, biocharOutputKg: 750, biocharMoisturePercent: 20, biocharDryMassKg: 600 },
+    { organizationId, facilityId: facility.id, reactorId: reactor.id, code: `E2E-FIFO-R1-${tag}`, status: 'complete' as const, feedstockWetMassKg: 3000, feedstockMoisturePercent: 10, feedstockMassDryKg: 2700, startTime: new Date('2026-09-09T08:00:00Z'), endTime: new Date('2026-09-09T12:00:00Z'), biocharStorageLocationId: source.id, biocharOutputKg: 1000, biocharMoisturePercent: 10, biocharDryMassKg: 900 },
+    { organizationId, facilityId: facility.id, reactorId: reactor.id, code: `E2E-FIFO-R2-${tag}`, status: 'complete' as const, feedstockWetMassKg: 3000, feedstockMoisturePercent: 10, feedstockMassDryKg: 2700, startTime: new Date('2026-09-11T08:00:00Z'), endTime: new Date('2026-09-11T12:00:00Z'), biocharStorageLocationId: source.id, biocharOutputKg: 750, biocharMoisturePercent: 20, biocharDryMassKg: 600 },
   ]).returning();
+  await db.insert(productionRunFeedstockDraws).values(runs.map(run => ({ organizationId, productionRunId: run.id, storageLocationId: fuelBin.id, wetMassKg: 3000 })));
+  await db.insert(productionRunFeedstocks).values(runs.map(run => ({ organizationId, productionRunId: run.id, feedstockId: intake.id, wetMassUsedKg: 3000 })));
   const [customer] = await db.insert(customers).values({ organizationId, code: `E2E-FIFO-C-${tag}`, name: `E2E Customer ${tag}` }).returning();
-  return { tag, ctx, facility, recipe, pure, ingredientType, ingredient, source, bin, runs, customer };
+  const [location] = await db.insert(customerLocations).values({ ...TEST_SITE_POSITION, country: "CH", organizationId, customerId: customer.id, name: `E2E Site ${tag}`, }).returning();
+  return { location, tag, ctx, facility, recipe, pure, ingredientType, ingredient, source, bin, runs, customer };
 }

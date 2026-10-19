@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   AGGREGATED_PRODUCTION_DATA_KEYS,
   CERTIFY_FIELD_REGISTRY,
+  resolveCertifyFieldInputTuples,
+  isCertifyFormField,
 } from "@/lib/certification/certify-field-registry";
-import { INPUT_MAPPING } from "@/lib/isometric/transformers/datapoint";
+import {
+  INPUT_MAPPING,
+  lookupInputMapping,
+} from "@/lib/isometric/transformers/datapoint";
 
 function inputMappingSources(): Set<string> {
   const sources = new Set<string>();
@@ -39,6 +44,16 @@ describe("CERTIFY_FIELD_REGISTRY drift guard", () => {
     ).toEqual([]);
   });
 
+  it("maps biochar transport to applied wet mass and customer distance, not delivered mass", () => {
+    const applied = CERTIFY_FIELD_REGISTRY.application.find(field => field.key === "biocharAppliedTons")!;
+    const delivered = CERTIFY_FIELD_REGISTRY.delivery.find(field => field.key === "deliveredWetMassKg")!;
+    const distance = CERTIFY_FIELD_REGISTRY.customerLocation.find(field => field.key === "facilityDistances")!;
+    expect(applied.mappings).toEqual([expect.objectContaining({ source: "biocharTransportMassDistanceTonneKm" })]);
+    expect(resolveCertifyFieldInputTuples(applied)).not.toEqual([]);
+    expect(resolveCertifyFieldInputTuples(applied)).toEqual(resolveCertifyFieldInputTuples(distance));
+    expect(resolveCertifyFieldInputTuples(delivered)).toEqual([]);
+  });
+
   it("only points at AggregatedProductionData keys", () => {
     const validSources = new Set<string>(AGGREGATED_PRODUCTION_DATA_KEYS);
     const coveredSources = registrySources();
@@ -48,36 +63,46 @@ describe("CERTIFY_FIELD_REGISTRY drift guard", () => {
     ).toEqual([]);
   });
 
-  it("keeps declared INPUT_MAPPING tuples in sync with their sources", () => {
+  it("resolves each field's input tuples to mappings that submit its sources", () => {
     const mismatches: string[] = [];
 
     for (const [entityKind, descriptors] of Object.entries(
       CERTIFY_FIELD_REGISTRY,
     )) {
       for (const descriptor of descriptors) {
-        for (const registryMapping of descriptor.mappings ?? []) {
-          for (const inputTuple of registryMapping.inputTuples ?? []) {
-            const mapping =
-              INPUT_MAPPING[inputTuple.groupKey]?.[inputTuple.blueprintKey]?.[
-                inputTuple.inputKey
-              ];
-            const tupleKey = `${inputTuple.groupKey}/${inputTuple.blueprintKey}/${inputTuple.inputKey}`;
-            if (!mapping) {
-              mismatches.push(`${entityKind}.${descriptor.key}: missing ${tupleKey}`);
-              continue;
-            }
-            if (mapping.source !== registryMapping.source) {
-              mismatches.push(
-                `${entityKind}.${descriptor.key}: ${tupleKey} maps to ${String(
-                  mapping.source,
-                )}, registry says ${String(registryMapping.source)}`,
-              );
-            }
+        const fieldSources = new Set<string>(
+          (descriptor.mappings ?? []).map((mapping) => mapping.source),
+        );
+        for (const inputTuple of resolveCertifyFieldInputTuples(descriptor)) {
+          const tupleKey = `${inputTuple.groupKey}/${inputTuple.blueprintKey}/${inputTuple.inputKey}`;
+          const mapping = lookupInputMapping(
+            inputTuple.groupKey,
+            inputTuple.blueprintKey,
+            inputTuple.inputKey,
+          );
+          const submitted = mapping
+            ? [mapping.source, ...Object.values(mapping.sourceByComponent ?? {})]
+            : [];
+          if (!submitted.some((source) => fieldSources.has(source))) {
+            mismatches.push(`${entityKind}.${descriptor.key}: ${tupleKey}`);
           }
         }
       }
     }
 
     expect(mismatches).toEqual([]);
+  });
+});
+
+
+describe("conditional master-data certification fields", () => {
+  it("requires the facility reference soil temperature only for 200-year durability", () => {
+    expect(isCertifyFormField("facilityEmissionConfig", "defaultSoilTemperatureC", { durabilityOption: "200_year" })).toBe(true);
+    expect(isCertifyFormField("facilityEmissionConfig", "defaultSoilTemperatureC", { durabilityOption: "1000_year" })).toBe(false);
+  });
+
+  it("requires a registry feedstock mapping only for pyrolysis usage", () => {
+    expect(isCertifyFormField("feedstockType", "isometricFeedstockTypeId", { usage: "pyrolysis" })).toBe(true);
+    expect(isCertifyFormField("feedstockType", "isometricFeedstockTypeId", { usage: "blend" })).toBe(false);
   });
 });

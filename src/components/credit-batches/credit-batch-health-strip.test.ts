@@ -1,63 +1,11 @@
+import { deriveBatchHealth, type BatchHealthFacts } from "@/lib/certification/batch-health";
 import { describe, expect, it } from "vitest";
 import type { BatchHealthCheck } from "@/lib/certification/batch-health";
 import {
   batchHealthFixLinkFor,
-  compactBatchHealthDetail,
   fallbackBatchHealthFixTarget,
-  NEXT_ACTION_DETAIL_MAX_CHARS,
   resolveBatchHealthFixTarget,
 } from "@/lib/certification/batch-health-links";
-
-describe("compactBatchHealthDetail", () => {
-  it("returns the string unchanged when it is shorter than the limit", () => {
-    expect(compactBatchHealthDetail("Short detail.", 180)).toBe(
-      "Short detail.",
-    );
-  });
-
-  it("returns the string unchanged when its length equals the limit exactly", () => {
-    const exactly180 = "x".repeat(180);
-    expect(compactBatchHealthDetail(exactly180, 180)).toBe(exactly180);
-    expect(compactBatchHealthDetail(exactly180, 180).length).toBe(180);
-  });
-
-  it("truncates and appends an ellipsis when the detail exceeds the limit", () => {
-    const long = "a".repeat(200);
-    const result = compactBatchHealthDetail(long, 180);
-    expect(result.endsWith("…")).toBe(true);
-    expect(result.length).toBe(181);
-  });
-
-  it("trims trailing whitespace from the slice before appending the ellipsis", () => {
-    // Build a string where the 180-char boundary lands on a space.
-    const core = "word ".repeat(36); // 36 × 5 = 180 chars; ends on a space
-    expect(core.length).toBe(180);
-    const long = core + "trailing";
-    const result = compactBatchHealthDetail(long, 180);
-    expect(result).toBe("word ".repeat(36).trimEnd() + "…");
-    expect(result.endsWith(" …")).toBe(false);
-  });
-
-  it("uses NEXT_ACTION_DETAIL_MAX_CHARS as the default production limit", () => {
-    expect(NEXT_ACTION_DETAIL_MAX_CHARS).toBe(180);
-    const boundary = "a".repeat(180);
-    expect(compactBatchHealthDetail(boundary)).toBe(boundary);
-    expect(compactBatchHealthDetail("a".repeat(181))).toMatch(/^a{180}…$/);
-  });
-
-  it("handles an empty string without throwing", () => {
-    expect(compactBatchHealthDetail("", 180)).toBe("");
-    expect(compactBatchHealthDetail("", 0)).toBe("");
-  });
-
-  it("returns just the ellipsis when maxChars is 0 and detail is non-empty", () => {
-    expect(compactBatchHealthDetail("hello", 0)).toBe("…");
-  });
-
-  it("does not add an ellipsis to a string that fits exactly in a small limit", () => {
-    expect(compactBatchHealthDetail("abc", 3)).toBe("abc");
-  });
-});
 
 describe("fallbackBatchHealthFixTarget", () => {
   it("routes carbon check failures to labSamples (where lab inputs are entered)", () => {
@@ -105,6 +53,13 @@ describe("batchHealthFixLinkFor", () => {
     key,
     fixTarget,
     affectedRecords,
+  });
+
+  it.each([undefined, "certificationTemplates"] as const)("routes template target %s to Removal templates", (target) => {
+    expect(batchHealthFixLinkFor(check("template", target), facilityId)).toEqual({
+      label: "Review Removal templates",
+      href: `/certification/settings?section=removal-templates&facility=${facilityId}`,
+    });
   });
 
   it("routes a carbon check with no explicit fixTarget to Lab Samples", () => {
@@ -266,4 +221,55 @@ describe("batchHealthFixLinkFor", () => {
     expect(link.href).toContain("/production-runs");
   });
 
+  it("opens the delivery evidence section for missing proof", () => {
+    const deliveryId = "11111111-1111-4111-8111-111111111111";
+    const link = batchHealthFixLinkFor({ key: "entityReadiness", fixTarget: "deliveryEvidence", affectedRecords: [
+      { id: deliveryId, code: "D-0012", missing: ["Proof of delivery"] },
+    ] }, "facility-1");
+    expect(link.href).toBe(`/deliveries?facility=facility-1&delivery=${deliveryId}&mode=edit&focus=transport-evidence`);
+  });
+
+  it.each(["same delivery proofs", "multiple proofs", "distance", "production", "transport"] as const)(
+    "routes merged %s gaps to the appropriate delivery destination",
+    (kind) => {
+      const proof = {
+        detail: "Missing proof", fixTarget: "deliveryEvidence" as const,
+        record: { id: "delivery-1", code: "D-1" },
+      };
+      const facts: BatchHealthFacts = {
+        carbonMissingInputs: [], facilityEmissionsBlockers: [], feedstockTypeMappingGaps: [],
+        entityReadinessGaps: [], hasSubmittableRuns: kind !== "production",
+        facilitySetupComplete: true,
+        requiredTransport: kind === "transport" ? [{ category: "biochar", present: false }] : [],
+        submissionLineageBlockers: [
+          proof,
+          ...(kind === "same delivery proofs" ? [proof] : []),
+          ...(kind === "multiple proofs" ? [{ ...proof, record: { id: "delivery-2", code: "D-2" } }] : []),
+          ...(kind === "distance" ? [{ detail: "Missing distance", fixTarget: "deliveryDistances" as const, record: proof.record }] : []),
+        ],
+        ...(kind === "production" ? { productionReadinessGap: {
+          kind: "noApplications", detail: "Missing delivery", fixTarget: "deliveries",
+        } } : {}),
+      };
+      const row = deriveBatchHealth(facts).checks.find((item) => item.status === "unmet" &&
+        (item.fixTarget === "deliveryEvidence" || item.fixTarget === "deliveries" || item.fixTarget === "deliveryDistances"))!;
+      expect(batchHealthFixLinkFor(row, "facility-1", "batch-1").href)
+        .toBe(kind === "same delivery proofs"
+          ? "/deliveries?facility=facility-1&delivery=delivery-1&mode=edit&focus=transport-evidence"
+          : "/deliveries?facility=facility-1&creditBatch=batch-1");
+    },
+  );
+});
+
+ it("opens the exact location form for a missing facility pair", () => {
+  const href = "/customers?facility=f1&customer=c1&mode=edit&location=l1";
+  expect(batchHealthFixLinkFor({ key: "entityReadiness", fixTarget: "deliveryDistances", affectedRecords: [{ id: "d1", code: "DL-1", href, missing: ["Distance"] }] }, "f1"))
+    .toEqual({ label: "Edit location distances", href });
+});
+
+it("routes emissions to the batch sheet separately from facility emission estimates", () => {
+  expect(fallbackBatchHealthFixTarget("emissions")).toBe("emissions");
+  expect(batchHealthFixLinkFor({ key: "emissions" }, "facility-1", "batch-1")).toEqual({
+    label: "Review emissions", href: "/credit-batches?facility=facility-1&batch=batch-1",
+  });
 });

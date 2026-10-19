@@ -1,9 +1,10 @@
+import { assertRowVersion, nextVersion } from "./row-version";
 /**
  * Reactors Data Access Layer
  * CRUD operations for reactors with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, isNull, or, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, or, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
@@ -12,7 +13,9 @@ import {
   productionRuns,
   type Reactor,
 } from "@/db/schema";
-import type { ReactorFilterData } from "@/schemas/reactors";
+import { reactorTypes, type ReactorFilterData } from "@/schemas/reactors";
+
+const REACTOR_CONFLICT_ENTITY = "reactor";
 
 // ============================================
 // Types
@@ -86,7 +89,7 @@ export async function getReactors(
   }
 
   if (reactorType) {
-    conditions.push(eq(reactors.reactorType, reactorType));
+    conditions.push(inArray(reactors.reactorType, reactorTypes.filter((type) => type === reactorType)));
   }
 
   const whereClause = and(...conditions);
@@ -126,6 +129,7 @@ export async function getReactors(
       specifications: reactors.specifications,
       archivedAt: reactors.archivedAt,
       createdAt: reactors.createdAt,
+      version: reactors.version,
       updatedAt: reactors.updatedAt,
       facilityCode: facilities.code,
       facilityName: facilities.name,
@@ -154,6 +158,7 @@ export async function getReactors(
     specifications: reactor.specifications,
     archivedAt: reactor.archivedAt,
     createdAt: reactor.createdAt,
+    version: reactor.version,
     updatedAt: reactor.updatedAt,
     facilityCode: reactor.facilityCode ?? "",
     facilityName: reactor.facilityName ?? "",
@@ -190,6 +195,7 @@ export async function getReactorById(
       specifications: reactors.specifications,
       archivedAt: reactors.archivedAt,
       createdAt: reactors.createdAt,
+      version: reactors.version,
       updatedAt: reactors.updatedAt,
       facilityCode: facilities.code,
       facilityName: facilities.name,
@@ -219,6 +225,7 @@ export async function getReactorById(
     specifications: reactor.specifications,
     archivedAt: reactor.archivedAt,
     createdAt: reactor.createdAt,
+    version: reactor.version,
     updatedAt: reactor.updatedAt,
     facilityCode: reactor.facilityCode ?? "",
     facilityName: reactor.facilityName ?? "",
@@ -238,7 +245,7 @@ export async function createReactor(
     code: string;
     identifier: string;
     facilityId: string;
-    reactorType: string;
+    reactorType: Reactor["reactorType"];
     nominalThroughputTph?: number | null;
     specifications?: Record<string, unknown> | null;
   }
@@ -280,15 +287,17 @@ export async function updateReactor(
   ctx: OrgContext,
   reactorId: string,
   data: {
+    expectedVersion: number;
     code?: string;
     identifier?: string;
     facilityId?: string;
-    reactorType?: string;
+    reactorType?: Reactor["reactorType"];
     nominalThroughputTph?: number | null;
     specifications?: Record<string, unknown> | null;
   }
 ): Promise<Reactor> {
   requireOrgScope(ctx);
+  const { expectedVersion, ...reactorData } = data;
 
   // ADR 0022: sampling is a credit-batch choice, not a reactor property.
 
@@ -311,6 +320,17 @@ export async function updateReactor(
     if (!existing) {
       throw new SafeError("Reactor not found");
     }
+    assertRowVersion({ entity: REACTOR_CONFLICT_ENTITY, id: reactorId, expectedVersion, actualVersion: existing.version });
+
+    if (data.facilityId && data.facilityId !== existing.facilityId) {
+      const [run] = await tx.select({ id: productionRuns.id })
+        .from(productionRuns)
+        .where(and(eq(productionRuns.reactorId, reactorId), eq(productionRuns.organizationId, ctx.organizationId)))
+        .limit(1);
+      if (run) {
+        throw new SafeError("Cannot move a reactor with associated production runs to another facility. Create a reactor at the destination facility instead.");
+      }
+    }
 
     // A rename OR a facility move can collide with the per-facility identifier
     // index, and a code change with the org-scoped code index, so the update
@@ -328,7 +348,8 @@ export async function updateReactor(
             tx
               .update(reactors)
               .set({
-                ...data,
+                ...reactorData,
+                version: nextVersion(reactors.version),
                 updatedAt: new Date(),
               })
               .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)))
@@ -350,21 +371,19 @@ export async function updateReactor(
  */
 export async function deleteReactor(
   ctx: OrgContext,
-  reactorId: string
+  reactorId: string,
+  expectedVersion: number
 ): Promise<void> {
   requireOrgScope(ctx);
 
-  // Verify reactor exists
-  const [existing] = await db
-    .select({ id: reactors.id })
-    .from(reactors)
-    .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Reactor not found");
-  }
-
   await db.transaction(async (tx) => {
+    const [versioned] = await tx.select({ version: reactors.version })
+      .from(reactors)
+      .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)))
+      .for("update");
+    if (!versioned) throw new SafeError("Reactor not found");
+    assertRowVersion({ entity: REACTOR_CONFLICT_ENTITY, id: reactorId, expectedVersion, actualVersion: versioned.version });
+
     const [{ value: productionRunCount }] = await tx
       .select({ value: count() })
       .from(productionRuns)
@@ -383,7 +402,7 @@ export async function deleteReactor(
     await tx.delete(reactors).where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)));
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "reactor", entityId: reactorId },
-    ]);
+    ], "form");
   });
   await processPendingStorageObjectDeletions(ctx);
 }

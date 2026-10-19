@@ -1,6 +1,6 @@
 "use client";
 
-// Orphaned: no mounted operator entry point. See docs/open-questions.md "isometric/structured-telemetry-path".
+// Retained non-MVP seam (#942 q25, #1014): no current consumer; retained for structured readings imports. See docs/architecture.md#production-run-extensions.
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -10,6 +10,7 @@ import {
 import { productionRunKeys } from "@/hooks/use-production-runs";
 import { productionRunReadingKeys } from "@/hooks/use-production-run-readings";
 import { invalidateCertificationReadiness } from "@/hooks/use-certification";
+import { unwrap } from "@/hooks/types";
 
 export function useImportProductionRunReadings() {
   const queryClient = useQueryClient();
@@ -17,13 +18,12 @@ export function useImportProductionRunReadings() {
   return useMutation({
     mutationFn: async (
       documentId: string,
-    ): Promise<ProductionRunReadingsImportResult> => {
-      const result = await importProductionRunReadingsFromDocumentFn({
-        documentId,
-      });
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    ): Promise<ProductionRunReadingsImportResult> =>
+      unwrap(
+        await importProductionRunReadingsFromDocumentFn({
+          documentId,
+        }),
+      ),
     onSuccess: (data) => {
       queryClient.invalidateQueries({
         queryKey: productionRunKeys.lists(),
@@ -33,9 +33,6 @@ export function useImportProductionRunReadings() {
       });
       queryClient.invalidateQueries({
         queryKey: productionRunReadingKeys.lists(),
-      });
-      queryClient.invalidateQueries({
-        queryKey: productionRunKeys.readings(data.productionRunId),
       });
       invalidateCertificationReadiness(queryClient);
     },

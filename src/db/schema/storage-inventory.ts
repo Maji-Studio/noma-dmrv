@@ -8,7 +8,6 @@ import { organizations } from './auth';
 // ============================================
 // Biochar Storage Inventory - Product batches in storage bins
 // Tracks which biochar product batch is in which bin and how much remains.
-// Expiry is on biocharProduct.expiresAt (production date + 12 months) — not on the bin.
 // Transfers between bins are allowed: create a new record at the destination,
 // decrement quantityKgRemaining on the source, and set sourceInventoryId for audit trail.
 // ============================================

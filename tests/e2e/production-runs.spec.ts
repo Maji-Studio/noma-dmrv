@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "../helpers/feedstock-fixture";
 /**
  * Production Run + Sample UI CRUD Tests
  *
@@ -28,6 +29,10 @@ import {
   storageLocations,
 } from "@/db/schema";
 import { eq, inArray } from "drizzle-orm";
+import { validateAndSaveMeasurement, validateAndSaveIncident } from "./helpers/production-child-forms";
+import { chooseRunStatus } from "./helpers/run-status";
+import { formatFacilityWallClock } from "@/lib/date-utils";
+import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 
 const FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR =
   'input[name="feedstockDraws.0.wetMassKg"]';
@@ -42,7 +47,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
     await page.getByRole("button", { name: "New production run" }).click();
     await waitForSideSheet(page);
 
-    await page.selectOption('select[name="status"]', "draft");
+    await chooseRunStatus(page, "running");
 
     await selectEntity(
       page,
@@ -117,7 +122,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
         facilityId: seededData.facility.id,
         feedstockTypeId: secondaryTypeId,
       });
-      await db.insert(feedstocks).values({
+      await db.insert(feedstocks).values(await feedstockFixtureValues(db, {
         id: secondaryFeedstockId,
         organizationId: DEC_ORG_ID,
         code: `E2E-FS-MULTI-${tag}`,
@@ -128,7 +133,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
         massDryKg: 270,
         moistureContentPercent: 10,
         storageLocationId: secondaryBinId,
-      });
+      }));
 
       await page.goto(`/production-runs?facility=${seededData.facility.id}`);
       await expect(
@@ -137,7 +142,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
       const existingCodes = await getListedActionCodes(page);
       await page.getByRole("button", { name: "New production run" }).click();
       await waitForSideSheet(page);
-      await page.locator('select[name="status"]').selectOption("draft");
+      await chooseRunStatus(page, "running");
       await selectEntity(
         page,
         "Reactor",
@@ -168,15 +173,15 @@ test.describe("Production Run + Sample UI CRUD", () => {
         .fill("70");
       await page.locator('input[name="feedstockMoisturePercent"]').fill("15");
       // The "Total wet input" recap is gone; the Detailed composition ledger
-      // carries the summed wet mass and the process flow names the bin count.
+      // carries the summed wet mass. With no biochar mass yet the process flow
+      // is not drawn and names the mass still to record instead.
       await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
       await expect(
         page.getByRole("table", { name: /^Feedstock composition/ })
           .getByRole("row").filter({ hasText: "Wet total" }),
       ).toContainText("120 kg");
-      // The hidden calculation repeats the bin name, so match only the visible copy.
       await expect(
-        page.getByText(`${seededData.feedstockStorageLocation.name} + 1 more`, { exact: true }).locator("visible=true"),
+        page.getByText("Record the biochar wet mass to draw the flow.", { exact: true }),
       ).toBeVisible();
       await submitCreate(page);
       await waitForSideSheetClose(page);
@@ -210,6 +215,15 @@ test.describe("Production Run + Sample UI CRUD", () => {
       await expect(
         page.getByRole("status").filter({ hasText: "Production run updated." }),
       ).toBeVisible();
+      // A save closes the sheet for good, like every other list; reopen the
+      // run to read what was persisted.
+      await waitForSideSheetClose(page);
+      await page
+        .locator("tbody tr")
+        .filter({ hasText: createdCode })
+        .first()
+        .click();
+      await waitForSideSheet(page);
       await expect(
         detail.locator('input[name^="feedstockDraws."]'),
       ).toHaveCount(0);
@@ -250,6 +264,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
         await db.delete(productionRuns).where(inArray(productionRuns.id, runIds));
       }
       await db.delete(feedstocks).where(eq(feedstocks.id, secondaryFeedstockId));
+      await cleanupFeedstockFixtureParents(db);
       await db.delete(storageLocations).where(eq(storageLocations.id, secondaryBinId));
       await db.delete(feedstockTypes).where(eq(feedstockTypes.id, secondaryTypeId));
       await pool.end();
@@ -301,6 +316,11 @@ test.describe("Production Run + Sample UI CRUD", () => {
 
     const sampleDialog = page.locator('[role="dialog"]');
     await selectEntity(page, "Credit Batch", batch.id, batch.code);
+    const samplingTime = sampleDialog.locator('input[name="samplingTime"]');
+    await expect(samplingTime).toBeEnabled();
+    await expect(samplingTime).toHaveValue("");
+    // This fixture's facility uses UTC; sample within its current batch window.
+    await samplingTime.fill(formatFacilityWallClock(new Date(), "UTC"));
 
     // Fill some carbon analysis data
     await page.fill('input[name="totalCarbonPercent"]', "75");
@@ -339,7 +359,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
     await expect(
       sampleDialog.getByRole("heading", { name: "Add in-process measurement" }),
     ).toBeVisible();
-    await sampleDialog.getByRole("button", { name: "Cancel" }).click();
+    await validateAndSaveMeasurement(sampleDialog);
     await expect(sampleDialog).toBeHidden();
     await expect(page.locator('[role="dialog"]')).toHaveCount(1);
 
@@ -352,7 +372,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
         name: "Add production incident",
       }),
     ).toBeVisible();
-    await incidentDialog.getByRole("button", { name: "Cancel" }).click();
+    await validateAndSaveIncident(incidentDialog);
     await expect(incidentDialog).toBeHidden();
     await expect(page.locator('[role="dialog"]')).toHaveCount(1);
     await expect(runSideSheet).toBeVisible();
@@ -370,7 +390,8 @@ async function openRunForm(
     startTime: string;
     endDate?: string;
     endTime?: string;
-    status?: string;
+    status?: ProductionRunStatus;
+    recordOutput?: boolean;
   },
 ) {
   await page.goto(`/production-runs?facility=${seededData.facility.id}`);
@@ -379,7 +400,7 @@ async function openRunForm(
   ).toBeVisible();
   await page.getByRole("button", { name: "New production run" }).click();
   await waitForSideSheet(page);
-  await page.selectOption('select[name="status"]', window.status ?? "running");
+  await chooseRunStatus(page, window.status ?? "running");
   await selectEntity(
     page,
     "Reactor",
@@ -390,6 +411,14 @@ async function openRunForm(
   await page.fill('input[name="startTime"]', window.startTime);
   if (window.endDate) await page.fill('input[name="endDate"]', window.endDate);
   if (window.endTime) await page.fill('input[name="endTime"]', window.endTime);
+  if (window.recordOutput) {
+    await selectEntity(page, "Source Bin", seededData.feedstockStorageLocation.id, seededData.feedstockStorageLocation.name);
+    await page.fill(FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR, "50");
+    await page.fill('input[name="feedstockMoisturePercent"]', "15");
+    await selectEntity(page, "Biochar Storage", seededData.biocharStorageLocation.id, seededData.biocharStorageLocation.name);
+    await page.fill('input[name="biocharOutputKg"]', "10");
+    await page.fill('input[name="biocharMoisturePercent"]', "0");
+  }
 }
 
 async function submitCreate(page: Page) {
@@ -405,6 +434,9 @@ async function editFirstRow(page: Page) {
   // cleanly). A post-save list refetch can re-render the row and detach the
   // menu's "Edit" item mid-click, so retry the open→Edit sequence instead of
   // waiting for network idle (CI dev servers may never settle within budget).
+  // Edit is offered only once the row's lock read answers (#1119), so wait
+  // for its chip first.
+  await expect(page.locator("tbody tr").first().locator("[data-record-lock]")).toBeVisible({ timeout: 15000 });
   await expect(async () => {
     await page
       .locator("tbody tr")
@@ -508,7 +540,13 @@ test.describe("Production Run lifecycle (#254)", () => {
       "#feedstockDraws-error",
     );
 
-    await dialog.locator('select[name="status"]').selectOption("complete");
+    for (const field of ["endDate", "endTime", "feedstockMoisturePercent", "biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"]) {
+      await expect(dialog.locator(`label[for="${field}"]`)).not.toContainText("Required");
+    }
+    await chooseRunStatus(dialog, "complete");
+    for (const field of ["endDate", "endTime", "feedstockMoisturePercent", "biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"]) {
+      await expect(dialog.locator(`label[for="${field}"]`)).toContainText("Required");
+    }
     await dialog
       .getByRole("button", { name: "Remove feedstock source 1" })
       .click();
@@ -531,6 +569,12 @@ test.describe("Production Run lifecycle (#254)", () => {
 
     await submitCreate(page);
     await expect(feedstockRequirement).toHaveText("Enter feedstock moisture.");
+    await expect(dialog.locator("#biocharStorageLocationId-error")).toHaveText("Select a biochar output bin for a complete run.");
+    await expect(dialog.locator("#biocharMoisturePercent-error")).toHaveText("Enter biochar moisture for a complete run.");
+    await selectEntity(page, "Biochar Storage", seededData.biocharStorageLocation.id, seededData.biocharStorageLocation.name);
+    await dialog.locator('input[name="biocharMoisturePercent"]').fill("0");
+    await expect(dialog.locator("#biocharStorageLocationId-error")).toBeHidden();
+    await expect(dialog.locator("#biocharMoisturePercent-error")).toBeHidden();
   });
 
   test("offers only legal initial statuses", async ({
@@ -541,9 +585,13 @@ test.describe("Production Run lifecycle (#254)", () => {
     await page.getByRole("button", { name: "New production run" }).click();
     await waitForSideSheet(page);
 
-    await expect(
-      page.locator('[role="dialog"] select[name="status"] option'),
-    ).toHaveText(["Draft", "Running", "Complete", "Cancelled"]);
+    for (const detail of ["Simple", "Detailed"]) {
+      await page.getByRole("radio", { name: detail, exact: true }).locator("..").click();
+      const options = page.locator('[role="dialog"] label:has(input[name="status"])');
+      await expect(options).toHaveText(["Running", "Complete"]);
+      for (const option of await options.all()) await expect(option).toBeVisible();
+      await expect(page.locator('[role="dialog"] input[name="status"][value="running"]')).toBeChecked();
+    }
   });
 
   test("requires a cancellation reason and saves the cancelled audit record", async ({
@@ -553,8 +601,18 @@ test.describe("Production Run lifecycle (#254)", () => {
     await openRunForm(page, seededData, {
       startDate: "2025-01-05",
       startTime: "08:00",
-      status: "cancelled",
+      status: "running",
     });
+    await submitCreate(page);
+    await waitForSideSheetClose(page);
+    // Only the new run is running; the seeded run is complete and In use, so
+    // the first row must be this one before editing.
+    await page
+      .getByLabel("Filter production runs by status")
+      .selectOption("running");
+    await expect(page.locator('tbody [data-status="running"]').first()).toBeVisible();
+    await editFirstRow(page);
+    await chooseRunStatus(page, "cancelled");
 
     const dialog = page.locator('[role="dialog"]');
     const cancellationReason = dialog.locator(
@@ -562,11 +620,11 @@ test.describe("Production Run lifecycle (#254)", () => {
     );
     await expect(cancellationReason).toBeVisible();
 
-    await submitCreate(page);
+    await saveEdit(page);
     await expect(dialog.getByText("Enter a cancellation reason.")).toBeVisible();
 
     await cancellationReason.fill("Duplicate run entered by the operator");
-    await submitCreate(page);
+    await saveEdit(page);
     await waitForSideSheetClose(page);
 
     await page
@@ -600,6 +658,8 @@ test.describe("Production Run lifecycle (#254)", () => {
       seededData.feedstockStorageLocation.id,
       seededData.feedstockStorageLocation.name,
     );
+    await selectEntity(page, "Biochar Storage", seededData.biocharStorageLocation.id, seededData.biocharStorageLocation.name);
+    await dialog.locator('input[name="biocharMoisturePercent"]').fill("0");
     await dialog.locator('input[name="biocharOutputKg"]').fill("10");
 
     const wetMass = dialog.locator(FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR);
@@ -646,6 +706,11 @@ test.describe("Production Run lifecycle (#254)", () => {
     const dialog = page.locator('[role="dialog"]');
     await dialog.locator('input[name="endDate"]').fill("2025-02-05");
     await dialog.locator('input[name="endTime"]').fill("12:00");
+    // A Running run cannot keep an end time; the field says so until the status changes.
+    await dialog.locator('input[name="endTime"]').blur();
+    await expect(
+      dialog.getByText("Choose Complete or clear the end time for a Running run."),
+    ).toBeVisible();
     // A failed run needs a source bin, moisture %, and wet mass to compute
     // consumed feedstock (same guard as a complete run) — the lifecycle
     // schema rejects the status change without them.
@@ -657,7 +722,7 @@ test.describe("Production Run lifecycle (#254)", () => {
     );
     await dialog.locator(FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR).fill("50");
     await dialog.locator('input[name="feedstockMoisturePercent"]').fill("15");
-    await dialog.locator('select[name="status"]').selectOption("failed");
+    await chooseRunStatus(dialog, "failed");
     await saveEdit(page);
     await waitForSideSheetClose(page);
 
@@ -682,7 +747,8 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "08:00",
       endDate: "2025-01-05",
       endTime: "12:00",
-      status: "draft",
+      status: "complete",
+      recordOutput: true,
     });
     await submitCreate(page);
     await waitForSideSheetClose(page);
@@ -692,7 +758,8 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "08:00",
       endDate: "2025-01-05",
       endTime: "10:00",
-      status: "draft",
+      status: "complete",
+      recordOutput: true,
     });
     await submitCreate(page);
 
@@ -710,7 +777,8 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "08:00",
       endDate: "2025-02-05",
       endTime: "12:00",
-      status: "draft",
+      status: "complete",
+      recordOutput: true,
     });
     await submitCreate(page);
     await waitForSideSheetClose(page);
@@ -721,7 +789,8 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "10:00",
       endDate: "2025-02-05",
       endTime: "11:00",
-      status: "draft",
+      status: "complete",
+      recordOutput: true,
     });
     await submitCreate(page);
 
@@ -749,7 +818,8 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "13:00",
       endDate: "2025-03-05",
       endTime: "15:00",
-      status: "draft",
+      status: "complete",
+      recordOutput: true,
     });
     await submitCreate(page);
 
@@ -767,7 +837,8 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "22:00",
       endDate: "2025-04-06",
       endTime: "02:00",
-      status: "draft",
+      status: "complete",
+      recordOutput: true,
     });
     await submitCreate(page);
     // A clean save closes the side sheet.
@@ -784,7 +855,8 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "08:00",
       endDate: "2025-05-05",
       endTime: "10:00",
-      status: "draft",
+      status: "complete",
+      recordOutput: true,
     });
     await submitCreate(page);
     await waitForSideSheetClose(page);
@@ -794,7 +866,8 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "14:00",
       endDate: "2025-05-05",
       endTime: "16:00",
-      status: "draft",
+      status: "complete",
+      recordOutput: true,
     });
     await submitCreate(page);
     await waitForSideSheetClose(page);
@@ -877,7 +950,7 @@ test.describe("Production Run end-time editing", () => {
     await editCreatedRun();
     await page.fill('input[name="endDate"]', "2025-06-05");
     await page.fill('input[name="endTime"]', "12:00");
-    await page.selectOption('select[name="status"]', "complete");
+    await chooseRunStatus(page, "complete");
     await saveEdit(page);
     await waitForSideSheetClose(page);
 
@@ -908,7 +981,7 @@ test.describe("Production Run end-time editing", () => {
     await editCreatedRun();
     await expect(dialog.locator('input[name="endDate"]')).toHaveValue("2025-06-05");
     await expect(dialog.locator('input[name="endTime"]')).toHaveValue("13:00");
-    await expect(dialog.locator('select[name="status"]')).toHaveValue("complete");
+    await expect(dialog.locator('input[name="status"][value="complete"]')).toBeChecked();
   });
 
   test("create form has no clear-end-time control", async ({

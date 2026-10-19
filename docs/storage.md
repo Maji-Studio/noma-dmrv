@@ -44,8 +44,9 @@ the real provider.
 
 ## Reads always go through an app route
 
-The client never talks to the bucket except for the one-shot presigned PUT. All
-ordinary reads go through `/api/documents/[id]`; external verifier reads go
+The client never talks to the bucket except for the one-shot presigned PUT. App
+reads go through `/api/documents/[id]`; API reads use the owner-scoped
+`/api/v1/{owner}/{id}/documents/{documentId}/content`; external verifier reads go
 through `/api/ghg-statement-reports/[reportId]?token=…`. Both mint a fresh
 signed GET per request. **The app never embeds signed storage URLs in HTML or
 the DB** — so users never see "URL expired".
@@ -61,24 +62,19 @@ S3-compatible PUT, GET, HEAD, DELETE, and `putObject`, but it is never stored in
 the DB. The local-fs provider ignores it entirely. This keeps the logical key
 stable when an environment moves bucket or prefix.
 
-**Ordinary logical key** (stored in `documents.storage_key`, no leading `/`):
+**Browser upload logical keys** (stored without a leading `/`):
 
 ```text
-org/{organizationId}/{entityType}/{entityId}/{documentType}/{ulid}.{ext}
+org/{organizationId}/uploads/{documentId}/{ulid}
+org/{organizationId}/{entityType}/{entityId}/{documentType}/{documentId}-{sha256}.{ext}
 ```
 
-- `buildStorageKey()` builds only the
-  `{entityType}/{entityId}/{documentType}/{ulid}.{ext}` suffix; the owning
-  server action prepends `org/{ctx.organizationId}/`. Never accept the
-  organization segment from client input.
-- Original filename lives in `documents.file_name`, NOT in the key — avoids
-  URL-encoding pain and PII leakage via names like `"Smith - Confidential.pdf"`.
-  ULID sorts by upload time; `entityType`/`entityId` lead within each
-  organization namespace so bucket browsing mirrors app navigation.
-- `buildStorageKey()` (`src/lib/storage/keys.ts`) is the only place keys are
-  built — never construct one by hand. **It may return a key with no extension**:
-  `extractExtension` accepts only `[a-z0-9]{1,12}` and drops anything else, so
-  code that infers content type from the key extension will break.
+`buildUploadKey()` creates the client-writable key. Both providers refuse to
+presign a PUT outside that namespace. `buildFinalStorageKey()` creates the
+server-only key after inspection. The original filename stays in
+`documents.file_name`, never in either key. An unusable filename extension is
+omitted. Legacy uploaded rows keep their existing keys and download normally.
+`buildStorageKey()` remains available for server-generated objects.
 
 **Generated objects use deterministic logical namespaces where idempotent
 reuse matters:**
@@ -92,8 +88,9 @@ org/{organizationId}/ghgStatementReport/{reportId}/pdf/{ulid}.pdf
 Transport and durability ledgers key by their semantic model hash so identical
 content reuses the current artifact/Source; changed content creates a new object
 before older local ledgers are retired. A GHG Statement report always allocates
-a new report version and object, so it uses the ordinary key builder under the
-`ghgStatementReport` entity namespace. These are logical keys: the
+a new report version and object. Its key is
+`ghgStatementReportKeyPrefix(organizationId, reportId)` plus a lowercase ULID
+and `.pdf`. Approval and submission reject any stored key outside that prefix. These are logical keys: the
 S3-compatible provider may still prepend `STORAGE_PREFIX` physically.
 
 ## Visibility and read authz
@@ -112,8 +109,9 @@ back to `getPublicDocumentById(id)`.
 Non-UUID `id` → 400. A row with neither `storageKey` nor `fileUrl`, or a
 `storageKey` row not yet `uploaded` → 500 / 404 respectively.
 
-Flipping public is a one-row `UPDATE documents SET visibility = 'public'` — no
-provider call, no object copy, portable across providers that don't honor ACLs.
+An Owner or Admin can change visibility through the guarded document writer.
+It checks submitted lineage and increments the document version, without a
+provider call or object copy. API reads have no public-visibility fallback.
 
 ### Verifier capability route
 
@@ -141,12 +139,81 @@ route can't be used as an open redirect borrowing the app's domain trust.
 
 ## Write paths
 
-**1. Presigned upload** — `src/fn/documents.ts`: `requestUpload` → client PUT →
-`confirmUpload`. `confirmUpload`'s `headObject` is the **authoritative** size +
-content-type gate and the security boundary; client-side and `requestUpload`-time
-checks are best-effort UX, because presigned PUTs can't reliably enforce
-content-length across S3-compatible providers. On rejection the object is deleted
-immediately and `upload_status` becomes `'failed'`.
+**1. Presigned upload**: `requestUpload` commits a pending row through an
+unregistered app operation, then presigns its upload key for the remaining
+five-minute lease. The immutable size, MIME and optional SHA-256 declaration
+lives in `metadata.uploadDeclaration`. Client PUTs still send only Content-Type.
+`confirmUpload` returns an already uploaded row without storage I/O. A missing
+object returns retryable `conflict` and remains pending. A failed row returns
+`conflict` with its stored failure reason.
+
+Only pending rows undergo a bounded streaming read. The server verifies exact
+size, SHA-256, declared MIME, PDF/image magic bytes and the readings CSV rule,
+then records the candidate final key on the pending row before writing the
+inspected buffer to that content-addressed key. The bounded candidate list
+retains cleanup ownership if preparation or the runner fails. Storage
+has a 20-second abort budget within the 25-second confirmation deadline.
+The runner revalidates all inspection bindings under the document write locks
+before promoting the row. Refusals are returned outcomes so the failed state
+and deletion queue commit before the action returns an error. Losing confirms
+never delete a winning final key.
+
+All cleanup uses the deletion queue. Upload keys are eligible only after their
+lease plus a ten-minute grace period; promotion candidates wait past the
+confirmation deadline so an in-flight PUT cannot recreate a deleted object.
+A candidate handed off to cleanup cannot become live in a later confirmation. Parent
+retirement queues both keys. Draining happens after commit and skips future
+`not_before` entries, so a late PUT can only recreate an upload object whose
+cleanup is still pending.
+
+Upload-request replays renew pending leases under the same document row lock
+used by expiry. Each lease lasts five minutes, capped at creation plus
+`DOCUMENT_UPLOAD_MAX_LIFETIME_MS` (one hour). Renewal does not bump the version.
+A replay after that maximum returns the original representation without a PUT
+link. The ten-minute grace is `DOCUMENT_UPLOAD_GRACE_MS`.
+
+### Abandoned uploads and cleanup
+
+`GET /api/cron/sweep-document-uploads` uses the same bearer `CRON_SECRET`
+check and Node runtime as `purge-api-records`. It refuses requests when the
+secret is absent or wrong. `vercel.json` schedules it daily at 03:15 UTC on
+Production, after the API-record purge at 03:00 UTC. It is not a public v1 route.
+
+Each expiry batch locks at most `DOCUMENT_SWEEP_BATCH_SIZE` (100) expired pending
+rows across organizations with `FOR UPDATE SKIP LOCKED`. An upload expires when
+its lease ended more than ten minutes ago. The sweep sets `failed`, stores
+`metadata.uploadFailure = { reason: "expired" }`, increments `version`, and
+queues its keys in the same transaction. Renewal either commits first and is
+skipped by the sweep, or sees the committed failure and cannot renew.
+
+Retention batches remove up to 100 failed rows whose `updatedAt` is older than
+`DOCUMENT_FAILED_RETENTION_MS` (30 days), only when every key has already been
+queued. Completed queue entries also qualify. Thirty days leaves time to
+investigate a failed upload before its declaration disappears. Uploaded evidence
+is never removed by this retention policy. Each phase commits batches in separate
+transactions while full batches remain, sharing a `DOCUMENT_SWEEP_BUDGET_MS`
+(30 seconds) budget. The shared queue drain then processes
+50 entries at a time across organizations within
+`DOCUMENT_SWEEP_DRAIN_BUDGET_MS` (20 seconds), respecting `not_before`, row locks
+and retry backoff. The route allows 60 seconds overall. A failed phase logs its
+counts and allows subsequent phases to run; any failure returns HTTP 500.
+Logs contain counts and ids, never keys, URLs or file names.
+
+Staging is a Vercel Preview deployment and has no cron. Request-path drains
+remain enabled there and in Production, but do not expire abandoned pending
+rows. An optional bucket lifecycle rule can expire old upload objects as a
+backstop. Match only the physical `org/{organizationId}/uploads/` namespaces
+under the deployment prefix, using per-org prefixes or provider-supported
+filters. A literal bucket-root `uploads/` prefix does not match these keys.
+Keep its age comfortably beyond the one-hour maximum lifetime and grace, for
+example seven days; never apply it to final evidence namespaces.
+
+The sweep does not list final objects. A promotion written before a failed
+confirmation transaction can leave a final key with no document reference.
+See `storage/orphaned-final-keys` in
+[architecture open questions](./open-questions-architecture.md).
+
+### Server-generated objects
 
 **2. Server-side `putObject`** — for artifacts the server generates itself:
 transport/durability evidence ledgers
@@ -161,10 +228,18 @@ Client orchestration: `src/hooks/use-file-upload.ts` and
 
 ### Write authz and limits
 
-Every documents server action goes through
-`assertCanManageDocumentEntity(ctx, entityType, entityId)` — **the storage layer
-itself has no authz.** `DOCUMENT_ENTITY_TYPES` enumerates what a user-uploaded
-document can hang off.
+Document mutations enforce organization, owner and submitted-lineage checks in
+transaction-aware data-access writers. The lock order is documented in
+[architecture.md](./architecture.md#database-boundaries). Archived owners refuse
+request and confirm; delete remains allowed. Visibility requires an Owner or
+Admin at the data-access boundary and bumps the document version, as does
+application evidence reclassification. Submitted lineage refuses every app
+mutation, including deletion of documents that are not registry Sources.
+Server-generated ledgers and GHG Statement reports retain their own writers.
+The storage layer itself does not perform authorization.
+
+`reflectance_histogram` is a Sample-only document type available through the app,
+not the public API.
 
 Per-documentType size and MIME rules live in `src/schemas/documents.ts`
 (`UPLOAD_RULES`, `isAllowedMime`, `maxBytesFor`) — read them there, they change.
@@ -172,7 +247,7 @@ All user-uploaded document types currently share a 10 MB cap defined once in
 `src/lib/documents/upload-policy.ts`; UI limits are clamped to that server policy.
 Future file reduction (for example image processing with Sharp) should be a
 preprocessing step that produces the final artifact before `requestUpload`, so
-both the request check and authoritative `confirmUpload` HEAD check apply to the
+both the request check and authoritative `confirmUpload` bounded inspection apply to the
 bytes that are actually retained.
 The local-fs route additionally caps each upload at `min(token cap,
 LOCAL_FS_GLOBAL_MAX_BYTES)` (100 MB) as defense-in-depth.
@@ -194,7 +269,7 @@ status only and cannot be used to change supporting evidence.
 ## Adapter interface
 
 `src/lib/storage/types.ts` defines `StorageProvider` (`name`, `bucket`,
-`createUploadUrl`, `createDownloadUrl`, `getObject`, `headObject`,
+`createUploadUrl`, `createDownloadUrl`, `getObject`, `readObjectBounded`, `headObject`,
 `deleteObject`, `putObject`). `getObject` is the server-side read seam and
 returns the bytes plus a content type. The s3-compatible provider presigns a
 fresh URL and fetches it, refusing redirects, under the timeout in
@@ -234,13 +309,14 @@ not a requirement stated verbatim by Isometric Biochar Protocol v1.1. The
 project's approved monitoring method, PDD, or verifier instructions may define
 a different evidence grain or require a separate Certify delivery route.
 
-Legacy telemetry import and registry submission modules remain in the codebase
-for historical experiments. They are not called by the operator readings-file
-upload.
+The legacy row importer and `production_run_readings` remain separate from
+the operator readings-file upload.
 
-## CORS (production buckets only)
+## CORS (deployed buckets)
 
-The browser PUT is cross-origin, so DO Spaces / S3 must allow it:
+The browser PUT is cross-origin, so DO Spaces / S3 must allow the exact
+`NEXT_PUBLIC_APP_URL` origin. Domain changes require updating bucket CORS too;
+allowing an old marketing/app hostname does not cover the new app subdomain:
 
 ```json
 [
@@ -253,19 +329,73 @@ The browser PUT is cross-origin, so DO Spaces / S3 must allow it:
 ]
 ```
 
+Run `pnpm storage:cors` to check the configured app origin.
+`pnpm storage:cors --apply` repairs the upload rule for that exact HTTPS origin
+and preserves existing rules for other applications sharing the bucket. This
+administrative command needs bucket CORS read/write permission; it does not
+change object ACLs or make files public. On staging, dispatch **Storage health**
+with `repair_cors=true` to load the staging settings from 1Password, apply the
+repair, and verify the real storage round-trip. Scheduled health runs never
+change bucket configuration. If the storage key lacks CORS administration
+permission, a bucket administrator must apply the rule through the control panel.
+
 DO Spaces: *Spaces → Settings → CORS Configurations*. AWS S3: bucket
 *Permissions → CORS*. local-fs needs none — `/api/storage-local/...` is
 same-origin.
 
 ## Testing
 
+`pnpm vitest run tests/s3-compatible-storage.integration.test.ts` exercises the
+S3-compatible adapter against disposable local MinIO. PR CI starts a pinned
+MinIO container in each Vitest shard with throwaway credentials; no cloud
+credentials are needed. For a local run, start MinIO separately and export:
+
+- `MINIO_TEST_ENDPOINT`
+- `MINIO_TEST_REGION`
+- `MINIO_TEST_ACCESS_KEY_ID`
+- `MINIO_TEST_SECRET_ACCESS_KEY`
+
+These map directly to adapter config, never to the app's `STORAGE_*` settings
+or singleton. The endpoint must be an HTTP loopback origin. The suite creates
+a unique bucket with a nested prefix, then removes its objects and bucket
+even after test failures. Without any MinIO test env it skips with one log
+line; partial configuration fails rather than silently skipping.
+
+Coverage includes server uploads, real HTTP presigned PUT and GET, metadata,
+`getObject` bytes/content type, deletion, missing objects and wrong credentials.
+The deadline case forwards a real MinIO response through a loopback proxy that
+stalls its body, then checks that the named `getObject` deadline aborts the
+connection after headers and the first byte arrive. It injects a one-second
+timeout through the S3-compatible provider's optional `getObject` timeout
+parameter, asserts `get_object_timeout` within five seconds, and keeps a
+15-second test budget. The production default remains 30 seconds.
+The current presigner does not sign the Content-Type header: MinIO accepts a
+different Content-Type on PUT and stores the supplied type. The suite asserts
+that behavior; document confirmation enforces the declared MIME separately.
+A PUT signed in the past with an elapsed TTL returns 403 (`Request has expired`)
+and creates no object.
+Presigned PUT does not cap upload size (`maxBytes` is not enforced by the PUT),
+and `putObject` has no size cap. The adapter enforces `maxBytes` when
+`readObjectBounded` reads the object back, rejecting oversized objects with
+`StorageError` code `object_too_large`. The suite covers this rejection, an
+exact-limit read (bytes, size, SHA-256 and content type), and a missing-key read
+returning `null`. Document confirmation uses this bounded read to enforce the
+application upload policy described above.
+
 `pnpm storage:smoke` (`scripts/storage-smoke.ts`) does a real round-trip against
 the configured bucket — presigned PUT → HEAD → signed GET byte-for-byte → DELETE →
 HEAD 404 — covering exactly what the unit-test fakes deliberately don't:
 credentials, region/endpoint, path-style addressing, bucket permissions. It
 refuses to run against `local-fs` (exit 2), runs daily against staging via
-`.github/workflows/storage-health.yml`, and **does not test browser CORS** — only a
-real cross-origin PUT from the app exercises that.
+`.github/workflows/storage-health.yml`, and checks the browser PUT preflight for
+the configured app origin plus the actual PUT response CORS header. This catches
+stale origin allowlists as well as credential and storage failures. A full UI
+walkthrough remains separate.
+
+Outside CI, an HTTP loopback `NEXT_PUBLIC_APP_URL` (the local/worktree default)
+deliberately skips browser CORS checks and still tests the storage round-trip.
+Set `NEXT_PUBLIC_APP_URL` to the deployed HTTPS app origin to check its CORS too.
+CI always requires an exact HTTPS origin and never skips the CORS gate.
 
 Unit coverage lives in `tests/documents-*.test.ts` and `tests/*storage*.test.ts`
 (plus `tests/parent-document-retirement.test.ts`). Conventions:

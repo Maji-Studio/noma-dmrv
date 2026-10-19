@@ -9,36 +9,75 @@
  */
 import Link from "next/link";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
-import { Accordion } from "@/components/ui/accordion";
 import { InfoHint } from "@/components/ui/tooltip";
-import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
+import { ENTITY_READINESS_CHECK_DISPLAY_LIMIT, type RemovalRequirementCheck } from "@/lib/certification/readiness";
+import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
+import { transportRepairDestination } from "@/lib/isometric/semantic-binding-catalog";
 import { certificationSettingsHref } from "@/lib/certification/links";
+import {
+  removalTemplateBlockerDestination,
+  type RemovalTemplateBlockerCode,
+} from "@/lib/certification/removal-template-blockers";
 import {
   buildFeedstockTypeEditDeepLink,
   FEEDSTOCK_TYPE_EDIT_LABEL,
 } from "@/lib/entity-deep-link";
 import { actionableSubmissionChecks } from "./submission-facts";
 
-const CHECKS_ITEM = "submission-checks";
 const CHECK_ICON_SIZE = 14;
-const ACCORDION_ITEM =
-  "rounded-none border-[var(--color-border-secondary)] bg-[var(--color-background-white)]";
-const ACCORDION_TRIGGER =
-  "bg-[var(--color-background-white)] px-16 py-10 hover:bg-[var(--color-surface-light)]";
 /** Readiness details pack several records into one string. */
 const DETAIL_SEPARATOR = " · ";
+
+/** A member credit batch, for links that land on its Removal template. */
+interface CheckCreditBatch {
+  id: string;
+  code: string;
+}
 
 interface SubmissionChecksProps {
   checks: RemovalRequirementCheck[];
   facilityId: string;
+  /** The Removal's credit batches. Template pin blockers link to each one. */
+  creditBatches?: readonly CheckCreditBatch[];
+}
+
+/**
+ * A pin blocker is fixed on each credit batch (Switch template); a line blocker
+ * in the template line review. Without codes, fall back to Settings.
+ */
+function templateFixLinks(
+  codes: readonly RemovalTemplateBlockerCode[],
+  facilityId: string,
+  creditBatches: readonly CheckCreditBatch[],
+): { label: string; href: string }[] {
+  const destinations = new Set(
+    codes.map(removalTemplateBlockerDestination),
+  );
+  if (destinations.size === 0) {
+    return [{ label: "Open settings", href: certificationSettingsHref(facilityId) }];
+  }
+  const links: { label: string; href: string }[] = [];
+  if (destinations.has("creditBatchTemplate")) {
+    const target = { key: "template", fixTarget: "creditBatchTemplate" } as const;
+    if (creditBatches.length === 0) links.push(batchHealthFixLinkFor(target, facilityId));
+    for (const batch of creditBatches) {
+      const link = batchHealthFixLinkFor(target, facilityId, batch.id);
+      links.push(creditBatches.length === 1 ? link : { ...link, label: `${link.label} on ${batch.code}` });
+    }
+  }
+  if (destinations.has("templateLineReview")) {
+    links.push(batchHealthFixLinkFor({ key: "template", fixTarget: "templateLineReview" }, facilityId));
+  }
+  return links;
 }
 
 function fixLinksFor(
   check: Pick<
     RemovalRequirementCheck,
-    "key" | "fixTarget" | "fixTargetId"
+    "key" | "fixTarget" | "fixTargetId" | "transportCategory" | "lineageIssues" | "templateBlockerCodes"
   >,
   facilityId: string,
+  creditBatches: readonly CheckCreditBatch[] = [],
 ): { label: string; href: string }[] {
   const productionRuns = {
     label: "Review production runs",
@@ -53,12 +92,22 @@ function fixLinksFor(
     href: `/samples?facility=${facilityId}`,
   };
 
+  const links = (check.lineageIssues ?? []).slice(0, ENTITY_READINESS_CHECK_DISPLAY_LIMIT).map((issue) => batchHealthFixLinkFor({
+    key: check.key === "transport" ? "transport" : "entityReadiness", fixTarget: issue.fixTarget,
+    affectedRecords: [{ ...issue.record, missing: [issue.detail] }],
+  }, facilityId));
+  const lineageLinks = [...new Map(links.map((link) => [link.href, link])).values()];
+
   switch (check.key) {
+    case "entityReadiness": {
+      return lineageLinks;
+    }
     case "mapping":
-    case "template":
       return [
         { label: "Open settings", href: certificationSettingsHref(facilityId) },
       ];
+    case "template":
+      return templateFixLinks(check.templateBlockerCodes ?? [], facilityId, creditBatches);
     case "measurementDates":
       if (check.fixTarget === "productionRuns") return [productionRuns];
       if (check.fixTarget === "labSamples") return [labSamples];
@@ -78,9 +127,15 @@ function fixLinksFor(
       return [];
     case "transportUniformity":
     case "transport":
-      return [
-        { label: "Open deliveries", href: `/deliveries?facility=${facilityId}` },
-      ];
+      if (lineageLinks.length) return lineageLinks;
+      if (!check.transportCategory) return [];
+      return [{
+        ...batchHealthFixLinkFor({
+          key: "transport",
+          fixTarget: transportRepairDestination(check.transportCategory),
+        }, facilityId),
+        label: `Review ${check.transportCategory} transport`,
+      }];
     case "durability":
       return [
         { label: "Review Samples", href: `/samples?facility=${facilityId}` },
@@ -121,15 +176,17 @@ function dateGuidance(dateCount: number): string {
 function CheckRow({
   check,
   facilityId,
+  creditBatches,
 }: {
   check: RemovalRequirementCheck;
   facilityId: string;
+  creditBatches?: readonly CheckCreditBatch[];
 }) {
-  const fixes = fixLinksFor(check, facilityId);
+  const fixes = fixLinksFor(check, facilityId, creditBatches);
   const detailLines = check.detail?.split(DETAIL_SEPARATOR) ?? [];
 
   return (
-    <li className="flex items-start gap-8 border-t border-[var(--color-border-tertiary)] px-16 py-8 first:border-t-0">
+    <li className="flex items-start gap-8">
       <span className="mt-2">
         <WarningIcon
           size={CHECK_ICON_SIZE}
@@ -183,6 +240,7 @@ function CheckRow({
 export function SubmissionChecks({
   checks,
   facilityId,
+  creditBatches,
 }: SubmissionChecksProps) {
   const actionChecks = actionableSubmissionChecks(checks);
   const passedCount = actionChecks.filter(
@@ -193,35 +251,20 @@ export function SubmissionChecks({
   );
 
   return (
-    <Accordion.Root className="gap-0" defaultValue={[CHECKS_ITEM]}>
-      <Accordion.Item value={CHECKS_ITEM} className={ACCORDION_ITEM}>
-        <Accordion.Header>
-          <Accordion.Trigger
-            className={ACCORDION_TRIGGER}
-            labelClassName="body-small normal-case tracking-normal text-[var(--color-text-primary)]"
-          >
-            <span className="flex w-full items-center justify-between gap-12">
-              <span>What to fix</span>
-              <span className="body-caption font-normal text-[var(--color-text-tertiary)]">
-                {passedCount} {passedCount === 1 ? "check" : "checks"} passed
-              </span>
-            </span>
-          </Accordion.Trigger>
-        </Accordion.Header>
-        <Accordion.Panel className="[&>div]:p-0">
-          <div className="border-t border-[var(--color-border-tertiary)]">
-            <ul>
-              {attentionChecks.map((check) => (
-                <CheckRow
-                  key={check.key}
-                  check={check}
-                  facilityId={facilityId}
-                />
-              ))}
-            </ul>
-          </div>
-        </Accordion.Panel>
-      </Accordion.Item>
-    </Accordion.Root>
+    <section className="flex flex-col gap-12" aria-label="What to fix">
+      <div className="flex items-baseline justify-between gap-12">
+        <h3 className="body-small font-medium text-[var(--color-text-primary)]">
+          What to fix
+        </h3>
+        <span className="body-caption text-[var(--color-text-tertiary)]">
+          {passedCount} {passedCount === 1 ? "check" : "checks"} passed
+        </span>
+      </div>
+      <ul className="flex flex-col gap-12">
+        {attentionChecks.map((check) => (
+          <CheckRow key={`${check.key}-${check.transportCategory ?? ""}`} check={check} facilityId={facilityId} creditBatches={creditBatches} />
+        ))}
+      </ul>
+    </section>
   );
 }

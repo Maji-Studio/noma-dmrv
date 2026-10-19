@@ -31,6 +31,7 @@ interface CertifierSettingsPanelProps {
   canManage: boolean;
   /** Inline avoids opening a project-link dialog inside an existing modal. */
   projectLinkPresentation?: "dialog" | "inline";
+  onProjectLinked?: () => void;
 }
 
 export function CertifierSettingsPanel({
@@ -38,6 +39,7 @@ export function CertifierSettingsPanel({
   facilityLabel,
   canManage,
   projectLinkPresentation = "dialog",
+  onProjectLinked,
 }: CertifierSettingsPanelProps) {
   const { data: organization, isLoading } = useActiveOrganizationProfile();
 
@@ -72,6 +74,7 @@ export function CertifierSettingsPanel({
           canManage={canManage}
           embedded
           linkPresentation={projectLinkPresentation}
+          onLinked={onProjectLinked}
         />
       </div>
     </div>

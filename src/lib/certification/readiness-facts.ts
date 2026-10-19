@@ -22,28 +22,46 @@ export function toRemovalReadinessFacts(
     ? isLockedInFlight(ctx.latestSubmission) &&
       !canReclaimInterruptedSubmission(ctx.latestSubmission.metadata)
     : false;
+  // Feedstock issues are built from the same missingEntityIds used below.
+  // Transport readiness blocks them and carries their fix targets; including
+  // them here too would duplicate the entity-readiness row (#1024).
+  const submissionLineageIssues = ctx.submissionLineageBlockers.filter(
+    (blocker) => blocker.fixTarget !== "feedstocks",
+  );
   return {
     local: ctx.latestSubmission?.status ?? null,
     lockInFlight,
     hasOrgCredentials: ctx.hasOrgCredentials,
     hasMapping: !!ctx.mapping,
-    hasDefaultTemplate: !!ctx.defaultTemplate,
-    missingDefaultTemplateId: ctx.missingDefaultTemplateId,
+    hasRemovalTemplate: !!ctx.removalTemplate,
+    templateBlockers: ctx.templateBlockers,
+    emissionLineBlockers: ctx.emissionLines?.flatMap((line) => line.blocker ? [line.blocker] : []),
     unresolvedBlueprintKeys: ctx.unresolvedBlueprintKeys,
+    unbindableTemplateInputs: ctx.unbindableTemplateInputs,
     feedstockTypeMappingGaps: ctx.feedstockTypeMappingGaps ?? [],
     hasSubmittableRuns: ctx.hasSubmittableRuns,
     productionReadinessGap: ctx.productionReadinessGap ?? null,
     entityReadinessGaps: ctx.entityReadinessGaps ?? [],
+    submissionLineageIssues,
     durabilityGateBlockers: ctx.durabilityGateBlockers ?? [],
+    durabilityConfigurationBlockers: ctx.durabilityConfigurationBlockers,
+    templateTierBlocker: ctx.templateTierBlocker,
     futureDatedMeasurements: ctx.futureDatedMeasurements ?? [],
     supportingDocumentCount: ctx.supportingDocuments.total,
     mirroredDocumentCount: ctx.supportingDocuments.mirrored,
+    transportVehicleAdvisories: ctx.requiredTransportCategories.flatMap(
+      (category) => ctx.transportCoverage[category].vehicleAdvisories,
+    ),
     requiredTransport: ctx.requiredTransportCategories.map((category) => {
       const bucket = ctx.transportCoverage[category];
       return {
         category,
         count: bucket.count,
-        hasAggregationWarning: bucket.aggregationWarning !== null,
+        missingEntityIds: bucket.missingEntityIds,
+        lineageIssues: category === "feedstock"
+          ? ctx.submissionLineageBlockers.filter(blocker => blocker.fixTarget === "feedstocks")
+          : undefined,
+        aggregationWarning: bucket.aggregationWarning,
       };
     }),
   };

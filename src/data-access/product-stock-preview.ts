@@ -1,19 +1,17 @@
 import { db, type DbTransaction } from '@/db';
 import { storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
-import { conflictCode } from '@/lib/conflict-ref';
-import { STOCK_CONFLICT_ENTITY } from '@/lib/stock-conflict-entities';
 import { ActionConflictError, SafeError } from '@/lib/errors';
 import type { BiocharProductFormData } from '@/schemas/biochar-products';
 import type { AffectedStockPreview } from '@/types/output-stock';
 import { and, eq, isNull } from 'drizzle-orm';
 import { resolveCompositionIngredientMassBasis } from './biochar-product-composition';
 import { getIngredientStockBasis } from './ingredient-moisture-basis';
+import { StockBasisChangedError } from './output-stock-errors';
 import { prepareOutputStock, stockFingerprint } from './output-stock-operations';
 import { requireOrgScope } from './utils';
 
 const PERCENT_SCALE = 100;
-const STOCK_CHANGED_MESSAGE = 'Stock changed since this preview. Refresh the preview and try again.';
 export type ProductStockPreviewInput = Pick<BiocharProductFormData, 'facilityId' | 'formulationId' | 'placedAt' | 'sourceBiocharStorageLocationId' | 'storageLocationId' | 'massKg' | 'moistureContentPercent' | 'waterAddedKg' | 'sources'> & { ingredientBins?: Record<string, unknown>[] };
 
 /** Read-only projection. Product creation still revalidates every stock draw under locks. */
@@ -22,9 +20,14 @@ export async function previewProductStock(ctx: OrgContext, input: ProductStockPr
   return db.transaction(async tx => (await prepareProductStock(ctx, input, tx)).bins);
 }
 
-/** The same request projection is recomputed under all bin locks before writes. */
-export async function prepareProductStock(ctx: OrgContext, input: ProductStockPreviewInput, tx: DbTransaction) {
+/**
+ * The same request projection is recomputed under all bin locks before writes.
+ * The placement is read as one UTC instant, so a dry run and a write that name
+ * the same moment in different notations share a fingerprint.
+ */
+export async function prepareProductStock(ctx: OrgContext, raw: ProductStockPreviewInput, tx: DbTransaction) {
     requireOrgScope(ctx);
+    const input = { ...raw, placedAt: new Date(raw.placedAt).toISOString() };
     const base = { facilityId: input.facilityId, occurredAt: input.placedAt };
     // A split biochar bin is read per sub-bin; the draw then has no single moisture.
     const source = await prepareOutputStock(ctx, { ...base, storageLocationId: input.sourceBiocharStorageLocationId, kind: 'production_draw', wetMassKg: input.massKg,
@@ -62,7 +65,7 @@ export async function prepareProductStock(ctx: OrgContext, input: ProductStockPr
     const destination = await prepareOutputStock(ctx, { ...base, storageLocationId: input.storageLocationId, kind: 'count', wetMassKg: 0, moisturePercent: 0 }, tx);
     if (destination.lane !== 'product' || destination.bin.formulationId && destination.bin.formulationId !== input.formulationId) throw new SafeError('Choose a product bin matching the formulation.');
     const before = destination.preview;
-    // The product bin's wet stock is its batches at their latest readings; the
+    // The product bin's wet stock is its batches' wet in less wet out; the
     // new batch adds its own recorded wet mass on top.
     const beforeWet = before.beforeEstimatedWetKg;
     const beforeAllocations = before.beforeAllocations;
@@ -93,15 +96,18 @@ export async function prepareProductStock(ctx: OrgContext, input: ProductStockPr
 }
 
 export function assertProductStockBasis(expected: string, prepared: Awaited<ReturnType<typeof prepareProductStock>>) {
-  if (expected !== prepared.basisFingerprint) throw new ActionConflictError(
-    STOCK_CHANGED_MESSAGE,
-    { entity: STOCK_CONFLICT_ENTITY.storageLocation, id: prepared.source.bin.id, code: conflictCode(prepared.source.bin.code) },
-  );
+  if (expected !== prepared.basisFingerprint) throw new StockBasisChangedError(prepared.source.bin);
 }
 
-/** A previously previewable request becoming unavailable is also a refresh conflict. */
-export async function revalidateProductStock(ctx: OrgContext, input: ProductStockPreviewInput, tx: DbTransaction, expectedFingerprint: string) {
+/**
+ * Recomputes the product's stock basis under the bin locks. With a fingerprint
+ * from a preview, a moved basis is a refresh conflict, and so is a previewed
+ * request becoming unavailable. Without one the product acts on current stock
+ * (decision 53) and a refusal is the real refusal.
+ */
+export async function revalidateProductStock(ctx: OrgContext, input: ProductStockPreviewInput, tx: DbTransaction, expectedFingerprint?: string) {
   requireOrgScope(ctx);
+  if (expectedFingerprint === undefined) return prepareProductStock(ctx, input, tx);
   try {
     const prepared = await prepareProductStock(ctx, input, tx);
     assertProductStockBasis(expectedFingerprint, prepared);
@@ -113,7 +119,6 @@ export async function revalidateProductStock(ctx: OrgContext, input: ProductStoc
     const [bin] = await tx.select({ code: storageLocations.code }).from(storageLocations)
       .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, input.storageLocationId)));
     if (!bin) throw error;
-    throw new ActionConflictError(STOCK_CHANGED_MESSAGE,
-      { entity: STOCK_CONFLICT_ENTITY.storageLocation, id: input.storageLocationId, code: conflictCode(bin.code) });
+    throw new StockBasisChangedError({ id: input.storageLocationId, code: bin.code });
   }
 }

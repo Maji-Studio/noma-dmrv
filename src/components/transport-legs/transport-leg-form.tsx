@@ -1,6 +1,9 @@
 "use client";
 
-import { useForm, useWatch } from "react-hook-form";
+import { MODEL_YEAR_MIN, MODEL_YEAR_MAX } from "@/schemas/model-year";
+
+import { useController, useForm, useWatch } from "react-hook-form";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   DistanceCalcField,
@@ -22,9 +25,9 @@ import {
   DISTANCE_SOURCE_LABELS,
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
-import { TRIP_TYPE_OPTIONS, type TripTypeValue } from "@/schemas/trip-type";
-import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import { nextTransportDistanceSource } from "./distance-provenance";
+import { ONE_WAY_CUE, oneWayDistanceCue } from "@/lib/format-utils";
 import type { TransportLeg } from "@/db/schema";
 import { TransportEvidencePanel } from "./transport-evidence-documents";
 
@@ -52,8 +55,6 @@ function isSavedTransportLeg(
 
 function legToFormDefaults(
   leg: TransportLeg | TransportLegFormData | null | undefined,
-  /** Organization default, for a leg being created. */
-  defaultTripType: TripTypeValue,
 ) {
   return {
     originGpsLatitude: leg?.originGpsLatitude ?? null,
@@ -69,10 +70,7 @@ function legToFormDefaults(
     vehicleType: leg?.vehicleType ?? "",
     modelYear: leg?.modelYear ?? null,
     loadMassKg: leg?.loadMassKg ?? null,
-    tripType: leg?.tripType ?? defaultTripType,
     calculationMethodType: "distance_based" as const,
-    billOfLading: leg?.billOfLading ?? "",
-    weighScaleTicketRef: leg?.weighScaleTicketRef ?? "",
   };
 }
 
@@ -89,10 +87,7 @@ export function TransportLegForm({
 }: TransportLegFormProps) {
   const isEditMode = !!leg;
   const isPersisted = !!leg && isSavedTransportLeg(leg);
-  // Organization operating defaults seed create mode only; a saved leg always
-  // wins. Server-seeded in the `(app)` layout, so this is synchronous.
-  const { defaults: orgDefaults } = useOrganizationDefaultValues();
-  const defaultValues = legToFormDefaults(leg, orgDefaults.defaultTripType);
+  const defaultValues = legToFormDefaults(leg);
 
   const {
     register,
@@ -108,10 +103,15 @@ export function TransportLegForm({
 
   // Provenance: hand-editing the distance reverts a CALC'd map estimate to
   // manual. A legacy document value stays available only while selected.
-  const distanceSource = useWatch({
+  const { field: distanceSourceField } = useController({
     control,
     name: "distanceSource",
-  }) as DistanceSourceValue;
+  });
+  const { field: distanceKmField } = useController({
+    control,
+    name: "distanceKm",
+  });
+  const distanceSource = distanceSourceField.value as DistanceSourceValue;
   const distanceSourceOptions = (
     distanceSource === "map_estimate"
       ? (["map_estimate", "manual"] as const)
@@ -120,23 +120,16 @@ export function TransportLegForm({
         : (["manual"] as const)
   ).map((value) => ({ value, label: DISTANCE_SOURCE_LABELS[value] }));
 
-  // CALC endpoints: this leg's own origin/destination pickers.
+  // This leg's recorded origin and destination coordinates.
   const originLat = useWatch({ control, name: "originGpsLatitude" }) as number | null | undefined;
   const originLng = useWatch({ control, name: "originGpsLongitude" }) as number | null | undefined;
   const destinationLat = useWatch({ control, name: "destinationGpsLatitude" }) as number | null | undefined;
   const destinationLng = useWatch({ control, name: "destinationGpsLongitude" }) as number | null | undefined;
-  const distanceKm = useWatch({ control, name: "distanceKm" }) as number | null | undefined;
+  const distanceKm = distanceKmField.value as number | null | undefined;
   // A saved leg keeps its own method; new legs default to the one selectable method.
   const transportMethod =
     (useWatch({ control, name: "transportMethodType" }) as string | undefined) ??
     selectableTransportMethods[0];
-
-  const originPoint =
-    originLat != null && originLng != null ? { lat: originLat, lng: originLng } : null;
-  const destinationPoint =
-    destinationLat != null && destinationLng != null
-      ? { lat: destinationLat, lng: destinationLng }
-      : null;
 
   const submit = handleSubmit(async (data) => {
     await onSubmit(data as TransportLegFormData);
@@ -158,10 +151,12 @@ export function TransportLegForm({
         hint="We record distance and cargo mass; Isometric applies the transport emissions factor."
       >
         <div className="flex flex-col gap-16">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
+          {/* From → To: the two names read as one pair; the arrow only shows
+              when they sit side by side. */}
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-16">
             <FormField
               id="originName"
-              label="Origin name"
+              label="From"
               error={errors.originName?.message}
             >
               <FormInput
@@ -171,9 +166,15 @@ export function TransportLegForm({
                 {...register("originName")}
               />
             </FormField>
+            <ArrowRightIcon
+              size={16}
+              weight="bold"
+              aria-hidden="true"
+              className="hidden sm:block mt-[calc(var(--spacing-24)+var(--spacing-12))] text-[var(--color-text-tertiary)]"
+            />
             <FormField
               id="destinationName"
-              label="Destination name"
+              label="To"
               error={errors.destinationName?.message}
             >
               <FormInput
@@ -189,7 +190,7 @@ export function TransportLegForm({
               each preview, search box, and the lat/lng pair. */}
           <PositionPicker
             idPrefix="origin"
-            label="Origin position"
+            label="From position"
             accent="orange"
             latitude={originLat ?? null}
             longitude={originLng ?? null}
@@ -203,7 +204,7 @@ export function TransportLegForm({
           />
           <PositionPicker
             idPrefix="destination"
-            label="Destination position"
+            label="To position"
             accent="pink"
             latitude={destinationLat ?? null}
             longitude={destinationLng ?? null}
@@ -216,106 +217,99 @@ export function TransportLegForm({
             disabled={isSubmitting}
           />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
-          <DistanceCalcField
-            id="distanceKm"
-            label="Distance (km)"
-            required
-            certifyRequired={isTransportLegCertifyField("distanceKm")}
-            certifyStatus={certStatus("distanceKm")}
-            error={errors.distanceKm?.message}
-            disabled={isSubmitting}
-            // The provenance select next to this field is the source UI.
-            showSourceBadge={false}
-            distanceKm={distanceKm}
-            distanceSource={distanceSource}
-            onDistanceChange={(km, source) => {
-              setValue("distanceKm", km ?? undefined, {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
-              // CALC always claims map_estimate; a hand edit only degrades a
-              // map estimate — an explicit manual or legacy document value survives.
-              if (source === "map_estimate" || distanceSource === "map_estimate") {
-                setValue("distanceSource", source ?? "manual", { shouldDirty: true });
-              }
-            }}
-            origin={originPoint}
-            destination={destinationPoint}
-            originLabel="origin position"
-            destinationLabel="destination position"
-          />
-          <FormField
-            id="distanceSource"
-            label="Distance source"
-            error={errors.distanceSource?.message}
-            certifyRequired={isTransportLegCertifyField("distanceSource")}
-            certifyStatus={certStatus("distanceSource")}
-          >
-            <FormSelect
+          <div className="grid grid-cols-1 gap-16">
+            <FormField
               id="distanceSource"
-              options={distanceSourceOptions}
-              error={!!errors.distanceSource}
-              {...register("distanceSource")}
-            />
-          </FormField>
-          {/* Road is the only method the registry accepts, so it is a fixed
-              value: shown as text, still submitted through the hidden input. */}
-          <FormField id="transportMethodType-value" label="Transport method">
-            <output
-              id="transportMethodType-value"
-              className="block body-medium"
-              data-testid="transportMethodType-value"
+              label="Distance source"
+              error={errors.distanceSource?.message}
+              certifyRequired={isTransportLegCertifyField("distanceSource")}
+              certifyStatus={certStatus("distanceSource")}
             >
-              {formatTransportMethod(transportMethod)}
-            </output>
-          </FormField>
-          <input type="hidden" {...register("transportMethodType")} />
-          <FormField
-            id="tripType"
-            label="Trip type"
-            error={errors.tripType?.message}
-            helperText="Return doubles the distance (vehicle returns empty). Choose One-way only with an evidenced onward destination."
-          >
-            <FormSelect
-              id="tripType"
-              options={TRIP_TYPE_OPTIONS}
+              <FormSelect
+                id="distanceSource"
+                options={distanceSourceOptions}
+                error={!!errors.distanceSource}
+                {...distanceSourceField}
+                value={distanceSourceField.value ?? "manual"}
+              />
+            </FormField>
+            <DistanceCalcField
+              id="distanceKm"
+              label="Distance"
+              // Every leg counts its round trip; show what the entry counts.
+              cue={oneWayDistanceCue(distanceKm, ONE_WAY_CUE)}
+              required
+              certifyRequired={isTransportLegCertifyField("distanceKm")}
+              certifyStatus={certStatus("distanceKm")}
+              error={errors.distanceKm?.message}
               disabled={isSubmitting}
-              error={!!errors.tripType}
-              {...register("tripType")}
+              // The provenance select above this field is the source UI.
+              showSourceBadge={false}
+              allowEstimate={false}
+              origin={null}
+              destination={null}
+              distanceKm={distanceKm}
+              distanceSource={distanceSource}
+              onDistanceChange={(km, source) => {
+                distanceKmField.onChange(km);
+                // CALC always claims map_estimate; a hand edit only degrades a
+                // map estimate — an explicit manual or legacy document value survives.
+                const nextSource = nextTransportDistanceSource(source, distanceSource);
+                if (nextSource) distanceSourceField.onChange(nextSource);
+              }}
+              originLabel="origin position"
+              destinationLabel="destination position"
             />
-          </FormField>
-          <FormField
-            id="loadMassKg"
-            label="Load mass (kg)"
-            required
-            error={errors.loadMassKg?.message}
-            helperText="Mass moved on this leg. Used to weight transport emissions."
-            certifyRequired={isTransportLegCertifyField("loadMassKg")}
-            certifyStatus={certStatus("loadMassKg")}
-          >
-            <FormInput
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
+            {/* Road is the only method the registry accepts, so it is a fixed
+                value: shown as text, still submitted through the hidden input. */}
+            <FormField id="transportMethodType-value" label="Transport method">
+              <output
+                id="transportMethodType-value"
+                className="block body-medium"
+                data-testid="transportMethodType-value"
+              >
+                {formatTransportMethod(transportMethod)}
+              </output>
+            </FormField>
+            <input type="hidden" {...register("transportMethodType")} />
+            <FormField
               id="loadMassKg"
-              type="number"
-              step="any"
-              min={MIN_LOAD_MASS_KG}
-              error={!!errors.loadMassKg}
-              {...register("loadMassKg")}
-            />
-          </FormField>
-          <FormField
-            id="vehicleType"
-            label="Vehicle type"
-            error={errors.vehicleType?.message}
-            helperText="Selects the Isometric component emission factor."
-          >
-            <FormInput
+              label="Load mass"
+              unit="kg"
+              required
+              error={errors.loadMassKg?.message}
+              helperText="Mass moved on this leg. Used to weight transport emissions."
+              certifyRequired={isTransportLegCertifyField("loadMassKg")}
+              certifyStatus={certStatus("loadMassKg")}
+            >
+              <FormInput
+                id="loadMassKg"
+                type="number"
+                step="any"
+                min={MIN_LOAD_MASS_KG}
+                error={!!errors.loadMassKg}
+                {...register("loadMassKg")}
+              />
+            </FormField>
+            <FormField
               id="vehicleType"
-              placeholder="e.g. Class 8 heavy-duty truck"
-              error={!!errors.vehicleType}
-              {...register("vehicleType")}
-            />
-          </FormField>
+              label="Vehicle type"
+              error={errors.vehicleType?.message}
+              helperText="Recorded for Transportation module evidence. The removal template uses a fixed transport factor."
+            >
+              <FormInput
+                id="vehicleType"
+                placeholder="e.g. Class 8 heavy-duty truck"
+                error={!!errors.vehicleType}
+                {...register("vehicleType")}
+              />
+            </FormField>
+            <FormField id="modelYear" label="Model year" error={errors.modelYear?.message}>
+              <FormInput id="modelYear" type="number" min={MODEL_YEAR_MIN} max={MODEL_YEAR_MAX} step="1" error={!!errors.modelYear} {...register("modelYear")} />
+            </FormField>
           </div>
         </div>
       </FormSection>

@@ -1,3 +1,4 @@
+import { expectedVersionSchema } from "./helpers";
 /**
  * Production Incident validation schemas
  * Zod schemas for inline production incident CRUD within a production run
@@ -5,6 +6,7 @@
 
 import { z } from "zod";
 import { emptyToNull } from "./helpers";
+import { createEventInstantSchema } from "./event-instant";
 
 export const productionIncidentSeverities = ["low", "medium", "high"] as const;
 
@@ -19,21 +21,7 @@ export const productionIncidentFormSchema = z.object({
     .string()
     .min(1, "Select a production run.")
     .uuid("Choose a valid production run."),
-  incidentTime: z.union([
-    z.date(),
-    z.string().min(1, "Enter an incident time.").transform((val, ctx) => {
-      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(val)) return val;
-      const date = new Date(val);
-      if (isNaN(date.getTime())) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Enter a valid incident time.",
-        });
-        return z.NEVER;
-      }
-      return date;
-    }),
-  ]),
+  incidentTime: createEventInstantSchema("Enter the incident time."),
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   reactorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   severity: z.enum(productionIncidentSeverities),
@@ -61,13 +49,17 @@ export const productionIncidentFormSchema = z.object({
 export const createProductionIncidentSchema = productionIncidentFormSchema;
 
 export const updateProductionIncidentSchema = productionIncidentFormSchema.extend({
+  expectedVersion: expectedVersionSchema,
   productionIncidentId: z.string().uuid("Choose a valid production incident."),
 });
 
 export const deleteProductionIncidentSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   productionIncidentId: z.string().uuid("Choose a valid production incident."),
 });
 
 export type ProductionIncidentFormData = z.infer<typeof productionIncidentFormSchema>;
 export type CreateProductionIncidentData = z.infer<typeof createProductionIncidentSchema>;
 export type UpdateProductionIncidentData = z.infer<typeof updateProductionIncidentSchema>;
+
+export type DeleteProductionIncidentData = z.infer<typeof deleteProductionIncidentSchema>;

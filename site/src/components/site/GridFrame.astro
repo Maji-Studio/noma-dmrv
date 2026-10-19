@@ -1,0 +1,25 @@
+---
+/**
+ * GridFrame: a section in the hairline grid. The outer element spans the page (and carries the band
+ * colour); the inner column is framed by two vertical hairlines, with a top rule and cross marks.
+ * Props:
+ *   as?: "section" | "div" | "header" | "footer" | "aside"   default "section"
+ *   id?: string
+ *   tone?: "page" | "rose" | "purple" | "paper"   band colour, default "page"
+ *   rule?: boolean    top hairline, default true
+ *   cross?: boolean   cross marks where the top rule meets the frame, default true (needs rule)
+ *   pad?: "none" | "md" | "lg"   vertical padding inside the frame, default "lg" (--section)
+ *   flush?: boolean   no horizontal padding, so children (e.g. .gf-cells) run edge to edge
+ *   class?: string    added to the outer element
+ *   innerClass?: string   added to the framed column
+ *   ...rest           any other attribute (aria-labelledby, data-*) goes on the outer element
+ * Helpers: wrap children in <div class="gf-cells" style="--cols:2"> for hairline-divided cells.
+ */
+const { as: Tag = "section", tone = "page", rule = true, cross = true, pad = "lg", flush = false, class: className, innerClass, ...rest } = Astro.props;
+---
+<Tag
+  class:list={["gf", tone !== "page" && `gf--${tone}`, rule && "gf--rule", rule && cross && "gf--cross", pad !== "none" && `gf--pad-${pad}`, flush && "gf--flush", className]}
+  {...rest}
+>
+  <div class:list={["gf-in", innerClass]}><slot /></div>
+</Tag>

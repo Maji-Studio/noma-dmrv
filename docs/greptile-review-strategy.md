@@ -70,7 +70,7 @@ Do not copy project policy into reviewer dashboards. The sources of truth are:
 
 - [.claude/CLAUDE.md](../.claude/CLAUDE.md) for repository operations and
   architecture guardrails;
-- [CONTEXT.md](../CONTEXT.md) for domain language and entity grain;
+- [GLOSSARY.md](../GLOSSARY.md) for domain language and entity grain;
 - [architecture.md](architecture.md), [security.md](security.md), and
   [database.md](database.md) for system boundaries and persistence invariants;
 - specialized evergreen docs and ADRs referenced with scopes in
@@ -82,7 +82,7 @@ or path scope changes. Stable rule IDs make later narrowing or disabling
 traceable.
 
 Changes to `.greptile/**`, `.coderabbit.yaml`, `.claude/CLAUDE.md`, `AGENTS.md`,
-`CONTEXT.md`, and the referenced governing docs need explicit human review. A PR
+`GLOSSARY.md`, and the referenced governing docs need explicit human review. A PR
 must not be allowed to weaken its own reviewer unnoticed.
 
 Dashboard settings are organization defaults and are less auditable. Keep them

@@ -16,13 +16,14 @@ import { hashPassword } from "better-auth/crypto";
 import { and, eq } from "drizzle-orm";
 import { parse as parseEnv } from "dotenv";
 import * as schema from "../../src/db/schema";
-import { DEC_ORG_ID } from "../../src/db/org-defaults";
-import { encryptSecret } from "../../src/lib/crypto/secrets";
+import { DEC_ORG_ID, DEC_ORG_NAME } from "../../src/db/org-defaults";
 import { expect, test } from "./fixtures";
 import {
   seedCertifierMapping,
   SANDBOX_PROJECT_ID,
 } from "./fixtures/certification-helpers";
+import { CERTIFIER_VERIFICATION_MESSAGES } from "../../src/lib/certification/certifier-credentials-verification";
+import { saveCertifierKeysInAdminDirectory } from "./fixtures/certifier-credentials-ui";
 import { createDbConnection } from "./fixtures/db";
 
 const ISOMETRIC_BASE_URLS = {
@@ -136,26 +137,6 @@ test.describe(
         );
         if (!importedEntry) return;
 
-        await db
-          .insert(schema.certifierCredentials)
-          .values({
-            organizationId: DEC_ORG_ID,
-            provider: "isometric",
-            accessTokenEncrypted: encryptSecret(ACCESS_TOKEN!),
-            clientSecretEncrypted: encryptSecret(CLIENT_SECRET!),
-          })
-          .onConflictDoUpdate({
-            target: [
-              schema.certifierCredentials.organizationId,
-              schema.certifierCredentials.provider,
-            ],
-            set: {
-              accessTokenEncrypted: encryptSecret(ACCESS_TOKEN!),
-              clientSecretEncrypted: encryptSecret(CLIENT_SECRET!),
-              updatedAt: new Date(),
-            },
-          });
-
         if (!linkedEntry) {
           const [importedType] = await db
             .insert(schema.feedstockTypes)
@@ -204,11 +185,28 @@ test.describe(
         expect(signInResponse.ok()).toBe(true);
         const page = await browserContext.newPage();
 
+        // Store the sandbox keys through the app so the server encrypts them
+        // with its own key; this worker's key differs locally (#1010).
+        const keys = await saveCertifierKeysInAdminDirectory(page, DEC_ORG_NAME, {
+          accessToken: ACCESS_TOKEN!,
+          clientSecret: CLIENT_SECRET!,
+        });
+        await expect(
+          keys.getByText(CERTIFIER_VERIFICATION_MESSAGES.connected, {
+            exact: false,
+          }),
+        ).toBeVisible();
+        await page.keyboard.press("Escape");
+        await expect(keys).not.toBeVisible();
+
         await page.goto(
           `/feedstock-types?facility=${seededData.facility.id}`,
         );
         await page
-          .getByRole("button", { name: "Import from Isometric" })
+          .getByRole("button", { name: "More ways to add a feedstock type" })
+          .click();
+        await page
+          .getByRole("menuitem", { name: "Import from Isometric" })
           .click();
 
         const dialog = page.getByRole("dialog", {

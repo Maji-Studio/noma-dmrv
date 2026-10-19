@@ -1,3 +1,4 @@
+import type { LineSources } from "@/lib/isometric/template-observations/line-sources";
 /**
  * Non-blocking submission advisories (`buildSubmissionWarnings`).
  *
@@ -17,7 +18,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
-import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import { buildSubmissionWarnings } from "@/fn/certification/submission-warnings";
 
 interface ComponentSpec {
@@ -42,6 +43,7 @@ function template(
         display_name: component.blueprintKey,
         inputs: (component.inputs ?? []).map((input) => ({
           input_key: input.inputKey,
+          quantity_kind: input.inputKey === "volume_of_fuel" ? "volume" : "energy",
           display_name: input.inputKey,
           type: input.type,
           datapoint_id: input.type === "fixed" ? "dtp_FIXED" : null,
@@ -53,7 +55,7 @@ function template(
 
 function run(
   overrides: Partial<Record<string, unknown>> = {},
-): ProductionRunWithSamples {
+): ProductionRunForCertification {
   return {
     id: "run-1",
     code: "RUN-1",
@@ -62,7 +64,7 @@ function run(
     dieselGensetLiters: 0,
     samples: [],
     ...overrides,
-  } as unknown as ProductionRunWithSamples;
+  } as unknown as ProductionRunForCertification;
 }
 
 function lineage(applicationDate: Date): {
@@ -93,38 +95,42 @@ const TEMPLATE_WITH_FUEL_COMPONENT = template([
 describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
   it("warns when genset diesel is recorded but the template has no fuel_usage_by_volume", () => {
     const warnings = buildSubmissionWarnings({
-      defaultTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
+      lineSources: DIESEL_CONTRACTS,
+      removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
       runs: [run({ dieselGensetLiters: 25 })],
       lineages: [],
     });
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toMatch(/monitored pyrolysis fuel input/);
-    expect(warnings[0]).toMatch(/before submitting these fuel emissions/);
+    expect(warnings[0]).toMatch(/Genset diesel is recorded/);
+    expect(warnings[0]).toMatch(/Review the Removal template lines/);
   });
 
   it("warns when startup/preprocessing diesel is recorded without the component", () => {
     const warnings = buildSubmissionWarnings({
-      defaultTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
+      lineSources: DIESEL_CONTRACTS,
+      removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
       runs: [run({ dieselOperationLiters: 5, preprocessingFuelLiters: 3 })],
       lineages: [],
     });
-    expect(warnings).toHaveLength(1);
+    expect(warnings).toHaveLength(2);
   });
 
-  it("stays silent when the pyrolysis group declares fuel_usage_by_volume", () => {
+  it("warns for genset diesel when only the startup contract is carried", () => {
     const warnings = buildSubmissionWarnings({
-      defaultTemplate: TEMPLATE_WITH_FUEL_COMPONENT,
+      lineSources: DIESEL_CONTRACTS,
+      removalTemplate: TEMPLATE_WITH_FUEL_COMPONENT,
       runs: [run({ dieselGensetLiters: 25, dieselOperationLiters: 5 })],
       lineages: [],
     });
-    expect(warnings).toEqual([]);
+    expect(warnings).toEqual([expect.stringContaining("Genset diesel is recorded")]);
   });
 
   it("ignores a fuel_usage_by_volume declared outside the pyrolysis group (cannot carry run diesel)", () => {
     // INPUT_MAPPING only serves pyrolysis/fuel_usage_by_volume, so a component
     // in another group would not receive the combined litres — still warn.
     const warnings = buildSubmissionWarnings({
-      defaultTemplate: template([
+      lineSources: DIESEL_CONTRACTS,
+      removalTemplate: template([
         {
           key: "pyrolysis",
           components: [{ blueprintKey: "grid_electricity_use" }],
@@ -149,7 +155,8 @@ describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
     // resolveTemplateInputs treats fixed inputs as prebound datapoints, so the
     // run-derived litres are replaced by the constant — the advisory must fire.
     const warnings = buildSubmissionWarnings({
-      defaultTemplate: template([
+      lineSources: DIESEL_CONTRACTS,
+      removalTemplate: template([
         {
           key: "pyrolysis",
           components: [
@@ -168,7 +175,8 @@ describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
 
   it("warns when the component declares no volume_of_fuel input at all", () => {
     const warnings = buildSubmissionWarnings({
-      defaultTemplate: template([
+      lineSources: DIESEL_CONTRACTS,
+      removalTemplate: template([
         {
           key: "pyrolysis",
           components: [
@@ -187,7 +195,8 @@ describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
 
   it("stays silent when no diesel is recorded", () => {
     const warnings = buildSubmissionWarnings({
-      defaultTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
+      lineSources: DIESEL_CONTRACTS,
+      removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
       runs: [run()],
       lineages: [],
     });
@@ -196,7 +205,8 @@ describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
 
   it("returns no diesel warning without a default template", () => {
     const warnings = buildSubmissionWarnings({
-      defaultTemplate: null,
+      lineSources: DIESEL_CONTRACTS,
+      removalTemplate: null,
       runs: [run({ dieselGensetLiters: 25 })],
       lineages: [],
     });
@@ -207,7 +217,8 @@ describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
 describe("buildSubmissionWarnings — month straddle (issue #320)", () => {
   it("emits no straddle warning when production start and latest application share a UTC month", () => {
     const warnings = buildSubmissionWarnings({
-      defaultTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
+      lineSources: DIESEL_CONTRACTS,
+      removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
       runs: [run({ startTime: new Date("2026-01-05T00:00:00Z") })],
       lineages: [lineage(new Date("2026-01-28T00:00:00Z"))],
     });
@@ -216,7 +227,8 @@ describe("buildSubmissionWarnings — month straddle (issue #320)", () => {
 
   it("warns when the latest application falls in a later UTC month than production start", () => {
     const warnings = buildSubmissionWarnings({
-      defaultTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
+      lineSources: DIESEL_CONTRACTS,
+      removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
       runs: [run({ startTime: new Date("2026-01-05T00:00:00Z") })],
       lineages: [
         lineage(new Date("2026-01-20T00:00:00Z")),
@@ -232,7 +244,8 @@ describe("buildSubmissionWarnings — month straddle (issue #320)", () => {
 
   it("warns across a year boundary (December production, January application)", () => {
     const warnings = buildSubmissionWarnings({
-      defaultTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
+      lineSources: DIESEL_CONTRACTS,
+      removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
       runs: [run({ startTime: new Date("2025-12-20T00:00:00Z") })],
       lineages: [lineage(new Date("2026-01-03T00:00:00Z"))],
     });
@@ -245,7 +258,8 @@ describe("buildSubmissionWarnings — month straddle (issue #320)", () => {
     // Runs start Jan + Feb; applications Feb + Feb → straddle (Jan vs Feb),
     // even though the later run and both applications share February.
     const warnings = buildSubmissionWarnings({
-      defaultTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
+      lineSources: DIESEL_CONTRACTS,
+      removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
       runs: [
         run({ startTime: new Date("2026-02-01T00:00:00Z") }),
         run({ startTime: new Date("2026-01-30T00:00:00Z") }),
@@ -263,14 +277,16 @@ describe("buildSubmissionWarnings — month straddle (issue #320)", () => {
   it("emits nothing without runs or lineages (nothing to compare)", () => {
     expect(
       buildSubmissionWarnings({
-        defaultTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
+      lineSources: DIESEL_CONTRACTS,
+        removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
         runs: [],
         lineages: [lineage(new Date("2026-04-05T00:00:00Z"))],
       }),
     ).toEqual([]);
     expect(
       buildSubmissionWarnings({
-        defaultTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
+      lineSources: DIESEL_CONTRACTS,
+        removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
         runs: [run({ startTime: new Date("2026-01-05T00:00:00Z") })],
         lineages: [],
       }),
@@ -279,7 +295,8 @@ describe("buildSubmissionWarnings — month straddle (issue #320)", () => {
 
   it("fires independently of the template (a straddle is a property of the dates alone)", () => {
     const warnings = buildSubmissionWarnings({
-      defaultTemplate: null,
+      lineSources: DIESEL_CONTRACTS,
+      removalTemplate: null,
       runs: [run({ startTime: new Date("2026-01-05T00:00:00Z") })],
       lineages: [lineage(new Date("2026-02-05T00:00:00Z"))],
     });
@@ -291,7 +308,8 @@ describe("buildSubmissionWarnings — month straddle (issue #320)", () => {
 describe("buildSubmissionWarnings — combined advisories", () => {
   it("surfaces the unmapped-diesel advisory alongside a straddle warning", () => {
     const warnings = buildSubmissionWarnings({
-      defaultTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
+      lineSources: DIESEL_CONTRACTS,
+      removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
       runs: [
         run({
           startTime: new Date("2026-01-05T00:00:00Z"),
@@ -301,13 +319,14 @@ describe("buildSubmissionWarnings — combined advisories", () => {
       lineages: [lineage(new Date("2026-02-05T00:00:00Z"))],
     });
     expect(warnings).toHaveLength(2);
-    expect(warnings[0]).toContain("Genset or startup diesel");
+    expect(warnings[0]).toContain("Startup diesel");
     expect(warnings[1]).toContain("spans multiple months");
   });
 
   it("emits only the diesel advisory when the window stays within one month", () => {
     const warnings = buildSubmissionWarnings({
-      defaultTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
+      lineSources: DIESEL_CONTRACTS,
+      removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
       runs: [
         run({
           startTime: new Date("2026-01-05T00:00:00Z"),
@@ -317,6 +336,11 @@ describe("buildSubmissionWarnings — combined advisories", () => {
       lineages: [lineage(new Date("2026-01-25T00:00:00Z"))],
     });
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain("Genset or startup diesel");
+    expect(warnings[0]).toContain("Genset diesel");
   });
 });
+
+const DIESEL_CONTRACTS: LineSources = {
+  "rtc-0-0": { scope: "operating", automaticSource: "run-genset-diesel", entryPolicy: "additive", origin: "reviewed" },
+  "rtc-0-1": { scope: "operating", automaticSource: "run-startup-diesel", entryPolicy: "additive", origin: "reviewed" },
+};

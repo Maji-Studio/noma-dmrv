@@ -1,3 +1,12 @@
+import { readRecordDependents } from "./record-lock-dependents";
+import { assertRecordLockFields } from "@/lib/record-lock-fields";
+import { recordLocks } from "@/lib/record-lock";
+import { partyArchived } from "@/lib/party-domain-errors";
+import { lockSupplierReference } from "./party-reference-guards";
+import type { CaptureActivity } from "@/lib/activity-changes";
+import type { ActivityEventInput } from "./activity-events";
+import { withFeedstockTransportReadiness } from "./feedstock-transport-readiness";
+import type { SnapshotStock } from "./stock-effects";
 /**
  * Feedstock Data Access Layer
  * Unified CRUD for the combined delivery + bin allocation workflow.
@@ -25,33 +34,31 @@ import type {
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope, type Executor } from "./utils";
 import {
-  computeClampedDryMass,
   deriveMassDryKg,
   exceedsMassWithTolerance,
-  MASS_COMPARISON_EPSILON_KG,
 } from "@/lib/calculations/mass-dry";
 import {
   deleteTransportLegsForEntity,
   syncFeedstockTransportLeg,
-  type FeedstockTransportOverride,
 } from "./transport-legs";
+import { resolveDistanceSource, type DistanceSourceValue } from "@/schemas/distance-source";
 import { SafeError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
+import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 import { retireDocumentsForEntities } from "./documents";
-import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
-import { assertExpectedVersion } from "./expected-version";
+import { assertRowVersion, nextVersion } from "./row-version";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
 import { assertFeedstockBinLanesNotNegative } from "./feedstock-bin-stock-integrity";
 import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
+import { withAutoCodes } from "./code-generator";
 
 const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin"] as const;
 /** Entity key on a feedstock's expected-version conflict. */
 const FEEDSTOCK_CONFLICT_ENTITY = "feedstock";
 const ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE =
   "Enter a justification when allocated wet mass exceeds the declared delivery mass";
-const DRY_MASS_DISAGREEMENT_MESSAGE =
-  "Feedstock was not saved because its mass values disagree. Review wet mass and moisture.";
 
 function isFeedstockIntakeBinType(type: string): boolean {
   return FEEDSTOCK_INTAKE_BIN_TYPES.some((binType) => binType === type);
@@ -63,6 +70,7 @@ async function validateFeedstockStorageLocations(
   storageLocationIds: readonly string[],
   facilityId: string,
   feedstockTypeId: string,
+  referencePath: (index: number) => (string | number)[],
 ): Promise<void> {
   if (storageLocationIds.length === 0) return;
 
@@ -83,10 +91,12 @@ async function validateFeedstockStorageLocations(
     );
 
   const binMap = new Map(bins.map((bin) => [bin.id, bin]));
-  for (const storageLocationId of storageLocationIds) {
+  for (const [index, storageLocationId] of storageLocationIds.entries()) {
     const bin = binMap.get(storageLocationId);
     if (!bin) {
-      throw new SafeError(`Storage bin not found: ${storageLocationId}`);
+      throw new DomainError("not_found", `Storage bin not found: ${storageLocationId}`, {
+        issues: [{ path: referencePath(index), code: "not_found", message: "Storage bin was not found." }],
+      });
     }
     if (bin.facilityId !== facilityId) {
       throw new SafeError(
@@ -111,24 +121,26 @@ async function validateFeedstockStorageLocations(
 // ============================================
 
 export interface FeedstockWithRelations {
+  version: number;
+  distanceKmOverride: number | null;
+  distanceSource: DistanceSourceValue | null;
+  distanceNote: string | null;
   id: string;
   code: string;
   facilityId: string;
   status: "missing_data" | "complete";
   // Delivery fields
-  deliveryDate: Date | null;
-  supplierId: string | null;
+  deliveryDate: Date;
+  supplierId: string;
   vehicleId: string | null;
-  gpsLatitude: number | null;
-  gpsLongitude: number | null;
   deliveryGroupId: string | null;
   overrideJustification: string | null;
   // Material fields
   feedstockTypeId: string;
   massDryKg: number;
-  massWetKg: number | null;
-  moistureContentPercent: number | null;
-  storageLocationId: string | null;
+  massWetKg: number;
+  moistureContentPercent: number;
+  storageLocationId: string;
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -143,8 +155,9 @@ export interface FeedstockWithRelations {
   storageLocationCode: string | null;
   transportDistanceKm: number | null;
   transportDistanceSource: "map_estimate" | "manual" | "document" | null;
-  transportTripType: "return" | "one_way" | null;
   transportEvidenceDocumentCount: number;
+  hasUsableTransportLeg?: boolean;
+  transportLegDistanceSource?: "map_estimate" | "manual" | "document" | null;
 }
 
 export interface PaginatedFeedstocks {
@@ -173,17 +186,15 @@ export interface CreateFeedstockInput {
   deliveryDate: Date;
   supplierId: string;
   vehicleId?: string | null;
-  gpsLatitude?: number | null;
-  gpsLongitude?: number | null;
   feedstockTypeId: string;
   totalWetMassKg: number;
   moisturePercent: number;
   allocations: CreateFeedstockAllocation[];
   overrideJustification?: string | null;
   notes?: string | null;
+  distanceNote?: string | null;
   transportDistanceKm?: number | null;
-  transportDistanceSource?: FeedstockTransportOverride["distanceSource"];
-  transportTripType?: FeedstockTransportOverride["tripType"];
+  transportDistanceSource?: DistanceSourceValue | null;
 }
 
 export interface UpdateFeedstockInput {
@@ -191,20 +202,17 @@ export interface UpdateFeedstockInput {
   deliveryDate?: Date;
   supplierId?: string;
   vehicleId?: string | null;
-  gpsLatitude?: number | null;
-  gpsLongitude?: number | null;
   feedstockTypeId?: string;
-  massDryKg?: number;
-  massWetKg?: number | null;
-  moistureContentPercent?: number | null;
-  storageLocationId?: string | null;
+  massWetKg?: number;
+  moistureContentPercent?: number;
+  storageLocationId?: string;
   overrideJustification?: string | null;
   notes?: string | null;
+  distanceNote?: string | null;
   transportDistanceKm?: number | null;
-  transportDistanceSource?: FeedstockTransportOverride["distanceSource"];
-  transportTripType?: FeedstockTransportOverride["tripType"];
-  /** `updatedAt` the edit form loaded; refuses a save built on a stale read. */
-  expectedUpdatedAt?: Date;
+  transportDistanceSource?: DistanceSourceValue | null;
+  /** Mandatory version the edit form loaded. */
+  expectedVersion: number;
 }
 
 export interface CreateFeedstockResult {
@@ -217,6 +225,10 @@ export interface CreateFeedstockResult {
 // ============================================
 
 const feedstockSelectFields = {
+  distanceKmOverride: feedstocks.distanceKmOverride,
+  distanceSource: feedstocks.distanceSource,
+  distanceNote: feedstocks.distanceNote,
+  version: feedstocks.version,
   id: feedstocks.id,
   code: feedstocks.code,
   facilityId: feedstocks.facilityId,
@@ -224,8 +236,6 @@ const feedstockSelectFields = {
   deliveryDate: feedstocks.deliveryDate,
   supplierId: feedstocks.supplierId,
   vehicleId: feedstocks.vehicleId,
-  gpsLatitude: feedstocks.gpsLatitude,
-  gpsLongitude: feedstocks.gpsLongitude,
   deliveryGroupId: feedstocks.deliveryGroupId,
   overrideJustification: feedstocks.overrideJustification,
   feedstockTypeId: feedstocks.feedstockTypeId,
@@ -247,7 +257,6 @@ const feedstockSelectFields = {
   storageLocationCode: storageLocations.code,
   transportDistanceKm: transportLegs.distanceKm,
   transportDistanceSource: transportLegs.distanceSource,
-  transportTripType: transportLegs.tripType,
 } as const;
 
 /**
@@ -373,7 +382,7 @@ export async function getFeedstocks(
     .limit(pageSize)
     .offset(offset);
 
-  return { items, total, page, pageSize, totalPages };
+  return { items: await withFeedstockTransportReadiness(ctx, items), total, page, pageSize, totalPages };
 }
 
 export async function getFeedstockById(
@@ -386,10 +395,11 @@ export async function getFeedstockById(
   const [item] = await feedstockBaseQuery(ctx, executor).where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
 
   if (!item) {
-    throw new SafeError("Feedstock not found");
+    throw new DomainError("not_found", "Feedstock not found");
   }
 
-  return item;
+  const [enriched] = await withFeedstockTransportReadiness(ctx, [item], executor);
+  return enriched;
 }
 
 export async function getFeedstockStats(
@@ -439,20 +449,43 @@ export async function getFeedstockStats(
 // Create Operations
 // ============================================
 
-export async function createFeedstock(
+/** Capture the effective leg distance alongside the row’s override fields. */
+export async function readFeedstockTransportSnapshot(ctx: OrgContext, tx: DbTransaction, feedstockId: string) {
+  requireOrgScope(ctx);
+  const [leg] = await tx.select({
+    transportDistanceKm: transportLegs.distanceKm,
+    transportDistanceSource: transportLegs.distanceSource,
+  }).from(transportLegs).where(and(
+    eq(transportLegs.organizationId, ctx.organizationId),
+    eq(transportLegs.entityType, "feedstock"),
+    eq(transportLegs.entityId, feedstockId),
+    eq(transportLegs.isDerived, true),
+  ));
+  return { transportDistanceKm: leg?.transportDistanceKm ?? null, transportDistanceSource: leg?.transportDistanceSource ?? null };
+}
+
+/**
+ * Record a feedstock delivery and its bin allocations inside a caller-owned
+ * transaction owned by the operation runner. Every
+ * read and write goes through `tx`: at pool size 1 a read through the global
+ * `db` would wait on this transaction's own connection.
+ */
+export async function createFeedstockInTransaction(
   ctx: OrgContext,
+  tx: DbTransaction,
   data: CreateFeedstockInput,
-  codesFn: (count: number) => Promise<string[]>
+  snapshotStock?: SnapshotStock,
+  capture?: CaptureActivity,
 ): Promise<CreateFeedstockResult> {
   requireOrgScope(ctx);
-  await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId);
-  await assertSameOrg(ctx, suppliers, data.supplierId);
-  if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
-  await Promise.all(
-    data.allocations.map((allocation) =>
-      assertSameOrg(ctx, storageLocations, allocation.storageLocationId),
-    ),
-  );
+  await withFeedstockErrors(() => assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId, tx), "not_found", ["feedstockTypeId"]);
+  if (data.vehicleId) await withFeedstockErrors(() => assertSameOrg(ctx, vehicles, data.vehicleId!, tx), "not_found", ["vehicleId"]);
+  for (const [index, allocation] of data.allocations.entries()) {
+    await withFeedstockErrors(
+      () => assertSameOrg(ctx, storageLocations, allocation.storageLocationId, tx),
+      "not_found", ["allocations", index, "storageLocationId"],
+    );
+  }
 
   const allocatedTotalWetKg = data.allocations.reduce((sum, a) => sum + a.allocatedWetMassKg, 0);
   const allocationsExceedDelivery = exceedsMassWithTolerance(
@@ -465,92 +498,101 @@ export async function createFeedstock(
   const deliveryGroupId = data.allocations.length > 1 ? crypto.randomUUID() : null;
 
   // Confirm the feedstock type exists before locking compatible bins to it.
-  const [feedstockType] = await db
+  const [feedstockType] = await tx
     .select({ id: feedstockTypes.id })
     .from(feedstockTypes)
     .where(and(eq(feedstockTypes.id, data.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
 
   if (!feedstockType) {
-    throw new SafeError("Feedstock type not found");
+    throw new DomainError("not_found", "Feedstock type not found", {
+      issues: [{ path: ["feedstockTypeId"], code: "not_found", message: "Feedstock type was not found." }],
+    });
   }
 
   const binIds = data.allocations.map((a) => a.storageLocationId);
-  const codes = await codesFn(data.allocations.length);
+  await withFeedstockErrors(() => lockActiveFacilityReference(ctx, tx, data.facilityId), "not_found", ["facilityId"]);
+  await lockSupplierReference(ctx, tx, data.supplierId);
+  await lockBinStocks(ctx, tx, binIds);
+  await validateFeedstockStorageLocations(
+    ctx,
+    tx,
+    binIds,
+    data.facilityId,
+    data.feedstockTypeId,
+    (index) => ["allocations", index, "storageLocationId"],
+  );
 
-  const items = await db.transaction(async (tx) => {
-    await lockActiveFacilityReference(ctx, tx, data.facilityId);
-    await lockBinStocks(ctx, tx, binIds);
-    await validateFeedstockStorageLocations(
-      ctx,
-      tx,
-      binIds,
-      data.facilityId,
-      data.feedstockTypeId,
-    );
-    const results: string[] = [];
+  await snapshotStock?.(tx, binIds);
 
-    for (let i = 0; i < data.allocations.length; i++) {
-      const allocation = data.allocations[i];
-      const allocatedDryMassKg = deriveMassDryKg(allocation.allocatedWetMassKg, data.moisturePercent);
+  const items = await withAutoCodes(
+    ctx,
+    tx,
+    "FS",
+    feedstocks,
+    feedstocks.code,
+    data.allocations.length,
+    async (codes, savepoint) => {
+      const results: string[] = [];
 
-      const status = determineFeedstockStatus({
-        feedstockTypeId: data.feedstockTypeId,
-        massDryKg: allocatedDryMassKg,
-        massWetKg: allocation.allocatedWetMassKg,
-      });
+      for (let i = 0; i < data.allocations.length; i++) {
+        const allocation = data.allocations[i];
+        const allocatedDryMassKg = deriveMassDryKg(allocation.allocatedWetMassKg, data.moisturePercent);
 
-      const [feedstock] = await tx
-        .insert(feedstocks)
-        .values({
-          organizationId: ctx.organizationId,
-          code: codes[i],
-          facilityId: data.facilityId,
-          status,
-          // Delivery fields
-          deliveryDate: data.deliveryDate,
-          supplierId: data.supplierId,
-          vehicleId: data.vehicleId ?? null,
-          gpsLatitude: data.gpsLatitude ?? null,
-          gpsLongitude: data.gpsLongitude ?? null,
-          deliveryGroupId,
-          overrideJustification: data.overrideJustification || null,
-          // Material fields
+        const status = determineFeedstockStatus({
           feedstockTypeId: data.feedstockTypeId,
           massDryKg: allocatedDryMassKg,
           massWetKg: allocation.allocatedWetMassKg,
-          moistureContentPercent: data.moisturePercent,
-          storageLocationId: allocation.storageLocationId,
-          notes: data.notes || null,
-        })
-        .returning({ id: feedstocks.id });
+        });
 
-      results.push(feedstock.id);
+        const [feedstock] = await savepoint
+          .insert(feedstocks)
+          .values({
+            organizationId: ctx.organizationId,
+            code: codes[i],
+            facilityId: data.facilityId,
+            status,
+            // Delivery fields
+            deliveryDate: data.deliveryDate,
+            supplierId: data.supplierId,
+            vehicleId: data.vehicleId ?? null,
+            deliveryGroupId,
+            ...feedstockDistanceColumns(data),
+            overrideJustification: data.overrideJustification || null,
+            // Material fields
+            feedstockTypeId: data.feedstockTypeId,
+            massDryKg: allocatedDryMassKg,
+            massWetKg: allocation.allocatedWetMassKg,
+            moistureContentPercent: data.moisturePercent,
+            storageLocationId: allocation.storageLocationId,
+            notes: data.notes || null,
+          })
+          .returning();
 
-      await syncFeedstockTransportLeg(ctx, tx, feedstock.id, {
-        distanceKm: data.transportDistanceKm,
-        distanceSource: data.transportDistanceSource,
-        tripType: data.transportTripType,
-      });
+        results.push(feedstock.id);
 
-      // Lock feedstock type on bin (first-use lock)
-      await tx
-        .update(storageLocations)
-        .set({ feedstockTypeId: data.feedstockTypeId })
-        .where(
-          and(
-            eq(storageLocations.id, allocation.storageLocationId),
-            eq(storageLocations.organizationId, ctx.organizationId),
-            sql`${storageLocations.feedstockTypeId} is null`
-          )
-        );
-    }
+        await syncFeedstockTransportLeg(ctx, savepoint, feedstock.id);
+        if (capture) capture(feedstock.id, null, { ...feedstock, ...await readFeedstockTransportSnapshot(ctx, savepoint, feedstock.id) });
 
-    // Read the created records back inside the transaction. A read after the
-    // commit can fail on its own, and an empty result then looks identical to
-    // "nothing was created" (issue #769).
-    return feedstockBaseQuery(ctx, tx)
-      .where(and(inArray(feedstocks.id, results), eq(feedstocks.organizationId, ctx.organizationId)));
-  });
+        // Lock feedstock type on bin (first-use lock)
+        await savepoint
+          .update(storageLocations)
+          .set({ version: nextVersion(storageLocations.version), feedstockTypeId: data.feedstockTypeId })
+          .where(
+            and(
+              eq(storageLocations.id, allocation.storageLocationId),
+              eq(storageLocations.organizationId, ctx.organizationId),
+              sql`${storageLocations.feedstockTypeId} is null`
+            )
+          );
+      }
+
+      // Read the created records back inside the transaction. A read after the
+      // commit can fail on its own, and an empty result then looks identical to
+      // "nothing was created" (issue #769).
+      return feedstockBaseQuery(ctx, savepoint)
+        .where(and(inArray(feedstocks.id, results), eq(feedstocks.organizationId, ctx.organizationId)));
+    },
+  );
 
   // Generate warning if allocated wet mass > total delivery wet mass
   let warning: string | null = null;
@@ -561,255 +603,272 @@ export async function createFeedstock(
   return { feedstocks: items, warning };
 }
 
+/** The sole input-to-column mapping for persisted feedstock distance overrides. */
+function feedstockDistanceColumns(
+  input: Pick<UpdateFeedstockInput, "transportDistanceKm" | "transportDistanceSource" | "distanceNote">,
+  previous?: Pick<FeedstockWithRelations, "distanceKmOverride" | "distanceSource">,
+  routeAnchorChanged = false,
+) {
+  if (previous && input.transportDistanceKm === undefined && input.transportDistanceSource != null
+    && (previous.distanceKmOverride == null || routeAnchorChanged)) {
+    throw new DomainError("validation_failed", "The feedstock distance source was not changed. Set transportDistanceKm to change its source.");
+  }
+  // The v1 input contract accepts zero; it means derived, never a stored override.
+  const distanceKmOverride = input.transportDistanceKm !== undefined
+    ? input.transportDistanceKm === 0 ? null : input.transportDistanceKm
+    : routeAnchorChanged ? null : previous?.distanceKmOverride ?? null;
+  const source = input.transportDistanceKm === undefined && input.transportDistanceSource === undefined && !routeAnchorChanged
+    ? previous?.distanceSource
+    : input.transportDistanceSource;
+  return {
+    distanceKmOverride,
+    distanceSource: resolveDistanceSource(distanceKmOverride, source),
+    distanceNote: distanceKmOverride === null || input.distanceNote === "" ? null : input.distanceNote,
+  };
+}
+
 // ============================================
 // Update Operations
 // ============================================
 
-export async function updateFeedstock(
+export async function updateFeedstockInTransaction(
   ctx: OrgContext,
+  tx: DbTransaction,
   feedstockId: string,
   data: UpdateFeedstockInput,
+  snapshotStock?: SnapshotStock,
+  capture?: CaptureActivity,
 ): Promise<FeedstockWithRelations> {
   requireOrgScope(ctx);
   const {
     transportDistanceKm,
     transportDistanceSource,
-    transportTripType,
-    expectedUpdatedAt,
+    expectedVersion,
+    distanceNote,
     ...feedstockData
   } = data;
-  if (feedstockData.supplierId) await assertSameOrg(ctx, suppliers, feedstockData.supplierId);
-  if (feedstockData.vehicleId) await assertSameOrg(ctx, vehicles, feedstockData.vehicleId);
-  if (feedstockData.feedstockTypeId) await assertSameOrg(ctx, feedstockTypes, feedstockData.feedstockTypeId);
-  if (feedstockData.storageLocationId) await assertSameOrg(ctx, storageLocations, feedstockData.storageLocationId);
+  if (feedstockData.vehicleId) await withFeedstockErrors(() => assertSameOrg(ctx, vehicles, feedstockData.vehicleId!, tx), "not_found", ["vehicleId"]);
+  if (feedstockData.feedstockTypeId) await withFeedstockErrors(() => assertSameOrg(ctx, feedstockTypes, feedstockData.feedstockTypeId!, tx), "not_found", ["feedstockTypeId"]);
+  if (feedstockData.storageLocationId) await withFeedstockErrors(() => assertSameOrg(ctx, storageLocations, feedstockData.storageLocationId!, tx), "not_found", ["storageLocationId"]);
 
-  const [existing] = await db
+  if (feedstockData.facilityId !== undefined) {
+    await withFeedstockErrors(() => lockActiveFacilityReference(ctx, tx, feedstockData.facilityId!), "not_found", ["facilityId"]);
+  }
+  const supplier = feedstockData.supplierId !== undefined
+    ? await lockSupplierReference(ctx, tx, feedstockData.supplierId, { allowArchived: true })
+    : undefined;
+
+  const [locked] = await tx
     .select()
     .from(feedstocks)
-    .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
+    .where(and(
+      eq(feedstocks.id, feedstockId),
+      eq(feedstocks.organizationId, ctx.organizationId),
+      isNull(feedstocks.archivedAt),
+    ))
+    .for("update");
 
-  if (!existing) {
-    throw new SafeError("Feedstock not found");
+  if (!locked) {
+    throw new DomainError("not_found", "Feedstock not found");
   }
+  assertRowVersion({
+    entity: FEEDSTOCK_CONFLICT_ENTITY,
+    id: feedstockId,
+    expectedVersion,
+    actualVersion: locked.version,
+  });
+  if (feedstockData.supplierId !== undefined && feedstockData.supplierId !== locked.supplierId && supplier?.archivedAt) {
+    throw partyArchived("supplier", supplier.code);
+  }
+  const transportBefore = capture ? await readFeedstockTransportSnapshot(ctx, tx, feedstockId) : undefined;
 
-  const updated = await db.transaction(async (tx) => {
-    if (feedstockData.facilityId !== undefined) {
-      await lockActiveFacilityReference(ctx, tx, feedstockData.facilityId);
-    }
+  await withFeedstockErrors(() => assertCanMutateCertifiedLineage(
+    ctx,
+    tx,
+    { entityType: "feedstock", entityId: feedstockId },
+    "update",
+  ), "certification_locked");
 
-    const [locked] = await tx
-      .select()
-      .from(feedstocks)
-      .where(and(
-        eq(feedstocks.id, feedstockId),
-        eq(feedstocks.organizationId, ctx.organizationId),
-        isNull(feedstocks.archivedAt),
-      ))
-      .for("update");
+  assertRecordLockFields(recordLocks.feedstock({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "feedstock", entityId: feedstockId }) }), locked, feedstockData);
+  // Derive before anything reads the new masses: the status, the stock-lane
+  // check, and the write below must all see the same dry figure.
+  const derivedMassDryKg = resolveFeedstockDryMass(locked, feedstockData);
+  const effectiveChanges = { ...feedstockData, massDryKg: derivedMassDryKg };
 
-    if (!locked) {
-      throw new SafeError("Feedstock not found");
-    }
-    assertExpectedVersion({
-      entity: FEEDSTOCK_CONFLICT_ENTITY,
-      id: feedstockId,
-      expectedUpdatedAt,
-      actualUpdatedAt: locked.updatedAt,
-    });
+  const status = determineFeedstockStatus({ ...locked, ...effectiveChanges });
+  const routeAnchorChanged =
+    (feedstockData.supplierId !== undefined &&
+      feedstockData.supplierId !== locked.supplierId) ||
+    (feedstockData.facilityId !== undefined &&
+      feedstockData.facilityId !== locked.facilityId);
+  const distanceColumns = feedstockDistanceColumns({ transportDistanceKm, transportDistanceSource, distanceNote }, locked, routeAnchorChanged);
+  const effectiveStorageLocationId =
+    feedstockData.storageLocationId !== undefined
+      ? feedstockData.storageLocationId
+      : locked.storageLocationId;
+  const effectiveFeedstockTypeId =
+    feedstockData.feedstockTypeId ?? locked.feedstockTypeId;
+  const effectiveFacilityId =
+    feedstockData.facilityId ?? locked.facilityId;
+  const storageReferenceNeedsValidation =
+    feedstockData.storageLocationId !== undefined ||
+    feedstockData.feedstockTypeId !== undefined ||
+    feedstockData.facilityId !== undefined;
+  const stockDerivationChanged =
+    status !== locked.status ||
+    (effectiveChanges.massDryKg !== undefined &&
+      effectiveChanges.massDryKg !== locked.massDryKg) ||
+    (feedstockData.massWetKg !== undefined &&
+      feedstockData.massWetKg !== locked.massWetKg) ||
+    (feedstockData.storageLocationId !== undefined &&
+      feedstockData.storageLocationId !== locked.storageLocationId);
 
-    await assertCanMutateCertifiedLineage(
+  if (stockDerivationChanged || storageReferenceNeedsValidation) {
+    await lockBinStocks(ctx, tx, [
+      locked.storageLocationId,
+      effectiveStorageLocationId,
+    ]);
+  }
+  if (storageReferenceNeedsValidation && effectiveStorageLocationId) {
+    await validateFeedstockStorageLocations(
       ctx,
       tx,
-      { entityType: "feedstock", entityId: feedstockId },
-      "update",
+      [effectiveStorageLocationId],
+      effectiveFacilityId,
+      effectiveFeedstockTypeId,
+      () => ["storageLocationId"],
     );
+  }
 
-    // Derive before anything reads the new masses: the status, the stock-lane
-    // check, and the write below must all see the same dry figure.
-    const derivedMassDryKg = resolveFeedstockDryMass(locked, feedstockData);
-    const effectiveChanges =
-      derivedMassDryKg === undefined
-        ? feedstockData
-        : { ...feedstockData, massDryKg: derivedMassDryKg };
+  await snapshotStock?.(tx, stockDerivationChanged || storageReferenceNeedsValidation ? [locked.storageLocationId, effectiveStorageLocationId] : []);
 
-    const status = determineFeedstockStatus({ ...locked, ...effectiveChanges });
-    const routeAnchorChanged =
-      (feedstockData.supplierId !== undefined &&
-        feedstockData.supplierId !== locked.supplierId) ||
-      (feedstockData.facilityId !== undefined &&
-        feedstockData.facilityId !== locked.facilityId);
-    const explicitDistanceSupplied = transportDistanceKm !== undefined;
-    const explicitDistanceSourceSupplied =
-      transportDistanceSource !== undefined;
-    const effectiveStorageLocationId =
-      feedstockData.storageLocationId !== undefined
-        ? feedstockData.storageLocationId
-        : locked.storageLocationId;
-    const effectiveFeedstockTypeId =
-      feedstockData.feedstockTypeId ?? locked.feedstockTypeId;
-    const effectiveFacilityId =
-      feedstockData.facilityId ?? locked.facilityId;
-    const storageReferenceNeedsValidation =
-      feedstockData.storageLocationId !== undefined ||
-      feedstockData.feedstockTypeId !== undefined ||
-      feedstockData.facilityId !== undefined;
-    const stockDerivationChanged =
-      status !== locked.status ||
-      (effectiveChanges.massDryKg !== undefined &&
-        effectiveChanges.massDryKg !== locked.massDryKg) ||
-      (feedstockData.massWetKg !== undefined &&
-        feedstockData.massWetKg !== locked.massWetKg) ||
-      (feedstockData.storageLocationId !== undefined &&
-        feedstockData.storageLocationId !== locked.storageLocationId);
+  const [saved] = await tx
+    .update(feedstocks)
+    .set({
+      ...effectiveChanges,
+      ...distanceColumns,
+      status,
+      version: nextVersion(feedstocks.version),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId))).returning();
 
-    if (stockDerivationChanged || storageReferenceNeedsValidation) {
-      await lockBinStocks(ctx, tx, [
-        locked.storageLocationId,
-        effectiveStorageLocationId,
-      ]);
-    }
-    if (storageReferenceNeedsValidation && effectiveStorageLocationId) {
-      await validateFeedstockStorageLocations(
-        ctx,
-        tx,
-        [effectiveStorageLocationId],
-        effectiveFacilityId,
-        effectiveFeedstockTypeId,
-      );
-    }
+  // Re-derive the affected lanes now that the new row is visible, while the
+  // bin locks above are still held. Validating the bin reference only proves
+  // the bin is usable, never that the edited mass still covers withdrawals.
+  if (stockDerivationChanged) {
+    await assertFeedstockBinLanesNotNegative(
+      ctx,
+      tx,
+      [locked.storageLocationId, effectiveStorageLocationId],
+      "save",
+    );
+  }
 
-    await tx
-      .update(feedstocks)
-      .set({
-        ...effectiveChanges,
-        status,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
-
-    // Re-derive the affected lanes now that the new row is visible, while the
-    // bin locks above are still held. Validating the bin reference only proves
-    // the bin is usable, never that the edited mass still covers withdrawals.
-    if (stockDerivationChanged) {
-      await assertFeedstockBinLanesNotNegative(
-        ctx,
-        tx,
-        [locked.storageLocationId, effectiveStorageLocationId],
-        "save",
-      );
-    }
-
-    await syncFeedstockTransportLeg(ctx, tx, feedstockId, {
-      distanceKm: transportDistanceKm,
-      distanceSource: transportDistanceSource,
-      tripType: transportTripType,
-      resetDistanceToRoute:
-        routeAnchorChanged &&
-        !explicitDistanceSupplied &&
-        !explicitDistanceSourceSupplied,
-    });
-
-    // Read the updated record back inside the transaction, so a failed read
-    // rolls the update back instead of reporting a saved feedstock as
-    // "Feedstock not found" (issue #769).
-    return getFeedstockById(ctx, feedstockId, tx);
+  await syncFeedstockTransportLeg(ctx, tx, feedstockId, {
+    refreshFromLocation: (transportDistanceKm !== undefined && locked.distanceKmOverride != null && distanceColumns.distanceKmOverride === null) || routeAnchorChanged,
   });
-  await processPendingStorageObjectDeletions(ctx);
+  if (capture) capture(feedstockId, { ...locked, ...transportBefore }, { ...saved, ...await readFeedstockTransportSnapshot(ctx, tx, feedstockId) });
 
-  return updated;
+  // Read the updated record back inside the transaction, so a failed read
+  // rolls the update back instead of reporting a saved feedstock as
+  // "Feedstock not found" (issue #769).
+  return getFeedstockById(ctx, feedstockId, tx);
 }
 
 // ============================================
 // Delete Operations
 // ============================================
 
-export async function deleteFeedstock(
+export async function deleteFeedstockInTransaction(
   ctx: OrgContext,
-  feedstockId: string
-): Promise<void> {
+  tx: DbTransaction,
+  feedstockId: string,
+  expectedVersion: number,
+  source: ActivityEventInput["source"],
+  snapshotStock?: SnapshotStock,
+): Promise<{ facilityId: string }> {
   requireOrgScope(ctx);
 
-  const [existing] = await db
+  const [locked] = await tx
     .select({
       id: feedstocks.id,
+      facilityId: feedstocks.facilityId,
+      version: feedstocks.version,
       status: feedstocks.status,
       storageLocationId: feedstocks.storageLocationId,
     })
     .from(feedstocks)
-    .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
+    .where(and(
+      eq(feedstocks.id, feedstockId),
+      eq(feedstocks.organizationId, ctx.organizationId),
+      isNull(feedstocks.archivedAt),
+    ))
+    .for("update");
 
-  if (!existing) {
-    throw new SafeError("Feedstock not found");
+  if (!locked) {
+    throw new DomainError("not_found", "Feedstock not found");
   }
 
-  await db.transaction(async (tx) => {
-    const [locked] = await tx
-      .select({
-        id: feedstocks.id,
-        status: feedstocks.status,
-        storageLocationId: feedstocks.storageLocationId,
-      })
-      .from(feedstocks)
-      .where(and(
-        eq(feedstocks.id, feedstockId),
-        eq(feedstocks.organizationId, ctx.organizationId),
-      ))
-      .for("update");
+  assertRowVersion({
+    entity: FEEDSTOCK_CONFLICT_ENTITY,
+    id: feedstockId,
+    expectedVersion,
+    actualVersion: locked.version,
+  });
 
-    if (!locked) {
-      throw new SafeError("Feedstock not found");
-    }
+  await withFeedstockErrors(() => assertCanMutateCertifiedLineage(
+    ctx,
+    tx,
+    { entityType: "feedstock", entityId: feedstockId },
+    "delete",
+  ), "certification_locked");
 
-    await assertCanMutateCertifiedLineage(
+  // Block deletion if used in production runs
+  const [usageCount] = await tx
+    .select({ count: count() })
+    .from(productionRunFeedstocks)
+    .where(and(eq(productionRunFeedstocks.feedstockId, feedstockId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
+
+  if (Number(usageCount.count) > 0) {
+    throw new DomainError("certification_locked",
+      "Cannot delete feedstock that is used in production runs. Remove production run associations first."
+    );
+  }
+
+  if (locked.status === "complete") {
+    await lockBinStocks(ctx, tx, [locked.storageLocationId]);
+  }
+
+  await snapshotStock?.(tx, locked.status === "complete" ? [locked.storageLocationId] : []);
+
+  const transportLegDocuments = await deleteTransportLegsForEntity(
+    ctx,
+    tx,
+    "feedstock",
+    feedstockId,
+    source,
+  );
+  const result = await tx
+    .delete(feedstocks)
+    .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
+  if (result.rowCount === 0) {
+    throw new DomainError("not_found", "Feedstock not found");
+  }
+  // Removing a complete intake shrinks the lane the same way an edit does.
+  if (locked.status === "complete") {
+    await assertFeedstockBinLanesNotNegative(
       ctx,
       tx,
-      { entityType: "feedstock", entityId: feedstockId },
+      [locked.storageLocationId],
       "delete",
     );
-
-    // Block deletion if used in production runs
-    const [usageCount] = await tx
-      .select({ count: count() })
-      .from(productionRunFeedstocks)
-      .where(and(eq(productionRunFeedstocks.feedstockId, feedstockId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
-
-    if (Number(usageCount.count) > 0) {
-      throw new SafeError(
-        "Cannot delete feedstock that is used in production runs. Remove production run associations first."
-      );
-    }
-
-    if (locked.status === "complete") {
-      await lockBinStocks(ctx, tx, [locked.storageLocationId]);
-    }
-
-    const transportLegDocuments = await deleteTransportLegsForEntity(
-      ctx,
-      tx,
-      "feedstock",
-      feedstockId,
-    );
-    const result = await tx
-      .delete(feedstocks)
-      .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
-    if (result.rowCount === 0) {
-      throw new SafeError("Feedstock not found");
-    }
-    // Removing a complete intake shrinks the lane the same way an edit does.
-    if (locked.status === "complete") {
-      await assertFeedstockBinLanesNotNegative(
-        ctx,
-        tx,
-        [locked.storageLocationId],
-        "delete",
-      );
-    }
-    await retireDocumentsForEntities(ctx, tx, [
-      { entityType: "feedstock", entityId: feedstockId },
-      ...transportLegDocuments,
-    ]);
-  });
-  await processPendingStorageObjectDeletions(ctx);
+  }
+  await retireDocumentsForEntities(ctx, tx, [
+    { entityType: "feedstock", entityId: feedstockId },
+    ...transportLegDocuments,
+  ], source);
+  return { facilityId: locked.facilityId };
 }
 
 // ============================================
@@ -820,53 +879,21 @@ export async function deleteFeedstock(
 // Helpers
 // ============================================
 
-/**
- * Dry mass is server-owned. It is always the effective wet mass carried through
- * the effective moisture, so a moisture-only patch re-derives it instead of
- * leaving yesterday's figure in place, and the three mass columns can never
- * drift apart (100 wet / 50 % / 90 dry used to save).
- *
- * A client-supplied `massDryKg` is advisory: `createFeedstock` derives its own
- * from `deriveMassDryKg`, and the edit form sends the same derivation, so a
- * value that disagrees means a stale or hand-built payload and is refused
- * rather than silently overwritten. Returns `undefined` when there is nothing
- * to derive from (a legacy row with no wet mass or moisture), leaving the
- * caller's own value untouched.
- */
+/** Derive dry mass from the locked row and the supplied wet mass or moisture. */
 function resolveFeedstockDryMass(
-  stored: { massWetKg: number | null; moistureContentPercent: number | null },
-  patch: {
-    massWetKg?: number | null;
-    moistureContentPercent?: number | null;
-    massDryKg?: number;
-  },
-): number | undefined {
-  const effectiveWetKg =
-    patch.massWetKg !== undefined ? patch.massWetKg : stored.massWetKg;
-  const effectiveMoisturePercent =
-    patch.moistureContentPercent !== undefined
-      ? patch.moistureContentPercent
-      : stored.moistureContentPercent;
-
-  const derivedKg = computeClampedDryMass(
-    effectiveWetKg,
-    effectiveMoisturePercent,
+  stored: { massWetKg: number; moistureContentPercent: number },
+  patch: { massWetKg?: number; moistureContentPercent?: number },
+): number {
+  return deriveMassDryKg(
+    patch.massWetKg ?? stored.massWetKg,
+    patch.moistureContentPercent ?? stored.moistureContentPercent,
   );
-  if (derivedKg === null) return patch.massDryKg;
-
-  if (
-    patch.massDryKg !== undefined &&
-    Math.abs(patch.massDryKg - derivedKg) > MASS_COMPARISON_EPSILON_KG
-  ) {
-    throw new SafeError(DRY_MASS_DISAGREEMENT_MESSAGE);
-  }
-  return derivedKg;
 }
 
 function determineFeedstockStatus(data: {
   feedstockTypeId?: string | null;
   massDryKg?: number | null;
-  massWetKg?: number | null;
+  massWetKg?: number;
 }): "missing_data" | "complete" {
   if (
     data.feedstockTypeId &&

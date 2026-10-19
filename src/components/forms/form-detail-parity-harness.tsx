@@ -52,7 +52,7 @@ export function inventory(root: ReactTestInstance): ParityInventory {
       items.push(`field:${props.label}`);
       if (props.secondary) items.push(`field:${props.secondary.label}`);
     }
-    if (type === DetailSection || type === FormSection) items.push(`section:${props.title}`);
+    if (type === DetailSection || type === FormSection) items.push(`section:${props.title ?? "(untitled)"}`);
     if (type === CompositionCard) items.push(`block:${props.title}`);
     if (type === FormField) items.push(`field:${props.label}`);
     if (type === "button") items.push(`action:${props["aria-label"] ?? clean(textOf(node))}`);
@@ -79,4 +79,3 @@ export async function renderBothLevels(element: ReactElement): Promise<{ simple:
   await act(async () => renderer.unmount());
   return { simple, detailed, detailedJson };
 }
-

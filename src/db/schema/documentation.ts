@@ -35,6 +35,11 @@ export const documents = pgTable(
     storageBucket: text('storage_bucket'),
     storageKey: text('storage_key'),
     fileUrl: text('file_url'),
+    // Client-writable upload key of a browser or API upload. Confirm promotes
+    // the verified bytes to a server-only storage_key and queues this key for
+    // deferred deletion; upload_expires_at bounds every presigned PUT.
+    uploadStorageKey: text('upload_storage_key'),
+    uploadExpiresAt: timestamp('upload_expires_at'),
 
     fileName: text('file_name').notNull(),
     fileSizeBytes: integer('file_size_bytes'),
@@ -55,6 +60,7 @@ export const documents = pgTable(
     }),
     notes: text('notes'),
 
+    version: integer('version').notNull().default(1),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -77,6 +83,10 @@ export const documents = pgTable(
     ),
     index('documents_entity_type_entity_id_idx').on(table.entityType, table.entityId),
     index('documents_document_type_idx').on(table.documentType),
+    // Sweep of abandoned uploads (cron, cross-organization).
+    index('documents_pending_upload_expires_idx')
+      .on(table.uploadExpiresAt)
+      .where(sql`${table.uploadStatus} = 'pending'`),
   ]
 );
 
@@ -96,6 +106,9 @@ export const storageObjectDeletions = pgTable(
     attemptCount: integer('attempt_count').notNull().default(0),
     lastAttemptAt: timestamp('last_attempt_at'),
     lastErrorCode: text('last_error_code'),
+    // The drain skips the entry until then, so a late presigned PUT cannot
+    // recreate an upload key after its deletion ran.
+    notBefore: timestamp('not_before'),
     completedAt: timestamp('completed_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),

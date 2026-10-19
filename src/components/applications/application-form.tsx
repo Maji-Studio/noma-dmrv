@@ -3,7 +3,7 @@
  * Reusable application form with React Hook Form integration
  *
  * Form sections:
- * 1. Application details — applicationDate, delivery, biocharAppliedTons + auto-calculated dry mass card
+ * 1. Application details — applicationDate, delivery, biocharAppliedKg + auto-calculated dry mass card
  * 2. Field details — fieldSizeHa, fieldIdentifier, cropType, GPS coordinates
  * 3. Evidence method: customer location or GIS reference
  * 4. Supporting evidence: optional images and documents
@@ -11,17 +11,20 @@
  */
 "use client";
 
+import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
+import { recordInUseFreeFields } from "@/lib/record-lock";
+import { FACILITY_REFERENCE_TEMPERATURE_NOTICE } from "@/lib/application-guidance";
 import { nullableNumericValue, numericValue } from "@/lib/form-utils";
-import { formatLocalDate, formatUtcDate } from "@/lib/date-utils";
+import { formatUtcDate, toDateInputValue } from "@/lib/date-utils";
 import { formatDayString } from "@/lib/format-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 import { useEffect, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useController, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { PackageIcon, MapPinIcon, FileIcon, MapTrifoldIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormSelect, FormSection, FormSpine, FormActions, makeCertFieldStatus } from "@/components/forms";
+import { EntitySelect, FormField, FormInput, FormSelect, FormSection, FormSpine, FormActions, makeCertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import {
@@ -42,16 +45,15 @@ import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings"
 import type { DurabilityOption } from "@/schemas/credit-batches";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import { ApplicationSupportingEvidencePanel } from "./application-supporting-evidence-panel";
-import { resolveApplicationEvidenceMethodDefault } from "./application-form-defaults";
+import { resolveApplicationDateDefault, resolveApplicationEvidenceMethodDefault } from "./application-form-defaults";
 import {
   FieldPositionField,
   resetFieldPosition,
 } from "./field-position-field";
 import type { FieldPositionMode } from "./field-position-field";
 import {
-  applicationKgToTons,
   applicationTonsToKg,
-  formatApplicationDeliveryHelperText,
+  applicationStockCues,
   formatApplicationDeliveryOptionLabel,
   resolveApplicationPositionDefault,
   resolveApplicationSoilTemperatureDefault,
@@ -61,6 +63,7 @@ import {
   deliveryStockOverdrawMessage,
   formatStockLimitKg,
   isStockOverdraw,
+  wholeStockDrawKg,
 } from "@/lib/stock-overdraw";
 import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
 
@@ -117,6 +120,8 @@ function AppliedMassSplit({
 // ============================================
 
 interface ApplicationFormProps {
+  /** The saved application's lock: a Removal slice fixes its delivery and applied mass. */
+  lock?: RecordLockView;
   /** Existing application data for editing (undefined for create mode) */
   application?: Application;
   /** Available deliveries for selection */
@@ -152,8 +157,12 @@ export function ApplicationForm({
   submitLabel,
   durabilityOption = "200_year",
   deferredAttachments,
+  lock,
 }: ApplicationFormProps) {
   const isEditMode = !!application;
+  // A Removal slice refuses delivery and applied mass changes (`assertMutableSlices`).
+  // Fail closed: until the lock answers, fields an In use application holds stay disabled.
+  const locked = (field: string) => isEditMode && isRecordFieldHeld(lock, recordInUseFreeFields("application"), field);
   const { defaults: organizationDefaults } = useOrganizationDefaultValues();
   // Soil temperature feeds only the 200-year durable fraction; 1000-year
   // removals derive durability from petrographic reflectance + TGA.
@@ -161,10 +170,10 @@ export function ApplicationForm({
 
   const defaultValues = {
     applicationDate: application?.applicationDate
-      ? formatLocalDate(new Date(application.applicationDate))
-      : formatLocalDate(new Date()),
+      ? toDateInputValue(application.applicationDate)
+      : resolveApplicationDateDefault(),
     deliveryId: application?.deliveryId ?? "",
-    biocharAppliedTons: applicationTonsToKg(application?.biocharAppliedTons) ?? undefined,
+    biocharAppliedKg: applicationTonsToKg(application?.biocharAppliedTons) ?? undefined,
     fieldSizeHa: application?.fieldSizeHa ?? "",
     fieldIdentifier: application?.fieldIdentifier ?? "",
     cropType: application?.cropType ?? "",
@@ -204,7 +213,8 @@ export function ApplicationForm({
 
   const defaultSubmitLabel = isEditMode ? "Update application" : "Create application";
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
-  const watchedAppliedKg = useWatch({ control, name: "biocharAppliedTons" });
+  const { field: deliveryField } = useController({ control, name: "deliveryId" });
+  const watchedAppliedKg = useWatch({ control, name: "biocharAppliedKg" });
   const evidenceMethod = useWatch({ control, name: "evidenceMethod" }) as ApplicationEvidenceMethod;
   const gpsLatitude = useWatch({ control, name: "gpsLatitude" }) as number | null | undefined;
   const gpsLongitude = useWatch({ control, name: "gpsLongitude" }) as number | null | undefined;
@@ -213,8 +223,9 @@ export function ApplicationForm({
   // Only delivered deliveries accept applications (issue #284) — undelivered
   // ones stay visible but disabled so operators see why they can't pick them.
   const deliveryOptions = deliveries.map((d) => ({
-    value: d.id,
-    label:
+    id: d.id,
+    code: d.code,
+    name:
       d.status === "delivered"
         ? formatApplicationDeliveryOptionLabel(d)
         : `${formatApplicationDeliveryOptionLabel(d)} · not yet delivered`,
@@ -348,9 +359,18 @@ export function ApplicationForm({
     (message) => message === deliveryStockOverdrawMessage(),
   );
   const biocharAppliedError =
-    errors.biocharAppliedTons?.message ??
+    errors.biocharAppliedKg?.message ??
     applicationStockError ??
     routedServerError.inlineError;
+  const wholeAvailableKg =
+    availableKg !== null ? wholeStockDrawKg(availableKg) : null;
+  const stockCues = applicationStockCues({
+    delivery: selectedDelivery,
+    availableKg,
+    isEditMode,
+    massError: biocharAppliedError,
+    overdrawError: applicationStockError,
+  });
 
   const handleFormSubmit = handleSubmit(async (data) => {
     if (applicationStockError) return;
@@ -382,16 +402,6 @@ export function ApplicationForm({
       return;
     }
 
-    const biocharAppliedTons = applicationKgToTons(data.biocharAppliedTons);
-
-    if (biocharAppliedTons == null) {
-      setError("biocharAppliedTons", {
-        type: "manual",
-        message: "Biochar product applied is required",
-      });
-      return;
-    }
-
     if (appliedDryBiocharKg == null) {
       setError("root.serverError", {
         type: "manual",
@@ -402,7 +412,6 @@ export function ApplicationForm({
 
     await onSubmit({
       ...data,
-      biocharAppliedTons,
       gisBoundary: data.evidenceMethod === "boundary" ? data.gisBoundary : null,
     });
   });
@@ -415,7 +424,7 @@ export function ApplicationForm({
       <FormSection
         title="Application details"
         icon={<PackageIcon size={14} weight="bold" />}
-        fields={["applicationDate", "deliveryId", "biocharAppliedTons"]}
+        fields={["applicationDate", "deliveryId", "biocharAppliedKg"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="applicationDate" label="Application date" error={errors.applicationDate?.message} required>
@@ -435,46 +444,65 @@ export function ApplicationForm({
             label="Delivery"
             error={errors.deliveryId?.message}
             required
-            helperText={
-              selectedDelivery
-                ? formatApplicationDeliveryHelperText(selectedDelivery)
-                : "Choose a delivery by order, formulation, and kg."
-            }
+            cue={stockCues.deliveryCue}
+            helperText="Choose a delivery by order, formulation, and kg."
           >
-            <FormSelect
+            <EntitySelect
               id="deliveryId"
+              optionLabel="delivery"
               placeholder="Select delivery..."
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("deliveryId")}
               error={!!errors.deliveryId}
               options={deliveryOptions}
-              {...register("deliveryId")}
+              value={deliveryField.value}
+              onChange={(id) => {
+                deliveryField.onChange(id);
+                if (!isEditMode && !getFieldState("applicationDate").isDirty) {
+                  setValue("applicationDate", resolveApplicationDateDefault(
+                    deliveries.find(delivery => delivery.id === id)?.facilityTimezone,
+                  ));
+                }
+              }}
+              onBlur={deliveryField.onBlur}
             />
           </FormField>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
-            id="biocharAppliedTons"
-            label="Biochar product applied (kg)"
+            id="biocharAppliedKg"
+            label="Biochar product applied"
+            unit="kg"
             error={biocharAppliedError}
             required
             certifyRequired={isApplicationCertifyField("biocharAppliedTons")}
-            certifyStatus={certStatus("biocharAppliedTons")}
+            certifyStatus={certStatus("biocharAppliedKg")}
             hint="As-received mass at delivery, water included."
-            helperText={
-              availableKg !== null
-                ? `${formatStockLimitKg(availableKg)} available from this delivery`
+            cue={stockCues.appliedMassCue}
+            cueAction={
+              wholeAvailableKg !== null && !locked("appliedWetMassKg")
+                ? {
+                    label: "Add all",
+                    ariaLabel: "Add all to biochar product applied",
+                    disabled: isSubmitting,
+                    onClick: () =>
+                      setValue("biocharAppliedKg", wholeAvailableKg, {
+                        shouldDirty: true,
+                        shouldTouch: true,
+                        shouldValidate: true,
+                      }),
+                  }
                 : undefined
             }
           >
             <FormInput
-              id="biocharAppliedTons"
+              id="biocharAppliedKg"
               type="number"
               step="any"
               placeholder="e.g., 5000"
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("appliedWetMassKg")}
               error={!!biocharAppliedError}
-              {...register("biocharAppliedTons", {
+              {...register("biocharAppliedKg", {
                 setValueAs: numericValue,
               })}
             />
@@ -529,18 +557,7 @@ export function ApplicationForm({
           </FormField>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="cropType" label="Crop type" error={errors.cropType?.message}>
-            <FormInput
-              id="cropType"
-              type="text"
-              placeholder="e.g., Coffee"
-              disabled={isSubmitting}
-              error={!!errors.cropType}
-              {...register("cropType")}
-            />
-          </FormField>
-
+        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
           <FormField
             id="applicationMethodType"
             label="Application method"
@@ -553,6 +570,17 @@ export function ApplicationForm({
               error={!!errors.applicationMethodType}
               options={applicationMethodOptions}
               {...register("applicationMethodType")}
+            />
+          </FormField>
+
+          <FormField id="cropType" label="Crop type" error={errors.cropType?.message}>
+            <FormInput
+              id="cropType"
+              type="text"
+              placeholder="e.g., Coffee"
+              disabled={isSubmitting}
+              error={!!errors.cropType}
+              {...register("cropType")}
             />
           </FormField>
         </div>
@@ -572,6 +600,7 @@ export function ApplicationForm({
           latitudeError={errors.gpsLatitude?.message}
           longitudeError={errors.gpsLongitude?.message}
           disabled={isSubmitting}
+          required={(evidenceMethod ?? "location") === "location"}
         />
 
       </FormSection>
@@ -584,8 +613,10 @@ export function ApplicationForm({
         fields={["evidenceMethod", "gisBoundary"]}
       >
         <ApplicationEvidencePanel
+          applicationId={application?.id}
           mode={evidenceMethod ?? "location"}
           boundary={gisBoundary ?? null}
+          error={errors.gisBoundary?.message}
           disabled={isSubmitting}
           deferredAttachments={deferredAttachments}
           onModeChange={(nextMode) =>
@@ -626,7 +657,7 @@ export function ApplicationForm({
         hint="Used in the Isometric 200-year durability calculation."
         fields={["soilTemperatureSource", "soilTemperatureC"]}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
           <FormField
             id="soilTemperatureSource"
             label="Temperature source"
@@ -646,9 +677,9 @@ export function ApplicationForm({
             id="soilTemperatureC"
             label="Soil temperature (°C)"
             error={errors.soilTemperatureC?.message}
-            helperText="Annual average for this application site"
-            certifyRequired={isApplicationCertifyField("soilTemperatureC")}
-            certifyStatus={certStatus("soilTemperatureC")}
+            cue="Annual average for this application site"
+            hint={FACILITY_REFERENCE_TEMPERATURE_NOTICE}
+            aside={<span className="body-caption text-[var(--color-text-secondary)]">Advisory</span>}
           >
             <FormInput
               id="soilTemperatureC"

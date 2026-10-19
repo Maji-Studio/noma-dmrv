@@ -16,6 +16,16 @@ export type BodyMode = "form" | "read" | "page";
 export interface MeasureArgs {
   kind: SurfaceKind;
   mode: BodyMode;
+  /** Actual UA shadow-node content edges collected with Chromium DevTools (measureNativePickerIcons). */
+  nativePickerIcons: { index: number; right: number | null }[];
+}
+
+export interface TrailingIconGeometry {
+  field: string;
+  kind: "entity" | "date" | "time" | "datetime-local";
+  state: "empty" | "filled";
+  rightInset: number | null;
+  valid: boolean;
 }
 
 export interface TextStyle {
@@ -58,6 +68,7 @@ export interface Geometry {
     orphanedGridItems: { grid: string; columns: number; items: number }[];
     wrappedLabels: { row: string; labels: string[] }[];
   };
+  trailingIcons: TrailingIconGeometry[];
   overflow: {
     bodyHorizontalScroll: boolean;
     pageHorizontalScroll: boolean;
@@ -77,6 +88,7 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
   const HALF_WIDTH_RATIO = 0.6;
   const NEAR_MISALIGN_MAX_PX = 12;
   const PX_TOLERANCE = 1;
+  const TRAILING_ICON_INSET_PX = 12;
   const MIN_PARAGRAPH_CHARS = 1;
   /** The FormSpine's gutter column (form-spine.tsx grid-cols-[24px_1fr]); not a layout grid. */
   const FORM_SPINE_GUTTER_PX = 24;
@@ -88,6 +100,8 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
   const LITERAL_CAPS_MIN_LETTERS = 4;
   /** SectionLabel, the FormSection/DetailSection title (section-label.tsx). */
   const SECTION_TITLE = "h3.body-small.font-medium";
+  /** Plain section wrappers, including groups with no heading. */
+  const SECTION_ROOT = "[data-form-section], [data-detail-section]";
 
   const root = document.querySelector("[data-capture-root]") as HTMLElement | null;
   if (!root) throw new Error("No [data-capture-root] element to measure.");
@@ -122,6 +136,8 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
     "[role=switch]",
     "[role=slider]",
     "[data-presentation-control]",
+    // A FormField unit suffix renders inside the control's box.
+    "[data-control-unit]",
   ].join(",");
 
   const clean = (value: string | null | undefined) =>
@@ -212,7 +228,9 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
     styleMap.set(key, entry);
     const letters = text.replace(/[^A-Za-z]/g, "");
     const literalCaps = letters.length >= LITERAL_CAPS_MIN_LETTERS && letters === letters.toUpperCase() && !/\d/.test(text);
-    if (style.textTransform === "uppercase" || tracking !== "0" || literalCaps) {
+    // The CERT chip is a deliberate marker, not an uppercase label.
+    const certMarker = parent.closest("[data-cert-field]") !== null;
+    if (!certMarker && (style.textTransform === "uppercase" || tracking !== "0" || literalCaps)) {
       uppercaseOrTracked.push({ text, key });
     }
   }
@@ -234,7 +252,7 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
     else if (isFormActionsRow(el) || insideFormActions(el)) allowed = "form-actions";
     else if (el.closest("section[aria-label]") && el.querySelector(":scope > [data-presentation-control]")) allowed = "composition-action-row";
     // design-system.md keeps the hairline between plain FormSection/DetailSection blocks.
-    else if (top && !bottom && el.querySelector(`:scope > ${SECTION_TITLE}, :scope > div > ${SECTION_TITLE}`)) allowed = "section-divider";
+    else if (top && !bottom && (el.matches(SECTION_ROOT) || el.querySelector(`:scope > ${SECTION_TITLE}, :scope > div > ${SECTION_TITLE}`))) allowed = "section-divider";
     const text = clean((el as HTMLElement).innerText);
     if (top) lineItems.push({ side: "top", element: describe(el), text, allowed });
     if (bottom) lineItems.push({ side: "bottom", element: describe(el), text, allowed });
@@ -249,7 +267,9 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
       if (!isVisible(child)) continue;
       const style = getComputedStyle(child);
       if (style.position === "absolute" && child.getAttribute("aria-hidden") !== null) continue;
-      const leaf = child.children.length === 0 || child.matches(CONTROL_SELECTOR) || child.tagName === "svg";
+      // A choice card, segment or run row is one bordered box: measuring its caption text instead
+      // would drop the card's own padding and border from the gap below it.
+      const leaf = child.children.length === 0 || child.matches(CONTROL_SELECTOR) || child.tagName === "svg" || child.matches("label:has(> input[type=radio]), [data-production-run-id]");
       if (!leaf) continue;
       const rect = child.getBoundingClientRect();
       top = Math.min(top, rect.top);
@@ -259,8 +279,9 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
   };
 
   const titles = Array.from(body.querySelectorAll<HTMLElement>(SECTION_TITLE)).filter(isVisible);
-  const sectionRoots: HTMLElement[] = [];
+  const sectionRoots = Array.from(body.querySelectorAll<HTMLElement>(SECTION_ROOT)).filter(isVisible);
   for (const title of titles) {
+    if (title.closest(SECTION_ROOT)) continue;
     let node: HTMLElement = title;
     while (node.parentElement && node.parentElement !== body) {
       const parent: HTMLElement = node.parentElement;
@@ -273,14 +294,16 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
     }
     if (!sectionRoots.includes(node)) sectionRoots.push(node);
   }
+  sectionRoots.sort((a, b) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
   const sectionName = (el: Element) => {
     const title = el.matches(SECTION_TITLE) ? el : el.querySelector(SECTION_TITLE);
-    return title ? ownText(title) : describe(el);
+    const label = title ?? el.querySelector("label, span.body-small");
+    return label ? ownText(label) : describe(el);
   };
 
   const gaps: GapItem[] = [];
   const round = (value: number) => Math.round(value * 10) / 10;
-  // The space above each section: from whatever renders before it to its title row.
+  // The space above each section, whether it starts with a title or a field.
   for (const next of sectionRoots) {
     let prev = next.previousElementSibling;
     while (prev && !isVisible(prev)) prev = prev.previousElementSibling;
@@ -461,8 +484,9 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
   }
 
   /* --------------------------------------------------------------- Prose */
-  const helpers = all.filter((el) => el.matches("p[id$='-helper']"));
-  const paragraphs = all.filter((el) => el.tagName === "P" && !el.matches("[id$='-helper'], [id$='-error'], [role=alert]") && !inControl(el) && !insideFormActions(el) && clean(el.textContent).length >= MIN_PARAGRAPH_CHARS);
+  // A FormField `cue` is the visible helper caption since explanations moved to the ⓘ.
+  const helpers = all.filter((el) => el.matches("p[id$='-helper'], p[id$='-cue']"));
+  const paragraphs = all.filter((el) => el.tagName === "P" && !el.matches("[id$='-helper'], [id$='-cue'], [id$='-error'], [role=alert]") && !inControl(el) && !insideFormActions(el) && clean(el.textContent).length >= MIN_PARAGRAPH_CHARS);
   const proseSamples = [...helpers, ...paragraphs].slice(0, SAMPLE_LIMIT * 2).map((el) => clean(el.textContent));
 
   /* ------------------------------------------------------ R1 inventories */
@@ -488,6 +512,39 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
     ...actionEls.filter(explained).map(actionText),
   ]);
 
+  /* ------------------------------------------------------ Trailing icons */
+  const trailingIcons: TrailingIconGeometry[] = [];
+  const addTrailingIcon = (field: Element, kind: TrailingIconGeometry["kind"], filled: boolean, right: number | null) => {
+    // Every kind uses 12px +/- 1px from the padding-box right edge:
+    // border-box right minus border-right width, matching FormSelect's
+    // default background-origin (padding-box) and background-position: right 12px.
+    const borderRight = parseFloat(getComputedStyle(field).borderRightWidth) || 0;
+    const inset = right === null ? null : field.getBoundingClientRect().right - borderRight - right;
+    trailingIcons.push({
+      field: field.id || field.getAttribute("aria-label") || describe(field),
+      kind,
+      state: filled ? "filled" : "empty",
+      rightInset: inset === null ? null : round(inset),
+      valid: inset !== null && Math.abs(inset - TRAILING_ICON_INSET_PX) <= PX_TOLERANCE,
+    });
+  };
+  for (const trigger of body.querySelectorAll('[data-testid="entity-select-trigger"]')) {
+    if (!isVisible(trigger)) continue;
+    const icon = trigger.querySelector("[data-trailing-icon]");
+    addTrailingIcon(trigger, "entity", trigger.getAttribute("data-has-value") === "true", icon && isVisible(icon) ? icon.getBoundingClientRect().right : null);
+  }
+  // Must match TEMPORAL_INPUT_SELECTOR in native-picker-geometry.ts: nativePickerIcons is keyed by index.
+  // Inlined because this function runs in the page through page.evaluate.
+  const temporalSelector = 'input[type="date"], input[type="time"], input[type="datetime-local"]';
+  const temporalInputs = body.querySelectorAll<HTMLInputElement>(temporalSelector);
+  for (const input of temporalInputs) {
+    if (!isVisible(input) || input.disabled || input.readOnly) continue;
+    // The indices refer to all temporal inputs under root, including sheet chrome.
+    const index = Array.from(root.querySelectorAll(temporalSelector)).indexOf(input);
+    const native = args.nativePickerIcons.find((icon) => icon.index === index);
+    addTrailingIcon(input, input.type as TrailingIconGeometry["kind"], Boolean(input.value), native?.right ?? null);
+  }
+
   const html = document.documentElement;
   return {
     body: { width: Math.round(bodyRect.width), clientHeight: body.clientHeight, scrollHeight: body.scrollHeight },
@@ -495,6 +552,7 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
     lines: { items: lineItems, violations: lineItems.filter((item) => item.allowed === null).length },
     rhythm: { gaps },
     alignment: { controlLeftEdges, nearMisaligned, loneHalfWidth, orphanedGridItems, wrappedLabels },
+    trailingIcons,
     overflow: {
       bodyHorizontalScroll: body.scrollWidth > body.clientWidth + PX_TOLERANCE,
       pageHorizontalScroll: html.scrollWidth > window.innerWidth + PX_TOLERANCE,

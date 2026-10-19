@@ -19,7 +19,6 @@ function client(overrides: Partial<IsometricClient> = {}): IsometricClient {
     get(path, options),
   );
   return {
-    request: vi.fn(),
     post: vi.fn(),
     patch: vi.fn(),
     delete: vi.fn(),

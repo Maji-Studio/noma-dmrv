@@ -67,6 +67,8 @@ describe("CompiledSubmissionReview", () => {
               completedOn: "2026-04-05T00:00:00.000Z",
             },
           },
+          removalBlockers: [],
+          submissionAdvisories: [],
           blockers: [],
           warnings: ["Captured startup diesel is not represented."],
           compilationHash:
@@ -120,6 +122,8 @@ describe("CompiledSubmissionReview", () => {
         onRetry={vi.fn()}
         compilation={{
           review: null,
+          removalBlockers: [],
+          submissionAdvisories: [],
           blockers: [
             "Configure organization Isometric credentials before submitting.",
           ],

@@ -1,7 +1,11 @@
 "use client";
 
+import { throwActionError, StaleVersionError } from "@/lib/stale-version";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { entityKeys } from "./entity-query-keys";
+import { patchArrayListCacheByExactKeyWithSavedRow } from "./list-cache-utils";
+import type { FeedstockType } from "@/db/schema";
+import { invalidateEntityTypeQueries } from "./entity-query-keys";
 import {
   archiveFeedstockTypeFn,
   createFeedstockTypeFn,
@@ -18,8 +22,10 @@ import type {
 } from "@/schemas/feedstock-types";
 import { certificationKeys } from "./use-certification";
 
-const feedstockTypeKeys = {
+export const feedstockTypeKeys = {
   all: ["feedstock-types"] as const,
+  canManage: () => [...feedstockTypeKeys.all, "can-manage"] as const,
+  detail: (id: string) => ["feedstock-types", "detail", id] as const,
   list: () => ["feedstock-types", "list"] as const,
 };
 
@@ -28,7 +34,7 @@ export function useFeedstockTypeList(enabled = true) {
     queryKey: feedstockTypeKeys.list(),
     queryFn: async () => {
       const result = await listFeedstockTypesFn();
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     enabled,
@@ -40,9 +46,7 @@ function useInvalidateFeedstockTypes() {
   return () => {
     void queryClient.invalidateQueries({ queryKey: feedstockTypeKeys.all });
     void queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-    void queryClient.invalidateQueries({
-      queryKey: entityKeys.listPrefix("feedstockType"),
-    });
+    invalidateEntityTypeQueries(queryClient, "feedstockType");
   };
 }
 
@@ -51,7 +55,7 @@ export function useCreateFeedstockType() {
   return useMutation({
     mutationFn: async (input: CreateFeedstockTypeData) => {
       const result = await createFeedstockTypeFn(input);
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onSuccess: invalidate,
@@ -59,50 +63,66 @@ export function useCreateFeedstockType() {
 }
 
 export function useUpdateFeedstockType() {
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateFeedstockTypes();
   return useMutation({
     mutationFn: async (input: UpdateFeedstockTypeData) => {
       const result = await updateFeedstockTypeFn(input);
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
-    onSuccess: invalidate,
+    onError: (error) => { if (error instanceof StaleVersionError) invalidate(); },
+    onSuccess: (data) => {
+      patchArrayListCacheByExactKeyWithSavedRow<FeedstockType>(queryClient, feedstockTypeKeys.list(), data);
+      invalidate();
+    },
   });
 }
 
 export function useArchiveFeedstockType() {
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateFeedstockTypes();
   return useMutation({
-    mutationFn: async (feedstockTypeId: string) => {
-      const result = await archiveFeedstockTypeFn({ feedstockTypeId });
-      if (!result.success) throw new Error(result.error);
+    mutationFn: async (variables: { feedstockTypeId: string; expectedVersion: number }) => {
+      const result = await archiveFeedstockTypeFn(variables);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
-    onSuccess: invalidate,
+    onSuccess: (data) => {
+      patchArrayListCacheByExactKeyWithSavedRow<FeedstockType>(queryClient, feedstockTypeKeys.list(), data);
+      invalidate();
+    },
+    onError: (error) => { if (error instanceof StaleVersionError) invalidate(); },
   });
 }
 
 export function useUnarchiveFeedstockType() {
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateFeedstockTypes();
   return useMutation({
-    mutationFn: async (feedstockTypeId: string) => {
-      const result = await unarchiveFeedstockTypeFn({ feedstockTypeId });
-      if (!result.success) throw new Error(result.error);
+    mutationFn: async (variables: { feedstockTypeId: string; expectedVersion: number }) => {
+      const result = await unarchiveFeedstockTypeFn(variables);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
-    onSuccess: invalidate,
+    onSuccess: (data) => {
+      patchArrayListCacheByExactKeyWithSavedRow<FeedstockType>(queryClient, feedstockTypeKeys.list(), data);
+      invalidate();
+    },
+    onError: (error) => { if (error instanceof StaleVersionError) invalidate(); },
   });
 }
 
 export function useDeleteFeedstockType() {
   const invalidate = useInvalidateFeedstockTypes();
   return useMutation({
-    mutationFn: async (feedstockTypeId: string) => {
-      const result = await deleteFeedstockTypeFn({ feedstockTypeId });
-      if (!result.success) throw new Error(result.error);
+    mutationFn: async (variables: { feedstockTypeId: string; expectedVersion: number }) => {
+      const result = await deleteFeedstockTypeFn(variables);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onSuccess: invalidate,
+    onError: (error) => { if (error instanceof StaleVersionError) invalidate(); },
   });
 }
 
@@ -111,7 +131,7 @@ export function useImportIsometricFeedstockType() {
   return useMutation({
     mutationFn: async (input: ImportIsometricFeedstockTypeData) => {
       const result = await importIsometricFeedstockTypeFn(input);
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onSuccess: invalidate,

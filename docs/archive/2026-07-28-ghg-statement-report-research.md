@@ -89,9 +89,9 @@ description for `ghg_statement_report_url` is that the URL should be accessible
 to the verifier. The schema is a plain string: there is no `format: uri`, MIME
 type, extension, content-length, or size field. The same contract is present in
 noma's generated OpenAPI snapshot:
-[`SubmitGhgStatementRequest`](../../src/lib/isometric/generated/mrv.openapi.json#L6037)
+[`SubmitGhgStatementRequest`](https://github.com/Maji-Studio/noma-dmrv/blob/7fa045d9685d0031dd37d7f9ea06b8c0cb160c49/src/lib/isometric/generated/mrv.openapi.json#L6037)
 and
-[`ResubmitGhgStatementRequest`](../../src/lib/isometric/generated/mrv.openapi.json#L5528).
+[`ResubmitGhgStatementRequest`](https://github.com/Maji-Studio/noma-dmrv/blob/7fa045d9685d0031dd37d7f9ea06b8c0cb160c49/src/lib/isometric/generated/mrv.openapi.json#L5528).
 
 This means the following distinctions matter:
 

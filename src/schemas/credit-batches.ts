@@ -1,5 +1,7 @@
+import { expectedVersionSchema } from "./helpers";
+import type { certifierProvider } from "@/db/schema/common";
 import { z } from "zod";
-import { getCreditBatchProductionWindowIssue } from "@/lib/credit-batch-production-window";
+import { validateBatchPeriod } from "@/lib/certifier-policy";
 
 // ============================================
 // Constants and Enums
@@ -20,11 +22,7 @@ export type CreditBatchStatus = (typeof creditBatchStatuses)[number];
 export const creditBatchSamplingChoices = ["sampled", "unsampled"] as const;
 export type CreditBatchSampling = (typeof creditBatchSamplingChoices)[number];
 
-/**
- * Certifier provider options
- */
-export const certifierProviders = ["isometric"] as const;
-export type CertifierProvider = (typeof certifierProviders)[number];
+export type CertifierProvider = (typeof certifierProvider.enumValues)[number];
 
 /**
  * Durability options (Isometric Protocol)
@@ -41,12 +39,6 @@ export type DurabilityOption = (typeof durabilityOptions)[number];
  */
 export const DURABILITY_TIER_FALLBACK: DurabilityOption = "1000_year";
 
-/**
- * Currency codes (ISO 4217)
- */
-export const currencyCodes = ["TZS", "USD", "EUR", "GBP", "KES"] as const;
-export type CurrencyCode = (typeof currencyCodes)[number];
-
 // ============================================
 // Credit Batch Form Schema (Client-side validation)
 // ============================================
@@ -56,11 +48,9 @@ export type CurrencyCode = (typeof currencyCodes)[number];
  * Form sections:
  * 1. Overview — code, facilityId, startDate, endDate, status
  * 2. Production cohort — productionRunIds (membership via credit_batch_production_runs)
- * 3. Durability — durabilityOption toggle (200-year vs 1000-year) with conditional fields
- * 4. GHG Accounting — buffer pool % (CO2e figures are derived/registry-owned)
- * 5. Verification — registry, value, currency (applied weight is derived)
+ * 3. Site management — siteManagementNotes
  */
-export const creditBatchFormSchema = z
+export const creditBatchFormSchemaForCertifier = (certifier: CertifierProvider | null) => z
   .object({
     // === Section 1: Overview ===
     facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
@@ -79,75 +69,7 @@ export const creditBatchFormSchema = z
       .array(z.string().uuid())
       .default([]),
 
-    // === Section 3: Durability ===
-    // The tier is NOT a batch input — it is inherited from the facility
-    // (ADR 0021) and shown read-only on the form. The tier-specific evidence
-    // fields below gate on the facility tier.
-
-    // 200-year durability fields
-    hToCorgRatio: z
-      .number()
-      .min(0, "H:Corg ratio must be positive")
-      .max(1, "H:Corg ratio must be at most 1")
-      .optional()
-      .nullable(),
-
-    // 1000-year durability fields
-    meanRandomReflectancePercent: z
-      .number()
-      .min(0, "Reflectance must be positive")
-      .max(100, "Reflectance must be at most 100%")
-      .optional()
-      .nullable(),
-    stdRandomReflectance: z
-      .number()
-      .min(0, "Standard deviation must be positive")
-      .optional()
-      .nullable(),
-    meanNonReactiveCarbonPercent: z
-      .number()
-      .min(0, "Non-reactive carbon must be positive")
-      .max(100, "Non-reactive carbon must be at most 100%")
-      .optional()
-      .nullable(),
-    stdNonReactiveCarbonPercent: z
-      .number()
-      .min(0, "Standard deviation must be positive")
-      .optional()
-      .nullable(),
-
-    // Calculated durability fraction (output)
-    fDurableCalculated: z
-      .number()
-      .min(0)
-      .max(0.95)
-      .optional()
-      .nullable(),
-
-    // === Section 4: GHG Accounting ===
-    // CO2e stored/emissions/counterfactual are derived or registry-owned
-    // (issue #285, ADR 0018) — no longer form inputs.
-    bufferPoolPercent: z
-      .number()
-      .min(2, "Buffer pool must be at least 2%")
-      .max(20, "Buffer pool must be at most 20%")
-      .optional()
-      .nullable(),
-
-    // === Section 5: Verification ===
-    registry: z
-      .string()
-      .max(100, "Registry must be less than 100 characters")
-      .optional()
-      .or(z.literal("")),
-    value: z
-      .number()
-      .min(0, "Value must be positive")
-      .optional()
-      .nullable(),
-    currency: z.enum(currencyCodes).default("TZS"),
-
-    // === Site Management ===
+    // === Section 3: Site management ===
     siteManagementNotes: z
       .string()
       .max(2000, "Notes must be less than 2000 characters")
@@ -155,10 +77,7 @@ export const creditBatchFormSchema = z
       .or(z.literal("")),
   })
   .superRefine((data, ctx) => {
-    const windowIssue = getCreditBatchProductionWindowIssue(
-      data.startDate,
-      data.endDate,
-    );
+    const windowIssue = validateBatchPeriod({ certifier, startDate: data.startDate, endDate: data.endDate });
     if (windowIssue) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -171,19 +90,20 @@ export const creditBatchFormSchema = z
     // credit-batch creation.
   });
 
+export const creditBatchFormSchema = creditBatchFormSchemaForCertifier("isometric");
+
 // ============================================
 // Server Action Schemas
 // ============================================
 
-/**
- * Schema for creating a credit batch (server action)
- */
+/** Isometric-default create shape for inferred types and Isometric demo seeds. */
 export const createCreditBatchSchema = creditBatchFormSchema;
 
 /**
  * Schema for updating a credit batch (server action)
  */
 export const updateCreditBatchSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   creditBatchId: z.string().uuid("Choose a valid credit batch."),
   code: z
     .string()
@@ -198,17 +118,6 @@ export const updateCreditBatchSchema = z.object({
   productionRunIds: z
     .array(z.string().uuid())
     .optional(),
-  // durabilityOption is inherited from the facility (ADR 0021), not a batch field.
-  hToCorgRatio: z.number().min(0).max(1).optional().nullable(),
-  meanRandomReflectancePercent: z.number().min(0).max(100).optional().nullable(),
-  stdRandomReflectance: z.number().min(0).optional().nullable(),
-  meanNonReactiveCarbonPercent: z.number().min(0).max(100).optional().nullable(),
-  stdNonReactiveCarbonPercent: z.number().min(0).optional().nullable(),
-  fDurableCalculated: z.number().min(0).max(0.95).optional().nullable(),
-  bufferPoolPercent: z.number().min(2).max(20).optional().nullable(),
-  registry: z.string().max(100).optional().nullable(),
-  value: z.number().min(0).optional().nullable(),
-  currency: z.enum(currencyCodes).optional(),
   siteManagementNotes: z.string().max(2000).optional().nullable(),
   sampling: z.never({ error: "Sampling cannot be changed after creation" }).optional(),
 });
@@ -217,6 +126,7 @@ export const updateCreditBatchSchema = z.object({
  * Schema for deleting a credit batch
  */
 export const deleteCreditBatchSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   creditBatchId: z.string().uuid("Choose a valid credit batch."),
 });
 
@@ -255,3 +165,5 @@ export function formatDurabilityOption(option: DurabilityOption): string {
   };
   return labels[option];
 }
+
+export type DeleteCreditBatchData = z.infer<typeof deleteCreditBatchSchema>;

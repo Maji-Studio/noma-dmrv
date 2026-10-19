@@ -14,12 +14,14 @@ import type {
 } from "@/components/forms/entity-select/types";
 import { productionRunStatus } from "@/db/schema/common";
 import type { OrgContext } from "@/lib/auth/server";
-import { PURE_PRODUCT_BIN_FILTER } from "@/schemas/biochar-products";
+import { PURE_PRODUCT_BIN_FILTER, STRICT_FORMULATION_MATCH } from "@/schemas/biochar-products";
 import {
   storageLocationTypes,
   type StorageLocationType,
 } from "@/schemas/storage-locations";
 import { requireOrgScope } from "../utils";
+import { ENTITY_SEARCH_LIMIT } from "@/config/forms";
+import { getCustomerLocationsEntity, getCustomerLocationEntityById } from "./customer-locations";
 
 import {
   getApplicationEntityById,
@@ -53,9 +55,6 @@ import { getStorageLocationById, getStorageLocations } from "./storage-locations
 import { getSupplierById, getSuppliers } from "./suppliers";
 import { getVehicleById, getVehicles } from "./vehicles";
 
-/** Default page size for searchable entity-select queries. */
-const DEFAULT_ENTITY_LIMIT = 50;
-
 interface GetEntitiesParams {
   entityType: EntityType;
   search?: string;
@@ -68,7 +67,7 @@ export async function getEntities(
   params: GetEntitiesParams
 ): Promise<EntityOption[]> {
   requireOrgScope(ctx);
-  const { entityType, search, filterBy, limit = DEFAULT_ENTITY_LIMIT } = params;
+  const { entityType, search, filterBy, limit = ENTITY_SEARCH_LIMIT } = params;
 
   switch (entityType) {
     case "facility":
@@ -78,7 +77,9 @@ export async function getEntities(
     case "supplier":
       return getSuppliers(ctx, { search, limit });
     case "customer":
-      return getCustomers(ctx, { search, limit });
+      return getCustomers(ctx, { search, limit, includeArchived: filterBy?.includeArchived === "true" });
+    case "customerLocation":
+      return getCustomerLocationsEntity(ctx, { search, customerId: filterBy?.customerId, limit });
     case "driver":
       return getDrivers(ctx, { search, limit });
     case "operator":
@@ -103,13 +104,15 @@ export async function getEntities(
         type = validTypes.length === 1 ? validTypes[0] : validTypes;
       }
       // Product-bin formulation filter: the sentinel means "pure-biochar product →
-      // only unassigned bins"; a real id means "matching OR unassigned bins".
+      // only unassigned bins"; a real id defaults to "matching OR unassigned",
+      // while delivery-source pickers request an exact formulation match.
       const rawFormulation = filterBy?.formulationId?.trim();
       const pureProductOnly = rawFormulation === PURE_PRODUCT_BIN_FILTER;
       const formulationId =
         rawFormulation && rawFormulation !== PURE_PRODUCT_BIN_FILTER
           ? rawFormulation
           : undefined;
+      if (filterBy?.formulationMatch === STRICT_FORMULATION_MATCH && !formulationId && !pureProductOnly) return [];
       const rawFeedstockTypeUsage = filterBy?.feedstockTypeUsage?.trim();
       const feedstockTypeUsage =
         rawFeedstockTypeUsage === "pyrolysis" || rawFeedstockTypeUsage === "blend"
@@ -123,6 +126,7 @@ export async function getEntities(
         feedstockTypeUsage,
         formulationId,
         pureProductOnly,
+        strictFormulation: filterBy?.formulationMatch === STRICT_FORMULATION_MATCH,
         limit,
       });
     }
@@ -190,6 +194,8 @@ export async function getEntityById(
       return getSupplierById(ctx, id);
     case "customer":
       return getCustomerById(ctx, id);
+    case "customerLocation":
+      return getCustomerLocationEntityById(ctx, id);
     case "driver":
       return getDriverById(ctx, id);
     case "operator":

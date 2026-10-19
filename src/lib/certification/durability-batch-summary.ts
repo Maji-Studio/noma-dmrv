@@ -139,6 +139,12 @@ export interface DurabilitySummaryEligibility {
   hToCWithinThreshold: boolean | null;
   /** mean < 0.2; null when the O/C_org mean is indeterminate. */
   oToCWithinThreshold: boolean | null;
+  /**
+   * Sample codes whose H/C_org is in the submitted mean without a paired
+   * O/C_org. The submission gate blocks on these (Q54), so a passing paired
+   * verdict is not ready while any remain.
+   */
+  unpairedHToCSampleCodes: string[];
 }
 
 /** The mean ± std-dev the measurement-sample POST submits for this batch. */
@@ -156,6 +162,11 @@ export interface DurabilityBatchSummary {
   sampling: CreditBatchSampling;
   /** The batch's declared durability tier — samples inherit it (issue #309). */
   durabilityOption: "200_year" | "1000_year";
+  /**
+   * The batch facility's IANA zone, which the lab-sample form reads its
+   * sampling time in (round 7 Q51); null when the input carried none.
+   */
+  facilityTimezone: string | null;
   /** Raw lab sample rows pooled on this batch (across member runs/days). */
   sampleCount: number;
   /** Replicates carrying paired H/C_org + O/C_org — the eligibility / ≥3-count set. */
@@ -249,6 +260,7 @@ export function buildDurabilityBatchSummaries(
       creditBatchCode: batch.creditBatchCode,
       sampling: batch.sampling,
       durabilityOption: batch.durabilityOption ?? "200_year",
+      facilityTimezone: batch.facilityTimezone ?? null,
       sampleCount: batch.samples.length,
       usableReplicateCount: eligibility.usableReplicateCount,
       minimumReplicates: MINIMUM_REPLICATES_PER_BATCH,
@@ -259,6 +271,13 @@ export function buildDurabilityBatchSummaries(
         oToCorgMean: eligibility.meanOToCOrgRatio,
         hToCWithinThreshold: eligibility.hToCWithinThreshold,
         oToCWithinThreshold: eligibility.oToCWithinThreshold,
+        // Mirrors gate (d), which exempts unsampled batches.
+        unpairedHToCSampleCodes:
+          batch.sampling === "unsampled"
+            ? []
+            : eligibility.unpairedHToCReplicateIndexes.map(
+                (index) => batch.samples[index].sampleCode,
+              ),
       },
       submitted: {
         hToCorg: dp?.hToCorgRatio ?? null,

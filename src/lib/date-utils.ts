@@ -8,11 +8,13 @@
 import { SafeError } from "@/lib/errors";
 
 /**
- * Fallback IANA zone when a facility's timezone cannot be resolved. Mirrors the
- * `facilities.timezone` column default (`src/db/schema/facilities.ts`) so a
- * missing facility row and a facility that never set a zone behave identically.
+ * Zone used when a facility cannot be resolved (absent from the loaded list, or
+ * deleted): to display times and to read times entered against it. The UI says
+ * so through {@link facilityTimeHelperText}. It is not a default: every
+ * facility stores its own zone (`facilities.timezone` is required, with no
+ * default), and this value is never written to a facility.
  */
-export const DEFAULT_FACILITY_TIMEZONE = "UTC";
+export const UNKNOWN_FACILITY_TIMEZONE = "UTC";
 
 /** Shapes {@link combineDateAndTime} accepts for its two halves. */
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -196,23 +198,23 @@ export function formatTimezoneLabel(
 
 /**
  * Resolve a facility's IANA zone from a facility list. Returns
- * {@link DEFAULT_FACILITY_TIMEZONE} when the facility is unknown — e.g. an edit
+ * {@link UNKNOWN_FACILITY_TIMEZONE} when the facility is unknown — e.g. an edit
  * form opened for a run whose facility is not in the current context list.
  */
 export function resolveFacilityTimezone(
   facilities: readonly { id: string; timezone: string }[],
   facilityId: string | null | undefined
 ): string {
-  if (!facilityId) return DEFAULT_FACILITY_TIMEZONE;
+  if (!facilityId) return UNKNOWN_FACILITY_TIMEZONE;
   return (
     facilities.find((facility) => facility.id === facilityId)?.timezone ??
-    DEFAULT_FACILITY_TIMEZONE
+    UNKNOWN_FACILITY_TIMEZONE
   );
 }
 
 /**
  * Always-visible cue naming the zone entered times are read in. A facility
- * missing from the list falls back to {@link DEFAULT_FACILITY_TIMEZONE}, and the
+ * missing from the list falls back to {@link UNKNOWN_FACILITY_TIMEZONE}, and the
  * cue says so rather than applying the fallback silently (QA F-2).
  */
 export function facilityTimeHelperText(
@@ -222,10 +224,15 @@ export function facilityTimeHelperText(
   const resolved = facilityId
     ? facilities.some((facility) => facility.id === facilityId)
     : false;
-  const label = resolveFacilityTimezone(facilities, facilityId).replaceAll("_", " ");
+  const timeZone = resolveFacilityTimezone(facilities, facilityId);
   return resolved
-    ? `Facility time: ${label}`
-    : `Facility time is not set. Using ${label}.`;
+    ? facilityTimeCue(timeZone)
+    : `Facility time is not set. Using ${timeZone.replaceAll("_", " ")}.`;
+}
+
+/** The cue for a known facility zone, for a form that has the zone but not the facility. */
+export function facilityTimeCue(timeZone: string): string {
+  return `Facility time: ${timeZone.replaceAll("_", " ")}`;
 }
 
 /** Format a Date as "YYYY-MM-DD" in local timezone. */
@@ -318,7 +325,7 @@ export class AmbiguousLocalTimeError extends SafeError {
  * instead of 05:00Z, and the telemetry importer — which clips CSV rows to the
  * stored run window — then discarded the readings that fell outside the shifted
  * hour with no error. A defaulted zone is exactly what made that invisible, so
- * callers must name the zone (use {@link DEFAULT_FACILITY_TIMEZONE} explicitly
+ * callers must name the zone (use {@link UNKNOWN_FACILITY_TIMEZONE} explicitly
  * when there is genuinely nothing better).
  *
  * ## DST policy — a wall clock is not always exactly one instant
@@ -398,6 +405,32 @@ export function toDateInputValue(value: string | Date | null | undefined): strin
   const date = typeof value === "string" ? new Date(value) : value;
   if (isNaN(date.getTime())) return formatLocalDate(new Date());
   return formatUtcDate(date);
+}
+
+/**
+ * First instant of a facility calendar day, including skipped or repeated
+ * midnights. Unlike an entered wall clock, a day boundary is unambiguous:
+ * choose the first existing time, or the earlier occurrence of midnight.
+ * Invalid or entirely skipped calendar dates return an Invalid Date.
+ */
+export function startOfFacilityDay(dateStr: string, timeZone: string): Date {
+  if (!DATE_ONLY_PATTERN.test(dateStr)) return new Date(NaN);
+  const utcMidnight = Date.parse(`${dateStr}T00:00:00.000Z`);
+  if (!Number.isFinite(utcMidnight) || formatUtcDate(new Date(utcMidnight)) !== dateStr) {
+    return new Date(NaN);
+  }
+
+  // A day on either side brackets local midnight for every facility offset.
+  // Search calendar dates, so a missing midnight needs no invented wall time.
+  let before = utcMidnight - OFFSET_PROBE_MS;
+  let after = utcMidnight + OFFSET_PROBE_MS;
+  while (after - before > 1) {
+    const middle = Math.floor((before + after) / 2);
+    if (formatFacilityDate(new Date(middle), timeZone) < dateStr) before = middle;
+    else after = middle;
+  }
+  const start = new Date(after);
+  return formatFacilityDate(start, timeZone) === dateStr ? start : new Date(NaN);
 }
 
 /**

@@ -23,3 +23,9 @@ export {
   readDashboardOverview,
   type DashboardOverviewInput,
 } from "./dashboard-overview";
+export {
+  readCreditBatchActivity,
+  readCreditBatchActivitySummary,
+  type CreditBatchActivityInput,
+  type CreditBatchActivitySummaryInput,
+} from "./credit-batch-activity";

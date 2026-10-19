@@ -7,7 +7,7 @@ import { useOutputStockBalance } from "./use-output-stock";
 
 /**
  * The estimate a stock moisture field is checked against: the bin's moisture
- * from each batch's latest reading at the entry's time. Null until a bin is
+ * from each batch's last count, or its recorded moisture, at the entry's time. Null until a bin is
  * chosen or when the bin has no estimate. A live preview's own estimate wins
  * (`fromPreview`): it is computed for the same entry, including a correction's
  * stock before the entry it replaces.

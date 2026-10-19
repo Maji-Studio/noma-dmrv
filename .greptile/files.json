@@ -5,13 +5,18 @@
       "description": "Authoritative repository instructions, architecture boundaries, security guardrails, and review workflow."
     },
     {
-      "path": "CONTEXT.md",
+      "path": "GLOSSARY.md",
       "description": "Authoritative noma-dmrv domain glossary and invariant vocabulary."
     },
     {
       "path": "docs/architecture.md",
       "description": "Current application layering, facility context, caching, certification, and integration patterns.",
       "scope": ["src/**", "tests/**"]
+    },
+    {
+      "path": "docs/api.md",
+      "description": "REST and MCP authentication, shared operations, resource contracts, and API fuzzing context.",
+      "scope": ["src/lib/api/**", "src/app/api/**", "src/lib/mcp/**", "src/lib/operations/**", "openapi/**", "scripts/api-fuzz/**"]
     },
     {
       "path": "docs/security.md",

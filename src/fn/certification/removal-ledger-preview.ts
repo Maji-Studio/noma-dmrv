@@ -1,10 +1,10 @@
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
-import { appliedBiocharFraction, type RemovalRunSummary } from "@/lib/certification/mass-accounting";
+import { type RemovalRunSummary } from "@/lib/certification/mass-accounting";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import {
   aggregateProductionRuns,
   enrichWithTransportLegs,
-  type ProductionRunWithSamples,
+  type ProductionRunForCertification,
   type TransportLegsByCategory,
 } from "@/lib/isometric";
 import { logger, sanitizeErrorMessage } from "@/lib/log";
@@ -25,6 +25,7 @@ export interface RemovalLedgerClaim {
   creditBatchId: string;
   creditBatchCode: string;
   claimingRemovalId: string | null;
+  claimingRemovalCode: string | null;
   contribution: "production-and-delivery" | "delivery-only";
 }
 
@@ -46,6 +47,7 @@ interface MemberBatchClaim {
   creditBatchId: string;
   code: string;
   claimedByRemovalId: string | null;
+  claimingRemovalCode?: string | null;
   productionRunIds: string[];
   applicationIds: string[];
   applicationSlices?: Array<{ applicationId: string }>;
@@ -64,7 +66,7 @@ function input(
 export function buildRemovalLedgerPreview(args: {
   removalId: string | null;
   memberBatchClaims: MemberBatchClaim[];
-  runs: ProductionRunWithSamples[];
+  runs: ProductionRunForCertification[];
   lineages: ChainOfCustodyData[];
   transportLegs: TransportLegsByCategory;
   attributionByRunId: Map<string, number>;
@@ -75,6 +77,7 @@ export function buildRemovalLedgerPreview(args: {
     creditBatchId: batch.creditBatchId,
     creditBatchCode: batch.code,
     claimingRemovalId: batch.claimedByRemovalId,
+    claimingRemovalCode: batch.claimingRemovalCode ?? null,
     contribution: productionClaimContribution(
       batch.claimedByRemovalId,
       args.removalId,
@@ -97,7 +100,6 @@ export function buildRemovalLedgerPreview(args: {
           productionRunIds,
         }),
         args.transportLegs,
-        { appliedBiocharFraction: appliedBiocharFraction(args.runSummary) },
       );
       inputs.push(
         input(

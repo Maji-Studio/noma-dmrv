@@ -35,7 +35,8 @@ test.describe("Side-sheet discard guard", () => {
     await waitForSideSheet(page);
 
     await page.getByRole("button", { name: "Edit feedstock" }).click();
-    const notesField = page.getByLabel("Notes");
+    // By role: the field's ⓘ button is named "More about Notes".
+    const notesField = page.getByRole("textbox", { name: "Notes" });
     await expect(notesField).toBeVisible();
     await notesField.fill("E2E discard-guard probe");
 
@@ -49,7 +50,7 @@ test.describe("Side-sheet discard guard", () => {
     // Keep editing preserves the typed value.
     await dialog.getByRole("button", { name: "Keep editing" }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByLabel("Notes")).toHaveValue(
+    await expect(page.getByRole("textbox", { name: "Notes" })).toHaveValue(
       "E2E discard-guard probe",
     );
 

@@ -1,5 +1,6 @@
 "use server";
 
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { env } from "@/config/env";
 import { getLatestSubmission } from "@/data-access/certification-submissions";
 import {
@@ -14,7 +15,6 @@ import { SafeError } from "@/lib/errors";
 import {
   getGhgEntry,
   getGhgStatement,
-  getIsometricClientForOrg,
 } from "@/lib/isometric";
 import {
   GHG_STATEMENT_ENTITY_TYPE,
@@ -62,7 +62,7 @@ export async function loadGhgStatementBreakdown(
       return { status: "pending", value: null, message: "Registry totals appear after the GHG Statement is created." };
     }
 
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    const client = await resolveIsometricClient(orgCtx);
     let fetchedEntries: Array<Awaited<ReturnType<typeof getGhgEntry>>>;
     let remote: Awaited<ReturnType<typeof getGhgStatement>>;
     try {

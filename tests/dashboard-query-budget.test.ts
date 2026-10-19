@@ -1,3 +1,5 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
+import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { countQueries } from "./helpers/query-counter";
 /**
  * Round-trip budget for the dashboard's startup reads. Each number below is
@@ -18,18 +20,19 @@ import {
   productionProcesses,
   productionRuns,
   reactors,
+  storageLocations,
 } from "@/db/schema";
 import { getDashboardOverview } from "@/data-access/dashboard-overview";
 import { getOnboardingStatus } from "@/data-access/onboarding";
 import { deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
 } from "./helpers/test-org";
 
 /** Statements one dashboard overview read may send, with any number of batches. */
-const OVERVIEW_QUERY_BUDGET = 19;
+const OVERVIEW_QUERY_BUDGET = 18;
 /** Statements one onboarding status read may send for a selected facility. */
 const ONBOARDING_QUERY_BUDGET = 2;
 const BATCH_COUNT = 3;
@@ -58,11 +61,11 @@ beforeAll(async () => {
   const tag = crypto.randomUUID().slice(0, 8);
   const [facility] = await db
     .insert(facilities)
-    .values({ organizationId: TEST_ORG_ID, code: `QB-F-${tag}`, name: `Query budget ${tag}` })
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `QB-F-${tag}`, name: `Query budget ${tag}` })
     .returning({ id: facilities.id });
   const [feedstockType] = await db
     .insert(feedstockTypes)
-    .values({ organizationId: TEST_ORG_ID, code: `QB-FT-${tag}`, name: `Query budget ${tag}`, category: "forestry" })
+    .values({ usage: "pyrolysis", organizationId: TEST_ORG_ID, code: `QB-FT-${tag}`, name: `Query budget ${tag}`, category: "forestry" })
     .returning({ id: feedstockTypes.id });
   const [process] = await db
     .insert(productionProcesses)
@@ -72,6 +75,7 @@ beforeAll(async () => {
     .insert(reactors)
     .values({ organizationId: TEST_ORG_ID, facilityId: facility.id, code: `QB-R-${tag}`, identifier: `Query budget ${tag}`, reactorType: "fixed-bed" })
     .returning({ id: reactors.id });
+  const outputBinId = await createProductionRunOutputBin(TEST_ORG_ID, facility.id);
   const runs = await db
     .insert(productionRuns)
     .values(
@@ -81,6 +85,7 @@ beforeAll(async () => {
         reactorId: reactor.id,
         code: `QB-PR${n}-${tag}`,
         status: "complete" as const,
+        biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
         startTime: new Date(`2026-07-0${n + 1}T08:00:00Z`),
         endTime: new Date(`2026-07-0${n + 1}T16:00:00Z`),
         feedstockMassDryKg: 1_000 * (n + 1),
@@ -91,16 +96,15 @@ beforeAll(async () => {
   const stocks = await db
     .insert(feedstocks)
     .values(
-      runs.map((_, n) => ({
+      await feedstockFixtureValues(db, runs.map((_, n) => ({
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
         code: `QB-FS${n}-${tag}`,
         status: n === 0 ? ("missing_data" as const) : ("complete" as const),
         massDryKg: 500,
-        eligibilityStatus: "eligible" as const,
         deliveryDate: new Date(`2026-06-2${n}T00:00:00Z`),
-      })),
+      }))),
     )
     .returning({ id: feedstocks.id });
   const batches = await db
@@ -141,7 +145,9 @@ afterAll(async () => {
   await db.delete(creditBatchProductionRuns).where(inArray(creditBatchProductionRuns.creditBatchId, fixture.batchIds));
   await db.delete(creditBatches).where(inArray(creditBatches.id, fixture.batchIds));
   await db.delete(feedstocks).where(inArray(feedstocks.id, fixture.feedstockIds));
+  await cleanupFeedstockFixtureParents(db);
   await db.delete(productionRuns).where(inArray(productionRuns.id, fixture.runIds));
+  await db.delete(storageLocations).where(eq(storageLocations.facilityId, fixture.facilityId));
   await db.delete(productionProcesses).where(eq(productionProcesses.id, fixture.processId));
   await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
   await db.delete(feedstockTypes).where(eq(feedstockTypes.id, fixture.feedstockTypeId));

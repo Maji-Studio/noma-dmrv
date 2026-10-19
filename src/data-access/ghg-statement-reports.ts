@@ -1,3 +1,4 @@
+import { recordDocumentActivity } from "./write-activity";
 import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
@@ -7,6 +8,7 @@ import {
   documents,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { PDF_MIME_TYPE } from "@/lib/storage/types";
 import { SafeError } from "@/lib/errors";
 import type {
   GhgStatementReportModel,
@@ -259,7 +261,7 @@ export async function insertPreparedGhgStatementReport(
         storageKey: args.storage.key,
         fileName: args.storage.fileName,
         fileSizeBytes: args.storage.fileSizeBytes,
-        mimeType: "application/pdf",
+        mimeType: PDF_MIME_TYPE,
         checksumSha256: args.contentChecksumSha256,
         visibility: "private",
         uploadStatus: "uploaded",
@@ -272,6 +274,7 @@ export async function insertPreparedGhgStatementReport(
         createdBy: ctx.userId,
       })
       .returning();
+    await recordDocumentActivity(ctx, tx, document, "created", { source: "form" });
     const [report] = await tx
       .insert(certifierGhgStatementReports)
       .values({

@@ -4,6 +4,7 @@
  * production run.
  */
 "use client";
+import { toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { useState } from "react";
 import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
@@ -25,12 +26,13 @@ import {
   type ProductionIncidentFormData,
 } from "@/schemas/production-incidents";
 import type { ProductionIncidentWithRelations } from "@/data-access/production-incidents";
-import { formatDateTime } from "@/lib/format-utils";
+import { formatFacilityDateTime } from "@/lib/format-utils";
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 
 interface ProductionIncidentTableProps {
   productionRunId: string;
-  facilityId?: string;
+  facilityId: string;
   defaultReactorId?: string | null;
   defaultOperatorId?: string | null;
   readOnly?: boolean;
@@ -48,12 +50,15 @@ export function ProductionIncidentTable({
   const updateIncident = useUpdateProductionIncident();
   const deleteIncident = useDeleteProductionIncident(productionRunId);
   const toast = useToast();
+  const { timeZone } = useFacilityClock(facilityId);
 
   const [formDialog, setFormDialog] = useState<
     | { open: false }
     | { open: true; incident?: ProductionIncidentWithRelations }
   >({ open: false });
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<ProductionIncidentWithRelations | null>(null);
+  const deletingId = deleting?.id;
+  const setDeletingId = (id: string | null) => setDeleting(incidents?.find(row => row.id === id) ?? null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const openCreate = () => {
@@ -75,6 +80,7 @@ export function ProductionIncidentTable({
       if (formDialog.open && formDialog.incident) {
         await updateIncident.mutateAsync({
           productionIncidentId: formDialog.incident.id,
+          expectedVersion: formDialog.incident.version,
           ...data,
         });
         toast.success("Incident updated");
@@ -89,14 +95,14 @@ export function ProductionIncidentTable({
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deletingId) return;
+    if (!deleting) return;
     try {
-      await deleteIncident.mutateAsync(deletingId);
+      await deleteIncident.mutateAsync({ productionIncidentId: deleting.id, expectedVersion: deleting.version });
       setDeletingId(null);
       toast.success("Incident deleted");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Incident was not deleted. Try again.");
-      setDeletingId(null);
+      setDeleting(null);
+      toast.error(toDeleteErrorMessage(err, "Incident", "Incident was not deleted. Try again."));
     }
   };
 
@@ -133,7 +139,7 @@ export function ProductionIncidentTable({
         <div className="overflow-x-auto">
           <table className="w-full body-small">
             <thead>
-              <tr className="border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-tertiary)]">
+              <tr className="border-b border-[var(--color-border-primary)] text-left body-small text-[var(--color-text-secondary)]">
                 <th className="py-8 pr-12 font-medium">Time</th>
                 <th className="py-8 pr-12 font-medium">Severity</th>
                 <th className="py-8 pr-12 font-medium">Reactor</th>
@@ -151,12 +157,10 @@ export function ProductionIncidentTable({
                   className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-background-medium)]"
                 >
                   <td className="py-8 pr-12 font-medium">
-                    {formatDateTime(incident.incidentTime)}
+                    {formatFacilityDateTime(incident.incidentTime, timeZone)}
                   </td>
                   <td className="py-8 pr-12">
-                    {incident.severity
-                      ? formatProductionIncidentSeverity(incident.severity)
-                      : MISSING_VALUE.notRecorded}
+                    {formatProductionIncidentSeverity(incident.severity)}
                   </td>
                   <td className="py-8 pr-12">
                     {incident.reactorIdentifier ?? MISSING_VALUE.notRecorded}

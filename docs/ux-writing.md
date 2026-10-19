@@ -4,7 +4,7 @@ Use this guide for all user-facing copy in noma. It applies to interface text,
 validation and error messages, warnings, toasts, empty states, generated and
 template content, operator reports, PDFs, and emails.
 
-Check [CONTEXT.md](../CONTEXT.md) before naming a domain concept. Its terms
+Check [GLOSSARY.md](../GLOSSARY.md) before naming a domain concept. Its terms
 override casual alternatives.
 
 ## Core rules
@@ -18,7 +18,7 @@ override casual alternatives.
 - Do not use an en dash or em dash. Use a full stop, comma, colon, or
   parentheses instead.
 
-Preserve necessary domain terms from [CONTEXT.md](../CONTEXT.md), even when a
+Preserve necessary domain terms from [GLOSSARY.md](../GLOSSARY.md), even when a
 more casual term looks simpler. Explain a domain term only when the operator
 needs that explanation to complete the task.
 
@@ -168,7 +168,7 @@ provide.
 Write for an operator who may read the output away from the app. Give records,
 dates, units, statuses, and required actions enough context to stand alone.
 Keep headings and field names consistent with the app and
-[CONTEXT.md](../CONTEXT.md).
+[GLOSSARY.md](../GLOSSARY.md).
 
 Separate observed facts from estimates, derived values, and requirements. Keep
 machine-facing dates and identifiers in their required stable format.
@@ -186,7 +186,7 @@ feature and status terms as the app.
 
 Before shipping user-facing copy, confirm that it:
 
-- uses the terms in [CONTEXT.md](../CONTEXT.md);
+- uses the terms in [GLOSSARY.md](../GLOSSARY.md);
 - uses simple, direct words and short sentences;
 - uses active voice and present tense;
 - gives the next action when one is needed;

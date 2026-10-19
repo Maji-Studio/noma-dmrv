@@ -7,7 +7,7 @@ import { hasPendingStatementTotal } from "@/lib/certification/pending-statement-
  * (`lib/isometric/*` runtime modules). The remote GHG union is a **type-only**
  * import from the generated OpenAPI types, which is erased at build time.
  *
- * Two artifacts, two lifecycles (see `CONTEXT.md`, ADR 0003/0004):
+ * Two artifacts, two lifecycles (see `GLOSSARY.md`, ADR 0003/0004):
  *
  *   - **Removal** → submitted to the **registry**. Single-phase `submitRemoval`.
  *     There is NO remote Removal status in this integration, so the lifecycle
@@ -25,6 +25,8 @@ import { hasPendingStatementTotal } from "@/lib/certification/pending-statement-
  */
 
 import type { StatusValue } from "@/components/ui/status-badge";
+// Type-only: erased at build time, used only to check the status list below.
+import type { certificationSubmissionStatus } from "@/db/schema/common";
 // Type-only — erased at build time, so the generated types never reach the
 // client bundle as runtime code.
 import type { components } from "@/lib/isometric/generated/certify";
@@ -34,36 +36,29 @@ import {
 import type { RemovalReadiness } from "./readiness";
 
 /**
- * Local certification-submission ledger status. Mirrors the DB enum in
+ * Local certification-submission ledger statuses. Mirrors the DB enum in
  * `src/db/schema/common.ts` (`certificationSubmissionStatus`); declared
- * locally so this module imports no server/schema runtime code.
+ * locally so this module imports no server/schema runtime code. The check
+ * below fails the build when the two drift apart in either direction.
  */
-export type LocalSubmissionStatus =
-  | "draft"
-  | "submitted"
-  | "accepted"
-  | "rejected"
-  | "superseded";
-
-/**
- * Local submission statuses that carry a live remote dependency, and so freeze
- * what their removal represents: while one is present the removal's credit-batch
- * membership can't be regrouped and its facility's certifier mapping can't be
- * repointed/unlinked (ADR 0003). Terminal `rejected`/`superseded` rows are
- * excluded — they have no live remote resource a change could orphan.
- *
- * The single client-safe source for this list: the server guards in
- * `data-access/certification.ts` (`hasBlockingFacilitySubmission`) and
- * `data-access/credit-batch-certification-lock.ts`
- * (`assertRemovalAllowsCreditBatchMutation`) and the client gate in
- * `lib/certification/readiness.ts` (`canRegroupRemoval`) both import it from
- * here, so the UI never offers a control the server will refuse.
- */
-export const BLOCKING_SUBMISSION_STATUSES: readonly LocalSubmissionStatus[] = [
+export const LOCAL_SUBMISSION_STATUSES = [
   "draft",
   "submitted",
   "accepted",
-];
+  "rejected",
+  "superseded",
+] as const;
+
+export type LocalSubmissionStatus = (typeof LOCAL_SUBMISSION_STATUSES)[number];
+
+type DbSubmissionStatus = (typeof certificationSubmissionStatus.enumValues)[number];
+type MirrorsDbEnum = [LocalSubmissionStatus] extends [DbSubmissionStatus]
+  ? [DbSubmissionStatus] extends [LocalSubmissionStatus]
+    ? true
+    : false
+  : false;
+/** Compile-time proof that the list mirrors the DB enum: anything but `true` fails the build. */
+export const LOCAL_SUBMISSION_STATUSES_MIRROR_DB_ENUM: MirrorsDbEnum = true;
 
 /** Remote Isometric GHG-statement status (verifier lifecycle). */
 export type RemoteGhgStatus = components["schemas"]["GhgStatementStatus"];
@@ -103,44 +98,6 @@ const IN_PROGRESS: DerivedStatus = {
   isActionable: false,
   isTerminal: false,
 };
-
-/**
- * Kinds in which the record definition behind a Removal is locked (interim
- * certification lock, design review DR-003): the removal has left noma (or a
- * submission is in flight), so editing or deleting the records that back it
- * would silently contradict what the registry holds. `rejected` and
- * `verification-failed` stay editable — the operator must amend data to
- * resubmit. This predicate drives the UI affordances only; the server-side
- * enforcement is `assertCanMutateCertifiedLineage` /
- * `assertRemovalAllowsCreditBatchMutation` (data-access), which block on
- * `BLOCKING_SUBMISSION_STATUSES` and are deliberately stricter (a stale
- * draft submission still blocks there). The full amendment flow is a DEC +
- * Isometric decision (docs/open-questions.md).
- */
-// Exhaustive by construction: adding a DerivedStatusKind without deciding its
-// lock stance is a typecheck error, so a new kind can never silently default
-// to editable (the unsafe direction for a certification gate).
-const REMOVAL_LOCK_BY_KIND: Record<DerivedStatusKind, boolean> = {
-  "in-progress": true,
-  interrupted: true,
-  "not-submitted": false,
-  submitted: true,
-  draft: false,
-  "in-registry": true,
-  "in-verification": true,
-  "pending-changes": true,
-  verified: true,
-  issued: true,
-  rejected: false,
-  "verification-failed": false,
-  superseded: true,
-};
-
-export function isRemovalStatusLocked(
-  status: Pick<DerivedStatus, "kind"> | null | undefined,
-): boolean {
-  return status != null && REMOVAL_LOCK_BY_KIND[status.kind];
-}
 
 export interface RemovalStatusInput {
   /** Latest ledger status, or `null` when no submission row exists yet. */
@@ -212,6 +169,41 @@ function interruptedWorkflowStatus(
     isActionable,
     canRetry,
   };
+}
+
+type RemovalStatusPresentation = Pick<RemovalWorkflowStatus, "value" | "label">;
+
+const REMOVAL_SUBMITTING: Pick<RemovalWorkflowStatus, "kind" | "value" | "label"> = {
+  kind: "submitting",
+  value: "running",
+  label: "Submitting",
+};
+
+const REMOVAL_SUBMISSION_FAILED: Pick<RemovalWorkflowStatus, "kind" | "value" | "label"> = {
+  kind: "failed",
+  value: "failed",
+  label: "Submission failed",
+};
+
+/**
+ * The label and color `deriveRemovalWorkflowStatus` gives a Removal's
+ * lifecycle on its own, without readiness: what status history entries show,
+ * so a history entry names a state the way the badge does. A Removal that
+ * was never submitted keeps its lifecycle label ("Not submitted"), since
+ * readiness at that time is not known.
+ */
+export function deriveRemovalLifecycleWorkflowStatus(
+  input: RemovalStatusInput,
+): RemovalStatusPresentation {
+  const lifecycle = deriveRemovalStatus(input);
+  switch (lifecycle.kind) {
+    case "in-progress":
+      return { value: REMOVAL_SUBMITTING.value, label: REMOVAL_SUBMITTING.label };
+    case "rejected":
+      return { value: REMOVAL_SUBMISSION_FAILED.value, label: REMOVAL_SUBMISSION_FAILED.label };
+    default:
+      return { value: lifecycle.value, label: lifecycle.label };
+  }
 }
 
 export interface RemovalWorkflowStatusInput extends RemovalStatusInput {
@@ -360,9 +352,7 @@ export function deriveRemovalWorkflowStatus({
 
   if (lifecycle.kind === "in-progress") {
     return {
-      kind: "submitting",
-      value: "running",
-      label: "Submitting",
+      ...REMOVAL_SUBMITTING,
       reasons: [],
       isActionable: false,
       canRetry: false,
@@ -375,9 +365,7 @@ export function deriveRemovalWorkflowStatus({
         ? readiness.reasons
         : ["Review submission history, then select Review & submit."];
     return {
-      kind: "failed",
-      value: "failed",
-      label: "Submission failed",
+      ...REMOVAL_SUBMISSION_FAILED,
       reasons,
       isActionable: true,
       canRetry: false,
@@ -427,9 +415,7 @@ export function deriveRemovalWorkflowStatus({
       };
     case "inProgress":
       return {
-        kind: "submitting",
-        value: "running",
-        label: "Submitting",
+        ...REMOVAL_SUBMITTING,
         reasons: [],
         isActionable: false,
         canRetry: false,

@@ -24,9 +24,13 @@ function reader(queues: ReadonlyArray<readonly [unknown, readonly unknown[][]]>)
   const predicates: { table: unknown; sql: string }[] = [];
   const executor = { select: vi.fn(() => {
     let table: unknown;
+    let predicate: SQL;
     const query = { from: (from: unknown) => { table = from; return query; }, innerJoin: () => query, leftJoin: () => query, orderBy: () => query,
-      where: (predicate: SQL) => { predicates.push({ table, sql: new PgDialect().sqlToQuery(predicate).sql }); return query; },
-      then: (resolve: (rows: unknown[]) => unknown) => Promise.resolve(table === facilities ? [{ timezone: 'Africa/Dar_es_Salaam' }] : pending.get(table)?.shift() ?? []).then(resolve) };
+      where: (value: SQL) => { predicate = value; return query; },
+      then: (resolve: (rows: unknown[]) => unknown) => {
+        predicates.push({ table, sql: new PgDialect().sqlToQuery(predicate).sql });
+        return Promise.resolve(table === facilities ? [{ timezone: 'Africa/Dar_es_Salaam' }] : pending.get(table)?.shift() ?? []).then(resolve);
+      } };
     return query;
   }) } as unknown as DbTransaction;
   return { executor, predicates, sqlFor: (table: unknown) => predicates.filter(p => p.table === table).map(p => p.sql) };

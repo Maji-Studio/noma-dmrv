@@ -1,8 +1,11 @@
+import { updateOrder } from "@/lib/operations/orders";
+import { runOperationInProcess } from "@/lib/operations/runner";
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
-import { createOrder, updateOrder } from "@/data-access/orders";
+import { createOrderInTransaction } from "@/data-access/orders";
 import { db } from "@/db";
 import { facilities } from "@/db/schema/facilities";
 import { orders } from "@/db/schema/logistics";
@@ -33,7 +36,7 @@ beforeAll(async () => {
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ organizationId: TEST_ORG_ID, code: `FAC-OCG-${tag}`, name: `OCG Facility ${tag}` })
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-OCG-${tag}`, name: `OCG Facility ${tag}` })
         .returning({ id: facilities.id });
       const [product] = await tx
         .insert(biocharProducts)
@@ -85,19 +88,19 @@ beforeAll(async () => {
       const [locationA] = await tx
         .insert(customerLocations)
         .values({
+          ...TEST_SITE_POSITION,
           organizationId: TEST_ORG_ID,
           customerId: customerA.id,
           name: `OCG Location A ${tag}`,
-          country: "Tanzania",
         })
         .returning({ id: customerLocations.id });
       const [locationB] = await tx
         .insert(customerLocations)
         .values({
+          ...TEST_SITE_POSITION,
           organizationId: TEST_ORG_ID,
           customerId: customerB.id,
           name: `OCG Location B ${tag}`,
-          country: "Tanzania",
         })
         .returning({ id: customerLocations.id });
       const [order] = await tx
@@ -213,51 +216,50 @@ beforeAll(async () => {
 
   it("rejects creating an order with a location from another customer", async () => {
     await expect(
-      createOrder(makeTestOrgContext(TEST_USER_ID), {
+      db.transaction(async tx => createOrderInTransaction(makeTestOrgContext(TEST_USER_ID), tx, {
         code: `OR-OCG-CREATE-${tag}`,
         facilityId,
         customerId: customerAId,
         customerLocationId: locationBId,
-        formulationId: (await db.select().from(biocharProducts).where(eq(biocharProducts.id, productId)))[0].formulationId,
+        formulationId: (await tx.select().from(biocharProducts).where(eq(biocharProducts.id, productId)))[0].formulationId,
         orderDate: new Date("2026-06-13"),
         quantityKg: 100,
         packaging: "loose",
-      }),
+      })),
     ).rejects.toThrow("Delivery location belongs to a different customer");
   });
 
   it("accepts a formulation request before source biochar is available", async () => {
     await expect(
-      createOrder(makeTestOrgContext(TEST_USER_ID), {
+      db.transaction(async tx => createOrderInTransaction(makeTestOrgContext(TEST_USER_ID), tx, {
         code: `OR-OCG-ZERO-${tag}`,
         facilityId,
         customerId: customerAId,
         customerLocationId: locationAId,
-        formulationId: (await db.select().from(biocharProducts).where(eq(biocharProducts.id, zeroBiocharProductId)))[0].formulationId,
+        formulationId: (await tx.select().from(biocharProducts).where(eq(biocharProducts.id, zeroBiocharProductId)))[0].formulationId,
         orderDate: new Date("2026-06-13"),
         quantityKg: 100,
         packaging: "loose",
-      }),
+      })),
     ).resolves.toMatchObject({ packaging: "loose" });
   });
 
   it("rejects changing an order customer while preserving another customer's location", async () => {
     await expect(
-      updateOrder(makeTestOrgContext(TEST_USER_ID), orderId, { customerId: customerBId }),
+      runOperationInProcess(updateOrder, makeTestOrgContext(TEST_USER_ID), { orderId, expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", orderId), customerId: customerBId }),
     ).rejects.toThrow("Delivery location belongs to a different customer");
   });
 
   it("rejects changing an order location to another customer's location", async () => {
     await expect(
-      updateOrder(makeTestOrgContext(TEST_USER_ID), orderId, { customerLocationId: locationBId }),
+      runOperationInProcess(updateOrder, makeTestOrgContext(TEST_USER_ID), { orderId, expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", orderId), customerLocationId: locationBId }),
     ).rejects.toThrow("Delivery location belongs to a different customer");
   });
 
   it("updates request metadata without reserving source stock", async () => {
     await expect(
-      updateOrder(makeTestOrgContext(TEST_USER_ID), zeroProductOrderId, {
-        packaging: "bagged",
-      }),
+      runOperationInProcess(updateOrder, makeTestOrgContext(TEST_USER_ID), { orderId: zeroProductOrderId, expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", zeroProductOrderId),
+        packaging: "bagged", }),
     ).resolves.toMatchObject({ packaging: "bagged" });
   });
 
@@ -314,7 +316,7 @@ beforeAll(async () => {
     const [source] = await db.select().from(biocharProducts).where(eq(biocharProducts.id, concurrentCreateProductId));
     await expect(
       runWhileProductBecomesZero(concurrentCreateProductId, () =>
-        createOrder(makeTestOrgContext(TEST_USER_ID), {
+        db.transaction(async tx => createOrderInTransaction(makeTestOrgContext(TEST_USER_ID), tx, {
           code,
           facilityId,
           customerId: customerAId,
@@ -323,7 +325,7 @@ beforeAll(async () => {
           orderDate: new Date("2026-06-13"),
           quantityKg: 100,
           packaging: "loose",
-        }),
+        })),
       ),
     ).resolves.toMatchObject({ packaging: "loose" });
 
@@ -335,12 +337,8 @@ beforeAll(async () => {
 
   it("updates request metadata independently of concurrent product stock changes", async () => {
     await expect(
-      runWhileProductBecomesZero(concurrentUpdateProductId, () =>
-        updateOrder(
-          makeTestOrgContext(TEST_USER_ID),
-          concurrentUpdateOrderId,
-          { packaging: "bagged" },
-        ),
+      runWhileProductBecomesZero(concurrentUpdateProductId, async () =>
+        runOperationInProcess(updateOrder, makeTestOrgContext(TEST_USER_ID), { orderId: concurrentUpdateOrderId, expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", concurrentUpdateOrderId), packaging: "bagged" }),
       ),
     ).resolves.toMatchObject({ packaging: "bagged" });
 

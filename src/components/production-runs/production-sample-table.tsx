@@ -4,6 +4,7 @@
  * production run detail.
  */
 "use client";
+import { toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { useState } from "react";
 import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
@@ -23,7 +24,8 @@ import { ProductionSampleForm } from "./production-sample-form";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import type { ProductionSampleWithRelations } from "@/data-access/production-samples";
 import type { ProductionSampleFormData } from "@/schemas/production-samples";
-import { formatDateTime } from "@/lib/format-utils";
+import { formatFacilityDateTime } from "@/lib/format-utils";
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 
 // ============================================
@@ -41,11 +43,13 @@ function formatNum(v: number | null, unit?: string): string {
 
 interface ProductionSampleTableProps {
   productionRunId: string;
+  facilityId: string;
   readOnly?: boolean;
 }
 
 export function ProductionSampleTable({
   productionRunId,
+  facilityId,
   readOnly = false,
 }: ProductionSampleTableProps) {
   const { data: samples, isLoading, error } = useProductionSamples(productionRunId);
@@ -53,12 +57,15 @@ export function ProductionSampleTable({
   const updateSample = useUpdateProductionSample();
   const deleteSample = useDeleteProductionSample(productionRunId);
   const toast = useToast();
+  const { timeZone } = useFacilityClock(facilityId);
 
   const [formDialog, setFormDialog] = useState<
     | { open: false }
     | { open: true; sample?: ProductionSampleWithRelations }
   >({ open: false });
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<ProductionSampleWithRelations | null>(null);
+  const deletingId = deleting?.id;
+  const setDeletingId = (id: string | null) => setDeleting(samples?.find(row => row.id === id) ?? null);
   const [formError, setFormError] = useState<string | null>(null);
   const createWithEvidence = useCreateWithEvidence({
     entityType: "production_sample",
@@ -135,6 +142,7 @@ export function ProductionSampleTable({
       if (createWithEvidence.guardUpdate()) return;
       await updateSample.mutateAsync({
         productionSampleId: formDialog.sample.id,
+          expectedVersion: formDialog.sample.version,
         ...data,
       });
       toast.success("In-process measurement updated.");
@@ -145,14 +153,14 @@ export function ProductionSampleTable({
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deletingId) return;
+    if (!deleting) return;
     try {
-      await deleteSample.mutateAsync(deletingId);
+      await deleteSample.mutateAsync({ productionSampleId: deleting.id, expectedVersion: deleting.version });
       setDeletingId(null);
       toast.success("In-process measurement deleted.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "In-process measurement was not deleted. Try again.");
-      setDeletingId(null);
+      setDeleting(null);
+      toast.error(toDeleteErrorMessage(err, "In-process measurement", "In-process measurement was not deleted. Try again."));
     }
   };
 
@@ -165,7 +173,7 @@ export function ProductionSampleTable({
   // NOTE: no certification replicate chip here. These are in-process production
   // samples; the ≥3-replicate / eligibility certification signal is judged on the
   // lab `Sample` records the Certify path actually reads
-  // (`getProductionRunsWithSamples`), not this table — surfacing a `CERT n/3`
+  // (`getCreditBatchesWithSamples`), not this table — surfacing a `CERT n/3`
   // chip off this count would misreport certification coverage.
 
   return (
@@ -199,8 +207,7 @@ export function ProductionSampleTable({
         <div className="overflow-x-auto">
           <table className="w-full body-small">
             <thead>
-              <tr className="border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-tertiary)]">
-                <th className="py-8 pr-12 font-medium">Code</th>
+              <tr className="border-b border-[var(--color-border-primary)] text-left body-small text-[var(--color-text-secondary)]">
                 <th className="py-8 pr-12 font-medium">Time</th>
                 <th className="py-8 pr-12 font-medium">Temp</th>
                 <th className="py-8 pr-12 font-medium">Weight</th>
@@ -218,10 +225,7 @@ export function ProductionSampleTable({
                   key={s.id}
                   className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-background-medium)]"
                 >
-                  <td className="py-8 pr-12 font-medium text-[var(--clr-dark-purple)]">
-                    {s.sampleCode ?? MISSING_VALUE.notRecorded}
-                  </td>
-                  <td className="py-8 pr-12">{formatDateTime(s.timestamp)}</td>
+                  <td className="py-8 pr-12">{formatFacilityDateTime(s.timestamp, timeZone)}</td>
                   <td className="py-8 pr-12">{formatNum(s.temperatureC, "\u00B0C")}</td>
                   <td className="py-8 pr-12">{formatNum(s.weightGrams, "g")}</td>
                   <td className="py-8 pr-12">{formatNum(s.moistureContentPercent, "%")}</td>
@@ -274,6 +278,7 @@ export function ProductionSampleTable({
         >
           {formDialog.open && (
             <ProductionSampleForm
+              facilityId={facilityId}
               key={formDialog.sample?.id ?? "create"}
               productionRunId={productionRunId}
               sample={formDialog.sample}

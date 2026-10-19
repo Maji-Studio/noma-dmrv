@@ -40,13 +40,7 @@ async function seedFormCompleteApplication(
   await waitForSideSheet(page);
   await page.fill('input[name="orderDate"]', today);
   await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
-  await page.waitForSelector('select[name="customerLocationId"]:not([disabled])', {
-    timeout: 8000,
-  });
-  await page.selectOption(
-    'select[name="customerLocationId"]',
-    seededData.customerLocation.id,
-  );
+  await selectEntity(page, "Customer location", seededData.customerLocation.id, seededData.customerLocation.name);
   await selectEntity(
     page,
     "Formulation", seededData.formulation.id, seededData.formulation.name,
@@ -62,34 +56,27 @@ async function seedFormCompleteApplication(
   await page.click('button:has-text("New delivery")');
   await waitForSideSheet(page);
   await selectFirstEntity(page, "Order");
-  await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
+  await selectEntity(page, "Actual source bin", seededData.productStorageLocation.id, seededData.productStorageLocation.name);
   await page.fill('input[name="deliveredWetMassKg"]', "10000");
   await fillStockMoisture(page, "delivery", "10");
   await page.locator('[role="dialog"]').locator('button:has-text("Create delivery")').click();
   await waitForSideSheetClose(page);
 
-  // Application — every field the shared readiness decision requires for a
-  // 200-year facility EXCEPT evidence: mass (wet + dry) and soil temperature.
+  // Application — every field the application field check requires, with no
+  // evidence: mass (wet + dry), plus the advisory soil temperature.
   await page.goto(`/applications?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
   await page.click('button:has-text("New application")');
   await waitForSideSheet(page);
   await page.fill('input[name="applicationDate"]', today);
 
-  const deliverySelect = page.locator('select[name="deliveryId"]');
-  const firstDeliveryValue = await deliverySelect
-    .locator("option:not([value=''])")
-    .first()
-    .getAttribute("value");
-  if (firstDeliveryValue) {
-    await deliverySelect.selectOption(firstDeliveryValue);
-  }
+  await selectFirstEntity(page, "Delivery");
 
-  await page.fill('input[name="biocharAppliedTons"]', "5000");
+  await page.fill('input[name="biocharAppliedKg"]', "5000");
   await page.fill('input[name="fieldSizeHa"]', "2");
   await page.fill('input[name="fieldIdentifier"]', fieldIdentifier);
   await page.fill('input[name="cropType"]', "maize");
-  // Soil temperature is a certify requirement for 200-year facilities.
+  // Soil temperature is advisory; submission uses the facility reference.
   await page.fill('input[name="soilTemperatureC"]', "24");
 
   // New applications default to the delivery customer's location. The test
@@ -154,10 +141,10 @@ test.describe("Application evidence does not gate certification", () => {
     await expect(row).toBeVisible({ timeout: 10000 });
 
     await expect(
-      row.locator('[aria-label="Ready for certification"]'),
+      row.locator('[aria-label="Fields complete"]'),
     ).toBeVisible();
     await expect(
-      row.getByRole("button", { name: /Incomplete for certification/ }),
+      row.getByRole("button", { name: /Incomplete application fields/ }),
     ).toHaveCount(0);
 
     // Add qualifying geotagged evidence for all three visual stages, mirroring a
@@ -187,10 +174,10 @@ test.describe("Application evidence does not gate certification", () => {
       hasText: applicationCode,
     });
     await expect(
-      reloadedRow.locator('[aria-label="Ready for certification"]'),
+      reloadedRow.locator('[aria-label="Fields complete"]'),
     ).toBeVisible({ timeout: 10000 });
     await expect(
-      page.getByRole("button", { name: /Incomplete for certification/ }),
+      page.getByRole("button", { name: /Incomplete application fields/ }),
     ).toHaveCount(0);
   });
 });

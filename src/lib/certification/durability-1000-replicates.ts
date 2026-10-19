@@ -1,7 +1,7 @@
 import { pluralize } from "@/lib/copy-utils";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import { CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS } from "@/schemas/samples";
-import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import { transformSequestrationSourceValue } from "@/lib/isometric/transformers/sequestration-binding";
 import { isUnitFraction } from "@/lib/calculations/biochar-removal";
 
@@ -72,6 +72,25 @@ function missingMeasurementBlocker(args: {
   );
 }
 
+/** The per-Sample measurements of the 1,000-year tuple, named as the blockers name them. */
+const SAMPLED_1000_YEAR_MEASUREMENTS = [
+  { field: "totalCarbonPercent", measurement: "total carbon" },
+  { field: "inorganicCarbonPercent", measurement: "measured inorganic carbon" },
+  { field: "sReflectanceFraction", measurement: "the R₀ fraction at or above 2%" },
+] as const;
+
+/**
+ * The 1,000-year measurements one Sample lacks, by the same rule the
+ * submission gate below blocks on. Lab sample entry warns with it (round 7 Q52).
+ */
+export function missingSampled1000YearMeasurements(
+  sample: Pick<Sampled1000YearMeasurement, "totalCarbonPercent" | "inorganicCarbonPercent" | "sReflectanceFraction">,
+): string[] {
+  return SAMPLED_1000_YEAR_MEASUREMENTS
+    .filter(({ field }) => !isUsableNumber(sample[field]))
+    .map(({ measurement }) => measurement);
+}
+
 /**
  * Evaluates the exact same-sample tuple used by the current 1,000-year wire
  * contract. Missing or invalid rows are never silently dropped: blockers name
@@ -84,32 +103,13 @@ export function evaluateSampled1000YearReplicates(args: {
   const orderedSamples = [...args.samples].sort((left, right) =>
     left.id.localeCompare(right.id),
   );
-  const blockers = [
+  const blockers = SAMPLED_1000_YEAR_MEASUREMENTS.map(({ field, measurement }) =>
     missingMeasurementBlocker({
       creditBatchCode: args.creditBatchCode,
-      labels: sampleLabels(
-        orderedSamples,
-        (sample) => !isUsableNumber(sample.totalCarbonPercent),
-      ),
-      measurement: "total carbon",
+      labels: sampleLabels(orderedSamples, (sample) => !isUsableNumber(sample[field])),
+      measurement,
     }),
-    missingMeasurementBlocker({
-      creditBatchCode: args.creditBatchCode,
-      labels: sampleLabels(
-        orderedSamples,
-        (sample) => !isUsableNumber(sample.inorganicCarbonPercent),
-      ),
-      measurement: "measured inorganic carbon",
-    }),
-    missingMeasurementBlocker({
-      creditBatchCode: args.creditBatchCode,
-      labels: sampleLabels(
-        orderedSamples,
-        (sample) => !isUsableNumber(sample.sReflectanceFraction),
-      ),
-      measurement: "the R₀ fraction at or above 2%",
-    }),
-  ].filter((blocker): blocker is string => blocker != null);
+  ).filter((blocker): blocker is string => blocker != null);
 
   const invalidInorganicLabels = sampleLabels(
     orderedSamples,

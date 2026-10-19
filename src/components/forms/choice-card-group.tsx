@@ -21,6 +21,7 @@ import {
 } from "react";
 import { CheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
+import { RequiredMarker } from "./required-marker";
 
 export interface ChoiceCardOption {
   value: string;
@@ -45,10 +46,14 @@ export interface ChoiceCardGroupProps {
   onValueChange?: (value: string) => void;
   onBlur?: FocusEventHandler<HTMLInputElement>;
   disabled?: boolean;
+  /** Adds "Required" to the legend; the visible star stays on the FormField label. */
+  required?: boolean;
   error?: boolean;
   "aria-describedby"?: string;
   "aria-invalid"?: boolean | "true" | "false";
   className?: string;
+  /** Put the art above the text at every width, for drawings too wide to sit beside it. */
+  stackArt?: boolean;
 }
 
 /** Width of the group at which each column count starts. Cards keep about 176px. */
@@ -87,8 +92,10 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
       onValueChange,
       onBlur,
       disabled = false,
+      required = false,
       error,
       className,
+      stackArt = false,
       ...aria
     },
     ref,
@@ -105,7 +112,10 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
         aria-describedby={aria["aria-describedby"]}
         aria-invalid={error ? true : aria["aria-invalid"]}
       >
-        <legend className="sr-only">{legend}</legend>
+        <legend className="sr-only">
+          {legend}
+          {required && <RequiredMarker visual={false} />}
+        </legend>
         <div className="@container">
           <div className={cn("grid grid-cols-1 gap-8", COLUMN_CLASSES[columns], className)}>
             {options.map((option) => {
@@ -136,6 +146,7 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
                     className={cn(
                       "flex w-full items-center gap-12 border px-12 py-10 text-left transition-colors duration-300",
                       STACK_CLASSES[columns],
+                      stackArt && "flex-col items-start",
                       "border-[var(--color-border-secondary)] bg-[var(--color-background-white)]",
                       "hover:border-[var(--color-border-primary)]",
                       "peer-checked:border-[var(--color-interaction)] peer-checked:bg-[var(--color-background-interaction-light)] peer-checked:shadow-[inset_0_0_0_1px_var(--color-interaction)]",
@@ -148,7 +159,10 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
                     {option.art && (
                       <span
                         aria-hidden
-                        className="hidden shrink-0 items-center text-[var(--color-text-secondary)] @min-[22rem]:flex"
+                        className={cn(
+                          "shrink-0 items-center text-[var(--color-text-secondary)]",
+                          stackArt ? "flex" : "hidden @min-[22rem]:flex",
+                        )}
                       >
                         {option.art}
                       </span>

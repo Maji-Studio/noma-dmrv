@@ -10,27 +10,28 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { BuildingsIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { FormActions, FormField, FormInput } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import {
   useAllOrganizations,
+  useAllOrganizationApiAccess,
   useCreateOrganization,
   useEnterOrganization,
 } from "@/hooks/use-organizations";
 import { createOrganizationSchema } from "@/schemas/organizations";
-import { OrganizationCertifierCredentials } from "./organization-certifier-credentials";
-import {
-  OrganizationRosterList,
-  OrganizationRosterRow,
-} from "./organization-roster-list";
+import { OrganizationAdminRow } from "./organization-admin-row";
+import { OrganizationRosterList } from "./organization-roster-list";
 
 type CreateForm = z.infer<typeof createOrganizationSchema>;
 
 export function OrganizationsAdmin() {
   const toast = useToast();
   const { data: organizations, isLoading } = useAllOrganizations();
+  const apiAccess = useAllOrganizationApiAccess();
+  const apiAccessByOrg = new Map((apiAccess.isError ? undefined : apiAccess.data)?.map((row) => [row.organizationId, row.enabled]));
   const createOrg = useCreateOrganization();
   const enterOrganization = useEnterOrganization();
   const [enteringId, setEnteringId] = useState<string | null>(null);
@@ -72,7 +73,16 @@ export function OrganizationsAdmin() {
     <div className="flex flex-col gap-32">
       <section className="flex flex-col gap-16">
         <h2 className="title-heading-3">Organizations</h2>
-        {isLoading ? (
+        {apiAccess.isError && (
+          <Notice tone="error" action={
+            <Button type="button" variant="weak" size="small" busy={apiAccess.isFetching} onClick={() => apiAccess.refetch()}>
+              Retry
+            </Button>
+          }>
+            API access could not be loaded. Retry to view or change it.
+          </Notice>
+        )}
+        {isLoading || apiAccess.isLoading ? (
           <Skeleton className="h-64 w-full" />
         ) : !organizations || organizations.length === 0 ? (
           <EmptyState
@@ -84,32 +94,12 @@ export function OrganizationsAdmin() {
         ) : (
           <OrganizationRosterList>
             {organizations.map((org) => (
-              <OrganizationRosterRow
+              <OrganizationAdminRow
                 key={org.id}
-                primary={org.name}
-                secondary={
-                  <>
-                    {org.slug} · {org.memberCount} member
-                    {org.memberCount === 1 ? "" : "s"}
-                  </>
-                }
-                actions={
-                  <Button
-                    type="button"
-                    variant="weak"
-                    size="small"
-                    onClick={() => enterOrg(org.id)}
-                    busy={enteringId === org.id}
-                  >
-                    Enter
-                  </Button>
-                }
-                details={
-                  <OrganizationCertifierCredentials
-                    organizationId={org.id}
-                    organizationName={org.name}
-                  />
-                }
+                org={org}
+                apiAccessEnabled={apiAccessByOrg.get(org.id)}
+                entering={enteringId === org.id}
+                onEnter={() => enterOrg(org.id)}
               />
             ))}
           </OrganizationRosterList>
@@ -150,7 +140,7 @@ export function OrganizationsAdmin() {
             id="org-owner-email"
             label="Owner email"
             error={errors.ownerEmail?.message}
-            helperText="Must be an existing user account; they become the org Owner."
+            cue="Must be an existing user account; they become the org Owner."
             required
           >
             <FormInput

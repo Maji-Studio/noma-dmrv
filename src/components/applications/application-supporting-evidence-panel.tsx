@@ -1,11 +1,13 @@
 "use client";
 
+import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
+
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FileIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormFileUpload, ServerError } from "@/components/forms";
+import { FormField, FormFileUpload, ServerError } from "@/components/forms";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { Notice } from "@/components/ui/notice";
 import { useToast } from "@/components/ui/toast";
 import { applicationKeys } from "@/hooks/use-applications";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
@@ -14,11 +16,13 @@ import {
   useDeleteDocument,
   useDocumentsForEntity,
 } from "@/hooks/use-documents";
+import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification-lock";
 import {
   APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE,
   isApplicationEvidenceDocumentReady,
   isApplicationIsometricSourceDocumentType,
 } from "@/lib/certification/application-evidence";
+import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
 import type { DocumentEntityType } from "@/schemas/documents";
 import { ApplicationEvidenceDocumentList } from "./application-evidence-document-list";
 import {
@@ -27,6 +31,8 @@ import {
 } from "./application-supporting-evidence";
 
 const ENTITY_TYPE = "application" satisfies DocumentEntityType;
+/** The consequence of saving straight away stays visible as the cue. */
+const UPLOAD_CUE = "Uploads are saved immediately. Closing does not discard them.";
 const SUPPORTING_EVIDENCE_ACCEPT = "image/*,application/pdf,.pdf";
 
 interface ApplicationSupportingEvidencePanelProps {
@@ -40,11 +46,16 @@ export function ApplicationSupportingEvidencePanel({
   applicationId,
   disabled = false,
   deferredAttachments,
-  readOnly = false,
+  readOnly: readOnlyProp = false,
 }: ApplicationSupportingEvidencePanelProps) {
   const toast = useToast();
   const queryClient = useQueryClient();
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  // A submitted lineage freezes the files: download stays, changes are hidden.
+  const locked = useIsRecordCertificationLocked(ENTITY_TYPE, applicationId);
+  const readOnly = readOnlyProp || locked;
+  const [deleting, setDeleting] = useState<{ id: string; version: number } | null>(null);
+  const deleteId = deleting?.id ?? null;
+  const setDeleteId = (id: string | null) => setDeleting(docs?.find((doc) => doc.id === id) ?? null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { data: docs, isLoading, error } = useDocumentsForEntity(
     ENTITY_TYPE,
@@ -70,25 +81,29 @@ export function ApplicationSupportingEvidencePanel({
   };
 
   const handleDelete = async () => {
-    if (!deleteId) return;
+    if (!deleting) return;
     setErrorMessage(null);
     try {
-      await deleteMutation.mutateAsync(deleteId);
+      await deleteMutation.mutateAsync({ documentId: deleting.id, expectedVersion: deleting.version });
       invalidateApplicationLists();
       toast.success("Supporting evidence deleted");
       setDeleteId(null);
     } catch (deleteError) {
       setErrorMessage(
-        deleteError instanceof Error
+        deleteError instanceof StaleVersionError ? staleDeleteMessage("Supporting evidence") : deleteError instanceof Error
           ? deleteError.message
           : "The supporting evidence was not deleted. Try again.",
       );
     }
   };
 
+  const uploadId = applicationId
+    ? `application-${applicationId}-supporting-evidence-upload`
+    : "application-create-supporting-evidence-upload";
+
   const upload = applicationId ? (
     <FormFileUpload
-      id={`application-${applicationId}-supporting-evidence-upload`}
+      id={uploadId}
       accept={SUPPORTING_EVIDENCE_ACCEPT}
       disabled={disabled}
       entityType={ENTITY_TYPE}
@@ -102,7 +117,7 @@ export function ApplicationSupportingEvidencePanel({
     />
   ) : (
     <FormFileUpload
-      id="application-create-supporting-evidence-upload"
+      id={uploadId}
       accept={SUPPORTING_EVIDENCE_ACCEPT}
       disabled={disabled}
       deferred
@@ -127,6 +142,7 @@ export function ApplicationSupportingEvidencePanel({
 
   return (
     <div className="flex flex-col gap-16">
+      {locked && <Notice tone="info">{RECORD_FILES_LOCKED_MESSAGE}</Notice>}
       {(error || errorMessage) && (
         <ServerError
           message={
@@ -153,17 +169,16 @@ export function ApplicationSupportingEvidencePanel({
       ) : null}
 
       {!readOnly && (
-        <div className="flex flex-col gap-8">
-          <div className="flex items-center gap-8">
-            <FileIcon size={18} weight="bold" />
-            <h4 className="body-small font-medium">Images and PDFs</h4>
-          </div>
-          {applicationId && <p className="body-caption text-[var(--color-text-secondary)]">Uploads are saved immediately. Closing this panel does not discard them. Evidence added after submission is excluded from the saved attempt until a new evidence review.</p>}
+        <FormField
+          id={uploadId}
+          label="Images and PDFs"
+          cue={applicationId ? UPLOAD_CUE : undefined}
+        >
           {upload}
-        </div>
+        </FormField>
       )}
 
-      {!readOnly && applicationId && deferredAttachments && (
+      {!readOnlyProp && applicationId && deferredAttachments && (
         <FailedDeferredAttachments
           attachments={deferredAttachments.attachments}
           onRetry={async (key) => {
@@ -176,6 +191,7 @@ export function ApplicationSupportingEvidencePanel({
           }}
           onRemove={deferredAttachments.remove}
           disabled={disabled}
+          retryable={!locked}
         />
       )}
 

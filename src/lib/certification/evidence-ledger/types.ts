@@ -41,16 +41,16 @@ export interface LedgerLeg {
   /** "lat, lng" or null when GPS not recorded. */
   originGeo: string | null;
   destinationGeo: string | null;
+  /** The one-way road distance the operator entered. */
+  oneWayDistanceKm: number;
   /**
-   * The distance carried into the t·km calc — the ROUND-TRIP distance for a
-   * `return` leg (2 × one-way), the one-way distance for a `one_way` leg
-   * (issue #316). Shown in the ledger so `distance × mass ÷ 1000 = t·km`
-   * reconciles on the row.
+   * The distance carried into the t·km calc: the ROUND-TRIP distance
+   * (2 × one way), because every leg counts its empty return (issue #852).
+   * Shown in the ledger so `distance × mass ÷ 1000 = t·km` reconciles on the
+   * row.
    */
   distanceKm: number;
   loadMassKg: number;
-  /** True when distanceKm is a doubled round trip (vehicle returns empty). */
-  roundTrip: boolean;
   /** Capitalised mode, e.g. "Road" / "Rail". */
   mode: string;
   vehicle: string | null;
@@ -59,19 +59,6 @@ export interface LedgerLeg {
   tkm: number;
   /** True when load mass was missing (tkm computed as 0) — surfaced in the row. */
   massMissing: boolean;
-}
-
-/**
- * DELIVERY-bucket scaling detail (§8.6.2, issue #349, ADR 0020) for a category
- * whose submitted scalar is the raw leg-sum × the applied-biochar share.
- */
-export interface LedgerCategoryScaling {
-  /** Σ per-leg t·km before scaling — what the table rows sum to, 2dp. */
-  rawSubtotalTkm: number;
-  /** Applied-biochar share, clamped into [0, 1]. */
-  appliedFraction: number;
-  /** Adjustment from displayed operands to the canonical submitted scalar. */
-  displayAdjustmentTkm?: number;
 }
 
 export interface LedgerCategory {
@@ -83,8 +70,6 @@ export interface LedgerCategory {
   legs: LedgerLeg[];
   /**
    * The reconciled subtotal — always equals the submitted registry scalar.
-   * When `scaling` is present this is rawSubtotalTkm × appliedFraction; the
-   * PDF shows that arithmetic explicitly so per-leg rows still reconcile.
    */
   subtotalTkm: number;
   /** Sum of rendered 2dp leg values; present only when reconciliation is needed. */
@@ -95,12 +80,6 @@ export interface LedgerCategory {
    * visibly without changing the canonical scalar or overstating precision.
    */
   roundingAdjustmentTkm?: number;
-  /**
-   * Present only for the biochar (DELIVERY-bucket) category of a
-   * partially-applied removal (§8.6.2, ADR 0020). Omitted — not null — at
-   * full application, so fully-applied ledgers keep a stable content hash.
-   */
-  scaling?: LedgerCategoryScaling;
 }
 
 export interface LedgerModel {

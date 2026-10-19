@@ -1,7 +1,7 @@
 "use server";
 
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import {
-  getIsometricClientForOrg,
   listFeedstockTypes,
   type IsometricFeedstockType,
 } from "@/lib/isometric";
@@ -17,7 +17,7 @@ export async function loadIsometricFeedstockTypes(): Promise<
   ActionResult<IsometricFeedstockType[]>
 > {
   return withAction(async (orgCtx) => {
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    const client = await resolveIsometricClient(orgCtx);
     return safeListIfConfigured(() => listFeedstockTypes(client));
   });
 }

@@ -5,14 +5,15 @@
  * limited to clearing all readings for a run ("delete all").
  */
 
+// Retained non-MVP seam (#942 q25, #1014): consumed by the unmounted ProductionRunReadingTable; retained for the structured readings preview with no mounted operator entry point. See docs/architecture.md#production-run-extensions.
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getProductionRunReadingsListFn,
   deleteAllProductionRunReadingsFn,
 } from "@/fn/production-run-readings";
-import { productionRunKeys } from "@/hooks/use-production-runs";
 import { invalidateCertificationReadiness } from "@/hooks/use-certification";
-import type { MutationCallbacks } from "./types";
+import { unwrap, type MutationCallbacks } from "./types";
 
 // ============================================
 // Query Keys
@@ -35,16 +36,13 @@ export function useProductionRunReadings(
 ) {
   return useQuery({
     queryKey: productionRunReadingKeys.list(productionRunId, facilityId),
-    queryFn: async () => {
-      const result = await getProductionRunReadingsListFn(
-        productionRunId,
-        facilityId
-      );
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () =>
+      unwrap(
+        await getProductionRunReadingsListFn(
+          productionRunId,
+          facilityId
+        ),
+      ),
     staleTime: 30000,
   });
 }
@@ -73,10 +71,6 @@ export function useDeleteAllProductionRunReadings(
     onSuccess: async (deletedCount, productionRunId) => {
       queryClient.invalidateQueries({
         queryKey: productionRunReadingKeys.lists(),
-      });
-      // Also refresh the inline readings cache keyed under production runs.
-      queryClient.invalidateQueries({
-        queryKey: productionRunKeys.readings(productionRunId),
       });
       invalidateCertificationReadiness(queryClient);
       await callbacks?.onSuccess?.(deletedCount, productionRunId);

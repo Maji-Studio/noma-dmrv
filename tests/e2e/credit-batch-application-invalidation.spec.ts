@@ -2,9 +2,9 @@
  * Credit Batch / Application Cache Invalidation E2E Test (issue #396)
  *
  * `useUpdateApplication` (and create/delete) now invalidate `creditBatchKeys`
- * on success, so a credit batch's derived `appliedWeightTons` (Σ member
- * applications' biocharAppliedTons) doesn't go stale once cached — the
- * credit-batches query uses `refetchOnWindowFocus: false`.
+ * on success, so a credit batch's applied biochar (the List view shows the dry
+ * mass of its slices) doesn't go stale once cached — the credit-batches
+ * queries use `refetchOnWindowFocus: false`.
  *
  * The credit-batches list and the application editor live on separate
  * routes with no shared component (there is no single page in this app that
@@ -23,6 +23,7 @@ import * as crypto from "crypto";
 import { test, expect, type SeededChainData } from "./fixtures";
 import { seedCreditBatchProductionLineage } from "./fixtures/seed-chain-data";
 import {
+  creditBatchRow,
   selectEntity,
   selectFirstEntity,
   waitForFacilityHydration,
@@ -31,6 +32,10 @@ import {
 } from "./fixtures/page-helpers";
 import type { Page } from "@playwright/test";
 import { fillStockMoisture } from "./helpers/stock-moisture";
+
+/** 5000 kg applied from a delivery at 10% moisture, then edited to 3000 kg: dry is 90% of each. */
+const APPLIED_DRY_BEFORE = "4.50 t";
+const APPLIED_DRY_AFTER = "2.70 t";
 
 async function createApplicationForLineage(
   page: Page,
@@ -46,14 +51,7 @@ async function createApplicationForLineage(
 
   await page.fill('input[name="orderDate"]', today);
   await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
-  await page.waitForSelector(
-    'select[name="customerLocationId"]:not([disabled])',
-    { timeout: 8000 },
-  );
-  await page.selectOption(
-    'select[name="customerLocationId"]',
-    seededData.customerLocation.id,
-  );
+  await selectEntity(page, "Customer location", seededData.customerLocation.id, seededData.customerLocation.name);
   await selectEntity(
     page,
     "Formulation", seededData.formulation.id, seededData.formulation.name,
@@ -71,7 +69,7 @@ async function createApplicationForLineage(
   await waitForSideSheet(page);
 
   await selectFirstEntity(page, "Order");
-  await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
+  await selectEntity(page, "Actual source bin", seededData.productStorageLocation.id, seededData.productStorageLocation.name);
   await page.fill('input[name="deliveredWetMassKg"]', "10000");
   await fillStockMoisture(page, "delivery", "10");
   await page.locator('[role="dialog"]').locator('button:has-text("Create delivery")').click();
@@ -85,15 +83,8 @@ async function createApplicationForLineage(
   await waitForSideSheet(page);
 
   await page.fill('input[name="applicationDate"]', today);
-  const deliverySelect = page.locator('select[name="deliveryId"]');
-  const firstDeliveryValue = await deliverySelect
-    .locator("option:not([value=''])")
-    .first()
-    .getAttribute("value");
-  if (firstDeliveryValue) {
-    await deliverySelect.selectOption(firstDeliveryValue);
-  }
-  await page.fill('input[name="biocharAppliedTons"]', "5000");
+  await selectFirstEntity(page, "Delivery");
+  await page.fill('input[name="biocharAppliedKg"]', "5000");
   await page.fill('input[name="fieldSizeHa"]', "2");
   await page.locator('[role="dialog"]').locator('button:has-text("Create application")').click();
   await waitForSideSheetClose(page);
@@ -110,21 +101,13 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
 
     await createApplicationForLineage(page, seededData, today);
 
-    // Baseline: visit /credit-batches and read the pre-edit Weight figure.
-    await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
+    // Baseline: visit /credit-batches and read the pre-edit applied (dry) figure.
+    await page.goto(`/credit-batches?facility=${seededData.facility.id}&view=list`);
     await page.waitForLoadState("networkidle");
 
-    const card = page.locator("article").filter({ hasText: lineage.creditBatchCode });
-    await expect(card).toBeVisible({ timeout: 10000 });
-    const appliedBiocharMetric = card
-      .getByText("Applied biochar", { exact: true })
-      .locator("xpath=..");
-    // The applications form's "biocharAppliedTons" input is entered in kg
-    // (applicationTonsToKg converts for display) but the schema field — and
-    // this rollup — is in tonnes, so 5000 kg in reads back as "5.00 t".
-    await expect(
-      appliedBiocharMetric.getByText("5.00 t", { exact: true }),
-    ).toBeVisible({ timeout: 10000 });
+    const row = creditBatchRow(page, lineage.creditBatchCode);
+    await expect(row).toBeVisible({ timeout: 10000 });
+    await expect(row.locator("[data-applied-dry]")).toHaveText(APPLIED_DRY_BEFORE, { timeout: 10000 });
 
     // Navigate to /applications via the sidebar (client-side nav — the
     // QueryClient created once in providers.tsx survives the route change).
@@ -132,29 +115,28 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
     await page.waitForURL(/\/applications/);
     await page.waitForLoadState("networkidle");
 
-    const applicationRow = page.locator("table tbody tr[tabindex='0']").first();
+    const applicationRow = page.locator("table tbody tr").filter({ has: page.locator("[data-row-link]") }).first();
     await applicationRow.click();
     await waitForSideSheet(page);
     await page.getByRole("button", { name: "Edit application" }).click();
 
-    await page.fill('input[name="biocharAppliedTons"]', "3000");
+    await page.fill('input[name="biocharAppliedKg"]', "3000");
     await page.locator('[role="dialog"]').locator('button:has-text("Update application")').click();
     await waitForSideSheetClose(page);
 
     // Back to /credit-batches, again via client-side nav — no page.reload(),
     // no page.goto(). This is the exact scenario the fix targets: a query
     // that was cached under refetchOnWindowFocus:false must have been
-    // invalidated by the application mutation, or this would still read 5.00.
+    // invalidated by the application mutation, or this would still read 4.50 t.
     await page.locator("nav").getByRole("link", { name: "Credit Batches" }).click();
     await page.waitForURL(/\/credit-batches(\?|$)/);
     await page.waitForLoadState("networkidle");
+    // The sidebar link opens the timeline; the row figures live in the list view.
+    await page.getByRole("button", { name: "List", exact: true }).click();
 
-    const cardAfter = page.locator("article").filter({ hasText: lineage.creditBatchCode });
-    const appliedBiocharMetricAfter = cardAfter
-      .getByText("Applied biochar", { exact: true })
-      .locator("xpath=..");
-    await expect(
-      appliedBiocharMetricAfter.getByText("3.00 t", { exact: true }),
-    ).toBeVisible({ timeout: 10000 });
+    // 5000 kg became 3000 kg of the same delivery: the dry figure follows.
+    await expect(creditBatchRow(page, lineage.creditBatchCode).locator("[data-applied-dry]")).toHaveText(APPLIED_DRY_AFTER, {
+      timeout: 10000,
+    });
   });
 });

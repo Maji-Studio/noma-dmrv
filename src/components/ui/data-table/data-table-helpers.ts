@@ -11,6 +11,12 @@ declare module "@tanstack/react-table" {
      * cell carries a leading hairline as the in-region overflow signal.
      */
     stickyEnd?: boolean;
+    /**
+     * The record's identity column (code or name). In a table with
+     * `onRowClick` its cell renders as the record link, and it cannot be
+     * hidden. Never mark a column whose cell renders its own controls.
+     */
+    recordLink?: boolean;
   }
 }
 
@@ -42,25 +48,25 @@ export function columnLabel(column: {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
-/** Activate a clickable row or card with Enter/Space. */
-export function handleRowActivationKeyDown(
-  event: React.KeyboardEvent<HTMLElement>,
-  activate: () => void,
-) {
-  if (event.key !== "Enter" && event.key !== " ") return;
-  const interactive = (event.target as HTMLElement).closest(
-    INTERACTIVE_ROW_CONTROL_SELECTOR,
-  );
-  if (interactive && interactive !== event.currentTarget) return;
-  event.preventDefault();
-  activate();
+/**
+ * React events bubble through portals, so a press inside a popover or menu
+ * opened from a row reaches the row's handlers although its target sits
+ * outside the row's DOM. Such presses never activate the row.
+ */
+function isFromPortal(event: React.SyntheticEvent<HTMLElement>): boolean {
+  return !event.currentTarget.contains(event.target as Node);
 }
 
-/** Activate a clickable row or card unless a nested control was clicked. */
+/**
+ * Pointer-only row click. Keyboard and screen-reader users activate the
+ * record link (`meta.recordLink`) instead (see `row-link.tsx`); a nested control keeps its own
+ * press.
+ */
 export function handleRowActivationClick(
   event: React.MouseEvent<HTMLElement>,
   activate: () => void,
 ) {
+  if (isFromPortal(event)) return;
   const interactive = (event.target as HTMLElement).closest(
     INTERACTIVE_ROW_CONTROL_SELECTOR,
   );

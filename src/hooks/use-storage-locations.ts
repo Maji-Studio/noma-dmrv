@@ -4,6 +4,7 @@
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import {
   keepPreviousData,
   useMutation,
@@ -30,7 +31,8 @@ import {
   deleteStorageLocationFn,
 } from "@/fn/storage-locations";
 import { facilityKeys } from "@/hooks/use-facilities";
-import { throwActionError } from "@/lib/stale-version";
+import { invalidateEntityTypeQueries } from "@/hooks/entity-query-keys";
+import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
@@ -70,7 +72,7 @@ export function useStorageLocations(
     queryFn: async () => {
       const result = await getStorageLocationsFn(filters);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -98,10 +100,11 @@ export function useCreateStorageLocation(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.storageLocation),
     mutationFn: async (data: CreateStorageLocationData) => {
       const result = await createStorageLocationFn(data);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -126,6 +129,8 @@ export function useCreateStorageLocation(
 
       // Pre-populate the detail cache with the new storage location
       queryClient.setQueryData(storageLocationKeys.detail(data.id), data);
+      // Bin pickers in entry forms list the new bin straight away.
+      invalidateEntityTypeQueries(queryClient, "storageLocation");
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -150,6 +155,7 @@ export function useUpdateStorageLocation(
   const { optimistic = true } = options ?? {};
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.storageLocation),
     mutationFn: async (data: UpdateStorageLocationData) => {
       const result = await updateStorageLocationFn(data);
       // Keeps an expected-version refusal typed so the open edit form can show
@@ -247,6 +253,8 @@ export function useUpdateStorageLocation(
         // A stock-mode change reshapes the bin's sub-bins, balance and history.
         queryClient.invalidateQueries({ queryKey: outputStockKeys.all }),
       ]);
+      // A rename or type change shows in every bin picker's label and options.
+      invalidateEntityTypeQueries(queryClient, "storageLocation");
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -275,6 +283,9 @@ export function useUpdateStorageLocation(
         });
       }
 
+      if (error instanceof StaleVersionError) {
+        void queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
+      }
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {
@@ -292,19 +303,22 @@ export function useUpdateStorageLocation(
  * Hook to archive a storage location while preserving its history.
  */
 export function useArchiveStorageLocation(
-  callbacks?: MutationCallbacks<StorageLocation, string>,
+  callbacks?: MutationCallbacks<StorageLocation, { storageLocationId: string; expectedVersion: number }>,
 ) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (storageLocationId: string) => {
-      const result = await archiveStorageLocationFn({ storageLocationId });
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.storageLocation),
+    mutationFn: async (variables: { storageLocationId: string; expectedVersion: number }) => {
+      const result = await archiveStorageLocationFn(variables);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
-    onSuccess: async (data, storageLocationId) => {
+    onSuccess: async (data, variables) => {
+      queryClient.setQueryData(storageLocationKeys.detail(data.id), data);
+      patchListCachesWithSavedRow<StorageLocationWithFacility>(queryClient, storageLocationKeys.lists(), data);
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: storageLocationKeys.all,
@@ -313,13 +327,14 @@ export function useArchiveStorageLocation(
           queryKey: facilityKeys.storageLocations(data.facilityId),
         }),
       ]);
-      await callbacks?.onSuccess?.(data, storageLocationId);
+      await callbacks?.onSuccess?.(data, variables);
     },
-    onError: async (error, storageLocationId) => {
-      await callbacks?.onError?.(error, storageLocationId);
+    onError: async (error, variables) => {
+      if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
+      await callbacks?.onError?.(error, variables);
     },
-    onSettled: async (data, error, storageLocationId) => {
-      await callbacks?.onSettled?.(data, error, storageLocationId);
+    onSettled: async (data, error, variables) => {
+      await callbacks?.onSettled?.(data, error, variables);
     },
   });
 }
@@ -328,19 +343,22 @@ export function useArchiveStorageLocation(
  * Hook to restore an individually archived storage location.
  */
 export function useRestoreStorageLocation(
-  callbacks?: MutationCallbacks<StorageLocation, string>,
+  callbacks?: MutationCallbacks<StorageLocation, { storageLocationId: string; expectedVersion: number }>,
 ) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (storageLocationId: string) => {
-      const result = await restoreStorageLocationFn({ storageLocationId });
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.storageLocation),
+    mutationFn: async (variables: { storageLocationId: string; expectedVersion: number }) => {
+      const result = await restoreStorageLocationFn(variables);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
-    onSuccess: async (data, storageLocationId) => {
+    onSuccess: async (data, variables) => {
+      queryClient.setQueryData(storageLocationKeys.detail(data.id), data);
+      patchListCachesWithSavedRow<StorageLocationWithFacility>(queryClient, storageLocationKeys.lists(), data);
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: storageLocationKeys.all,
@@ -349,13 +367,14 @@ export function useRestoreStorageLocation(
           queryKey: facilityKeys.storageLocations(data.facilityId),
         }),
       ]);
-      await callbacks?.onSuccess?.(data, storageLocationId);
+      await callbacks?.onSuccess?.(data, variables);
     },
-    onError: async (error, storageLocationId) => {
-      await callbacks?.onError?.(error, storageLocationId);
+    onError: async (error, variables) => {
+      if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
+      await callbacks?.onError?.(error, variables);
     },
-    onSettled: async (data, error, storageLocationId) => {
-      await callbacks?.onSettled?.(data, error, storageLocationId);
+    onSettled: async (data, error, variables) => {
+      await callbacks?.onSettled?.(data, error, variables);
     },
   });
 }
@@ -365,23 +384,25 @@ export function useRestoreStorageLocation(
  * Supports optimistic updates for immediate UI feedback.
  */
 export function useDeleteStorageLocation(
-  callbacks?: MutationCallbacks<void, string>,
+  callbacks?: MutationCallbacks<void, { storageLocationId: string; expectedVersion: number }>,
   options?: OptimisticUpdateOptions
 ) {
   const queryClient = useQueryClient();
   const { optimistic = true } = options ?? {};
 
   return useMutation({
-    mutationFn: async (storageLocationId: string) => {
-      const result = await deleteStorageLocationFn({ storageLocationId });
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.storageLocation),
+    mutationFn: async (variables: { storageLocationId: string; expectedVersion: number }) => {
+      const result = await deleteStorageLocationFn(variables);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return;
     },
-    onMutate: async (storageLocationId) => {
+    onMutate: async (variables) => {
+      const storageLocationId = variables.storageLocationId;
       if (!optimistic) {
-        await callbacks?.onMutate?.(storageLocationId);
+        await callbacks?.onMutate?.(variables);
         return;
       }
 
@@ -412,12 +433,13 @@ export function useDeleteStorageLocation(
         });
       });
 
-      await callbacks?.onMutate?.(storageLocationId);
+      await callbacks?.onMutate?.(variables);
 
       // Return context with snapshots for rollback
       return { previousStorageLocation, previousLists };
     },
-    onSuccess: async (_, storageLocationId) => {
+    onSuccess: async (_, variables) => {
+      const storageLocationId = variables.storageLocationId;
       // Get the storage location to know its facility
       const storageLocation = queryClient.getQueryData<StorageLocation>(
         storageLocationKeys.detail(storageLocationId)
@@ -449,9 +471,11 @@ export function useDeleteStorageLocation(
           : []),
       ]);
 
-      await callbacks?.onSuccess?.(undefined, storageLocationId);
+      await callbacks?.onSuccess?.(undefined, variables);
     },
-    onError: async (error, storageLocationId, context) => {
+    onError: async (error, variables, context) => {
+      if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
+      const storageLocationId = variables.storageLocationId;
       // Rollback to previous values on error
       if (optimistic && context) {
         const { previousStorageLocation, previousLists } = context as {
@@ -476,15 +500,15 @@ export function useDeleteStorageLocation(
         });
       }
 
-      await callbacks?.onError?.(error, storageLocationId);
+      await callbacks?.onError?.(error, variables);
     },
-    onSettled: async (data, error, storageLocationId) => {
-      // Refetch lists to ensure consistency
+    onSettled: async (data, error, variables) => {
+            // Refetch lists to ensure consistency
       queryClient.invalidateQueries({
         queryKey: storageLocationKeys.lists(),
       });
 
-      await callbacks?.onSettled?.(data, error, storageLocationId);
+      await callbacks?.onSettled?.(data, error, variables);
     },
   });
 }

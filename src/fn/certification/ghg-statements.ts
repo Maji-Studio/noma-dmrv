@@ -1,5 +1,6 @@
 "use server";
 
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import {
   getCertifierProjectByFacility,
@@ -48,7 +49,6 @@ import { logger } from "@/lib/log";
 import {
   createGhgStatement,
   ghgStatementCreateRefusalMessage,
-  getIsometricClientForOrg,
   getGhgStatement,
   getGhgStatementPeriod,
   listGhgStatementsForProject,
@@ -160,6 +160,7 @@ export interface GhgStatementListItem {
 // preview partitions these by `completedOn` against the chosen period end.
 export interface OpenRemovalView {
   removalId: string;
+  code: string;
   externalId: string;
   completedOn: string | null;
   startedOn: string | null;
@@ -215,7 +216,7 @@ async function createGhgStatementDraftLocked(
   orgCtx: OrgContext,
   parsed: ReturnType<typeof createGhgStatementSchema.parse>,
 ): Promise<CreateGhgStatementResult> {
-  const client = await getIsometricClientForOrg(orgCtx.organizationId);
+  const client = await resolveIsometricClient(orgCtx);
   assertProductionConfirmed(parsed.confirmProduction);
 
     const submissionAttemptId = crypto.randomUUID();
@@ -633,7 +634,7 @@ export async function refreshGhgStatementStatus(
 ): Promise<ActionResult<GhgStatement>> {
   return withAction(async (orgCtx) => {
     requireOrgRole(orgCtx, "admin");
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    const client = await resolveIsometricClient(orgCtx);
     const submission = await getSubmissionById(orgCtx, submissionId);
     if (
       !submission ||
@@ -709,7 +710,7 @@ export async function loadGhgStatementState(
   ghgStatementId: string,
 ): Promise<ActionResult<GhgStatementState>> {
   return withAction(async (orgCtx) => {
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    const client = await resolveIsometricClient(orgCtx);
     const statement = await getCertifierGhgStatementById(
       orgCtx,
       ghgStatementId,
@@ -831,6 +832,7 @@ export async function loadOpenRemovalsForFacility(
     );
     return open.map(({ removal, externalId }) => ({
       removalId: removal.id,
+      code: removal.code,
       externalId,
       completedOn: removal.completedOn,
       startedOn: removal.startedOn,

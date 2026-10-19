@@ -1,3 +1,9 @@
+import {
+  PYROLYSIS_FEEDSTOCK_CATEGORIES as pyrolysisFeedstockCategories,
+  BLEND_FEEDSTOCK_CATEGORIES as blendFeedstockCategories,
+  FEEDSTOCK_CATEGORIES as feedstockCategories,
+} from "@/db/schema/common";
+import { expectedVersionSchema } from "./helpers";
 /**
  * Feedstock Type Validation Schemas
  * Zod schemas for feedstock type CRUD operations
@@ -9,27 +15,7 @@ import { z } from "zod";
 // Constants
 // ============================================
 
-export const pyrolysisFeedstockCategories = [
-  "forestry",
-  "agricultural",
-  "industrial",
-  "municipal",
-  "invasive",
-] as const;
-
-export const blendFeedstockCategories = [
-  "compost",
-  "mineral",
-  "lime",
-  "binder",
-  "amendment",
-  "other",
-] as const;
-
-export const feedstockCategories = [
-  ...pyrolysisFeedstockCategories,
-  ...blendFeedstockCategories,
-] as const;
+export { pyrolysisFeedstockCategories, blendFeedstockCategories, feedstockCategories };
 
 export type FeedstockCategory = (typeof feedstockCategories)[number];
 
@@ -73,8 +59,6 @@ const blendCategorySet = new Set<string>(blendFeedstockCategories);
  * only one of the pair cannot reach a combination the form would reject.
  */
 export function categoryMatchesUsage(
-  // `feedstock_types.category` is a text column, so a stored value read back
-  // for the merged check arrives as a plain string, not the narrowed union.
   category: string,
   usage: FeedstockTypeUsage,
 ): boolean {
@@ -152,6 +136,7 @@ export const feedstockTypeFormSchema = z.object({
 export const createFeedstockTypeSchema = feedstockTypeFormSchema;
 
 export const updateFeedstockTypeSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   feedstockTypeId: z.uuid("Choose a valid feedstock type."),
   name: z.string().trim().min(1).max(255).optional(),
   category: z.enum(feedstockCategories).optional(),
@@ -162,6 +147,7 @@ export const updateFeedstockTypeSchema = z.object({
 }).superRefine(validateCategoryUsage);
 
 export const deleteFeedstockTypeSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   feedstockTypeId: z.uuid("Choose a valid feedstock type."),
 });
 

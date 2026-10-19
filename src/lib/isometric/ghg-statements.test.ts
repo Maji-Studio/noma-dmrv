@@ -1,14 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/config/env", () => ({
-  env: {
-    ISOMETRIC_CLIENT_SECRET: "test-client-secret",
-    ISOMETRIC_ACCESS_TOKEN: "test-access-token",
-    ISOMETRIC_ENVIRONMENT: "sandbox",
-  },
-}));
 
-import { getIsometricClientFromEnv } from "./client";
+import { testIsometricClient } from "../../../tests/fixtures/isometric-client";
 import {
   getGhgStatementPeriod,
   listGhgStatementsForProject,
@@ -48,7 +41,7 @@ describe("GHG statement registry discovery", () => {
 
     await expect(
       listGhgStatementsForProject(
-        getIsometricClientFromEnv(),
+        testIsometricClient(),
         "prj_target",
       ),
     ).resolves.toMatchObject([{ id: "ggs_first" }, { id: "ggs_second" }]);

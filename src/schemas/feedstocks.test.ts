@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { DISTANCE_NOTE_MAX_LENGTH } from "./distance-source";
+import { DELIVERY_DISTANCE_NOTE_MAX_LENGTH } from "./delivery-input";
 import {
   createFeedstockSchema,
   feedstockFormSchema,
+  updateFeedstockSchema,
 } from "./feedstocks";
 
 const validForm = {
@@ -19,11 +22,10 @@ const validForm = {
 };
 
 describe("feedstock delivery-date schemas", () => {
-  it("allows an unset date when editing a legacy record", () => {
+  it("requires a delivery date when editing", () => {
     const result = feedstockFormSchema.safeParse(validForm);
 
-    expect(result.success).toBe(true);
-    if (result.success) expect(result.data.deliveryDate).toBeUndefined();
+    expect(result.success).toBe(false);
   });
 
   it("still requires a delivery date when creating a record", () => {
@@ -35,4 +37,44 @@ describe("feedstock delivery-date schemas", () => {
       }).success,
     ).toBe(true);
   });
+});
+
+const patch = { feedstockId: validForm.facilityId, expectedVersion: 1 };
+it("refuses clearing the intake bin", () => {
+  for (const storageLocationId of [null, ""]) {
+    expect(updateFeedstockSchema.safeParse({ ...patch, storageLocationId }).success).toBe(false);
+  }
+  expect(updateFeedstockSchema.safeParse(patch).success).toBe(true);
+});
+it("requires moisture below 100 on create and update", () => {
+  for (const moisture of [100, 101]) {
+    expect(createFeedstockSchema.safeParse({ ...validForm, deliveryDate: "2026-10-15", moisturePercent: moisture }).success).toBe(false);
+    expect(updateFeedstockSchema.safeParse({ ...patch, moistureContentPercent: moisture }).success).toBe(false);
+  }
+  expect(updateFeedstockSchema.safeParse({ ...patch, moistureContentPercent: 99.999999 }).success).toBe(true);
+});
+it("strips dry mass from the in-process PATCH schema", () => {
+  expect(updateFeedstockSchema.parse({ ...patch, massDryKg: 90 })).not.toHaveProperty("massDryKg");
+});
+
+it("coerces positive distance overrides and preserves omitted versus cleared patches", () => {
+  expect(updateFeedstockSchema.parse(patch).transportDistanceKm).toBeUndefined();
+  for (const transportDistanceKm of [null, ""]) {
+    expect(updateFeedstockSchema.parse({ ...patch, transportDistanceKm }).transportDistanceKm).toBeNull();
+  }
+  expect(updateFeedstockSchema.parse({ ...patch, transportDistanceKm: "25.5", distanceNote: "Alternate route" }))
+    .toMatchObject({ transportDistanceKm: 25.5, distanceNote: "Alternate route" });
+  expect(updateFeedstockSchema.parse({ ...patch, transportDistanceKm: 0 }).transportDistanceKm).toBe(0);
+  expect(createFeedstockSchema.parse({ ...validForm, deliveryDate: "2026-10-15", transportDistanceKm: 0 }).transportDistanceKm).toBe(0);
+  for (const transportDistanceKm of [-1, Infinity, "invalid"]) {
+    expect(updateFeedstockSchema.safeParse({ ...patch, transportDistanceKm }).success).toBe(false);
+    expect(createFeedstockSchema.safeParse({ ...validForm, deliveryDate: "2026-10-15", transportDistanceKm }).success).toBe(false);
+  }
+});
+
+it("limits the distance note like a delivery's", () => {
+  expect(DISTANCE_NOTE_MAX_LENGTH).toBe(DELIVERY_DISTANCE_NOTE_MAX_LENGTH);
+  expect(updateFeedstockSchema.safeParse({ ...patch, distanceNote: "a".repeat(DISTANCE_NOTE_MAX_LENGTH) }).success).toBe(true);
+  expect(updateFeedstockSchema.safeParse({ ...patch, distanceNote: "a".repeat(DISTANCE_NOTE_MAX_LENGTH + 1) }).success).toBe(false);
+  expect(feedstockFormSchema.safeParse({ ...validForm, deliveryDate: "2026-10-15", distanceNote: "a".repeat(DISTANCE_NOTE_MAX_LENGTH + 1) }).success).toBe(false);
 });

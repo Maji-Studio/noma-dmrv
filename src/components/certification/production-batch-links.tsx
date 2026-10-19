@@ -13,6 +13,7 @@
 "use client";
 
 import { useRemovalProductionBatches } from "@/hooks/use-certification";
+import { DetailField } from "@/components/ui/detail-panel";
 import { isometricRegistry } from "@/lib/isometric/links";
 import { IsometricLink } from "./isometric-link";
 
@@ -34,34 +35,34 @@ export function ProductionBatchLinks({
   const environment = isProduction ? "production" : "sandbox";
 
   return (
-    <div className="flex flex-col gap-4">
-      <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-        Isometric production batches ({batches.length})
-      </span>
-      <ul className="body-small flex flex-col gap-4 text-[var(--color-text-primary)]">
-        {batches.map((batch) => {
-          const url =
-            batch.externalProjectId && batch.externalFacilityId
-              ? isometricRegistry.productionBatch({
-                  environment,
-                  externalProjectId: batch.externalProjectId,
-                  externalFacilityId: batch.externalFacilityId,
-                  externalProductionBatchId: batch.externalProductionBatchId,
-                })
-              : null;
-          return (
-            <li
-              key={batch.creditBatchId}
-              className="flex flex-wrap items-center gap-x-12 gap-y-4"
-            >
-              <span className="font-mono text-[var(--color-text-secondary)]">
-                {batch.creditBatchCode} · {batch.externalProductionBatchId}
-              </span>
-              {url && <IsometricLink href={url} />}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+    <DetailField
+      label={`Isometric production batches (${batches.length})`}
+      value={
+        <ul className="flex flex-col gap-4">
+          {batches.map((batch) => {
+            const url =
+              batch.externalProjectId && batch.externalFacilityId
+                ? isometricRegistry.productionBatch({
+                    environment,
+                    externalProjectId: batch.externalProjectId,
+                    externalFacilityId: batch.externalFacilityId,
+                    externalProductionBatchId: batch.externalProductionBatchId,
+                  })
+                : null;
+            return (
+              <li
+                key={batch.creditBatchId}
+                className="flex flex-wrap items-center gap-x-12 gap-y-4"
+              >
+                <span className="font-mono">
+                  {batch.creditBatchCode} · {batch.externalProductionBatchId}
+                </span>
+                {url && <IsometricLink href={url} />}
+              </li>
+            );
+          })}
+        </ul>
+      }
+    />
   );
 }

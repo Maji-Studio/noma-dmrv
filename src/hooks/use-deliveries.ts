@@ -1,3 +1,8 @@
+import { invalidateRecordedTransport } from "./transport-distance-query-keys";
+import { throwDeliveryActionError } from "@/lib/delivery-action-errors";
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
+import { StaleVersionError } from "@/lib/stale-version";
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { outputStockKeys } from "./use-output-stock";
 /**
  * Deliveries React Query Hooks
@@ -21,12 +26,18 @@ import type {
   CreateDeliveryData,
   DeliveryFilterData,
   UpdateDeliveryData,
+  DeleteDeliveryData,
 } from "@/schemas/deliveries";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { invalidateStockEntityQueries } from "./entity-query-keys";
-import type { MutationCallbacks } from "./types";
-import { certificationKeys } from "./use-certification";
+import { biocharProductKeys } from "./use-biochar-products";
+import { creditBatchKeys } from "./credit-batch-query-keys";
+import { chainOfCustodyKeys } from "./use-chain-of-custody";
+import { orderKeys } from "./use-orders";
+import { storageLocationKeys } from "./use-storage-locations";
+import { unwrap, type MutationCallbacks } from "./types";
+import { invalidateCertificationReadiness } from "./use-certification";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 
 // ============================================
@@ -71,13 +82,7 @@ export function useDeliveries(
 ) {
   return useQuery({
     queryKey: deliveryKeys.list(filters),
-    queryFn: async () => {
-      const result = await getDeliveriesFn(filters);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getDeliveriesFn(filters)),
     staleTime: 30000, // 30 seconds
     enabled: options?.enabled,
   });
@@ -89,15 +94,22 @@ export function useDeliveries(
 export function useDeliveryWithRelations(deliveryId: string, enabled = true) {
   return useQuery({
     queryKey: deliveryKeys.detailWithRelations(deliveryId),
-    queryFn: async () => {
-      const result = await getDeliveryWithRelationsFn(deliveryId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getDeliveryWithRelationsFn(deliveryId)),
     enabled: enabled && !!deliveryId,
     staleTime: 30000,
+  });
+}
+
+/**
+ * Reads one delivery fresh, for a sheet that must reopen its form on the
+ * record's new version (after a deliberate refresh from location).
+ */
+export function useFetchDeliveryWithRelations() {
+  const queryClient = useQueryClient();
+  return (deliveryId: string) => queryClient.fetchQuery({
+    queryKey: deliveryKeys.detailWithRelations(deliveryId),
+    queryFn: async () => unwrap(await getDeliveryWithRelationsFn(deliveryId)),
+    staleTime: 0,
   });
 }
 
@@ -115,13 +127,7 @@ export function useDeliveryStats(
 ) {
   return useQuery({
     queryKey: deliveryKeys.stats(filters),
-    queryFn: async () => {
-      const result = await getDeliveryStatsFn(filters);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getDeliveryStatsFn(filters)),
     staleTime: 30000,
     enabled: options?.enabled,
   });
@@ -140,27 +146,36 @@ export function useCreateDelivery(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.delivery),
     mutationFn: async (data: CreateDeliveryData) => {
       const result = await createDeliveryFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
+      if (!result.success) throwDeliveryActionError(result);
       return result.data;
     },
     onMutate: async (variables) => {
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
+      for (const row of data.savedProducts) {
+        patchListCachesWithSavedRow(queryClient, biocharProductKeys.lists(), row);
+        queryClient.setQueryData(biocharProductKeys.detail(row.id), (old: object | undefined) => old ? { ...old, ...row } : old);
+      }
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.details() });
       // Invalidate all delivery lists
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
       // Invalidate stats
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void invalidateRecordedTransport(queryClient);
       // Delivery writes resync the derived biochar distribution leg and its
       // evidence set, inputs to certification readiness.
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void invalidateCertificationReadiness(queryClient);
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "delivery");
+      // Every delivery write moves its order's derived fulfillment: lists and the
+      // `?order=` detail read alike.
+      void queryClient.invalidateQueries({ queryKey: orderKeys.all });
       // Pre-populate the detail cache with the new delivery
       queryClient.setQueryData(deliveryKeys.detail(data.id), data);
 
@@ -185,10 +200,11 @@ export function useUpdateDelivery(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.delivery),
     mutationFn: async (data: UpdateDeliveryData) => {
       const result = await updateDeliveryFn(data);
       if (!result.success) {
-        throw new Error(result.error);
+        throwDeliveryActionError(result);
       }
       return result.data;
     },
@@ -218,9 +234,7 @@ export function useUpdateDelivery(
               ? {
                   ...old,
                   ...variables,
-                  // tripType is nullable/optional on the update payload but
-                  // non-null on the row — keep the prior value when unset.
-                  tripType: variables.tripType ?? old.tripType,
+                  deliveredWetMassKg: variables.deliveredWetMassKg ?? old.deliveredWetMassKg,
                   updatedAt: new Date(),
                 }
               : old
@@ -250,9 +264,21 @@ export function useUpdateDelivery(
 
       return { previousDelivery, previousLists };
     },
-    onSuccess: async (data, variables) => {
+    onSuccess: async ({ savedProducts, ...data }, variables) => {
+      // A mass or moisture edit re-posted stock: merge the products' new versions, then refresh what reads stock.
+      for (const row of savedProducts) {
+        patchListCachesWithSavedRow(queryClient, biocharProductKeys.lists(), row);
+        queryClient.setQueryData(biocharProductKeys.detail(row.id), (old: object | undefined) => old ? { ...old, ...row } : old);
+      }
+      if (savedProducts.length) {
+        for (const key of [biocharProductKeys.all, storageLocationKeys.all, creditBatchKeys.all, chainOfCustodyKeys.all]) {
+          void queryClient.invalidateQueries({ queryKey: key });
+        }
+      }
+      patchListCachesWithSavedRow(queryClient, deliveryKeys.lists(), data);
       // Update cache with actual server data
       queryClient.setQueryData(deliveryKeys.detail(data.id), data);
+      queryClient.setQueryData(deliveryKeys.detailWithRelations(data.id), (old: DeliveryWithRelations | undefined) => old ? { ...old, ...data } : old);
 
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({
@@ -261,11 +287,15 @@ export function useUpdateDelivery(
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void invalidateRecordedTransport(queryClient);
       // Delivery writes resync the derived biochar distribution leg and its
       // evidence set, inputs to certification readiness.
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void invalidateCertificationReadiness(queryClient);
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "delivery");
+      // Every delivery write moves its order's derived fulfillment: lists and the
+      // `?order=` detail read alike.
+      void queryClient.invalidateQueries({ queryKey: orderKeys.all });
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -307,18 +337,20 @@ export function useUpdateDelivery(
 /**
  * Hook to delete a delivery
  */
-export function useDeleteDelivery(callbacks?: MutationCallbacks<void, string>) {
+export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeliveryData>) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (deliveryId: string) => {
-      const result = await deleteDeliveryFn({ deliveryId });
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.delivery),
+    mutationFn: async (variables: DeleteDeliveryData) => {
+      const result = await deleteDeliveryFn(variables);
       if (!result.success) {
-        throw new Error(result.error);
+        throwDeliveryActionError(result);
       }
       return;
     },
-    onMutate: async (deliveryId) => {
+    onMutate: async (variables) => {
+      const { deliveryId } = variables;
       // Cancel outgoing refetches
       await queryClient.cancelQueries({
         queryKey: deliveryKeys.lists(),
@@ -344,11 +376,12 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, string>) {
         });
       });
 
-      await callbacks?.onMutate?.(deliveryId);
+      await callbacks?.onMutate?.(variables);
 
       return { previousDelivery, previousLists };
     },
-    onSuccess: async (_, deliveryId) => {
+    onSuccess: async (_, variables) => {
+      const { deliveryId } = variables;
       // Remove specific delivery from cache
       queryClient.removeQueries({ queryKey: deliveryKeys.detail(deliveryId) });
       queryClient.removeQueries({
@@ -358,14 +391,22 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, string>) {
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void invalidateRecordedTransport(queryClient);
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.details() });
+      void queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       // Deleting a delivery shrinks the derived biochar leg's evidence set.
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void invalidateCertificationReadiness(queryClient);
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "delivery");
+      // Every delivery write moves its order's derived fulfillment: lists and the
+      // `?order=` detail read alike.
+      void queryClient.invalidateQueries({ queryKey: orderKeys.all });
 
-      await callbacks?.onSuccess?.(undefined, deliveryId);
+      await callbacks?.onSuccess?.(undefined, variables);
     },
-    onError: async (error, deliveryId, context) => {
+    onError: async (error, variables, context) => {
+      const { deliveryId } = variables;
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       // Rollback to previous values on error
       if (context) {
@@ -388,12 +429,16 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, string>) {
         });
       }
 
-      await callbacks?.onError?.(error, deliveryId);
+      if (error instanceof StaleVersionError) {
+        queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: deliveryKeys.detail(deliveryId) });
+      }
+      await callbacks?.onError?.(error, variables);
     },
-    onSettled: async (data, error, deliveryId) => {
+    onSettled: async (data, error, variables) => {
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
 
-      await callbacks?.onSettled?.(data, error, deliveryId);
+      await callbacks?.onSettled?.(data, error, variables);
     },
   });
 }

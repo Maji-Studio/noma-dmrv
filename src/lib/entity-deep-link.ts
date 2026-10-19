@@ -3,12 +3,15 @@ export const ENTITY_DEEP_LINK_FOCUS_PARAM = "focus";
 export const ENTITY_DEEP_LINK_EDIT_MODE = "edit";
 export const FEEDSTOCK_TYPE_EDIT_LABEL = "Edit feedstock type";
 export const FEEDSTOCK_TYPE_QUERY_PARAM = "feedstockType";
+export const LOCATION_DEEP_LINK_PARAM = "location";
+export const SUPPLIER_QUERY_PARAM = "supplier";
 
 const FEEDSTOCK_TYPES_PATH = "/feedstock-types";
 
 export const ENTITY_FOCUS_TARGETS = {
   transportRoute: "transport-route",
   transportEvidence: "transport-evidence",
+  removalTemplate: "removal-template",
 } as const;
 
 export type EntityFocusTarget =
@@ -60,4 +63,17 @@ export function buildFeedstockTypeEditDeepLink(
     params.set(ENTITY_DEEP_LINK_MODE_PARAM, ENTITY_DEEP_LINK_EDIT_MODE);
   }
   return `${FEEDSTOCK_TYPES_PATH}?${params.toString()}`;
+}
+
+/** Deep link that opens one record's view sheet on its list page. */
+export function entityViewHref(
+  path: string,
+  queryKey: string,
+  entityId: string,
+  facilityId?: string | null,
+): string {
+  const params = new URLSearchParams();
+  if (facilityId) params.set("facility", facilityId);
+  params.set(queryKey, entityId);
+  return `${path}?${params.toString()}`;
 }

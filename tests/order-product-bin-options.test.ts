@@ -8,7 +8,7 @@ import {
 import { db } from "@/db";
 import { facilities, storageLocations } from "@/db/schema/facilities";
 import { biocharProducts } from "@/db/schema/products";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -20,7 +20,7 @@ describe("order product-bin options", () => {
   let facilityId: string;
   let productBinId: string;
   let productId: string;
-  let binlessProductId: string;
+  let otherProductId: string;
 
   beforeAll(async () => {
     await ensureTestOrg();
@@ -28,7 +28,7 @@ describe("order product-bin options", () => {
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-OPB-${tag}`,
           name: `Order Product Bin Facility ${tag}`,
@@ -55,11 +55,11 @@ describe("order product-bin options", () => {
           moistureContentPercent: 15,
         }))
         .returning({ id: biocharProducts.id });
-      const [binlessProduct] = await tx
+      const [otherProduct] = await tx
         .insert(biocharProducts)
         .values(await outputProductFixtureValues(tx, {
           organizationId: TEST_ORG_ID,
-          code: `BP-NOBIN-${tag}`,
+          code: `BP-OTHER-${tag}`,
           facilityId: facility.id,
           massKg: 250,
           moistureContentPercent: 15,
@@ -70,18 +70,18 @@ describe("order product-bin options", () => {
         facilityId: facility.id,
         productBinId: productBin.id,
         productId: product.id,
-        binlessProductId: binlessProduct.id,
+        otherProductId: otherProduct.id,
       };
     });
 
     facilityId = fixture.facilityId;
     productBinId = fixture.productBinId;
     productId = fixture.productId;
-    binlessProductId = fixture.binlessProductId;
+    otherProductId = fixture.otherProductId;
   });
 
   afterAll(async () => {
-    await deleteOutputProductFixtures(db, eq(biocharProducts.id, binlessProductId));
+    await deleteOutputProductFixtures(db, eq(biocharProducts.id, otherProductId));
     await deleteOutputProductFixtures(db, eq(biocharProducts.id, productId));
     await db
       .delete(storageLocations)
@@ -111,16 +111,18 @@ describe("order product-bin options", () => {
     });
   });
 
-  it("offers a bin-less product under its product code", async () => {
+  it("offers every product under its required bin identity", async () => {
     const options = await getBiocharProducts(ctx, {
       facilityId,
       limit: 10,
     });
 
+    const [product] = await db.select().from(biocharProducts).where(eq(biocharProducts.id, otherProductId));
+    const [bin] = await db.select().from(storageLocations).where(eq(storageLocations.id, product.storageLocationId));
     expect(options).toContainEqual({
-      id: binlessProductId,
-      code: `BP-NOBIN-${tag}`,
-      name: "E2E Pure fixture",
+      id: otherProductId,
+      code: bin.code,
+      name: `${bin.name} • E2E Pure fixture`,
       mass: {
         moisturePercent: 15,
       },
@@ -167,6 +169,6 @@ describe("order product-bin options", () => {
 
     const ids = options.map((option) => option.id);
     expect(ids).not.toContain(productId);
-    expect(ids).toContain(binlessProductId);
+    expect(ids).toContain(otherProductId);
   });
 });

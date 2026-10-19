@@ -184,10 +184,12 @@ export function IngredientBinField({
                   <EntitySelect
                     id={row.storageLocationFieldName}
                     entityType="storageLocation"
+                    allowEdit
                     value={field.value || ""}
                     onChange={field.onChange}
                     placeholder="Select a feedstock bin..."
-                    disabled={isSubmitting || allocationFrozen}
+                    disabled={isSubmitting}
+                    selectionLocked={allocationFrozen}
                     error={!!fieldState.error}
                     filterBy={{
                       ...(facilityId ? { facilityId } : {}),

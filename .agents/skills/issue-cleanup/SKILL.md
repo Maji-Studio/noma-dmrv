@@ -26,7 +26,7 @@ Writes `issues-snapshot.json` (all open issues with bodies, comments, closing-PR
 node -e 'const s=require("<abs-path>/issues-snapshot.json");const want=new Set([25,33]);console.log(JSON.stringify(s.openIssues.filter(i=>want.has(i.number)),null,1))'
 ```
 
-Also load: `CONTEXT.md` (glossary), `docs/adr/` index, `docs/open-questions.md`, `docs/isometric/versions.json`.
+Also load: `GLOSSARY.md` (glossary), `docs/adr/` index, `docs/open-questions.md`, `docs/isometric/versions.json`.
 
 ## Phase 1 — Verdicts (Claude Workflow, multi-agent)
 
@@ -92,7 +92,7 @@ Every posted comment starts with the triage disclaimer line:
 
 ## Phase 4 — Grilling round (interactive)
 
-List `grill` survivors ranked by value. For each, run `/grill-with-docs` with the maintainer (updates `CONTEXT.md`/ADRs as decisions land), then refresh the issue body. Resumable: record grill-pending issue numbers in the final report so a later session continues where this one stopped.
+List `grill` survivors ranked by value. For each, run `/grill-with-docs` with the maintainer (updates `GLOSSARY.md`/ADRs as decisions land), then refresh the issue body. Resumable: record grill-pending issue numbers in the final report so a later session continues where this one stopped.
 
 ## Phase 5 — Report
 

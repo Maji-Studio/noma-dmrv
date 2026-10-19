@@ -36,7 +36,7 @@ const extensionCandidates = [
 ];
 const rootFileNames = new Set([
   "AGENTS.md",
-  "CONTEXT.md",
+  "GLOSSARY.md",
   "README.md",
   "TEMPLATE_USAGE.md",
   "drizzle.config.ts",

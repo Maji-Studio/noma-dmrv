@@ -12,24 +12,59 @@ vi.mock('@/db', () => {
   return { db: { ...tx, transaction: (run: (reader: unknown) => unknown) => run(tx) } };
 });
 vi.mock('./output-stock', () => ({ getBiocharOutputStockLayers: mocks.state, getProductOutputStockLayers: mocks.state, getOutputBinStocks: mocks.stocks, getLayerMoistureBases: async (_ctx: unknown, _bin: unknown, layers: { id: string; placedAt: string; remainingSolidsKg: unknown }[]) =>
-  layers.map(layer => ({ layerId: layer.id, placedAt: layer.placedAt, remainingSolidsKg: layer.remainingSolidsKg, recorded: null, readings: [] })) }));
+  layers.map(layer => ({ layerId: layer.id, placedAt: layer.placedAt, remainingSolidsKg: layer.remainingSolidsKg, recorded: null, readings: [], removals: [] })) }));
 vi.mock('./output-stock-corrections', () => ({ prepareOutputCorrection: mocks.correction }));
-vi.mock('./certification-lineage-guards', () => ({ getCertifiedLineage: mocks.lineage }));
+vi.mock('./certification-lineage-guards', async importOriginal => ({ ...await importOriginal<typeof import('./certification-lineage-guards')>(), getCertifiedLineage: mocks.lineage }));
 vi.mock('./output-stock-history', () => ({ getOutputStockHistory: vi.fn() }));
-import { getMatchingOutputBins, previewOutputStock } from './output-stock-operations';
+import { getMatchingOutputBins, prepareOutputStock, previewOutputStock } from './output-stock-operations';
 
-it('returns certification artifact identities while checking both affected sources and the corrected delivery', async () => {
+it('keeps a correction fingerprint stable when product rows return in a different order', async () => {
+  const binId = '00000000-0000-4000-8000-000000000001';
+  const initialVersion = 1;
+  const editedVersion = 2;
+  const layers = ['earlier', 'later'].map((id, index) => ({
+    id, placedAt: `2026-09-${index === 0 ? '12' : '13'}T12:00:00.000Z`,
+    postingSequence: BigInt(index + 1), establishedDryBiocharKg: '100',
+    ingredientDrySolidsKg: '0', remainingDryBiocharKg: '100',
+    remainingSolidsKg: rational(BigInt(100)),
+    runs: [{ productionRunId: id, establishedDryKg: '100', remainingDryKg: '100' }],
+  }));
+  const input = { storageLocationId: binId, facilityId: '00000000-0000-4000-8000-000000000002',
+    correctsMovementId: '00000000-0000-4000-8000-000000000003', occurredAt: '2026-09-12T18:00:00.000Z',
+    kind: 'count' as const, wetMassKg: 125, moisturePercent: 20 };
+  const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
+  const prepare = async (orderedLayers: typeof layers, version: number) => {
+    mocks.reads = [[{ id: binId, type: 'product_bin', name: 'Products', code: 'PRODUCTS', formulationId: null }], [], [],
+      layers.map(layer => ({ id: layer.id, code: layer.id, version: layer.id === 'later' ? version : initialVersion })), []];
+    mocks.state.mockResolvedValue({ layers: orderedLayers });
+    mocks.correction.mockResolvedValue({ original: { inputSnapshot: {} }, layers: orderedLayers, allocations: [], deliveryId: null });
+    return prepareOutputStock(ctx, input);
+  };
+  const original = await prepare(layers, initialVersion);
+  const refreshed = await prepare([...layers].reverse(), editedVersion);
+  expect(original.preview.allocations).toEqual([]);
+  expect(refreshed.readings.map(reading => reading.layerId)).toEqual(['earlier']);
+  expect(refreshed.preview.expectedProductVersions?.later).toBe(editedVersion);
+  expect(refreshed.preview.basisFingerprint).toBe(original.preview.basisFingerprint);
+
+  const changedLayers = layers.map(layer => layer.id === 'later'
+    ? { ...layer, placedAt: '2026-09-14T12:00:00.000Z' } : layer);
+  expect((await prepare(changedLayers, editedVersion)).preview.basisFingerprint).not.toBe(original.preview.basisFingerprint);
+});
+
+it.each(['AWAITING_VERIFICATION', 'FAILED_VERIFICATION'])('names the actual holder with a %s statement', async status => {
+  mocks.lineage.mockClear();
   const binId = '00000000-0000-4000-8000-000000000001';
   const layers = [{ id: 'run', placedAt: '2026-09-01T12:00:00.000Z', postingSequence: BigInt(1), establishedDryBiocharKg: '100', ingredientDrySolidsKg: '0', remainingDryBiocharKg: '100', remainingSolidsKg: rational(BigInt(100)), runs: [{ productionRunId: 'run', establishedDryKg: '100', remainingDryKg: '100' }] }];
-  // Bin, its mode changes (none), its movements (none), then layer and run codes.
-  mocks.reads = [[{ id: binId, type: 'biochar_bin', name: 'Source', code: 'BC-001', formulationId: null }], [], [], [{ id: 'run', code: 'RUN-001' }], [{ id: 'run', code: 'RUN-001' }]];
+  // Bin, its mode changes (none), its movements (none), layer and run codes, then the corrected entry's readings (none).
+  mocks.reads = [[{ id: binId, type: 'biochar_bin', name: 'Source', code: 'BC-001', formulationId: null }], [], [], [{ id: 'run', code: 'RUN-001' }], [{ id: 'run', code: 'RUN-001' }], []];
   mocks.state.mockResolvedValue({ layers });
   mocks.correction.mockResolvedValue({ original: { inputSnapshot: {} }, layers, allocations: [], deliveryId: 'delivery' });
-  mocks.lineage.mockResolvedValueOnce([{ removalId: 'removal', removalSubmissionId: 'submitted', ghgStatementSubmissionId: null }]).mockResolvedValueOnce([{ removalId: 'removal', ghgStatementId: 'statement', ghgStatementSubmissionId: 'submitted' }]);
+  mocks.lineage.mockResolvedValueOnce([{ recordLockRemoval: { id: 'removal', submissions: [{ status: 'submitted' }], statements: [] }, removalId: 'removal', removalSubmissionId: 'submitted', ghgStatementSubmissionId: null }]).mockResolvedValueOnce([{ recordLockRemoval: { id: 'removal', submissions: [{ status: 'submitted' }], statements: [{ id: 'statement', status, fresh: true, submittedToVerifier: true }] }, removalId: 'removal', ghgStatementId: 'statement', ghgStatementSubmissionId: 'submitted' }]);
   const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
   const result = await previewOutputStock(ctx, { storageLocationId: binId, facilityId: '00000000-0000-4000-8000-000000000002', correctsMovementId: '00000000-0000-4000-8000-000000000003', occurredAt: '2026-09-14T12:00:00.000Z', kind: 'loss', wetMassKg: 10, moisturePercent: 10 });
   expect(result.blockingMessage).toContain('certification');
-  expect(result.blockers).toEqual([{ entity: 'removal', id: 'removal', code: 'Removal' }, { entity: 'ghgStatement', id: 'statement', code: 'GHG Statement' }]);
+  expect(result.blockers).toEqual([{ entity: 'removal', id: 'removal', code: 'Removal' }, ...(status === 'AWAITING_VERIFICATION' ? [{ entity: 'ghgStatement', id: 'statement', code: 'GHG Statement' }] : [])]);
   expect(mocks.lineage.mock.calls.map(call => call[2])).toEqual([{ entityType: 'productionRun', entityId: 'run' }, { entityType: 'delivery', entityId: 'delivery' }]);
   expect(result.removedDryKg).toBe(9);
 });
@@ -69,4 +104,25 @@ it('reads every matching bin in one stock batch and keeps an unresolved bin in t
   expect(mocks.stocks).toHaveBeenCalledTimes(1);
   expect(mocks.stocks.mock.calls[0][1]).toEqual(['bin', 'broken']);
   expect(mocks.state).not.toHaveBeenCalled();
+});
+
+it('keeps the operator blocking message and adds the typed shortage for API callers', async () => {
+  const binId = '00000000-0000-4000-8000-000000000001';
+  const layers = [{ id: 'run', placedAt: '2026-09-01T12:00:00.000Z', postingSequence: BigInt(1), establishedDryBiocharKg: '100', ingredientDrySolidsKg: '0', remainingDryBiocharKg: '100', remainingSolidsKg: rational(BigInt(100)), runs: [{ productionRunId: 'run', establishedDryKg: '100', remainingDryKg: '100' }] }];
+  const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
+  const prepare = (wetMassKg: number, moisturePercent: number) => {
+    // Bin, its mode changes (none), its movements (none), then layer and run codes.
+    mocks.reads = [[{ id: binId, type: 'biochar_bin', name: 'Source', code: 'BC-001', formulationId: null }], [], [], [{ id: 'run', code: 'RUN-001' }], [{ id: 'run', code: 'RUN-001' }]];
+    mocks.state.mockResolvedValue({ layers });
+    return prepareOutputStock(ctx, { storageLocationId: binId, facilityId: '00000000-0000-4000-8000-000000000002', occurredAt: '2026-09-14T12:00:00.000Z', kind: 'loss', wetMassKg, moisturePercent });
+  };
+  // 200 kg wet at 10% is 180 kg solids against 100 kg held.
+  const short = await prepare(200, 10);
+  expect(short.plan).toBeNull();
+  expect(short.preview.blockingMessage).toBe('Not enough dry biochar in the selected bin for this wet mass at this moisture. Reduce the wet mass or choose another bin.');
+  expect(short.blocking).toEqual({ kind: 'insufficient_stock', storageLocationId: binId, measure: 'dry_biochar', availableSolidsKg: 100, requestedSolidsKg: 180 });
+  expect(short.preview).not.toHaveProperty('blocking');
+  const fits = await prepare(50, 10);
+  expect(fits.blocking).toBeNull();
+  expect(fits.preview.blockingMessage).toBeNull();
 });

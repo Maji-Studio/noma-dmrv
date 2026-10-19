@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
-import { ServerError } from "@/components/forms";
+import { ServerError } from "@/components/forms/server-error";
 import { ConfirmActionDialog } from "@/components/certification/confirm-action-dialog";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";

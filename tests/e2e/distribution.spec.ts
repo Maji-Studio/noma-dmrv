@@ -9,6 +9,12 @@
  * - Facility, Customer, CustomerLocation, BiocharProduct seeded via seededData
  */
 import type { Page } from "@playwright/test";
+import * as crypto from "crypto";
+import { eq } from "drizzle-orm";
+import { DEC_ORG_ID } from "@/db/org-defaults";
+import * as schema from "../../src/db/schema";
+import { TEST_SITE_POSITION } from "../helpers/test-org";
+import { createDbConnection } from "./fixtures/db";
 import { test, expect, type SeededChainData } from "./fixtures";
 import { deliveryStatuses } from "../../src/schemas/deliveries";
 import { selectEntity, selectEntityByText } from "./fixtures/page-helpers";
@@ -42,22 +48,16 @@ async function createOrderViaUi(
 
   await page.fill('input[name="orderDate"]', "2026-03-02");
   await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
-  await page.waitForSelector('select[name="customerLocationId"]:not([disabled])', {
-    timeout: 8000,
-  });
-  await page.selectOption(
-    'select[name="customerLocationId"]',
-    seededData.customerLocation.id
-  );
+  await selectEntity(page, "Customer location", seededData.customerLocation.id, seededData.customerLocation.name);
 
-  // Selecting a location surfaces the read-only details panel with the stored
-  // facility distance and its provenance (issue #196). The mini map is not
-  // asserted — it needs a MapTiler key absent in hermetic CI.
+  // Selecting a location surfaces the read-only details panel with the
+  // delivery route at the stored facility distance (issue #196). The route
+  // map is not asserted: it needs a MapTiler key absent in hermetic CI.
   await expect(page.getByTestId("order-location-details")).toBeVisible({
     timeout: 8000,
   });
   await expect(page.getByTestId("order-location-distance")).toContainText(
-    "25 km from"
+    "25 km one way"
   );
 
   await page.selectOption('select[name="packaging"]', "loose");
@@ -84,7 +84,7 @@ async function createDeliveryViaUi(page: Page, seededData: SeededChainData) {
 
   await page.fill('input[name="deliveryDate"]', "2026-03-02T12:00");
   await selectEntityByText(page, "Order", seededData.customer.name);
-  await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
+  await selectEntity(page, "Actual source bin", seededData.productStorageLocation.id, seededData.productStorageLocation.name);
   await page.fill('input[name="deliveredWetMassKg"]', "95");
   await fillStockMoisture(page, "delivery", "10");
   await page.click('button[type="submit"]:has-text("Create delivery")');
@@ -284,6 +284,47 @@ test.describe("Delivery Mass Validation - Isometric Protocol", () => {
     expect(validateMoisture(-1)).toBe(false);
     expect(validateMoisture(101)).toBe(false);
     expect(validateMoisture(null)).toBe(true);
+  });
+});
+
+// ============================================
+// Orders: `?order=` deep link
+// ============================================
+
+test.describe("Order deep link", () => {
+  test("opens an archived order by id and refuses one from another facility", async ({
+    adminPage,
+    seededData,
+    cleanupTestData,
+  }) => {
+    void cleanupTestData;
+    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const { db, pool } = createDbConnection();
+    let otherFacilityId: string | undefined;
+    try {
+      // Archived orders are hidden from the list but a detail read still hydrates them.
+      const [order] = await db.insert(schema.orders).values({
+        organizationId: DEC_ORG_ID, code: `E2E-OR-LINK-${tag}`, facilityId: seededData.facility.id,
+        orderDate: new Date(), customerId: seededData.customer.id, customerLocationId: seededData.customerLocation.id,
+        formulationId: seededData.formulation.id, quantityKg: 100, packaging: "loose", archivedAt: new Date(),
+      }).returning();
+      const [otherFacility] = await db.insert(schema.facilities).values({
+        ...TEST_SITE_POSITION, organizationId: DEC_ORG_ID, code: `E2E-FAC-ORD-${tag}`,
+        name: `E2E Order Link Facility ${tag}`, timezone: "UTC",
+      }).returning({ id: schema.facilities.id });
+      otherFacilityId = otherFacility.id;
+
+      await adminPage.goto(`${ORDERS_URL}?facility=${seededData.facility.id}&order=${order.id}`);
+      await expect(adminPage.getByRole("dialog").getByRole("heading", { name: order.code })).toBeVisible({ timeout: 15000 });
+
+      await adminPage.goto(`${ORDERS_URL}?facility=${otherFacilityId}&order=${order.id}`);
+      await expect(adminPage.getByText("Linked order is not in the selected facility")).toBeVisible({ timeout: 15000 });
+      await expect(adminPage).not.toHaveURL(/order=/);
+      await expect(adminPage.getByRole("dialog")).toHaveCount(0);
+    } finally {
+      if (otherFacilityId) await db.delete(schema.facilities).where(eq(schema.facilities.id, otherFacilityId));
+      await pool.end();
+    }
   });
 });
 

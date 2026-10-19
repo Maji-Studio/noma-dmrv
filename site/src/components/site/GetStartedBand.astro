@@ -1,0 +1,31 @@
+---
+/**
+ * GetStartedBand: closing call to action on a purple-5 band. Reuse it at the end of every page.
+ * Props:
+ *   title?: string   default "Follow your biochar with us."
+ *   text?: string    default walkthrough line
+ * The button says "Book a walkthrough" because the action on /get-started is the walkthrough form.
+ */
+import { GITHUB_URL } from "../../config.js";
+import GridFrame from "./GridFrame.astro";
+import Button from "./Button.astro";
+import TextLink from "./TextLink.astro";
+const { title = "Follow your biochar with us.", text = "We’ll walk through the trace and the records behind it, using an example like your operation." } = Astro.props;
+---
+<GridFrame class="gs-band" tone="purple" aria-labelledby="gs-band-title">
+  <div class="gs-band-in">
+    <h2 id="gs-band-title" class="t-h2">{title}</h2>
+    <div class="stack">
+      <p class="t-lead">{text}</p>
+      <div class="actions">
+        <Button href="/get-started">Book a walkthrough</Button>
+        <TextLink href={GITHUB_URL} external>Self-host on GitHub</TextLink>
+      </div>
+    </div>
+  </div>
+</GridFrame>
+<style>
+  .gs-band-in { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap); align-items: end; }
+  .gs-band-in h2 { max-width: 12ch; }
+  @media (max-width: 760px) { .gs-band-in { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); } }
+</style>

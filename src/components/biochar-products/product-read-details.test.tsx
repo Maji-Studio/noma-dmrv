@@ -5,7 +5,6 @@ import { FormDetailControl, FormDetailProvider } from "@/components/forms/form-d
 import { EntitySideSheetSections } from "@/components/ui/entity-side-sheet";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 
-vi.mock("@/components/transport-legs", () => ({ TransportLegsSummary: () => <span>Transport legs</span> }));
 vi.mock("@/components/ui/entity-detail-value", () => ({ EntityDetailValue: () => <span>Manure store</span> }));
 vi.mock("@/components/ui/tooltip", () => ({
   InfoHint: ({ children, label }: { children: ReactNode; label: string }) => <span aria-label={label}>{children}</span>,
@@ -71,12 +70,18 @@ describe("Product read view levels", () => {
     // The form's split rule and labels: each ingredient as its solids, one pooled water.
     expect(simple).toContain("Chicken manure solids 80 kg");
     expect(simple).toContain("Water 70 kg");
-    expect(renderer.root.findAll(node => node.props.role === "img")).toHaveLength(1);
+    // The picture is the mass flow: each input, then the product it makes.
+    const flows = renderer.root.findAll(node => node.props["data-mass-flow"] !== undefined && typeof node.type === "string");
+    expect(flows).toHaveLength(1);
+    expect(text(flows[0]).trim()).toBe(
+      "Biochar 250 kg wet Chicken manure 100 kg wet Water added 50 kg Wet biochar product 400 kg " +
+        "Dry biochar 200 kg (50%) Chicken manure solids 80 kg (20%) Water 70 kg (18%) Water added 50 kg (12%)",
+    );
     // Dry figures are data: a secondary line under each wet mass.
     expect(simple).toContain("Source biochar wet mass (kg) 250 kg Dry biochar 200 kg");
     expect(simple).toContain("Chicken manure wet mass (kg) 100 kg Dry solids 80 kg");
-    expect(simple).toContain("Derived transport");
-    expect(simple).toContain("Transport legs");
+    // Goods move on deliveries, so transport reads there, not on the product.
+    expect(simple).not.toMatch(/transport/i);
     for (const hidden of ["% of total", "Show calculation"]) {
       expect(simple).not.toContain(hidden);
     }

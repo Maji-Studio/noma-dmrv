@@ -2,11 +2,8 @@
  * Organization operating defaults.
  *
  * These are the facts an operator re-types on every record because the codebase
- * had nowhere to put them: the currency they trade in, the country and timezone
- * they work in, whether their hauls are round trips, how they evidence an
- * application, how they ship. Each was a hardcoded literal repeated in three to
- * five places — `'TZS'` in five files, `'UTC'` in three — which is a
- * multi-tenant app encoding one tenant's habits as physics.
+ * had nowhere to put them: the country and timezone they work in, how they
+ * evidence an application, and how they ship.
  *
  * Deliberately NOT here: anything protocol-derived. A settings row that could
  * move `SOIL_TEMPERATURE_FLOOR_C`, the Woolf/Sanei durability coefficients, the
@@ -14,10 +11,11 @@
  * operator weaken a certification gate from a form. Those stay constants; see
  * `docs/archive/plans/2026-07-28-admin-settings-ia-research.md` for the full triage.
  *
- * Every column is NOT NULL with a default matching the literal it replaces, and
- * `DEFAULT_ORGANIZATION_SETTINGS` (`@/config/organization-settings`) mirrors
- * them for organizations with no row yet. A read never returns null, so no
- * consumer has to decide what a missing default means.
+ * Every column except `default_timezone` is NOT NULL with a default matching
+ * the literal it replaces, and `DEFAULT_ORGANIZATION_SETTINGS`
+ * (`@/config/organization-settings`) mirrors them for organizations with no row
+ * yet. `default_timezone` is nullable with no default: null means the
+ * organization has not chosen a zone, so none is assumed.
  *
  * One row per organization — the unique index is what makes the upsert an
  * upsert.
@@ -27,7 +25,6 @@ import { organizations } from "./auth";
 import {
   applicationEvidenceMethod,
   packagingType,
-  transportTripType,
 } from "./common";
 
 export const organizationSettings = pgTable(
@@ -38,20 +35,14 @@ export const organizationSettings = pgTable(
       .notNull()
       .references(() => organizations.id),
 
-    /** ISO 4217. Text, not an enum, matching `orders.currency`. */
-    defaultCurrency: text("default_currency").notNull().default("TZS"),
     /**
      * Nullable on purpose: most organizations work in one country, but "we have
-     * not said" is a real state, and it is not the same as the `'UNKNOWN'` that
-     * facility and party rows persist today.
+     * not said" is a real state. Facility and party locations require an
+     * explicitly supplied country instead.
      */
     defaultCountry: text("default_country"),
     /** IANA zone. Wrong values silently shift sampling-day attribution. */
-    defaultTimezone: text("default_timezone").notNull().default("UTC"),
-    /** Conservative protocol default; the per-leg field stays editable. */
-    defaultTripType: transportTripType("default_trip_type")
-      .notNull()
-      .default("return"),
+    defaultTimezone: text("default_timezone"),
     defaultEvidenceMethod: applicationEvidenceMethod("default_evidence_method")
       .notNull()
       .default("location"),

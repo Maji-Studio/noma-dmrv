@@ -4,13 +4,14 @@
  */
 
 import { z } from "zod";
-import { optionalDistanceSource } from "./distance-source";
+import { PARTY_MAX_LOCATIONS, PARTY_NAME_MAX, LOCATION_PLACE_MAX, PARTY_ADDRESS_MAX } from "@/config/party-input";
+import { facilityDistancesInputSchema } from "./facility-distances";
 import {
   clearableDefaultSoilTemperature,
-  clearablePositiveNumber,
+  gpsPairSuperRefine,
   defaultSoilTemperatureSchema,
-  expectedUpdatedAtSchema,
-  optionalPositiveNumber,
+  expectedVersionSchema,
+  uuidSchema,
   requiredLatitudeSchema as requiredLat,
   requiredLongitudeSchema as requiredLng,
   toNumberOrUndefined,
@@ -20,19 +21,17 @@ import {
 // Shared Location Part Schemas
 // ============================================
 
-const LOCATION_PART_MAX = 100;
-const locationPartSchema = z.string().max(LOCATION_PART_MAX).optional().nullable().or(z.literal(""));
+const locationPartSchema = z.string().max(LOCATION_PLACE_MAX).optional().nullable().or(z.literal(""));
 
 // Optional free text describing the application site: a landmark, parcel name,
 // access note, or street address. Rural application sites frequently have no
 // postal address at all, and the GPS position is the identifying field, so
 // requiring this forced operators to type filler.
-const CUSTOMER_LOCATION_DESCRIPTION_MAX = 500;
 const customerLocationDescriptionSchema = z
   .string()
   .max(
-    CUSTOMER_LOCATION_DESCRIPTION_MAX,
-    `Site description must be ${CUSTOMER_LOCATION_DESCRIPTION_MAX} characters or fewer`,
+    PARTY_ADDRESS_MAX,
+    `Site description must be ${PARTY_ADDRESS_MAX} characters or fewer`,
   )
   .optional()
   .nullable();
@@ -41,8 +40,8 @@ const customerLocationDescriptionSchema = z
 // GPS Coordinate Validation
 // ============================================
 
-const optionalLatitudeSchema = requiredLat.nullable().optional();
-const optionalLongitudeSchema = requiredLng.nullable().optional();
+const optionalLatitudeSchema = requiredLat.optional();
+const optionalLongitudeSchema = requiredLng.optional();
 
 // ============================================
 // Customer Form Schema (Client-side validation)
@@ -58,7 +57,7 @@ export const customerFormSchema = z.object({
     .string()
     .trim()
     .min(1, "Customer name is required")
-    .max(255, "Customer name must be less than 255 characters"),
+    .max(PARTY_NAME_MAX, "Customer name must be less than 255 characters"),
 
   // Optional fields
   cropType: z
@@ -74,7 +73,7 @@ export const customerFormSchema = z.object({
   contactEmail: z
     .string()
     .email("Enter a valid email address.")
-    .max(255, "Email must be less than 255 characters")
+    .max(PARTY_NAME_MAX, "Email must be less than 255 characters")
     .optional()
     .or(z.literal("")),
   contactPhone: z
@@ -98,17 +97,15 @@ export const customerLocationFormSchema = z.object({
     .string()
     .trim()
     .min(1, "Location name is required")
-    .max(255, "Location name must be less than 255 characters"),
-  country: z.string().min(1, "Country is required").max(100, "Country must be less than 100 characters"),
+    .max(PARTY_NAME_MAX, "Location name must be less than 255 characters"),
+  country: z.string().min(1, "Country is required").max(LOCATION_PLACE_MAX, "Country must be less than 100 characters"),
   stateRegion: locationPartSchema,
   city: locationPartSchema,
   address: customerLocationDescriptionSchema,
   gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLat),
   gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLng),
-  // Operational road distance (km) from the origin facility. Certifier
-  // transport is recorded on cargo entities, not deliveries.
-  distanceFromFacilityKm: optionalPositiveNumber,
-  distanceSource: optionalDistanceSource,
+  // One-way defaults per origin facility, captured when a delivery is saved.
+  facilityDistances: facilityDistancesInputSchema,
   defaultSoilTemperatureC: defaultSoilTemperatureSchema,
   // Marks this as the customer's default destination.
   isDefault: z.boolean().optional().default(false),
@@ -130,25 +127,18 @@ export const createCustomerSchema = customerFormSchema;
  */
 export const updateCustomerSchema = z.object({
   customerId: z.string().uuid("Choose a valid customer."),
-  expectedUpdatedAt: expectedUpdatedAtSchema,
+  expectedVersion: expectedVersionSchema,
   code: z
     .string()
     .min(1)
     .max(50)
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
-  name: z.string().trim().min(1).max(255).optional(),
+  name: z.string().trim().min(1).max(PARTY_NAME_MAX).optional(),
   cropType: z.string().max(100).optional().nullable().or(z.literal("")),
   address: z.string().max(500).optional().nullable().or(z.literal("")),
-  contactEmail: z.string().email().max(255).optional().nullable().or(z.literal("")),
+  contactEmail: z.string().email().max(PARTY_NAME_MAX).optional().nullable().or(z.literal("")),
   contactPhone: z.string().max(30).optional().nullable().or(z.literal("")),
-});
-
-/**
- * Schema for deleting a customer
- */
-export const deleteCustomerSchema = z.object({
-  customerId: z.string().uuid("Choose a valid customer."),
 });
 
 // ============================================
@@ -164,15 +154,14 @@ export const createCustomerLocationSchema = z.object({
     .string()
     .trim()
     .min(1, "Location name is required")
-    .max(255, "Location name must be less than 255 characters"),
-  country: z.string().min(1, "Country is required").max(LOCATION_PART_MAX),
+    .max(PARTY_NAME_MAX, "Location name must be less than 255 characters"),
+  country: z.string().min(1, "Country is required").max(LOCATION_PLACE_MAX),
   stateRegion: locationPartSchema,
   city: locationPartSchema,
   address: customerLocationDescriptionSchema,
   gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLat),
   gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLng),
-  distanceFromFacilityKm: optionalPositiveNumber,
-  distanceSource: optionalDistanceSource,
+  facilityDistances: facilityDistancesInputSchema,
   defaultSoilTemperatureC: defaultSoilTemperatureSchema,
   isDefault: z.boolean().optional().default(false),
 });
@@ -185,11 +174,7 @@ export const createCustomerLocationSchema = z.object({
 export const pendingCustomerLocationSchema =
   createCustomerLocationSchema.omit({ customerId: true });
 
-/**
- * One create form cannot reasonably capture more sites than this, so the cap
- * bounds the payload and the transaction without constraining real operators.
- */
-export const MAX_PENDING_CUSTOMER_LOCATIONS = 50;
+export { PARTY_MAX_LOCATIONS as MAX_PENDING_CUSTOMER_LOCATIONS } from "@/config/party-input";
 
 /**
  * Schema for creating a customer together with its locations in one
@@ -200,35 +185,37 @@ export const createCustomerWithLocationsSchema = z.object({
   locations: z
     .array(pendingCustomerLocationSchema)
     .max(
-      MAX_PENDING_CUSTOMER_LOCATIONS,
-      `Add at most ${MAX_PENDING_CUSTOMER_LOCATIONS} locations at a time. Create the customer, then add the rest from its detail page.`,
+      PARTY_MAX_LOCATIONS,
+      `Add at most ${PARTY_MAX_LOCATIONS} locations at a time. Create the customer, then add the rest from its detail page.`,
     )
-    .default([]),
+    .min(1, "At least one location is required"),
 });
 
 /**
  * Schema for updating a customer location (server action)
  */
 export const updateCustomerLocationSchema = z.object({
+  customerId: uuidSchema().optional(),
   locationId: z.string().uuid("Choose a valid location."),
-  expectedUpdatedAt: expectedUpdatedAtSchema,
-  name: z.string().trim().min(1).max(255).optional(),
-  country: z.string().min(1).max(LOCATION_PART_MAX).optional(),
+  expectedVersion: expectedVersionSchema,
+  name: z.string().trim().min(1).max(PARTY_NAME_MAX).optional(),
+  country: z.string().min(1).max(LOCATION_PLACE_MAX).optional(),
   stateRegion: locationPartSchema,
   city: locationPartSchema,
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
   address: customerLocationDescriptionSchema,
-  distanceFromFacilityKm: clearablePositiveNumber,
-  distanceSource: optionalDistanceSource,
+  facilityDistances: facilityDistancesInputSchema,
   defaultSoilTemperatureC: clearableDefaultSoilTemperature,
   isDefault: z.boolean().optional(),
-});
+}).superRefine(gpsPairSuperRefine);
 
 /**
  * Schema for deleting a customer location
  */
 export const deleteCustomerLocationSchema = z.object({
+  customerId: uuidSchema().optional(),
+  expectedVersion: expectedVersionSchema,
   locationId: z.string().uuid("Choose a valid location."),
 });
 
@@ -241,10 +228,12 @@ export const deleteCustomerLocationSchema = z.object({
  * Used for search, pagination, and filtering
  */
 export const customerFilterSchema = z.object({
+  // false = active only; true = archived only.
+  archived: z.boolean().default(false),
   // Text search across code, name, cropType
   search: z
     .string()
-    .max(255, "Search query must be less than 255 characters")
+    .max(PARTY_NAME_MAX, "Search query must be less than 255 characters")
     .optional(),
 
   // Filter by crop type

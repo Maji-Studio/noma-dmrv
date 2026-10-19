@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { stockModeAt, type StockModeChange } from './stock-mode';
+import { resolveDrawPolicy, stockModeAt, type StockModeChange } from './stock-mode';
 
 const MERGED = '2026-09-15T10:00:00.000Z';
 const SPLIT = '2026-09-20T10:00:00.000Z';
@@ -35,5 +35,14 @@ describe('stockModeAt', () => {
   it('two changes at one instant: the later posting wins', () => {
     const changes = [change('split', SPLIT, 7), change('mix', SPLIT, 3)];
     expect(stockModeAt('split', changes, SPLIT)).toBe('split');
+  });
+});
+
+describe('resolveDrawPolicy', () => {
+  it.each([
+    ['split', 'oldest_first', 'fifo'], ['split', 'newest_first', 'lifo'],
+    ['mix', 'oldest_first', 'pro_rata'], ['mix', 'newest_first', 'pro_rata'],
+  ] as const)('%s with %s resolves to %s', (mode, order, policy) => {
+    expect(resolveDrawPolicy(mode, order)).toBe(policy);
   });
 });

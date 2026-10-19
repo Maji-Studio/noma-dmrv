@@ -1,3 +1,6 @@
+import { CODE_CONFLICT_MESSAGES, withAutoCodes } from "./code-generator";
+import { recordActivityChange } from "./activity-events";
+import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
 import { assertNoRemovalBatchDeletion } from "./removal-production-batch-deletion";
 import { and, asc, desc, eq, exists, gte, inArray, isNull, or, sql } from "drizzle-orm";
@@ -34,6 +37,8 @@ export type CertifierRemovalRow = typeof certifierRemovals.$inferSelect;
 type CreditBatchRow = typeof creditBatches.$inferSelect;
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+const AUTO_CODE_COUNT = 1;
+export const REMOVAL_CODE_PREFIX = "RM";
 const ISOMETRIC = "isometric" as const;
 const THOUSAND_YEAR_REMOVAL_BATCH_LIMIT = 1;
 const THOUSAND_YEAR_REMOVAL_ERROR =
@@ -429,6 +434,7 @@ export async function createRemovalWithCreditBatches(
       .select({
         creditBatchId: creditBatchApplications.creditBatchId,
         applicationId: creditBatchApplications.applicationId,
+        removalId: creditBatchApplications.removalId,
       })
       .from(creditBatchApplications)
       .where(
@@ -505,10 +511,14 @@ export async function createRemovalWithCreditBatches(
       );
     }
 
-    const [removal] = await tx
-      .insert(certifierRemovals)
-      .values({ facilityId, organizationId: ctx.organizationId })
-      .returning({ id: certifierRemovals.id });
+    const [removal] = await withAutoCodes(
+      ctx, tx, REMOVAL_CODE_PREFIX, certifierRemovals, certifierRemovals.code, AUTO_CODE_COUNT,
+      ([code], savepoint) => savepoint
+        .insert(certifierRemovals)
+        .values({ code, facilityId, organizationId: ctx.organizationId })
+        .returning({ id: certifierRemovals.id }),
+      CODE_CONFLICT_MESSAGES.removal,
+    );
 
     const assigned = await tx
       .update(creditBatchApplications)
@@ -520,7 +530,7 @@ export async function createRemovalWithCreditBatches(
           eq(creditBatchApplications.organizationId, ctx.organizationId),
         ),
       )
-      .returning({ applicationId: creditBatchApplications.applicationId });
+      .returning({ creditBatchId: creditBatchApplications.creditBatchId, applicationId: creditBatchApplications.applicationId, removalId: creditBatchApplications.removalId });
     const expectedAssignmentCount = splitsApplicationsByBatch
       ? unassignedSiblingSlices.filter((slice) =>
           selectedIdSet.has(slice.creditBatchId),
@@ -531,6 +541,12 @@ export async function createRemovalWithCreditBatches(
         "Application allocation changed while creating the Removal. Refresh and retry.",
       );
     }
+
+    for (const creditBatchId of new Set(slices.map(slice => slice.creditBatchId))) await recordActivityChange(ctx, tx, {
+      entityType: toActivityEntityType("credit_batch"), entityId: creditBatchId, creditBatchId,
+      action: "updated", source: "form",
+    }, { removalAssignment: slices.filter(slice => slice.creditBatchId === creditBatchId) },
+    { removalAssignment: assigned.filter(slice => slice.creditBatchId === creditBatchId) });
 
     return removal.id;
   });
@@ -668,7 +684,7 @@ export async function discardLocalRemovalDraft(
           eq(creditBatchApplications.organizationId, ctx.organizationId),
         ),
       )
-      .returning({ id: creditBatchApplications.id });
+      .returning({ id: creditBatchApplications.id, creditBatchId: creditBatchApplications.creditBatchId, removalId: creditBatchApplications.removalId });
 
     const [deleted] = await tx
       .delete(certifierRemovals)
@@ -683,6 +699,12 @@ export async function discardLocalRemovalDraft(
     if (!deleted) {
       throw new SafeError(DISCARD_REMOVAL_ERROR);
     }
+
+    for (const creditBatchId of new Set(released.map(slice => slice.creditBatchId))) await recordActivityChange(ctx, tx, {
+      entityType: toActivityEntityType("credit_batch"), entityId: creditBatchId, creditBatchId,
+      action: "updated", source: "form",
+    }, { removalAssignment: released.filter(slice => slice.creditBatchId === creditBatchId).map(slice => ({ ...slice, removalId })) },
+    { removalAssignment: released.filter(slice => slice.creditBatchId === creditBatchId) });
 
     logger.info(
       { removalId, releasedSliceCount: released.length },

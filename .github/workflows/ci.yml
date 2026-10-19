@@ -2,11 +2,16 @@ name: CI
 
 on:
   pull_request:
+  merge_group:
+    types: [checks_requested]
   push:
     branches: [main, staging]
 
 permissions:
   contents: read
+
+env:
+  NODE_MAJOR: 22
 
 # Cancel superseded runs on the same ref (e.g. new push to an open PR).
 concurrency:
@@ -28,50 +33,97 @@ jobs:
           persist-credentials: false
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_MAJOR }}
           cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Documentation references
-        run: pnpm docs:check
+      - name: Hash route file paths
+        id: lint-routes
+        # The Next link rule reads filenames; include paths so identical-content renames invalidate it too.
+        env:
+          CACHE_PREFIX: ${{ runner.os }}-static-node${{ env.NODE_MAJOR }}-v1-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'eslint.config.*', 'tsconfig*.json', '.github/workflows/ci.yml') }}-
+        run: |
+          route_hash=$(git ls-files -z -- app src/app pages src/pages | sha256sum | cut -d ' ' -f 1)
+          echo "prefix=${CACHE_PREFIX}${route_hash}-" >> "$GITHUB_OUTPUT"
 
-      - name: Lint
-        run: pnpm lint
+      # ESLint caches per file; type-aware or cross-file rules (projectService, import/no-cycle) need the cache dropped or key widened.
+      # Unlike the Turbopack PR seed, ESLint/tsbuildinfo state changes each commit;
+      # these small archives (~1.3 MB + ~2.1 MB) are refreshed per SHA.
+      - name: Restore static check caches
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .cache/eslint
+            .cache/typecheck.tsbuildinfo
+          key: ${{ steps.lint-routes.outputs.prefix }}${{ github.sha }}
+          restore-keys: |
+            ${{ steps.lint-routes.outputs.prefix }}
 
-      - name: Typecheck
-        run: pnpm typecheck
+      - name: Static quality checks
+        run: pnpm verify:static
 
-      - name: Org-scoping check
-        run: pnpm check:org-scoping
+  openapi-breaking:
+    # PR merge-base comparisons have no meaning for a merge group.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
-      # Tailwind's spacing scale is an allow-list here (`--spacing-*: initial`),
-      # so an off-scale utility compiles to nothing and fails silently at
-      # runtime rather than at build time. Nothing else catches it.
-      - name: Spacing-scale check
-        run: pnpm check:spacing-scale
+      - name: Compare public API contracts
+        # A deliberate break regenerates v1.json and adds its method/path and
+        # exact oasdiff singleline change description to accepted-breaking-changes.txt
+        # in the same PR. --err-ignore accepts only those listed findings.
+        # Remove stale acceptances once the changed contract reaches the base.
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          base="$RUNNER_TEMP/openapi-base.json"
+          if ! git cat-file -e "$merge_base:openapi/v1.json"; then
+            echo "Merge base has no openapi/v1.json; first release has no breaking-change baseline."
+            exit 0
+          fi
+          git show "$merge_base:openapi/v1.json" > "$base"
+          curl --fail --silent --show-error --location \
+            https://github.com/oasdiff/oasdiff/releases/download/v1.32.1/oasdiff_1.32.1_linux_amd64.tar.gz \
+            --output "$RUNNER_TEMP/oasdiff.tar.gz"
+          echo "7c8939fc49b75ee11fec66a5b83b37a2fca6aee109fed85013b1ba2ac2a1ee7f  $RUNNER_TEMP/oasdiff.tar.gz" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/oasdiff"
+          tar -xzf "$RUNNER_TEMP/oasdiff.tar.gz" -C "$RUNNER_TEMP/oasdiff" oasdiff
+          "$RUNNER_TEMP/oasdiff/oasdiff" breaking "$base" openapi/v1.json \
+            --fail-on ERR --err-ignore openapi/accepted-breaking-changes.txt
 
-      # docs/ux-writing.md bans en and em dashes in user-facing copy; this
-      # parses string literals and JSX text (never comments) to enforce it.
-      - name: UX-copy dash check
-        run: pnpm check:ux-copy
-
-  # Full Vitest suite. No secrets — tests/setup.ts fills safe env defaults and
-  # the Isometric sandbox *.integration.test.ts suites self-skip without
+  # Full Vitest suite split by file across matrix shards, each with its own
+  # Postgres service, migrations and disposable MinIO. No secrets — tests/setup.ts fills safe env
+  # defaults; Isometric sandbox *.integration.test.ts suites self-skip without
   # RUN_ISOMETRIC_SANDBOX_TESTS. A throwaway Postgres service is required
   # because several suites exercise the real `@/db` connection + transactions
   # rather than mocking the data-access layer.
   quality-tests:
+    name: quality-tests (${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
 
     services:
       postgres:
@@ -88,11 +140,34 @@ jobs:
           --health-timeout 5s
           --health-retries 10
 
+      minio:
+        # Frozen legacy image still permits anonymous pulls; if removed, replace with a verified public build or build from source.
+        image: bitnamilegacy/minio:2025.7.23-debian-12-r5@sha256:6dabb4a2088c9a79908de3bc05f4586c23ad2182c8908e7e3acbf61c1467fb20
+        env:
+          # Throwaway credentials for this job's disposable MinIO, not secrets.
+          MINIO_ROOT_USER: minio-ci-user
+          MINIO_ROOT_PASSWORD: minio-ci-password
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "curl --fail --silent http://localhost:9000/minio/health/ready || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     env:
       # Overrides the tests/setup.ts default so the DB-backed suites reach the
       # service above. vitest sets NODE_ENV=test, so the local-fs storage
       # default and missing secrets are accepted by @/config/env.
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/noma_dmrv_test
+      # Matches .env.test: contract suites share one localhost IP bucket. The
+      # limiter's own tests stub this off or call the bucket directly.
+      DISABLE_RATE_LIMIT: "true"
+      MINIO_TEST_ENDPOINT: http://127.0.0.1:9000
+      MINIO_TEST_REGION: us-east-1
+      # Throwaway credentials for this job's disposable MinIO, not secrets.
+      MINIO_TEST_ACCESS_KEY_ID: minio-ci-user
+      MINIO_TEST_SECRET_ACCESS_KEY: minio-ci-password
 
     steps:
       - name: Checkout code
@@ -101,24 +176,23 @@ jobs:
           persist-credentials: false
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_MAJOR }}
           cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Apply schema
-        run: pnpm drizzle-kit push --force
+      - name: Apply migrations
+        run: pnpm db:migrate
 
       - name: Unit tests
-        run: pnpm exec vitest run
+        run: pnpm exec vitest run --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 
   # Production build check. PRs opt into the experimental Turbopack filesystem
   # cache; pushes to main/staging keep it off and exercise the deploy-equivalent
@@ -149,14 +223,13 @@ jobs:
           persist-credentials: false
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_MAJOR }}
           cache: pnpm
 
       # Cache only Next's incremental compiler data, not the runnable .next

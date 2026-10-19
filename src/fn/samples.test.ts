@@ -1,151 +1,107 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { updateSampleFn } from "./samples";
+import { DomainError } from "@/lib/domain-errors";
+import { createSampleFn, deleteSampleFn, updateSampleFn } from "./samples";
+
+/**
+ * The Sample actions are thin: they validate the form payload and run the
+ * lab sample operations. The window, zone, archive and lineage rules live in
+ * the writer and are covered against the database in
+ * tests/operation-lab-samples.test.ts.
+ */
 
 const mocks = vi.hoisted(() => ({
-  getCreditBatchById: vi.fn(),
-  getFacilityById: vi.fn(),
-  getSampleById: vi.fn(),
   requireOrgContext: vi.fn(),
-  updateSample: vi.fn(),
+  runOperationInProcess: vi.fn(),
 }));
 
-vi.mock("@/data-access/code-generator", () => ({
-  withAutoCode: vi.fn(),
+vi.mock("@/lib/auth/server", () => ({ requireOrgContext: mocks.requireOrgContext }));
+vi.mock("@/lib/operations/runner", () => ({ runOperationInProcess: mocks.runOperationInProcess }));
+vi.mock("@/lib/operations/lab-samples", () => ({
+  recordLabSample: { id: "record_lab_sample" },
+  updateLabSample: { id: "update_lab_sample" },
+  deleteLabSample: { id: "delete_lab_sample" },
 }));
-
-vi.mock("@/data-access/credit-batches", () => ({
-  getCreditBatchById: mocks.getCreditBatchById,
-}));
-
-vi.mock("@/data-access/facilities", () => ({
-  getFacilityById: mocks.getFacilityById,
-}));
-
-vi.mock("@/data-access/samples", () => ({
-  createSample: vi.fn(),
-  deleteSample: vi.fn(),
-  getSampleById: mocks.getSampleById,
-  getSamples: vi.fn(),
-  getSampleStats: vi.fn(),
-  updateSample: mocks.updateSample,
-}));
-
-vi.mock("@/lib/auth/server", () => ({
-  requireOrgContext: mocks.requireOrgContext,
-}));
+vi.mock("@/data-access/samples", () => ({ getSampleById: vi.fn(), getSamples: vi.fn(), getSampleStats: vi.fn() }));
 
 const SAMPLE_ID = "00000000-0000-4000-8000-000000000001";
 const CREDIT_BATCH_ID = "00000000-0000-4000-8000-000000000002";
-const FACILITY_ID = "00000000-0000-4000-8000-000000000003";
-const ORGANIZATION_ID = "00000000-0000-4000-8000-000000000004";
-const USER_ID = "00000000-0000-4000-8000-000000000005";
-const BATCH_START_DATE = "2026-01-15";
+const WINDOW_MESSAGE = "Sample date 2026-01-14 is before credit batch CB-2026-001's production window, 2026-01-15 to 2026-01-31. Choose a date within or after the production window.";
 
-describe("sample credit batch window guard", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.requireOrgContext.mockResolvedValue({
-      userId: USER_ID,
-      organizationId: ORGANIZATION_ID,
-      orgRole: "admin",
-      isPlatformAdmin: false,
-    });
-    mocks.getSampleById.mockResolvedValue({
-      id: SAMPLE_ID,
-      creditBatchId: CREDIT_BATCH_ID,
-      samplingTime: new Date("2026-01-15T12:00:00.000Z"),
-    });
-    mocks.getCreditBatchById.mockResolvedValue({
-      id: CREDIT_BATCH_ID,
-      code: "CB-2026-001",
-      facilityId: FACILITY_ID,
-      startDate: BATCH_START_DATE,
-      endDate: "2026-01-31",
-    });
-    mocks.getFacilityById.mockResolvedValue({
-      id: FACILITY_ID,
-      timezone: "UTC",
-    });
-    mocks.updateSample.mockResolvedValue({ id: SAMPLE_ID });
+function operationCall(index = 0) {
+  const [operation, , input] = mocks.runOperationInProcess.mock.calls[index];
+  return { operationId: (operation as { id: string }).id, input: input as Record<string, unknown> };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.requireOrgContext.mockResolvedValue({ userId: "user", organizationId: "org", orgRole: "admin", isPlatformAdmin: false });
+  mocks.runOperationInProcess.mockResolvedValue({ sample: { id: SAMPLE_ID }, notices: [], warnings: [] });
+});
+
+describe("createSampleFn", () => {
+  const form = {
+    creditBatchId: CREDIT_BATCH_ID,
+    samplingTime: new Date("2026-01-15T12:00:00.000Z"),
+    totalCarbonPercent: 80,
+    organicCarbonPercent: 75,
+    totalHydrogenPercent: 1.5,
+    hToCOrgRatio: 0.2397,
+    labName: "",
+    durabilityOption: "200_year" as const,
+    nutrientClaimEnabled: false,
+  };
+
+  it("runs record_lab_sample and returns the saved Sample as before", async () => {
+    expect(await createSampleFn(form)).toEqual({ success: true, data: { id: SAMPLE_ID } });
+    const { operationId, input } = operationCall();
+    expect(operationId).toBe("record_lab_sample");
+    expect(input).toMatchObject({ creditBatchId: CREDIT_BATCH_ID, samplingTime: form.samplingTime, totalHydrogenPercent: 1.5, labName: null });
   });
 
-  it("accepts a sample on the local start day when its UTC day is earlier", async () => {
-    mocks.getFacilityById.mockResolvedValue({
-      id: FACILITY_ID,
-      timezone: "Africa/Nairobi",
-    });
-
-    const result = await updateSampleFn({
-      sampleId: SAMPLE_ID,
-      samplingTime: new Date("2026-01-14T21:30:00.000Z"),
-    });
-
-    expect(result.success).toBe(true);
-    expect(mocks.updateSample).toHaveBeenCalledOnce();
-    expect(mocks.getFacilityById).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: ORGANIZATION_ID }),
-      FACILITY_ID,
-    );
+  it("leaves the ratio calculation and form-only fields to the server", async () => {
+    await createSampleFn(form);
+    const { input } = operationCall();
+    for (const field of ["hToCOrgRatio", "sampleCode", "durabilityOption", "nutrientClaimEnabled", "r0HistogramFileUrl", "tgaThermogramFileUrl"]) {
+      expect(input, field).not.toHaveProperty(field);
+    }
   });
 
-  it("rejects a sample locally before the start day even when its UTC day matches", async () => {
-    mocks.getFacilityById.mockResolvedValue({
-      id: FACILITY_ID,
-      timezone: "America/Los_Angeles",
-    });
-
-    const result = await updateSampleFn({
-      sampleId: SAMPLE_ID,
-      samplingTime: new Date("2026-01-15T07:30:00.000Z"),
-    });
-
-    expect(result).toEqual({
-      success: false,
-      error:
-        "Sample date 2026-01-14 is before credit batch CB-2026-001's production window, 2026-01-15 to 2026-01-31. Choose a date within or after the production window.",
-    });
-    expect(mocks.getCreditBatchById).toHaveBeenCalledWith(
-      expect.anything(),
-      CREDIT_BATCH_ID,
-      { skipPreview: true },
-    );
-    expect(mocks.updateSample).not.toHaveBeenCalled();
+  it("shows the writer's refusal copy unchanged", async () => {
+    mocks.runOperationInProcess.mockRejectedValue(new DomainError("validation_failed", WINDOW_MESSAGE, {
+      issues: [{ path: ["samplingTime"], code: "validation_failed", message: WINDOW_MESSAGE }],
+    }));
+    expect(await createSampleFn(form)).toMatchObject({ success: false, error: WINDOW_MESSAGE });
   });
 
-  it("allows changing sampling time on a legacy batchless sample", async () => {
-    mocks.getSampleById.mockResolvedValue({
-      id: SAMPLE_ID,
-      creditBatchId: null,
-      samplingTime: new Date("2026-01-15T12:00:00.000Z"),
-    });
+  it("refuses a Sample without a credit batch before the operation", async () => {
+    const { creditBatchId: _omitted, ...withoutBatch } = form;
+    void _omitted;
+    expect(await createSampleFn(withoutBatch as never)).toMatchObject({ success: false });
+    expect(mocks.runOperationInProcess).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateSampleFn", () => {
+  it("runs update_lab_sample with the id, precondition and code under their operation names", async () => {
     const samplingTime = new Date("2026-01-20T09:00:00.000Z");
-
-    const result = await updateSampleFn({
-      sampleId: SAMPLE_ID,
-      samplingTime,
-    });
-
-    expect(result.success).toBe(true);
-    expect(mocks.getCreditBatchById).not.toHaveBeenCalled();
-    expect(mocks.updateSample).toHaveBeenCalledWith(
-      expect.anything(),
-      SAMPLE_ID,
-      expect.objectContaining({ samplingTime }),
-    );
+    const result = await updateSampleFn({ expectedVersion: 3, sampleId: SAMPLE_ID, sampleCode: "SAM-26-009", samplingTime, totalHydrogenPercent: null });
+    expect(result).toEqual({ success: true, data: { id: SAMPLE_ID } });
+    const { operationId, input } = operationCall();
+    expect(operationId).toBe("update_lab_sample");
+    expect(input).toMatchObject({ labSampleId: SAMPLE_ID, expectedVersion: 3, code: "SAM-26-009", samplingTime, totalHydrogenPercent: null });
   });
 
-  it("accepts a sample clearly inside the local production window", async () => {
-    mocks.getFacilityById.mockResolvedValue({
-      id: FACILITY_ID,
-      timezone: "Africa/Nairobi",
-    });
+  it("keeps omitted fields omitted, so the stored values stay", async () => {
+    await updateSampleFn({ expectedVersion: 1, sampleId: SAMPLE_ID, labName: "Lab" });
+    const { input } = operationCall();
+    expect(Object.entries(input).filter(([, value]) => value !== undefined).map(([key]) => key).sort())
+      .toEqual(["expectedVersion", "labName", "labSampleId"]);
+  });
+});
 
-    const result = await updateSampleFn({
-      sampleId: SAMPLE_ID,
-      samplingTime: new Date("2026-01-20T09:00:00.000Z"),
-    });
-
-    expect(result.success).toBe(true);
-    expect(mocks.updateSample).toHaveBeenCalledOnce();
+describe("deleteSampleFn", () => {
+  it("runs delete_lab_sample", async () => {
+    expect(await deleteSampleFn({ expectedVersion: 2, sampleId: SAMPLE_ID })).toEqual({ success: true, data: undefined });
+    expect(operationCall()).toEqual({ operationId: "delete_lab_sample", input: { labSampleId: SAMPLE_ID, expectedVersion: 2 } });
   });
 });

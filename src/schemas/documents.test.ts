@@ -7,6 +7,8 @@ import {
 import {
   DOCUMENT_TYPE_LABELS,
   DOCUMENT_TYPES,
+  DOCUMENT_ENTITY_TYPES,
+  requestUploadSchema,
   isAllowedMime,
   maxBytesFor,
 } from "@/schemas/documents";
@@ -43,4 +45,22 @@ describe("document upload limits", () => {
   it("labels GIS boundary documents", () => {
     expect(DOCUMENT_TYPE_LABELS.gis_boundary).toBe("GIS boundary");
   });
+});
+
+const histogramUpload = { entityType: "sample", entityId: "11111111-1111-4111-8111-111111111111", documentType: "reflectance_histogram", fileName: "histogram.pdf", contentType: "application/pdf", sizeBytes: 100 };
+it("accepts histogram evidence on Samples with PDF, image and tabular formats", () => {
+  expect(requestUploadSchema.safeParse(histogramUpload).success).toBe(true);
+  expect(DOCUMENT_TYPE_LABELS.reflectance_histogram).toBe("Reflectance histogram");
+  for (const mime of ["application/pdf", "image/png", "text/csv", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]) {
+    expect(isAllowedMime("reflectance_histogram", mime)).toBe(true);
+  }
+  expect(isAllowedMime("reflectance_histogram", "video/mp4")).toBe(false);
+  expect(maxBytesFor("reflectance_histogram")).toBe(maxBytesFor("lab_report"));
+});
+it.each(DOCUMENT_ENTITY_TYPES.filter((owner) => owner !== "sample"))("refuses histogram uploads on %s", (entityType) => {
+  expect(requestUploadSchema.safeParse({ ...histogramUpload, entityType }).success).toBe(false);
+});
+
+it("supports the fourteen current document owners", () => {
+  expect(DOCUMENT_ENTITY_TYPES).toEqual(["emission_entry", "sample", "delivery", "production_run", "production_incident", "production_sample", "biochar_product", "feedstock", "application", "credit_batch", "facility", "reactor", "order", "transport_leg"]);
 });

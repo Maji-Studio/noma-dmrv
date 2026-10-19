@@ -138,12 +138,6 @@ const TABLE_META: Record<string, TableMeta> = {
     summary: "Production/reactor operator records.",
     useCases: ["Operational accountability", "Run and Sample attribution"],
   },
-  feedstock_deliveries: {
-    area: "Feedstock",
-    modulePath: "src/db/schema/feedstock.ts",
-    summary: "Incoming biomass shipment records.",
-    useCases: ["Receiving workflows", "Transport emissions inputs"],
-  },
   feedstock_types: {
     area: "Feedstock",
     modulePath: "src/db/schema/feedstock.ts",
@@ -261,9 +255,8 @@ const TABLE_META: Record<string, TableMeta> = {
   credit_batch_applications: {
     area: "Credits",
     modulePath: "src/db/schema/credits.ts",
-    summary: "Legacy application membership cache; applications are now derived from member production runs.",
-    useCases: ["Migration compatibility"],
-    isLegacy: true,
+    summary: "Wet and dry mass allocations for each Application x Credit batch slice. Unassigned slices are recalculated when an Application changes; slices a Removal owns are frozen.",
+    useCases: ["Applied mass allocation", "Frozen Removal slices"],
   },
   documents: {
     area: "Documentation",

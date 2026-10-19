@@ -4,7 +4,7 @@
  * Common UI interaction helpers for E2E tests.
  * Extracted from individual spec files to avoid duplication.
  */
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 export const ACTION_LABEL_PREFIX = "Actions for ";
 
@@ -196,7 +196,24 @@ export async function selectFirstEntity(page: Page, fieldLabel: string) {
   await page.waitForSelector('[data-testid="entity-select-listbox"]', {
     timeout: 10000,
   });
-  await page.locator('[role="option"]').first().click();
+  await page.locator('[role="option"][data-testid^="entity-option-"]:not([aria-disabled="true"])').first().click();
+}
+
+/** Open a field's portalled menu and verify it has no entity options. */
+export async function expectNoEntityOptions(page: Page, fieldLabel: string) {
+  const dialog = page.locator('[role="dialog"]');
+  const label = dialog.locator("label").filter({ hasText: fieldLabel }).first();
+  const fieldContainer = label.locator(
+    "xpath=ancestor::div[.//*[@data-testid='entity-select-trigger']][1]"
+  );
+
+  const trigger = fieldContainer.getByTestId("entity-select-trigger");
+  await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  const listbox = page.getByTestId("entity-select-listbox");
+  await expect(listbox.getByTestId("entity-select-empty")).toBeVisible();
+  await expect(listbox.locator('[data-testid^="entity-option-"]')).toHaveCount(0);
+  await trigger.press("Escape");
 }
 
 export async function selectFirstCreditBatchProductionRun(
@@ -212,4 +229,43 @@ export async function selectFirstCreditBatchProductionRun(
     .getByTestId("credit-batch-production-run-preview")
     .first();
   await firstRunPreview.waitFor({ state: "visible", timeout: 10000 });
+}
+
+/** Budget for one open-menu-then-click attempt; short so a detached menu retries fast. */
+const ROW_MENU_ATTEMPT_TIMEOUT_MS = 3_000;
+/** Total budget across retries when a list re-render closes the menu. */
+const ROW_MENU_TOTAL_TIMEOUT_MS = 20_000;
+
+/**
+ * Open a row's actions menu and click one item, retrying when the list
+ * re-renders (a debounced search query landing) detaches the open menu.
+ * Presses Escape between attempts so a stale menu never blocks the next one.
+ */
+export async function clickRowMenuItem(
+  page: Page,
+  trigger: Locator,
+  item: string,
+  options: { exact?: boolean } = {},
+) {
+  await expect(async () => {
+    try {
+      await trigger.click({ timeout: ROW_MENU_ATTEMPT_TIMEOUT_MS });
+      await page
+        .getByRole("menuitem", { name: item, exact: options.exact })
+        .click({ timeout: ROW_MENU_ATTEMPT_TIMEOUT_MS });
+    } catch (error) {
+      await page.keyboard.press("Escape");
+      throw error;
+    }
+  }).toPass({ timeout: ROW_MENU_TOTAL_TIMEOUT_MS });
+}
+
+/** A credit batch row in the /credit-batches List view (`?view=list`). */
+export function creditBatchRow(page: Page, code: string): Locator {
+  return page.locator(`[data-credit-batch-row="${code}"]`);
+}
+
+/** Any credit batch row in the List view. */
+export function creditBatchRows(page: Page): Locator {
+  return page.locator("[data-credit-batch-row]");
 }

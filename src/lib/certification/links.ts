@@ -16,6 +16,9 @@ export const CERTIFICATION_SETTINGS_SOURCES_SECTION = "sources";
 export const CERTIFICATION_SETTINGS_DIAGNOSTICS_SECTION = "diagnostics";
 export const CERTIFICATION_SETTINGS_TEMPLATE_MAPPING_SECTION =
   "template-mapping";
+/** Line review for the facility default and every template a credit batch pins. */
+export const CERTIFICATION_SETTINGS_REMOVAL_TEMPLATES_SECTION =
+  "removal-templates";
 /**
  * Keys and the facility's project link are one pane — one is useless without
  * the other. `connection` was the key while they were separate categories;
@@ -45,6 +48,14 @@ export function certificationEmissionEstimatesHref(facilityId: string): string {
   return certificationSettingsSectionHref(
     facilityId,
     CERTIFICATION_SETTINGS_EMISSIONS_SECTION,
+  );
+}
+
+/** The Removal template line review, where lines that need review are settled. */
+export function certificationRemovalTemplatesHref(facilityId: string): string {
+  return certificationSettingsSectionHref(
+    facilityId,
+    CERTIFICATION_SETTINGS_REMOVAL_TEMPLATES_SECTION,
   );
 }
 
@@ -107,6 +118,22 @@ export function traceabilityApplicationHref(
   const params = new URLSearchParams({
     batch: creditBatchId,
     application: applicationId,
+  });
+  return `/traceability?${params.toString()}`;
+}
+
+/** The Traceability view value of the batch Activity segment. */
+export const TRACEABILITY_ACTIVITY_VIEW = "activity";
+
+/** A credit batch's Activity segment on the Traceability page. */
+export function traceabilityActivityHref(
+  creditBatchId: string,
+  facilityId: string,
+): string {
+  const params = new URLSearchParams({
+    facility: facilityId,
+    batch: creditBatchId,
+    view: TRACEABILITY_ACTIVITY_VIEW,
   });
   return `/traceability?${params.toString()}`;
 }

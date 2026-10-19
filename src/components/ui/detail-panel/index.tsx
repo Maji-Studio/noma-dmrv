@@ -43,6 +43,7 @@ import { Button } from "@/components/ui/button";
 import { SectionLabel } from "@/components/forms/section-label";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { SecondaryFigure } from "@/components/ui/secondary-figure";
+import { InfoHint } from "@/components/ui/tooltip";
 import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 import {
   isCertFieldValuePresent,
@@ -98,13 +99,15 @@ DetailValueSkeleton.displayName = "DetailValueSkeleton";
  * -----------------------------------------------------------------------------------------------*/
 
 interface DetailSectionProps {
-  title: string;
+  title?: string;
   children: React.ReactNode;
   /** Hairline divider above the section (default) — first section disables it. */
   divider?: boolean;
   className?: string;
   /** Positional metadata for the passive read-only step rail. */
   spine?: SpineMeta;
+  /** Explanatory text behind an ⓘ beside the title. */
+  hint?: React.ReactNode;
 }
 
 function DetailSection({
@@ -113,8 +116,9 @@ function DetailSection({
   divider = true,
   className,
   spine,
+  hint,
 }: DetailSectionProps) {
-  const label = <SectionLabel>{title}</SectionLabel>;
+  const label = title != null ? <SectionLabel hint={hint}>{title}</SectionLabel> : null;
 
   if (spine) {
     return (
@@ -126,6 +130,7 @@ function DetailSection({
 
   return (
     <div
+      data-detail-section
       className={cn(
         "flex flex-col gap-16",
         divider && "border-t border-[var(--color-border-tertiary)] pt-16",
@@ -167,6 +172,8 @@ DetailRow.displayName = "DetailRow";
 interface DetailFieldProps {
   label: string;
   value: React.ReactNode;
+  /** Explanation behind an ⓘ beside the label, mirroring the form field's. */
+  hint?: React.ReactNode;
   className?: string;
   certifyRequired?: boolean;
   /** Override the value-derived saved status for composite requirements. */
@@ -267,6 +274,7 @@ function resolveDetailFieldValue({
 function DetailField({
   label,
   value,
+  hint,
   className,
   certifyRequired,
   certifyStatus,
@@ -287,6 +295,7 @@ function DetailField({
       <span className="flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
         {label}
         {certifyRequired && <CertificationFieldTag status={resolvedCertifyStatus} />}
+        {hint != null && <InfoHint side="top" label={`More about ${label}`}>{hint}</InfoHint>}
       </span>
       <span
         className={cn("body-medium break-words", valueClassName)}
@@ -341,6 +350,8 @@ function DetailSecondaryLine({
 export interface DetailPanelField {
   label: string;
   value: React.ReactNode;
+  /** Explanation behind an ⓘ beside the label, mirroring the form field's. */
+  hint?: React.ReactNode;
   certifyRequired?: boolean;
   certifyStatus?: CertFieldStatus;
   /** Which missing-value token stands in when `value` is empty. Defaults to `notRecorded`. */
@@ -353,9 +364,13 @@ export interface DetailPanelField {
   secondary?: DetailSecondaryValue;
 }
 
-/** One read section. Both detail levels show every section and its fields. */
-export interface DetailPanelSection {
-  title: string;
+/**
+ * One read section. Both detail levels show every section and its fields.
+ * Headingless sections require a stable id; titled sections may key by title.
+ */
+export type DetailPanelSection = {
+  /** Explanatory text behind an ⓘ beside the title. */
+  hint?: React.ReactNode;
   fields: DetailPanelField[];
   /** Optional extension content that belongs inside this mirrored section. */
   content?: React.ReactNode;
@@ -365,7 +380,10 @@ export interface DetailPanelSection {
    * Only Detailed renders it. Never put a field, action or decision info here.
    */
   explanation?: React.ReactNode;
-}
+} & (
+  | { id: string; title?: string }
+  | { id?: string; title: string }
+);
 
 interface DetailSpineProps {
   sections: DetailPanelSection[];
@@ -379,8 +397,9 @@ function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
     <div className={cn("flex flex-col", !numbered && "gap-20")}>
       {sections.map((section, sectionIdx) => (
         <DetailSection
-          key={section.title}
+          key={section.id ?? section.title}
           title={section.title}
+          hint={section.hint}
           divider={!numbered && sectionIdx > 0}
           spine={
             numbered
@@ -395,6 +414,7 @@ function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
                   key={`${rowIdx}-${fieldIdx}`}
                   label={field.label}
                   value={field.value}
+                  hint={field.hint}
                   certifyRequired={field.certifyRequired}
                   certifyStatus={field.certifyStatus}
                   emptySituation={field.emptySituation}

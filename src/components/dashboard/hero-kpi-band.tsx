@@ -10,6 +10,7 @@
 "use client";
 
 import type { DashboardKpi } from "@/data-access/dashboard-overview";
+import { InfoHint } from "@/components/ui/tooltip";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 
 /** Pinned so server and client format the number identically (no hydration drift). */
@@ -64,32 +65,44 @@ export function HeroKpiBand({ kpis, isLoading }: HeroKpiBandProps) {
     >
       {cells.map((kpi, index) => (
         <div key={kpi.key} className={`px-20 py-16 ${CELL_BORDERS(index)}`}>
-          <div className="font-[family-name:var(--font-mono)] text-[10px] font-medium uppercase leading-[1.2] tracking-[0.1em] text-[var(--clr-dark-purple-60)]">
-            {kpi.label}
+          <div className="flex min-h-24 items-center gap-4">
+            <span className="body-caption text-[var(--clr-dark-purple-60)]">
+              {kpi.label}
+            </span>
+            {kpi.hint && (
+              <InfoHint label={`More about ${kpi.label}`}>
+                {kpi.hint}
+              </InfoHint>
+            )}
           </div>
           <div className="mt-6 text-[26px] font-bold leading-[1.15] text-[var(--ink)]">
             {formatValue(kpi)}
             {kpi.value != null && (
-              <span className="ml-4 font-[family-name:var(--font-mono)] text-[11px] font-medium text-[var(--clr-dark-purple-60)]">
-                {kpi.unit}
-                {kpi.deltaPercent != null && (
-                  <span
-                    className="ml-6"
-                    style={{
-                      color:
-                        Math.round(kpi.deltaPercent) >= 0
-                          ? "var(--st-ok)"
-                          : "var(--st-wait)",
-                    }}
-                  >
-                    {formatDelta(kpi.deltaPercent)}
-                  </span>
-                )}
+              // The type class resets margins, so the gap sits on a wrapper.
+              <span className="ml-4">
+                <span className="body-caption font-medium text-[var(--clr-dark-purple-60)]">
+                  {kpi.unit}
+                  {kpi.deltaPercent != null && (
+                    <span
+                      className="ml-6"
+                      style={{
+                        color:
+                          Math.round(kpi.deltaPercent) >= 0
+                            ? "var(--st-ok)"
+                            : "var(--st-wait)",
+                      }}
+                    >
+                      {formatDelta(kpi.deltaPercent)}
+                    </span>
+                  )}
+                </span>
               </span>
             )}
           </div>
-          <div className="mt-4 font-[family-name:var(--font-mono)] text-[10px] leading-[1.4] tracking-[0.02em] text-[var(--color-text-tertiary)]">
-            {kpi.detail}
+          <div className="mt-4">
+            <p className="body-caption text-[var(--color-text-tertiary)]">
+              {kpi.detail}
+            </p>
           </div>
         </div>
       ))}

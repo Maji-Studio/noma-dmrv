@@ -1,3 +1,7 @@
+import { assertEmissionEntryDocumentWritable, bumpEmissionEntryEvidence } from "./emission-entry-lock";
+import { type ActivityScope, recordDocumentActivity } from "./write-activity";
+import type { ActivityEventInput } from "./activity-events";
+import { enqueueDocumentKeys } from "./document-storage-deletions";
 import { and, desc, eq, getTableColumns, inArray, isNull, or, sql } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
@@ -10,8 +14,8 @@ import {
   creditBatches,
   deliveries,
   documents,
+  emissionEntries,
   facilities,
-  feedstockDeliveries,
   feedstocks,
   incidentReports,
   orders,
@@ -23,7 +27,6 @@ import {
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
 import {
-  acquireMirrorLock,
   acquireMirrorLocksSorted,
 } from "@/lib/isometric/utils/source-lock";
 import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
@@ -39,10 +42,6 @@ import {
   isExternalSourceReferencedInSnapshots,
   submissionIsNotDeleted,
 } from "./certifier-document-uploads";
-import {
-  enqueueStorageObjectDeletion,
-  processPendingStorageObjectDeletions,
-} from "./storage-object-deletions";
 
 /**
  * Hard cap on documents returned for a single entity. This is a guardrail
@@ -50,12 +49,9 @@ import {
  * separately (architecture audit, Phase 3).
  */
 const MAX_DOCUMENTS_PER_ENTITY = 200;
-const DELIVERY_TABLE_NAME = "deliveries";
-const DELIVERY_ARCHIVED_AT_COLUMN = "archived_at";
 const TRANSPORT_LEDGER_DOCUMENT_ENTITY_TYPE = "credit_batch";
 const TRANSPORT_LEDGER_DOCUMENT_TYPE = "pdf";
 
-let deliveryArchivedAtColumnAvailablePromise: Promise<boolean> | null = null;
 
 export type DocumentRow = typeof documents.$inferSelect;
 export type NewDocumentRow = typeof documents.$inferInsert;
@@ -63,9 +59,11 @@ export type NewDocumentRow = typeof documents.$inferInsert;
 export interface DocumentEntityRef {
   entityType: DocumentEntityType;
   entityId: string;
+  activityScopes?: ActivityScope[];
 }
 
 const DOCUMENT_ENTITY_LABELS: Record<DocumentEntityType, string> = {
+  emission_entry: "Emissions entry",
   sample: "Sample",
   delivery: "Delivery",
   production_run: "Production run",
@@ -73,7 +71,6 @@ const DOCUMENT_ENTITY_LABELS: Record<DocumentEntityType, string> = {
   production_sample: "In-process measurement",
   biochar_product: "Biochar product",
   feedstock: "Feedstock",
-  feedstock_delivery: "Feedstock delivery",
   application: "Application",
   credit_batch: "Credit batch",
   facility: "Facility",
@@ -92,26 +89,11 @@ function entityMissingError(entityType: DocumentEntityType) {
   );
 }
 
-async function hasDeliveryArchivedAtColumn(): Promise<boolean> {
-  if (!deliveryArchivedAtColumnAvailablePromise) {
-    deliveryArchivedAtColumnAvailablePromise = db
-      .execute<{ column_name: string }>(sql`
-        select column_name
-        from information_schema.columns
-        where table_schema = 'public'
-          and table_name = ${DELIVERY_TABLE_NAME}
-          and column_name = ${DELIVERY_ARCHIVED_AT_COLUMN}
-      `)
-      .then(({ rows }) => rows.length > 0);
-  }
-
-  return deliveryArchivedAtColumnAvailablePromise;
-}
-
 export async function assertCanManageDocumentEntity(
   ctx: OrgContext,
   entityType: string,
-  entityId: string
+  entityId: string,
+  tx?: DbTransaction
 ): Promise<void> {
   requireOrgScope(ctx);
 
@@ -120,6 +102,18 @@ export async function assertCanManageDocumentEntity(
   }
 
   switch (entityType) {
+    case "emission_entry": {
+      const [row] = await (tx ?? db)
+        .select({ id: emissionEntries.id })
+        .from(emissionEntries)
+        .where(and(
+          eq(emissionEntries.id, entityId),
+          eq(emissionEntries.organizationId, ctx.organizationId),
+          isNull(emissionEntries.deletedAt),
+        ));
+      if (!row) throw entityMissingError(entityType);
+      return;
+    }
     case "sample": {
       const [row] = await db
         .select({ id: samples.id })
@@ -130,9 +124,7 @@ export async function assertCanManageDocumentEntity(
     }
     case "delivery": {
       const conditions = [eq(deliveries.id, entityId), eq(deliveries.organizationId, ctx.organizationId)];
-      if (await hasDeliveryArchivedAtColumn()) {
-        conditions.push(isNull(deliveries.archivedAt));
-      }
+      conditions.push(isNull(deliveries.archivedAt));
       // org-scope-ok: conditions includes the active organization predicate.
       const [row] = await db
         .select({ id: deliveries.id })
@@ -190,20 +182,6 @@ export async function assertCanManageDocumentEntity(
         .select({ id: feedstocks.id })
         .from(feedstocks)
         .where(and(eq(feedstocks.id, entityId), eq(feedstocks.organizationId, ctx.organizationId), isNull(feedstocks.archivedAt)));
-      if (!row) throw entityMissingError(entityType);
-      return;
-    }
-    case "feedstock_delivery": {
-      const [row] = await db
-        .select({ id: feedstockDeliveries.id })
-        .from(feedstockDeliveries)
-        .where(
-          and(
-            eq(feedstockDeliveries.id, entityId),
-            eq(feedstockDeliveries.organizationId, ctx.organizationId),
-            isNull(feedstockDeliveries.archivedAt)
-          )
-        );
       if (!row) throw entityMissingError(entityType);
       return;
     }
@@ -326,6 +304,9 @@ export async function listDocumentsForEntityIds(
   return db
     .select({
       id: rankedDocuments.id,
+      version: rankedDocuments.version,
+      uploadStorageKey: rankedDocuments.uploadStorageKey,
+      uploadExpiresAt: rankedDocuments.uploadExpiresAt,
       organizationId: rankedDocuments.organizationId,
       entityType: rankedDocuments.entityType,
       entityId: rankedDocuments.entityId,
@@ -415,34 +396,32 @@ export async function insertDocument(
   input: Omit<NewDocumentRow, "organizationId">
 ): Promise<DocumentRow> {
   requireOrgScope(ctx);
-  const [row] = await db.insert(documents).values({ ...input, organizationId: ctx.organizationId }).returning();
-  return row;
-}
-
-export async function updateDocument(
-  ctx: OrgContext,
-  id: string,
-  patch: Partial<Omit<NewDocumentRow, "organizationId">>
-): Promise<DocumentRow | null> {
-  requireOrgScope(ctx);
-  const [row] = await db
-    .update(documents)
-    .set({ ...patch, updatedAt: new Date() })
-    .where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)))
-    .returning();
-  return row ?? null;
+  return db.transaction(async (tx) => {
+    if (input.entityType === "emission_entry") await assertEmissionEntryDocumentWritable(ctx, input.entityId, tx);
+    const [row] = await tx.insert(documents).values({ ...input, organizationId: ctx.organizationId }).returning();
+    await bumpEmissionEntryEvidence(ctx, tx, row.entityType, row.entityId);
+    await recordDocumentActivity(ctx, tx, row, "created", { source: "form" });
+    return row;
+  });
 }
 
 export async function deleteDocumentRow(
   ctx: OrgContext,
-  id: string
+  id: string,
+  source: ActivityEventInput["source"],
+  tx?: DbTransaction,
 ): Promise<DocumentRow | null> {
   requireOrgScope(ctx);
-  const [row] = await db
-    .delete(documents)
-    .where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)))
-    .returning();
-  return row ?? null;
+  if (!tx) return db.transaction(writerTx => deleteDocumentRow(ctx, id, source, writerTx));
+  const [initial] = await tx.select().from(documents).where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)));
+  if (initial?.entityType === "emission_entry" && !(source === "system" && initial.uploadStatus === "failed")) await assertEmissionEntryDocumentWritable(ctx, initial.entityId, tx);
+  const [row] = await tx.select().from(documents)
+    .where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId))).for("update");
+  if (!row) return null;
+  if (row.uploadStatus === "uploaded") await bumpEmissionEntryEvidence(ctx, tx, row.entityType, row.entityId);
+  await recordDocumentActivity(ctx, tx, row, "deleted", { source });
+  await tx.delete(documents).where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)));
+  return row;
 }
 
 const MIRRORED_DOCUMENT_BLOCKS_PARENT_DELETE_MESSAGE =
@@ -482,11 +461,12 @@ type IsometricMappingRelease = "released" | "reviewed-evidence" | "referenced";
  * recheck after the delete guards against a future submission entry point
  * that forgets to take the mirror lock.
  */
-async function releaseUnreferencedIsometricMapping(
+export async function releaseUnreferencedIsometricMapping(
   ctx: OrgContext,
   tx: DbTransaction,
   documentId: string,
 ): Promise<IsometricMappingRelease> {
+  requireOrgScope(ctx);
   if (await isReviewedCertificationEvidence(ctx, tx, documentId)) {
     return "reviewed-evidence";
   }
@@ -510,93 +490,22 @@ async function releaseUnreferencedIsometricMapping(
   return "released";
 }
 
-/**
- * Delete one owning-record document while preserving certification history.
- *
- * The per-document advisory lock is shared with mirror and Removal submit.
- * Under that lock an unreferenced Isometric mapping may be retired locally;
- * the remote Source is deliberately untouched. Any persisted snapshot
- * reference blocks the whole transaction.
- */
-export async function deleteDocumentWithCertificationSafety(
-  ctx: OrgContext,
-  id: string,
-): Promise<DocumentRow | null> {
+/** Batch deletion already holds the facility and batch locks before these entry locks. */
+export async function retireTombstonedEmissionEntryDocuments(
+  ctx: OrgContext, tx: DbTransaction, entryIds: string[],
+): Promise<void> {
   requireOrgScope(ctx);
-  const result = await db.transaction(async (tx) => {
-    await acquireMirrorLock(tx, id);
-
-    const [row] = await tx
-      .select()
-      .from(documents)
-      .where(
-        and(
-          eq(documents.id, id),
-          eq(documents.organizationId, ctx.organizationId),
-        ),
-      )
-      .for("update");
-    if (!row) return { deleted: null, queued: false };
-
-    const release = await releaseUnreferencedIsometricMapping(ctx, tx, id);
-    if (release === "reviewed-evidence") {
-      throw new SafeError("This document belongs to reviewed certification evidence and cannot be deleted or replaced.");
-    }
-    if (release === "referenced") {
-      throw new SafeError(
-        "This document belongs to submitted certification history and cannot be deleted or replaced. The Isometric Source and audit history remain unchanged.",
-      );
-    }
-
-    // Isometric is the only provider whose local mapping may be retired by
-    // this owning-record flow. Preserve the FK backstop for every other
-    // certification provider, with a clear error before storage is touched.
-    const [remainingMapping] = await tx
-      .select({ id: certifierDocumentUploads.id })
-      .from(certifierDocumentUploads)
-      .where(
-        and(
-          eq(certifierDocumentUploads.documentId, id),
-          eq(
-            certifierDocumentUploads.organizationId,
-            ctx.organizationId,
-          ),
-        ),
-      )
-      .limit(1);
-    if (remainingMapping) {
-      throw new SafeError(
-        "This document is mirrored to a certification provider and cannot be deleted.",
-      );
-    }
-
-    if (row.storageKey) {
-      if (!row.storageProvider || !row.storageBucket) {
-        throw new Error("Stored document is missing its provider or bucket");
-      }
-      await enqueueStorageObjectDeletion(ctx, tx, {
-        storageProvider: row.storageProvider,
-        storageBucket: row.storageBucket,
-        storageKey: row.storageKey,
-      });
-    }
-
-    const [deleted] = await tx
-      .delete(documents)
-      .where(
-        and(
-          eq(documents.id, id),
-          eq(documents.organizationId, ctx.organizationId),
-        ),
-      )
-      .returning();
-    return { deleted: deleted ?? null, queued: row.storageKey !== null };
-  });
-
-  if (result.queued) {
-    await processPendingStorageObjectDeletions(ctx);
+  if (!entryIds.length) return;
+  const entries = await tx.select().from(emissionEntries)
+    .where(and(eq(emissionEntries.organizationId, ctx.organizationId), inArray(emissionEntries.id, entryIds)))
+    .for("update");
+  if (entries.length !== entryIds.length || entries.some(entry => !entry.deletedAt ||
+    entry.sentByRemovalId || entry.sendReservedBySubmissionId || entry.confirmedForRemovalId)) {
+    throw new SafeError("Delete this credit batch's emissions entries before deleting it.");
   }
-  return result.deleted;
+  await retireOwnedDocuments(ctx, tx, entries.map(entry => ({
+    entityType: "emission_entry" as const, entityId: entry.id,
+  })), "form", undefined, true);
 }
 
 /**
@@ -615,6 +524,17 @@ export async function retireDocumentsForEntities(
   ctx: OrgContext,
   tx: DbTransaction,
   entities: readonly DocumentEntityRef[],
+  source: ActivityEventInput["source"],
+  actorUserId?: ActivityEventInput["actorUserId"],
+): Promise<void> {
+  requireOrgScope(ctx);
+  return retireOwnedDocuments(ctx, tx, entities, source, actorUserId);
+}
+
+async function retireOwnedDocuments(
+  ctx: OrgContext, tx: DbTransaction, entities: readonly DocumentEntityRef[],
+  source: ActivityEventInput["source"], actorUserId?: ActivityEventInput["actorUserId"],
+  tombstonedEntries = false,
 ): Promise<void> {
   requireOrgScope(ctx);
   if (entities.length === 0) return;
@@ -627,6 +547,9 @@ export async function retireDocumentsForEntities(
       ]),
     ).values(),
   ];
+  for (const entity of uniqueEntities.filter(entity => entity.entityType === "emission_entry").sort((a, b) => a.entityId.localeCompare(b.entityId))) {
+    if (!tombstonedEntries) await assertEmissionEntryDocumentWritable(ctx, entity.entityId, tx);
+  }
   const ownershipConditions = uniqueEntities.map((entity) =>
     and(
       eq(documents.entityType, entity.entityType),
@@ -699,15 +622,10 @@ export async function retireDocumentsForEntities(
   }
 
   for (const document of ownedDocuments) {
-    if (!document.storageKey) continue;
-    if (!document.storageProvider || !document.storageBucket) {
-      throw new Error("Stored document is missing its provider or bucket");
-    }
-    await enqueueStorageObjectDeletion(ctx, tx, {
-      storageProvider: document.storageProvider,
-      storageBucket: document.storageBucket,
-      storageKey: document.storageKey,
-    });
+    if (!tombstonedEntries) await bumpEmissionEntryEvidence(ctx, tx, document.entityType, document.entityId);
+    const owner = uniqueEntities.find(entity => entity.entityType === document.entityType && entity.entityId === document.entityId);
+    await recordDocumentActivity(ctx, tx, document, "deleted", { scopes: owner?.activityScopes, source, actorUserId });
+    await enqueueDocumentKeys(ctx, tx, document);
   }
 
   await tx

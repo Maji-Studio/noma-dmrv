@@ -1,3 +1,5 @@
+import * as customerCreate from "@/data-access/customer-create";
+import { createCustomerInTransaction } from "@/data-access/customer-writes";
 /**
  * Customer + locations compound create (issue #771).
  *
@@ -8,12 +10,11 @@
  *
  * Requires a running database (uses DATABASE_URL from .env.test or test defaults).
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  createCustomerWithLocations,
   getCustomerById,
   getCustomerLocations,
 } from "@/data-access/customers";
@@ -26,10 +27,6 @@ const RUN_ID = randomUUID().slice(0, 8);
 const ORG_ID = `org_test_customer_create_tx_${RUN_ID}`;
 const OTHER_ORG_ID = `org_test_customer_create_tx_other_${RUN_ID}`;
 const TEST_USER_ID = `test-user-customer-create-tx-${RUN_ID}`;
-
-// Outside the CHECK constraint `customer_locations_gps_latitude_range`, so the
-// insert fails inside the transaction the way a real bad write would.
-const OUT_OF_RANGE_LATITUDE = 999;
 
 function makeCtx(organizationId: string): OrgContext {
   return {
@@ -90,6 +87,7 @@ describe("createCustomerWithLocations", () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     const orgIds = [ORG_ID, OTHER_ORG_ID];
     await db
       .delete(customerLocations)
@@ -105,21 +103,13 @@ describe("createCustomerWithLocations", () => {
 
   it("rolls the customer back when a later location fails", async () => {
     const customer = nextCustomer();
-
-    await expect(
-      createCustomerWithLocations(ctx, {
-        customer,
-        locations: [
-          validLocation("First Field"),
-          {
-            ...validLocation("Second Field"),
-            gpsLatitude: OUT_OF_RANGE_LATITUDE,
-          },
-        ],
-      }),
-      // The location insert is what fails, so this is a real database rollback
-      // and not an early return before the customer was written.
-    ).rejects.toThrow(/customer_locations/);
+    const failure = new Error("Injected second location insert failure");
+    const insert = customerCreate.createCustomerLocationInTransaction;
+    vi.spyOn(customerCreate, "createCustomerLocationInTransaction")
+      .mockImplementationOnce(insert).mockRejectedValueOnce(failure);
+    await expect(createCustomerWithLocations(ctx, {
+      customer, locations: [validLocation("First Field"), validLocation("Second Field")],
+    })).rejects.toBe(failure);
 
     expect(await countCustomersNamed(customer.name)).toBe(0);
 
@@ -130,17 +120,10 @@ describe("createCustomerWithLocations", () => {
     expect(orphanLocations).toHaveLength(0);
   });
 
-  it("creates a customer that has no locations", async () => {
-    const customer = nextCustomer();
-
-    const created = await createCustomerWithLocations(ctx, {
-      customer,
-      locations: [],
-    });
-
-    expect(created.customer.code).toBe(customer.code);
-    expect(created.locations).toHaveLength(0);
-    expect(await getCustomerLocations(ctx, created.customer.id)).toHaveLength(0);
+  it("refuses a customer without locations", async () => {
+    await expect(createCustomerWithLocations(ctx, {
+      customer: nextCustomer(), locations: [],
+    })).rejects.toThrow("At least one location is required");
   });
 
   it("saves two locations with exactly one default", async () => {
@@ -206,3 +189,7 @@ describe("createCustomerWithLocations", () => {
     expect(await getCustomerLocations(ctx, created.customer.id)).toHaveLength(1);
   });
 });
+
+async function createCustomerWithLocations(ctx: OrgContext, input: { customer: { code: string; name: string }; locations: ReturnType<typeof validLocation>[] }) {
+  return db.transaction(tx => createCustomerInTransaction(ctx, tx, { ...input.customer, locations: input.locations }));
+}

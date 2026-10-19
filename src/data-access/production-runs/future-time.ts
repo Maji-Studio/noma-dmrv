@@ -1,10 +1,14 @@
-import { SafeError } from "@/lib/errors";
+import type { CaptureActivity } from "@/lib/activity-changes";
+import type { SnapshotStock } from "../stock-effects";
+import { assertEventTimesNotFuture } from "../future-event-time";
 import {
   formatProductionRunFutureTimeError,
-  getFutureProductionRunTimeFields,
+  PRODUCTION_RUN_FUTURE_TIME_MESSAGES,
 } from "@/lib/production-runs/time-validation";
 
 export type ProductionRunMutationOptions = {
+  snapshotStock?: SnapshotStock;
+  capture?: CaptureActivity;
   /** Injectable server clock for exact-boundary tests. */
   now?: Date;
 };
@@ -16,8 +20,10 @@ export function assertProductionRunTimesNotFuture(
   },
   now: Date,
 ): void {
-  const futureFields = getFutureProductionRunTimeFields(input, now);
-  if (futureFields.length > 0) {
-    throw new SafeError(formatProductionRunFutureTimeError(futureFields));
-  }
+  assertEventTimesNotFuture(
+    { startTime: input.startTime, endTime: input.endTime },
+    PRODUCTION_RUN_FUTURE_TIME_MESSAGES,
+    now,
+    formatProductionRunFutureTimeError,
+  );
 }

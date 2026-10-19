@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui";
 import type { Application } from "@/db/schema/application";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatDate } from "@/lib/format-utils";
+import { formatCalendarDate } from "@/lib/format-utils";
 import { MASS_MOISTURE_LABELS } from "@/lib/mass-moisture";
 import {
   formatApplicationMethod,
@@ -47,7 +47,7 @@ export function ApplicationCard({
       <div className="flex flex-1 flex-col gap-16 p-20">
         {/* Header: code badge */}
         <div className="flex items-center gap-12">
-          <span className="inline-flex items-center gap-6 border border-[var(--clr-rose-20)] bg-[var(--clr-rose-10)] px-10 py-4 text-[11px] uppercase tracking-[0.12em] text-[var(--clr-pink)]">
+          <span className="inline-flex items-center gap-6 border border-[var(--clr-rose-20)] bg-[var(--clr-rose-10)] px-10 py-4 text-[11px] font-medium text-[var(--clr-pink)]">
             <PlantIcon size={12} weight="bold" />
             {application.code}
           </span>
@@ -56,7 +56,7 @@ export function ApplicationCard({
         {/* Date + method */}
         <div>
           <h3 className="title-heading-3 text-[var(--color-text-primary)]">
-            {formatDate(application.applicationDate)}
+            {formatCalendarDate(application.applicationDate)}
           </h3>
           {application.applicationMethodType && (
             <p className="mt-6 body-caption text-[var(--color-text-tertiary)]">

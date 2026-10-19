@@ -20,7 +20,7 @@ vi.mock("@/lib/certification/batch-health-facts", () => ({
 }));
 
 vi.mock("@/lib/certification/facility-setup-gaps", () => ({
-  deriveFacilitySetupGaps: vi.fn(() => []),
+  deriveFacilityConnectionGaps: vi.fn(() => []),
 }));
 
 const mockedListUngrouped = vi.mocked(listUngroupedCreditBatches);

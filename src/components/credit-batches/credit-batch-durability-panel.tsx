@@ -23,7 +23,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui/empty-state";
 import { buttonVariants } from "@/components/ui/button";
-import { SectionLabel } from "@/components/forms";
+import { SectionLabel } from "@/components/forms/section-label";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
 import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 import type {
@@ -36,7 +36,7 @@ import {
   formatDurabilityStat,
 } from "@/components/certification/durability-readiness";
 import { sampleCreateHref, sampleDetailHref } from "@/lib/sample-create-intent";
-import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
+import { SheetLinkRow, SheetLinkRows } from "@/components/ui/sheet-link-row";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 
 function Section({
@@ -107,7 +107,7 @@ function SubmittedStat({
 }) {
   return (
     <div className="flex flex-col gap-4 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] p-12">
-      <span className="label-micro text-[var(--color-text-tertiary)]">
+      <span className="body-caption text-[var(--color-text-tertiary)]">
         {label}
       </span>
       <span className="body-medium font-medium text-[var(--color-text-primary)]">
@@ -168,22 +168,22 @@ function ReplicateTable({ summary }: { summary: DurabilityBatchSummary }) {
       <table className="w-full min-w-[520px] border-collapse">
         <thead>
           <tr className="text-left">
-            <th className="px-10 py-8 label-micro text-[var(--color-text-tertiary)]">
+            <th className="px-10 py-8 body-small font-medium text-[var(--color-text-secondary)]">
               Sample
             </th>
-            <th className="px-10 py-8 label-micro text-[var(--color-text-tertiary)]">
+            <th className="px-10 py-8 body-small font-medium text-[var(--color-text-secondary)]">
               Run · day
             </th>
-            <th className="px-10 py-8 text-right label-micro text-[var(--color-text-tertiary)]">
+            <th className="px-10 py-8 text-right body-small font-medium text-[var(--color-text-secondary)]">
               H/C_org
             </th>
-            <th className="px-10 py-8 text-right label-micro text-[var(--color-text-tertiary)]">
+            <th className="px-10 py-8 text-right body-small font-medium text-[var(--color-text-secondary)]">
               O/C_org
             </th>
-            <th className="px-10 py-8 text-right label-micro text-[var(--color-text-tertiary)]">
+            <th className="px-10 py-8 text-right body-small font-medium text-[var(--color-text-secondary)]">
               Total C %
             </th>
-            <th className="px-10 py-8 text-right label-micro text-[var(--color-text-tertiary)]">
+            <th className="px-10 py-8 text-right body-small font-medium text-[var(--color-text-secondary)]">
               Organic C %
             </th>
           </tr>
@@ -319,7 +319,7 @@ export function CreditBatchDurabilityPanel({
         <div className="flex flex-col gap-16 border-t border-[var(--color-border-tertiary)] p-12">
           {/* The batch-level figures the measurement-sample submission sends. */}
           <div className="flex flex-col gap-8">
-            <span className="label-micro text-[var(--color-text-tertiary)]">
+            <span className="body-small font-medium text-[var(--color-text-secondary)]">
               Submitted to registry (mean ± s.d.)
             </span>
             <div className="grid grid-cols-2 gap-8">

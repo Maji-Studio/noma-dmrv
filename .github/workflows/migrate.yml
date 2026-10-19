@@ -65,9 +65,8 @@ jobs:
           DATABASE_CA_CERT: op://Environment Variables/noma-dmrv env staging/DATABASE_CA_CERT
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -108,9 +107,8 @@ jobs:
           DATABASE_CA_CERT: op://Environment Variables/noma-dmrv env staging/DATABASE_CA_CERT
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -143,7 +141,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Load production database secret from 1Password
+      - name: Load production database secrets from 1Password
         uses: 1password/load-secrets-action@70062d7a876d3eb6334754fa26efd2fbd90c32f2 # v5.0.1
         with:
           export-env: true
@@ -151,11 +149,12 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env production/DATABASE_URL
+          # Provider CA keeps managed database TLS verification enabled.
+          DATABASE_CA_CERT: op://Environment Variables/noma-dmrv env production/DATABASE_CA_CERT
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -203,6 +202,8 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env production/DATABASE_URL
+          # Provider CA keeps managed database TLS verification enabled.
+          DATABASE_CA_CERT: op://Environment Variables/noma-dmrv env production/DATABASE_CA_CERT
           ADMIN_EMAIL: op://Environment Variables/noma-dmrv env production/ADMIN_EMAIL
           ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env production/ADMIN_PASSWORD
           CREDENTIALS_ENCRYPTION_KEY: op://Environment Variables/noma-dmrv env production/CREDENTIALS_ENCRYPTION_KEY
@@ -210,9 +211,8 @@ jobs:
           ISOMETRIC_CLIENT_SECRET: op://Environment Variables/noma-dmrv env production/ISOMETRIC_CLIENT_SECRET
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -277,9 +277,8 @@ jobs:
           STORAGE_SECRET_ACCESS_KEY: op://Environment Variables/noma-dmrv env staging/STORAGE_SECRET_ACCESS_KEY
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -348,9 +347,8 @@ jobs:
           ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env staging/ADMIN_PASSWORD
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -397,6 +395,8 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env production/DATABASE_URL
+          # Provider CA keeps managed database TLS verification enabled.
+          DATABASE_CA_CERT: op://Environment Variables/noma-dmrv env production/DATABASE_CA_CERT
           DB_RESET_ALLOW_REMOTE: op://Environment Variables/noma-dmrv env production/DB_RESET_ALLOW_REMOTE
           ADMIN_EMAIL: op://Environment Variables/noma-dmrv env production/ADMIN_EMAIL
           ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env production/ADMIN_PASSWORD
@@ -405,9 +405,8 @@ jobs:
           ISOMETRIC_CLIENT_SECRET: op://Environment Variables/noma-dmrv env production/ISOMETRIC_CLIENT_SECRET
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0

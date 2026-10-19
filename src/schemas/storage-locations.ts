@@ -4,10 +4,10 @@
  */
 
 import { z } from "zod";
-import { OUTPUT_STOCK_MODES, type OutputStockMode } from "@/lib/output-stock/stock-mode";
+import { OUTPUT_DRAW_ORDERS, OUTPUT_STOCK_MODES, type OutputDrawOrder, type OutputStockMode } from "@/lib/output-stock/stock-mode";
 import {
   emptyToNull,
-  expectedUpdatedAtSchema,
+  expectedVersionSchema,
   positiveMassKgSchema,
   stockEventInstantSchema,
 } from "./helpers";
@@ -82,15 +82,37 @@ export const OUTPUT_STOCK_MODE_LABELS: Record<OutputStockMode, string> = {
   mix: "Mix: one blended pile",
 };
 
+/** Names shared by the bin setting, read view and draw picker. */
+export const OUTPUT_DRAW_ORDER_LABELS: Record<OutputDrawOrder, string> = {
+  oldest_first: "Oldest first",
+  newest_first: "Newest first",
+};
+
+/** The bin types that choose a stock mode. */
+export type OutputBinType = Extract<StorageLocationType, "biochar_bin" | "product_bin">;
+
+/** Stock mode card captions by bin type: what stays apart or blends, and what a draw takes. */
+export const OUTPUT_STOCK_MODE_DESCRIPTIONS: Record<OutputBinType, Record<OutputStockMode, string>> = {
+  biochar_bin: {
+    split: "Each production run stays in its own bay, bag or heap. A draw records which runs it came from.",
+    mix: "All runs go into one pile. A draw takes from each run in proportion.",
+  },
+  product_bin: {
+    split: "Each product batch stays apart. A draw records which batches it came from.",
+    mix: "All batches go into one pile. A draw takes from each batch in proportion.",
+  },
+};
+
 /** Only biochar and product bins choose a stock mode. */
-export function isOutputBinType(type: StorageLocationType | undefined | null): boolean {
+export function isOutputBinType(type: StorageLocationType | undefined | null): type is OutputBinType {
   return type === "biochar_bin" || type === "product_bin";
 }
 
 const MIX_OUTPUT_BIN_MESSAGE = "Only biochar and product bins can hold one mixed pile.";
 
 /** When a split bin's batches were merged into one pile; empty until the operator picks one. */
-const mergedAtSchema = stockEventInstantSchema("Enter when the batches were merged.").or(z.literal("")).nullable().optional();
+export const MERGE_TIME_REQUIRED_MESSAGE = "Enter when the batches were merged.";
+const mergedAtSchema = stockEventInstantSchema(MERGE_TIME_REQUIRED_MESSAGE).or(z.literal("")).nullable().optional();
 
 const FORMULATION_PRODUCT_BIN_MESSAGE =
   "A formulation can only be assigned to a product bin";
@@ -128,6 +150,7 @@ export const storageLocationFormSchema = z.object({
   // formulation put into it (`data-access/biochar-products.ts`).
   formulationId: emptyToNull.or(z.string().uuid("Choose a valid formulation.")).nullable().optional(),
   stockMode: z.enum(outputStockModes, { message: "Choose split or mix." }).optional(),
+  drawOrder: z.enum(OUTPUT_DRAW_ORDERS, { message: "Choose oldest or newest first." }).optional(),
   mergedAt: mergedAtSchema,
   storageMethod: z
     .string()
@@ -175,7 +198,7 @@ export const createStorageLocationSchema = storageLocationFormSchema;
  */
 export const updateStorageLocationSchema = z.object({
   storageLocationId: z.string().uuid("Choose a valid storage bin."),
-  expectedUpdatedAt: expectedUpdatedAtSchema,
+  expectedVersion: expectedVersionSchema,
   code: z
     .string()
     .min(1)
@@ -184,15 +207,15 @@ export const updateStorageLocationSchema = z.object({
     .optional(),
   name: z.string().trim().min(1).max(255).optional(),
   type: z.enum(storageLocationTypes).optional(),
-  facilityId: z.string().uuid().optional(),
+  // No facilityId: a bin never changes facility through the update action.
   capacityKg: positiveMassKgSchema().optional().nullable(),
   feedstockTypeId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   formulationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   stockMode: z.enum(outputStockModes).optional(),
+  drawOrder: z.enum(OUTPUT_DRAW_ORDERS).optional(),
   mergedAt: mergedAtSchema,
   storageMethod: z.string().max(255).optional().nullable(),
   storageDescription: z.string().max(1000).optional().nullable(),
-  supplierReferenceId: z.string().max(100).optional().nullable(),
 }).superRefine((data, ctx) => {
   if (data.formulationId && data.type && data.type !== "product_bin") {
     ctx.addIssue({
@@ -221,12 +244,14 @@ export const updateStorageLocationSchema = z.object({
  * Schema for deleting a storage location
  */
 export const deleteStorageLocationSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   storageLocationId: z.string().uuid("Choose a valid storage bin."),
 });
 
 /**
  * Schemas for reversible storage-location lifecycle actions.
  */
+export const getStorageLocationSchema = deleteStorageLocationSchema.omit({ expectedVersion: true });
 export const archiveStorageLocationSchema = deleteStorageLocationSchema;
 export const restoreStorageLocationSchema = deleteStorageLocationSchema;
 
@@ -292,6 +317,13 @@ export type StorageLocationFilterData = z.infer<
 /**
  * Format storage location type for display
  */
+/** Segment labels for the storage type control, where the field name already says "bin". */
+export const STORAGE_LOCATION_TYPE_SHORT_LABELS: Record<StorageLocationType, string> = {
+  feedstock_bin: "Feedstock",
+  biochar_bin: "Biochar",
+  product_bin: "Product",
+};
+
 export function formatStorageLocationType(type: StorageLocationType): string {
   const labels: Record<StorageLocationType, string> = {
     feedstock_bin: "Feedstock bin",

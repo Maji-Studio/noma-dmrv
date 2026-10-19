@@ -64,7 +64,9 @@ export function GisReferenceSummary({
 function sourceLabel(boundary: GisBoundary): string {
   return boundary.source === "upload"
     ? (boundary.fileName ?? "Uploaded file")
-    : "Pasted GeoJSON";
+    : boundary.source === "api"
+      ? "Added through the API"
+      : "Pasted GeoJSON";
 }
 
 function areasValue(boundary: GisBoundary): string {

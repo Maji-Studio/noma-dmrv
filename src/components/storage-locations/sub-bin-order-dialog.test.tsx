@@ -29,10 +29,10 @@ function button(renderer: ReactTestRenderer, name: string): ReactTestInstance {
   return renderer.root.find(node => node.type === "button" && (node.props["aria-label"] === name || node.props.children === name));
 }
 
-async function open(order: string[] | null) {
+async function open(order: string[] | null, newestFirst = false) {
   const onApply = vi.fn();
   let renderer!: ReactTestRenderer;
-  await act(async () => { renderer = create(<SubBinOrderDialog isOpen onClose={vi.fn()} subBins={SUB_BINS} order={order} onApply={onApply} timeZone="UTC" />); });
+  await act(async () => { renderer = create(<SubBinOrderDialog isOpen onClose={vi.fn()} subBins={newestFirst ? [...SUB_BINS].reverse() : SUB_BINS} order={order} defaultOrderLabel={newestFirst ? "Newest first" : "Oldest first"} onApply={onApply} timeZone="UTC" />); });
   return { renderer, onApply };
 }
 
@@ -52,6 +52,17 @@ describe("SubBinOrderDialog", () => {
     await act(async () => { button(renderer, "Reset to oldest first").props.onClick(); });
     await act(async () => { button(renderer, "Use this order").props.onClick(); });
     expect(onApply).toHaveBeenCalledWith(null);
+  });
+
+  it("keeps and resets newest first as no operator override", async () => {
+    const { renderer, onApply } = await open(null, true);
+    expect(button(renderer, "Move B-0419 up").props.disabled).toBe(true);
+    await act(async () => button(renderer, "Use this order").props.onClick());
+    expect(onApply).toHaveBeenLastCalledWith(null);
+    await act(async () => button(renderer, "Move B-0412 up").props.onClick());
+    await act(async () => button(renderer, "Reset to newest first").props.onClick());
+    await act(async () => button(renderer, "Use this order").props.onClick());
+    expect(onApply).toHaveBeenLastCalledWith(null);
   });
 
   it("unticks a sub-bin and will not apply an empty load", async () => {

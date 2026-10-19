@@ -12,7 +12,6 @@
  */
 import {
   applications,
-  biocharProducts,
   creditBatches,
   deliveries,
   feedstocks,
@@ -35,20 +34,6 @@ export function runsMissingMassWhere(
       isNull(productionRuns.biocharDryMassKg),
       isNull(productionRuns.feedstockMassDryKg),
     ),
-  );
-}
-
-/** Biochar products with neither a source bin nor a legacy production-run link. */
-export function productsUnlinkedWhere(
-  organizationId: string,
-  facilityId: string,
-): SQL | undefined {
-  return and(
-    eq(biocharProducts.organizationId, organizationId),
-    eq(biocharProducts.facilityId, facilityId),
-    isNull(biocharProducts.archivedAt),
-    isNull(biocharProducts.sourceBiocharStorageLocationId),
-    isNull(biocharProducts.linkedProductionRunId),
   );
 }
 

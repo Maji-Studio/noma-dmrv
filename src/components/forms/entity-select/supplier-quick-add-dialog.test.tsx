@@ -29,8 +29,8 @@ const mocks = vi.hoisted(() => ({
     | undefined,
 }));
 
-vi.mock("@/components/ui", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/components/ui")>();
+vi.mock("@/components/ui/modal", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/ui/modal")>();
 
   return {
     ...actual,
@@ -53,11 +53,15 @@ vi.mock("@/components/ui", async (importOriginal) => {
         if (isOpen && !wasOpen.current) onOpen?.();
         wasOpen.current = isOpen;
       }, [isOpen, onOpen]);
-      mocks.modalProps = { ...props, isOpen, onClose };
+      if (onOpen) mocks.modalProps = { ...props, isOpen, onClose };
       return isOpen ? <div role="dialog">{children}</div> : null;
     },
   };
 });
+
+vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityContext: () => ({ facilities: [], selectedFacility: undefined }),
+}));
 
 vi.mock("@/hooks/use-geo", () => ({
   useGeoCapabilities: () => ({ data: { routingConfigured: true } }),
@@ -194,6 +198,7 @@ describe("SupplierQuickAddDialog", () => {
           gpsLatitude: 47.3769,
           gpsLongitude: 8.5417,
           isDefault: true,
+          facilityDistances: [],
         },
       ],
     });
@@ -308,6 +313,7 @@ describe("SupplierQuickAddDialog", () => {
           gpsLatitude: 47.3769,
           gpsLongitude: 8.5417,
           isDefault: true,
+          facilityDistances: [],
         },
       ],
     });

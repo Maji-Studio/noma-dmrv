@@ -5,6 +5,16 @@ import type { FacilityCertifierMapping } from "@/fn/certification/facility-mappi
 import { useFacilityCertifierMapping } from "@/hooks/use-certification";
 import { FacilityCertifierForm } from "./facility-certifier-dialog";
 import { FacilityCertifierSection } from "./facility-certifier-section";
+import { EntitySelect } from "@/components/forms/entity-select/entity-select";
+import type { EntitySelectProps } from "@/components/forms/entity-select/types";
+
+vi.mock("@/components/forms/entity-select/entity-select", () => ({
+  EntitySelect: ({ id, value, options, placeholder }: EntitySelectProps) => (
+    <button id={id} role="combobox" aria-controls={`${id}-options`} aria-expanded={false}>
+      {options?.find((option) => option.id === value)?.name ?? placeholder}
+    </button>
+  ),
+}));
 
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ success: vi.fn() }),
@@ -12,14 +22,20 @@ vi.mock("@/components/ui/toast", () => ({
 
 vi.mock("@/components/forms", async () => {
   const { forwardRef } = await import("react");
+  const { EntitySelect } = await import("@/components/forms/entity-select/entity-select");
   return {
+    EntitySelect,
     FormActions: ({
       submitDisabled,
       submitLabel,
+      showSubmit = true,
+      submitVariant,
     }: {
       submitDisabled?: boolean;
       submitLabel?: string;
-    }) => <button disabled={submitDisabled}>{submitLabel}</button>,
+      showSubmit?: boolean;
+      submitVariant?: string;
+    }) => showSubmit ? <button data-variant={submitVariant} disabled={submitDisabled}>{submitLabel}</button> : null,
     FormField: ({
       label,
       children,
@@ -102,7 +118,7 @@ beforeEach(() => {
 });
 
 describe("FacilityCertifierSection", () => {
-  it("keeps the disabled link action visible until a project is selected", () => {
+  it("hides the link action until a project is selected", () => {
     const markup = renderToStaticMarkup(
       <FacilityCertifierSection
         facilityId="facility-1"
@@ -113,8 +129,7 @@ describe("FacilityCertifierSection", () => {
     );
 
     expect(markup).toContain("Select a project");
-    expect(markup).toContain(">Link project<");
-    expect(markup).toContain("disabled");
+    expect(markup).not.toContain(">Link project<");
     expect(markup).not.toContain("Default Removal template");
     expect(markup).not.toContain("Isometric facility ID");
   });
@@ -125,7 +140,7 @@ describe("FacilityCertifierSection", () => {
         externalProjectId: "prj_test",
         protocolSlug: "biochar",
         defaultRemovalTemplateId: null,
-        externalFacilityId: null,
+        externalFacilityId: "",
       } as NonNullable<FacilityCertifierMapping["mapping"]>,
       availableProjects: [
         {
@@ -154,6 +169,7 @@ describe("FacilityCertifierSection", () => {
     expect(markup).toContain("Default Removal template");
     expect(markup).toContain("Isometric facility ID");
     expect(markup).toContain("Save changes");
+    expect(markup).toContain('data-variant="default"');
   });
 
   it("restores persisted project fields after switching away and back", async () => {
@@ -217,12 +233,10 @@ describe("FacilityCertifierSection", () => {
 
     const changeProject = async (value: string) => {
       const select = renderer?.root
-        .findAllByType("select")
+        .findAllByType(EntitySelect)
         .find((node) => node.props.id === "externalProjectId");
       await act(async () => {
-        select?.props.onChange({
-          target: { name: "externalProjectId", type: "select-one", value },
-        });
+        select?.props.onChange(value);
       });
     };
 
@@ -257,7 +271,7 @@ describe("FacilityCertifierSection", () => {
           externalProjectId: "prj_test",
           protocolSlug: "biochar",
           defaultRemovalTemplateId: null,
-          externalFacilityId: null,
+          externalFacilityId: "",
         },
         availableProjects: [],
         availableTemplates: [],
@@ -280,5 +294,6 @@ describe("FacilityCertifierSection", () => {
 
     expect(markup).not.toContain(">Edit<");
     expect(markup).toContain("prj_test");
+    expect(markup).toContain("Not set. Add the Isometric facility ID to register production batches.");
   });
 });

@@ -1,4 +1,8 @@
-import { loadApplicationCertificationLock } from "@/fn/application-certification-lock";
+import type { ActionResult } from "@/types/actions";
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
+import type { DeleteApplicationInput } from "@/schemas/application-input";
+import { StaleVersionError, throwActionError } from "@/lib/stale-version";
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import {
   useMutation,
   useQueries,
@@ -13,9 +17,11 @@ import {
   deleteApplicationFn,
 } from "@/fn/applications";
 import { creditBatchKeys } from "@/hooks/use-credit-batches";
-import { certificationKeys, invalidateCertificationReadiness } from "@/hooks/use-certification";
-import type { ApplicationFormData, UpdateApplicationData } from "@/schemas/applications";
+import { chainOfCustodyKeys } from "./use-chain-of-custody";
+import { invalidateCertificationReadiness } from "@/hooks/use-certification";
+import type { ApplicationFormData } from "@/schemas/applications";
 import type { ApplicationListOptions } from "@/data-access/applications";
+import { unwrap } from "@/hooks/types";
 
 const EXACT_ID_CHUNK_SIZE = 100;
 
@@ -29,7 +35,6 @@ export const applicationKeys = {
     [...applicationKeys.lists(), filters] as const,
   deliveryOptions: (facilityId?: string) =>
     [...applicationKeys.all, "deliveryOptions", facilityId] as const,
-  certificationLock: (id?: string) => [...certificationKeys.all, "application-lock", id] as const,
   details: () => [...applicationKeys.all, "detail"] as const,
   detail: (id: string) => [...applicationKeys.details(), id] as const,
 };
@@ -57,11 +62,7 @@ export function useApplications(
   const results = useQueries({
     queries: requests.map((request) => ({
       queryKey: applicationKeys.list(request),
-      queryFn: async () => {
-        const result = await getApplicationsFn(request);
-        if (!result.success) throw new Error(result.error);
-        return result.data;
-      },
+      queryFn: async () => unwrap(await getApplicationsFn(request)),
       staleTime: 30000,
       enabled: queryOptions?.enabled,
     })),
@@ -89,13 +90,7 @@ export function useApplicationDeliveryOptions(
 ) {
   return useQuery({
     queryKey: applicationKeys.deliveryOptions(facilityId),
-    queryFn: async () => {
-      const result = await getApplicationDeliveryOptionsFn(facilityId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getApplicationDeliveryOptionsFn(facilityId)),
     staleTime: 30000,
     enabled: options?.enabled,
   });
@@ -108,7 +103,8 @@ export function useCreateApplication() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: ApplicationFormData) => createApplicationFn(data),
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.application),
+    mutationFn: (data: ApplicationFormData) => createApplicationFn(applicationOperationInput(data)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
       queryClient.invalidateQueries({
@@ -118,6 +114,7 @@ export function useCreateApplication() {
       // membership isn't known here, so invalidate the whole credit-batch
       // scope rather than guessing a single detail key.
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.all });
+      queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       invalidateCertificationReadiness(queryClient);
     },
   });
@@ -130,13 +127,20 @@ export function useUpdateApplication() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: UpdateApplicationData) => updateApplicationFn(data),
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.application),
+    mutationFn: async (data: ApplicationFormData & { applicationId: string; expectedVersion: number; code?: string }): Promise<Awaited<ReturnType<typeof updateApplicationFn>>> => {
+      const result = await updateApplicationFn({ ...applicationOperationInput(data), applicationId: data.applicationId, expectedVersion: data.expectedVersion, code: data.code });
+      if (!result.success) throwActionError(result);
+      return result;
+    },
     onSuccess: (result) => {
+      if (result.success) patchListCachesWithSavedRow(queryClient, applicationKeys.lists(), result.data);
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
       queryClient.invalidateQueries({
         queryKey: [...applicationKeys.all, "deliveryOptions"],
       });
       if (result.success && result.data) {
+        queryClient.setQueryData(applicationKeys.detail(result.data.id), (old: object | undefined) => old ? { ...old, ...result.data } : old);
         queryClient.invalidateQueries({
           queryKey: applicationKeys.detail(result.data.id),
         });
@@ -145,6 +149,9 @@ export function useUpdateApplication() {
       // batch's derived figures; batch membership isn't known here, so
       // invalidate the whole credit-batch scope rather than guessing.
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.all });
+      // Batch membership is not returned by the write; refresh application
+      // geography and every batch/run projection that may include it.
+      queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       invalidateCertificationReadiness(queryClient);
     },
   });
@@ -157,8 +164,18 @@ export function useDeleteApplication() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (applicationId: string) =>
-      deleteApplicationFn({ applicationId }),
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.application),
+    mutationFn: async (data: DeleteApplicationInput): Promise<ActionResult<void>> => {
+      const result = await deleteApplicationFn(data);
+      if (!result.success) throwActionError(result);
+      return result;
+    },
+    onError: (error, variables) => {
+      if (error instanceof StaleVersionError) {
+        queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: applicationKeys.detail(variables.applicationId) });
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
       queryClient.invalidateQueries({
@@ -168,19 +185,15 @@ export function useDeleteApplication() {
       // it belonged to; batch membership isn't known here, so invalidate
       // the whole credit-batch scope rather than guessing.
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.all });
+      queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       invalidateCertificationReadiness(queryClient);
     },
   });
 }
 
-export function useApplicationCertificationLock(applicationId?: string) {
-  return useQuery({
-    queryKey: applicationKeys.certificationLock(applicationId),
-    enabled: !!applicationId,
-    queryFn: async () => {
-      const result = await loadApplicationCertificationLock(applicationId!);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-  });
+function applicationOperationInput(data: ApplicationFormData) {
+  const { biocharAppliedKg, applicationMethodType, ...fields } = data;
+  return { ...fields, gpsLatitude: fields.gpsLatitude ?? null, gpsLongitude: fields.gpsLongitude ?? null,
+    soilTemperatureC: fields.soilTemperatureC ?? null, soilTemperatureSource: fields.soilTemperatureSource ?? null,
+    appliedWetMassKg: biocharAppliedKg, applicationMethod: applicationMethodType };
 }

@@ -79,6 +79,8 @@ test.describe("Facility + Reactor UI CRUD", () => {
     // Fill in required fields
     await page.fill('input[name="name"]', facilityName);
     await page.fill('input[name="country"]', facilityCountry);
+    await page.locator("#gps-latitude").fill("-8.3");
+    await page.locator("#gps-longitude").fill("35.3");
     await facilityDialog.getByRole("combobox", { name: "Timezone" }).fill("Nairobi");
     await page
       .getByRole("option", { name: "Africa/Nairobi (UTC+3)" })

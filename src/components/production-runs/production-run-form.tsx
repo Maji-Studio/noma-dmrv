@@ -25,7 +25,7 @@ import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, PlusIcon } from "@p
 import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { ProductionReadingsField } from "./production-readings-field";
-import { FormSelect } from "@/components/forms/form-select";
+import { SegmentedControl } from "@/components/forms/segmented-control";
 import {
   EntitySelect,
   StorageLocationQuickAddDialog,
@@ -45,6 +45,8 @@ import {
 } from "./production-run-mass-balance";
 import {
   allowedProductionRunStatusesFrom,
+  isTerminalProductionRunStatus,
+  PRODUCTION_RUN_CREATE_STATUSES,
   shouldClearProductionRunEndTime,
   shouldIncludeProductionRunEndTime,
 } from "@/lib/production-runs/lifecycle";
@@ -54,6 +56,7 @@ import type { StorageLocationType } from "@/schemas/storage-locations";
 import { ProductionRunFeedstockDrawRow } from "./production-run-feedstock-draw-row";
 import { ProductionRunMixBinNotice } from "./production-run-mix-bin-notice";
 import { summarizeFeedstockWetInput } from "./production-run-feedstock-input";
+import { isProductionRunOutputLocked, type RecordLockView } from "@/lib/record-lock-view";
 
 // ============================================
 // Constants for select options
@@ -74,7 +77,7 @@ const EMPTY_FEEDSTOCK_DRAW = { storageLocationId: "", wetMassKg: undefined };
 
 export type ProductionRunSubmitData = Omit<ProductionRunFormData, "endTime"> & {
   endTime?: ProductionRunFormData["endTime"] | null;
-  expectedUpdatedAt?: Date;
+  expectedVersion?: number;
 };
 
 interface ProductionRunFormProps {
@@ -97,6 +100,8 @@ interface ProductionRunFormProps {
    */
   children?: React.ReactNode;
   deferredAttachments?: UseDeferredAttachmentsResult;
+  /** The saved run's lock: a product, stock entry or count fixes its output basis. */
+  lock?: RecordLockView;
 }
 export function ProductionRunForm({
   productionRun,
@@ -107,11 +112,17 @@ export function ProductionRunForm({
   submitLabel,
   children,
   deferredAttachments,
+  lock,
 }: ProductionRunFormProps) {
   const formId = useId();
   const isEditMode = !!productionRun;
-  const transitionFrom = (productionRun?.status as ProductionRunStatus) ?? "draft";
-  const statusOptions = allowedProductionRunStatusesFrom(transitionFrom).map(
+  // `assertProductionRunOutputBasisChange` refuses these once stock is used.
+  // Fail closed: the output basis waits for the lock to answer.
+  const outputLocked = isEditMode && (!lock || isProductionRunOutputLocked(lock));
+  const transitionFrom = (productionRun?.status as ProductionRunStatus) ?? "running";
+  const statusOptions = (isEditMode
+    ? allowedProductionRunStatusesFrom(transitionFrom)
+    : PRODUCTION_RUN_CREATE_STATUSES).map(
     (status) => ({ value: status, label: formatProductionRunStatus(status) }),
   );
   const { facilityId: contextFacilityId, facilities } = useFacilityContext();
@@ -121,7 +132,7 @@ export function ProductionRunForm({
   const defaultValues = {
     facilityId: productionRun?.facilityId || contextFacilityId || "",
     reactorId: productionRun?.reactorId ?? "",
-    status: (productionRun?.status as ProductionRunStatus) ?? "draft",
+    status: (productionRun?.status as ProductionRunStatus) ?? "running",
     cancellationReason: productionRun?.cancellationReason ?? "",
     ...productionRunTimingDefaults(
       productionRun,
@@ -134,15 +145,7 @@ export function ProductionRunForm({
             storageLocationId: draw.storageLocationId,
             wetMassKg: draw.wetMassKg,
           }))
-        : productionRun?.feedstockStorageLocationId &&
-            productionRun.feedstockWetMassKg
-          ? [
-              {
-                storageLocationId: productionRun.feedstockStorageLocationId,
-                wetMassKg: productionRun.feedstockWetMassKg,
-              },
-            ]
-          : [{ ...EMPTY_FEEDSTOCK_DRAW }],
+        : [{ ...EMPTY_FEEDSTOCK_DRAW }],
     feedstockMoisturePercent: productionRun?.feedstockMoisturePercent ?? null,
     feedingRateKgHr: productionRun?.feedingRateKgHr ?? null,
     residenceTimeMinutes: productionRun?.residenceTimeMinutes ?? undefined,
@@ -163,6 +166,7 @@ export function ProductionRunForm({
     (
       buildProductionRunResolver(
         resolveFacilityTimezone(facilities, values.facilityId),
+        productionRun?.status,
       ) as unknown as Resolver<
         ProductionRunFormValues,
         unknown,
@@ -210,6 +214,7 @@ export function ProductionRunForm({
   // Watch facility to filter reactors and storage locations
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedStatus = useWatch({ control, name: "status" });
+  const terminal = isTerminalProductionRunStatus(watchedStatus);
 
   // The zone the entered start/end are interpreted in — the facility picked in
   // the form, which can differ from the context facility.
@@ -341,7 +346,7 @@ export function ProductionRunForm({
     }
     const combined: ProductionRunSubmitData = {
       ...data,
-      expectedUpdatedAt: productionRun?.updatedAt,
+      expectedVersion: productionRun?.version,
       startTime: runWindow.startTime,
       endTime: runWindow.endTime,
     };
@@ -377,44 +382,23 @@ export function ProductionRunForm({
         fields={["reactorId", "status", "cancellationReason", "startDate", "startTime", "endDate", "endTime", "operatorId"]}
       >
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="reactorId" label="Reactor" error={errors.reactorId?.message} required>
-            <Controller
-              name="reactorId"
-              control={control}
-              render={({ field }) => (
-                <EntitySelect
-                  id="reactorId"
-                  entityType="reactor"
-                  value={field.value}
-                  onChange={field.onChange}
-                  placeholder="Select a reactor..."
-                  disabled={isSubmitting || !watchedFacilityId}
-                  error={!!errors.reactorId}
-                  filterBy={watchedFacilityId ? { facilityId: watchedFacilityId } : undefined}
-                  autoSelectSingle
-                />
-              )}
-            />
-          </FormField>
-
-          <FormField
+        <FormField
+          id="status"
+          label="Status"
+          error={errors.status?.message}
+          helperText="Mark finished runs Complete before certification."
+          certifyRequired
+          certifyStatus={runStatusCertStatus}
+        >
+          <SegmentedControl
             id="status"
-            label="Status"
-            error={errors.status?.message}
-            helperText="Mark finished runs Complete before certification."
-            certifyRequired
-            certifyStatus={runStatusCertStatus}
-          >
-            <FormSelect
-              id="status"
-              disabled={isSubmitting}
-              error={!!errors.status}
-              options={statusOptions}
-              {...register("status")}
-            />
-          </FormField>
-        </div>
+            legend="Run status"
+            options={statusOptions}
+            disabled={isSubmitting || outputLocked}
+            error={!!errors.status}
+            {...register("status")}
+          />
+        </FormField>
 
         {watchedStatus === "cancelled" && (
           <FormField
@@ -434,22 +418,64 @@ export function ProductionRunForm({
           </FormField>
         )}
 
+        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
+          <FormField id="reactorId" label="Reactor" error={errors.reactorId?.message} required>
+            <Controller
+              name="reactorId"
+              control={control}
+              render={({ field }) => (
+                <EntitySelect
+                  id="reactorId"
+                  entityType="reactor"
+                  allowEdit
+                  value={field.value}
+                  onChange={field.onChange}
+                  placeholder="Select a reactor..."
+                  disabled={isSubmitting || !watchedFacilityId || outputLocked}
+                  error={!!errors.reactorId}
+                  filterBy={watchedFacilityId ? { facilityId: watchedFacilityId } : undefined}
+                  autoSelectSingle
+                />
+              )}
+            />
+          </FormField>
+
+          <FormField id="operatorId" label="Operator" error={errors.operatorId?.message}>
+            <Controller
+              name="operatorId"
+              control={control}
+              render={({ field }) => (
+                <EntitySelect
+                  id="operatorId"
+                  entityType="operator"
+                  allowEdit
+                  value={field.value || undefined}
+                  onChange={field.onChange}
+                  placeholder="Select operator..."
+                  disabled={isSubmitting}
+                  error={!!errors.operatorId}
+                />
+              )}
+            />
+          </FormField>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="startDate"
             label="Start date"
             error={errors.startDate?.message}
-            helperText={timezoneHelperText}
+            cue={timezoneHelperText}
             required
           >
-            <FormInput id="startDate" type="date" disabled={isSubmitting} error={!!errors.startDate} {...register("startDate")} />
+            <FormInput id="startDate" type="date" disabled={isSubmitting || outputLocked} error={!!errors.startDate} {...register("startDate")} />
           </FormField>
 
           <FormField id="startTime" label="Start time" error={errors.startTime?.message} required>
             <FormInput
               id="startTime"
               type="time"
-              disabled={isSubmitting}
+              disabled={isSubmitting || outputLocked}
               error={!!errors.startTime}
               {...register("startTime")}
             />
@@ -472,48 +498,30 @@ export function ProductionRunForm({
           <FormField
             id="endDate"
             label="End date"
+            required={terminal}
             error={errors.endDate?.message}
             helperText="Leave the end blank until the run finishes. For an overnight run, set the next day."
           >
             <FormInput
               id="endDate"
               type="date"
-              disabled={isSubmitting}
+              disabled={isSubmitting || outputLocked}
               error={!!errors.endDate}
               {...register("endDate")}
             />
           </FormField>
 
-          <FormField id="endTime" label="End time" error={errors.endTime?.message}>
+          <FormField id="endTime" label="End time" required={terminal} error={errors.endTime?.message}>
             <FormInput
               id="endTime"
               type="time"
-              disabled={isSubmitting}
+              disabled={isSubmitting || outputLocked}
               error={!!errors.endTime}
               {...register("endTime")}
             />
           </FormField>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="operatorId" label="Operator" error={errors.operatorId?.message}>
-            <Controller
-              name="operatorId"
-              control={control}
-              render={({ field }) => (
-                <EntitySelect
-                  id="operatorId"
-                  entityType="operator"
-                  value={field.value || undefined}
-                  onChange={field.onChange}
-                  placeholder="Select operator..."
-                  disabled={isSubmitting}
-                  error={!!errors.operatorId}
-                />
-              )}
-            />
-          </FormField>
-        </div>
       </FormSection>
 
       {/* ── Feedstock & processing ── */}
@@ -602,11 +610,11 @@ export function ProductionRunForm({
         ))}
 
 
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <MoistureField
             id="feedstockMoisturePercent"
             materialLabel="Feedstock"
+            required={terminal}
             error={errors.feedstockMoisturePercent?.message}
             disabled={isSubmitting}
             certifyRequired={isProductionRunCertifyField("feedstockMoisturePercent")}
@@ -662,6 +670,7 @@ export function ProductionRunForm({
         <FormField
           id="biocharStorageLocationId"
           label="Biochar storage bin"
+          required={watchedStatus === "complete"}
           error={errors.biocharStorageLocationId?.message}
         >
           <Controller
@@ -671,9 +680,10 @@ export function ProductionRunForm({
               <EntitySelect
                 id="biocharStorageLocationId"
                 entityType="storageLocation"
+                allowEdit
                 value={field.value || undefined}
                 onChange={field.onChange}
-                disabled={isSubmitting || !watchedFacilityId}
+                disabled={isSubmitting || !watchedFacilityId || outputLocked}
                 error={!!errors.biocharStorageLocationId}
                 filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "biochar_bin" } : undefined}
                 allowCreate={!!watchedFacilityId}
@@ -690,9 +700,10 @@ export function ProductionRunForm({
           moisturePercent={watchedBiocharMoisture}
           wet={{
             id: "biocharOutputKg",
+            required: watchedStatus === "complete",
             error: biocharOutputError,
             warning: massBalanceFeedback.wetWarning,
-            disabled: isSubmitting,
+            disabled: isSubmitting || outputLocked,
             placeholder: "e.g. 150",
             certifyRequired: isProductionRunCertifyField("biocharOutputKg"),
             certifyStatus: certStatus("biocharOutputKg"),
@@ -700,8 +711,9 @@ export function ProductionRunForm({
           }}
           moisture={{
             id: "biocharMoisturePercent",
+            required: watchedStatus === "complete",
             error: errors.biocharMoisturePercent?.message,
-            disabled: isSubmitting,
+            disabled: isSubmitting || outputLocked,
             placeholder: "e.g. 1.5",
             certifyRequired: isProductionRunCertifyField("biocharMoisturePercent"),
             certifyStatus: certStatus("biocharMoisturePercent"),

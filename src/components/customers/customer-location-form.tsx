@@ -5,15 +5,19 @@
  */
 "use client";
 
+import { facilityDistanceDefaults } from "@/lib/facility-distance-defaults";
+import { useFacilityContext } from "@/hooks/use-facility-context";
+import { Notice } from "@/components/ui/notice";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormActions, makeCertFieldStatus } from "@/components/forms";
+import { FormActions } from "@/components/forms";
 import {
   customerLocationFormSchema,
   type CustomerLocationFormData,
   type CustomerLocationFormInput,
 } from "@/schemas/customers";
 import type { CustomerLocation } from "@/db/schema/parties";
+import type { Facility } from "@/db/schema";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { resolveLocationCountry } from "@/lib/location-defaults";
 import { CustomerLocationFields } from "./customer-location-fields";
@@ -22,9 +26,24 @@ import { CustomerLocationFields } from "./customer-location-fields";
 // Component
 // ============================================
 
+/** Fields the form pre-fills from: a saved location or a pending one. */
+export type CustomerLocationInitialValues = Pick<CustomerLocation, "country"> &
+  Partial<
+    Pick<
+      CustomerLocation,
+      | "name"
+      | "stateRegion"
+      | "city"
+      | "gpsLatitude"
+      | "gpsLongitude"
+      | "address"
+      | "defaultSoilTemperatureC"
+      | "isDefault"
+    >
+  > & { facilityDistances?: import("@/schemas/facility-distances").FacilityDistanceInput[] };
+
 export type EditableCustomerLocation = Pick<
   CustomerLocation,
-  | "id"
   | "name"
   | "country"
   | "stateRegion"
@@ -32,17 +51,24 @@ export type EditableCustomerLocation = Pick<
   | "gpsLatitude"
   | "gpsLongitude"
   | "address"
-  | "distanceFromFacilityKm"
-  | "distanceSource"
+  | "facilityDistances"
   | "defaultSoilTemperatureC"
   | "isDefault"
-  // The version the dialog opened on, echoed back on save (issue #768).
-  | "updatedAt"
->;
+> &
+  Pick<
+    CustomerLocation,
+    | "id"
+    | "updatedAt"
+    // The integer version the dialog opened on, echoed back on save (issue #768).
+    | "version"
+  >;
 
 interface CustomerLocationFormProps {
   /** Existing location data for editing (undefined for create mode) */
-  location?: EditableCustomerLocation;
+  location?: CustomerLocationInitialValues;
+  facility?: Facility;
+  /** Start "default" checked for a new location (the customer's first). */
+  initialIsDefault?: boolean;
   /** Prefix field IDs when the form opens above another form with overlapping IDs. */
   idPrefix?: string;
   /** Form submission handler */
@@ -59,6 +85,8 @@ interface CustomerLocationFormProps {
 
 export function CustomerLocationForm({
   location,
+  facility,
+  initialIsDefault = false,
   idPrefix,
   onSubmit,
   onCancel,
@@ -67,6 +95,7 @@ export function CustomerLocationForm({
   submitLabel,
 }: CustomerLocationFormProps) {
   const isEditMode = !!location;
+  const { facilities } = useFacilityContext();
   const { defaults: organizationDefaults } = useOrganizationDefaultValues();
   const defaultValues = {
     name: location?.name ?? "",
@@ -79,10 +108,9 @@ export function CustomerLocationForm({
     gpsLatitude: location?.gpsLatitude ?? undefined,
     gpsLongitude: location?.gpsLongitude ?? undefined,
     address: location?.address ?? "",
-    distanceFromFacilityKm: location?.distanceFromFacilityKm ?? undefined,
-    distanceSource: location?.distanceSource ?? null,
-    defaultSoilTemperatureC: location?.defaultSoilTemperatureC ?? undefined,
-    isDefault: location?.isDefault ?? false,
+    facilityDistances: facilityDistanceDefaults(facility ? [facility] : facilities, location?.facilityDistances),
+    defaultSoilTemperatureC: location?.defaultSoilTemperatureC ?? "",
+    isDefault: location?.isDefault ?? initialIsDefault,
   };
 
   const form = useForm<
@@ -93,7 +121,6 @@ export function CustomerLocationForm({
     resolver: zodResolver(customerLocationFormSchema),
     defaultValues,
   });
-  const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
   const defaultSubmitLabel = isEditMode ? "Update location" : "Add location";
 
@@ -109,11 +136,15 @@ export function CustomerLocationForm({
       }}
       className="space-y-20"
     >
+      {isEditMode && <Notice tone="info">Saving fills a missing distance; never changes a recorded one.</Notice>}
       <CustomerLocationFields
         form={form}
+        facility={facility}
         isSubmitting={isSubmitting}
+        isCurrentDefault={location?.isDefault === true}
         idPrefix={idPrefix}
-        certStatus={certStatus}
+        isEditMode={isEditMode}
+        savedDistances={location?.facilityDistances}
       />
 
       <FormActions

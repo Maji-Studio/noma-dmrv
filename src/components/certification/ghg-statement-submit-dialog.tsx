@@ -32,7 +32,8 @@ import {
   type RemoteGhgStatus,
 } from "@/lib/certification/status";
 import { formatCount } from "@/lib/copy-utils";
-import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { DetailField } from "@/components/ui/detail-panel";
+import { PeriodStrip } from "./ghg-statement-period-strip";
 import {
   buildSubmitGhgStatementDialogSchema,
   type SubmitGhgStatementDialogFormInput,
@@ -424,22 +425,7 @@ function GhgStatementSubmitDialogContent({
             {displayedServerError && (
               <ServerError message={displayedServerError} />
             )}
-            <div className="flex flex-wrap items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
-              <span className="body-caption text-[var(--color-text-tertiary)]">
-                {isPending
-                  ? "noma is submitting the GHG Statement to the verifier."
-                  : mutation.isSuccess && reconciledStatus
-                    ? verificationFailed
-                      ? "Isometric status: Verification failed. Update the Removals, close this dialog, then use Refresh on the GHG Statement before resubmitting."
-                      : resultNeedsReview
-                        ? `Isometric status: ${reconciledStatus.label}. Review the submission before trying again.`
-                        : `Isometric status: ${reconciledStatus.label}. The reconciled status is saved in noma.`
-                    : mutation.isSuccess
-                      ? "The reconciled Isometric status is saved in noma."
-                      : submissionStalled
-                        ? "Registry work may still be continuing. Close this dialog, then use Refresh on the GHG Statement before trying again."
-                        : "Completed registry operations are preserved for a safe retry."}
-              </span>
+            <div className="flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] pt-16">
               {!isPending && (
                 <div className="flex items-center gap-12">
                   {mutation.isSuccess && resultNeedsReview ? (
@@ -463,6 +449,13 @@ function GhgStatementSubmitDialogContent({
                     <>
                       <Button
                         type="button"
+                        variant="primary"
+                        onClick={() => void retrySubmission()}
+                      >
+                        Try again
+                      </Button>
+                      <Button
+                        type="button"
                         onClick={() => {
                           mutation.reset();
                           setProgressUpdates([]);
@@ -470,17 +463,25 @@ function GhgStatementSubmitDialogContent({
                       >
                         Review submission
                       </Button>
-                      <Button
-                        type="button"
-                        variant="primary"
-                        onClick={() => void retrySubmission()}
-                      >
-                        Try again
-                      </Button>
                     </>
                   )}
                 </div>
               )}
+              <span className="body-caption text-[var(--color-text-tertiary)]">
+                {isPending
+                  ? "noma is submitting the GHG Statement to the verifier."
+                  : mutation.isSuccess && reconciledStatus
+                    ? verificationFailed
+                      ? "Isometric status: Verification failed. Update the Removals, close this dialog, then use Refresh on the GHG Statement before resubmitting."
+                      : resultNeedsReview
+                        ? `Isometric status: ${reconciledStatus.label}. Review the submission before trying again.`
+                        : `Isometric status: ${reconciledStatus.label}. The reconciled status is saved in noma.`
+                    : mutation.isSuccess
+                      ? "The reconciled Isometric status is saved in noma."
+                      : submissionStalled
+                        ? "Registry work may still be continuing. Close this dialog, then use Refresh on the GHG Statement before trying again."
+                        : "Completed registry operations are preserved for a safe retry."}
+              </span>
             </div>
           </>
         ) : (
@@ -503,25 +504,7 @@ function GhgStatementSubmitDialogContent({
                 }
               }}
               footer={
-                <div className="flex flex-wrap justify-end gap-12">
-                  <Button
-                    type="button"
-                    variant="default"
-                    onClick={onClose}
-                    disabled={submissionPending}
-                  >
-                    Cancel
-                  </Button>
-                  {stepIndex === REVIEW_STEP_INDEX && (
-                    <Button
-                      type="button"
-                      variant="default"
-                      onClick={returnToReportStep}
-                      disabled={submissionPending}
-                    >
-                      Back
-                    </Button>
-                  )}
+                <div className="flex flex-wrap justify-start gap-12">
                   {stepIndex === REPORT_STEP_INDEX ? (
                     <Button
                       type="button"
@@ -556,6 +539,24 @@ function GhgStatementSubmitDialogContent({
                           : "Submit"}
                     </Button>
                   )}
+                  {stepIndex === REVIEW_STEP_INDEX && (
+                    <Button
+                      type="button"
+                      variant="default"
+                      onClick={returnToReportStep}
+                      disabled={submissionPending}
+                    >
+                      Back
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="default"
+                    onClick={onClose}
+                    disabled={submissionPending}
+                  >
+                    Cancel
+                  </Button>
                 </div>
               }
             >
@@ -616,7 +617,7 @@ function GhgStatementSubmitDialogContent({
                         <FormField
                           id="externalReportUrl"
                           label="External report URL"
-                          helperText="The verifier must be able to open this controlled document."
+                          cue="The verifier must be able to open this controlled document."
                           required
                           error={errors.externalReportUrl?.message}
                         >
@@ -698,15 +699,6 @@ function GeneratedReportPreview({
   onReview: () => void;
 }) {
   const data = query.data?.status === "available" ? query.data.value : null;
-  const period = data
-    ? data.reportingPeriodStartOn
-      ? formatDateRange(
-          data.reportingPeriodStartOn,
-          data.reportingPeriodEndOn,
-        )
-      : `Ends ${formatDate(data.reportingPeriodEndOn)}`
-    : null;
-
   return (
     <section className="flex flex-col gap-12" aria-labelledby="report-preview">
       <div className="flex flex-col gap-4">
@@ -719,7 +711,7 @@ function GeneratedReportPreview({
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-12 border-y border-[var(--color-border-secondary)] py-12">
+      <div className="flex flex-wrap items-center justify-between gap-12">
         <span className="body-small text-[var(--color-text-secondary)]">
           {reviewed
             ? `Version ${report.version} opened for review.`
@@ -737,24 +729,20 @@ function GeneratedReportPreview({
       </div>
 
       {data && (
-        <dl className="grid grid-cols-1 gap-12 sm:grid-cols-2">
-          <div className="flex flex-col gap-2">
-            <dt className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-              Reporting period
-            </dt>
-            <dd className="body-small text-[var(--color-text-primary)]">
-              {period}
-            </dd>
-          </div>
-          <div className="flex flex-col gap-2">
-            <dt className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-              Contents
-            </dt>
-            <dd className="body-small text-[var(--color-text-primary)]">
-              {formatCount(data.memberGhgEntryCount, "GHG Entry", "GHG Entries")}
-            </dd>
-          </div>
-        </dl>
+        <>
+          <PeriodStrip
+            start={data.reportingPeriodStartOn ?? null}
+            end={data.reportingPeriodEndOn}
+          />
+          <DetailField
+            label="Contents"
+            value={formatCount(
+              data.memberGhgEntryCount,
+              "GHG Entry",
+              "GHG Entries",
+            )}
+          />
+        </>
       )}
 
       <GhgStatementCarbonBreakdown query={query} />
@@ -773,16 +761,10 @@ function ExternalReportPreview({ url }: { url: string }) {
           noma attaches this controlled document when you submit.
         </p>
       </div>
-      <dl className="border-y border-[var(--color-border-secondary)] py-12">
-        <div className="flex flex-col gap-2">
-          <dt className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-            External report URL
-          </dt>
-          <dd className="body-small break-all font-mono text-[var(--color-text-primary)]">
-            {url}
-          </dd>
-        </div>
-      </dl>
+      <DetailField
+        label="External report URL"
+        value={<span className="break-all font-mono">{url}</span>}
+      />
     </section>
   );
 }

@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   getProductionRuns: vi.fn(),
   getProductionRunStats: vi.fn(),
   getCreditBatches: vi.fn(),
+  listCreditBatchActivity: vi.fn(),
+  getCreditBatchActivitySummary: vi.fn(),
   getCertifierProjectByFacility: vi.fn(),
   listFacilitiesLinkedToExternal: vi.fn(),
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
@@ -35,6 +37,7 @@ vi.mock("@/data-access/production-runs", () => ({
   getProductionRuns: mocks.getProductionRuns,
   getProductionRunStats: mocks.getProductionRunStats,
 }));
+vi.mock("@/data-access/credit-batch-activity", () => ({ listCreditBatchActivity: mocks.listCreditBatchActivity, getCreditBatchActivitySummary: mocks.getCreditBatchActivitySummary }));
 vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatches: mocks.getCreditBatches,
 }));
@@ -54,7 +57,10 @@ vi.mock("@/lib/log", () => ({
     error instanceof Error ? error.message : String(error),
 }));
 
+import type { DomainIssue } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
+import { POST as activitySummaryRoute } from "./credit-batches/activity/summary/route";
+import { POST as activityRoute } from "./credit-batches/activity/route";
 import { POST as creditBatchesRoute } from "./credit-batches/route";
 import { POST as certifierSummaryRoute } from "./facilities/[facilityId]/certifier-summary/route";
 import { POST as facilitiesRoute } from "./facilities/route";
@@ -74,9 +80,17 @@ const ORG_CONTEXT = {
   isPlatformAdmin: false,
 };
 const FACILITY_ID = "11111111-1111-4111-8111-111111111111";
+const FACILITY_VERSION = 3;
 const FOREIGN_FACILITY_ID = "22222222-2222-4222-8222-222222222222";
 const MALFORMED_ID = "not-a-facility";
 const TOO_LONG_SEARCH = "x".repeat(256);
+
+const INVALID_FACILITY_ISSUE: DomainIssue = {
+  path: [],
+  code: "invalid_format",
+  message: "Choose a valid facility.",
+  meta: { format: "uuid" },
+};
 
 const EMPTY_PAGE = {
   items: [],
@@ -107,6 +121,7 @@ interface ReadEndpoint {
   /** A request whose input cannot be validated; absent when the read takes none. */
   badInput?: () => Promise<Response>;
   badInputError?: string;
+  badInputIssues?: DomainIssue[];
   /** A request naming a facility outside the active organization. */
   foreignFacility?: () => Promise<Response>;
   /** The data-access call a foreign facility must never reach. */
@@ -114,11 +129,26 @@ interface ReadEndpoint {
 }
 
 const endpoints: Record<string, ReadEndpoint> = {
+  "credit batch activity summary": {
+    ok: () => activitySummaryRoute(post("/api/reads/credit-batches/activity/summary", { creditBatchId: CREDIT_BATCH.id })),
+    data: { total: 0, counts: [], latest: null },
+    badInput: () => activitySummaryRoute(post("/api/reads/credit-batches/activity/summary", { creditBatchId: MALFORMED_ID })),
+    badInputError: "Invalid activity filters: Choose a valid credit batch.",
+    badInputIssues: [{ path: ["creditBatchId"], code: "invalid_format", message: "Choose a valid credit batch.", meta: { format: "uuid" } }],
+  },
+  "credit batch activity": {
+    ok: () => activityRoute(post("/api/reads/credit-batches/activity", { creditBatchId: CREDIT_BATCH.id })),
+    data: { items: [], nextCursor: null },
+    badInput: () => activityRoute(post("/api/reads/credit-batches/activity", { creditBatchId: MALFORMED_ID })),
+    badInputError: "Invalid activity filters: Choose a valid credit batch.",
+    badInputIssues: [{ path: ["creditBatchId"], code: "invalid_format", message: "Choose a valid credit batch.", meta: { format: "uuid" } }],
+  },
   "facility detail": {
     ok: () => facilityRoute(post("/api/reads/facilities"), facilityParams(FACILITY_ID)),
-    data: { id: FACILITY_ID },
+    data: { id: FACILITY_ID, version: FACILITY_VERSION },
     badInput: () => facilityRoute(post("/api/reads/facilities"), facilityParams(MALFORMED_ID)),
     badInputError: "Invalid facility identifier: Choose a valid facility.",
+    badInputIssues: [INVALID_FACILITY_ISSUE],
   },
   "active organization": {
     ok: () => activeOrganizationRoute(),
@@ -129,12 +159,14 @@ const endpoints: Record<string, ReadEndpoint> = {
     data: { facilityCount: 1 },
     badInput: () => onboardingRoute(post("/api/reads/onboarding/status", { facilityId: MALFORMED_ID })),
     badInputError: "Invalid onboarding filters: Choose a valid facility.",
+    badInputIssues: [{ ...INVALID_FACILITY_ISSUE, path: ["facilityId"] }],
   },
   "dashboard overview": {
     ok: () => dashboardRoute(post("/api/reads/dashboard/overview", { facilityId: FACILITY_ID })),
     data: { generatedAt: "2026-09-15T10:00:00.000Z" },
     badInput: () => dashboardRoute(post("/api/reads/dashboard/overview", { facilityId: MALFORMED_ID })),
     badInputError: "Invalid dashboard filters: Choose a valid facility.",
+    badInputIssues: [{ ...INVALID_FACILITY_ISSUE, path: ["facilityId"] }],
     foreignFacility: () => dashboardRoute(post("/api/reads/dashboard/overview", { facilityId: FOREIGN_FACILITY_ID })),
     guardedRead: () => mocks.getDashboardOverview,
   },
@@ -147,6 +179,12 @@ const endpoints: Record<string, ReadEndpoint> = {
       ),
     badInputError:
       "Invalid facility filters: Search query must be less than 255 characters.",
+    badInputIssues: [{
+      path: ["search"],
+      code: "too_big",
+      message: "Search query must be less than 255 characters",
+      meta: { maximum: TOO_LONG_SEARCH.length - 1, inclusive: true },
+    }],
   },
   "production runs": {
     ok: () =>
@@ -159,6 +197,7 @@ const endpoints: Record<string, ReadEndpoint> = {
         post("/api/reads/production-runs", { startDate: null }),
       ),
     badInputError: "Invalid production run filters: Enter a valid date.",
+    badInputIssues: [{ path: ["startDate"], code: "invalid_union", message: "Enter a valid date." }],
     foreignFacility: () =>
       productionRunsRoute(
         post("/api/reads/production-runs", { facilityId: FOREIGN_FACILITY_ID }),
@@ -176,6 +215,7 @@ const endpoints: Record<string, ReadEndpoint> = {
         post("/api/reads/production-runs/stats", MALFORMED_ID),
       ),
     badInputError: "Invalid facility identifier: Choose a valid facility.",
+    badInputIssues: [INVALID_FACILITY_ISSUE],
     foreignFacility: () =>
       productionRunStatsRoute(
         post("/api/reads/production-runs/stats", FOREIGN_FACILITY_ID),
@@ -188,6 +228,7 @@ const endpoints: Record<string, ReadEndpoint> = {
     badInput: () =>
       creditBatchesRoute(post("/api/reads/credit-batches", MALFORMED_ID)),
     badInputError: "Invalid facility identifier: Choose a valid facility.",
+    badInputIssues: [INVALID_FACILITY_ISSUE],
     foreignFacility: () =>
       creditBatchesRoute(post("/api/reads/credit-batches", FOREIGN_FACILITY_ID)),
     guardedRead: () => mocks.getCreditBatches,
@@ -210,6 +251,7 @@ const endpoints: Record<string, ReadEndpoint> = {
         facilityParams(MALFORMED_ID),
       ),
     badInputError: "Invalid facility identifier: Choose a valid facility.",
+    badInputIssues: [INVALID_FACILITY_ISSUE],
     foreignFacility: () =>
       certifierSummaryRoute(
         post(`/api/reads/facilities/${FOREIGN_FACILITY_ID}/certifier-summary`),
@@ -227,13 +269,15 @@ describe.each(Object.entries(endpoints))(
       mocks.resolveOrgContext.mockResolvedValue({ ok: true, ctx: ORG_CONTEXT });
       mocks.requireOrgFacility.mockResolvedValue(undefined);
       mocks.getFacilities.mockResolvedValue(EMPTY_PAGE);
-      mocks.getFacilityById.mockResolvedValue({ id: FACILITY_ID });
+      mocks.getFacilityById.mockResolvedValue({ id: FACILITY_ID, version: FACILITY_VERSION });
       mocks.getActiveOrganization.mockResolvedValue({ id: ORG_CONTEXT.organizationId });
       mocks.getOnboardingStatus.mockResolvedValue({ facilityCount: 1 });
       mocks.getDashboardOverview.mockResolvedValue({ generatedAt: "2026-09-15T10:00:00.000Z" });
       mocks.getProductionRuns.mockResolvedValue(EMPTY_PAGE);
       mocks.getProductionRunStats.mockResolvedValue(RUN_STATS);
       mocks.getCreditBatches.mockResolvedValue([CREDIT_BATCH]);
+      mocks.getCreditBatchActivitySummary.mockResolvedValue({ total: 0, counts: [], latest: null });
+      mocks.listCreditBatchActivity.mockResolvedValue({ items: [], nextCursor: null });
       mocks.getCertifierProjectByFacility.mockResolvedValue(null);
       mocks.listFacilitiesLinkedToExternal.mockResolvedValue([]);
     });
@@ -289,6 +333,8 @@ describe.each(Object.entries(endpoints))(
       await expect(response.json()).resolves.toEqual({
         success: false,
         error: endpoint.badInputError,
+        code: "validation_failed",
+        issues: endpoint.badInputIssues,
       });
       expect(mocks.logger.error).not.toHaveBeenCalled();
     });

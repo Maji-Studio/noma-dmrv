@@ -20,7 +20,7 @@ describe("supplier location form parity", () => {
     expect(supplierFormSource).not.toContain("useCreateSupplierLocation");
     expect(supplierLocationFormSource).toContain("useOrganizationDefaultValues");
     expect(supplierLocationFormSource).toContain("<PositionPicker");
-    expect(supplierLocationFormSource).toContain("<DistanceCalcField");
+    expect(supplierLocationFormSource).toContain("<PartyFacilityDistances");
     expect(supplierLocationFormSource).toContain('register("isDefault")');
   });
 
@@ -35,7 +35,7 @@ describe("supplier location form parity", () => {
     expect(supplierLocationFormSource).toContain('fieldId(idPrefix, "distance")');
     expect(supplierLocationFormSource).toContain('fieldId(idPrefix, "default")');
     expect(supplierLocationFormSource).toContain("idPrefix={positionIdPrefix}");
-    expect(supplierLocationFormSource).toContain("id={distanceId}");
+    expect(supplierLocationFormSource).toContain("idPrefix={distanceId}");
     expect(supplierLocationFormSource).toContain("htmlFor={defaultId}");
     expect(supplierLocationFormSource).toContain("id={defaultId}");
   });

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   AmbiguousLocalTimeError,
   combineDateAndTime,
-  DEFAULT_FACILITY_TIMEZONE,
+  UNKNOWN_FACILITY_TIMEZONE,
   formatFacilityDate,
   formatFacilityTime,
   formatLocalDate,
@@ -11,10 +11,37 @@ import {
   NonexistentLocalTimeError,
   parseLocalDateString,
   resolveFacilityTimezone,
+  startOfFacilityDay,
   toDateInputValue,
 } from "@/lib/date-utils";
 
 const originalTz = process.env.TZ;
+
+describe("startOfFacilityDay", () => {
+  it.each([
+    { day: "2026-09-06", zone: "America/Santiago", expected: "2026-09-06T04:00:00.000Z", clock: "01:00" },
+    { day: "2026-11-01", zone: "America/Havana", expected: "2026-11-01T04:00:00.000Z", clock: "00:00" },
+    { day: "2026-07-17", zone: "Africa/Dar_es_Salaam", expected: "2026-07-16T21:00:00.000Z", clock: "00:00" },
+    { day: "2026-07-17", zone: "UTC", expected: "2026-07-17T00:00:00.000Z", clock: "00:00" },
+  ])("finds the first instant of $day in $zone", ({ day, zone, expected, clock }) => {
+    for (const machineZone of ["Europe/Zurich", "America/New_York", "UTC"]) {
+      process.env.TZ = machineZone;
+      const start = startOfFacilityDay(day, zone);
+      expect(start.toISOString()).toBe(expected);
+      expect(formatFacilityDate(start, zone)).toBe(day);
+      expect(formatFacilityTime(start, zone, "HH:mm")).toBe(clock);
+      expect(formatFacilityDate(new Date(start.getTime() - 1), zone)).not.toBe(day);
+    }
+  });
+
+  it.each(["", "2026-02-30", "2026-13-01"])("rejects invalid calendar date %s", (day) => {
+    expect(startOfFacilityDay(day, "UTC").getTime()).toBeNaN();
+  });
+
+  it("rejects an entirely skipped calendar day", () => {
+    expect(startOfFacilityDay("2011-12-30", "Pacific/Apia").getTime()).toBeNaN();
+  });
+});
 
 afterEach(() => {
   process.env.TZ = originalTz;
@@ -224,16 +251,16 @@ describe("resolveFacilityTimezone", () => {
 
   // Edit mode for a run whose facility is not in the context list, and the
   // create form before the facility list has loaded. Falls back to the
-  // `facilities.timezone` column default rather than the browser's zone.
-  it("falls back to the column default for an unknown or absent facility", () => {
+  // unknown-facility zone rather than the browser's zone.
+  it("falls back to the unknown-facility zone for an unknown or absent facility", () => {
     expect(resolveFacilityTimezone(facilities, "facility-z")).toBe(
-      DEFAULT_FACILITY_TIMEZONE,
+      UNKNOWN_FACILITY_TIMEZONE,
     );
     expect(resolveFacilityTimezone(facilities, null)).toBe(
-      DEFAULT_FACILITY_TIMEZONE,
+      UNKNOWN_FACILITY_TIMEZONE,
     );
     expect(resolveFacilityTimezone([], "facility-a")).toBe(
-      DEFAULT_FACILITY_TIMEZONE,
+      UNKNOWN_FACILITY_TIMEZONE,
     );
   });
 });

@@ -22,23 +22,18 @@ vi.mock("@/lib/auth/server", () => ({
   }),
 }));
 
-vi.mock("@/data-access/customers", () => ({
-  createCustomer: vi.fn(),
-  deleteCustomer: vi.fn(),
-  getCustomers: vi.fn(),
-  getCustomerWithRelations: vi.fn(),
-  getCustomerLocations: vi.fn(),
-  updateCustomer: vi.fn(),
-  createCustomerLocation: (...args: unknown[]) =>
-    mockCreateCustomerLocation(...args),
-  updateCustomerLocation: (...args: unknown[]) =>
-    mockUpdateCustomerLocation(...args),
-  deleteCustomerLocation: vi.fn(),
+vi.mock("@/lib/operations/customer-locations", () => ({
+  addCustomerLocation: { id: "add_customer_location" },
+  updateCustomerLocation: { id: "update_customer_location" },
+  deleteCustomerLocation: { id: "delete_customer_location" },
 }));
-
-vi.mock("@/data-access/code-generator", () => ({
-  CODE_CONFLICT_MESSAGES: { customer: "A customer with this code already exists." },
-  withAutoCode: vi.fn(),
+vi.mock("@/lib/operations/customers", () => ({}));
+vi.mock("@/data-access/customers", () => ({}));
+vi.mock("@/lib/operations/runner", () => ({
+  runOperationInProcess: (operation: { id: string }, ctx: unknown, input: Record<string, unknown>) =>
+    operation.id === "add_customer_location"
+      ? mockCreateCustomerLocation(ctx, input)
+      : mockUpdateCustomerLocation(ctx, input.locationId, input),
 }));
 
 import {
@@ -64,7 +59,7 @@ describe("updateCustomerLocationFn", () => {
   });
 
   it("leaves every omitted field untouched when only the default flag changes", async () => {
-    const result = await updateCustomerLocationFn({
+    const result = await updateCustomerLocationFn({ expectedVersion: 1,
       locationId: LOCATION_ID,
       isDefault: true,
     });
@@ -80,8 +75,7 @@ describe("updateCustomerLocationFn", () => {
       "address",
       "gpsLatitude",
       "gpsLongitude",
-      "distanceFromFacilityKm",
-      "distanceSource",
+      "facilityDistances",
       "defaultSoilTemperatureC",
     ]) {
       expect(patch[key]).toBeUndefined();
@@ -89,12 +83,12 @@ describe("updateCustomerLocationFn", () => {
   });
 
   it("clears a field the operator actually emptied", async () => {
-    await updateCustomerLocationFn({
+    await updateCustomerLocationFn({ expectedVersion: 1,
       locationId: LOCATION_ID,
       stateRegion: "",
       city: "",
       address: "",
-      distanceFromFacilityKm: "",
+      facilityDistances: [{ facilityId: LOCATION_ID, distanceKm: "", distanceSource: "manual" }],
       defaultSoilTemperatureC: "",
     } as never);
 
@@ -102,28 +96,26 @@ describe("updateCustomerLocationFn", () => {
       stateRegion: null,
       city: null,
       address: null,
-      distanceFromFacilityKm: null,
-      distanceSource: null,
+      facilityDistances: [{ facilityId: LOCATION_ID, distanceKm: null, distanceSource: "manual" }],
       defaultSoilTemperatureC: null,
     });
   });
 
-  it("keeps populated values, including zero", async () => {
-    await updateCustomerLocationFn({
+  it("keeps positive distances and zero soil temperature", async () => {
+    await updateCustomerLocationFn({ expectedVersion: 1,
       locationId: LOCATION_ID,
       stateRegion: "Iringa",
       city: "Mafinga",
-      distanceFromFacilityKm: 0,
+      facilityDistances: [{ facilityId: LOCATION_ID, distanceKm: 1, distanceSource: "manual" }],
       defaultSoilTemperatureC: 0,
     } as never);
 
     expect(lastPatch()).toMatchObject({
       stateRegion: "Iringa",
       city: "Mafinga",
-      distanceFromFacilityKm: 0,
+      facilityDistances: [{ facilityId: LOCATION_ID, distanceKm: 1, distanceSource: "manual" }],
       defaultSoilTemperatureC: 0,
       // A present distance typed without explicit provenance is operator-entered.
-      distanceSource: "manual",
     });
   });
 

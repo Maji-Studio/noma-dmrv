@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { buildSubmissionWarningNotes } from "./submission-warning-notes";
 
 const POST_WINDOW_SUFFIX =
-  "§8.3.1 permits sampling from stored material only when Samples are spatially distributed across the stored batch. Confirm this with the registry.";
+  "§8.3.1 says biochar should be sampled in its final pre-storage condition, after processing and at typical moisture levels, " +
+  "and before blending when it is applied with other substances such as compost. Confirm this Sample represents the batch in that condition.";
 
 describe("buildSubmissionWarningNotes", () => {
   it("groups repeated post-production sample warnings into one plain-language note", () => {
@@ -20,9 +21,12 @@ describe("buildSubmissionWarningNotes", () => {
         ),
       }),
     ]);
-    expect(buildSubmissionWarningNotes(warnings)[0].detail).toContain(
-      "stored-material Samples must represent the batch's full range",
+    const { detail } = buildSubmissionWarningNotes(warnings)[0];
+    expect(detail).toContain(
+      "§8.3.1 asks for Samples of the biochar in its final pre-storage condition, and before blending when it is applied with other substances. Confirm these Samples represent the batch in that condition.",
     );
+    // Protocol v1.1 has no "stored material" sampling route to cite.
+    expect(detail).not.toMatch(/stored-material|registry/);
   });
 
   it("uses singular copy for one post-production sample", () => {

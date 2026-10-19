@@ -17,14 +17,16 @@
  * to a manual/seeded run — it depends on a guaranteed-ready batch and the live
  * registry, which are too fragile for CI.
  */
-import { expect, test } from "./fixtures";
+import { expect, test, type SeededChainData } from "./fixtures";
 import {
   type SeededGroupedRemoval,
   type SeededIncompleteBatch,
   SANDBOX_PROJECT_ID,
   seedCertifierMapping,
+  type SeededReadyBatch,
   seedGroupedRemovalWithChain,
   seedUngroupedIncompleteBatch,
+  seedUngroupedReadyBatchWithChain,
 } from "./fixtures/certification-helpers";
 import { SAMPLE_CREATE_CREDIT_BATCH_PARAM } from "@/lib/sample-create-intent";
 
@@ -34,6 +36,32 @@ const FAKE_PROJECT_ID = "e2e-new-removal-fake-project";
 // First navigation to a not-yet-compiled certification route can take 10-30s in
 // dev (Turbopack cold compile); give assertions room so the test isn't flaky.
 const COLD_COMPILE_TIMEOUT_MS = 30_000;
+
+// The wizard only lists batches that still have an unassigned application
+// slice (a Removal groups application slices), so the @live tests need a batch
+// with an application link that is nonetheless NOT ready (no lab samples, no
+// production-run link). Hermetic tests keep the lighter application-less seed.
+function seedNotReadyListedBatch(
+  seededData: SeededChainData,
+  testRunId: string,
+): Promise<SeededReadyBatch> {
+  return seedUngroupedReadyBatchWithChain(
+    {
+      facilityId: seededData.facility.id,
+      reactorId: seededData.reactor.id,
+      formulationId: seededData.formulation.id,
+      feedstockId: seededData.feedstock.id,
+      feedstockStorageLocationId: seededData.feedstockStorageLocation.id,
+      biocharStorageLocationId: seededData.biocharStorageLocation.id,
+      productStorageLocationId: seededData.productStorageLocation.id,
+      customerId: seededData.customer.id,
+      customerLocationId: seededData.customerLocation.id,
+      vehicleId: seededData.vehicle.id,
+    },
+    testRunId,
+    { incomplete: true },
+  );
+}
 
 test.describe("Certification — New-Removal wizard", () => {
   test("opens credit-batch and sample create sheets from hard-entry URLs", async ({
@@ -313,13 +341,10 @@ test.describe("Certification — New-Removal wizard (Phase 0 cross-surface)", { 
     const mapping = await seedCertifierMapping(facilityId, {
       externalProjectId: SANDBOX_PROJECT_ID as string,
     });
-    let batch: SeededIncompleteBatch | undefined;
+    let batch: SeededReadyBatch | undefined;
 
     try {
-      batch = await seedUngroupedIncompleteBatch(
-        { facilityId, feedstockTypeId: seededData.feedstockType.id },
-        testRunId,
-      );
+      batch = await seedNotReadyListedBatch(seededData, testRunId);
 
       // Surface 1 — the credit-batch detail page's certification checklist.
       await page.goto(
@@ -382,15 +407,13 @@ test.describe("Certification — New-Removal wizard (Phase 2 readiness workspace
     const mapping = await seedCertifierMapping(facilityId, {
       externalProjectId: SANDBOX_PROJECT_ID as string,
     });
-    let batch: SeededIncompleteBatch | undefined;
+    let batch: SeededReadyBatch | undefined;
 
     try {
-      // A runless batch is deterministically not-ready (missing lab chemistry +
-      // production data), so it lands in the collapsed "Not ready yet" group.
-      batch = await seedUngroupedIncompleteBatch(
-        { facilityId, feedstockTypeId: seededData.feedstockType.id },
-        testRunId,
-      );
+      // A batch with an application slice but no lab samples or production-run
+      // link is deterministically not-ready, so it lands in the collapsed
+      // "Not ready yet" group.
+      batch = await seedNotReadyListedBatch(seededData, testRunId);
 
       await page.goto(`/certification/removals?facility=${facilityId}`);
       await page
@@ -427,14 +450,14 @@ test.describe("Certification — New-Removal wizard (Phase 2 readiness workspace
         dialog.getByText("Lab chemistry results").first(),
       ).toBeVisible();
       // …and carries its own deep link to the exact fix (this batch has no
-      // application in its crediting period → Applications), mirroring the batch
-      // page's own health strip. New tab so this workspace stays put while the
-      // operator resolves it.
-      const fixLink = dialog.getByRole("link", { name: "Review applications" });
+      // linked production run → Production runs), mirroring the batch page's own
+      // health strip. New tab so this workspace stays put while the operator
+      // resolves it.
+      const fixLink = dialog.getByRole("link", { name: "Link production data" });
       await expect(fixLink).toBeVisible();
       await expect(fixLink).toHaveAttribute(
         "href",
-        new RegExp(`/applications\\?facility=${facilityId}`),
+        new RegExp(`/production-runs\\?facility=${facilityId}`),
       );
       await expect(fixLink).toHaveAttribute("target", "_blank");
 

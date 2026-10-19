@@ -5,7 +5,8 @@
 "use client";
 
 import type { UseFormRegisterReturn } from "react-hook-form";
-import { FormField, FormTextarea } from "@/components/forms";
+import { FormField } from "@/components/forms/form-field";
+import { FormTextarea } from "@/components/forms/form-textarea";
 
 const MIN_DISPLAYED_OVERAGE_KG = 0.01;
 
@@ -42,6 +43,7 @@ export function WetMassWarning({
     <FormField
       id="overrideJustification"
       label="Over-allocation justification"
+      required
       error={justificationError}
       warning={`${formatOverageKg(overageKg)} over delivery. Add a justification.`}
     >

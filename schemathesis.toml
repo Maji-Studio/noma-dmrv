@@ -1,0 +1,297 @@
+# CLI and config schema verified against Schemathesis 4.29.3.
+base-url = "${API_FUZZ_BASE_URL}"
+seed = 20261009
+workers = 1
+request-timeout = 10
+hooks = "scripts/api-fuzz/hooks.py"
+
+# Consumed by hooks as a positive-only omission, not an all-phase override.
+[parameters]
+"query.cursor" = ""
+
+[headers]
+Authorization = "Bearer ${API_FUZZ_KEY}"
+
+[generation]
+mode = "all"
+max-examples = 25
+# No saved Hypothesis examples from previous runs; use the seed to reproduce.
+database = "none"
+
+[checks]
+enabled = true
+
+# 4.29.3 has no expected-statuses setting for status_code_conformance.
+# The replacement skips only pre-application URI/header transport rejections.
+[checks.status_code_conformance]
+enabled = false
+
+[checks.application_status_code_conformance]
+enabled = true
+
+[checks.seeded_document_content_redirect]
+enabled = true
+
+[checks.seeded_pending_document_unchanged]
+enabled = true
+
+[checks.configured_authentication]
+enabled = true
+
+[checks.seeded_party_boundary_rejection]
+enabled = true
+
+[checks.seeded_formulation_ratio_rejection]
+enabled = true
+
+[checks.seeded_oversize_rejection]
+enabled = true
+
+# A seeded positive example (fixture-backed by-id and create case) must answer 2xx.
+# The positive-status allowances below never apply to it.
+[checks.seeded_example_success]
+enabled = true
+
+[checks.positive_data_acceptance]
+expected-statuses = ["2xx", 401, 403, 404, 409, 414, 429, 431, "5xx"]
+
+[checks.negative_data_rejection]
+expected-statuses = [400, 401, 403, 404, 405, 406, 409, 413, 414, 415, 422, 428, 429, 431, "5xx"]
+
+[phases.examples]
+enabled = true
+
+[phases.coverage]
+enabled = true
+# next start's undici Request rejects TRACE before app code (500); Vercel
+# returns 405.
+# QUERY is rejected by the HTTP parser with an empty 400 on next start and Vercel.
+unexpected-methods = ["GET", "PUT", "POST", "DELETE", "OPTIONS", "PATCH"]
+
+[phases.fuzzing]
+enabled = true
+
+# This version infers links from response schemas and Location headers. There
+# are no hand-written operation links or endpoint filters in this harness.
+[phases.stateful]
+enabled = true
+max-steps = 5
+
+[phases.stateful.inference]
+algorithms = ["location-headers", "dependency-analysis"]
+
+[phases.stateful.generation]
+max-examples = 10
+
+[output.sanitization]
+enabled = true
+
+[reports.junit]
+path = "api-fuzz-report/junit.xml"
+
+# Application tags may be stale after generated writes. Keep rejection expected
+# without a fixture PATCH or DELETE that could consume the seeded application.
+[[operations]]
+include-operation-id = ["update_application", "delete_application"]
+[operations.checks.positive_data_acceptance]
+expected-statuses = ["2xx", 401, 403, 404, 409, 412, 413, 414, 422, 429, 431, "5xx"]
+[operations.checks.negative_data_rejection]
+expected-statuses = [400, 401, 403, 404, 405, 406, 409, 412, 413, 414, 415, 422, 428, 429, 431, "5xx"]
+
+# Cross-field domain guards can refuse schema-valid writes with 422. Reads retain
+# the global positive-status list, which does not accept 422.
+[[operations]]
+include-method = ["POST", "PATCH", "DELETE"]
+[operations.checks.positive_data_acceptance]
+expected-statuses = ["2xx", 401, 403, 404, 409, 413, 414, 422, 429, 431, "5xx"]
+
+# 428 is valid only for the operations that require If-Match. The check has
+# operation-level scope but cannot scope expected statuses by header name.
+[[operations]]
+include-operation-id = ["update_feedstock", "delete_feedstock", "update_production_run", "delete_production_run", "update_biochar_product", "update_lab_sample", "delete_lab_sample", "update_order", "delete_order", "update_delivery", "update_application", "delete_application", "update_formulation", "delete_formulation", "archive_formulation", "restore_formulation", "update_supplier", "delete_supplier", "archive_supplier", "restore_supplier", "update_customer", "delete_customer", "archive_customer", "restore_customer", "update_supplier_location", "delete_supplier_location", "update_customer_location", "delete_customer_location", "archive_customer_location", "restore_customer_location"]
+[operations.checks.missing_required_header]
+expected-statuses = [400, 401, 403, 406, 415, 422, 428]
+
+# Location examples are bound from the private fixture by operationId in hooks.py.
+# Both path ids and location ETags are supplied, including archive/restore POSTs.
+# Hooks add one deterministic seeded example and release these scalar overrides
+# for the other phases, so random identifiers are still exercised.
+
+[[operations]]
+include-operation-id = "get_facility"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_FACILITY_ID}"
+
+[[operations]]
+include-operation-id = "get_supplier"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_SUPPLIER_ID}"
+
+[[operations]]
+include-operation-id = "get_feedstock_type"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_FEEDSTOCK_TYPE_ID}"
+
+[[operations]]
+include-operation-id = "get_storage_location"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_BIN_ID}"
+
+[[operations]]
+include-operation-id = "get_driver"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_DRIVER_ID}"
+
+[[operations]]
+include-operation-id = "get_vehicle"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_VEHICLE_ID}"
+
+[[operations]]
+include-operation-id = "get_feedstock"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_FEEDSTOCK_ID}"
+
+[[operations]]
+include-operation-id = "update_feedstock"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_FEEDSTOCK_ID}"
+"header.If-Match" = "${API_FUZZ_FEEDSTOCK_ETAG}"
+
+[[operations]]
+include-operation-id = "delete_feedstock"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_FEEDSTOCK_ID}"
+"header.If-Match" = "${API_FUZZ_FEEDSTOCK_ETAG}"
+
+[[operations]]
+include-operation-id = "find_supplier_locations"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_SUPPLIER_ID}"
+
+[[operations]]
+include-operation-id = "get_reactor"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_REACTOR_ID}"
+
+[[operations]]
+include-operation-id = "get_production_run"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_PRODUCTION_RUN_ID}"
+
+[[operations]]
+include-operation-id = "update_production_run"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_PRODUCTION_RUN_ID}"
+"header.If-Match" = "${API_FUZZ_PRODUCTION_RUN_ETAG}"
+
+[[operations]]
+include-operation-id = "delete_production_run"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_PRODUCTION_RUN_ID}"
+"header.If-Match" = "${API_FUZZ_PRODUCTION_RUN_ETAG}"
+
+[[operations]]
+include-operation-id = "get_biochar_product"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_BIOCHAR_PRODUCT_ID}"
+
+[[operations]]
+include-operation-id = "update_biochar_product"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_BIOCHAR_PRODUCT_ID}"
+"header.If-Match" = "${API_FUZZ_BIOCHAR_PRODUCT_ETAG}"
+
+[[operations]]
+include-operation-id = "get_formulation"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_PURE_FORMULATION_ID}"
+
+# The stock read, movement history and write share the seeded biochar bin.
+[[operations]]
+include-operation-id = "get_bin_stock"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_BIOCHAR_BIN_ID}"
+
+[[operations]]
+include-operation-id = "find_output_stock_movements"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_BIOCHAR_BIN_ID}"
+
+[[operations]]
+include-operation-id = "record_output_stock_movement"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_BIOCHAR_BIN_ID}"
+
+# The credit batch and lab sample sit on a 200-year facility. Mean R0 and TGA
+# are optional at either tier. The dry-run create, update and delete use them.
+[[operations]]
+include-operation-id = "get_credit_batch"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_CREDIT_BATCH_ID}"
+
+[[operations]]
+include-operation-id = "get_lab_sample"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_LAB_SAMPLE_ID}"
+
+[[operations]]
+include-operation-id = "update_lab_sample"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_LAB_SAMPLE_ID}"
+"header.If-Match" = "${API_FUZZ_LAB_SAMPLE_ETAG}"
+
+[[operations]]
+include-operation-id = "delete_lab_sample"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_LAB_SAMPLE_ID}"
+"header.If-Match" = "${API_FUZZ_LAB_SAMPLE_ETAG}"
+
+[[operations]]
+include-operation-id = "get_customer"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_CUSTOMER_ID}"
+
+[[operations]]
+include-operation-id = "find_customer_locations"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_CUSTOMER_ID}"
+
+[[operations]]
+include-operation-id = "get_order"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_ORDER_ID}"
+
+[[operations]]
+include-operation-id = "get_order_balance"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_ORDER_ID}"
+
+[[operations]]
+include-operation-id = "update_order"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_ORDER_ID}"
+"header.If-Match" = "${API_FUZZ_ORDER_ETAG}"
+
+[[operations]]
+include-operation-id = "delete_order"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_DELETE_ORDER_ID}"
+"header.If-Match" = "${API_FUZZ_DELETE_ORDER_ETAG}"
+
+[[operations]]
+include-operation-id = "get_delivery"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_DELIVERY_ID}"
+
+[[operations]]
+include-operation-id = "update_delivery"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_DELIVERY_ID}"
+"header.If-Match" = "${API_FUZZ_DELIVERY_ETAG}"
+
+# Document content returns a redirect; the harness never follows storage capabilities.
+[[operations]]
+include-path-regex = "/documents/.*?/content$"
+[operations.checks.positive_data_acceptance]
+expected-statuses = [302, 401, 403, 404, 409, 414, 429, 431, "5xx"]

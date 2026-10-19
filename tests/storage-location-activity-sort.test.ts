@@ -1,34 +1,36 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { outputProductFixtureValues, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 /**
  * Integration coverage for the `lastActivityAt` sort in `getStorageLocations`.
  *
  * `storageLocationLastActivityAt()` (src/data-access/storage-location-activity.ts)
- * is a correlated scalar subquery over five UNION branches, and four of them
- * read the same two tables under different join predicates. An unqualified or
+ * is a correlated scalar subquery over six UNION branches, with separate
+ * source-bin and destination-bin predicates for products. An unqualified or
  * mis-qualified column in any branch resolves against the wrong table *without
  * erroring* — the query still runs and simply orders by the wrong timestamp.
  * Only executing it against a real database catches that.
  *
- * The fixture gives every branch a bin whose position **only that branch can
- * produce**, so dropping or misqualifying any one of the five reorders the
+ * The fixture gives every event family a bin whose position **only that family can
+ * produce**, so dropping or misqualifying a branch reorders the
  * result and fails the test:
  *
  *   bin A  feedstock arrival                      (branch 1)
  *   bin B  run drawing from it                    (branch 2)
  *   bin C  run filling it                         (branch 3)
- *   bin D  product drawn from it, via its run     (branch 4) — its own run is
+ *   bin D  single-run product drawn from it       (branch 4); its own run is
  *          deliberately OLDER than bin A, so branch 3 cannot supply bin D's
- *          position; only the linked product's timestamp can.
- *   bin G  multi-run product drawn from it        (branch 5)
- *   bin E  product stored in it                   (branch 6)
+ *          position; only the source-bin product's timestamp can.
+ *   bin G  multi-run product drawn from it        (also branch 4)
+ *   bin E  product stored in it                   (branch 5)
  *   bin Q  nothing at all                         (NULL, sorts last both ways)
  *
+ * A separate case posts a stock count to bin Q (branch 6).
  * It also pins the two contract details the board depends on: nulls last in
  * both directions, and code as the tiebreaker so a bin cannot repeat a page.
  *
  * Skips when DATABASE_URL is unreachable, matching the other DB-backed specs.
  */
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -53,14 +55,14 @@ const PAGE_SIZE = 50;
 const T1_FEEDSTOCK_IN = new Date("2026-01-05T08:00:00Z");
 const T2_RUN_DRAW = new Date("2026-02-10T08:00:00Z");
 const T3_RUN_FILL = new Date("2026-03-11T08:00:00Z");
-const T4_PRODUCT_FROM_RUN = new Date("2026-05-05T08:00:00Z");
+const T4_PRODUCT_FROM_BIN = new Date("2026-05-05T08:00:00Z");
 const T5_MULTI_RUN_PRODUCT = new Date("2026-06-01T08:00:00Z");
 const T5_PRODUCT_STORED = new Date("2026-06-20T08:00:00Z");
 const T6_STOCK_TAKE = new Date("2026-07-25T08:00:00Z");
 
 /**
  * Bin D's own production run. Older than every other event on purpose: if the
- * linked-product branch stopped contributing, bin D would fall back to this and
+ * source-bin product branch stopped contributing, bin D would fall back to this and
  * sort below bin A, which the ordering assertion would catch.
  */
 const BIN_D_RUN_CREATED = new Date("2025-11-02T08:00:00Z");
@@ -74,6 +76,7 @@ interface ActivitySortFixture {
   /** Bins A..E, oldest activity first. */
   binIdsByAge: string[];
   quietBinId: string;
+  archivedSourceBinId: string;
   feedstockIds: string[];
   productionRunIds: string[];
   biocharProductIds: string[];
@@ -85,7 +88,7 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-ACT-${runId}`,
         name: `Activity Sort Facility ${runId}`,
@@ -106,6 +109,7 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
     const [feedstockType] = await tx
       .insert(feedstockTypes)
       .values({
+        usage: "pyrolysis",
         organizationId: TEST_ORG_ID,
         code: `FST-ACT-${runId}`,
         name: `Activity Sort Type ${runId}`,
@@ -189,7 +193,7 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
     // Branch 1: feedstock arriving in bin A.
     const insertedFeedstocks = await tx
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(tx, {
         organizationId: TEST_ORG_ID,
         code: `FS-ACT-${runId}`,
         facilityId: facility.id,
@@ -200,7 +204,7 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
         moistureContentPercent: 20,
         storageLocationId: binA.id,
         createdAt: T1_FEEDSTOCK_IN,
-      })
+      }))
       .returning({ id: feedstocks.id });
 
     // Branches 2 and 3: one run drawing from bin B, another filling bin C.
@@ -216,7 +220,6 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
           reactorId: reactor.id,
           startTime: T2_RUN_DRAW,
           feedstockMoisturePercent: 20,
-          feedstockStorageLocationId: binB.id,
           createdAt: T2_RUN_DRAW,
         },
         {
@@ -274,17 +277,23 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
     const binDRunId = insertedRuns[2].id;
     const [binGRun1, binGRun2] = insertedRuns.slice(3);
 
+    // The stored product has a required source, retired from the active board.
+    const [archivedSourceBin] = await tx.insert(storageLocations).values({
+      organizationId: TEST_ORG_ID, facilityId: facility.id, type: "biochar_bin",
+      code: `BIN-ACT-RETIRED-${runId}`, name: `E2E Retired source ${runId}`, archivedAt: T5_PRODUCT_STORED,
+    }).returning();
     const insertedProducts = await tx
       .insert(biocharProducts)
       .values(await outputProductFixtureValues(tx, [
-        // Branch 4: a product made from bin D's run, i.e. biochar drawn OUT of
-        // bin D. Reached only through the join on `linked_production_run_id`.
+        // Branch 4: a single-run product drawn from bin D with measured provenance.
         {
           organizationId: TEST_ORG_ID,
           code: `BP-ACT-DRAWN-${runId}`,
           facilityId: facility.id,
           formulationId: formulation.id,
           linkedProductionRunId: binDRunId,
+          sourceBiocharStorageLocationId: binD.id,
+          storageLocationId: binE.id,
           massKg: 50,
           composition: {
             ingredients: [{
@@ -296,9 +305,9 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
               moistureContentPercent: 0,
             }],
           },
-          createdAt: T4_PRODUCT_FROM_RUN,
+          createdAt: T4_PRODUCT_FROM_BIN,
         },
-        // Branch 5: a commingled product drawn from bin G. Its two allocation
+        // Also branch 4: a commingled product drawn from bin G. Its two allocation
         // rows are the authoritative wet/dry outbound mass.
         {
           organizationId: TEST_ORG_ID,
@@ -306,15 +315,17 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
           facilityId: facility.id,
           formulationId: formulation.id,
           sourceBiocharStorageLocationId: binG.id,
+          storageLocationId: binE.id,
           massKg: 100,
           createdAt: T5_MULTI_RUN_PRODUCT,
         },
-        // Branch 6: a product sitting IN bin E.
+        // Branch 5: a product sitting IN bin E.
         {
           organizationId: TEST_ORG_ID,
           code: `BP-ACT-STORED-${runId}`,
           facilityId: facility.id,
           storageLocationId: binE.id,
+          sourceBiocharStorageLocationId: archivedSourceBin.id,
           massKg: 1,
           moistureContentPercent: 0,
           createdAt: T5_PRODUCT_STORED,
@@ -325,7 +336,8 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
     const insertedAllocations = await tx
       .insert(biocharProductSourceAllocations)
       .values([
-        { organizationId: TEST_ORG_ID, biocharProductId: insertedProducts[2].id, productionRunId: binGRun1.id, sourceStorageLocationId: binG.id, allocatedWetMassKg: 1, allocatedDryMassKg: 1, createdAt: T5_PRODUCT_STORED },
+        { organizationId: TEST_ORG_ID, biocharProductId: insertedProducts[0].id, productionRunId: binDRunId, sourceStorageLocationId: binD.id, allocatedWetMassKg: 40, allocatedDryMassKg: 32, createdAt: T4_PRODUCT_FROM_BIN },
+        { organizationId: TEST_ORG_ID, biocharProductId: insertedProducts[2].id, productionRunId: binGRun1.id, sourceStorageLocationId: archivedSourceBin.id, allocatedWetMassKg: 1, allocatedDryMassKg: 1, createdAt: T5_PRODUCT_STORED },
         {
           organizationId: TEST_ORG_ID,
           biocharProductId: insertedProducts[1].id,
@@ -358,6 +370,7 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
         binE.id,
       ],
       quietBinId: quietBin.id,
+      archivedSourceBinId: archivedSourceBin.id,
       feedstockIds: insertedFeedstocks.map((row) => row.id),
       productionRunIds: insertedRuns.map((row) => row.id),
       biocharProductIds: insertedProducts.map((row) => row.id),
@@ -398,13 +411,14 @@ async function cleanupFixture(fixture: ActivitySortFixture): Promise<void> {
       .delete(productionRuns)
       .where(inArray(productionRuns.id, fixture.productionRunIds));
     await tx.delete(feedstocks).where(inArray(feedstocks.id, fixture.feedstockIds));
+    await cleanupFeedstockFixtureParents(tx);
     await tx
       .delete(formulations)
       .where(eq(formulations.id, fixture.formulationId));
     await tx
       .delete(storageLocations)
       .where(
-        inArray(storageLocations.id, [...fixture.binIdsByAge, fixture.quietBinId]),
+        inArray(storageLocations.id, [...fixture.binIdsByAge, fixture.quietBinId, fixture.archivedSourceBinId]),
       );
     await tx
       .delete(feedstockTypes)
@@ -412,6 +426,7 @@ async function cleanupFixture(fixture: ActivitySortFixture): Promise<void> {
     await tx.delete(reactors).where(eq(reactors.id, fixture.reactorId));
     await deleteOutputFacilityFixtures(tx, eq(facilities.id, fixture.facilityId));
   });
+  await cleanupFeedstockFixtureParents(db);
 }
 
 beforeAll(() => ensureTestOrg());
@@ -479,7 +494,7 @@ describe("storage-location lastActivityAt sort", () => {
           pageSize: PAGE_SIZE,
         },
       );
-      const legacyBin = items.find(
+      const singleRunBin = items.find(
         (bin) => bin.id === fixture.binIdsByAge[3],
       );
       const commingledBin = items.find(
@@ -496,13 +511,13 @@ describe("storage-location lastActivityAt sort", () => {
         label: "Feedstock used",
       });
 
-      expect(legacyBin?.lastActivity).toMatchObject({
+      expect(singleRunBin?.lastActivity).toMatchObject({
         type: "out",
         massKg: 40,
         massDryKg: 32,
         label: `Garden Blend ${runId}`,
       });
-      expect(legacyBin?.biocharInventory.downstreamFormulations).toEqual([
+      expect(singleRunBin?.biocharInventory.downstreamFormulations).toEqual([
         `Garden Blend ${runId}`,
       ]);
       expect(commingledBin?.lastActivity).toMatchObject({

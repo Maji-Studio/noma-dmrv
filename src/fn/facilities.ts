@@ -1,5 +1,7 @@
 "use server";
 
+import { withAction } from "./with-action";
+
 /**
  * Facilities Server Actions
  * Server-side functions for facility CRUD operations
@@ -16,7 +18,6 @@ import {
   updateFacility,
   type FacilityArchiveImpact,
 } from "@/data-access/facilities";
-import { requireOrgContext } from "@/lib/auth/server";
 import {
   archiveFacilitySchema,
   createFacilitySchema,
@@ -29,39 +30,8 @@ import {
   withAutoCode,
 } from "@/data-access/code-generator";
 import { facilities as facilitiesTable } from "@/db/schema";
-import {
-  type ActionFailure,
-  formatZodActionError,
-  toActionFailure,
-  toLoggedActionError,
-} from "./action-errors";
 
-/**
- * Failure shape for the write paths. Unlike the read helper below it keeps an
- * `ActionConflictError`'s `conflict`, so the form can tell an expected-version
- * refusal from an ordinary save failure and hold on to the operator's draft.
- */
-function facilityActionFailure(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): ActionFailure {
-  return toActionFailure(error, {
-    fallbackMessage,
-    log: { message: "facility action failed", context: { op } },
-  });
-}
-
-function facilityActionError(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): string {
-  return toLoggedActionError(error, fallbackMessage, {
-    message: "facility action failed",
-    context: { op },
-  });
-}
+const LOG_MESSAGE = "facility action failed";
 
 // ============================================
 // List/Query Operations
@@ -74,23 +44,15 @@ function facilityActionError(
 export async function getFacilityCountriesFn(
   archived?: boolean,
 ): Promise<ActionResult<string[]>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const countries = await getFacilityCountriesData(ctx, {
       archived: archived === true,
     });
-    return { success: true, data: countries };
-  } catch (error) {
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to load countries",
-        "facility:countries",
-      ),
-    };
-  }
+    return countries;
+  }, {
+    fallbackMessage: "Failed to load countries",
+    log: { message: LOG_MESSAGE, context: { op: "facility:countries" } },
+  });
 }
 
 // ============================================
@@ -103,9 +65,7 @@ export async function getFacilityCountriesFn(
 export async function createFacilityFn(
   data: z.infer<typeof createFacilitySchema>
 ): Promise<ActionResult<Facility>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = createFacilitySchema.parse(data);
 
     const facility = await withAutoCode(
@@ -121,8 +81,8 @@ export async function createFacilityFn(
           country: validated.country,
           location: validated.location || null,
           address: validated.address || null,
-          gpsLatitude: validated.gpsLatitude ?? null,
-          gpsLongitude: validated.gpsLongitude ?? null,
+          gpsLatitude: validated.gpsLatitude,
+          gpsLongitude: validated.gpsLongitude,
           timezone: validated.timezone,
           contactEmail: validated.contactEmail || null,
           contactPhone: validated.contactPhone || null,
@@ -131,23 +91,11 @@ export async function createFacilityFn(
       CODE_CONFLICT_MESSAGES.facility,
     );
 
-    return { success: true, data: facility };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to create facility",
-        "facility:create",
-      ),
-    };
-  }
+    return facility;
+  }, {
+    fallbackMessage: "Failed to create facility",
+    log: { message: LOG_MESSAGE, context: { op: "facility:create" } },
+  });
 }
 
 // ============================================
@@ -160,13 +108,12 @@ export async function createFacilityFn(
 export async function updateFacilityFn(
   data: z.infer<typeof updateFacilitySchema>
 ): Promise<ActionResult<Facility>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = updateFacilitySchema.parse(data);
 
     const facility = await updateFacility(ctx, validated.facilityId, {
-      expectedUpdatedAt: validated.expectedUpdatedAt,
+      expectedVersion: validated.expectedVersion,
       code: validated.code,
       name: validated.name,
       country: validated.country,
@@ -180,10 +127,8 @@ export async function updateFacilityFn(
       durabilityOption: validated.durabilityOption,
     });
 
-    return { success: true, data: facility };
-  } catch (error) {
-    return facilityActionFailure(error, "Failed to update facility", "facility:update");
-  }
+    return facility;
+  }, { fallbackMessage: "Failed to update facility", log: { message: LOG_MESSAGE, context: { op: "facility:update" } } });
 }
 
 // ============================================
@@ -196,21 +141,13 @@ export async function updateFacilityFn(
 export async function getFacilityArchiveImpactFn(
   facilityId: string
 ): Promise<ActionResult<FacilityArchiveImpact>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const impact = await getFacilityArchiveImpact(ctx, facilityId);
-    return { success: true, data: impact };
-  } catch (error) {
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to load archive impact",
-        "facility:archive-impact",
-      ),
-    };
-  }
+    return impact;
+  }, {
+    fallbackMessage: "Failed to load archive impact",
+    log: { message: LOG_MESSAGE, context: { op: "facility:archive-impact" } },
+  });
 }
 
 /**
@@ -219,29 +156,13 @@ export async function getFacilityArchiveImpactFn(
 export async function archiveFacilityFn(
   data: z.infer<typeof archiveFacilitySchema>
 ): Promise<ActionResult<Facility>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = archiveFacilitySchema.parse(data);
-    const facility = await archiveFacility(ctx, validated.facilityId);
+    const facility = await archiveFacility(ctx, validated.facilityId, validated.expectedVersion);
 
-    return { success: true, data: facility };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to archive facility",
-        "facility:archive",
-      ),
-    };
-  }
+    return facility;
+  }, { fallbackMessage: "Failed to archive facility", log: { message: LOG_MESSAGE, context: { op: "facility:archive" } } });
 }
 
 /**
@@ -250,27 +171,11 @@ export async function archiveFacilityFn(
 export async function restoreFacilityFn(
   data: z.infer<typeof restoreFacilitySchema>
 ): Promise<ActionResult<Facility>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = restoreFacilitySchema.parse(data);
-    const facility = await restoreFacility(ctx, validated.facilityId);
+    const facility = await restoreFacility(ctx, validated.facilityId, validated.expectedVersion);
 
-    return { success: true, data: facility };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to restore facility",
-        "facility:restore",
-      ),
-    };
-  }
+    return facility;
+  }, { fallbackMessage: "Failed to restore facility", log: { message: LOG_MESSAGE, context: { op: "facility:restore" } } });
 }

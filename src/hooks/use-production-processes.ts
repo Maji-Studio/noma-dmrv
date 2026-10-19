@@ -10,28 +10,32 @@ import type {
   RecordMethodBPrerequisitesInput,
   StartNewProcessInput,
 } from "@/schemas/production-process";
+import { unwrap } from "@/hooks/types";
+import { formatUtcDate } from "@/lib/date-utils";
 
 const productionProcessKeys = {
   all: ["production-processes"] as const,
-  eligibility: (facilityId?: string, feedstockTypeId?: string) =>
-    ["production-processes", "eligibility", facilityId, feedstockTypeId] as const,
+  eligibility: (facilityId?: string, feedstockTypeId?: string, batchStartDate?: string) =>
+    ["production-processes", "eligibility", facilityId, feedstockTypeId, batchStartDate] as const,
 };
 
 export function useMethodBEligibility(
   facilityId?: string,
   feedstockTypeId?: string,
   enabled = true,
+  batchStartDate?: Date,
 ) {
+  const batchStartDay = batchStartDate ? formatUtcDate(batchStartDate) : undefined;
   return useQuery({
-    queryKey: productionProcessKeys.eligibility(facilityId, feedstockTypeId),
-    queryFn: async () => {
-      const result = await getMethodBEligibilityFn({
-        facilityId,
-        feedstockTypeId,
-      });
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryKey: productionProcessKeys.eligibility(facilityId, feedstockTypeId, batchStartDay),
+    queryFn: async () =>
+      unwrap(
+        await getMethodBEligibilityFn({
+          facilityId,
+          feedstockTypeId,
+          batchStartDate: batchStartDay,
+        }),
+      ),
     enabled: enabled && Boolean(facilityId && feedstockTypeId),
   });
 }
@@ -39,11 +43,8 @@ export function useMethodBEligibility(
 export function useRecordMethodBPrerequisites() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: RecordMethodBPrerequisitesInput) => {
-      const result = await recordMethodBPrerequisitesFn(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (input: RecordMethodBPrerequisitesInput) =>
+      unwrap(await recordMethodBPrerequisitesFn(input)),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: productionProcessKeys.all }),
   });
 }
@@ -51,11 +52,8 @@ export function useRecordMethodBPrerequisites() {
 export function useStartNewProductionProcess() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: StartNewProcessInput) => {
-      const result = await startNewProductionProcessFn(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (input: StartNewProcessInput) =>
+      unwrap(await startNewProductionProcessFn(input)),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: productionProcessKeys.all }),
   });
 }

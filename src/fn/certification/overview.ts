@@ -1,6 +1,9 @@
 "use server";
 
+import { getRemovalCodes } from "@/data-access/removal-codes";
 import { z } from "zod";
+import { getRecordLocksForTargets } from "@/data-access/record-certification-lock";
+import type { RecordLock } from "@/lib/record-lock";
 import { env } from "@/config/env";
 import { listCreditBatchCertificationLinks } from "@/data-access/credit-batch-certification-links";
 import { requireOrgFacility } from "@/data-access/utils";
@@ -75,8 +78,11 @@ export interface CreditBatchHealthSummary {
   issueCount: number;
   /** The latest Removal containing this batch, or null before its first one. */
   removalId: string | null;
+  removalCode: string | null;
+  productionEmissionsClaimedByRemovalCode: string | null;
   /** The Removal's own registry-submission status. */
   removalStatus: DerivedStatus | null;
+  recordLock?: RecordLock;
   /** The downstream GHG Statement, once the submitted Removal is rolled up. */
   ghgStatementId: string | null;
   /** The GHG Statement's verifier lifecycle, kept distinct from the Removal. */
@@ -88,6 +94,7 @@ export interface CreditBatchHealthSummary {
 // and wizard submit step render).
 export interface RemovalPreflightSummary {
   removalId: string;
+  code: string;
   startedOn: string | null;
   completedOn: string | null;
   memberBatchCodes: string[];
@@ -131,6 +138,7 @@ async function buildRemovalPreflightSummary(
   facilityFacts: Awaited<ReturnType<typeof loadFacilityCertifierFacts>>,
 ): Promise<RemovalPreflightSummary> {
   const scope = await resolveScopeForRemoval(orgCtx, removalId);
+  if (!scope.removal) throw new SafeError("Removal not found.");
   const [ctx, recentSyncEvents] = await Promise.all([
     buildRemovalContext(orgCtx, scope, facilityFacts),
     listRecentSyncEvents(orgCtx, {
@@ -140,8 +148,8 @@ async function buildRemovalPreflightSummary(
     }),
   ]);
   const facts = toRemovalReadinessFacts(ctx);
-  const startedOn = scope.removal?.startedOn ?? null;
-  const completedOn = scope.removal?.completedOn ?? null;
+  const startedOn = scope.removal.startedOn ?? null;
+  const completedOn = scope.removal.completedOn ?? null;
   const submissionInterrupted =
     isRemovalSubmissionInterruptedFromSubmission(ctx.latestSubmission, {
       startedOn,
@@ -149,6 +157,7 @@ async function buildRemovalPreflightSummary(
     });
   return {
     removalId,
+    code: scope.removal.code,
     startedOn,
     completedOn,
     memberBatchCodes: ctx.memberBatches.map((batch) => batch.code),
@@ -164,7 +173,7 @@ async function buildRemovalPreflightSummary(
       submissionId: ctx.latestSubmission?.id ?? null,
       submissionVersion: ctx.latestSubmission?.version ?? null,
       submissionStatus: ctx.latestSubmission?.status ?? null,
-      removalMetadata: scope.removal?.metadata ?? null,
+      removalMetadata: scope.removal.metadata ?? null,
     }),
     submissionWarnings: ctx.submissionWarnings,
     recentSyncEvents,
@@ -306,6 +315,7 @@ export async function loadCreditBatchHealthSummaries(
       throw new SafeError("Batch does not belong to requested facility");
     }
 
+    const claimCodes = await getRemovalCodes(orgCtx, batchFacilityRows.flatMap(row => row.productionEmissionsClaimedByRemovalId ? [row.productionEmissionsClaimedByRemovalId] : []));
     const batchRowById = new Map(
       ids.map((batchId) => {
         const rows = batchFacilityRows.filter((row) => row.id === batchId);
@@ -358,6 +368,8 @@ export async function loadCreditBatchHealthSummaries(
       ids,
       facilityFacts,
     );
+    const locks = await getRecordLocksForTargets(orgCtx, ids.map(entityId => ({ entityType: "creditBatch", entityId })));
+    const locksById = new Map(ids.map((id, index) => [id, locks[index]]));
     const summaries: Record<string, CreditBatchHealthSummary> = {};
     for (const batchId of ids) {
       const ctx = contextsByBatch[batchId];
@@ -375,9 +387,12 @@ export async function loadCreditBatchHealthSummaries(
         ? (ghgStatementSubmissions.get(ghgStatementId) ?? null)
         : null;
       summaries[batchId] = {
+        recordLock: locksById.get(batchId)!,
         state: health.state,
         issueCount: health.issueCount,
         removalId,
+        removalCode: batchRow?.removalCode ?? null,
+        productionEmissionsClaimedByRemovalCode: claimCodes.get(batchRow?.productionEmissionsClaimedByRemovalId ?? "") ?? null,
         removalStatus: removalId
           ? deriveSubmissionStatus(
               removalSubmission,

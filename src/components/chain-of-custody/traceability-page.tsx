@@ -4,8 +4,9 @@
  * The page re-anchors on the credit batch — the unit whose provenance
  * verification actually cares about — with the single application's rollback
  * as the drill-down. Header selectors: a credit batch resolves to the
- * roll-up readings (merged DAG | transit Map | mass-balance Sankey), and a
- * production-run filter (derived from the batch's lineages) narrows the
+ * roll-up readings (merged DAG | transit Map | mass-balance Sankey) plus
+ * the batch's recorded Activity, and a
+ * production-run filter (derived from the batch's rollbacks and roll-forwards) narrows the
  * roll-up to one run's flow. The application drill-down (Lineage | Map |
  * Split | Trail) opens by clicking an application card or via the
  * `?application=` deep link; `?batch=` + `?application=` together =
@@ -14,6 +15,7 @@
  */
 "use client";
 
+import { CreditBatchActivityView } from "@/components/activity";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import {
@@ -22,6 +24,7 @@ import {
 } from "@/hooks/use-chain-of-custody";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { buildBatchSankey } from "@/lib/chain-of-custody/sankey";
+import { TRACEABILITY_ACTIVITY_VIEW } from "@/lib/certification/links";
 import { cn } from "@/lib/utils";
 import { CertificateIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
 import {
@@ -60,7 +63,11 @@ import {
   useChainGraph,
 } from "./use-chain-graph";
 import { useCreditBatchCardSelection } from "./use-credit-batch-card-selection";
-import { NO_LINEAGE_FOR_SELECTED_RUN } from "@/lib/chain-of-custody/copy";
+import {
+  NO_APPLICATION_SANKEY_MESSAGE,
+  NO_LINEAGE_FOR_SELECTED_RUN,
+  NO_RUN_APPLICATION_YET_WARNING,
+} from "@/lib/chain-of-custody/copy";
 
 const nodeTypes: NodeTypes = {
   chainNode: ChainNode,
@@ -71,7 +78,7 @@ const edgeTypes = {
 };
 
 type ApplicationViewMode = "lineage" | "map" | "split" | "trail";
-type BatchViewMode = "dag" | "map" | "sankey";
+type BatchViewMode = "dag" | "map" | "sankey" | typeof TRACEABILITY_ACTIVITY_VIEW;
 
 const APPLICATION_VIEW_MODES: Array<{ value: ApplicationViewMode; label: string }> = [
   { value: "lineage", label: "Lineage" },
@@ -84,6 +91,7 @@ const BATCH_VIEW_MODES: Array<{ value: BatchViewMode; label: string }> = [
   { value: "dag", label: "DAG" },
   { value: "map", label: "Map" },
   { value: "sankey", label: "Sankey" },
+  { value: TRACEABILITY_ACTIVITY_VIEW, label: "Activities" },
 ];
 
 const DEFAULT_APPLICATION_VIEW: ApplicationViewMode = "lineage";
@@ -176,8 +184,8 @@ function ChainFlowGraph({
     <div className="h-full w-full">
       {warnings.length > 0 ? (
         <div className="absolute top-16 left-16 z-10 max-w-[480px] border-[1.5px] border-dashed border-[var(--st-wait)] bg-[var(--paper)] p-12">
-          <p className="font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-[var(--st-wait)]">
-            Missing Links
+          <p className="text-[10px] font-medium text-[var(--st-wait)]">
+            Missing links
           </p>
           <ul className="mt-8 flex flex-col gap-6">
             {warnings.map((warning) => (
@@ -409,6 +417,14 @@ export function TraceabilityPage() {
         )
       : undefined;
   const batchLineages = filteredBatchLineages?.map((lineage) => lineage.chain);
+  const batchRollForwards =
+    anchor === "batch"
+      ? batchData?.rollForwards.filter(
+          (rollForward) =>
+            !selectedRunId ||
+            rollForward.source.productionRun.id === selectedRunId
+        )
+      : undefined;
   const runOptions: RunPickerOption[] = (() => {
     const byRun = new Map<string, RunPickerOption>();
     const countedApplications = new Set<string>();
@@ -430,6 +446,17 @@ export function TraceabilityPage() {
         });
       }
     }
+    // Member runs nothing has been applied from yet still trace forward.
+    for (const { source } of batchData?.rollForwards ?? []) {
+      const run = source.productionRun;
+      if (byRun.has(run.id)) continue;
+      byRun.set(run.id, {
+        id: run.id,
+        code: run.code,
+        date: run.date,
+        applicationCount: 0,
+      });
+    }
     return Array.from(byRun.values()).sort((a, b) =>
       a.code.localeCompare(b.code)
     );
@@ -438,23 +465,26 @@ export function TraceabilityPage() {
   // app-prefixed batch-wide strings, so the unfiltered set would leak
   // out-of-scope applications into the narrowed view).
   const batchWarnings = selectedRunId
-    ? Array.from(
-        new Set(
-          (filteredBatchLineages ?? []).flatMap((lineage) =>
-            lineage.chain.warnings.map(
-              (warning) => `${lineage.chain.application.code}: ${warning}`
+    ? (filteredBatchLineages?.length ?? 0) === 0
+      ? [NO_RUN_APPLICATION_YET_WARNING]
+      : Array.from(
+          new Set(
+            (filteredBatchLineages ?? []).flatMap((lineage) =>
+              lineage.chain.warnings.map(
+                (warning) => `${lineage.chain.application.code}: ${warning}`
+              )
             )
           )
         )
-      )
     : (batchData?.warnings ?? []);
   // A run-filtered sankey recomputes from the lineage subset; all figures
-  // (including the ineligible-feedstock exit) derive from the lineages
+  // derive from the lineages
   // themselves (issue #285), so no batch-level facts are needed.
   const filteredSankey =
     selectedRunId && batchLineages ? buildBatchSankey(batchLineages) : null;
   const { nodes: batchNodes, edges: batchEdges } = useBatchChainGraph(
     batchLineages,
+    batchRollForwards,
     {
       // Application cards drill down instead of navigating, so links drop.
       disableLinks: true,
@@ -697,6 +727,17 @@ export function TraceabilityPage() {
 
   const batchBody = (() => {
     if (!selectedBatchId) return null;
+    // Activity reads the batch's own history, not its lineage, so it renders
+    // without waiting for the roll-up and even for a batch with no runs.
+    if (batchView === TRACEABILITY_ACTIVITY_VIEW) {
+      return (
+        <CreditBatchActivityView
+          key={selectedBatchId}
+          creditBatchId={selectedBatchId}
+          batchCode={batchSelection.batches.find((batch) => batch.id === selectedBatchId)?.code}
+        />
+      );
+    }
     if (batchIsError) {
       return (
         <CenteredMessage tone="error">
@@ -708,15 +749,19 @@ export function TraceabilityPage() {
       return <LoadingState label="Loading batch roll-up..." />;
     }
     if (!batchData) return null;
-    if (batchData.lineages.length === 0 && batchView !== "sankey") {
+    if (batchData.rollForwards.length === 0) {
       return (
         <CenteredMessage>
-          This credit batch has no member applications yet, so there is no
-          lineage to roll up.
+          This credit batch has no member production runs yet, so there is
+          nothing to trace.
         </CenteredMessage>
       );
     }
-    if (selectedRunId && (filteredBatchLineages?.length ?? 0) === 0) {
+    if (
+      selectedRunId &&
+      (filteredBatchLineages?.length ?? 0) === 0 &&
+      (batchRollForwards?.length ?? 0) === 0
+    ) {
       return (
         <CenteredMessage>{NO_LINEAGE_FOR_SELECTED_RUN}</CenteredMessage>
       );
@@ -742,6 +787,8 @@ export function TraceabilityPage() {
             runId: selectedRunId,
           }}
           lineages={batchLineages}
+          rollForwards={batchRollForwards}
+          facility={batchData.facility}
           view="map"
           highlight={selection}
           focusNodeIds={focusNodeIds}
@@ -752,6 +799,11 @@ export function TraceabilityPage() {
           onDetailClose={closeMapDetail}
           onDetailTrace={traceFromMapDetail}
         />
+      );
+    }
+    if ((filteredBatchLineages?.length ?? 0) === 0) {
+      return (
+        <CenteredMessage>{NO_APPLICATION_SANKEY_MESSAGE}</CenteredMessage>
       );
     }
     return (
@@ -792,6 +844,7 @@ export function TraceabilityPage() {
             onSelectBatch={handleBatchChange}
             anchor={anchor}
             runOptions={runOptions}
+            showRunFilter={batchView !== TRACEABILITY_ACTIVITY_VIEW}
             selectedRunId={selectedRunId}
             onRunChange={handleRunChange}
             runFilterDisabled={batchLoading || runOptions.length === 0}

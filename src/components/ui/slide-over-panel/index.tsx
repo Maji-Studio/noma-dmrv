@@ -239,7 +239,9 @@ const Title = React.forwardRef<HTMLHeadingElement, SlideOverPanelTitleProps>(
         ref={ref}
         className={cn(
           "title-heading-4 text-[var(--color-text-primary)]",
-          "truncate",
+          // Wrap, never truncate: at phone width the title shares its row
+          // with the Simple/Detailed toggle and the close button.
+          "text-balance break-words",
           className
         )}
       >
@@ -333,7 +335,7 @@ function Footer({ children, className }: SlideOverPanelFooterProps) {
   return (
     <div
       className={cn(
-        "flex items-center justify-end gap-12",
+        "flex items-center justify-start gap-12",
         "px-24 py-16",
         "border-t border-[var(--color-border-secondary)]",
         "bg-[var(--color-background-white)]",

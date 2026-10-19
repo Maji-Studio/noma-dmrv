@@ -18,7 +18,7 @@ const RAIL_BOX_CLASS =
 
 const RAIL_HEAD_CLASS =
   "flex justify-between gap-8 border-b border-[var(--clr-dark-purple-10)] px-12 py-10 " +
-  "font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-[var(--clr-dark-purple-60)]";
+  "text-[9.5px] font-medium text-[var(--clr-dark-purple-60)]";
 
 // ---------------------------------------------------------------------------
 // Legend (top-right) — swatches mirror the marker shapes
@@ -39,7 +39,7 @@ export function ViewerLegend() {
       {LEGEND_ROWS.map((row) => (
         <div
           key={row.label}
-          className="flex items-center gap-[9px] font-mono text-[9.5px] font-medium uppercase tracking-[0.08em] text-[var(--clr-dark-purple-60)]"
+          className="flex items-center gap-[9px] text-[9.5px] font-medium text-[var(--clr-dark-purple-60)]"
         >
           <span
             className="size-[9px] shrink-0"
@@ -85,7 +85,7 @@ export function NotGeolocatedChips({
             key={node.id}
             type="button"
             onClick={() => onSelectNode(node.id)}
-            className="cursor-pointer border-[1.5px] border-current px-[7px] py-4 font-mono text-[9.5px] font-medium uppercase tracking-[0.06em] hover:bg-[var(--clr-dark-purple-1)]"
+            className="cursor-pointer border-[1.5px] border-current px-[7px] py-4 font-mono text-[9.5px] font-medium hover:bg-[var(--clr-dark-purple-1)]"
             style={{ color: NODE_ACCENT_VAR[node.kind] }}
           >
             {node.code}
@@ -124,7 +124,7 @@ export function MapWarningBanner({
       {warnings.map((warning) => (
         <p
           key={warning}
-          className="border-[1.5px] border-dashed border-[var(--clr-red)] bg-[color-mix(in_srgb,var(--color-background-white)_94%,transparent)] px-[14px] py-[11px] font-mono text-[9.5px] uppercase leading-[1.7] tracking-[0.07em] text-[var(--clr-red)] backdrop-blur-[8px]"
+          className="border-[1.5px] border-dashed border-[var(--clr-red)] bg-[color-mix(in_srgb,var(--color-background-white)_94%,transparent)] px-[14px] py-[11px] text-[9.5px] leading-[1.7] text-[var(--clr-red)] backdrop-blur-[8px]"
         >
           {warning}
         </p>
@@ -142,7 +142,7 @@ export function ViewerEmptyState({ message }: { message: string }) {
       <p className="text-[34px] font-thin tracking-[-0.01em] text-[var(--color-text-primary)]">
         Nothing to plot.
       </p>
-      <p className="max-w-[42ch] font-mono text-[11px] uppercase leading-[1.8] tracking-[0.1em] text-[var(--clr-dark-purple-40)]">
+      <p className="max-w-[42ch] text-[11px] leading-[1.8] text-[var(--clr-dark-purple-40)]">
         {message}
       </p>
     </div>

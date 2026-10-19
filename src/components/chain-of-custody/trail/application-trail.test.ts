@@ -19,6 +19,7 @@ function lineage(): ChainOfCustodyData {
       href: "/applications",
     },
     delivery: {
+      proofOfDeliveryCount: 1,
       id: "delivery-1",
       code: "DL-1",
       status: "delivered",
@@ -74,10 +75,8 @@ describe("buildTrailSteps", () => {
         deliveryDate: new Date("2026-05-16T00:00:00Z"),
         massDryKg: 1_950,
         wetMassUsedKg: 3_000,
-        eligibilityStatus: "eligible",
         supplierName: "Supplier",
         feedstockTypeName: "Wood chips",
-        feedstockDeliveryCode: "FD-1",
         href: "/feedstocks",
       },
     ];

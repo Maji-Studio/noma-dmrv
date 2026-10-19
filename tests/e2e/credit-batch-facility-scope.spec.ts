@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "../helpers/test-org";
 import * as crypto from "crypto";
 import { eq } from "drizzle-orm";
 import { DEC_ORG_ID } from "@/db/org-defaults";
@@ -24,10 +25,10 @@ test.describe("credit batch facility scope", () => {
       const [otherFacility] = await db
         .insert(schema.facilities)
         .values({
+          ...TEST_SITE_POSITION,
           organizationId: DEC_ORG_ID,
           code: `FAC-CB-SCOPE-${tag}`,
           name: `Credit Batch Scope Facility ${tag}`,
-          country: "Tanzania",
           timezone: "Africa/Dar_es_Salaam",
         })
         .returning({ id: schema.facilities.id });

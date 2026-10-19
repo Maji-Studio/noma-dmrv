@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { rational, storeRational } from './exact';
-import { outputStockBalance, projectBiocharLayers, projectMoistureBases, projectProductLayers, UnresolvedOutputStockError, type AllocationEffectRow, type CompletedRunRow } from './layer-projection';
+import { BEFORE_LEDGER_SEQUENCE, outputStockBalance, preLedgerWetRemovals, projectBiocharLayers, projectMoistureBases, projectProductLayers, UNRESOLVED_STOCK_REASONS, UNRESOLVED_STOCK_SENTENCES, UnresolvedOutputStockError, type AllocationEffectRow, type CompletedRunRow } from './layer-projection';
 
-const run: CompletedRunRow = { id: 'run', dryKg: '100.000', endTime: new Date('2026-09-01T12:00:00.000Z'), postingSequence: BigInt(1) };
+const run: CompletedRunRow = { id: 'run', code: 'PR-0042', dryKg: '100.000', endTime: new Date('2026-09-01T12:00:00.000Z'), postingSequence: BigInt(1) };
 const noRows = { sources: [], effects: [] };
 
 /** A saved draw of `dryKg` from a layer, with the solids it took. */
@@ -15,12 +15,34 @@ function effect(id: string, layer: { productionRunId?: string; biocharProductId?
 }
 
 describe('biochar layers', () => {
+  it('names the production run to repair when dry biochar mass is missing', () => {
+    const unresolved = { ...run, dryKg: null };
+    expect(() => projectBiocharLayers({ runs: [unresolved], ...noRows })).toThrow(
+      'Production run PR-0042 has no dry biochar mass. Add the biochar wet mass and moisture to that run, then try again.',
+    );
+  });
+
+  it('says the dry biochar mass is zero rather than missing', () => {
+    expect(() => projectBiocharLayers({ runs: [{ ...run, dryKg: '0.000' }], ...noRows })).toThrow(
+      'Production run PR-0042 has zero dry biochar mass. Check its biochar wet mass and moisture, then try again.',
+    );
+  });
+
   it.each([null, 'NaN', 'Infinity', '0'])('treats run dry mass %s as unresolved', dryKg => {
     expect(() => projectBiocharLayers({ runs: [{ ...run, dryKg }], ...noRows })).toThrow(UnresolvedOutputStockError);
   });
 
   it('treats a run with no end time as unresolved', () => {
     expect(() => projectBiocharLayers({ runs: [{ ...run, endTime: null }], ...noRows })).toThrow(UnresolvedOutputStockError);
+    expect(() => projectBiocharLayers({ runs: [{ ...run, endTime: null }], ...noRows })).toThrow(
+      'Production run PR-0042 has no end time. Add the end time to that run, then try again.',
+    );
+  });
+
+  it('names both facts to repair when dry biochar mass and end time are missing', () => {
+    expect(() => projectBiocharLayers({ runs: [{ ...run, dryKg: null, endTime: null }], ...noRows })).toThrow(
+      'Production run PR-0042 has no dry biochar mass and no end time. Add the biochar wet mass, moisture and end time to that run, then try again.',
+    );
   });
 
   it('counts a product draw once when both its source snapshot and ledger allocation exist', () => {
@@ -31,6 +53,14 @@ describe('biochar layers', () => {
     });
     expect(layer).toMatchObject({ remainingDryBiocharKg: '60.000', establishedDryBiocharKg: '100.000' });
     expect(layer.remainingSolidsKg).toEqual(rational(BigInt(60)));
+  });
+
+  it('takes the wet mass of the same pre-ledger draws the dry layer subtracts, before every posted movement', () => {
+    const posted = effect('a1', { productionRunId: run.id }, '30.000', BigInt(30), { targetBiocharProductId: 'posted' });
+    const sources = [{ productId: 'posted', runId: run.id, wetMassKg: '40.000' }, { productId: 'legacy', runId: run.id, wetMassKg: '12.500' }];
+    expect(preLedgerWetRemovals(sources, [posted.allocation])).toEqual([
+      { layerId: run.id, movementId: 'product:legacy', wetMassKg: '12.500', reversesAllocationId: null, sequence: BEFORE_LEDGER_SEQUENCE },
+    ]);
   });
 
   describe('repair exclusion', () => {
@@ -111,15 +141,60 @@ describe('balance at an instant', () => {
 
 describe('moisture bases', () => {
   const [layer] = projectBiocharLayers({ runs: [run], ...noRows });
-  const reading = (movementId: string, moisturePercent: number) => ({ layerId: run.id, movementId, moisturePercent, occurredAt: new Date('2026-09-02T12:00:00.000Z'), sequence: BigInt(1) });
+  const occurredAt = new Date('2026-09-02T12:00:00.000Z');
+  const reading = (movementId: string, moisturePercent: number) => ({ layerId: run.id, movementId, moisturePercent, solidsBasisKg: { numerator: '100', denominator: '1' }, occurredAt, sequence: BigInt(1) });
+  const removal = (movementId: string, wetMassKg: string | null, reversesAllocationId: string | null = null) => ({ layerId: run.id, movementId, wetMassKg, reversesAllocationId, sequence: BigInt(2) });
+  const none = { readings: [], removals: [], reversedMovementIds: new Set<string>() };
 
-  it('uses the recorded wet mass and drops readings a correction reversed', () => {
-    const [basis] = projectMoistureBases([layer], { recordedWetKg: new Map([[run.id, '125.000']]), readings: [reading('kept', 10), reading('reversed', 30)], reversedMovementIds: new Set(['reversed']) });
+  it('uses the recorded wet mass and drops readings and removals a correction reversed', () => {
+    const [basis] = projectMoistureBases([layer], { recordedWetKg: new Map([[run.id, '125.000']]), readings: [reading('kept', 10), reading('reversed', 30)],
+      removals: [removal('kept', '20.000'), removal('reversed', '30.000'), removal('reversal', '-30.000', 'allocation'), removal('count', null)], reversedMovementIds: new Set(['reversed']) });
     expect(basis.recorded).toEqual({ solidsKg: rational(BigInt(100)), wetKg: rational(BigInt(125)) });
-    expect(basis.readings.map(r => r.moisturePercent)).toEqual([10]);
+    expect(basis.readings.map(r => [r.moisturePercent, r.solidsKg])).toEqual([[10, rational(BigInt(100))]]);
+    expect(basis.removals.map(r => r.wetKg)).toEqual([rational(BigInt(20))]);
   });
 
   it.each([null, 'NaN', '-1'])('has no recorded basis for wet mass %s', wet => {
-    expect(projectMoistureBases([layer], { recordedWetKg: new Map([[run.id, wet]]), readings: [], reversedMovementIds: new Set() })[0].recorded).toBeNull();
+    expect(projectMoistureBases([layer], { recordedWetKg: new Map([[run.id, wet]]), ...none })[0].recorded).toBeNull();
+  });
+});
+
+describe('unresolved stock reasons', () => {
+  const product = { id: 'product', placedAt: new Date('2026-09-01T12:00:00.000Z'), postingSequence: BigInt(1) };
+  const products = (composition: unknown, placedAt: Date | null = product.placedAt) => () => projectProductLayers({ products: [{ ...product, placedAt, composition }],
+    sources: [{ productId: 'product', runId: 'run', dryKg: '100.000' }], ingredients: [], effects: [] });
+  const reasonOf = (project: () => unknown) => {
+    try {
+      project();
+    } catch (error) {
+      if (error instanceof UnresolvedOutputStockError) return error;
+      throw error;
+    }
+    throw new Error('Expected unresolved stock');
+  };
+
+  it.each([
+    ['run_incomplete', () => projectBiocharLayers({ runs: [{ ...run, endTime: null }], ...noRows })],
+    ['product_placement_missing', products({}, null)],
+    ['ingredient_mass_invalid', products({ ingredients: [{ formulationIngredientId: 'i', massKg: -1 }] })],
+    ['ingredient_snapshot_mismatch', products({ ingredients: [{ formulationIngredientId: 'i', massKg: 5 }] })],
+  ] as const)('names %s at its throw site', (reason, project) => {
+    const error = reasonOf(project);
+    expect(error.reason).toBe(reason);
+    expect(UNRESOLVED_STOCK_REASONS).toContain(reason);
+  });
+
+  it('keeps the operator message each throw site had', () => {
+    expect(reasonOf(() => projectBiocharLayers({ runs: [{ ...run, dryKg: null }], ...noRows })).message).toBe(`Production run ${run.code} has no dry biochar mass. Add the biochar wet mass and moisture to that run, then try again.`);
+    expect(reasonOf(products({ ingredients: [{ formulationIngredientId: 'i', massKg: 5 }] })).message).toBe('Ingredient dry solids are unresolved');
+  });
+
+  it('gives every reason one fixed public sentence without dashes', () => {
+    for (const reason of UNRESOLVED_STOCK_REASONS) {
+      const sentence = UNRESOLVED_STOCK_SENTENCES[reason];
+      expect(sentence).toMatch(/^[A-Z].*\.$/);
+      expect(sentence).not.toMatch(/[–—]/);
+    }
+    expect(new Set(Object.values(UNRESOLVED_STOCK_SENTENCES)).size).toBe(UNRESOLVED_STOCK_REASONS.length);
   });
 });

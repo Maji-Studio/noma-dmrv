@@ -11,25 +11,22 @@ import {
   eq,
   isNotNull,
   isNull,
-  ne,
   or,
   sql,
 } from "drizzle-orm";
+import { ENTITY_DEEP_LINK_EDIT_MODE, ENTITY_DEEP_LINK_MODE_PARAM, SUPPLIER_QUERY_PARAM } from "@/lib/entity-deep-link";
 import { db } from "@/db";
 import { countRows } from "@/db/aggregate";
 import {
   biocharProducts,
   creditBatches,
-  facilities,
   feedstocks,
-  productionRuns,
   samples,
   supplierLocations,
   suppliers,
   transportLegs,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { requireOrgScope } from "./utils";
 import {
   buildEntityDeepLink,
@@ -38,7 +35,6 @@ import {
 } from "@/lib/entity-deep-link";
 
 export interface DashboardStructuralGapCounts {
-  missingFacilityGps: number;
   missingFeedstockGps: number;
   transportEndpointGpsGaps: number;
   missingFeedstockGpsSupplierId: string | null;
@@ -51,7 +47,6 @@ export interface TransportGapTarget {
 }
 
 export type DashboardStructuralGapKey =
-  | "facilityGps"
   | "feedstockGps"
   | "transportEndpointGps";
 
@@ -153,20 +148,13 @@ export function buildDashboardStructuralGaps(
   const facilityParams = new URLSearchParams({ facility: facilityId });
   const facilityQuery = `?${facilityParams.toString()}`;
   const supplierHref = counts.missingFeedstockGpsSupplierId
-    ? `/suppliers/${counts.missingFeedstockGpsSupplierId}${facilityQuery}`
+    ? `/suppliers?${new URLSearchParams({
+        facility: facilityId,
+        [SUPPLIER_QUERY_PARAM]: counts.missingFeedstockGpsSupplierId,
+        [ENTITY_DEEP_LINK_MODE_PARAM]: ENTITY_DEEP_LINK_EDIT_MODE,
+      }).toString()}`
     : `/suppliers${facilityQuery}`;
   return [
-    {
-      key: "facilityGps" as const,
-      label: "Facility GPS missing",
-      metadata: structuralGapMetadata(
-        "Facility form",
-        "Location",
-        counts.missingFacilityGps,
-      ),
-      count: counts.missingFacilityGps,
-      href: `/facilities${facilityQuery}`,
-    },
     {
       key: "feedstockGps" as const,
       label: "Feedstock GPS missing",
@@ -197,7 +185,7 @@ export function buildDashboardStructuralGaps(
 }
 
 /**
- * Count the three structural certification gaps for one active facility.
+ * Count the structural certification gaps for one active facility.
  * Transport legs are resolved through their polymorphic active parent so an
  * archived feedstock, product, run, or credit batch cannot keep a stale gap
  * alive. Every leg and parent predicate is organization-scoped.
@@ -209,18 +197,7 @@ export async function loadDashboardStructuralGapCounts(
   requireOrgScope(ctx);
 
   const orgId = ctx.organizationId;
-  const [[facilityGps], [feedstockGps], [transportRow]] = await Promise.all([
-    db
-      .select({ count: count() })
-      .from(facilities)
-      .where(
-        and(
-          eq(facilities.id, facilityId),
-          eq(facilities.organizationId, orgId),
-          isNull(facilities.archivedAt),
-          or(isNull(facilities.gpsLatitude), isNull(facilities.gpsLongitude)),
-        ),
-      ),
+  const [[feedstockGps], [transportRow]] = await Promise.all([
     db
       .select({
         count: count(),
@@ -251,7 +228,6 @@ export async function loadDashboardStructuralGapCounts(
             isNull(supplierLocations.gpsLatitude),
             isNull(supplierLocations.gpsLongitude),
           ),
-          or(isNull(suppliers.gpsLatitude), isNull(suppliers.gpsLongitude)),
         ),
       ),
     // One pass over the facility's legs: each parent type is a left join
@@ -289,13 +265,6 @@ export async function loadDashboardStructuralGapCounts(
         ),
       )
       .leftJoin(
-        productionRuns,
-        and(
-          eq(samples.productionRunId, productionRuns.id),
-          eq(productionRuns.organizationId, orgId),
-        ),
-      )
-      .leftJoin(
         creditBatches,
         and(
           eq(samples.creditBatchId, creditBatches.id),
@@ -315,16 +284,9 @@ export async function loadDashboardStructuralGapCounts(
               isNull(biocharProducts.archivedAt),
             ),
             and(
-              isNotNull(samples.creditBatchId),
+              isNotNull(samples.id),
               eq(creditBatches.facilityId, facilityId),
               isNull(creditBatches.archivedAt),
-            ),
-            and(
-              isNotNull(samples.id),
-              isNull(samples.creditBatchId),
-              eq(productionRuns.facilityId, facilityId),
-              isNull(productionRuns.archivedAt),
-              ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
             ),
           ),
         ),
@@ -338,7 +300,6 @@ export async function loadDashboardStructuralGapCounts(
   ]);
 
   return {
-    missingFacilityGps: Number(facilityGps?.count ?? 0),
     missingFeedstockGps: Number(feedstockGps?.count ?? 0),
     transportEndpointGpsGaps: transport.endpointGpsGaps,
     missingFeedstockGpsSupplierId: feedstockGps?.supplierId ?? null,

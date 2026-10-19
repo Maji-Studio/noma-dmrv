@@ -1,15 +1,21 @@
+"use client";
+
 /**
  * ApplicationList component
  * Displays application records in a DataTable with create/edit/delete
  * Includes stat cards, search, and pagination
  */
-"use client";
 
 
+import { applicationDeepLinkHref } from "@/lib/application-links";
+import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
+import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -20,7 +26,6 @@ import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import type { ApplicationListItem } from "@/data-access/applications";
 import {
   applicationKeys,
-  useApplicationCertificationLock,
   useApplicationDeliveryOptions,
   useApplications,
   useCreateApplication,
@@ -31,19 +36,22 @@ import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useRecordCertificationLock } from "@/hooks/use-record-certification-lock";
 import {
   useListPagination,
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
+import { APPLICATION_DEEP_LINK_PARAM } from "@/lib/application-links";
 import { APPLICATION_EVIDENCE_RULE_SPEC } from "@/lib/certification/application-evidence";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
-import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { formatCalendarDate, formatDateRange } from "@/lib/format-utils";
 import { sumNullableBy } from "@/lib/nullable-sum";
 import {
   isStaleVersionFailure,
   STALE_VERSION_MESSAGE,
+  toDeleteErrorMessage,
   toSaveErrorMessage,
 } from "@/lib/stale-version";
 import type { ApplicationFormData } from "@/schemas/applications";
@@ -52,7 +60,7 @@ import { LeafIcon, MapPinIcon, PlusIcon, XIcon } from "@phosphor-icons/react/dis
 import { useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApplicationForm } from "./application-form";
 import { applicationSheetSections } from "./application-read-sections";
 import { formatApplicationKgFromTons, formatFieldSizeHa, type ApplicationDeliveryOption } from "./mass-utils";
@@ -64,11 +72,13 @@ import { formatApplicationKgFromTons, formatFieldSizeHa, type ApplicationDeliver
 function createColumns(
   onEdit: (application: ApplicationListItem) => void,
   onDelete: (applicationId: string) => void,
+  locks: RecordLockViews,
+  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<ApplicationListItem>[] {
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -79,7 +89,7 @@ function createColumns(
       meta: { nowrap: true },
       header: "Date",
       cell: ({ row }) => (
-        <span>{formatDate(row.original.applicationDate)}</span>
+        <span>{formatCalendarDate(row.original.applicationDate)}</span>
       ),
     },
     {
@@ -154,28 +164,33 @@ function createColumns(
     },
     {
       id: "certifyReadiness",
-      header: "Certification",
+      header: () => <CertificationScopeHeader />,
       cell: ({ row }) => (
         <EntityCertifyReadinessBadge
           readiness={deriveEntityCertifyReadiness("application", row.original)}
+          readyLabel="Fields complete"
+          readinessNoun="application fields"
         />
       ),
     },
+    recordLockColumn<ApplicationListItem>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end">
-          <RowActionsMenu
-            label={`Actions for ${row.original.code}`}
-            actions={[
-              { label: "Edit", onSelect: () => onEdit(row.original) },
-              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
-            ]}
-          />
-        </div>
-      ),
+      cell: ({ row }) => {
+        const lock = locks[row.original.id];
+        // A Removal of any kind refuses the delete; a Sent one refuses edits.
+        const actions = [
+          ...(isRecordEditable(lock) ? [{ label: "Edit", onSelect: () => onEdit(row.original) }] : []),
+          ...(isRecordDeletable(lock) ? [{ label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) }] : []),
+        ];
+        return (
+          <div className="flex items-center justify-end">
+            {actions.length > 0 && <RowActionsMenu label={`Actions for ${row.original.code}`} actions={actions} />}
+          </div>
+        );
+      },
       enableSorting: false,
     },
   ];
@@ -232,8 +247,34 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     mode: SideSheetMode;
   } | null>(null);
   const [deletingApplicationId, setDeletingApplicationId] = useState<string | null>(null);
+  const [deletingVersion, setDeletingVersion] = useState<number | null>(null);
 
-  const applicationLock = useApplicationCertificationLock(sideSheet?.entity?.id);
+  // `?application=<id>` opens that application's view sheet, mirroring
+  // `?delivery=` on the delivery list. The row is read through the exact-id
+  // filter so the sheet gets the same list item shape a row click passes.
+  const [focusedApplicationId, setFocusedApplicationId] = useQueryState(
+    APPLICATION_DEEP_LINK_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const focusedQueryEnabled = !!contextFacilityId && !!focusedApplicationId;
+  const focusedApplication = useApplications(
+    contextFacilityId && focusedApplicationId
+      ? { facilityId: contextFacilityId, ids: [focusedApplicationId] }
+      : undefined,
+    { enabled: focusedQueryEnabled },
+  );
+  const focusedApplicationItem =
+    focusedApplication.data?.items.find((item) => item.id === focusedApplicationId) ?? null;
+  const focusedApplicationMissing =
+    focusedQueryEnabled &&
+    !focusedApplication.isLoading &&
+    (focusedApplication.error != null || focusedApplicationItem == null);
+  const displaySideSheet =
+    sideSheet ??
+    (focusedApplicationItem ? { entity: focusedApplicationItem, mode: "view" as const } : null);
+
+  const applicationLock = useRecordCertificationLock("application", displaySideSheet?.entity?.id);
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("application", displaySideSheet?.entity?.id);
 
   // Error state
   const [createError, setCreateError] = useState<string | null>(null);
@@ -281,6 +322,17 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const deleteApplication = useDeleteApplication();
   const toast = useToast();
   const queryClient = useQueryClient();
+
+  // The exact-id read answers an unknown id with an empty page rather than an
+  // error, so the effect can see "missing" again before the cleared param
+  // lands. Report each linked id once.
+  const reportedMissingIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusedApplicationMissing || reportedMissingIdRef.current === focusedApplicationId) return;
+    reportedMissingIdRef.current = focusedApplicationId;
+    void setFocusedApplicationId(null);
+    toast.error("Linked application could not be opened");
+  }, [focusedApplicationId, focusedApplicationMissing, setFocusedApplicationId, toast]);
   const createWithEvidence = useCreateWithEvidence({
     entityType: "application",
     entityNoun: "Application",
@@ -327,8 +379,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const handleCreate = createWithEvidence.handleCreate;
 
   const handleUpdate = async (data: ApplicationFormData) => {
-    if (!sideSheet?.entity) return;
-    const applicationId = sideSheet.entity.id;
+    if (!displaySideSheet?.entity) return;
+    const applicationId = displaySideSheet.entity.id;
     setUpdateError(null);
     // Still guards on failed or in-flight attachments, as every other list
     // does. It does not block held files, which the flush below sends: an
@@ -340,7 +392,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         applicationId,
         // The version the side sheet opened on, never a refetched one, so a
         // concurrent edit is refused instead of silently overwritten (#768).
-        expectedUpdatedAt: sideSheet.entity.updatedAt,
+        expectedVersion: displaySideSheet.entity.version,
         ...data,
       });
       if (result.success) {
@@ -373,6 +425,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           });
         }
         createWithEvidence.reset();
+        void setFocusedApplicationId(null);
         setSideSheet(null);
         toast.success("Application updated.");
       } else {
@@ -391,14 +444,17 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   };
 
   const handleDelete = (applicationId: string) => {
+    const row = (items).find((item) => item.id === applicationId);
+    if (!row) return;
+    setDeletingVersion(row.version);
     setDeletingApplicationId(applicationId);
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deletingApplicationId) return;
+    if (!deletingApplicationId || deletingVersion === null) return;
     setDeleteError(null);
     try {
-      const result = await deleteApplication.mutateAsync(deletingApplicationId);
+      const result = await deleteApplication.mutateAsync({ applicationId: deletingApplicationId, expectedVersion: deletingVersion });
       if (result.success) {
         setDeletingApplicationId(null);
         toast.success("Application deleted.");
@@ -406,19 +462,24 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         setDeleteError(result.error || "Application was not deleted. Try again.");
       }
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Application was not deleted. Try again.");
+      setDeleteError(toDeleteErrorMessage(error, "Application", "Application was not deleted. Try again."));
     }
   };
 
   const openCreate = () => {
+    void setFocusedApplicationId(null);
     setCreateError(null);
     setUpdateError(null);
     createWithEvidence.reset();
     setSideSheet({ entity: null, mode: "create" });
   };
-  const openView = (application: ApplicationListItem) => { setSideSheet({ entity: application, mode: "view" }); };
+  const openView = (application: ApplicationListItem) => {
+    void setFocusedApplicationId(application.id);
+    setSideSheet({ entity: application, mode: "view" });
+  };
   const openEdit = (application: ApplicationListItem) => { setCreateError(null); setUpdateError(null); createWithEvidence.reset(); setSideSheet({ entity: application, mode: "edit" }); };
   const closeSideSheet = () => {
+    void setFocusedApplicationId(null);
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
@@ -426,15 +487,15 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   };
 
   const confirmCreateClose = () =>
-    createWithEvidence.confirmClose(sideSheet?.mode === "create");
+    createWithEvidence.confirmClose(displaySideSheet?.mode === "create");
   const attemptCloseSideSheet = () => {
     if (confirmCreateClose()) closeSideSheet();
   };
 
   // Memoize columns
-  const columns = createColumns(openEdit, handleDelete);
-
   const items = applications?.items ?? [];
+  const applicationLocks = useRecordLocks("application", items.map((item) => item.id));
+  const columns = createColumns(openEdit, handleDelete, applicationLocks.locks, applicationLocks.statusOf);
   const deliveryOptions = scopedDeliveries ?? deliveries;
   const totalApplications = applications?.total ?? 0;
   const totalPages = applications?.totalPages ?? 0;
@@ -483,16 +544,16 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   }
 
   // Derived values for the side sheet
-  const sideSheetOpen = !!sideSheet;
-  const fieldsEditable = !sideSheet?.entity || applicationLock.data === false;
-  const sideSheetMode = sideSheet?.mode === "edit" && !fieldsEditable ? "view" : sideSheet?.mode ?? "create";
+  const sideSheetOpen = !!displaySideSheet;
+  const fieldsEditable = !displaySideSheet?.entity || applicationLock.data === false;
+  const sideSheetMode = displaySideSheet?.mode === "edit" && !fieldsEditable ? "view" : displaySideSheet?.mode ?? "create";
   // The stored entity is a snapshot from when the sheet opened; prefer the
   // refreshed row from the list query so evidence-driven readiness changes
   // show while the sheet stays open. Fall back to the snapshot for rows the
   // list has not caught up with yet (e.g. just-created applications).
-  const sideSheetEntity = sideSheet?.entity
-    ? (items.find((item) => item.id === sideSheet.entity?.id) ??
-      sideSheet.entity)
+  const sideSheetEntity = displaySideSheet?.entity
+    ? (items.find((item) => item.id === displaySideSheet.entity?.id) ??
+      displaySideSheet.entity)
     : null;
 
   const sideSheetTitle =
@@ -502,7 +563,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     sideSheetMode === "create"
       ? undefined
       : sideSheetEntity
-        ? formatDate(sideSheetEntity.applicationDate)
+        ? formatCalendarDate(sideSheetEntity.applicationDate)
         : undefined;
   const sideSheetDelivery = sideSheetEntity
     ? deliveryOptions.find((delivery) => delivery.id === sideSheetEntity.deliveryId)
@@ -560,6 +621,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => applicationDeepLinkHref(row.id, contextFacilityId)}
         emptyMessage={
           <EmptyState
             padding="md"
@@ -687,10 +749,13 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         onOpenChange={(open) => !open && closeSideSheet()}
         onCloseAttempt={confirmCreateClose}
         mode={sideSheetMode}
-        onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
+        onModeChange={(mode) =>
+          setSideSheet(displaySideSheet ? { ...displaySideSheet, mode } : null)
+        }
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        canEdit={fieldsEditable}
+        canEdit={fieldsEditable && isRecordEditable(sheetLock)}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
         editLabel="Edit application"
         size="wide"
         sections={sideSheetEntity ? applicationSheetSections(sideSheetEntity, { delivery: sideSheetDelivery, lock: applicationLock, durabilityOption }) : undefined}
@@ -698,6 +763,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         <ApplicationForm
           key={sideSheetEntity?.id ?? "create"}
           application={sideSheetEntity ?? undefined}
+          lock={sheetLock}
           deliveries={deliveryOptions}
           durabilityOption={durabilityOption}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}

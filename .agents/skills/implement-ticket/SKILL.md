@@ -25,12 +25,12 @@ Completion: brief file written, feature branch checked out, board moved (if appl
 
 Spawn ONE subagent with only the brief path, the repo root, and a pointer to `.claude/CLAUDE.md`. Its task:
 
-- Implement the change through the layered flow (schema → data-access+guards → fn → hooks → components), reusing existing hooks/utilities. Per the model rubric in CLAUDE.md, bulk/mechanical briefs (clear-spec implementation, migrations, sweeps) may be delegated to gpt-6-astra via the **codex-implementation** skill — the subagent then owns inspecting the diff and verifying, and codex output is evidence, not authority. User-facing work (UI, copy, API design) stays with Claude.
-- Keep `pnpm lint` and `pnpm typecheck` green — never trust exit 0 from a piped command; read the real output.
+- Implement the change through the layered flow (schema → data-access+guards → fn → hooks → components), reusing existing hooks/utilities. Route the work per the shared model policy (`~/.claude/model-selection.md`): non-UI changes go to Codex via the **codex-implementation** skill — the subagent then owns inspecting the diff and verifying, and codex output is evidence, not authority. User-facing work (UI, copy, API design) stays with Claude.
+- Keep `pnpm verify:static` green — never trust exit 0 from a piped command; read the real output.
 - Commit on the feature branch (conventional commits; body says *why*).
 - **Verify the changed behaviour** per the playbook's UI verification section — the path depends on session mode. Interactive session: ensure the dev server is up on :3100 and delegate to the **codex-computer-use** skill (the user approves the full-access prompt); judge the screenshots + report yourself. Auto/unattended session: the permission classifier blocks codex full-access and credential extraction — write or extend a Playwright e2e spec (HTTP-auth fixtures) covering the flow and run it; do not attempt the codex path. Claude-in-chrome fallback per playbook (user signs in themselves in auto mode). For a backend-only change with no UI surface, exercise the relevant `pnpm test:e2e` spec or unit path instead and say which.
 
-Completion: change committed, lint+typecheck green, the changed behaviour observed working. If verify goes red, send the failure back to the same subagent (SendMessage) to fix — never open a PR on red.
+Completion: change committed, verify:static green, the changed behaviour observed working. If verify goes red, send the failure back to the same subagent (SendMessage) to fix — never open a PR on red.
 
 ## Phase 3 — Publish (one subagent)
 
@@ -43,7 +43,7 @@ Completion: PR open against `staging`, issue linked, board moved.
 Three reviews converge on the PR. Keep the reviewer **fresh** — never the implementer — so it stays unbiased. Run the first two concurrently:
 
 - **Fresh reviewer subagent** — review the diff against the brief/issue and repo standards. Verify every finding against the actual code before reporting; false positives (even bogus P0s) are common here. Post ONE PR comment, signed as a session-local reviewer.
-- **Codex** (best-effort) — a subagent runs a gpt-6-astra review via the **codex-review** skill (playbook) and posts the findings as a PR comment under a "Codex review (gpt-6-astra)" heading, labeled as unverified — Phase 5 verifies every comment anyway. If the binary is absent or errors, skip and note it.
+- **Codex** (best-effort) — a subagent runs a gpt-6-astra review via the **codex-review** skill (playbook; use the skill's gpt-6-astra escalation flags, since PR reviews run on astra) and posts the findings as a PR comment under a "Codex review (gpt-6-astra)" heading, labeled as unverified — Phase 5 verifies every comment anyway. If the binary is absent or errors, skip and note it.
 - **CodeRabbit** — auto-reviews PRs to `staging`. Wait for its review to land before Phase 5 (poll `gh pr view <n> --json reviews` until a coderabbit review appears or ~10 min elapse; proceed with what exists if it doesn't).
 
 Completion: fresh review posted, codex attempted, CodeRabbit review present (or waited-out and noted).
@@ -56,7 +56,7 @@ Spawn a FRESH resolver subagent with the PR number. For every comment — fresh 
 - Fix valid findings with the **minimal** change. Resist over-engineering: a fix that balloons scope is itself a smell to push back on, not follow.
 - Decline false positives and gold-plating with a one-line written reason.
 - Reply to each thread; resolve the ones addressed or declined; leave genuinely open questions unresolved.
-- One commit per addressed comment; keep lint+typecheck green; push.
+- One commit per addressed comment; keep verify:static green; push.
 
 Completion: every comment triaged (fixed / declined+reason), replies posted, threads resolved, branch pushed.
 

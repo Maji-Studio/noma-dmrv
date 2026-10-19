@@ -19,7 +19,13 @@
  * contract. This file is the integration layer: the server action runs for
  * real with data-access / storage / isometric-client boundaries faked.
  */
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", () => ({
+  resolveIsometricClient: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
+}));
+
 import { makeTestOrgContext } from "./helpers/test-org";
 
 vi.mock("@/lib/auth/server", () => ({
@@ -74,7 +80,6 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
   return {
     ...actual,
-    getIsometricClientForOrg: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
     findSourceBySupplierRef: vi.fn(),
     requestSignedUploadUrl: vi.fn(),
     createSource: vi.fn(),
@@ -124,12 +129,15 @@ import * as documentsDA from "@/data-access/documents";
 import * as uploadsDA from "@/data-access/certifier-document-uploads";
 import * as organizationSettingsDA from "@/data-access/certifier-organization-settings";
 import * as isometric from "@/lib/isometric";
+import { mirrorDocumentToSource } from "@/fn/certification/sources";
 import {
   loadCandidateDocumentsForRemovalForUser,
-  mirrorCandidateSourcesForSubmission,
-  mirrorDocumentToSource,
   type CandidateSourceDocument,
-} from "@/fn/certification/sources";
+} from "@/fn/certification/source-candidates";
+import {
+  mirrorCandidateSourcesForSubmission,
+  mirrorDocumentToSourceForUser,
+} from "@/fn/certification/sources-mirror-core";
 import { buildSourceSupplierRef } from "@/lib/isometric/utils/source-ref";
 
 const SUPPLIER_REF = buildSourceSupplierRef(DOCUMENT_ID);
@@ -138,6 +146,7 @@ const SUBMISSION_CANDIDATE: CandidateSourceDocument = {
   binding: null,
   biocharApplicationId: "biochar-application-test",
 };
+
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -355,6 +364,78 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
     );
   });
 
+  it("mirrors only the reviewed candidates, not documents attached since review", async () => {
+    // A second document joined the lineage after the reviewed compilation.
+    // The submission mirror must not create a Source for it; the reviewed-hash
+    // re-assert aborts the submission instead.
+    vi.mocked(documentsDA.listDocumentsForEntity).mockImplementation(
+      async (_orgCtx, entityType, entityId) =>
+        entityType === "application" && entityId === APPLICATION_ID
+          ? ([
+              DOCUMENT_FIXTURE,
+              { ...DOCUMENT_FIXTURE, id: STALE_DOCUMENT_ID },
+            ] as never)
+          : ([] as never),
+    );
+    vi.mocked(isometric.findSourceBySupplierRef).mockResolvedValue({
+      id: EXISTING_SOURCE_ID,
+      is_public: false,
+    } as never);
+    vi.mocked(isometric.requestSignedUploadUrl).mockResolvedValue({
+      kind: "already_uploaded",
+    });
+
+    await mirrorCandidateSourcesForSubmission(
+      makeTestOrgContext(USER_ID),
+      {
+        removalId: REMOVAL_ID,
+        candidateSourceDocuments: [SUBMISSION_CANDIDATE],
+      },
+    );
+
+    expect(documentsDA.getDocumentById).toHaveBeenCalledTimes(1);
+    expect(documentsDA.getDocumentById).toHaveBeenCalledWith(
+      makeTestOrgContext(USER_ID),
+      DOCUMENT_ID,
+    );
+    expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledTimes(1);
+    expect(uploadsDA.insertOrGetDocumentUpload).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ documentId: STALE_DOCUMENT_ID }),
+      expect.anything(),
+    );
+  });
+
+  it("refuses a trusted mirror of a document outside the Removal's lineage", async () => {
+    vi.mocked(documentsDA.listDocumentsForEntity).mockResolvedValue([]);
+
+    await expect(
+      mirrorDocumentToSourceForUser(makeTestOrgContext(USER_ID), {
+        removalId: REMOVAL_ID,
+        documentId: DOCUMENT_ID,
+      }),
+    ).rejects.toThrow(/not available for this Removal/i);
+    expect(isometric.createSource).not.toHaveBeenCalled();
+    expect(uploadsDA.insertOrGetDocumentUpload).not.toHaveBeenCalled();
+  });
+
+  it("enforces the Removal lifecycle on trusted mirrors by default", async () => {
+    vi.mocked(
+      submissionsDA.getLatestSubmissionWithExecutor,
+    ).mockResolvedValue({
+      status: "submitted",
+      lockedAt: null,
+    } as never);
+
+    await expect(
+      mirrorDocumentToSourceForUser(makeTestOrgContext(USER_ID), {
+        removalId: REMOVAL_ID,
+        documentId: DOCUMENT_ID,
+      }),
+    ).rejects.toThrow(/registry value sources are read-only/i);
+    expect(isometric.createSource).not.toHaveBeenCalled();
+  });
+
   it("lets the submission-owned mirror seam rebuild live evidence after supersede", async () => {
     vi.mocked(
       submissionsDA.getLatestSubmissionWithExecutor,
@@ -472,7 +553,7 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       expect(result.success).toBe(false);
       if (result.success) return;
       expect(result.error).toMatch(/registry value sources are read-only/i);
-      expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
+      expect(resolveIsometricClient).not.toHaveBeenCalled();
       expect(isometric.findSourceBySupplierRef).not.toHaveBeenCalled();
       expect(isometric.createSource).not.toHaveBeenCalled();
       expect(uploadsDA.insertOrGetDocumentUpload).not.toHaveBeenCalled();
@@ -495,7 +576,7 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error).toMatch(/submission is in progress/i);
-    expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
+    expect(resolveIsometricClient).not.toHaveBeenCalled();
     expect(isometric.createSource).not.toHaveBeenCalled();
   });
 
@@ -739,7 +820,7 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error).toMatch(/upload has not been confirmed/i);
-    expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
+    expect(resolveIsometricClient).not.toHaveBeenCalled();
     expect(isometric.findSourceBySupplierRef).not.toHaveBeenCalled();
     expect(isometric.createSource).not.toHaveBeenCalled();
     expect(uploadsDA.insertOrGetDocumentUpload).not.toHaveBeenCalled();

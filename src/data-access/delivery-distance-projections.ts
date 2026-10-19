@@ -1,29 +1,12 @@
-import { sql } from "drizzle-orm";
-import { customerLocations, deliveries } from "@/db/schema";
+import type { Delivery } from "@/db/schema";
+import { resolveDeliveryTransportRoute } from "@/lib/calculations/transport-leg";
 
-interface DeliveryDistanceColumns {
-  distanceKmOverride: boolean;
-  distanceSource: boolean;
-}
-
-export function effectiveDeliveryDistanceSource(
-  columns: DeliveryDistanceColumns,
+/** Reads resolve the optional override over the frozen pair snapshot. */
+export function effectiveDeliveryDistance(
+  delivery: Pick<Delivery, "distanceKmOverride" | "distanceSource" | "recordedDistanceKm" | "recordedDistanceSource">,
 ) {
-  if (!columns.distanceKmOverride || !columns.distanceSource) {
-    return customerLocations.distanceSource;
-  }
-
-  return sql<"map_estimate" | "manual" | "document" | null>`case
-    when ${deliveries.distanceSource} = 'document'
-      then 'document'::distance_source
-    when ${deliveries.distanceKmOverride} is not null
-      then coalesce(${deliveries.distanceSource}, 'manual')
-    else ${customerLocations.distanceSource}
-  end`;
-}
-
-export function effectiveDeliveryDistanceKm(columns: DeliveryDistanceColumns) {
-  return columns.distanceKmOverride
-    ? sql<number | null>`coalesce(${deliveries.distanceKmOverride}, ${customerLocations.distanceFromFacilityKm})`
-    : customerLocations.distanceFromFacilityKm;
+  const route = resolveDeliveryTransportRoute({ ...delivery, location: {
+    distanceKm: delivery.recordedDistanceKm, distanceSource: delivery.recordedDistanceSource,
+  } });
+  return { effectiveDistanceKm: route.distanceKm, effectiveDistanceSource: route.distanceSource };
 }

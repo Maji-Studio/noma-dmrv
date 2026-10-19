@@ -57,7 +57,7 @@ vi.mock("@/data-access/certifier-document-uploads", () => ({
   getDocumentUploadByDocument: vi.fn(async () => null),
   deleteDocumentUploadByDocument: vi.fn(async () => {}),
 }));
-vi.mock("@/fn/certification/sources", () => ({
+vi.mock("@/fn/certification/sources-mirror-core", () => ({
   mirrorDocumentToSourceForUser: vi.fn(async () => ({
     externalDocumentId: "src_new",
     isPublic: false,
@@ -95,7 +95,7 @@ import {
 } from "@/data-access/certifier-document-uploads";
 import { renderEvidenceLedgerPdf } from "@/lib/certification/evidence-ledger/pdf";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
-import { mirrorDocumentToSourceForUser } from "@/fn/certification/sources";
+import { mirrorDocumentToSourceForUser } from "@/fn/certification/sources-mirror-core";
 import { ensureTransportEvidenceLedgerSourceFromContext } from "@/fn/certification/evidence-ledger";
 import { EvidenceLedgerRetirementError } from "@/fn/certification/evidence-ledger-core";
 
@@ -134,12 +134,10 @@ function ctx(overrides?: {
         ? { externalProjectId: "prj_TEST" }
         : overrides.mapping,
     memberBatches: [{ id: BATCH, code: "CB-26-001" }],
-    // Full application (fraction 1) — the ledger builder reads the removal's
-    // run summary for the §8.6.2 delivery-bucket applied share (ADR 0020).
+    // Biochar transport legs already carry their attributed delivery loads.
     runSummary: {
       runCount: 1,
       totalBiocharOutputKg: 1000,
-      deliveryBiocharOutputKg: 1000,
       appliedDryKg: 1000,
     },
     transportLegs: overrides?.legs ?? {
@@ -202,10 +200,11 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
     expect(meta.removalId).toBe(REMOVAL);
     expect(typeof meta.contentHash).toBe("string");
 
-    expect(mirrorDocumentToSourceForUser).toHaveBeenCalledWith(makeTestOrgContext(USER), {
-      removalId: REMOVAL,
-      documentId: "doc-new",
-    });
+    expect(mirrorDocumentToSourceForUser).toHaveBeenCalledWith(
+      makeTestOrgContext(USER),
+      { removalId: REMOVAL, documentId: "doc-new" },
+      { enforceRemovalLifecycle: false },
+    );
 
     expect(result).toMatchObject({
       status: "created",
@@ -292,7 +291,7 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
       "isometric",
       "doc-old",
     );
-    expect(deleteDocumentRow).toHaveBeenCalledWith(makeTestOrgContext(USER), "doc-old");
+    expect(deleteDocumentRow).toHaveBeenCalledWith(makeTestOrgContext(USER), "doc-old", "form");
     expect(deleteObject).toHaveBeenCalledWith("transport-evidence/old-hash.pdf");
   });
 
@@ -320,7 +319,7 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
       "isometric",
       "doc-old",
     );
-    expect(deleteDocumentRow).toHaveBeenCalledWith(makeTestOrgContext(USER), "doc-old");
+    expect(deleteDocumentRow).toHaveBeenCalledWith(makeTestOrgContext(USER), "doc-old", "form");
   });
 
   it("fails closed when an empty-ledger retirement cannot remove the stale mapping", async () => {

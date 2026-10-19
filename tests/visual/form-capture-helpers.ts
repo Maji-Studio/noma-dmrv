@@ -97,7 +97,8 @@ export async function menuItem(page: Page, menuLabel: string, item: string | Reg
 /** Opens a storage bin's read sheet from its tile on /storage-locations. */
 export async function openBinSheet(page: Page, ctx: CaptureContext, binName: string): Promise<Locator> {
   await gotoRoute(page, ctx, "storage-locations");
-  await page.getByRole("button", { name: binName, exact: true }).first().click();
+  // The tile is an article named for the bin; its material heading is the link.
+  await page.getByRole("article", { name: binName, exact: true }).first().locator("[data-row-link], h3 button").first().click();
   const sheet = lastSheet(page);
   await expect(sheet).toBeVisible({ timeout: OPEN_TIMEOUT_MS });
   await settle(page, sheet);
@@ -123,17 +124,17 @@ export async function openQuickAdd(page: Page, scope: Locator, trigger: string):
   return dialog;
 }
 
-/** Opens a bin's loss or count sheet from its read sheet. */
+/** Opens a bin's lost-mass sheet from its read sheet. */
 export async function binMovementSheet(
   page: Page,
   ctx: CaptureContext,
   type: SeededBin["type"],
-  button: "Record loss" | "Reconcile stock",
+  button: "Adjust stock",
 ): Promise<Locator> {
   const sheet = await openBinSheet(page, ctx, findBin(ctx, { type })!.name);
   await sheet.getByRole("button", { name: button, exact: true }).first().click();
   const movement = lastSheet(page);
-  await expect(movement.getByRole("heading", { name: /^Reconcile / }).first()).toBeVisible();
+  await expect(movement.getByRole("heading", { name: "Lost mass" }).first()).toBeVisible();
   return movement;
 }
 

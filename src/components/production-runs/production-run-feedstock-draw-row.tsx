@@ -6,7 +6,10 @@ import { Button } from "@/components/ui/button";
 import { useStockAvailability } from "@/hooks/use-stock-availability";
 import {
   binStockOverdrawInlineMessage,
+  formatStockLimitKg,
   isStockOverdraw,
+  pickerShowsRemainingStock,
+  wholeStockDrawKg,
 } from "@/lib/stock-overdraw";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 
@@ -60,11 +63,14 @@ export function ProductionRunFeedstockDrawRow({
         }
       : null,
   );
+  const availableKg = availability?.availableKg ?? null;
+  const wholeDrawKg =
+    availableKg !== null ? wholeStockDrawKg(availableKg) : null;
   const stockError =
     typeof wetMassKg === "number" &&
-    availability?.availableKg != null &&
-    isStockOverdraw(wetMassKg, availability.availableKg)
-      ? binStockOverdrawInlineMessage("feedstock", availability.availableKg)
+    availableKg != null &&
+    isStockOverdraw(wetMassKg, availableKg)
+      ? binStockOverdrawInlineMessage("feedstock", availableKg)
       : undefined;
   const resolvedWetMassError = wetMassError ?? stockError;
 
@@ -89,7 +95,7 @@ export function ProductionRunFeedstockDrawRow({
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+      <div className="flex flex-col gap-y-20">
         <FormField
           id={`feedstockDraws.${index}.storageLocationId`}
           label="Source bin"
@@ -99,6 +105,7 @@ export function ProductionRunFeedstockDrawRow({
           <EntitySelect
             id={`feedstockDraws.${index}.storageLocationId`}
             entityType="storageLocation"
+            allowEdit
             value={storageLocationId}
             onChange={onStorageLocationChange}
             placeholder="Select bin..."
@@ -117,6 +124,13 @@ export function ProductionRunFeedstockDrawRow({
               (id) => id !== storageLocationId,
             )}
             autoSelectSingle={false}
+            // The wet mass cue states what this draw may take; the bin's
+            // Remaining now line would be a second, near-identical figure.
+            showRemainingMass={pickerShowsRemainingStock({
+              availableKg,
+              massError: resolvedWetMassError,
+              overdrawError: stockError,
+            })}
           />
         </FormField>
         <input
@@ -133,6 +147,17 @@ export function ProductionRunFeedstockDrawRow({
             id={`feedstockDraws.${index}.wetMassKg`}
             label="Wet mass (kg)"
             error={resolvedWetMassError}
+            cue={availableKg != null ? `${formatStockLimitKg(availableKg)} available ${productionRunId ? "to this run" : "in this bin"}` : undefined}
+            cueAction={
+              wholeDrawKg !== null
+                ? {
+                    label: "Add all",
+                    ariaLabel: `Add all stock to feedstock source ${index + 1}`,
+                    disabled,
+                    onClick: () => onWetMassChange(wholeDrawKg),
+                  }
+                : undefined
+            }
             hint="As-received weight from this bin, water included."
             required
           >

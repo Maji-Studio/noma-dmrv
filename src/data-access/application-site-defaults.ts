@@ -1,0 +1,45 @@
+import { and, eq, sql } from "drizzle-orm";
+import { db, type DbTransaction } from "@/db";
+import { deliveries, orders, customerLocations, certifierProjects, facilities } from "@/db/schema";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope, type Executor } from "./utils";
+
+/** The order owns the site now that deliveries.customer_location_id is gone. */
+export function applicationSiteDefaultsQuery(ctx: OrgContext, executor: Executor = db) {
+  requireOrgScope(ctx);
+  return executor.select({
+    deliveryId: sql<string>`${deliveries.id}`.as("delivery_id"),
+    customerLocationId: sql<string | null>`${customerLocations.id}`.as("customer_location_id"),
+    customerLocationName: customerLocations.name,
+    gpsLatitude: customerLocations.gpsLatitude,
+    gpsLongitude: customerLocations.gpsLongitude,
+    defaultSoilTemperatureC: customerLocations.defaultSoilTemperatureC,
+    facilityDefaultSoilTemperatureC: sql<number | null>`${certifierProjects.defaultSoilTemperatureC}`.as("facility_default_soil_temperature_c"),
+    durabilityOption: facilities.durabilityOption,
+  }).from(deliveries)
+    .innerJoin(orders, and(eq(orders.id, deliveries.orderId), eq(orders.organizationId, ctx.organizationId)))
+    .innerJoin(facilities, and(eq(facilities.id, deliveries.facilityId), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(customerLocations, and(eq(customerLocations.id, orders.customerLocationId), eq(customerLocations.organizationId, ctx.organizationId)))
+    .leftJoin(certifierProjects, and(eq(certifierProjects.facilityId, deliveries.facilityId), eq(certifierProjects.provider, "isometric"), eq(certifierProjects.organizationId, ctx.organizationId)))
+    .where(eq(deliveries.organizationId, ctx.organizationId)).$dynamic();
+}
+
+export async function getApplicationSiteDefaults(ctx: OrgContext, tx: DbTransaction, deliveryId: string) {
+  requireOrgScope(ctx);
+  const sites = await applicationSiteDefaultsQuery(ctx, tx)
+    .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
+  return sites.at(0) ?? null;
+}
+
+type ApplicationSiteDefaults = NonNullable<Awaited<ReturnType<typeof getApplicationSiteDefaults>>>;
+
+export function usesSiteSoilTemperature(site: Pick<ApplicationSiteDefaults, "durabilityOption"> | null): boolean {
+  return site?.durabilityOption === "200_year";
+}
+
+export function resolveSiteSoilTemperatureDefault(site: ApplicationSiteDefaults | null): { temperatureC: number; origin: "customer_location" | "facility" } | null {
+  if (!usesSiteSoilTemperature(site)) return null;
+  if (site?.defaultSoilTemperatureC != null) return { temperatureC: site.defaultSoilTemperatureC, origin: "customer_location" };
+  if (site?.facilityDefaultSoilTemperatureC != null) return { temperatureC: site.facilityDefaultSoilTemperatureC, origin: "facility" };
+  return null;
+}

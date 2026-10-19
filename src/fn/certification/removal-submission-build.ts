@@ -1,6 +1,9 @@
+import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
+export { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
+import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
+import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import type { OrgContext } from "@/lib/auth/server";
 import { env } from "@/config/env";
-import { appliedBiocharFraction } from "@/lib/certification/mass-accounting";
 import { SafeError } from "@/lib/errors";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
@@ -13,9 +16,9 @@ import {
 } from "@/lib/isometric";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import {
-  expectedSequestrationBlueprintKeys,
   isSequestrationBlueprintFamily,
-} from "@/lib/isometric/transformers/measurement-sample";
+  isStorageBlueprintKey,
+} from "@/lib/isometric/storage-blueprints";
 import {
   assertSequestrationTemplateBindings,
   buildDirectSequestrationDatapoints,
@@ -43,7 +46,7 @@ import {
 import type {
   CandidateSourceDocument,
   ResolvedSourceBindingCandidate,
-} from "./sources";
+} from "./source-candidates";
 import type { RemovalSubmissionContext } from "./certify-context-core";
 import {
   sourceIdsForDatapointTarget,
@@ -185,20 +188,17 @@ export interface MaterializedRemovalSubmissionSnapshot {
   metadata: { supersedePreviousId: string | null };
 }
 
+export const REMOVAL_COMPILATION_FAILED_MESSAGE = "Removal submission could not be compiled from the current source data.";
+
 const DATAPOINT_POST_TARGET = "/datapoints";
 const MEASUREMENT_SAMPLE_POST_TARGET = "/measurement-samples";
 const GHG_ENTRY_POST_TARGET = "/ghg-entries";
-const LEGACY_SEQUESTRATION_BLUEPRINT =
-  "carbon_rich_substance_sequestration";
-
 function hasSupportedSequestrationComponent(
   template: IsometricGhgEntryTemplate,
 ): boolean {
   return (template.groups ?? []).some((group) =>
     group.components.some(
-      (component) =>
-        component.blueprint_key === LEGACY_SEQUESTRATION_BLUEPRINT ||
-        isSequestrationBlueprintFamily(component.blueprint_key),
+      (component) => isStorageBlueprintKey(component.blueprint_key),
     ),
   );
 }
@@ -226,28 +226,6 @@ function emptyReview(
   };
 }
 
-export function removalTemplateTierCompatibilityBlocker(
-  ctx: Pick<RemovalSubmissionContext, "batchesWithSamples">,
-  template: IsometricGhgEntryTemplate,
-): string | null {
-  const facilityTier = ctx.batchesWithSamples[0]?.durabilityOption ?? null;
-  if (!facilityTier) return null;
-  const expectedKeys = expectedSequestrationBlueprintKeys(facilityTier);
-  const mismatched = template.groups
-    .flatMap((group) => group.components)
-    .map((component) => component.blueprint_key)
-    .filter(isSequestrationBlueprintFamily)
-    .find((key) => !expectedKeys.has(key));
-  if (!mismatched) return null;
-
-  const tierLabel = facilityTier === "1000_year" ? "1000-year" : "200-year";
-  return (
-    `This facility uses ${tierLabel} durability, but its default Removal ` +
-    `template uses an incompatible storage component (${mismatched}). ` +
-    `Choose a ${tierLabel} template or change the facility's durability tier.`
-  );
-}
-
 export async function compileRemovalSubmission(
   args: Parameters<typeof buildRemovalSubmissionBuild>[0] & {
     /**
@@ -257,15 +235,25 @@ export async function compileRemovalSubmission(
     allowPendingSources?: boolean;
   },
 ): Promise<CompiledRemovalSubmission> {
+  const unbindable = findUnbindableTemplateInputs(args.prepared.removalTemplate, { lineSources: args.prepared.lineSources });
+  if (unbindable.length > 0) {
+    return {
+      review: emptyReview(args.prepared.removalTemplate),
+      transportPlan: null,
+      blockers: [formatUnbindableTemplateInputsText(unbindable)],
+      warnings: [...(args.ctx.submissionWarnings ?? [])],
+      snapshot: null,
+    };
+  }
   if (
     args.ctx.entityReadinessGaps?.length === 0 &&
-    !hasSupportedSequestrationComponent(args.prepared.defaultTemplate)
+    !hasSupportedSequestrationComponent(args.prepared.removalTemplate)
   ) {
     return {
-      review: emptyReview(args.prepared.defaultTemplate),
+      review: emptyReview(args.prepared.removalTemplate),
       transportPlan: null,
       blockers: [
-        "The default Removal template has no supported biochar sequestration component. Rebind a complete Removal template before submitting.",
+        "The Removal template has no supported biochar sequestration component. Choose a complete Removal template for this credit batch.",
       ],
       warnings: [...(args.ctx.submissionWarnings ?? [])],
       snapshot: null,
@@ -287,12 +275,12 @@ export async function compileRemovalSubmission(
       );
     }
     return {
-      review: emptyReview(args.prepared.defaultTemplate),
+      review: emptyReview(args.prepared.removalTemplate),
       transportPlan: null,
       blockers: [
         error instanceof SafeError
           ? error.message
-          : "Removal submission could not be compiled from the current source data.",
+          : REMOVAL_COMPILATION_FAILED_MESSAGE,
       ],
       warnings: [...(args.ctx.submissionWarnings ?? [])],
       snapshot: null,
@@ -307,7 +295,7 @@ export async function compileRemovalSubmission(
   );
   const tierBlocker = removalTemplateTierCompatibilityBlocker(
     args.ctx,
-    args.prepared.defaultTemplate,
+    args.prepared.removalTemplate,
   );
   if (tierBlocker) blockers.push(tierBlocker);
   if (
@@ -342,7 +330,7 @@ export async function compileRemovalSubmission(
   });
 
   const templateComponentById = new Map(
-    args.prepared.defaultTemplate.groups
+    args.prepared.removalTemplate.groups
       .flatMap((group) => group.components)
       .map((component) => [component.id, component] as const),
   );
@@ -369,7 +357,7 @@ export async function compileRemovalSubmission(
       binding: "fixed" as const,
       fixedDatapointId: input.preboundDatapointId,
     })),
-    ...args.prepared.defaultTemplate.groups.flatMap((group) =>
+    ...args.prepared.removalTemplate.groups.flatMap((group) =>
       group.components
         .filter((component) =>
           isSequestrationBlueprintFamily(component.blueprint_key),
@@ -393,7 +381,7 @@ export async function compileRemovalSubmission(
   const directSequestrationDatapoints =
     build.durabilityMeasurementSampleArgs
       ? buildDirectSequestrationDatapoints({
-          template: args.prepared.defaultTemplate,
+          template: args.prepared.removalTemplate,
           measurementSampleSubmissions:
             buildVersionedMeasurementSampleSubmissions({
               ...build.durabilityMeasurementSampleArgs,
@@ -414,8 +402,8 @@ export async function compileRemovalSubmission(
 
   const review: RemovalSubmissionReview = {
     template: {
-      id: args.prepared.defaultTemplate.id,
-      displayName: args.prepared.defaultTemplate.display_name,
+      id: args.prepared.removalTemplate.id,
+      displayName: args.prepared.removalTemplate.display_name,
       mappingRevision: MAPPING_REVISION,
     },
     bindings,
@@ -609,6 +597,15 @@ export function assertEntityReadinessGapsResolved(
   );
 }
 
+export function assertSubmissionLineageResolved(blockers: SubmissionLineageBlocker[] | undefined): void {
+  if (!blockers) {
+    throw new SafeError("The Removal review did not finish. Refresh the review before submitting.");
+  }
+  if (blockers.length > 0) {
+    throw new SafeError(`Removal submission blocked:\n${blockers.map((blocker) => blocker.detail).join("\n")}`);
+  }
+}
+
 export async function buildRemovalSubmissionBuild(args: {
   orgCtx: OrgContext;
   removalId: string;
@@ -622,15 +619,16 @@ export async function buildRemovalSubmissionBuild(args: {
 }): Promise<RemovalSubmissionBuild> {
   const { orgCtx, removalId, ctx, log } = args;
   const {
-    defaultTemplate,
+    removalTemplate,
     blueprintsByKey,
     externalProjectId,
     allowPeriodInputStub,
     hasDurabilityComponents,
   } = args.prepared;
 
+  assertSubmissionLineageResolved(ctx.submissionLineageBlockers);
   assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
-  assertSequestrationTemplateBindings(defaultTemplate);
+  assertSequestrationTemplateBindings(removalTemplate);
 
   const compiledBiocharApplicationIntents =
     await compileBiocharApplicationIntents({
@@ -690,9 +688,7 @@ export async function buildRemovalSubmissionBuild(args: {
     );
   }
 
-  const transportAgg = enrichWithTransportLegs(baseAgg, ctx.transportLegs, {
-    appliedBiocharFraction: appliedBiocharFraction(ctx.runSummary),
-  });
+  const transportAgg = enrichWithTransportLegs(baseAgg, ctx.transportLegs);
   const transportWarnings = transportAgg.warnings.slice(baseAgg.warnings.length);
   if (transportWarnings.length > 0) {
     throw new SafeError(
@@ -738,7 +734,7 @@ export async function buildRemovalSubmissionBuild(args: {
     orgCtx,
     removalId,
     ctx,
-    template: defaultTemplate,
+    template: removalTemplate,
     compiledBiocharApplicationIntents,
     supplied: args,
   });
@@ -749,7 +745,9 @@ export async function buildRemovalSubmissionBuild(args: {
     datapointBodyByKey,
     omittedTemplateComponentIds,
   } = resolveTemplateInputs({
-    template: defaultTemplate,
+    template: removalTemplate,
+    lineSources: args.prepared.lineSources,
+    emissionLines: ctx.emissionLines,
     blueprintsByKey,
     agg,
     externalProjectId,
@@ -790,10 +788,10 @@ export async function buildRemovalSubmissionBuild(args: {
     removalId,
     mappingRevision: MAPPING_REVISION,
     externalProjectId,
-    templateId: defaultTemplate.id,
+    templateId: removalTemplate.id,
     omittedTemplateComponentIds,
     sequestrationTemplate: normalizeSequestrationTemplateForHash(
-      defaultTemplate,
+      removalTemplate,
     ),
     sourceProductionRunIds: [...agg.sourceProductionRunIds].sort(),
     startedOn: reportingWindow.startedOn.toISOString(),

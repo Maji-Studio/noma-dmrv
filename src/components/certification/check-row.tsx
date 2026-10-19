@@ -8,6 +8,7 @@
  */
 "use client";
 
+import { MultilineDetail } from "./multiline-detail";
 import type { ReactNode } from "react";
 import type { Icon } from "@phosphor-icons/react";
 import Link from "next/link";
@@ -96,7 +97,7 @@ export function CheckRow({
         </span>
         {detail && (
           <div className="body-caption text-[var(--color-text-secondary)]">
-            {detail}
+            <MultilineDetail>{detail}</MultilineDetail>
           </div>
         )}
       </div>

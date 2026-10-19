@@ -25,8 +25,8 @@ import { DurabilityReadinessSignals } from "@/components/certification/durabilit
  * override is left blank (`sample-form.tsx`), so naming the ratios sent
  * operators looking for a field they cannot fill.
  */
-const H_TO_CORG_INPUT_LABEL = "Hydrogen (%)";
-const O_TO_CORG_INPUT_LABEL = "Oxygen (%)";
+const H_TO_CORG_INPUT_LABEL = "Hydrogen";
+const O_TO_CORG_INPUT_LABEL = "Oxygen";
 
 interface SampleBatchProgressProps {
   /** The form's currently-selected credit batch. */
@@ -47,7 +47,7 @@ function isUsableReplicate(
  */
 function summarizeIncompleteChemistry(summary: DurabilityBatchSummary): {
   count: number;
-  /** The input(s) to fill, e.g. `"Oxygen (%)"` or `"Hydrogen (%) and Oxygen (%)"`. */
+  /** The input(s) to fill, e.g. `"Oxygen"` or `"Hydrogen and Oxygen"`. */
   label: string;
 } {
   let count = 0;

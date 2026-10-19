@@ -15,6 +15,7 @@ import type {
   RouteDistanceRequest,
   RouteGeometriesRequest,
 } from "@/schemas/geo";
+import { unwrap } from "@/hooks/types";
 
 const GEOCODE_MIN_QUERY_LENGTH = 3;
 /** Geocode hits for the same query string never change mid-session. */
@@ -46,13 +47,7 @@ const geoKeys = {
 export function useGeoCapabilities() {
   return useQuery({
     queryKey: geoKeys.capabilities(),
-    queryFn: async () => {
-      const result = await getGeoCapabilitiesFn();
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getGeoCapabilitiesFn()),
     // Env-derived; cannot change without a server restart.
     staleTime: Infinity,
   });
@@ -63,13 +58,8 @@ export function useGeocodeSearch(query: string, enabled = true) {
   const trimmed = query.trim();
   return useQuery({
     queryKey: geoKeys.geocode(trimmed),
-    queryFn: async (): Promise<GeocodeResult[]> => {
-      const result = await geocodeAddressFn({ query: trimmed });
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async (): Promise<GeocodeResult[]> =>
+      unwrap(await geocodeAddressFn({ query: trimmed })),
     enabled: enabled && trimmed.length >= GEOCODE_MIN_QUERY_LENGTH,
     staleTime: GEOCODE_STALE_TIME_MS,
   });
@@ -81,11 +71,7 @@ export function useReverseGeocode(point: GeoPointInput | null, enabled = true) {
     queryKey: point ? geoKeys.reverse(point) : [...geoKeys.all, "reverse", "none"],
     queryFn: async (): Promise<string | null> => {
       if (!point) return null;
-      const result = await reverseGeocodeFn(point);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
+      return unwrap(await reverseGeocodeFn(point));
     },
     enabled: enabled && point !== null,
     staleTime: GEOCODE_STALE_TIME_MS,
@@ -95,13 +81,8 @@ export function useReverseGeocode(point: GeoPointInput | null, enabled = true) {
 /** CALC button: routed road distance (km) between two points. */
 export function useRouteDistance() {
   return useMutation({
-    mutationFn: async (request: RouteDistanceRequest): Promise<number> => {
-      const result = await routeDistanceFn(request);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    mutationFn: async (request: RouteDistanceRequest): Promise<number> =>
+      unwrap(await routeDistanceFn(request)),
   });
 }
 
@@ -116,13 +97,8 @@ const ROUTE_GEOMETRY_STALE_TIME_MS = 30 * 60 * 1000;
 export function useRouteGeometries(request: RouteGeometriesRequest | null) {
   return useQuery({
     queryKey: geoKeys.routeGeometries(request?.legs ?? []),
-    queryFn: async (): Promise<RouteGeometryByRequestId> => {
-      const result = await routeGeometriesFn(request!);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async (): Promise<RouteGeometryByRequestId> =>
+      unwrap(await routeGeometriesFn(request!)),
     enabled: request !== null && request.legs.length > 0,
     staleTime: ROUTE_GEOMETRY_STALE_TIME_MS,
   });

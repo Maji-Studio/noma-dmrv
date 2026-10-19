@@ -1,0 +1,55 @@
+/* /get-started: intro, the walkthrough form beside what we'll cover, then self-hosting. Rhythm follows Home. */
+.gsp-intro-in { display: grid; gap: var(--space-6); padding: var(--section) var(--frame-pad) var(--space-9); }
+.gsp-intro-in h1 { max-width: 16ch; }
+.gsp-intro-in .t-lead { margin-top: var(--space-5); }
+
+.gf-cells.gsp-cells { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); border-top: var(--hairline) solid var(--rule); }
+.gsp-cells > * { padding-block: var(--space-8) var(--section); }
+.gsp-cover { display: grid; gap: var(--space-5); align-content: start; }
+.gsp-cover ul { list-style: none; margin: 0; padding: 0; border-bottom: var(--hairline) solid var(--rule); }
+.gsp-cover li { padding-block: var(--space-4); border-top: var(--hairline) solid var(--rule); font-size: var(--fs-ui); color: var(--ink-2); }
+.gsp-cover li b { display: block; font-weight: 300; font-size: var(--fs-body); color: var(--ink); }
+
+.gsp-self-in { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }
+.gsp-self-in h2 { max-width: 12ch; }
+.gsp-self-in .stack { justify-items: start; }
+.gsp-spec { margin: 0; width: 100%; border-bottom: var(--hairline) solid var(--rule); }
+.gsp-spec > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--space-4); padding-block: var(--space-3); border-top: var(--hairline) solid var(--rule); font-size: var(--fs-ui); }
+.gsp-spec dt { color: var(--ink-2); }
+.gsp-spec dd { margin: 0; }
+
+/* Form: square fields, labels above, errors under the field. */
+.wf { display: grid; gap: var(--space-7); min-width: 0; }
+.wf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-6) var(--space-5); }
+.wf-field { display: grid; gap: var(--space-2); align-content: start; min-width: 0; }
+.wf-field--wide { grid-column: 1 / -1; }
+.wf-field label { font-size: var(--fs-small); color: var(--ink); }
+.wf :is(input, select, textarea) { width: 100%; min-height: var(--btn-h); padding: var(--space-3) var(--space-4); border: var(--hairline) solid var(--rule-strong); border-radius: var(--r-square); background: var(--paper); color: var(--ink); font-size: var(--fs-body); font-weight: 300; line-height: 1.4; transition: border-color var(--dur-fast); }
+.wf textarea { resize: vertical; display: block; }
+.wf :is(input, select, textarea) { border-color: var(--ink-2); }
+/* "Choose a size" is a prompt, not a value: muted until a size is picked. */
+.wf select:has(option[value=""]:checked) { color: var(--ink-2); }
+.wf option { color: var(--ink); }
+.wf :is(input, select, textarea):hover { border-color: var(--link); }
+.site .wf :is(input, select, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+.wf input[aria-invalid="true"] { border-color: var(--warn); box-shadow: inset 0 0 0 1px var(--warn); }
+.wf-error { font-size: var(--fs-small); color: var(--warn); }
+.wf-error:empty { display: none; }
+.wf-select { position: relative; display: block; }
+.wf-select select { appearance: none; padding-right: var(--space-8); cursor: pointer; }
+.wf-select::after { content: ""; position: absolute; right: var(--space-5); top: 50%; width: var(--space-2); height: var(--space-2); border-right: var(--hairline) solid var(--ink); border-bottom: var(--hairline) solid var(--ink); transform: translateY(-75%) rotate(45deg); pointer-events: none; }
+.wf-hp { position: absolute; left: -100vw; width: 1px; height: 1px; opacity: 0; }
+.wf-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-6); }
+.wf-actions .t-caption { max-width: 30ch; }
+.wf-status { font-size: var(--fs-ui); color: var(--ink); }
+.wf-status:empty { position: absolute; }
+.wf-status:not(:empty) { padding: var(--space-4) var(--space-5); border: var(--hairline) solid var(--rule-strong); background: var(--band-purple); }
+
+@media (max-width: 860px) {
+  .gf-cells.gsp-cells, .gsp-self-in { grid-template-columns: minmax(0, 1fr); }
+  .gsp-cells > * { padding-block: var(--space-7); }
+  .gsp-self-in { gap: var(--space-6); }
+}
+@media (max-width: 560px) {
+  .wf-grid { grid-template-columns: minmax(0, 1fr); }
+}

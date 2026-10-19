@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/hooks/use-transport-legs", () => ({
+  // Read by use-fleet through the entity-select quick-add dialogs.
+  transportLegKeys: { all: ["transportLegs"] },
   useCreateTransportLeg: () => ({ isPending: false }),
   useDeleteTransportLeg: () => ({ isPending: false }),
   useUpdateTransportLeg: () => ({ isPending: false }),
@@ -47,12 +49,12 @@ function renderEditor(props: Record<string, unknown> = {}) {
   );
 }
 
-describe("TransportLegsEditor journey timeline", () => {
+describe("TransportLegsEditor route rail", () => {
   beforeEach(() => {
     mocks.legs = [savedLeg()];
   });
 
-  it("renders the journey as a list of stops, never a table", () => {
+  it("renders the route as a list of stops, never a table", () => {
     const html = renderEditor({ readOnly: true });
 
     expect(html).not.toContain("<table");
@@ -61,13 +63,12 @@ describe("TransportLegsEditor journey timeline", () => {
     expect(html).toContain("E2E Regional collection hub");
   });
 
-  it("names the route category in a caption and labels the timeline with it", () => {
+  it("labels the route as a field and names the category for screen readers", () => {
     const html = renderEditor({ readOnly: true });
 
     expect(html).not.toContain("<h3");
-    expect(html).not.toContain("Transport: Sample to lab");
-    expect(html).toContain("Sample to lab");
-    expect(html).toContain('aria-label="Sample to lab journey"');
+    expect(text(html).startsWith("Route")).toBe(true);
+    expect(html).toContain('aria-label="Sample to lab route"');
   });
 
   it("shares a stop between chained legs and keeps them in route order", () => {
@@ -89,11 +90,9 @@ describe("TransportLegsEditor journey timeline", () => {
     expect(first).toBeGreaterThan(-1);
     expect(middle).toBeGreaterThan(first);
     expect(last).toBeGreaterThan(middle);
-    // Three stops for two chained legs: the shared hub is one node, named
+    // Three stops for two chained legs: the shared hub is one stop, named
     // once as a stop plus once in the first leg's screen-reader destination.
-    expect(rendered.match(/Leg to E2E Regional collection hub/g)).toHaveLength(
-      1,
-    );
+    expect(rendered.match(/Leg to E2E Regional collection hub/g)).toHaveLength(1);
     expect(rendered.match(/E2E Regional collection hub/g)).toHaveLength(2);
   });
 
@@ -119,13 +118,23 @@ describe("TransportLegsEditor journey timeline", () => {
     }
   });
 
-  it("reads each leg as one line: distance, mode and an evidence icon", () => {
+  it("reads a leg as mode and one-way distance, with the counted round trip beside it", () => {
     const html = renderEditor({ readOnly: true });
     const rendered = text(html);
 
-    expect(rendered).toContain("12 km by road");
+    expect(rendered).toContain("Road · 12 km one way");
+    expect(rendered).toContain("24 km round trip");
     expect(html).toContain('role="img" aria-label="No evidence"');
     expect(html).not.toContain("Evidence attached");
+  });
+
+  it("states a single leg's counted distance once, with its load on the leg", () => {
+    const rendered = text(renderEditor({ readOnly: true }));
+
+    expect(rendered.match(/24 km/g)).toHaveLength(1);
+    expect(rendered).toContain("Distance source: Manual entry · Load: 2 kg");
+    expect(rendered).not.toContain("Distance counted");
+    expect(rendered).not.toContain("Load carried");
   });
 
   it("names attached evidence on the icon", () => {
@@ -135,15 +144,13 @@ describe("TransportLegsEditor journey timeline", () => {
     expect(html).toContain('role="img" aria-label="Evidence attached"');
   });
 
-  it("keeps the distance source in the leg's accessible text and hover title", () => {
+  it("names where the distance came from on the leg", () => {
     mocks.legs = [savedLeg({ distanceSource: "map_estimate" })];
-    const html = renderEditor({ readOnly: true });
 
-    expect(text(html)).toContain("Distance from route calculation.");
-    expect(html).toContain('title="Distance from route calculation"');
+    expect(text(renderEditor({ readOnly: true }))).toContain("Route calculation");
   });
 
-  it("totals the journey under the final stop", () => {
+  it("totals several legs under the last stop and reads a shared load once", () => {
     mocks.legs = [
       savedLeg(),
       savedLeg({
@@ -155,13 +162,12 @@ describe("TransportLegsEditor journey timeline", () => {
     ];
     const rendered = text(renderEditor({ readOnly: true }));
 
-    expect(rendered).toContain("Total distance 192 km");
-    // The same cargo moves along both legs, so the load is reported once.
+    expect(rendered).toContain("Distance counted, all legs 384 km");
     expect(rendered).toContain("Load carried 2 kg");
-    expect(rendered).not.toContain("Load 2 kg");
+    expect(rendered).not.toContain("Load: 2 kg");
   });
 
-  it("names each leg's load inline when the legs carry different loads", () => {
+  it("names each leg's load when the legs carry different loads", () => {
     mocks.legs = [
       savedLeg(),
       savedLeg({
@@ -174,11 +180,11 @@ describe("TransportLegsEditor journey timeline", () => {
     const rendered = text(renderEditor({ readOnly: true }));
 
     expect(rendered).not.toContain("Load carried");
-    expect(rendered).toContain("Load 2 kg");
-    expect(rendered).toContain("Load 5 kg");
+    expect(rendered).toContain("Load: 2 kg");
+    expect(rendered).toContain("Load: 5 kg");
   });
 
-  it("says how many legs the total distance could not include", () => {
+  it("says how many legs the total could not include", () => {
     mocks.legs = [
       savedLeg(),
       savedLeg({
@@ -190,14 +196,15 @@ describe("TransportLegsEditor journey timeline", () => {
     ];
     const rendered = text(renderEditor({ readOnly: true }));
 
-    expect(rendered).toContain("Total distance 12 km");
+    expect(rendered).toContain("Distance counted, all legs 24 km");
     expect(rendered).toContain("1 leg has no recorded distance.");
   });
 
-  it("carries one section CERT chip rather than one per leg", () => {
+  it("carries one CERT chip on the Route label rather than one per leg", () => {
+    mocks.legs = [savedLeg(), savedLeg({ id: "leg-2", originName: "E2E Regional collection hub" })];
     const html = renderEditor({ readOnly: true });
 
-    expect(html.match(/CERT/g)?.length).toBe(1);
+    expect(html.match(/data-cert-field=/g)?.length).toBe(1);
   });
 
   it("keeps the add button and a per-leg actions menu in edit mode", () => {
@@ -223,6 +230,10 @@ describe("TransportLegsEditor journey timeline", () => {
     expect(html).not.toContain("Actions for leg");
   });
 
+  it("offers no map without coordinates on both ends", () => {
+    expect(text(renderEditor({ readOnly: true }))).not.toContain("View map");
+  });
+
   it("reports an unrecorded distance instead of a bare unit", () => {
     mocks.legs = [savedLeg({ distanceKm: null, distanceSource: null })];
     const rendered = text(
@@ -235,9 +246,15 @@ describe("TransportLegsEditor journey timeline", () => {
       ),
     );
 
-    expect(rendered).toContain("By road, distance not recorded");
-    expect(rendered).toContain("Distance source not recorded.");
+    expect(rendered).toContain("Road · One way: Not recorded");
+    expect(rendered).toContain("Distance source: Not recorded");
     expect(rendered).not.toContain("null km");
+  });
+
+  it("says a single leg's load is not recorded instead of dropping it", () => {
+    mocks.legs = [savedLeg({ loadMassKg: null })];
+
+    expect(text(renderEditor({ readOnly: true }))).toContain("Load: Not recorded");
   });
 
   it("names an unrecorded stop rather than leaving the node blank", () => {

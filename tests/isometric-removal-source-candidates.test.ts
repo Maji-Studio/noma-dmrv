@@ -16,7 +16,7 @@ import * as documentsDA from "@/data-access/documents";
 import {
   collectCandidateSourceDocumentsForRemoval,
   resolveSourceBindingCandidates,
-} from "@/fn/certification/sources";
+} from "@/fn/certification/source-candidates";
 import * as uploadsDA from "@/data-access/certifier-document-uploads";
 
 const orgCtx = makeTestOrgContext("user-1");

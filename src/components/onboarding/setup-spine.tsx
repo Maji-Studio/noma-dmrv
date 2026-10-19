@@ -13,9 +13,8 @@
 "use client";
 
 import { CheckIcon } from "@phosphor-icons/react/dist/ssr";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui";
+import { SetupStepAction } from "./setup-step-action";
+import type { SetupActions } from "./setup-actions";
 import type { SetupStep } from "./use-setup-steps";
 
 type LinkState = "done" | "active" | "upcoming";
@@ -50,26 +49,23 @@ function SpineNode({ state, n }: { state: LinkState; n: number }) {
 interface SetupSpineProps {
   steps: SetupStep[];
   activeIndex: number;
-  /** Facility step, when no facility exists, reopens the wizard instead of routing. */
-  onStartFacility: () => void;
+  actions: SetupActions;
 }
 
 export function SetupSpine({
   steps,
   activeIndex,
-  onStartFacility,
+  actions,
 }: SetupSpineProps) {
-  const router = useRouter();
 
   return (
     <ol className="flex flex-col">
       {steps.map((step, index) => {
         const state = linkState(step, index, activeIndex);
         const isLast = index === steps.length - 1;
-        const startsFacilityWizard = step.id === "facility";
 
         return (
-          <li key={step.id} className="flex gap-16">
+          <li key={step.id} aria-current={state === "active" ? "step" : undefined} className="flex gap-16">
             {/* Marker column: node + the rail that links it to the next step. */}
             <div className="flex flex-col items-center">
               <SpineNode state={state} n={index + 1} />
@@ -113,38 +109,15 @@ export function SetupSpine({
                 </div>
 
                 {state === "done" && (
-                  <span className="label-micro shrink-0 text-[var(--st-ok)]">
+                  <span className="body-caption shrink-0 text-[var(--st-ok)]">
                     Done
                   </span>
                 )}
 
-                {state === "active" &&
-                  (startsFacilityWizard ? (
-                    <Button
-                      variant="primary"
-                      size="small"
-                      onClick={onStartFacility}
-                    >
-                      {step.ctaLabel}
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="primary"
-                      size="small"
-                      onClick={() => router.push(step.href)}
-                    >
-                      {step.ctaLabel}
-                    </Button>
-                  ))}
-
-                {state === "upcoming" && (
-                  <Link
-                    href={step.href}
-                    className="body-small shrink-0 text-[var(--color-text-tertiary)] underline underline-offset-2 transition-colors hover:text-[var(--color-text-secondary)]"
-                  >
-                    {step.ctaLabel}
-                  </Link>
+                {state !== "done" && (
+                  <SetupStepAction step={step} active={state === "active"} actions={actions} />
                 )}
+
               </div>
             </div>
           </li>

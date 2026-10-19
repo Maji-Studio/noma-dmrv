@@ -1,3 +1,5 @@
+import { createTestApplication } from "../helpers/application-writers";
+import { chooseRunStatus } from "./helpers/run-status";
 /** Repeatable, local-only PR gallery. Run serially with the isolated 3102 environment. */
 import { mkdir, appendFile } from "node:fs/promises";
 import path from "node:path";
@@ -7,7 +9,7 @@ import { test, expect, selectEntity, waitForFacilityHydration } from "./fixtures
 import { seedDurabilityBatch, seedCreditBatch } from "./fixtures/seed-chain-data";
 import { createDbConnection } from "./fixtures/db";
 import { seedOutputStockBrowserFixture, readOutputStockBrowserFixture, FIFO_BROWSER_DATE, FIFO_BROWSER_TIME } from "./helpers/output-stock-browser-fixture";
-import { createApplication } from "../../src/data-access/applications";
+
 import * as schema from "../../src/db/schema";
 import { DEC_ORG_ID } from "../../src/db/org-defaults";
 import { fillStockMoisture } from "./helpers/stock-moisture";
@@ -201,7 +203,7 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
   await page.getByRole("button", { name: "New delivery", exact: true }).click();
   await page.locator("#deliveryDate").fill(FIFO_BROWSER_TIME);
   await selectEntity(page, "Order", f.order.id, f.order.code);
-  await page.locator("#storageLocationId").selectOption(f.bin.id);
+  await selectEntity(page, "Actual source bin", f.bin.id, f.bin.name);
   await page.locator("#deliveredWetMassKg").fill("2500");
   await fillStockMoisture(page, "delivery", "15");
   // The blocker renders once, under the wet-mass field, never a second time inside the preview.
@@ -210,6 +212,7 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
   await capture(page, "delivery-create-1440-simple-blocker");
   await page.locator("#deliveredWetMassKg").fill("2000");
   await fillStockMoisture(page, "delivery", "30");
+  await page.getByRole("button", { name: "Override the one-way distance" }).click();
   await page.locator("#distanceKmOverride").fill("25");
   await page.locator("#distanceKmOverride").blur();
   await pairs(page, "delivery-create", ["Mass and moisture", "Transport"]);
@@ -229,8 +232,8 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
   await navigate(page, "applications", f.facility);
   await page.getByRole("button", { name: "New application", exact: true }).click();
   await page.locator("#applicationDate").fill(DATE);
-  await page.locator("#deliveryId").selectOption(delivery.id);
-  await page.locator("#biocharAppliedTons").fill("1000");
+  await selectEntity(page, "Delivery", delivery.id, delivery.code);
+  await page.locator("#biocharAppliedKg").fill("1000");
   await page.locator("#fieldSizeHa").fill("1");
   await page.locator("#fieldIdentifier").fill("E2E Demonstration plot A");
   await page.locator("#cropType").fill("Maize");
@@ -247,7 +250,7 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
 test("gallery feedstock create read edit", async ({ adminPage: page, seededData: d }) => {
   const { db, pool } = createDbConnection();
   try {
-    await db.insert(schema.transportLegs).values({ organizationId: DEC_ORG_ID, entityType: "feedstock", entityId: d.feedstock.id, originName: "E2E Wood-chip supplier", destinationName: d.facility.name, distanceKm: 42, distanceSource: "manual", transportMethodType: "road", loadMassKg: 1500, tripType: "return", isDerived: true });
+    await db.insert(schema.transportLegs).values({ organizationId: DEC_ORG_ID, entityType: "feedstock", entityId: d.feedstock.id, originName: "E2E Wood-chip supplier", destinationName: d.facility.name, distanceKm: 42, distanceSource: "manual", transportMethodType: "road", loadMassKg: 1500, isDerived: true });
     await db.update(schema.feedstocks).set({ massWetKg: 1500, massDryKg: 1200, moistureContentPercent: 20, vehicleId: d.vehicle.id, notes: "E2E wood chips received, weighed and allocated to the covered feedstock bin." }).where(eq(schema.feedstocks.id, d.feedstock.id));
   } finally { await pool.end(); }
   await navigate(page, "feedstocks", d.facility);
@@ -280,8 +283,8 @@ test("gallery production run create read edit credit batch and sample read", asy
     await db.update(schema.samples).set({ labName: "E2E Carbon Laboratory", labAccreditation: "E2E demonstration accreditation", analysisDate: "2026-09-21", totalHydrogenPercent: 2.5, totalNitrogenPercent: 0.8, totalOxygenPercent: 8, totalSulfurPercent: 0.1, inorganicCarbonPercent: 2, saltContentGPerKg: 1.2, weightGrams: 250, volumeMl: 500, moistureContentPercent: 5, ashContentPercent: 12, bulkDensityKgPerM3: 400, ph: 8.2 }).where(eq(schema.samples.sampleCode, batch.sampleCodes[0]));
     const [sample] = await db.select().from(schema.samples).where(eq(schema.samples.sampleCode, batch.sampleCodes[0]));
     await db.insert(schema.transportLegs).values([
-      { organizationId: DEC_ORG_ID, entityType: "sample", entityId: sample.id, originName: "E2E Production facility", destinationName: "E2E Regional collection hub", distanceKm: 42, distanceSource: "manual", transportMethodType: "road", vehicleType: "Light goods vehicle", loadMassKg: 2, tripType: "return" },
-      { organizationId: DEC_ORG_ID, entityType: "sample", entityId: sample.id, originName: "E2E Regional collection hub", destinationName: "E2E Carbon Laboratory", distanceKm: 180, distanceSource: "manual", transportMethodType: "road", vehicleType: "Heavy goods vehicle", loadMassKg: 2, tripType: "one_way" },
+      { organizationId: DEC_ORG_ID, entityType: "sample", entityId: sample.id, originName: "E2E Production facility", destinationName: "E2E Regional collection hub", distanceKm: 42, distanceSource: "manual", transportMethodType: "road", vehicleType: "Light goods vehicle", loadMassKg: 2 },
+      { organizationId: DEC_ORG_ID, entityType: "sample", entityId: sample.id, originName: "E2E Regional collection hub", destinationName: "E2E Carbon Laboratory", distanceKm: 180, distanceSource: "manual", transportMethodType: "road", vehicleType: "Heavy goods vehicle", loadMassKg: 2 },
     ]);
   } finally { await pool.end(); }
   await navigate(page, "production-runs", d.facility);
@@ -289,6 +292,7 @@ test("gallery production run create read edit credit batch and sample read", asy
   await selectEntity(page, "Reactor", d.reactor.id, d.reactor.identifier);
   await page.locator("#startDate").fill(DATE);
   await page.locator("#startTime").fill("08:00");
+  await chooseRunStatus(page, "complete");
   await page.locator("#endDate").fill(DATE);
   await page.locator("#endTime").fill("14:00");
   if (await page.locator('input[name="feedstockDraws.0.wetMassKg"]').count() === 0) await page.getByRole("button", { name: "Add source", exact: true }).click();
@@ -308,6 +312,7 @@ test("gallery production run create read edit credit batch and sample read", asy
   await edit(page, "production run");
   await pairs(page, "production-run-edit", ["Feedstock & processing", "Output", "Energy"]);
   await navigate(page, "credit-batches", d.facility);
+  await page.getByRole("button", { name: "List", exact: true }).click();
   await page.getByText(batch.creditBatchCode, { exact: true }).first().click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await pairs(page, "credit-batch-read", ["Production runs", "Batch definition"]);
@@ -317,32 +322,22 @@ test("gallery production run create read edit credit batch and sample read", asy
   await pairs(page, "sample-read", ["Transport"]);
 });
 
-test("gallery output bin reconciliation loss and correction", async ({ adminPage: page, testUsers }) => {
+test("gallery output bin lost mass and history", async ({ adminPage: page, testUsers }) => {
   const f = await seedOutputStockBrowserFixture(testUsers.admin.id, true);
   await bin(page, f);
-  await page.getByRole("button", { name: "Reconcile stock", exact: true }).click();
-  await fillStock(page, "600", "E2E stock count: drying only, no dry biochar loss.");
-  await pairs(page, "output-bin-reconciliation", ["Stock preview", "Reason"]);
-  await page.getByRole("button", { name: "Reconcile stock", exact: true }).last().click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await bin(page, f);
-  await page.getByRole("button", { name: "Record loss", exact: true }).click();
+  await page.getByRole("button", { name: "Adjust stock", exact: true }).click();
   await fillStock(page, "120", "E2E spill during loading.");
   await pairs(page, "output-bin-loss", ["Stock preview", "Reason"]);
-  await page.getByRole("button", { name: "Record loss", exact: true }).last().click();
+  await page.getByRole("button", { name: "Save lost mass", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await bin(page, f);
-  await page.getByRole("button", { name: "Stock history", exact: true }).first().click();
+  await page.getByRole("button", { name: "History", exact: true }).click();
   const history = page.getByRole("dialog", { name: "Stock history", exact: true });
-  await history.locator("article").filter({ hasText: "E2E spill during loading." }).getByRole("button", { name: "Correct entry" }).click();
-  await fillStock(page, "12", "E2E corrected spill after scale ticket review.");
-  await pairs(page, "output-stock-correction", ["Proposed replacement", "Stock preview"], "Stock history");
-  await history.getByRole("button", { name: "Save correction", exact: true }).click();
-  await expect(history.getByText("E2E corrected spill after scale ticket review.", { exact: true }).first()).toBeVisible();
+  await history.locator("details").filter({ hasText: "E2E spill during loading." }).locator("summary").click();
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize(viewport);
     await scrollTop(history);
-    await capture(page, `output-stock-correction-saved-${viewport.width}-history`);
+    await capture(page, `output-stock-lost-mass-${viewport.width}-history`);
   }
 });
 
@@ -359,8 +354,9 @@ test("gallery credit batch applied mass context", async ({ adminPage: page, test
     await db.insert(schema.creditBatchProductionRuns).values(f.runs.map(run => ({ organizationId: DEC_ORG_ID, creditBatchId: batch.id, productionRunId: run.id })));
     await db.insert(schema.samples).values([0, 1, 2].map(index => ({ organizationId: DEC_ORG_ID, sampleCode: `E2E-APPLIED-S${index}-${f.tag}`, creditBatchId: batch.id, productionRunId: f.runs[index % 2].id, samplingTime: new Date("2026-09-12T12:00:00Z"), totalCarbonPercent: 80, organicCarbonPercent: 78, hToCOrgRatio: 0.38, oToCOrgRatio: 0.12 })));
   } finally { await pool.end(); }
-  await createApplication(f.ctx, { code: `E2E-APPLIED-${f.tag}`, deliveryId: f.delivery!.id, applicationDate: new Date(DATE), biocharAppliedTons: 1, fieldSizeHa: 1, fieldIdentifier: "E2E Soil plot A", cropType: "Maize", gpsLatitude: -6.8, gpsLongitude: 39.2, applicationMethodType: "mechanical", soilTemperatureSource: "baseline", soilTemperatureC: 25 });
+  await createTestApplication(f.ctx, { code: `E2E-APPLIED-${f.tag}`, deliveryId: f.delivery!.id, applicationDate: new Date(DATE), appliedWetMassKg: 1000, fieldSizeHa: 1, fieldIdentifier: "E2E Soil plot A", cropType: "Maize", gpsLatitude: -6.8, gpsLongitude: 39.2, applicationMethod: "mechanical", soilTemperatureSource: "baseline", soilTemperatureC: 25 });
   await navigate(page, "credit-batches", f.facility);
+  await page.getByRole("button", { name: "List", exact: true }).click();
   await page.getByText(batch.code, { exact: true }).first().click();
   await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
   await pairs(page, "credit-batch-applied-read", ["Production runs", "Batch definition"]);
@@ -404,6 +400,7 @@ test("gallery order create and read", async ({ adminPage: page, testUsers }) => 
   await page.getByRole("button", { name: "New order", exact: true }).click();
   await page.locator("#orderDate").fill(FIFO_BROWSER_DATE);
   await selectEntity(page, "Customer", f.customer.id, f.customer.name);
+  await selectEntity(page, "Customer location", f.location.id, f.location.name ?? undefined);
   await selectEntity(page, "Formulation", f.recipe.id, f.recipe.name);
   await page.locator("#quantityKg").fill("1500");
   await page.locator("#packaging").selectOption("loose");

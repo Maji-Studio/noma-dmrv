@@ -38,8 +38,8 @@ vi.mock("@/hooks/use-entities", () => ({
     dataUpdatedAt: 1, isPending: false, isError: false, error: null,
   }),
 }));
-vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: ({ triggerLabel }: { triggerLabel?: string }) => <button type="button">{triggerLabel ?? "Stock history"}</button> }));
-vi.mock("@/components/storage-locations/bin-movement-history-modal", () => ({ BinMovementHistoryModal: ({ triggerLabel }: { triggerLabel: string }) => <button type="button">{triggerLabel}</button> }));
+// Base UI interaction is tested in the browser DOM suite; parity needs the trigger only.
+vi.mock("@/components/storage-locations/sub-bin-card", async (importOriginal) => ({ ...await importOriginal<typeof import("@/components/storage-locations/sub-bin-card")>(), DetailsTooltip: ({ trigger }: { trigger: ReactNode }) => trigger }));
 // The bin picker's quick-add dialogs need a query client; none is under test.
 vi.mock("./entity-select/driver-quick-add-dialog", () => ({ DriverQuickAddDialog: () => null }));
 vi.mock("./entity-select/operator-quick-add-dialog", () => ({ OperatorQuickAddDialog: () => null }));
@@ -66,7 +66,7 @@ import { EntitySideSheetSections } from "@/components/ui/entity-side-sheet";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import { OutputStockAvailability, OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
-import { MixPileCard } from "@/components/storage-locations/mix-pile-card";
+import { MixPileBay } from "@/components/storage-locations/sub-bin-bays";
 import { ProcessFlowPreview } from "@/components/production-runs/production-run-process-flow-preview";
 import { ApplicationAllocationShares } from "@/components/applications/application-allocation-shares";
 import { SampleDerivedRatios } from "@/components/samples/sample-derived-ratios";
@@ -133,6 +133,7 @@ beforeAll(() => {
 afterAll(() => { vi.unstubAllGlobals(); });
 
 const preview: Preview = {
+  expectedProductVersions: {},
   basisFingerprint: "basis", storageLocationId: "bin", binName: "Product bin", binCode: "PB-001", formulationName: "Mix", lane: "product",
   beforeDryKg: 1500, afterDryKg: 350, beforeSolidsKg: 1820, afterSolidsKg: 420,
   removedDryKg: 1150, removedWetKg: 2000, movementMoisturePercent: 30,
@@ -168,8 +169,8 @@ const SURFACE_CASES: { name: string; element: ReactElement; blankInSimple?: bool
   { name: "wet mass and moisture, untouched", element: massFields(null) },
   { name: "wet mass and moisture, started", element: massFields(100) },
   { name: "product composition", element: <ProductCompositionPreview wetMassKg={100} dryBiocharKg={60} /> },
-  { name: "product form composition, untouched", blankInSimple: true, element: <ProductCompositionBlock composition={composition} massKg={null} ingredientBins={[]} storageLocationId={null} facilityId="facility" /> },
-  { name: "product form composition, source bin chosen", element: <ProductCompositionBlock composition={composition} massKg={null} ingredientBins={[]} storageLocationId="bin" facilityId="facility" /> },
+  { name: "product form composition, untouched", blankInSimple: true, element: <ProductCompositionBlock composition={composition} massKg={null} ingredientBins={[]} /> },
+  { name: "product form composition, started", element: <ProductCompositionBlock composition={composition} massKg={100} ingredientBins={[]} /> },
   { name: "ingredient split", element: <IngredientHarness /> },
   { name: "bin picker remaining mass", element: <EntitySelect entityType="storageLocation" value="bin" onChange={() => undefined} /> },
   { name: "formulation form, balanced", element: <FormulationForm formulation={balanced} onSubmit={() => undefined} /> },
@@ -179,10 +180,10 @@ const SURFACE_CASES: { name: string; element: ReactElement; blankInSimple?: bool
   { name: "stock movement preview", element: <OutputStockPreview variant="movement" preview={acceptedPreview} /> },
   { name: "stock movement preview, blocked", element: <OutputStockPreview variant="movement" preview={preview} /> },
   { name: "stock load preview", element: <OutputStockPreview variant="load" preview={acceptedPreview} /> },
-  { name: "stock availability", element: <OutputStockAvailability binName="Product bin" dryKg={1500} wetEstimate={{ kg: 1800, basis: "At the latest moisture reading of each batch" }} allocations={[{ layerId: "a", code: "Batch A", wetMassKg: null, dryMassKg: 1500, runs: [] }] as never} /> },
+  { name: "stock availability", element: <OutputStockAvailability binName="Product bin" dryKg={1500} wetEstimate={{ kg: 1800, basis: "Wet mass added less wet mass taken out" }} allocations={[{ layerId: "a", code: "Batch A", wetMassKg: null, dryMassKg: 1500, runs: [] }] as never} /> },
   { name: "matching stock", element: <MatchingOutputBins facilityId="facility" formulationId="formulation" /> },
-  { name: "delivery stock", element: <DeliveryStockDetails deliveryId="delivery" storageLocationId="bin" facilityId="facility" wetMassKg={100} dryMassKg={80} /> },
-  { name: "mix pile", element: <MixPileCard binName="Product bin" wetKg={1800} moisturePercent={20} dryKg={1440} batches={[{ code: "B-001", dryMassKg: 800 }, { code: "B-002", dryMassKg: 640 }] as never} /> },
+  { name: "delivery stock", element: <DeliveryStockDetails deliveryId="delivery" storageLocationId="bin" wetMassKg={100} dryMassKg={80} /> },
+  { name: "mix pile", element: <MixPileBay bands={[{ label: "B-001", kg: 800, details: [] }, { label: "B-002", kg: 640, details: [] }, { label: "Water, estimated", kg: 360, category: "existing-water", details: [] }]} /> },
 ];
 
 describe("detail level render parity", () => {

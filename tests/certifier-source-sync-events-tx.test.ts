@@ -25,6 +25,13 @@ import {
   it,
   vi,
 } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", () => ({
+  resolveIsometricClient: vi.fn(
+      async () => ({}) as import("@/lib/isometric").IsometricClient,
+    ),
+}));
+
 import { and, eq, inArray } from "drizzle-orm";
 
 const TEST_TIMEOUT_MS = 20_000;
@@ -96,6 +103,13 @@ vi.mock("@/data-access/certifier-organization-settings", async (importOriginal) 
     await importOriginal<typeof import("@/data-access/certifier-organization-settings")>();
   return { ...actual, getRegistrySourceVisibility: vi.fn(async () => "private" as const) };
 });
+// The live lineage walk is covered by the mirror-flow suite; here it only has
+// to name the seeded document as a candidate for the Removal.
+vi.mock("@/fn/certification/source-candidates", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/fn/certification/source-candidates")>();
+  return { ...actual, loadCandidateDocumentsForRemovalForUser: vi.fn() };
+});
 vi.mock("@/lib/storage", () => ({
   getStorageProvider: vi.fn(() => ({
     headObject: vi.fn(async () => ({
@@ -109,9 +123,6 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
   return {
     ...actual,
-    getIsometricClientForOrg: vi.fn(
-      async () => ({}) as import("@/lib/isometric").IsometricClient,
-    ),
     findSourceBySupplierRef: vi.fn(async () => null),
     requestSignedUploadUrl: vi.fn(),
     createSource: vi.fn(),
@@ -129,7 +140,8 @@ import * as certificationDA from "@/data-access/certification";
 import * as removalsDA from "@/data-access/certifier-removals";
 import * as documentsDA from "@/data-access/documents";
 import * as isometric from "@/lib/isometric";
-import { mirrorDocumentToSourceForUser } from "@/fn/certification/sources";
+import * as sourceCandidates from "@/fn/certification/source-candidates";
+import { mirrorDocumentToSourceForUser } from "@/fn/certification/sources-mirror-core";
 import type { OrgContext } from "@/lib/auth/server";
 
 /**
@@ -177,18 +189,35 @@ async function seedDocument(): Promise<string> {
 }
 
 function mirror(documentId: string) {
+  vi.mocked(
+    sourceCandidates.loadCandidateDocumentsForRemovalForUser,
+  ).mockResolvedValue({
+    removalId: REMOVAL_ID,
+    facilityId: FACILITY_ID,
+    candidates: [
+      {
+        document: { id: documentId },
+        lineageEntity: {
+          entityType: "application",
+          entityId: APPLICATION_ID,
+          entityLabel: "Application source-audit",
+        },
+        binding: null,
+        biocharApplicationId: APPLICATION_ID,
+        mirror: null,
+      },
+    ],
+    mirroredExternalIds: [],
+    hasMapping: true,
+  } as unknown as Awaited<
+    ReturnType<typeof sourceCandidates.loadCandidateDocumentsForRemovalForUser>
+  >);
   return mirrorDocumentToSourceForUser(
     orgCtx,
     { removalId: REMOVAL_ID, documentId },
-    {
-      // Skips the live candidate re-derivation and the lifecycle guard, both of
-      // which are covered elsewhere and irrelevant to the pool contract.
-      submissionCandidate: {
-        documentId,
-        binding: null,
-        biocharApplicationId: APPLICATION_ID,
-      },
-    },
+    // The lifecycle guard is covered elsewhere and irrelevant to the pool
+    // contract under test.
+    { enforceRemovalLifecycle: false },
   );
 }
 

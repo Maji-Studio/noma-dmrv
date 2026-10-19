@@ -9,7 +9,6 @@ import {
   biocharProducts,
   deliveries,
   facilities,
-  feedstockDeliveries,
   feedstockTypes,
   feedstocks,
   formulations,
@@ -29,9 +28,10 @@ import type {
   BatchLineageRunFact,
 } from "./credit-batch-accounting";
 import { productionRunDateExpr } from "./production-runs/date-expr";
+import { getDeliveryProofCounts } from "./delivery-proof";
 import { requireOrgScope } from "./utils";
 
-const CHAIN_HREFS = {
+export const CHAIN_HREFS = {
   application: "/applications",
   delivery: "/deliveries",
   order: "/orders",
@@ -74,6 +74,11 @@ export interface ChainDeliveryLineage {
   status: string | null;
   deliveryDate: Date;
   deliveredWetMassKg?: number | null;
+  distanceKmOverride?: number | null;
+  recordedDistanceKm?: number | null;
+  /** Resolved from the delivery's order. */
+  customerLocationId?: string | null;
+  proofOfDeliveryCount: number;
   massDryKg: number | null;
   href: string;
 }
@@ -90,7 +95,7 @@ export interface ChainBiocharProductLineage {
   id: string;
   code: string;
   status: string | null;
-  productionDate: Date;
+  productionDate: string;
   massKg: number | null;
   /**
    * Recorded moisture (%) of the lot's wet `massKg`. Lets the Sankey convert
@@ -131,11 +136,8 @@ export interface ChainFeedstockLineage {
   deliveryDate: Date | null;
   massDryKg: number | null;
   wetMassUsedKg: number | null;
-  /** Drives the Sankey's derived ineligible-feedstock exit (issue #285). */
-  eligibilityStatus: "eligible" | "ineligible" | "conditional" | null;
   supplierName: string | null;
   feedstockTypeName: string | null;
-  feedstockDeliveryCode: string | null;
   href: string;
 }
 
@@ -178,6 +180,7 @@ export function projectChainOfCustodyFromBatchFacts(
   const warnings = run.feedstocks.length === 0
     ? ["The linked production run does not have any recorded feedstock allocations."]
     : [];
+  const source = sourceLineageFromRunFact(run, application.sourceAllocation);
   return {
     facility: application.facility,
     application: {
@@ -201,6 +204,20 @@ export function projectChainOfCustodyFromBatchFacts(
       ...application.biocharProduct,
       href: CHAIN_HREFS.biocharProduct,
     },
+    productionRun: source.productionRun,
+    reactor: source.reactor,
+    feedstocks: source.feedstocks,
+    sources: [source],
+    warnings,
+  };
+}
+
+/** A member run's upstream block (run, reactor, feedstocks) as a chain source. */
+export function sourceLineageFromRunFact(
+  run: BatchLineageRunFact,
+  allocation: { allocatedWetMassKg: number | null; allocatedDryMassKg: number | null } | null,
+): ChainSourceLineage {
+  return {
     productionRun: {
       id: run.id, code: run.code, status: run.status, date: run.date,
       biocharStorageName: run.biocharStorageName,
@@ -216,28 +233,8 @@ export function projectChainOfCustodyFromBatchFacts(
       ...feedstock,
       href: CHAIN_HREFS.feedstock,
     })),
-    sources: [{
-      productionRun: {
-        id: run.id, code: run.code, status: run.status, date: run.date,
-        biocharStorageName: run.biocharStorageName,
-        biocharOutputKg: run.biocharOutputKg,
-        biocharDryMassKg: run.biocharDryMassKg,
-        feedstockMassDryKg: run.feedstockMassDryKg,
-        href: CHAIN_HREFS.productionRun,
-      },
-      reactor: run.reactor
-        ? { ...run.reactor, href: CHAIN_HREFS.reactor }
-        : null,
-      feedstocks: run.feedstocks.map((feedstock) => ({
-        ...feedstock,
-        href: CHAIN_HREFS.feedstock,
-      })),
-      allocatedWetMassKg:
-        application.sourceAllocation?.allocatedWetMassKg ?? null,
-      allocatedDryMassKg:
-        application.sourceAllocation?.allocatedDryMassKg ?? null,
-    }],
-    warnings,
+    allocatedWetMassKg: allocation?.allocatedWetMassKg ?? null,
+    allocatedDryMassKg: allocation?.allocatedDryMassKg ?? null,
   };
 }
 
@@ -308,6 +305,7 @@ export async function getChainOfCustodyData(
       allocatedWetMassKg: shares.reduce((n, a) => n + Number(a.wetMassKg), 0),
       allocatedDryMassKg: shares.reduce((n, a) => n + Number(a.dryMassKg), 0) });
   }
+  const proofCounts = await getDeliveryProofCounts(ctx, [applicationRow.deliveryId]);
   const biocharProduct = products.length === 1 ? products[0].product : null;
   const sources = products.flatMap(p => p.sources);
   const singleSource = sources.length === 1 ? sources[0] : null;
@@ -350,6 +348,7 @@ export async function getChainOfCustodyData(
       href: "/applications",
     },
     delivery: {
+      proofOfDeliveryCount: proofCounts.get(applicationRow.deliveryId) ?? 0,
       id: applicationRow.deliveryId,
       code: applicationRow.deliveryCode,
       status: applicationRow.deliveryStatus,
@@ -497,14 +496,11 @@ async function getFeedstocksForRuns(
       deliveryDate: feedstocks.deliveryDate,
       massDryKg: feedstocks.massDryKg,
       wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg,
-      eligibilityStatus: feedstocks.eligibilityStatus,
       supplierName: suppliers.name,
       feedstockTypeName: feedstockTypes.name,
-      feedstockDeliveryCode: feedstockDeliveries.code,
     })
     .from(productionRunFeedstocks)
     .innerJoin(feedstocks, and(eq(productionRunFeedstocks.feedstockId, feedstocks.id), eq(feedstocks.organizationId, ctx.organizationId)))
-    .leftJoin(feedstockDeliveries, and(eq(feedstocks.feedstockDeliveryId, feedstockDeliveries.id), eq(feedstockDeliveries.organizationId, ctx.organizationId)))
     .leftJoin(suppliers, and(eq(feedstocks.supplierId, suppliers.id), eq(suppliers.organizationId, ctx.organizationId)))
     .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
     .where(

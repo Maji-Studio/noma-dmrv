@@ -82,7 +82,7 @@ export function RegistryCarbonResultCard({
       aria-label="Isometric registry carbon result"
     >
       <div className="flex flex-col gap-2">
-        <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+        <span className="body-small text-[var(--color-text-secondary)]">
           Isometric registry result
         </span>
         <span className="title-heading-2 tabular-nums text-[var(--color-text-primary)]">

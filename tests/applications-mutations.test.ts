@@ -1,15 +1,14 @@
+import { createTestApplication, updateTestApplication } from "./helpers/application-writers";
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
 import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  createApplication,
-  getApplicationDeliveryOptions,
-  updateApplication,
-} from "@/data-access/applications";
+import { getApplicationDeliveryOptions } from "@/data-access/applications";
+import { findApiDeliveryApplicationBalance } from "@/data-access/api-delivery-application-balance";
 import { applications } from "@/db/schema/application";
 import { certifierProjects } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
@@ -59,10 +58,11 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
 
     const [facility] = await tx
       .insert(facilities)
-      .values({ organizationId: TEST_ORG_ID, name: `Application Mutation Facility ${runId}`, code: `FAC-AM-${runId}` })
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, name: `Application Mutation Facility ${runId}`, code: `FAC-AM-${runId}` })
       .returning({ id: facilities.id });
 
     await tx.insert(certifierProjects).values({
+      externalFacilityId: `fcl_test_${facility.id}`,
       organizationId: TEST_ORG_ID,
       facilityId: facility.id,
       provider: "isometric",
@@ -178,11 +178,11 @@ describe("application mutations", () => {
       code: `AP-AM-${crypto.randomUUID()}-INVALID-FIELD`,
       deliveryId: crypto.randomUUID(),
       applicationDate: new Date("2025-07-08"),
-      biocharAppliedTons: 1,
+      appliedWetMassKg: 1000,
     };
 
     await expect(
-      createApplication(makeTestOrgContext(TEST_USER_ID), {
+      createTestApplication(makeTestOrgContext(TEST_USER_ID), {
         ...base,
         fieldSizeHa: 0,
       }),
@@ -190,9 +190,9 @@ describe("application mutations", () => {
       `Application ${base.code} needs a field size greater than 0 ha. Enter a field size and save again.`,
     );
     await expect(
-      createApplication(
+      createTestApplication(
         makeTestOrgContext(TEST_USER_ID),
-        base as unknown as Parameters<typeof createApplication>[1],
+        base as unknown as Parameters<typeof createTestApplication>[1],
       ),
     ).rejects.toThrow(
       `Application ${base.code} needs a field size greater than 0 ha. Enter a field size and save again.`,
@@ -204,11 +204,11 @@ describe("application mutations", () => {
     const fixture = await createMutationFixture(runId);
 
     try {
-      const application = await createApplication(makeTestOrgContext(TEST_USER_ID), {
+      const application = await createTestApplication(makeTestOrgContext(TEST_USER_ID), {
         code: `AP-AM-${runId}-CREATE`,
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
-        biocharAppliedTons: 2,
+        appliedWetMassKg: 2000,
         fieldSizeHa: 1,
       });
       fixture.applicationIds.push(application.id);
@@ -216,10 +216,10 @@ describe("application mutations", () => {
       expect(application.biocharAppliedTons).toBe(2);
       expect(application.biocharAppliedDryTons).toBeCloseTo(1.6);
       await expect(
-        updateApplication(
+        updateTestApplication(
           makeTestOrgContext(TEST_USER_ID),
           application.id,
-          { fieldSizeHa: 0 },
+          { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id), fieldSizeHa: 0 },
         ),
       ).rejects.toThrow(
         `Application ${application.code} needs a field size greater than 0 ha. Enter a field size and save again.`,
@@ -245,18 +245,18 @@ describe("application mutations", () => {
     const fixture = await createMutationFixture(runId);
 
     try {
-      const first = await createApplication(makeTestOrgContext(TEST_USER_ID), {
+      const first = await createTestApplication(makeTestOrgContext(TEST_USER_ID), {
         code: `AP-AM-${runId}-PARTIAL`,
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
-        biocharAppliedTons: 2,
+        appliedWetMassKg: 2000,
         fieldSizeHa: 1,
       });
-      const last = await createApplication(makeTestOrgContext(TEST_USER_ID), {
+      const last = await createTestApplication(makeTestOrgContext(TEST_USER_ID), {
         code: `AP-AM-${runId}-REMAINDER`,
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-09"),
-        biocharAppliedTons: 3,
+        appliedWetMassKg: 3000,
         fieldSizeHa: 1,
       });
       fixture.applicationIds.push(first.id, last.id);
@@ -286,11 +286,11 @@ describe("application mutations", () => {
       fixture.applicationIds.push(corrupt.id);
 
       await expect(
-        createApplication(makeTestOrgContext(TEST_USER_ID), {
+        createTestApplication(makeTestOrgContext(TEST_USER_ID), {
           code: `AP-AM-${runId}-AFTER-CORRUPT`,
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-09"),
-          biocharAppliedTons: 1,
+          appliedWetMassKg: 1000,
           fieldSizeHa: 1,
         }),
       ).rejects.toThrow("Tracked dry biochar is not available");
@@ -304,11 +304,11 @@ describe("application mutations", () => {
     const fixture = await createMutationFixture(runId);
 
     try {
-      const application = await createApplication(makeTestOrgContext(TEST_USER_ID), {
+      const application = await createTestApplication(makeTestOrgContext(TEST_USER_ID), {
         code: `AP-AM-${runId}-EVIDENCE`,
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
-        biocharAppliedTons: 2,
+        appliedWetMassKg: 2000,
         fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
@@ -326,11 +326,11 @@ describe("application mutations", () => {
     const fixture = await createMutationFixture(runId);
 
     try {
-      const application = await createApplication(makeTestOrgContext(TEST_USER_ID), {
+      const application = await createTestApplication(makeTestOrgContext(TEST_USER_ID), {
         code: `AP-AM-${runId}-BOUNDARY`,
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
-        biocharAppliedTons: 2,
+        appliedWetMassKg: 2000,
         fieldSizeHa: 1,
         evidenceMethod: "boundary",
         gisBoundary: TEST_GIS_BOUNDARY,
@@ -344,16 +344,16 @@ describe("application mutations", () => {
     }
   });
 
-  it("clears a GIS boundary to null", async () => {
+  it("clears a GIS boundary when switching to customer location", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);
 
     try {
-      const application = await createApplication(makeTestOrgContext(TEST_USER_ID), {
+      const application = await createTestApplication(makeTestOrgContext(TEST_USER_ID), {
         code: `AP-AM-${runId}-CLEAR-GIS`,
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
-        biocharAppliedTons: 2,
+        appliedWetMassKg: 2000,
         fieldSizeHa: 1,
         evidenceMethod: "boundary",
         gisBoundary: TEST_GIS_BOUNDARY,
@@ -362,8 +362,9 @@ describe("application mutations", () => {
 
       expect(application.gisBoundary).toEqual(TEST_GIS_BOUNDARY);
 
-      const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+      const updated = await updateTestApplication(makeTestOrgContext(TEST_USER_ID), application.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
         gisBoundary: null,
+        evidenceMethod: "location",
       });
       expect(updated.gisBoundary).toBeNull();
     } finally {
@@ -390,6 +391,9 @@ describe("application mutations", () => {
         destinationGpsLatitude: -3.3,
         destinationGpsLongitude: 37.3,
       });
+      const balance = await findApiDeliveryApplicationBalance(makeTestOrgContext(TEST_USER_ID), { id: fixture.deliveryIds[0] });
+      expect(balance.site).toMatchObject({ customerLocationId: fixture.customerLocationId,
+        gpsLatitude: deliveryOption!.destinationGpsLatitude, gpsLongitude: deliveryOption!.destinationGpsLongitude });
     } finally {
       await cleanupMutationFixture(fixture);
     }
@@ -402,11 +406,11 @@ describe("application mutations", () => {
 
     try {
       await expect(
-        createApplication(makeTestOrgContext(TEST_USER_ID), {
+        createTestApplication(makeTestOrgContext(TEST_USER_ID), {
           code,
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
-          biocharAppliedTons: 6,
+          appliedWetMassKg: 6000,
           fieldSizeHa: 1,
         }),
       ).rejects.toThrow("Not enough biochar in this delivery");
@@ -433,11 +437,11 @@ describe("application mutations", () => {
         .set({ moistureContentPercent: null })
         .where(eq(deliveries.id, fixture.deliveryIds[0]));
 
-      const application = await createApplication(makeTestOrgContext(TEST_USER_ID), {
+      const application = await createTestApplication(makeTestOrgContext(TEST_USER_ID), {
           code,
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
-          biocharAppliedTons: 2,
+          appliedWetMassKg: 2000,
           fieldSizeHa: 1,
         });
       fixture.applicationIds.push(application.id);
@@ -458,13 +462,13 @@ describe("application mutations", () => {
         .set({ moistureContentPercent: null })
         .where(eq(deliveries.id, fixture.deliveryIds[0]));
 
-      const application = await createApplication(
+      const application = await createTestApplication(
         makeTestOrgContext(TEST_USER_ID),
         {
           code: `AP-AM-${runId}-DRY-UPDATE`,
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
-          biocharAppliedTons: 2,
+          appliedWetMassKg: 2000,
           fieldSizeHa: 1,
           gpsLatitude: -3.3349,
           gpsLongitude: 37.3404,
@@ -472,7 +476,7 @@ describe("application mutations", () => {
       );
       fixture.applicationIds.push(application.id);
 
-      const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+      const updated = await updateTestApplication(makeTestOrgContext(TEST_USER_ID), application.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
           fieldIdentifier: "Updated field",
         });
       expect(updated.biocharAppliedDryTons).toBeCloseTo(1.6);
@@ -490,11 +494,11 @@ describe("application mutations", () => {
       const unresolvedDeliveryId = await insertUnresolvedDelivery(fixture, runId);
 
       await expect(
-        createApplication(makeTestOrgContext(TEST_USER_ID), {
+        createTestApplication(makeTestOrgContext(TEST_USER_ID), {
           code,
           deliveryId: unresolvedDeliveryId,
           applicationDate: new Date("2025-07-08"),
-          biocharAppliedTons: 2,
+          appliedWetMassKg: 2000,
           fieldSizeHa: 1,
         }),
       ).rejects.toThrow(
@@ -518,11 +522,11 @@ describe("application mutations", () => {
 
     try {
       await expect(
-        createApplication(makeTestOrgContext(TEST_USER_ID), {
+        createTestApplication(makeTestOrgContext(TEST_USER_ID), {
           code: `AP-AM-${runId}-EARLY`,
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-04"),
-          biocharAppliedTons: 2,
+          appliedWetMassKg: 2000,
           fieldSizeHa: 1,
         }),
       ).rejects.toThrow("cannot be before the delivery date");
@@ -536,11 +540,11 @@ describe("application mutations", () => {
     const fixture = await createMutationFixture(runId);
 
     try {
-      const application = await createApplication(makeTestOrgContext(TEST_USER_ID), {
+      const application = await createTestApplication(makeTestOrgContext(TEST_USER_ID), {
         code: `AP-AM-${runId}-SAME-DAY`,
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-05"),
-        biocharAppliedTons: 2,
+        appliedWetMassKg: 2000,
         fieldSizeHa: 1,
       });
       fixture.applicationIds.push(application.id);
@@ -556,11 +560,11 @@ describe("application mutations", () => {
     const fixture = await createMutationFixture(runId);
 
     try {
-      const application = await createApplication(makeTestOrgContext(TEST_USER_ID), {
+      const application = await createTestApplication(makeTestOrgContext(TEST_USER_ID), {
         code: `AP-AM-${runId}-EARLY-UPDATE`,
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
-        biocharAppliedTons: 2,
+        appliedWetMassKg: 2000,
         fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
@@ -568,7 +572,7 @@ describe("application mutations", () => {
       fixture.applicationIds.push(application.id);
 
       await expect(
-        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+        updateTestApplication(makeTestOrgContext(TEST_USER_ID), application.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
           applicationDate: new Date("2025-07-04"),
         }),
       ).rejects.toThrow("cannot be before the delivery date");
@@ -582,11 +586,11 @@ describe("application mutations", () => {
     const fixture = await createMutationFixture(runId);
 
     try {
-      const application = await createApplication(makeTestOrgContext(TEST_USER_ID), {
+      const application = await createTestApplication(makeTestOrgContext(TEST_USER_ID), {
         code: `AP-AM-${runId}-REPOINT`,
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
-        biocharAppliedTons: 2,
+        appliedWetMassKg: 2000,
         fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
@@ -596,7 +600,7 @@ describe("application mutations", () => {
       const unresolvedDeliveryId = await insertUnresolvedDelivery(fixture, runId);
 
       await expect(
-        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+        updateTestApplication(makeTestOrgContext(TEST_USER_ID), application.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
           deliveryId: unresolvedDeliveryId,
         }),
       ).rejects.toThrow(
@@ -612,20 +616,20 @@ describe("application mutations", () => {
     const fixture = await createMutationFixture(runId);
 
     try {
-      const application = await createApplication(makeTestOrgContext(TEST_USER_ID), {
+      const application = await createTestApplication(makeTestOrgContext(TEST_USER_ID), {
         code: `AP-AM-${runId}-UPDATE`,
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
-        biocharAppliedTons: 2,
+        appliedWetMassKg: 2000,
         fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
       });
       fixture.applicationIds.push(application.id);
 
-      const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+      const updated = await updateTestApplication(makeTestOrgContext(TEST_USER_ID), application.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
         deliveryId: fixture.deliveryIds[1],
-        biocharAppliedTons: 2,
+        appliedWetMassKg: 2000,
         fieldSizeHa: 1,
       });
 
@@ -642,11 +646,11 @@ describe("application mutations", () => {
     const fixture = await createMutationFixture(runId);
 
     try {
-      const application = await createApplication(makeTestOrgContext(TEST_USER_ID), {
+      const application = await createTestApplication(makeTestOrgContext(TEST_USER_ID), {
         code: `AP-AM-${runId}-GPS-CLEAR`,
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
-        biocharAppliedTons: 2,
+        appliedWetMassKg: 2000,
         fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
@@ -654,7 +658,7 @@ describe("application mutations", () => {
       fixture.applicationIds.push(application.id);
 
       await expect(
-        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+        updateTestApplication(makeTestOrgContext(TEST_USER_ID), application.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
           gpsLatitude: null,
           gpsLongitude: null,
         }),
@@ -682,11 +686,11 @@ describe("application mutations", () => {
     const fixture = await createMutationFixture(runId);
 
     try {
-      const application = await createApplication(makeTestOrgContext(TEST_USER_ID), {
+      const application = await createTestApplication(makeTestOrgContext(TEST_USER_ID), {
         code: `AP-AM-${runId}-GPS-HALF-CLEAR`,
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
-        biocharAppliedTons: 2,
+        appliedWetMassKg: 2000,
         fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
@@ -694,7 +698,7 @@ describe("application mutations", () => {
       fixture.applicationIds.push(application.id);
 
       await expect(
-        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+        updateTestApplication(makeTestOrgContext(TEST_USER_ID), application.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
           gpsLongitude: null,
         }),
       ).rejects.toThrow("Longitude is required when a latitude is entered.");
@@ -721,21 +725,21 @@ describe("application mutations", () => {
     const fixture = await createMutationFixture(runId);
 
     try {
-      const application = await createApplication(
+      const application = await createTestApplication(
         makeTestOrgContext(TEST_USER_ID),
         {
           code: `AP-AM-${runId}-LOCATION-WITHOUT-GPS`,
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
-          biocharAppliedTons: 2,
+          appliedWetMassKg: 2000,
           fieldSizeHa: 1,
-          evidenceMethod: "boundary",
+          evidenceMethod: "boundary", gisBoundary: TEST_GIS_BOUNDARY, gpsLatitude: null, gpsLongitude: null,
         },
       );
       fixture.applicationIds.push(application.id);
 
       await expect(
-        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+        updateTestApplication(makeTestOrgContext(TEST_USER_ID), application.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
           evidenceMethod: "location",
         }),
       ).rejects.toThrow("Customer location coordinates are required.");
@@ -756,25 +760,25 @@ describe("application mutations", () => {
     const fixture = await createMutationFixture(runId);
 
     try {
-      const application = await createApplication(
+      const application = await createTestApplication(
         makeTestOrgContext(TEST_USER_ID),
         {
           code: `AP-AM-${runId}-BOUNDARY-GPS-CLEAR`,
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
-          biocharAppliedTons: 2,
+          appliedWetMassKg: 2000,
           fieldSizeHa: 1,
-          evidenceMethod: "boundary",
+          evidenceMethod: "boundary", gisBoundary: TEST_GIS_BOUNDARY,
           gpsLatitude: -3.3349,
           gpsLongitude: 37.3404,
         },
       );
       fixture.applicationIds.push(application.id);
 
-      const updated = await updateApplication(
+      const updated = await updateTestApplication(
         makeTestOrgContext(TEST_USER_ID),
         application.id,
-        {
+        { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
           gpsLatitude: null,
           gpsLongitude: null,
         },
@@ -795,11 +799,11 @@ describe("application mutations", () => {
     const fixture = await createMutationFixture(runId);
 
     try {
-      const application = await createApplication(makeTestOrgContext(TEST_USER_ID), {
+      const application = await createTestApplication(makeTestOrgContext(TEST_USER_ID), {
         code: `AP-AM-${runId}-REJECT`,
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
-        biocharAppliedTons: 2,
+        appliedWetMassKg: 2000,
         fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
@@ -807,8 +811,8 @@ describe("application mutations", () => {
       fixture.applicationIds.push(application.id);
 
       await expect(
-        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
-          biocharAppliedTons: 6,
+        updateTestApplication(makeTestOrgContext(TEST_USER_ID), application.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
+          appliedWetMassKg: 6000,
           fieldSizeHa: 1,
         }),
       ).rejects.toThrow("Not enough biochar in this delivery");

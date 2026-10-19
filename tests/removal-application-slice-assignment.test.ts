@@ -1,10 +1,11 @@
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
-import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
-import { beforeAll, describe, expect, it } from "vitest";
+import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  activityEvents,
   applications,
   biocharProductSourceAllocations,
   biocharProducts,
@@ -20,30 +21,40 @@ import {
   facilities,
   feedstockTypes,
   orders,
+  organizations,
   productionProcesses,
   productionRuns,
   reactors,
   storageLocations,
 } from "@/db/schema";
 import {
+  REMOVAL_CODE_PREFIX,
   createRemovalWithCreditBatches,
   discardLocalRemovalDraft,
+  getCertifierRemovalById,
+  listRemovalsForFacility,
 } from "@/data-access/certifier-removals";
 import { reconcileUnassignedCreditBatchApplicationSlices } from "@/data-access/credit-batch-application-slices";
-import {
-  ensureTestOrg,
+import { TEST_SITE_POSITION,
   makeTestOrgContext,
-  TEST_ORG_ID,
 } from "./helpers/test-org";
 
-beforeAll(() => ensureTestOrg());
+const TEST_ORG_ID = `org_removal_assignment_${crypto.randomUUID()}`;
+beforeAll(async () => {
+  await db.insert(organizations).values({
+    id: TEST_ORG_ID, name: "Removal assignment tests", slug: TEST_ORG_ID,
+  });
+});
+afterAll(async () => {
+  await db.delete(organizations).where(eq(organizations.id, TEST_ORG_ID));
+});
 
 describe("Removal Application-slice assignment", () => {
   it("enforces 1000-year grouping and safely recovers a local draft", async () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `RAS-F-${tag}`,
         name: `Removal assignment ${tag}`,
@@ -72,6 +83,7 @@ describe("Removal Application-slice assignment", () => {
     const [feedstockType] = await db
       .insert(feedstockTypes)
       .values({
+        usage: "pyrolysis",
         organizationId: TEST_ORG_ID,
         code: `RAS-FT-${tag}`,
         name: `Removal assignment ${tag}`,
@@ -95,6 +107,7 @@ describe("Removal Application-slice assignment", () => {
           reactorId: reactor.id,
           code: `RAS-PR${number}-${tag}`,
           status: "complete" as const,
+          biocharStorageLocationId: sourceBin.id, biocharMoisturePercent: 0,
           startTime: new Date(`2026-04-0${number}T08:00:00Z`),
           endTime: new Date(`2026-04-0${number}T12:00:00Z`),
           biocharDryMassKg: 100,
@@ -153,6 +166,7 @@ describe("Removal Application-slice assignment", () => {
         massDryKg: 300,
       }, row => row);
     const [application] = await insertOutputApplicationFixture(db, {
+      fieldSizeHa: 1,
         organizationId: TEST_ORG_ID,
         deliveryId: delivery.id,
         code: `RAS-A-${tag}`,
@@ -189,7 +203,7 @@ describe("Removal Application-slice assignment", () => {
     let ghgStatementId: string | null = null;
     let auditRemovalId: string | null = null;
     try {
-      const ctx = makeTestOrgContext();
+      const ctx = { ...makeTestOrgContext(), organizationId: TEST_ORG_ID };
       await db.transaction((tx) =>
         reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
           applicationIds: [application.id],
@@ -222,6 +236,28 @@ describe("Removal Application-slice assignment", () => {
       secondRemovalId = await createRemovalWithCreditBatches(ctx, facility.id, [
         batches[1].id,
       ]);
+      const firstRemoval = await getCertifierRemovalById(ctx, removalId);
+      const secondRemoval = await getCertifierRemovalById(ctx, secondRemovalId);
+      const year = String(new Date().getFullYear()).slice(-2);
+      expect(firstRemoval?.code).toMatch(new RegExp(`^${REMOVAL_CODE_PREFIX}-${year}-\\d{3,}$`));
+      expect(secondRemoval?.code).toMatch(new RegExp(`^${REMOVAL_CODE_PREFIX}-${year}-\\d{3,}$`));
+      expect(Number(secondRemoval!.code.split("-").at(-1))).toBe(
+        Number(firstRemoval!.code.split("-").at(-1)) + 1,
+      );
+      const listed = await listRemovalsForFacility(ctx, facility.id);
+      expect(listed.map(removal => removal.code)).toEqual(
+        expect.arrayContaining([firstRemoval!.code, secondRemoval!.code]),
+      );
+      expect(await getCertifierRemovalById(
+        { ...ctx, organizationId: "org_without_access" }, removalId,
+      )).toBeNull();
+      const assignmentEvents = await db.select().from(activityEvents)
+        .where(inArray(activityEvents.creditBatchId, batches.map(batch => batch.id)));
+      expect(assignmentEvents).toHaveLength(batches.length);
+      for (const batch of batches) expect(assignmentEvents).toContainEqual(expect.objectContaining({
+        entityType: "credit_batch", entityId: batch.id, creditBatchId: batch.id,
+        action: "updated", changedFields: ["removalAssignment"], source: "form", actorUserId: ctx.userId,
+      }));
       const separatelyAssigned = await db
         .select({
           creditBatchId: creditBatchApplications.creditBatchId,
@@ -245,6 +281,16 @@ describe("Removal Application-slice assignment", () => {
         discardLocalRemovalDraft(ctx, facility.id, secondRemovalId),
       ).resolves.toEqual({ releasedSliceCount: 1 });
       secondRemovalId = null;
+      const releasedEvents = await db.select().from(activityEvents)
+        .where(inArray(activityEvents.creditBatchId, batches.map(batch => batch.id)));
+      for (const batch of batches) {
+        const history = releasedEvents.filter(event => event.creditBatchId === batch.id);
+        expect(history).toHaveLength(2);
+        for (const event of history) expect(event).toMatchObject({
+          entityType: "credit_batch", entityId: batch.id, action: "updated",
+          changedFields: ["removalAssignment"], source: "form", actorUserId: ctx.userId,
+        });
+      }
 
       await db
         .update(facilities)
@@ -411,6 +457,9 @@ describe("Removal Application-slice assignment", () => {
       expect(retainedAudit).toHaveLength(1);
       removalId = null;
     } finally {
+      await db.delete(activityEvents).where(inArray(activityEvents.creditBatchId, [
+        ...batches.map(batch => batch.id), ...(laterBatchId ? [laterBatchId] : []),
+      ]));
       if (ghgStatementId) {
         if (removalId) {
           await db
@@ -465,7 +514,7 @@ describe("Removal Application-slice assignment", () => {
       );
       await deleteOutputApplicationFixtures(db, eq(applications.id, application.id));
       await deleteOutputDeliveryFixtures(db, eq(deliveries.id, delivery.id));
-      await db.delete(orders).where(eq(orders.id, order.id));
+      await deleteOutputOrderFixtures(db, eq(orders.id, order.id));
       await db.delete(customers).where(eq(customers.id, customer.id));
       await db
         .delete(biocharProductSourceAllocations)

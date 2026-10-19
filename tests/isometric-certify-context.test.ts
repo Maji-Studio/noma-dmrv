@@ -1,5 +1,20 @@
+vi.mock("@/data-access/transport-distance-fix-links", () => ({ getTransportDistanceFixLinks: vi.fn(async () => new Map()) }));
+import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations";
+import { reviewedTemplateSources } from "./helpers/template-line-sources";
+import { listPinnedRemovalTemplateIds } from "@/data-access/credit-batch-removal-template";
+import { observeRemovalTemplate } from "@/fn/certification/observe-removal-template";
+vi.mock("@/data-access/credit-batch-removal-template", () => ({ listPinnedRemovalTemplateIds: vi.fn() }));
+vi.mock("@/fn/certification/observe-removal-template", () => ({ observeRemovalTemplate: vi.fn() }));
+import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
+import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { makeTestOrgContext } from "./helpers/test-org";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as readings from "@/data-access/production-run-readings";
+import * as readingImports from "@/data-access/production-run-reading-imports";
+import * as readingsActions from "@/fn/production-run-readings";
+import * as readingImportActions from "@/fn/production-run-reading-imports";
+import * as readingsCsv from "@/lib/production-readings/readings-csv";
+import { deriveRemovalReadiness } from "@/lib/certification/readiness";
 import {
   getCertifierProjectByFacility,
   type CertifierProjectRow,
@@ -14,7 +29,7 @@ import {
 import {
   listDocumentsForEntityIds,
 } from "@/data-access/documents";
-import { getProductionRunsWithSamples } from "@/data-access/production-runs";
+import { getProductionRunsForCertification } from "@/data-access/production-runs";
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { getTransportLegsWithEvidenceForEntities } from "@/data-access/transport-legs";
 import {
@@ -28,12 +43,20 @@ import {
 import {
   loadCertifyContextForCreditBatchForUser,
 } from "@/fn/certification/certify-context-core";
-import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 import {
-  factsFromMockedLineages,
+  mockNormalizedLineageFacts,
   satisfiedVisualEvidenceDocuments,
   transportTemplate,
 } from "./fixtures/certify-context";
+
+vi.mock("@/data-access/production-run-readings");
+vi.mock("@/data-access/production-run-reading-imports");
+vi.mock("@/fn/production-run-readings");
+vi.mock("@/fn/production-run-reading-imports");
+vi.mock("@/lib/production-readings/readings-csv");
+
+const readingsFunctions = [readings, readingImports, readingsActions,
+  readingImportActions, readingsCsv].flatMap((module) => Object.values(module));
 
 vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchById: vi.fn(),
@@ -45,6 +68,7 @@ vi.mock("@/data-access/certification", () => ({
 }));
 
 vi.mock("@/data-access/certifier-credentials", () => ({
+  resolveIsometricClient: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
   hasCertifierCredentials: vi.fn(),
 }));
 
@@ -60,7 +84,7 @@ vi.mock("@/data-access/credit-batch-accounting", () => ({
 }));
 
 vi.mock("@/data-access/production-runs", () => ({
-  getProductionRunsWithSamples: vi.fn(),
+  getProductionRunsForCertification: vi.fn(),
 }));
 
 vi.mock("@/data-access/credit-batch-samples", () => ({
@@ -69,6 +93,10 @@ vi.mock("@/data-access/credit-batch-samples", () => ({
 
 vi.mock("@/data-access/documents", () => ({
   listDocumentsForEntityIds: vi.fn(),
+}));
+
+vi.mock("@/data-access/biochar-delivery-transport", () => ({
+  loadBiocharDeliveryTransportLegs: vi.fn(),
 }));
 
 vi.mock("@/data-access/transport-legs", () => ({
@@ -80,7 +108,6 @@ vi.mock("@/lib/isometric", async () => {
     await vi.importActual<typeof import("@/lib/isometric")>("@/lib/isometric");
   return {
     ...actual,
-    getIsometricClientForOrg: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
     listProjects: vi.fn(),
     listGhgEntryTemplates: vi.fn(),
     listComponentBlueprints: vi.fn(),
@@ -95,7 +122,7 @@ const mockedGetMapping = vi.mocked(getCertifierProjectByFacility);
 const mockedHasCredentials = vi.mocked(hasCertifierCredentials);
 const mockedGetLineage = vi.mocked(getChainOfCustodyData);
 const mockedLoadAccounting = vi.mocked(loadCreditBatchRollups);
-const mockedGetRuns = vi.mocked(getProductionRunsWithSamples);
+const mockedGetRuns = vi.mocked(getProductionRunsForCertification);
 const mockedGetBatchesWithSamples = vi.mocked(getCreditBatchesWithSamples);
 const mockedListDocuments = vi.mocked(listDocumentsForEntityIds);
 const mockedGetLegs = vi.mocked(getTransportLegsWithEvidenceForEntities);
@@ -107,51 +134,6 @@ const USER_ID = "user-1";
 const CREDIT_BATCH_ID = "cb-1";
 const FACILITY_ID = "fac-1";
 const EXTERNAL_PROJECT_ID = "prj_test";
-function mockNormalizedLineageFacts(
-  memberRunStatusById: Record<string, ProductionRunStatus> = {},
-): void {
-  mockedLoadAccounting.mockImplementation(async (ctx, batchIds) => {
-    const entries = await Promise.all(
-      batchIds.map(async (batchId) => {
-        const batch = await mockedGetCreditBatch(ctx, batchId, {
-          skipPreview: true,
-        });
-        const productionRunIds = batch?.productionRunIds ?? [];
-        const applicationIds = productionRunIds.includes("pr-1")
-          ? ["app-1"]
-          : [];
-        const lineages = await Promise.all(
-          applicationIds.map((applicationId) =>
-            mockedGetLineage(ctx, applicationId),
-          ),
-        );
-        const lineageFacts = factsFromMockedLineages(
-          batchId,
-          productionRunIds,
-          lineages,
-          memberRunStatusById,
-        );
-        return [
-          batchId,
-          {
-            batch: {
-              ...batch,
-              id: batchId,
-              code: batch?.code ?? "CB-1",
-              facilityId: batch?.facilityId ?? FACILITY_ID,
-              durabilityOption: batch?.durabilityOption ?? "200_year",
-              productionEmissionsClaimedByRemovalId:
-                batch?.productionEmissionsClaimedByRemovalId ?? null,
-            },
-            lineageFacts,
-            appliedWeightTons: lineageFacts.appliedWeightTons,
-          },
-        ] as const;
-      }),
-    );
-    return Object.fromEntries(entries) as never;
-  });
-}
 
 function mapping(
   overrides: Partial<CertifierProjectRow> = {},
@@ -210,7 +192,26 @@ function blueprint(key: string): IsometricComponentBlueprint {
 describe("loadCertifyContextForCreditBatchForUser", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mockNormalizedLineageFacts();
+    vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
+    mockNormalizedLineageFacts(mockedLoadAccounting, mockedGetCreditBatch, mockedGetLineage);
+    const loadRollups = mockedLoadAccounting.getMockImplementation()!;
+    mockedLoadAccounting.mockImplementation(async (...args) => {
+      const rows = await loadRollups(...args);
+      const project = await mockedGetMapping(args[0], FACILITY_ID, "isometric");
+      for (const row of Object.values(rows)) row.batch.removalTemplateId = project?.defaultRemovalTemplateId ?? null;
+      return rows;
+    });
+    vi.mocked(listPinnedRemovalTemplateIds).mockImplementation(async () => {
+      const project = await mockedGetMapping(makeTestOrgContext(USER_ID), FACILITY_ID, "isometric");
+      return project?.defaultRemovalTemplateId ? [project.defaultRemovalTemplateId] : [];
+    });
+    vi.mocked(observeRemovalTemplate).mockImplementation(async (_ctx, input) => ({
+      definition: normalizeTemplateDefinition(input.template), lineSources: reviewedTemplateSources(input.template),
+      enrichment: Object.fromEntries(input.template.groups.flatMap((group) => group.components.map((component) => [
+        component.id, Object.fromEntries(component.inputs.map((input) => [input.input_key, { unit: "tonne * km" }])),
+      ]))),
+    }) as never);
+    mockedListBlueprints.mockResolvedValue([]);
     mockedHasCredentials.mockResolvedValue(true);
     mockedGetCreditBatchRemovalId.mockResolvedValue(null);
     mockedGetCreditBatch.mockResolvedValue({
@@ -241,9 +242,10 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       facilityId: FACILITY_ID,
       mapping: null,
       project: null,
-      defaultTemplate: null,
-      missingDefaultTemplateId: null,
+      removalTemplate: null,
+      templateBlockers: [{ code: "unpinnedTemplate" }],
       blueprintsForTemplate: [],
+      unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [],
     });
     expect(mockedListProjects).not.toHaveBeenCalled();
@@ -256,54 +258,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     );
   });
 
-  it("evaluates batch and facility gates even when no applications are linked", async () => {
-    mockedGetCreditBatch.mockResolvedValue({
-      id: CREDIT_BATCH_ID,
-      code: "CB-1",
-      facilityId: FACILITY_ID,
-      productionRunIds: [],
-      durabilityOption: "200_year",
-      sampling: "sampled",
-    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
-    mockedGetBatchesWithSamples.mockResolvedValue([
-      {
-        creditBatchId: CREDIT_BATCH_ID,
-        creditBatchCode: "CB-1",
-        startDate: "2026-07-01",
-        endDate: "2026-07-31",
-        facilityTimezone: "UTC",
-        sampling: "sampled",
-        durabilityOption: "200_year",
-        samples: [],
-        runs: [],
-      },
-    ] as unknown as Awaited<ReturnType<typeof getCreditBatchesWithSamples>>);
-    mockedGetMapping.mockResolvedValue(null);
-
-    const result = await loadCertifyContextForCreditBatchForUser(
-      makeTestOrgContext(USER_ID),
-      CREDIT_BATCH_ID,
-    );
-
-    expect(result.productionReadinessGap).toMatchObject({
-      kind: "noProductionRuns",
-      detail:
-        "No completed production runs are linked to this credit batch. Complete a matching production run to continue.",
-      fixTarget: "productionRuns",
-    });
-    expect(result.durabilityGateBlockers).toEqual([
-      "Credit batch CB-1 is marked as sampled but has no Samples. Add at least 3 Samples before submitting.",
-      "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal.",
-    ]);
-    expect(result.memberBatches[0]?.facilityEmissionsGateBlockers).toEqual([
-      "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal.",
-    ]);
-    expect(result.submissionWarnings).toEqual([]);
-    expect(mockedGetBatchesWithSamples).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: expect.any(String) }),
-      [CREDIT_BATCH_ID],
-    );
-  });
 
   it("routes a member production run with no applications to the application chain", async () => {
     mockedGetCreditBatch.mockResolvedValue({
@@ -332,12 +286,12 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
   // non-complete member run should not occur; if one ever does (legacy rows,
   // a future membership path), routing must still point at Production Runs.
   it("defensively routes a batch whose only member runs are incomplete to Production Runs", async () => {
-    mockNormalizedLineageFacts({ "pr-draft": "draft" });
+    mockNormalizedLineageFacts(mockedLoadAccounting, mockedGetCreditBatch, mockedGetLineage, { "pr-running": "running" });
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       code: "CB-1",
       facilityId: FACILITY_ID,
-      productionRunIds: ["pr-draft"],
+      productionRunIds: ["pr-running"],
       durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetMapping.mockResolvedValue(null);
@@ -366,14 +320,14 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       hasOrgCredentials: false,
       mapping: { externalProjectId: EXTERNAL_PROJECT_ID },
       project: null,
-      defaultTemplate: null,
+      removalTemplate: null,
     });
     expect(mockedListProjects).not.toHaveBeenCalled();
     expect(mockedListTemplates).not.toHaveBeenCalled();
     expect(mockedListBlueprints).not.toHaveBeenCalled();
   });
 
-  it("returns linked-no-default shape without remote calls when defaultRemovalTemplateId is null", async () => {
+  it("returns an unpinned blocker without remote calls when the default and batch pin are absent", async () => {
     mockedGetMapping.mockResolvedValue(
       mapping({ defaultRemovalTemplateId: null }),
     );
@@ -387,8 +341,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
 
     expect(result.mapping?.externalProjectId).toBe(EXTERNAL_PROJECT_ID);
     expect(result.project).toBeNull();
-    expect(result.defaultTemplate).toBeNull();
-    expect(result.missingDefaultTemplateId).toBeNull();
+    expect(result.removalTemplate).toBeNull();
+    expect(result.templateBlockers).toMatchObject([{ code: "unpinnedTemplate" }]);
     expect(result.blueprintsForTemplate).toEqual([]);
     expect(mockedListProjects).not.toHaveBeenCalled();
     expect(mockedListTemplates).not.toHaveBeenCalled();
@@ -456,7 +410,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       CREDIT_BATCH_ID,
     );
 
-    expect(result.defaultTemplate).toBeNull();
+    expect(result.removalTemplate).toBeNull();
     expect(result.runSummary).toMatchObject({
       runCount: 2,
       totalBiocharOutputKg: 1_500,
@@ -527,6 +481,54 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     ]);
   });
 
+  it("is ready through the real loader when all readings modules throw (#627)", async () => {
+    for (const fn of readingsFunctions) {
+      vi.mocked(fn).mockImplementation(() => {
+        throw new Error("Certify readiness must not load structured readings");
+      });
+    }
+    mockedGetCreditBatch.mockResolvedValue({
+      id: CREDIT_BATCH_ID, code: "CB-1", facilityId: FACILITY_ID,
+      productionRunIds: ["pr-1"], durabilityOption: "200_year",
+    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
+    mockedGetMapping.mockResolvedValue(mapping({ defaultRemovalTemplateId: "tpl_ready" }));
+    mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
+    mockedListTemplates.mockResolvedValue([template("tpl_ready")]);
+    mockedListBlueprints.mockResolvedValue([]);
+    mockedGetLineage.mockResolvedValue({
+      facility: { id: FACILITY_ID, code: "F", name: "F" },
+      application: {
+        id: "app-1", code: "APP-1", biocharAppliedDryTons: 0.035,
+        applicationDate: new Date("2026-01-20T00:00:00Z"),
+      } as never,
+      delivery: { id: "del-1", proofOfDeliveryCount: 1, customerLocationId: "loc-1" } as never,
+      order: null,
+      biocharProduct: { id: "bp-1", linkedProductionRunId: "pr-1" } as never,
+      productionRun: { id: "pr-1", code: "PR-1" } as never,
+      reactor: null, feedstocks: [], warnings: [],
+    } as Awaited<ReturnType<typeof getChainOfCustodyData>>);
+    mockedGetRuns.mockResolvedValue([{
+      id: "pr-1", code: "PR-1", status: "complete", hasReadingsFile: true,
+      startTime: new Date("2026-01-05T00:00:00Z"),
+      endTime: new Date("2026-01-05T12:00:00Z"),
+      feedstockWetMassKg: 100, feedstockMoisturePercent: 10,
+      biocharOutputKg: 40, biocharMoisturePercent: 12, biocharDryMassKg: 35,
+      dieselOperationLiters: 0, preprocessingFuelLiters: 0,
+      dieselGensetLiters: 0, electricityKwh: 0, samples: [],
+    } as never]);
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      makeTestOrgContext(USER_ID), CREDIT_BATCH_ID,
+    );
+
+    expect(mockedGetRuns).toHaveBeenCalledWith(makeTestOrgContext(USER_ID), ["pr-1"]);
+    expect(result.entityReadinessGaps).toEqual([]);
+    expect(deriveRemovalReadiness(toRemovalReadinessFacts(result))).toMatchObject({
+      state: "ready", reasons: [],
+    });
+    for (const fn of readingsFunctions) expect(fn).not.toHaveBeenCalled();
+  });
+
   it("flags missingDefaultTemplateId when the saved template is not in the list (drift)", async () => {
     mockedGetMapping.mockResolvedValue(
       mapping({ defaultRemovalTemplateId: "rvt_stale" }),
@@ -539,11 +541,11 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       CREDIT_BATCH_ID,
     );
 
-    expect(result.defaultTemplate).toBeNull();
-    expect(result.missingDefaultTemplateId).toBe("rvt_stale");
+    expect(result.removalTemplate).toBeNull();
+    expect(result.templateBlockers).toMatchObject([{ code: "templateNotFound" }]);
     expect(result.blueprintsForTemplate).toEqual([]);
     expect(result.unresolvedBlueprintKeys).toEqual([]);
-    expect(mockedListBlueprints).not.toHaveBeenCalled();
+    expect(mockedListBlueprints).toHaveBeenCalled();
   });
 
   it("reports unresolvedBlueprintKeys when the catalog is missing keys referenced by the template", async () => {
@@ -561,8 +563,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       CREDIT_BATCH_ID,
     );
 
-    expect(result.defaultTemplate?.id).toBe("rvt_resolved");
-    expect(result.missingDefaultTemplateId).toBeNull();
+    expect(result.removalTemplate?.id).toBe("rvt_resolved");
+    expect(result.templateBlockers).toEqual([]);
     expect(result.blueprintsForTemplate.map((bp) => bp.key)).toEqual([
       "key_known",
     ]);
@@ -587,7 +589,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       CREDIT_BATCH_ID,
     );
 
-    expect(result.defaultTemplate?.id).toBe("rvt_resolved");
+    expect(result.removalTemplate?.id).toBe("rvt_resolved");
     expect(result.blueprintsForTemplate.map((bp) => bp.key)).toEqual([
       "key_known",
     ]);
@@ -613,8 +615,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       CREDIT_BATCH_ID,
     );
 
-    expect(result.defaultTemplate?.id).toBe("rvt_resolved");
-    expect(result.missingDefaultTemplateId).toBeNull();
+    expect(result.removalTemplate?.id).toBe("rvt_resolved");
+    expect(result.templateBlockers).toEqual([]);
     expect(result.unresolvedBlueprintKeys).toEqual([]);
     expect(result.blueprintsForTemplate.map((bp) => bp.key).sort()).toEqual([
       "key_a",
@@ -632,7 +634,9 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(result.runSummary.runCount).toBe(0);
   });
 
-  it("populates removal-level transportCoverage by walking the application lineage", async () => {
+  it.each(["carbon_rich_substance_sequestration", "biochar_sequestration_200_year_c_org"].flatMap((storageKey) =>
+    ([[], ["feedstock"], ["biochar"], ["feedstock", "biochar"]] as const).map((omit) => ({ storageKey, omit })),
+  ))("scopes lineage and durability blockers for $storageKey omitting $omit", async ({ storageKey, omit }) => {
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       facilityId: FACILITY_ID,
@@ -642,20 +646,23 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       mapping({ defaultRemovalTemplateId: "rvt_resolved" }),
     );
     mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
-    mockedListTemplates.mockResolvedValue([template("rvt_resolved")]);
+    const resolvedTemplate = template("rvt_resolved", [storageKey]);
+    resolvedTemplate.groups.push(...transportTemplate("rvt_resolved", omit).groups);
+    mockedListTemplates.mockResolvedValue([resolvedTemplate]);
     mockedListBlueprints.mockResolvedValue([]);
 
     mockedGetLineage.mockResolvedValue({
       facility: { id: FACILITY_ID, code: "F", name: "F" },
       application: {
+        code: "AP-MISSING",
         applicationDate: new Date("2026-01-20T00:00:00Z"),
       } as never,
-      delivery: {} as never,
+      delivery: { proofOfDeliveryCount: 1, code: "DL-MISSING", status: "delivered", customerLocationId: null } as never,
       order: null,
       biocharProduct: { id: "bp-1" } as never,
       productionRun: { id: "pr-1" } as never,
       reactor: null,
-      feedstocks: [{ id: "fs-1" } as never, { id: "fs-2" } as never],
+      feedstocks: [{ id: "fs-1" } as never, { id: "fs-2", code: "FS-MISSING" } as never],
       warnings: [],
     } as Awaited<ReturnType<typeof getChainOfCustodyData>>);
     mockedGetRuns.mockResolvedValue([
@@ -683,7 +690,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         creditBatchCode: "CB-1",
         productionProcessId: null,
         sampling: "sampled",
-        declaredHToCorgRatio: null,
         durabilityOption: "200_year",
         runs: [{ id: "pr-1", code: "PR-1", biocharDryMassKg: 35 }],
         samples: [{ id: "s-1" } as never, { id: "s-2" } as never],
@@ -698,26 +704,66 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       return [];
     });
 
+    vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([{
+      id: "delivery-missing-distance", entityId: "delivery-missing-distance", entityType: "biochar",
+      distanceKm: 0, loadMassKg: 25, isDerived: true,
+      transportMethodType: "road", calculationMethodType: "distance_based",
+    } as never]);
+
     const result = await loadCertifyContextForCreditBatchForUser(
       makeTestOrgContext(USER_ID),
       CREDIT_BATCH_ID,
     );
 
+    expect(result.submissionLineageBlockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ detail: expect.stringContaining("Application AP-MISSING has no customer location") }),
+    ]));
+    expect(result.submissionLineageBlockers?.some((reason) => reason.detail.includes("Feedstock FS-MISSING"))).toBe(!omit.some((category) => category === "feedstock"));
+    expect(result.submissionLineageBlockers?.some((reason) => reason.detail.includes("Delivery DL-MISSING"))).toBe(!omit.some((category) => category === "biochar"));
+    expect(toRemovalReadinessFacts(result).submissionLineageIssues).toEqual(
+      result.submissionLineageBlockers.filter((blocker) => blocker.fixTarget !== "feedstocks"),
+    );
+    expect(result.durabilityConfigurationBlockers).toEqual(storageKey === "carbon_rich_substance_sequestration" ? [] : ["200-year Removals cannot be submitted yet. Wait for support to confirm registry availability."]);
     const coverage = result.transportCoverage;
     expect(coverage.feedstock.count).toBe(3);
     expect(coverage.feedstock.entityIds.sort()).toEqual(["fs-1", "fs-2"]);
-    expect(coverage.biochar.count).toBe(0);
+    const biocharRequired = !omit.some((category) => category === "biochar");
+    expect(coverage.biochar.count).toBe(biocharRequired ? 1 : 0);
+    if (!biocharRequired) {
+      expect(toRemovalReadinessFacts(result).requiredTransport.map(item => item.category)).not.toContain("biochar");
+    }
+    // Recorded delivery transport loads even when the template omits it, so a dropped line warns.
+    expect(loadBiocharDeliveryTransportLegs).toHaveBeenCalledTimes(1);
     expect(coverage.biochar.entityIds).toEqual(["bp-1"]);
     expect(coverage.sample.count).toBe(1);
     expect(coverage.sample.entityIds.sort()).toEqual(["s-1", "s-2"]);
-    expect(mockedGetLegs).toHaveBeenCalledTimes(3);
+    expect(mockedGetLegs).toHaveBeenCalledTimes(2);
   });
 });
 
 describe("requiredTransportCategories", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mockNormalizedLineageFacts();
+    vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
+    mockNormalizedLineageFacts(mockedLoadAccounting, mockedGetCreditBatch, mockedGetLineage);
+    const loadRollups = mockedLoadAccounting.getMockImplementation()!;
+    mockedLoadAccounting.mockImplementation(async (...args) => {
+      const rows = await loadRollups(...args);
+      const project = await mockedGetMapping(args[0], FACILITY_ID, "isometric");
+      for (const row of Object.values(rows)) row.batch.removalTemplateId = project?.defaultRemovalTemplateId ?? null;
+      return rows;
+    });
+    vi.mocked(listPinnedRemovalTemplateIds).mockImplementation(async () => {
+      const project = await mockedGetMapping(makeTestOrgContext(USER_ID), FACILITY_ID, "isometric");
+      return project?.defaultRemovalTemplateId ? [project.defaultRemovalTemplateId] : [];
+    });
+    vi.mocked(observeRemovalTemplate).mockImplementation(async (_ctx, input) => ({
+      definition: normalizeTemplateDefinition(input.template), lineSources: reviewedTemplateSources(input.template),
+      enrichment: Object.fromEntries(input.template.groups.flatMap((group) => group.components.map((component) => [
+        component.id, Object.fromEntries(component.inputs.map((input) => [input.input_key, { unit: "tonne * km" }])),
+      ]))),
+    }) as never);
+    mockedListBlueprints.mockResolvedValue([]);
     mockedHasCredentials.mockResolvedValue(true);
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
@@ -907,7 +953,6 @@ describe("requiredTransportCategories", () => {
         creditBatchCode: "CB-1",
         productionProcessId: null,
         sampling: "sampled",
-        declaredHToCorgRatio: null,
         durabilityOption: "1000_year",
         runs: [{ id: "pr-1", code: "PR-1", biocharDryMassKg: 35 }],
         samples: [
@@ -937,7 +982,7 @@ describe("requiredTransportCategories", () => {
     );
 
     expect(result.entityReadinessGaps).toEqual([
-      "Sample S-1: Total carbon · Measured inorganic carbon · TGA non-reactive carbon data · R0 reflectance · R₀ readings at or above 2%",
+      "Sample S-1: Sample moisture · Total carbon · Measured inorganic carbon · R₀ readings at or above 2%",
     ]);
   });
 

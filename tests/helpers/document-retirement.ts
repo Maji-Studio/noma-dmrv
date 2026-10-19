@@ -1,18 +1,27 @@
 /**
- * Shared fixtures for the parent-document retirement specs
- * (`tests/parent-document-retirement.test.ts`,
- * `tests/parent-document-mirror-release.test.ts`).
+ * Shared fixtures and assertions for document-retirement specs.
  */
+import { and, eq } from "drizzle-orm";
+import { expect } from "vitest";
 import { db } from "@/db";
-import { certificationSubmissions, documents, facilities, reactors } from "@/db/schema";
+import {
+  certificationSubmissions,
+  documents,
+  facilities,
+  reactors,
+  storageObjectDeletions,
+  transportLegs,
+} from "@/db/schema";
+import { __setStorageProviderForTests } from "@/lib/storage";
 import type {
   ObjectHead,
   PresignedUpload,
   StorageProvider,
 } from "@/lib/storage";
-import { TEST_ORG_ID } from "./test-org";
+import { TEST_SITE_POSITION, TEST_ORG_ID } from "./test-org";
 
 const SUBMISSION_VERSION = 1;
+const SWEEP_ATTEMPT_COUNT = 1;
 
 export class RetirementStorageProvider implements StorageProvider {
   readonly name = "local-fs" as const;
@@ -32,6 +41,8 @@ export class RetirementStorageProvider implements StorageProvider {
   async getObject(): Promise<never> {
     throw new Error("Not used by retirement tests");
   }
+
+  async readObjectBounded(): Promise<never> { throw new Error("Not used by this test"); }
 
   async headObject(key: string): Promise<ObjectHead | null> {
     return this.objects.has(key)
@@ -57,7 +68,7 @@ export async function createReactorFixture(
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId,
         code: `FAC-DOC-${tag}`,
         name: `Document retirement facility ${tag}`,
@@ -99,6 +110,38 @@ export async function insertManagedDocument(
     })
     .returning({ id: documents.id });
   return document.id;
+}
+
+export async function expectDerivedLegEvidenceSwept(
+  legId: string,
+  tag: string,
+  mutate: () => Promise<void>,
+): Promise<void> {
+  const provider = new RetirementStorageProvider();
+  const key = `transport_leg/${legId}/pdf/${tag}.pdf`;
+  const documentId = await insertManagedDocument(provider, "transport_leg", legId, key);
+  __setStorageProviderForTests(provider);
+
+  try {
+    await mutate();
+
+    expect(await db.select().from(transportLegs).where(eq(transportLegs.id, legId))).toHaveLength(0);
+    expect(await db.select().from(documents).where(eq(documents.id, documentId))).toHaveLength(0);
+    expect(provider.deleteCalls).toContain(key);
+    expect(provider.objects.has(key)).toBe(false);
+    const [deletion] = await db.select().from(storageObjectDeletions).where(and(
+      eq(storageObjectDeletions.organizationId, TEST_ORG_ID),
+      eq(storageObjectDeletions.storageKey, key),
+    ));
+    expect(deletion).toMatchObject({ attemptCount: SWEEP_ATTEMPT_COUNT, completedAt: expect.any(Date) });
+  } finally {
+    __setStorageProviderForTests(null);
+    await db.delete(documents).where(eq(documents.id, documentId));
+    await db.delete(storageObjectDeletions).where(and(
+      eq(storageObjectDeletions.organizationId, TEST_ORG_ID),
+      eq(storageObjectDeletions.storageKey, key),
+    ));
+  }
 }
 
 export async function insertRemovalSnapshot(args: {

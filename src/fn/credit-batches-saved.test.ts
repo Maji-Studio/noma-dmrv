@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   createCreditBatch: vi.fn(),
   updateCreditBatch: vi.fn(),
   getCreditBatchById: vi.fn(),
+  getCreditBatchCertifierForFacility: vi.fn(),
   loggerError: vi.fn(),
 }));
 
@@ -43,6 +44,7 @@ vi.mock("@/data-access/credit-batches", () => ({
   updateCreditBatch: mocks.updateCreditBatch,
   deleteCreditBatch: vi.fn(),
   creditBatchCodeExists: vi.fn(),
+  getCreditBatchCertifierForFacility: mocks.getCreditBatchCertifierForFacility,
 }));
 
 vi.mock("@/lib/log", () => ({
@@ -66,7 +68,6 @@ const input = {
   endDate: new Date("2026-01-31T00:00:00.000Z"),
   sampling: "sampled" as const,
   productionRunIds: [],
-  currency: "TZS" as const,
 };
 
 /** The committed row, as the data-access layer answers it. */
@@ -85,9 +86,34 @@ function createdRow(rollupLoaded: boolean) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.requireOrgContext.mockResolvedValue({ organizationId: ORGANIZATION_ID });
+  mocks.getCreditBatchCertifierForFacility.mockResolvedValue("isometric");
 });
 
 describe("createCreditBatchFn", () => {
+  it("rejects an invalid facility before looking up its certifier", async () => {
+    expect(await createCreditBatchFn({ ...input, facilityId: "invalid" }))
+      .toMatchObject({ success: false, code: "validation_failed", issues: [{ path: ["facilityId"] }] });
+    expect(mocks.getCreditBatchCertifierForFacility).not.toHaveBeenCalled();
+    expect(mocks.createCreditBatch).not.toHaveBeenCalled();
+  });
+
+  it("accepts a multi-month period when the facility has no certifier", async () => {
+    mocks.getCreditBatchCertifierForFacility.mockResolvedValue(null);
+    mocks.createCreditBatch.mockResolvedValue(createdRow(true));
+    expect(await createCreditBatchFn({ ...input, endDate: new Date("2026-04-30T00:00:00.000Z") }))
+      .toMatchObject({ success: true });
+  });
+
+  it("keeps the Isometric month refusal's ActionResult code and field issue", async () => {
+    expect(await createCreditBatchFn({ ...input, endDate: new Date("2026-04-30T00:00:00.000Z") }))
+      .toMatchObject({
+        success: false,
+        code: "validation_failed",
+        issues: [{ path: ["endDate"], message: "Choose an end date on or before Jan 31, 2026. Isometric credit batches must cover less than one month." }],
+      });
+    expect(mocks.createCreditBatch).not.toHaveBeenCalled();
+  });
+
   it("reports a plain success when the roll-up loads with the batch", async () => {
     mocks.createCreditBatch.mockResolvedValue(createdRow(true));
 
@@ -125,7 +151,7 @@ describe("createCreditBatchFn", () => {
 });
 
 describe("updateCreditBatchFn", () => {
-  const updateInput = { creditBatchId: BATCH_ID, hToCorgRatio: 0.5 };
+  const updateInput = { expectedVersion: 1, creditBatchId: BATCH_ID, siteManagementNotes: "Updated notes" };
 
   beforeEach(() => {
     mocks.getCreditBatchById.mockResolvedValue({ id: BATCH_ID, code: "CB-001" });

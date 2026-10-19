@@ -4,10 +4,10 @@ import { binMovements, type StorageLocation } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import { formatFacilityDateTime } from '@/lib/format-utils';
-import { grams, kilograms } from '@/lib/output-stock';
+import { grams, kilograms, layersHoldMaterial } from '@/lib/output-stock';
 import { outputStockEventLabel } from '@/lib/output-stock/labels';
 import { stockModeAt, type OutputStockMode, type StockModeChange } from '@/lib/output-stock/stock-mode';
-import { isOutputBinType, type StorageLocationType } from '@/schemas/storage-locations';
+import { MERGE_TIME_REQUIRED_MESSAGE, isOutputBinType, type StorageLocationType } from '@/schemas/storage-locations';
 import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm';
 import { requestFingerprint } from './bin-movement-requests';
 import { getBiocharOutputStockLayers, getProductOutputStockLayers } from './output-stock';
@@ -50,6 +50,9 @@ export async function applyStockModeChange(ctx: OrgContext, tx: DbTransaction, e
   if (!isOutputBinType(next.type)) return 'split';
   const target = next.stockMode ?? existing.stockMode;
   if (target === existing.stockMode) return target;
+  if (target === 'mix' && (!next.mergedAt || !Number.isFinite(next.mergedAt.getTime()))) {
+    throw new SafeError(MERGE_TIME_REQUIRED_MESSAGE);
+  }
   // A bin changes type only while it holds nothing (the identity guard sees to
   // that), so there is no pile to merge or sort.
   if (next.type !== existing.type) return target;
@@ -66,13 +69,13 @@ export async function applyStockModeChange(ctx: OrgContext, tx: DbTransaction, e
     if (last?.occurredAt && last.occurredAt.getTime() > Date.now()) {
       throw new SafeError(`This bin has a movement recorded for ${await facilityTime(last.occurredAt)}. Switch it to split after that time.`);
     }
-    if (layers.some(layer => grams(layer.remainingDryBiocharKg) > BigInt(0) || (layer.remainingSolidsKg?.numerator ?? BigInt(0)) > BigInt(0))) {
+    if (layersHoldMaterial(layers)) {
       throw new SafeError('Empty this bin before switching it to split. If nothing is left, record a stock count of zero first. A mixed pile cannot be sorted back into batches.');
     }
     await postModeChange(ctx, tx, existing, 'split', new Date(), balance);
     return 'split';
   }
-  const mergedAt = next.mergedAt ?? new Date();
+  const mergedAt = next.mergedAt!;
   if (mergedAt.getTime() > Date.now()) throw new SafeError('Merged at cannot be in the future.');
   // Strictly after: a merge at the same instant would pull that split entry into the mix period.
   if (last?.occurredAt && mergedAt.getTime() <= last.occurredAt.getTime()) {

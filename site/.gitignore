@@ -1,0 +1,8 @@
+dist/
+.astro/
+node_modules/
+
+# Mafinga photo stays local until DEC approves publishing it. The old
+# preview path stays ignored: checkouts made before #900 still hold the file there.
+public/images/mafinga-field-trial.jpg
+public/preview/mafinga-field-trial.jpg

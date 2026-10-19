@@ -35,6 +35,8 @@ from source data instead:
   from lineage allocations whose feedstock is flagged
   `eligibilityStatus = 'ineligible'`, clamped to never exceed the column it
   exits from.
+  **Superseded 2026-10-15 (#942 q8):** the ineligible feedstock exit and
+  eligibility flag have been removed; the Sankey no longer derives this fraction.
 - **Emissions / counterfactual** — per ADR 0018, these were already
   registry-owned; the breakdown functions now pass explicit nulls instead of
   reading a dropped column.

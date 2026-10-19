@@ -1,0 +1,99 @@
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import type { ReactNode } from "react";
+import { beforeEach, expect, it, vi } from "vitest";
+import { ConflictError, conflictCode } from "@/lib/conflict-ref";
+import { CreditBatchList } from "./credit-batch-list";
+
+const harness = vi.hoisted(() => ({
+  remove: vi.fn(), error: vi.fn(), success: vi.fn(),
+  onDelete: undefined as ((id: string) => void) | undefined,
+  onConfirm: undefined as (() => Promise<void>) | undefined,
+  batch: { id: "batch-1", version: 3, code: "CB-1", facilityId: "facility-1", startDate: "2026-09-01", endDate: "2026-09-30" },
+}));
+vi.mock("nuqs", () => ({ parseAsString: { withOptions: () => ({}) }, useQueryState: () => [null, vi.fn()] }));
+vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilityId: "facility-1" }), useFacilityClock: () => ({ timeZone: "UTC" }) }));
+vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => ({ isOpen: false, clear: vi.fn() }) }));
+vi.mock("@/hooks/use-list-pagination", () => ({ useListPagination: () => ({ currentPage: 1, pageSize: 10, setCurrentPage: vi.fn(), setPageSize: vi.fn() }) }));
+vi.mock("@/hooks/use-credit-batches", () => ({
+  useCreditBatches: () => ({ data: [harness.batch] }),
+  useCreditBatch: () => ({}),
+  useCreditBatchCo2eStoredPreviews: () => ({ data: {} }),
+  useCreditBatchProductionRunOptions: () => ({ data: [] }),
+  useCreditBatchTimelineFacts: () => ({ data: {}, isLoading: false, isFetching: false, error: null, refetch: vi.fn() }),
+  useCreateCreditBatch: () => ({}),
+  useUpdateCreditBatch: () => ({}),
+  useDeleteCreditBatch: () => ({ mutateAsync: harness.remove }),
+}));
+vi.mock("@/hooks/use-certification", () => ({ useCreditBatchHealthSummaries: () => ({ data: {} }) }));
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: harness.error, success: harness.success }) }));
+vi.mock("@/components/ui", () => ({ Button: () => null, EmptyState: () => null, ListPagination: () => null, PageHeader: () => null }));
+vi.mock("@/components/forms", () => ({ ServerError: ({ message, action }: { message?: string; action?: ReactNode }) =>
+  message ? <div role="alert">{message}{action}</div> : null }));
+vi.mock("next/link", () => ({ default: ({ href, children }: { href: string; children: ReactNode }) => <a href={href}>{children}</a> }));
+vi.mock("@/components/navigation", () => ({ SelectFacilityEmptyState: () => null }));
+vi.mock("@/components/ui/notice", () => ({ Notice: () => null }));
+vi.mock("@/components/ui/illustrations", () => ({ ILLUSTRATION_SIZE: { empty: 48 }, CreditBatchArt: () => null }));
+vi.mock("@phosphor-icons/react/dist/ssr", () => ({ CertificateIcon: () => null, LeafIcon: () => null, PlusIcon: () => null }));
+vi.mock("@/hooks/use-record-locks", async () => (await import("../../../tests/helpers/record-lock-mocks")).openRecordLocksModule);
+vi.mock("@/components/record-locks", async () => (await import("../../../tests/helpers/record-lock-mocks")).stubRecordLockComponentsModule);
+
+vi.mock("./credit-batch-form", () => ({ CreditBatchForm: () => null }));
+vi.mock("./credit-batch-timeline", () => ({ CreditBatchTimeline: () => null }));
+vi.mock("./credit-batch-filters", () => ({ CreditBatchFilters: () => null }));
+vi.mock("./credit-batch-health-strip", () => ({ CreditBatchHealthStrip: () => null }));
+vi.mock("./credit-batch-durability-panel", () => ({ CreditBatchDurabilityPanel: () => null }));
+vi.mock("./credit-batch-view", () => ({ creditBatchSheetSections: () => [] }));
+vi.mock("./credit-batch-list-rows", () => ({
+  CreditBatchListRows: ({ children }: { children: ReactNode }) => <>{children}</>,
+  CreditBatchListRow: ({ onDelete }: { onDelete: (id: string) => void }) => {
+    harness.onDelete = onDelete;
+    return null;
+  },
+}));
+vi.mock("@/components/ui/entity-side-sheet", () => ({ EntitySideSheet: () => null }));
+vi.mock("@/components/ui/delete-confirm-dialog", () => ({ DeleteConfirmDialog: ({ onConfirm }: { onConfirm: () => Promise<void> }) => {
+  harness.onConfirm = onConfirm;
+  return null;
+} }));
+
+beforeEach(() => { vi.clearAllMocks(); });
+
+it("shows the server's deletion refusal in the toast", async () => {
+  const reason = "This credit batch is locked by a certification submission.";
+  harness.remove.mockRejectedValueOnce(new Error(reason));
+  let renderer: ReactTestRenderer | undefined;
+  try {
+    await act(async () => { renderer = create(<CreditBatchList canManage initialView="list" />); });
+    await act(async () => { harness.onDelete!(harness.batch.id); });
+    await act(async () => { await harness.onConfirm!(); });
+    expect(harness.remove).toHaveBeenCalledWith({ creditBatchId: harness.batch.id, expectedVersion: harness.batch.version });
+    expect(harness.error).toHaveBeenCalledWith(reason);
+    expect(harness.success).not.toHaveBeenCalled();
+  } finally {
+    await act(async () => renderer?.unmount());
+  }
+});
+
+it("shows a blocked delete with a link to the Sample and clears it for the next attempt", async () => {
+  const reason = "This credit batch has Samples.";
+  harness.remove.mockRejectedValueOnce(new ConflictError(reason, {
+    conflict: { entity: "sample", id: "sample-1", code: conflictCode("SAM-1") },
+  }));
+  let renderer: ReactTestRenderer | undefined;
+  try {
+    await act(async () => { renderer = create(<CreditBatchList canManage initialView="list" />); });
+    await act(async () => { harness.onDelete!(harness.batch.id); });
+    await act(async () => { await harness.onConfirm!(); });
+    const alert = renderer!.root.findByProps({ role: "alert" });
+    expect(alert.children).toContain(reason);
+    const link = alert.findByType("a");
+    expect(link.props.href).toBe("/samples?facility=facility-1&sample=sample-1");
+    expect(link.children.join("")).toBe("Open SAM-1");
+    expect(harness.error).not.toHaveBeenCalled();
+    expect(harness.success).not.toHaveBeenCalled();
+    await act(async () => { harness.onDelete!(harness.batch.id); });
+    expect(renderer!.root.findAllByProps({ role: "alert" })).toHaveLength(0);
+  } finally {
+    await act(async () => renderer?.unmount());
+  }
+});

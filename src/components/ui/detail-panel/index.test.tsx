@@ -1,4 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { useState } from "react";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it } from "vitest";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { DetailField, DetailSpine } from "./index";
@@ -117,8 +119,8 @@ describe("DetailField pending contract", () => {
       <DetailField label="Distance" value={null} certifyRequired pending />,
     );
 
-    expect(markup).not.toContain("--st-wait-border");
-    expect(markup).not.toContain("--st-ok-border");
+    expect(markup).not.toContain('data-cert-field="missing"');
+    expect(markup).not.toContain('data-cert-field="satisfied"');
   });
 
   it("names the omission once the field stops pending", () => {
@@ -150,7 +152,7 @@ describe("DetailField certification status", () => {
       <DetailField label="Distance" value="25 km" certifyRequired />,
     );
 
-    expect(markup).toContain("--st-ok-border");
+    expect(markup).toContain('data-cert-field="satisfied"');
   });
 
   it("renders absent saved values with the missing treatment", () => {
@@ -158,7 +160,7 @@ describe("DetailField certification status", () => {
       <DetailField label="Distance" value={null} certifyRequired />,
     );
 
-    expect(markup).toContain("--st-wait-border");
+    expect(markup).toContain('data-cert-field="missing"');
   });
 
   it.each(Object.values(MISSING_VALUE))(
@@ -168,8 +170,8 @@ describe("DetailField certification status", () => {
         <DetailField label="Distance" value={value} certifyRequired />,
       );
 
-      expect(markup).toContain("--st-wait-border");
-      expect(markup).not.toContain("--st-ok-border");
+      expect(markup).toContain('data-cert-field="missing"');
+      expect(markup).not.toContain('data-cert-field="satisfied"');
     },
   );
 
@@ -185,8 +187,8 @@ describe("DetailField certification status", () => {
         />,
       );
 
-      expect(markup).toContain("--st-wait-border");
-      expect(markup).not.toContain("--st-ok-border");
+      expect(markup).toContain('data-cert-field="missing"');
+      expect(markup).not.toContain('data-cert-field="satisfied"');
     },
   );
 
@@ -204,8 +206,8 @@ describe("DetailField certification status", () => {
       />,
     );
 
-    expect(markup).toContain("--st-wait-border");
-    expect(markup).not.toContain("--st-ok-border");
+    expect(markup).toContain('data-cert-field="missing"');
+    expect(markup).not.toContain('data-cert-field="satisfied"');
     expect(markup).toContain('data-empty="true"');
   });
 
@@ -219,8 +221,8 @@ describe("DetailField certification status", () => {
       />,
     );
 
-    expect(markup).toContain("--st-wait-border");
-    expect(markup).not.toContain("--st-ok-border");
+    expect(markup).toContain('data-cert-field="missing"');
+    expect(markup).not.toContain('data-cert-field="satisfied"');
   });
 
   it("accepts an explicit present signal for values it cannot read", () => {
@@ -233,8 +235,8 @@ describe("DetailField certification status", () => {
       />,
     );
 
-    expect(markup).toContain("--st-ok-border");
-    expect(markup).not.toContain("--st-wait-border");
+    expect(markup).toContain('data-cert-field="satisfied"');
+    expect(markup).not.toContain('data-cert-field="missing"');
   });
 
   it("accepts an explicit composite-requirement override", () => {
@@ -247,12 +249,42 @@ describe("DetailField certification status", () => {
       />,
     );
 
-    expect(markup).toContain("--st-wait-border");
-    expect(markup).not.toContain("--st-ok-border");
+    expect(markup).toContain('data-cert-field="missing"');
+    expect(markup).not.toContain('data-cert-field="satisfied"');
   });
 });
 
 describe("DetailSpine", () => {
+  it("keeps headingless fields and their divider without an empty title row", () => {
+    const markup = renderToStaticMarkup(
+      <DetailSpine sections={[
+        { id: "name", fields: [{ label: "Name", value: "Mix" }] },
+        { id: "description", fields: [{ label: "Description", value: "Soil blend" }] },
+      ]} />,
+    );
+    expect(markup).not.toContain("<h3");
+    expect(markup.match(/border-t /g)).toHaveLength(1);
+    expect(markup.indexOf("Name")).toBeLessThan(markup.indexOf("Description"));
+  });
+
+  it("preserves each headingless section's content state when sections reorder", async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    function StatefulContent({ name }: { name: string }) {
+      const [initialName] = useState(name);
+      return <span>{name}:{initialName}</span>;
+    }
+    const sections = ["name", "description"].map(id => ({
+      id, fields: [], content: <StatefulContent name={id} />,
+    }));
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<DetailSpine sections={sections} />); });
+    await act(async () => { renderer.update(<DetailSpine sections={[...sections].reverse()} />); });
+    const markup = JSON.stringify(renderer.toJSON());
+    expect(markup).toContain('["description",":","description"]');
+    expect(markup).toContain('["name",":","name"]');
+    await act(async () => { renderer.unmount(); });
+  });
+
   it("renders a contiguous passive step rail with shared spine chrome", () => {
     const markup = renderToStaticMarkup(
       <DetailSpine
@@ -294,18 +326,18 @@ describe("DetailSpine", () => {
 });
 
 describe("DetailField secondary line", () => {
-  it("reads a second figure under the value with its own CERT status", () => {
+  it("reads a second figure under the value with its own certification status", () => {
     const present = renderToStaticMarkup(
       <DetailField label="Biochar product applied (kg)" value="5,000 kg" secondary={{ label: "Dry biochar applied", value: "4,000 kg", certifyRequired: true }} />,
     );
     expect(present).toContain("Dry biochar applied");
     expect(present).toContain("4,000 kg");
-    expect(present).toContain("--st-ok-border");
+    expect(present).toContain('data-cert-field="satisfied"');
 
     const missing = renderToStaticMarkup(
       <DetailField label="Biochar product applied (kg)" value="5,000 kg" secondary={{ label: "Dry biochar applied", value: null, certifyRequired: true }} />,
     );
     expect(missing).toContain(MISSING_VALUE.notRecorded);
-    expect(missing).toContain("--st-wait-border");
+    expect(missing).toContain('data-cert-field="missing"');
   });
 });

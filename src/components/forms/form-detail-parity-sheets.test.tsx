@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "../../../tests/helpers/test-org";
 /**
  * Detail level parity for every read sheet: each read-section builder renders
  * through the shared side-sheet spine at Simple, then at Detailed, and must
@@ -31,11 +32,14 @@ vi.mock("@/hooks/use-output-stock", async (importOriginal) => ({
   useMatchingOutputBins: () => ({ data: [{ id: "bin", code: "PB-001", name: "Product bin", dryMassKg: 1500, estimatedWetMassKg: 1800 }], isLoading: false, error: null }),
   useOutputStockBalance: () => ({ data: { binName: "Mix bin", beforeDryKg: 1440, beforeEstimatedWetKg: 1800, moistureEstimate: { moisturePercent: 20 } }, isLoading: false, error: null }),
   useOutputSubBins: () => ({ data: { stockMode: "mix", subBins: [{ code: "B-001", dryMassKg: 800 }, { code: "B-002", dryMassKg: 640 }] }, isLoading: false, error: null }),
-  useOutputStockHistory: () => ({ data: [{ id: "entry", deliveryId: "delivery", kind: "delivery", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [{ layerId: "batch", code: "B-001", wetMassKg: null, dryMassKg: 80, runs: [{ productionRunId: "run", code: "PR-001", dryMassKg: 80 }] }] }], isLoading: false, error: null }),
+  useOutputStockHistory: () => ({ dataUpdatedAt: Date.parse("2026-09-22T12:00:00.000Z"), data: [{ id: "entry", deliveryId: "delivery", kind: "delivery", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [{ layerId: "batch", code: "B-001", wetMassKg: null, dryMassKg: 80, runs: [{ productionRunId: "run", code: "PR-001", dryMassKg: 80 }] }] }], isLoading: false, error: null }),
 }));
-vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: ({ triggerLabel }: { triggerLabel?: string }) => <button type="button">{triggerLabel ?? "Stock history"}</button> }));
-vi.mock("@/components/storage-locations/bin-movement-history-modal", () => ({ BinMovementHistoryModal: ({ triggerLabel }: { triggerLabel: string }) => <button type="button">{triggerLabel}</button> }));
-vi.mock("@/components/transport-legs", () => ({ TransportLegsSummary: stub("Transport legs"), TransportEvidencePanel: stub("Transport evidence") }));
+vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: ({ triggerLabel }: { triggerLabel?: string }) => <button type="button">{triggerLabel ?? "History"}</button> }));
+vi.mock("@/components/storage-locations/feedstock-bin-balance", () => ({ FeedstockBinBalance: () => <button type="button">History</button> }));
+// This render-only check inspects tooltip triggers; interaction has its own DOM test.
+vi.mock("@/components/storage-locations/sub-bin-card", async (importOriginal) => ({ ...await importOriginal<typeof import("@/components/storage-locations/sub-bin-card")>(), DetailsTooltip: ({ trigger }: { trigger: ReactNode }) => trigger }));
+vi.mock("@/components/transport-legs", () => ({ TransportLegsSummary: stub("Transport legs"), TransportRoutePreview: stub("Transport route"), TransportEvidencePanel: stub("Transport evidence") }));
+vi.mock("@/components/transport-legs/transport-distance-drift", () => ({ TransportDistanceDriftNotice: stub("Distance drift") }));
 vi.mock("@/components/ui/entity-detail-value", () => ({ EntityDetailValue: stub("Manure store") }));
 vi.mock("@/components/feedstock-types/feedstock-type-sampling", () => ({ FeedstockTypeSampling: stub("Feedstock sampling") }));
 vi.mock("@/components/production-runs/production-incident-table", () => ({ ProductionIncidentTable: stub("Incidents") }));
@@ -45,7 +49,10 @@ vi.mock("@/components/applications/application-evidence-panel", () => ({ Applica
 vi.mock("@/components/applications/application-storage-location-sync", () => ({ ApplicationStorageLocationSync: stub("Application site") }));
 vi.mock("@/components/applications/application-supporting-evidence-panel", () => ({ ApplicationSupportingEvidencePanel: stub("Supporting evidence") }));
 vi.mock("@/components/samples/sample-documents-panel", () => ({ SampleDocumentsPanel: stub("Sample documents") }));
+vi.mock("@/components/orders/order-location-read", () => ({ OrderLocationRead: stub("Delivery location") }));
+vi.mock("@/components/credit-batches/credit-batch-removal-template", () => ({ CreditBatchRemovalTemplate: stub("Removal template") }));
 vi.mock("@/components/certification/facility-certifier-summary", () => ({ FacilityCertifierSummary: stub("Registry connection") }));
+vi.mock("@/components/activity", () => ({ CreditBatchActivitySection: stub("Batch activity") }));
 
 import { renderBothLevels, sourceFiles } from "./form-detail-parity-harness";
 import { EntitySideSheetSections } from "@/components/ui/entity-side-sheet";
@@ -72,10 +79,10 @@ const noop = () => undefined;
 const as = <T,>(value: object) => value as unknown as T;
 type Arg<F extends (...args: never[]) => unknown, I extends number = 0> = Parameters<F>[I];
 
-const location = { name: "North field", country: "TZ", stateRegion: "Iringa", city: "Mafinga", address: "Plot 4", gpsLatitude: -8.3, gpsLongitude: 35.3, distanceFromFacilityKm: 12, isDefault: true, defaultSoilTemperatureC: 22 };
+const location = { name: "North field", ...TEST_SITE_POSITION, country: "TZ", stateRegion: "Iringa", city: "Mafinga", address: "Plot 4", facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", facilityName: "Test facility", distanceKm: 12, distanceSource: "manual" as const }], isDefault: true, defaultSoilTemperatureC: 22 };
 
 const storageBin = (type: string, stockMode: string) => as<Arg<typeof storageLocationSheetSections>>({
-  id: `${type}-bin`, facilityId: "facility", type, stockMode, name: `${type} bin`, capacityKg: 5000, storageMethod: "Covered heap", storageDescription: null,
+  id: `${type}-bin`, facilityId: "facility", type, stockMode, drawOrder: "newest_first", name: `${type} bin`, capacityKg: 5000, storageMethod: "Covered heap", storageDescription: null,
   feedstockTypeName: "Maize cobs", formulationName: "Mix",
   feedstockInventory: { currentWetMassKg: 900, pendingWetMassKg: 100, pendingBatchCount: 1, estimatedDryMassKg: 700, estimatedMoisturePercent: 22, feedstockTypes: ["Maize cobs"] },
   biocharInventory: { allocatedToProductsKg: 400, productionRunCount: 3, downstreamFormulations: ["Mix"] },
@@ -85,8 +92,8 @@ const storageBin = (type: string, stockMode: string) => as<Arg<typeof storageLoc
 /** Every read-section builder, rendered through the shared side-sheet spine. */
 const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSection[] }[] = [
   { file: "components/orders/order-read-sections.tsx", name: "order", sections: orderSheetSections(as({
-    id: "order", facilityId: "facility", formulationId: "formulation", formulationName: "Mix", customerName: "Customer", customerLocationName: "North field",
-    orderDate: new Date("2026-09-21"), quantityKg: 2000, packaging: "loose", value: 500, currency: "TZS", fulfillmentStatus: "partial", deliveryCount: 1, deliveredWetMassKg: 1200,
+    id: "order", facilityId: "facility", formulationId: "formulation", formulationName: "Mix", customerId: "customer", customerLocationId: "location", customerName: "Customer", customerLocationName: "North field",
+    orderDate: new Date("2026-09-21"), quantityKg: 2000, packaging: "loose", fulfillmentStatus: "partial", deliveryCount: 1, deliveredWetMassKg: 1200,
   })) },
   { file: "components/biochar-products/product-read-details.tsx", name: "biochar product", sections: productSheetSections(as({
     id: "product", facilityId: "facility", placedAt: "2026-09-21T12:00:00.000Z", massKg: 350, waterAddedKg: 50, moistureContentPercent: 5, sourceAllocatedDryMassKg: 200, densityKgM3: 300,
@@ -107,21 +114,21 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
     fieldSizeHa: 1.5, fieldIdentifier: "Plot 4", cropType: "Maize", applicationMethodType: null, gpsLatitude: -8.3, gpsLongitude: 35.3,
     evidenceMethod: "location", gisBoundary: null, durabilityOption: "200_year", soilTemperatureSource: null, soilTemperatureC: 21,
   }), { delivery: { productBinName: "Product bin", formulationName: "Mix", deliveryDate: new Date("2026-09-01"), deliveryDay: "2026-09-01" }, lock: as({ data: false, isPending: false, error: null, isFetching: false, refetch: noop }), durabilityOption: "200_year" }) },
-  { file: "components/customers/customer-read-sections.tsx", name: "customer", sections: customerSheetSections(as({ name: "Customer", contactEmail: null, contactPhone: "+255", cropType: "Maize", address: null }), [location]) },
+  { file: "components/customers/customer-read-sections.tsx", name: "customer", sections: customerSheetSections(as({ name: "Customer", contactEmail: null, contactPhone: "+255", cropType: "Maize", address: null }), as({ data: [location], isPending: false, isError: false, isFetching: false, refetch: noop })) },
   { file: "components/deliveries/delivery-read-sections.tsx", name: "delivery", sections: deliverySheetSections(as({
     id: "delivery", facilityId: "facility", deliveryDate: new Date("2026-09-01T10:00:00Z"), status: "delivered", orderCode: "OR-001", deliveredWetMassKg: 100, moistureContentPercent: 20,
-    storageLocationId: "bin", massDryKg: 80, effectiveDistanceKm: 12, tripType: "round_trip", distanceKmOverride: 14, distanceNote: "Detour", effectiveDistanceSource: "manual",
+    storageLocationId: "bin", massDryKg: 80, effectiveDistanceKm: 12, distanceKmOverride: 14, distanceNote: "Detour", effectiveDistanceSource: "manual",
   }), FACILITIES) },
   { file: "components/facilities/facility-read-sections.tsx", name: "facility", sections: facilitySheetSections(as({
-    id: "facility", name: "Mafinga", country: "TZ", timezone: "Africa/Dar_es_Salaam", location: "Mafinga", address: null, gpsLatitude: -8.3, gpsLongitude: 35.3,
+    id: "facility", name: "Mafinga", ...TEST_SITE_POSITION, country: "TZ", timezone: "Africa/Dar_es_Salaam", location: "Mafinga", address: null,
     contactEmail: null, contactPhone: null, durabilityOption: "200_year", reactorCount: 2,
     storageSummary: { feedstockBinCount: 2, biocharBinCount: 1, productBinCount: 3 }, inventorySummary: { feedstockWetKg: 1200, biocharKg: 800, productKg: 400 },
   })) },
   { file: "components/feedstock-types/feedstock-type-read-sections.tsx", name: "feedstock type", sections: feedstockTypeSheetSections(as({
-    id: "type", name: "Maize cobs", code: "FT-001", category: "agricultural_residue", usage: "pyrolysis", archivedAt: null, isometricFeedstockTypeId: null, registryUrl: null, description: null,
-  }), { facilityId: "facility", canManage: true }) },
+    id: "type", name: "Maize cobs", code: "FT-001", category: "agricultural", usage: "pyrolysis", archivedAt: null, isometricFeedstockTypeId: null, registryUrl: null, description: null,
+  }), { facilityId: "facility", canManage: true }, true) },
   { file: "components/feedstocks/feedstock-read-sections.tsx", name: "feedstock delivery", sections: feedstockSheetSections(as({
-    id: "feedstock", deliveryDate: new Date("2026-08-01"), supplierName: "Supplier", vehiclePlateNumber: "T 123", transportDistanceKm: 20, transportTripType: "one_way", transportDistanceSource: "supplier_default",
+    id: "feedstock", deliveryDate: new Date("2026-08-01"), supplierName: "Supplier", vehiclePlateNumber: "T 123", transportDistanceKm: 20, transportDistanceSource: "supplier_default",
     feedstockTypeName: "Maize cobs", massWetKg: 1000, moistureContentPercent: 20, massDryKg: 800, storageLocationCode: "FB-01", storageLocationName: "Feedstock bin", overrideJustification: null, notes: null,
   })) },
   { file: "components/formulations/formulation-read-sections.tsx", name: "formulation", sections: formulationSheetSections(as({
@@ -134,7 +141,7 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
     biocharStorageLocationName: "Biochar bin", biocharOutputKg: 300, biocharMoisturePercent: 10, biocharDryMassKg: 270,
     dieselOperationLiters: 5, dieselGensetLiters: null, preprocessingFuelLiters: null, electricityKwh: 40,
   }), FACILITIES) },
-  { file: "components/reactors/reactor-read-sections.tsx", name: "reactor", sections: reactorSheetSections(as({ identifier: "R-1", reactorType: "kon_tiki", nominalThroughputTph: 0.5 })) },
+  { file: "components/reactors/reactor-read-sections.tsx", name: "reactor", sections: reactorSheetSections(as({ identifier: "R-1", reactorType: "batch", nominalThroughputTph: 0.5 })) },
   { file: "components/samples/sample-read-sections.tsx", name: "sample (1000-year)", sections: sampleSheetSections(as({
     id: "sample", creditBatchCode: "CB-26-001", samplingTime: new Date("2026-09-01T09:00:00Z"), analysisDate: new Date("2026-09-10"), labName: "Lab", labAccreditation: null, volumeMl: 100, weightGrams: 50,
     totalCarbonPercent: 80, organicCarbonPercent: 75, inorganicCarbonPercent: 5, totalHydrogenPercent: 2, totalNitrogenPercent: 1, totalOxygenPercent: 10, totalSulfurPercent: 0.1,
@@ -145,7 +152,7 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
   { file: "components/storage-locations/storage-location-read-sections.tsx", name: "storage bin (feedstock)", sections: storageLocationSheetSections(storageBin("feedstock_bin", "fifo"), noop) },
   { file: "components/storage-locations/storage-location-read-sections.tsx", name: "storage bin (mix product)", sections: storageLocationSheetSections(storageBin("product_bin", "mix"), noop) },
   { file: "components/suppliers/supplier-read-sections.tsx", name: "supplier", sections: supplierSheetSections(
-    as({ name: "Supplier", contactName: null, contactEmail: null, contactPhone: null, location: "Mafinga", sourceRegion: "Iringa", address: null, distanceToFacilityKm: 20 }),
+    as({ name: "Supplier", contactName: null, contactEmail: null, contactPhone: null, location: "Mafinga", sourceRegion: "Iringa", address: null }),
     as({ data: [location], isPending: false, isError: false, isFetching: false, refetch: noop }),
   ) },
 ];
@@ -153,6 +160,33 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
 beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
 
 describe("read sheet detail level parity", () => {
+  it.each([
+    { name: "formulation", keys: ["name", "Blend composition by volume", "description"], first: "Formulation name", last: "Description" },
+    { name: "reactor", keys: ["identifier", "Reactor configuration"], first: "Identifier", last: "Nominal throughput (tph)" },
+    { name: "credit batch", keys: ["Certification progress", "Removal template", "Batch definition", "Production runs", "notes", "Activity"], first: "Feedstock type", last: "Notes" },
+  ])("keeps $name read groups and field order without generic headings", async ({ name, keys, first, last }) => {
+    const { sections } = READ_SECTION_CASES.find(entry => entry.name === name)!;
+    expect(sections.map(section => section.id ?? section.title)).toEqual(keys);
+    const labels = sections.flatMap(section => section.fields.map(field => field.label));
+    expect(labels[0]).toBe(first);
+    expect(labels.at(-1)).toBe(last);
+    const { simple, detailed } = await renderBothLevels(<EntitySideSheetSections sections={sections} />);
+    for (const level of [simple, detailed]) {
+      expect(level.items).toContain("section:(untitled)");
+      expect(level.text).not.toContain("Required information");
+      expect(level.text).not.toContain("Additional information");
+    }
+  });
+
+  it("shows the saved default only on split output bin read views", () => {
+    for (const [type, mode] of [["biochar_bin", "split"], ["product_bin", "split"], ["product_bin", "mix"], ["feedstock_bin", "split"]]) {
+      const sections = storageLocationSheetSections(storageBin(type, mode), noop);
+      const order = sections.flatMap(section => section.fields ?? []).find(field => field.label === "Default draw order");
+      if (type !== "feedstock_bin" && mode === "split") expect(order?.value).toBe("Newest first");
+      else expect(order).toBeUndefined();
+    }
+  });
+
   it("covers every read-section builder", () => {
     const builders = sourceFiles()
       .filter(file => /\):\s*DetailPanelSection\[\]/.test(file.text) || file.path.endsWith("-read-sections.tsx"))

@@ -86,10 +86,11 @@ export const outputStockRunAllocations = pgTable('output_stock_run_allocations',
 ]);
 
 /**
- * A measured moisture that resets the estimate of what it describes: a split
- * bin's sub-bin (one layer column set). Both layer columns null is reserved for
- * a mix bin's whole pile. Estimates use the latest reading that no correction
- * has reversed; dry biochar and solids never change with a reading.
+ * A count's measured moisture on what it weighed: a split bin's sub-bin (one
+ * layer column set). Both layer columns null is reserved for a mix bin's whole
+ * pile. Estimates start from the last posted count reading that no correction
+ * has reversed; readings older removals saved are history only. Dry biochar
+ * and solids never change with a reading.
  */
 export const outputStockMoistureReadings = pgTable('output_stock_moisture_readings', {
   id: uuid('id').primaryKey().defaultRandom(),

@@ -17,6 +17,7 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 import { FormField } from "@/components/forms/form-field";
 import { FormInput } from "@/components/forms/form-input";
+import { RequiredMarker } from "@/components/forms/required-marker";
 import { InfoHint } from "@/components/ui/tooltip";
 import { GEOCODE_DEBOUNCE_MS } from "@/config/geo";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -147,14 +148,7 @@ export function PositionPicker({
       <div className="flex items-baseline justify-between border-b border-[var(--clr-dark-purple-30)] px-12 py-8">
         <span className="body-small font-medium text-[var(--color-text-secondary)]">
           {label}
-          {required && (
-            <>
-              <span className="text-[var(--color-signal-red)] ml-2" aria-hidden="true">
-                *
-              </span>
-              <span className="sr-only">Required</span>
-            </>
-          )}
+          {required && <RequiredMarker />}
         </span>
         <span className="body-caption text-[var(--color-text-tertiary)]">
           Search · click map · type
@@ -211,7 +205,7 @@ export function PositionPicker({
             id={`${idPrefix}-latitude`}
             label="GPS latitude"
             error={latitudeError}
-            helperText="-90 to 90"
+            cue="-90 to 90"
             required={required}
           >
             <FormInput
@@ -230,7 +224,7 @@ export function PositionPicker({
             id={`${idPrefix}-longitude`}
             label="GPS longitude"
             error={longitudeError}
-            helperText="-180 to 180"
+            cue="-180 to 180"
             required={required}
           >
             <FormInput

@@ -209,7 +209,7 @@ p,
   margin: 0;
 }
 
-/* Mono micro-label — table headers, KPI titles, panel heads. The 12px
+/* Mono micro-label — page-level eyebrows only. The 12px
    sibling of .title-chapter-title (every label is GT Flexa Mono Medium,
    uppercase, letter-spaced, per the Maji DS). */
 .label-micro {

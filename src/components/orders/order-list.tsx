@@ -1,8 +1,11 @@
+"use client";
+
+import { orderDeepLinkHref } from "@/lib/order-links";
+import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * OrderList component
  * Main order listing with CRUD operations, filters, and DataTable
  */
-"use client";
 
 import { EntitySelect, ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
@@ -22,9 +25,9 @@ import {
   useListPagination,
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
-import { useCreateOrder, useDeleteOrder, useOrders, useUpdateOrder } from "@/hooks/use-orders";
+import { useCreateOrder, useDeleteOrder, useOrderWithRelations, useOrders, useUpdateOrder } from "@/hooks/use-orders";
 import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
-import { formatDate } from "@/lib/format-utils";
+import { formatCalendarDate } from "@/lib/format-utils";
 import {
   ORDER_FULFILLMENT_DISPLAY,
   orderFulfillmentStatuses,
@@ -33,9 +36,18 @@ import {
 import type { OrderFilterData, OrderFormData } from "@/schemas/orders";
 import { PackageIcon, PlusIcon, TruckIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import type { ColumnDef } from "@tanstack/react-table";
-import { useState } from "react";
+import { parseAsString, useQueryState } from "nuqs";
+import { useEffect, useRef, useState } from "react";
+import { ORDER_DEEP_LINK_PARAM } from "@/lib/order-links";
 import { OrderForm } from "./order-form";
+import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { orderSheetSections } from "./order-read-sections";
+import { ILLUSTRATION_SIZE, OrderArt } from "@/components/ui/illustrations";
+
+/** The customer filter also lists archived customers, so their orders stay findable. */
+const ORDER_CUSTOMER_FILTER_OPTIONS = { includeArchived: "true" };
 
 // ============================================
 // Column Definitions
@@ -43,12 +55,14 @@ import { orderSheetSections } from "./order-read-sections";
 
 function createColumns(
   onEdit: (order: OrderWithRelations) => void,
-  onDelete: (orderId: string) => void
+  onDelete: (orderId: string) => void,
+  locks: RecordLockViews,
+  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<OrderWithRelations>[] {
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true },
       header: "Code",
       cell: ({ row }) => <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>,
     },
@@ -56,7 +70,7 @@ function createColumns(
       accessorKey: "orderDate",
       meta: { nowrap: true },
       header: "Date",
-      cell: ({ row }) => <span className="text-[var(--color-text-secondary)]">{formatDate(row.original.orderDate)}</span>,
+      cell: ({ row }) => <span className="text-[var(--color-text-secondary)]">{formatCalendarDate(row.original.orderDate)}</span>,
     },
     {
       id: "customer",
@@ -107,21 +121,25 @@ function createColumns(
         return <StatusBadge status={badgeStatus} label={label} />;
       },
     },
+    recordLockColumn<OrderWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end">
-          <RowActionsMenu
-            label={`Actions for ${row.original.code}`}
-            actions={[
-              { label: "Edit", onSelect: () => onEdit(row.original) },
-              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
-            ]}
-          />
-        </div>
-      ),
+      cell: ({ row }) => {
+        const lock = locks[row.original.id];
+        // Never offer what the server refuses: Sent locks every field, and an
+        // order with deliveries cannot be deleted.
+        const actions = [
+          ...(isRecordEditable(lock) ? [{ label: "Edit", onSelect: () => onEdit(row.original) }] : []),
+          ...(isRecordDeletable(lock) ? [{ label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) }] : []),
+        ];
+        return (
+          <div className="flex items-center justify-end">
+            {actions.length > 0 && <RowActionsMenu label={`Actions for ${row.original.code}`} actions={actions} />}
+          </div>
+        );
+      },
       enableSorting: false,
     },
   ];
@@ -143,6 +161,14 @@ export function OrderList() {
     useListPagination(facilityId);
   const debouncedSearch = useDebounce(searchQuery, LIST_SEARCH_DEBOUNCE_MS);
 
+  // `?order=<id>` deep-links the view sheet (customer and credit-batch
+  // convention); local state handles sheets opened by clicks.
+  const [focusedOrderId, setFocusedOrderId] = useQueryState(
+    ORDER_DEEP_LINK_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const handledInvalidOrderIdRef = useRef<string | null>(null);
+
   // Unified side sheet state
   const [sideSheet, setSideSheet] = useState<{
     entity: OrderWithRelations | null;
@@ -151,6 +177,7 @@ export function OrderList() {
 
   // Delete state
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
+  const [deletingVersion, setDeletingVersion] = useState<number | null>(null);
 
   // Error state
   const [formError, setFormError] = useState<string | null>(null);
@@ -172,12 +199,25 @@ export function OrderList() {
     { enabled: !!facilityId },
   );
 
+  // The list row shape (customer, fulfillment) for the deep-linked order, read
+  // by id so an order on another page, behind a filter or archived still opens.
+  const focusedOrder = useOrderWithRelations(focusedOrderId ?? "", !!focusedOrderId);
+  const deepLinkedSideSheet =
+    focusedOrderId &&
+    focusedOrder.data?.id === focusedOrderId &&
+    (!facilityId || focusedOrder.data.facilityId === facilityId)
+      ? ({ entity: focusedOrder.data, mode: "view" } as const)
+      : null;
+  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
   const deleteOrder = useDeleteOrder();
   const toast = useToast();
 
   const orders = ordersData?.items ?? [];
+  const orderLocks = useRecordLocks("order", orders.map((order) => order.id));
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("order", displaySideSheet?.entity?.id);
   const totalOrders = ordersData?.total ?? 0;
   const totalPages = ordersData?.totalPages ?? 0;
   useReconcileListPage({
@@ -191,12 +231,14 @@ export function OrderList() {
 
   // Side sheet helpers
   const openCreate = () => {
+    void setFocusedOrderId(null);
     setFormError(null);
     setSideSheet({ entity: null, mode: "create" });
   };
 
   const openView = (order: OrderWithRelations) => {
     setFormError(null);
+    void setFocusedOrderId(order.id);
     setSideSheet({ entity: order, mode: "view" });
   };
 
@@ -206,9 +248,43 @@ export function OrderList() {
   };
 
   const closeSideSheet = () => {
+    void setFocusedOrderId(null);
     setSideSheet(null);
     setFormError(null);
   };
+
+  // Clear a deep-linked `?order=` that cannot be opened (wrong facility,
+  // deleted, or cross-org), with the same guard as the credit-batch list.
+  useEffect(() => {
+    if (!focusedOrderId) {
+      handledInvalidOrderIdRef.current = null;
+      return;
+    }
+    if (focusedOrder.isLoading || focusedOrder.isFetching || focusedOrder.isPending) return;
+    if (handledInvalidOrderIdRef.current === focusedOrderId) return;
+    if (focusedOrder.data && facilityId && focusedOrder.data.facilityId !== facilityId) {
+      handledInvalidOrderIdRef.current = focusedOrderId;
+      toast.error("Linked order is not in the selected facility");
+      void setFocusedOrderId(null);
+      return;
+    }
+    if (focusedOrder.isError || (focusedOrder.isSuccess && !focusedOrder.data)) {
+      handledInvalidOrderIdRef.current = focusedOrderId;
+      toast.error("Linked order could not be opened");
+      void setFocusedOrderId(null);
+    }
+  }, [
+    facilityId,
+    focusedOrder.data,
+    focusedOrder.isError,
+    focusedOrder.isFetching,
+    focusedOrder.isLoading,
+    focusedOrder.isPending,
+    focusedOrder.isSuccess,
+    focusedOrderId,
+    setFocusedOrderId,
+    toast,
+  ]);
 
   // Handlers
   const handleCreate = async (data: OrderFormData) => {
@@ -223,10 +299,10 @@ export function OrderList() {
   };
 
   const handleUpdate = async (data: OrderFormData) => {
-    if (!sideSheet?.entity) return;
+    if (!displaySideSheet?.entity) return;
     setFormError(null);
     try {
-      await updateOrder.mutateAsync({ orderId: sideSheet.entity.id, ...data });
+      await updateOrder.mutateAsync({ orderId: displaySideSheet.entity.id, expectedVersion: displaySideSheet.entity.version, ...data });
       closeSideSheet();
       toast.success("Order updated.");
     } catch (error) {
@@ -234,17 +310,22 @@ export function OrderList() {
     }
   };
 
-  const handleDelete = (orderId: string) => setDeletingOrderId(orderId);
+  const handleDelete = (orderId: string) => {
+    const row = (orders).find((item) => item.id === orderId);
+    if (!row) return;
+    setDeletingVersion(row.version);
+    setDeletingOrderId(orderId);
+  };
 
   const handleDeleteConfirm = async () => {
-    if (!deletingOrderId) return;
+    if (!deletingOrderId || deletingVersion === null) return;
     setDeleteError(null);
     try {
-      await deleteOrder.mutateAsync(deletingOrderId);
+      await deleteOrder.mutateAsync({ orderId: deletingOrderId, expectedVersion: deletingVersion });
       setDeletingOrderId(null);
       toast.success("Order deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Order was not deleted. Try again.");
+      setDeleteError(toDeleteErrorMessage(error, "Order", "Order was not deleted. Try again."));
     }
   };
 
@@ -256,7 +337,7 @@ export function OrderList() {
   };
   const hasActiveFilters = !!searchQuery || !!statusFilter || !!customerFilter;
 
-  const columns = createColumns(openEdit, handleDelete);
+  const columns = createColumns(openEdit, handleDelete, orderLocks.locks, orderLocks.statusOf);
 
   if (!facilityId) {
     return (
@@ -276,9 +357,9 @@ export function OrderList() {
   }
 
   // Derived values for the side sheet
-  const sideSheetOpen = !!sideSheet;
-  const sideSheetMode = sideSheet?.mode ?? "create";
-  const sideSheetEntity = sideSheet?.entity ?? null;
+  const sideSheetOpen = !!displaySideSheet;
+  const sideSheetMode = displaySideSheet?.mode ?? "create";
+  const sideSheetEntity = displaySideSheet?.entity ?? null;
 
   const sideSheetTitle =
     sideSheetMode === "create" ? "Create order" : sideSheetEntity?.code ?? "";
@@ -324,10 +405,11 @@ export function OrderList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => orderDeepLinkHref(row.id, row.facilityId)}
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<PackageIcon size={48} />}
+            icon={hasActiveFilters ? <PackageIcon size={48} /> : <OrderArt size={ILLUSTRATION_SIZE.empty} />}
             title={hasActiveFilters ? "No orders found" : "No orders yet"}
             description={hasActiveFilters ? "Try adjusting your search or filters." : undefined}
             action={!hasActiveFilters ? <Button variant="primary" onClick={openCreate}><PlusIcon size={20} weight="bold" />Create your first order</Button> : undefined}
@@ -362,6 +444,8 @@ export function OrderList() {
               onChange={(value) => { setCustomerFilter(value ?? ""); setCurrentPage(1); }}
               placeholder="Filter by customer"
               noneOption={{ label: "All customers" }}
+              // Orders of an archived customer stay findable, so the filter lists it too.
+              filterBy={ORDER_CUSTOMER_FILTER_OPTIONS}
               alwaysShowSearch
               className="w-full sm:w-[200px]"
             />
@@ -384,16 +468,19 @@ export function OrderList() {
           // Mode changes are navigation; a submit error from the previous
           // visit must not resurface on the next edit entry.
           setFormError(null);
-          setSideSheet((prev) => (prev ? { ...prev, mode } : null));
+          setSideSheet(displaySideSheet ? { entity: displaySideSheet.entity, mode } : null);
         }}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
+        canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit order"
         sections={sideSheetEntity ? orderSheetSections(sideSheetEntity) : undefined}
       >
         <OrderForm
           key={sideSheetEntity?.id ?? "create"}
-          order={sideSheet?.entity as Order | undefined}
+          order={displaySideSheet?.entity as Order | undefined}
+          lock={sheetLock}
           onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
           onCancel={closeSideSheet}
           isSubmitting={createOrder.isPending || updateOrder.isPending}

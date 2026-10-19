@@ -3,8 +3,8 @@
  * CRUD operations for production runs with auth guards, pagination, and filtering.
  * Includes M:M relationship handling for feedstocks.
  *
- * Split by concern: queries (reads), mutations (create/update/delete), and
- * readings (time-series). This barrel preserves the original public API so
+ * Split by concern: queries (reads) and mutations (create/update/delete).
+ * This barrel preserves the original public API so
  * `@/data-access/production-runs` keeps resolving here.
  */
 
@@ -13,20 +13,20 @@ export type {
   ProductionRunWithRelations,
   PaginatedProductionRuns,
   ProductionRunStats,
-  FacilityEnergyTotals,
-  ProductionRunReadingRecord,
-  ProductionRunWithSamples,
+  ProductionRunForCertification,
 } from "./types";
 
 export {
   getProductionRuns,
   getProductionRunById,
   getProductionRunStats,
-  getFacilityEnergyTotals,
-  getProductionRunsWithSamples,
+  getProductionRunsForCertification,
 } from "./queries";
 
 export {
+  createProductionRunInTransaction,
+  updateProductionRunInTransaction,
+  deleteProductionRunInTransaction,
   createProductionRun,
   updateProductionRun,
   deleteProductionRun,
@@ -41,5 +41,3 @@ export {
 export { ProductionRunOverlapError } from "./overlap";
 
 export { productionRunDateExpr } from "./date-expr";
-
-export { getProductionRunReadings } from "./readings";

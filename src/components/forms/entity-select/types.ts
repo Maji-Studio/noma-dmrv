@@ -9,6 +9,10 @@ export interface EntityOption {
   name: string;
   /** Optional subtitle for additional context (e.g., location, type) */
   subtitle?: string;
+  /** The stored record is archived: shown for context, read-only until restored. */
+  archived?: boolean;
+  /** Visible for context, but cannot be selected. */
+  disabled?: boolean;
   /** Structured mass data for forms that render a selected entity's mass. */
   mass?: {
     moisturePercent: number | null;
@@ -31,6 +35,7 @@ export type EntityType =
   | "reactor"
   | "supplier"
   | "customer"
+  | "customerLocation"
   | "driver"
   | "operator"
   | "storageLocation"
@@ -44,20 +49,29 @@ export type EntityType =
   | "order"
   | "creditBatch";
 
-export interface EntitySelectProps {
+interface EntitySelectBaseProps {
   /** Id of the trigger; a wrapping FormField passes its own so the label names the control. */
   id?: string;
-  /** The type of entity to select */
-  entityType: EntityType;
+  /** Noun used for local-option search and placeholders. */
+  optionLabel?: string;
+  /** Loading state for caller-owned options. */
+  isLoading?: boolean;
   /** Current selected value (entity ID) */
   value?: string;
+  /** Fallback label when a saved value is absent from caller-owned options. */
+  selectedLabel?: string;
   /** Callback when selection changes */
   onChange: (value: string | undefined) => void;
+  onBlur?: () => void;
   /** Placeholder text */
   placeholder?: string;
-  /** Whether the field is disabled */
+  /** Disables all picker interaction, including editing. */
   disabled?: boolean;
-  /** Whether the field has an error */
+  /** Locks selection while allowing an Edit-only menu for the selected entity. */
+  selectionLocked?: boolean;
+  /** Loading error for caller-owned options; does not mark the field invalid. */
+  loadError?: Error | null;
+  /** Field validation error styling. */
   error?: boolean;
   /** Optional className for styling */
   className?: string;
@@ -73,6 +87,8 @@ export interface EntitySelectProps {
   onCreateNew?: () => void;
   /** Filter options (e.g., facilityId for filtering reactors by facility) */
   filterBy?: Record<string, string>;
+  /** Upstream source value(s); changes re-enable automatic selection after a user clear. */
+  dependsOn?: string | null | (string | null | undefined)[];
   /**
    * Option ids to hide from the list — e.g. blend materials already picked on
    * other formulation lines, so each material can only be chosen once. The
@@ -85,6 +101,12 @@ export interface EntitySelectProps {
   alwaysShowSearch?: boolean;
   /** Hide the search input entirely */
   hideSearch?: boolean;
+  /**
+   * Whether the selected option's remaining-mass caption shows at all. A form
+   * that states its own availability cue ("N kg available in this bin") turns
+   * it off, so the field carries one stock figure, not two near-identical ones.
+   */
+  showRemainingMass?: boolean;
   /** Whether the selected option's remaining-mass caption includes dry mass. */
   showRemainingDryMass?: boolean;
   /** Custom formatter for the selected value display */
@@ -109,7 +131,22 @@ export interface EntitySelectProps {
     label: string;
     subtitle?: string;
   };
+  /** Open the shared edit modal for the selected entity. */
+  allowEdit?: boolean;
+  /** Opens the selected entity without changing the value. */
+  onEditSelected?: () => void;
+  /** Overrides the default Edit <selectedOption.name> label. */
+  editLabel?: string;
+
 }
+
+/** A picker has either a server entity type or a caller-owned list. */
+export type EntitySelectProps = EntitySelectBaseProps & (
+  /** Server-backed search. */
+  | { entityType: EntityType; options?: undefined }
+  /** Caller-owned options use local search and disable all entity queries. */
+  | { entityType?: EntityType; options: readonly EntityOption[] }
+);
 
 export interface UseEntityOptionsParams {
   entityType: EntityType;

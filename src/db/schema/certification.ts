@@ -20,7 +20,7 @@ import {
   registrySourceVisibility,
   syncStatus,
 } from './common';
-import { facilities, reactors } from './facilities';
+import { facilities } from './facilities';
 import { documents } from './documentation';
 import { organizations, users } from './auth';
 
@@ -88,12 +88,6 @@ export const certifierProjects = pgTable(
     // Default Certify removal template used when submitting credit batches for this facility.
     defaultRemovalTemplateId: text('default_removal_template_id'),
     // --- Phase 3.7 emission-estimate config (per facility) ---
-    // Diesel-genset electrical yield: kWh produced per litre of genset
-    // diesel. VESTIGIAL since issue #319: diesel submits as litres via
-    // `fuel_usage_by_volume` (EF bound on the Isometric template), so this
-    // yield no longer feeds any submission datapoint. Kept only because
-    // dropping the column is a migration (follow-up ticket).
-    gensetEnergyYieldKwhPerLitre: real('genset_energy_yield_kwh_per_litre'),
     // ADR 0015 removed the three `stage_split_*_pct` columns: energy now
     // submits as one combined measurement point, so there is no per-stage
     // breakdown to apportion.
@@ -115,13 +109,10 @@ export const certifierProjects = pgTable(
     defaultSoilTemperatureSource: text('default_soil_temperature_source'),
     // HMAC secret for verifying incoming Isometric webhook signatures
     webhookSecret: text('webhook_secret'),
-    // Phase 5 Slice A — operator-pasted Isometric facility ID
-    // (e.g. `fcl_…`). Isometric exposes no `POST /facilities`, so the
-    // operator creates the facility in the Certify UI and pastes the ID
-    // here. Required before telemetry submission can run; null disables
-    // the "Submit Telemetry" button. See ADR 0006 + integration-plan
-    // Phase 5 row.
-    externalFacilityId: text('external_facility_id'),
+    // Operator-pasted Isometric facility ID (`fcl_…`) used by registry
+    // Production Batch and measurement-sample registration. Isometric
+    // exposes no `POST /facilities`; the operator creates it in Certify.
+    externalFacilityId: text('external_facility_id').notNull(),
     metadata: jsonb('metadata'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -146,9 +137,8 @@ export const certifierProjects = pgTable(
     ),
     // A project may be shared across facilities (above), but the Isometric
     // facility id (fcl_…) is the real 1:1 anchor: two noma facilities pointing
-    // at the same Isometric facility would cross-contaminate telemetry. NULL
-    // externalFacilityId is allowed for many facilities (Postgres treats NULL
-    // tuples as distinct) — only non-null ids must be unique per provider.
+    // at the same Isometric facility would cross-contaminate registry production
+    // data. Every mapping carries a non-null fcl_ ID, unique per provider.
     unique('certifier_projects_provider_external_facility_unique').on(
       table.provider,
       table.externalFacilityId
@@ -156,56 +146,6 @@ export const certifierProjects = pgTable(
     check(
       'certifier_projects_default_soil_temperature_c_range',
       sql`${table.defaultSoilTemperatureC} is null or (${table.defaultSoilTemperatureC} >= -50 and ${table.defaultSoilTemperatureC} <= 60)`
-    ),
-  ]
-);
-
-// Phase 5 Slice A — maps a noma reactor + measurement property to the
-// Isometric Sensor that receives its telemetry. One row per
-// `(provider, reactor, measurement_property)` — a single reactor publishes
-// one sensor per quantity (temperature, pressure, …) for each certifier.
-// `externalSensorId` is
-// the `sns_…` returned by `POST /sensors`; `sensorReference` is the
-// stable, noma-controlled reference used by `GET /sensors?reference=…`
-// reconciliation when the persistence write lost a race against a sandbox
-// reset. `measurementProperty` is a deterministic encoding of the
-// Isometric `MeasurementProperty` object: `<quantity_kind>` when
-// `qualifier` is null, otherwise `<quantity_kind>|<qualifier>`. Encoding
-// it as a single text column lets the unique constraint cover the
-// "qualifier null" case (Postgres unique permits multiple NULLs in a
-// nullable column, so a (kind, qualifier) shape would silently allow
-// duplicates for the common temperature/pressure pair).
-export const certifierSensors = pgTable(
-  'certifier_sensors',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    organizationId: text('organization_id')
-      .notNull()
-      .references(() => organizations.id),
-    provider: certifierProvider('provider').notNull().default('isometric'),
-    // Long-tail parent (plan §1.2): org integrity is app-enforced via
-    // assertSameOrg(ctx, reactors, …) in the certifier-sensors data access,
-    // not a composite FK (those are reserved for the seven hot-path parents).
-    reactorId: uuid('reactor_id')
-      .notNull()
-      .references(() => reactors.id),
-    measurementProperty: text('measurement_property').notNull(),
-    externalSensorId: text('external_sensor_id').notNull(),
-    sensorReference: text('sensor_reference').notNull(),
-    units: text('units').notNull(),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  },
-  (table) => [
-    index('certifier_sensors_organization_id_idx').on(table.organizationId),
-    unique('certifier_sensors_provider_reactor_property_unique').on(
-      table.provider,
-      table.reactorId,
-      table.measurementProperty
-    ),
-    unique('certifier_sensors_provider_reference_unique').on(
-      table.provider,
-      table.sensorReference
     ),
   ]
 );
@@ -380,6 +320,7 @@ export const certifierRemovals = pgTable(
     organizationId: text('organization_id')
       .notNull()
       .references(() => organizations.id),
+    code: text('code').notNull(),
     facilityId: uuid('facility_id')
       .notNull(),
     provider: certifierProvider('provider').notNull().default('isometric'),
@@ -399,6 +340,10 @@ export const certifierRemovals = pgTable(
   },
   (table) => [
     index('certifier_removals_organization_id_idx').on(table.organizationId),
+    unique('certifier_removals_organization_id_code_unique').on(
+      table.organizationId,
+      table.code,
+    ),
     unique('certifier_removals_id_organization_id_unique').on(
       table.id,
       table.organizationId,

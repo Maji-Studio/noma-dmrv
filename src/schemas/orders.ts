@@ -5,9 +5,11 @@
 
 import { orderFulfillmentStatuses } from "@/lib/orders/fulfillment";
 import {
-  emptyToNull,
-  MASS_INPUT_MAX_KG,
-  MASS_MAX_KG_MESSAGE,
+  calendarDateSchema,
+  expectedVersionSchema,
+  MASS_KG_INPUT_STEP,
+  MASS_MIN_KG_MESSAGE,
+  requiredPositiveMassKgSchema,
 } from "@/schemas/helpers";
 import { z } from "zod";
 
@@ -22,6 +24,19 @@ export const packagingTypes = ["loose", "bagged"] as const;
 
 export type PackagingType = (typeof packagingTypes)[number];
 
+export const orderCustomerLocationIdSchema = z.uuid({
+  error: (issue) => issue.input == null || issue.input === ""
+    ? "Select a customer location."
+    : "Choose a valid customer location.",
+}).toLowerCase();
+
+export const orderQuantityKgSchema = requiredPositiveMassKgSchema(
+  "Quantity is required",
+  "Quantity must be a number",
+  "Quantity must be greater than 0",
+  { value: MASS_KG_INPUT_STEP, message: MASS_MIN_KG_MESSAGE },
+);
+
 // ============================================
 // Order Form Schema (Client-side validation)
 // ============================================
@@ -34,24 +49,11 @@ export const orderFormSchema = z.object({
   // Required fields
   facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
   customerId: z.string().min(1, "Select a customer.").uuid("Choose a valid customer."),
-  customerLocationId: emptyToNull.or(z.string().uuid("Choose a valid customer location.")).optional().nullable(),
+  customerLocationId: orderCustomerLocationIdSchema,
   formulationId: z.string().min(1, "Select a formulation.").pipe(z.uuid("Choose a valid formulation.")),
-  orderDate: z.coerce.date({ error: "Order date is required" }),
-  quantityKg: z
-    .number({ error: "Quantity is required" })
-    .min(0.01, "Quantity must be greater than 0")
-    .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE)
-    .finite("Quantity must be a valid number"),
+  orderDate: calendarDateSchema(),
+  quantityKg: orderQuantityKgSchema,
   packaging: z.enum(packagingTypes, { error: "Packaging type is required" }),
-
-  // Optional fields
-  value: z
-    .number()
-    .min(0, "Value must be non-negative")
-    .finite()
-    .optional()
-    .nullable(),
-  currency: z.string().max(10).default("TZS"),
 });
 
 // ============================================
@@ -69,6 +71,7 @@ export const createOrderSchema = orderFormSchema;
  * All fields optional except orderId
  */
 export const updateOrderSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   orderId: z.string().uuid("Choose a valid order."),
   code: z
     .string()
@@ -78,19 +81,18 @@ export const updateOrderSchema = z.object({
     .optional(),
   facilityId: z.string().uuid().optional(),
   customerId: z.string().uuid().optional(),
-  customerLocationId: z.string().uuid().optional().nullable(),
+  customerLocationId: orderCustomerLocationIdSchema.optional(),
   formulationId: z.uuid().optional(),
-  orderDate: z.coerce.date().optional(),
-  quantityKg: z.number().min(0.01).max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).finite().optional(),
+  orderDate: calendarDateSchema().optional(),
+  quantityKg: orderQuantityKgSchema.optional(),
   packaging: z.enum(packagingTypes).optional(),
-  value: z.number().min(0).finite().optional().nullable(),
-  currency: z.string().max(10).optional(),
 });
 
 /**
  * Schema for deleting an order
  */
 export const deleteOrderSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   orderId: z.string().uuid("Choose a valid order."),
 });
 
@@ -141,3 +143,5 @@ export type OrderFormData = z.infer<typeof orderFormSchema>;
 export type CreateOrderData = z.infer<typeof createOrderSchema>;
 export type UpdateOrderData = z.infer<typeof updateOrderSchema>;
 export type OrderFilterData = z.infer<typeof orderFilterSchema>;
+
+export type DeleteOrderData = z.infer<typeof deleteOrderSchema>;

@@ -13,6 +13,7 @@
 import { config } from "dotenv";
 import { eq } from "drizzle-orm";
 import type { OrgContext } from "../src/lib/auth/server";
+import { saveMappingSchema } from "../src/schemas/certification";
 
 config({ path: ".env.local" });
 
@@ -65,6 +66,15 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
+  const facilityIdResult = saveMappingSchema.shape.externalFacilityId.safeParse(
+    process.env.ISOMETRIC_DEMO_FACILITY_ID?.trim() ?? "",
+  );
+  if (!facilityIdResult.success) {
+    console.error(`ISOMETRIC_DEMO_FACILITY_ID: ${facilityIdResult.error.issues[0].message}`);
+    process.exit(1);
+  }
+  const externalFacilityId = facilityIdResult.data;
+
   const facility = facilityRows.find((f) => f.id === targetFacilityId);
   if (!facility) {
     console.error(`Facility ${targetFacilityId} not found.`);
@@ -101,6 +111,7 @@ async function main(): Promise<void> {
       facilityId: targetFacilityId,
       provider: "isometric",
       externalProjectId: demoExternalProjectId,
+      externalFacilityId,
       protocolSlug: "biochar",
       metadata: { externalProjectName: demoProjectName },
     })

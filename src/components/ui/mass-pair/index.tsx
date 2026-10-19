@@ -53,7 +53,7 @@ export function MassPair({
               : "flex flex-col gap-2",
           )}
         >
-          <dt className="label-micro text-[var(--color-text-secondary)]">
+          <dt className="body-caption text-[var(--color-text-secondary)]">
             {figure.label}
           </dt>
           <dd

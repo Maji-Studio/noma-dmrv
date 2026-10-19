@@ -1,8 +1,9 @@
+import { insertRemovalFixture } from "../helpers/removal-fixture";
 /**
  * Certification workspace E2E — section navigation across the three routes and
  * the consolidated Settings surface (Stage 3 remodel).
  *
- * Two scenarios live here; the create→submit happy path is its own file
+ * Three scenarios live here; the create→submit happy path is its own file
  * (`certification-full-removal-submit.spec.ts`).
  *
  *  1. Section navigation — NO sandbox creds needed. Seeds a DB-only
@@ -14,7 +15,10 @@
  *     per-route heading plus that the active `?facility=` scope is preserved on
  *     every hop. Links are addressed by accessible name (sidebar section per
  *     ADR 0007, amended 2026-06-04).
- *  2. Settings round-trip — needs a seeded `certifier_projects` mapping against
+ *  2. Status history — DB-only. Seeds a submitted Removal with a recorded
+ *     status change, opens its badge's history from the Removals list and the
+ *     detail sheet, and closes it with Escape.
+ *  3. Settings round-trip — needs a seeded `certifier_projects` mapping against
  *     the REAL sandbox project (the connection card resolves the project from
  *     Isometric), so it's gated behind the sandbox skip. Asserts the Settings
  *     page renders the linked project in the Certifier pane (the console's
@@ -29,12 +33,17 @@
 import { config as loadEnv } from "dotenv";
 loadEnv({ path: ".env.local", override: false });
 
+import * as crypto from "crypto";
 import type { Page } from "@playwright/test";
+import { eq } from "drizzle-orm";
+import { DEC_ORG_ID } from "@/db/org-defaults";
+import * as schema from "../../src/db/schema";
 import { expect, test } from "./fixtures";
 import {
   SANDBOX_PROJECT_ID,
   seedCertifierMapping,
 } from "./fixtures/certification-helpers";
+import { createDbConnection } from "./fixtures/db";
 
 const SECTIONS = [
   { label: "Removals", path: "/certification/removals" },
@@ -104,6 +113,136 @@ test.describe("Certification workspace — section navigation", () => {
       }
     } finally {
       await mapping.cleanup();
+    }
+  });
+});
+
+test.describe("Certification workspace — status history", () => {
+  test("opens a Removal badge's status history and closes it with Escape", async ({
+    adminPage: page,
+    seededData,
+    testUsers,
+    cleanupTestData,
+  }) => {
+    void cleanupTestData; // activate fixture auto-cleanup
+
+    const facilityId = seededData.facility.id;
+    const removalId = crypto.randomUUID();
+    let removalCode = "";
+    const submissionId = crypto.randomUUID();
+    const createdAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const submittedAt = new Date(Date.now() - 60 * 60 * 1000);
+    const mapping = await seedCertifierMapping(facilityId, {
+      externalProjectId: FAKE_PROJECT_ID,
+    });
+    const { db, pool } = createDbConnection();
+    try {
+      await db.transaction(async (tx) => {
+        const [removalRow] = await insertRemovalFixture(tx, {
+          organizationId: DEC_ORG_ID,
+          id: removalId,
+          facilityId,
+          provider: "isometric",
+          // A submitted Removal without a reporting window reads as interrupted.
+          startedOn: createdAt.toISOString().slice(0, 10),
+          completedOn: submittedAt.toISOString().slice(0, 10),
+        });
+        removalCode = removalRow.code;
+        await tx.insert(schema.certificationSubmissions).values({
+          organizationId: DEC_ORG_ID,
+          id: submissionId,
+          provider: "isometric",
+          submissionType: "removal",
+          localEntityType: "removal",
+          localEntityId: removalId,
+          version: 1,
+          status: "submitted",
+          payloadSnapshot: {},
+          payloadHash: "e2e-status-history",
+          createdAt,
+          submittedAt,
+          updatedAt: submittedAt,
+        });
+        await tx.insert(schema.activityEvents).values({
+          organizationId: DEC_ORG_ID,
+          facilityId,
+          occurredAt: submittedAt,
+          entityType: "removal",
+          entityId: removalId,
+          action: "status_changed",
+          fromStatus: "draft",
+          toStatus: "submitted",
+          submissionRef: {
+            provider: "isometric",
+            submissionType: "removal",
+            submissionId,
+            version: 1,
+          },
+          source: "form",
+          actorUserId: testUsers.admin.id,
+        });
+      });
+
+      await page.goto(`/certification/removals?facility=${facilityId}`);
+      const listBadge = page
+        .getByRole("table", { name: "Removals" })
+        .getByRole("button", { name: "Submitted, status history" });
+      await expect(listBadge).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
+
+      // The popover opens from the list without opening the detail sheet.
+      await listBadge.click();
+      const history = page.getByRole("dialog", { name: "Status history" });
+      await expect(history).toBeVisible();
+      const entries = history.getByRole("list", { name: "Status changes, newest first" }).getByRole("listitem");
+      await expect(entries).toHaveCount(2);
+      await expect(entries.nth(0)).toContainText("Submitted");
+      await expect(entries.nth(0)).toContainText(testUsers.admin.name);
+      await expect(entries.nth(1)).toContainText("Not submitted");
+      await expect(page).not.toHaveURL(/removal=/);
+
+      // React events bubble through the portal to the row: a press on plain
+      // popover content must not open the row's detail sheet.
+      const sheet = page.getByRole("dialog").filter({ has: page.getByText("Submission status") });
+      await entries.nth(1).getByText("Version 1").click();
+      await expect(history).toBeVisible();
+      await expect(page).not.toHaveURL(/removal=/);
+      await expect(sheet).toHaveCount(0);
+
+      await page.keyboard.press("Escape");
+      await expect(history).toBeHidden();
+      await expect(listBadge).toBeFocused();
+
+      // The record link in the row's identity column opens the sheet by keyboard
+      // (the row itself has no tab stop); a click on the row opens it too.
+      const row = page
+        .getByRole("table", { name: "Removals" })
+        .getByRole("row")
+        .filter({ hasText: removalCode });
+      await row.locator("[data-row-link]").focus();
+      await page.keyboard.press("Enter");
+      await expect(sheet).toBeVisible();
+      await expect(page).toHaveURL(new RegExp(`removal=${removalId}`));
+      await page.keyboard.press("Escape");
+      await expect(sheet).toHaveCount(0);
+
+      // Same badge on the detail sheet; Escape closes the popover, not the sheet.
+      await page.getByRole("cell", { name: new RegExp(removalCode) }).click();
+      await expect(sheet).toBeVisible();
+      await sheet.getByRole("button", { name: "Submitted, status history" }).click();
+      await expect(history).toBeVisible();
+      await expect(history.getByRole("listitem")).toHaveCount(2);
+      await page.keyboard.press("Escape");
+      await expect(history).toBeHidden();
+      await expect(sheet).toBeVisible();
+    } finally {
+      try {
+        await db.delete(schema.activityEvents).where(eq(schema.activityEvents.entityId, removalId));
+        await db.delete(schema.certificationSubmissions).where(eq(schema.certificationSubmissions.id, submissionId));
+        await db.delete(schema.certifierRemovals).where(eq(schema.certifierRemovals.id, removalId));
+      } finally {
+        await pool.end();
+        await mapping.cleanup();
+      }
     }
   });
 });

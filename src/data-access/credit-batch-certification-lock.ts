@@ -1,25 +1,35 @@
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import {
-  certificationSubmissions,
   certifierRemovals,
 } from "@/db/schema/certification";
 import { creditBatchApplications } from "@/db/schema/credits";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { formatCertificationLineageLockMessage } from "@/lib/certification/lineage-lock-message";
-import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
+import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
+import { DomainError } from "@/lib/domain-errors";
+import { readRecordLockLineage } from "./record-lock-lineage";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { requireOrgScope } from "./utils";
 
 const CERTIFIER_PROVIDER = "isometric" as const;
-const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
 
-export async function isCreditBatchMembershipLockedBySubmission(
+export class CreditBatchLineageChangedError extends SafeError {
+  constructor() {
+    super("Certification lineage changed while it was being locked. Refresh and retry.");
+    this.name = "CreditBatchLineageChangedError";
+  }
+}
+
+async function readCreditBatchRemovals(
   ctx: OrgContext,
   tx: DbTransaction,
   creditBatchId: string,
-): Promise<boolean> {
-  const removalRows = await tx
+  lock = false,
+) {
+  requireOrgScope(ctx);
+  const query = tx
     .select({
       id: certifierRemovals.id,
       ghgStatementId: certifierRemovals.ghgStatementId,
@@ -38,84 +48,69 @@ export async function isCreditBatchMembershipLockedBySubmission(
         eq(creditBatchApplications.organizationId, ctx.organizationId),
       ),
     )
-    .orderBy(certifierRemovals.id)
-    .for("update");
+    .orderBy(certifierRemovals.id);
+  // Keep lineage stable without waiting on a Removal lifecycle transaction
+  // that may hold its row while waiting for our artifact lock. An incomplete
+  // result fails the snapshot comparison below and asks the caller to retry.
+  const removalRows = await (lock ? query.for("update", { skipLocked: true }) : query);
   const removals = [
     ...new Map(removalRows.map((removal) => [removal.id, removal])).values(),
   ];
-  if (removals.length === 0) return false;
+  const facts = await readRecordLockLineage(ctx, tx, removals.map(row => ({ removalId: row.id, ghgStatementId: row.ghgStatementId })));
+  return removals.map(row => ({ ...row, statementIds: [...new Set([
+    ...(row.ghgStatementId ? [row.ghgStatementId] : []),
+    ...facts.find(fact => fact.id === row.id)!.statements.map(statement => statement.id),
+  ])].sort() }));
+}
 
+type CreditBatchRemovals = Awaited<ReturnType<typeof readCreditBatchRemovals>>;
+
+/** Acquire artifacts from an unlocked read, before taking any batch row lock. */
+export async function lockCreditBatchArtifacts(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  creditBatchId: string,
+): Promise<CreditBatchRemovals> {
+  const removals = await readCreditBatchRemovals(ctx, tx, creditBatchId);
   await acquireCertificationArtifactLocksSorted(tx, [
     ...removals.map((removal) => ({
       provider: CERTIFIER_PROVIDER,
       localEntityType: "removal",
       localEntityId: removal.id,
     } as const)),
-    ...removals
-      .filter((removal) => removal.ghgStatementId)
-      .map((removal) => ({
-        provider: CERTIFIER_PROVIDER,
-        localEntityType: "ghgStatement",
-        localEntityId: removal.ghgStatementId!,
-      } as const)),
+    ...removals.flatMap(removal => removal.statementIds.map(id => ({
+      provider: CERTIFIER_PROVIDER, localEntityType: "ghgStatement", localEntityId: id,
+    }))),
   ]);
 
-  const removalIds = removals.map((removal) => removal.id);
+  return removals;
+}
 
-  const [removalSubmission] = await tx
-    .select({ id: certificationSubmissions.id })
-    .from(certificationSubmissions)
-    .where(
-      and(
-        eq(certificationSubmissions.provider, CERTIFIER_PROVIDER),
-        eq(certificationSubmissions.localEntityType, "removal"),
-        inArray(certificationSubmissions.localEntityId, removalIds),
-        inArray(
-          certificationSubmissions.submissionType,
-          REMOVAL_SCOPED_SUBMISSION_TYPES,
-        ),
-        inArray(
-          certificationSubmissions.status,
-          BLOCKING_SUBMISSION_STATUSES,
-        ),
-        eq(
-          certificationSubmissions.organizationId,
-          ctx.organizationId,
-        ),
-      ),
+/** Re-resolve under the batch lock; never acquire newly discovered artifacts here. */
+async function creditBatchMembershipLock(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  creditBatchId: string,
+  lockedRemovals: CreditBatchRemovals,
+) {
+  const removals = await readCreditBatchRemovals(ctx, tx, creditBatchId, true);
+  if (
+    removals.length !== lockedRemovals.length ||
+    removals.some((removal, index) =>
+      removal.id !== lockedRemovals[index].id ||
+      removal.ghgStatementId !== lockedRemovals[index].ghgStatementId ||
+      JSON.stringify(removal.statementIds) !== JSON.stringify(lockedRemovals[index].statementIds),
     )
-    .limit(1);
-
-  const ghgStatementIds = removals
-    .map((removal) => removal.ghgStatementId)
-    .filter((id): id is string => Boolean(id));
-  let ghgStatementSubmission:
-    | { id: (typeof certificationSubmissions.$inferSelect)["id"] }
-    | undefined;
-  if (ghgStatementIds.length > 0) {
-    [ghgStatementSubmission] = await tx
-      .select({ id: certificationSubmissions.id })
-      .from(certificationSubmissions)
-      .where(
-        and(
-          eq(certificationSubmissions.provider, CERTIFIER_PROVIDER),
-          eq(certificationSubmissions.localEntityType, "ghgStatement"),
-          eq(certificationSubmissions.submissionType, "ghg_statement"),
-          inArray(certificationSubmissions.localEntityId, ghgStatementIds),
-          inArray(
-            certificationSubmissions.status,
-            BLOCKING_SUBMISSION_STATUSES,
-          ),
-          eq(
-            certificationSubmissions.organizationId,
-            ctx.organizationId,
-          ),
-        ),
-      )
-      .limit(1);
+  ) {
+    throw new CreditBatchLineageChangedError();
   }
 
-  return Boolean(removalSubmission || ghgStatementSubmission);
+  const facts = await readRecordLockLineage(ctx, tx, removals.map(row => ({ removalId: row.id, ghgStatementId: row.ghgStatementId })), true);
+  return recordLocks.creditBatch({ removals: facts, dependents: [] });
+}
+
+export async function isCreditBatchMembershipLockedBySubmission(ctx: OrgContext, tx: DbTransaction, creditBatchId: string, lockedRemovals: CreditBatchRemovals): Promise<boolean> {
+  return (await creditBatchMembershipLock(ctx, tx, creditBatchId, lockedRemovals)).level === "sent";
 }
 
 export async function assertRemovalAllowsCreditBatchMutation(
@@ -123,19 +118,15 @@ export async function assertRemovalAllowsCreditBatchMutation(
   tx: DbTransaction,
   creditBatchId: string,
   mutation: "update" | "delete",
+  lockedRemovals: CreditBatchRemovals,
 ): Promise<void> {
-  if (
-    !(await isCreditBatchMembershipLockedBySubmission(
-      ctx,
-      tx,
-      creditBatchId,
-    ))
-  ) {
-    return;
-  }
+  const lock = await creditBatchMembershipLock(ctx, tx, creditBatchId, lockedRemovals);
+  if (lock.level !== "sent") return;
 
-  throw new SafeError(
+  throw new DomainError(
+    "certification_locked",
     formatCertificationLineageLockMessage({
+      lock,
       mutation,
       subjectEntityType: "creditBatch",
       lineageEntityType: "creditBatch",
@@ -149,7 +140,7 @@ export async function assertCreditBatchSlicesAreUnassigned(
   creditBatchId: string,
 ): Promise<void> {
   const [assignedSlice] = await tx
-    .select({ applicationId: creditBatchApplications.applicationId })
+    .select({ removalId: creditBatchApplications.removalId })
     .from(creditBatchApplications)
     .where(
       and(
@@ -162,7 +153,7 @@ export async function assertCreditBatchSlicesAreUnassigned(
     .limit(1);
   if (!assignedSlice) return;
 
-  throw new SafeError(
-    "Cannot change this credit batch's production membership because its applied mass belongs to a Removal.",
-  );
+  const lock = recordLocks.creditBatch({ removals: [], dependents: [{ kind: "removal", id: assignedSlice.removalId! }] });
+  throw new DomainError("certification_locked", withRecordLockGuidance(
+    "Cannot change this credit batch's production membership because its applied mass belongs to a Removal.", lock));
 }

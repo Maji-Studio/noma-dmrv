@@ -14,12 +14,18 @@ import {
   type FieldValues,
 } from "react-hook-form";
 import { Button } from "@/components/ui";
+import { FormDialogContext } from "@/components/ui/form-dialog-context";
+import { Notice } from "@/components/ui/notice";
+import { useSubmitBlock } from "@/components/ui/submit-block-context";
 import { cn } from "@/lib/utils";
 import {
   useSideSheetActions,
   type SideSheetActions,
 } from "@/components/ui/entity-side-sheet/side-sheet-context";
 import { ServerError } from "./server-error";
+
+/** Room kept between a focused control and the sticky CTA row's top edge. */
+const FOCUS_CLEARANCE_PX = 8;
 
 interface FormActionsProps<
   TFieldValues extends FieldValues = FieldValues,
@@ -46,6 +52,8 @@ interface FormActionsProps<
   /** Rendered under `errorMessage`: detail about the records the refusal named. */
   errorAction?: React.ReactNode;
   submitLabel?: string;
+  showSubmit?: boolean;
+  submitVariant?: React.ComponentProps<typeof Button>["variant"];
   submittingLabel?: string;
   defaultSubmitLabel?: string;
   /** Context-specific label for the secondary action. */
@@ -61,6 +69,8 @@ interface FormActionsProps<
   formId?: string;
   /** Sticky footer (default) — disable for nested inline forms. */
   sticky?: boolean;
+  /** Route Cancel through FormDialog even for a non-sticky dialog footer. */
+  guardDialogCancel?: boolean;
   /** Use `button` when actions render inside an owning parent form. */
   submitType?: "submit" | "button";
   /** Click handler for a non-submit action button. */
@@ -78,12 +88,15 @@ export function FormActions<
   errorMessage,
   errorAction,
   submitLabel,
+  showSubmit = true,
+  submitVariant = "primary",
   submittingLabel = "Saving...",
   defaultSubmitLabel = "Save",
   cancelLabel = "Cancel",
   submitDisabled = false,
   formId,
   sticky = true,
+  guardDialogCancel = sticky,
   submitType = "submit",
   onSubmitClick,
 }: FormActionsProps<TFieldValues, TContext, TTransformed>) {
@@ -91,21 +104,33 @@ export function FormActions<
   // sheet (edit -> back to read view, create -> guarded close) so every sheet
   // form behaves the same without per-list wiring. The caller's `onCancel`
   // still owns *presence*: no handler, no Cancel button. Nested inline forms
-  // (sticky={false}) and forms inside a Modal (context barrier) keep the
-  // caller-supplied handler.
+  // (sticky={false}) keep the caller-supplied handler by default.
+  // Dialog footers can opt into its guard independently of sticky layout.
   const sheetActions = useSideSheetActions();
+  const dialogActions = React.useContext(FormDialogContext);
   const inSheet = sticky && sheetActions !== null;
+  const block = useSubmitBlock();
+  const blockedReasonId = React.useId();
+  const inDialog = guardDialogCancel && dialogActions !== null;
   const handleCancel = onCancel
     ? inSheet
       ? sheetActions.cancel
-      : onCancel
+      : inDialog
+        ? dialogActions.cancel
+        : onCancel
     : undefined;
   return (
     <>
+      {control && dialogActions && (
+        <DialogFormBridge control={control} actions={dialogActions} busy={isSubmitting} />
+      )}
       {control && inSheet && (
         <SheetDirtyBridge control={control} reportDirty={sheetActions.reportDirty} />
       )}
-    <div
+    {/* A read-only form (a lock that arrived Sent) offers no actions here; its
+        container keeps the way back and the lock line says why. */}
+    {!block?.readOnly && (showSubmit || handleCancel || errorMessage) && <div
+      ref={sticky ? reserveStickyFooterSpace : undefined}
       className={cn(
         "flex flex-col gap-16 border-t border-[var(--color-border-secondary)]",
         sticky
@@ -118,25 +143,70 @@ export function FormActions<
       )}
     >
       <ServerError message={errorMessage} action={errorAction} />
+      {/* Why Save is off sits above the buttons, in the tone of the block. */}
+      {showSubmit && block && (
+        <Notice
+          tone={block.tone}
+          id={blockedReasonId}
+          action={block.retry ? (
+            <Button type="button" variant="default" size="small" busy={block.retry.running} onClick={block.retry.run}>
+              {block.retry.label}
+            </Button>
+          ) : undefined}
+        >
+          {block.reason}
+        </Notice>
+      )}
       <div className="flex items-center justify-start gap-16">
-        <Button
+        {showSubmit && <Button
           type={submitType}
-          variant="primary"
+          variant={submitVariant}
           form={formId}
           onClick={onSubmitClick}
-          disabled={isSubmitting || submitDisabled}
+          disabled={isSubmitting || submitDisabled || !!block}
+          aria-describedby={block ? blockedReasonId : undefined}
         >
           {isSubmitting ? submittingLabel : submitLabel ?? defaultSubmitLabel}
-        </Button>
+        </Button>}
         {handleCancel && (
           <Button type="button" variant="default" onClick={handleCancel} disabled={isSubmitting}>
             {cancelLabel}
           </Button>
         )}
       </div>
-    </div>
+    </div>}
     </>
   );
+}
+
+/**
+ * Keeps keyboard focus clear of the sticky CTA row (WCAG 2.2 SC 2.4.11). The
+ * browser's focus scrolling ignores sticky elements but honours
+ * `scroll-padding`, so the row's height is reserved as `scroll-padding-bottom`
+ * on its scroll container. The row grows when an action error shows, so its
+ * size is observed rather than assumed. Ref callback; returns the cleanup.
+ */
+export function reserveStickyFooterSpace(footer: HTMLElement | null) {
+  if (!footer || typeof ResizeObserver === "undefined") return;
+  const scrollport = findScrollContainer(footer);
+  if (!scrollport) return;
+  const previous = scrollport.style.scrollPaddingBottom;
+  const observer = new ResizeObserver(() => {
+    scrollport.style.scrollPaddingBottom = `${footer.offsetHeight + FOCUS_CLEARANCE_PX}px`;
+  });
+  observer.observe(footer);
+  return () => {
+    observer.disconnect();
+    scrollport.style.scrollPaddingBottom = previous;
+  };
+}
+
+function findScrollContainer(element: HTMLElement): HTMLElement | null {
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node);
+    if (overflowY === "auto" || overflowY === "scroll") return node;
+  }
+  return null;
 }
 
 /**
@@ -161,5 +231,23 @@ function SheetDirtyBridge<
   React.useEffect(() => {
     reportDirty(isDirty);
   }, [isDirty, reportDirty]);
+  return null;
+}
+
+/** RHF state is synchronized into the dialog's imperative dismissal guard. */
+function DialogFormBridge<TFieldValues extends FieldValues, TContext, TTransformed>({
+  control,
+  actions,
+  busy,
+}: {
+  control: Control<TFieldValues, TContext, TTransformed>;
+  actions: NonNullable<React.ContextType<typeof FormDialogContext>>;
+  busy: boolean;
+}) {
+  const { isDirty, isSubmitting } = useFormState({ control });
+  React.useEffect(() => {
+    actions.report(control, { dirty: isDirty, busy: busy || isSubmitting });
+    return () => actions.report(control, null);
+  }, [actions, control, isDirty, busy, isSubmitting]);
   return null;
 }

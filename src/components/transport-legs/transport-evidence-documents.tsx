@@ -1,5 +1,7 @@
 "use client";
 
+import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
+
 import { useState } from "react";
 import {
   ArrowSquareOutIcon,
@@ -9,6 +11,7 @@ import {
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Notice } from "@/components/ui/notice";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { formatFileSize } from "@/lib/format-utils";
@@ -17,8 +20,11 @@ import {
   useDeleteDocument,
   useDocumentsForEntity,
 } from "@/hooks/use-documents";
+import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification-lock";
+import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
 import type { DocumentEntityType } from "@/schemas/documents";
 import { InfoHint } from "@/components/ui/tooltip";
+import { TRANSPORT_EVIDENCE_HINTS } from "./transport-evidence-hints";
 import { isAcceptedDeliveryEvidenceDocument } from "@/lib/certification/delivery-evidence";
 import { isAcceptedTransportEvidenceDocument } from "@/lib/certification/transport-evidence";
 import {
@@ -37,14 +43,6 @@ const PANEL_HEADINGS: Record<TransportEvidenceEntityType, string> = {
   delivery: "Delivery evidence",
 };
 
-const PANEL_HINTS: Record<TransportEvidenceEntityType, string> = {
-  feedstock:
-    "Optional. Attach a bill of lading, weigh-scale ticket, or other transport record if you have one.",
-  transport_leg:
-    "Optional. Attach a bill of lading, weigh-scale ticket, or other transport record if you have one.",
-  delivery:
-    "Optional. Attach a delivery receipt, bill of lading, photo, or other delivery record.",
-};
 
 const PANEL_EMPTY_TITLE: Record<TransportEvidenceEntityType, string> = {
   feedstock: "No transport evidence",
@@ -71,13 +69,17 @@ interface TransportEvidenceDocumentsProps {
  * Evidence upload + list for a stable lineage entity or a saved manual
  * transport leg. The document layer keeps the same evidence controls across
  * all three supported owners; deliveries add receipt and photo classifications.
+ * Once the owner's lineage is submitted (a leg follows its parent), the files
+ * stay downloadable and every change control is hidden.
  */
 export function TransportEvidenceDocuments({
   entityType,
   entityId,
-  readOnly = false,
+  readOnly: readOnlyProp = false,
 }: TransportEvidenceDocumentsProps) {
   const toast = useToast();
+  const locked = useIsRecordCertificationLocked(entityType, entityId);
+  const readOnly = readOnlyProp || locked;
   const { data: docs, isLoading, error } = useDocumentsForEntity(
     entityType,
     entityId,
@@ -85,20 +87,22 @@ export function TransportEvidenceDocuments({
   const invalidateKey = documentKeys.forEntity(entityType, entityId);
   const deleteMutation = useDeleteDocument(invalidateKey, { entityType });
 
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<{ id: string; version: number } | null>(null);
+  const deletingId = deleting?.id ?? null;
+  const setDeletingId = (id: string | null) => setDeleting(docs?.find((doc) => doc.id === id) ?? null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   const handleDeleteConfirm = async () => {
-    if (!deletingId) return;
+    if (!deleting) return;
     setDeleteError(null);
     try {
-      await deleteMutation.mutateAsync(deletingId);
+      await deleteMutation.mutateAsync({ documentId: deleting.id, expectedVersion: deleting.version });
       toast.success("Document deleted");
       setDeletingId(null);
     } catch (err) {
       setDeleteError(
-        err instanceof Error ? err.message : "Document was not deleted. Try again.",
+        err instanceof StaleVersionError ? staleDeleteMessage("Document") : err instanceof Error ? err.message : "Document was not deleted. Try again.",
       );
     }
   };
@@ -109,6 +113,7 @@ export function TransportEvidenceDocuments({
 
   return (
     <div className="flex flex-col gap-12">
+      {locked && <Notice tone="info">{RECORD_FILES_LOCKED_MESSAGE}</Notice>}
       {error && (
         <ServerError
           message={
@@ -231,16 +236,18 @@ export function TransportEvidencePanel({
       }
       aria-label={embedded ? heading : undefined}
     >
-      <div className="flex items-center gap-6">
-        {!embedded && (
+      {/* Embedded, the parent section title carries the heading and the hint,
+          so no row of its own is left holding a lone icon. */}
+      {!embedded && (
+        <div className="flex items-center gap-6">
           <h3 className="body-small font-medium text-[var(--color-text-primary)]">
             {heading}
           </h3>
-        )}
-        <InfoHint label={`About ${heading.toLowerCase()}`}>
-          {PANEL_HINTS[entityType]}
-        </InfoHint>
-      </div>
+          <InfoHint label={`About ${heading.toLowerCase()}`}>
+            {TRANSPORT_EVIDENCE_HINTS[entityType]}
+          </InfoHint>
+        </div>
+      )}
       <TransportEvidenceDocuments
         entityType={entityType}
         entityId={entityId}

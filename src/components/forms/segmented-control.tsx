@@ -3,8 +3,9 @@
 /**
  * SegmentedControl: short, equal options as one bar (loss / count, storage
  * type). Same native-radio contract as ChoiceCardGroup: one tab stop, arrow
- * keys move and select, register(name) or value + onValueChange. The selected
- * segment is raised, bordered and carries a check glyph, so it reads without
+ * keys move and select, register(name) or value + onValueChange. Every segment
+ * is bordered so unselected ones read as clickable; the selected segment gets
+ * the interaction-coloured border and a check glyph, so it reads without
  * colour and in forced-colors mode.
  */
 
@@ -16,6 +17,7 @@ import {
 } from "react";
 import { CheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
+import { RequiredMarker } from "./required-marker";
 
 export interface SegmentedOption {
   value: string;
@@ -34,6 +36,8 @@ export interface SegmentedControlProps {
   onValueChange?: (value: string) => void;
   onBlur?: FocusEventHandler<HTMLInputElement>;
   disabled?: boolean;
+  /** Adds "Required" to the legend; the visible star stays on the FormField label. */
+  required?: boolean;
   error?: boolean;
   "aria-describedby"?: string;
   "aria-invalid"?: boolean | "true" | "false";
@@ -52,6 +56,7 @@ export const SegmentedControl = forwardRef<HTMLInputElement, SegmentedControlPro
       onValueChange,
       onBlur,
       disabled = false,
+      required = false,
       error,
       className,
       ...aria
@@ -74,7 +79,10 @@ export const SegmentedControl = forwardRef<HTMLInputElement, SegmentedControlPro
         aria-describedby={aria["aria-describedby"]}
         aria-invalid={error ? true : aria["aria-invalid"]}
       >
-        <legend className="sr-only">{legend}</legend>
+        <legend className="sr-only">
+          {legend}
+          {required && <RequiredMarker visual={false} />}
+        </legend>
         {options.map((option) => {
           const optionDisabled = disabled || option.disabled;
           return (
@@ -98,10 +106,11 @@ export const SegmentedControl = forwardRef<HTMLInputElement, SegmentedControlPro
               />
               <span
                 className={cn(
-                  "flex min-h-44 w-full items-center justify-center gap-6 border border-transparent px-12 text-center",
+                  "flex min-h-44 w-full items-center justify-center gap-6 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 text-center",
                   "body-small text-[var(--color-text-secondary)] transition-colors duration-300",
                   "hover:text-[var(--color-text-primary)]",
-                  "peer-checked:border-[var(--color-interaction)] peer-checked:bg-[var(--color-background-white)] peer-checked:text-[var(--color-text-primary)]",
+                  "peer-[:not(:checked):not(:disabled)]:hover:border-[var(--color-border-primary)]",
+                  "peer-checked:border-[var(--color-interaction)] peer-checked:shadow-[inset_0_0_0_1px_var(--color-interaction)] peer-checked:text-[var(--color-text-primary)]",
                   "forced-colors:peer-checked:border-[Highlight] forced-colors:peer-checked:border-2",
                   "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--color-interaction)]",
                   "peer-disabled:opacity-60",

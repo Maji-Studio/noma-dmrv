@@ -6,19 +6,12 @@
  */
 
 import {
-  CODE_CONFLICT_MESSAGES,
-  withAutoCode,
-} from "@/data-access/code-generator";
-import {
-  createOrder,
-  deleteOrder,
   getOrders as getOrdersData,
   getOrdersForSelect as getOrdersForSelectData,
-  updateOrder,
   type PaginatedOrders,
 } from "@/data-access/orders";
 import { requireOrgFacility } from "@/data-access/utils";
-import { orders, type Order } from "@/db/schema";
+import { type Order } from "@/db/schema";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import {
   createOrderSchema,
@@ -28,7 +21,11 @@ import {
 } from "@/schemas/orders";
 import type { ActionResult } from "@/types/actions";
 import { z } from "zod";
+import { recordOrder, updateOrder, deleteOrder } from "@/lib/operations/orders";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import { withAction } from "./with-action";
+import { getOrderById, getOrderWithRelationsById, type OrderWithRelations } from "@/data-access/orders";
+import { uuidSchema } from "@/schemas/helpers";
 
 // ============================================
 // List/Query Operations
@@ -68,6 +65,7 @@ export async function getOrdersForSelectFn(
       formulationName: string | null;
       formulationId: string;
       quantityKg: number;
+      destinationName: string | null;
       destinationGpsLatitude: number | null;
       destinationGpsLongitude: number | null;
       destinationDistanceKm: number | null;
@@ -99,27 +97,7 @@ export async function createOrderFn(
   return withAction(async (ctx) => {
     const validated = createOrderSchema.parse(data);
 
-    return withAutoCode(
-      ctx,
-      "OR",
-      orders,
-      orders.code,
-      undefined,
-      (code) =>
-        createOrder(ctx, {
-          code,
-          facilityId: validated.facilityId,
-          customerId: validated.customerId,
-          customerLocationId: validated.customerLocationId,
-          formulationId: validated.formulationId,
-          orderDate: validated.orderDate,
-          quantityKg: validated.quantityKg,
-          packaging: validated.packaging,
-          value: validated.value ?? null,
-          currency: validated.currency,
-        }),
-      CODE_CONFLICT_MESSAGES.order,
-    );
+    return runOperationInProcess(recordOrder, ctx, validated);
   }, { fallbackMessage: "Failed to create order" });
 }
 
@@ -136,18 +114,7 @@ export async function updateOrderFn(
   return withAction(async (ctx) => {
     const validated = updateOrderSchema.parse(data);
 
-    return updateOrder(ctx, validated.orderId, {
-      code: validated.code,
-      facilityId: validated.facilityId,
-      customerId: validated.customerId,
-      customerLocationId: validated.customerLocationId,
-      formulationId: validated.formulationId,
-      orderDate: validated.orderDate,
-      quantityKg: validated.quantityKg,
-      packaging: validated.packaging,
-      value: validated.value,
-      currency: validated.currency,
-    });
+    return runOperationInProcess(updateOrder, ctx, validated);
   }, { fallbackMessage: "Failed to update order" });
 }
 
@@ -163,6 +130,15 @@ export async function deleteOrderFn(
 ): Promise<ActionResult<void>> {
   return withAction(async (ctx) => {
     const validated = deleteOrderSchema.parse(data);
-    await deleteOrder(ctx, validated.orderId);
+    await runOperationInProcess(deleteOrder, ctx, validated);
   }, { fallbackMessage: "Failed to delete order" });
+}
+
+export async function getOrderByIdFn(id: string) {
+  return withAction((ctx) => getOrderById(ctx, uuidSchema().parse(id)));
+}
+
+/** One order in the list row shape, archived included: the `?order=` deep link. */
+export async function getOrderWithRelationsFn(id: string): Promise<ActionResult<OrderWithRelations>> {
+  return withAction((ctx) => getOrderWithRelationsById(ctx, uuidSchema().parse(id)));
 }

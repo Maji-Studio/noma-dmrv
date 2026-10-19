@@ -69,6 +69,22 @@ describe("paginate bounds", () => {
     );
   });
 
+  it("rejects a scan without page_info instead of reporting not found", async () => {
+    const get = vi.fn().mockResolvedValue({
+      nodes: [{ id: "a", ref: "other" }],
+      total_count: 1,
+    });
+    const client = createIsometricClientFromTransport(get);
+
+    await expect(
+      findRegistryRecord<Row>(client, "/rows", {
+        ...unique,
+        where: (row) => row.ref === "x",
+      }),
+    ).rejects.toThrow(/without page_info/);
+    expect(get).toHaveBeenCalledOnce();
+  });
+
   it.each([0, 51, 1.5])("rejects page size %s before any request", async (pageSize) => {
     const { client, get } = clientOver();
     await expect(client.paginateAll<Row>("/rows", { pageSize })).rejects.toThrow(

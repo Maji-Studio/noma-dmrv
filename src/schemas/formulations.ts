@@ -8,7 +8,10 @@
  */
 
 import { z } from "zod";
-import { optionalPercent } from "./helpers";
+import { expectedVersionSchema, optionalPercent } from "./helpers";
+import { RATIO_SUM_EXCEEDED_MESSAGE, exceedsFormulationRatioSum, isExactFormulationRatio } from "@/lib/formulation-ratios";
+
+export { RATIO_SUM_EXCEEDED_MESSAGE, exceedsFormulationRatioSum } from "@/lib/formulation-ratios";
 
 // ============================================
 // Constants
@@ -19,46 +22,6 @@ export const FORMULATION_LINE_FEEDSTOCK_USAGE = "blend" as const;
 // ============================================
 // Ratio Sum Constraint (issue #282)
 // ============================================
-
-/**
- * A formulation's ratios partition the *solid* blend — water is tracked
- * separately on the product (`waterAddedKg`) — so biochar + ingredient ratios
- * can never sum to more than the whole, 1.0.
- */
-export const RATIO_SUM_MAX = 1;
-
-/**
- * Absolute tolerance when comparing the combined ratio to {@link RATIO_SUM_MAX}.
- * Percentage entry (70 + 30, 33 + 33 + 34) is exact; the tolerance only absorbs
- * floating-point artifacts, never a real over-allocation.
- */
-export const RATIO_SUM_TOLERANCE = 1e-6;
-
-export const RATIO_SUM_EXCEEDED_MESSAGE =
-  "Biochar and ingredient ratios add up to more than 100% of the blend. Reduce them so the total is 100% or less.";
-
-/** Combined biochar + ingredient ratio, treating missing ratios as 0. */
-export function formulationRatioSum(
-  biocharRatio: number | null | undefined,
-  ingredients: ReadonlyArray<{ ratio?: number | null }> | null | undefined,
-): number {
-  const ingredientSum = (ingredients ?? []).reduce(
-    (total, ingredient) => total + (ingredient?.ratio ?? 0),
-    0,
-  );
-  return (biocharRatio ?? 0) + ingredientSum;
-}
-
-/** True when the combined ratio exceeds 100% beyond {@link RATIO_SUM_TOLERANCE}. */
-export function exceedsFormulationRatioSum(
-  biocharRatio: number | null | undefined,
-  ingredients: ReadonlyArray<{ ratio?: number | null }> | null | undefined,
-): boolean {
-  return (
-    formulationRatioSum(biocharRatio, ingredients) >
-    RATIO_SUM_MAX + RATIO_SUM_TOLERANCE
-  );
-}
 
 /**
  * Shared refinement flagging `biocharRatio` when the blend over-allocates.
@@ -127,6 +90,7 @@ const optionalRatioSchema = z
   .number()
   .min(0, "Ratio must be between 0 and 1")
   .max(1, "Ratio must be between 0 and 1")
+  .refine(isExactFormulationRatio)
   .optional()
   .nullable();
 
@@ -179,6 +143,7 @@ export const createFormulationSchema = formulationFormSchema;
 
 export const updateFormulationSchema = z
   .object({
+  expectedVersion: expectedVersionSchema,
     formulationId: z.string().uuid("Choose a valid formulation."),
     code: z
       .string()
@@ -194,7 +159,8 @@ export const updateFormulationSchema = z
   .superRefine(ratioSumRefinement)
   .superRefine(duplicateBlendMaterialRefinement);
 
-export const deleteFormulationSchema = z.object({
+export const formulationVersionSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   formulationId: z.string().uuid("Choose a valid formulation."),
 });
 
@@ -203,6 +169,7 @@ export const deleteFormulationSchema = z.object({
 // ============================================
 
 export const formulationFilterSchema = z.object({
+  archived: z.boolean().default(false),
   search: z
     .string()
     .max(255, "Search query must be less than 255 characters")

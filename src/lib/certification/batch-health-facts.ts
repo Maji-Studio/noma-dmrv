@@ -15,6 +15,7 @@
 
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
+import { sampleDocumentWarnings } from "./sample-document-warnings";
 import type { BatchHealthFacts } from "./batch-health";
 import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "./preview-gaps";
 
@@ -34,10 +35,6 @@ const CARBON_INPUT_LABELS: Record<string, string> = {
   soilTemperatureC: "Soil temperature",
   hToCorgRatio: "H:Corg ratio",
   thousandYearReplicates: `At least ${MINIMUM_REPLICATES_PER_BATCH} usable 1000-year Samples`,
-  meanRandomReflectancePercent: "Mean random reflectance (R₀)",
-  stdRandomReflectance: "Std dev of R₀",
-  meanNonReactiveCarbonPercent: "Mean non-reactive carbon",
-  stdNonReactiveCarbonPercent: "Std dev of non-reactive carbon",
 };
 
 /**
@@ -63,15 +60,16 @@ function carbonMissingInputs(
   return Array.from(new Set(member?.durabilityGateBlockers ?? []));
 }
 
-// The facility's project mapping + default template resolve cleanly. Transport
+// The facility project and batch-pinned template resolve cleanly. Transport
 // requirements come from the template, so transport is only evaluable once true
 // (mirrors `templateResolvesCleanly` in readiness.ts, plus the mapping gate).
 function isFacilitySetupComplete(ctx: RemovalCertifyContext): boolean {
   return (
     !!ctx.mapping &&
-    !!ctx.defaultTemplate &&
-    !ctx.missingDefaultTemplateId &&
-    ctx.unresolvedBlueprintKeys.length === 0
+    !!ctx.removalTemplate &&
+    !ctx.templateBlockers?.length &&
+    ctx.unresolvedBlueprintKeys.length === 0 &&
+    ctx.unbindableTemplateInputs.length === 0
   );
 }
 
@@ -80,24 +78,29 @@ export function toBatchHealthFacts(
   batchId: string,
 ): BatchHealthFacts {
   const facilitySetupComplete = isFacilitySetupComplete(ctx);
+  const batch = ctx.memberBatches.find((member) => member.id === batchId);
   return {
+    templateBlockers: ctx.templateBlockers ?? [],
+    emissionLines: ctx.emissionLinesByBatchId?.[batchId] ?? ctx.emissionLines,
+    warnings: batch ? sampleDocumentWarnings({ ...batch, creditBatchCode: batch.code }) : [],
     carbonMissingInputs: carbonMissingInputs(ctx, batchId),
-    facilityEmissionsBlockers:
-      ctx.memberBatches.find((batch) => batch.id === batchId)
-        ?.facilityEmissionsGateBlockers ?? [],
+    facilityEmissionsBlockers: batch?.facilityEmissionsGateBlockers ?? [],
     feedstockTypeMappingGaps: facilitySetupComplete
       ? (ctx.feedstockTypeMappingGaps ?? []).filter(
           (gap) => gap.creditBatchId === batchId,
         )
       : [],
     entityReadinessGaps: ctx.entityReadinessGaps ?? [],
+    submissionLineageBlockers: ctx.submissionLineageBlockers,
+    durabilityConfigurationBlockers: ctx.durabilityConfigurationBlockers,
     entityReadinessIssues: ctx.entityReadinessIssues ?? [],
     hasSubmittableRuns: ctx.hasSubmittableRuns,
     productionReadinessGap: ctx.productionReadinessGap ?? null,
     facilitySetupComplete,
     requiredTransport: ctx.requiredTransportCategories.map((category) => ({
       category,
-      present: ctx.transportCoverage[category].count > 0,
+      present: ctx.transportCoverage[category].count > 0 &&
+        (ctx.transportCoverage[category].missingEntityIds?.length ?? 0) === 0,
     })),
   };
 }

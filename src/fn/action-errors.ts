@@ -1,3 +1,7 @@
+import { DomainError } from "@/lib/domain-errors";
+import { validationFailed } from "@/lib/operations/errors";
+import { formatValidationIssues } from "@/lib/validation-message";
+import { STALE_VERSION_CONFLICT_CODE } from "@/lib/stale-version";
 import { ActionConflictError, SafeError, toActionError } from "@/lib/errors";
 import { logger, sanitizeErrorMessage } from "@/lib/log";
 import type { ActionResult } from "@/types/actions";
@@ -12,6 +16,8 @@ interface LogActionErrorOptions {
 export type ActionFailure = Extract<ActionResult<never>, { success: false }>;
 
 interface ActionFailureOptions {
+  /** Adapters with stricter logging can log safely before converting. */
+  logUnexpected?: boolean;
   /** Fallback message when the error is not safe to show verbatim. */
   fallbackMessage: string;
   /** Structured log line for unexpected errors (Zod and conflicts are not). */
@@ -19,8 +25,6 @@ interface ActionFailureOptions {
   /** Optional task-specific context for ZodError messages. */
   zodErrorPrefix?: string;
 }
-
-const DEFAULT_ZOD_ACTION_ERROR = "Check the highlighted fields.";
 
 /**
  * A body result whose work has a committed part and a non-fatal follow-up:
@@ -42,25 +46,8 @@ export function toWarnableSuccess<T>({
   return warning ? { success: true, data, warning } : { success: true, data };
 }
 
-function asSentence(message: string): string {
-  return /[.!?]$/.test(message) ? message : `${message}.`;
-}
-
-export function formatZodActionError(
-  error: ZodError,
-  context?: string,
-): string {
-  const messages = [
-    ...new Set(
-      error.issues
-        .map((issue) => issue.message.trim())
-        .filter((message) => message.length > 0),
-    ),
-  ].map(asSentence);
-  const issueText = messages.join(" ") || DEFAULT_ZOD_ACTION_ERROR;
-
-  if (!context) return issueText;
-  return `${context.trim().replace(/[:.\s]+$/, "")}: ${issueText}`;
+export function formatZodActionError(error: ZodError, context?: string): string {
+  return formatValidationIssues(error.issues, context);
 }
 
 export function logActionError(
@@ -98,22 +85,59 @@ export function toLoggedActionError(
  */
 export function toActionFailure(
   error: unknown,
-  { fallbackMessage, log, zodErrorPrefix }: ActionFailureOptions,
+  { fallbackMessage, log, zodErrorPrefix, logUnexpected = true }: ActionFailureOptions,
 ): ActionFailure {
+  if (error instanceof DomainError) {
+    let rootCause: unknown = error;
+    let hasUnexpectedCause = false;
+    const seen = new Set<unknown>();
+    while (
+      typeof rootCause === "object" && rootCause !== null &&
+      "cause" in rootCause && rootCause.cause !== undefined &&
+      !seen.has(rootCause)
+    ) {
+      seen.add(rootCause);
+      rootCause = rootCause.cause;
+      if (!(rootCause instanceof SafeError)) hasUnexpectedCause = true;
+    }
+    if (logUnexpected && (error.code === "outcome_unknown" || error.code === "deadline_exceeded" || hasUnexpectedCause)) {
+      logger.error(
+        {
+          ...log.context,
+          code: error.code,
+          errorName: rootCause instanceof Error ? rootCause.name : typeof rootCause,
+          errorMessage: sanitizeErrorMessage(rootCause),
+        },
+        log.message,
+      );
+    }
+    return {
+      success: false,
+      error: error.message,
+      code: error.code,
+      ...(error.issues.length ? { issues: error.issues } : {}),
+      ...(error.conflict ? { conflict: error.conflict } : {}),
+      ...(error.blockers ? { blockers: error.blockers } : {}),
+      ...(error.preview ? { preview: error.preview } : {}),
+    };
+  }
   if (error instanceof ZodError) {
     return {
       success: false,
       error: formatZodActionError(error, zodErrorPrefix),
+      code: "validation_failed",
+      issues: validationFailed(error).issues,
     };
   }
   if (error instanceof ActionConflictError) {
     return {
       success: false,
       error: error.message,
+      code: error.conflict.code === STALE_VERSION_CONFLICT_CODE ? "stale_version" : "conflict",
       conflict: error.conflict,
       ...(error.blockers ? { blockers: error.blockers } : {}),
     };
   }
-  logActionError(error, log);
+  if (logUnexpected) logActionError(error, log);
   return { success: false, error: toActionError(error, fallbackMessage) };
 }

@@ -1,4 +1,4 @@
-import type { IsometricClient } from "./client";
+import type { IsometricClient, IsometricRequestOptions } from "./client";
 import type { components } from "./generated/certify";
 
 export type CreateGhgStatementRequest =
@@ -43,8 +43,12 @@ export function createGhgStatement(
   return client.post<GhgStatement>("/ghg_statements", body);
 }
 
-export function getGhgStatement(client: IsometricClient, id: string): Promise<GhgStatement> {
-  return client.get<GhgStatement>(`/ghg_statements/${id}`);
+export function getGhgStatement(
+  client: IsometricClient,
+  id: string,
+  options?: IsometricRequestOptions,
+): Promise<GhgStatement> {
+  return client.get<GhgStatement>(`/ghg_statements/${id}`, options);
 }
 
 export function submitGhgStatement(

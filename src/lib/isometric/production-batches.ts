@@ -1,7 +1,7 @@
 /**
  * Typed wrappers + payload builder for the Isometric `ProductionBatch` API
  * surface (issue #630). Pure HTTP + pure functions — no DB, no auth, no
- * ActionResult — mirroring `sensors.ts`. `fn/certification/production-batches.ts`
+ * ActionResult. `fn/certification/production-batches.ts`
  * composes these with the ledger/journal writes.
  *
  * ─── VERIFIED AGAINST THE REGISTRY (Certify OpenAPI, 2026-08-13) ─────────────
@@ -13,7 +13,7 @@
  *   started and completed, respectively.
  *   `mass` is a `ScalarQuantity` — required `magnitude` + `unit`, OPTIONAL
  *   `standard_deviation`. `GET /production_batches` exposes NO supplier-reference
- *   filter (unlike `/sensors?reference=`), so the reconcile lookup below
+ *   filter, so the reconcile lookup below
  *   paginates and filters client-side, exactly as measurement samples do.
  *
  * Mass definition (PDD `M_biochar (DM)`): the TOTAL DRY MASS of biochar produced

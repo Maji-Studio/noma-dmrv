@@ -89,19 +89,53 @@ integer columns.
 
 ## Environment Variables
 
-**Canonical list: the `envSchema` object in `src/config/env.ts`.** Templates:
+**`EMISSIONS_ENTRIES_ENABLED`** accepts `true` or `false` and defaults to `false`.
+The server refuses emissions entry writes and evidence changes while disabled.
+Existing entries stay visible in the batch display. Enabling it also refuses new sample transport legs. Keep
+it disabled until entry submission support is deployed.
+
+**App environment list: the `envSchema` object in `src/config/env.ts`.**
+The logger validates `LOG_LEVEL` locally; standalone Isometric scripts and health
+checks validate their credential pair and environment in `src/lib/isometric/client-env.ts`. Templates:
 `.env.local.tpl` (local 1Password item) and `.env.tpl` (staging item → Vercel
 sync). The app refuses to boot on an invalid or missing required var.
 
 Non-obvious semantics only:
 
+- **`CRON_SECRET`** — at least 32 characters; required for `NODE_ENV=production`
+  builds and runtimes, including staging, except hermetic CI. Optional in
+  development/test. The daily Vercel crons call `/api/cron/purge-api-records` at 03:00 UTC
+  and `/api/cron/sweep-document-uploads` at 03:15 UTC with a bearer secret, compared in
+  constant time. An unconfigured route returns 503; invalid credentials return
+  an empty 401. The purge removes expired idempotency records and buckets idle for a day.
+  The sweep expires abandoned uploads, retires old failed rows and drains queued
+  object deletions. Both use bounded batches and log counts only. It lives in all three
+  1Password items (local, staging, production); `pnpm env:vercel` syncs the
+  staging and production values to Vercel Preview and Production.
+  [Vercel invokes cron jobs only on Production deployments](https://vercel.com/docs/cron-jobs/quickstart),
+  so neither runs on staging (Preview). The site Production deployment answers
+  404 to both routes. Staging's idempotency claim path
+  deletes expired records lazily when their keys are reused; idle rate-limit
+  buckets have no scheduled staging cleanup.
+- **`API_WRITES_DISABLED`** — `true` or `false`, defaults to `false`. API write
+  guards return retryable 503 while enabled, including for dry runs. MCP returns
+  an `isError` tool result with code `api_writes_disabled`; reads keep working.
+  Organization API access defaults to enabled and only Platform Admins
+  can toggle it at `/admin/organizations`; disabled organizations receive
+  403 `api_access_disabled` on API requests. This does not revoke their keys.
+- **`API_FUZZ_DISABLE_RATE_LIMIT`**: `true` or `false`, defaults to `false`.
+  Skips API token buckets for the production-bundle Schemathesis harness.
+  Env validation refuses `true` unless `NOMA_HERMETIC_CI=true`, `CI` is truthy,
+  and the app URL is HTTP(S) loopback. This CI-only setting never belongs in
+  deployment environments. Authentication, scopes, and `API_WRITES_DISABLED`
+  still apply. Local reproduction: [testing.md](./testing.md#api-schema-fuzzing).
 - **Both-or-neither pairs** (`superRefine`): `RESEND_API_KEY` +
   `RESEND_FROM_EMAIL`; `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
   (seed/CI-only, not runtime app credentials).
 - **Signup is invite-only.** `ALLOW_SELF_SIGNUP` is `false` in every environment
   (`.env.example`, `tests/setup.ts`, both E2E workflows) and public self-signup
   is not a supported configuration for a B2B tenant — the flag is a tunable
-  that is never tuned. See [open-questions.md](./open-questions.md)
+  that is never tuned. See [Architecture open questions](./open-questions-architecture.md#drop-the-allow_self_signup-flag-authdrop-self-signup-flag-opened-2026-07-20)
   (`auth/drop-self-signup-flag`).
 - **`CREDENTIALS_ENCRYPTION_KEY`** — a hard boot requirement in production (see
   Hermetic-CI exception below). Server-only 32-byte hex/base64 key.
@@ -122,6 +156,9 @@ Non-obvious semantics only:
 
 Read directly from `process.env`, **not** validated by `env.ts`:
 
+- `LOG_LEVEL` — validated in `src/lib/log/index.ts`: `trace`, `debug`, `info`,
+  `warn`, `error`, `fatal`, or `silent`. Unset/blank defaults to `info` in
+  production and `debug` otherwise; invalid values are rejected.
 - `NOMA_HERMETIC_CI` — the literal `"true"` marks only the production-bundle
   builds in `ci.yml` and the hermetic PR Playwright workflow. Live sandbox
   workflows and deployments must not set it.
@@ -145,13 +182,18 @@ Read directly from `process.env`, **not** validated by `env.ts`:
   literal string `"true"` permits a remote reset; the manually confirmed staging
   and production reset jobs load it from their matching 1Password item.
 - `VERCEL` and `VERCEL_REGION` — platform-injected, read by `src/db/index.ts`
-  only to register the pool with Fluid Compute lifecycle hooks and to tag pool
-  telemetry with the compute region. Absent locally; never set by hand.
+  to register the pool with Fluid Compute lifecycle hooks and to tag pool
+  telemetry with the compute region. `VERCEL` also controls whether
+  `src/lib/api/client-ip.ts:clientIpBucketKey` trusts forwarded IP headers.
+  Absent locally; never set by hand.
 - `DISABLE_RATE_LIMIT` — rate limiting is **opt-out** via a bare
   `process.env.DISABLE_RATE_LIMIT !== "true"` read
   (`src/lib/auth/better-auth.ts`). A typo fails safe (limits stay ON), but only
   the literal string `"true"` disables them; E2E fixtures depend on that exact
-  literal ([testing.md](./testing.md)).
+  literal ([testing.md](./testing.md)). API guards reuse this flag but ignore it
+  in production. Their PostgreSQL token buckets charge pre-auth IPs (hashed,
+  never stored raw), credentials and organizations before business transactions,
+  including failures and dry runs. Forwarded IP headers are trusted only on Vercel.
 - `ISOMETRIC_DEMO_PROJECT_ID` — CI/staging smoke-test target.
 
 Both `ADMIN_PASSWORD` and `ISOMETRIC_DEMO_PROJECT_ID` **are** pulled locally via
@@ -161,7 +203,7 @@ must be set directly on the staging/production items.
 ### Hermetic-CI exception on the production fail-closed gates
 
 The production gates — `GEO_PROVIDER=stub`, unset `ISOMETRIC_ENVIRONMENT`,
-missing `CREDENTIALS_ENCRYPTION_KEY`, and non-`s3-compatible` storage — are
+missing `CREDENTIALS_ENCRYPTION_KEY` or `CRON_SECRET`, and non-`s3-compatible` storage — are
 skipped only for a **hermetic CI build**: `NOMA_HERMETIC_CI=true`, `CI` truthy,
 and an HTTP(S) loopback `NEXT_PUBLIC_APP_URL` (ci.yml and e2e.yml compile
 production bundles against localhost with placeholder config on purpose).
@@ -239,6 +281,16 @@ and live submission **fail closed** when the active organization has no
 credential row. Keep the same key while stored rows exist — rotating it requires
 re-encrypting or replacing every organization's credentials.
 
+Normal registry callers pass their trusted `OrgContext` to
+`resolveIsometricClient(ctx)` in `src/data-access/certifier-credentials.ts`.
+Both the resolver and decrypted getter enforce `requireOrgScope`; the query
+filters on that context's organization and the Isometric provider. There is no
+exported bare-id credential getter or organization factory in the HTTP library.
+The narrow `verifyIsometricCredentialsForOrganization` seam
+checks Platform Admin authority before reading a selected organization's
+credentials and carries an `// org-scope-ok:` waiver. Neither client nor
+plaintext secrets may cross a server-action boundary.
+
 `ISOMETRIC_ACCESS_TOKEN` / `ISOMETRIC_CLIENT_SECRET` are seed/CI-only:
 `db:ensure-admin` seeds the default organization's encrypted row when all three
 values are present, and `isometric-health.yml` uses its dedicated pair through
@@ -247,8 +299,10 @@ values are present, and `isometric-health.yml` uses its dedicated pair through
 
 ### Database dispatch actions (`migrate.yml`)
 
-Pushes to `main` run `migrate-production`, which loads only `DATABASE_URL` — a
-renamed 1Password field cannot block schema migrations. Everything destructive is
+Pushes to `main` run `migrate-production`, which loads `DATABASE_URL` and
+`DATABASE_CA_CERT` from the production 1Password item. The CA PEM is required
+for verified TLS to managed Postgres and must exist in that item before the
+production migration, bootstrap, or reset jobs run. Everything destructive is
 a manual `workflow_dispatch` with a typed confirmation phrase:
 
 | action | confirmation |
@@ -294,7 +348,28 @@ omit registry credentials.
   cooldown; never lower the global setting.
 - **Build-script gating** — `allowBuilds` in `pnpm-workspace.yaml` allowlists the
   only packages permitted to run install scripts.
+- **One pnpm version** — `packageManager` in `package.json` and `site/package.json`
+  pins pnpm for local installs, every `pnpm/action-setup` step and both Vercel
+  projects (their build logs show "Detected … from package.json#packageManager").
+  Bump both files together, and to a release pnpm will install: Vercel's
+  install refused 11.13.0 as "a broken release". Overrides belong in
+  `pnpm-workspace.yaml`, the only place pnpm 11 reads them.
 - **Dependabot (security-only)** — `.github/dependabot.yml` sets
-  `open-pull-requests-limit: 0`, disabling routine version bumps; only
-  security-fix PRs open. Severity filtering lives in repo Settings → Advanced
-  Security auto-triage rules, not in `dependabot.yml`.
+  `open-pull-requests-limit: 0` for the app (`/`) and the marketing site
+  (`/site`), disabling routine version bumps; only security-fix PRs open.
+  Severity filtering lives in repo Settings → Advanced Security auto-triage
+  rules. The one per-package rule in `dependabot.yml` ignores `maplibre-gl`
+  major versions, which break the map worker under Turbopack; see
+  [`maps/maplibre-v6`](./open-questions-toolchain.md#maplibre-gl-v6-upgrade-mapsmaplibre-v6-opened-2026-10-02).
+  A security fix that exists only in a new major is never merged on green CI
+  alone: read the changelog and check the Vercel preview first.
+
+
+## API write audit
+
+The API audit row contract is defined in [Activity events](./database.md#activity-events).
+Allowlisted values are internal to `activity_events.changes`, retained forever.
+Notes, reasons and file names are never stored as activity values. Linked
+records store IDs only and resolve current labels in org-scoped reads.
+Stored idempotency outcome schema v2 includes value-free effect metadata;
+older outcomes answer `replay_unavailable` without a compatibility mapper.

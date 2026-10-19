@@ -31,15 +31,14 @@ vi.mock("@/data-access/certifier-storage-locations", async (importOriginal) => (
   replaceMissingStorageLocationRegistration: mocks.replaceRegistration,
   setStorageLocationDrift: mocks.setDrift,
 }));
-vi.mock("@/lib/isometric/client", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/isometric/client")>();
+vi.mock("@/data-access/certifier-credentials", async () => {
+  const actual = await import("@/lib/isometric/client");
   // List reads walk the real paginate over the stubbed `get`.
   const paged = actual.createIsometricClientFromTransport(
     (_method, path, options) => mocks.client.get(path, options),
   );
   return {
-    ...actual,
-    getIsometricClientForOrg: vi.fn(async () => ({ ...paged, ...mocks.client })),
+    resolveIsometricClient: vi.fn(async () => ({ ...paged, ...mocks.client })),
   };
 });
 vi.mock("@/db", () => ({
@@ -271,6 +270,7 @@ describe("ensureStorageLocation", () => {
     const result = await ensure();
 
     const lockKeys = [
+      `certifier-storage-site:org-test:${CUSTOMER_LOCATION_ID}`,
       `certifier-storage-location:isometric:prj-test:${CUSTOMER_LOCATION_ID}`,
       "certifier-project-mapping:org-test:isometric:facility-1",
       "certifier-external-project:org-test:isometric:prj-test",

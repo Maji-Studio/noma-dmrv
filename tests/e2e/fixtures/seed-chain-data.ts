@@ -1,3 +1,4 @@
+import { cleanupFeedstockFixtureParents } from "../../helpers/feedstock-fixture";
 import "../../setup";
 import { deleteOutputApplicationFixtures } from "../../helpers/output-contract-fixtures";
 import { preparePureOutputProductFixture, outputProductFixtureValues, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "../../helpers/output-contract-fixtures";
@@ -19,7 +20,6 @@ const SEEDED_CREDIT_BATCH_CODE_PREFIX = "E2E-CB";
 const SEEDED_CREDIT_BATCH_DURATION_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const MS_PER_HOUR = 60 * 60 * 1000;
-const SEEDED_H_TO_CORG_RATIO = 0.4;
 
 export interface SeededChainData {
   facility: { id: string; code: string; name: string };
@@ -34,7 +34,6 @@ export interface SeededChainData {
   biocharStorageLocation: { id: string; code: string; name: string };
   productStorageLocation: { id: string; code: string; name: string };
   vehicle: { id: string; code: string; name: string };
-  feedstockDelivery: { id: string; code: string };
   feedstock: { id: string; code: string };
 }
 
@@ -60,12 +59,11 @@ export async function seedChainData(
     const biocharStorageId = crypto.randomUUID();
     const productStorageId = crypto.randomUUID();
     const vehicleId = crypto.randomUUID();
-    const feedstockDeliveryId = crypto.randomUUID();
     const feedstockId = crypto.randomUUID();
 
     await db.transaction(async (tx) => {
       // 1. Facility (needed by storage locations, biochar product, orders, etc.)
-      await tx.insert(schema.facilities).values({
+      await tx.insert(schema.facilities).values({ timezone: "UTC",
         organizationId: DEC_ORG_ID,
         id: facilityId,
         code: `E2E-FAC-${testRunId}`,
@@ -99,12 +97,16 @@ export async function seedChainData(
         id: supplierId,
         code: `E2E-SUP-${testRunId}`,
         name: `E2E Seed Supplier ${testRunId}`,
-        gpsLatitude: -6.8,
-        gpsLongitude: 39.28,
+      });
+
+      await tx.insert(schema.supplierLocations).values({
+        organizationId: DEC_ORG_ID, supplierId, country: "Tanzania",
+        gpsLatitude: -6.8, gpsLongitude: 39.28, isDefault: true,
       });
 
       // 3. Feedstock Type
       await tx.insert(schema.feedstockTypes).values({
+        usage: "pyrolysis",
         organizationId: DEC_ORG_ID,
         id: feedstockTypeId,
         code: `E2E-FST-${testRunId}`,
@@ -132,9 +134,9 @@ export async function seedChainData(
         address: "123 Farm Road, Dar es Salaam",
         gpsLatitude: -6.8,
         gpsLongitude: 39.28,
-        distanceFromFacilityKm: 25,
-        distanceSource: "manual",
       });
+
+      await tx.insert(schema.customerLocationFacilityDistances).values({ organizationId: DEC_ORG_ID, locationId: customerLocationId, facilityId, distanceKm: 25, distanceSource: "manual" });
 
       // 6. Formulation
       await tx.insert(schema.formulations).values({
@@ -176,9 +178,7 @@ export async function seedChainData(
       });
 
       // 8. Biochar Product (needs facility + formulation)
-      const productionDate = new Date("2025-01-01T00:00:00Z");
-      const expiresAt = new Date();
-      expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+      const productionDate = "2025-01-01";
       await tx.insert(schema.biocharProducts).values(await outputProductFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
         id: biocharProductId,
@@ -194,7 +194,6 @@ export async function seedChainData(
         massKg: 100000,
         moistureContentPercent: 10,
         productionDate,
-        expiresAt,
       }));
 
       await preparePureOutputProductFixture(tx, biocharProductId);
@@ -207,31 +206,21 @@ export async function seedChainData(
         name: `E2E Seed Vehicle ${testRunId}`,
         identifier: `TZ-${testRunId}`,
         vehicleType: "truck",
-        fuelType: "diesel",
+        fuelType: "Diesel",
         fuelConsumptionLPerKm: 0.25,
         modelYear: 2022,
       });
 
-      // 10. Feedstock Delivery (needs facility + supplier)
+      // Intake date
       const deliveryDate = new Date();
-      await tx.insert(schema.feedstockDeliveries).values({
-        organizationId: DEC_ORG_ID,
-        id: feedstockDeliveryId,
-        code: `E2E-FSD-${testRunId}`,
-        facilityId: facilityId,
-        supplierId: supplierId,
-        deliveryDate,
-        feedstockTypeId: feedstockTypeId,
-      });
 
-      // 11. Feedstock (needs facility + delivery + type)
+      // 11. Feedstock (needs facility + supplier + type)
       await tx.insert(schema.feedstocks).values({
         organizationId: DEC_ORG_ID,
         id: feedstockId,
         code: `E2E-FS-${testRunId}`,
         facilityId: facilityId,
-        feedstockDeliveryId: feedstockDeliveryId,
-        // Delivery fields (absorbed from feedstock_deliveries)
+        // Delivery fields
         deliveryDate,
         supplierId: supplierId,
         // Material fields
@@ -261,7 +250,6 @@ export async function seedChainData(
       biocharStorageLocation: { id: biocharStorageId, code: `E2E-SL-BC-${testRunId}`, name: `E2E Biochar Pile ${testRunId}` },
       productStorageLocation: { id: productStorageId, code: `E2E-SL-PR-${testRunId}`, name: `E2E Product Bin ${testRunId}` },
       vehicle: { id: vehicleId, code: `E2E-VEH-${testRunId}`, name: `E2E Seed Vehicle ${testRunId}` },
-      feedstockDelivery: { id: feedstockDeliveryId, code: `E2E-FSD-${testRunId}` },
       feedstock: { id: feedstockId, code: `E2E-FS-${testRunId}` },
     };
   } finally {
@@ -311,10 +299,6 @@ export async function seedCreditBatch(
       productionProcessId,
       startDate: start,
       endDate: end,
-      // Durability tier is inherited from the facility (ADR 0021; the seed
-      // facility is 200-year). Carry a declared H/C_org so the batch has
-      // realistic chemistry; the spec doesn't depend on the durability calc.
-      hToCorgRatio: SEEDED_H_TO_CORG_RATIO,
     });
     return { id, code };
   } finally {
@@ -370,7 +354,6 @@ export async function seedCreditBatchProductionLineage(
         productionProcessId,
         startDate: start,
         endDate: end,
-        hToCorgRatio: SEEDED_H_TO_CORG_RATIO,
       });
       await tx.insert(schema.creditBatchProductionRuns).values({
         organizationId: DEC_ORG_ID,
@@ -497,7 +480,6 @@ export async function seedDurabilityBatch(
         productionProcessId,
         startDate: start,
         endDate: end,
-        hToCorgRatio: SEEDED_H_TO_CORG_RATIO,
       });
       await tx.insert(schema.creditBatchProductionRuns).values([
         { organizationId: DEC_ORG_ID, creditBatchId, productionRunId: run1Id },
@@ -536,8 +518,7 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
       if (facilityBatches.length > 0) {
         const batchIds = facilityBatches.map((b) => b.id);
         // Samples anchor on the credit batch (issue #309) with a NO ACTION FK —
-        // delete them before their batches. (The by-run sample sweep further
-        // down only catches legacy run-linked rows.)
+        // delete them before their batches.
         await tx
           .delete(schema.samples)
           .where(inArray(schema.samples.creditBatchId, batchIds));
@@ -693,21 +674,21 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
                 facilityRunIds
               )
             );
-          // Delete samples linked to production runs
-          await tx
-            .delete(schema.samples)
-            .where(
-              inArray(
-                schema.samples.productionRunId,
-                facilityRunIds
-              )
-            );
           // Delete in-process production samples linked to production runs
           await tx
             .delete(schema.productionSamples)
             .where(
               inArray(
                 schema.productionSamples.productionRunId,
+                facilityRunIds
+              )
+            );
+          // Delete incident reports linked to production runs
+          await tx
+            .delete(schema.incidentReports)
+            .where(
+              inArray(
+                schema.incidentReports.productionRunId,
                 facilityRunIds
               )
             );
@@ -751,11 +732,8 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
       await tx
         .delete(schema.feedstocks)
         .where(eq(schema.feedstocks.facilityId, data.facility.id));
+      await cleanupFeedstockFixtureParents(tx);
 
-      // Feedstock deliveries
-      await tx
-        .delete(schema.feedstockDeliveries)
-        .where(eq(schema.feedstockDeliveries.facilityId, data.facility.id));
 
       // Vehicles
       await tx
@@ -794,6 +772,8 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
         .where(eq(schema.customers.id, data.customer.id));
 
       // Suppliers
+      await tx.delete(schema.supplierLocations)
+        .where(eq(schema.supplierLocations.supplierId, data.supplier.id));
       await tx
         .delete(schema.suppliers)
         .where(eq(schema.suppliers.id, data.supplier.id));
@@ -810,10 +790,14 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
       await tx
         .delete(schema.certifierProjects)
         .where(eq(schema.certifierProjects.facilityId, data.facility.id));
+      await tx
+        .delete(schema.facilityEmissionFactors)
+        .where(eq(schema.facilityEmissionFactors.facilityId, data.facility.id));
 
       // Facility (must be last — everything references it)
       await deleteOutputFacilityFixtures(tx, eq(schema.facilities.id, data.facility.id));
     });
+    await cleanupFeedstockFixtureParents(db);
   } finally {
     await pool.end();
   }

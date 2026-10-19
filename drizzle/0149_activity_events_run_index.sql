@@ -1,0 +1,1 @@
+CREATE INDEX "activity_events_org_run_occurred_sequence_idx" ON "activity_events" USING btree ("organization_id","production_run_id","occurred_at","sequence");

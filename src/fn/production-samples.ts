@@ -1,13 +1,13 @@
 "use server";
+import { withAction } from "./with-action";
 
 /**
  * Production Samples Server Actions
  * Server-side functions for in-process sample CRUD operations
  */
 
+import { SafeError } from "@/lib/errors";
 import { z } from "zod";
-import { productionSamples } from "@/db/schema";
-import { withAutoCode } from "@/data-access/code-generator";
 import {
   getProductionSamples as getProductionSamplesData,
   createProductionSample,
@@ -15,21 +15,20 @@ import {
   deleteProductionSample,
   type ProductionSampleWithRelations,
 } from "@/data-access/production-samples";
-import { requireOrgContext } from "@/lib/auth/server";
-import { toActionError } from "@/lib/errors";
 import {
   createProductionSampleSchema,
   updateProductionSampleSchema,
   deleteProductionSampleSchema,
 } from "@/schemas/production-samples";
 import type { ActionResult } from "@/types/actions";
-import { formatZodActionError } from "./action-errors";
+
+const LOAD_FAILURE = "In-process measurements could not be loaded. Refresh the page and try again.";
+const CREATE_FAILURE = "In-process measurement was not created. Check the form.";
+const INVALID_INPUT = "Invalid input";
 
 const productionRunIdSchema = z.string().uuid("Production run is required");
 
-function logServerError(context: string, error: unknown): void {
-  console.error(`[production-samples] ${context}`, error);
-}
+class InvalidProductionRunInputError extends SafeError {}
 
 // ============================================
 // List Operations
@@ -41,24 +40,26 @@ function logServerError(context: string, error: unknown): void {
 export async function getProductionSamplesFn(
   productionRunId: string
 ): Promise<ActionResult<ProductionSampleWithRelations[]>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedProductionRunId = productionRunIdSchema.safeParse(productionRunId);
     if (!validatedProductionRunId.success) {
-      return { success: false, error: "Invalid input" };
+      throw new InvalidProductionRunInputError(INVALID_INPUT);
     }
 
     const samples = await getProductionSamplesData(ctx, validatedProductionRunId.data);
-    return { success: true, data: samples };
-  } catch (error) {
-    logServerError("getProductionSamplesFn failed", error);
-    return {
-      success: false,
-      error:
-        "In-process measurements could not be loaded. Refresh the page and try again.",
-    };
-  }
+    return samples;
+  }, {
+    fallbackMessage: LOAD_FAILURE,
+    log: { message: "getProductionSamplesFn failed", context: { op: "production-sample:list" } },
+    mapError: (error) => {
+      if (error instanceof InvalidProductionRunInputError) {
+        return { success: false as const, error: INVALID_INPUT };
+      }
+      return error instanceof SafeError
+        ? { success: false as const, error: LOAD_FAILURE }
+        : undefined;
+    },
+  });
 }
 
 // ============================================
@@ -66,56 +67,38 @@ export async function getProductionSamplesFn(
 // ============================================
 
 /**
- * Create a new production sample with auto-generated sample code
+ * Create a new in-process measurement
  */
 export async function createProductionSampleFn(
   data: z.infer<typeof createProductionSampleSchema>
 ): Promise<ActionResult<ProductionSampleWithRelations>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = createProductionSampleSchema.parse(data);
 
-    const sample = await withAutoCode(
-      ctx,
-      "PS",
-      productionSamples,
-      productionSamples.sampleCode,
-      undefined,
-      async (sampleCode) => {
-        return createProductionSample(ctx, {
-          sampleCode,
-          productionRunId: validated.productionRunId,
-          timestamp: new Date(validated.timestamp),
-          weightGrams: validated.weightGrams ?? null,
-          volumeMl: validated.volumeMl ?? null,
-          temperatureC: validated.temperatureC ?? null,
-          moistureContentPercent: validated.moistureContentPercent ?? null,
-          fixedCarbonPercent: validated.fixedCarbonPercent ?? null,
-          volatileMatterPercent: validated.volatileMatterPercent ?? null,
-          ashContentPercent: validated.ashContentPercent ?? null,
-          photoUrl: validated.photoUrl || null,
-          sampledById: validated.sampledById ?? null,
-          notes: validated.notes ?? null,
-        });
-      }
-    );
+    const sample = await createProductionSample(ctx, {
+      productionRunId: validated.productionRunId,
+      timestamp: validated.timestamp,
+      weightGrams: validated.weightGrams ?? null,
+      volumeMl: validated.volumeMl ?? null,
+      temperatureC: validated.temperatureC ?? null,
+      moistureContentPercent: validated.moistureContentPercent ?? null,
+      fixedCarbonPercent: validated.fixedCarbonPercent ?? null,
+      volatileMatterPercent: validated.volatileMatterPercent ?? null,
+      ashContentPercent: validated.ashContentPercent ?? null,
+      photoUrl: validated.photoUrl || null,
+      sampledById: validated.sampledById ?? null,
+      notes: validated.notes ?? null,
+    });
 
-    return { success: true, data: sample };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    logServerError("createProductionSampleFn failed", error);
-    return {
-      success: false,
-      error:
-        "In-process measurement was not created. Check the form.",
-    };
-  }
+    return sample;
+  }, {
+    fallbackMessage: CREATE_FAILURE,
+    log: { message: "createProductionSampleFn failed", context: { op: "production-sample:create" } },
+    mapError: (error) =>
+      error instanceof SafeError
+        ? { success: false as const, error: CREATE_FAILURE }
+        : undefined,
+  });
 }
 
 // ============================================
@@ -128,16 +111,15 @@ export async function createProductionSampleFn(
 export async function updateProductionSampleFn(
   data: z.infer<typeof updateProductionSampleSchema>
 ): Promise<ActionResult<ProductionSampleWithRelations>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = updateProductionSampleSchema.parse(data);
 
     const sample = await updateProductionSample(
       ctx,
       validated.productionSampleId,
       {
-        timestamp: new Date(validated.timestamp),
+        expectedVersion: validated.expectedVersion,
+        timestamp: validated.timestamp,
         weightGrams: validated.weightGrams,
         volumeMl: validated.volumeMl,
         temperatureC: validated.temperatureC,
@@ -151,20 +133,11 @@ export async function updateProductionSampleFn(
       }
     );
 
-    return { success: true, data: sample };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    logServerError("updateProductionSampleFn failed", error);
-    return {
-      success: false,
-      error: "In-process measurement was not saved. Try again.",
-    };
-  }
+    return sample;
+  }, {
+    fallbackMessage: "In-process measurement was not saved. Try again.",
+    log: { message: "updateProductionSampleFn failed", context: { op: "production-sample:update" } },
+  });
 }
 
 // ============================================
@@ -177,27 +150,13 @@ export async function updateProductionSampleFn(
 export async function deleteProductionSampleFn(
   data: z.infer<typeof deleteProductionSampleSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = deleteProductionSampleSchema.parse(data);
-    await deleteProductionSample(ctx, validated.productionSampleId);
+    await deleteProductionSample(ctx, validated.productionSampleId, validated.expectedVersion);
 
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    logServerError("deleteProductionSampleFn failed", error);
-    return {
-      success: false,
-      error: toActionError(
-        error,
-        "In-process measurement was not deleted. Try again.",
-      ),
-    };
-  }
+    return;
+  }, {
+    fallbackMessage: "In-process measurement was not deleted. Try again.",
+    log: { message: "deleteProductionSampleFn failed", context: { op: "production-sample:delete" } },
+  });
 }

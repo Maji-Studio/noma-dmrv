@@ -1,8 +1,12 @@
+import { createReadStream } from "node:fs";
+import { readBoundedStream } from "./bounded-read";
+import { boundedReadError } from "./bounded-read-error";
+import type { ReadObjectBoundedArgs, PutObjectOptions } from "./types";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "fs/promises";
 import path from "path";
 import { BINARY_CONTENT_TYPE } from "./get-object";
-import { isSafeStorageKey } from "./keys";
+import { isSafeStorageKey, isUploadKey } from "./keys";
 import type {
   StorageProvider,
   StorageProviderName,
@@ -105,11 +109,12 @@ export class LocalFsProvider implements StorageProvider {
 
   async createUploadUrl(args: CreateUploadUrlArgs): Promise<PresignedUpload> {
     if (!isSafeStorageKey(args.key)) {
-      throw new StorageError(`Unsafe storage key: ${args.key}`, "unsafe_key");
+      throw new StorageError("Unsafe storage key", "unsafe_key");
     }
+    if (!isUploadKey(args.key)) throw new StorageError("Only upload keys may be presigned", "unsafe_upload_key");
     const cap = Math.min(args.maxBytes, this.globalMaxBytes);
     const ttl = args.expiresInSeconds ?? DEFAULT_UPLOAD_TTL_SECONDS;
-    const expiresAt = new Date(Date.now() + ttl * 1000);
+    const expiresAt = new Date((args.signingDate?.getTime() ?? Date.now()) + ttl * 1000);
     const token = signLocalFsToken(this.signingSecret, {
       k: args.key,
       m: "PUT",
@@ -128,7 +133,7 @@ export class LocalFsProvider implements StorageProvider {
 
   async createDownloadUrl(args: CreateDownloadUrlArgs): Promise<string> {
     if (!isSafeStorageKey(args.key)) {
-      throw new StorageError(`Unsafe storage key: ${args.key}`, "unsafe_key");
+      throw new StorageError("Unsafe storage key", "unsafe_key");
     }
     const ttl = args.expiresInSeconds ?? DEFAULT_DOWNLOAD_TTL_SECONDS;
     const token = signLocalFsToken(this.signingSecret, {
@@ -159,6 +164,20 @@ export class LocalFsProvider implements StorageProvider {
     }
   }
 
+  async readObjectBounded(args: ReadObjectBoundedArgs) {
+    const abs = resolveLocalFsPath(this.root, args.key);
+    if (!abs) throw new StorageError("Invalid storage key", "unsafe_key");
+    try {
+      args.signal?.throwIfAborted();
+      const meta = await this.readMeta(abs);
+      return await readBoundedStream(createReadStream(abs, { highWaterMark: args.maxBytes + 1 }), args.maxBytes, meta?.contentType ?? BINARY_CONTENT_TYPE, args.signal);
+    } catch (error) {
+      const failure = boundedReadError(error, "local-fs");
+      if (failure.code === "object_not_found") return null;
+      throw failure;
+    }
+  }
+
   async headObject(key: string): Promise<ObjectHead | null> {
     const abs = resolveLocalFsPath(this.root, key);
     if (!abs) return null;
@@ -179,18 +198,21 @@ export class LocalFsProvider implements StorageProvider {
   async putObject(
     key: string,
     body: Buffer,
-    contentType: string
+    contentType: string,
+    options: PutObjectOptions = {},
   ): Promise<void> {
     const abs = resolveLocalFsPath(this.root, key);
     if (!abs) {
-      throw new StorageError(`Unsafe storage key: ${key}`, "unsafe_key");
+      throw new StorageError("Unsafe storage key", "unsafe_key");
     }
+    options.signal?.throwIfAborted();
     await mkdir(path.dirname(abs), { recursive: true });
     // Write to a temp sibling then rename, so a concurrent headObject/read of
     // `abs` never observes a torn file (mirrors the local-fs PUT route).
     const tempPath = `${abs}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
     try {
-      await writeFile(tempPath, body);
+      await writeFile(tempPath, body, { signal: options.signal });
+      options.signal?.throwIfAborted();
       await rename(tempPath, abs);
     } catch (err) {
       await rm(tempPath, { force: true }).catch(() => {});

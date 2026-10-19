@@ -1,3 +1,4 @@
+import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
 import { describe, expect, it } from "vitest";
 import type { components } from "@/lib/isometric/generated/certify";
 import {
@@ -13,9 +14,9 @@ import {
 } from "@/lib/isometric/transformers/sequestration-binding";
 import {
   build1000YearSequestrationSample,
-  CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
   PRODUCT_MASS_UNIT,
 } from "@/lib/isometric/transformers/measurement-sample";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import type { AggregatedProductionData } from "@/lib/isometric/utils/aggregation";
 
 type ComponentBlueprint = components["schemas"]["ComponentBlueprint"];
@@ -48,8 +49,6 @@ const baseAgg: AggregatedProductionData = {
   weightedOrganicCarbonPercent: 80,
   weightedHToCorgRatio: 0.4,
   weightedOToCorgRatio: 0.2,
-  weightedAshPercent: 5,
-  weightedMoisturePercent: 10,
   totalBiocharDryMassKg: 1000,
   totalFeedstockDryMassKg: 4000,
   totalStartupDieselLitres: 50,
@@ -313,6 +312,7 @@ describe("buildCreateDatapointRequest", () => {
       groupKey: "miscellaneous",
       componentBlueprintKey: "mass_based_ci_emissions",
       componentDisplayName: "Safety margin",
+      lineContract: { scope: "operating", automaticSource: "safety-margin", entryPolicy: "none", origin: "reviewed" },
       rtcInput: rtcInput({ input_key: "mass", quantity_kind: "mass" }),
       blueprintInput: blueprintInput({
         input_key: "mass",
@@ -347,7 +347,7 @@ describe("buildCreateDatapointRequest", () => {
         projectId: PROJECT_ID,
         supplierRefId: SUPPLIER_REF,
       }),
-    ).toThrow(/PROJECT.*safety margin/i);
+    ).toThrow(/belongs at the project level/i);
   });
 
   it("does not resolve inherited component-map keys", () => {
@@ -358,8 +358,8 @@ describe("buildCreateDatapointRequest", () => {
     );
 
     expect(mapping).toBeDefined();
-    expect(() => resolveDatapointSource(mapping!, "constructor")).toThrow(
-      /not recognized/i,
+    expect(() => resolveDatapointSource(mapping!, { scope: "operating", entryPolicy: "none", origin: "reviewed" } satisfies LineContract)).toThrow(
+      /Review the Removal template lines/,
     );
     expect(
       lookupInputMapping("constructor", "mass_based_ci_emissions", "mass"),
@@ -414,7 +414,8 @@ describe("buildCreateDatapointRequest", () => {
   // The Dark Earth template declares TWO pyrolysis `fuel_usage_by_volume`
   // components sharing one (group, blueprint, input) triple; the datapoint
   // source is resolved per component display name (docs/isometric/changes.md).
-  const fuelVolumeArgs = (componentDisplayName: string) => ({
+  const fuelVolumeArgs = (componentDisplayName: string, lineContract?: LineContract) => ({
+    lineContract,
     groupKey: PYROLYSIS_FUEL_VOLUME.groupKey,
     componentBlueprintKey: PYROLYSIS_FUEL_VOLUME.blueprintKey,
     componentDisplayName,
@@ -431,7 +432,7 @@ describe("buildCreateDatapointRequest", () => {
 
   it("maps the Generator diesel component to totalGensetDieselLitres", () => {
     const result = buildCreateDatapointRequest(
-      fuelVolumeArgs("Generator diesel usage"),
+      fuelVolumeArgs("Generator diesel usage", { scope: "operating", automaticSource: "run-genset-diesel", entryPolicy: "additive", origin: "reviewed" }),
     );
     // genset + preprocessing = 20 litres, NOT the combined 70.
     expect(result.quantity).toEqual({ magnitude: 20, unit: "l" });
@@ -440,25 +441,25 @@ describe("buildCreateDatapointRequest", () => {
 
   it("maps the Startup diesel component to totalStartupDieselLitres", () => {
     const result = buildCreateDatapointRequest(
-      fuelVolumeArgs("Startup diesel usage"),
+      fuelVolumeArgs("Startup diesel usage", { scope: "operating", automaticSource: "run-startup-diesel", entryPolicy: "additive", origin: "reviewed" }),
     );
     // startup / plant diesel = 50 litres, NOT the combined 70.
     expect(result.quantity).toEqual({ magnitude: 50, unit: "l" });
   });
 
-  it("resolves the diesel component name case/whitespace-insensitively", () => {
+  it("resolves a renamed diesel component through its contract", () => {
     const result = buildCreateDatapointRequest(
-      fuelVolumeArgs("  GENERATOR Diesel Usage  "),
+      fuelVolumeArgs("Any renamed generator", { scope: "operating", automaticSource: "run-genset-diesel", entryPolicy: "additive", origin: "reviewed" }),
     );
     expect(result.quantity.magnitude).toBe(20);
   });
 
-  it("fails closed on an unrecognized pyrolysis diesel component name", () => {
+  it("fails closed on a diesel component without a contract", () => {
     // A rename / added component must surface loudly, never silently
     // double-count or land in the wrong bucket.
     expect(() =>
       buildCreateDatapointRequest(fuelVolumeArgs("Diesel usage")),
-    ).toThrow(/pyrolysis diesel component is not recognized/);
+    ).toThrow(/Review the Removal template lines/);
   });
 
   it("rejects an unknown (group, blueprint, input) tuple with a SafeError pointing to the mapping file", () => {

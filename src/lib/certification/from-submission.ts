@@ -26,7 +26,7 @@ import {
 
 export type CertificationArtifact = "removal" | "ghgStatement";
 
-const REMOTE_GHG_STATUSES: readonly RemoteGhgStatus[] = [
+export const REMOTE_GHG_STATUSES: readonly RemoteGhgStatus[] = [
   "DRAFT",
   "AWAITING_VERIFICATION",
   "VERIFIED",

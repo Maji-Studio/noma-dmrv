@@ -1,4 +1,6 @@
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { insertRemovalFixture } from "./helpers/removal-fixture";
+import { masterDataVersion } from "./helpers/master-data-version";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed tests for the durability-tier edit guard on `updateFacility`.
  *
@@ -9,8 +11,8 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
  * flip collapses a soil-temp-evidenced batch's CO₂e-stored preview to null, and
  * invalidates any registry data built under the old tier).
  *
- * `updateFacility` guards this: once the facility owns a consequential
- * (verified/issued, non-archived) credit batch, the tier is locked. This mirrors
+ * `updateFacility` guards this: once the facility owns a blocking
+ * registry submission, the tier is locked. This mirrors
  * the externalProjectId/externalFacilityId registry-invalidation guard in
  * `certification.ts`.
  *
@@ -63,7 +65,7 @@ async function setupFacility(
 ): Promise<FacilityChain> {
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Durability-Guard ${tag} ${runId}`,
       code: `FAC-DG-${tag}-${runId}`,
@@ -75,6 +77,7 @@ async function setupFacility(
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Durability-Guard Woodchips ${tag} ${runId}`,
       code: `FT-DG-${tag}-${runId}`,
@@ -132,10 +135,7 @@ async function insertBlockingRemoval(
   chain: FacilityChain,
   status: "draft" | "submitted" | "accepted" = "submitted",
 ): Promise<void> {
-  const [removal] = await db
-    .insert(certifierRemovals)
-    .values({ organizationId: TEST_ORG_ID, facilityId: chain.facilityId })
-    .returning({ id: certifierRemovals.id });
+  const [removal] = await insertRemovalFixture(db, { organizationId: TEST_ORG_ID, facilityId: chain.facilityId });
   createdIds.certifierRemovals.push(removal.id);
 
   const [submission] = await db
@@ -198,21 +198,19 @@ afterAll(async () => {
 
 
 describe("updateFacility durability-tier guard", () => {
-  // Both locking statuses must be exercised — a regression that dropped one from
-  // the lock set would otherwise pass while only `issued` is tested.
+  // Neither unwritten legacy batch status locks the tier. Registry submissions do.
   for (const status of ["verified", "issued"] as const) {
-    it(`rejects a tier change when a ${status} batch exists`, async () => {
+    it(`ignores the unwritten legacy ${status} batch status`, async () => {
       const chain = await setupFacility(`blocked-${status}`, "200_year");
       await insertBatch(chain, status);
 
       await expect(
-        updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, {
+        updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, { expectedVersion: await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "facilities", chain.facilityId),
           durabilityOption: "1000_year",
         }),
-      ).rejects.toBeInstanceOf(SafeError);
+      ).resolves.toMatchObject({ durabilityOption: "1000_year" });
 
-      // The write must not have landed.
-      expect(await tierOf(chain.facilityId)).toBe("200_year");
+      expect(await tierOf(chain.facilityId)).toBe("1000_year");
     });
   }
 
@@ -225,7 +223,7 @@ describe("updateFacility durability-tier guard", () => {
     await insertBlockingRemoval(chain, "submitted");
 
     await expect(
-      updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, {
+      updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, { expectedVersion: await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "facilities", chain.facilityId),
         durabilityOption: "1000_year",
       }),
     ).rejects.toBeInstanceOf(SafeError);
@@ -240,7 +238,7 @@ describe("updateFacility durability-tier guard", () => {
     await insertBatch(chain, "pending");
     await insertBatch(chain, "issued", /* archived */ true);
 
-    const updated = await updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, {
+    const updated = await updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, { expectedVersion: await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "facilities", chain.facilityId),
       durabilityOption: "1000_year",
     });
 
@@ -252,7 +250,7 @@ describe("updateFacility durability-tier guard", () => {
     await insertBatch(chain, "verified");
 
     // Same tier passed through + an unrelated field change must still succeed.
-    const updated = await updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, {
+    const updated = await updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, { expectedVersion: await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "facilities", chain.facilityId),
       durabilityOption: "200_year",
       contactEmail: "ops@example.com",
     });
@@ -268,7 +266,7 @@ describe("updateFacility durability-tier guard", () => {
 
     await db.transaction(async (tx) => {
       await acquireFacilityDurabilityLock(ctx, tx, chain.facilityId);
-      updatePromise = updateFacility(ctx, chain.facilityId, {
+      updatePromise = updateFacility(ctx, chain.facilityId, { expectedVersion: await masterDataVersion(ctx, "facilities", chain.facilityId),
         contactPhone: "+41 44 555 01 23",
       });
 

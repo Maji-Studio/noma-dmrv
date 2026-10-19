@@ -19,7 +19,6 @@ export const IN_WINDOW_COMPLETED_ON = "2026-01-15";
 export const REPORT_URL = "https://example.com/report.pdf";
 export const REPORT_ID = "55555555-5555-4555-8555-555555555555";
 export const REPORT_DOCUMENT_ID = "66666666-6666-4666-8666-666666666666";
-export const GENSET_ENERGY_YIELD_KWH_PER_LITRE = 3.375;
 export const GENERATED_REPORT_URL =
   `http://localhost:3100/api/ghg-statement-reports/${REPORT_ID}?token=opaque`;
 
@@ -58,6 +57,7 @@ export function makeOpenRemoval(
 export function makeMapping(): CertifierProjectRow {
   return {
     id: "cert-proj-1",
+    externalFacilityId: "fcl_test_1",
     facilityId: FACILITY_ID,
     provider: "isometric",
     externalProjectId: EXTERNAL_PROJECT_ID,
@@ -66,7 +66,6 @@ export function makeMapping(): CertifierProjectRow {
     defaultRemovalTemplateId: "rvt_1",
     webhookSecret: null,
     metadata: null,
-    gensetEnergyYieldKwhPerLitre: GENSET_ENERGY_YIELD_KWH_PER_LITRE,
     createdAt: new Date(),
     updatedAt: new Date(),
   } as CertifierProjectRow;

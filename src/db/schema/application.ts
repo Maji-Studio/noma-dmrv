@@ -1,4 +1,5 @@
-import { check, doublePrecision, foreignKey, index, jsonb, pgTable, text, timestamp, unique, uuid, real, date } from "drizzle-orm/pg-core";
+import { check, doublePrecision, foreignKey, index, jsonb, pgTable,
+  integer, text, timestamp, unique, uuid, real, date } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import type { GisBoundary } from "@/lib/geojson/types";
 import {
@@ -19,12 +20,13 @@ import { organizations } from "./auth";
 export const applications = pgTable(
   "applications",
   {
+    version: integer('version').notNull().default(1),
     id: uuid("id").primaryKey().defaultRandom(),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organizations.id),
     code: text("code").notNull(), // e.g., "AP-2025-043"
-    applicationDate: timestamp("application_date").defaultNow().notNull(),
+    applicationDate: timestamp("application_date").notNull(),
     status: applicationStatus("status").default("applied").notNull(),
 
     // --- Linked Records ---
@@ -46,7 +48,7 @@ export const applications = pgTable(
     gpsLongitude: doublePrecision("gps_longitude"),
 
     // Field details
-    fieldSizeHa: real("field_size_ha"),
+    fieldSizeHa: real("field_size_ha").notNull(),
     cropType: text("crop_type"),
     applicationMethodType: applicationMethod("application_method"), // manual/mechanical
     fieldIdentifier: text("field_identifier"), // Field name/parcel ID

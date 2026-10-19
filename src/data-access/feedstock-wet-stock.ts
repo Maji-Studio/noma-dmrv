@@ -6,7 +6,7 @@ import { SafeError } from "@/lib/errors";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
 import { deriveLaneStock } from "./lane-stock-derivation";
 import { lockBinStock } from "./lock-bin-stocks";
-import { overdrawError } from "./stock-overdraw-error";
+import { overdrawError, StockOverdrawError } from "./stock-overdraw-error";
 import { requireOrgScope } from "./utils";
 
 type FeedstockStockReader = Pick<typeof db, "select">;
@@ -62,7 +62,7 @@ export async function assertFeedstockWetDrawWithinStock(
     },
   );
   if (isStockOverdraw(params.requestedWetKg, availableWetKg)) {
-    throw overdrawError("feedstock");
+    throw overdrawError("feedstock", { storageLocationId: params.storageLocationId, availableWetKg, requestedWetKg: params.requestedWetKg });
   }
 }
 
@@ -103,14 +103,14 @@ export async function allocateFeedstockWetMass(
     .orderBy(asc(feedstocks.id));
 
   if (batches.length === 0) {
-    throw new SafeError(EMPTY_FEEDSTOCK_BIN_MESSAGE);
+    throw new StockOverdrawError(EMPTY_FEEDSTOCK_BIN_MESSAGE, { storageLocationId, availableWetKg: 0, requestedWetKg: totalWetMassKg });
   }
 
   const totalUnits = toMassUnits(totalWetMassKg);
   const weights = batches.map((batch) => toMassUnits(batch.massWetKg ?? 0));
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
   if (totalWeight === 0) {
-    throw new SafeError(EMPTY_FEEDSTOCK_BIN_MESSAGE);
+    throw new StockOverdrawError(EMPTY_FEEDSTOCK_BIN_MESSAGE, { storageLocationId, availableWetKg: 0, requestedWetKg: totalWetMassKg });
   }
 
   let allocatedUnits = 0;

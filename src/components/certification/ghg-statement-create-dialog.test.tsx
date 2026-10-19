@@ -1,15 +1,13 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import {
-  PeriodWindow,
-  RegistryStatementsPanel,
-} from "./ghg-statement-create-dialog";
+import { RegistryStatementsPanel } from "./ghg-statement-create-dialog";
+import { PeriodStrip } from "./ghg-statement-period-strip";
 import { ResultPanel } from "./ghg-statement-result-panel";
 
-describe("PeriodWindow", () => {
+describe("PeriodStrip", () => {
   it("shows Isometric-owned first start and the chosen end", () => {
     const html = renderToStaticMarkup(
-      <PeriodWindow derivedStart={null} endOn="2026-07-31" />,
+      <PeriodStrip start={null} end="2026-07-31" />,
     );
 
     expect(html).toContain("Start");
@@ -20,7 +18,7 @@ describe("PeriodWindow", () => {
 
   it("shows the derived start for later statements", () => {
     const html = renderToStaticMarkup(
-      <PeriodWindow derivedStart="2026-07-01" endOn="2026-07-31" />,
+      <PeriodStrip start="2026-07-01" end="2026-07-31" />,
     );
 
     expect(html).toContain("Start");

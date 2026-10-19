@@ -7,12 +7,14 @@ QA report.
 
 - [Architecture](./architecture.md), [code organization](./organization.md),
   [database](./database.md), and [forms](./forms.md)
+- [REST and MCP data-entry API](./api.md) and [master data writes](./api-master-data.md)
 - [Authentication](./auth.md), [security](./security.md), and
   [storage](./storage.md)
 - [Testing](./testing.md), [troubleshooting](./troubleshooting.md), and
   [modern library patterns](./modern-patterns.md)
 - [Traceability](./traceability.md), [schema overview](./schema-overview.md),
   [design system](./design-system.md), and [UX writing](./ux-writing.md)
+- [Marketing site](./site.md) (`site/`, its Vercel projects and domains)
 - [Architecture decisions](./adr/)
 
 ## Active work and unresolved decisions

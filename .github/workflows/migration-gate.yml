@@ -3,27 +3,15 @@ name: PR migration gate
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-    paths:
-      - "src/db/schema/**"
-      - "drizzle/**"
-      - "drizzle.config.ts"
-      # Validate canonical development fixtures against the candidate schema.
-      - "src/db/seed-data.ts"
-      - "src/lib/cli/seed/**"
-      - "src/lib/cli/org-context.ts"
-      # Runtime inputs of the gate itself: edits to the workflow or the CLI
-      # scripts it invokes should exercise the gate.
-      - ".github/workflows/migration-gate.yml"
-      - "src/lib/cli/ensure-admin.ts"
-      - "src/lib/cli/ensure-admin-core.ts"
-      - "src/lib/cli/verify-db-schema.ts"
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 permissions:
   contents: read
   pull-requests: read
 
-# Cancel superseded checks for the same pull request or manually selected ref.
+# Cancel superseded checks for the same PR, merge-group ref or manual ref.
 concurrency:
   group: migration-gate-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -68,8 +56,8 @@ jobs:
       # schema changes, so validate the candidate's complete migration chain
       # and current seed instead of requiring upgrades of obsolete demo rows.
       # github.ref is GitHub's prospective merge ref for pull requests, so this
-      # tests what will land rather than the head branch in isolation. A manual
-      # run uses the commit selected in the workflow-dispatch UI.
+      # tests what will land rather than the head branch in isolation. Merge
+      # groups use github.sha; manual runs use the selected commit.
       - name: Checkout merge candidate
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -78,9 +66,8 @@ jobs:
           fetch-depth: 0
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -107,7 +94,7 @@ jobs:
         run: pnpm db:verify-schema
 
   # Independently exercise the full empty-database chain and bootstrap guards
-  # on every matching PR/manual run. No promotion label can bypass this gate.
+  # on every PR, merge group and manual run. No promotion label bypasses this gate.
   fresh-database-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -138,18 +125,17 @@ jobs:
       ISOMETRIC_CLIENT_SECRET: fresh-gate-client-secret
 
     steps:
-      # github.ref is the prospective merge ref, so this tests what will land.
+      # PRs use the prospective merge ref; merge groups and manual runs use github.sha.
       - name: Checkout merge candidate
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ github.event_name == 'pull_request' && github.ref || github.sha }}
           persist-credentials: false
           fetch-depth: 0
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0

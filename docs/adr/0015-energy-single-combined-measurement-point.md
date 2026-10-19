@@ -99,3 +99,5 @@ badge; removal is a follow-up migration. Startup/plant diesel is no longer
 advisory-only: it submits inside the combined litres figure, and the readiness
 advisory now fires only when the active template declares no pyrolysis
 `fuel_usage_by_volume` component while any diesel is recorded.
+
+Amended 2026-10-15 (#1012): the vestigial genset yield column and admin form were removed.

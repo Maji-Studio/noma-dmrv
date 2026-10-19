@@ -17,7 +17,7 @@ test.describe("Split bin picker", () => {
     await page.getByRole("button", { name: "New delivery", exact: true }).click();
     await page.locator("#deliveryDate").fill(FIFO_BROWSER_TIME);
     await selectEntity(page, "Order", f.order.id, f.order.code);
-    await page.locator("#storageLocationId").selectOption(f.bin.id);
+    await selectEntity(page, "Actual source bin", f.bin.id, f.bin.name);
     await page.locator("#deliveredWetMassKg").fill("1200");
     // Oldest first: 1,200 kg wet stays inside the older batch, so one row.
     const reading = (code: string) => page.getByRole("spinbutton", { name: `${code} moisture` });
@@ -74,13 +74,16 @@ test.describe("Split bin picker", () => {
     await waitForFacilityHydration(page, f.facility.name);
     await page.getByPlaceholder("Search by code or name…").fill(f.bin.code);
     await page.getByText(f.bin.name, { exact: true }).first().click();
-    const cards = page.getByRole("dialog").getByRole("list", { name: "Sub-bins, oldest first" }).getByRole("listitem");
+    const cards = page.getByRole("dialog").getByRole("list", { name: "Sub-bins, next out first" }).getByRole("listitem");
     await expect(cards).toHaveCount(2);
     await expect(cards.first()).toContainText(f.products[0].code);
-    await expect(cards.first()).toContainText("≈ 1,500 kg wet");
+    await expect(cards.first()).toContainText("1,500");
+    await expect(cards.first()).toContainText("Next out");
     // A tap opens it too, for touch screens with neither hover nor keyboard focus.
     await cards.first().getByRole("button", { name: `${f.products[0].code} details` }).click();
+    await expect(page.getByText("Wet, estimated", { exact: true })).toBeVisible();
     await expect(page.getByText("Dry biochar", { exact: true })).toBeVisible();
+    await expect(page.getByText("≈ 1,500 kg wet", { exact: true })).toBeVisible();
     await expect(page.getByText("Added 1,500 kg wet", { exact: true })).toBeVisible();
   });
 });

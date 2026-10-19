@@ -1,13 +1,13 @@
 import { createFacilityFn, updateFacilityFn } from "@/fn/facilities";
 import { createReactorFn } from "@/fn/reactors";
 import { createSupplierWithLocationsFn } from "@/fn/suppliers";
-import { createCustomerFn, createCustomerLocationFn } from "@/fn/customers";
+import { createCustomerWithLocationsFn } from "@/fn/customers";
 import { createFormulationFn } from "@/fn/formulations";
 import { createStorageLocationFn } from "@/fn/storage-locations";
 import { createDriverFn, createOperatorFn, createVehicleFn } from "@/fn/quick-add";
 import { createFacilitySchema } from "@/schemas/facilities";
 import { createSupplierWithLocationsSchema } from "@/schemas/suppliers";
-import { createCustomerLocationSchema } from "@/schemas/customers";
+import { createCustomerWithLocationsSchema } from "@/schemas/customers";
 import { percentFormToRatioPayload } from "@/schemas/formulations";
 import { CUSTOMER, CUSTOMER_LOCATION, EQUIPMENT, FACILITY, FORMULATION, MAFINGA_CODE, SUPPLIERS, SUPPLIER_LOCATION } from "./constants";
 import { unwrap, type SeedCounts } from "./actions";
@@ -16,7 +16,7 @@ import { seedRegistryAndTypes } from "./registry";
 export async function seedInfrastructure(counts: SeedCounts) {
   const facility = await unwrap("create facility", createFacilityFn(createFacilitySchema.parse(FACILITY)));
   counts.add("facilities");
-  await unwrap("set facility idempotency code", updateFacilityFn({ facilityId: facility.id, code: MAFINGA_CODE }));
+  await unwrap("set facility idempotency code", updateFacilityFn({ facilityId: facility.id, expectedVersion: facility.version, code: MAFINGA_CODE }));
   const facilityId = facility.id;
   const types = await seedRegistryAndTypes(facilityId, counts);
   const reactor = await unwrap("create reactor", createReactorFn({ ...EQUIPMENT.reactor, facilityId }));
@@ -26,17 +26,16 @@ export async function seedInfrastructure(counts: SeedCounts) {
     suppliers.push(await unwrap(`create supplier ${index + 1} with location`, createSupplierWithLocationsFn(
       createSupplierWithLocationsSchema.parse({
         supplier: { name: supplier.name, sourceRegion: FACILITY.location },
-        locations: [{ ...SUPPLIER_LOCATION, distanceFromFacilityKm: supplier.distanceKm }],
+        locations: [{ ...SUPPLIER_LOCATION, facilityDistances: [{ facilityId, distanceKm: supplier.distanceKm, distanceSource: "manual" }] }],
       }),
     )));
     counts.add("suppliers");
     counts.add("supplier locations");
   }
-  const customer = await unwrap("create customer", createCustomerFn(CUSTOMER));
-  counts.add("customers");
-  const customerLocation = await unwrap("create customer location", createCustomerLocationFn(
-    createCustomerLocationSchema.parse({ ...CUSTOMER_LOCATION, customerId: customer.id }),
+  const { customer, locations: [customerLocation] } = await unwrap("create customer with location", createCustomerWithLocationsFn(
+    createCustomerWithLocationsSchema.parse({ customer: CUSTOMER, locations: [{ ...CUSTOMER_LOCATION, facilityDistances: [{ facilityId, distanceKm: CUSTOMER_LOCATION.distanceKm, distanceSource: "manual" }] }] }),
   ));
+  counts.add("customers");
   counts.add("customer locations");
   const formulation = await unwrap("create formulation", createFormulationFn(percentFormToRatioPayload({
     name: FORMULATION.name, biocharPercent: FORMULATION.biocharPercent,

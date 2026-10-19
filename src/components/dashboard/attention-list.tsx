@@ -41,7 +41,7 @@ export function AttentionList({
       title="Needs attention"
       meta={
         <span
-          className="label-micro"
+          className="body-small font-medium"
           style={{ color: STATUS_STATE_COLOR_TOKENS[summaryState] }}
         >
           {total > 0 ? `${total} open` : "All clear"}
@@ -76,7 +76,7 @@ export function AttentionList({
       )}
       {total > displayedOpenCount && (
         <div className="border-t border-[var(--color-border-tertiary)] px-20 py-10">
-          <span className="label-micro text-[var(--color-text-tertiary)]">
+          <span className="body-caption text-[var(--color-text-tertiary)]">
             Showing first {displayedOpenCount} of {total}
           </span>
         </div>

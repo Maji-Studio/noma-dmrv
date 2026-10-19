@@ -17,6 +17,10 @@ vi.mock("@/hooks/use-documents", () => ({
 vi.mock("@/hooks/use-applications", () => ({
   applicationKeys: { lists: () => ["applications", "list"] },
 }));
+vi.mock("@/hooks/use-record-certification-lock", () => ({
+  useIsRecordCertificationLocked: () => false,
+}));
+
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ success: vi.fn() }),
 }));
@@ -36,6 +40,13 @@ vi.mock("@/components/forms", () => ({
       data-document-type={documentType}
       data-resolves-document-type={!!resolveDocumentType}
     />
+  ),
+  FormField: ({ label, helperText, children }: { label: string; helperText?: string; children?: ReactNode }) => (
+    <div>
+      <span>{label}</span>
+      {helperText && <span>{helperText}</span>}
+      {children}
+    </div>
   ),
   ServerError: ({ message }: { message: string }) => <p>{message}</p>,
 }));
@@ -143,6 +154,14 @@ function renderSupportingEvidencePanel(
     </QueryClientProvider>,
   );
 }
+
+describe("GIS reference required marker", () => {
+  it("stars the GIS reference only for the GIS reference method, and not read-only", () => {
+    expect(renderPanel([], "boundary")).toContain("sr-only\">Required");
+    expect(renderPanel([], "location")).not.toContain("Required");
+    expect(renderPanel([], "boundary", null, true)).not.toContain("Required");
+  });
+});
 
 describe("ApplicationEvidencePanel", () => {
   it("shows customer location first and selects it by default", () => {
@@ -259,4 +278,12 @@ describe("ApplicationSupportingEvidencePanel", () => {
     expect(html).toContain("field-boundary.geojson");
     expect(html).toContain('aria-label="Delete field-boundary.geojson"');
   });
+});
+
+it("shows the boundary field refusal in the evidence panel", () => {
+  const message = "Add a boundary file, or choose Customer location.";
+  const html = renderToStaticMarkup(<QueryClientProvider client={new QueryClient()}>
+    <ApplicationEvidencePanel mode="boundary" boundary={null} error={message} />
+  </QueryClientProvider>);
+  expect(html).toContain(message);
 });

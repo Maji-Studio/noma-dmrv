@@ -1,7 +1,7 @@
 /** Sample side-sheet view mode: the sections config for EntitySideSheet. */
 import { TransportLegsSummary } from "@/components/transport-legs";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatDate, formatDateTime, formatPercent } from "@/lib/format-utils";
+import { formatDate, formatDateTime, formatFacilityDateTime, formatPercent } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL, PERCENT_SCALE } from "@/lib/mass-moisture";
 import { formatDurabilityOption } from "@/schemas/samples";
 import { SampleDocumentsPanel } from "./sample-documents-panel";
@@ -16,13 +16,27 @@ function formatLabPercent(value: number | null | undefined): string {
   return formatPercent(value, { digits: LAB_PERCENT_FRACTION_DIGITS });
 }
 
-export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSection[] {
+/**
+ * Sampling time on the credit batch facility's clock, the clock it is entered
+ * on (round 7 Q51). Without a configured facility zone, use the viewer's clock.
+ */
+export function formatSamplingTime(sample: Pick<SampleWithRelations, "samplingTime" | "facilityTimezone">): string {
+  return sample.facilityTimezone
+    ? formatFacilityDateTime(sample.samplingTime, sample.facilityTimezone)
+    : formatDateTime(sample.samplingTime);
+}
+
+export function sampleSheetSections(
+  sample: SampleWithRelations,
+  options: { hideTransport?: boolean } = {},
+): DetailPanelSection[] {
+  const certificationContext = { sampling: sample.sampling, durabilityOption: sample.durabilityOption };
   return [
     {
       title: "Sample information",
       fields: [
         { label: "Credit batch", value: sample.creditBatchCode },
-        { label: "Sampling time", value: formatDateTime(sample.samplingTime) },
+        { label: "Sampling time", value: formatSamplingTime(sample) },
         { label: "Analysis date", value: formatDate(sample.analysisDate) },
         { label: "Lab name", value: sample.labName },
         { label: "Lab accreditation", value: sample.labAccreditation },
@@ -31,27 +45,16 @@ export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSec
       ],
     },
     {
-      title: "Carbon analysis",
+      title: "Lab analysis",
       fields: [
-        { label: "Total carbon (%)", value: formatLabPercent(sample.totalCarbonPercent) },
-        { label: "Organic carbon (%)", ...certificationDetailField("sample", "organicCarbonPercent"), value: formatLabPercent(sample.organicCarbonPercent) },
-        { label: "Inorganic carbon (%)", value: formatLabPercent(sample.inorganicCarbonPercent) },
-      ],
-    },
-    {
-      title: "Elemental analysis",
-      fields: [
-        { label: "Hydrogen (%)", value: formatLabPercent(sample.totalHydrogenPercent) },
-        { label: "Nitrogen (%)", value: formatLabPercent(sample.totalNitrogenPercent) },
-        { label: "Oxygen (%)", value: formatLabPercent(sample.totalOxygenPercent) },
-        { label: "Sulfur (%)", value: formatLabPercent(sample.totalSulfurPercent) },
-      ],
-    },
-    {
-      title: "Proximate analysis",
-      fields: [
-        { label: "Ash content (%)", value: formatLabPercent(sample.ashContentPercent) },
-        { label: MOISTURE_FIELD_LABEL, value: formatMoisturePercent(sample.moistureContentPercent) },
+        { label: "Total carbon", value: formatLabPercent(sample.totalCarbonPercent) },
+        { label: "Organic carbon", ...certificationDetailField("sample", "organicCarbonPercent", certificationContext), value: formatLabPercent(sample.organicCarbonPercent) },
+        { label: "Inorganic carbon", value: formatLabPercent(sample.inorganicCarbonPercent) },
+        { label: "Ash content", value: formatLabPercent(sample.ashContentPercent) },
+        { label: "Hydrogen", value: formatLabPercent(sample.totalHydrogenPercent) },
+        { label: "Nitrogen", value: formatLabPercent(sample.totalNitrogenPercent) },
+        { label: "Oxygen", value: formatLabPercent(sample.totalOxygenPercent) },
+        { label: "Sulfur", value: formatLabPercent(sample.totalSulfurPercent) },
       ],
     },
     {
@@ -60,22 +63,23 @@ export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSec
         { label: "Bulk density (kg/m³)", value: sample.bulkDensityKgPerM3 },
         { label: "pH", value: sample.ph != null ? String(sample.ph) : null },
         { label: "Salt content (g/kg)", value: sample.saltContentGPerKg },
+        { label: MOISTURE_FIELD_LABEL, value: formatMoisturePercent(sample.moistureContentPercent) },
       ],
     },
     {
       title: "Stability ratios",
       fields: [
         { label: "Inherited durability", value: formatDurabilityOption(sample.durabilityOption) },
-        { label: "H:C org ratio", ...certificationDetailField("sample", "hToCOrgRatio"), value: sample.hToCOrgRatio?.toFixed(RATIO_DIGITS) ?? null },
-        { label: "O:C org ratio", ...certificationDetailField("sample", "oToCOrgRatio"), value: sample.oToCOrgRatio?.toFixed(RATIO_DIGITS) ?? null },
+        { label: "H:C org ratio", ...certificationDetailField("sample", "hToCOrgRatio", certificationContext), value: sample.hToCOrgRatio?.toFixed(RATIO_DIGITS) ?? null },
+        { label: "O:C org ratio", ...certificationDetailField("sample", "oToCOrgRatio", certificationContext), value: sample.oToCOrgRatio?.toFixed(RATIO_DIGITS) ?? null },
       ],
     },
     ...(sample.durabilityOption === "1000_year" ? [
       {
         title: "1000-year durability · R₀ reflectance",
         fields: [
-          { label: "Mean random reflectance R₀ (%)", ...certificationDetailField("sample", "randomReflectanceR0Percent"), value: formatLabPercent(sample.randomReflectanceR0Percent) },
-          { label: "R₀ readings at or above 2% (%)", ...certificationDetailField("sample", "sReflectanceFraction"), value: sample.sReflectanceFraction == null ? null : formatLabPercent(sample.sReflectanceFraction * PERCENT_SCALE) },
+          { label: "Mean random reflectance R₀", ...certificationDetailField("sample", "randomReflectanceR0Percent", certificationContext), value: formatLabPercent(sample.randomReflectanceR0Percent) },
+          { label: "R₀ readings ≥ 2%", ...certificationDetailField("sample", "sReflectanceFraction", certificationContext), value: sample.sReflectanceFraction == null ? null : formatLabPercent(sample.sReflectanceFraction * PERCENT_SCALE) },
           { label: "Measurement count", value: sample.r0MeasurementCount },
           { label: "R₀ analysis date", value: formatDate(sample.r0AnalysisDate) },
         ],
@@ -83,8 +87,8 @@ export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSec
       {
         title: "TGA non-reactive carbon",
         fields: [
-          { label: "Reactive carbon (%)", ...certificationDetailField("sample", "reactiveCarbonPercent"), value: formatLabPercent(sample.reactiveCarbonPercent) },
-          { label: "Residual (non-reactive) carbon (%)", ...certificationDetailField("sample", "residualCarbonPercent"), value: formatLabPercent(sample.residualCarbonPercent) },
+          { label: "Reactive carbon", ...certificationDetailField("sample", "reactiveCarbonPercent", certificationContext), value: formatLabPercent(sample.reactiveCarbonPercent) },
+          { label: "Residual carbon", ...certificationDetailField("sample", "residualCarbonPercent", certificationContext), value: formatLabPercent(sample.residualCarbonPercent) },
           { label: "TGA analysis date", value: formatDate(sample.tgaAnalysisDate) },
         ],
       },
@@ -107,10 +111,13 @@ export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSec
       fields: [],
       content: <SampleDocumentsPanel sampleId={sample.id} readOnly />,
     },
-    {
-      title: "Transport",
-      fields: [],
-      content: <TransportLegsSummary entityType="sample" entityId={sample.id} />,
-    },
+    // Sample shipping is an emissions entry on the credit batch once the gate is on.
+    ...(options.hideTransport
+      ? []
+      : [{
+          title: "Transport",
+          fields: [],
+          content: <TransportLegsSummary entityType="sample" entityId={sample.id} />,
+        }]),
   ];
 }

@@ -1,3 +1,6 @@
+import { StaleVersionError, throwActionError } from "@/lib/stale-version";
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 /**
  * Orders React Query Hooks
  * Client-side state management for order operations
@@ -9,6 +12,7 @@ import type {
   OrderFilterData,
   CreateOrderData,
   UpdateOrderData,
+  DeleteOrderData,
 } from "@/schemas/orders";
 import type { PaginatedOrders, OrderWithRelations } from "@/data-access/orders";
 import {
@@ -17,10 +21,12 @@ import {
   createOrderFn,
   updateOrderFn,
   deleteOrderFn,
+  getOrderWithRelationsFn,
 } from "@/fn/orders";
 
-import type { MutationCallbacks } from "./types";
+import { unwrap, type MutationCallbacks } from "./types";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
+import { activityKeys } from "./activity-query-keys";
 
 // ============================================
 // Query Keys
@@ -35,8 +41,9 @@ export const orderKeys = {
   detail: (id: string) => [...orderKeys.details(), id] as const,
   detailWithRelations: (id: string) =>
     [...orderKeys.details(), id, "relations"] as const,
+  selects: () => [...orderKeys.all, "select"] as const,
   select: (facilityId?: string) =>
-    [...orderKeys.all, "select", facilityId] as const,
+    [...orderKeys.selects(), facilityId] as const,
   codeCheck: (code: string, excludeId?: string) =>
     [...orderKeys.all, "codeCheck", code, excludeId] as const,
 };
@@ -54,15 +61,21 @@ export function useOrders(
 ) {
   return useQuery({
     queryKey: orderKeys.list(filters),
-    queryFn: async () => {
-      const result = await getOrdersFn(filters);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getOrdersFn(filters)),
     staleTime: 30000, // 30 seconds
     enabled: options?.enabled,
+  });
+}
+
+/**
+ * One order in the list row shape, archived included (the `?order=` deep link).
+ */
+export function useOrderWithRelations(orderId: string, enabled = true) {
+  return useQuery({
+    queryKey: orderKeys.detailWithRelations(orderId),
+    queryFn: async () => unwrap(await getOrderWithRelationsFn(orderId)),
+    enabled: enabled && !!orderId,
+    staleTime: 30000,
   });
 }
 
@@ -75,13 +88,7 @@ export function useOrdersForSelect(
 ) {
   return useQuery({
     queryKey: orderKeys.select(facilityId),
-    queryFn: async () => {
-      const result = await getOrdersForSelectFn(facilityId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getOrdersForSelectFn(facilityId)),
     staleTime: 30000,
     enabled: options?.enabled,
   });
@@ -100,13 +107,8 @@ export function useCreateOrder(
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: CreateOrderData) => {
-      const result = await createOrderFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.order),
+    mutationFn: async (data: CreateOrderData) => unwrap(await createOrderFn(data)),
     onMutate: async (variables) => {
       await callbacks?.onMutate?.(variables);
     },
@@ -114,6 +116,8 @@ export function useCreateOrder(
       // Invalidate all order lists
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
       invalidateStockEntityQueries(queryClient, "order");
+      // Order writes record activity on the batches their deliveries reach.
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
       // Pre-populate the detail cache with the new order
       queryClient.setQueryData(orderKeys.detail(data.id), data);
 
@@ -137,10 +141,11 @@ export function useUpdateOrder(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.order),
     mutationFn: async (data: UpdateOrderData) => {
       const result = await updateOrderFn(data);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -200,6 +205,8 @@ export function useUpdateOrder(
       return { previousOrder, previousLists };
     },
     onSuccess: async (data, variables) => {
+      patchListCachesWithSavedRow(queryClient, orderKeys.lists(), data);
+      queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
       // Update cache with actual server data
       queryClient.setQueryData(orderKeys.detail(data.id), data);
 
@@ -209,6 +216,8 @@ export function useUpdateOrder(
       });
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
       invalidateStockEntityQueries(queryClient, "order");
+      // Order writes record activity on the batches their deliveries reach.
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -249,18 +258,20 @@ export function useUpdateOrder(
 /**
  * Hook to delete an order
  */
-export function useDeleteOrder(callbacks?: MutationCallbacks<void, string>) {
+export function useDeleteOrder(callbacks?: MutationCallbacks<void, DeleteOrderData>) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (orderId: string) => {
-      const result = await deleteOrderFn({ orderId });
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.order),
+    mutationFn: async (variables: DeleteOrderData) => {
+      const result = await deleteOrderFn(variables);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return;
     },
-    onMutate: async (orderId) => {
+    onMutate: async (variables) => {
+      const { orderId } = variables;
       // Cancel outgoing refetches
       await queryClient.cancelQueries({
         queryKey: orderKeys.lists(),
@@ -286,11 +297,12 @@ export function useDeleteOrder(callbacks?: MutationCallbacks<void, string>) {
         });
       });
 
-      await callbacks?.onMutate?.(orderId);
+      await callbacks?.onMutate?.(variables);
 
       return { previousOrder, previousLists };
     },
-    onSuccess: async (_, orderId) => {
+    onSuccess: async (_, variables) => {
+      const { orderId } = variables;
       // Remove specific order from cache
       queryClient.removeQueries({ queryKey: orderKeys.detail(orderId) });
       queryClient.removeQueries({
@@ -299,10 +311,13 @@ export function useDeleteOrder(callbacks?: MutationCallbacks<void, string>) {
       // Invalidate lists for consistency
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
       invalidateStockEntityQueries(queryClient, "order");
+      // Order writes record activity on the batches their deliveries reach.
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
 
-      await callbacks?.onSuccess?.(undefined, orderId);
+      await callbacks?.onSuccess?.(undefined, variables);
     },
-    onError: async (error, orderId, context) => {
+    onError: async (error, variables, context) => {
+      const { orderId } = variables;
       // Rollback to previous values on error
       if (context) {
         const { previousOrder, previousLists } = context as {
@@ -321,12 +336,16 @@ export function useDeleteOrder(callbacks?: MutationCallbacks<void, string>) {
         });
       }
 
-      await callbacks?.onError?.(error, orderId);
+      if (error instanceof StaleVersionError) {
+        queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: orderKeys.detail(orderId) });
+      }
+      await callbacks?.onError?.(error, variables);
     },
-    onSettled: async (data, error, orderId) => {
+    onSettled: async (data, error, variables) => {
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
 
-      await callbacks?.onSettled?.(data, error, orderId);
+      await callbacks?.onSettled?.(data, error, variables);
     },
   });
 }

@@ -1,4 +1,7 @@
 "use client";
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
+import { throwActionError } from "@/lib/stale-version";
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 
 import { getMatchingOutputBinsFn, getOutputStockHistoryFn, getOutputSubBinsFn, postOutputStockFn, previewOutputStockFn } from "@/fn/output-stock";
 import type { OutputStockPostInput, OutputStockPreviewInput, OutputSubBinsInput } from "@/types/output-stock";
@@ -12,13 +15,15 @@ import { deliveryKeys } from "./use-deliveries";
 import { storageLocationKeys } from "./use-storage-locations";
 import { certificationKeys } from "./use-certification";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
+import { unwrap } from "@/hooks/types";
+import { activityKeys } from "./activity-query-keys";
 
 export const outputStockKeys = {
   all: ["outputStock"] as const,
   preview: (input: OutputStockPreviewInput | null) => ["outputStock", "preview", input] as const,
   balance: (storageLocationId: string, facilityId: string, occurredAt?: string) => ["outputStock", "balance", storageLocationId, facilityId, occurredAt ?? "now"] as const,
   history: (id: string) => ["outputStock", "history", id] as const,
-  subBins: (input: SubBinsQueryInput | null) => ["outputStock", "subBins", input] as const,
+  subBins: (input: OutputSubBinsInput | null) => ["outputStock", "subBins", input] as const,
   matching: (facilityId: string, formulationId: string) => ["outputStock", "matching", facilityId, formulationId] as const,
 };
 
@@ -28,9 +33,7 @@ export function useOutputStockPreview(input: OutputStockPreviewInput | null) {
     enabled: input !== null,
     queryFn: async () => {
       if (!input) throw new Error("Choose a storage bin first.");
-      const result = await previewOutputStockFn(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
+      return unwrap(await previewOutputStockFn(input));
     },
     staleTime: 0,
     retry: false,
@@ -49,32 +52,27 @@ export function useOutputStockBalance(bin: { storageLocationId: string; facility
     enabled: bin !== null,
     queryFn: async () => {
       if (!bin) throw new Error("Choose a storage bin first.");
-      const result = await previewOutputStockFn({ ...bin, occurredAt: occurredAt ?? new Date().toISOString(), kind: "count", wetMassKg: 0, moisturePercent: null });
-      if (!result.success) throw new Error(result.error);
-      return result.data;
+      return unwrap(await previewOutputStockFn({ ...bin, occurredAt: occurredAt ?? new Date().toISOString(), kind: "count", wetMassKg: 0, moisturePercent: null }));
     },
     staleTime: 0,
     retry: false,
   });
 }
 
-/** Without `occurredAt` the sub-bins are read as of each fetch, like the bin balance. */
-type SubBinsQueryInput = Omit<OutputSubBinsInput, "occurredAt"> & { occurredAt?: string };
-
 /**
- * A split bin's sub-bins at the entry's time, oldest first. Keeps the last
+ * A split bin's sub-bins at the entry's time, oldest first. Without
+ * `occurredAt` they are read as of each fetch, like the bin balance: the
+ * server takes that instant, so a batch placed just before is never left out. Keeps the last
  * answer for the same bin while the time is edited, so the reading rows do
  * not blink; another bin never shows the last bin's sub-bins.
  */
-export function useOutputSubBins(input: SubBinsQueryInput | null) {
+export function useOutputSubBins(input: OutputSubBinsInput | null) {
   return useQuery({
     queryKey: outputStockKeys.subBins(input),
     enabled: input !== null,
     queryFn: async () => {
       if (!input) throw new Error("Choose a storage bin first.");
-      const result = await getOutputSubBinsFn({ ...input, occurredAt: input.occurredAt ?? new Date().toISOString() });
-      if (!result.success) throw new Error(result.error);
-      return result.data;
+      return unwrap(await getOutputSubBinsFn(input));
     },
     placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2]?.storageLocationId === input?.storageLocationId ? previous : undefined,
     retry: false,
@@ -85,11 +83,7 @@ export function useMatchingOutputBins(facilityId: string, formulationId: string,
   return useQuery({
     queryKey: outputStockKeys.matching(facilityId, formulationId),
     enabled: enabled && !!facilityId && !!formulationId,
-    queryFn: async () => {
-      const result = await getMatchingOutputBinsFn({ facilityId, formulationId });
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getMatchingOutputBinsFn({ facilityId, formulationId })),
   });
 }
 
@@ -97,23 +91,29 @@ export function useOutputStockHistory(storageLocationId: string, enabled = true)
   return useQuery({
     queryKey: outputStockKeys.history(storageLocationId),
     enabled: enabled && !!storageLocationId,
-    queryFn: async () => {
-      const result = await getOutputStockHistoryFn(storageLocationId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getOutputStockHistoryFn(storageLocationId)),
   });
 }
 
 export function usePostOutputStock() {
   const client = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.stock),
     mutationFn: async (input: OutputStockPostInput) => {
       const result = await postOutputStockFn(input);
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      void client.invalidateQueries({ queryKey: activityKeys.all });
+      for (const row of data.savedDeliveries) {
+        patchListCachesWithSavedRow(client, deliveryKeys.lists(), row);
+        client.setQueriesData({ queryKey: deliveryKeys.detail(row.id) }, (old: object | undefined) => old ? { ...old, ...row } : old);
+      }
+      for (const row of data.savedProducts) {
+        patchListCachesWithSavedRow(client, biocharProductKeys.lists(), row);
+        client.setQueryData(biocharProductKeys.detail(row.id), (old: object | undefined) => old ? { ...old, ...row } : old);
+      }
       for (const key of [outputStockKeys.all, storageLocationKeys.all, biocharProductKeys.all, deliveryKeys.all, orderKeys.all, dashboardOverviewKeys.all, certificationKeys.all, creditBatchKeys.all, chainOfCustodyKeys.all]) {
         void client.invalidateQueries({ queryKey: key });
       }

@@ -1,3 +1,6 @@
+import { generateNextCodes } from "./code-generator";
+import { REMOVAL_CODE_PREFIX } from "./certifier-removals";
+import { TEST_SITE_POSITION } from "../../tests/helpers/test-org";
 /** Real PostgreSQL query tests in session-local TEMP tables, always rolled back.
  * These verify consumer SQL, not the conductor's combined migration/FKs.
  */
@@ -37,7 +40,7 @@ const tables: PgTable[] = [schema.applications, schema.applicationOutputAllocati
   schema.deliveries, schema.orders, schema.outputStockAllocations, schema.outputStockRunAllocations,
   schema.productionRuns, schema.creditBatchApplications, schema.creditBatchProductionRuns, schema.creditBatches,
   schema.facilities, schema.feedstockTypes, schema.formulations, schema.reactors, schema.storageLocations,
-  schema.productionRunFeedstocks, schema.feedstocks, schema.feedstockDeliveries, schema.suppliers,
+  schema.productionRunFeedstocks, schema.feedstocks, schema.suppliers,
   schema.samples, schema.certifierRemovals, schema.certificationSubmissions, schema.documents];
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
@@ -56,11 +59,14 @@ describe.skipIf(!available)("saved provenance PostgreSQL consumer queries", () =
     tx = executor as unknown as DbTransaction;
     vi.spyOn(db, "transaction").mockImplementation(async callback => callback(tx));
     vi.spyOn(db, "select").mockImplementation(executor.select.bind(executor));
-    await executor.insert(schema.facilities).values({ ...org, id: ids.facility, code: "F", name: "Fixture" });
+    await executor.insert(schema.facilities).values({ ...TEST_SITE_POSITION, timezone: "UTC", ...org, id: ids.facility, code: "F", name: "Fixture" });
     await executor.insert(schema.storageLocations).values({ ...org, id: ids.bin, facilityId: ids.facility, code: "BIN", name: "Fixture bin", type: "product_bin" });
-    await executor.insert(schema.productionRuns).values(["A", "B"].map(label => ({ ...org, id: ids[`run${label}`], facilityId: ids.facility, code: `R${label}`, reactorId: randomUUID(), status: "complete" as const, biocharDryMassKg: 1000 })));
+    const [outputBin] = await executor.insert(schema.storageLocations).values({
+      ...org, facilityId: ids.facility, code: "OUT", name: "E2E Run output", type: "biochar_bin",
+    }).returning();
+    await executor.insert(schema.productionRuns).values(["A", "B"].map(label => ({ ...org, id: ids[`run${label}`], facilityId: ids.facility, code: `R${label}`, reactorId: randomUUID(), status: "complete" as const, startTime: new Date("2026-01-01T08:00:00Z"), biocharStorageLocationId: outputBin.id, biocharMoisturePercent: 0, biocharOutputKg: 1000, biocharDryMassKg: 1000 })));
     await executor.insert(schema.formulations).values({ ...org, id: ids.formulation, code: "FORM", name: "Fixture pure", biocharRatio: 1 });
-    await executor.insert(schema.biocharProducts).values(["A", "B", "C"].map(label => ({ ...org, id: ids[label], facilityId: ids.facility, code: label, formulationId: ids.formulation, placedAt: new Date("2026-01-01T12:00:00.000Z"), productionDate: new Date("2026-01-01"), massKg: 2500 })));
+    await executor.insert(schema.biocharProducts).values(["A", "B", "C"].map(label => ({ ...org, id: ids[label], facilityId: ids.facility, code: label, formulationId: ids.formulation, placedAt: new Date("2026-01-01T12:00:00.000Z"), productionDate: "2026-01-01", massKg: 2500, moistureContentPercent: 0, waterAddedKg: 0, storageLocationId: ids.bin, sourceBiocharStorageLocationId: outputBin.id })));
     await executor.execute(sql`insert into orders (organization_id, id, facility_id, formulation_id, code, order_date, quantity_kg) values (${ctx.organizationId}, ${ids.order}, ${ids.facility}, ${ids.formulation}, 'O', '2026-01-02', 2000)`);
     await executor.insert(schema.deliveries).values({ ...org, id: ids.delivery, facilityId: ids.facility, code: "D", orderId: ids.order, deliveryDate: new Date("2026-01-03"), status: "delivered", storageLocationId: ids.bin, deliveredWetMassKg: 2000, massDryKg: 1150 });
     // Original + reversal + replacement. The unrelated product C nets to zero.
@@ -125,7 +131,8 @@ describe.skipIf(!available)("saved provenance PostgreSQL consumer queries", () =
   });
 
   it("resolves a B-only captured lineage through truck, product, application and source without locking unused C", async () => {
-    await executor.insert(schema.certifierRemovals).values({ ...org, id: ids.removal, facilityId: ids.facility });
+    const [code] = await generateNextCodes(ctx, REMOVAL_CODE_PREFIX, schema.certifierRemovals, schema.certifierRemovals.code, 1, executor);
+    await executor.insert(schema.certifierRemovals).values({ ...org, code, id: ids.removal, facilityId: ids.facility });
     await executor.update(schema.creditBatchApplications).set({ removalId: ids.removal }).where(eq(schema.creditBatchApplications.creditBatchId, ids.batchB));
     for (const [entityType, entityId] of [["delivery", ids.delivery], ["application", ids.app], ["biocharProduct", ids.B], ["productionRun", ids.runB]] as const) {
       expect(await getCertifiedLineage(ctx, tx, { entityType, entityId })).toHaveLength(1);
@@ -143,7 +150,8 @@ describe.skipIf(!available)("saved provenance PostgreSQL consumer queries", () =
 
   it("persists repeated partial applications and closes every saved source gram", async () => {
     for (const [wet, dry] of [[0.333333, 0.191667], [0.333333, 0.191667], [0.333334, 0.191666]]) {
-      const [app] = await executor.insert(schema.applications).values({ ...org, id: randomUUID(), code: "PARTIAL", deliveryId: ids.delivery, applicationDate: new Date("2026-01-04"), biocharAppliedTons: wet, biocharAppliedDryTons: dry }).returning();
+      const [app] = await executor.insert(schema.applications).values({
+        fieldSizeHa: 1,  ...org, id: randomUUID(), code: "PARTIAL", deliveryId: ids.delivery, applicationDate: new Date("2026-01-04"), biocharAppliedTons: wet, biocharAppliedDryTons: dry }).returning();
       await saveApplicationOutputAllocations(ctx, tx, app);
       await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, { applicationIds: [app.id] });
     }

@@ -20,3 +20,5 @@ export type {
   QuickAddDialogProps,
   UseEntityOptionsParams,
 } from "./types";
+
+export type { EntityEditDialogProps } from "./entity-edit-dialog";

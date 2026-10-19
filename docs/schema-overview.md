@@ -12,16 +12,21 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 | Area | File |
 |---|---|
 | Auth, orgs, members, invitations | `src/db/schema/auth.ts` |
+| API credentials (`api_keys`) and management records (`api_key_owners`) | `src/db/schema/api-keys.ts` |
+| API bookkeeping (`api_idempotency_records`, `api_rate_limit_buckets`, `organization_api_access`) | `src/db/schema/api.ts` |
+| Emissions entries and input values | `src/db/schema/emission-entries.ts`. Organization-consistent references, versioned tombstones, entry claims, and exact decimal values. |
+| Line comments (`emission_line_comments`) | `src/db/schema/emission-line-comments.ts`. One versioned, noma-only comment per organization, credit batch and template component ID. Hard deleted; earlier wording stays in activity. |
+| Activity history (`activity_events`) | `src/db/schema/activity.ts` |
 | Facilities, reactors, storage locations | `src/db/schema/facilities.ts` |
 | Suppliers, customers, their locations, drivers, operators | `src/db/schema/parties.ts` |
-| Feedstock deliveries, types, feedstocks | `src/db/schema/feedstock.ts` |
+| Feedstock types and feedstocks | `src/db/schema/feedstock.ts`. Feedstocks own intake and transport facts; split intakes share `deliveryGroupId`. |
 | Production runs, readings, samples, incidents, run↔physical-bin draw ledger, run↔feedstock provenance junction | `src/db/schema/production.ts` |
 | Production processes (epochs + Method-B prerequisites) | `src/db/schema/production-processes.ts` |
 | Formulations, ingredients, biochar products | `src/db/schema/products.ts` |
 | Vehicles, orders, deliveries, transport legs | `src/db/schema/logistics.ts` |
 | Applications, soil temperature measurements | `src/db/schema/application.ts` |
 | Credit batches + application/production-run membership | `src/db/schema/credits.ts` |
-| Certifier credentials, organization settings, projects, sensors, GHG statements, generated statement reports, removals, submissions, uploads, sync events | `src/db/schema/certification.ts` |
+| Certifier credentials, organization settings, projects, GHG statements, generated statement reports, removals, submissions, uploads, sync events | `src/db/schema/certification.ts` |
 | Registry production-batch identities (Isometric `ptb_…` per credit batch) | `src/db/schema/certifier-production-batches.ts` |
 | Registry Storage Location identities (Isometric `slc_…` per project and Customer Location) | `src/db/schema/certifier-storage-locations.ts` |
 | Registry Biochar Application idempotency journal | `src/db/schema/certifier-biochar-applications.ts` |
@@ -30,8 +35,123 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 | Bin movements (ledger) | `src/db/schema/bin-movements.ts` |
 | Documents (polymorphic evidence store) | `src/db/schema/documentation.ts` |
 | Organization operating defaults | `src/db/schema/settings.ts` |
+| Facility emission factors (dormant, ADR 0031) | `src/db/schema/emission-factors.ts` |
 | Route cache | `src/db/schema/geo.ts` |
 | Shared enums / shared numeric column types | `src/db/schema/common.ts` · `src/db/schema/numeric-families.ts` |
+
+Production runs, incident reports, in-process production samples, and biochar
+products each carry a required integer `version`, initially 1. Every row update
+increments it atomically, including archive cascades and product stock effects.
+Edit and delete commands must send the loaded version.
+
+Production run status is `running | complete | failed | cancelled`. Migration
+`0133_run_status_no_draft` dropped `draft` without a backfill, so it fails on a
+database that still holds draft runs: delete those rows or reset the database
+first (`pnpm db:reset` locally; shared staging uses the manual reset workflow
+in [database.md](./database.md), announced first).
+
+Migration `0137_logistics_required_fields` sets `applications.field_size_ha`,
+`deliveries.delivered_wet_mass_kg`, and the five `biochar_products` columns
+(`mass_kg`, `moisture_content_percent`, `water_added_kg`,
+`source_biochar_storage_location_id`, `storage_location_id`) NOT NULL, drops
+the `applications.application_date` and `biochar_products.production_date`
+defaults, and drops `biochar_products.expires_at` without a backfill, so it
+fails on a database that still holds null legacy rows. Run `pnpm db:reset` locally; shared staging
+uses the manual reset workflow in [database.md](./database.md), announced first.
+
+Migration `0140_require_order_delivery_site` makes
+`orders.customer_location_id` NOT NULL. The location must belong to the selected
+customer. Create requires it; updates may omit it to keep the saved destination
+and cannot clear it. Existing development rows without a destination require a
+database reset before applying the constraint (`pnpm db:reset` locally; shared
+staging uses the manual reset workflow in [database.md](./database.md), announced
+first).
+
+Migration `0141_drop_dead_sample_and_batch_columns` sets `samples.credit_batch_id`
+NOT NULL and drops the unused Sample contaminant and histogram/thermogram URL
+columns and credit-batch durability, buffer percentage and registry columns
+without a backfill. It fails while any Sample has a null batch, including rows
+left by the old batch-delete and membership-edit paths. Delete those rows or
+run `pnpm db:reset` locally; shared staging uses the manual reset workflow in
+[database.md](./database.md), announced first.
+
+Migration `0145_facility_reactor_feedstock_type_rules` makes
+`certifier_projects.external_facility_id` NOT NULL, drops
+`certifier_projects.genset_energy_yield_kwh_per_litre` and the
+`feedstock_types.usage` default, and adds CHECKs on `reactors.reactor_type` and
+`feedstock_types.category` without a backfill. It fails while mappings with null
+facility IDs, unsupported reactor types, or unsupported feedstock categories
+exist. Run `pnpm db:reset` locally; shared staging uses the manual reset workflow
+in [database.md](./database.md), announced first.
+
+Migration `0147_feedstock_intake_required_fields` makes the five intake columns
+`feedstocks.delivery_date`, `supplier_id`, `mass_wet_kg`,
+`moisture_content_percent`, and `storage_location_id` NOT NULL, requires moisture
+below 100%, and adds a CHECK requiring `bin_movements.occurred_at` for
+feedstock-lane losses. It drops intake GPS, CO2e, source-region, counterfactual,
+market-leakage, baseline and eligibility columns (and the eligibility enum),
+transport-leg bill-of-lading and weigh-scale reference columns, and the bin
+supplier-reference column. Feedstock-lane losses without an event time get
+their `created_at` (the time the ledger already used) before the CHECK is added;
+Kenji chose that one backfill on 2026-10-15. It fails on rows that violate the
+other requirements. Run `pnpm db:reset` locally; shared staging uses the manual
+reset workflow in [database.md](./database.md), announced first.
+
+Migration `0158_removal_code` requires a database reset where Removals exist; after merge, shared staging uses the manual reset workflow in [database.md](./database.md), announced first.
+
+Production starts have no database time default. Physical feedstock sources
+live only in `production_run_feedstock_draws`; the run stores their total wet
+mass. Database CHECKs keep run moisture at or above 0% and below 100%.
+Incidents store one event instant and require severity. In-process
+measurements have no separate code and require
+at least one measured value in the shared input schemas. Database CHECKs keep
+recorded weight and volume non-negative, allowing null. Both child
+event times use the parent run's facility clock.
+
+Orders and credit batches store no price or currency, organization operating
+defaults have no default currency, and credit batches store no third-party sale
+verification fields.
+
+## Location distances
+
+`supplier_location_facility_distances` and `customer_location_facility_distances`
+store one positive one-way `distance_km` and `distance_source` per location and
+facility. Both carry organization scope, integer versions and timestamps, unique
+location/facility pairs, composite organization-safe foreign keys, and cascade
+on location deletion. Locations and parties have no scalar distance columns.
+Delivery `recorded_distance_km` and `recorded_distance_source` snapshot the resolved
+pair independently of an optional override, preserving per-delivery accounting
+when the location's defaults change. Feedstock `distance_km_override`,
+`distance_source` and `distance_note` persist an explicit override separately
+from its derived leg. Clearing that override captures the current supplier
+default location and facility pair; omitting distance from an edit keeps the
+recorded leg distance. A version-checked refresh explicitly re-stamps a derived
+feedstock or delivery distance and resyncs legs under the lineage guard.
+Pair upserts fill null delivery snapshots
+and missing feedstock legs in the same transaction, skipping locked certification
+lineage and archived cargo. Saving a pair fills a missing distance; never changes a recorded one. Missing pairs permit entry and block
+certification readiness where transport is required.
+
+Migration 0153 contains Kenji's approved one-off copy: pair defaults are copied
+only for organizations with exactly one active facility. All existing deliveries,
+including archived and lineage-locked deliveries in multi-facility organizations,
+keep their old location scalar as a recorded snapshot before the scalar columns
+are dropped. Multi-facility organizations must enter new pair defaults. Existing
+feedstock legs retain their stamped distances. See [ADR 0034](./adr/0034-per-facility-location-distances-frozen-on-record.md).
+
+## API bookkeeping
+
+All three tables live in `src/db/schema/api.ts`:
+
+| Table | Grain and scope |
+|---|---|
+| `api_idempotency_records` | Unique organization/credential/key claim with fingerprint, expiry and stored outcome v2. Normal claims are org-scoped; expiry purge is a system seam. |
+| `api_rate_limit_buckets` | Token balance and refill time per bucket key. Organization-neutral system seam for hashed-IP, credential and organization budgets; no org column. |
+| `organization_api_access` | Organization primary key, enabled flag, changing user id and time. Missing row means on. Credential lookup and Platform Admin directory/toggle are privileged seams; non-Platform-Admins cannot administer it. |
+
+## Activity history
+
+`activity_events` stores entity changes and API writes under the [Activity events contract](./database.md#activity-events).
 
 ## Invariants and traps
 
@@ -40,23 +160,28 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
   paths are **composite** on `(id, organization_id)` (e.g.
   `credit_batch_production_runs` → `credit_batches(id, organization_id)`).
   Better Auth infrastructure in `auth.ts` uses its own user/session/account/org
-  relationships, and `geo_route_cache` is intentionally organization-neutral.
+  relationships. `api_keys.reference_id` is the Better Auth plugin's organization
+  id; `api_key_owners` carries `organization_id` and a management `version`
+  independent of plugin last-used bookkeeping. `geo_route_cache` is intentionally organization-neutral.
   Those are explicit infrastructure exceptions; a new domain table or join
   that omits organization scope is wrong. See [ADR
   0010](./adr/0010-shared-schema-org-column-tenancy.md) and
   [`organization.md`](./organization.md).
-- **Numeric columns are shared families**, not raw `numeric(p,s)`: use `massKg`, `tonnes`, `ppm`, `fraction`, `percent` from `src/db/schema/numeric-families.ts`. Never hand-roll precision.
+- **Numeric columns are shared families**, not raw `numeric(p,s)`: use `massKg`, `tonnes`, `ppm`, `fraction`, `percent`, `emissionFactor` from `src/db/schema/numeric-families.ts`. Never hand-roll precision.
 - **`bin_movements` is append-only.** Rows are never UPDATEd or DELETEd — correct a mistake with a compensating signed movement. Movements never mutate `biochar_storage_inventory`; derived stock overlays their signed sum. See [ADR 0012](./adr/0012-bin-capability-from-held-feedstock-type.md). Every operator command that writes it (output posts, feedstock losses) carries a client-generated `idempotency_key`, unique per organization: a resubmit replays the saved row and a key reused with different values is refused.
 - **A production run belongs to at most one credit batch** — `credit_batch_production_runs` has composite PK `(credit_batch_id, production_run_id)` plus a unique on `production_run_id` alone. See [ADR 0014](./adr/0014-credit-batch-as-production-cohort.md), [ADR 0020](./adr/0020-production-emissions-front-loaded-per-credit-batch.md).
 - **Some rules live only in raw SQL**, not in Drizzle. Read the migration chain when a schema invariant is unclear; the current Method-B model deliberately has no sample-floor trigger because eligibility is a live read.
-- **`samples.credit_batch_id` and `samples.production_run_id` are both nullable.** Credit-batch attachment is the intended route ([ADR 0016](./adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md)), but nothing in the schema requires either — validate in `fn/`.
-- **`credit_batches` stores no aggregate totals** — applied weight, CO2e stored, and ineligible-biomass fraction are derived on read ([ADR 0019](./adr/0019-credit-batch-aggregates-derived-on-read.md)). The deliberate exception is Removal-owned `credit_batch_applications` mass: each assigned application-by-batch slice is an immutable submission snapshot, while unassigned slices are reconciled from live provenance. The batch also stores a permanent production-emissions Removal claim and a pre-POST submission reservation; the reservation's submission ledger row supplies its lock, status, and external-mutation state ([ADR 0020](./adr/0020-production-emissions-front-loaded-per-credit-batch.md)). Project emissions are registry-owned ([ADR 0018](./adr/0018-isometric-owns-project-emissions.md)); durability tier is inherited from the facility, not stored per batch ([ADR 0021](./adr/0021-durability-tier-is-facility-scoped.md)).
+- **Every Sample requires `samples.credit_batch_id`.** It characterises one credit batch ([ADR 0016](./adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md)); nullable `samples.production_run_id` is provenance only. Membership changes preserve Sample attachment, and a batch with Samples cannot be deleted.
+- **`credit_batches` stores no aggregate totals** — applied weight and CO2e stored are derived on read ([ADR 0019](./adr/0019-credit-batch-aggregates-derived-on-read.md)). The deliberate exception is Removal-owned `credit_batch_applications` mass: each assigned application-by-batch slice is an immutable submission snapshot, while unassigned slices are reconciled from live provenance. The batch also stores a permanent production-emissions Removal claim and a pre-POST submission reservation; the reservation's submission ledger row supplies its lock, status, and external-mutation state ([ADR 0020](./adr/0020-production-emissions-front-loaded-per-credit-batch.md)). Project emissions are registry-owned ([ADR 0018](./adr/0018-isometric-owns-project-emissions.md)); durability tier is inherited from the facility, not stored per batch ([ADR 0021](./adr/0021-durability-tier-is-facility-scoped.md)).
 - **`production_processes` owns the process epoch and Method-B prerequisites**, keyed `(facility, feedstock)`; `credit_batches.sampling` owns the immutable per-batch choice. Eligibility is computed, never stored. See [ADR 0022](./adr/0022-method-b-is-computed-eligibility-not-stored-unlock.md).
 - **`certifier_credentials` holds provider auth** (encrypted access token + client secret, unique per `(organization_id, provider)`) — separate from `certifier_projects`, which only maps facilities to provider project IDs plus emission-estimate config ([ADR 0015](./adr/0015-energy-single-combined-measurement-point.md)). Submission-unit shape: [ADR 0003](./adr/0003-removal-as-submission-unit.md), [ADR 0004](./adr/0004-ghg-statement-as-independent-artifact.md), [ADR 0008](./adr/0008-submission-ledger-internal-seam.md).
+- **`credit_batches.removal_template_id` pins the Removal template**, copied from the facility default at creation and from the target facility default on a facility move. Other pin changes use the audited Switch template action; a move records the pin change in activity. Removals compile against matching member pins, never the current default. Pre-existing rows are not backfilled under the pre-production policy; local resets are supported and shared staging resets require notification.
+- **`removal_template_observations` stores Isometric template observations**, scoped by organization, provider and external template ID. Definition and enrichment fingerprints identify versions; component-ID line contracts carry forward across observations, with Owner/Admin review for proposed, unassigned or invalid contracts. It lives in its own schema module ([ADR 0032](./adr/0032-per-batch-emissions-entries-bound-to-template-lines.md)).
 - **`certifier_production_batches` mirrors the registry's Production Batch id for a credit batch** (`external_production_batch_id` = `ptb_…`, one row per `(provider, credit_batch_id)`, provider pinned to `isometric`). The credit batch IS the protocol production batch ([ADR 0016](./adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md)), so the row is written before its MeasurementSamples POST and is the idempotency journal for them: present ⇒ GET the exact `ptb_…` and verify its saved identity and current mapping before reuse; absent remotely or locally ⇒ reconcile by the `nm-ptb-…` supplier reference before POSTing. Only a 404 or the exact provider missing-ProductionBatch 400 permits replacement. Recovery validates current facts, refuses duplicate references or mismatched payloads, and replaces the old journal through an organization-scoped compare-and-set after confirmation. A live batch with a changed project/facility mapping blocks submission. It also mirrors the registered `mass_kg` (total dry biochar, `M_biochar (DM)` — NOT the attribution-scaled GHG-entry `product_mass`), window, and payload hash so local payload drift remains detectable while the live registry identity stays authoritative.
 - **`certifier_storage_locations` journals one reusable agricultural site per certifier project and Customer Location.** Isometric scopes Storage Locations to a project, so the same Customer Location can own a separate `slc_...` identity under another project. Each row records that identity, its project, stable supplier reference, submitted payload/hash, and operator-visible local or remote drift state. Only a confirmed 404 under registration locks permits replacing the external ID through an organization-scoped compare-and-set. Recovery preserves the submitted payload/hash and flags dependent Biochar Application journals for review rather than repointing them. It is distinct from facility inventory-bin `storage_locations`; application create/update never writes it. A project mapping with registered sites cannot be rebound or unlinked.
 - **`certifier_biochar_applications` journals Biochar Application creation at the Removal-versioned allocation-slice grain.** One row represents one `(Application, credit batch/Production Batch, Removal submission version)` slice and retains the linked submission, Production Batch and Storage Location registrations, exact submitted payload/hash, external identity, observed GHG Entry/Removal identity, and ordinary `creating` or `confirmed` lifecycle state. Supersession owns a new supplier reference and remote Biochar Application associated with the new GHG Entry; an exact confirmed retry reads that version's persisted external identity and performs zero writes. The provider arrival mass is the slice's immutable allocated wet kg and departure is zero; commingled slices therefore partition the physical Application total. An unconfirmed claim reconciles every bounded list page by its exact stable supplier reference before POST. Payload or current-GHG identity drift fails closed.
 - **A registry GHG statement's local identity is per `(provider, organization, facility, remote id)`**, because one Isometric project may be shared by several facilities (`certifier_projects` has no `external_project_id` unique). So the same registry statement can hold one `certifier_ghg_statements` row per facility, and `cert_submissions_external_unique` is partial — it excludes `submission_type = 'ghg_statement'`, which uses `cert_submissions_ghg_statement_external_unique` instead. ADR 0004's one-statement-per-`(provider, facility, period)` constraint is unaffected. See [ADR 0023](./adr/0023-registry-ghg-statement-identity-is-org-and-facility-scoped.md).
+- `certification_submissions.submission_type`: `dataUpload` is unsupported; migration `0135` refuses to run if any such rows exist. For a local database, delete those rows or run `pnpm db:reset` before migrating.
 - **`certifier_ghg_statement_reports` is an immutable version stream per GHG
   Statement.** Each prepared row owns one private `documents` row, frozen
   inputs/model, source fingerprint, content checksum, preparation idempotency
@@ -67,12 +192,38 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
   organizations only under its explicit `// org-scope-ok:` capability waiver;
   all management paths remain org-scoped.
 - **`certifier_organization_settings` holds provider policy above the facility scope.** Its Source visibility value is unique per `(organization_id, provider)`, defaults to private when the row is absent, and applies only to newly mirrored registry Sources.
-- **`organization_settings` holds operating defaults that seed forms, never protocol constants.** One row per organization (unique on `organization_id`); every column is NOT NULL with a default mirroring the literal it replaced, and the read falls back to `DEFAULT_ORGANIZATION_SETTINGS` (`src/config/organization-settings.ts`) when no row exists, so consumers never see null. Changing a default never rewrites a saved record. Protocol-derived thresholds stay constants — a settings row that could move the H:C eligibility ceiling or the Method-B sample floor would let an operator weaken a certification gate from a form.
+- **`organization_settings` holds operating defaults that seed forms, never protocol constants.** One row per organization (unique on `organization_id`); every column except `default_timezone` is NOT NULL with a default mirroring the literal it replaced, and the read falls back to `DEFAULT_ORGANIZATION_SETTINGS` (`src/config/organization-settings.ts`) when no row exists. `default_timezone` is nullable with no default: null means the organization has not chosen a zone, and the facility form then starts empty. Changing a default never rewrites a saved record. Protocol-derived thresholds stay constants — a settings row that could move the H:C eligibility ceiling or the Method-B sample floor would let an operator weaken a certification gate from a form.
+- **`facility_emission_factors` is dormant**: one row per facility (unique on `facility_id`, composite FK to `facilities(id, organization_id)`) of kg CO₂e per litre of diesel, per kWh of grid electricity and per tonne-km of road freight, plus a source note. Nothing reads or writes it; see [open-questions.md](./open-questions.md). It never fed a submission; Isometric applies its own template factors ([ADR 0031](./adr/0031-operator-energy-estimates.md), [ADR 0018](./adr/0018-isometric-owns-project-emissions.md)).
+- **Integer row versions** start at 1 on feedstocks and editable master data: facilities, reactors, storage locations, suppliers and supplier locations, customers and customer locations, formulations, feedstock types, vehicles, drivers and operators. Every writer increments the affected row; edit and delete payloads carry the loaded version ([architecture.md](./architecture.md#expected-version-checks-on-edit-forms)).
 - **Soft delete** via nullable `archived_at` on `facilities` and its operational descendants — see [`database.md`](./database.md) → "Soft Delete — Facility Archive".
 - **All domain enums** are in `src/db/schema/common.ts` — read the file, not a sample.
+
+## Auth account columns
+
+Better Auth maps its account model to `account` in
+`src/db/schema/auth.ts`. It stores required text `id`, `user_id`, `account_id`
+and `provider_id`; nullable text `access_token`, `refresh_token`, `id_token`,
+`scope` and `password`; nullable timestamps `access_token_expires_at` and
+`refresh_token_expires_at`; and required timestamps `created_at` and
+`updated_at`. See [auth.md](./auth.md) for the Better Auth version and credential
+identity rule. Credential `account_id` equals `user_id`. Indexes cover account
+and session `user_id` and verification `identifier`, alongside the membership
+and invitation indexes.
+Application table names, extra columns, membership uniqueness and the partial
+pending-invitation uniqueness constraint are preserved.
 
 ## Related references
 
 - Chain-of-custody traversal: [`traceability.md`](./traceability.md) · [ADR 0011](./adr/0011-credit-batch-anchored-chain-of-custody.md)
 - Layering rules for queries on these tables: [`architecture.md`](./architecture.md)
 - Isometric requirement mapping: [`isometric/schema-mapping.md`](./isometric/schema-mapping.md) · conditional fields: [`isometric/condition-registry.md`](./isometric/condition-registry.md)
+
+## Edit-form row versions
+
+Editable entity rows carry an integer `version NOT NULL DEFAULT 1`. This includes
+lab `samples`, `orders`, `deliveries`, `transport_legs`, `applications`, and
+`credit_batches`. Every update, including derived and cascade changes, increments
+the version in the same statement. UI commands require the loaded version; see
+[expected-version checks](./architecture.md#expected-version-checks-on-edit-forms).
+Sample `analysis_date`, `r0_analysis_date`, and `tga_analysis_date` are calendar
+`date` columns; `sampling_time` remains a timestamp instant.

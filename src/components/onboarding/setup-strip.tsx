@@ -7,15 +7,18 @@
 
 import { EyeIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
+import type { SetupActions } from "./setup-actions";
+import { SetupStepAction } from "./setup-step-action";
 import type { SetupProgress } from "./use-setup-steps";
 
 interface SetupStripProps {
   progress: SetupProgress;
   onExpand: () => void;
+  actions: SetupActions;
 }
 
-export function SetupStrip({ progress, onExpand }: SetupStripProps) {
-  const { steps, doneCount, total } = progress;
+export function SetupStrip({ progress, onExpand, actions }: SetupStripProps) {
+  const { steps, doneCount, total, activeIndex } = progress;
 
   return (
     <section
@@ -23,8 +26,8 @@ export function SetupStrip({ progress, onExpand }: SetupStripProps) {
       className="flex flex-wrap items-center justify-between gap-16 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-20 py-12"
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-12 gap-y-8">
-        <span className="label-micro text-[var(--color-text-tertiary)]">
-          Setup · {doneCount}/{total}
+        <span className="body-caption text-[var(--color-text-tertiary)]">
+          Setup, {doneCount} of {total}
         </span>
         <ol className="flex flex-wrap items-center gap-x-8 gap-y-4">
           {steps.map((step) => (
@@ -42,10 +45,15 @@ export function SetupStrip({ progress, onExpand }: SetupStripProps) {
           ))}
         </ol>
       </div>
-      <Button variant="weak" size="small" onClick={onExpand}>
-        <EyeIcon size={16} weight="bold" />
-        Show guide
-      </Button>
+      <div className="flex flex-wrap items-center gap-12">
+        {activeIndex >= 0 && (
+          <SetupStepAction step={steps[activeIndex]} active actions={actions} />
+        )}
+        <Button variant="weak" size="small" onClick={onExpand}>
+          <EyeIcon size={16} weight="bold" />
+          Show guide
+        </Button>
+      </div>
     </section>
   );
 }

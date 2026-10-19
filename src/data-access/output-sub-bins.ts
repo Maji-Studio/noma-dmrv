@@ -1,63 +1,65 @@
-import { db } from '@/db';
-import { biocharProducts, productionRuns, storageLocations } from '@/db/schema';
+import type { DbTransaction } from '@/db';
+import { storageLocations } from '@/db/schema';
 import { SUB_BIN_RECENT_MOVEMENTS } from '@/config/output-stock';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import { rationalToNumber } from '@/lib/output-stock';
-import { estimateStock } from '@/lib/output-stock/moisture-estimate';
 import { subBinMovements } from '@/lib/output-stock/sub-bin-movements';
 import { outputSubBinsSchema } from '@/schemas/output-stock';
+import { isOutputBinType } from '@/schemas/storage-locations';
 import type { OutputSubBins, OutputSubBinsInput } from '@/types/output-stock';
 import { and, eq, isNull } from 'drizzle-orm';
-import { getStockModeAt } from './output-bin-stock-mode';
-import { getBiocharOutputStockLayers, getLayerMoistureBases, getProductOutputStockLayers } from './output-stock';
+import { readOutputBinStockAt, withStockSnapshot } from './output-bin-stock';
 import { prepareOutputCorrection } from './output-stock-corrections';
 import { getOutputStockHistory } from './output-stock-history';
 import { requireOrgScope } from './utils';
 
 /**
- * The sub-bins a bin holds at `occurredAt`, oldest first, with the bin's mode then, each with its
+ * The sub-bins a bin holds at `occurredAt` (now when omitted), in the bin's default draw order, with the bin's mode then, each with its
  * own moisture estimate and latest movements. A correction reads them as they
  * were before the entry it replaces, so the operator can re-choose them. When
  * the correction itself is refused, the bin's current sub-bins still show: the
- * preview carries the refusal.
+ * preview carries the refusal. Stock and movements come from one snapshot, the
+ * same projection the API stock read uses; a mix bin's batches carry no wet
+ * mass or moisture of their own.
  */
-export async function getOutputSubBins(ctx: OrgContext, raw: OutputSubBinsInput): Promise<OutputSubBins> {
+export async function getOutputSubBins(ctx: OrgContext, raw: OutputSubBinsInput, tx?: DbTransaction): Promise<OutputSubBins> {
   requireOrgScope(ctx);
   const input = outputSubBinsSchema.parse(raw);
-  const [bin] = await db.select().from(storageLocations).where(and(
+  if (!tx) return withStockSnapshot(snapshot => getOutputSubBins(ctx, input, snapshot));
+  const [bin] = await tx.select().from(storageLocations).where(and(
     eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, input.storageLocationId),
     eq(storageLocations.facilityId, input.facilityId), isNull(storageLocations.archivedAt)));
-  if (!bin || !['biochar_bin', 'product_bin'].includes(bin.type)) throw new SafeError('Output bin not found or archived');
-  const state = bin.type === 'biochar_bin' ? await getBiocharOutputStockLayers(ctx, input) : await getProductOutputStockLayers(ctx, input);
-  let layers = state.layers;
-  if (input.correctsMovementId && input.kind) {
-    try {
-      layers = (await prepareOutputCorrection(ctx, { ...input, kind: input.kind, wetMassKg: 0 }, state.layers, db)).layers;
-    } catch (error) {
-      if (!(error instanceof SafeError)) throw error;
-    }
-  }
-  const bases = await getLayerMoistureBases(ctx, bin, layers, db, { ignoreMovementId: input.correctsMovementId });
-  const codes = bin.type === 'product_bin'
-    ? await db.select({ id: biocharProducts.id, code: biocharProducts.code }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, bin.id)))
-    : await db.select({ id: productionRuns.id, code: productionRuns.code }).from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.biocharStorageLocationId, bin.id)));
-  const codeMap = new Map(codes.map(row => [row.id, row.code]));
-  const history = await getOutputStockHistory(ctx, bin.id);
-  const held = layers.filter(layer => layer.placedAt <= input.occurredAt && layer.remainingSolidsKg && layer.remainingSolidsKg.numerator > BigInt(0))
-    .sort((a, b) => a.placedAt.localeCompare(b.placedAt) || (a.postingSequence < b.postingSequence ? -1 : a.postingSequence > b.postingSequence ? 1 : 0));
+  if (!bin || !isOutputBinType(bin.type)) throw new SafeError('Output bin not found or archived');
+  // The lookup fixed the snapshot, so "now" taken here never leaves out a batch the snapshot shows.
+  const occurredAt = input.occurredAt ?? new Date().toISOString();
+  const correction = input.correctsMovementId && input.kind ? { ...input, occurredAt, kind: input.kind, wetMassKg: 0 } : null;
+  const { stock, unresolved } = await readOutputBinStockAt(ctx, { ...bin, type: bin.type }, occurredAt, tx, {
+    includeArchived: false, ignoreMovementId: input.correctsMovementId,
+    adjustLayers: correction ? async layers => {
+      try {
+        return (await prepareOutputCorrection(ctx, correction, layers, tx)).layers;
+      } catch (error) {
+        if (!(error instanceof SafeError)) throw error;
+        return layers;
+      }
+    } : undefined,
+  });
+  if (unresolved) throw unresolved;
+  const history = await getOutputStockHistory(ctx, bin.id, tx);
+  // A split bin lists its sub-bins in its default draw order; the API stock read stays oldest first.
+  const subBins = stock.stockMode === 'split' && bin.drawOrder === 'newest_first' ? [...stock.subBins].reverse() : stock.subBins;
   return {
+    drawOrder: bin.drawOrder,
     // A merged bin was split before its merge, so a draw timed then still picks sub-bins.
-    stockMode: await getStockModeAt(ctx, bin, input.occurredAt),
-    subBins: held.map(layer => {
-      const basis = bases.find(b => b.layerId === layer.id);
-      const estimate = basis ? estimateStock([basis], input.occurredAt) : null;
-      return {
-        layerId: layer.id, code: codeMap.get(layer.id) ?? layer.id, placedAt: layer.placedAt,
-        dryMassKg: Number(layer.remainingDryBiocharKg), solidsKg: rationalToNumber(layer.remainingSolidsKg!),
-        wetEstimateKg: estimate?.wetKg ?? null, moisturePercent: estimate?.moisturePercent ?? null, basis: estimate?.basis ?? null,
-        recentMovements: subBinMovements(history, layer.id, SUB_BIN_RECENT_MOVEMENTS),
-      };
-    }),
+    stockMode: stock.stockMode,
+    subBins: subBins.map(subBin => ({
+      layerId: subBin.layerId, code: subBin.code ?? subBin.layerId, placedAt: subBin.placedAt,
+      dryMassKg: rationalToNumber(subBin.dryBiocharKg), solidsKg: rationalToNumber(subBin.solidsKg),
+      wetEstimateKg: subBin.estimatedWetKg ? rationalToNumber(subBin.estimatedWetKg) : null,
+      moisturePercent: subBin.estimatedMoisturePercent ? rationalToNumber(subBin.estimatedMoisturePercent) : null,
+      basis: subBin.moistureBasis,
+      recentMovements: subBinMovements(history, subBin.layerId, SUB_BIN_RECENT_MOVEMENTS),
+    })),
   };
 }

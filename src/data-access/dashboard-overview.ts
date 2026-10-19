@@ -22,6 +22,7 @@ import {
   productionRuns,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { formatUtcDate } from "@/lib/date-utils";
 import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
@@ -44,7 +45,6 @@ import {
   applicationEvidenceGapWhere,
   feedstocksMissingDataWhere,
   overdueBatchesWhere,
-  productsUnlinkedWhere,
   runsMissingMassWhere,
 } from "./dashboard-attention";
 import {
@@ -99,6 +99,8 @@ export type DashboardKpiKey =
 export interface DashboardKpi {
   key: DashboardKpiKey;
   label: string;
+  /** Optional explanation shown beside the label in an InfoHint. */
+  hint?: string;
   /** Display unit, e.g. "t", "tCO₂e". */
   unit: string;
   /** Null = no data in range (render "Not available", not 0). */
@@ -279,7 +281,7 @@ export async function getDashboardOverview(
               eq(biocharProducts.facilityId, facilityId),
               isNull(biocharProducts.archivedAt),
               ne(biocharProducts.status, "draft"),
-              ...(fetchStart ? [gte(biocharProducts.productionDate, fetchStart)] : []),
+              ...(fetchStart ? [gte(biocharProducts.productionDate, formatUtcDate(fetchStart))] : []),
             ),
           ),
         db
@@ -440,6 +442,7 @@ export async function getDashboardOverview(
     {
       key: "appliedToSoil",
       label: "Applied to soil",
+      hint: "Dry mass of biochar applied to soil at customer sites.",
       unit: "t",
       value: currentApplications.length > 0 ? appliedCurrentTons : null,
       deltaPercent:
@@ -450,7 +453,7 @@ export async function getDashboardOverview(
     },
     {
       key: "co2eStored",
-      label: "CO₂e stored",
+      label: "Estimated CO₂e stored",
       unit: "t",
       value: currentStoredBatches.length > 0 ? storedCurrentTons : null,
       deltaPercent:
@@ -460,7 +463,7 @@ export async function getDashboardOverview(
       detail:
         currentStoredBatches.length > 0
           ? `${currentStoredBatches.length} ${currentStoredBatches.length === 1 ? "credit batch" : "credit batches"}`
-          : "no verified storage in period",
+          : "no estimate in period",
     },
   ];
 
@@ -531,7 +534,6 @@ export async function getDashboardOverview(
 
 type AttentionKind =
   | "run-mass"
-  | "lot-unlinked"
   | "feedstock-missing"
   | "application-evidence"
   | "batch-pending";
@@ -567,7 +569,6 @@ interface AttentionRow {
 
 const ATTENTION_TITLES: Record<AttentionKind, string> = {
   "run-mass": "Complete run missing mass data",
-  "lot-unlinked": "Production run not linked",
   "feedstock-missing": "Feedstock record missing data",
   "application-evidence": "Application missing evidence",
   "batch-pending": "Period ended · awaiting verification",
@@ -576,7 +577,6 @@ const ATTENTION_TITLES: Record<AttentionKind, string> = {
 /** Flags sort before pending batches; within a kind the branch ordinal holds. */
 const ATTENTION_ORDER: AttentionKind[] = [
   "run-mass",
-  "lot-unlinked",
   "feedstock-missing",
   "application-evidence",
   "batch-pending",
@@ -591,8 +591,6 @@ function attentionHref(
   switch (kind) {
     case "run-mass":
       return productionRunHref(facilityId, id);
-    case "lot-unlinked":
-      return `/biochar-products${facilityQuery}`;
     case "feedstock-missing":
       return `/feedstocks${facilityQuery}`;
     case "application-evidence":
@@ -631,25 +629,12 @@ async function getAttentionItems(
       .limit(ATTENTION_PER_CHECK),
     db
       .select({
-        kind: attentionKind("lot-unlinked"),
-        id: biocharProducts.id,
-        code: biocharProducts.code,
-        dateDay: noDay,
-        dateMs: epochMs(biocharProducts.productionDate),
-        ord: branchOrdinal(desc(biocharProducts.productionDate)),
-      })
-      .from(biocharProducts)
-      .where(productsUnlinkedWhere(orgId, facilityId))
-      .orderBy(desc(biocharProducts.productionDate))
-      .limit(ATTENTION_PER_CHECK),
-    db
-      .select({
         kind: attentionKind("feedstock-missing"),
         id: feedstocks.id,
         code: feedstocks.code,
         dateDay: noDay,
         dateMs: epochMs(
-          sql`coalesce(${feedstocks.deliveryDate}, ${feedstocks.createdAt})`,
+          feedstocks.deliveryDate,
         ),
         ord: branchOrdinal(desc(feedstocks.createdAt)),
       })

@@ -9,8 +9,6 @@ import {
   and,
   eq,
   exists,
-  isNull,
-  or,
   sql,
   type SQL,
   type SQLWrapper,
@@ -50,19 +48,10 @@ export function inCreditBatchLineage(
       .innerJoin(
         biocharProducts,
         and(
-          or(
-            eq(
-              biocharProducts.id,
-              biocharProductSourceAllocations.biocharProductId,
-            ),
-            and(
-              isNull(biocharProducts.sourceBiocharStorageLocationId),
-              eq(
-                biocharProducts.linkedProductionRunId,
-                creditBatchProductionRuns.productionRunId,
-              ),
-            ),
-          )!,
+          eq(
+            biocharProducts.id,
+            biocharProductSourceAllocations.biocharProductId,
+          ),
           eq(biocharProducts.organizationId, ctx.organizationId),
           eq(biocharProducts.id, biocharProductId),
         ),
@@ -122,4 +111,20 @@ export function inDeliveryCreditBatchLineage(ctx: OrgContext, creditBatchId: str
     group by osa.biochar_product_id, osra.production_run_id
     having sum(osra.dry_mass_kg) > 0
   )`;
+}
+
+/** Applications match their frozen slice or their own source-run shares, including held-out applications. */
+export function inApplicationCreditBatchLineage(ctx: OrgContext, creditBatchId: string, applicationId: SQLWrapper): SQL {
+  requireOrgScope(ctx);
+  return sql`(exists (
+    select 1 from credit_batch_applications slice
+    where slice.organization_id = ${ctx.organizationId} and slice.application_id = ${applicationId}
+      and slice.credit_batch_id = ${creditBatchId}
+  ) or exists (
+    select 1 from application_output_allocations share
+    join credit_batch_production_runs membership on membership.production_run_id = share.production_run_id
+      and membership.organization_id = ${ctx.organizationId}
+    where share.organization_id = ${ctx.organizationId} and share.application_id = ${applicationId}
+      and membership.credit_batch_id = ${creditBatchId} and (share.wet_mass_kg > 0 or share.dry_mass_kg > 0)
+  ))`;
 }

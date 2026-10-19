@@ -1,7 +1,11 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
+import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
+import { productionVersion } from "./helpers/production-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
-import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Credit Batch Production-Run Validation Tests
  *
@@ -13,7 +17,7 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { facilities, reactors } from "@/db/schema/facilities";
+import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import {
   creditBatches,
   creditBatchApplications,
@@ -28,9 +32,15 @@ import { productionRuns, productionRunFeedstocks } from "@/db/schema/production"
 import { productionProcesses } from "@/db/schema/production-processes";
 import {
   createCreditBatch,
+  getCreditBatchProductionRunOptions,
   updateCreditBatch,
 } from "@/data-access/credit-batches";
-import { validateProductionRunIds } from "@/data-access/credit-batch-membership";
+import {
+  assertNoOverlappingCreditBatchCohort,
+  findMatchingUnassignedProductionRunIds,
+  lockCreditBatchDeclarationRuns,
+  validateProductionRunIds,
+} from "@/data-access/credit-batch-membership";
 import { updateProductionRun } from "@/data-access/production-runs";
 
 // Fake userId for requireAuth (just needs to be truthy)
@@ -92,11 +102,11 @@ beforeAll(async () => {
   // Create two facilities
   const [fA] = await db
     .insert(facilities)
-    .values({ organizationId: TEST_ORG_ID, name: `Test Facility A ${runId}`, code: `TFA-VAL-${runId}` })
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, name: `Test Facility A ${runId}`, code: `TFA-VAL-${runId}` })
     .returning({ id: facilities.id });
   const [fB] = await db
     .insert(facilities)
-    .values({ organizationId: TEST_ORG_ID, name: `Test Facility B ${runId}`, code: `TFB-VAL-${runId}` })
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, name: `Test Facility B ${runId}`, code: `TFB-VAL-${runId}` })
     .returning({ id: facilities.id });
   facilityA = fA;
   facilityB = fB;
@@ -124,6 +134,8 @@ beforeAll(async () => {
     .returning({ id: reactors.id });
   createdIds.reactors.push(reactorA.id, reactorB.id);
 
+  const outputBinA = await createProductionRunOutputBin(TEST_ORG_ID, facilityA.id);
+  const outputBinB = await createProductionRunOutputBin(TEST_ORG_ID, facilityB.id);
   const productionRunRows = await db
     .insert(productionRuns)
     .values([
@@ -225,7 +237,7 @@ beforeAll(async () => {
         biocharOutputKg: 100,
         biocharDryMassKg: 100,
       },
-    ].map((row) => ({ ...row, status: "complete" as const })))
+    ].map((row) => ({ ...row, status: "complete" as const, biocharMoisturePercent: 0, biocharStorageLocationId: row.facilityId === facilityA.id ? outputBinA : outputBinB })))
     .returning({ id: productionRuns.id });
   [
     runInFacilityA,
@@ -248,6 +260,7 @@ beforeAll(async () => {
   const [primaryType] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Validation Woodchips ${runId}`,
       code: `FT-VAL-W-${runId}`,
@@ -257,6 +270,7 @@ beforeAll(async () => {
   const [secondaryType] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Validation Coffee Husk ${runId}`,
       code: `FT-VAL-C-${runId}`,
@@ -268,33 +282,33 @@ beforeAll(async () => {
 
   const [feedstockAPrimary] = await db
     .insert(feedstocks)
-    .values({
+    .values(await feedstockFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `FS-VAL-A-W-${runId}`,
       facilityId: facilityA.id,
       feedstockTypeId: primaryType.id,
       massDryKg: 3000,
-    })
+    }))
     .returning({ id: feedstocks.id });
   const [feedstockASecondary] = await db
     .insert(feedstocks)
-    .values({
+    .values(await feedstockFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `FS-VAL-A-C-${runId}`,
       facilityId: facilityA.id,
       feedstockTypeId: secondaryType.id,
       massDryKg: 1500,
-    })
+    }))
     .returning({ id: feedstocks.id });
   const [feedstockBPrimary] = await db
     .insert(feedstocks)
-    .values({
+    .values(await feedstockFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `FS-VAL-B-W-${runId}`,
       facilityId: facilityB.id,
       feedstockTypeId: primaryType.id,
       massDryKg: 2800,
-    })
+    }))
     .returning({ id: feedstocks.id });
   createdIds.feedstocks.push(
     feedstockAPrimary.id,
@@ -395,6 +409,7 @@ beforeAll(async () => {
 
   // Create applications linked to each facility via deliveries
   const [aA] = await insertOutputApplicationFixture(db, {
+      fieldSizeHa: 1,
       organizationId: TEST_ORG_ID,
       code: `AP-VAL-A-${runId}`,
       deliveryId: deliveryA.id,
@@ -403,6 +418,7 @@ beforeAll(async () => {
       biocharAppliedDryTons: 4.5,
     }, row => ({ id: row.id }));
   const [aB] = await insertOutputApplicationFixture(db, {
+      fieldSizeHa: 1,
       organizationId: TEST_ORG_ID,
       code: `AP-VAL-B-${runId}`,
       deliveryId: deliveryB.id,
@@ -435,9 +451,7 @@ afterAll(async () => {
       await deleteOutputDeliveryFixtures(tx, inArray(deliveries.id, createdIds.deliveries));
     }
     if (createdIds.orders.length > 0) {
-      await tx
-        .delete(orders)
-        .where(inArray(orders.id, createdIds.orders));
+      await deleteOutputOrderFixtures(tx, inArray(orders.id, createdIds.orders));
     }
     if (createdIds.biocharProducts.length > 0) {
       await deleteOutputProductFixtures(tx, inArray(biocharProducts.id, createdIds.biocharProducts));
@@ -459,6 +473,7 @@ afterAll(async () => {
       await tx
         .delete(feedstocks)
         .where(inArray(feedstocks.id, createdIds.feedstocks));
+      await cleanupFeedstockFixtureParents(tx);
     }
     if (createdIds.reactors.length > 0) {
       await tx
@@ -476,6 +491,7 @@ afterAll(async () => {
         .where(inArray(customers.id, createdIds.customers));
     }
     if (createdIds.facilities.length > 0) {
+      await tx.delete(storageLocations).where(inArray(storageLocations.facilityId, createdIds.facilities));
       // createCreditBatch find-or-creates a production_processes row per
       // (facility, feedstockType); it isn't tracked in createdIds, so clear it
       // by facility before deleting facilities/feedstockTypes it references.
@@ -490,6 +506,7 @@ afterAll(async () => {
         .where(inArray(feedstockTypes.id, createdIds.feedstockTypes));
     }
   });
+  await cleanupFeedstockFixtureParents(db);
 });
 
 
@@ -501,8 +518,6 @@ describe("Credit Batch Production-Run Validation", () => {
     endDate: new Date("2025-06-30"),
     certifier: "isometric" as const,
     durabilityOption: "200_year" as const,
-    hToCorgRatio: 0.4,
-    currency: "TZS" as const,
     // Feedstock type is now DECLARED (ADR 0016 amendment) and guarded against the
     // member runs. A getter defers reading the module-scoped id until each test
     // spreads baseBatchData — after beforeAll has seeded it.
@@ -518,6 +533,64 @@ describe("Credit Batch Production-Run Validation", () => {
     );
     return { ...baseBatchData, startDate, endDate };
   }
+
+  it("accepts multi-month periods across uncertified batch writes, membership, and run options", async () => {
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const startDate = new Date("2027-01-01");
+    const endDate = new Date("2027-04-30");
+    const batch = await createCreditBatch(ctx, {
+      ...baseBatchData,
+      code: batchCode("CB-VAL-UNCERTIFIED"),
+      facilityId: facilityA.id,
+      startDate,
+      endDate,
+      productionRunIds: [],
+    });
+    createdIds.creditBatches.push(batch.id);
+    expect(batch).toMatchObject({ certifier: null, endDate: "2027-04-30" });
+
+    const updated = await updateCreditBatch(ctx, batch.id, {
+      expectedVersion: batch.version,
+      endDate: new Date("2027-06-30"),
+    });
+    expect(updated.endDate).toBe("2027-06-30");
+
+    const runPeriod = { startDate: new Date("2025-06-01"), endDate: new Date("2025-09-30") };
+    await expect(db.transaction((tx) => validateProductionRunIds(
+      ctx, tx, [runInFacilityA.id], facilityA.id, null, runPeriod.startDate, runPeriod.endDate,
+    ))).resolves.toBeUndefined();
+    const options = await getCreditBatchProductionRunOptions(ctx, { facilityId: facilityA.id, ...runPeriod });
+    expect(options.map((run) => run.id)).toContain(runInFacilityA.id);
+  });
+
+  it.each([null, "isometric"] as const)("applies the month cap consistently in membership helpers for %s", async (certifier) => {
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const period = {
+      facilityId: facilityA.id,
+      feedstockTypeId: primaryFeedstockTypeId,
+      certifier,
+      startDate: "2025-06-01",
+      endDate: "2025-09-30",
+    };
+    const message = "Choose an end date on or before Jun 30, 2025. Isometric credit batches must cover less than one month.";
+    const calls = [
+      () => db.transaction((tx) => assertNoOverlappingCreditBatchCohort(ctx, tx, period)),
+      () => db.transaction((tx) => findMatchingUnassignedProductionRunIds(ctx, tx, period)),
+      () => db.transaction((tx) => lockCreditBatchDeclarationRuns(ctx, tx, {
+        ...period, requestedProductionRunIds: [runInFacilityA.id],
+      })),
+      () => db.transaction((tx) => validateProductionRunIds(
+        ctx, tx, [runInFacilityA.id], period.facilityId, certifier, period.startDate, period.endDate,
+      )),
+    ];
+    for (const call of calls) {
+      if (certifier === "isometric") {
+        await expect(call()).rejects.toThrow(message);
+      } else {
+        await call();
+      }
+    }
+  });
 
   it("rejects missing production run IDs", async () => {
     const fakeId = "00000000-0000-0000-0000-000000000999";
@@ -552,6 +625,7 @@ describe("Credit Batch Production-Run Validation", () => {
           tx,
           [runInFacilityA.id, runInFacilityA.id],
           facilityA.id,
+          null,
         ),
       ),
     ).rejects.toThrow("selected production runs include a duplicate");
@@ -648,7 +722,7 @@ describe("Credit Batch Production-Run Validation", () => {
     // Try to change facilityId to B without updating productionRunIds.
     // Existing membership points to facility A runs — should fail against facility B.
     await expect(
-      updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, {
+      updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "creditBatches", batch.id),
         facilityId: facilityB.id,
       })
     ).rejects.toThrow("does not belong to the selected facility");
@@ -689,7 +763,7 @@ describe("Credit Batch Production-Run Validation", () => {
 
     // Try to update with a production run from facility B.
     await expect(
-      updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, {
+      updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "creditBatches", batch.id),
         productionRunIds: [runInFacilityB.id],
       })
     ).rejects.toThrow("does not belong to the selected facility");
@@ -750,7 +824,7 @@ describe("Credit Batch Production-Run Validation", () => {
         return result.rows[0]?.waiting ?? false;
       }, { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS }).toBe(true);
 
-      reopenPromise = updateProductionRun(ctx, concurrencyRunInFacilityA.id, {
+      reopenPromise = updateProductionRun(ctx, concurrencyRunInFacilityA.id, { expectedVersion: await productionVersion(ctx, "productionRuns", concurrencyRunInFacilityA.id),
         status: "running",
         endTime: null,
       });

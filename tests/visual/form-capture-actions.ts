@@ -74,23 +74,10 @@ function paneRoot(page: Page): Locator {
 
 async function binHistory(page: Page, ctx: CaptureContext, type: SeededBin["type"]) {
   const sheet = await openBinSheet(page, ctx, binName(ctx, type));
-  return openDialogFromButton(sheet, page, "Stock history");
+  return openDialogFromButton(sheet, page, "History");
 }
 
 const transportFeedstock: Surface[] = [
-  {
-    id: "supplier.detail-page",
-    family: "transport-feedstock",
-    title: "Supplier detail page",
-    kind: "page",
-    mode: "read",
-    fill: "none",
-    skip: (ctx) => (ctx.supplier ? undefined : "no seeded supplier"),
-    open: async (page, ctx) => {
-      await gotoRoute(page, ctx, `suppliers/${ctx.supplier!.id}`);
-      return page.locator("main");
-    },
-  },
   {
     id: "supplier.location-add",
     family: "transport-feedstock",
@@ -101,8 +88,9 @@ const transportFeedstock: Surface[] = [
     errors: true,
     skip: (ctx) => (ctx.supplier ? undefined : "no seeded supplier"),
     open: async (page, ctx) => {
-      await gotoRoute(page, ctx, `suppliers/${ctx.supplier!.id}`);
-      return openDialogFromButton(page.locator("main"), page, "Add location");
+      await gotoRoute(page, ctx, "suppliers");
+      const sheet = await openEdit(page, await openRowSheet(page, ctx.supplier!.name));
+      return openDialogFromButton(sheet, page, "Add location");
     },
   },
   {
@@ -114,8 +102,9 @@ const transportFeedstock: Surface[] = [
     fill: "filled",
     skip: (ctx) => (ctx.supplier ? undefined : "no seeded supplier"),
     open: async (page, ctx) => {
-      await gotoRoute(page, ctx, `suppliers/${ctx.supplier!.id}`);
-      return openDialogFromButton(page.locator("main"), page, "Edit");
+      await gotoRoute(page, ctx, "suppliers");
+      const sheet = await openEdit(page, await openRowSheet(page, ctx.supplier!.name));
+      return openDialogFromButton(sheet, page, /^Edit /);
     },
   },
   {
@@ -137,9 +126,12 @@ const transportFeedstock: Surface[] = [
     skip: needsLink,
     open: async (page, ctx) => {
       await gotoRoute(page, ctx, "feedstock-types");
-      const button = page.getByRole("button", { name: "Import from Isometric", exact: true });
-      if ((await button.count()) === 0) return "Import from Isometric is not offered to this viewer";
-      return openDialogFromButton(page, page, "Import from Isometric");
+      const trigger = page.getByRole("button", { name: "More ways to add a feedstock type", exact: true });
+      if ((await trigger.count()) === 0) return "Import from Isometric is not offered to this viewer";
+      await menuItem(page, "More ways to add a feedstock type", "Import from Isometric");
+      const dialog = lastDialog(page);
+      await expect(dialog).toBeVisible();
+      return dialog;
     },
   },
   {
@@ -182,6 +174,16 @@ const transportFeedstock: Surface[] = [
 
 const stockSamples: Surface[] = [
   {
+    id: "bin.read-feedstock",
+    family: "stock-samples",
+    title: "Storage bin read sheet (feedstock bin)",
+    kind: "sheet",
+    mode: "read",
+    fill: "none",
+    skip: noBin("feedstock_bin", "feedstock"),
+    open: (page, ctx) => openBinSheet(page, ctx, binName(ctx, "feedstock_bin")),
+  },
+  {
     id: "bin.read-output",
     family: "stock-samples",
     title: "Storage bin read sheet (biochar bin)",
@@ -214,36 +216,24 @@ const stockSamples: Surface[] = [
   {
     id: "bin.loss-feedstock",
     family: "stock-samples",
-    title: "Record loss (feedstock bin)",
+    title: "Lost mass (feedstock bin)",
     kind: "sheet",
     mode: "form",
     fill: "empty",
     errors: true,
     skip: noBin("feedstock_bin", "feedstock"),
-    // A feedstock bin has no "Record loss" button; "Reconcile stock" opens its loss form.
-    open: (page, ctx) => binMovementSheet(page, ctx, "feedstock_bin", "Reconcile stock"),
+    open: (page, ctx) => binMovementSheet(page, ctx, "feedstock_bin", "Adjust stock"),
   },
   {
     id: "bin.loss-output",
     family: "stock-samples",
-    title: "Record loss (biochar bin)",
+    title: "Lost mass (biochar bin)",
     kind: "sheet",
     mode: "form",
     fill: "empty",
     errors: true,
     skip: noBin("biochar_bin", "biochar"),
-    open: (page, ctx) => binMovementSheet(page, ctx, "biochar_bin", "Record loss"),
-  },
-  {
-    id: "bin.count-output",
-    family: "stock-samples",
-    title: "Reconcile stock / count (biochar bin)",
-    kind: "sheet",
-    mode: "form",
-    fill: "empty",
-    errors: true,
-    skip: noBin("biochar_bin", "biochar"),
-    open: (page, ctx) => binMovementSheet(page, ctx, "biochar_bin", "Reconcile stock"),
+    open: (page, ctx) => binMovementSheet(page, ctx, "biochar_bin", "Adjust stock"),
   },
   {
     id: "bin.split-order",
@@ -254,7 +244,7 @@ const stockSamples: Surface[] = [
     fill: "filled",
     skip: noBin("biochar_bin", "biochar"),
     open: async (page, ctx) => {
-      const sheet = await binMovementSheet(page, ctx, "biochar_bin", "Record loss");
+      const sheet = await binMovementSheet(page, ctx, "biochar_bin", "Adjust stock");
       const wet = sheet.getByRole("textbox", { name: /^Wet mass removed/ }).or(sheet.getByLabel(/^Wet mass removed/)).first();
       await wet.fill(PREVIEW_LOSS_KG);
       await settle(page, sheet);
@@ -276,7 +266,7 @@ const stockSamples: Surface[] = [
   {
     id: "bin.history-feedstock",
     family: "stock-samples",
-    title: "Reconciliation history (feedstock bin)",
+    title: "Stock history (feedstock bin)",
     kind: "dialog",
     mode: "read",
     fill: "none",
@@ -292,27 +282,6 @@ const stockSamples: Surface[] = [
     fill: "none",
     skip: noBin("biochar_bin", "biochar"),
     open: (page, ctx) => binHistory(page, ctx, "biochar_bin"),
-  },
-  {
-    id: "bin.correction",
-    family: "stock-samples",
-    title: "Stock history correction",
-    kind: "dialog",
-    mode: "form",
-    fill: "filled",
-    skip: noBin("product_bin", "product"),
-    open: async (page, ctx) => {
-      for (const type of ["product_bin", "biochar_bin"] as const) {
-        if (!findBin(ctx, { type })) continue;
-        const history = await binHistory(page, ctx, type);
-        const correct = history.getByRole("button", { name: /^Correct entry/ }).first();
-        if ((await correct.count()) === 0) continue;
-        await correct.click();
-        await expect(history.getByRole("radio", { name: "Simple", exact: true })).toBeAttached();
-        return lastDialog(page);
-      }
-      return "no correctable loss, count or delivery movement on the seeded output bins";
-    },
   },
   {
     id: "quick-add.storage-bin",
@@ -375,14 +344,14 @@ const productionSite: Surface[] = [
     },
   },
   {
-    id: "energy.page",
+    id: "emissions.page",
     family: "production-site",
-    title: "Energy summary page",
+    title: "Emissions overview page",
     kind: "page",
     mode: "read",
     fill: "none",
     open: async (page, ctx) => {
-      await gotoRoute(page, ctx, "energy");
+      await gotoRoute(page, ctx, "emissions");
       return page.locator("main");
     },
   },
@@ -398,20 +367,15 @@ const productionSite: Surface[] = [
   },
 ];
 
+/** The customer sheet (deep-linked by `?customer=`) switched to its edit form, where locations are managed. */
+async function customerEditSheet(page: Page, ctx: CaptureContext): Promise<Locator> {
+  await gotoRoute(page, ctx, `customers?customer=${ctx.customer!.id}`);
+  const sheet = page.getByRole("dialog").first();
+  await sheet.getByRole("button", { name: "Edit customer", exact: true }).click();
+  return sheet;
+}
+
 const downstream: Surface[] = [
-  {
-    id: "customer.detail-page",
-    family: "downstream",
-    title: "Customer detail page",
-    kind: "page",
-    mode: "read",
-    fill: "none",
-    skip: (ctx) => (ctx.customer ? undefined : "no seeded customer"),
-    open: async (page, ctx) => {
-      await gotoRoute(page, ctx, `customers/${ctx.customer!.id}`);
-      return page.locator("main");
-    },
-  },
   {
     id: "customer.location-add",
     family: "downstream",
@@ -422,8 +386,8 @@ const downstream: Surface[] = [
     errors: true,
     skip: (ctx) => (ctx.customer ? undefined : "no seeded customer"),
     open: async (page, ctx) => {
-      await gotoRoute(page, ctx, `customers/${ctx.customer!.id}`);
-      return openDialogFromButton(page.locator("main"), page, "Add location");
+      const sheet = await customerEditSheet(page, ctx);
+      return openDialogFromButton(sheet, page, "Add location");
     },
   },
   {
@@ -435,8 +399,8 @@ const downstream: Surface[] = [
     fill: "filled",
     skip: (ctx) => (ctx.customer ? undefined : "no seeded customer"),
     open: async (page, ctx) => {
-      await gotoRoute(page, ctx, `customers/${ctx.customer!.id}`);
-      return openDialogFromButton(page.locator("main"), page, "Edit");
+      const sheet = await customerEditSheet(page, ctx);
+      return openDialogFromButton(sheet, page, /^Edit /);
     },
   },
   {
@@ -457,7 +421,7 @@ const downstream: Surface[] = [
     id: "credit-batch.method-b",
     family: "downstream",
     title: "Method B setup (credit batch create)",
-    kind: "sheet",
+    kind: "dialog",
     mode: "form",
     fill: "empty",
     skip: (ctx) =>
@@ -472,8 +436,7 @@ const downstream: Surface[] = [
       await settle(page, sheet);
       const setup = sheet.getByRole("button", { name: "Set up Method-B prerequisites", exact: true });
       if ((await setup.count()) === 0) return "Method B setup is not offered for the first feedstock type (eligibility or prerequisites already recorded)";
-      await setup.click();
-      return sheet;
+      return openDialogFromButton(sheet, page, "Set up Method-B prerequisites");
     },
   },
   {
@@ -656,6 +619,23 @@ const settingsAuth: Surface[] = [
       return dialog;
     },
   },
+  {
+    id: "settings.organizations-keys",
+    family: "settings-auth-onboarding",
+    title: "Organizations: Isometric keys dialog",
+    kind: "dialog",
+    mode: "form",
+    fill: "filled",
+    open: async (page, ctx) => {
+      await gotoRoute(page, ctx, "admin/organizations");
+      const trigger = page.getByRole("button", { name: "Isometric keys" }).first();
+      if ((await trigger.count()) === 0) return "no organization row to open";
+      await trigger.click();
+      const dialog = lastDialog(page);
+      await expect(dialog).toBeVisible();
+      return dialog;
+    },
+  },
   ...(
     [
       ["members", "settings/organization"],
@@ -706,22 +686,17 @@ const settingsAuth: Surface[] = [
   })),
 ];
 
-/**
- * The onboarding wizard and setup guide (dashboard-view.tsx) render only for
- * an org owner or admin whose org has no facility or an unfinished required
- * setup step. No route or query opens them, and reaching that state writes
- * (a new org or facility), so each step is listed with its reason.
- */
-const ONBOARDING_STEPS = ["welcome", "facility", "reactor", "registry", "setup-guide"] as const;
+/** Setup surfaces require an unfinished organization in this read-only capture harness. */
+const ONBOARDING_STEPS = ["facility", "reactor", "registry", "setup-guide"] as const;
 const onboarding: Surface[] = ONBOARDING_STEPS.map((step): Surface => ({
   id: `onboarding.${step}`,
   family: "settings-auth-onboarding",
-  title: step === "setup-guide" ? "Onboarding setup guide" : `Onboarding wizard, ${step} step`,
+  title: step === "setup-guide" ? "Dashboard setup guide" : `Dashboard setup, ${step}`,
   kind: step === "setup-guide" ? "page" : "dialog",
   mode: "form",
   fill: "empty",
   skip: (ctx) =>
-    `unreachable without writes: the org has a facility (${ctx.facility.code}); the wizard and guide render only for an org with no facility or an unfinished required setup step, and no route opens them`,
+    `unreachable without writes: facility ${ctx.facility.code} is already set up; the dashboard guide appears only while required setup is incomplete`,
   open: async () => "unreachable without writes",
 }));
 

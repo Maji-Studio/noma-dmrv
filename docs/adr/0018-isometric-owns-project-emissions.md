@@ -17,6 +17,21 @@ Status: accepted (2026-07-02)
 > the component in `sourceByComponent`; everything else still fails closed
 > (`docs/isometric/changes.md`, 2026-07-29).
 
+> **Amended 2026-10-01**: noma now shows operator-facing CO₂e *estimates* on
+> the Energy page, computed from per-facility emission factors
+> (`facility_emission_factors`). They are display only and never submitted;
+> Isometric stays the system of record for project emissions and nothing
+> below changes for submission. See
+> [ADR 0031](./0031-operator-energy-estimates.md). Estimates paused 2026-10-16,
+> see ADR 0031.
+
+> **Proposed supersession 2026-10-15**: [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
+> moves operating emissions (staff travel, lab electricity, sampling consumables,
+> pyrolyzer direct emissions, sample shipping) onto Removals as per-batch
+> emissions entries. Establishment and end-of-life stay project-level, and the
+> scope guard keeps those tuples. Until ADR 0032 is accepted and implemented,
+> everything below is in force.
+
 ## Context
 
 ADR 0005 chose "Posture B": noma journals LCA-derived emission magnitudes per

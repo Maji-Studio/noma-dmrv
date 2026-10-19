@@ -1,8 +1,14 @@
+import { buildTransportCoverage } from "@/fn/certification/certify-transport-coverage";
+import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
+import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
+import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib/certification/readiness";
 import { describe, expect, it } from "vitest";
 import { TEST_ORG_ID } from "./helpers/test-org";
 import type { TransportLeg } from "@/db/schema";
+import { ROUND_TRIP_DISTANCE_FACTOR } from "@/lib/calculations/round-trip";
 import {
   aggregateTransportMassDistance,
+  aggregateBiocharTransportMassDistance,
   enrichWithTransportLegs,
   type AggregatedProductionData,
 } from "@/lib/isometric/utils/aggregation";
@@ -10,11 +16,12 @@ import {
 // Minimal-shape TransportLeg builder. Only the columns the aggregator reads are
 // populated. The emission factor is NOT stored on legs (it lives on the
 // Isometric `mass_distance_based_ci_emissions` blueprint as a fixed input), so
-// the aggregator only needs distance, load mass, and the factor-selecting
+// the aggregator only needs distance, load mass, and the method and mode
 // fields — and sums each leg's distance × load-mass (tonne·km) so Certify's
 // `mass_distance × factor` equals the per-leg sum (Transportation v1.1 §5).
 function leg(distanceKm: number, loadMassKg: number | null): TransportLeg {
   return {
+    version: 1,
     organizationId: TEST_ORG_ID,
     id: "tl_" + distanceKm + "_" + (loadMassKg ?? "null"),
     entityType: "biochar",
@@ -31,14 +38,8 @@ function leg(distanceKm: number, loadMassKg: number | null): TransportLeg {
     vehicleType: null,
     modelYear: null,
     loadMassKg,
-    // These cases assert the raw per-leg sum, so the builder pins `one_way`
-    // (no ×2). The round-trip multiplier (#316) is covered in
-    // src/lib/isometric/utils/aggregation.test.ts.
-    tripType: "one_way",
     calculationMethodType: "distance_based",
     isDerived: false,
-    billOfLading: null,
-    weighScaleTicketRef: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -51,32 +52,33 @@ describe("aggregateTransportMassDistance", () => {
     expect(result.warning).toBeNull();
   });
 
-  it("returns distance × load-mass (tonne·km) for a single leg", () => {
-    // 50 km × 1.0 t = 50 t·km
+  it("returns round-trip distance × load-mass (tonne·km) for a single leg", () => {
+    // (50 km × 2) × 1.0 t = 100 t·km: every leg counts its round trip
     const result = aggregateTransportMassDistance([leg(50, 1000)], "Feedstock");
-    expect(result.massDistanceTonneKm).toBe(50);
+    expect(result.massDistanceTonneKm).toBe(100);
     expect(result.warning).toBeNull();
   });
 
-  it("sums Σⱼ(distⱼ × massⱼ) across multiple legs (mass-weighted)", () => {
+  it("sums Σⱼ(2 × distⱼ × massⱼ) across multiple legs (mass-weighted)", () => {
     // The "storage bins pile up" case: a run's feedstock arrives across two
-    // deliveries. 50 km × 1 t + 100 km × 4 t = 50 + 400 = 450 t·km. The larger
-    // load over the longer distance dominates — exactly the mass-weighting.
+    // deliveries. 100 km × 1 t + 200 km × 4 t = 100 + 800 = 900 t·km (round
+    // trips of 50 and 100 km). The larger load over the longer distance
+    // dominates — exactly the mass-weighting.
     const result = aggregateTransportMassDistance(
       [leg(50, 1000), leg(100, 4000)],
       "Feedstock",
     );
-    expect(result.massDistanceTonneKm).toBe(450);
+    expect(result.massDistanceTonneKm).toBe(900);
     expect(result.warning).toBeNull();
   });
 
   it("keeps kilometre inputs unchanged for the four-lane outbound example", () => {
     const result = aggregateTransportMassDistance(
       [
-        { ...leg(7, 250), tripType: "return" },
-        { ...leg(7.015, 250), tripType: "return" },
-        { ...leg(7, 250), tripType: "return" },
-        { ...leg(7.015, 250), tripType: "return" },
+        leg(7, 250),
+        leg(7.015, 250),
+        leg(7, 250),
+        leg(7.015, 250),
       ],
       "Biochar",
     );
@@ -96,37 +98,72 @@ describe("aggregateTransportMassDistance", () => {
     );
   });
 
-  it("warns when legs mix transport-factor fields (different method)", () => {
+  it("warns when legs mix transport modes", () => {
     // Collapsing to one mass_distance scalar is only valid when every leg
-    // shares the fields that select the blueprint's emission factor. A
-    // differing transportMethodType (e.g. rail) carries a different factor and
-    // cannot be summed into one tonne·km value — surface a warning instead.
+    // shares a transport mode. Different modes cannot be summed into the
+    // single value sent to a template component.
     const result = aggregateTransportMassDistance(
       [leg(50, 1000), { ...leg(100, 1000), transportMethodType: "rail" }],
       "Feedstock",
     );
     expect(result.massDistanceTonneKm).toBeNull();
-    expect(result.warning).toMatch(/mix factor fields/);
+    expect(result.warning).toBe("Feedstock transport legs use different transport modes. Check the recorded modes against the removal template.");
   });
 
   it("handles zero-distance legs cleanly", () => {
-    // 0 km × 1 t + 100 km × 1 t = 100 t·km
+    // 0 km × 1 t + (100 km × 2) × 1 t = 200 t·km
     const result = aggregateTransportMassDistance(
       [leg(0, 1000), leg(100, 1000)],
       "Feedstock",
     );
-    expect(result.massDistanceTonneKm).toBe(100);
+    expect(result.massDistanceTonneKm).toBe(200);
     expect(result.warning).toBeNull();
   });
 });
 
+describe("aggregateBiocharTransportMassDistance", () => {
+  it("counts 25 kg applied from a 50 kg delivery at 10 km as 0.5 tonne-km, regardless of the 100 kg produced", () => {
+    expect(aggregateBiocharTransportMassDistance([leg(10, 25)]))
+      .toEqual({ massDistanceTonneKm: 0.5, warning: null });
+  });
+
+  it("sums two delivery slices at their own distances using wet mass", () => {
+    expect(aggregateBiocharTransportMassDistance([leg(10, 25), leg(30, 40)]))
+      .toEqual({ massDistanceTonneKm: 2.9, warning: null });
+  });
+
+  it.each([0, -1, NaN, Infinity])("names only affected deliveries for unusable distance %s", (distanceKm) => {
+    expect(aggregateBiocharTransportMassDistance([
+      { ...leg(10, 25), originName: "Facility", destinationName: "DL-1: Site A" },
+      { ...leg(distanceKm, 40), originName: "Facility", destinationName: "DL-2: Site B" },
+      { ...leg(0, 20), originName: "Facility", destinationName: "DL-3: Site C" },
+    ])).toEqual({
+      massDistanceTonneKm: null,
+      warning: "Biochar transport has 2 deliveries without a positive distance (Facility to DL-2: Site B, Facility to DL-3: Site C). Record a positive distance for each delivery before submitting.",
+    });
+  });
+
+  it.each([null, 0, -1, NaN, Infinity])("names the affected delivery for unusable wet mass %s", (loadMassKg) => {
+    expect(aggregateBiocharTransportMassDistance([
+      { ...leg(10, 25), originName: "Facility", destinationName: "DL-1: Site A" },
+      { ...leg(10, loadMassKg), originName: "Facility", destinationName: "DL-2: Site B" },
+    ])).toEqual({
+      massDistanceTonneKm: null,
+      warning: "Biochar transport has 1 leg without a load mass (Facility to DL-2: Site B). Record a load mass for each leg before submitting.",
+    });
+  });
+});
+
 describe("enrichWithTransportLegs", () => {
+  // These cases assert category plumbing, not the doubling, so each leg is
+  // built from the distance it COUNTS (its round trip): half of it one way.
+  const roundTripLeg = (countedKm: number, loadMassKg: number | null) =>
+    leg(countedKm / ROUND_TRIP_DISTANCE_FACTOR, loadMassKg);
+
   const baseAgg: AggregatedProductionData = {
     weightedOrganicCarbonPercent: 80,
     weightedHToCorgRatio: 0.4,
     weightedOToCorgRatio: 0.2,
-    weightedAshPercent: 5,
-    weightedMoisturePercent: 10,
     totalBiocharDryMassKg: 1000,
     totalFeedstockDryMassKg: 4000,
     totalStartupDieselLitres: 50,
@@ -142,11 +179,129 @@ describe("enrichWithTransportLegs", () => {
     warnings: [],
   };
 
+  it("carries mixed-vehicle advisories through coverage and readiness without submit blockers", () => {
+    const legs = {
+      feedstock: [
+        { ...leg(50, 1000), entityType: "feedstock" as const, isDerived: true, vehicleType: "truck", modelYear: 2020 },
+        { ...leg(100, 1000), entityType: "feedstock" as const, isDerived: true, vehicleType: "tractor", modelYear: null },
+        { ...leg(25, 1000), entityType: "feedstock" as const, originName: "Farm A", destinationName: "Plant Gate" },
+      ],
+      biochar: [],
+      sample: [],
+    };
+    const coverage = buildTransportCoverage(legs, {
+      feedstockIds: [], biocharProductIds: [], sampleIds: [],
+    });
+    const facts = toRemovalReadinessFacts({
+      submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
+      latestSubmission: null,
+      hasOrgCredentials: true,
+      mapping: {},
+      removalTemplate: {},
+      unbindableTemplateInputs: [],
+      unresolvedBlueprintKeys: [],
+      hasSubmittableRuns: true,
+      supportingDocuments: { total: 0, mirrored: 0 },
+      requiredTransportCategories: ["feedstock"],
+      transportCoverage: coverage,
+    } as unknown as RemovalCertifyContext);
+    const readiness = deriveRemovalReadiness(facts);
+    expect(readiness.state).toBe("ready");
+    expect(readiness.advisories).toEqual([]);
+    expect(readiness.transportVehicleAdvisories).toEqual([
+      "Feedstock transport uses more than one vehicle type. Check that the removal template's transport factor covers every vehicle used.",
+      "Feedstock transport has 1 leg without a vehicle type (Farm A to Plant Gate). Record the vehicle type on each leg when it is known.",
+      "Feedstock transport has different or unrecorded model years. Check that the removal template's transport factor covers every vehicle used.",
+    ]);
+    expect(buildRemovalRequirementsChecklist(facts).filter((check) => check.key === "transportUniformity")).toEqual([
+      expect.objectContaining({ status: "met" }),
+    ]);
+    const enriched = enrichWithTransportLegs(baseAgg, legs);
+    expect(enriched.feedstockTransportMassDistanceTonneKm).toBe(350);
+    // removal-submission-build blocks on this warning array, never the advisories.
+    expect(enriched.warnings).toEqual([]);
+  });
+
+  it.each([false, true])("omits vehicle advisories for delivery-derived biochar legs (manual leg: %s)", (includeManual) => {
+    const legs = {
+      feedstock: [],
+      biochar: [
+        { ...leg(50, 1000), isDerived: true },
+        { ...leg(100, 1000), isDerived: true },
+        ...(includeManual ? [{ ...leg(25, 1000), vehicleType: "truck" }] : []),
+      ],
+      sample: [],
+    };
+    const coverage = buildTransportCoverage(legs, {
+      feedstockIds: [], biocharProductIds: ["ent_test"], sampleIds: [],
+    });
+    const facts = toRemovalReadinessFacts({
+      submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
+      latestSubmission: null,
+      hasOrgCredentials: true,
+      mapping: {},
+      removalTemplate: {},
+      unbindableTemplateInputs: [],
+      unresolvedBlueprintKeys: [],
+      hasSubmittableRuns: true,
+      supportingDocuments: { total: 0, mirrored: 0 },
+      requiredTransportCategories: ["biochar"],
+      transportCoverage: coverage,
+    } as unknown as RemovalCertifyContext);
+    expect(coverage.biochar.vehicleAdvisories).toEqual([]);
+    expect(facts.transportVehicleAdvisories).toEqual([]);
+    const readiness = deriveRemovalReadiness(facts);
+    expect(readiness.state).toBe("ready");
+    expect(readiness.transportVehicleAdvisories).toEqual([]);
+    const enriched = enrichWithTransportLegs(baseAgg, legs);
+    expect(enriched.biocharTransportMassDistanceTonneKm).toBe(includeManual ? 350 : 300);
+    expect(enriched.warnings).toEqual([]);
+  });
+
+  it("does not duplicate feedstock blockers when they carry a location fix link", () => {
+    const blocker = { fixTarget: "feedstocks", detail: "Missing distance", record: { id: "feedstock-one", href: "/suppliers?location=one" } };
+    const facts = toRemovalReadinessFacts({
+      submissionLineageBlockers: [blocker], latestSubmission: null,
+      supportingDocuments: { total: 0, mirrored: 0 }, requiredTransportCategories: [],
+    } as unknown as RemovalCertifyContext);
+    expect(facts.submissionLineageIssues).toEqual([]);
+    expect(blocker.record.href).toBe("/suppliers?location=one");
+  });
+
+  it("omits mixed sample vehicles when the template has no sample component", () => {
+    const coverage = buildTransportCoverage({
+      feedstock: [], biochar: [],
+      sample: [{ ...leg(10, 100), vehicleType: "truck" }, { ...leg(20, 100), vehicleType: "van" }],
+    }, { feedstockIds: [], biocharProductIds: [], sampleIds: [] });
+    expect(coverage.sample.vehicleAdvisories).toHaveLength(1);
+    const facts = toRemovalReadinessFacts({
+      submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
+      latestSubmission: null, supportingDocuments: { total: 0, mirrored: 0 },
+      requiredTransportCategories: ["feedstock", "biochar"], transportCoverage: coverage,
+    } as unknown as RemovalCertifyContext);
+    expect(facts.transportVehicleAdvisories).toEqual([]);
+  });
+
+  it("preserves the missing-mass warning and repair category in readiness", () => {
+    const warning = aggregateTransportMassDistance([leg(10, null)], "Biochar").warning;
+    const checks = buildRemovalRequirementsChecklist({
+      local: null, lockInFlight: false,
+      hasMapping: true, hasOrgCredentials: true, hasRemovalTemplate: true,
+      unbindableTemplateInputs: [],
+      unresolvedBlueprintKeys: [], feedstockTypeMappingGaps: [], hasSubmittableRuns: true,
+      requiredTransport: [{ category: "biochar", count: 1, aggregationWarning: warning }],
+    });
+    expect(checks.find((check) => check.key === "transportUniformity")).toMatchObject({
+      status: "unmet", transportCategory: "biochar",
+      detail: "Biochar transport has 1 leg without a load mass (tl_10_null). Record a load mass for each leg before submitting.",
+    });
+  });
+
   it("populates all three transport fields with mass-distance (tonne·km)", () => {
     const enriched = enrichWithTransportLegs(baseAgg, {
-      feedstock: [leg(50, 1000), leg(100, 4000)], // 50 + 400 = 450
-      biochar: [leg(200, 1000)], // 200
-      sample: [leg(10, 500), leg(30, 500)], // 5 + 15 = 20
+      feedstock: [roundTripLeg(50, 1000), roundTripLeg(100, 4000)], // 50 + 400 = 450
+      biochar: [roundTripLeg(200, 1000)], // 200
+      sample: [roundTripLeg(10, 500), roundTripLeg(30, 500)], // 5 + 15 = 20
     });
 
     expect(enriched.feedstockTransportMassDistanceTonneKm).toBe(450);
@@ -160,14 +315,14 @@ describe("enrichWithTransportLegs", () => {
       feedstock: [],
       biochar: [],
       // 10 km × 0.5 t + 30 km × 0.5 t = 5 + 15 = 20 t·km
-      sample: [leg(10, 500), leg(30, 500)],
+      sample: [roundTripLeg(10, 500), roundTripLeg(30, 500)],
     });
     expect(enriched.sampleTransportMassDistanceTonneKm).toBe(20);
   });
 
   it("sample mass-distance is 0 (not null) when there are no sample legs", () => {
     const enriched = enrichWithTransportLegs(baseAgg, {
-      feedstock: [leg(50, 1000)],
+      feedstock: [roundTripLeg(50, 1000)],
       biochar: [],
       sample: [],
     });
@@ -176,7 +331,7 @@ describe("enrichWithTransportLegs", () => {
 
   it("does not mutate the input aggregation object", () => {
     const enriched = enrichWithTransportLegs(baseAgg, {
-      feedstock: [leg(50, 1000)],
+      feedstock: [roundTripLeg(50, 1000)],
       biochar: [],
       sample: [],
     });
@@ -205,7 +360,7 @@ describe("enrichWithTransportLegs", () => {
   it("leaves feedstock/biochar null (fail closed) when those categories have no legs", () => {
     const enriched = enrichWithTransportLegs(baseAgg, {
       feedstock: [],
-      biochar: [leg(100, 1000)], // 100
+      biochar: [roundTripLeg(100, 1000)], // 100
       sample: [],
     });
 
@@ -216,9 +371,9 @@ describe("enrichWithTransportLegs", () => {
 
   it("appends a warning per category with a leg missing load mass", () => {
     const enriched = enrichWithTransportLegs(baseAgg, {
-      feedstock: [leg(50, 1000), leg(100, null)],
-      biochar: [leg(200, 1000)],
-      sample: [leg(10, 500), leg(30, null)],
+      feedstock: [roundTripLeg(50, 1000), roundTripLeg(100, null)],
+      biochar: [roundTripLeg(200, 1000)],
+      sample: [roundTripLeg(10, 500), roundTripLeg(30, null)],
     });
 
     expect(enriched.feedstockTransportMassDistanceTonneKm).toBeNull();
@@ -237,7 +392,7 @@ describe("enrichWithTransportLegs", () => {
       warnings: ["Run PR-2026-001: missing biocharDryMassKg"],
     };
     const enriched = enrichWithTransportLegs(aggWithExisting, {
-      feedstock: [leg(50, 1000)],
+      feedstock: [roundTripLeg(50, 1000)],
       biochar: [],
       sample: [],
     });
@@ -245,72 +400,53 @@ describe("enrichWithTransportLegs", () => {
   });
 
   // §8.6.2 buckets (issue #349, ADR 0020): biochar transport is the DELIVERY
-  // bucket and scales with the applied share; feedstock/sample transport are
+  // bucket and carries attributed wet loads; feedstock/sample transport are
   // PRODUCTION-bucket and always sum whole.
-  it("scales the biochar mass-distance by the applied-biochar fraction", () => {
+  it("counts already-attributed delivery loads without a second share factor", () => {
     const enriched = enrichWithTransportLegs(
       baseAgg,
       {
         feedstock: [],
-        biochar: [leg(10, 1000)], // 10 t·km
+        biochar: [roundTripLeg(10, 1000)], // 10 t·km
         sample: [],
       },
-      { appliedBiocharFraction: 0.4 },
     );
-    expect(enriched.biocharTransportMassDistanceTonneKm).toBeCloseTo(4);
+    expect(enriched.biocharTransportMassDistanceTonneKm).toBeCloseTo(10);
   });
 
-  it("leaves feedstock and sample mass-distance unscaled at a fraction below 1", () => {
+  it("leaves feedstock and sample mass-distance unscaled", () => {
     const enriched = enrichWithTransportLegs(
       baseAgg,
       {
-        feedstock: [leg(50, 1000)], // 50 t·km
-        biochar: [leg(10, 1000)], // 10 t·km
-        sample: [leg(10, 500), leg(30, 500)], // 20 t·km
+        feedstock: [roundTripLeg(50, 1000)], // 50 t·km
+        biochar: [roundTripLeg(10, 1000)], // 10 t·km
+        sample: [roundTripLeg(10, 500), roundTripLeg(30, 500)], // 20 t·km
       },
-      { appliedBiocharFraction: 0.4 },
     );
     // PRODUCTION-bucket categories stay whole.
     expect(enriched.feedstockTransportMassDistanceTonneKm).toBe(50);
     expect(enriched.sampleTransportMassDistanceTonneKm).toBe(20);
-    // Only the DELIVERY-bucket biochar category scales.
-    expect(enriched.biocharTransportMassDistanceTonneKm).toBeCloseTo(4);
+    // The DELIVERY bucket is already attributed.
+    expect(enriched.biocharTransportMassDistanceTonneKm).toBeCloseTo(10);
   });
 
-  it("defaults to the full biochar mass-distance when no option is passed", () => {
+  it("sums biochar legs without a share factor", () => {
     const enriched = enrichWithTransportLegs(baseAgg, {
       feedstock: [],
-      biochar: [leg(10, 1000)],
+      biochar: [roundTripLeg(10, 1000)],
       sample: [],
     });
     expect(enriched.biocharTransportMassDistanceTonneKm).toBe(10);
   });
 
-  it("clamps an out-of-range applied-biochar fraction into [0, 1]", () => {
-    const legs = {
-      feedstock: [],
-      biochar: [leg(10, 1000)], // 10 t·km
-      sample: [],
-    };
-    const above = enrichWithTransportLegs(baseAgg, legs, {
-      appliedBiocharFraction: 1.5,
-    });
-    expect(above.biocharTransportMassDistanceTonneKm).toBe(10);
-    const below = enrichWithTransportLegs(baseAgg, legs, {
-      appliedBiocharFraction: -0.5,
-    });
-    expect(below.biocharTransportMassDistanceTonneKm).toBe(0);
-  });
-
-  it("keeps a null biochar mass-distance null under a fraction", () => {
+  it("keeps missing biochar legs null", () => {
     const enriched = enrichWithTransportLegs(
       baseAgg,
       {
-        feedstock: [leg(50, 1000)],
+        feedstock: [roundTripLeg(50, 1000)],
         biochar: [], // no legs ⇒ null (fails closed at submit)
         sample: [],
       },
-      { appliedBiocharFraction: 0.4 },
     );
     expect(enriched.biocharTransportMassDistanceTonneKm).toBeNull();
   });

@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ moisture: 100 / 15 as number | null }));
 vi.mock("@/hooks/use-entities", () => ({ useEntityById: () => ({ data: { mass: { moisturePercent: state.moisture } } }) }));
 vi.mock("@/components/forms", () => ({
-  FormField: ({ children, helperText, warning, hint }: { children: ReactNode; helperText?: string; warning?: string; hint?: ReactNode }) => <div><span data-part="helper">{helperText}</span><span data-part="warning">{warning}</span><span data-part="hint">{hint}</span>{children}</div>,
+  FormField: ({ children, cue, warning, hint }: { children: ReactNode; cue?: string; warning?: string; hint?: ReactNode }) => <div><span data-part="cue">{cue}</span><span data-part="warning">{warning}</span><span data-part="hint">{hint}</span>{children}</div>,
   FormInput: "input",
 }));
 import { IngredientMoistureField } from "./ingredient-moisture-field";
@@ -22,7 +22,7 @@ describe("IngredientMoistureField", () => {
     let renderer!: ReactTestRenderer;
     await act(async () => { renderer = create(<Harness />); });
     expect(renderer.root.findByType("input").props.value).toBe("");
-    expect(part(renderer, "helper")).toBe("Estimated moisture: 6.7%");
+    expect(part(renderer, "cue")).toBe("Estimated moisture: 6.7%");
     expect(part(renderer, "warning")).toBeUndefined();
     await act(async () => renderer.root.findByType("input").props.onChange({ target: { value: "18" } }));
     expect(part(renderer, "warning")).toBe("18% is 11.3 points above the 6.7% estimate. Check the reading before you save.");

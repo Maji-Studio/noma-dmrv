@@ -12,10 +12,11 @@ vi.mock('./output-stock-operations', async () => {
 vi.mock('./biochar-product-composition', () => ({ resolveCompositionIngredientMassBasis: mocks.composition }));
 vi.mock('./ingredient-moisture-basis', () => ({ getIngredientStockBasis: mocks.stock }));
 import { assertProductStockBasis, prepareProductStock, revalidateProductStock, previewProductStock, type ProductStockPreviewInput } from './product-stock-preview';
+import { StockBasisChangedError } from './output-stock-errors';
 
 const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
 const input: ProductStockPreviewInput = { facilityId: 'facility', formulationId: 'recipe', placedAt: '2026-09-14T12:00:00.000Z', sourceBiocharStorageLocationId: 'source', storageLocationId: 'destination', massKg: 100, moistureContentPercent: 10, waterAddedKg: 20, ingredientBins: [] };
-const preview: OutputStockPreview = { storageLocationId: 'source', binName: 'Source', binCode: 'BC-1', lane: 'biochar', basisFingerprint: 'source-basis', beforeDryKg: 180, afterDryKg: 90, beforeSolidsKg: 180, afterSolidsKg: 90, removedDryKg: 90, removedWetKg: 100, movementMoisturePercent: 10, beforeEstimatedWetKg: 200, afterEstimatedWetKg: 100, discrepancySolidsKg: 0, blockingMessage: null, allocations: [{ layerId: 'run', code: 'RUN-1', wetMassKg: 100, dryMassKg: 90, runs: [{ productionRunId: 'run', code: 'RUN-1', dryMassKg: 90 }] }] };
+const preview: OutputStockPreview = { expectedProductVersions: {}, storageLocationId: 'source', binName: 'Source', binCode: 'BC-1', lane: 'biochar', basisFingerprint: 'source-basis', beforeDryKg: 180, afterDryKg: 90, beforeSolidsKg: 180, afterSolidsKg: 90, removedDryKg: 90, removedWetKg: 100, movementMoisturePercent: 10, beforeEstimatedWetKg: 200, afterEstimatedWetKg: 100, discrepancySolidsKg: 0, blockingMessage: null, allocations: [{ layerId: 'run', code: 'RUN-1', wetMassKg: 100, dryMassKg: 90, runs: [{ productionRunId: 'run', code: 'RUN-1', dryMassKg: 90 }] }] };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -115,11 +116,39 @@ describe('product-wide preview basis', () => {
     expect(() => assertProductStockBasis(initial.basisFingerprint, changed)).toThrow(expect.objectContaining({
       name: 'ActionConflictError', conflict: { entity: 'storageLocation', id: 'source', code: 'BC-1' },
     }));
+    expect(() => assertProductStockBasis(initial.basisFingerprint, changed)).toThrow(StockBasisChangedError);
+    expect(() => assertProductStockBasis(initial.basisFingerprint, changed)).toThrow('Stock changed since this preview. Refresh the preview and try again.');
   });
 });
 
 it('returns a typed refresh conflict if the ingredient basis is no longer available', async () => {
   const { SafeError } = await import('@/lib/errors');
   mocks.composition.mockRejectedValue(new SafeError('Ingredient stock not found.'));
-  await expect(revalidateProductStock(ctx, input, tx, 'previous-product-basis')).rejects.toMatchObject({ name: 'ActionConflictError' });
+  const refusal = await revalidateProductStock(ctx, input, tx, 'previous-product-basis').catch((error: unknown) => error);
+  expect(refusal).toMatchObject({ name: 'ActionConflictError', message: 'Stock changed since this preview. Refresh the preview and try again.' });
+  expect(refusal).toBeInstanceOf(StockBasisChangedError);
+});
+
+describe('optional product fingerprint (decision 53)', () => {
+  it('lets the real refusal through when no fingerprint was sent', async () => {
+    const { SafeError } = await import('@/lib/errors');
+    const missing = new SafeError('Ingredient stock not found.');
+    mocks.composition.mockRejectedValue(missing);
+    const refusal = await revalidateProductStock(ctx, input, tx).catch((error: unknown) => error);
+    expect(refusal).toBe(missing);
+    expect(refusal).not.toBeInstanceOf(StockBasisChangedError);
+  });
+
+  it('acts on current stock without comparing a basis', async () => {
+    const prepared = await revalidateProductStock(ctx, input, tx);
+    expect(prepared.basisFingerprint).toEqual(expect.any(String));
+  });
+
+  it('reads the placement as one UTC instant, so equal instants share a fingerprint', async () => {
+    const utc = await prepareProductStock(ctx, input, tx);
+    expect(mocks.prepare.mock.calls[0][1]).toMatchObject({ occurredAt: '2026-09-14T12:00:00.000Z' });
+    const offset = await repeatPrepared({ ...input, placedAt: '2026-09-14T15:00:00+03:00' });
+    expect(mocks.prepare.mock.calls[2][1]).toMatchObject({ occurredAt: '2026-09-14T12:00:00.000Z' });
+    expect(offset.basisFingerprint).toBe(utc.basisFingerprint);
+  });
 });

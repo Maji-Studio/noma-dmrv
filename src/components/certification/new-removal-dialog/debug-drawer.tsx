@@ -38,7 +38,7 @@ export function DebugDrawer({
         <Accordion.Header>
           <Accordion.Trigger
             className={ACCORDION_TRIGGER}
-            labelClassName="label-micro text-[var(--color-text-tertiary)]"
+            labelClassName="body-small normal-case tracking-normal text-[var(--color-text-primary)]"
           >
             <span className="flex w-full items-center justify-between gap-12">
               <span>Technical details</span>

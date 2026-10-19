@@ -74,7 +74,7 @@ vi.mock("@/data-access/certifier-document-uploads", () => ({
   getDocumentUploadByDocument: vi.fn(async () => null),
   deleteDocumentUploadByDocument: vi.fn(async () => {}),
 }));
-vi.mock("@/fn/certification/sources", () => ({
+vi.mock("@/fn/certification/sources-mirror-core", () => ({
   mirrorDocumentToSourceForUser: vi.fn(async () => ({
     externalDocumentId: "src-new",
     isPublic: false,
@@ -100,13 +100,13 @@ import {
 } from "@/data-access/documents";
 import { renderDurabilityLedgerPdf } from "@/lib/certification/evidence-ledger/durability-pdf";
 import { renderThousandYearDurabilityLedgerPdf } from "@/lib/certification/evidence-ledger/durability-1000-pdf";
-import { mirrorDocumentToSourceForUser } from "@/fn/certification/sources";
+import { mirrorDocumentToSourceForUser } from "@/fn/certification/sources-mirror-core";
 import { ensureDurabilityEvidenceLedgerSourceFromContext } from "@/fn/certification/durability-evidence-ledger";
 import { buildThousandYearDurabilityLedgerModel } from "@/lib/certification/evidence-ledger/durability-1000-build-model";
 import {
   CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
   DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-} from "@/lib/isometric/transformers/measurement-sample";
+} from "@/lib/isometric/storage-blueprints";
 import { CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION } from "@/lib/calculations/biochar-removal";
 
 function context(args: {
@@ -172,6 +172,7 @@ describe("ensureDurabilityEvidenceLedgerSourceFromContext", () => {
         removalId: REMOVAL,
         documentId: "doc-new",
       },
+      { enforceRemovalLifecycle: false },
     );
   });
 
@@ -205,6 +206,7 @@ describe("ensureDurabilityEvidenceLedgerSourceFromContext", () => {
         removalId: REMOVAL,
         documentId: "doc-new",
       },
+      { enforceRemovalLifecycle: false },
     );
   });
 
@@ -248,6 +250,7 @@ describe("ensureDurabilityEvidenceLedgerSourceFromContext", () => {
     expect(deleteDocumentRow).toHaveBeenCalledWith(
       makeTestOrgContext(USER),
       "doc-old",
+      "form",
     );
   });
 
@@ -263,6 +266,7 @@ describe("ensureDurabilityEvidenceLedgerSourceFromContext", () => {
     expect(deleteDocumentRow).toHaveBeenCalledWith(
       makeTestOrgContext(USER),
       "doc-old",
+      "form",
     );
     expect(deleteObject).toHaveBeenCalledWith("durability-evidence/old.pdf");
   });

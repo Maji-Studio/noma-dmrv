@@ -70,25 +70,33 @@ export function useBiocharComposition(
     !!formulationId,
   );
 
-  // Sync rows whenever an unfrozen formulation's ingredient list arrives.
+  // Sync rows whenever an unfrozen formulation's ingredient list arrives or changes.
   // Products with persisted source allocations retain the exact saved rows and
   // metadata because those facts are part of the immutable allocation.
-  const syncedFormulationIdRef = useRef("");
+  const syncedFormulationSignatureRef = useRef("");
   useEffect(() => {
     if (allocationFrozen) return;
 
     // Pure-biochar product (no formulation) → no ingredient bins. Clear any rows
     // left over from a previously-selected formulation.
     if (!formulationId) {
-      if (syncedFormulationIdRef.current !== "") {
-        syncedFormulationIdRef.current = "";
+      if (syncedFormulationSignatureRef.current !== "") {
+        syncedFormulationSignatureRef.current = "";
         replace([]);
       }
       return;
     }
     if (!formulation?.ingredients) return;
-    if (formulation.id === syncedFormulationIdRef.current) return;
-    syncedFormulationIdRef.current = formulation.id;
+    const formulationSignature = JSON.stringify([
+      formulation.id,
+      formulation.ingredients.map((ingredient) => [
+        ingredient.id,
+        ingredient.feedstockTypeId,
+        ingredient.ratio,
+      ]),
+    ]);
+    if (formulationSignature === syncedFormulationSignatureRef.current) return;
+    syncedFormulationSignatureRef.current = formulationSignature;
 
     const live = (form.getValues("ingredientBins") as IngredientBin[] | undefined) ?? [];
     const next = reconcileComposition(formulation, live);

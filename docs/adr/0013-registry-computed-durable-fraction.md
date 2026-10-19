@@ -10,6 +10,13 @@
 > submission path exists” describe the pre-2026-07-10 state and are
 > superseded by this metadata and the later amendments.
 
+> **Amendment (2026-10-15, issue #1016):** the batch-level Eq.6 preview
+> (`computeFDurable1000` using stored batch petrography/TGA columns) and the
+> operator-declared `credit_batches.h_to_c_org_ratio` reconciliation are removed.
+> The local 1,000-year preview uses Sample replicates via
+> `computeApplicationCo2eStoredBlueprint1000`. The historical descriptions below
+> of the removed preview and reconciliation no longer apply.
+
 ## Amendment (2026-08-13) — replacement sampled 1,000-year component
 
 The sampled 1,000-year executable contract is now
@@ -118,14 +125,14 @@ against it with a divergence warning.
   temperature via a `biochar_soil` measurement sample (`temperature`). Both resolve to
   datapoints that the `biochar_sequestration_200_year_*` blueprint consumes. noma's generated
   types + `MeasurementProperty` encoder already support this (no type regen); a
-  measurement-samples submission module is net-new (mirror `sensors.ts`).
+  measurement-samples submission module is net-new.
 - **Aggregation is registry-side.** Submit the **list** of per-batch H/C datapoints (each with
   its std-dev from ≥3 replicates); the registry takes the mean (`_c_org`) or Winsorized
   mean + standard error (`_unsampled`). noma does **not** pre-collapse to a mass-weighted
   scalar; `weightedHToCorgRatio` is retained only as the local preview input.
 - **Blueprint selection is the Method A/B distinction** at submission (D6): sampled →
   `_c_org`, Method B unsampled → `_unsampled`.
-- **Soil temperature** is a project-area annual average (7 °C floor; subdivide if intra-area
+- **Soil temperature** is a project-area annual average (noma 7 °C floor per ADR 0016; subdivide if intra-area
   variation > 1 °C). noma submits a **facility-level reference value** sourced from a global
   soil-temperature database (Lembrechts et al. 2022 or equivalent — the protocol's sanctioned
   path when no on-site baselining exists; air temperature is explicitly prohibited as a proxy),

@@ -11,7 +11,7 @@ function lineage(overrides: Partial<SankeyLineage> = {}): SankeyLineage {
     },
     biocharProduct: { id: "lot-1", massKg: 3_000, moistureContentPercent: null },
     feedstocks: [
-      { id: "fs-1", wetMassUsedKg: 10_000, eligibilityStatus: "eligible" },
+      { id: "fs-1", wetMassUsedKg: 10_000 },
     ],
     ...overrides,
   };
@@ -19,13 +19,11 @@ function lineage(overrides: Partial<SankeyLineage> = {}): SankeyLineage {
 
 describe("buildBatchSankey", () => {
   it("builds the four columns with labeled exits for a single lineage", () => {
-    // The ineligible exit derives from the lineage's own feedstock
-    // eligibility flags (issue #285) — no batch-level fact is passed in.
     const result = buildBatchSankey([
       lineage({
         feedstocks: [
-          { id: "fs-1", wetMassUsedKg: 9_000, eligibilityStatus: "eligible" },
-          { id: "fs-2", wetMassUsedKg: 1_000, eligibilityStatus: "ineligible" },
+          { id: "fs-1", wetMassUsedKg: 9_000 },
+          { id: "fs-2", wetMassUsedKg: 1_000 },
         ],
       }),
     ]);
@@ -41,18 +39,12 @@ describe("buildBatchSankey", () => {
     expect(result.columns[2].massKg).toBe(3_000);
     expect(result.columns[3].massKg).toBe(2_000);
 
-    // 10 000 in − 1 000 ineligible − 3 000 out = 6 000 conversion loss;
+    // 10 000 in − 3 000 out = 7 000 conversion loss;
     // 3 000 lot − 2 000 applied = 1 000 in storage.
     expect(result.exits).toEqual([
       expect.objectContaining({
-        key: "ineligible_feedstock",
-        massKg: 1_000,
-        tone: "alert",
-        fromColumn: "feedstock",
-      }),
-      expect.objectContaining({
         key: "conversion_loss",
-        massKg: 6_000,
+        massKg: 7_000,
         fromColumn: "productionRuns",
       }),
       expect.objectContaining({
@@ -76,7 +68,6 @@ describe("buildBatchSankey", () => {
         {
           id: "fs-1",
           wetMassUsedKg: 10_000,
-          eligibilityStatus: "eligible" as const,
         },
       ],
     };
@@ -135,7 +126,6 @@ describe("buildBatchSankey", () => {
               {
                 id: "fs-1",
                 wetMassUsedKg: 6_000,
-                eligibilityStatus: "eligible",
               },
             ],
           },
@@ -149,7 +139,6 @@ describe("buildBatchSankey", () => {
               {
                 id: "fs-2",
                 wetMassUsedKg: 4_000,
-                eligibilityStatus: "eligible",
               },
             ],
           },
@@ -161,7 +150,7 @@ describe("buildBatchSankey", () => {
     expect(result.columns[1]).toMatchObject({ massKg: 3_000, count: 2 });
   });
 
-  it("dedupes the ineligible-feedstock exit for a run shared across applications", () => {
+  it("dedupes conversion loss for a run shared across applications", () => {
     const shared = {
       productionRun: {
         id: "run-1",
@@ -173,12 +162,10 @@ describe("buildBatchSankey", () => {
         {
           id: "fs-1",
           wetMassUsedKg: 8_000,
-          eligibilityStatus: "eligible" as const,
         },
         {
           id: "fs-2",
           wetMassUsedKg: 2_000,
-          eligibilityStatus: "ineligible" as const,
         },
       ],
     };
@@ -187,9 +174,9 @@ describe("buildBatchSankey", () => {
       lineage({ ...shared, application: { id: "app-2", biocharAppliedDryTons: 1 } }),
     ]);
 
-    // The shared run's ineligible allocation counts once, not per application.
+    // The shared run's conversion loss counts once, not per application.
     expect(result.exits).toContainEqual(
-      expect.objectContaining({ key: "ineligible_feedstock", massKg: 2_000 }),
+      expect.objectContaining({ key: "conversion_loss", massKg: 7_000 }),
     );
   });
 
@@ -202,8 +189,8 @@ describe("buildBatchSankey", () => {
           biocharDryMassKg: 2_000,
         },
         feedstocks: [
-          { id: "fs-1", wetMassUsedKg: 4_000, eligibilityStatus: "eligible" },
-          { id: "fs-2", wetMassUsedKg: 3_000, eligibilityStatus: null },
+          { id: "fs-1", wetMassUsedKg: 4_000 },
+          { id: "fs-2", wetMassUsedKg: 3_000 },
         ],
       }),
     ]);
@@ -223,7 +210,6 @@ describe("buildBatchSankey", () => {
           {
             id: "fs-1",
             wetMassUsedKg: 3_000,
-            eligibilityStatus: "eligible",
           },
         ],
       }),
@@ -263,15 +249,12 @@ describe("buildBatchSankey", () => {
           moistureContentPercent: null,
         }, // > run output
         feedstocks: [
-          // Wet eligibility share is applied to the run's dry input mass.
-          { id: "fs-1", wetMassUsedKg: 2_000, eligibilityStatus: "ineligible" },
+          { id: "fs-1", wetMassUsedKg: 2_000 },
         ],
       }),
     ]);
 
-    expect(result.exits).toContainEqual(
-      expect.objectContaining({ key: "ineligible_feedstock", massKg: 1_000 }),
-    );
+    expect(result.exits.map(exit => exit.key)).not.toContain("ineligible_feedstock");
     expect(
       result.exits.filter((e) =>
         ["conversion_loss", "unallocated_output", "in_storage"].includes(e.key),
@@ -294,7 +277,7 @@ describe("buildBatchSankey", () => {
         },
         biocharProduct: { id: "lot-1", massKg: 500, moistureContentPercent: 5 },
         feedstocks: [
-          { id: "fs-1", wetMassUsedKg: 475, eligibilityStatus: "eligible" },
+          { id: "fs-1", wetMassUsedKg: 475 },
         ],
       }),
     ]);

@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   createFormulationSchema,
   exceedsFormulationRatioSum,
+  formulationFilterSchema,
   formulationPercentFormSchema,
-  formulationRatioSum,
   percentFormToRatioPayload,
   percentToRatio,
   ratioToPercent,
@@ -12,17 +12,12 @@ import {
 
 const UUID = "11111111-1111-4111-8111-111111111111";
 
-describe("formulationRatioSum", () => {
-  it("treats missing ratios as zero", () => {
-    expect(formulationRatioSum(null, null)).toBe(0);
-    expect(formulationRatioSum(undefined, undefined)).toBe(0);
-    expect(formulationRatioSum(0.5, [{ ratio: null }])).toBe(0.5);
-  });
-
-  it("sums biochar and ingredient ratios", () => {
-    expect(
-      formulationRatioSum(0.7, [{ ratio: 0.2 }, { ratio: 0.1 }]),
-    ).toBeCloseTo(1, 10);
+describe("formulation list filters", () => {
+  it("defaults to active formulations and preserves an explicit archive filter", () => {
+    expect(formulationFilterSchema.parse({})).toMatchObject({ archived: false });
+    expect(formulationFilterSchema.parse({ archived: false })).toMatchObject({ archived: false });
+    expect(formulationFilterSchema.parse({ archived: true })).toMatchObject({ archived: true });
+    expect(formulationFilterSchema.safeParse({ archived: "true" }).success).toBe(false);
   });
 });
 
@@ -32,9 +27,8 @@ describe("exceedsFormulationRatioSum", () => {
     expect(exceedsFormulationRatioSum(0.5, [{ ratio: 0.4 }])).toBe(false);
   });
 
-  it("absorbs floating-point artifacts within tolerance", () => {
-    // 0.7 + 0.1 + 0.2 drifts to 1.0000000000000002 in float math — not a real
-    // over-allocation, so the tolerance must swallow it.
+  it("compares stored millionths without floating-point drift", () => {
+    // These three stored shares total exactly one million millionths.
     expect(
       exceedsFormulationRatioSum(0.7, [{ ratio: 0.1 }, { ratio: 0.2 }]),
     ).toBe(false);
@@ -84,7 +78,7 @@ describe("formulation schema ratio-sum refinement", () => {
   });
 
   it("rejects an over-allocated update payload", () => {
-    const result = updateFormulationSchema.safeParse({
+    const result = updateFormulationSchema.safeParse({ expectedVersion: 1,
       formulationId: UUID,
       biocharRatio: 0.9,
       ingredients: [{ feedstockTypeId: UUID, ratio: 0.5 }],

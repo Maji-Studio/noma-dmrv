@@ -1,3 +1,4 @@
+import { cleanupFeedstockFixtureParents } from "../helpers/feedstock-fixture";
 import { deleteOutputApplicationFixtures, deleteOutputDeliveryFixtures, deleteOutputProductFixtures } from "../helpers/output-contract-fixtures";
 /**
  * Full Chain UI Smoke Test
@@ -14,6 +15,7 @@ import { deleteOutputApplicationFixtures, deleteOutputDeliveryFixtures, deleteOu
 import { test, expect } from "./fixtures";
 import {
   ACTION_LABEL_PREFIX,
+  creditBatchRows,
   dismissCertifierLinkDialog,
   getCreatedActionCode,
   getListedActionCodes,
@@ -25,9 +27,10 @@ import {
 } from "./fixtures/page-helpers";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { eq, ilike, inArray } from "drizzle-orm";
+import { eq, ilike, inArray, or } from "drizzle-orm";
 import * as schema from "../../src/db/schema";
 import { fillStockMoisture } from "./helpers/stock-moisture";
+import { chooseRunStatus } from "./helpers/run-status";
 
 // ============================================
 // Full Chain Smoke Test
@@ -195,14 +198,7 @@ test.describe("Full Chain UI Smoke Test", () => {
                 .from(schema.feedstocks)
                 .where(inArray(schema.feedstocks.facilityId, facilityIds))
             : [];
-          const feedstockDeliveryRows = facilityIds.length
-            ? await tx
-                .select({ id: schema.feedstockDeliveries.id })
-                .from(schema.feedstockDeliveries)
-                .where(inArray(schema.feedstockDeliveries.facilityId, facilityIds))
-            : [];
           const feedstockIds = feedstocksByFacility.map((f) => f.id);
-          const feedstockDeliveryIds = feedstockDeliveryRows.map((fd) => fd.id);
 
           const biocharProductsByFacility = facilityIds.length
             ? await tx
@@ -238,7 +234,6 @@ test.describe("Full Chain UI Smoke Test", () => {
             ...applicationIds,
             ...creditBatchIds,
             ...feedstockIds,
-            ...feedstockDeliveryIds,
             ...biocharProductIds,
             ...storageLocationIds,
           ]);
@@ -250,6 +245,13 @@ test.describe("Full Chain UI Smoke Test", () => {
                 .where(inArray(schema.documents.entityId, allEntityIds))
             : [];
           const documentIds = documentRows.map((d) => d.id);
+
+          if (allEntityIds.length) await tx.delete(schema.activityEvents).where(or(
+            facilityIds.length ? inArray(schema.activityEvents.facilityId, facilityIds) : undefined,
+            creditBatchIds.length ? inArray(schema.activityEvents.creditBatchId, creditBatchIds) : undefined,
+            productionRunIds.length ? inArray(schema.activityEvents.productionRunId, productionRunIds) : undefined,
+            allEntityIds.length ? inArray(schema.activityEvents.entityId, [...allEntityIds, ...documentIds]) : undefined,
+          ));
 
           if (documentIds.length) {
             await tx
@@ -311,9 +313,6 @@ test.describe("Full Chain UI Smoke Test", () => {
               .delete(schema.incidentReports)
               .where(inArray(schema.incidentReports.productionRunId, productionRunIds));
             await tx
-              .delete(schema.samples)
-              .where(inArray(schema.samples.productionRunId, productionRunIds));
-            await tx
               .delete(schema.productionRunFeedstocks)
               .where(inArray(schema.productionRunFeedstocks.productionRunId, productionRunIds));
           }
@@ -335,13 +334,9 @@ test.describe("Full Chain UI Smoke Test", () => {
             await tx
               .delete(schema.feedstocks)
               .where(inArray(schema.feedstocks.id, feedstockIds));
+            await cleanupFeedstockFixtureParents(tx);
           }
 
-          if (feedstockDeliveryIds.length) {
-            await tx
-              .delete(schema.feedstockDeliveries)
-              .where(inArray(schema.feedstockDeliveries.id, feedstockDeliveryIds));
-          }
 
           if (reactorIds.length) {
             await tx
@@ -376,6 +371,7 @@ test.describe("Full Chain UI Smoke Test", () => {
               .where(inArray(schema.facilities.id, facilityIds));
           }
         });
+        await cleanupFeedstockFixtureParents(db);
       } finally {
         await pool.end();
       }
@@ -398,6 +394,8 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       await page.fill('input[name="name"]', `Chain Facility ${runId}`);
       await page.fill('input[name="country"]', "Tanzania");
+      await page.locator("#gps-latitude").fill("-8.3");
+      await page.locator("#gps-longitude").fill("35.3");
       await facilityDialog
         .getByRole("combobox", { name: "Timezone" })
         .fill("Dar es Salaam");
@@ -460,7 +458,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.click('button:has-text("New production run")');
       await waitForSideSheet(page);
 
-      await page.selectOption('select[name="status"]', "running");
+      await chooseRunStatus(page, "running");
 
       await selectEntityById(
         page,
@@ -512,7 +510,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await waitForSideSheet(page);
       await page.fill('input[name="endDate"]', productionRunDate);
       await page.fill('input[name="endTime"]', "12:00");
-      await page.selectOption('select[name="status"]', "complete");
+      await chooseRunStatus(page, "complete");
       await page
         .locator('[role="dialog"]')
         .getByRole("button", { name: "Save changes" })
@@ -537,14 +535,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await selectEntityById(page, "Customer", seededData.customer.id, seededData.customer.name);
 
       // Wait for cascading customer location select
-      await page.waitForSelector(
-        'select[name="customerLocationId"]:not([disabled])',
-        { timeout: 8000 }
-      );
-      await page.selectOption(
-        'select[name="customerLocationId"]',
-        seededData.customerLocation.id
-      );
+      await selectEntityById(page, "Customer location", seededData.customerLocation.id, seededData.customerLocation.name);
 
       // Orders select a formulation without reserving a bin.
       await selectEntityById(
@@ -579,7 +570,7 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       // Select the first available order (FormEntitySelect, not a native <select>)
       await selectFirstEntity(page, "Order");
-      await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
+      await selectEntityById(page, "Actual source bin", seededData.productStorageLocation.id, seededData.productStorageLocation.name);
 
       await page.fill('input[name="deliveredWetMassKg"]', "95");
       await fillStockMoisture(page, "delivery", "10");
@@ -603,15 +594,9 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.fill('input[name="applicationDate"]', today);
 
       // Select first delivery
-      const deliverySelect = page.locator('select[name="deliveryId"]');
-      const deliveryOptions = deliverySelect.locator("option:not([value=''])");
-      await expect(deliveryOptions.first()).toBeAttached({ timeout: 8000 });
-      const deliveryValue = await deliveryOptions.first().getAttribute("value");
-      if (deliveryValue) {
-        await deliverySelect.selectOption(deliveryValue);
-      }
+      await selectFirstEntity(page, "Delivery");
 
-      await page.fill('input[name="biocharAppliedTons"]', "50");
+      await page.fill('input[name="biocharAppliedKg"]', "50");
       await page.fill('input[name="fieldSizeHa"]', "2");
       await page.fill('input[name="fieldIdentifier"]', `E2E-Field-${runId}`);
       await page.fill('input[name="cropType"]', "maize");
@@ -626,7 +611,7 @@ test.describe("Full Chain UI Smoke Test", () => {
 
     // ─── 7. CREDIT BATCH ───────────────────────────────────
     await test.step("Create credit batch", async () => {
-      await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
+      await page.goto(`/credit-batches?facility=${seededData.facility.id}&view=list`);
       await page.waitForLoadState("networkidle");
 
       await page.click('button:has-text("New credit batch")');
@@ -640,7 +625,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.locator('[role="dialog"]').locator('button:has-text("Create credit batch")').click();
       await waitForSideSheetClose(page);
 
-      await expect(page.locator("article").first()).toBeVisible({ timeout: 10000 });
+      await expect(creditBatchRows(page).first()).toBeVisible({ timeout: 10000 });
     });
 
     // ─── 8. SAMPLE ─────────────────────────────────────────
@@ -655,6 +640,10 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       // Select the credit batch created above
       await selectFirstEntity(page, "Credit Batch");
+      const samplingTime = page.locator('input[name="samplingTime"]');
+      await expect(samplingTime).toBeEnabled();
+      await expect(samplingTime).toHaveValue("");
+      await samplingTime.fill(`${productionRunDate}T12:00`);
 
       // Fill carbon data
       await page.fill('input[name="totalCarbonPercent"]', "75");

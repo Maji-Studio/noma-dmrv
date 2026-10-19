@@ -1,3 +1,4 @@
+import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
 // Tests for the ADR 0005 period-input scope guard + INPUT_MAPPING cleanup.
 //
 // Three guarantees:
@@ -14,6 +15,7 @@
 //      from a merge or refactor surfaces immediately.
 
 import { describe, expect, it } from "vitest";
+import { allowsPeriodInputStub } from "@/lib/isometric/datapoint-mapping";
 import { SafeError } from "@/lib/errors";
 import type { components } from "@/lib/isometric/generated/certify";
 import {
@@ -105,7 +107,7 @@ describe("PERIOD_INPUT_TUPLES", () => {
         "miscellaneous",
         "mass_based_ci_emissions",
         "mass",
-        "  SAFETY Margin  ",
+        { scope: "operating", entryPolicy: "none", origin: "reviewed", automaticSource: "safety-margin" } satisfies LineContract,
       ),
     ).toBeUndefined();
     expect(
@@ -113,7 +115,7 @@ describe("PERIOD_INPUT_TUPLES", () => {
         "miscellaneous",
         "mass_based_ci_emissions",
         "mass",
-        "Some other overhead",
+        { scope: "operating", entryPolicy: "none", origin: "reviewed" } satisfies LineContract,
       ),
     ).toEqual({ category: "miscellaneous" });
     expect(
@@ -129,7 +131,7 @@ describe("PERIOD_INPUT_TUPLES", () => {
         "miscellaneous",
         "mass_based_ci_emissions",
         "mass",
-        "constructor",
+        { scope: "operating", entryPolicy: "none", origin: "reviewed" } satisfies LineContract,
       ),
     ).toEqual({ category: "miscellaneous" });
   });
@@ -189,8 +191,6 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
     weightedOrganicCarbonPercent: 0,
     weightedHToCorgRatio: 0,
     weightedOToCorgRatio: 0,
-    weightedAshPercent: 0,
-    weightedMoisturePercent: 0,
     totalBiocharDryMassKg: 1,
     totalFeedstockDryMassKg: 1,
     totalStartupDieselLitres: 0,
@@ -323,4 +323,13 @@ describe("MAPPING_REVISION", () => {
     expect(MAPPING_REVISION).toBe(payloadHash(MAPPING_REVISION_INPUT));
     expect(MAPPING_REVISION).not.toBe(payloadHash(INPUT_MAPPING));
   });
+});
+
+it.each([
+  ["sandbox", true],
+  ["production", false],
+  ["unknown", false],
+  [undefined, false],
+] as const)("allows period-input stubs only in sandbox (%s)", (environment, expected) => {
+  expect(allowsPeriodInputStub(environment)).toBe(expected);
 });

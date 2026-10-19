@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockCreateSample = vi.fn();
-const mockUpdateSample = vi.fn();
+/**
+ * The Sample Server Actions validate the form and run the lab sample
+ * operations; the batch window, zone, archive and lineage checks moved into
+ * the writer (tests/operation-lab-samples.test.ts covers them on a database).
+ * These specs pin what the actions pass on and what they return.
+ */
+
+const mockRunOperation = vi.fn();
 const mockGetSampleById = vi.fn();
-const mockWithAutoCode = vi.fn();
-const mockGetCreditBatchById = vi.fn();
-const mockGetFacilityById = vi.fn();
 
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi.fn().mockResolvedValue({
@@ -16,32 +19,30 @@ vi.mock("@/lib/auth/server", () => ({
   }),
 }));
 
+vi.mock("@/lib/operations/runner", () => ({
+  runOperationInProcess: (...args: unknown[]) => mockRunOperation(...args),
+}));
+
+vi.mock("@/lib/operations/lab-samples", () => ({
+  recordLabSample: { id: "record_lab_sample" },
+  updateLabSample: { id: "update_lab_sample" },
+  deleteLabSample: { id: "delete_lab_sample" },
+}));
+
 vi.mock("@/data-access/samples", () => ({
-  createSample: (...args: unknown[]) => mockCreateSample(...args),
-  deleteSample: vi.fn(),
   getSampleById: (...args: unknown[]) => mockGetSampleById(...args),
   getSampleStats: vi.fn(),
   getSamples: vi.fn(),
-  updateSample: (...args: unknown[]) => mockUpdateSample(...args),
 }));
 
-vi.mock("@/data-access/code-generator", () => ({
-  withAutoCode: (...args: unknown[]) => mockWithAutoCode(...args),
-}));
-
-vi.mock("@/data-access/credit-batches", () => ({
-  getCreditBatchById: (...args: unknown[]) => mockGetCreditBatchById(...args),
-}));
-
-vi.mock("@/data-access/facilities", () => ({
-  getFacilityById: (...args: unknown[]) => mockGetFacilityById(...args),
-}));
-
+import { DomainError } from "@/lib/domain-errors";
 import { createSampleFn, getSampleByIdFn, updateSampleFn } from "@/fn/samples";
 
 const CREDIT_BATCH_ID = "22222222-2222-4222-8222-222222222222";
 const LATER_CREDIT_BATCH_ID = "55555555-5555-4555-8555-555555555555";
-const FACILITY_ID = "44444444-4444-4444-8444-444444444444";
+const SAMPLE_ID = "33333333-3333-4333-8333-333333333333";
+const BEFORE_WINDOW_MESSAGE =
+  "Sample date 2025-12-31 is before credit batch CB-001's production window, 2026-01-01 to 2026-01-31. Choose a date within or after the production window.";
 
 function baseSampleInput(overrides: Record<string, unknown> = {}) {
   return {
@@ -55,51 +56,38 @@ function baseSampleInput(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("createSampleFn", () => {
-  beforeEach(() => {
-    mockCreateSample.mockReset();
-    mockCreateSample.mockResolvedValue({ id: "sample-1" });
-    mockWithAutoCode.mockReset();
-    mockGetCreditBatchById.mockReset();
-    mockGetCreditBatchById.mockResolvedValue({
-      code: "CB-001",
-      facilityId: FACILITY_ID,
-      startDate: "2026-01-01",
-      endDate: "2026-01-31",
-    });
-    mockGetFacilityById.mockReset();
-    mockGetFacilityById.mockResolvedValue({
-      id: FACILITY_ID,
-      timezone: "UTC",
-    });
-    mockWithAutoCode.mockImplementation(
-      async (
-        _ctx: unknown,
-        _prefix: unknown,
-        _table: unknown,
-        _column: unknown,
-        _excludeId: unknown,
-        create: (code: string) => Promise<unknown>,
-      ) => create("SAM-001"),
-    );
-  });
+function operationInput(): Record<string, unknown> {
+  return mockRunOperation.mock.calls[0][2] as Record<string, unknown>;
+}
 
-  it("passes the required creditBatchId through to data-access", async () => {
+function windowRefusal() {
+  return new DomainError("validation_failed", BEFORE_WINDOW_MESSAGE, {
+    issues: [{ path: ["samplingTime"], code: "validation_failed", message: BEFORE_WINDOW_MESSAGE }],
+  });
+}
+
+beforeEach(() => {
+  mockRunOperation.mockReset();
+  mockRunOperation.mockResolvedValue({ sample: { id: "sample-1" }, notices: [], warnings: [] });
+  mockGetSampleById.mockReset();
+});
+
+describe("createSampleFn", () => {
+  it("passes the required creditBatchId through to the operation", async () => {
     await createSampleFn(baseSampleInput());
 
-    expect(mockCreateSample).toHaveBeenCalledOnce();
-    const payload = mockCreateSample.mock.calls[0][1];
-    expect(payload.creditBatchId).toBe(CREDIT_BATCH_ID);
+    expect(mockRunOperation).toHaveBeenCalledOnce();
+    expect(operationInput().creditBatchId).toBe(CREDIT_BATCH_ID);
   });
 
-  it("passes 1000-year s_fraction through to data-access", async () => {
+  it("passes 1000-year s_fraction through to the operation", async () => {
     await createSampleFn(baseSampleInput({
-      durabilityOption:"1000_year",
-      randomReflectanceR0Percent:2.8,
-      sReflectanceFraction:0.92,
-      residualCarbonPercent:65,
+      durabilityOption: "1000_year",
+      randomReflectanceR0Percent: 2.8,
+      sReflectanceFraction: 0.92,
+      residualCarbonPercent: 65,
     }));
-    expect(mockCreateSample.mock.calls[0][1].sReflectanceFraction).toBe(0.92);
+    expect(operationInput().sReflectanceFraction).toBe(0.92);
   });
 
   it("rejects a sample without a credit batch (issue #309: exactly one batch)", async () => {
@@ -110,103 +98,59 @@ describe("createSampleFn", () => {
     );
 
     expect(result.success).toBe(false);
-    expect(mockCreateSample).not.toHaveBeenCalled();
+    expect(mockRunOperation).not.toHaveBeenCalled();
   });
 
-  it("rejects a sample dated before the assigned credit-batch window", async () => {
+  it("shows the writer's before-window refusal unchanged", async () => {
+    mockRunOperation.mockRejectedValue(windowRefusal());
     const result = await createSampleFn(
       baseSampleInput({ samplingTime: new Date("2025-12-31T23:59:59.000Z") }),
     );
 
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error).toContain("2026-01-01 to 2026-01-31");
-    }
-    expect(mockCreateSample).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ success: false, error: BEFORE_WINDOW_MESSAGE });
   });
 
-  it("accepts post-window sampling from stored material", async () => {
+  it("returns the saved Sample on success", async () => {
     const result = await createSampleFn(
       baseSampleInput({ samplingTime: new Date("2026-02-15T12:00:00.000Z") }),
     );
 
-    expect(result.success).toBe(true);
-    expect(mockCreateSample).toHaveBeenCalledOnce();
+    expect(result).toEqual({ success: true, data: { id: "sample-1" } });
   });
 });
 
 describe("updateSampleFn", () => {
-  beforeEach(() => {
-    mockUpdateSample.mockReset();
-    mockUpdateSample.mockResolvedValue({ id: "sample-1" });
-    mockGetSampleById.mockReset();
-    mockGetSampleById.mockResolvedValue({
-      id: "sample-1",
-      creditBatchId: CREDIT_BATCH_ID,
-      samplingTime: new Date("2026-01-15T12:00:00.000Z"),
-    });
-    mockGetCreditBatchById.mockReset();
-    mockGetCreditBatchById.mockResolvedValue({
-      code: "CB-001",
-      facilityId: FACILITY_ID,
-      startDate: "2026-01-01",
-      endDate: "2026-01-31",
-    });
-    mockGetFacilityById.mockReset();
-    mockGetFacilityById.mockResolvedValue({
-      id: FACILITY_ID,
-      timezone: "UTC",
-    });
-  });
-
-  it("rejects moving an assigned sample before its batch window", async () => {
-    const result = await updateSampleFn({
-      sampleId: "33333333-3333-4333-8333-333333333333",
+  it("shows the writer's before-window refusal for an earlier sampling time", async () => {
+    mockRunOperation.mockRejectedValue(windowRefusal());
+    const result = await updateSampleFn({ expectedVersion: 1,
+      sampleId: SAMPLE_ID,
       samplingTime: new Date("2025-12-31T23:59:59.000Z"),
     });
 
-    expect(result.success).toBe(false);
-    expect(mockUpdateSample).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ success: false, error: BEFORE_WINDOW_MESSAGE });
   });
 
-  it("rejects reassigning a sample to a later credit-batch window", async () => {
-    mockGetCreditBatchById.mockResolvedValueOnce({
-      code: "CB-002",
-      facilityId: FACILITY_ID,
-      startDate: "2026-02-01",
-      endDate: "2026-02-28",
-    });
-
-    const result = await updateSampleFn({
-      sampleId: "33333333-3333-4333-8333-333333333333",
+  it("passes a batch move to the operation, which re-checks the target window", async () => {
+    await updateSampleFn({ expectedVersion: 1,
+      sampleId: SAMPLE_ID,
       creditBatchId: LATER_CREDIT_BATCH_ID,
     });
 
-    expect(result.success).toBe(false);
-    expect(mockGetCreditBatchById).toHaveBeenCalledWith(
-      expect.anything(),
-      LATER_CREDIT_BATCH_ID,
-      { skipPreview: true },
-    );
-    expect(mockUpdateSample).not.toHaveBeenCalled();
+    expect(operationInput()).toMatchObject({ labSampleId: SAMPLE_ID, expectedVersion: 1, creditBatchId: LATER_CREDIT_BATCH_ID });
   });
 
   it("allows moving an assigned sample after its batch window", async () => {
-    const result = await updateSampleFn({
-      sampleId: "33333333-3333-4333-8333-333333333333",
+    const result = await updateSampleFn({ expectedVersion: 1,
+      sampleId: SAMPLE_ID,
       samplingTime: new Date("2026-02-15T12:00:00.000Z"),
     });
 
     expect(result.success).toBe(true);
-    expect(mockUpdateSample).toHaveBeenCalledOnce();
+    expect(mockRunOperation).toHaveBeenCalledOnce();
   });
 });
 
 describe("getSampleByIdFn", () => {
-  beforeEach(() => {
-    mockGetSampleById.mockReset();
-  });
-
   it("sanitizes raw database errors into the generic fallback (issue #251)", async () => {
     mockGetSampleById.mockRejectedValue(
       new Error(

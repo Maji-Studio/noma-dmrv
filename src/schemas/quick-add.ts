@@ -13,6 +13,7 @@ import {
 } from "./helpers";
 import {
   storageLocationTypes,
+  storageLocationFormSchema,
   type StorageLocationType,
   isFeedstockBinType,
 } from "./storage-locations";
@@ -61,7 +62,7 @@ export const vehicleQuickAddSchema = z.object({
     .nullish(),
   fuelConsumptionLPerKm: z
     .number()
-    .nonnegative("Fuel consumption must be zero or positive")
+    .positive("Fuel consumption must be greater than 0")
     .max(10, "Fuel consumption seems too high")
     .nullish(),
   modelYear: z
@@ -107,6 +108,8 @@ export const storageLocationQuickAddSchema = z.object({
     .min(1, "Bin name is required")
     .max(255, "Name must be less than 255 characters"),
   type: z.enum(storageLocationTypes, { message: "Bin type is required" }),
+  stockMode: storageLocationFormSchema.shape.stockMode,
+  drawOrder: storageLocationFormSchema.shape.drawOrder,
   facilityId: z
     .string()
     .uuid("Choose a valid facility."),

@@ -23,7 +23,7 @@ const SEGMENT_GROUP_CLASS =
   "flex items-stretch border-[1.5px] border-[var(--clr-dark-purple-20)]";
 const SEGMENT_BUTTON_CLASS =
   "flex cursor-pointer items-center border-r-[1.5px] border-[var(--clr-dark-purple-20)] " +
-  "px-12 font-mono text-[11px] font-medium uppercase tracking-[0.06em] last:border-r-0";
+  "px-12 text-[11px] font-medium last:border-r-0";
 const SEGMENT_ACTIVE_CLASS =
   "bg-[var(--clr-dark-purple)] text-[var(--color-background-white)]";
 const SEGMENT_IDLE_CLASS =
@@ -48,6 +48,8 @@ export interface TraceabilityHeaderProps {
   onSelectBatch: (batchId: string) => void;
   anchor: "application" | "batch" | "none";
   runOptions: RunPickerOption[];
+  /** The run filter narrows lineage readings; Activity covers the whole batch. */
+  showRunFilter?: boolean;
   selectedRunId: string | null;
   onRunChange: (runId: string | undefined) => void;
   runFilterDisabled: boolean;
@@ -73,6 +75,7 @@ export function TraceabilityHeader({
   onSelectBatch,
   anchor,
   runOptions,
+  showRunFilter = true,
   selectedRunId,
   onRunChange,
   runFilterDisabled,
@@ -102,7 +105,7 @@ export function TraceabilityHeader({
         onSelect={onSelectBatch}
       />
 
-      {anchor === "batch" ? (
+      {anchor === "batch" && showRunFilter ? (
         <div className="min-w-0 shrink-0" data-testid="chain-run-select">
           <RunPicker
             runs={runOptions}
@@ -118,7 +121,7 @@ export function TraceabilityHeader({
           variant="default"
           onClick={onBackToBatch}
           data-testid="chain-back-to-batch"
-          className="border-[1.5px] border-[var(--clr-dark-purple-20)] px-[14px] text-[11px] tracking-[0.06em] text-[var(--clr-dark-purple-60)] hover:text-[var(--clr-dark-purple)]"
+          className="border-[1.5px] border-[var(--clr-dark-purple-20)] px-[14px] text-[11px] text-[var(--clr-dark-purple-60)] hover:text-[var(--clr-dark-purple)]"
         >
           <ArrowLeftIcon size={14} weight="bold" />
           Batch roll-up

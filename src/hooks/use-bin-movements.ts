@@ -2,17 +2,21 @@ import { outputStockKeys } from "./use-output-stock";
 /**
  * Bin Movements React Query Hooks (issue #194)
  *
- * Reconciliation history query + append-only stock-take / loss mutations.
+ * Feedstock stock query + append-only stock-take / loss mutations.
  * Successful writes invalidate the storage-location caches so derived stock
  * (and the negative-stock badge) refresh immediately.
  */
 
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
+import { feedstockBinStockKeys } from "./feedstock-bin-stock-keys";
+import type { DomainIssue } from "@/lib/domain-errors";
 import type { ConflictRef } from "@/lib/conflict-ref";
 import {
-  getBinMovementsFn,
+  getFeedstockBinStockFn,
   recordLossFn,
   recordStockTakeFn,
 } from "@/fn/bin-movements";
+import { stockAvailabilityKeys } from "@/hooks/use-stock-availability";
 import { storageLocationKeys } from "@/hooks/use-storage-locations";
 import type {
   RecordLossData,
@@ -20,12 +24,13 @@ import type {
 } from "@/schemas/bin-movements";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
+import { unwrap } from "@/hooks/types";
 
 /** Client-side carrier for a structured loss action field error. */
 export class RecordLossFieldError extends Error {
-  readonly field: "lossMassKg";
+  readonly field: "lossMassKg" | "occurredAt";
 
-  constructor(message: string, field: "lossMassKg") {
+  constructor(message: string, field: "lossMassKg" | "occurredAt") {
     super(message);
     this.name = "RecordLossFieldError";
     this.field = field;
@@ -56,8 +61,11 @@ export class RecordLossConflictError extends Error {
 export function throwRecordLossError(result: {
   error: string;
   field?: "lossMassKg";
+  issues?: DomainIssue[];
   conflict?: RecordLossConflict;
 }): never {
+  const timeIssue = result.issues?.find(issue => issue.path[0] === "occurredAt");
+  if (timeIssue) throw new RecordLossFieldError(timeIssue.message, "occurredAt");
   if (result.field) {
     throw new RecordLossFieldError(result.error, result.field);
   }
@@ -78,41 +86,19 @@ export class RecordStockTakeFieldError extends Error {
   }
 }
 
-const binMovementKeys = {
-  all: ["binMovements"] as const,
-  byLocation: (storageLocationId: string) =>
-    [...binMovementKeys.all, storageLocationId] as const,
-};
-
-/** Reconciliation history for a bin, newest first. */
-export function useBinMovements(storageLocationId: string, enabled = true) {
-  return useQuery({
-    queryKey: binMovementKeys.byLocation(storageLocationId),
-    queryFn: async () => {
-      const result = await getBinMovementsFn(storageLocationId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!storageLocationId,
-    staleTime: 15_000,
-  });
-}
-
 /** Invalidate the caches a movement affects (history + all derived stock). */
 function useInvalidateAfterMovement() {
   const queryClient = useQueryClient();
   return (storageLocationId: string) => {
-    queryClient.invalidateQueries({
-      queryKey: binMovementKeys.byLocation(storageLocationId),
-    });
     // Derived stock lives on the storage-location lists/details.
     queryClient.invalidateQueries({ queryKey: storageLocationKeys.lists() });
     queryClient.invalidateQueries({
       queryKey: storageLocationKeys.detailWithFacility(storageLocationId),
     });
     void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
+    void queryClient.invalidateQueries({
+      queryKey: stockAvailabilityKeys.all,
+    });
     invalidateStockEntityQueries(queryClient, "binMovement");
   };
 }
@@ -120,6 +106,7 @@ function useInvalidateAfterMovement() {
 export function useRecordStockTake() {
   const invalidate = useInvalidateAfterMovement();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.stock),
     mutationFn: async (data: RecordStockTakeData) => {
       const result = await recordStockTakeFn(data);
       if (!result.success) {
@@ -137,6 +124,7 @@ export function useRecordStockTake() {
 export function useRecordLoss() {
   const invalidate = useInvalidateAfterMovement();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.stock),
     mutationFn: async (data: RecordLossData) => {
       const result = await recordLossFn(data);
       if (!result.success) {
@@ -145,5 +133,14 @@ export function useRecordLoss() {
       return result.data;
     },
     onSuccess: (_data, variables) => invalidate(variables.storageLocationId),
+  });
+}
+
+/** A feedstock bin's stock timeline and proportional intake split. */
+export function useFeedstockBinStock(storageLocationId: string, enabled = true) {
+  return useQuery({
+    queryKey: feedstockBinStockKeys.detail(storageLocationId),
+    queryFn: async () => unwrap(await getFeedstockBinStockFn(storageLocationId)),
+    enabled: enabled && !!storageLocationId,
   });
 }

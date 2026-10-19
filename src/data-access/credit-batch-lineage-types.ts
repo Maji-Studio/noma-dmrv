@@ -8,10 +8,8 @@ export interface BatchLineageFeedstockFact {
   deliveryDate: Date | null;
   massDryKg: number | null;
   wetMassUsedKg: number | null;
-  eligibilityStatus: "eligible" | "ineligible" | "conditional" | null;
   supplierName: string | null;
   feedstockTypeName: string | null;
-  feedstockDeliveryCode: string | null;
 }
 
 export interface BatchLineageRunFact {
@@ -53,6 +51,11 @@ export interface BatchLineageApplicationFact {
     status: string | null;
     deliveryDate: Date;
     deliveredWetMassKg?: number | null;
+    distanceKmOverride?: number | null;
+    recordedDistanceKm?: number | null;
+    /** Resolved from the delivery's order, not a delivery-owned field. */
+    customerLocationId?: string | null;
+    proofOfDeliveryCount: number;
     massDryKg: number | null;
   };
   order: {
@@ -65,12 +68,39 @@ export interface BatchLineageApplicationFact {
     id: string;
     code: string;
     status: string | null;
-    productionDate: Date;
+    productionDate: string;
     massKg: number | null;
     moistureContentPercent: number | null;
     formulationName: string | null;
     linkedProductionRunId: string;
   };
+}
+
+/** A delivery's share of one run's biochar, shipped inside one product layer. */
+export interface BatchRunForwardDeliveryFact {
+  id: string;
+  code: string;
+  status: string | null;
+  deliveryDate: Date;
+  deliveredWetMassKg: number | null;
+  massDryKg: number | null;
+  /** This run's share of the shipped product layer (reversals netted). */
+  wetMassKg: number | null;
+  dryMassKg: number;
+}
+
+/** A product layer drawn from one run, and where that run's share shipped. */
+export interface BatchRunForwardProductFact {
+  id: string;
+  code: string;
+  status: string | null;
+  productionDate: string;
+  massKg: number;
+  moistureContentPercent: number;
+  formulationName: string | null;
+  drawnWetMassKg: number;
+  drawnDryMassKg: number;
+  deliveries: BatchRunForwardDeliveryFact[];
 }
 
 export interface CreditBatchLineageFacts {
@@ -80,4 +110,9 @@ export interface CreditBatchLineageFacts {
   applications: BatchLineageApplicationFact[];
   applicationIds: string[];
   appliedWeightTons: number;
+  /**
+   * Per member run id: product layers drawn from it and their shipments.
+   * Loaded only with `includeRunForwards` (traceability roll-forwards).
+   */
+  runForwards?: Record<string, BatchRunForwardProductFact[]>;
 }

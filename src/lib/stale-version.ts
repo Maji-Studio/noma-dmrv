@@ -2,13 +2,9 @@
  * Expected-version (optimistic concurrency) vocabulary, shared by the server
  * updaters, the React Query hooks and the edit forms (issue #768).
  *
- * A consequential edit form sends the `updatedAt` it loaded as
- * `expectedUpdatedAt`. The updater compares it against the row it locked and,
- * when they differ, throws an `ActionConflictError` carrying
- * `code: STALE_VERSION_CONFLICT_CODE`. `withAction` turns that into
- * `{ success: false, error, conflict }`, the mutation hook re-throws it as
- * `StaleVersionError`, and the form shows the message next to its submit while
- * keeping every value the operator typed.
+ * Edit forms send the integer `expectedVersion` they loaded. A mismatch carries the stale-version conflict
+ * through ActionResult; hooks rethrow StaleVersionError so the open form keeps
+ * the operator's draft.
  *
  * Kept free of server-only imports so client components can use it.
  */
@@ -30,6 +26,11 @@ export const STALE_VERSION_CONFLICT_CODE = conflictCode("stale-version");
 /** The one message every entity shows when its version check refuses a save. */
 export const STALE_VERSION_MESSAGE =
   "This record changed since you opened it. Your changes were not saved. Review the latest values before saving again.";
+
+/** State the refused deletion and the next action using the record's code. */
+export function staleDeleteMessage(recordLabel: string): string {
+  return `${recordLabel} was not deleted. It changed since the list loaded. Review it before deleting.`;
+}
 
 /** Structured reference to the record whose version moved on. */
 export type StaleVersionConflict = ConflictRef;
@@ -96,5 +97,26 @@ export function throwActionError(result: ConflictCarryingFailure): never {
  */
 export function toSaveErrorMessage(error: unknown, fallback: string): string {
   if (getStaleVersionConflict(error)) return STALE_VERSION_MESSAGE;
+  return error instanceof Error ? error.message : fallback;
+}
+
+/** Message for a refused delete, preserving other server errors and fallbacks. */
+export function toDeleteErrorMessage(error: unknown, recordLabel: string, fallback: string): string {
+  if (getStaleVersionConflict(error)) return staleDeleteMessage(recordLabel);
+  return error instanceof Error ? error.message : fallback;
+}
+
+/** Message for a refused archive or restore, preserving other errors and fallbacks. */
+export function toArchiveRestoreErrorMessage(
+  error: unknown,
+  recordLabel: string,
+  action: "archive" | "restore",
+  fallback: string,
+): string {
+  if (getStaleVersionConflict(error)) {
+    const outcome = action === "archive" ? "archived" : "restored";
+    const retry = action === "archive" ? "archiving" : "restoring";
+    return `${recordLabel} was not ${outcome}. It changed since the list loaded. Review it before ${retry}.`;
+  }
   return error instanceof Error ? error.message : fallback;
 }

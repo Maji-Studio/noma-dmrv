@@ -4,6 +4,7 @@ import {
   syncApplicationStorageLocation,
 } from "@/fn/certification";
 import { certificationKeys } from "./use-certification";
+import { unwrap } from "@/hooks/types";
 
 const storageLocationSyncKeys = {
   all: [...certificationKeys.all, "storage-location-sync"] as const,
@@ -14,11 +15,7 @@ const storageLocationSyncKeys = {
 export function useApplicationStorageLocationSync(applicationId: string) {
   return useQuery({
     queryKey: storageLocationSyncKeys.application(applicationId),
-    queryFn: async () => {
-      const result = await loadApplicationStorageLocationSync(applicationId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadApplicationStorageLocationSync(applicationId)),
     enabled: Boolean(applicationId),
   });
 }

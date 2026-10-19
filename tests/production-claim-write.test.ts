@@ -1,4 +1,5 @@
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { insertRemovalFixture } from "./helpers/removal-fixture";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed tests for the §8.6.2 production-emissions claim write inside
  * `markSubmissionSubmitted` (issue #349, ADR 0020).
@@ -88,7 +89,7 @@ async function createFixture(): Promise<Fixture> {
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({ organizationId: TEST_ORG_ID, code: `FAC-PCW-${tag}`, name: `PCW Facility ${tag}` })
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-PCW-${tag}`, name: `PCW Facility ${tag}` })
       .returning({ id: facilities.id });
     createdFacilityIds.push(facility.id);
 
@@ -109,14 +110,8 @@ async function createFixture(): Promise<Fixture> {
       .values({ organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id })
       .returning({ id: productionProcesses.id });
 
-    const [removalA] = await tx
-      .insert(certifierRemovals)
-      .values({ organizationId: TEST_ORG_ID, facilityId: facility.id })
-      .returning({ id: certifierRemovals.id });
-    const [removalB] = await tx
-      .insert(certifierRemovals)
-      .values({ organizationId: TEST_ORG_ID, facilityId: facility.id })
-      .returning({ id: certifierRemovals.id });
+    const [removalA] = await insertRemovalFixture(tx, { organizationId: TEST_ORG_ID, facilityId: facility.id });
+    const [removalB] = await insertRemovalFixture(tx, { organizationId: TEST_ORG_ID, facilityId: facility.id });
     createdRemovalIds.push(removalA.id, removalB.id);
 
     const [batch] = await tx

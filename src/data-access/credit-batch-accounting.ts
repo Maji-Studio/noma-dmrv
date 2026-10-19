@@ -1,3 +1,4 @@
+import { getDeliveryProofCounts } from "./delivery-proof";
 import { db, type DbTransaction } from "@/db";
 import {
   applications,
@@ -7,8 +8,8 @@ import {
   creditBatchProductionRuns,
   creditBatches,
   deliveries,
+  customerLocations,
   facilities,
-  feedstockDeliveries,
   feedstockTypes,
   feedstocks,
   formulations,
@@ -38,7 +39,7 @@ import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { evaluateSampled1000YearReplicates } from "@/lib/certification/durability-1000-replicates";
 import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "@/lib/certification/preview-gaps";
 import { SafeError } from "@/lib/errors";
-import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import {
   weightedBatchChemistry,
   type WeightedBatchChemistry,
@@ -66,6 +67,7 @@ import type {
   BatchLineageRunFact,
   CreditBatchLineageFacts,
 } from "./credit-batch-lineage-types";
+import { loadRunForwardFactsWithExecutor } from "./credit-batch-run-forward-facts";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { requireOrgScope } from "./utils";
 export type {
@@ -77,6 +79,8 @@ export type {
   BatchLineageApplicationFact,
   BatchLineageFeedstockFact,
   BatchLineageRunFact,
+  BatchRunForwardDeliveryFact,
+  BatchRunForwardProductFact,
   CreditBatchLineageFacts
 } from "./credit-batch-lineage-types";
 
@@ -105,7 +109,7 @@ export type CreditBatchAccountingByBatch = Record<
 >;
 const uniqueSorted = (values: string[]) => [...new Set(values)].sort();
 const unique = (values: string[]) => [...new Set(values)];
-/** Four set-based queries regardless of batch/application count. */
+/** Set-based queries regardless of batch/application count. */
 async function loadLineageWithExecutor(
   ctx: OrgContext,
   batchIds: string[],
@@ -185,6 +189,9 @@ async function loadLineageWithExecutor(
           deliveryId: deliveries.id,
           deliveryCode: deliveries.code,
           deliveryStatus: deliveries.status,
+          distanceKmOverride: deliveries.distanceKmOverride,
+          recordedDistanceKm: deliveries.recordedDistanceKm,
+          customerLocationId: customerLocations.id,
           deliveryDate: deliveries.deliveryDate,
           deliveryWetMassKg: deliveries.deliveredWetMassKg,
           deliveryMassDryKg: deliveries.massDryKg,
@@ -232,6 +239,13 @@ async function loadLineageWithExecutor(
             eq(orders.organizationId, ctx.organizationId),
           ),
         )
+        .leftJoin(customerLocations, and(
+          eq(
+            customerLocations.id,
+            orders.customerLocationId,
+          ),
+          eq(customerLocations.organizationId, ctx.organizationId),
+        ))
         .innerJoin(applicationOutputAllocations, and(
           eq(applicationOutputAllocations.applicationId, applications.id),
           eq(applicationOutputAllocations.organizationId, ctx.organizationId),
@@ -280,10 +294,8 @@ async function loadLineageWithExecutor(
           deliveryDate: feedstocks.deliveryDate,
           massDryKg: feedstocks.massDryKg,
           wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg,
-          eligibilityStatus: feedstocks.eligibilityStatus,
           supplierName: suppliers.name,
           feedstockTypeName: feedstockTypes.name,
-          feedstockDeliveryCode: feedstockDeliveries.code,
         })
         .from(productionRunFeedstocks)
         .innerJoin(
@@ -293,7 +305,6 @@ async function loadLineageWithExecutor(
             eq(feedstocks.organizationId, ctx.organizationId),
           ),
         )
-        .leftJoin(feedstockDeliveries, and(eq(feedstocks.feedstockDeliveryId, feedstockDeliveries.id), eq(feedstockDeliveries.organizationId, ctx.organizationId)))
         .leftJoin(suppliers, and(eq(feedstocks.supplierId, suppliers.id), eq(suppliers.organizationId, ctx.organizationId)))
         .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
         .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
@@ -324,6 +335,7 @@ async function loadLineageWithExecutor(
     });
   }
 
+  const proofCounts = await getDeliveryProofCounts(ctx, applicationRows.map((row) => row.deliveryId), executor);
   const applicationsByBatchRun = new Map<
     string,
     BatchLineageApplicationFact[]
@@ -347,7 +359,7 @@ async function loadLineageWithExecutor(
       sourceAllocation: { productionRunId: effectiveRunId, allocatedWetMassKg: Number(row.allocatedWetMassKg), allocatedDryMassKg: Number(row.allocatedDryMassKg) },
       soilTemperatureC: row.soilTemperatureC,
       facility: { id: row.facilityId, code: row.facilityCode, name: row.facilityName },
-      delivery: { id: row.deliveryId, code: row.deliveryCode, status: row.deliveryStatus, deliveryDate: row.deliveryDate, deliveredWetMassKg: row.deliveryWetMassKg, massDryKg: row.deliveryMassDryKg },
+      delivery: { proofOfDeliveryCount: proofCounts.get(row.deliveryId) ?? 0, id: row.deliveryId, code: row.deliveryCode, status: row.deliveryStatus, deliveryDate: row.deliveryDate, deliveredWetMassKg: row.deliveryWetMassKg, massDryKg: row.deliveryMassDryKg, distanceKmOverride: row.distanceKmOverride, recordedDistanceKm: row.recordedDistanceKm, customerLocationId: row.customerLocationId },
       order: row.orderId ? { id: row.orderId, code: row.orderCode!, orderDate: row.orderDate!, quantityKg: row.orderQuantityKg } : null,
       biocharProduct: { id: row.productId, code: row.productCode, status: row.productStatus, productionDate: row.productionDate, massKg: row.productMassKg, moistureContentPercent: row.productMoisturePercent, formulationName: row.formulationName, linkedProductionRunId: effectiveRunId },
     };
@@ -521,7 +533,6 @@ export function buildCo2eStoredPreview(
               : [],
           })
         : computeApplicationCo2eStored({
-            durabilityOption: batch.durabilityOption,
             dryMassTonnes: application?.biocharAppliedDryTons ?? null,
             soilTemperatureC: application?.soilTemperatureC ?? null,
             hToCorgRatio: chemistry.weightedHToCorgRatio,
@@ -634,6 +645,7 @@ async function loadCreditBatchRollupsWithExecutor(
   executor: Executor,
   removalId?: string,
   unassignedOnly = false,
+  includeRunForwards = false,
 ): Promise<CreditBatchRollupsByBatch> {
   requireOrgScope(ctx);
   const ids = uniqueSorted(batchIds);
@@ -684,9 +696,23 @@ async function loadCreditBatchRollupsWithExecutor(
     removalId,
     unassignedOnly,
   );
+  const runForwards = includeRunForwards
+    ? await loadRunForwardFactsWithExecutor(
+        ctx,
+        uniqueSorted(Object.values(factsByBatch).flatMap((facts) => facts.productionRunIds)),
+        executor,
+      )
+    : null;
   return Object.fromEntries(
     rollupIdentities.map(({ batch, feedstockType }) => {
-      const lineageFacts = factsByBatch[batch.id];
+      const lineageFacts = runForwards
+        ? {
+            ...factsByBatch[batch.id],
+            runForwards: Object.fromEntries(
+              factsByBatch[batch.id].productionRunIds.map((runId) => [runId, runForwards[runId] ?? []]),
+            ),
+          }
+        : factsByBatch[batch.id];
       return [
         batch.id,
         {
@@ -708,7 +734,12 @@ async function loadCreditBatchRollupsWithExecutor(
 export async function loadCreditBatchRollups(
   ctx: OrgContext,
   batchIds: string[],
-  options?: { removalId?: string; unassignedOnly?: boolean },
+  options?: {
+    removalId?: string;
+    unassignedOnly?: boolean;
+    /** Also load each member run's product layers and shipments (roll-forwards). */
+    includeRunForwards?: boolean;
+  },
 ): Promise<CreditBatchRollupsByBatch> {
   requireOrgScope(ctx);
   const ids = uniqueSorted(batchIds);
@@ -720,6 +751,7 @@ export async function loadCreditBatchRollups(
       tx,
       options?.removalId,
       options?.unassignedOnly,
+      options?.includeRunForwards,
     ),
     {
       isolationLevel: "repeatable read",
@@ -795,7 +827,6 @@ export async function loadCreditBatchAccounting(
         .orderBy(asc(samples.id));
       const samplesByBatch = new Map<string, Sample[]>();
       for (const sample of sampleRows) {
-        if (!sample.creditBatchId) continue;
         const batchSamples = samplesByBatch.get(sample.creditBatchId) ?? [];
         batchSamples.push(sample);
         samplesByBatch.set(sample.creditBatchId, batchSamples);

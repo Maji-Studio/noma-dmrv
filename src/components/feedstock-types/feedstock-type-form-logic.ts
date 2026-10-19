@@ -76,3 +76,7 @@ export function shouldShowCertifiedFeedstockWarning(
     !hasSelectedIsometricFeedstock
   );
 }
+
+/** Tooltip on the Local category field in the Isometric flows. */
+export const LOCAL_CATEGORY_HINT =
+  "Used inside noma only, for example in bin and delivery subtitles. It is not sent to Isometric.";

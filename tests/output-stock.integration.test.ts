@@ -1,3 +1,4 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { withProductStockFingerprint } from "./helpers/product-stock-preview-fixture";
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -5,10 +6,13 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { biocharProducts, binMovements, outputStockAllocations, outputStockRunAllocations, storageLocations, productionRuns, deliveries } from '@/db/schema';
 import { createBiocharProduct } from '@/data-access/biochar-product-create';
-import { createOrder } from '@/data-access/orders';
+import { createOrderInTransaction } from '@/data-access/orders';
 import { getDeliveryAllocationProvenance } from '@/data-access/delivery-allocation-provenance';
-import { createDelivery, updateDelivery, deleteDelivery } from '@/data-access/delivery-output-writes';
+import { deleteDelivery } from "@/data-access/delivery-output-writes";
+import { createDelivery } from "./helpers/create-delivery";
+import { updateDelivery } from '@/lib/operations/deliveries';
 import { getOutputStockHistory } from '@/data-access/output-stock-history';
+import { buildStockLevelSeries } from '@/components/storage-locations/stock-level-series';
 import { getMatchingOutputBins, previewOutputStock } from '@/data-access/output-stock-operations';
 import { postOutputStock } from '@/data-access/output-stock-post';
 import { cleanupOutputStockFixture } from './helpers/output-stock-cleanup';
@@ -31,15 +35,15 @@ async function fixture() {
     const product = await createBiocharProduct(f.ctx, productInput);
     expect((await createBiocharProduct(f.ctx, productInput)).id).toBe(product.id);
   }
-  const order = await createOrder(f.ctx, { code: `E2E-FIFO-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.recipe.id, orderDate: new Date('2026-09-12'), quantityKg: 5000, packaging: 'loose' });
+  const order = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-FIFO-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, customerLocationId: f.location.id, formulationId: f.recipe.id, orderDate: new Date('2026-09-12'), quantityKg: 5000, packaging: 'loose' }));
   const input = { storageLocationId: f.bin.id, facilityId: f.facility.id, occurredAt: '2026-09-14T12:00:00.000Z', kind: 'delivery' as const, wetMassKg: 2000, moisturePercent: 30 };
   const preview = await previewOutputStock(f.ctx, input);
-  const deliveryInput = { code: `E2E-FIFO-D-${f.tag}`, orderId: order.id, facilityId: f.facility.id, deliveryDate: new Date('2026-09-14T12:00:00.000Z'), storageLocationId: f.bin.id, deliveredWetMassKg: 2000, moistureContentPercent: 30, idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint };
+  const deliveryInput = { code: `E2E-FIFO-D-${f.tag}`, orderId: order.id, facilityId: f.facility.id, deliveryDate: new Date('2026-09-14T12:00:00.000Z'), storageLocationId: f.bin.id, deliveredWetMassKg: 2000, moistureContentPercent: 30, idempotencyKey: randomUUID(), expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint };
   return { ...f, order, input, preview, deliveryInput };
 }
 async function post(f: { ctx: Awaited<ReturnType<typeof fixture>>['ctx'] }, input: OutputStockPreviewInput) {
   const preview = await previewOutputStock(f.ctx, input);
-  return postOutputStock(f.ctx, { ...input, basisFingerprint: preview.basisFingerprint, idempotencyKey: randomUUID(), reason: 'E2E measured stock' });
+  return postOutputStock(f.ctx, { ...input, expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint, idempotencyKey: randomUUID(), reason: 'E2E measured stock' });
 }
 describe('output FIFO transactions', () => {
   it('posts A900+B250, conserves wet/run sums and retries without duplicate effects', async () => {
@@ -50,6 +54,17 @@ describe('output FIFO transactions', () => {
     const retry = await createDelivery(f.ctx, f.deliveryInput);
     expect(retry.id).toBe(delivery.id);
     expect(delivery.massDryKg).toBe(1150);
+    const history = await getOutputStockHistory(f.ctx, f.bin.id);
+    expect(history.find(entry => entry.deliveryId === delivery.id)).toMatchObject({
+      source: { entity: 'delivery', id: delivery.id }, solidsDeltaKg: -1400,
+    });
+    expect(history.filter(entry => entry.kind === 'intake').every(entry => entry.source?.entity === 'biocharProduct')).toBe(true);
+    // The current estimator drops emptied layers. Replay its frozen effects,
+    // rather than treating the truck weight as a whole-bin moisture reset.
+    const last = buildStockLevelSeries(history).points.at(-1)!;
+    expect(last.dryKg).toBe(350);
+    expect(last.ingredientsKg).toBeCloseTo(70, 6);
+    expect(last.waterKg).toBeCloseTo(1000 - 300 / 0.7 - 420, 6);
     const allocations = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
     expect(allocations.reduce((sum, a) => sum + Number(a.wetMassKg), 0)).toBe(2000);
     expect(allocations.reduce((sum, a) => sum + Number(a.dryMassKg), 0)).toBe(1150);
@@ -59,8 +74,8 @@ describe('output FIFO transactions', () => {
       expect(a.basisSnapshot.solidsKg).toBeTruthy();
     }
     await expect(createDelivery(f.ctx, { ...f.deliveryInput, deliveredWetMassKg: 1900 })).rejects.toThrow('different values');
-    await expect(updateDelivery(f.ctx, delivery.id, { deliveredWetMassKg: 1900 })).rejects.toThrow('Correct entry');
-    await expect(deleteDelivery(f.ctx, delivery.id)).rejects.toThrow('history');
+    await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), deliveredWetMassKg: 1900 })).resolves.toMatchObject({ deliveredWetMassKg: 1900, massDryKg: 1091.667 });
+    await expect(deleteDelivery(f.ctx, delivery.id, await labLogisticsVersion(f.ctx, "deliveries", delivery.id))).resolves.toBeUndefined();
     const [recorded] = await db.select({ wet: sql<number>`sum(${biocharProducts.massKg})`.mapWith(Number) }).from(biocharProducts).where(eq(biocharProducts.storageLocationId, f.bin.id));
     expect(recorded.wet).toBe(2500);
   });
@@ -68,7 +83,7 @@ describe('output FIFO transactions', () => {
     const f = await fixture();
     const loss = { ...f.input, kind: 'loss' as const, wetMassKg: 1000 };
     const preview = await previewOutputStock(f.ctx, loss);
-    const results = await Promise.allSettled([createDelivery(f.ctx, f.deliveryInput), postOutputStock(f.ctx, { ...loss, reason: 'E2E competing loss', idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint })]);
+    const results = await Promise.allSettled([createDelivery(f.ctx, f.deliveryInput), postOutputStock(f.ctx, { ...loss, reason: 'E2E competing loss', idempotencyKey: randomUUID(), expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint })]);
     expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
     expect(results.filter(r => r.status === 'rejected')).toHaveLength(1);
     await expect(createDelivery(f.ctx, { ...f.deliveryInput, idempotencyKey: randomUUID() })).rejects.toThrow();
@@ -79,10 +94,10 @@ describe('output FIFO transactions', () => {
     const f = await fixture();
     await createDelivery(f.ctx, f.deliveryInput);
     const base = { ...f.input, kind: 'count' as const, wetMassKg: 600 };
-    // A count is compared with the estimated wet stock: product 1 keeps the 420 kg
-    // of solids the delivery did not draw, at the delivery's 30% reading.
-    expect((await previewOutputStock(f.ctx, base)).beforeEstimatedWetKg).toBeCloseTo(420 / 0.7, 6);
-    expect((await previewOutputStock(f.ctx, { ...base, kind: 'loss', wetMassKg: 10 })).moistureEstimate).toMatchObject({ moisturePercent: 30, basis: { source: 'reading' } });
+    // A count is compared with the wet stock: the delivery emptied product 0 and took
+    // the rest of its 2,000 kg from product 1 (300 kg solids at 30%), which keeps its 28%.
+    expect((await previewOutputStock(f.ctx, base)).beforeEstimatedWetKg).toBeCloseTo(1000 - 300 / 0.7, 3);
+    expect((await previewOutputStock(f.ctx, { ...base, kind: 'loss', wetMassKg: 10 })).moistureEstimate).toMatchObject({ moisturePercent: expect.closeTo(28, 9), basis: { source: 'recorded' } });
     expect((await post(f, base)).preview.removedDryKg).toBe(0);
     expect((await post(f, { ...base, wetMassKg: 700 })).preview.removedDryKg).toBe(0);
     const loss = await post(f, { ...base, kind: 'loss', wetMassKg: 120 });
@@ -92,6 +107,8 @@ describe('output FIFO transactions', () => {
     expect(correction.preview.afterDryKg).toBe(343);
     const zero = await post(f, { ...base, wetMassKg: 0, moisturePercent: undefined });
     expect(zero.preview.removedDryKg).toBe(343);
+    const series = buildStockLevelSeries(await getOutputStockHistory(f.ctx, f.bin.id));
+    expect(series.points.at(-1)).toMatchObject({ dryKg: 0, waterKg: expect.closeTo(0, 6), ingredientsKg: expect.closeTo(0, 6) });
     await expect(post(f, { ...base, kind: 'loss', wetMassKg: 6, correctsMovementId: correction.movementId })).rejects.toThrow('later');
   });
   it('rejects shortages, physically future sources, organization and formulation forgery; orders need no stock and bins are unpaginated', async () => {
@@ -100,10 +117,10 @@ describe('output FIFO transactions', () => {
     expect((await previewOutputStock(f.ctx, { ...f.input, occurredAt: '2026-09-10T12:00:00.000Z', wetMassKg: 1500, moisturePercent: 15 })).blockingMessage).toMatch(/Not enough dry biochar/);
     await expect(previewOutputStock({ ...f.ctx, organizationId: 'other-org' }, f.input)).rejects.toThrow('not found');
     const bins = await db.insert(storageLocations).values(Array.from({ length: 24 }, (_, i) => ({ organizationId: f.ctx.organizationId, facilityId: f.facility.id, code: `E2E-FIFO-E${i}-${f.tag}`, name: `E2E Empty ${i} ${f.tag}`, type: 'product_bin' as const, formulationId: f.pure.id }))).returning();
-    const emptyOrder = await createOrder(f.ctx, { code: `E2E-FIFO-EMPTY-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.pure.id, orderDate: new Date('2026-09-14'), quantityKg: 100, packaging: 'loose' });
+    const emptyOrder = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-FIFO-EMPTY-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, customerLocationId: f.location.id, formulationId: f.pure.id, orderDate: new Date('2026-09-14'), quantityKg: 100, packaging: 'loose' }));
     expect(emptyOrder.formulationId).toBe(f.pure.id);
     expect(await getMatchingOutputBins(f.ctx, { facilityId: f.facility.id, formulationId: f.pure.id })).toHaveLength(bins.length);
-    await expect(createDelivery(f.ctx, { ...f.deliveryInput, orderId: emptyOrder.id, deliveredWetMassKg: 50 })).rejects.toThrow('matching');
+    await expect(createDelivery(f.ctx, { ...f.deliveryInput, orderId: emptyOrder.id, deliveredWetMassKg: 50 })).rejects.toThrow('Source bin holds another formulation.');
   });
   it('reduces a loss on its original run after an older intake, with no debit to the late run', async () => {
     const f = await seedOutputStockParents(db);
@@ -165,7 +182,7 @@ describe('output FIFO transactions', () => {
       products.push(await createBiocharProduct(f.ctx, await withProductStockFingerprint(f.ctx, { code: `E2E-FIFO-TINY-P${index}-${f.tag}`, facilityId: f.facility.id, formulationId: f.pure.id, placedAt: input.occurredAt,
         sourceBiocharStorageLocationId: f.source.id, storageLocationId: bin.id, massKg, moistureContentPercent: 0, waterAddedKg: 0, composition: {}, idempotencyKey: randomUUID() })));
     }
-    const order = await createOrder(f.ctx, { code: `E2E-FIFO-TINY-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.pure.id, orderDate: new Date('2026-09-14'), quantityKg: 1, packaging: 'loose' });
+    const order = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-FIFO-TINY-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, customerLocationId: f.location.id, formulationId: f.pure.id, orderDate: new Date('2026-09-14'), quantityKg: 1, packaging: 'loose' }));
     let lastDelivery;
     for (const [index, wet, moisture] of [[0, 0.001, 40], [1, 0.004, 60]] as const) {
       const input = { storageLocationId: bin.id, facilityId: f.facility.id, occurredAt: '2026-09-14T12:00:00.000Z', kind: 'delivery' as const, wetMassKg: wet, moisturePercent: moisture };

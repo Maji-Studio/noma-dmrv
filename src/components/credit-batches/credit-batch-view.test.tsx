@@ -10,7 +10,11 @@ import type {
 } from "@/data-access/credit-batches";
 import { creditBatchSheetSections } from "./credit-batch-view";
 
+// The Activity section fetches its own data; these suites render without a query client.
+vi.mock("@/components/activity", () => ({ CreditBatchActivitySection: () => null }));
 vi.mock("next/link", () => ({ default: ({ children, href, ...props }: { children: ReactNode; href: string }) => <a href={href} {...props}>{children}</a> }));
+// The pinned template block reads live queries; its own suite covers it.
+vi.mock("./credit-batch-removal-template", () => ({ CreditBatchRemovalTemplate: () => <div>Removal template block</div> }));
 // The real InfoHint mounts a floating-ui tooltip, which reads `window` on
 // mount. These suites run in the node environment, so the hint renders as
 // plain text here and its behaviour is covered by the tooltip's own tests.
@@ -173,7 +177,7 @@ describe("credit batch CO₂e stored", () => {
 
     // The result is a field at both levels; how it was reached is explanation.
     expect(section?.fields).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "Durability estimate", value: "95.0%" }),
+      expect.objectContaining({ label: "Durability estimate (capped)", value: "95.0%" }),
     ]));
     const explanation = renderToStaticMarkup(<>{section?.explanation}</>);
     expect(explanation).toContain("Raw durability estimate");
@@ -184,7 +188,7 @@ describe("credit batch CO₂e stored", () => {
 });
 
 describe("credit batch production-run preview", () => {
-  it("labels draft and running previews without labeling completed members", () => {
+  it("labels running previews without labeling completed members", () => {
     const creditBatch = {
       id: "batch-1",
       code: "CB-26-001",
@@ -201,7 +205,6 @@ describe("credit batch production-run preview", () => {
     const sections = creditBatchSheetSections({
       creditBatch,
       productionRuns: [
-        makeRun("draft", 1),
         makeRun("running", 2),
         makeRun("complete", 3),
       ],
@@ -219,9 +222,8 @@ describe("credit batch production-run preview", () => {
     expect(html).not.toContain("PR-26-001");
     expect(html).not.toContain("PR-26-002");
     expect(html).not.toContain("PR-26-003");
-    expect(html).toContain("May 13, 2026");
+    expect(html).toContain("May 14, 2026");
     expect(html).toContain("Moshi Raw Biochar Curing Pad");
-    expect(html).toContain("Draft");
     expect(html).toContain("Running");
     expect(html).not.toContain('data-status="complete"');
   });
@@ -240,14 +242,14 @@ it("shows saved fields, the durability result and the carbon estimate figure at 
   const simple = visibleText(renderer.root);
   for (const label of ["Carbon ledger", "Show calculation", "Feedstock dry mass", "Raw durability estimate", "Preview formula"]) expect(simple).not.toContain(label);
   expect(simple).toContain("Applied biochar");
-  expect(simple).toContain("Durability estimate 95.0%");
+  expect(simple).toContain("Durability estimate (capped) 95.0%");
   // The estimate closes the Production runs section and Simple keeps its figure.
   expect(simple).toContain("Carbon estimate, before project emissions");
   expect(simple).toContain("≈ 12.50 t CO₂e");
   expect(simple.indexOf("Production runs")).toBeLessThan(simple.indexOf("≈ 12.50 t CO₂e"));
   expect(sections.map(section => section.title)).not.toContain("Carbon ledger");
   expect(simple).toContain("Wood chips");
-  expect(simple).toContain("Production emissions included in Removal");
+  expect(simple).toContain("Production emissions included in a Removal");
   await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
   const detailed = visibleText(renderer.root);
   expect(detailed).toContain("12.50");

@@ -5,9 +5,7 @@
  * server trust boundary can't drift.
  */
 import { z } from "zod";
-
-export const INVITATION_PASSWORD_MIN_LENGTH = 8;
-export const INVITATION_PASSWORD_MAX_LENGTH = 72;
+import { passwordSchema } from "@/schemas/auth";
 
 export const orgRoleSchema = z.enum(["owner", "admin", "member"]);
 export type OrgRoleValue = z.infer<typeof orgRoleSchema>;
@@ -45,8 +43,17 @@ export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
  * First-time credential entry: both halves have to be typed, because there is
  * nothing stored to fall back on.
  */
-const MASK_CHARACTER = "\u2022";
+export const MASK_CHARACTER = "\u2022";
 export const CERTIFIER_CREDENTIAL_MASK = MASK_CHARACTER.repeat(16);
+const MASKED_SECRET_PREFIX_LENGTH = 4;
+const MASKED_SECRET_DISPLAY_LENGTH = 8;
+
+export function maskedSecretDisplay(last4?: string | null): string {
+  return last4
+    ? MASK_CHARACTER.repeat(MASKED_SECRET_PREFIX_LENGTH) + last4
+    : MASK_CHARACTER.repeat(MASKED_SECRET_DISPLAY_LENGTH);
+}
+
 const MASK_CONTAMINATION_MESSAGE =
   "Remove the masked placeholder before entering a key.";
 
@@ -139,16 +146,7 @@ export const invitationIdSchema = z.object({
 
 export const invitationBootstrapSchema = invitationIdSchema.extend({
   name: z.string().trim().min(1, "Name is required."),
-  password: z
-    .string()
-    .min(
-      INVITATION_PASSWORD_MIN_LENGTH,
-      `Password must be at least ${INVITATION_PASSWORD_MIN_LENGTH} characters.`
-    )
-    .max(
-      INVITATION_PASSWORD_MAX_LENGTH,
-      `Password must be at most ${INVITATION_PASSWORD_MAX_LENGTH} characters.`
-    ),
+  password: passwordSchema,
 });
 export type InvitationBootstrapInput = z.infer<
   typeof invitationBootstrapSchema

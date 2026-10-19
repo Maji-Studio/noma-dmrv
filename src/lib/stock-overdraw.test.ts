@@ -8,6 +8,8 @@ import {
   formatStockMinimumKg,
   formatStockKg,
   isStockOverdraw,
+  pickerShowsRemainingStock,
+  wholeStockDrawKg,
   productStockOverdrawMessage,
 } from "./stock-overdraw";
 
@@ -72,5 +74,57 @@ describe("stock overdraw", () => {
     expect(binStockOverdrawInlineMessage("product", 100)).toBe(
       "Only 100 kg of biochar is available. Reduce the mass.",
     );
+  });
+});
+
+describe("pickerShowsRemainingStock", () => {
+  it("hides the picker figure while the availability cue shows", () => {
+    expect(pickerShowsRemainingStock({ availableKg: 1_000 })).toBe(false);
+  });
+
+  it("shows the picker figure when availability is unknown", () => {
+    expect(pickerShowsRemainingStock({ availableKg: null })).toBe(true);
+  });
+
+  it("shows the picker figure when a mass error replaces the cue", () => {
+    expect(
+      pickerShowsRemainingStock({
+        availableKg: 1_000,
+        massError: "Enter wet mass.",
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps it hidden when the error is the over-draw that states the figure", () => {
+    const overdrawError = binStockOverdrawInlineMessage("feedstock", 1_000);
+    expect(
+      pickerShowsRemainingStock({
+        availableKg: 1_000,
+        massError: overdrawError,
+        overdrawError,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("wholeStockDrawKg", () => {
+  it("returns the remaining stock unchanged when it is already stored precision", () => {
+    expect(wholeStockDrawKg(600)).toBe(600);
+    expect(wholeStockDrawKg(12.345)).toBe(12.345);
+  });
+
+  it("removes float noise from the subtraction", () => {
+    expect(wholeStockDrawKg(1_000.3 - 1_000)).toBe(0.3);
+    expect(wholeStockDrawKg(0.1 + 0.2)).toBe(0.3);
+  });
+
+  it("never rounds above the stock", () => {
+    expect(wholeStockDrawKg(5.0009)).toBe(5);
+  });
+
+  it("is null when less than one storage increment remains", () => {
+    expect(wholeStockDrawKg(0)).toBeNull();
+    expect(wholeStockDrawKg(-3)).toBeNull();
+    expect(wholeStockDrawKg(0.0004)).toBeNull();
   });
 });

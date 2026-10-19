@@ -6,22 +6,21 @@ import { facilities } from "@/db/schema/facilities";
 import { productionRuns, samples } from "@/db/schema/production";
 import type { Sample } from "@/db/schema";
 import type { CreditBatchDurabilityInput } from "@/lib/isometric/utils/durability-aggregation";
-import { DURABILITY_TIER_FALLBACK } from "@/schemas/credit-batches";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 import { requireOrgScope } from "./utils";
-
-const FALLBACK_FACILITY_TIMEZONE = "UTC";
+import { getBatchesWithLabReports, getBatchesWithReflectanceHistograms } from "./sample-document-evidence";
 
 /**
  * A credit batch's durability inputs as loaded from the DB: its lab Samples
  * pooled on `samples.creditBatchId` (across member runs/days — ADR 0016 made the
  * credit batch the sampling unit and the run link nullable provenance), its
- * member production runs, and the sampling choice + declared H/C_org carried for
- * the gate and reconciliation. Structurally a superset of
+ * member production runs, and the sampling choice. Structurally a superset of
  * `CreditBatchDurabilityInput`, so it feeds `buildPerBatchDurabilityData`
  * directly.
  */
 export interface CreditBatchWithSamples extends CreditBatchDurabilityInput {
+  hasLabReport?: boolean;
+  hasReflectanceHistogram?: boolean;
   /** ISO date-only production window bounds from the credit-batch row. */
   startDate?: string | null;
   endDate?: string | null;
@@ -30,8 +29,6 @@ export interface CreditBatchWithSamples extends CreditBatchDurabilityInput {
   runs: Array<{ id: string; code: string; biocharDryMassKg: number | null }>;
   /** Immutable sampled/unsampled choice stored on this batch (ADR 0022). */
   sampling: CreditBatchSampling;
-  /** Operator-declared `credit_batches.h_to_c_org_ratio` (advisory; reconciled). */
-  declaredHToCorgRatio: number | null;
   /** The batch's declared durability tier — its samples inherit it (issue #309). */
   durabilityOption: "200_year" | "1000_year";
 }
@@ -59,13 +56,12 @@ export async function getCreditBatchesWithSamples(
       startDate: creditBatches.startDate,
       endDate: creditBatches.endDate,
       sampling: creditBatches.sampling,
-      declaredHToCorgRatio: creditBatches.hToCorgRatio,
       // Tier is inherited from the facility (ADR 0021), not a batch column.
       durabilityOption: facilities.durabilityOption,
       facilityTimezone: facilities.timezone,
     })
     .from(creditBatches)
-    .leftJoin(facilities, and(eq(creditBatches.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .innerJoin(facilities, and(eq(creditBatches.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
     .where(and(inArray(creditBatches.id, ids), eq(creditBatches.organizationId, ctx.organizationId)));
   if (batchRows.length === 0) return [];
 
@@ -101,10 +97,8 @@ export async function getCreditBatchesWithSamples(
     runsByBatch.set(row.creditBatchId, list);
   }
 
-  // Samples pooled by credit batch — the key re-grain. Skips the null-run filter
-  // `getProductionRunsWithSamples` applies, so commingled-batch chemistry is
-  // visible to the durability surfaces again. Ordered by id: Postgres gives no
-  // row order without one, and the 1000-year submission body (and thus its
+  // Samples pooled by credit batch, including commingled biochar. Ordered by id:
+  // Postgres gives no row order without one, and the 1000-year submission body (and thus its
   // change-detection hash) carries per-replicate values in this order — an
   // unordered read could flip the hash for unchanged rows.
   const sampleRows = await db
@@ -114,22 +108,23 @@ export async function getCreditBatchesWithSamples(
     .orderBy(asc(samples.id));
   const samplesByBatch = new Map<string, Sample[]>();
   for (const s of sampleRows) {
-    if (s.creditBatchId == null) continue;
     const list = samplesByBatch.get(s.creditBatchId) ?? [];
     list.push(s);
     samplesByBatch.set(s.creditBatchId, list);
   }
 
+  const batchesWithReports = await getBatchesWithLabReports(ctx, ids, db, sampleRows);
+  const batchesWithHistograms = await getBatchesWithReflectanceHistograms(ctx, ids, db, sampleRows);
   return batchRows.map((batch) => ({
+    hasReflectanceHistogram: batchesWithHistograms.has(batch.id),
+    hasLabReport: batchesWithReports.has(batch.id),
     creditBatchId: batch.id,
     creditBatchCode: batch.code,
     startDate: batch.startDate,
     endDate: batch.endDate,
-    facilityTimezone:
-      batch.facilityTimezone ?? FALLBACK_FACILITY_TIMEZONE,
+    facilityTimezone: batch.facilityTimezone,
     sampling: batch.sampling,
-    declaredHToCorgRatio: batch.declaredHToCorgRatio,
-    durabilityOption: batch.durabilityOption ?? DURABILITY_TIER_FALLBACK,
+    durabilityOption: batch.durabilityOption,
     runs: runsByBatch.get(batch.id) ?? [],
     samples: samplesByBatch.get(batch.id) ?? [],
   }));
@@ -165,15 +160,5 @@ export async function getSamplesByCreditBatchIds(
     .from(samples)
     .where(and(inArray(samples.creditBatchId, ids), eq(samples.organizationId, ctx.organizationId)));
 
-  return rows.flatMap((row) =>
-    row.creditBatchId == null
-      ? []
-      : [
-          {
-            id: row.id,
-            creditBatchId: row.creditBatchId,
-            sampleCode: row.sampleCode,
-          },
-        ],
-  );
+  return rows;
 }

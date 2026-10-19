@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "../helpers/removal-fixture";
 /**
  * Phase 1 carryover — facility ↔ Isometric project mapping E2E.
  *
@@ -11,8 +12,8 @@
  *
  * Strategy: pre-seed `certifier_projects` (and a credit batch +
  * submission for test 2) directly via Drizzle, then drive the UI
- * assertions. The actual link/edit dialog is exercised by
- * `tests/isometric-mapping-lock.test.ts` (unit) and
+ * assertions. Mapping locks, template guards, and artifact anchor re-checks are covered by
+ * `tests/certification-submissions.test.ts` (database-backed), and live reads by
  * `tests/isometric-sandbox-health.integration.test.ts` (live API).
  *
  * `loadFacilityCertifierMapping` always reads from Isometric
@@ -70,6 +71,7 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
       await db.transaction(async (tx) => {
         await tx.insert(schema.certifierProjects).values([
           {
+            externalFacilityId: `fcl_test_${facilityF1.id}`,
             organizationId: DEC_ORG_ID,
             facilityId: facilityF1.id,
             provider: "isometric",
@@ -79,6 +81,7 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
             defaultRemovalTemplateId: null,
           },
           {
+            externalFacilityId: `fcl_test_${facilityF2.id}`,
             organizationId: DEC_ORG_ID,
             facilityId: facilityF2.id,
             provider: "isometric",
@@ -140,7 +143,8 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
     try {
       await db.transaction(async (tx) => {
         await tx.insert(schema.certifierProjects).values({
-        organizationId: DEC_ORG_ID,
+          externalFacilityId: `fcl_test_${facility.id}`,
+          organizationId: DEC_ORG_ID,
           facilityId: facility.id,
           provider: "isometric",
           externalProjectId: sandboxProjectId,
@@ -153,7 +157,7 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
         // joined to a removal-scoped, non-terminal submission. The legacy
         // creditBatch-keyed shape no longer blocks (ADR 0003/0004), so seed
         // the current shape directly.
-        await tx.insert(schema.certifierRemovals).values({
+        await insertRemovalFixture(tx, {
         organizationId: DEC_ORG_ID,
           id: removalId,
           facilityId: facility.id,

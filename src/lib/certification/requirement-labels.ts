@@ -35,6 +35,7 @@ export type CertRequirementKey =
   | "entityReadiness"
   | "mapping"
   | "credentials"
+  | "emissions"
   | "template"
   | "evidence"
   | "durability";
@@ -90,7 +91,7 @@ export const CERT_REQUIREMENT_META: Record<
   transportUniformity: {
     requirementLabel: "Transport legs aggregate cleanly",
     whyDetail:
-      "When several batches are pooled into one Removal, their transport legs in each category must share a single method and emission factor. Make the methods and factors consistent before submitting.",
+      "When several batches are pooled into one Removal, their transport legs in each category must share a calculation method and transport mode, with a positive load mass on every leg. Review the recorded methods, modes and load masses before submitting.",
   },
   entityReadiness: {
     requirementLabel: "Certifier fields on linked records",
@@ -106,6 +107,10 @@ export const CERT_REQUIREMENT_META: Record<
     requirementLabel: "Organization Isometric credentials",
     whyDetail:
       "Each organization uses its own encrypted Isometric access token and client secret. A Platform Admin must configure them before the organization can read from or submit to the registry.",
+  },
+  emissions: {
+    requirementLabel: "Emissions",
+    whyDetail: "Emissions entries with a value need a file before the Removal can be submitted.",
   },
   template: {
     requirementLabel: "Removal template resolved",

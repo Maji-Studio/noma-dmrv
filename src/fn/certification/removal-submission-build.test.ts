@@ -1,6 +1,16 @@
+import { reviewedTemplateSources } from "../../../tests/helpers/template-line-sources";
+import { buildSubmissionLineageBlockers } from "./certify-lineage-blockers";
+import { deriveRequiredTransportCategories } from "./certify-transport-coverage";
+import { missingFeedstockTransportIds } from "@/lib/certification/submission-readiness";
+import production from "../../../tests/fixtures/isometric/production-template-2026-07-03.json";
+import type { components as RegistryComponents } from "@/lib/isometric/generated/certify";
+import * as ghgEntry from "@/lib/isometric/transformers/ghg-entry";
+import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
+import { findUnbindableTemplateInputs as findCoverage, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("./sources", () => ({
+vi.mock("./source-candidates", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./source-candidates")>()),
   collectCandidateSourceDocumentsForRemoval: vi.fn(),
   resolveSourceBindingCandidates: vi.fn(),
 }));
@@ -17,12 +27,12 @@ import type {
   IsometricComponentBlueprint,
   IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
-import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import { classifyRemovalSourceCandidate } from "@/lib/certification/removal-source-bindings";
 import {
   CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
   DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-} from "@/lib/isometric/transformers/measurement-sample";
+} from "@/lib/isometric/storage-blueprints";
 import {
   buildRemovalSubmissionBuild,
   buildProductionEmissionClaims,
@@ -31,7 +41,7 @@ import {
   normalizeSequestrationTemplateForHash,
   removalTemplateTierCompatibilityBlocker,
 } from "./removal-submission-build";
-import * as sources from "./sources";
+import * as sources from "./source-candidates";
 
 const TEST_ORG_CONTEXT = {
   userId: "removal-submission-build-user",
@@ -98,8 +108,9 @@ describe("buildRemovalSubmissionBuild", () => {
       } as never,
     );
 
-    expect(blocker).toMatch(/uses 200-year durability/i);
-    expect(blocker).toMatch(/biochar_sequestration_1000_year/);
+    expect(blocker).toBe(
+      `This facility uses 200-year durability, but the credit batch's Removal template uses an incompatible storage component (${CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR}). Switch the credit batch to a 200-year template or change the facility's durability tier.`,
+    );
   });
 
   it("does not accept the deprecated key for a newly configured 1,000-year template", () => {
@@ -121,8 +132,9 @@ describe("buildRemovalSubmissionBuild", () => {
       } as never,
     );
 
-    expect(blocker).toMatch(/incompatible storage component/i);
-    expect(blocker).toContain(DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR);
+    expect(blocker).toBe(
+      `This facility uses 1000-year durability, but the credit batch's Removal template uses an incompatible storage component (${DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR}). Switch the credit batch to a 1000-year template or change the facility's durability tier.`,
+    );
   });
 
   it("returns compile blockers instead of constructing transport for missing readiness", async () => {
@@ -131,9 +143,11 @@ describe("buildRemovalSubmissionBuild", () => {
       removalId: "rem-test-missing-readiness",
       ctx: {} as RemovalSubmissionContext,
       prepared: {
-        defaultTemplate: {
+        lineSources: {},
+        removalTemplate: {
           id: "rvt-test",
           display_name: "Test template",
+          groups: [],
         } as never,
         blueprintsByKey: new Map(),
         externalProjectId: "prj-test",
@@ -154,11 +168,13 @@ describe("buildRemovalSubmissionBuild", () => {
       orgCtx: TEST_ORG_CONTEXT,
       removalId: "rem-test-no-sequestration",
       ctx: {
+        submissionLineageBlockers: [],
         entityReadinessGaps: [],
         submissionWarnings: [],
       } as unknown as RemovalSubmissionContext,
       prepared: {
-        defaultTemplate: {
+        lineSources: {},
+        removalTemplate: {
           id: "rvt-test",
           display_name: "Emissions-only template",
           groups: [],
@@ -245,8 +261,8 @@ describe("buildRemovalSubmissionBuild", () => {
     ).not.toBe(baseline);
   });
 
-  it("fails closed when entity certification readiness was not evaluated", async () => {
-    const ctx = {} as RemovalSubmissionContext;
+  it.each(["entityReadinessGaps", "submissionLineageBlockers"] as const)("fails closed when %s was not evaluated", async (missing) => {
+    const ctx = { entityReadinessGaps: [], submissionLineageBlockers: [], [missing]: undefined } as unknown as RemovalSubmissionContext;
 
     await expect(
       buildRemovalSubmissionBuild({
@@ -254,7 +270,8 @@ describe("buildRemovalSubmissionBuild", () => {
         removalId: "rem-test-missing-readiness",
         ctx,
         prepared: {
-          defaultTemplate: {} as never,
+        lineSources: {},
+          removalTemplate: { groups: [] } as never,
           blueprintsByKey: new Map(),
           externalProjectId: "prj-test-missing-readiness",
           allowPeriodInputStub: false,
@@ -271,6 +288,7 @@ describe("buildRemovalSubmissionBuild", () => {
 
   it("blocks entity certification gaps before preparing registry inputs", async () => {
     const ctx = {
+      submissionLineageBlockers: [],
       entityReadinessGaps: [
         "Application APP-TEST-001: Upload the application logbook",
       ],
@@ -282,7 +300,8 @@ describe("buildRemovalSubmissionBuild", () => {
         removalId: "rem-test-1",
         ctx,
         prepared: {
-          defaultTemplate: {} as never,
+        lineSources: {},
+          removalTemplate: { groups: [] } as never,
           blueprintsByKey: new Map(),
           externalProjectId: "prj-test-1",
           allowPeriodInputStub: false,
@@ -295,6 +314,63 @@ describe("buildRemovalSubmissionBuild", () => {
       sources.collectCandidateSourceDocumentsForRemoval,
     ).not.toHaveBeenCalled();
     expect(sources.resolveSourceBindingCandidates).not.toHaveBeenCalled();
+  });
+
+  it("blocks a missing feedstock leg before preparing registry inputs", async () => {
+    const missing = missingFeedstockTransportIds(["FS-1", "FS-2"], [
+      { entityId: "FS-1", distanceKm: 10, loadMassKg: 100 },
+    ]);
+    const ctx = {
+      entityReadinessGaps: [],
+      submissionLineageBlockers: buildSubmissionLineageBlockers([], missing, { "FS-2": "FS-2" }, ["feedstock"]),
+    } as unknown as RemovalSubmissionContext;
+    await expect(buildRemovalSubmissionBuild({
+      orgCtx: TEST_ORG_CONTEXT,
+      removalId: "rem-missing-feedstock",
+      ctx,
+      prepared: {
+        lineSources: {},
+        removalTemplate: { groups: [] } as never,
+        blueprintsByKey: new Map(),
+        externalProjectId: "prj-test",
+        allowPeriodInputStub: false,
+        hasDurabilityComponents: false,
+      },
+    })).rejects.toThrow("Removal submission blocked:\nFeedstock FS-2 has no usable transport leg.");
+  });
+
+  it("refuses missing delivery proof even without transport inputs", async () => {
+    const lineages = [{ application: { id: "app-1", code: "AP-1" }, delivery: {
+      id: "delivery-1", code: "D-0012", customerLocationId: "location-1", proofOfDeliveryCount: 0,
+    }, order: null }] as RemovalSubmissionContext["lineages"];
+    const ctx = { entityReadinessGaps: [],
+      submissionLineageBlockers: buildSubmissionLineageBlockers(lineages, [], {}, []),
+    } as unknown as RemovalSubmissionContext;
+    await expect(buildRemovalSubmissionBuild({
+      orgCtx: TEST_ORG_CONTEXT, removalId: "rem-missing-proof", ctx,
+      prepared: {
+        lineSources: {}, removalTemplate: { groups: [] } as never, blueprintsByKey: new Map(),
+        externalProjectId: "prj-test", allowPeriodInputStub: false, hasDurabilityComponents: false },
+    })).rejects.toThrow("Delivery D-0012 has no proof of delivery");
+  });
+
+  it("refuses a delivered delivery without distance before preparing registry inputs", async () => {
+    const lineages = [{ application: { id: "app-1", code: "AP-1" }, delivery: {
+      id: "delivery-1", code: "DL-1", status: "delivered", customerLocationId: "location-1",
+      distanceKmOverride: null, recordedDistanceKm: null,
+    }, order: null }] as RemovalSubmissionContext["lineages"];
+    const ctx = {
+      entityReadinessGaps: [],
+      submissionLineageBlockers: buildSubmissionLineageBlockers(lineages, [], {}, ["biochar"]),
+    } as unknown as RemovalSubmissionContext;
+    await expect(buildRemovalSubmissionBuild({
+      orgCtx: TEST_ORG_CONTEXT, removalId: "rem-missing-distance", ctx,
+      prepared: {
+        lineSources: {},
+        removalTemplate: { groups: [] } as never, blueprintsByKey: new Map(),
+        externalProjectId: "prj-test", allowPeriodInputStub: false, hasDurabilityComponents: false,
+      },
+    })).rejects.toThrow("Delivery DL-1 has no positive transport distance");
   });
 
   it("builds the Safety margin from dry mass with the Inventory Source attached", async () => {
@@ -404,8 +480,9 @@ describe("buildRemovalSubmissionBuild", () => {
       preprocessingFuelLiters: 0,
       electricityKwh: 0,
       samples: [],
-    } as unknown as ProductionRunWithSamples;
+    } as unknown as ProductionRunForCertification;
     const ctx = {
+      submissionLineageBlockers: [],
       entityReadinessGaps: [],
       lineages: [
         {
@@ -414,7 +491,7 @@ describe("buildRemovalSubmissionBuild", () => {
             code: "APP-001",
             applicationDate: new Date("2026-01-03T00:00:00Z"),
           },
-          delivery: { id: "delivery-1" },
+          delivery: { id: "delivery-1", proofOfDeliveryCount: 1, status: "delivered", customerLocationId: "location-1" },
           productionRun: { id: "run-1" },
           feedstocks: [],
           warnings: [],
@@ -428,7 +505,6 @@ describe("buildRemovalSubmissionBuild", () => {
       runSummary: {
         runCount: 1,
         totalBiocharOutputKg: 1_200,
-        deliveryBiocharOutputKg: 1_200,
         appliedDryKg: 600,
       },
       submissionWarnings: [],
@@ -441,6 +517,12 @@ describe("buildRemovalSubmissionBuild", () => {
       memberBatches: [{ id: "batch-1" }],
       facilityReferenceSoilTemperature: null,
     } as unknown as RemovalSubmissionContext;
+    ctx.lineSources = reviewedTemplateSources(template, { "component-safety-margin": { scope: "operating", automaticSource: "safety-margin", entryPolicy: "additive", origin: "reviewed" } });
+    ctx.submissionLineageBlockers = buildSubmissionLineageBlockers(
+      ctx.lineages, ["feedstock-without-leg"], {},
+      deriveRequiredTransportCategories(template),
+    );
+    expect(ctx.submissionLineageBlockers).toEqual([]);
     const sourceCandidate = {
       documentId: "document-inventory",
       sourceId: "source-inventory",
@@ -452,7 +534,8 @@ describe("buildRemovalSubmissionBuild", () => {
       removalId: "removal-1",
       ctx,
       prepared: {
-        defaultTemplate: template,
+        lineSources: reviewedTemplateSources(template, { "component-safety-margin": { scope: "operating", entryPolicy: "additive", automaticSource: "safety-margin", origin: "reviewed" } }),
+        removalTemplate: template,
         blueprintsByKey,
         externalProjectId: "project-1",
         allowPeriodInputStub: false,
@@ -576,7 +659,6 @@ describe("buildRemovalSubmissionBuild", () => {
               creditBatchCode: "CB-001",
               facilityTimezone: "UTC",
               sampling: "sampled",
-              declaredHToCorgRatio: null,
               durabilityOption: "1000_year",
               runs: [
                 {
@@ -645,3 +727,22 @@ describe("buildRemovalSubmissionBuild", () => {
     expect(directSFractionDatapoints).toHaveLength(0);
   });
 });
+
+it.each([unsupportedTemplate(), production as RegistryComponents["schemas"]["GhgEntryTemplate"]])("stops compilation before building a GHG entry for unbindable inputs", async (removalTemplate) => {
+  const builder = vi.spyOn(ghgEntry, "buildCreateGhgEntryRequest");
+  const compiled = await compileRemovalSubmission({
+    orgCtx: TEST_ORG_CONTEXT, removalId: "blocked-removal", ctx: {} as RemovalSubmissionContext,
+    prepared: {
+        lineSources: reviewedTemplateSources(removalTemplate),
+        removalTemplate, blueprintsByKey: new Map(), externalProjectId: "project", allowPeriodInputStub: false, hasDurabilityComponents: true },
+  });
+  expect(builder).not.toHaveBeenCalled();
+  builder.mockRestore();
+  expect(compiled.blockers).toEqual([formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(removalTemplate))]);
+  expect(compiled.transportPlan).toBeNull();
+  expect(compiled.snapshot).toBeNull();
+});
+
+function findUnbindableTemplateInputs(template: Parameters<typeof findCoverage>[0], options: Parameters<typeof findCoverage>[1] = {}) {
+  return findCoverage(template, { lineSources: reviewedTemplateSources(template), ...options });
+}

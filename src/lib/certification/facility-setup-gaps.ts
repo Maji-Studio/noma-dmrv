@@ -10,28 +10,32 @@
  * and where it is fixed. Pure and client-safe: derives only from the
  * facility-certifier facts the server already loads.
  */
+import type { UnbindableTemplateInput } from "@/lib/isometric/template-binding-coverage";
 
 import {
   CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
   DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-} from "@/lib/isometric/transformers/measurement-sample";
+} from "@/lib/isometric/storage-blueprints";
 
 export type FacilitySetupGap =
   | { kind: "project_link" }
   | { kind: "credentials" }
+  | { kind: "external_facility_id" }
   | { kind: "default_template" }
   | { kind: "template_resolution"; templateId: string }
-  | { kind: "blueprint_keys"; keys: string[] };
+  | { kind: "blueprint_keys"; keys: string[] }
+  | { kind: "template_unbindable"; inputs: UnbindableTemplateInput[] };
 
 export interface FacilitySetupGapFacts {
   hasOrgCredentials: boolean;
   /** The facility → Isometric project mapping row, or null when unlinked. */
-  mapping: unknown | null;
+  mapping: { externalFacilityId?: string | null } | null;
   /** The cleanly-resolved default removal template, or null. */
   defaultTemplate: unknown | null;
   /** Set when a configured default template id no longer resolves remotely. */
   missingDefaultTemplateId: string | null;
   unresolvedBlueprintKeys: string[];
+  unbindableTemplateInputs: UnbindableTemplateInput[];
 }
 
 const BLUEPRINT_OPERATOR_LABELS: Record<string, string> = {
@@ -55,21 +59,20 @@ export function facilityBlueprintLabel(key: string): string {
   );
 }
 
-/**
- * Derive the ordered setup gaps from the facility certifier facts. An empty
- * array means facility setup is complete (the wizard's old boolean is exactly
- * `deriveFacilitySetupGaps(facts).length === 0`). Prerequisites short-circuit
- * the way `loadFacilityCertifierFacts` does, most-fundamental first: org
- * credentials gate reaching the registry AT ALL — the project-link connector
- * disables itself until they exist — so a credential-less org must be told to
- * configure credentials, never to link a facility it structurally can't link.
- * Only then does the missing project link, then the template facts, surface.
- */
-export function deriveFacilitySetupGaps(
-  facts: FacilitySetupGapFacts,
+/** Connection prerequisites for grouping; template health belongs to each batch pin. */
+export function deriveFacilityConnectionGaps(
+  facts: Pick<FacilitySetupGapFacts, "hasOrgCredentials" | "mapping">,
 ): FacilitySetupGap[] {
   if (!facts.hasOrgCredentials) return [{ kind: "credentials" }];
   if (!facts.mapping) return [{ kind: "project_link" }];
+  if (!facts.mapping.externalFacilityId?.trim()) return [{ kind: "external_facility_id" }];
+  return [];
+}
+
+/** Settings advice includes the default used when creating future batches. */
+export function deriveFacilitySetupGaps(facts: FacilitySetupGapFacts): FacilitySetupGap[] {
+  const connectionGaps = deriveFacilityConnectionGaps(facts);
+  if (connectionGaps.length) return connectionGaps;
   if (facts.missingDefaultTemplateId) {
     return [
       { kind: "template_resolution", templateId: facts.missingDefaultTemplateId },
@@ -78,6 +81,9 @@ export function deriveFacilitySetupGaps(
   if (!facts.defaultTemplate) return [{ kind: "default_template" }];
   if (facts.unresolvedBlueprintKeys.length > 0) {
     return [{ kind: "blueprint_keys", keys: facts.unresolvedBlueprintKeys }];
+  }
+  if (facts.unbindableTemplateInputs.length > 0) {
+    return [{ kind: "template_unbindable", inputs: facts.unbindableTemplateInputs }];
   }
   return [];
 }

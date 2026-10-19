@@ -25,6 +25,7 @@ function enrichment(
 ): RemovalPreflightSummary {
   return {
     removalId: id,
+    code: "RM-26-001",
     startedOn: "2026-07-01",
     completedOn: "2026-07-31",
     memberBatchCodes: [`${id}-enriched`],
@@ -35,7 +36,7 @@ function enrichment(
     submissionInterrupted: false,
     hasFinalizedSubmission: false,
     registryBoundaryOpened: false,
-    readiness: { state: "ready", reasons: [], advisories: [] },
+    readiness: { state: "ready", reasons: [], advisories: [], transportVehicleAdvisories: [] },
     evidenceHealth: null,
     submissionWarnings: [],
     recentSyncEvents: [],

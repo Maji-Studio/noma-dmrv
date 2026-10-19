@@ -1,13 +1,21 @@
 /**
  * Quick Add Dialog Shell
  * Generic dialog wrapper for nested entity creation and editing. Composes the shared
- * `Modal` primitive (chrome, centering, focus, backdrop, ESC) and adds an
+ * `FormDialog` primitive (chrome, centering, focus, backdrop, ESC) and adds an
  * inset header around the embedded form.
  */
 "use client";
 
-import { useId } from "react";
-import { Modal, type ModalWidth } from "@/components/ui";
+import { useId, type SyntheticEvent } from "react";
+import type { ModalWidth } from "@/components/ui/modal";
+import { FormDialog } from "@/components/ui/form-dialog";
+
+/**
+ * A dialog renders through a portal but still sits inside the entry form in
+ * the React tree, where its own form's submit would bubble on to the entry
+ * form's `onSubmit` and save it. Wrap the dialog's form to stop it there.
+ */
+export const stopSubmitBubbling = (event: SyntheticEvent) => event.stopPropagation();
 
 interface QuickAddDialogShellProps {
   isOpen: boolean;
@@ -39,7 +47,7 @@ export function QuickAddDialogShell({
   const titleId = useId();
 
   return (
-    <Modal
+    <FormDialog
       isOpen={isOpen}
       onClose={onClose}
       onOpen={onOpen}
@@ -54,17 +62,17 @@ export function QuickAddDialogShell({
     >
       <div className="flex flex-col" data-testid={testId}>
         {/* Header */}
-        <div className="flex items-center p-24 border-b border-[var(--color-border-primary)]">
+        <div className="flex flex-col gap-4 p-24 border-b border-[var(--color-border-primary)]">
           <h2 id={titleId} className="title-heading-3">
             {title}
           </h2>
         </div>
 
         {/* Form content */}
-        <div className="p-24 flex flex-col gap-24">
+        <div className="p-24 flex flex-col gap-24" onSubmit={stopSubmitBubbling}>
           {children}
         </div>
       </div>
-    </Modal>
+    </FormDialog>
   );
 }

@@ -114,7 +114,7 @@ function SetPasswordFormContent() {
           <FormField
             id="password"
             label="Password"
-            helperText="Minimum 8 characters"
+            cue="Minimum 8 characters"
             error={errors.password?.message}
           >
             <FormInput

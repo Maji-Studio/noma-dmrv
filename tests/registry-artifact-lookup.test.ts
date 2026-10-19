@@ -5,6 +5,10 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/data-access/certifier-credentials", async (importOriginal) =>
+  (await import("./fixtures/fake-registry")).fakeCredentialsModule(importOriginal),
+);
+
 vi.mock("@/lib/isometric/client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric/client")>();
   const { createFakeClientModule } = await import("./fixtures/fake-registry");
@@ -12,7 +16,6 @@ vi.mock("@/lib/isometric/client", async (importOriginal) => {
 });
 
 import {
-  getIsometricClientFromEnv,
   IsometricApiError,
   IsometricPageLimitError,
 } from "@/lib/isometric/client";
@@ -39,13 +42,15 @@ import {
   type FakeIsometricRegistry,
 } from "./fixtures/fake-registry";
 
+import { testIsometricClient } from "./fixtures/isometric-client";
+
 const PROJECT_ID = "prj_fake";
 const OTHER_PROJECT_ID = "prj_other";
 // More than one fake page (50), so every lookup crosses a cursor.
 const FILLER_RECORDS = 60;
 
 let registry: FakeIsometricRegistry;
-const client = () => getIsometricClientFromEnv();
+const client = testIsometricClient;
 
 beforeEach(() => {
   registry = installFakeRegistry();

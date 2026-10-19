@@ -1,19 +1,6 @@
-/**
- * Onboarding — first-run setup for a new Owner/Admin.
- *
- * Two surfaces, one shared gate: the first-run wizard (create-once foundation)
- * and the self-clearing getting-started guide (the traceability-spine
- * dashboard takeover). The dashboard mounts them via `useOnboardingGate` +
- * `OnboardingWizard`; the guide/strip/member surfaces render by mode.
- */
-
-export { useOnboardingGate } from "./use-onboarding-gate";
-export type {
-  OnboardingGate,
-  OnboardingMode,
-  OnboardingWizardControls,
-} from "./use-onboarding-gate";
-export { OnboardingWizard } from "./onboarding-wizard";
+/** Dashboard setup guide, collapsed strip, and member progress state. */
+export { useSetupGuide } from "./use-setup-guide";
+export type { SetupGuideState, OnboardingMode } from "./use-setup-guide";
 export { SetupGuide } from "./setup-guide";
 export { SetupGuideSkeleton } from "./setup-guide-skeleton";
 export { SetupStrip } from "./setup-strip";

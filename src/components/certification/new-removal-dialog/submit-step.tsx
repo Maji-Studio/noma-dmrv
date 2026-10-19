@@ -259,7 +259,10 @@ export function SubmitStep({
           updates={progressUpdates}
           isResubmission={attemptIsResubmission}
         />
-        <div className="flex flex-wrap items-center justify-end gap-12">
+        <div className="flex flex-wrap items-center justify-start gap-12">
+          <Button variant="primary" onClick={onDone}>
+            Done
+          </Button>
           {viewUrl && (
             <a
               href={viewUrl}
@@ -271,9 +274,6 @@ export function SubmitStep({
               <ArrowSquareOutIcon size={ACTION_ICON_SIZE} aria-hidden />
             </a>
           )}
-          <Button variant="primary" onClick={onDone}>
-            Done
-          </Button>
         </div>
       </div>
     );
@@ -304,14 +304,7 @@ export function SubmitStep({
           isResubmission={attemptIsResubmission}
         />
         {terminalError && <ServerError message={terminalError} />}
-        <div className="flex flex-wrap items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
-          <span className="body-caption text-[var(--color-text-tertiary)]">
-            {submitMutation.isPending
-              ? "noma is submitting the Removal to Isometric."
-              : submissionStalled
-                ? "Registry work may still be continuing. Close this dialog and refresh the page to reconcile its status."
-                : "Completed registry operations are preserved for a safe retry."}
-          </span>
+        <div className="flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] pt-16">
           {!submitMutation.isPending && (
             <div className="flex items-center gap-12">
               {submissionStalled ? (
@@ -338,6 +331,13 @@ export function SubmitStep({
               )}
             </div>
           )}
+          <span className="body-caption text-[var(--color-text-tertiary)]">
+            {submitMutation.isPending
+              ? "noma is submitting the Removal to Isometric."
+              : submissionStalled
+                ? "Registry work may still be continuing. Close this dialog and refresh the page to reconcile its status."
+                : "Completed registry operations are preserved for a safe retry."}
+          </span>
         </div>
         {confirmDialog}
       </div>
@@ -356,7 +356,7 @@ export function SubmitStep({
   );
 
   return (
-    <div className="flex flex-col gap-16">
+    <div className="flex flex-col gap-24">
       <SubmissionSummary
         ctx={ctx}
         facilityId={facilityId}
@@ -391,18 +391,7 @@ export function SubmitStep({
           alert is only for what the last submit attempt returned. */}
       {submitError && <ServerError message={submitError} />}
 
-      <div className="flex items-center justify-between gap-12">
-        {canDeleteRemoval ? (
-          <Button
-            variant="default"
-            onClick={() => setDeleteConfirmOpen(true)}
-            disabled={submitMutation.isPending}
-          >
-            {deleteCopy.actionLabel}
-          </Button>
-        ) : (
-          <span />
-        )}
+      <div className="flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] pt-16">
         {requirementsMet ? (
           submitButton
         ) : (
@@ -412,6 +401,15 @@ export function SubmitStep({
             </span>
           </Tooltip>
         )}
+        {canDeleteRemoval ? (
+          <Button
+            variant="default"
+            onClick={() => setDeleteConfirmOpen(true)}
+            disabled={submitMutation.isPending}
+          >
+            {deleteCopy.actionLabel}
+          </Button>
+        ) : null}
       </div>
 
       {confirmDialog}

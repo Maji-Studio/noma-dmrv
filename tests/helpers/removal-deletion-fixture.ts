@@ -1,11 +1,12 @@
+import { insertRemovalFixture } from "./removal-fixture";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { certificationSubmissions, certifierProjects, certifierRemovals } from "@/db/schema/certification";
+import { certificationSubmissions, certifierProjects } from "@/db/schema/certification";
 import { creditBatches } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionProcesses } from "@/db/schema/production-processes";
-import { TEST_ORG_ID } from "./test-org";
+import { TEST_SITE_POSITION, TEST_ORG_ID } from "./test-org";
 
 const RUN_ID_LENGTH = 8;
 const SUBMISSION_VERSION = 1;
@@ -28,7 +29,7 @@ export async function createRemovalDeletionFixture(tracked: {
   const runId = crypto.randomUUID().slice(0, RUN_ID_LENGTH);
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Deletion Facility ${runId}`,
       code: `FAC-DEL-${runId}`,
@@ -40,20 +41,18 @@ export async function createRemovalDeletionFixture(tracked: {
   const [project] = await db
     .insert(certifierProjects)
     .values({
+      externalFacilityId: `fcl_test_${facility.id}`,
       organizationId: TEST_ORG_ID,
       facilityId: facility.id,
       provider: "isometric",
       externalProjectId,
     })
     .returning({ id: certifierProjects.id });
-  const [removal] = await db
-    .insert(certifierRemovals)
-    .values({
+  const [removal] = await insertRemovalFixture(db, {
       organizationId: TEST_ORG_ID,
       facilityId: facility.id,
       provider: "isometric",
-    })
-    .returning({ id: certifierRemovals.id });
+    });
   createdRemovalIds.push(removal.id);
   const [feedstockType] = await db
     .insert(feedstockTypes)

@@ -40,12 +40,19 @@ Application credentials are not environment-only:
 - Owners/Admins manage their active organization's credentials through
   `src/data-access/certifier-credentials.ts`;
 - application calls construct an organization-specific client with
-  `getIsometricClientForOrg(organizationId)`;
+  `resolveIsometricClient(ctx)` in `src/data-access/certifier-credentials.ts`,
+  which calls `requireOrgScope` and filters credentials on `ctx.organizationId`;
+- Platform Admin verification of a selected organization's saved credentials uses
+  `verifyIsometricCredentialsForOrganization(ctx, organizationId)`
+  in the same data-access module, with an explicit privilege check and
+  `// org-scope-ok:` waiver;
 - environment credentials are retained only for scripts and dedicated health
-  checks through `getIsometricClientFromEnv()`.
+  checks through `getIsometricClientFromEnv()` in `client-env.ts`, which validates
+  only the credential pair and environment selector. The HTTP client accepts
+  credentials explicitly and does not read app configuration.
 
 External certification writes require organization Admin authorization. This
-includes Removal submission, telemetry submission, GHG Statement create/submit,
+includes Removal submission, GHG Statement create/submit,
 generated-report preparation/approval, Source mirroring, and mapping changes.
 Data access is organization-scoped and resolves the facility from trusted
 lineage. Fine-grained “user may access facility X inside this organization”
@@ -61,7 +68,7 @@ Admin-only.
 Each facility has a provider-aware `certifier_projects` mapping containing the
 external project, default GHG-entry template, protocol metadata, and the
 external facility ID (`fcl_…`). The facility ID is required: production-batch
-registration (issue #630) submits against it, and telemetry uses it too.
+registration (issue #630) submits against it.
 Adopting it for the first time (null to a value) is allowed even when the
 facility already has submissions; changing or clearing an established facility
 ID, or rebinding the project, still requires superseding those submissions.
@@ -208,8 +215,9 @@ provider missing-resource 400 for the addressed batch or measurement is absence.
 ## Template and input contract
 
 The live template is read at compilation time. Every monitored ordinary input
-must resolve through `INPUT_MAPPING` in
-`src/lib/isometric/transformers/datapoint.ts`, and every durability component
+must resolve through the semantic binding catalog
+(`src/lib/isometric/semantic-binding-catalog.ts`, projected as `INPUT_MAPPING`
+in `src/lib/isometric/transformers/datapoint.ts`), and every durability component
 must have an explicit supported binding. Unit, quantity-kind, component-name,
 tier, and scope conflicts fail before a registry write.
 
@@ -293,11 +301,26 @@ is not confirmed, so no production-live Method-B submission is claimed.
 
 ## Sources and evidence
 
+Proof of delivery is a Removal-readiness requirement (#942 q12).
+Each delivery in the Removal lineage needs at least one delivery-owned,
+`uploaded` document classified as `delivery_receipt`, `bill_of_lading` or
+`photo`. A pending upload with a storage key is not proof. Weighbridge tickets
+and other transport evidence do not satisfy this requirement. Documents have
+no archive column or archive upload status; deleted document rows cannot count.
+Saving a delivery without proof remains allowed.
+
+This gate applies regardless of template transport categories: proof supports
+mass verification under [Biochar v1.1 §8.3.1.1](https://registry.isometric.com/protocol/biochar/1.1#measurement-of-mass-of-biochar-applied).
+The shared lineage predicate feeds Removal readiness, batch health and submission;
+the delivery badge uses the same predicate. The fix opens Delivery evidence.
+The gate does not change registry Source binding rules below.
+
 Source attribution is target-specific, not Removal-wide.
 
 `src/lib/certification/removal-source-bindings.ts` classifies operator
 documents and generated evidence ledgers into an immutable plan of exact
-component/input targets:
+component/input targets, taken from the evidence targets the semantic binding
+catalog declares on each input:
 
 - feedstock bill of lading to feedstock transport `mass_distance`;
 - delivery bill of lading to biochar transport `mass_distance`;
@@ -382,30 +405,21 @@ and GHG Statement creation where the remote API supports the necessary lookup.
 `src/data-access/certification-submissions.ts` is the internal Postgres-backed
 claim seam.
 
-Telemetry follows ADR 0006 because FileUpload/DataUploadSubmission has no
-supplier-reference discovery contract. It journals FileUpload ID, signed URL
-expiry, upload facts, and DataUploadSubmission ID into `payloadSnapshot` and
-resumes from those stored IDs where possible.
+## Reactor time-series upload
 
-## Telemetry status
+The Readings file (`sensor_data`) stays unchanged on the production run,
+retrievable for verifier requests. Certification readiness and Removal submission
+use Readings file presence.
+This one file is the retained evidence for both the §9.1.2 pressure series and the
+§9.2.4 / §9.2.4.1 flue-stack temperature series; noma does not check its contents,
+which are the operator's responsibility.
+The [project monitoring requirement](./requirements-shortlist.md#project-reactor-monitoring)
+defines the evidence requirements.
+There is no reactor time-series upload ([ADR 0006](../adr/0006-data-upload-submission-idempotency.md)).
 
-The server-side Slice A pipeline is implemented:
-
-- creates/reconciles sensors;
-- writes the Parquet payload;
-- `POST /file-uploads`;
-- uploads bytes to the signed URL;
-- `POST /data-upload-submissions`;
-- reads `/data-upload-submissions/{id}` for status;
-- journals step IDs and uses mapping locks.
-
-Production-run readings are now stored as unchanged `sensor_data` CSV
-documents, and the upload UI does not populate row-level readings.
-
-The UI is not live. `TelemetryPanel` and its hook exist, but the panel is not
-rendered on any current route. There is no usable “Submit Telemetry” button in
-the application. Treat the pipeline as implemented but dark until it is
-re-homed and revalidated against the sandbox.
+The legacy `production_run_readings` table and row importer are retained.
+Operator file upload does not populate row-level readings. Parsed rows, Sensors,
+Parquet and reactor MeasurementSamples are outside the approved submission route.
 
 ## Operational checks
 

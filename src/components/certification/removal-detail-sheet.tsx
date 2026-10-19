@@ -11,14 +11,14 @@
  */
 "use client";
 
+import { MultilineDetail } from "./multiline-detail";
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { DetailField, DetailSection } from "@/components/ui/detail-panel";
 import {
   useDeleteRemoval,
   useFacilityCertifierSummary,
@@ -27,7 +27,7 @@ import {
   deriveRemovalWorkflowStatus,
   type RemovalWorkflowStatus,
 } from "@/lib/certification/status";
-import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
+import { pluralize } from "@/lib/copy-utils";
 import { formatDateRange } from "@/lib/format-utils";
 import { isometricRegistry } from "@/lib/isometric/links";
 import { EnvBanner } from "./env-banner";
@@ -39,6 +39,7 @@ import { SourcesPanel } from "./sources-panel";
 import { SubmissionNotes } from "./submission-notes";
 import { buildSubmissionWarningNotes } from "./submission-warning-notes";
 import { SyncEventLog } from "./sync-event-log";
+import { CertificationStatusBadge } from "./certification-status-badge";
 import {
   canDeleteRemovalRow,
   removalDeletionTouchesRegistry,
@@ -46,6 +47,8 @@ import {
 } from "./removal-list-state";
 import { removalDeletionCopy } from "./removal-deletion-copy";
 import { Notice } from "@/components/ui/notice";
+import type { RecordLockView } from "@/lib/record-lock-view";
+import { RemovalCorrectionNotice } from "./removal-correction-needed";
 
 interface RemovalDetailSheetProps {
   summary: RemovalListRow;
@@ -53,17 +56,8 @@ interface RemovalDetailSheetProps {
   facilityId: string;
   open: boolean;
   onClose: () => void;
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-4">
-      <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-        {label}
-      </span>
-      <div className="body-small text-[var(--color-text-primary)]">{children}</div>
-    </div>
-  );
+  /** Which Isometric returned, if any: shows "Correction needed". */
+  lock?: RecordLockView;
 }
 
 export function RemovalStorageSitesField({
@@ -78,18 +72,22 @@ export function RemovalStorageSitesField({
   const environment = isProduction ? "production" : "sandbox";
 
   return (
-    <Field label="Storage sites">
-      <IsometricLink
-        href={isometricRegistry.storageSites({
-          environment,
-          externalProjectId,
-        })}
-      />
-    </Field>
+    <DetailField
+      label="Storage sites"
+      value={
+        <IsometricLink
+          label="View on Isometric"
+          href={isometricRegistry.storageSites({
+            environment,
+            externalProjectId,
+          })}
+        />
+      }
+    />
   );
 }
 
-function SubmissionStatusPanel({
+function SubmissionStatusSection({
   summary,
   status,
 }: {
@@ -97,25 +95,28 @@ function SubmissionStatusPanel({
   status: RemovalWorkflowStatus;
 }) {
   return (
-    <section
-      aria-labelledby="removal-submission-status"
-      className="border-y border-[var(--color-border-secondary)] py-12"
-    >
-      <div className="flex items-center justify-between gap-12">
-        <h3
-          id="removal-submission-status"
-          className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]"
-        >
-          Submission status
-        </h3>
-        <StatusBadge status={status.value} label={status.label} />
-      </div>
+    <DetailSection title="Submission status" divider={false}>
+      <DetailField
+        label="Status"
+        // The label paints above the badge's 44px hit area, which reaches 6px
+        // into it, so a press on the label text stays on the label.
+        className="[&>span:first-child]:relative [&>span:first-child]:z-10"
+        value={
+          <CertificationStatusBadge
+            entityType="removal"
+            entityId={summary.removalId}
+            status={status.value}
+            label={status.label}
+          />
+        }
+        valuePresent
+      />
 
       {status.reasons.length > 0 && (
-        <Notice tone="warning" className="mt-10">
+        <Notice tone="warning">
           <ul className="flex flex-col gap-6">
             {status.reasons.map((reason) => (
-              <li key={reason}>{reason}</li>
+              <li key={reason}><MultilineDetail>{reason}</MultilineDetail></li>
             ))}
           </ul>
         </Notice>
@@ -125,13 +126,14 @@ function SubmissionStatusPanel({
         <Button
           variant="default"
           size="small"
-          className="mt-10"
+          // `relative` paints it above the status badge's expanded hit area.
+          className="relative self-start"
           onClick={() => void summary.retry?.()}
         >
           Retry
         </Button>
       )}
-    </section>
+    </DetailSection>
   );
 }
 
@@ -162,6 +164,7 @@ export function RemovalDetailSheet({
   facilityId,
   open,
   onClose,
+  lock,
 }: RemovalDetailSheetProps) {
   const { data: certifierSummary } = useFacilityCertifierSummary(
     facilityId,
@@ -177,7 +180,7 @@ export function RemovalDetailSheet({
     readiness: summary.readiness,
   });
   const submissionWarningNotes = buildSubmissionWarningNotes(
-    summary.submissionWarnings,
+    [...summary.submissionWarnings, ...(summary.readiness?.transportVehicleAdvisories ?? [])],
   );
   // The workflow may only be (re)entered while something still needs doing:
   // `ready` (submit it) or `blocked` (resolve preconditions). A `submitted`
@@ -215,7 +218,7 @@ export function RemovalDetailSheet({
         <SlideOverPanel.Content size="default">
           <SlideOverPanel.Header showClose>
             <SlideOverPanel.Title>
-              Removal {summary.removalId.slice(0, 8)}…
+              {summary.code}
             </SlideOverPanel.Title>
             {hasReportingWindow && (
               <SlideOverPanel.Description>{window}</SlideOverPanel.Description>
@@ -225,7 +228,8 @@ export function RemovalDetailSheet({
           <SlideOverPanel.Body className="flex flex-col gap-24">
             <EnvBanner isProduction={isProduction} variant="inline" />
 
-            <SubmissionStatusPanel summary={summary} status={workflowStatus} />
+            <SubmissionStatusSection summary={summary} status={workflowStatus} />
+            <RemovalCorrectionNotice lock={lock} />
 
             {summary.externalId && (
               <RemovalCarbonBreakdown
@@ -234,48 +238,66 @@ export function RemovalDetailSheet({
               />
             )}
 
-            <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
-              <Field label="Reporting window">{window}</Field>
-              <Field label={`Credit batches (${summary.memberBatchCodes.length})`}>
-                <span className="font-mono">
-                  {summary.memberBatchCodes.join(", ") || MISSING_VALUE.none}
-                </span>
-              </Field>
+            <DetailSection title="Removal">
+              <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
+                <DetailField
+                  label="Reporting window"
+                  value={window}
+                  valuePresent={Boolean(hasReportingWindow)}
+                />
+                <DetailField
+                  label={`Credit batches (${summary.memberBatchCodes.length})`}
+                  value={
+                    summary.memberBatchCodes.length > 0 ? (
+                      <span className="font-mono">
+                        {summary.memberBatchCodes.join(", ")}
+                      </span>
+                    ) : null
+                  }
+                  emptySituation="none"
+                />
 
-              {summary.externalId && (
-                <Field label="Registry record">
-                  <RegistryRecordLink
-                    facilityId={facilityId}
-                    externalId={summary.externalId}
-                    version={summary.version}
-                    isProduction={isProduction}
-                    kind="removal"
+                {summary.externalId && (
+                  <DetailField
+                    label="Registry record"
+                    value={
+                      <RegistryRecordLink
+                        facilityId={facilityId}
+                        externalId={summary.externalId}
+                        version={summary.version}
+                        isProduction={isProduction}
+                        kind="removal"
+                      />
+                    }
                   />
-                </Field>
-              )}
+                )}
 
-              <ProductionBatchLinks
-                removalId={summary.removalId}
-                isProduction={isProduction}
-                enabled={open}
-              />
+                <ProductionBatchLinks
+                  removalId={summary.removalId}
+                  isProduction={isProduction}
+                  enabled={open}
+                />
 
-              <RemovalStorageSitesField
-                externalProjectId={externalProjectId}
-                isProduction={isProduction}
-              />
+                <RemovalStorageSitesField
+                  externalProjectId={externalProjectId}
+                  isProduction={isProduction}
+                />
 
-              {summary.evidenceHealth && (
-                <Field label="Evidence attachments">
-                  <span>
-                    {summary.evidenceHealth.label}
-                    {summary.evidenceHealth.totalCount > 0
-                      ? `: ${summary.evidenceHealth.verifiedCount} of ${summary.evidenceHealth.totalCount} intended ${pluralize(summary.evidenceHealth.totalCount, "target")} verified`
-                      : ""}
-                  </span>
-                </Field>
-              )}
-            </div>
+                {summary.evidenceHealth && (
+                  <DetailField
+                    label="Evidence attachments"
+                    value={
+                      <span>
+                        {summary.evidenceHealth.label}
+                        {summary.evidenceHealth.totalCount > 0
+                          ? `: ${summary.evidenceHealth.verifiedCount} of ${summary.evidenceHealth.totalCount} intended ${pluralize(summary.evidenceHealth.totalCount, "target")} verified`
+                          : ""}
+                      </span>
+                    }
+                  />
+                )}
+              </div>
+            </DetailSection>
 
             {/*
               Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant

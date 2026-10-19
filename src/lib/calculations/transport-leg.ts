@@ -9,11 +9,12 @@
  * Method is always distance-based (Isometric Transportation v1.1 Eq. 3):
  *   emissions = distance (km) × cargo mass (tonnes) × EF (kg CO₂e/tonne·km)
  * We store distance + cargo mass only. The EF lives in the Isometric component
- * blueprint and Certify applies it — we never store or submit a factor.
+ * blueprint and Certify applies it — we never store or submit a factor. The
+ * stored distance is one way; every leg counts its round trip at mass-distance
+ * aggregation (`@/lib/calculations/round-trip`).
  */
 
 import type { DistanceSourceValue } from "@/schemas/distance-source";
-import { DEFAULT_TRIP_TYPE, type TripTypeValue } from "@/schemas/trip-type";
 
 /** Destination label used when a product's deliveries span multiple sites. */
 const CUSTOMER_SITES_LABEL = "Customer sites";
@@ -39,7 +40,7 @@ export interface DeriveTransportLegInput {
   origin: TransportPartyRef | null;
   /** Destination partner (feedstock: facility). */
   destination: TransportPartyRef | null;
-  /** Vehicle supplies the vehicle type (maps to the Isometric component EF). */
+  /** Vehicle supplies type and model year for the Transportation module records. */
   vehicle: { vehicleType?: string | null; modelYear?: number | null } | null;
   /** Cargo mass moved on the leg (Eq. 3, W_j), kg. */
   loadMassKg?: number | null;
@@ -51,12 +52,6 @@ export interface DeriveTransportLegInput {
   distanceKmOverride?: number | null;
   /** Provenance of the override; an override without one was hand-typed. */
   distanceSourceOverride?: DistanceSourceValue | null;
-  /**
-   * Round-trip vs one-way accounting (issue #316). Omitted / null defaults to
-   * `return` — the conservative protocol default. The stored distance stays
-   * one-way; the ×2 is applied downstream at mass-distance aggregation.
-   */
-  tripType?: TripTypeValue | null;
 }
 
 export interface DerivedTransportLeg {
@@ -76,8 +71,6 @@ export interface DerivedTransportLeg {
   vehicleType: string | null;
   modelYear: number | null;
   loadMassKg: number | null;
-  /** Round-trip vs one-way accounting; drives the ×2 at aggregation (#316). */
-  tripType: TripTypeValue;
   /** Inputs missing for a complete, persistable leg. */
   missing: string[];
 }
@@ -130,7 +123,6 @@ export function deriveTransportLeg(
     vehicleType: vehicle?.vehicleType ?? null,
     modelYear: vehicle?.modelYear ?? null,
     loadMassKg: loadMass,
-    tripType: input.tripType ?? DEFAULT_TRIP_TYPE,
     missing,
   };
 }
@@ -156,8 +148,31 @@ export interface DistributionLegRow {
   locationName: string | null;
   locationGpsLatitude: number | null;
   locationGpsLongitude: number | null;
-  /** Round-trip vs one-way accounting for this delivery (issue #316). */
-  tripType?: TripTypeValue | null;
+}
+
+/** Resolve a delivery's route before aggregating or attributing its load. */
+export function resolveDeliveryTransportRoute(input: {
+  distanceKmOverride: number | null;
+  distanceSource: DistanceSourceValue | null;
+  location: (TransportPartyRef & {
+    distanceKm: number | null;
+    distanceSource: DistanceSourceValue | null;
+  }) | null;
+}): Omit<DistributionLegRow, "loadMassKg"> {
+  const { location } = input;
+  const override = positiveOrNull(input.distanceKmOverride);
+  return {
+    distanceKm: override ?? location?.distanceKm ?? null,
+    // A delivery can document the stored route without overriding its distance.
+    distanceSource: input.distanceSource === "document"
+      ? "document"
+      : override != null
+        ? (input.distanceSource ?? "manual")
+        : (location?.distanceSource ?? null),
+    locationName: location?.name ?? null,
+    locationGpsLatitude: location?.gpsLatitude ?? null,
+    locationGpsLongitude: location?.gpsLongitude ?? null,
+  };
 }
 
 export interface AggregatedDistributionLeg {
@@ -175,14 +190,6 @@ export interface AggregatedDistributionLeg {
   destinationName: string | null;
   destinationGpsLatitude: number | null;
   destinationGpsLongitude: number | null;
-  /**
-   * Collapsed trip type for the single aggregated leg. Conservative: `return`
-   * if ANY qualifying delivery is a round trip, else `one_way`. Empty → the
-   * `return` default (issue #316). One leg can carry only one trip type, so the
-   * safer (higher-emission) treatment wins, mirroring how distanceSource takes
-   * the weakest contributor.
-   */
-  tripType: TripTypeValue;
 }
 
 /**
@@ -199,9 +206,6 @@ export function aggregateDistributionLegs(
   let totalMassKg = 0;
   let weightedDistanceSum = 0;
   let weakestSourceRank = Infinity;
-  // Conservative collapse: any qualifying round-trip delivery makes the whole
-  // aggregated leg a round trip (a null/unset tripType counts as `return`).
-  let anyReturn = false;
   const names = new Set<string>();
   // GPS observed per destination name: a coordinate pair, or `null` once two
   // rows report *differing* coords for the same name. We can't honestly report
@@ -216,7 +220,6 @@ export function aggregateDistributionLegs(
     totalMassKg += mass;
     weightedDistanceSum += mass * distance;
     weakestSourceRank = Math.min(weakestSourceRank, distanceSourceRank(row.distanceSource));
-    if (row.tripType !== "one_way") anyReturn = true;
     if (row.locationName) {
       names.add(row.locationName);
       // Only record GPS when this row actually carries coordinates, so a row
@@ -251,8 +254,5 @@ export function aggregateDistributionLegs(
         : null,
     destinationGpsLatitude: singleGps ? singleGps.lat : null,
     destinationGpsLongitude: singleGps ? singleGps.lng : null,
-    // No qualifying delivery → `return` default (conservative); nothing is
-    // aggregated so the trip type is moot, but stays consistent with the default.
-    tripType: anyReturn || totalMassKg === 0 ? "return" : "one_way",
   };
 }

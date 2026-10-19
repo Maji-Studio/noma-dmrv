@@ -29,7 +29,7 @@ import {
 } from "./form-spine";
 
 interface FormSectionProps {
-  title: React.ReactNode;
+  title?: React.ReactNode;
   children: React.ReactNode;
   /** Hairline divider above the section (default) — first section disables it. Ignored inside a FormSpine. */
   divider?: boolean;
@@ -68,7 +68,7 @@ export function FormSection({
 }: FormSectionProps) {
   const spine = useSpineContext();
 
-  const label = (
+  const label = title != null ? (
     <SectionLabel
       hint={hint}
       certifyRequired={certifyRequired}
@@ -77,9 +77,9 @@ export function FormSection({
     >
       {title}
     </SectionLabel>
-  );
+  ) : null;
   const labelRow = actions ? (
-    <div className="flex items-center justify-between gap-16">
+    <div className={cn("flex items-center gap-16", label ? "justify-between" : "justify-end")}>
       {label}
       {actions}
     </div>
@@ -115,6 +115,7 @@ export function FormSection({
   // Standalone (no spine): the original section grammar, unchanged.
   return (
     <section
+      data-form-section
       className={cn(
         "space-y-16",
         divider && "border-t border-[var(--color-border-tertiary)] pt-16",

@@ -86,22 +86,27 @@ retired questions do not belong in this file.
   `src/data-access/certifier-removal-deletion.ts:finalizeRemovalDeletion` is
   the natural carrier.
 
-### Template component → dmrv source mapping is hardcoded by display name (`certification/template-component-source-wizard`, opened 2026-07-04)
+### Template component source assignments (`certification/template-component-source-wizard`)
 
-- **Decision needed** — where should the "this template component carries this
-  dmrv aggregated source" mapping live? Today it's the code constant
-  `PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT`
-  (`src/lib/isometric/transformers/datapoint.ts`), keyed by component **display
-  name** because Certify exposes no stable per-component key. Full rationale is
-  in the code comment above that constant — do not restate it here.
-- **Why it matters** — a display-name rename in the Isometric UI fails closed
-  with a `SafeError` (can't mis-submit) but blocks the submit until code catches
-  up, coupling the registry template to a deploy no operator can do.
-- **To resolve** — a facility-configurable component→source mapping (persisted
-  on the certifier mapping row) plus an assignment wizard in facility settings;
-  the constant becomes the seed/default. Scope it when a second multi-component
-  `(group, blueprint, input)` triple appears — today only the pyrolysis
-  generator/startup diesel split collides. Structural umbrella: **#291**.
+PR #1067 resolves runtime display-name binding: observations persist contracts
+by component ID, bootstrap the three known templates and carry surviving IDs
+forward. Owner/Admin assignment is limited to proposed, unassigned or invalid
+lines inside the change review. A general binding editor (#894) stays closed.
+The remaining #893 work is to include observation identity and contracts in
+immutable submission snapshots and draft recompilation checks (plan §4.5, PR 4).
+Entry-only period-input lines now block coverage in every environment until
+entries compile. Only the datapoint-builder stub plumbing remains, to be removed
+when entries compile (plan §4.5). Sample transport legs still feed the known
+bootstrap sample lines that have an automatic source. Retire those legs and
+replace their contributions with per-line entries in the app, API and MCP
+when entries compile (plan §4.5).
+
+### Fixed datapoint deprecation signal (`isometric/fixed-datapoint-deprecation`)
+
+Isometric REST reports no deprecation flag for fixed datapoints. Enrichment
+records `deprecated: null`, so the plan §4.1 deprecated-factor readiness advisory
+cannot fire yet. Confirm an authoritative registry signal before implementing
+the advisory. Deprecation is non-blocking; missing enrichment still blocks.
 
 ### Replacement 1,000-year component confirmation and template migration (`certification/fdurable-1000-r0-semantics`, opened 2026-07-03; updated 2026-08-13)
 
@@ -168,8 +173,9 @@ the input binding and one unit transform remain unconfirmed.
 - **H/C unit transform — needs-registry-check.** The 200-year blueprint declares
   `h_c_molar_ratios` in `%` while samples store a dimensionless molar ratio
   (~0.5); `toHcMolarRatioPercent`
-  (`src/lib/isometric/transformers/measurement-sample.ts`) applies ×100 as the
-  most likely transform. The Certify measurement-samples reference lists H:C as
+  (`src/lib/isometric/transformers/measurement-sample.ts`) applies the ×100
+  `RATIO_TO_PERCENT` transform that the 200-year storage entry declares
+  (`src/lib/isometric/storage-blueprints.ts`) as the most likely transform. The Certify measurement-samples reference lists H:C as
   `DIMENSIONLESS_RATIO` / `HYDROGEN_TO_ORGANIC_CARBON_RATIO`, which may make the
   ×100 wrong. Verify the live template's blueprint input unit before adding the
   200-year explicit binding.
@@ -275,7 +281,7 @@ itself is **built and enforced** — see the invariants section,
 "user X may access facility Y" check *inside* an org.
 
 - **Current authorization:** irreversible Isometric writes require organization
-  Admin role: Removal submit, telemetry submit, GHG Statement create/submit,
+  Admin role: Removal submit, GHG Statement create/submit,
   Source mirror, report prepare/approve, and mapping changes. The local
   `createRemovalWithBatchesAction` grouping step is facility/org-scoped but is
   not Admin-only because it creates no remote registry resource.
@@ -307,7 +313,7 @@ itself is **built and enforced** — see the invariants section,
   negative tests in `tests/documents-authz.test.ts` against the scoped helper.
 - **Resolve via:** build a real `requireFacilityAccess(ctx, facilityId)` first
   (do not wire calls to a missing helper), then gate every
-  removal/statement/telemetry/mapping accessor on the *resolved*
+  removal/statement/mapping accessor on the *resolved*
   facility, preserve the Admin requirement for remote writes, and audit all `localEntityId`
   accessors in `certifier_sync_events` for the same shape. Also swap
   `resolveEntityFacility` (`src/data-access/transport-legs.ts` — the polymorphic
@@ -336,31 +342,61 @@ itself is **built and enforced** — see the invariants section,
 
 ### Transport-leg compliance follow-ups (opened 2026-05-13)
 
+- **Bound road factor covers the lightest vehicle**
+  (`isometric/transport-fleet-factor-coverage`, `needs-registry-check`).
+  - **Tracking issue:** [#1017](https://github.com/Maji-Studio/noma-dmrv/issues/1017).
+  - **Anchor:** `src/lib/isometric/utils/aggregation.ts:transportVehicleAdvisories`.
+  - **Open condition:** the template's bound road factor must cover the lightest
+    vehicle actually used, which has the highest emissions per tonne-km.
+    Mixed vehicle types are advisory only; fleet records do not establish GVW
+    classes or prove coverage. See the [#961 factor findings](https://github.com/Maji-Studio/noma-dmrv/issues/961#issuecomment-6171802000).
+  - **Resolve via:** confirm the fleet GVW classes for each transport category
+    and the active template's bound GLEC row with the operator and registry.
+    If needed, rebind `carbon_intensity` to the lightest class's GLEC row and
+    document the exact row in its Source.
+
+- **Vehicle snapshots after submitted lineage is released**
+  (`isometric/transport-released-lineage-snapshots`, **deferred**).
+  - **Anchor:** `src/data-access/vehicles.ts:updateVehicleOnce`.
+  - **Gap:** type and model-year edits skip feedstock legs in submitted
+    lineage. If that lineage later becomes rejected or superseded and is
+    regrouped, the derived legs can retain the old type and model year.
+    Rebuilding submission inputs reads those stored legs; it does not refresh
+    them from the fleet record.
+  - **Resolve via:** a dedicated lifecycle change that refreshes member
+    feedstocks with `src/data-access/transport-legs.ts:syncFeedstockTransportLeg`
+    only after checking that no other submitted lineage still holds them.
+    Preserve the feedstock/artifact/vehicle lock order and test an edit while
+    submitted followed by release/regroup for both fields. There is no common
+    refresh hook today: `rejectDraftSubmission` and
+    `retireStaleSubmissionDraft` only transition drafts, while
+    `createRemovalWithCreditBatches` assigns application slices without rebuilding legs.
+
 - **Per-leg evidence model deferred** (`isometric/transport-v1.1-evidence`).
   - Isometric Transportation v1.1 §6 + Appendix 1 require: emission-factor
     source citation, factor vintage by mode (road ≤3 y, ship/air ≤5 y,
-    rail/pipeline ≤7 y), round-trip vs. onward-leg evidence, distance-method
-    fallback justification (§3.1 "appropriately evidenced"), weigh-scale
+    rail/pipeline ≤7 y), round-trip vs. onward-leg evidence, weigh-scale
     calibration record, vehicle class/model year.
-  - **Current state** (`src/db/schema/logistics.ts`): `tripType` **exists**
-    (`'return'` default, ×2 multiplier — see the invariants section), as do
-    `billOfLading` and `weighScaleTicketRef`. There is **no**
+  - **Current state** (`src/db/schema/logistics.ts`): every leg counts its
+    round trip (×2 of the stored one-way distance, no trip type since issue
+    #852; see the invariants section in `open-questions.md`), and
+    transport evidence is retained as uploaded documents (bill of lading,
+    weigh-scale ticket). There is **no**
     `emissionFactorSource` column anywhere in the schema, and none for factor
-    vintage, onward destination, or fallback evidence. Form text mentions §3.2
+    vintage or onward destination. Form text mentions §3.2
     but validators do not enforce.
   - **Resolve via:** a dedicated PR with a Drizzle migration adding the columns,
     condition-registry rules
     ([`docs/isometric/condition-registry.md`](./isometric/condition-registry.md)),
     refreshed [`docs/isometric/schema-mapping.md`](./isometric/schema-mapping.md)
-    rows 30–32, and three new entries on
+    transportation row, and the remaining entries on
     [`docs/isometric/p0-compliance-checklist.md`](./isometric/p0-compliance-checklist.md)
-    (P0-16 method-hierarchy + fallback evidence, P0-17 per-leg round-trip
-    default, P0-18 factor vintage by mode).
+    (P0-17 per-leg round-trip default, P0-18 factor vintage by mode).
 
 - **Mixed-mode transport** (`isometric/transport-mixed-mode`) — **deferred.** One
     `mass_distance` component carries one emission factor, so rail/ship legs
     (different EF) cannot be summed into a road tonne·km scalar — today they
-    trip the mixed-factor warning and block submission. Supporting them needs
+    hit the "different transport modes" blocker when combined with road legs. Supporting them needs
     per-mode component instances. Out of scope while the transport UI is
     road-only; re-raise when a non-road mode is enterable.
 
@@ -383,10 +419,7 @@ itself is **built and enforced** — see the invariants section,
 
 ### Phase 5 Slice B / C deferrals (opened 2026-05-29)
 
-Scoped out of the Phase 5 Slice A design (biochar reactor time-series via
-Parquet — [ADR 0006](./adr/0006-data-upload-submission-idempotency.md)). The
-Slice A server pipeline exists but its UI is dark. Each item below is
-independently shippable when its upstream primitives and operator demand exist.
+The independent items below require operator demand and registry confirmation.
 
 - **Deleted Storage Location recovery** (`isometric/storage-location-recovery`).
   If an already-journaled remote Storage Location returns 404, noma marks its
@@ -396,13 +429,9 @@ independently shippable when its upstream primitives and operator demand exist.
 
 - **Slice C — `MonitoringSubmission`** (`isometric/phase-5-slice-c`).
   `POST /projects/{project_id}/monitoring_requirements/{id}/submissions` —
-  structured-by-requirement submissions, parallel to the bulk Parquet path.
-  Deferred because it overlaps Slice A's purpose; without operator demand we
-  don't know which is the canonical home for which protocol-mandated
-  measurement. **Resolve via:** ask Isometric directly whether reactor
-  temperature/pressure belongs in `MonitoringSubmission` or
-  `DataUploadSubmission`. If the former, consider whether Slice A's hourly
-  aggregator becomes a `MonitoringSubmission` feeder rather than a Parquet writer.
+  structured-by-requirement submissions. The approved MVP needs no continuous
+  reactor gas telemetry. **Resolve via:** confirm the registry monitoring
+  evidence contract if future operator demand requires a submission path.
 
 ### Isometric Certify API — no facilities LIST endpoint (`isometric/facilities-list-endpoint`, opened 2026-06-10)
 
@@ -411,11 +440,11 @@ independently shippable when its upstream primitives and operator demand exist.
   `GET /facilities`, no `GET /projects/{project_id}/facilities`, no
   `POST /facilities`. The facility id (`fcl_…`) appears only as a stored scalar
   on other resources.
-- **Why it matters:** the facility certifier mapping's "Isometric facility
-  (telemetry)" field (`externalFacilityId`) is therefore a free-text paste —
+- **Why it matters:** the facility certifier mapping's "Isometric facility"
+  field (`externalFacilityId`) is therefore a free-text paste —
   operators create the facility in the Certify UI then hand-copy the id into
-  noma (`facility-certifier-dialog.tsx`). Error-prone (typo → telemetry
-  submitted against the wrong facility), and it is the one mapping field with no
+  noma (`facility-certifier-dialog.tsx`). Error-prone (typo → production batches
+  registered against the wrong facility), and it is the one mapping field with no
   validation against a real list. Creation being UI-only is fine and
   intentional; the gap is purely the missing read.
 - **Resolve via:** when a read endpoint ships (ideally
@@ -504,10 +533,9 @@ independently shippable when its upstream primitives and operator demand exist.
 
 - **Per-column upload-URL field migration** (`storage/phase-2`). *(Misfiled — a
   storage concern sitting inside the Isometric section; move on next touch.)*
-  Four plain-text URL columns survive: `r0HistogramFileUrl` and
-  `tgaThermogramFileUrl` (`src/db/schema/production.ts`), `photoUrl` (same file,
-  `production_samples`), and `registryUrl` (`src/db/schema/feedstock.ts`).
-  (`plc_data_file_url` and `emissions.source_url` no longer exist.)
+  Two plain-text URL columns remain: `photoUrl`
+  (`src/db/schema/production.ts`, `production_samples`) and `registryUrl`
+  (`src/db/schema/feedstock.ts`).
   Phase 2 plan: add a `*_document_id` FK alongside each, backfill via UI, drop
   the URL column — routing all uploaded evidence through the single `documents`
   table (one audit trail, one storage-key convention, one visibility model, see
@@ -639,12 +667,22 @@ Three failure-path gaps, each a surprising mode before a registry write:
   either re-assert `state === "ready"` inside `createRemovalWithCreditBatches`
   after acquiring locks, or document health as a point-in-time advisory.
 
-### TelemetryPanel orphaned, reactor-telemetry submit dark (`certification/telemetry-panel-orphaned`, opened 2026-06-19)
+### Early template coverage does not validate all builder metadata (`isometric/template-binding-metadata`)
 
-- `TelemetryPanel` still exists but is not rendered anywhere, so the reactor
-  temperature/pressure → Isometric `DataUploadSubmission` path remains dark.
-  Archive:
-  [`docs/archive/2026-06-19-telemetry-panel-orphaned.md`](./archive/2026-06-19-telemetry-panel-orphaned.md).
-- **Resolve via:** re-home and barrel-export `TelemetryPanel`, then validate the
-  file-upload → signed PUT → data-upload-submission pipeline live on the sandbox
-  before re-surfacing it.
+- **Anchor**: `src/lib/isometric/template-binding-coverage.ts:findUnbindableTemplateInputs`.
+- **Known late failures**: quantity-kind or compatible-unit mismatch against the
+  blueprint, a monitored input absent from its blueprint, and a fixed input with
+  no bound Datapoint ID still fail in the builder rather than early coverage.
+- **Current handling**: the builder remains fail-closed. Facility facts have
+  `blueprintsForTemplate`, but coverage is also called from preparation and
+  compilation. Sharing the builder's metadata validation across all three paths
+  needs a separate extraction and consistent blueprint handling.
+- **To resolve**: extract that validation, pass resolved blueprints through every
+  coverage caller, and test each refusal before registry writes.
+
+### Per-project `protocolVersion`: write it or drop it (`isometric/project-protocol-version`, opened 2026-10-17)
+
+- **Anchor**: `certifier_projects.protocol_version` (`src/db/schema/certification.ts`) and `src/fn/certification/protocol-version-preflight.ts`.
+- **Current handling**: Certification → Settings shows the pinned versions from `docs/isometric/versions.json` (#1092). The column is nullable and the mapping action never sets it, so the submit preflight normally warns "missing" and records a sync event.
+- **Options**: (a) let the operator record the Certify project's protocol version per project, so the preflight can detect a mismatch; (b) drop the column and the preflight warning, since the Certify API exposes no protocol version and the pin is global.
+- **To resolve**: Kenji picks one. Not decided in #1092.

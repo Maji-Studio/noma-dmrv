@@ -4,8 +4,10 @@
  * One question drives the order: is this batch ready to become credits, and
  * what needs fixing if not? Certification progress leads, then the batch's
  * identity (mirroring the edit form's section titles), the member production
- * runs closed by the carbon estimate they produce, and notes. The interactive certification checklist and lab-sample
- * panels mount below via `viewModeChildren` because they fetch their own data.
+ * runs closed by the carbon estimate they produce, notes, and the batch's
+ * recorded activity (which fetches its own summary). The interactive
+ * certification checklist and lab-sample panels mount below via
+ * `viewModeChildren` because they fetch their own data.
  */
 import { CompositionCard, DerivedHeadline } from "@/components/forms";
 import Link from "next/link";
@@ -21,7 +23,8 @@ import { StockRows } from "@/components/storage-locations/stock-figures";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
 import { formatWetDryMass, PERCENT_SCALE } from "@/lib/mass-moisture";
 import { CreditBatchLifecycleSteps } from "./credit-batch-lifecycle";
-import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
+import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
+import { SheetLinkRow, SheetLinkRows } from "@/components/ui/sheet-link-row";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
@@ -33,6 +36,8 @@ import {
   productionRunDeepLinkHref,
 } from "@/lib/certification/links";
 import { Notice } from "@/components/ui/notice";
+import { CreditBatchActivitySection } from "@/components/activity";
+import { CreditBatchEmissionsPanel } from "./credit-batch-emissions-panel";
 
 /** Names the figure, so the headline needs no label of its own. */
 const CARBON_ESTIMATE_TITLE = "Carbon estimate, before project emissions";
@@ -264,6 +269,14 @@ interface CreditBatchSheetSectionsOptions extends CreditBatchRunsContentProps {
   /** Removal/GHG lifecycle summary; undefined while loading or unavailable. */
   healthSummary?: CreditBatchHealthSummary;
   isHealthLoading: boolean;
+  /** Owner or Admin: may switch the batch's Removal template. */
+  canManage?: boolean;
+  /** A submitted Removal holds the batch, so its definition is locked. */
+  locked?: boolean;
+  /** The deep-link focus target the sheet was opened with. */
+  activeFocusTarget?: string | null;
+  /** The server's EMISSIONS_ENTRIES_ENABLED flag; set it to mount the Emissions panel between Production runs and Notes. */
+  emissionsEntriesEnabled?: boolean;
 }
 
 export function creditBatchSheetSections({
@@ -275,8 +288,15 @@ export function creditBatchSheetSections({
   onRetryRuns,
   healthSummary,
   isHealthLoading,
+  canManage = false,
+  locked = false,
+  activeFocusTarget,
+  emissionsEntriesEnabled,
 }: CreditBatchSheetSectionsOptions): DetailPanelSection[] {
   const removalId = creditBatch.productionEmissionsClaimedByRemovalId ?? healthSummary?.removalId ?? null;
+  const removalCode = creditBatch.productionEmissionsClaimedByRemovalId
+    ? healthSummary?.productionEmissionsClaimedByRemovalCode
+    : healthSummary?.removalCode;
   const preview = creditBatch.co2eStoredPreview;
   const durabilityResult = preview?.applicationResults.find(
     (result) => result.fDurable != null,
@@ -299,12 +319,26 @@ export function creditBatchSheetSections({
                 : "Certification progress unavailable"}
             </span>
           )}
-          {removalId && <Link href={certificationRemovalsHref({ facility: creditBatch.facilityId, removal: removalId })} className="body-small underline">Production emissions included in Removal {removalId.slice(0, 8)}…</Link>}
+          {removalId && <Link href={certificationRemovalsHref({ facility: creditBatch.facilityId, removal: removalId })} className="body-small underline">{removalCode ? `Production emissions included in Removal ${removalCode}` : "Production emissions included in a Removal"}</Link>}
           {/* Anchor for the checklist's `#batch-details` fix link — sits just
               above the Batch definition section so the jump lands on top of
               those fields rather than past them. */}
           <span id="batch-details" className="scroll-mt-24" aria-hidden />
         </>
+      ),
+    },
+    {
+      // Read and switched here, never in the edit form: a switch is its own
+      // audited action with its own lock and version checks.
+      title: "Removal template",
+      fields: [],
+      content: (
+        <CreditBatchRemovalTemplate
+          creditBatch={creditBatch}
+          canManage={canManage}
+          locked={locked}
+          activeFocusTarget={activeFocusTarget}
+        />
       ),
     },
     {
@@ -320,7 +354,7 @@ export function creditBatchSheetSections({
           value: formatTonnes(creditBatch.appliedWeightTons),
         },
         ...(durabilityResult?.fDurable != null
-          ? [{ label: "Durability estimate", value: formatDurabilityPercent(durabilityResult.fDurable) }]
+          ? [{ label: "Durability estimate (capped)", value: formatDurabilityPercent(durabilityResult.fDurable) }]
           : []),
       ],
       // How the durability estimate was reached: the raw figure, the cap and
@@ -359,9 +393,34 @@ export function creditBatchSheetSections({
         </div>
       ),
     },
+    ...(emissionsEntriesEnabled === undefined
+      ? []
+      : [
+          {
+            id: "emissions",
+            fields: [],
+            content: (
+              <CreditBatchEmissionsPanel
+                creditBatchId={creditBatch.id}
+                facilityId={creditBatch.facilityId}
+                enabled={emissionsEntriesEnabled}
+              />
+            ),
+          },
+        ]),
     {
-      title: "Additional information",
+      id: "notes",
       fields: [{ label: "Notes", value: creditBatch.siteManagementNotes }],
+    },
+    {
+      title: "Activity",
+      fields: [],
+      content: (
+        <CreditBatchActivitySection
+          creditBatchId={creditBatch.id}
+          facilityId={creditBatch.facilityId}
+        />
+      ),
     },
   ];
 }

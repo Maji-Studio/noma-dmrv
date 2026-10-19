@@ -1,3 +1,4 @@
+import { RUN } from "./constants";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -10,7 +11,7 @@ async function action<T>(name: string, input: unknown, schema: { parse(input: un
   const data = schema.parse(input);
   calls.inputs.set(name, [...(calls.inputs.get(name) ?? []), data]);
   calls.sequence.push(name);
-  return { success: true as const, data: { ...data, id: randomUUID() } };
+  return { success: true as const, data: { ...data, id: randomUUID(), version: 1 } };
 }
 vi.mock("@/fn/facilities", async () => {
   const s = await import("@/schemas/facilities");
@@ -26,7 +27,12 @@ vi.mock("@/fn/suppliers", async () => {
 });
 vi.mock("@/fn/customers", async () => {
   const s = await import("@/schemas/customers");
-  return { createCustomerFn: (x: unknown) => action("customer", x, s.createCustomerSchema), createCustomerLocationFn: (x: unknown) => action("customer-location", x, s.createCustomerLocationSchema) };
+  return { createCustomerWithLocationsFn: async (x: unknown) => {
+    const parsed = s.createCustomerWithLocationsSchema.parse(x);
+    const customer = await action("customer", parsed.customer, s.createCustomerSchema);
+    const location = await action("customer-location", { ...parsed.locations[0], customerId: customer.data.id }, s.createCustomerLocationSchema);
+    return { success: true, data: { customer: customer.data, locations: [location.data] } };
+  } };
 });
 vi.mock("@/fn/feedstock-types", async () => {
   const s = await import("@/schemas/feedstock-types");
@@ -137,7 +143,7 @@ describe("Mafinga operator-action seed", () => {
     expect(calls.inputs.get("product-preview")?.[0]).toMatchObject({ massKg: 300 });
     expect(calls.inputs.get("product")?.[0]).toMatchObject({ massKg: 600, status: "testing", basisFingerprint: "live-product-basis", placedAt: "2026-09-15T07:00:00.000Z" });
     expect(calls.inputs.get("delivery")?.[0]).toMatchObject({ basisFingerprint: "live-delivery-basis", deliveredWetMassKg: 1000 });
-    expect(calls.inputs.get("run")?.[0]).toMatchObject({ status: "complete", startTime: new Date("2026-09-08T05:00:00Z"), endTime: new Date("2026-09-08T13:00:00Z") });
+    expect(calls.inputs.get("run")?.[0]).toMatchObject({ status: "complete", biocharStorageLocationId: infra.biocharBin.id, biocharMoisturePercent: RUN.biocharMoisturePercent, startTime: new Date("2026-09-08T05:00:00Z"), endTime: new Date("2026-09-08T13:00:00Z") });
     expect(calls.sequence.filter(name => ["request-upload", "upload-bytes", "confirm-upload", "import-readings"].includes(name))).toEqual(Array(3).fill(["request-upload", "upload-bytes", "confirm-upload", "import-readings"]).flat());
   });
 

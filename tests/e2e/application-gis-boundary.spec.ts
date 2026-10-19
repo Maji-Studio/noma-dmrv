@@ -55,7 +55,7 @@ const PASTE_BOUNDARY = {
   ],
 };
 
-test("adds, reads, replaces, and removes a GIS boundary", async ({
+test("adds, reads and replaces a GIS boundary, and keeps it when removal would leave GIS reference empty", async ({
   adminPage: page,
   seededData,
 }) => {
@@ -69,13 +69,7 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await waitForSideSheet(page);
   await page.locator("#orderDate").fill(today);
   await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
-  await page.waitForSelector(
-    'select[name="customerLocationId"]:not([disabled])',
-    { timeout: COLD_COMPILE_TIMEOUT_MS },
-  );
-  await page
-    .locator("#customerLocationId")
-    .selectOption(seededData.customerLocation.id);
+  await selectEntity(page, "Customer location", seededData.customerLocation.id, seededData.customerLocation.name);
   await selectEntity(
     page,
     "Formulation", seededData.formulation.id, seededData.formulation.name,
@@ -93,7 +87,7 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await page.getByRole("button", { name: "New delivery" }).click();
   await waitForSideSheet(page);
   await selectFirstEntity(page, "Order");
-  await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
+  await selectEntity(page, "Actual source bin", seededData.productStorageLocation.id, seededData.productStorageLocation.name);
   await page.locator("#deliveredWetMassKg").fill("100");
   await fillStockMoisture(page, "delivery", "10");
   await page
@@ -107,15 +101,8 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await page.getByRole("button", { name: "New application" }).click();
   await waitForSideSheet(page);
   await page.locator("#applicationDate").fill(today);
-  const deliverySelect = page.locator("#deliveryId");
-  const deliveryValue = await deliverySelect
-    .locator("option:not([value=''])")
-    .first()
-    .getAttribute("value");
-  expect(deliveryValue).not.toBeNull();
-  if (!deliveryValue) throw new Error("No delivered delivery was available");
-  await deliverySelect.selectOption(deliveryValue);
-  await page.locator("#biocharAppliedTons").fill("50");
+  await selectFirstEntity(page, "Delivery");
+  await page.locator("#biocharAppliedKg").fill("50");
   await page.locator("#fieldSizeHa").fill("2");
   await page.locator("#fieldIdentifier").fill(fieldIdentifier);
 
@@ -148,10 +135,10 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await waitForSideSheetClose(page);
 
   await page.getByLabel("Search applications").fill(fieldIdentifier);
-  await expect(page.locator("table tbody tr[tabindex='0']")).toHaveCount(1, {
+  await expect(page.locator("table tbody tr").filter({ has: page.locator("[data-row-link]") })).toHaveCount(1, {
     timeout: COLD_COMPILE_TIMEOUT_MS,
   });
-  const applicationRow = page.locator("table tbody tr[tabindex='0']").first();
+  const applicationRow = page.locator("table tbody tr").filter({ has: page.locator("[data-row-link]") }).first();
   await applicationRow.click();
   await waitForSideSheet(page);
   // The saved panel prints the file name twice: once as the reference summary's
@@ -183,18 +170,20 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await expect(page.getByText("Pasted GeoJSON")).toBeVisible({
     timeout: COLD_COMPILE_TIMEOUT_MS,
   });
+  // Q79: the GIS reference method needs a boundary, so removing it cannot be saved.
   await page.getByRole("button", { name: "Edit application" }).click();
   await page.getByRole("button", { name: "Remove" }).click();
   await page
     .locator('[role="dialog"]')
     .getByRole("button", { name: "Update application" })
     .click();
-  await waitForSideSheetClose(page);
+  await expect(page.getByText("Add a boundary file, or choose Customer location.")).toBeVisible();
+  await expect(page.locator('[role="dialog"]')).toBeVisible();
 
-  await applicationRow.click();
+  // The sheet reopens from the URL in view mode, showing the stored boundary.
+  await page.reload();
   await waitForSideSheet(page);
-  await expect(page.getByText("No GIS reference")).toBeVisible({
+  await expect(page.getByText("Pasted GeoJSON")).toBeVisible({
     timeout: COLD_COMPILE_TIMEOUT_MS,
   });
-  await expect(page.getByText("Choose Edit to add the field boundary.")).toBeVisible();
 });

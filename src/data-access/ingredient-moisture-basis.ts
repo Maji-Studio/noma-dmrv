@@ -1,8 +1,9 @@
+import { deletedProductIds } from './output-stock-active-movements';
 import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, facilities, feedstocks, productionRunFeedstockDraws, productionRuns } from '@/db/schema';
 import { GRAMS_PER_KILOGRAM, toPersistedMassGrams } from '@/lib/biochar-composition/composition';
 import type { OrgContext } from '@/lib/auth/server';
-import { and, eq, isNull, lte, ne, sql } from 'drizzle-orm';
+import { notInArray, and, eq, isNull, lte, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { STORED_PERCENT_INPUT_STEP } from '@/schemas/helpers';
 import { requireOrgScope } from './utils';
@@ -21,7 +22,7 @@ export async function getIngredientStockBasis(ctx: OrgContext, storageLocationId
       eq(feedstocks.status, 'complete'), isNull(feedstocks.archivedAt),
       at ? sql`${feedstocks.deliveryDate}::date <= (${at.toISOString()}::timestamptz at time zone ${facilities.timezone})::date` : undefined));
   const products = await reader.select({ composition: biocharProducts.composition }).from(biocharProducts)
-    .where(and(eq(biocharProducts.organizationId, ctx.organizationId), excludeProductId ? ne(biocharProducts.id, excludeProductId) : undefined,
+    .where(and(eq(biocharProducts.organizationId, ctx.organizationId), notInArray(biocharProducts.id, deletedProductIds(ctx, reader)), excludeProductId ? ne(biocharProducts.id, excludeProductId) : undefined,
       at ? lte(biocharProducts.placedAt, at) : undefined,
       sql`${biocharProducts.composition}->'ingredients' @> ${JSON.stringify([{ storageLocationId }])}::jsonb`));
   const draws = await reader.select({ wet: productionRunFeedstockDraws.wetMassKg })

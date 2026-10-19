@@ -16,12 +16,13 @@ import * as React from "react";
 import { FormDetailProvider, FormDetailControl } from "@/components/forms/form-detail-context";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
+import { DiscardChangesDialog } from "@/components/ui/discard-changes-dialog";
 import {
   DetailSpine,
   type DetailPanelSection,
 } from "@/components/ui/detail-panel";
 import { SideSheetActionsContext } from "./side-sheet-context";
+import { SubmitBlockContext, type SubmitBlock } from "@/components/ui/submit-block-context";
 
 /* -------------------------------------------------------------------------------------------------
  * Back Arrow Icon
@@ -73,6 +74,16 @@ interface EntitySideSheetProps {
   title: string;
   /** Optional subtitle (entity name or helper text) */
   subtitle?: string;
+  /** A chip beside the title in view and edit mode (the record lock chip). */
+  titleBadge?: React.ReactNode;
+  /** Edit-mode banner above the form (the record lock line). */
+  editNotice?: React.ReactNode;
+  /**
+   * Edit mode: why the form cannot save. Save turns off with the reason
+   * beside it; a `readOnly` block also disables every field and offers only
+   * the way back. The draft stays in both cases.
+   */
+  submitBlock?: SubmitBlock | null;
   /** View-mode section config — rendered as read-only detail fields */
   sections?: DetailPanelSection[];
   /** Mirror a paired edit form's FormSpine numbering in read mode. */
@@ -88,6 +99,11 @@ interface EntitySideSheetProps {
    * the fields and the CTA.
    */
   viewModeChildren?: React.ReactNode;
+  /**
+   * View-mode banner rendered before the sections, so a state that changes how
+   * the whole record reads (for example "archived") is seen first.
+   */
+  viewModeNotice?: React.ReactNode;
   /** Label for the Edit button shown in view-mode footer */
   editLabel?: string;
   /** Whether the view-mode footer exposes the edit action. */
@@ -112,15 +128,20 @@ function EntitySideSheet({
   onModeChange,
   title,
   subtitle,
+  titleBadge,
+  editNotice,
+  submitBlock,
   sections,
   numberedSections = false,
   viewModeChildren,
+  viewModeNotice,
   editLabel = "Edit",
   canEdit = true,
   children,
   size = "wide",
 }: EntitySideSheetProps) {
   const isViewMode = mode === "view";
+  const editBlock = mode === "edit" ? submitBlock ?? null : null;
 
   const bodyRef = React.useRef<HTMLDivElement>(null);
   // Dirty tracking is two sources OR-ed together: a native input/change
@@ -134,7 +155,6 @@ function EntitySideSheet({
   const [pendingDiscard, setPendingDiscard] = React.useState<
     "close" | "view" | null
   >(null);
-  const discardTitleId = React.useId();
 
   // Imperative scrollport work (sanctioned useEffect): the body element
   // persists across view -> edit, so without a reset the edit form inherits
@@ -228,7 +248,10 @@ function EntitySideSheet({
               </Button>
             )}
             <div className="flex flex-col gap-4 min-w-0">
-              <SlideOverPanel.Title>{title}</SlideOverPanel.Title>
+              <div className="flex min-w-0 flex-wrap items-center gap-8">
+                <SlideOverPanel.Title>{title}</SlideOverPanel.Title>
+                {mode !== "create" && titleBadge}
+              </div>
               {subtitle && (
                 <SlideOverPanel.Description className={showDetailToggle ? "truncate" : undefined}>
                   {subtitle}
@@ -249,6 +272,7 @@ function EntitySideSheet({
         >
           {isViewMode ? (
             <>
+              {viewModeNotice}
               {sections && (
                 <EntitySideSheetSections
                   sections={sections}
@@ -259,10 +283,25 @@ function EntitySideSheet({
             </>
           ) : (
             <SideSheetActionsContext.Provider value={sheetActions}>
-              {children}
+              <SubmitBlockContext.Provider value={editBlock}>
+                {mode === "edit" && editNotice ? (
+                  <div className="flex flex-col gap-12 pb-20">{editNotice}</div>
+                ) : null}
+                {/* Always mounted, so turning read-only never remounts the form. */}
+                <fieldset disabled={!!editBlock?.readOnly} className="contents" data-submit-block-fieldset>{children}</fieldset>
+              </SubmitBlockContext.Provider>
             </SideSheetActionsContext.Provider>
           )}
         </SlideOverPanel.Body>
+
+        {/* A read-only edit form hides its own actions; the way back stays. */}
+        {mode === "edit" && editBlock?.readOnly && (
+          <SlideOverPanel.Footer className="justify-stretch">
+            <Button variant="default" className="flex-1" onClick={backToView}>
+              Back to view
+            </Button>
+          </SlideOverPanel.Footer>
+        )}
 
         {/* Footer — only in view mode */}
         {isViewMode && (
@@ -286,36 +325,15 @@ function EntitySideSheet({
 
         {/* Unsaved-changes guard: Escape, backdrop, close icon, Cancel and the
             back arrow all funnel here instead of discarding typed work. */}
-        <Modal
+        <DiscardChangesDialog
           isOpen={pendingDiscard !== null}
           onClose={() => setPendingDiscard(null)}
-          ariaLabelledBy={discardTitleId}
-          width="sm"
-        >
-          <div className="flex flex-col gap-16">
-            <h2 id={discardTitleId} className="title-heading-4">
-              Discard unsaved changes?
-            </h2>
-            <p className="body-small text-[var(--color-text-secondary)]">
-              This form has changes that are not saved.
-            </p>
-            <div className="flex items-center justify-start gap-16">
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  const action = pendingDiscard;
-                  setPendingDiscard(null);
-                  if (action) confirmDiscard(action);
-                }}
-              >
-                Discard changes
-              </Button>
-              <Button variant="default" onClick={() => setPendingDiscard(null)}>
-                Keep editing
-              </Button>
-            </div>
-          </div>
-        </Modal>
+          onDiscard={() => {
+            const action = pendingDiscard;
+            setPendingDiscard(null);
+            if (action) confirmDiscard(action);
+          }}
+        />
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>
     </FormDetailProvider>

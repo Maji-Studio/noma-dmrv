@@ -28,6 +28,12 @@ application becomes the **drill-down** scope, preserving today's views
 unchanged; a dual header selector (batch *or* application) keeps
 unbatched applications reachable.
 
+**Amendment (2026-09-30).** The roll-up also merges one **roll-forward**
+per member run (GLOSSARY.md), so a batch with no application yet still
+shows feedstock → run → product → delivery. The anchor stays the credit
+batch; the forward resolver below now exists, but only fills in records
+the rollbacks lack.
+
 ## Considered options
 
 - **Production-run anchor** — the operator's unit of work, traced
@@ -46,7 +52,7 @@ unbatched applications reachable.
   runs feed this batch."
 - Views split by scale: batch level gets aggregate readings (merged DAG,
   transit map, **mass balance** Sankey); application level keeps the
-  linear readings (DAG, map, split, **Trail**). See CONTEXT.md →
+  linear readings (DAG, map, split, **Trail**). See GLOSSARY.md →
   Provenance & lineage for the canonical terms.
 - The application-first sections of `docs/traceability.md` and
   CLAUDE.md must be updated when the re-anchor ships (Phase 3), not

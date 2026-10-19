@@ -1,4 +1,7 @@
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
+import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed concurrency tests for DB-enforced sample_code uniqueness
  * (issue #395). The `samples_sample_code_unique` index is the sole
@@ -16,7 +19,7 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { facilities, reactors } from "@/db/schema/facilities";
+import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import { feedstockTypes, feedstocks } from "@/db/schema/feedstock";
 import {
   productionRuns,
@@ -77,7 +80,7 @@ beforeAll(async () => {
 
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Sample-Code Facility ${suffix}`,
       code: `FAC-SC-${suffix}`,
@@ -101,6 +104,7 @@ beforeAll(async () => {
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Sample-Code Woodchips ${suffix}`,
       code: `FT-SC-${suffix}`,
@@ -111,16 +115,17 @@ beforeAll(async () => {
 
   const [feedstock] = await db
     .insert(feedstocks)
-    .values({
+    .values(await feedstockFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `FS-SC-${suffix}`,
       facilityId: facility.id,
       feedstockTypeId: feedstockType.id,
       massDryKg: 9000,
-    })
+    }))
     .returning({ id: feedstocks.id });
   createdIds.feedstocks.push(feedstock.id);
 
+  const outputBinId = await createProductionRunOutputBin(TEST_ORG_ID, facility.id);
   const [run] = await db
     .insert(productionRuns)
     .values({
@@ -131,7 +136,8 @@ beforeAll(async () => {
       reactorId: reactor.id,
       startTime: new Date("2025-06-10T08:00:00Z"),
       endTime: new Date("2025-06-10T12:00:00Z"),
-      biocharDryMassKg: 4000,
+      biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
+      biocharOutputKg: 4000, biocharDryMassKg: 4000,
     })
     .returning({ id: productionRuns.id });
   createdIds.productionRuns.push(run.id);
@@ -149,8 +155,6 @@ beforeAll(async () => {
     productionRunIds: [run.id],
     startDate: new Date("2025-06-01"),
     endDate: new Date("2025-06-30"),
-    hToCorgRatio: 0.4,
-    currency: "TZS",
     feedstockTypeId: feedstockType.id,
   });
   batchId = batch.id;
@@ -192,8 +196,10 @@ afterAll(async () => {
       await tx
         .delete(feedstocks)
         .where(inArray(feedstocks.id, createdIds.feedstocks));
+      await cleanupFeedstockFixtureParents(tx);
     }
     if (createdIds.facilities.length > 0) {
+      await tx.delete(storageLocations).where(inArray(storageLocations.facilityId, createdIds.facilities));
       await tx
         .delete(productionProcesses)
         .where(inArray(productionProcesses.facilityId, createdIds.facilities));
@@ -210,6 +216,7 @@ afterAll(async () => {
         .where(inArray(feedstockTypes.id, createdIds.feedstockTypes));
     }
   });
+  await cleanupFeedstockFixtureParents(db);
 });
 
 
@@ -257,7 +264,7 @@ describe("updateSample reconciles carbon against the stored state (QA 2026-07-20
     const { id } = await createConcurrentSample(undefined);
 
     await expect(
-      updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+      updateSample(makeTestOrgContext(TEST_USER_ID), id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", id),
         organicCarbonPercent: 95,
       }),
     ).rejects.toThrow(/Organic carbon cannot exceed total carbon/);
@@ -271,7 +278,7 @@ describe("updateSample reconciles carbon against the stored state (QA 2026-07-20
     // semantics that must still fall back to the stored total.
     const { id } = await createConcurrentSample(undefined);
     await expect(
-      updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+      updateSample(makeTestOrgContext(TEST_USER_ID), id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", id),
         totalCarbonPercent: undefined,
         organicCarbonPercent: 95,
         inorganicCarbonPercent: undefined,
@@ -282,7 +289,7 @@ describe("updateSample reconciles carbon against the stored state (QA 2026-07-20
   it("accepts a partial update that stays reconciled with the stored total", async () => {
     const { id } = await createConcurrentSample(undefined);
 
-    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", id),
       organicCarbonPercent: 75,
     });
     expect(updated.organicCarbonPercent).toBe(75);
@@ -296,7 +303,7 @@ describe("updateSample reconciles carbon against the stored state (QA 2026-07-20
     const { id } = await createConcurrentSample(undefined);
 
     await expect(
-      updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+      updateSample(makeTestOrgContext(TEST_USER_ID), id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", id),
         inorganicCarbonPercent: 5,
       }),
     ).rejects.toThrow(
@@ -307,7 +314,7 @@ describe("updateSample reconciles carbon against the stored state (QA 2026-07-20
   it("accepts an explicit null inorganic patch (the null short-circuit)", async () => {
     const { id } = await createConcurrentSample(undefined);
 
-    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", id),
       inorganicCarbonPercent: null,
     });
     expect(updated.inorganicCarbonPercent).toBeNull();
