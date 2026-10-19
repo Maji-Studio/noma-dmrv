@@ -89,3 +89,38 @@ it.each(["sent", "inUse"] as const)("names holders and gives release guidance fo
   });
   expect(message).toBe("Cannot edit this record. Held by production run RUN-42. Correct the production run first.");
 });
+
+it("words the In use refusal for one holder or several, and keeps custom sentences", async () => {
+  const { withRecordLockGuidance, inUseHowToFree, IN_USE_HOW_TO_FREE } = await import("./record-lock");
+  const holder = (id: string) => ({ kind: "delivery", id, label: id });
+  const lock = (heldBy: ReturnType<typeof holder>[], howToFree: string) => ({ level: "inUse" as const, heldBy, freeFields: [], howToFree });
+  expect(withRecordLockGuidance("No.", lock([holder("DL-1")], IN_USE_HOW_TO_FREE)))
+    .toBe("No. Held by delivery DL-1. To change this, first correct or remove the record that uses it.");
+  expect(withRecordLockGuidance("No.", lock([holder("DL-1"), holder("DL-2")], IN_USE_HOW_TO_FREE)))
+    .toBe("No. Held by delivery DL-1, delivery DL-2. To change this, first correct or remove the records that use it.");
+  expect(withRecordLockGuidance("No.", lock([holder("DL-1")], "Custom."))).toBe("No. Held by delivery DL-1. Custom.");
+  expect(inUseHowToFree("notice", 1)).toBe("To change them, first correct or remove that record.");
+  expect(inUseHowToFree("notice", 3)).toBe(IN_USE_HOW_TO_FREE);
+});
+
+describe("returned Removals", () => {
+  const returned = (submittedAt: string) => ({ id: "removal", submissions: [{ status: "submitted", externalId: "entry", submittedAt }], statements: [{
+    id: "statement", status: "FAILED_VERIFICATION", fresh: true, submittedToVerifier: true, returnedAt: "2026-10-02T00:00:00Z", removalExternalIds: ["entry"],
+  }] });
+
+  it("names the returned Removal and its statement once Sent is lifted", () => {
+    expect(recordLocks.productionRun({ dependents: [], removals: [returned("2026-10-01T00:00:00Z")] })).toMatchObject({
+      level: "open", returnedBy: [{ removalId: "removal", statements: [{ id: "statement", status: "FAILED_VERIFICATION" }] }],
+    });
+  });
+
+  it("is not returned when an attempt is newer than the return, which keeps it Sent", () => {
+    const lock = recordLocks.productionRun({ dependents: [], removals: [returned("2026-10-03T00:00:00Z")] });
+    expect(lock.level).toBe("sent");
+    expect(lock.returnedBy).toBeUndefined();
+  });
+
+  it("is not returned when nothing ever reached Isometric", () => {
+    expect(recordLocks.productionRun({ dependents: [], removals: [{ id: "removal", submissions: [{ status: "rejected" }], statements: [] }] }).returnedBy).toBeUndefined();
+  });
+});

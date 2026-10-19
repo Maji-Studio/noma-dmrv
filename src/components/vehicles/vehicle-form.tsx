@@ -1,6 +1,5 @@
 "use client";
 
-import { MODEL_YEAR_MIN, MODEL_YEAR_MAX } from "@/schemas/model-year";
 
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,6 +16,10 @@ import {
   type VehicleFormData,
 } from "@/schemas/vehicles";
 import type { Vehicle } from "@/db/schema/logistics";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(vehicleFormSchema);
 
 interface VehicleFormProps {
   vehicle?: Vehicle;
@@ -135,9 +138,7 @@ export function VehicleForm({
             <FormInput
               id="fuelConsumptionLPer100Km"
               type="number"
-              step="any"
-              min="0.1"
-              max="1000"
+              {...numberBounds("fuelConsumptionLPer100Km")}
               placeholder="e.g., 30"
               disabled={isSubmitting}
               error={!!errors.fuelConsumptionLPer100Km}
@@ -154,9 +155,7 @@ export function VehicleForm({
           <FormInput
             id="modelYear"
             type="number"
-            min={MODEL_YEAR_MIN}
-            max={MODEL_YEAR_MAX}
-            step="1"
+            {...numberBounds("modelYear")}
             placeholder="e.g., 2020"
             disabled={isSubmitting}
             error={!!errors.modelYear}

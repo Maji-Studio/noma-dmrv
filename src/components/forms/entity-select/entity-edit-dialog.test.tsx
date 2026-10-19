@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   load: vi.fn(), update: vi.fn(), toast: vi.fn(), restore: vi.fn(), restoreSupplier: vi.fn(), restoreCustomer: vi.fn(), success: vi.fn(),
 }));
 vi.mock("@/hooks/use-entity-edit-record", () => ({ useEntityEditRecord: (...args: unknown[]) => { mocks.load(...args); return mocks.query; } }));
+vi.mock("@/hooks/use-record-locks", async () => (await import("../../../../tests/helpers/record-lock-mocks")).openRecordLocksModule);
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: mocks.toast, success: mocks.success }) }));
 vi.mock("@/components/ui", () => ({ Modal: ({ children, isOpen }: { children: ReactNode; isOpen: boolean }) => isOpen ? createPortal(<div role="dialog">{children}</div>, document.body) : null }));
 vi.mock("@/hooks/use-customers", () => ({

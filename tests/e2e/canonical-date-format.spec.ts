@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { inArray } from "drizzle-orm";
 import { test, expect } from "./fixtures/auth-fixtures";
 import { createDbConnection } from "./fixtures/db";
-import { waitForSideSheet } from "./fixtures/page-helpers";
+import { creditBatchRow, waitForSideSheet } from "./fixtures/page-helpers";
 import { DEC_ORG_ID } from "@/db/org-defaults";
 import { creditBatches, orders, productionProcesses, samples } from "@/db/schema";
 
@@ -87,9 +87,9 @@ test("read surfaces use canonical dates while native inputs keep ISO values", as
     const orderRow = page.locator("tbody tr").filter({ hasText: orderCode });
     await expect(orderRow).toContainText("Jun 13, 2026");
 
-    await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
-    const sameYearCard = page.locator("article").filter({ hasText: sameYearCode });
-    const crossYearCard = page.locator("article").filter({ hasText: crossYearCode });
+    await page.goto(`/credit-batches?facility=${seededData.facility.id}&view=list`);
+    const sameYearCard = creditBatchRow(page, sameYearCode);
+    const crossYearCard = creditBatchRow(page, crossYearCode);
     await expect(sameYearCard).toContainText("Jun 1 to Jun 30, 2026");
     await expect(crossYearCard).toContainText(
       "Dec 15, 2026 to Jan 10, 2027",

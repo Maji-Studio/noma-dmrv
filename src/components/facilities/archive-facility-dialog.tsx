@@ -190,15 +190,7 @@ export function ArchiveFacilityDialog({
           )}
         </div>
 
-        <div className="flex gap-16 justify-end">
-          <Button
-            size="large"
-            variant="default"
-            onClick={handleCancel}
-            disabled={isPending}
-          >
-            Cancel
-          </Button>
+        <div className="flex flex-wrap gap-16 justify-start">
           <Button
             size="large"
             variant="default"
@@ -209,6 +201,14 @@ export function ArchiveFacilityDialog({
             disabled={isPending || isLoading || !impact || !typedCodeMatches}
           >
             {isPending ? "Archiving..." : "Archive"}
+          </Button>
+          <Button
+            size="large"
+            variant="default"
+            onClick={handleCancel}
+            disabled={isPending}
+          >
+            Cancel
           </Button>
         </div>
       </div>

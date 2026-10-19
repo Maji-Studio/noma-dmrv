@@ -14,8 +14,8 @@ export const GET = apiRoute<Params>("api.v1.production-runs.get", "production-ru
   const data = await readProductionRun(ctx, idOrCode);
   headers.set("ETag", productionRunEtag(data));
   return Response.json({ data }, { headers });
-});
+}, { audience: "rest" });
 export const PATCH = apiRoute<Params>("api.v1.production-runs.update", "production-runs:write", (request, context, { idOrCode }) =>
-  mutateProductionRunResponse(request, context, idOrCode, "PATCH"));
+  mutateProductionRunResponse(request, context, idOrCode, "PATCH"), { audience: "rest" });
 export const DELETE = apiRoute<Params>("api.v1.production-runs.delete", "production-runs:delete", (request, context, { idOrCode }) =>
-  mutateProductionRunResponse(request, context, idOrCode, "DELETE"));
+  mutateProductionRunResponse(request, context, idOrCode, "DELETE"), { audience: "rest" });

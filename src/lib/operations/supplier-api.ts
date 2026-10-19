@@ -1,5 +1,5 @@
 import { readApiSupplier } from "@/lib/read-models/api-suppliers";
-import { representSupplierLocation } from "@/lib/representations/supplier-locations";
+import { readApiSupplierLocation } from "@/lib/read-models/api-supplier-locations";
 import type { SupplierRepresentation } from "@/lib/representations/suppliers";
 import type { SupplierLocationRepresentation } from "@/lib/representations/supplier-locations";
 import { createSupplierApiInput, updateSupplierApiInput, supplierVersionInput } from "@/schemas/supplier-input";
@@ -16,7 +16,11 @@ export const createSupplierApi: Operation<typeof createSupplierApiInput, Supplie
   execute: async (scope, input) => {
     const result = await createSupplier.execute(scope, input);
     return { supplier: await readApiSupplier(scope.ctx, { id: result.supplier.id }, scope.tx),
-      locations: result.locations.map(row => representSupplierLocation(row)) };
+      locations: await Promise.all(result.locations.map(async row => {
+        const location = await readApiSupplierLocation(scope.ctx, result.supplier.id, row.id, scope.tx);
+        if (!location) throw new Error("Created supplier location was not found.");
+        return location;
+      })) };
   },
 };
 export const updateSupplierApi: Operation<typeof updateInput, SupplierOutput> = {

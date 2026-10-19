@@ -10,6 +10,12 @@ infrastructure (`users`, sessions, accounts, verifications, organizations,
 members, invitations) follows its own identity/membership relationships.
 `api_keys.reference_id` is the plugin's organization id; its management table
 `api_key_owners` carries `organization_id` and an independent integer `version`.
+OAuth consents and tokens carry `reference_id`, the grant generation id, and
+reach their organization through `oauth_grants.organization_id`. Authorization
+attempts carry their own `organization_id`. The platform tables are
+`oauth_clients`, `oauth_resources`, `oauth_client_resources` and
+`oauth_client_assertions`. Client `reference_id` and `user_id` remain null in
+our provider configuration.
 `geo_route_cache` is the explicit organization-neutral cache. These exceptions
 are not examples for new domain tables. Domain tenancy is enforced in
 `src/data-access/`, not by the route layer.
@@ -38,6 +44,57 @@ are not examples for new domain tables. Domain tenancy is enforced in
 The purge helpers are system seams that delete expired idempotency records and
 idle buckets across organizations. These waivers do not relax ordinary
 org-scoped reads.
+
+## OAuth grant lifecycle
+
+`oauth_grants` binds an organization, user, issuance membership, client and
+resource immutably. Removal sets the membership FK to null. Re-admission
+creates a new generation; it never restores an old connection. One partial
+unique index permits one unrevoked binding per organization, user, client and
+resource. Creation sets `last_used_at` to `created_at`; management revocation
+increments `version` once and preserves the first reason.
+
+`oauth_authorization_attempts` binds one verified authorization query to one
+organization and session. Selection is insert-only. Resolution locks the
+attempt and the live membership, then reuses or creates a generation. A stored
+grant id never rebinds after revocation. The shared eligibility guard must also
+check the returned generation before issuance. Only consented generations
+count as connected apps or as the picker's most recently used connection.
+Exactly one eligible membership can skip the picker; multiple memberships
+always permit a new organization choice.
+
+`revokeGeneration` sets the generation's revocation time and reason and deletes
+its consent in one transaction. It never deletes or updates plugin token rows.
+The provider can interpret a revoked refresh row as replay and delete tokens
+across organizations, so application revocation must stay on the generation.
+Plugin member removal and self-service leave revoke affected generations;
+Platform Admin removal does so in its membership transaction. The live
+membership identity also fails closed after a direct membership delete.
+
+Named privileged seams use these exact waiver reasons:
+
+- `pre-authentication token lookup establishes the grant organization`: token
+  resolution and trusted generation revocation.
+- `session-authenticated authorization attempt; membership validated in the same query`:
+  `selectOAuthOrganization`, `resolveAttemptGrant`, and picker selection reads.
+- `trusted membership hooks revoke only the affected organization/user generations`:
+  `revokeMemberOAuthGrants`.
+- `platform client registry`: platform client reads.
+
+Connected-app management is ordinary org-scoped data access. It checks live
+membership, filters by organization, limits Members to their own connections,
+and requires the expected management version to disconnect. Owners and Admins
+can list and disconnect all connections in their organization. Role policy
+lives in `oauth-role-policy.ts`; Platform Admin status gives no override. Role
+changes keep connections under the default policy. If Member connections are
+disabled there, both membership role hooks revoke on demotion to Member.
+
+The authenticated API purge cron deletes expired attempts, unconsented pending
+generations older than a day, expired plugin tokens and expired client
+assertions. Pending cleanup also requires no token rows. An expired refresh
+row remains while an access token still references it, preventing the plugin's
+cascade FK from deleting an unexpired access token. Revoked generations remain
+for attribution. Purge queries are explicit cross-organization system seams.
 
 ## Activity events
 
@@ -355,7 +412,14 @@ the stamps. `NULL` = active.
 - **Lab sample writes** reject an archived credit batch (create, update, move; reads and delete still work). They read the batch after locking it, in the order certification artifacts, credit batches by id, sample (`src/data-access/samples/write-scope.ts`). `archiveFacility` locks the facility's credit batches in id order before its bulk update so it cannot deadlock against a sample move.
 - **Codes stay reserved** while archived (uniqueness checks ignore archive state) so restore can't collide.
 
-Stamped tables: `facilities`, `reactors`, `storage_locations`, `feedstocks`, `production_runs`, `biochar_products`, `orders`, `deliveries`, `credit_batches`, `stockpile_events`, `power_procurement_evidence` (archive stamps introduced in `drizzle/0041_outgoing_paper_doll.sql`).
+Party archive stamps also cover `suppliers`, `customers`, `formulations` and
+`customer_locations`. Customer locations archive independently of their parent;
+`customer_locations_default_active` requires an archived location to have
+`is_default = false`. Writers retain one active default, refuse archiving the
+last active location and promote an active sibling when archiving the default.
+Detail reads keep archived destinations for existing orders.
+
+Stamped facility-cascade tables: `facilities`, `reactors`, `storage_locations`, `feedstocks`, `production_runs`, `biochar_products`, `orders`, `deliveries`, `credit_batches`, `stockpile_events`, `power_procurement_evidence` (archive stamps introduced in `drizzle/0041_outgoing_paper_doll.sql`).
 
 ## Migrations
 
@@ -506,4 +570,5 @@ decimal text. Values are non-negative and finite. Optional `mass_distance_detail
 JSON stores the entered mass and distance as decimal strings with canonical units.
 The writer checks their exact product against the magnitude. Partial unique indexes
 enforce one active single-policy value per batch and one live zero per Removal,
-batch and component. Confirmed zeros are owned by their draft Removal.
+batch and component. Only the Removal-flow confirmation writes zero rows, each owned by its draft
+Removal through `confirmed_for_removal_id`.

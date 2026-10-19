@@ -679,3 +679,10 @@ Three failure-path gaps, each a surprising mode before a registry write:
   needs a separate extraction and consistent blueprint handling.
 - **To resolve**: extract that validation, pass resolved blueprints through every
   coverage caller, and test each refusal before registry writes.
+
+### Per-project `protocolVersion`: write it or drop it (`isometric/project-protocol-version`, opened 2026-10-17)
+
+- **Anchor**: `certifier_projects.protocol_version` (`src/db/schema/certification.ts`) and `src/fn/certification/protocol-version-preflight.ts`.
+- **Current handling**: Certification → Settings shows the pinned versions from `docs/isometric/versions.json` (#1092). The column is nullable and the mapping action never sets it, so the submit preflight normally warns "missing" and records a sync event.
+- **Options**: (a) let the operator record the Certify project's protocol version per project, so the preflight can detect a mismatch; (b) drop the column and the preflight warning, since the Certify API exposes no protocol version and the pin is global.
+- **To resolve**: Kenji picks one. Not decided in #1092.

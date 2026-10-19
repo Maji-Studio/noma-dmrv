@@ -29,10 +29,10 @@ import {
   suppliers,
   transportLegs,
 } from "@/db/schema";
-import { updateSupplierLocation } from "@/data-access/suppliers";
+import { updateSupplierLocation } from "./helpers/supplier-location-operations";
 import { getTransportDistanceFixLinks } from "@/data-access/transport-distance-fix-links";
 import { missingFeedstockTransportIds } from "@/lib/certification/submission-readiness";
-import { updateCustomerLocation } from "@/data-access/customers";
+import { updateCustomerLocation } from "./helpers/customer-location-operations";
 import { deleteDelivery } from "@/data-access/deliveries";
 import { createDelivery } from "./helpers/create-delivery";
 import { expectDerivedLegEvidenceSwept } from "./helpers/document-retirement";
@@ -331,7 +331,7 @@ describe("derived transport-leg transaction boundaries", () => {
         transportDistanceKm: 25,
         transportDistanceSource: "document",
       }));
-    expect(result.feedstocks[0].status).toBe("complete");
+    expect(result.feedstocks[0]).toMatchObject({ status: "complete", distanceKmOverride: 25, distanceSource: "document" });
     const feedstockId = result.feedstocks[0].id;
 
     const partialUpdate = await db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, feedstockId, {

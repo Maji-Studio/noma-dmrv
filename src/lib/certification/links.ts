@@ -27,14 +27,19 @@ export const CERTIFICATION_SETTINGS_REMOVAL_TEMPLATES_SECTION =
 export const CERTIFICATION_SETTINGS_CERTIFIER_SECTION = "certifier";
 export const CERTIFICATION_SETTINGS_LEGACY_CONNECTION_SECTION = "connection";
 
+/** Narrows the Removal templates pane to one template, even one not yet in use. */
+export const CERTIFICATION_SETTINGS_TEMPLATE_PARAM = "template";
+
 function certificationSettingsSectionHref(
   facilityId: string,
   section: string,
+  extra = "",
 ): string {
   return (
     `/certification/settings` +
     `?${CERTIFICATION_SETTINGS_SECTION_PARAM}=${encodeURIComponent(section)}` +
-    `&facility=${encodeURIComponent(facilityId)}`
+    `&facility=${encodeURIComponent(facilityId)}` +
+    extra
   );
 }
 
@@ -51,11 +56,21 @@ export function certificationEmissionEstimatesHref(facilityId: string): string {
   );
 }
 
-/** The Removal template line review, where lines that need review are settled. */
-export function certificationRemovalTemplatesHref(facilityId: string): string {
+/**
+ * The Removal template line review, where lines that need review are settled.
+ * With `templateId` the pane also shows that template's lines when no facility
+ * default or credit batch uses it yet.
+ */
+export function certificationRemovalTemplatesHref(
+  facilityId: string,
+  templateId?: string,
+): string {
   return certificationSettingsSectionHref(
     facilityId,
     CERTIFICATION_SETTINGS_REMOVAL_TEMPLATES_SECTION,
+    templateId
+      ? `&${CERTIFICATION_SETTINGS_TEMPLATE_PARAM}=${encodeURIComponent(templateId)}`
+      : "",
   );
 }
 

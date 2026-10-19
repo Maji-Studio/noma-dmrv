@@ -31,6 +31,11 @@ import {
 } from "@/schemas/storage-locations";
 import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
 import type { StorageLocation } from "@/db/schema/facilities";
+import { isBinFormulationLocked, type RecordLockView } from "@/lib/record-lock-view";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(storageLocationFormSchema);
 
 const STOCK_MODE_HINT =
   "Split keeps every production run or batch in its own bay, bag or heap, and each draw records which ones it came from. Mix is one blended pile: every draw takes from each in proportion to what it holds.";
@@ -58,6 +63,8 @@ interface StorageLocationFormProps {
   defaultFormulationId?: string;
   /** Pre-selects the facility when rendered outside FacilityProvider context */
   defaultFacilityId?: string;
+  /** The saved bin's lock: stock history fixes its storage type and feedstock type. */
+  lock?: RecordLockView;
 }
 
 export function StorageLocationForm({
@@ -74,8 +81,15 @@ export function StorageLocationForm({
   lockFeedstockType = false,
   defaultFormulationId,
   defaultFacilityId,
+  lock,
 }: StorageLocationFormProps) {
   const isEditMode = !!storageLocation;
+  // The identity guard (#767) refuses these two once any stock row points at
+  // the bin, and both wait for the lock to answer (fail closed). Stock mode
+  // keeps its own inline rule.
+  const identityLocked = isEditMode && (!lock || lock.level !== "open");
+  // The formulation guard: only the one formulation every stored product has.
+  const formulationLocked = isEditMode && (!lock || isBinFormulationLocked(lock, storageLocation?.formulationId ?? null));
   const { facilityId: contextFacilityId } = useFacilityContext();
 
   const typeChoices = allowedTypes ?? storageLocationTypes;
@@ -175,7 +189,8 @@ export function StorageLocationForm({
             <SegmentedControl
               id="type"
               legend="Storage type"
-              disabled={isSubmitting}
+              required
+              disabled={isSubmitting || identityLocked}
               error={!!errors.type}
               options={storageTypeOptions}
               {...register("type")}
@@ -204,7 +219,7 @@ export function StorageLocationForm({
           <FormInput
             id="capacityKg"
             type="number"
-            step="any"
+            {...numberBounds("capacityKg")}
             placeholder="e.g., 5000"
             disabled={isSubmitting}
             error={!!errors.capacityKg}
@@ -242,6 +257,7 @@ export function StorageLocationForm({
             <ChoiceCardGroup
               id="stockMode"
               legend="Stock mode"
+              required
               disabled={isSubmitting}
               error={!!errors.stockMode}
               stackArt
@@ -260,7 +276,7 @@ export function StorageLocationForm({
           {watchedStockMode === "split" && (
             <div className="md:col-span-2">
               <FormField id="drawOrder" label="Default draw order" hint="Which sub-bin a draw takes first. You can change the order for any draw." error={errors.drawOrder?.message} required>
-                <ChoiceCardGroup id="drawOrder" legend="Default draw order" disabled={isSubmitting}
+                <ChoiceCardGroup id="drawOrder" legend="Default draw order" required disabled={isSubmitting}
                   error={!!errors.drawOrder} stackArt options={drawOrderOptions} {...register("drawOrder")} />
               </FormField>
             </div>
@@ -283,7 +299,7 @@ export function StorageLocationForm({
             entityType="feedstockType"
             allowEdit
             placeholder="Select feedstock type..."
-            disabled={isSubmitting}
+            disabled={isSubmitting || identityLocked}
             selectionLocked={lockFeedstockType}
             required
             helperText={feedstockTypeHelperText}
@@ -305,8 +321,10 @@ export function StorageLocationForm({
             entityType="formulation"
             allowEdit
             placeholder="Pure biochar (no formulation)"
-            disabled={isSubmitting}
-            helperText="Restricts this bin to one formulation. Leave it empty for a pure biochar bin, which the first formulated product stored here will claim."
+            disabled={isSubmitting || formulationLocked}
+            helperText={formulationLocked
+              ? "Fixed while this bin stores product of this formulation. Move or remove the product to change it."
+              : "Restricts this bin to one formulation. Leave it empty for a pure biochar bin, which the first formulated product stored here will claim."}
             allowCreate
             createLabel="Add new formulation"
           />

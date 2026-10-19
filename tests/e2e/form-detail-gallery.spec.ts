@@ -212,6 +212,7 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
   await capture(page, "delivery-create-1440-simple-blocker");
   await page.locator("#deliveredWetMassKg").fill("2000");
   await fillStockMoisture(page, "delivery", "30");
+  await page.getByRole("button", { name: "Override the one-way distance" }).click();
   await page.locator("#distanceKmOverride").fill("25");
   await page.locator("#distanceKmOverride").blur();
   await pairs(page, "delivery-create", ["Mass and moisture", "Transport"]);
@@ -311,6 +312,7 @@ test("gallery production run create read edit credit batch and sample read", asy
   await edit(page, "production run");
   await pairs(page, "production-run-edit", ["Feedstock & processing", "Output", "Energy"]);
   await navigate(page, "credit-batches", d.facility);
+  await page.getByRole("button", { name: "List", exact: true }).click();
   await page.getByText(batch.creditBatchCode, { exact: true }).first().click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await pairs(page, "credit-batch-read", ["Production runs", "Batch definition"]);
@@ -354,6 +356,7 @@ test("gallery credit batch applied mass context", async ({ adminPage: page, test
   } finally { await pool.end(); }
   await createTestApplication(f.ctx, { code: `E2E-APPLIED-${f.tag}`, deliveryId: f.delivery!.id, applicationDate: new Date(DATE), appliedWetMassKg: 1000, fieldSizeHa: 1, fieldIdentifier: "E2E Soil plot A", cropType: "Maize", gpsLatitude: -6.8, gpsLongitude: 39.2, applicationMethod: "mechanical", soilTemperatureSource: "baseline", soilTemperatureC: 25 });
   await navigate(page, "credit-batches", f.facility);
+  await page.getByRole("button", { name: "List", exact: true }).click();
   await page.getByText(batch.code, { exact: true }).first().click();
   await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
   await pairs(page, "credit-batch-applied-read", ["Production runs", "Batch definition"]);

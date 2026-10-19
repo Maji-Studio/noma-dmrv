@@ -4,6 +4,7 @@
  * submission flow (N credit batches → 1 Isometric Removal — ADR 0003).
  */
 
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { activityKeys } from "./activity-query-keys";
 import {
   type QueryClient,
@@ -110,6 +111,7 @@ export function getRemovalPreflightRefetchInterval(
 
 export const certificationKeys = {
   removalTemplateReviewPreview: (facilityId: string, templateId: string) => ["certification", "removal-template-review-preview", facilityId, templateId] as const,
+  removalTemplateReviewEntry: (facilityId: string, templateId: string) => ["certification", "removal-template-review-entry", facilityId, templateId] as const,
   removalTemplateReview: (facilityId: string) => ["certification", "removal-template-review", facilityId] as const,
   all: ["certification"] as const,
   /** Whether a submitted Removal or GHG statement freezes the record's files. */
@@ -217,6 +219,9 @@ export function invalidateCertificationReadiness(
   options?: { creditBatchPreviews?: boolean },
 ) {
   const invalidations = [
+    queryClient.invalidateQueries({ queryKey: creditBatchKeys.details() }),
+    // Removal codes and the not-in-a-Removal mass on the timeline's hover cards.
+    queryClient.invalidateQueries({ queryKey: creditBatchKeys.timelineFactsPrefix() }),
     // Readiness-affecting mutations also change the batch activity history.
     queryClient.invalidateQueries({ queryKey: activityKeys.all }),
     queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
@@ -225,9 +230,6 @@ export function invalidateCertificationReadiness(
     invalidations.push(
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.previewsPrefix(),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: creditBatchKeys.details(),
       }),
     );
   }
@@ -618,6 +620,7 @@ export function useSelectableBatches(facilityId: string, enabled = true) {
 export function useSubmitRemoval() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: (vars: {
       input: SubmitRemovalInput;
       onProgress: (update: SubmissionProgressUpdate) => void;
@@ -627,12 +630,12 @@ export function useSubmitRemoval() {
         vars.onProgress,
       ),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
+      invalidateCertificationReadiness(queryClient),
     onError: () => {
       // A Removal failure can happen after its draft was claimed. Refresh the
       // submission state before the operator returns to review so the active
       // lock, if any, gates the next attempt.
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      invalidateCertificationReadiness(queryClient);
     },
     // Claim reservation and release record activity even when the registry
     // call fails afterwards.
@@ -648,11 +651,12 @@ export function useSubmitRemoval() {
 export function useCreateRemovalWithBatches() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: async (input: CreateRemovalWithBatchesInput) =>
       unwrap(await createRemovalWithBatchesAction(input)),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: activityKeys.all });
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      invalidateCertificationReadiness(queryClient);
     },
   });
 }
@@ -660,6 +664,7 @@ export function useCreateRemovalWithBatches() {
 export function useDeleteRemoval() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: async (input: DeleteRemovalInput) => unwrap(await deleteRemovalAction(input)),
     onSuccess: () =>
       invalidateCertificationReadiness(queryClient, {
@@ -677,7 +682,7 @@ export function useDeleteFacilityCertifierMapping() {
       queryClient.invalidateQueries({
         queryKey: certificationKeys.facilityMapping(facilityId),
       });
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      invalidateCertificationReadiness(queryClient);
     },
   });
 }
@@ -719,11 +724,12 @@ export function useRegistryGhgStatementsForFacility(
 export function useSyncGhgStatementsFromRegistry() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: async (facilityId: string) =>
       unwrap(await reconcileGhgStatementsFromRegistry(facilityId)),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: activityKeys.all });
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      invalidateCertificationReadiness(queryClient);
     },
   });
 }
@@ -777,7 +783,7 @@ export function usePrepareGhgStatementReport() {
       unwrap(await prepareGhgStatementReport(input)),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: activityKeys.all });
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      invalidateCertificationReadiness(queryClient);
     },
   });
 }
@@ -788,7 +794,7 @@ export function useApproveGhgStatementReport() {
     mutationFn: async (input: ApproveGhgStatementReportInput) =>
       unwrap(await approveGhgStatementReport(input)),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      invalidateCertificationReadiness(queryClient);
     },
   });
 }
@@ -810,10 +816,11 @@ export function useOpenRemovalsForFacility(
 export function useCreateGhgStatement() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: async (input: CreateGhgStatementInput) =>
       unwrap(await createGhgStatementDraft(input)),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
+      invalidateCertificationReadiness(queryClient),
     // A definitive registry refusal records rejection activity before the create fails.
     onSettled: () => queryClient.invalidateQueries({ queryKey: activityKeys.all }),
   });
@@ -823,6 +830,7 @@ export function useCreateGhgStatement() {
 export function useSubmitGhgStatementToVerifier() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: async (vars: {
       ghgStatementId: string;
       input: SubmitGhgStatementDialogInput;
@@ -838,9 +846,9 @@ export function useSubmitGhgStatementToVerifier() {
       );
     },
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
+      invalidateCertificationReadiness(queryClient),
     onError: () => {
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      invalidateCertificationReadiness(queryClient);
     },
     // The report attachment records document activity before the provider
     // submission, so a failed submission still leaves new activity.
@@ -852,11 +860,12 @@ export function useSubmitGhgStatementToVerifier() {
 export function useRefreshGhgStatementStatus() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: async (submissionId: string) =>
       unwrap(await refreshGhgStatementStatus(submissionId)),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: activityKeys.all });
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      invalidateCertificationReadiness(queryClient);
     },
   });
 }

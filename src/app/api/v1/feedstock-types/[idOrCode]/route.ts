@@ -10,4 +10,4 @@ export const GET = apiRoute<Params>("api.v1.feedstock-types.get", "feedstock-typ
   const data = await readFeedstockType(request, ctx, idOrCode);
   headers.set("ETag", feedstockTypeEtag(data));
   return Response.json({ data }, { headers });
-});
+}, { audience: "rest" });

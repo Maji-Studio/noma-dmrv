@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { CascadeChangedError } from "@/lib/cascade-changed";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError } from "@/lib/stale-version";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CustomerWithRelations } from "@/data-access/customers";
@@ -15,7 +16,11 @@ const state = vi.hoisted(() => ({
   success: vi.fn(),
   query: {} as Record<string, string | null>,
   linked: null as unknown,
+  preview: { data: undefined as unknown, error: null as Error | null, isPending: false, isError: false },
+  removeVariables: [] as unknown[],
 }));
+
+const OPEN_CASCADE = { orders: [{ id: "o1", code: "ORD-0001", facilityId: "f1" }], cascadeFingerprint: "v1:open" };
 
 function customer(code: string, archivedAt: Date | null): CustomerWithRelations {
   return {
@@ -39,6 +44,7 @@ vi.mock("@/hooks/use-customers", () => {
     useCustomerLocations: () => ({ data: [], isLoading: false }),
     useCreateCustomerWithLocations: mutation,
     useUpdateCustomer: mutation,
+    useCustomerDeletePreview: () => state.preview,
     useDeleteCustomer: () => ({ mutateAsync: state.remove, isPending: false }),
     useArchiveCustomer: () => ({ mutateAsync: state.archive, isPending: false }),
     useRestoreCustomer: () => ({ mutateAsync: state.restore, isPending: false }),
@@ -56,8 +62,8 @@ vi.mock("./customer-form", () => ({ CustomerForm: () => null }));
 vi.mock("./customer-read-sections", () => ({ customerSheetSections: () => [] }));
 vi.mock("@/components/ui/illustrations", () => ({ ILLUSTRATION_SIZE: { empty: 0 }, CustomerArt: () => null }));
 vi.mock("@/components/ui/delete-confirm-dialog", () => ({
-  DeleteConfirmDialog: ({ isOpen, onConfirm }: { isOpen: boolean; onConfirm: () => void }) =>
-    isOpen ? <button type="button" onClick={onConfirm}>Confirm delete</button> : null,
+  DeleteConfirmDialog: ({ isOpen, onConfirm, children, errorMessage }: { isOpen: boolean; onConfirm: () => void; children?: ReactNode; errorMessage?: string }) =>
+    isOpen ? <div role="dialog">{children}{errorMessage && <p role="alert">{errorMessage}</p>}<button type="button" onClick={onConfirm}>Confirm delete</button></div> : null,
 }));
 vi.mock("@/components/ui/entity-side-sheet", () => ({
   EntitySideSheet: ({ open, mode, canEdit = true, viewModeNotice, onModeChange }: { open: boolean; mode: string; canEdit?: boolean; viewModeNotice?: ReactNode; onModeChange?: (mode: string) => void }) =>
@@ -103,7 +109,8 @@ beforeEach(() => {
   state.linked = null;
   state.archive.mockReset().mockResolvedValue(undefined);
   state.restore.mockReset().mockResolvedValue(undefined);
-  state.remove.mockReset().mockResolvedValue(undefined);
+  state.remove.mockReset().mockResolvedValue({ cascade: OPEN_CASCADE, warnings: [] });
+  state.preview = { data: { cascade: OPEN_CASCADE }, error: null, isPending: false, isError: false };
   state.success.mockReset();
   state.items = [customer("CUST-0001", null), customer("CUST-0002", new Date("2026-01-01"))];
 });
@@ -161,10 +168,10 @@ describe("CustomerList archive view", () => {
     render(<CustomerList />);
     fireEvent.click(within("Actions for CUST-0001", "Delete"));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
-    expect(await screen.findByText("CUST-0001 is in use and cannot be deleted.")).toBeTruthy();
+    expect(await screen.findByText("CUST-0001 is in use")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Archive instead" }));
     await waitFor(() => expect(state.archive).toHaveBeenCalledWith({ customerId: "id-CUST-0001", expectedVersion: 4 }));
-    await waitFor(() => expect(screen.queryByText("CUST-0001 is in use and cannot be deleted.")).toBeNull());
+    await waitFor(() => expect(screen.queryByText("CUST-0001 is in use")).toBeNull());
   });
 
   it("retries Archive instead with the refreshed version after a stale refusal", async () => {
@@ -173,7 +180,7 @@ describe("CustomerList archive view", () => {
     const view = render(<CustomerList />);
     fireEvent.click(within("Actions for CUST-0001", "Delete"));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
-    await screen.findByText("CUST-0001 is in use and cannot be deleted.");
+    await screen.findByText("CUST-0001 is in use");
     fireEvent.click(screen.getByRole("button", { name: "Archive instead" }));
     await waitFor(() => expect(state.archive).toHaveBeenLastCalledWith({ customerId: "id-CUST-0001", expectedVersion: 4 }));
     await screen.findByRole("alert");
@@ -199,6 +206,64 @@ describe("CustomerList archive view", () => {
     await waitFor(() => expect(state.restore).toHaveBeenLastCalledWith({ customerId: "id-CUST-0002", expectedVersion: 5 }));
   });
 
+  it("lists the orders that go with the customer and sends the fingerprint with the delete", async () => {
+    state.preview = { ...state.preview, data: { cascade: { orders: Array.from({ length: 7 }, (_, index) => ({ id: `o${index}`, code: `ORD-000${index + 1}`, facilityId: "f1" })), cascadeFingerprint: "v1:seven" } } };
+    render(<CustomerList />);
+    fireEvent.click(within("Actions for CUST-0001", "Delete"));
+    expect(screen.getByText("These 7 orders are deleted too")).toBeTruthy();
+    const links = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
+    expect(screen.getByRole("link", { name: "Open order ORD-0005" }).getAttribute("href")).toBe("/orders?facility=f1&order=o4");
+    expect(screen.queryByRole("link", { name: "Open order ORD-0006" })).toBeNull();
+    expect(links.filter((href) => href?.startsWith("/orders"))).toHaveLength(5);
+    expect(screen.getByText("and 2 more")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    await waitFor(() => expect(state.remove).toHaveBeenCalledWith({ customerId: "id-CUST-0001", expectedVersion: 4, cascadeFingerprint: "v1:seven" }));
+    expect(state.success).toHaveBeenCalledWith("Customer deleted.");
+  });
+
+  it("offers Archive instead as soon as the dry run refuses a customer that has deliveries", () => {
+    state.preview = { data: undefined, isPending: false, isError: true, error: new Error("Customer was not deleted because deliveries were recorded on its orders. Archive it instead.") };
+    render(<CustomerList />);
+    fireEvent.click(within("Actions for CUST-0001", "Delete"));
+    expect(screen.getByText("CUST-0001 is in use")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Archive instead" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Confirm delete" })).toBeNull();
+  });
+
+  it("shows the changed order list and asks again instead of deleting silently", async () => {
+    const fresh = { orders: [{ id: "o1", code: "ORD-0001", facilityId: "f1" }, { id: "o2", code: "ORD-0002", facilityId: "f1" }], cascadeFingerprint: "v1:fresh" };
+    state.remove.mockRejectedValueOnce(new CascadeChangedError("The orders this delete would remove changed since the preview. Review them and confirm again.", fresh)).mockResolvedValue({ cascade: fresh, warnings: [] });
+    render(<CustomerList />);
+    fireEvent.click(within("Actions for CUST-0001", "Delete"));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    await waitFor(() => expect(state.remove).toHaveBeenLastCalledWith({ customerId: "id-CUST-0001", expectedVersion: 4, cascadeFingerprint: "v1:open" }));
+    expect(await screen.findByText("The orders deleted with this customer changed. Review the list and delete again.")).toBeTruthy();
+    expect(screen.getByText("These 2 orders are deleted too")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open order ORD-0002" })).toBeTruthy();
+    expect(state.success).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    await waitFor(() => expect(state.remove).toHaveBeenLastCalledWith({ customerId: "id-CUST-0001", expectedVersion: 4, cascadeFingerprint: "v1:fresh" }));
+    expect(state.success).toHaveBeenCalledWith("Customer deleted.");
+  });
+
+  it("self-heals a deep-linked archived sheet after a stale Restore, because the sheet reads the live detail", async () => {
+    state.query = { customer: "id-CUST-0002" };
+    state.linked = customer("CUST-0002", new Date("2026-01-01"));
+    state.restore.mockRejectedValueOnce(new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "customer", id: "id-CUST-0002", code: STALE_VERSION_CONFLICT_CODE })).mockResolvedValue(undefined);
+    const view = render(<CustomerList />);
+    fireEvent.click(buttonIn(screen.getByLabelText("Sheet"), "Restore"));
+    await waitFor(() => expect(state.restore).toHaveBeenLastCalledWith({ customerId: "id-CUST-0002", expectedVersion: 4 }));
+    await screen.findByRole("alert");
+
+    // The refused save refetched the detail query: the sheet now holds the current version.
+    state.linked = { ...(state.linked as object), version: 5 };
+    view.rerender(<CustomerList />);
+    fireEvent.click(buttonIn(screen.getByLabelText("Sheet"), "Restore"));
+    await waitFor(() => expect(state.restore).toHaveBeenLastCalledWith({ customerId: "id-CUST-0002", expectedVersion: 5 }));
+  });
+
   it("does not offer Archive instead when an already archived customer is refused as in use", async () => {
     state.remove.mockRejectedValue(new Error("Customer was not deleted because orders still use it. Open Orders and review them. Reassign them where appropriate, or keep this customer."));
     render(<CustomerList />);
@@ -207,7 +272,7 @@ describe("CustomerList archive view", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
     await waitFor(() => expect(state.remove).toHaveBeenCalled());
     expect(screen.queryByRole("button", { name: "Archive instead" })).toBeNull();
-    expect(screen.queryByText(/is in use and cannot be deleted/)).toBeNull();
+    expect(screen.queryByText(/ is in use/)).toBeNull();
   });
 
   it("refuses the edit mode request on an archived customer and allows it on an active one", () => {

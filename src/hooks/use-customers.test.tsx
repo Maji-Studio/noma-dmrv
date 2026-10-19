@@ -19,6 +19,9 @@ const mocks = vi.hoisted(() => ({
   createCustomerLocationFn: vi.fn(),
   updateCustomerLocationFn: vi.fn(),
   deleteCustomerLocationFn: vi.fn(),
+  archiveCustomerLocationFn: vi.fn(),
+  restoreCustomerLocationFn: vi.fn(),
+  previewDeleteCustomerFn: vi.fn(),
 }));
 
 vi.mock("@/fn/customers", () => ({
@@ -31,6 +34,9 @@ vi.mock("@/fn/customers", () => ({
   createCustomerLocationFn: mocks.createCustomerLocationFn,
   updateCustomerLocationFn: mocks.updateCustomerLocationFn,
   deleteCustomerLocationFn: mocks.deleteCustomerLocationFn,
+  previewDeleteCustomerFn: mocks.previewDeleteCustomerFn,
+  archiveCustomerLocationFn: mocks.archiveCustomerLocationFn,
+  restoreCustomerLocationFn: mocks.restoreCustomerLocationFn,
 }));
 
 import {
@@ -40,7 +46,11 @@ import {
   useDeleteCustomerLocation,
   useDeleteCustomer,
   useUpdateCustomer,
+  useArchiveCustomerLocation,
+  useCustomerDeletePreview,
 } from "./use-customers";
+import { CascadeChangedError } from "@/lib/cascade-changed";
+import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE } from "@/lib/stale-version";
 
 const customer = {
   id: "customer-1",
@@ -261,6 +271,97 @@ describe("customer location mutations refresh the new picker", () => {
     });
     expect(queryClient.getQueryData(detailKey)).toBeUndefined();
     expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(true);
+    await act(async () => renderer?.unmount());
+    queryClient.clear();
+  });
+});
+
+describe("customer delete with a cascade fingerprint", () => {
+  it("sends the fingerprint and returns the orders that went with the customer", async () => {
+    const queryClient = newQueryClient();
+    const cascade = { orders: [{ id: "o1", code: "ORD-0001" }], cascadeFingerprint: "v1:abc" };
+    mocks.deleteCustomerFn.mockResolvedValue({ success: true, data: { cascade, warnings: ["Also deleted 1 order without deliveries: ORD-0001."] } });
+    const { mutation, renderer } = await renderMutation(queryClient, () => useDeleteCustomer(undefined, { optimistic: false }));
+
+    let result: unknown;
+    await act(async () => {
+      result = await (mutation as DeleteMutation).mutateAsync({ customerId: customer.id, expectedVersion: 2, cascadeFingerprint: "v1:abc" });
+    });
+
+    expect(mocks.deleteCustomerFn).toHaveBeenCalledWith({ customerId: customer.id, expectedVersion: 2, cascadeFingerprint: "v1:abc" });
+    expect(result).toMatchObject({ cascade, warnings: ["Also deleted 1 order without deliveries: ORD-0001."] });
+    await act(async () => renderer?.unmount());
+    queryClient.clear();
+  });
+
+  it("rejects with the fresh order list when the orders changed, keeping the list cache", async () => {
+    const queryClient = newQueryClient();
+    const listKey = customerKeys.list({ page: 1 });
+    queryClient.setQueryData(listKey, { items: [{ id: customer.id }], total: 1 });
+    const fresh = { orders: [{ id: "o1", code: "ORD-0001" }, { id: "o2", code: "ORD-0002" }], cascadeFingerprint: "v1:fresh" };
+    mocks.deleteCustomerFn.mockResolvedValue({ success: false, code: "cascade_changed", error: "The orders this delete would remove changed since the preview. Review them and confirm again.", preview: fresh });
+    const { mutation, renderer } = await renderMutation(queryClient, () => useDeleteCustomer(undefined, { optimistic: false }));
+
+    let caught: unknown;
+    await act(async () => {
+      try {
+        await (mutation as DeleteMutation).mutateAsync({ customerId: customer.id, expectedVersion: 2, cascadeFingerprint: "v1:old" });
+      } catch (error) {
+        caught = error;
+      }
+    });
+
+    expect(caught).toBeInstanceOf(CascadeChangedError);
+    expect((caught as CascadeChangedError).preview).toEqual(fresh);
+    expect(queryClient.getQueryData(listKey)).toEqual({ items: [{ id: customer.id }], total: 1 });
+    await act(async () => renderer?.unmount());
+    queryClient.clear();
+  });
+});
+
+describe("customer location archive", () => {
+  it("merges the saved row into the locations cache before the refetch and drops the warnings", async () => {
+    const queryClient = newQueryClient();
+    const key = customerKeys.locations(customer.id);
+    queryClient.setQueryData(key, [{ ...location, version: 1, archivedAt: null }, { id: "location-2", version: 1, isDefault: false }]);
+    const saved = { ...location, version: 2, archivedAt: new Date("2026-10-01"), warnings: ["E2E South Block is now the default location."] };
+    mocks.archiveCustomerLocationFn.mockResolvedValue({ success: true, data: saved });
+    const { mutation, renderer } = await renderMutation(queryClient, () => useArchiveCustomerLocation(customer.id) as unknown as AnyMutation);
+
+    await act(async () => {
+      await (mutation as unknown as ReturnType<typeof useArchiveCustomerLocation>).mutateAsync({ locationId: location.id, expectedVersion: 1 });
+    });
+
+    expect(mocks.archiveCustomerLocationFn).toHaveBeenCalledWith({ locationId: location.id, expectedVersion: 1 });
+    const cached = queryClient.getQueryData<Array<Record<string, unknown>>>(key)!;
+    expect(cached[0]).toMatchObject({ id: location.id, version: 2, archivedAt: saved.archivedAt });
+    expect(cached[0]).not.toHaveProperty("warnings");
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+    await act(async () => renderer?.unmount());
+    queryClient.clear();
+  });
+});
+
+describe("customer delete preview", () => {
+  it("refreshes the customer lists when the preview is refused as stale", async () => {
+    const queryClient = newQueryClient();
+    const listKey = customerKeys.list({ page: 1 });
+    queryClient.setQueryData(listKey, { items: [{ id: customer.id }], total: 1 });
+    mocks.previewDeleteCustomerFn.mockResolvedValue({
+      success: false,
+      error: STALE_VERSION_MESSAGE,
+      conflict: { entity: "customer", id: customer.id, code: STALE_VERSION_CONFLICT_CODE },
+    });
+    let renderer: ReactTestRenderer | undefined;
+    function Probe() {
+      useCustomerDeletePreview({ id: customer.id, version: 2 });
+      return null;
+    }
+    await act(async () => {
+      renderer = create(<TestProvider queryClient={queryClient}><Probe /></TestProvider>);
+    });
+
+    await vi.waitFor(() => expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(true));
     await act(async () => renderer?.unmount());
     queryClient.clear();
   });

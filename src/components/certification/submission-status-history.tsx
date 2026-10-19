@@ -2,7 +2,7 @@
  * SubmissionStatusHistory
  * The statuses one Removal or GHG Statement went through, newest first: when
  * each began and who changed it. Styled after `SyncEventList`: a ruled,
- * compact timeline. Rendered inside the badge popover
+ * compact timeline with a bubble per entry. Rendered inside the badge popover
  * (`CertificationStatusBadge`), so it mounts, and fetches, on open.
  */
 "use client";
@@ -16,6 +16,7 @@ import type {
 } from "@/lib/certification/status-history";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDate, formatDateTime } from "@/lib/format-utils";
+import { cn } from "@/lib/utils";
 import { describeStatusChangeActor } from "./status-change-actor";
 
 const EMPTY_ICON_SIZE = 32;
@@ -90,12 +91,33 @@ function StatusHistoryList({ entries }: { entries: SubmissionStatusHistoryEntry[
   return (
     <ol
       aria-label="Status changes, newest first"
-      className="flex flex-col gap-12 border-l border-[var(--color-border-secondary)] pl-12"
+      className="flex flex-col"
     >
-      {entries.map((entry) => {
+      {entries.map((entry, index) => {
+        const isLast = index === entries.length - 1;
         const actor = describeStatusChangeActor(entry);
         return (
-          <li key={entry.id} className="flex flex-col gap-4 body-caption">
+          <li
+            key={entry.id}
+            className={cn("relative flex flex-col gap-4 pl-16 body-caption", !isLast && "pb-12")}
+          >
+            {/* Timeline: a bubble per entry on a line that runs to the next
+                bubble and ends at the last one. The newest bubble is solid. */}
+            {!isLast && (
+              <span
+                aria-hidden="true"
+                className="absolute bottom-0 left-[3px] top-10 w-2 bg-[var(--color-border-secondary)]"
+              />
+            )}
+            <span
+              aria-hidden="true"
+              className={cn(
+                "absolute left-0 top-6 size-8 rounded-full border border-[var(--color-text-tertiary)]",
+                index === 0
+                  ? "bg-[var(--color-text-tertiary)]"
+                  : "bg-[var(--color-background-white)]"
+              )}
+            />
             <div className="flex flex-wrap items-center gap-8">
               <StatusBadge status={entry.value} label={entry.label} size="small" />
               {entry.occurredAt ? (

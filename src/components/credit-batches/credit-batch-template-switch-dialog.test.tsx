@@ -99,8 +99,11 @@ describe("CreditBatchTemplateSwitchDialog", () => {
     expect(mocks.preview).toHaveBeenLastCalledWith(FACILITY_ID, "rvt_new", true);
     expect(screen.getByText("2 lines need review")).toBeTruthy();
     expect(screen.getByText("Removals for CB-26-001 stay blocked until an Owner or Admin reviews them.")).toBeTruthy();
-    const link = screen.getByRole("link", { name: "Open Removal templates" });
+    const link = screen.getByRole("link", { name: "Review lines in a new tab" });
+    // Straight to the chosen template, in a new tab so the unsaved choice stays here.
     expect(link.getAttribute("href")).toContain("section=removal-templates");
+    expect(link.getAttribute("href")).toContain("template=rvt_new");
+    expect(link.getAttribute("target")).toBe("_blank");
     expect((screen.getByRole("button", { name: "Switch template" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -128,7 +131,7 @@ describe("CreditBatchTemplateSwitchDialog", () => {
 
     expect(screen.getByText("All lines in this template are reviewed.")).toBeTruthy();
     expect(screen.queryByText(/need review/)).toBeNull();
-    expect(screen.queryByRole("link", { name: "Open Removal templates" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Review lines in a new tab" })).toBeNull();
   });
 
   it("offers a retry when the preview cannot be read and still allows the switch", async () => {
@@ -144,6 +147,16 @@ describe("CreditBatchTemplateSwitchDialog", () => {
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Try again" })); });
     expect(refetch).toHaveBeenCalled();
     expect((screen.getByRole("button", { name: "Switch template" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("says set template when the batch has no pin", async () => {
+    render(dialog({ ...BATCH, removalTemplateId: null }));
+    await screen.findByRole("dialog", { name: "Set template" });
+    await act(async () => {
+      fireEvent.change(document.getElementById("removalTemplateId")!, { target: { value: "rvt_new" } });
+    });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Set template" })); });
+    expect(mocks.success).toHaveBeenCalledWith("Removal template set for CB-26-001.");
   });
 
   it("switches the pin against the batch version and closes", async () => {

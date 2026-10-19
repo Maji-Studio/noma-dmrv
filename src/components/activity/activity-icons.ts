@@ -3,6 +3,7 @@ import { createElement, type ReactElement } from "react";
 import type { Icon } from "@phosphor-icons/react";
 import {
   CertificateIcon,
+  ChatTextIcon,
   CubeIcon,
   FactoryIcon,
   FileIcon,
@@ -39,6 +40,7 @@ export const ACTIVITY_RECORD_TYPE_ICONS: Record<ActivityEntityType, Icon> = {
   removal: StackIcon,
   ghg_statement: FileTextIcon,
   emission_entry: LightningIcon,
+  emission_line_comment: ChatTextIcon,
   formulation: ListChecksIcon,
   supplier: HandshakeIcon,
   supplier_location: MapPinLineIcon,

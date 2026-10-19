@@ -9,6 +9,11 @@ import {
   SPINE_SECTION_TAG,
   type SpineMeta,
 } from "@/components/forms/form-spine";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+import { sampleFormSchema } from "@/schemas/samples";
+
+/** Native min, max and step for each nutrient share, read from the schema. */
+const numberBounds = numberInputConstraintsFor(sampleFormSchema);
 
 interface NutrientFieldRegistration {
   registration: UseFormRegisterReturn;
@@ -73,11 +78,11 @@ export function SampleNutrientFields({
       {enabled && (
         <div className="grid grid-cols-1 gap-x-16 gap-y-20 pt-8 sm:grid-cols-2">
           {fields.map((field) => (
-            <FormField key={field.id} id={field.id} label={field.label} error={field.error}>
+            <FormField key={field.id} id={field.id} label={field.label} error={field.error} required>
               <FormInput
                 id={field.id}
                 type="number"
-                step="any"
+                {...numberBounds(field.id)}
                 placeholder={field.placeholder}
                 disabled={isSubmitting}
                 error={!!field.error}

@@ -175,6 +175,16 @@ Tokens expire after 1 hour. Verify the email was sent, that `NEXT_PUBLIC_APP_URL
 
 ## Build & Deployment Issues
 
+### OAuth resource seeding during build
+
+**Symptom:** with `OAUTH_PROVIDER_ENABLED=true`, `next build` logs
+`could not seed resources at startup` from oauth-provider when no database is
+available. This is expected for a build without a DB: the plugin tries to seed
+the configured REST and MCP resources and retries on first access. Do not run
+DB commands or weaken auth to silence the build log. A runtime failure after
+connecting to the configured DB still needs investigation. See
+[build-check env](./testing.md#build-check-environment).
+
 ### Type Errors During Build
 
 `rm -rf .next .cache`, then `pnpm typecheck` (the first-class script; not `pnpm tsc --noEmit`).

@@ -107,6 +107,49 @@ branch's journal must be reset or recreated. It never repairs the DB automatical
 Set `VITEST_SKIP_MIGRATION_CHECK=1` for pure unit runs without a DB; the check
 also skips when no DB URL is configured.
 
+## OAuth suites
+
+OAuth is opt-in for each process. In Vitest, call
+`vi.stubEnv("OAUTH_PROVIDER_ENABLED", "true")`, then `vi.resetModules()` before
+importing the auth/config modules. They capture validated env and plugin setup
+at import time. Restore stubs after tests that change env. Do not rely on an
+untracked env file to enable the provider. The default-off and production-gate
+cases live in `src/config/env-oauth.test.ts`.
+
+| Coverage | Suites |
+|---|---|
+| Pure or mocked boundaries | Colocated `oauth-config`, `oauth-scopes`, `oauth-role-policy`, `oauth-request-policy`, `oauth-token-hash`, `oauth-context`, `oauth-provider`, `api-credential-header`, `lib/api/problem`, `lib/mcp/oauth-admission` and `lib/mcp/tools/required-scopes` tests |
+| Schema, generations, attempts and eligibility | `tests/oauth-schema-contract.test.ts`, `tests/oauth-grants.test.ts`, `tests/oauth-grant-lifecycle.test.ts`, `tests/oauth-eligibility.test.ts`, `tests/oauth-membership-hooks.test.ts` |
+| API authority, isolation, parity and admission | `tests/oauth-api-context.test.ts`, `tests/oauth-bola.test.ts`, `tests/oauth-member-parity.test.ts`, `tests/api-mcp-oauth.test.ts`, `tests/oauth-documents.test.ts`, `tests/api-admission-limits.test.ts` |
+| Real provider, rotation and public boundary | `tests/oauth-flow.test.ts`, `tests/oauth-refresh.test.ts`, `tests/oauth-endpoint-lockdown.test.ts`, `tests/oauth-cimd.test.ts`, `tests/oauth-discovery.test.ts`, `tests/oauth-endpoint-limits.test.ts`, `tests/oauth-endpoint-limits-db.test.ts` |
+| Actions and UI | `tests/oauth-actions.test.ts`, colocated `src/fn/oauth.test.ts`, `src/hooks/use-oauth-grants.test.tsx`, `src/components/oauth/*.test.tsx` |
+| Browser flows | `tests/e2e/oauth-consent.spec.ts`, `tests/e2e/connected-apps.spec.ts` |
+
+Read setup before running: most root OAuth suites use Postgres; endpoint-limits
+and CIMD also have mocked harnesses. [Vitest database safety](#vitest-only-runs-against-a-throwaway-database)
+still applies. Refresh tests cover replay, generation-scoped reuse, racing
+successors and the patched teardown refusal. These and the runtime endpoint
+inventory must stay green on every Better Auth upgrade.
+
+For E2E, enable `OAUTH_PROVIDER_ENABLED=true` on the app server as well as the
+Playwright process. `tests/e2e/fixtures/oauth-helpers.ts` provides preregistered
+clients, multi-organization people, PKCE authorize URLs, ready-made connections,
+read assertions and cleanup with the E2E naming contract. The OAuth specs extend
+Playwright directly with these dedicated fixtures. Use a local migrated DB;
+real Claude/ChatGPT proof is the separate [staging checklist](./api.md#connecting-claude-and-chatgpt).
+For screenshots, close the Next.js Dev Tools menu and issue overlay if present;
+its development-only warning can obscure the OAuth page without a page failure.
+
+### Build-check environment
+
+Use the placeholder env block in `.github/workflows/ci.yml`'s `build` job for
+production-bundle checks without deployment credentials. Hermetic exceptions
+require all three: `NOMA_HERMETIC_CI=true`, truthy `CI`, and a loopback app URL.
+A local production build outside that exception also needs a `CRON_SECRET`
+placeholder of at least 32 characters and the other [production gates](./security.md#hermetic-ci-exception-on-the-production-fail-closed-gates).
+Never use a real deployment secret for a build check. With OAuth enabled and no
+DB, [resource seeding can log an expected error](./troubleshooting.md#oauth-resource-seeding-during-build).
+
 ## Agent evaluation
 
 `pnpm eval:mcp` runs two feedstock intake requests, two chained production-run
@@ -426,8 +469,11 @@ retry**. Specs must not assume ordering across files, workers, or shards.
   main checkout is the live dev database. For a Vitest-only problem reset the test DB instead:
   `DATABASE_URL=<TEST_DATABASE_URL> pnpm db:reset`.
 - A side sheet is `[role="dialog"]`; assert on the sheet **closing** as the success signal.
-- A DataTable `<tr>` becomes `role="button"` when `onRowClick` is set — select with
-  `getByRole("button")`, not `getByRole("row")`.
+- A DataTable row stays a plain `<tr>` (role `row`) when `onRowClick` is set; the
+  `meta.recordLink` column holds the record link (`[data-row-link]`, an `<a href>` deep
+  link, or a link-styled button on reactors and formulations). Select rows with
+  `getByRole("row")` or `locator("table tbody tr")`, open one by clicking the row or that
+  link, and never rely on `role="button"` / `tabindex` on a row or mobile card.
 - **Wait for hydration before touching a control on a server-rendered form.** Forms are
   server-rendered, so the inputs exist in the HTML before React attaches to them, and
   react-hook-form only records a value once its `onChange` listener is live. A `fill()` or

@@ -4,14 +4,14 @@ import type { OrgContext } from "@/lib/auth/server";
 import { deleteSupplier as deleteSupplierOperation } from "@/lib/operations/suppliers";
 const deleteSupplier = (ctx: OrgContext, supplierId: string, expectedVersion: number) => runOperationInProcess(deleteSupplierOperation, ctx, { supplierId, expectedVersion });
 import { deleteCustomer as deleteCustomerOperation } from "@/lib/operations/customers";
-const deleteCustomer = (ctx: OrgContext, customerId: string, expectedVersion: number) => runOperationInProcess(deleteCustomerOperation, ctx, { customerId, expectedVersion });
+const deleteCustomer = async (ctx: OrgContext, customerId: string, expectedVersion: number) => { await runOperationInProcess(deleteCustomerOperation, ctx, { customerId, expectedVersion }); };
 import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { customers, customerLocations, suppliers, supplierLocations, facilities, feedstockTypes, feedstocks } from "@/db/schema";
-import { createSupplierLocation, deleteSupplierLocation, updateSupplierLocation } from "@/data-access/suppliers";
-import { createCustomerLocation, deleteCustomerLocation, updateCustomerLocation } from "@/data-access/customers";
+import { createSupplierLocation, deleteSupplierLocation, updateSupplierLocation } from "./helpers/supplier-location-operations";
+import { createCustomerLocation, deleteCustomerLocation, updateCustomerLocation } from "./helpers/customer-location-operations";
 import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 const ctx = makeTestOrgContext();

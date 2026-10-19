@@ -5,7 +5,8 @@ import {
   type CertifierProjectRow,
 } from "@/data-access/certification";
 import { requireOrgFacility } from "@/data-access/utils";
-import type { OrgContext } from "@/lib/auth/server";
+import { hasOrgRole, type OrgContext } from "@/lib/auth/server";
+import { REMOVAL_REGISTRY_DELETION_MIN_ROLE } from "@/lib/certification/removal-deletion-role";
 import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
 import { facilityIdSchema } from "./facility-id";
 
@@ -20,6 +21,8 @@ export interface FacilityCertifierSummary {
   linkedFacilityCount: number;
   isProduction: boolean;
   viewerCanManage: boolean;
+  /** Whether the viewer may delete Removals whose registry boundary opened. */
+  viewerCanDeleteRegistryRemovals: boolean;
 }
 
 /** The certification settings summary for one facility. */
@@ -45,6 +48,7 @@ export async function readFacilityCertifierSummary(
     mapping,
     linkedFacilityCount: linkedFacilities.length,
     isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
+    viewerCanDeleteRegistryRemovals: hasOrgRole(ctx, REMOVAL_REGISTRY_DELETION_MIN_ROLE),
     viewerCanManage:
       ctx.isPlatformAdmin ||
       ctx.orgRole === "owner" ||

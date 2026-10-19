@@ -6,6 +6,54 @@ these areas; the entry rules and invariants live in
 
 ## Architecture
 
+### OAuth connection follow-ups
+
+- **`api/activity-client-name`:** `src/lib/operations/runner.ts:runOperation`
+  records `oauthClientId`, but Activity does not display the connected app's name.
+  Add an organization-scoped label read without storing names in audit values.
+- **`api/oauth-client-admin-ui`:** `src/lib/auth/oauth-provider.ts:createOAuthProvider`
+  permits Platform Admin server-side creation only. Add a guarded client admin
+  screen for registration and disabling; preserve the closed HTTP endpoints.
+- **`api/oauth-purge-batches`:** `src/data-access/oauth-purge.ts` deletes expired
+  attempts, tokens and assertions in one statement each, unlike the bounded
+  batches of the other purge helpers. Volumes are small before production; batch
+  it before connections are on in production (PR #1161 review round 2).
+- **`api/dpop`:** `src/lib/auth/oauth-request-policy.ts:guardOAuthTokenInput`
+  refuses proofs and `src/lib/auth/oauth-context.ts:resolveOAuthContext` refuses
+  sender-bound rows. Full DPoP needs proof, nonce and replay validation before
+  advertising or accepting it.
+- **`api/chat-file-attachments`:** `src/lib/operations/document-guidance.ts:DOCUMENT_GUIDANCE`
+  directs agents without HTTP PUT to noma. Decision 128 defers chat attachments;
+  any Claude sandbox upload or ChatGPT file hand-off needs a separate verified
+  path, including fetch restrictions for server-side downloads.
+- **`api/mobile-oauth-client`:** register the native public client in **Phase 8**
+  (decision 126), using `src/lib/auth/oauth-provider.ts:createOAuthProvider` and
+  `src/lib/auth/oauth-config.ts:deriveOAuthConfig`. Settle its native redirect
+  and link it to REST only.
+- **claude.ai metadata and refresh:**
+  `src/lib/auth/oauth-cimd.ts:createOAuthCimdPlugins` uses the client's metadata
+  cache policy. Removing an identity can cause provider `invalid_client` on
+  refresh.
+  Record claude.ai's metadata `Cache-Control` and its reaction to that refusal
+  in c8, alongside client versions in [plan section 28](./plans/2026-10-06-data-entry-api.md#28-oauth-track-results-2026-10-19).
+- **Shared Disconnect touch target:**
+  `src/components/oauth/connected-app-list.tsx:ConnectedAppList` uses the shared
+  `src/components/ui/button/index.tsx:Button` at 40px. Resolve the shared target size
+  against the design system's 44px minimum without a one-off OAuth override.
+
+### Party write adapters per kind (`api/party-write-adapters`, opened 2026-10-17)
+
+- **Anchor:** `src/lib/mcp/tools/party-tools.ts:partyWriteTools`,
+  `src/lib/api/customer-locations-mutations.ts` and
+  `src/lib/api/supplier-locations-mutations.ts`.
+- `partyWriteTools` branches on `kind` for the customer delete cascade and the
+  location tools (`checkedDelete` is optional and asserted). The two location
+  mutation modules and their write-operation files match line for line apart
+  from schema, operation, ETag and noun. A transport change has to land twice.
+- **Follow-up:** inject the delete runner, its output schema and the location
+  tools through `deps`; extract one `partyLocationMutationResponse` helper with
+  per-kind configuration. Keep replay-before-revision and empty-body rules.
+
 ### Formulation bin foreign-key backstop (`data/formulation-bin-fk-backstop`, opened 2026-10-16)
 
 - **Anchor:** `src/db/schema/facilities.ts:storageLocations`,
@@ -30,6 +78,8 @@ these areas; the entry rules and invariants live in
 - **Follow-up:** add a test-only interception seam, bump the customer once through
   its operation, then release the agent. Score one stale write, a new read and
   one retry with the requested final change. Keep the case skipped until then.
+- Phase 7c adds the location-update, missing-GPS, archive, in-use refusal and
+  archived-order-destination cases; none provides the interception seam above.
 
 ### Align the Applications page credit batch filter (`app/application-batch-lineage-filter`, opened 2026-10-15)
 
@@ -190,7 +240,9 @@ these areas; the entry rules and invariants live in
   is **not** dead: both delete surfaces read it as `registryBoundaryOpened`
   for the confirmation copy (`src/lib/certification/removal-external-mutation.ts`,
   consumed by `src/fn/certification/removals-hub.ts` and the certify
-  context); issue #746 decides whether it also becomes a role gate.
+  context), and it is also the role gate: once it is set, deleting needs
+  `REMOVAL_REGISTRY_DELETION_MIN_ROLE` (`src/lib/certification/removal-deletion-role.ts`,
+  issue #746).
 - **To resolve:** retire `discardLocalRemovalDraft` and port the three
   fixtures onto `claimRemovalDeletion` (which takes the same Removal row and
   artifact locks), or record why the discard seam stays. The marker and its
@@ -216,6 +268,17 @@ these areas; the entry rules and invariants live in
   **To resolve:** if an operation ever needs external work inside its
   transaction, race the callback against the deadline and keep the client out
   of the pool until the callback settles; until then keep `execute` database-only.
+
+### Location distance fill runs inside the pair save (`data/location-distance-fill-cost`, opened 2026-10-16)
+
+- **Anchor:** `src/data-access/location-distance-fill.ts:fillMissingLocationDistances`.
+- A supplier pair save locks the supplier FOR UPDATE and every unfilled intake of
+  that supplier, then fills their legs in the same transaction. On a large
+  supplier this is a long transaction under the 10 s operation budget.
+- The fill stays synchronous and atomic: past the deadline the whole write fails
+  with retryable `deadline_exceeded`, never a partial fill. No batch cap.
+- **Follow-up:** measure the p99 on the Mafinga seed. If it does not fit, design a
+  durable queued continuation with changed response semantics.
 
 ### Production run row precedes delivery lineage artifacts (`data/production-run-artifact-order`, opened 2026-10-14)
 
@@ -545,6 +608,13 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   decrypt-only retired keys with a background re-encrypt pass during a bounded
   rotation window. Cheap now, expensive to retrofit (M). See
   [`docs/security.md`](./security.md).
+
+### Platform Admin cross-organization deep link (`tenancy/admin-deep-link`, opened 2026-10-19)
+
+- Platform Admin cross-organization deep link: a link to a record in another
+  organization shows Not found; later, noma could name the owning organization
+  and offer to switch. Non-members keep the 404
+  (`tests/e2e/org-isolation.spec.ts`). Parked 2026-10-19 (#372).
 
 ### Drop the `ALLOW_SELF_SIGNUP` flag (`auth/drop-self-signup-flag`, opened 2026-07-20)
 

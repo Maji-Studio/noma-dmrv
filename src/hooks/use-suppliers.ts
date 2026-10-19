@@ -1,4 +1,5 @@
 import { transportLegKeys } from "./use-transport-legs";
+import { chainOfCustodyKeys } from "./use-chain-of-custody";
 import { feedstockKeys } from "./use-feedstocks";
 import { invalidateCertificationReadiness } from "./use-certification";
 /**
@@ -126,6 +127,12 @@ export function useSupplier(supplierId: string, enabled = true) {
     ...supplierQueryOptions(supplierId),
     enabled: enabled && !!supplierId,
   });
+}
+
+/** Read one supplier from the server now, bypassing the cache, for a sheet that needs its current row. */
+export function useFetchSupplier() {
+  const queryClient = useQueryClient();
+  return (supplierId: string) => queryClient.fetchQuery({ ...supplierQueryOptions(supplierId), staleTime: 0 });
 }
 
 // ============================================
@@ -501,6 +508,7 @@ export function useCreateSupplierLocation(callbacks?: MutationCallbacks<Supplier
       queryClient.invalidateQueries({ queryKey: supplierKeys.detail(variables.supplierId) });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: transportLegKeys.all }),
+        queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all }),
         queryClient.invalidateQueries({ queryKey: feedstockKeys.all }),
         invalidateCertificationReadiness(queryClient, { creditBatchPreviews: true }),
       ]);
@@ -530,6 +538,7 @@ export function useUpdateSupplierLocation(supplierId: string, callbacks?: Mutati
       queryClient.invalidateQueries({ queryKey: supplierKeys.detail(supplierId) });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: transportLegKeys.all }),
+        queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all }),
         queryClient.invalidateQueries({ queryKey: feedstockKeys.all }),
         invalidateCertificationReadiness(queryClient, { creditBatchPreviews: true }),
       ]);
@@ -556,6 +565,7 @@ export function useDeleteSupplierLocation(supplierId: string, callbacks?: Mutati
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(supplierId) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.detail(supplierId) });
+      queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       callbacks?.onSuccess?.(undefined, variables);
     },
     onError: (error, variables) => {

@@ -360,6 +360,7 @@ export function FeedstockTypeForm({
                     <SegmentedControl
                       id="usage"
                       legend="Usage"
+                      required
                       disabled={isSubmitting}
                       error={!!errors.usage}
                       options={usageOptions}

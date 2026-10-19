@@ -5,6 +5,7 @@
  */
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import versions from "../../../docs/isometric/versions.json";
 import { CertificationSettings } from "./certification-settings";
 
 const facilityState = vi.hoisted(() => ({
@@ -116,6 +117,30 @@ describe("CertificationSettings", () => {
     // One pane at a time: no other section's content is in the document.
     expect(html).not.toContain("Emission estimates form");
     expect(html).not.toContain("Source visibility policy");
+  });
+
+  it("lists the pinned protocol and modules with versions and registry links in the certifier pane", () => {
+    const html = renderToStaticMarkup(<CertificationSettings />);
+
+    expect(html).toContain("Protocols in use");
+    expect(html).toContain(versions.protocol.name);
+    expect(html).toContain(`v${versions.protocol.patch_version}`);
+    expect(html).toContain(
+      `https://registry.isometric.com/protocol/${versions.protocol.slug}/${versions.protocol.minor_version}"`,
+    );
+    for (const mod of versions.modules) {
+      expect(html).toContain(mod.name);
+      expect(html).toContain(`v${mod.patch_version}`);
+      expect(html).toContain(
+        `https://registry.isometric.com/module/${mod.slug}/${mod.minor_version}"`,
+      );
+    }
+
+    // Other panes do not carry it.
+    urlState.section = "sources";
+    expect(renderToStaticMarkup(<CertificationSettings />)).not.toContain(
+      "Protocols in use",
+    );
   });
 
   it("groups categories under the tier that owns them", () => {
@@ -235,7 +260,7 @@ describe("CertificationSettings", () => {
 
     expect(html).toContain("Certifier");
     expect(html).toContain("Sources");
-    expect(html).not.toContain("Emissions");
+    expect(html).not.toContain(">Emissions<");
   });
 
   it("falls back to a visible section when the URL asks for one this viewer lacks", () => {

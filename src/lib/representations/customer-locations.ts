@@ -16,7 +16,8 @@ export const customerLocationRepresentationSchema = z.object({
   stateRegion: z.string().nullable().describe("State or region, or null when unspecified."),
   city: z.string().nullable().describe("City, or null when unspecified."),
   version: lookupVersion,
-}).omit({ code: true, archivedAt: true });
+  archivedAt: z.iso.datetime().nullable().describe("Archive instant in UTC (RFC 3339), or null when active."),
+}).omit({ code: true });
 export type CustomerLocationRepresentation = z.infer<typeof customerLocationRepresentationSchema>;
 export type CustomerLocationRepresentationInput = LookupRepresentationInput<CustomerLocationRepresentation>;
 

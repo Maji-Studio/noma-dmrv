@@ -423,9 +423,10 @@ Parquet and reactor MeasurementSamples are outside the approved submission route
 
 ## Operational checks
 
-- `pnpm isometric:coverage-check -- --source=fixture` validates checked-in
-  template fixtures against ordinary, durability, diesel-name, safety-margin,
-  and PROJECT-scope guards.
+- `pnpm isometric:coverage-check -- --source=fixture` fetches live templates
+  selected by the checked-in fixture and uses the same line contracts as readiness
+  and submission (ADR 0032). Entry-only operating lines warn; unsettled contracts,
+  forbidden lines and unmapped inputs fail.
 - `pnpm isometric:coverage-check -- --source=db` inspects configured facility
   templates when credentials/database access are available.
 - `.github/workflows/isometric-health.yml` performs the repository's scheduled

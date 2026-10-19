@@ -1,3 +1,4 @@
+import { apiKeyContext } from "../../../../tests/helpers/api-context";
 import { beforeEach, expect, it, vi } from "vitest";
 import { DELIVERY_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { representationEtag } from "@/lib/api/etag";
@@ -26,7 +27,7 @@ const row = { id: ID, code: "DL-1", version: 2, facilityId: ID, orderId: ID, sto
 const allocations = [{ layerId: ID, code: "BP-1", dryBiocharKg: 80, solidsKg: 80, wetKg: MASS_KG, moisturePercent: 20, policy: "fifo" }];
 const create = { orderId: ID, storageLocationId: ID, deliveredAt: CLOCK, deliveredWetMassKg: MASS_KG, moisturePercent: 20 };
 const target = { deliveryId: ID, expectedVersion: row.version };
-const context = { ctx: { credentialId: "credential", organizationId: "org", userId: "user" }, deadlineAt: 0,
+const context = { ctx: apiKeyContext({ credentialId: "credential", organizationId: "org", userId: "user" }), deadlineAt: 0,
   requestId: "request", instance: "/api/mcp", headers: new Headers() } as unknown as ApiRouteContext;
 const tool = (name: string) => deliveryWriteTools.find(candidate => candidate.name === name)!;
 const args = (name: string) => name === "record_delivery" ? create : target;

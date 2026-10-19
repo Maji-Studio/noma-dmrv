@@ -21,6 +21,9 @@ diesel against. Production runs are the membership primitive for a
 **credit batch** and roll up (applied-biochar scoped) into an Isometric
 **Removal** through their derived application lineage — a run is *not*
 1:1 with a Removal.
+A completed run joins the credit batch whose window contains the day the
+run ended on the facility's calendar, in its time zone. Lists and dashboards
+still date runs by their start.
 
 **Production run status**:
 New runs default to *Running*. Operators may create an already-finished run
@@ -52,7 +55,14 @@ _Avoid_: sensor dump, log file, reactor-day file, channel mapping.
 An operating-emissions measurement recorded on one credit batch and bound to a
 Removal-template line. Its typed values and evidence supplement automatic run
 figures where the line allows it.
+_On screen_: manual entry; the screen calls the part that comes from forms and
+routes "From records".
 _Avoid_: activity (reserved for the history log).
+
+**Line comment**:
+One editable comment on a credit batch's Removal-template line, identified by
+component ID. It stays in noma and never changes line state or blocks a Removal.
+Earlier wording stays in the activity log. Each emissions entry keeps its own note.
 
 **Emission estimate**:
 A per-facility configured value (reference soil temperature) used to derive
@@ -371,17 +381,22 @@ _Avoid_: treating an application event or facility inventory bin as the site.
 
 **Credit batch**:
 noma's production-cohort unit of carbon accounting — the production
-runs of **one feedstock** at one facility within a ≤1-month window.
+runs of **one feedstock** at one facility within a production window. Under Isometric, both the window and the member-run
+span (earliest start to latest end) must cover less than one month. Other
+certifiers have no month cap.
 This makes a credit batch the Isometric protocol's **production
 batch**: the lab-characterisation and sampling unit (one feedstock,
 consistent pyrolysis conditions). The one-calendar-month cap is noma’s
 conservative rule (ADR 0016), not a pinned Biochar v1.1 requirement. A facility running
 several feedstocks in a month therefore has several **concurrent**
 credit batches, one per feedstock. The `startDate`/`endDate` window
-means production period, not application period. Batch membership is
-production runs — each completed run matching the batch's organization,
-facility, feedstock, and production window is attached automatically, so the
-batch may be declared before any runs exist. Application-by-credit-batch wet
+means production period, not application period. Batch members are
+**production runs**. Each completed run joins the credit batch whose inclusive
+window contains the day the run ended on the facility's calendar, in its time
+zone, matching its organization, facility and feedstock. Lists and dashboards
+still date runs by their start. Matching runs
+attach automatically while membership is unlocked, so the batch may be declared
+before any runs exist. Application-by-credit-batch wet
 and dry mass slices are derived from product provenance. A slice belongs to a
 Removal only after its nullable ownership is assigned, so newly applied mass
 from the same credit batch can remain unassigned for a later Removal without
@@ -572,13 +587,16 @@ surfaces as evidence health, never as an upload error.
 _Avoid_: validation failure (the photo is not rejected).
 
 **Distance override**:
-A one-way distance recorded on a delivery only when that delivery's
-routing differs from the destination's stored distance for the delivery's facility.
-The delivery records its location and facility distance independently of the
-override. Clearing an override restores that recorded distance. Pair saves fill
-missing distances on unlocked deliveries and feedstock transport, but never
-replace a recorded distance, including for unsubmitted Removals. Deliberate
-refresh and per-leg overrides are separate operations; submitted and certified
+A positive one-way distance saved on a feedstock or delivery when its route
+needs an explicit distance instead of the location's facility default. The
+record stores the override, its provenance and an optional note. Derived legs
+keep their recorded distances: changing a location default affects future
+records, while pair saves can fill missing distances on unlocked records.
+Clearing a feedstock override deliberately derives its leg from the current
+supplier default location and facility pair. Clearing a delivery override
+restores its independently recorded pair distance. Refresh from location is a
+separate deliberate, version-checked correction of a derived distance; it
+re-stamps the current pair and resyncs transport. Submitted and certified
 lineage remains locked.
 _Avoid_: treating the override as the primary distance value.
 
@@ -681,6 +699,20 @@ A user's belonging to an **Organization**, carrying one org role —
 are Admin-and-up), or *Member* (day-to-day MRV data entry). A user may
 hold memberships in several Organizations, though one is the norm.
 _Avoid_: teammate, seat.
+
+### Connected apps
+
+**Connected app**:
+An app a person has allowed to act for them in one **Organization**, within
+permissions they approve. This is the app-facing term shown in Settings.
+_Avoid_: integration, API key, OAuth client when writing interface copy.
+
+**OAuth client**:
+The technical identity of an app that requests a person's permission to use
+noma; one OAuth client can have many **Connected apps** belonging to different
+people or Organizations.
+_Avoid_: client in operator-facing copy; treating the app identity as one
+person's connection.
 
 ## Relationships
 

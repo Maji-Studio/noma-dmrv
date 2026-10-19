@@ -29,6 +29,15 @@ function facts(): FacilityCertifierFacts {
 }
 
 describe("Removal template pins", () => {
+  it("uses raw template array order for live facility facts", () => {
+    const facility = facts();
+    facility.templatesById[template.id]!.observation!.lineSources = resolveLineSources({ definition: normalizeTemplateDefinition(template) });
+    const lines = resolveRemovalTemplate([{ id: "batch", removalTemplateId: template.id }], facility).emissionLines!;
+    expect(lines.map(({ componentId, groupName, groupPosition, position }) => ({ componentId, groupName, groupPosition, position })))
+      .toEqual(template.groups.flatMap((group, groupPosition) => group.components.map((component, position) => ({
+        componentId: component.id, groupName: group.display_name, groupPosition, position,
+      }))));
+  });
   it("blocks an unpinned member without substituting the default", () => {
     const result = resolveRemovalTemplate([{ removalTemplateId: template.id }, { removalTemplateId: null }], facts());
     expect(result.removalTemplate).toBeNull();

@@ -16,6 +16,7 @@ import { API_VERSION } from "@/config/api-rest";
 import { readDescriptions } from "@/lib/operations/read-descriptions";
 import { z } from "zod";
 import { API_BODY_MAX_BYTES, API_FEEDSTOCK_MAX_ALLOCATIONS, API_DOCS_CACHE_SECONDS } from "@/config/api-rest";
+import { OAUTH_GRANTABLE_SCOPES } from "@/lib/auth/oauth-scopes";
 import { API_KEY_LIVE_PREFIX, API_KEY_TEST_PREFIX } from "@/config/api-keys";
 import { createFeedstockSchema, updateFeedstockSchema } from "@/schemas/feedstocks";
 import type { JsonSchema } from "@/lib/operations/json-schema";
@@ -32,6 +33,7 @@ import { resources } from "./resources";
 import { operationInput, privateOperation, requestBody, type Paths } from "./operation-kit";
 import { addBiocharWritePaths } from "./biochar-writes";
 import { addOrderWritePaths } from "./order-writes";
+import { addPartyLocationWritePaths } from "./party-location-writes";
 import { addPartyWritePaths } from "./party-writes";
 import { addFormulationWritePaths } from "./formulation-writes";
 import { addDeliveryWritePaths } from "./delivery-writes";
@@ -47,6 +49,7 @@ const resourceReadDescriptions: Partial<Record<(typeof resources)[number]["path"
   customers: { list: `${readDescriptions.list} ${readDescriptions.customers}`, get: readDescriptions.customers },
 };
 
+const OAUTH_ISSUER_PATH = "/api/auth";
 const READ_ERRORS = [400, 401, 403, 429, 500];
 const WRITE_ERRORS = [400, 401, 403, 404, 409, 422, 429, 500, 503];
 const JSON_INDENT = 2;
@@ -147,6 +150,16 @@ export function buildOpenApiDocument() {
   responses.CustomerProblem412 = { ...responses.Problem412,
     content: { "application/problem+json": { schema: { $ref: "#/components/schemas/CustomerPreconditionProblem" } } },
   };
+  for (const kind of ["Supplier", "Customer"]) {
+    schemas[`${kind}LocationPreconditionProblem`] = {
+      allOf: [{ $ref: "#/components/schemas/Problem" }, { type: "object", properties: {
+        current: { $ref: `#/components/schemas/${kind.toLowerCase()}_location`, description: "Current location after a failed version precondition." },
+      }, required: ["current"] }],
+    };
+    responses[`${kind}LocationProblem412`] = { ...responses.Problem412,
+      content: { "application/problem+json": { schema: { $ref: `#/components/schemas/${kind}LocationPreconditionProblem` } } },
+    };
+  }
   const runPreconditionResponse = { "412": { $ref: "#/components/responses/ProductionRunProblem412" } };
   const feedstockPreconditionResponse = { "412": { $ref: "#/components/responses/FeedstockProblem412" } };
   for (const resource of published) {
@@ -183,6 +196,17 @@ export function buildOpenApiDocument() {
     { ...problemResponses([...READ_ERRORS, 404]), "200": jsonResponse("Supplier location page.", publishOutput(listEnvelopeSchema(supplierLocationRepresentationSchema))) },
     [targetParameter(true), ...queryParameters(supplierLocationListSchema)],
   ) };
+  for (const kind of ["customer", "supplier"] as const) {
+    const schema = kind === "customer" ? customerLocationRepresentationSchema : supplierLocationRepresentationSchema;
+    paths[`/${kind}s/{idOrCode}/locations/{locationId}`] = { get: privateOperation(
+      `get_${kind}_location`, `${kind}s:read`,
+      "Read one location under its parent, including archived parties and locations. Returns a strong version.revision ETag. Missing, foreign or wrong-parent locations answer 404 at /locationId.",
+      { ...problemResponses([...READ_ERRORS, 404]), "200": jsonResponse("Location representation.", publishOutput(itemEnvelopeSchema(schema)), etagHeader) },
+      [targetParameter(kind === "supplier"), { name: "locationId", in: "path", required: true,
+        description: "Location identifier under this parent, UUID.", schema: { type: "string", format: "uuid" } }],
+    ) };
+  }
+  addPartyLocationWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
   paths["/storage-locations/{idOrCode}/stock-movements"] = { get: privateOperation(
     "find_output_stock_movements", "biochar-products:read", readDescriptions.outputStockMovements,
     { ...problemResponses([...READ_ERRORS, 404, 422]), "200": jsonResponse("Movement page.", publishOutput(listEnvelopeSchema(outputStockMovementRepresentationSchema, "newest posting first"))) },
@@ -200,7 +224,7 @@ export function buildOpenApiDocument() {
   (createInput.properties as Record<string, JsonSchema>).allocations.maxItems = API_FEEDSTOCK_MAX_ALLOCATIONS;
   const patchInput = operationInput(updateFeedstockSchema.omit({ feedstockId: true, expectedVersion: true }));
   paths["/feedstocks"].post = {
-    ...privateOperation("log_feedstock_delivery", "feedstocks:write", "Record a wood-chip intake split across receiving bins. Positive wet masses and moisture at least 0 and below 100 are required; allocation overage requires justification. Dry runs roll back, skip external effects and return provisional ids, codes and stock additions. Location and ETag identify the first feedstock on committed responses and are absent on dry runs.",
+    ...privateOperation("log_feedstock_delivery", "feedstocks:write", "Record a wood-chip intake split across receiving bins. A positive transportDistanceKm persists a one-way distance override; omission derives the distance from the supplier location for this facility. Positive wet masses and moisture at least 0 and below 100 are required; allocation overage requires justification. Dry runs roll back, skip external effects and return provisional ids, codes and stock additions. Location and ETag identify the first feedstock on committed responses and are absent on dry runs.",
       { ...problemResponses([...WRITE_ERRORS, 413, 415]),
         "201": jsonResponse("Intake committed, or replayed.", publishOutput(feedstockCreateEnvelopeSchema), { ...etagHeader, ...locationHeader, ...writeHeaders }),
         "200": jsonResponse("Dry-run intake preview.", publishOutput(feedstockCreateEnvelopeSchema), writeHeaders) },
@@ -214,7 +238,7 @@ export function buildOpenApiDocument() {
     }),
   };
   paths["/feedstocks/{idOrCode}"].patch = {
-    ...privateOperation("update_feedstock", "feedstocks:write", "Update by UUID using a strong If-Match. Omitted fields stay unchanged, null clears clearable fields, zero stays zero. Wet/dry mass and moisture are validated against locked merged state. Dry runs roll back. Replays precede version rechecking.",
+    ...privateOperation("update_feedstock", "feedstocks:write", "Update by UUID using a strong If-Match. Omitted fields stay unchanged. A positive transportDistanceKm sets an override; null clears it and captures the current supplier-location facility distance. Legacy zero also clears. Other clearable fields accept null. Wet/dry mass and moisture are validated against locked merged state. Dry runs roll back. Replays precede version rechecking.",
       { ...problemResponses([...WRITE_ERRORS, 412, 413, 415, 428]), ...feedstockPreconditionResponse, "200": jsonResponse("Updated feedstock or dry-run representation. ETag is absent on dry runs.", publishOutput(stockWriteEnvelopeSchema(feedstockRepresentationSchema)), { ...etagHeader, ...writeHeaders }) },
       [targetParameter(true), ...queryParameters(mutationQuerySchema), ifMatchParameter, idempotencyParameter(false)]),
     requestBody: requestBody(patchInput, { massWetKg: 4250, notes: "Corrected weighbridge wet mass for bin B2." }),
@@ -277,11 +301,26 @@ export function buildOpenApiDocument() {
       content: { [mediaType]: { schema: mediaType === "text/plain" ? { type: "string", description: "Plain-text guide for API agents." } : { type: "object", description: "OpenAPI 3.1 document.", additionalProperties: true } } },
     } } } };
   }
+  // Operations keep the global bearer requirement: an OAuth access token is
+  // also an Authorization: Bearer credential. The oauth2 scheme documents how
+  // to obtain one; per-operation alternatives would hide the bearer header
+  // from contract fuzzing (Schemathesis negative auth probes).
   return {
     openapi: "3.1.0",
     info: { title: "noma data-entry API", version: API_VERSION, description: "Organization-scoped feedstock intake, production runs, biochar products, lab samples, formulations, orders and balances, suppliers, customers and destination lookups, and output bin stock movement history. Use POST /formulations with Idempotency-Key; PATCH and DELETE /formulations/{id} and POST /formulations/{id}/archive and /restore use UUID paths with If-Match (formulations:write for create, update, archive and restore; formulations:delete for delete). Use POST /suppliers with Idempotency-Key; PATCH and DELETE /suppliers/{id} and POST /suppliers/{id}/archive and /restore use UUID paths with If-Match (suppliers:write for create, update, archive and restore; suppliers:delete for delete). Use POST /customers with Idempotency-Key; PATCH and DELETE /customers/{id} and POST /customers/{id}/archive and /restore use UUID paths with If-Match (customers:write for create, update, archive and restore; customers:delete for delete). Business dates are facility-local YYYY-MM-DD; event times are sent as RFC 3339 with an explicit offset or as facility-local { date, time }, and returned as UTC instants. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers. Unsupported methods on visible paths return Problem405 with Allow listing supported methods, including automatic HEAD and OPTIONS. Private refusals follow bearer authentication and path visibility checks; unknown or invisible paths return 404 without Allow. Public discovery paths need no credential. This response is a path-level refusal, not a response of a published operation." },
     servers: [{ url: "/api/v1" }], security: [{ bearerAuth: [] }], paths,
-    components: { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "API key", description: `Authorization: Bearer <key> only. Keys use ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX} prefixes and bind exactly one organization; cookies and x-api-key cannot authorize requests.` } }, schemas, headers: headerComponents, responses },
+    components: { securitySchemes: {
+      bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "API key", description: `Authorization: Bearer <key> only. Keys use ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX} prefixes and bind exactly one organization; cookies and x-api-key cannot authorize requests.` },
+      oauth2: {
+        type: "oauth2",
+        description: "OAuth connections require the provider flag. Authorization code with S256 PKCE only, using the same-origin /api/auth issuer. Send resource for this origin's /api/v1 audience. Start with read scopes and step up on 403 insufficient_scope. Request offline_access for refresh; no delete scopes are grantable.",
+        flows: { authorizationCode: {
+          authorizationUrl: `${OAUTH_ISSUER_PATH}/oauth2/authorize`,
+          tokenUrl: `${OAUTH_ISSUER_PATH}/oauth2/token`,
+          scopes: Object.fromEntries([...OAUTH_GRANTABLE_SCOPES].map(scope => [scope, `Allow ${scope}.`])),
+        } },
+      },
+    }, schemas, headers: headerComponents, responses },
   };
 }
 

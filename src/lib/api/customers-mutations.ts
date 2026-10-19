@@ -1,7 +1,9 @@
+import { apiAudit } from "@/lib/api/audit";
 import { z } from "zod";
 import { DomainError } from "@/lib/domain-errors";
 import { createCustomerApi } from "@/lib/operations/customer-api";
 import { toOperationJsonSchema } from "@/lib/operations/json-schema";
+import { runWithCascadePreview } from "@/lib/operations/cascade-preview";
 import { runOperation } from "@/lib/operations/runner";
 import { customerLocationRepresentationSchema } from "@/lib/representations/customer-locations";
 import { customerRepresentationSchema } from "@/lib/representations/customers";
@@ -10,9 +12,9 @@ import { partyNotFound } from "@/lib/party-domain-errors";
 import { canonicalUuid } from "./canonical-uuid";
 import { parseIfMatch } from "./etag";
 import { withCurrentOnStale } from "./customer-write-checks";
-import { representationCheckedDelete, representationCheckedTransition, representationCheckedUpdate } from "./customer-write-operations";
+import { representationCheckedCascadeDelete, representationCheckedTransition, representationCheckedUpdate } from "./customer-write-operations";
 import { remainingDeadlineMs } from "./write-checks";
-import { mutationQuerySchema, parseApiQuery } from "./query";
+import { customerDeleteQuerySchema, mutationQuerySchema, parseApiQuery } from "./query";
 import { readIdempotencyKey, readJsonBody, readOptionalJsonBody } from "./request-body";
 import { customerEtag } from "./representation-etags";
 import type { ApiRouteContext } from "./route";
@@ -39,7 +41,7 @@ export async function createCustomerResponse(request: Request, { ctx, headers, d
   rejectUnknownFields(body, createContract);
   const result = await runOperation(createCustomerApi, ctx, body, {
     deadlineMs: remainingDeadlineMs(deadlineAt), dryRun,
-    audit: { requestId, credentialId: ctx.credentialId, transport: "rest" },
+    audit: apiAudit(ctx, requestId, "rest"),
     idempotency: key ? { credentialId: ctx.credentialId, key } : undefined,
   });
   const responseBody = createCustomerBody(result.data);
@@ -66,7 +68,7 @@ export async function updateCustomerResponse(request: Request, { ctx, headers, d
       ? { ...body, customerId: id, expectedVersion: version } : body;
     const result = await runOperation(representationCheckedUpdate(id, revision), ctx, input, {
       deadlineMs: remainingDeadlineMs(deadlineAt), dryRun,
-      audit: { requestId, credentialId: ctx.credentialId, transport: "rest" },
+      audit: apiAudit(ctx, requestId, "rest"),
       idempotency: key ? { credentialId: ctx.credentialId, key, target: id, precondition: precondition! } : undefined,
     });
     const responseBody = customerBody(result.data);
@@ -79,7 +81,8 @@ export async function updateCustomerResponse(request: Request, { ctx, headers, d
 
 /** DELETE and the two POST commands share the empty-body and precondition contracts. */
 export async function commandCustomerResponse(request: Request, { ctx, headers, deadlineAt, requestId }: ApiRouteContext, segment: string, command: "delete" | "archive" | "restore") {
-  const { dryRun } = parseApiQuery(request, mutationQuerySchema);
+  const query = parseApiQuery(request, command === "delete" ? customerDeleteQuerySchema : mutationQuerySchema);
+  const { dryRun } = query;
   const precondition = request.headers.get("if-match");
   const { version, revision } = parseIfMatch(precondition);
   const id = canonicalUuid(segment);
@@ -93,16 +96,16 @@ export async function commandCustomerResponse(request: Request, { ctx, headers, 
   return withCurrentOnStale(ctx, id, async () => {
     const options = {
       deadlineMs: remainingDeadlineMs(deadlineAt), dryRun,
-      audit: { requestId, credentialId: ctx.credentialId, transport: "rest" as const },
+      audit: apiAudit(ctx, requestId, "rest"),
       idempotency: key ? { credentialId: ctx.credentialId, key, target: id, precondition: precondition! } : undefined,
     };
     const input = { customerId: id, expectedVersion: version };
     if (command === "delete") {
-      const result = await runOperation(representationCheckedDelete(id, revision), ctx, input, options);
+      const result = await runWithCascadePreview(representationCheckedCascadeDelete(id, revision), ctx, { ...input, ...("cascadeFingerprint" in query ? { cascadeFingerprint: query.cascadeFingerprint } : {}) }, options);
       if (result.replayed) headers.set("Idempotent-Replayed", "true");
       if (dryRun) {
         headers.set("Dry-Run", "true");
-        return Response.json({ data: customerRepresentationSchema.parse(result.data) }, { headers });
+        return Response.json({ ...customerBody(result.data), cascade: result.data.cascade, ...(result.data.warnings.length ? { warnings: result.data.warnings } : {}) }, { headers });
       }
       return new Response(null, { status: 204, headers });
     }

@@ -27,11 +27,13 @@ type SubmitHandler = (data: never) => Promise<void> | void;
 
 const harness = vi.hoisted(() => ({
   update: vi.fn(),
+  warning: vi.fn(),
   onSubmit: null as SubmitHandler | null,
   errorMessages: [] as (string | undefined)[],
   locationProps: [] as unknown[],
 }));
 
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn(), warning: harness.warning }) }));
 vi.mock("@/components/forms/entity-select/quick-add-dialog-shell", () => ({
   QuickAddDialogShell: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
@@ -90,6 +92,7 @@ const draft = {
 
 beforeEach(() => {
   harness.update.mockReset();
+  harness.warning.mockReset();
   harness.onSubmit = null;
   harness.errorMessages.length = 0;
   harness.locationProps.length = 0;
@@ -136,6 +139,25 @@ describe("CustomerLocationDialog on a stale-version refusal", () => {
     expect(new Set(harness.locationProps).size).toBe(1);
     expect(harness.locationProps.at(-1)).toBe(location);
 
+    await act(async () => {
+      renderer?.unmount();
+    });
+  });
+
+  it("closes and shows what else the save changed as one warning", async () => {
+    harness.update.mockResolvedValue({ warnings: ["E2E South Block is no longer the default location.", "Recorded the distance on 2 deliveries."] });
+    const onClose = vi.fn();
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(<CustomerLocationDialog isOpen onClose={onClose} customerId={CUSTOMER_ID} location={location} />);
+    });
+
+    await act(async () => {
+      await harness.onSubmit?.(draft as never);
+    });
+
+    expect(onClose).toHaveBeenCalled();
+    expect(harness.warning).toHaveBeenCalledWith("E2E South Block is no longer the default location. Recorded the distance on 2 deliveries.");
     await act(async () => {
       renderer?.unmount();
     });

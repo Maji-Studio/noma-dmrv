@@ -64,3 +64,16 @@ export function buildFeedstockTypeEditDeepLink(
   }
   return `${FEEDSTOCK_TYPES_PATH}?${params.toString()}`;
 }
+
+/** Deep link that opens one record's view sheet on its list page. */
+export function entityViewHref(
+  path: string,
+  queryKey: string,
+  entityId: string,
+  facilityId?: string | null,
+): string {
+  const params = new URLSearchParams();
+  if (facilityId) params.set("facility", facilityId);
+  params.set(queryKey, entityId);
+  return `${path}?${params.toString()}`;
+}

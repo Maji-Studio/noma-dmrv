@@ -36,6 +36,7 @@ export interface RemovalCertifyContext {
   removalTemplate: IsometricGhgEntryTemplate | null;
   lineSources: LineSources;
   templateBlockers: RemovalTemplateBlocker[];
+  emissionLinesByBatchId?: Record<string, BatchEmissionLine[]>;
   emissionLines?: BatchEmissionLine[] | null;
   blueprintsForTemplate: IsometricComponentBlueprint[];
   unresolvedBlueprintKeys: string[];
@@ -122,6 +123,7 @@ export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "e
     code: string;
     durabilityOption: DurabilityOption;
     claimedByRemovalId: string | null;
+    claimingRemovalCode?: string | null;
     productionRunIds: string[];
     applicationIds: string[];
     applicationSlices?: {

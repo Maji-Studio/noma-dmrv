@@ -145,7 +145,7 @@ describe("registered customer operations", { timeout: TIMEOUT_MS }, () => {
   const archive = operationRegistry.archive_customer;
   const restore = operationRegistry.restore_customer;
   const remove = operationRegistry.delete_customer;
-  it.each(["json", "in-process"] as const)("returns JSON safe envelopes through %s and void for delete", async mode => {
+  it.each(["json", "in-process"] as const)("returns JSON safe envelopes through %s including the delete cascade", async mode => {
     const f = await fixture();
     const made = mode === "json" ? (await runOperation(create, f.ctx, input)).data : await runOperationInProcess(create, f.ctx, input);
     expect(Object.keys(made)).toEqual(["customer", "locations"]);
@@ -173,10 +173,15 @@ describe("registered customer operations", { timeout: TIMEOUT_MS }, () => {
       expect(JSON.parse(JSON.stringify(committed))).toEqual(committed);
     }
     const body = { customerId: first.id, expectedVersion: 4 };
-    expect((await runOperation(remove, f.ctx, body, { dryRun: true })).data).toBeNull();
+    const customer = await readApiCustomer(f.ctx, { id: first.id });
+    const expected = { customer, cascade: { orders: [], cascadeFingerprint: "v1:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" }, warnings: [] };
+    const preview = (await runOperation(remove, f.ctx, body, { dryRun: true })).data;
+    expect(preview).toEqual(expected);
+    expect(JSON.parse(JSON.stringify(preview))).toEqual(preview);
     expect(await readApiCustomer(f.ctx, { id: first.id })).toMatchObject({ version: 4 });
-    if (mode === "json") expect((await runOperation(remove, f.ctx, body)).data).toBeNull();
-    else expect(await runOperationInProcess(remove, f.ctx, body)).toBeUndefined();
+    const deleted = mode === "json" ? (await runOperation(remove, f.ctx, body)).data : await runOperationInProcess(remove, f.ctx, body);
+    expect(deleted).toEqual(expected);
+    expect(JSON.parse(JSON.stringify(deleted))).toEqual(deleted);
     await expect(readApiCustomer(f.ctx, { id: first.id })).rejects.toMatchObject({ code: "not_found" });
   });
   it("previews without claiming keys and replays reordered bodies byte identically", async () => {

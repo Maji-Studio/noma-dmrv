@@ -452,10 +452,16 @@ it("membership edits preserve linked samples and batch deletion refuses them", a
 it("derived transport upserts bump the existing row", async () => {
   const f = await fixture();
   const [feedstock] = await db.select().from(feedstocks).where(eq(feedstocks.organizationId, f.ctx.organizationId));
-  await db.transaction(tx => syncFeedstockTransportLeg(f.ctx, tx, feedstock.id, { distanceKm: 10 }));
+  await db.transaction(async tx => {
+    await tx.update(feedstocks).set({ distanceKmOverride: 10, distanceSource: "manual" }).where(eq(feedstocks.id, feedstock.id));
+    await syncFeedstockTransportLeg(f.ctx, tx, feedstock.id, { refreshFromLocation: true });
+  });
   const [before] = await db.select().from(transportLegs).where(eq(transportLegs.entityId, feedstock.id));
   expect(before).toBeDefined();
-  await db.transaction(tx => syncFeedstockTransportLeg(f.ctx, tx, feedstock.id, { distanceKm: 20 }));
+  await db.transaction(async tx => {
+    await tx.update(feedstocks).set({ distanceKmOverride: 20, distanceSource: "manual" }).where(eq(feedstocks.id, feedstock.id));
+    await syncFeedstockTransportLeg(f.ctx, tx, feedstock.id, { refreshFromLocation: true });
+  });
   const [after] = await db.select().from(transportLegs).where(eq(transportLegs.id, before.id));
   expect(after.version).toBe(before.version + VERSION_INCREMENT);
 });

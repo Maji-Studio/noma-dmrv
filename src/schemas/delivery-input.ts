@@ -3,12 +3,12 @@ import { eventInstantSchema } from "./event-instant";
 import { expectedVersionSchema, requiredPositiveMassKgSchema, storedPercentSchema, uuidSchema } from "./helpers";
 import { DELIVERED_WET_MASS_MIN_KG, DELIVERED_WET_MASS_RANGE_MESSAGE } from "@/lib/delivery-wet-mass";
 import { orderedSourceSchema, MAX_STOCK_ENTRY_ITEMS } from "./output-stock";
-import { optionalDistanceSource } from "./distance-source";
+import { DISTANCE_NOTE_MAX_LENGTH, optionalDistanceSource } from "./distance-source";
 
 export const DELIVERY_DISTANCE_MESSAGE = "Distance must be greater than 0";
 export const DELIVERY_CODE_MAX_LENGTH = 50;
 export const DELIVERY_CODE_PATTERN = /^[A-Z0-9-]+$/;
-export const DELIVERY_DISTANCE_NOTE_MAX_LENGTH = 500;
+export const DELIVERY_DISTANCE_NOTE_MAX_LENGTH = DISTANCE_NOTE_MAX_LENGTH;
 const metadata = {
   driverId: uuidSchema().nullable().optional().describe("Driver UUID; null clears the driver on update."),
   vehicleId: uuidSchema().nullable().optional().describe("Vehicle UUID; null clears the vehicle on update."),

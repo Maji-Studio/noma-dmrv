@@ -44,6 +44,10 @@ import {
   type FormulationPercentFormData,
 } from "@/schemas/formulations";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(formulationPercentFormSchema);
 
 const EMPTY_INGREDIENT = {
   feedstockTypeId: "",
@@ -331,9 +335,8 @@ export function FormulationForm({
                   <FormInput
                     id="biocharPercent"
                     type="number"
+                    {...numberBounds("biocharPercent")}
                     step={SHARE_PERCENT_STEP}
-                    min="0"
-                    max="100"
                     placeholder="e.g., 70"
                     disabled={isSubmitting}
                     error={!!errors.biocharPercent}
@@ -394,9 +397,8 @@ export function FormulationForm({
                     <FormInput
                       id={`ingredients.${index}.sharePercent`}
                       type="number"
+                      {...numberBounds("ingredients.sharePercent")}
                       step={SHARE_PERCENT_STEP}
-                      min="0"
-                      max="100"
                       placeholder="e.g., 30"
                       disabled={isSubmitting}
                       error={!!errors.ingredients?.[index]?.sharePercent}

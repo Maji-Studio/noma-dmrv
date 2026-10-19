@@ -228,7 +228,7 @@ async function main(): Promise<void> {
     reactorId: reactor.id, reactorCode: reactor.code,
     productionRunId: run.id, productionRunCode: run.code, productionRunEtag: productionRunEtag(run),
     driverId: driver.id, driverCode: driver.code, vehicleId: vehicle.id, vehicleCode: vehicle.code,
-    // Supplier locations have no code column or by-id API route.
+    // Location detail routes use the parent UUID and location UUID.
     supplierLocationId: supplierLocation.id,
     biocharBinId: biocharBin.id, biocharBinCode: biocharBin.code, productBinId: productBin.id,
     ...formulationFields,

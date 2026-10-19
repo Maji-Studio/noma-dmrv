@@ -344,14 +344,14 @@ const productionSite: Surface[] = [
     },
   },
   {
-    id: "energy.page",
+    id: "emissions.page",
     family: "production-site",
-    title: "Energy summary page",
+    title: "Emissions overview page",
     kind: "page",
     mode: "read",
     fill: "none",
     open: async (page, ctx) => {
-      await gotoRoute(page, ctx, "energy");
+      await gotoRoute(page, ctx, "emissions");
       return page.locator("main");
     },
   },

@@ -1,3 +1,4 @@
+import { apiKeyContext } from "../../../../tests/helpers/api-context";
 import { beforeEach, expect, it, vi } from "vitest";
 import { BIOCHAR_PRODUCT_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { representationEtag } from "@/lib/api/etag";
@@ -50,9 +51,9 @@ const movement = {
   productionRunIds: [], biocharProductIds: [], targetBiocharProductId: null, deliveryId: null, createdAt: CLOCK,
 };
 const context = {
-  ctx: { userId: "user", credentialId: "credential", organizationId: "org", orgRole: "admin", scopes: ["biochar-products:write", "biochar-products:read", "formulations:read"] },
+  ctx: apiKeyContext({ userId: "user", credentialId: "credential", organizationId: "org", orgRole: "admin", scopes: ["biochar-products:write", "biochar-products:read", "formulations:read"] }),
   deadlineAt: 0, requestId: "request", instance: "/api/mcp", headers: new Headers(),
-} as unknown as ApiRouteContext;
+} satisfies ApiRouteContext;
 const make = { facilityId: ID, formulationId: ID, placedAt: CLOCK, sourceBiocharStorageLocationId: BIN, storageLocationId: ID, biocharWetMassKg: 500, biocharMoisturePercent: 10, waterAddedKg: 0, ingredients: [] };
 const update = { biocharProductId: ID, expectedVersion: 2, status: "ready" };
 const record = { storageLocationId: BIN, kind: "loss", occurredAt: CLOCK, wetMassKg: 25, moisturePercent: 10, reason: "Spilled." };

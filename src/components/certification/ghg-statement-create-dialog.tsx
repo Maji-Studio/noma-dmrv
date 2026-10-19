@@ -324,29 +324,13 @@ function DialogBody({
         )}
       </div>
 
-      <div className="sticky bottom-0 z-10 flex flex-wrap justify-end gap-12 border-t border-[var(--color-border-tertiary)] bg-[var(--color-background-white)] pt-16">
+      <div className="sticky bottom-0 z-10 flex flex-wrap justify-start gap-12 border-t border-[var(--color-border-tertiary)] bg-[var(--color-background-white)] pt-16">
         {result ? (
           <Button variant="primary" onClick={onClose}>
             Done
           </Button>
         ) : (
           <>
-            <Button
-              variant="default"
-              onClick={onClose}
-              disabled={mutation.isPending}
-            >
-              Cancel
-            </Button>
-            {stepIndex > 0 && (
-              <Button
-                variant="default"
-                onClick={() => setStepIndex((s) => s - 1)}
-                disabled={mutation.isPending}
-              >
-                Back
-              </Button>
-            )}
             {isLastStep ? (
               <Button
                 variant="primary"
@@ -375,6 +359,22 @@ function DialogBody({
                 Next
               </Button>
             )}
+            {stepIndex > 0 && (
+              <Button
+                variant="default"
+                onClick={() => setStepIndex((s) => s - 1)}
+                disabled={mutation.isPending}
+              >
+                Back
+              </Button>
+            )}
+            <Button
+              variant="default"
+              onClick={onClose}
+              disabled={mutation.isPending}
+            >
+              Cancel
+            </Button>
           </>
         )}
       </div>

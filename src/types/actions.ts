@@ -1,4 +1,4 @@
-import type { DomainErrorCode, DomainIssue, StockPreview } from "@/lib/domain-errors";
+import type { DomainErrorCode, DomainIssue, OperationPreview } from "@/lib/domain-errors";
 import type { ConflictRef } from "@/lib/conflict-ref";
 
 /**
@@ -39,6 +39,6 @@ export type ActionResult<T> =
        * `conflict`.
        */
       blockers?: ConflictRef[];
-      /** The current dry run after a `stock_basis_changed` refusal, when one could be computed. */
-      preview?: StockPreview;
+      /** The current dry run after a stock or cascade conflict, when one could be computed. */
+      preview?: OperationPreview;
     };

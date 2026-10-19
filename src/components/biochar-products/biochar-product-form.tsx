@@ -47,9 +47,6 @@ import {
   PURE_PRODUCT_BIN_FILTER,
   type BiocharProductFormData,
 } from "@/schemas/biochar-products";
-import {
-  MASS_KG_INPUT_STEP,
-} from "@/schemas/helpers";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CubeIcon, FactoryIcon, ListChecksIcon } from "@phosphor-icons/react/dist/ssr";
@@ -60,6 +57,12 @@ import { formProductComposition, type FormProductComposition } from "./form-prod
 import { IngredientBinRows } from "./ingredient-bin-rows";
 import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
 import { Notice } from "@/components/ui/notice";
+import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
+import { recordInUseFreeFields } from "@/lib/record-lock";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(biocharProductEntrySchema);
 
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
@@ -137,7 +140,12 @@ interface BiocharProductFormProps {
    */
   children?: React.ReactNode;
   focusTarget?: EntityFocusTarget | null;
+  /** The saved product's lock; Sent disables every field before typing. */
+  lock?: RecordLockView;
 }
+
+/** Shown on the posted fields a saved product keeps (`POSTED_FIELDS` on the server). */
+const POSTED_FIELD_HINT = "Fixed once the product is posted to stock. Record a stock correction in the bin to change it.";
 
 export function BiocharProductForm({
   product,
@@ -148,10 +156,14 @@ export function BiocharProductForm({
   submitLabel,
   children,
   focusTarget,
+  lock,
 }: BiocharProductFormProps) {
   const formId = useId();
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   const isEditMode = !!product;
+  // Posted fields are refused on every saved product; the rest follow the lock.
+  // Fail closed: until the lock answers, fields an In use biocharProduct holds stay disabled.
+  const locked = (field: string) => isEditMode && isRecordFieldHeld(lock, recordInUseFreeFields("biocharProduct"), field);
   const hasFrozenSourceAllocation = Boolean(
     product?.sourceBiocharStorageLocationId,
   );
@@ -490,9 +502,9 @@ export function BiocharProductForm({
             id: "moistureContentPercent",
             error: errors.moistureContentPercent?.message,
             required: true,
-            disabled: isSubmitting,
+            disabled: isSubmitting || isEditMode,
             placeholder: "e.g. 2",
-            helperText: "Typically 1 to 2% for biochar",
+            helperText: isEditMode ? POSTED_FIELD_HINT : "Typically 1 to 2% for biochar",
             estimate: isEditMode ? undefined : sourceMoistureEstimate,
             reading: watchedMoisture,
             registration: register("moistureContentPercent", { setValueAs: nullableNumericValue }),
@@ -561,17 +573,16 @@ export function BiocharProductForm({
             id="waterAddedKg"
             label="Water added (kg)"
             error={errors.waterAddedKg?.message}
-            helperText="Water added to reach target moisture"
+            helperText={isEditMode ? POSTED_FIELD_HINT : "Water added to reach target moisture"}
             hint="Dry mass is unchanged by added water."
             required
           >
             <FormInput
               id="waterAddedKg"
               type="number"
-              step={MASS_KG_INPUT_STEP}
-              min="0"
+              {...numberBounds("waterAddedKg")}
               placeholder="e.g., 50"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isEditMode}
               error={!!errors.waterAddedKg}
               {...register("waterAddedKg", { setValueAs: nullableNumericValue })}
             />
@@ -584,10 +595,9 @@ export function BiocharProductForm({
             <FormInput
               id="densityKgM3"
               type="number"
-              step="any"
-              min="0"
+              {...numberBounds("densityKgM3")}
               placeholder="e.g., 350"
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("densityKgM3")}
               error={!!errors.densityKgM3}
               {...register("densityKgM3")}
             />
@@ -599,9 +609,11 @@ export function BiocharProductForm({
           label="Product bin"
           error={errors.storageLocationId?.message}
           helperText={
-            selectedFormulationId
-              ? "Bins for this formulation, or unassigned bins (claimed on first use)."
-              : "Pure-biochar or unassigned bins."
+            isEditMode
+              ? POSTED_FIELD_HINT
+              : selectedFormulationId
+                ? "Bins for this formulation, or unassigned bins (claimed on first use)."
+                : "Pure-biochar or unassigned bins."
           }
           required
         >
@@ -624,13 +636,14 @@ export function BiocharProductForm({
                   />
                 )}
                 disabled={isSubmitting}
+                selectionLocked={isEditMode}
                 error={!!fieldState.error}
                 filterBy={{
                   ...(selectedFacilityId ? { facilityId: selectedFacilityId } : {}),
                   type: "product_bin",
                   formulationId: selectedFormulationId || PURE_PRODUCT_BIN_FILTER,
                 }}
-                allowCreate
+                allowCreate={!isEditMode}
                 onCreateNew={() => storageLocationDialog.open()}
               />
             )}
