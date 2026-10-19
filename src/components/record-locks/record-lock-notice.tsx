@@ -10,6 +10,7 @@ import {
   type RecordLockStatus,
   type RecordLockView,
 } from "@/lib/record-lock-view";
+import { IN_USE_HOW_TO_FREE, IN_USE_HOW_TO_FREE_ONE } from "@/lib/record-lock";
 import { recordLockLinkHref, recordLockLinkText } from "./record-lock-labels";
 
 /** Holders named inline; the rest are counted and listed under "Used by". */
@@ -124,9 +125,12 @@ function LockLine({ lock, subject = "record", inUseLocksNothing = false }: {
       </Notice>
     );
   }
+  const plural = lock.heldBy.length > 1;
+  // The shared sentence names "those records"; one holder reads "that record".
+  const howToFree = !plural && lock.howToFree === IN_USE_HOW_TO_FREE ? IN_USE_HOW_TO_FREE_ONE : lock.howToFree;
   return (
     <Notice tone="info" boxed data-record-lock-notice="inUse">
-      Some fields can{"'"}t be changed, because <HolderList holders={lock.heldBy} /> {lock.heldBy.length > 1 ? "use" : "uses"} its figures. {lock.howToFree}
+      Some fields can{"'"}t be changed, because <HolderList holders={lock.heldBy} /> {plural ? "use" : "uses"} its figures. {howToFree}
     </Notice>
   );
 }

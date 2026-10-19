@@ -94,7 +94,7 @@ describe("RecordLockNotice", () => {
   it("names the one record that uses it as a link, with how to free it", () => {
     render(<RecordLockNotice lock={view("inUse", [RUN])} />);
     expect(screen.getByRole("status").textContent).toBe(
-      "Some fields can't be changed, because production run PR-26-004 uses its figures. To change them, first correct or remove those records.",
+      "Some fields can't be changed, because production run PR-26-004 uses its figures. To change them, first correct or remove that record.",
     );
     expect(screen.getByRole("link", { name: "production run PR-26-004" }).getAttribute("href"))
       .toBe(`/production-runs?facility=${FACILITY}&run=run-1`);

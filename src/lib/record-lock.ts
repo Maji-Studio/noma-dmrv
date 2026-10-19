@@ -28,6 +28,8 @@ import { getMetadataValue } from "@/lib/certification/submission-metadata";
 
 /** The second sentence of the In use notice: what to do. */
 export const IN_USE_HOW_TO_FREE = "To change them, first correct or remove those records.";
+/** The same sentence when one record holds the lock. */
+export const IN_USE_HOW_TO_FREE_ONE = "To change them, first correct or remove that record.";
 
 const TERMINAL_ATTEMPT_STATUSES: ReadonlySet<LocalSubmissionStatus> = new Set(["submitted", "accepted", "rejected", "superseded"]);
 const REMOTELY_SUBMITTED_STATUSES: ReadonlySet<LocalSubmissionStatus> = new Set(["submitted", "accepted"]);
