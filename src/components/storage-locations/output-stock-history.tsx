@@ -98,6 +98,8 @@ function LedgerRow({ entry, kind, reversedEntry, replacedBy, reversedBy, moistur
       <LedgerFacts facts={[
         ...(entry.moisturePercent !== null && !reversedEntry ? [{ label: "Moisture", value: formatMoisturePercent(entry.moisturePercent) }] : []),
         ...(entry.reason && entry.kind !== "intake" ? [{ label: reversedEntry ? "Why corrected" : "Reason", value: entry.reason }] : []),
+        // A deleted Lost mass keeps the operator's reason on the crossed-out entry, as on feedstock bins.
+        ...(kind === "loss" && reversedBy && !replacedBy && reversedBy.reason ? [{ label: "Why deleted", value: reversedBy.reason }] : []),
         { label: "Recorded", value: `${recordedLater ? formatFacilityDateTime(entry.recordedAt, timeZone) : "At the time"}${entry.actorName ? ` by ${entry.actorName}` : ""}` },
       ]} />
       {kind === "loss" && !reversed && (entry.editLockedReason === null

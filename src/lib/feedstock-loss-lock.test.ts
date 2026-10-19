@@ -4,7 +4,7 @@
  * formatFeedstockLossLockReason(blocker: FeedstockLedgerEntry, timeZone: string): string
  * Entries are already ordered by occurredAt, recordedAt, id; entryId names an
  * existing loss. Return the first later dependency, the target itself if it is
- * reversed, or null when editable. A reversed target gets already-corrected copy.
+ * reversed, or null when editable. Reversed copy distinguishes edits and deletes.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -12,6 +12,7 @@ import {
   formatFeedstockLossCrossingMessage, formatFeedstockLossLockReason,
 } from "@/lib/feedstock-loss-lock";
 import { formatFacilityDateTime } from "@/lib/format-utils";
+import { ALREADY_CORRECTED_MESSAGE, ALREADY_DELETED_MESSAGE } from "@/lib/loss-correction-messages";
 import type { FeedstockLedgerEntry } from "@/types/feedstock-bin-ledger";
 
 const EARLY = "2026-01-01T08:00:00.000Z";
@@ -99,10 +100,10 @@ describe("feedstock Lost mass record lock", () => {
     expect(findFeedstockLossBlocker([before, loss, after], loss.id)).toEqual(after);
   });
 
-  it("keeps an already reversed loss locked even without a later withdrawal", () => {
-    const loss = entry({ reversed: true });
+  it.each(["replacement", null])("keeps an already reversed loss locked (replacement: %s)", (replacementId) => {
+    const loss = entry({ reversed: true, reversedBy: { id: "reversal", reason: "Correction", recordedAt: LATE, actorName: null, replacementId } });
     expect(findFeedstockLossBlocker([loss], loss.id)).toEqual(loss);
-    expect(formatFeedstockLossLockReason(loss, TIME_ZONE)).toMatch(/already.*corrected/i);
+    expect(formatFeedstockLossLockReason(loss, TIME_ZONE)).toBe(replacementId ? ALREADY_CORRECTED_MESSAGE : ALREADY_DELETED_MESSAGE);
   });
 
   it("allows the live replacement of a reversed loss to be corrected", () => {

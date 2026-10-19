@@ -4,6 +4,7 @@ import { biocharProducts, binMovements, outputStockAllocations, type BiocharProd
 import type { OrgContext } from '@/lib/auth/server';
 import type { CaptureActivity } from '@/lib/activity-changes';
 import { SafeError } from '@/lib/errors';
+import { ALREADY_CORRECTED_MESSAGE, ALREADY_DELETED_MESSAGE } from '@/lib/loss-correction-messages';
 import type { RemoveLossData } from '@/schemas/bin-movements';
 import { requestFingerprint } from './bin-movement-requests';
 import { toBiocharProductRecord } from './biochar-product-record';
@@ -49,8 +50,11 @@ export async function removeOutputStockLossInTransaction(ctx: OrgContext, tx: Db
   if (!original || !(original.outputKind === 'loss' || (original.outputKind === 'replacement' && original.inputSnapshot?.kind === 'loss'))) {
     throw new SafeError('Choose a Lost mass entry in this bin to delete.');
   }
-  const [corrected] = await tx.select({ id: binMovements.id }).from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.correctsMovementId, original.id)));
-  if (corrected) throw new SafeError('This entry has already been corrected. Open its correction instead.');
+  const corrections = await tx.select({ outputKind: binMovements.outputKind }).from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.correctsMovementId, original.id)));
+  if (corrections.length) {
+    const deleted = corrections.some(row => row.outputKind === 'reversal') && !corrections.some(row => row.outputKind === 'replacement');
+    throw new SafeError(deleted ? ALREADY_DELETED_MESSAGE : ALREADY_CORRECTED_MESSAGE);
+  }
   await assertOutputMovementEditable(ctx, storageLocationId, original.id, tx);
   const stock = await readOutputBinAllLayers(ctx, storageLocationId, tx, { includeArchived: true });
   const correction = await prepareOutputCorrection(ctx, {

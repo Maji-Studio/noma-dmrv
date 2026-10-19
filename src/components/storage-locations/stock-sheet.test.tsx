@@ -140,6 +140,7 @@ it("says when and by whom a deleted Lost mass was deleted", async () => {
   await act(async () => renderer.root.findByType("button").props.onClick());
   const markup = text(renderer.root);
   expect(markup).toMatch(/Deleted .+ by Asha\.\s+It no longer counts toward the stock\./);
+  expect(markup).toMatch(/Why deleted\s+Recorded twice/);
   expect(renderer.root.findAllByType("button").filter(button => text(button) === "Delete")).toHaveLength(0);
   await act(async () => renderer.unmount());
 });

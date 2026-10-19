@@ -1,5 +1,6 @@
 import type { FeedstockLedgerEntry } from '@/types/feedstock-bin-ledger';
 import { formatFacilityDateTime } from './format-utils';
+import { ALREADY_CORRECTED_MESSAGE, ALREADY_DELETED_MESSAGE } from './loss-correction-messages';
 import { recordLocks, withRecordLockGuidance } from './record-lock';
 
 function isFeedstockLossDependency(entry: FeedstockLedgerEntry): boolean {
@@ -45,7 +46,7 @@ export function findFeedstockLossCrossing(
 
 /** Shared by the ledger's edit affordance and the locked server command. */
 export function formatFeedstockLossLockReason(blocker: FeedstockLedgerEntry, timeZone: string): string {
-  if (blocker.reversed) return 'This entry has already been corrected. Open its correction instead.';
+  if (blocker.reversed) return blocker.reversedBy?.replacementId ? ALREADY_CORRECTED_MESSAGE : ALREADY_DELETED_MESSAGE;
   const label = feedstockDependencyLabel(blocker);
   const holder = {
     kind: blocker.kind === 'run_draw' ? 'productionRun'
