@@ -572,6 +572,13 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   rotation window. Cheap now, expensive to retrofit (M). See
   [`docs/security.md`](./security.md).
 
+### Platform Admin cross-organization deep link (`tenancy/admin-deep-link`, opened 2026-10-19)
+
+- Platform Admin cross-organization deep link: a link to a record in another
+  organization shows Not found; later, noma could name the owning organization
+  and offer to switch. Non-members keep the 404
+  (`tests/e2e/org-isolation.spec.ts`). Parked 2026-10-19 (#372).
+
 ### Drop the `ALLOW_SELF_SIGNUP` flag (`auth/drop-self-signup-flag`, opened 2026-07-20)
 
 - **Decided:** public self-signup is not a supported configuration. The product
