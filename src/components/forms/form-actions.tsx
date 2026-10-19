@@ -158,16 +158,14 @@ export function FormActions<
         </Notice>
       )}
       <div className="flex items-center justify-start gap-16">
-        {/* formNoValidate: the schema's own messages explain a refusal, so the
-            browser's constraint bubbles (from the native min, max and step the
-            inputs carry) never block the submit. Enter submits through this
-            button too. */}
         {showSubmit && <Button
           type={submitType}
           variant={submitVariant}
           form={formId}
-          formNoValidate={submitType === "submit" ? true : undefined}
-          onClick={onSubmitClick}
+          onClick={(event) => {
+            if (submitType === "submit") skipNativeChecksUnlessUnparsed(event.currentTarget);
+            onSubmitClick?.();
+          }}
           disabled={isSubmitting || submitDisabled || !!block}
           aria-describedby={block ? blockedReasonId : undefined}
         >
@@ -181,6 +179,21 @@ export function FormActions<
       </div>
     </div>}
     </>
+  );
+}
+
+/**
+ * Lets the schema's own messages explain a refusal: the browser's constraint
+ * bubbles (from the native min, max and step the inputs carry) are skipped.
+ * The one exception is a number input holding text the browser cannot parse
+ * ("1e"): it reports an empty value, which the schema would read as a cleared
+ * field, so the browser's check stays on and blocks the save. Runs on click,
+ * which Enter-key submission also fires, before the form validates.
+ */
+export function skipNativeChecksUnlessUnparsed(submitter: HTMLButtonElement) {
+  const elements = submitter.form ? Array.from(submitter.form.elements) : [];
+  submitter.formNoValidate = !elements.some(
+    (element) => element instanceof HTMLInputElement && element.validity.badInput,
   );
 }
 

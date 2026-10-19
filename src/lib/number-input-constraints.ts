@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const INTEGER_STEP = 1;
+const DECIMAL_RADIX = 10;
 const MAX_FIXED_DECIMALS = 100;
 const ARRAY_INDEX_PATTERN = /^\d+$/;
 
@@ -12,21 +13,28 @@ export interface NumberInputConstraints {
 
 type Schema = z.core.$ZodType;
 
-/** Pipes prefer their output; unions retain every matching branch. */
-function resolveSchemas<T extends Schema>(
+/** Pipes prefer their output unless both sides can be intersected; unions retain every match. */
+function resolveSchemas<T>(
   schema: Schema,
-  matches: (value: Schema) => value is T,
+  resolve: (value: Schema) => T | undefined,
+  intersect?: (input: T, output: T) => T,
   ancestors = new Set<Schema>(),
 ): T[] {
   if (ancestors.has(schema)) return [];
-  if (matches(schema)) return [schema];
+  const resolved = resolve(schema);
+  if (resolved !== undefined) return [resolved];
   const visited = new Set(ancestors).add(schema);
   if (schema instanceof z.ZodPipe) {
-    const output = resolveSchemas(schema.out, matches, visited);
-    return output.length ? output : resolveSchemas(schema.in, matches, visited);
+    const output = resolveSchemas(schema.out, resolve, intersect, visited);
+    if (output.length && !intersect) return output;
+    const input = resolveSchemas(schema.in, resolve, intersect, visited);
+    if (intersect && input.length === 1 && output.length === 1) {
+      return [intersect(input[0], output[0])];
+    }
+    return output.length ? output : input;
   }
   if (schema instanceof z.ZodUnion) {
-    return schema.options.flatMap(option => resolveSchemas(option, matches, visited));
+    return schema.options.flatMap(option => resolveSchemas(option, resolve, intersect, visited));
   }
   if (
     schema instanceof z.ZodOptional || schema instanceof z.ZodNullable ||
@@ -34,7 +42,7 @@ function resolveSchemas<T extends Schema>(
     schema instanceof z.ZodCatch || schema instanceof z.ZodReadonly ||
     schema instanceof z.ZodNonOptional || schema instanceof z.ZodLazy
   ) {
-    return resolveSchemas(schema.unwrap(), matches, visited);
+    return resolveSchemas(schema.unwrap(), resolve, intersect, visited);
   }
   return [];
 }
@@ -45,19 +53,26 @@ function decimalPlaces(value: number): number {
   return Math.min(MAX_FIXED_DECIMALS, Math.max(0, fractionLength - Number(exponent)));
 }
 
-function exclusiveBound(value: number, step: NumberInputConstraints["step"], direction: number): number {
-  return step === "any" ? value : Number((value + direction * step).toFixed(decimalPlaces(step)));
+function exclusiveBound(value: number, step: NumberInputConstraints["step"], direction: "min" | "max"): number {
+  if (step === "any") return value;
+  const precision = decimalPlaces(step);
+  const scale = DECIMAL_RADIX ** precision;
+  const scaledStep = Math.round(step * scale);
+  // Shift the decimal exponent so an aligned bound like 0.29 does not
+  // become 28.999999999999996 before floor/ceil choose the next multiple.
+  const [coefficient, exponent] = value.toExponential().split("e");
+  const scaledValue = Number(`${coefficient}e${Number(exponent) + precision}`);
+  const multiple = direction === "min"
+    ? Math.floor(scaledValue / scaledStep) + INTEGER_STEP
+    : Math.ceil(scaledValue / scaledStep) - INTEGER_STEP;
+  return multiple * scaledStep / scale;
 }
 
 function inputBound(value: number | undefined): value is number {
   return value !== undefined && Number.isFinite(value) && Math.abs(value) < Number.MAX_SAFE_INTEGER;
 }
 
-/** Constraints for one numeric field schema. */
-export function numberInputConstraints(schema: z.ZodType): NumberInputConstraints {
-  const numbers = resolveSchemas(schema, (value): value is z.ZodNumber => value instanceof z.ZodNumber);
-  if (numbers.length !== 1) return { step: "any" };
-  const number = numbers[0];
+function constraintsForNumber(number: z.ZodNumber): NumberInputConstraints {
   const bag = number._zod.bag;
   const step = typeof bag.multipleOf === "number"
     ? bag.multipleOf
@@ -65,8 +80,8 @@ export function numberInputConstraints(schema: z.ZodType): NumberInputConstraint
   const constraints: NumberInputConstraints = { step };
   const minima = [bag.minimum];
   const maxima = [bag.maximum];
-  if (inputBound(bag.exclusiveMinimum)) minima.push(exclusiveBound(bag.exclusiveMinimum, step, 1));
-  if (inputBound(bag.exclusiveMaximum)) maxima.push(exclusiveBound(bag.exclusiveMaximum, step, -1));
+  if (inputBound(bag.exclusiveMinimum)) minima.push(exclusiveBound(bag.exclusiveMinimum, step, "min"));
+  if (inputBound(bag.exclusiveMaximum)) maxima.push(exclusiveBound(bag.exclusiveMaximum, step, "max"));
   const usableMinima = minima.filter(inputBound);
   const usableMaxima = maxima.filter(inputBound);
   if (usableMinima.length) constraints.min = Math.max(...usableMinima);
@@ -74,9 +89,28 @@ export function numberInputConstraints(schema: z.ZodType): NumberInputConstraint
   return constraints;
 }
 
+function intersectConstraints(input: NumberInputConstraints, output: NumberInputConstraints): NumberInputConstraints {
+  const constraints: NumberInputConstraints = {
+    step: typeof output.step === "number" ? output.step : input.step,
+  };
+  const minima = [input.min, output.min].filter(inputBound);
+  const maxima = [input.max, output.max].filter(inputBound);
+  if (minima.length) constraints.min = Math.max(...minima);
+  if (maxima.length) constraints.max = Math.min(...maxima);
+  return constraints;
+}
+
+/** Constraints for one numeric field schema. */
+export function numberInputConstraints(schema: z.ZodType): NumberInputConstraints {
+  const numbers = resolveSchemas(schema,
+    value => value instanceof z.ZodNumber ? constraintsForNumber(value) : undefined,
+    intersectConstraints);
+  return numbers.length === 1 ? numbers[0] : { step: "any" };
+}
+
 function pathContainer(schema: Schema): z.ZodObject | z.ZodArray | undefined {
-  const containers = resolveSchemas(schema, (value): value is z.ZodObject | z.ZodArray =>
-    value instanceof z.ZodObject || value instanceof z.ZodArray);
+  const containers = resolveSchemas(schema, value =>
+    value instanceof z.ZodObject || value instanceof z.ZodArray ? value : undefined);
   return containers.length === 1 ? containers[0] : undefined;
 }
 

@@ -50,6 +50,7 @@ import {
 
 const TIME_ONLY_RE = /^\d{2}:\d{2}$/;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const RESIDENCE_TIME_INTEGER_MESSAGE = "Enter residence time as a whole number of minutes.";
 export const CANCELLATION_REASON_MAX_LENGTH = 2000;
 export { DRY_MASS_BALANCE_MESSAGE } from "@/lib/production-runs/lifecycle";
 
@@ -272,7 +273,14 @@ const productionRunFormObject = z.object({
 
   // Processing Parameters (Isometric Protocol Section 9)
   feedingRateKgHr: z.preprocess(toNumberOrNull, z.number().positive("Feeding rate must be positive").nullable()).optional(),
-  residenceTimeMinutes: z.preprocess(toIntOrNull, z.number().int().positive("Residence time must be a positive integer").max(PG_INTEGER_MAX, "Residence time is too large").nullable()).optional(),
+  residenceTimeMinutes: z.preprocess(
+    toIntOrNull,
+    z.number({ error: RESIDENCE_TIME_INTEGER_MESSAGE })
+      .int(RESIDENCE_TIME_INTEGER_MESSAGE)
+      .positive("Residence time must be at least 1 minute.")
+      .max(PG_INTEGER_MAX, "Residence time is too large")
+      .nullable(),
+  ).optional(),
 
   // Energy Inputs (Isometric: Energy Use Accounting Module, Eq.6)
   dieselOperationLiters: z.preprocess(toNumberOrNull, z.number().min(0, "Diesel operation must be non-negative").nullable()).optional(),

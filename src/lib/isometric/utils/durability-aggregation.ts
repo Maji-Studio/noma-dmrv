@@ -186,10 +186,13 @@ export function weightedBatchChemistry(
   batches: CreditBatchDurabilityInput[],
   attributionByRunId?: Map<string, number>,
 ): WeightedBatchChemistry {
-  const weighted = (pick: (s: Sample) => number | null | undefined) => {
+  const weighted = (
+    pick: (s: Sample) => number | null | undefined,
+    isUsable = isUsableNumber,
+  ) => {
     const contributions: Array<{ mean: number; massKg: number }> = [];
     for (const batch of batches) {
-      const values = batch.samples.map(pick).filter(isUsableNumber);
+      const values = batch.samples.map(pick).filter(isUsable);
       if (values.length === 0) continue;
       const mean = values.reduce((a, b) => a + b, 0) / values.length;
       const massKg = batch.runs.reduce(
@@ -215,8 +218,8 @@ export function weightedBatchChemistry(
 
   return {
     weightedOrganicCarbonPercent: weighted((s) => s.organicCarbonPercent),
-    weightedHToCorgRatio: weighted((s) => s.hToCOrgRatio),
-    weightedOToCorgRatio: weighted((s) => s.oToCOrgRatio),
+    weightedHToCorgRatio: weighted((s) => s.hToCOrgRatio, isUsableRatio),
+    weightedOToCorgRatio: weighted((s) => s.oToCOrgRatio, isUsableRatio),
     weightedAshPercent: weighted((s) => s.ashContentPercent),
     weightedMoisturePercent: weighted((s) => s.moistureContentPercent),
   };

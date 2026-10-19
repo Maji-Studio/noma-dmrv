@@ -22,16 +22,6 @@ describe("FormActions", () => {
     expect(markup).toContain("Action failed");
   });
 
-  it("submits past native constraint checks so the schema messages explain a refusal", () => {
-    const submit = renderToStaticMarkup(<FormActions submitLabel="Save record" />);
-    const nested = renderToStaticMarkup(
-      <FormActions submitLabel="Save leg" submitType="button" onSubmitClick={() => undefined} />,
-    );
-
-    expect(submit).toMatch(/<button[^>]*type="submit"[^>]*formNoValidate=""/);
-    expect(nested).not.toContain("formNoValidate");
-  });
-
   it("does not render an alert without an action error", () => {
     const markup = renderToStaticMarkup(<FormActions submitLabel="Save record" />);
 

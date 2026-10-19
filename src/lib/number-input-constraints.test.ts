@@ -6,6 +6,7 @@ import {
   MASS_KG_INPUT_STEP,
   optionalPercent,
   optionalStoredMoisture,
+  optionalStoredPercent,
   positiveMassKgSchema,
   requiredMassKgSchema,
   RATIO_INPUT_MAX,
@@ -17,7 +18,45 @@ import { sampleFormSchema } from "@/schemas/samples";
 import { formulationPercentFormSchema } from "@/schemas/formulations";
 import { numberInputConstraints, numberInputConstraintsFor } from "./number-input-constraints";
 
+const PERCENT_MIN = 0;
+const PERCENT_MAX = 100;
+const PIPE_INPUT_MIN = 10;
+const PIPE_INPUT_MAX = 90;
+const PIPE_OUTPUT_MIN = 20;
+const PIPE_OUTPUT_MAX = 80;
+const PIPE_INPUT_STEP = 2;
+const PIPE_OUTPUT_STEP = 4;
+const EXCLUSIVE_BOUND_CASES = [
+  { label: "unaligned positive bounds", step: 2, min: 1, max: 5, expectedMin: 2, expectedMax: 4 },
+  { label: "unaligned negative bounds", step: 2, min: -5, max: -1, expectedMin: -4, expectedMax: -2 },
+  { label: "fractional bounds with an integer step", step: 2, min: 1.5, max: 4.5, expectedMin: 2, expectedMax: 4 },
+  { label: "millionth precision", step: 0.000001, min: 0, max: 100, expectedMin: 0.000001, expectedMax: 99.999999 },
+  { label: "thousandth precision", step: 0.001, min: 0, max: 1, expectedMin: 0.001, expectedMax: 0.999 },
+  { label: "decimal bounds prone to binary rounding", step: 0.01, min: 0.29, max: 0.57, expectedMin: 0.3, expectedMax: 0.56 },
+] as const;
+const UNALIGNED_INCLUSIVE_BOUNDS = { step: 2, min: 1, max: 5 };
+
 describe("numberInputConstraints", () => {
+  it("preserves stored percent bounds through its precision pipe", () => {
+    expect(numberInputConstraints(optionalStoredPercent)).toEqual({
+      min: PERCENT_MIN, max: PERCENT_MAX, step: STORED_PERCENT_INPUT_STEP,
+    });
+  });
+
+  it("intersects pipe bounds and prefers the output numeric step", () => {
+    const input = z.number().min(PIPE_INPUT_MIN).max(PIPE_INPUT_MAX).multipleOf(PIPE_INPUT_STEP);
+    const output = z.number().min(PIPE_OUTPUT_MIN).max(PIPE_OUTPUT_MAX).multipleOf(PIPE_OUTPUT_STEP);
+    expect(numberInputConstraints(input.pipe(output))).toEqual({
+      min: PIPE_OUTPUT_MIN, max: PIPE_OUTPUT_MAX, step: PIPE_OUTPUT_STEP,
+    });
+    expect(numberInputConstraints(output.pipe(input))).toEqual({
+      min: PIPE_OUTPUT_MIN, max: PIPE_OUTPUT_MAX, step: PIPE_INPUT_STEP,
+    });
+    expect(numberInputConstraints(input.pipe(z.number()))).toEqual({
+      min: PIPE_INPUT_MIN, max: PIPE_INPUT_MAX, step: PIPE_INPUT_STEP,
+    });
+  });
+
   it("reads canonical percent and moisture constraints", () => {
     expect(numberInputConstraints(optionalPercent)).toEqual({ min: 0, max: 100, step: "any" });
     expect(numberInputConstraints(optionalStoredMoisture))
@@ -75,6 +114,17 @@ describe("numberInputConstraints", () => {
       .toEqual({ min: 0.100001, max: 99.999999, step: 0.000001 });
     expect(numberInputConstraints(z.number().int().min(5).gt(2).max(90).lt(100)))
       .toEqual({ min: 5, max: 90, step: 1 });
+  });
+
+  it.each(EXCLUSIVE_BOUND_CASES)("uses the nearest valid step for $label", ({ step, min, max, expectedMin, expectedMax }) => {
+    expect(numberInputConstraints(z.number().multipleOf(step).gt(min).lt(max)))
+      .toEqual({ min: expectedMin, max: expectedMax, step });
+  });
+
+  it("preserves inclusive bounds even when they are not step-aligned", () => {
+    const { step, min, max } = UNALIGNED_INCLUSIVE_BOUNDS;
+    expect(numberInputConstraints(z.number().multipleOf(step).min(min).max(max)))
+      .toEqual(UNALIGNED_INCLUSIVE_BOUNDS);
   });
 
   it("does not loop on recursive lazy schemas", () => {

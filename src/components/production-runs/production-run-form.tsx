@@ -6,7 +6,7 @@
 "use client";
 
 import { MoistureSplit } from "@/components/ui/moisture-split";
-import { nullableNumericValue, integerValue } from "@/lib/form-utils";
+import { nullableNumericValue } from "@/lib/form-utils";
 import { formatLocalDate, resolveFacilityTimezone } from "@/lib/date-utils";
 import {
   buildProductionRunResolver,
@@ -653,9 +653,7 @@ export function ProductionRunForm({
               placeholder="e.g. 30"
               disabled={isSubmitting}
               error={!!errors.residenceTimeMinutes}
-              {...register("residenceTimeMinutes", {
-                setValueAs: integerValue,
-              })}
+              {...register("residenceTimeMinutes")}
             />
           </FormField>
         </div>

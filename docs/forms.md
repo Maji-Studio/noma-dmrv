@@ -170,8 +170,11 @@ shares). `number-input-bounds-coverage.test.ts` fails on a number input with no
 bounds spread and no `min`.
 
 The native attributes give the spinner its range and expose min and max to
-assistive tech. They never block a save: `FormActions`' submit button carries
-`formNoValidate`, so the schema's messages are the only ones an operator sees.
+assistive tech. They do not block a save: `FormActions`' submit sets
+`formNoValidate` on click (`skipNativeChecksUnlessUnparsed`), so the schema's
+messages explain a refusal. The exception is a number input holding text the
+browser cannot parse ("1e"): it reports an empty value the schema would read as
+cleared, so the browser's own check stays on and blocks the save.
 
 ### GPS coordinates
 
@@ -352,7 +355,7 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
 - When the actions render **inside an owning parent form**, pass `submitType="button"` + `onSubmitClick` — nesting `<form>` elements is invalid HTML.
 - `formId` is the escape hatch when extension content must render between the fields and the CTA: the CTA lives outside the `<form>` and points back at it by id.
 - `submitDisabled` gates on an unmet precondition (e.g. an unchecked acknowledgement).
-- The submit button carries `formNoValidate` (see [Native number constraints](#native-number-constraints)); a nested `submitType="button"` does not need it.
+- The submit skips the browser's constraint bubbles except for unparsed number text (see [Native number constraints](#native-number-constraints)); a nested `submitType="button"` is untouched.
 
 ### FormSpine
 
