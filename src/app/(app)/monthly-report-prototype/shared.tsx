@@ -47,7 +47,7 @@ export function Panel({ children, className = "" }: { children: ReactNode; class
 }
 
 /** Static stand-ins for the facility and month pickers. */
-export function ReportToolbar() {
+export function ReportToolbar({ month = MONTH_LABEL }: { month?: string }) {
   const control =
     "flex h-40 items-center gap-8 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 body-small";
   return (
@@ -58,18 +58,18 @@ export function ReportToolbar() {
       </span>
       <span className={control}>
         <CalendarBlankIcon size={16} weight="bold" aria-hidden />
-        {MONTH_LABEL}
+        {month}
       </span>
     </div>
   );
 }
 
-export function EmptyMonth() {
+export function EmptyMonth({ month = MONTH_LABEL }: { month?: string }) {
   return (
     <EmptyState
       icon={<CalendarBlankIcon size={48} weight="bold" />}
-      title={`No records for ${MONTH_LABEL}`}
-      description={`${FACILITY_NAME} has no production runs, feedstock deliveries, biochar deliveries, applications or credit batches in this month. Pick another month to see its report.`}
+      title={`No records for ${month} yet`}
+      description={`Production runs, deliveries, applications and credit batches at ${FACILITY_NAME} appear here once they are recorded.`}
     />
   );
 }
