@@ -42,7 +42,7 @@ describe("Notice", () => {
   it("boxes a non-error tone on a neutral surface without any red", () => {
     const out = renderToStaticMarkup(
       <Notice tone="info" boxed>
-        In use by delivery DL-1.
+        Nothing can be changed, because this was sent to Isometric with Removal R-1.
       </Notice>,
     );
     expect(out).toContain("--color-surface-light");
