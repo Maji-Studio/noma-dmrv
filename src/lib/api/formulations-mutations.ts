@@ -1,3 +1,4 @@
+import { apiAudit } from "@/lib/api/audit";
 import { z } from "zod";
 import { DomainError } from "@/lib/domain-errors";
 import { createFormulationApi } from "@/lib/operations/formulation-api";
@@ -34,7 +35,7 @@ export async function createFormulationResponse(request: Request, { ctx, headers
   rejectUnknownFields(body, createContract);
   const result = await runOperation(createFormulationApi, ctx, body, {
     deadlineMs: remainingDeadlineMs(deadlineAt), dryRun,
-    audit: { requestId, credentialId: ctx.credentialId, transport: "rest" },
+    audit: apiAudit(ctx, requestId, "rest"),
     idempotency: key ? { credentialId: ctx.credentialId, key } : undefined,
   });
   const responseBody = formulationBody(result.data);
@@ -61,7 +62,7 @@ export async function updateFormulationResponse(request: Request, { ctx, headers
       ? { ...body, formulationId: id, expectedVersion: version } : body;
     const result = await runOperation(representationCheckedUpdate(id, revision), ctx, input, {
       deadlineMs: remainingDeadlineMs(deadlineAt), dryRun,
-      audit: { requestId, credentialId: ctx.credentialId, transport: "rest" },
+      audit: apiAudit(ctx, requestId, "rest"),
       idempotency: key ? { credentialId: ctx.credentialId, key, target: id, precondition: precondition! } : undefined,
     });
     const responseBody = formulationBody(result.data);
@@ -88,7 +89,7 @@ export async function commandFormulationResponse(request: Request, { ctx, header
   return withCurrentOnStale(ctx, id, async () => {
     const options = {
       deadlineMs: remainingDeadlineMs(deadlineAt), dryRun,
-      audit: { requestId, credentialId: ctx.credentialId, transport: "rest" as const },
+      audit: apiAudit(ctx, requestId, "rest"),
       idempotency: key ? { credentialId: ctx.credentialId, key, target: id, precondition: precondition! } : undefined,
     };
     const input = { formulationId: id, expectedVersion: version };

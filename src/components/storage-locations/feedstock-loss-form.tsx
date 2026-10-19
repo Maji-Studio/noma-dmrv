@@ -31,6 +31,10 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { FeedstockLossChange } from "./feedstock-loss-change";
 import { LossReasonChips } from "./loss-reason-chips";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(recordLossFormSchema);
 
 /** Shown when a resubmit reuses a request key that already saved a loss. */
 const LOSS_CONFLICT_MESSAGE =
@@ -204,8 +208,7 @@ export function FeedstockLossForm({
         <FormInput
           id="loss-amount"
           type="number"
-          step="any"
-          min="0"
+          {...numberBounds("lossMassKg")}
           placeholder="e.g., 50"
           disabled={recordLoss.isPending}
           error={!!lossMassError}

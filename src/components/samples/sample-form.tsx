@@ -49,6 +49,7 @@ import {
   getSampleCarbonReconciliationErrors,
   type SampleFormData,
 } from "@/schemas/samples";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
 import { SampleDerivedRatios } from "./sample-derived-ratios";
 import { SampleEligibilityAdvisory } from "./sample-eligibility-advisory";
 import { SampleBatchProgress } from "./sample-batch-progress";
@@ -71,6 +72,8 @@ import {
 // ============================================
 
 const NO_FACILITY_SENTINEL = "__none__";
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(sampleFormSchema);
 
 // ============================================
 // Component
@@ -290,7 +293,7 @@ export function SampleForm({
         <FormInput
           id="oToCOrgRatio"
           type="number"
-          step="any"
+          {...numberBounds("oToCOrgRatio")}
           placeholder={
             ratioPreview.oToCOrgSource === "calculated" && ratioPreview.oToCOrgRatio !== null
               ? formatSampleRatio(ratioPreview.oToCOrgRatio)
@@ -444,7 +447,7 @@ export function SampleForm({
                   <FormInput
                     id="weightGrams"
                     type="number"
-                    step="any"
+                    {...numberBounds("weightGrams")}
                     placeholder="e.g., 50"
                     disabled={isSubmitting}
                     error={!!errors.weightGrams}
@@ -462,7 +465,7 @@ export function SampleForm({
                   <FormInput
                     id="volumeMl"
                     type="number"
-                    step="any"
+                    {...numberBounds("volumeMl")}
                     placeholder="e.g., 100"
                     disabled={isSubmitting}
                     error={!!errors.volumeMl}
@@ -493,7 +496,7 @@ export function SampleForm({
                   <FormInput
                     id="totalCarbonPercent"
                     type="number"
-                    step="any"
+                    {...numberBounds("totalCarbonPercent")}
                     placeholder="e.g., 75.5"
                     disabled={isSubmitting}
                     error={!!errors.totalCarbonPercent}
@@ -516,7 +519,7 @@ export function SampleForm({
                   <FormInput
                     id="organicCarbonPercent"
                     type="number"
-                    step="any"
+                    {...numberBounds("organicCarbonPercent")}
                     placeholder="e.g., 72.0"
                     disabled={isSubmitting}
                     error={!!organicCarbonError}
@@ -537,7 +540,7 @@ export function SampleForm({
                   <FormInput
                     id="inorganicCarbonPercent"
                     type="number"
-                    step="any"
+                    {...numberBounds("inorganicCarbonPercent")}
                     placeholder="e.g., 3.5"
                     disabled={isSubmitting}
                     error={!!inorganicCarbonError}
@@ -556,7 +559,7 @@ export function SampleForm({
                   <FormInput
                     id="ashContentPercent"
                     type="number"
-                    step="any"
+                    {...numberBounds("ashContentPercent")}
                     placeholder="e.g., 8.5"
                     disabled={isSubmitting}
                     error={!!errors.ashContentPercent}
@@ -577,7 +580,7 @@ export function SampleForm({
                   <FormInput
                     id="totalHydrogenPercent"
                     type="number"
-                    step="any"
+                    {...numberBounds("totalHydrogenPercent")}
                     placeholder="e.g., 2.5"
                     disabled={isSubmitting}
                     error={!!errors.totalHydrogenPercent}
@@ -596,7 +599,7 @@ export function SampleForm({
                   <FormInput
                     id="totalNitrogenPercent"
                     type="number"
-                    step="any"
+                    {...numberBounds("totalNitrogenPercent")}
                     placeholder="e.g., 0.8"
                     disabled={isSubmitting}
                     error={!!errors.totalNitrogenPercent}
@@ -616,7 +619,7 @@ export function SampleForm({
                   <FormInput
                     id="totalOxygenPercent"
                     type="number"
-                    step="any"
+                    {...numberBounds("totalOxygenPercent")}
                     placeholder="e.g., 12.0"
                     disabled={isSubmitting}
                     error={!!errors.totalOxygenPercent}
@@ -635,7 +638,7 @@ export function SampleForm({
                   <FormInput
                     id="totalSulfurPercent"
                     type="number"
-                    step="any"
+                    {...numberBounds("totalSulfurPercent")}
                     placeholder="e.g., 0.1"
                     disabled={isSubmitting}
                     error={!!errors.totalSulfurPercent}
@@ -662,7 +665,7 @@ export function SampleForm({
                   <FormInput
                     id="bulkDensityKgPerM3"
                     type="number"
-                    step="any"
+                    {...numberBounds("bulkDensityKgPerM3")}
                     placeholder="e.g., 350"
                     disabled={isSubmitting}
                     error={!!errors.bulkDensityKgPerM3}
@@ -680,9 +683,7 @@ export function SampleForm({
                   <FormInput
                     id="ph"
                     type="number"
-                    step="any"
-                    min="0"
-                    max="14"
+                    {...numberBounds("ph")}
                     placeholder="e.g., 9.5"
                     disabled={isSubmitting}
                     error={!!errors.ph}
@@ -700,7 +701,7 @@ export function SampleForm({
                   <FormInput
                     id="saltContentGPerKg"
                     type="number"
-                    step="any"
+                    {...numberBounds("saltContentGPerKg")}
                     placeholder="e.g., 5.0"
                     disabled={isSubmitting}
                     error={!!errors.saltContentGPerKg}
@@ -784,7 +785,7 @@ export function SampleForm({
                     <FormInput
                       id="randomReflectanceR0Percent"
                       type="number"
-                      step="any"
+                      {...numberBounds("randomReflectanceR0Percent")}
                       placeholder="e.g., 2.5"
                       disabled={isSubmitting}
                       error={!!errors.randomReflectanceR0Percent}
@@ -837,8 +838,7 @@ export function SampleForm({
                     <FormInput
                       id="r0MeasurementCount"
                       type="number"
-                      step="1"
-                      min="0"
+                      {...numberBounds("r0MeasurementCount")}
                       placeholder="e.g., 100"
                       disabled={isSubmitting}
                       error={!!errors.r0MeasurementCount}
@@ -881,7 +881,7 @@ export function SampleForm({
                     <FormInput
                       id="reactiveCarbonPercent"
                       type="number"
-                      step="any"
+                      {...numberBounds("reactiveCarbonPercent")}
                       placeholder="e.g., 15.0"
                       disabled={isSubmitting}
                       error={!!errors.reactiveCarbonPercent}
@@ -902,7 +902,7 @@ export function SampleForm({
                     <FormInput
                       id="residualCarbonPercent"
                       type="number"
-                      step="any"
+                      {...numberBounds("residualCarbonPercent")}
                       placeholder="e.g., 85.0"
                       disabled={isSubmitting}
                       error={!!errors.residualCarbonPercent}

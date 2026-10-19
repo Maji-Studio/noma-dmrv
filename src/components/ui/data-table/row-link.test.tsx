@@ -209,3 +209,23 @@ describe("DataTable without a record-link column", () => {
     warn.mockRestore();
   });
 });
+
+describe("DataTable record link marks", () => {
+  const markedColumns: ColumnDef<Row>[] = [
+    {
+      accessorKey: "code",
+      header: "Code",
+      meta: { recordLink: true, recordLinkBefore: (row) => (row.id === "r1" ? <span data-mark="">Sent</span> : null) },
+    },
+  ];
+
+  it("renders the mark before the record link, never inside it", () => {
+    const { container } = render(
+      <DataTable columns={markedColumns} data={rows} onRowClick={vi.fn()} aria-label="Suppliers" />,
+    );
+    const marks = container.querySelectorAll("tbody [data-mark]");
+    expect(marks).toHaveLength(1);
+    expect(marks[0].closest("[data-row-link]")).toBeNull();
+    expect(within(container.querySelector("tbody tr") as HTMLElement).getByRole("button", { name: "SUP-001" })).toBeTruthy();
+  });
+});

@@ -6,4 +6,4 @@ export const maxDuration = 30;
 
 type Params = { idOrCode: string };
 export const POST = apiRoute<Params>("api.v1.customers.archive", "customers:write", (request, context, { idOrCode }) =>
-  commandCustomerResponse(request, context, idOrCode, "archive"));
+  commandCustomerResponse(request, context, idOrCode, "archive"), { audience: "rest" });

@@ -36,9 +36,9 @@ import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
-import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
+import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
@@ -105,12 +105,11 @@ function createColumns(
   onEdit: (sample: SampleWithRelations) => void,
   onDelete: (sampleId: string) => void,
   locks: RecordLockViews,
-  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<SampleWithRelations>[] {
   return [
     {
       accessorKey: "sampleCode",
-      meta: { nowrap: true, recordLink: true },
+      meta: { nowrap: true, recordLink: true, recordLinkBefore: recordLockTitleMark(locks) },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">
@@ -168,7 +167,6 @@ function createColumns(
         />
       ),
     },
-    recordLockColumn<SampleWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
@@ -569,7 +567,7 @@ export function SampleList({
   const isSubmitting =
     createSample.isPending || updateSample.isPending || isFlushing;
 
-  const columns = createColumns(openEdit, handleDelete, sampleLocks.locks, sampleLocks.statusOf);
+  const columns = createColumns(openEdit, handleDelete, sampleLocks.locks);
 
   if (!contextFacilityId) {
     return (
@@ -614,6 +612,8 @@ export function SampleList({
         <StatCard title="200-Year" value={statsData?.samples200Year ?? 0} icon={<FireIcon size={24} weight="bold" />} description="Standard durability" isLoading={statsLoading} />
         <StatCard title="1000-Year" value={statsData?.samples1000Year ?? 0} icon={<CertificateIcon size={24} weight="bold" />} description="Enhanced durability" isLoading={statsLoading} />
       </div>
+
+      <RecordLockListNotice read={sampleLocks} />
 
       <DataTable
         columns={columns}

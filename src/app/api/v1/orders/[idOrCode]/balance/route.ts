@@ -11,5 +11,5 @@ export const GET = apiRoute<Params>("api.v1.orders.balance.get", "orders:read", 
   const body = await readOrderBalance(request, ctx, idOrCode);
   headers.set("ETag", bodyHashEtag(ORDER_BALANCE_REPRESENTATION_REVISION, body.data));
   return Response.json(body, { headers });
-});
+}, { audience: "rest" });
 

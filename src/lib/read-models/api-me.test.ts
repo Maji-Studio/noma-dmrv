@@ -16,7 +16,7 @@ it("uses each facility's current calendar day at the same instant", async () => 
   const ctx: ApiContext = {
     userId: "owner", organizationId: "org", orgRole: "admin", isPlatformAdmin: false,
     credentialId: "key-id", principal: { userId: "owner", credentialId: "key-id", kind: "api-key" },
-    scopes: [], credential: { id: "key-id", name: "Intake", expiresAt: new Date("2026-12-01T00:00:00Z") },
+    scopes: [], credential: { kind: "api-key", id: "key-id", name: "Intake", expiresAt: new Date("2026-12-01T00:00:00Z") },
   };
   const result = await readApiMe(ctx);
   expect(result.facilities.map(({ today }) => today)).toEqual(["2026-10-07", "2026-10-06"]);

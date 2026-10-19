@@ -1,10 +1,12 @@
+import { principalAllows } from "@/lib/auth/api-scopes";
+import { apiDenialResponse } from "@/lib/api/problem";
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
 import { localhostAllowedOrigins, originValidationResponse } from "@modelcontextprotocol/server";
 import { env } from "@/config/env";
 import { readBoundedBody } from "@/lib/api/request-body";
 import { ApiHttpError } from "@/lib/api/http-error";
 import { apiRoute } from "@/lib/api/route";
-import { mcpRequestAccess, mcpRequestDeadlineMs, serveMcp } from "@/lib/mcp/server";
+import { mcpRequestAccess, mcpRequestRequiredScopes, mcpRequestDeadlineMs, serveMcp } from "@/lib/mcp/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -12,6 +14,7 @@ export const maxDuration = 30;
 const BASE_DEADLINE_MS = OPERATION_DEADLINE_MS;
 
 const authenticatedHandler = apiRoute("api.mcp", undefined, serveMcp, {
+  audience: "mcp",
   deadlineMs: BASE_DEADLINE_MS,
   deadlineInHandler: true,
   writesDisabledInHandler: true,
@@ -23,6 +26,12 @@ const authenticatedHandler = apiRoute("api.mcp", undefined, serveMcp, {
     try { body = JSON.parse(new TextDecoder().decode(bytes)); } catch { /* SDK owns parse errors. */ }
     if (Array.isArray(body)) {
       throw new ApiHttpError(400, "batch_not_supported", "Send one JSON-RPC message per request.");
+    }
+    const requiredScopes = mcpRequestRequiredScopes(ctx, body);
+    if (requiredScopes.some(scope => !principalAllows(ctx, scope))) {
+      return { request, access: "read", response: apiDenialResponse("missing_scope", context.instance, context.requestId, {
+        oauth: true, role: ctx.orgRole, scopes: ctx.scopes, requiredScopes,
+      }) };
     }
     // Preserve the pre-auth start instant when the tool declares its own budget.
     context.deadlineAt += mcpRequestDeadlineMs(ctx, body, BASE_DEADLINE_MS) - BASE_DEADLINE_MS;
@@ -42,7 +51,8 @@ export async function POST(request: Request): Promise<Response> {
   return rejected ?? authenticatedHandler(request);
 }
 
-function methodNotAllowed(): Response {
-  return new Response(null, { status: 405, headers: { Allow: "POST" } });
-}
+const methodNotAllowedResponse = () => new Response(null, { status: 405, headers: { Allow: "POST" } });
+const methodNotAllowed = apiRoute("api.mcp.method-not-allowed", undefined, async () => methodNotAllowedResponse(), {
+  audience: "mcp", prepare: async request => ({ request, access: "read", response: methodNotAllowedResponse() }),
+});
 export { methodNotAllowed as GET, methodNotAllowed as DELETE };

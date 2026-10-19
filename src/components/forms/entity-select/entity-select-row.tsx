@@ -1,4 +1,4 @@
-import { EyeIcon, PencilSimpleIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
+import { ArrowSquareOutIcon, EyeIcon, PencilSimpleIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { Combobox } from "@base-ui/react/combobox";
 import { cn } from "@/lib/utils";
 import type { EntityOption, EntitySelectProps } from "./types";
@@ -31,10 +31,12 @@ interface EntitySelectRowProps {
   /** The edit row only opens a read-only view (archived selection): show the view icon. */
   isViewOnly?: boolean;
   createLabel: string;
+  /** The create row opens a page in a new tab (`createHref`), not a quick-add dialog. */
+  createOpensNewTab?: boolean;
 }
 
 export function EntitySelectRow({
-  row, value, noneOption, editLabel, isViewOnly, createLabel, highlightActions,
+  row, value, noneOption, editLabel, isViewOnly, createLabel, createOpensNewTab, highlightActions,
 }: EntitySelectRowProps) {
   const isAction = row.kind === "edit" || row.kind === "create";
   const disabled = row.kind === "option" && row.option.disabled;
@@ -78,9 +80,14 @@ export function EntitySelectRow({
             ? (isViewOnly
               ? <EyeIcon aria-hidden weight="bold" className="size-16" />
               : <PencilSimpleIcon aria-hidden weight="bold" className="size-16" />)
-            : <PlusIcon aria-hidden weight="bold" className="size-16" />}
+            : createOpensNewTab
+              ? <ArrowSquareOutIcon aria-hidden weight="bold" className="size-16" />
+              : <PlusIcon aria-hidden weight="bold" className="size-16" />}
           <span className="text-[var(--text-s)]">
             {row.kind === "edit" ? editLabel : createLabel}
+            {row.kind === "create" && createOpensNewTab && (
+              <span className="sr-only"> (opens in a new tab)</span>
+            )}
           </span>
         </>
       )}

@@ -36,11 +36,11 @@ export function partyLocationNotFound(kind: Party): DomainError {
   return partyRefusal("not_found", kind === "supplier" ? "Supplier location not found" : "Customer location not found", ["locationId"]);
 }
 
-export function customerLocationHasOrders(orderCodes: string[] = []): DomainError {
-  return partyRefusal("conflict", `Customer location ${IN_USE_DELETE_MARKER} orders use it. Archive it instead.`, ["locationId"], { orderCodes });
+export function customerLocationHasOrders(orderCodes: string[] = [], archived = false): DomainError {
+  return partyRefusal("conflict", `Customer location ${IN_USE_DELETE_MARKER} orders use it.${archived ? "" : " Archive it instead."}`, ["locationId"], { orderCodes });
 }
-export function customerLocationHasStorageSite(): DomainError {
-  return partyRefusal("conflict", `Customer location ${IN_USE_DELETE_MARKER} it is registered with Isometric as a storage site. Archive it instead.`, ["locationId"]);
+export function customerLocationHasStorageSite(archived = false): DomainError {
+  return partyRefusal("conflict", `Customer location ${IN_USE_DELETE_MARKER} it is registered with Isometric as a storage site.${archived ? "" : " Archive it instead."}`, ["locationId"]);
 }
 export function customerLocationCertificationLocked(field: "name" | "gpsLatitude" | "gpsLongitude"): DomainError {
   return partyRefusal("certification_locked", "This location is registered with Isometric as a storage site, so its name and coordinates cannot change. Add a new location instead.", [field]);
