@@ -59,12 +59,14 @@ const PASSING_CHECKS: RemovalRequirementCheck[] = [
     key: "mapping",
     label: "Facility linked to a registry project",
     requirementLabel: "Facility linked to a registry project",
+    unmetLabel: "Facility not linked to a registry project",
     status: "met",
   },
   {
     key: "template",
     label: "Removal template resolved",
     requirementLabel: "Removal template resolved",
+    unmetLabel: "Removal template has unresolved parts",
     status: "met",
   },
 ];

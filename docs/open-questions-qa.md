@@ -61,7 +61,7 @@ bound); these are the decisions it deliberately did not make.
   three photo roles). The counts are consistent across surfaces, but the
   wording never says "1 gap group · 4 missing fields".
 - **Resolve via:** pick one convention (group count with expanded field list,
-  or field count everywhere) and apply it to the card tag, health strip, and
+  or field count everywhere) and apply it to the card tag, the batch page's open items, and
   Removal wizard copy (S).
 
 ### Zoneless date/time construction outside the production-run form (`dates/zoneless-instants`)

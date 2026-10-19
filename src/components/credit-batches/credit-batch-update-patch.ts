@@ -1,6 +1,6 @@
 import { formatUtcDate } from "@/lib/date-utils";
 import type { RecordLockView } from "@/lib/record-lock-view";
-import type { CreditBatchFormData } from "@/schemas/credit-batches";
+import type { CreditBatchFormData, UpdateCreditBatchData } from "@/schemas/credit-batches";
 
 const MEMBERSHIP_FIELDS = ["facilityId", "feedstockTypeId", "startDate", "endDate", "productionRunIds"] as const;
 
@@ -62,4 +62,49 @@ export function creditBatchUpdatePatch(
   const patch: Partial<Omit<CreditBatchFormData, "sampling">> = { ...data };
   for (const field of MEMBERSHIP_FIELDS) delete patch[field];
   return patch;
+}
+
+const NOT_SAVED_MESSAGE = "Credit batch was not saved. Try again.";
+
+/** What one edit save came to: saved (maybe with a warning), or the error to show beside the form. */
+export type CreditBatchSaveOutcome =
+  | { status: "saved"; warning?: string }
+  | { status: "error"; message: string };
+
+interface SaveResult {
+  success: boolean;
+  error?: string;
+  warning?: string;
+}
+
+/**
+ * One edit save, shared by the list's sheet and the batch page. Sampling is
+ * immutable and never sent; a held membership never reaches the server (see
+ * `creditBatchUpdatePatch`); `saved` is the snapshot the edit opened on, so a
+ * concurrent save answers with the stale-version conflict instead of being
+ * overwritten.
+ */
+export async function saveCreditBatchEdit({
+  data,
+  saved,
+  membershipLocked,
+  update,
+}: {
+  data: CreditBatchFormData;
+  saved: SavedCreditBatchDefinition & { id: string; version: number };
+  membershipLocked: boolean;
+  update: (input: Omit<UpdateCreditBatchData, "sampling">) => Promise<SaveResult>;
+}): Promise<CreditBatchSaveOutcome> {
+  try {
+    const { sampling, ...mutableData } = data;
+    void sampling;
+    const patch = creditBatchUpdatePatch(mutableData, saved, membershipLocked);
+    if (!patch) return { status: "error", message: CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE };
+    const result = await update({ creditBatchId: saved.id, expectedVersion: saved.version, ...patch });
+    if (!result.success) return { status: "error", message: result.error || NOT_SAVED_MESSAGE };
+    return result.warning ? { status: "saved", warning: result.warning } : { status: "saved" };
+  } catch (err) {
+    console.error("Credit batch update error:", err);
+    return { status: "error", message: err instanceof Error ? err.message : NOT_SAVED_MESSAGE };
+  }
 }

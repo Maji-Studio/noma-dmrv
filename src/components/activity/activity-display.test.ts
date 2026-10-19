@@ -122,7 +122,7 @@ describe("record links", () => {
     expect(activityRecordHref(item({ entityType: "application", entityId: "a-1" }), CONTEXT)).toBe("/applications?facility=facility-1&application=a-1");
     expect(activityRecordHref(item({ entityType: "removal", entityId: "r-1" }), CONTEXT)).toBe("/certification/removals?facility=facility-1&removal=r-1");
     expect(activityRecordHref(item({ entityType: "ghg_statement", entityId: "g-1" }), CONTEXT)).toBe("/certification/ghg-statements?facility=facility-1&statement=g-1");
-    expect(activityRecordHref(item({ entityType: "credit_batch", entityId: "other" }), CONTEXT)).toBe("/credit-batches?facility=facility-1&batch=other");
+    expect(activityRecordHref(item({ entityType: "credit_batch", entityId: "other" }), CONTEXT)).toBe("/credit-batches/other?facility=facility-1");
     expect(activityRecordHref(item({ entityType: "order", entityId: "o-1" }), CONTEXT)).toBe("/orders?facility=facility-1&order=o-1");
   });
 

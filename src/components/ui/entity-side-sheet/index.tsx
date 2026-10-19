@@ -108,6 +108,11 @@ interface EntitySideSheetProps {
   editLabel?: string;
   /** Whether the view-mode footer exposes the edit action. */
   canEdit?: boolean;
+  /**
+   * A view-mode footer action that leads, ahead of Edit (a preview sheet's
+   * link to the record's own page). Edit then drops to secondary weight.
+   */
+  viewPrimaryAction?: React.ReactNode;
   /** The form component rendered in edit/create mode */
   children: React.ReactNode;
   /** Panel width */
@@ -137,6 +142,7 @@ function EntitySideSheet({
   viewModeNotice,
   editLabel = "Edit",
   canEdit = true,
+  viewPrimaryAction,
   children,
   size = "wide",
 }: EntitySideSheetProps) {
@@ -303,12 +309,16 @@ function EntitySideSheet({
           </SlideOverPanel.Footer>
         )}
 
-        {/* Footer — only in view mode; the header X is the way out. */}
-        {isViewMode && canEdit && (
+        {/* Footer — only in view mode; the header X is the way out. A preview's
+            lead action (its link to the record's own page) comes before Edit. */}
+        {isViewMode && (canEdit || viewPrimaryAction) && (
           <SlideOverPanel.Footer>
-            <Button variant="primary" onClick={() => onModeChange("edit")}>
-              {editLabel}
-            </Button>
+            {viewPrimaryAction}
+            {canEdit && (
+              <Button variant={viewPrimaryAction ? "default" : "primary"} onClick={() => onModeChange("edit")}>
+                {editLabel}
+              </Button>
+            )}
           </SlideOverPanel.Footer>
         )}
 

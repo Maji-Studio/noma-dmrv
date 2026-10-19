@@ -10,8 +10,6 @@ import type {
 } from "@/data-access/credit-batches";
 import { creditBatchSheetSections } from "./credit-batch-view";
 
-// The Activity section fetches its own data; these suites render without a query client.
-vi.mock("@/components/activity", () => ({ CreditBatchActivitySection: () => null }));
 vi.mock("next/link", () => ({ default: ({ children, href, ...props }: { children: ReactNode; href: string }) => <a href={href} {...props}>{children}</a> }));
 // The pinned template block reads live queries; its own suite covers it.
 vi.mock("./credit-batch-removal-template", () => ({ CreditBatchRemovalTemplate: () => <div>Removal template block</div> }));
@@ -184,6 +182,20 @@ describe("credit batch CO₂e stored", () => {
     expect(explanation).toContain("97.0%");
     expect(explanation).toContain("Durability cap applied");
     expect(explanation).toContain("organic-carbon-cap-v1");
+  });
+});
+
+describe("credit batch sheet applied biochar", () => {
+  const applied = (appliedDryKg?: number | null) => creditBatchSheetSections({ ...baseOptions, creditBatch: makeBatch({}), appliedDryKg })
+    .find((entry) => entry.title === "Batch definition")?.fields.find((field) => field.label === "Applied biochar (dry)");
+
+  it("reads dry applied biochar from the page model, as the batch page does", () => {
+    expect(applied(320)).toMatchObject({ value: "0.32 t", pending: false });
+  });
+
+  it("waits while the page model loads and says when it failed", () => {
+    expect(applied(undefined)).toMatchObject({ value: null, pending: true });
+    expect(applied(null)).toMatchObject({ value: null, pending: false, emptySituation: "notAvailable" });
   });
 });
 

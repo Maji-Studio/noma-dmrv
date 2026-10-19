@@ -9,13 +9,14 @@ import { toDeleteErrorMessage } from "@/lib/stale-version";
  * data readiness, Removal submission, and the linked GHG Statement's verifier
  * status.
  *
- * Clicking a row opens the unified side sheet in view mode (deep-linkable via
- * `?batch=<id>`, mirroring the production-run list) — there is no separate
- * detail page; `/credit-batches/[id]` redirects here.
+ * Clicking a row opens the side sheet as a preview (deep-linkable via
+ * `?batch=<id>`). Its lead action opens the batch's own page,
+ * `/credit-batches/[id]`, where the checklist, Samples and activity live.
  */
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ConflictError } from "@/lib/conflict-ref";
 import { parseAsString, useQueryState } from "nuqs";
 import {
@@ -42,12 +43,10 @@ import {
   CreditBatchTimeline,
   type NewBatchRequest,
 } from "./credit-batch-timeline";
-import { CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE, creditBatchUpdatePatch, isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
+import { isCreditBatchMembershipLocked, saveCreditBatchEdit } from "./credit-batch-update-patch";
 import { RecordUsedBy, recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { isRecordEditable } from "@/lib/record-lock-view";
-import { CreditBatchHealthStrip } from "./credit-batch-health-strip";
-import { CreditBatchDurabilityPanel } from "./credit-batch-durability-panel";
 import { creditBatchSheetSections } from "./credit-batch-view";
 import {
   CreditBatchFilters,
@@ -63,6 +62,7 @@ import {
   useCreditBatch,
   useCreditBatchCo2eStoredPreviews,
   useCreditBatchProductionRunOptions,
+  useCreditBatchPageModel,
   useCreditBatchTimelineFacts,
   useCreateCreditBatch,
   useUpdateCreditBatch,
@@ -76,7 +76,8 @@ import {
   monthWindow,
 } from "@/lib/credit-batches/timeline";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
-import { CREDIT_BATCH_DEEP_LINK_PARAM } from "@/lib/credit-batch-links";
+import { CREDIT_BATCH_DEEP_LINK_PARAM, creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
+import { buttonVariants } from "@/components/ui/button";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   parseEntityFocusTarget,
@@ -153,6 +154,7 @@ export function CreditBatchList({
 
   // Side sheet state — `?batch=` deep-links the view sheet (production-run
   // convention); local state handles sheets opened by clicks.
+  const router = useRouter();
   const [focusedBatchId, setFocusedBatchId] = useQueryState(
     CREDIT_BATCH_DEEP_LINK_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
@@ -326,41 +328,21 @@ export function CreditBatchList({
   const handleUpdate = async (data: CreditBatchFormData) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
-    try {
-      const { sampling, ...mutableData } = data;
-      void sampling;
-      // A held membership never reaches the server, so a notes-only save
-      // passes the slice guard; a free batch re-resolves on every save. A
-      // membership change made before the lock arrived is never dropped.
-      const patch = creditBatchUpdatePatch(mutableData, sideSheet.entity, membershipLocked);
-      if (!patch) {
-        setUpdateError(CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE);
-        return;
-      }
-      const result = await updateCreditBatch.mutateAsync({
-        creditBatchId: sideSheet.entity.id,
-        expectedVersion: sideSheet.entity.version,
-        ...patch,
-      });
-      if (result.success) {
-        closeSideSheet();
-        // The batch is saved. A warning says only that part of its detail did
-        // not load, so the operator is told what to do, not that it failed.
-        if (result.warning) toast.warning(`${result.warning} Refresh the page.`);
-        else toast.success("Credit batch updated.");
-      } else {
-        setUpdateError(
-          result.error || "Credit batch was not saved. Try again.",
-        );
-      }
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Credit batch was not saved. Try again.";
-      console.error("Credit batch update error:", err);
-      setUpdateError(message);
+    const outcome = await saveCreditBatchEdit({
+      data,
+      saved: sideSheet.entity,
+      membershipLocked,
+      update: (input) => updateCreditBatch.mutateAsync(input),
+    });
+    if (outcome.status === "error") {
+      setUpdateError(outcome.message);
+      return;
     }
+    closeSideSheet();
+    // The batch is saved. A warning says only that part of its detail did
+    // not load, so the operator is told what to do, not that it failed.
+    if (outcome.warning) toast.warning(`${outcome.warning} Refresh the page.`);
+    else toast.success("Credit batch updated.");
   };
 
   const handleDelete = (batchId: string) => {
@@ -409,11 +391,10 @@ export function CreditBatchList({
     setUpdateError(null);
     setSideSheet({ entity: null, mode: "create" });
   };
-  const openView = (batch: CreditBatchWithRelations) => {
-    setCreateError(null);
-    setUpdateError(null);
-    void setFocusedBatchId(batch.id);
-    setSideSheet({ entity: batch, mode: "view" });
+  // Bars and rows open the batch page. The preview sheet stays for old
+  // `?batch=<id>` links and for Edit.
+  const openPage = (batch: CreditBatchWithRelations) => {
+    router.push(creditBatchDeepLinkHref(batch.id, batch.facilityId));
   };
   const openEdit = (batch: CreditBatchWithRelations) => {
     setCreateError(null);
@@ -504,6 +485,8 @@ export function CreditBatchList({
   );
   const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("creditBatch", viewEntity?.id);
   const membershipLocked = isCreditBatchMembershipLocked(sheetLock);
+  // One read for the one batch the sheet shows: its applied biochar is dry, as on the page.
+  const sheetPageModel = useCreditBatchPageModel(viewEntity?.id ?? "");
   const runOptionsQuery = useCreditBatchProductionRunOptions({
     facilityId: viewEntity?.facilityId,
     startDate: viewEntity?.startDate,
@@ -511,9 +494,6 @@ export function CreditBatchList({
     includeCreditBatchId: viewEntity?.id,
   });
   const memberRunIds = new Set(viewEntity?.productionRunIds ?? []);
-  const memberRuns = (runOptionsQuery.data ?? []).filter((run) =>
-    memberRunIds.has(run.id),
-  );
   const displayedRuns = (runOptionsQuery.data ?? []).filter((run) => {
     if (memberRunIds.has(run.id)) return true;
     return (
@@ -658,7 +638,6 @@ export function CreditBatchList({
           batches={allItems}
           facilityId={contextFacilityId}
           today={today}
-          onOpenBatch={openView}
           onNewBatch={openCreate}
         />
       ) : (
@@ -777,7 +756,7 @@ export function CreditBatchList({
                   facts={factsQuery.data[batch.id]}
                   factsStatus={factsQuery.error ? "failed" : factsQuery.isLoading ? "loading" : "ready"}
                   lock={batchLocks.locks[batch.id]}
-                  onView={openView}
+                  onOpen={openPage}
                   onEdit={openEdit}
                   onDelete={handleDelete}
                 />
@@ -831,7 +810,7 @@ export function CreditBatchList({
         onModeChange={handleModeChange}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit credit batch"
+        editLabel="Edit"
         canEdit={isRecordEditable(sheetLock)}
         {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: !membershipLocked })}
         size="wide"
@@ -855,24 +834,23 @@ export function CreditBatchList({
                   sideSheetEntity.id === focusedBatchId
                     ? parseEntityFocusTarget(deepLinkFocus)
                     : null,
+                appliedDryKg: sheetPageModel.error
+                  ? null
+                  : sheetPageModel.data?.mass.appliedDryKg,
               })
             : undefined
         }
         viewModeChildren={
+          sideSheetEntity ? <RecordUsedBy lock={sheetLock} /> : undefined
+        }
+        viewPrimaryAction={
           sideSheetEntity ? (
-            <>
-              <CreditBatchHealthStrip
-                creditBatchId={sideSheetEntity.id}
-                facilityId={sideSheetEntity.facilityId}
-                productionRuns={memberRuns}
-                feedstockName={sideSheetEntity.feedstockTypeName}
-              />
-              <CreditBatchDurabilityPanel
-                creditBatchId={sideSheetEntity.id}
-                facilityId={sideSheetEntity.facilityId}
-              />
-              <RecordUsedBy lock={sheetLock} />
-            </>
+            <Link
+              href={creditBatchDeepLinkHref(sideSheetEntity.id, sideSheetEntity.facilityId)}
+              className={buttonVariants({ variant: "primary" })}
+            >
+              Open credit batch
+            </Link>
           ) : undefined
         }
       >

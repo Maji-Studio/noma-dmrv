@@ -3,11 +3,12 @@
 /**
  * The hover card of a credit batch bar. Base UI PreviewCard: it opens on hover
  * and on keyboard focus of the bar, and on a first tap on touch screens (the
- * second tap opens the batch). The bar itself is the control that opens the
- * batch, so the card carries facts only, no link.
+ * second tap opens the batch page). The bar itself is the link to the batch
+ * page, so the card carries facts only, no link.
  * Elevated surface per the design system: paper, full-ink border, no shadow.
  */
 import { useState, type ReactNode } from "react";
+import Link from "next/link";
 import { PreviewCard } from "@base-ui/react/preview-card";
 import { CalendarBlankIcon, LeafIcon, WarningCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { StatusBadge, type StatusValue } from "@/components/ui/status-badge";
@@ -114,13 +115,14 @@ export function BatchHoverCard({
   batch,
   label,
   className,
-  onOpenBatch,
+  href,
   children,
 }: {
   batch: HoverCardBatch;
   label: string;
   className?: string;
-  onOpenBatch: () => void;
+  /** The batch page. */
+  href: string;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -140,21 +142,21 @@ export function BatchHoverCard({
         delay={OPEN_DELAY_MS}
         closeDelay={CLOSE_DELAY_MS}
         render={
-          <button
-            type="button"
+          <Link
+            href={href}
             aria-label={label}
             className={className}
             onClick={(event) => {
-              // A first touch tap shows the card; the next one opens the batch.
+              // A first touch tap shows the card; the next one follows the link.
               const pointerType = (event.nativeEvent as PointerEvent).pointerType;
               if (pointerType === "touch" && !open) {
+                event.preventDefault();
                 setPinned(true);
                 setOpen(true);
                 return;
               }
               setPinned(false);
               setOpen(false);
-              onOpenBatch();
             }}
           />
         }

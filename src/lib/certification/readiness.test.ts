@@ -131,6 +131,13 @@ describe("deriveRemovalReadiness — blocked: linkage & template", () => {
     });
   });
 
+  it("names the template check 'No Removal template chosen' in the checklist when none is chosen", () => {
+    const check = checkFor(buildRemovalRequirementsChecklist(ready({ hasRemovalTemplate: false })), "template");
+    expect(check.status).toBe("unmet");
+    expect(check.unmetLabel).toBe("No Removal template chosen");
+    expect(checkFor(buildRemovalRequirementsChecklist(ready()), "template").unmetLabel).toBe(CERT_REQUIREMENT_META.template.unmetLabel);
+  });
+
   it("blocks when no default template is selected", () => {
     const r = deriveRemovalReadiness(ready({ hasRemovalTemplate: false }));
     expect(r.state).toBe("blocked");

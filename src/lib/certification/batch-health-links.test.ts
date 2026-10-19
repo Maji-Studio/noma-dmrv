@@ -26,6 +26,6 @@ it("does not label generic hrefs as location repairs", () => {
 it("keeps emissions evidence separate from emission estimates and opens the batch sheet", () => {
   expect(fallbackBatchHealthFixTarget("emissions")).toBe("emissions");
   expect(batchHealthFixLinkFor({ key: "emissions" }, "facility-1", "batch-1")).toEqual({
-    label: "Review emissions", href: "/credit-batches?facility=facility-1&batch=batch-1",
+    label: "Review emissions", href: "/credit-batches/batch-1?facility=facility-1&tab=emissions",
   });
 });

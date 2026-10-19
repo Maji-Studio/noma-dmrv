@@ -4,4 +4,4 @@
 
 export { CreditBatchForm } from "./credit-batch-form";
 export { CreditBatchList } from "./credit-batch-list";
-export { CreditBatchHealthStrip } from "./credit-batch-health-strip";
+export { CreditBatchPage } from "./credit-batch-page";

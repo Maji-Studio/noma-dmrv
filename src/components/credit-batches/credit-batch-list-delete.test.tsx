@@ -10,6 +10,7 @@ const harness = vi.hoisted(() => ({
   onConfirm: undefined as (() => Promise<void>) | undefined,
   batch: { id: "batch-1", version: 3, code: "CB-1", facilityId: "facility-1", startDate: "2026-09-01", endDate: "2026-09-30" },
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("nuqs", () => ({ parseAsString: { withOptions: () => ({}) }, useQueryState: () => [null, vi.fn()] }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilityId: "facility-1" }), useFacilityClock: () => ({ timeZone: "UTC" }) }));
 vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => ({ isOpen: false, clear: vi.fn() }) }));
@@ -19,6 +20,7 @@ vi.mock("@/hooks/use-credit-batches", () => ({
   useCreditBatch: () => ({}),
   useCreditBatchCo2eStoredPreviews: () => ({ data: {} }),
   useCreditBatchProductionRunOptions: () => ({ data: [] }),
+  useCreditBatchPageModel: () => ({}),
   useCreditBatchTimelineFacts: () => ({ data: {}, isLoading: false, isFetching: false, error: null, refetch: vi.fn() }),
   useCreateCreditBatch: () => ({}),
   useUpdateCreditBatch: () => ({}),
@@ -40,7 +42,6 @@ vi.mock("@/components/record-locks", async () => (await import("../../../tests/h
 vi.mock("./credit-batch-form", () => ({ CreditBatchForm: () => null }));
 vi.mock("./credit-batch-timeline", () => ({ CreditBatchTimeline: () => null }));
 vi.mock("./credit-batch-filters", () => ({ CreditBatchFilters: () => null }));
-vi.mock("./credit-batch-health-strip", () => ({ CreditBatchHealthStrip: () => null }));
 vi.mock("./credit-batch-durability-panel", () => ({ CreditBatchDurabilityPanel: () => null }));
 vi.mock("./credit-batch-view", () => ({ creditBatchSheetSections: () => [] }));
 vi.mock("./credit-batch-list-rows", () => ({

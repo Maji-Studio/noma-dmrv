@@ -405,8 +405,8 @@ export interface ReadyBatchOptions {
   /**
    * Omit the lab samples and the batch → production-run link. The batch still
    * has an unassigned application slice (so the wizard lists it) but is
-   * deterministically NOT ready: gaps "Lab chemistry results" and "Linked
-   * production data". Defaults to the full ready chain.
+   * deterministically NOT ready: gaps "No lab chemistry results" and "No
+   * production run linked". Defaults to the full ready chain.
    */
   incomplete?: boolean;
 }

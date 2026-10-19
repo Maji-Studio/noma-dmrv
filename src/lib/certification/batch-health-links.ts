@@ -25,9 +25,9 @@ export interface BatchHealthFixLink {
   href: string;
 }
 
-// Note: the problem-phrased "open check headline" was retired in Phase 0 — every
-// readiness surface now renders the one neutral `BatchHealthCheck.requirementLabel`
-// (see `requirement-labels.ts`), so the batch page and the removal wizard can't
+// Note: every readiness surface labels a check through `certCheckLabel`
+// (`requirement-labels.ts`): the named problem while unmet, the neutral
+// requirement otherwise. The batch page and the removal wizard therefore can't
 // phrase the same gap differently.
 
 export function fallbackBatchHealthFixTarget(
@@ -89,7 +89,7 @@ export function batchHealthFixLinkFor(
   };
   switch (target) {
     case "emissions":
-      return { label: "Review emissions", href: creditBatchId ? creditBatchDeepLinkHref(creditBatchId, facilityId) : `/credit-batches?${query(undefined, false)}` };
+      return { label: "Review emissions", href: creditBatchId ? creditBatchDeepLinkHref(creditBatchId, facilityId, { tab: "emissions" }) : `/credit-batches?${query(undefined, false)}` };
     case "certificationTemplates":
       return { label: "Review Removal templates", href: certificationRemovalTemplatesHref(facilityId) };
     case "creditBatchTemplate":

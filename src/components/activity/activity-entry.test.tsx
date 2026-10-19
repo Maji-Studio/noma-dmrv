@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { formatDateTime } from "@/lib/format-utils";
+import { formatDateTime, formatTime } from "@/lib/format-utils";
 import { ActivityEntry } from "./activity-entry";
 import type { ActivityItem } from "./activity-display";
 
@@ -21,7 +21,7 @@ const item: ActivityItem = {
 };
 
 /** The rendered row as a DOM tree, so text is read the way a browser reads it. */
-function renderEntry(entry: ActivityItem = item, props: { hideMeta?: boolean; showDate?: boolean } = {}): HTMLElement {
+function renderEntry(entry: ActivityItem = item, props: { showDate?: boolean } = {}): HTMLElement {
   const container = document.createElement("div");
   container.innerHTML = renderToStaticMarkup(<ActivityEntry item={entry} creditBatchId="batch-1" {...props} />);
   return container;
@@ -59,11 +59,20 @@ describe("ActivityEntry field lines", () => {
 });
 
 describe("ActivityEntry meta", () => {
-  it("keeps the actor and full time for screen readers when the header carries them", () => {
-    const row = renderEntry(item, { hideMeta: true });
-    const text = [...row.querySelectorAll(".sr-only")].map(readText).join(" ");
-    expect(text).toContain("Ada Operator");
-    expect(text).toContain(formatDateTime(item.occurredAt));
+  it("puts who and when on one line under the title, on every row", () => {
+    const row = renderEntry();
+    const time = row.querySelector("time") as HTMLTimeElement;
+    expect(time.getAttribute("datetime")).toBe(item.occurredAt.toISOString());
+    expect(time.getAttribute("title")).toBe(formatDateTime(item.occurredAt));
+    expect(readText(time.parentElement as Element)).toBe(`Ada Operator · ${formatTime(item.occurredAt)}`);
+  });
+
+  it("draws the record type in a circle node and dashes it for a deleted record", () => {
+    const live = renderEntry().querySelector('[aria-hidden="true"].rounded-full');
+    expect(live?.querySelector("svg")).not.toBeNull();
+    const gone = renderEntry({ ...item, record: { ...item.record, deleted: true } });
+    expect(gone.querySelector('[aria-hidden="true"].rounded-full')?.className).toContain("border-dashed");
+    expect(gone.querySelector('[data-testid="activity-tombstone"]')).not.toBeNull();
   });
 
   it("shows the full date and time when asked", () => {
