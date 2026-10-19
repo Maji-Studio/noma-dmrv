@@ -1,128 +1,169 @@
 /**
- * PROTOTYPE (issue #1004, throwaway, never merges): the part model and the
- * fixture entries behind the bin history variants. Nothing here is read from
- * the database.
+ * PROTOTYPE (issue #1004, round 2, throwaway, never merges): fixture movements
+ * for one product bin and the figures every variant derives from them.
+ * Nothing here is read from the database.
  *
- * Three variants of one question: how does a history entry show every part of
- * the mix (dry biochar, each blend ingredient, water) before and after, while
- * the wet total stays the headline? Switch with `?variant=A|B|C` on the
- * storage-locations page, open a product bin, then its History.
+ * Wet mass is the headline; dry biochar sits beside it when known; every other
+ * figure lives in the history. Switch with `?variant=A1|A2|A3`; add
+ * `&state=nomoisture` for a bin whose last batch has no moisture reading.
  */
-import type { OutputStockHistoryEntry } from "@/types/output-stock";
+import { ESTIMATED_WATER_LABEL } from "@/lib/output-stock/labels";
 
-export type PartKind = "biochar" | "ingredient" | "water";
-
-export interface Part {
-  key: string;
-  label: string;
-  kind: PartKind;
-  /** Null when the records cannot give it: only ever the water part. */
-  kg: number | null;
-  /** Position among the ingredients, for the accent fill. */
-  index?: number;
-}
-
-export interface Side {
-  /** Wet stock from the records; null when a batch has no moisture basis. */
-  wetKg: number | null;
-  parts: Part[];
-}
-
-export interface EntryParts { before: Side; after: Side }
-
-export const WATER_LABEL = "Water";
-export const WATER_SOURCE = "from the records";
-export const WATER_UNKNOWN = "Unknown until the next count";
+export const DRY_BIOCHAR = "Dry biochar";
+export const INGREDIENTS = ["Compost", "Wood ash"] as const;
 const EPSILON_KG = 1e-6;
 
-/**
- * Water is wet stock less solids. Two cases have no honest figure and say so
- * instead of a floored 0 kg: no wet figure at all (a batch without a moisture
- * basis), and less wet stock than solids (wetter removals used the water up).
- */
-export function resolveWater(wetKg: number | null, solidsKg: number): number | null {
-  if (wetKg === null) return null;
-  if (wetKg < solidsKg - EPSILON_KG) return null;
-  if (wetKg <= 0 && solidsKg > 0) return null;
-  return wetKg - solidsKg;
+export type MoveKind = "added" | "withdrawal" | "mode";
+
+/** Signed change of one movement. Wet is null when the batch has no moisture reading. */
+export interface Delta { wet: number | null; biochar: number; ingredients: number[] }
+
+export interface Move {
+  id: string;
+  kind: MoveKind;
+  /** Local facility time, "YYYY-MM-DDTHH:mm". */
+  at: string;
+  /** Source batch or product the movement came from or went to. */
+  source?: string;
+  delta: Delta;
+  moisture: number | null;
+  recordedAt: string;
+  recordedBy: string;
+  /** A correction names the entry it replaced. */
+  corrects?: string;
+  /** Mode change text. */
+  caption?: string;
 }
 
-export function side(wetKg: number | null, biocharKg: number, ingredients: [string, number][] = []): Side {
-  const solids = biocharKg + ingredients.reduce((total, [, kg]) => total + kg, 0);
-  return {
-    wetKg,
-    parts: [
-      { key: "biochar", label: "Dry biochar", kind: "biochar", kg: biocharKg },
-      ...ingredients.map(([label, kg], index) => ({ key: label, label, kind: "ingredient" as const, kg, index })),
-      { key: "water", label: WATER_LABEL, kind: "water", kg: resolveWater(wetKg, solids) },
-    ],
-  };
-}
+export interface Snapshot { wet: number | null; biochar: number; ingredients: number[] }
 
-const EMPTY = side(0, 0);
-const AFTER_T1 = side(300, 246);
-const AFTER_T2 = side(800, 486, [["Compost", 150]]);
-const AFTER_T3 = side(1200, 686, [["Compost", 230], ["Wood ash", 40]]);
-const AFTER_T4 = side(900, 540, [["Compost", 150], ["Wood ash", 30]]);
-// Wetter removals took the recorded wet stock to zero while solids remain.
-const AFTER_T5 = side(0, 480, [["Compost", 130], ["Wood ash", 30]]);
-// A batch with no moisture basis: wet is unknown, so is water.
-const AFTER_T6 = side(null, 600, [["Compost", 130], ["Wood ash", 30]]);
+export interface Part { label: string; kg: number; delta: number | null }
 
-export const PROTO_PARTS: Record<string, EntryParts> = {
-  t1: { before: EMPTY, after: AFTER_T1 },
-  t2: { before: AFTER_T1, after: AFTER_T2 },
-  t3: { before: AFTER_T2, after: AFTER_T3 },
-  t4: { before: AFTER_T3, after: AFTER_T4 },
-  t5: { before: AFTER_T4, after: AFTER_T5 },
-  t6: { before: AFTER_T5, after: AFTER_T6 },
-};
+const NO_INGREDIENTS = [0, 0];
+const d = (wet: number | null, biochar: number, compost = 0, ash = 0): Delta => ({ wet, biochar, ingredients: [compost, ash] });
 
-function allocation(code: string, wetMassKg: number | null, dryMassKg: number) {
-  return { layerId: code, code, wetMassKg, dryMassKg, runs: [] };
-}
-
-function entry(id: string, kind: string, at: string, wet: number | null, dry: number, moisture: number | null, reason: string,
-  codes: [string, number][]): OutputStockHistoryEntry {
-  const parts = PROTO_PARTS[id];
-  return {
-    id, kind, occurredAt: `${at}:00.000Z`, recordedAt: `${at}:00.000Z`, actorName: "Operator", reason,
-    wetMassKg: wet, moisturePercent: moisture, dryMassKg: dry,
-    beforeDryKg: parts.before.parts[0].kg ?? 0, afterDryKg: parts.after.parts[0].kg ?? 0,
-    correctsMovementId: null, deliveryId: null,
-    allocations: codes.map(([code, kg]) => allocation(code, null, kg)),
-  };
-}
-
-/** Newest first, as the history shows them. Dry mass is signed: intakes negative, removals positive. */
-export const PROTO_ENTRIES: OutputStockHistoryEntry[] = [
-  entry("t6", "intake", "2026-10-17T10:15", null, -120, null, "", [["BC-0431", 120]]),
-  entry("t5", "product_draw", "2026-10-17T08:30", 900, 60, 24, "Product PRD-090", [["PRD-022", 60]]),
-  entry("t4", "product_draw", "2026-10-16T14:20", 300, 146, 21, "Product PRD-088", [["PRD-022", 96], ["PRD-023", 50]]),
-  entry("t3", "intake", "2026-10-15T11:05", 400, -200, 20, "", [["PRD-023", 200]]),
-  entry("t2", "intake", "2026-10-14T15:40", 500, -240, 22, "", [["PRD-022", 240]]),
-  entry("t1", "intake", "2026-10-14T09:10", 300, -246, 18, "", [["PRD-021", 246]]),
+const BASE_MOVES: Move[] = [
+  { id: "e1", kind: "added", at: "2026-10-14T09:10", source: "PRD-021", delta: d(300, 246), moisture: 18, recordedAt: "2026-10-14T09:10", recordedBy: "Operator" },
+  { id: "e2", kind: "added", at: "2026-10-14T15:40", source: "PRD-022", delta: d(500, 240, 150), moisture: 22, recordedAt: "2026-10-14T15:40", recordedBy: "Operator" },
+  { id: "e3", kind: "added", at: "2026-10-15T11:05", source: "PRD-023", delta: d(400, 200, 80, 40), moisture: 20, recordedAt: "2026-10-15T11:05", recordedBy: "Operator" },
+  { id: "m1", kind: "mode", at: "2026-10-15T11:30", delta: d(0, 0), moisture: null, recordedAt: "2026-10-15T11:30", recordedBy: "Operator", caption: "Switched to mix. From here on the bin is one blended pile." },
+  { id: "e4", kind: "withdrawal", at: "2026-10-16T14:20", source: "PRD-088", delta: d(-300, -146, -80, -10), moisture: 21, recordedAt: "2026-10-16T14:20", recordedBy: "Operator" },
+  { id: "e5", kind: "withdrawal", at: "2026-10-16T14:20", source: "PRD-088", delta: d(-250, -122, -67, -8), moisture: 21, recordedAt: "2026-10-16T16:05", recordedBy: "Operator", corrects: "e4" },
+  { id: "e6", kind: "withdrawal", at: "2026-10-17T08:30", source: "PRD-090", delta: d(-150, -70, -22, -3), moisture: 24, recordedAt: "2026-10-17T08:30", recordedBy: "Operator" },
+  { id: "e7", kind: "added", at: "2026-10-17T10:15", source: "BC-0431", delta: d(300, 243), moisture: 19, recordedAt: "2026-10-17T10:15", recordedBy: "Operator" },
 ];
 
-/** No honest wet figure: no basis at all, or wet at zero while solids remain. */
-export function wetUnknown(side: Side): boolean {
-  const solids = side.parts.reduce((total, part) => total + (part.kind === "water" ? 0 : part.kg ?? 0), 0);
-  return side.wetKg === null || (side.wetKg <= 0 && solids > 0);
+/** A batch added by dry weight alone: no moisture reading, so no wet mass. */
+const NO_MOISTURE_MOVE: Move = { id: "e8", kind: "added", at: "2026-10-17T11:40", source: "BC-0432", delta: d(null, 120), moisture: null, recordedAt: "2026-10-17T11:40", recordedBy: "Operator" };
+
+export type ProtoState = "full" | "nomoisture";
+
+export interface Row {
+  move: Move;
+  /** A corrected entry no longer counts. */
+  replacedBy?: Move;
+  /** The entry a correction replaced. */
+  corrected?: Move;
+  /** Stock after this entry, null for an entry that no longer counts. */
+  after: Snapshot | null;
+  parts: Part[] | null;
 }
 
-/** The wet headline. `short` is the entry line's right-hand figure. */
-export function formatWet(side: Side, short = false): string {
-  if (wetUnknown(side)) return short ? "Not available" : "Unknown until the next count";
-  return `≈ ${(side.wetKg ?? 0).toLocaleString()} kg wet`;
+/** Stock after each entry in time order, skipping entries a correction replaced. Newest first. */
+export function buildRows(state: ProtoState): Row[] {
+  const moves = state === "nomoisture" ? [...BASE_MOVES, NO_MOISTURE_MOVE] : BASE_MOVES;
+  const replaced = new Map(moves.filter((move) => move.corrects).map((move) => [move.corrects as string, move]));
+  let run: Snapshot = { wet: 0, biochar: 0, ingredients: NO_INGREDIENTS };
+  const rows: Row[] = [];
+  const ordered = [...moves].sort((a, b) => a.at.localeCompare(b.at) || a.recordedAt.localeCompare(b.recordedAt));
+  for (const move of ordered) {
+    const dead = replaced.has(move.id);
+    const before = run;
+    if (!dead) {
+      run = {
+        wet: before.wet === null || move.delta.wet === null ? null : before.wet + move.delta.wet,
+        biochar: before.biochar + move.delta.biochar,
+        ingredients: before.ingredients.map((kg, index) => kg + move.delta.ingredients[index]),
+      };
+    }
+    const after = dead ? null : run;
+    rows.push({
+      move,
+      replacedBy: replaced.get(move.id),
+      corrected: move.corrects ? moves.find((item) => item.id === move.corrects) : undefined,
+      after,
+      parts: after ? partsOf(after, before, move.delta) : null,
+    });
+  }
+  return rows.reverse();
 }
 
-export function formatKg(kg: number): string {
-  return `${kg.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg`;
+export function solids(snapshot: Snapshot): number {
+  return snapshot.biochar + snapshot.ingredients.reduce((total, kg) => total + kg, 0);
 }
 
-/** Change of one part across the entry, signed, or null while either side is unknown. */
-export function partDelta(before: Part | undefined, after: Part): number | null {
-  const was = before?.kg ?? (before ? null : 0);
-  if (was === null || after.kg === null) return null;
-  return after.kg - was;
+/** Water is wet stock less solids; with no wet figure, or less wet than solids, there is no honest figure to show. */
+export function waterOf(snapshot: Snapshot): number | null {
+  if (snapshot.wet === null || snapshot.wet < solids(snapshot) - EPSILON_KG) return null;
+  return snapshot.wet - solids(snapshot);
 }
+
+/** Parts in the order the bin draws them, top down. The water row is left out when it has no honest figure. */
+export function partsOf(after: Snapshot, before?: Snapshot, delta?: Delta): Part[] {
+  const waterAfter = waterOf(after);
+  const waterBefore = before ? waterOf(before) : null;
+  const waterDelta = waterAfter !== null && waterBefore !== null ? waterAfter - waterBefore : null;
+  return [
+    { label: DRY_BIOCHAR, kg: after.biochar, delta: delta ? delta.biochar : null },
+    ...INGREDIENTS.map((name, index) => ({ label: `${name} solids`, kg: after.ingredients[index], delta: delta ? delta.ingredients[index] : null })),
+    ...(waterAfter === null ? [] : [{ label: ESTIMATED_WATER_LABEL, kg: waterAfter, delta: waterDelta }]),
+  ].filter((part) => (delta ? (part.delta ?? 1) !== 0 : part.kg > 0));
+}
+
+export function nowOf(rows: Row[]): Snapshot {
+  return rows.find((row) => row.after)?.after as Snapshot;
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "Oct 16, 2026" */
+export function dayLabel(at: string): string {
+  const [year, month, day] = at.slice(0, 10).split("-").map(Number);
+  return `${MONTHS[month - 1]} ${day}, ${year}`;
+}
+
+/** "Oct 16, 2026, 14:20" */
+export function dateTimeLabel(at: string): string {
+  return `${dayLabel(at)}, ${at.slice(11, 16)}`;
+}
+
+export function timeLabel(at: string): string {
+  return at.slice(11, 16);
+}
+
+export function kg(value: number): string {
+  return `${(Math.round(value * 10) / 10).toLocaleString("en-US")} kg`;
+}
+
+/** Signed change, with a real minus sign. */
+export function signedKg(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  if (rounded === 0) return "0 kg";
+  return `${rounded > 0 ? "+" : "−"}${Math.abs(rounded).toLocaleString("en-US")} kg`;
+}
+
+/** The sentence a movement reads as: "Added 300 kg wet mass". */
+export function sentence(move: Move): string {
+  if (move.kind === "mode") return move.caption ?? "";
+  const verb = move.kind === "added" ? "Added" : "Withdrew";
+  const amount = move.delta.wet === null ? `${kg(Math.abs(move.delta.biochar))} dry biochar` : `${kg(Math.abs(move.delta.wet))} wet mass`;
+  return `${verb} ${amount}`;
+}
+
+/** "Corrected withdrawal: 250 kg wet mass". */
+export function correctionSentence(move: Move): string {
+  const amount = move.delta.wet === null ? `${kg(Math.abs(move.delta.biochar))} dry biochar` : `${kg(Math.abs(move.delta.wet))} wet mass`;
+  return `Corrected ${move.kind === "added" ? "addition" : "withdrawal"}: ${amount}`;
+}
+
+export const NO_MOISTURE_REASON = "The last batch added has no moisture reading, so there is no wet mass. Record one when adding stock.";
