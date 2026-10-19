@@ -46,6 +46,8 @@ import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementDetailSheet } from "./ghg-statement-detail-sheet";
+import { IsometricLink } from "./isometric-link";
+import { formatRegistryRecord, registryRecordUrl } from "./registry-record";
 import { Notice } from "@/components/ui/notice";
 
 // Which blocking notice (if any) the list shows above the table. Precedence:
@@ -216,7 +218,13 @@ function LinkedRemovalsCell({ item }: { item: GhgStatementListItem }) {
   );
 }
 
-function RegistryRecordCell({ item }: { item: GhgStatementListItem }) {
+function RegistryRecordCell({
+  item,
+  registryHref,
+}: {
+  item: GhgStatementListItem;
+  registryHref: string | null;
+}) {
   const { latestSubmission } = item;
   if (!latestSubmission?.externalId) {
     return (
@@ -226,8 +234,11 @@ function RegistryRecordCell({ item }: { item: GhgStatementListItem }) {
     );
   }
   return (
-    <span className="body-small font-mono text-[var(--color-text-secondary)] truncate">
-      {latestSubmission.externalId} · v{latestSubmission.version}
+    <span className="inline-flex max-w-full min-w-0 items-center gap-4 align-top">
+      <span className="body-small font-mono text-[var(--color-text-secondary)] truncate">
+        {formatRegistryRecord(latestSubmission.externalId, latestSubmission.version)}
+      </span>
+      {registryHref && <IsometricLink href={registryHref} />}
     </span>
   );
 }
@@ -251,7 +262,9 @@ function StatusCell({ item }: { item: GhgStatementListItem }) {
   );
 }
 
-const columns: ColumnDef<GhgStatementListItem>[] = [
+const createColumns = (
+  registryHref: (externalId: string) => string | null,
+): ColumnDef<GhgStatementListItem>[] => [
   {
     id: "period",
     meta: { recordLink: true },
@@ -269,7 +282,15 @@ const columns: ColumnDef<GhgStatementListItem>[] = [
     id: "registry",
     header: "Registry record",
     accessorFn: (item) => item.latestSubmission?.externalId ?? "",
-    cell: ({ row }) => <RegistryRecordCell item={row.original} />,
+    cell: ({ row }) => {
+      const externalId = row.original.latestSubmission?.externalId;
+      return (
+        <RegistryRecordCell
+          item={row.original}
+          registryHref={externalId ? registryHref(externalId) : null}
+        />
+      );
+    },
   },
   {
     id: "status",
@@ -303,6 +324,16 @@ function ListBody({ facilityId }: { facilityId: string }) {
   );
 
   const isProduction = summaryQuery.data?.isProduction ?? false;
+  const externalProjectId =
+    summaryQuery.data?.mapping?.externalProjectId ?? null;
+  const columns = createColumns((externalId) =>
+    registryRecordUrl({
+      kind: "ghgStatement",
+      externalId,
+      externalProjectId,
+      isProduction,
+    }),
+  );
   const gate = deriveGhgCreateGate({
     isLoading: summaryQuery.isLoading,
     isError: summaryQuery.isError,
