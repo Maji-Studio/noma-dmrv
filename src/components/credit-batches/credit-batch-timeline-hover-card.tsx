@@ -18,9 +18,8 @@ import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import type { TimelineState } from "@/lib/credit-batches/timeline";
 import { OPEN_TODOS_LABEL, todosLabel } from "@/lib/credit-batches/batch-page";
-import { CountBadge } from "./credit-batch-page-parts";
 import { cn } from "@/lib/utils";
-import { MUTED, STATE_TONE } from "./credit-batch-timeline-parts";
+import { BlockingCount, MUTED, STATE_TONE } from "./credit-batch-timeline-parts";
 
 const OPEN_DELAY_MS = 200;
 const CLOSE_DELAY_MS = 120;
@@ -93,7 +92,7 @@ function HoverCardBody({ batch }: { batch: HoverCardBatch }) {
         <div className={cn("flex items-center gap-8 px-16 py-8 body-small font-medium", STATE_TONE.blocking.tint)}>
           <WarningCircleIcon size={16} weight="fill" className={cn("shrink-0", STATE_TONE.blocking.text)} aria-hidden />
           {OPEN_TODOS_LABEL}
-          <CountBadge count={batch.todoCount} blocking label={todosLabel(batch.todoCount)} />
+          <BlockingCount count={batch.todoCount} role="img" aria-label={todosLabel(batch.todoCount)} />
         </div>
       )}
       <dl className="grid grid-cols-2 gap-12 border-t border-[var(--color-border-tertiary)] px-16 py-12">

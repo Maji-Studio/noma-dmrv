@@ -27,8 +27,7 @@ import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
 import { cn } from "@/lib/utils";
 import { OPEN_TODOS_LABEL, todosLabel } from "@/lib/credit-batches/batch-page";
-import { CountBadge } from "./credit-batch-page-parts";
-import { MUTED, STATE_TONE, StateMark } from "./credit-batch-timeline-parts";
+import { BlockingCount, MUTED, STATE_TONE, StateMark } from "./credit-batch-timeline-parts";
 
 const STATE_MARK_PX = 10;
 const SKELETON_HEIGHT_PX = 14;
@@ -104,7 +103,7 @@ function BatchState({
         <span className="inline-flex items-center gap-6 body-small font-medium">
           <StateMark state={view.state} size={STATE_MARK_PX} />
           {view.openTodoCount > 0 ? OPEN_TODOS_LABEL : STATE_TONE[view.state].title}
-          {view.openTodoCount > 0 && <CountBadge count={view.openTodoCount} blocking label={todosLabel(view.openTodoCount)} />}
+          {view.openTodoCount > 0 && <BlockingCount count={view.openTodoCount} role="img" aria-label={todosLabel(view.openTodoCount)} />}
         </span>
       ) : readinessStatus === "loading" ? (
         <Skeleton width={STATE_SKELETON_WIDTH_PX} height={SKELETON_HEIGHT_PX} />
