@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FormDialogContext } from "@/components/ui/form-dialog-context";
 import { StaleVersionError, STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE } from "@/lib/stale-version";
 import { RemovalTemplateReviewPanel } from "./removal-template-review-panel";
-import type { RemovalTemplateReviewEntry } from "./removal-template-review-model";
+import { component, entry, OBSERVATION_ID } from "./removal-template-review-test-support";
 
 vi.mock("@/components/ui/tooltip", () => ({
   InfoHint: () => null,
@@ -36,57 +36,6 @@ vi.mock("@/hooks/use-removal-template-review", () => ({
 }));
 
 const FACILITY_ID = "11111111-1111-4111-8111-111111111111";
-const OBSERVATION_ID = "22222222-2222-4222-8222-222222222222";
-
-function component(id: string, displayName: string) {
-  return {
-    id, displayName, description: null, blueprintKey: "fuel_usage_by_volume",
-    inputs: [{ key: "volume_of_fuel", type: "monitored", quantityKind: "volume" }],
-  };
-}
-
-function baseEntry(overrides: Record<string, unknown>): RemovalTemplateReviewEntry {
-  return {
-    templateId: "rvt_test",
-    template: { id: "rvt_test", display_name: "Dark Earth Carbon Template", credit_type: "REMOVAL" },
-    observation: { id: OBSERVATION_ID, version: 3, enrichment: { cmp_startup: { volume_of_fuel: { unit: "L" } } } },
-    enrichment: { cmp_startup: { volume_of_fuel: { unit: "L" } } },
-    preview: false,
-    isDefault: true,
-    availability: "listed",
-    changes: {},
-    lines: [
-      {
-        component: component("cmp_startup", "Startup diesel usage"), groupKey: "pyrolysis", groupName: "Operations",
-        contract: { scope: "operating", automaticSource: "run-startup-diesel", entryPolicy: "additive", origin: "proposed" },
-        catalogCandidates: ["run-startup-diesel"], allowedEntryPolicies: ["none", "additive"], change: "added",
-      },
-      {
-        component: component("cmp_lab", "Lab electricity"), groupKey: "pyrolysis", groupName: "Operations",
-        contract: { scope: "operating", entryPolicy: "additive", origin: "reviewed" },
-        catalogCandidates: [], allowedEntryPolicies: ["none", "additive"], change: "unchanged",
-      },
-    ],
-    enrichmentProblems: [],
-    lineSourceProblems: [{ code: "unassigned", componentId: "cmp_startup" }],
-    ...overrides,
-  } as unknown as RemovalTemplateReviewEntry;
-}
-
-/** The stored definition and contracts behind the lines, as the server returns them. */
-function entry(overrides: Record<string, unknown> = {}): RemovalTemplateReviewEntry {
-  const base = baseEntry(overrides);
-  if (!base.observation) return base;
-  const groups = new Map<string, RemovalTemplateReviewEntry["lines"]>();
-  for (const line of base.lines) groups.set(line.groupKey, [...(groups.get(line.groupKey) ?? []), line]);
-  const definition = {
-    groups: [...groups].map(([key, lines]) => ({
-      id: key, key, displayName: lines[0].groupName, description: "", components: lines.map((line) => line.component),
-    })),
-  };
-  const lineSources = Object.fromEntries(base.lines.map((line) => [line.component.id, line.contract]));
-  return { ...base, observation: { ...base.observation, definition, lineSources } } as RemovalTemplateReviewEntry;
-}
 
 beforeEach(() => {
   vi.clearAllMocks();

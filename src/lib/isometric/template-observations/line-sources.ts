@@ -59,10 +59,10 @@ export function validateLineSources(definition: TemplateDefinition, lineSources:
 }
 
 /**
- * Single check the Accept proposal control and "accept all proposals" (#1163)
- * call for problems accepting this proposal would put on this line. Accepting
- * every acceptable proposal together adds no problem: collisions are reported
- * on every owner of a figure, including pending proposals, so no two acceptable
+ * The one check for whether a pending proposal can be accepted as is; the
+ * Accept proposal control and any bulk accept use it. Accepting every
+ * acceptable proposal together adds no problem: collisions are reported on
+ * every owner of a figure, including pending proposals, so no two acceptable
  * proposals share one. The save still checks the whole template, so it also
  * needs every other line free of problems.
  */
@@ -97,8 +97,10 @@ export function resolveLineSources({ definition, previous }: {
     for (const component of group.components) {
       const carried = previousIds.has(component.id) && previous && ownValue(previous.lineSources, component.id);
       // A pending proposal stays pending across repeated observations. Changing
-      // its origin to carried would accept it on the next live read.
-      if (carried) {
+      // its origin to carried would accept it on the next live read. An empty
+      // proposal is not carried: a figure dropped for a clash is proposed again
+      // once the clash is gone, and the final pass still filters it.
+      if (carried && !(carried.origin === "proposed" && carried.scope === "unassigned")) {
         sources[component.id] = { ...carried, origin: carried.origin === "proposed" ? "proposed" : "carried" };
         continue;
       }

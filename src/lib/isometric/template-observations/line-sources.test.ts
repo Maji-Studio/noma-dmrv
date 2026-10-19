@@ -144,6 +144,23 @@ describe("acceptable proposals", () => {
   const proposal: LineContract = { scope: "operating", automaticSource: "feedstock-transport", entryPolicy: "additive", origin: "proposed" };
   const unassigned: LineContract = { scope: "unassigned", entryPolicy: "none", origin: "proposed" };
 
+  it("proposes a dropped figure again once the clash is gone", () => {
+    const first = resolveLineSources({ definition: shared });
+    expect(first[trucks[0].id]).toEqual(unassigned);
+    const sources = resolveLineSources({ definition: lone, previous: { definition: shared, lineSources: first } });
+    expect(sources[trucks[0].id]).toEqual(proposal);
+    expect(isAcceptableProposal(lone, sources, trucks[0].id)).toBe(true);
+  });
+
+  it("keeps a line with no single candidate unassigned across reads", () => {
+    const pyrolysis = { ...definition.groups.find((candidate) => candidate.key === "pyrolysis")!, components: [{ ...component(GENSET), id: "rtc_new_diesel" }] };
+    const next = { groups: [pyrolysis] };
+    expect(catalogCandidates(pyrolysis.components[0], pyrolysis.key)).toHaveLength(2);
+    const first = resolveLineSources({ definition: next });
+    expect(first.rtc_new_diesel).toEqual(unassigned);
+    expect(resolveLineSources({ definition: next, previous: { definition: next, lineSources: first } }).rtc_new_diesel).toEqual(unassigned);
+  });
+
   it("drops stored proposals sharing a figure without mutating the snapshot, retaining order", () => {
     const sources: LineSources = Object.fromEntries(trucks.map((truck, position) => [truck.id,
       { ...proposal, templateOrder: { groupPosition: 0, position } },
