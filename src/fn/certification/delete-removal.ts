@@ -57,7 +57,8 @@ import { appendSyncEventBestEffort } from "./shared";
  * this cleanup started from, so it is audited and logged but never fails the
  * deletion.
  *
- * No role floor for now: any member may delete (issue #746).
+ * Members may delete a Removal that never touched the registry; once the
+ * boundary opened, `claimRemovalDeletion` requires `REMOVAL_REGISTRY_DELETION_MIN_ROLE`.
  *
  * This module is deliberately not a `"use server"` file: the core takes a
  * caller-supplied `OrgContext`, so it must never be registered as a callable

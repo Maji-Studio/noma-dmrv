@@ -150,8 +150,9 @@ export async function listProductionClaimDraftContenders(
 // Deletes a removal that has become an empty shell — no member credit
 // batches and no submission history. Locks the removal row FOR UPDATE first
 // so a concurrent regroup or submit cannot race the emptiness check. A
-// removal with ledger history is kept: its row anchors a live Isometric
-// Removal even after its last credit batch leaves.
+// removal with ledger history or an opened registry boundary is kept even
+// after its last credit batch leaves, so only role-gated Removal deletion
+// can remove it.
 export async function gcRemovalIfOrphaned(
   ctx: OrgContext,
   tx: Tx,
@@ -159,12 +160,13 @@ export async function gcRemovalIfOrphaned(
 ): Promise<void> {
   requireOrgScope(ctx);
   const [removal] = await tx
-    .select({ id: certifierRemovals.id })
+    .select({ id: certifierRemovals.id, metadata: certifierRemovals.metadata })
     .from(certifierRemovals)
     .where(and(eq(certifierRemovals.id, removalId), eq(certifierRemovals.organizationId, ctx.organizationId)))
     .for("update")
     .limit(1);
   if (!removal) return;
+  if (removalMayHaveExternalMutation(removal.metadata)) return;
 
   const [remaining] = await tx
     .select({ id: creditBatchApplications.applicationId })
