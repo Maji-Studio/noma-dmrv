@@ -132,11 +132,11 @@ describe("OutputStockAvailability", () => {
       const text = visible(renderer.root).replace(/\s+/g, " ");
       expect(text).toContain("Available wet stock, estimate");
       expect(text).toContain("2,833 kg wet mass");
-      expect(text).toContain("Dry biochar 2,380 kg");
+      expect(text).toContain("2,380 kg dry biochar");
       expect(text).toContain("At 16% departure moisture");
       // The dry line sits under the headline, before the batch bar.
-      expect(text.indexOf("2,833 kg wet mass")).toBeLessThan(text.indexOf("Dry biochar 2,380 kg"));
-      expect(text.indexOf("Dry biochar 2,380 kg")).toBeLessThan(text.indexOf("Batch A"));
+      expect(text.indexOf("2,833 kg wet mass")).toBeLessThan(text.indexOf("2,380 kg dry biochar"));
+      expect(text.indexOf("2,380 kg dry biochar")).toBeLessThan(text.indexOf("Batch A"));
     }
     await act(async () => renderer.unmount());
   });
@@ -283,7 +283,7 @@ describe("StockMovementCard", () => {
   it("shows what a reading resets as an estimate block, an arrow and a reading block", async () => {
     const moistureReset = { layerCodes: ["B-0419"], before: { moisturePercent: 35, wetKg: 675.48 }, after: { moisturePercent: 33, wetKg: 655.32 } };
     const card = await render({ ...loss, moistureReset });
-    expect(card.text()).toMatch(/Moisture updated ·\s*B-0419\s*Estimate\s*35(\.0)?%\s*≈ 675 kg wet\s*Reading\s*33(\.0)?%\s*≈ 655 kg wet/);
+    expect(card.text()).toMatch(/Moisture updated ·\s*B-0419\s*Estimate\s*35(\.0)?%\s*675 kg wet mass\s*Reading\s*33(\.0)?%\s*655 kg wet mass/);
     await act(async () => card.renderer.unmount());
     const refused = await render({ ...loss, moistureReset, blockingMessage: "Loss exceeds the dry biochar in this bin." });
     expect(refused.text()).not.toContain("Moisture updated");

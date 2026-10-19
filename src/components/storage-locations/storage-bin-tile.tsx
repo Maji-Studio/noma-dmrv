@@ -212,7 +212,7 @@ function TileFigure({ feedstock, massKg, wetEstimateKg }: { feedstock: boolean; 
   if (!feedstock && wetEstimateKg != null && wetEstimateKg > 0) return `${formatWetEstimate(wetEstimateKg)} kg wet mass`;
   if (massKg == null) return MISSING_VALUE.notAvailable;
   if (massKg === 0) return "Empty";
-  if (feedstock) return `${formatMassKg(massKg)} wet`;
+  if (feedstock) return `${formatMassKg(massKg)} wet mass`;
   return wetEstimateKg == null ? `${formatMassKg(massKg)} dry biochar` : `${formatWetEstimate(wetEstimateKg)} kg wet mass`;
 }
 

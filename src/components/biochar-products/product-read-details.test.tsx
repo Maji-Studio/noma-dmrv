@@ -66,7 +66,7 @@ describe("Product read view levels", () => {
     expect(simple).toContain("Product composition");
     // Headline and key at save precision, from the saved allocation.
     expect(simple).toContain("400 kg");
-    expect(simple).toContain("Dry biochar 200 kg");
+    expect(simple).toContain("200 kg dry biochar");
     // The form's split rule and labels: each ingredient as its solids, one pooled water.
     expect(simple).toContain("Chicken manure solids 80 kg");
     expect(simple).toContain("Water 70 kg");
@@ -78,8 +78,8 @@ describe("Product read view levels", () => {
         "Dry biochar 200 kg (50%) Chicken manure solids 80 kg (20%) Water 70 kg (18%) Water added 50 kg (12%)",
     );
     // Dry figures are data: a secondary line under each wet mass.
-    expect(simple).toContain("Source biochar wet mass (kg) 250 kg Dry biochar 200 kg");
-    expect(simple).toContain("Chicken manure wet mass (kg) 100 kg Dry solids 80 kg");
+    expect(simple).toContain("Source biochar wet mass (kg) 250 kg 200 kg dry biochar");
+    expect(simple).toContain("Chicken manure wet mass (kg) 100 kg 80 kg dry solids");
     // Goods move on deliveries, so transport reads there, not on the product.
     expect(simple).not.toMatch(/transport/i);
     for (const hidden of ["% of total", "Show calculation"]) {

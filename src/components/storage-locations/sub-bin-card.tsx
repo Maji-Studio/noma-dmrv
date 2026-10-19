@@ -29,7 +29,7 @@ const CLOSE_DELAY_MS = 80;
 
 /** The sub-bin's wet stock, or the missing-value token when nothing dates its moisture. */
 export function subBinWetText(subBin: OutputSubBin): string {
-  return subBin.wetEstimateKg === null ? MISSING_VALUE.notAvailable : `≈ ${formatWetEstimate(subBin.wetEstimateKg)} kg wet`;
+  return subBin.wetEstimateKg === null ? MISSING_VALUE.notAvailable : `${formatWetEstimate(subBin.wetEstimateKg)} kg wet mass`;
 }
 
 /** The sub-bin's estimated moisture, or the same missing-value token as its wet figure. */
@@ -115,7 +115,7 @@ export function DetailsTooltip({ title, rows, groups = [], trigger }: {
 export function SubBinTooltip({ subBin, timeZone, trigger }: { subBin: OutputSubBin; timeZone: string; trigger: TapTrigger }) {
   const wet = subBin.wetEstimateKg === null ? [] : [
     // The label already says wet, so the value is the bare estimate.
-    { label: ESTIMATED_WET_LABEL, value: `≈ ${formatWetEstimate(subBin.wetEstimateKg)} kg` },
+    { label: ESTIMATED_WET_LABEL, value: `${formatWetEstimate(subBin.wetEstimateKg)} kg` },
     { label: "Moisture", value: subBinMoistureText(subBin) },
   ];
   const waterKg = subBin.wetEstimateKg === null ? null : Math.max(subBin.wetEstimateKg - subBin.solidsKg, 0);

@@ -10,7 +10,7 @@ const ICON_PX = 16;
 type Side = OutputMoistureReset["before"];
 
 function wetLine(side: Side): string {
-  return side.wetKg === null ? "Wet stock not available" : `≈ ${formatWetEstimate(side.wetKg)} kg wet`;
+  return side.wetKg === null ? "Wet stock not available" : `${formatWetEstimate(side.wetKg)} kg wet mass`;
 }
 
 /** One side of the change: the moisture as the figure, the wet stock it gives under it. */
