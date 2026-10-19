@@ -7,9 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
 import { InfoIcon } from "@phosphor-icons/react/dist/ssr";
 import { cloneElement, useState, type MouseEvent, type ReactElement } from "react";
+import { STOCK_PART_MIN_KG } from "@/config/output-stock";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
+import { DRY_BIOCHAR_LABEL, ingredientSolidsLabel } from "@/components/biochar-products/product-composition-components";
+import { ESTIMATED_WATER_LABEL, ESTIMATED_WET_LABEL, INGREDIENT_SOLIDS_LABEL } from "@/lib/output-stock/labels";
 import type { OutputSubBin, SubBinMovement } from "@/types/output-stock";
 import { formatWetEstimate } from "./stock-preview-shared";
 
@@ -18,13 +21,15 @@ const MOVEMENT_LABELS: Record<SubBinMovement["kind"], string> = {
 };
 
 const TOOLTIP_OFFSET_PX = 6;
+const CONTENTS_LABEL = "Contents";
+const MOVEMENTS_LABEL = "Latest movements";
 /** The shared tooltip's delays (`components/ui/tooltip`). */
 const OPEN_DELAY_MS = 160;
 const CLOSE_DELAY_MS = 80;
 
 /** The sub-bin's wet stock, or the missing-value token when nothing dates its moisture. */
 export function subBinWetText(subBin: OutputSubBin): string {
-  return subBin.wetEstimateKg === null ? MISSING_VALUE.notAvailable : `≈ ${formatWetEstimate(subBin.wetEstimateKg)} kg wet`;
+  return subBin.wetEstimateKg === null ? MISSING_VALUE.notAvailable : `${formatWetEstimate(subBin.wetEstimateKg)} kg wet mass`;
 }
 
 /** The sub-bin's estimated moisture, or the same missing-value token as its wet figure. */
@@ -33,27 +38,59 @@ export function subBinMoistureText(subBin: OutputSubBin): string {
 }
 
 function movementMass(movement: SubBinMovement): string {
-  return movement.wetMassKg === null ? `${formatMassKg(Math.abs(movement.dryMassKg))} dry` : `${formatMassKg(Math.abs(movement.wetMassKg))} wet`;
+  return movement.wetMassKg === null ? `${formatMassKg(Math.abs(movement.dryMassKg))} dry` : `${formatMassKg(Math.abs(movement.wetMassKg))} wet mass`;
 }
 
 type TapTrigger = ReactElement<{ onClick?: (event: MouseEvent) => void }>;
 
+export interface DetailRow { label: string; value: string }
+
+/**
+ * The ingredient solids of a bin, sub-bin or batch as parts, named the way the
+ * product composition names them. `ingredientsKg` is all of them (solids less
+ * dry biochar); whatever the named parts leave out (rounding, a product read
+ * without its lines) stays one "Ingredient solids" part, so the parts still add
+ * up and every surface lists the same ones.
+ */
+export function ingredientSolidsParts(ingredients: readonly { name: string; solidsKg: number }[], ingredientsKg: number): { label: string; kg: number }[] {
+  const named = ingredients.filter((ingredient) => ingredient.solidsKg >= STOCK_PART_MIN_KG)
+    .map((ingredient) => ({ label: ingredientSolidsLabel(ingredient.name), kg: ingredient.solidsKg }));
+  const restKg = ingredientsKg - named.reduce((sum, part) => sum + part.kg, 0);
+  return restKg >= STOCK_PART_MIN_KG ? [...named, { label: INGREDIENT_SOLIDS_LABEL, kg: restKg }] : named;
+}
+
+/**
+ * What a sub-bin or batch is made of, as the product composition names the
+ * parts, top down in the order the bay draws them: the water its wet estimate
+ * holds over its solids, each ingredient's solids, then its dry biochar. Pure
+ * biochar has no ingredient row, and a batch with no wet estimate has no water
+ * row: there is nothing to subtract.
+ */
+export function contentsRows({ dryMassKg, solidsKg, ingredients, waterKg }: Pick<OutputSubBin, "dryMassKg" | "solidsKg" | "ingredients"> & { waterKg: number | null }): DetailRow[] {
+  return [
+    ...(waterKg !== null && waterKg >= STOCK_PART_MIN_KG ? [{ label: ESTIMATED_WATER_LABEL, value: formatMassKg(waterKg) }] : []),
+    ...ingredientSolidsParts(ingredients, Math.max(solidsKg - dryMassKg, 0)).map((part) => ({ label: part.label, value: formatMassKg(part.kg) })),
+    { label: DRY_BIOCHAR_LABEL, value: formatMassKg(dryMassKg) },
+  ];
+}
+
 /**
  * Dark details opened from `trigger`: on hover and focus like every tooltip,
  * and on tap, since a touch screen has neither. Labels sit dimmed on the
- * left so the values lead.
+ * left so the values lead, and every table spans the popup so their figures
+ * share one right edge. A group's name heads it, dimmed like the labels.
  */
 export function DetailsTooltip({ title, rows, groups = [], trigger }: {
   title: string;
-  rows: { label: string; value: string }[];
+  rows: DetailRow[];
   /** Further aligned tables under the first, such as latest movements. */
-  groups?: { label: string; rows: { label: string; value: string }[] }[];
+  groups?: { label: string; rows: DetailRow[] }[];
   trigger: TapTrigger;
 }) {
   const [open, setOpen] = useState(false);
   const toggle = (event: MouseEvent) => { event.preventDefault(); event.stopPropagation(); setOpen(!open); };
-  const table = (items: { label: string; value: string }[], label?: string) => (
-    <dl aria-label={label} className="grid grid-cols-[auto_auto] gap-x-12 gap-y-2 [&_dt]:opacity-70">
+  const table = (items: DetailRow[], label?: string) => (
+    <dl aria-label={label} className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-12 gap-y-2 [&_dt]:opacity-70">
       {items.map((item, index) => (
         <div key={`${item.label}-${index}`} className="contents">
           <dt className="tabular-nums">{item.label}</dt><dd className="tabular-nums text-right">{item.value}</dd>
@@ -71,7 +108,10 @@ export function DetailsTooltip({ title, rows, groups = [], trigger }: {
             <BaseTooltip.Popup className="max-w-[300px] px-12 py-8 bg-[var(--color-background-dark-strong)] text-[var(--color-background-white)] border border-[var(--color-border-primary)] body-caption">
               <span className="mb-4 block font-medium">{title}</span>
               {table(rows)}
-              {groups.filter((group) => group.rows.length > 0).map((group) => <div key={group.label} className="mt-8">{table(group.rows, group.label)}</div>)}
+              {groups.filter((group) => group.rows.length > 0).map((group) => <div key={group.label} className="mt-8">
+                <span aria-hidden="true" className="mb-2 block opacity-70">{group.label}</span>
+                {table(group.rows, group.label)}
+              </div>)}
             </BaseTooltip.Popup>
           </BaseTooltip.Positioner>
         </BaseTooltip.Portal>
@@ -80,20 +120,27 @@ export function DetailsTooltip({ title, rows, groups = [], trigger }: {
   );
 }
 
-/** A sub-bin's details: wet estimate, moisture, dry biochar, solids, time added and the last movements. */
+/**
+ * A sub-bin's details: its wet estimate and moisture, when it was added, what
+ * it is made of and its last movements. Without a dated moisture there is no
+ * wet estimate to show, so its rows give way to the dry contents.
+ */
 export function SubBinTooltip({ subBin, timeZone, trigger }: { subBin: OutputSubBin; timeZone: string; trigger: TapTrigger }) {
+  const wet = subBin.wetEstimateKg === null ? [] : [
+    // The label already says wet, so the value is the bare estimate.
+    { label: ESTIMATED_WET_LABEL, value: `${formatWetEstimate(subBin.wetEstimateKg)} kg` },
+    { label: "Moisture", value: subBinMoistureText(subBin) },
+  ];
+  const waterKg = subBin.wetEstimateKg === null ? null : Math.max(subBin.wetEstimateKg - subBin.solidsKg, 0);
   return (
     <DetailsTooltip title={subBin.code} trigger={trigger}
-      rows={[
-        { label: "Wet, estimated", value: subBinWetText(subBin) },
-        { label: "Moisture", value: subBinMoistureText(subBin) },
-        { label: "Dry biochar", value: formatMassKg(subBin.dryMassKg) },
-        { label: "Solids", value: formatMassKg(subBin.solidsKg) },
-        { label: "Added", value: formatFacilityDateTime(subBin.placedAt, timeZone) },
-      ]}
-      groups={[{ label: "Latest movements", rows: subBin.recentMovements.map((movement) => ({
-        label: `${MOVEMENT_LABELS[movement.kind]} ${movementMass(movement)}`, value: formatFacilityDateTime(movement.occurredAt, timeZone),
-      })) }]} />
+      rows={[...wet, { label: "Added", value: formatFacilityDateTime(subBin.placedAt, timeZone) }]}
+      groups={[
+        { label: CONTENTS_LABEL, rows: contentsRows({ dryMassKg: subBin.dryMassKg, solidsKg: subBin.solidsKg, ingredients: subBin.ingredients, waterKg }) },
+        { label: MOVEMENTS_LABEL, rows: subBin.recentMovements.map((movement) => ({
+          label: formatFacilityDateTime(movement.occurredAt, timeZone), value: `${MOVEMENT_LABELS[movement.kind]} ${movementMass(movement)}`,
+        })) },
+      ]} />
   );
 }
 

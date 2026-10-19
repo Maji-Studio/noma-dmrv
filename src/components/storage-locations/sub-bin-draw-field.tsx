@@ -36,8 +36,8 @@ interface Props {
 /** What a row draws, beside its label. Silent for a one-row load: the load weight already says it. */
 function rowAside(row: SubBinRow, rowCount: number): string | undefined {
   if (row.wetKg === null) return undefined;
-  if (row.emptied) return `Emptied, ≈ ${formatWetEstimate(row.wetKg)} kg wet`;
-  return rowCount > 1 ? `Takes ≈ ${formatWetEstimate(row.wetKg)} kg wet` : undefined;
+  if (row.emptied) return `Emptied, ${formatWetEstimate(row.wetKg)} kg wet mass`;
+  return rowCount > 1 ? `Takes ${formatWetEstimate(row.wetKg)} kg wet mass` : undefined;
 }
 
 function readingError(raw: string | undefined, showErrors: boolean): string | undefined {

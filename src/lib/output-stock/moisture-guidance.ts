@@ -19,7 +19,8 @@ export function moistureBasisText(basis: MoistureBasis | null, timeZone: string)
   if (!basis) return null;
   const at = formatFacilityDateTime(basis.at, timeZone);
   return basis.source === 'reading'
-    ? `From the count on ${at}.`
+    // The app no longer records counts, but an old one still dates the estimate; it reads as its history entry does.
+    ? `From the stock count on ${at}.`
     : `From the moisture recorded when the batch was added on ${at}.`;
 }
 

@@ -31,7 +31,7 @@ vi.mock("@/hooks/use-output-stock", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-output-stock")>(),
   useMatchingOutputBins: () => ({ data: [{ id: "bin", code: "PB-001", name: "Product bin", dryMassKg: 1500, estimatedWetMassKg: 1800 }], isLoading: false, error: null }),
   useOutputStockBalance: () => ({ data: { binName: "Mix bin", beforeDryKg: 1440, beforeEstimatedWetKg: 1800, moistureEstimate: { moisturePercent: 20 } }, isLoading: false, error: null }),
-  useOutputSubBins: () => ({ data: { stockMode: "mix", subBins: [{ code: "B-001", dryMassKg: 800 }, { code: "B-002", dryMassKg: 640 }] }, isLoading: false, error: null }),
+  useOutputSubBins: () => ({ data: { stockMode: "mix", subBins: [{ code: "B-001", dryMassKg: 800, solidsKg: 800, ingredients: [] }, { code: "B-002", dryMassKg: 640, solidsKg: 640, ingredients: [] }] }, isLoading: false, error: null }),
   useOutputStockHistory: () => ({ dataUpdatedAt: Date.parse("2026-09-22T12:00:00.000Z"), data: [{ id: "entry", deliveryId: "delivery", kind: "delivery", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [{ layerId: "batch", code: "B-001", wetMassKg: null, dryMassKg: 80, runs: [{ productionRunId: "run", code: "PR-001", dryMassKg: 80 }] }] }], isLoading: false, error: null }),
 }));
 vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: ({ triggerLabel }: { triggerLabel?: string }) => <button type="button">{triggerLabel ?? "History"}</button> }));

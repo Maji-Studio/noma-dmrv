@@ -11,8 +11,9 @@ vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ time
 vi.mock("next/link", () => ({ default: ({ children, href, ...props }: { children: ReactNode; href: string }) => <a href={href} {...props}>{children}</a> }));
 vi.mock("@/components/ui/modal", () => ({ Modal: ({ isOpen, children }: { isOpen: boolean; children: ReactNode }) => isOpen ? <div role="dialog">{children}</div> : null }));
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null, Tooltip: ({ children }: { children: ReactNode }) => children }));
-vi.mock("./sub-bin-card", () => ({ DetailsTooltip: ({ trigger }: { trigger: ReactNode }) => trigger, SubBinTooltip: ({ trigger }: { trigger: ReactNode }) => trigger, subBinMoistureText: () => "20%" }));
+vi.mock("./sub-bin-card", async (importOriginal) => ({ ...(await importOriginal<typeof import("./sub-bin-card")>()), DetailsTooltip: ({ trigger }: { trigger: ReactNode }) => trigger, SubBinTooltip: ({ trigger }: { trigger: ReactNode }) => trigger, subBinMoistureText: () => "20%" }));
 
+import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import { FeedstockBinBalance } from "./feedstock-bin-balance";
 import { OutputStockHistory } from "./output-stock-history";
 import { StockLevelChart } from "./stock-level-chart";
@@ -62,6 +63,9 @@ it("uses the same feedstock cards, links intake/run/product history and leaves l
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<FeedstockBinBalance storageLocationId={BIN_ID} facilityId={FACILITY_ID} capacityKg={100} onAdjust={adjust} />); });
   expect(renderer.root.findAllByType("section").map(section => section.props["aria-label"])).toEqual(["Stock", "Stock over time"]);
+  // Dry solids read under the wet stock; the moisture is in the water band's details, not the caption.
+  expect(renderer.root.findByType(SecondaryFigure).props).toMatchObject({ label: "Dry solids", value: "40 kg" });
+  expect(text(renderer.root.findAllByType("section")[0]!)).not.toMatch(/Not available|moisture/);
   const actions = renderer.root.findAllByType("button");
   await act(async () => actions.find(button => text(button).includes("Adjust stock"))!.props.onClick());
   expect(adjust).toHaveBeenCalledOnce();
@@ -76,7 +80,7 @@ it("uses the same feedstock cards, links intake/run/product history and leaves l
 });
 
 it("wraps every split bay and fills a lone bay against capacity", async () => {
-  const subBin: OutputSubBin = { layerId: "layer", code: "PR-001", placedAt: INSTANT, dryMassKg: 80, solidsKg: 80, wetEstimateKg: 100, moisturePercent: 20, basis: null, recentMovements: [] };
+  const subBin: OutputSubBin = { layerId: "layer", code: "PR-001", placedAt: INSTANT, dryMassKg: 80, solidsKg: 80, wetEstimateKg: 100, moisturePercent: 20, basis: null, recentMovements: [], ingredients: [] };
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<SubBinBays subBins={[subBin]} capacityKg={200} label="Sub-bins" timeZone="UTC" />); });
   expect(renderer.root.findAllByType("span").some(node => node.props.style?.height === "50%" && node.props["aria-hidden"] === "true")).toBe(true);
@@ -131,3 +135,15 @@ it('crosses out a deleted product placement while retaining the product link', a
   expect(renderer.root.findAllByType('a').map(link => link.props.href)).toContain(stockSourceHref({ entity: 'biocharProduct', id: 'product' }, FACILITY_ID));
   await act(async () => renderer.unmount());
 });
+
+it("names a lone product bay's parts like the product composition, by ingredient", async () => {
+  const subBin: OutputSubBin = { layerId: "layer", code: "BP-001", placedAt: INSTANT, dryMassKg: 90, solidsKg: 160, wetEstimateKg: 200, moisturePercent: 20, basis: null, recentMovements: [],
+    ingredients: [{ name: "Compost", solidsKg: 40 }, { name: "Clay", solidsKg: 30 }] };
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<SubBinBays subBins={[subBin]} label="Sub-bins" timeZone="UTC" />); });
+  const parts = renderer.root.findByProps({ "aria-label": "BP-001 contents" }).findAllByType("dt").map(node => node.findAllByType("span").at(-1)!.children.join(""));
+  expect(parts).toEqual(["Water, estimated", "Compost solids", "Clay solids", "Dry biochar"]);
+  expect(JSON.stringify(renderer.toJSON())).not.toMatch(/Solids|Ingredients, dry|Biochar, dry/);
+  await act(async () => renderer.unmount());
+});
+
