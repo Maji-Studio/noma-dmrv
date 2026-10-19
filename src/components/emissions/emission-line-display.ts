@@ -218,14 +218,25 @@ function entryFigureText(entry: EmissionEntry): string {
     .join(", ");
 }
 
-/** The row Total: the server total, the single entry's pair, a zero, or a missing token. */
+/**
+ * The row Total: the server total, the single entry's pair, a zero, or a
+ * missing token. A line that holds figures the server could not add up (units
+ * that differ, an entry that stopped counting) reads Not available, never Not
+ * recorded: something was recorded.
+ */
 export function lineTotalText(line: EmissionLine): string {
   if (line.state === "needsSetup") return EMISSION_LINE_STATE_LABELS.needsSetup;
   if (line.total) return formatFigure(line.total);
   const values = valueEntries(line);
   if (values.length === 1 && values[0].values.length > 1) return entryFigureText(values[0]);
   if (line.state === "confirmedZero") return `0 ${displayUnit(line.unit)}`.trim();
-  return MISSING_VALUE.notRecorded;
+  const recorded = hasRecordsFigure(line.records) || line.entries.some((entry) => entry.kind === "value");
+  return recorded ? MISSING_VALUE.notAvailable : MISSING_VALUE.notRecorded;
+}
+
+/** The Total is a missing token, not a figure: phones drop it, since the state already says so. */
+export function isTotalMissing(line: EmissionLine): boolean {
+  return !line.total && line.state !== "confirmedZero" && valueEntries(line).every((entry) => entry.values.length < 2);
 }
 
 /* ---------- what the operator may do ---------- */

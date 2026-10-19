@@ -7,7 +7,7 @@
  * source yet; the chips, links and the ⋯ menu stay separate controls.
  *
  * A list, not a table, so the row can be one click target and phones can
- * stack the same cells into a card.
+ * fold the same cells into the name line and one meta line.
  */
 "use client";
 
@@ -20,12 +20,13 @@ import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
 import { certificationRemovalTemplatesHref } from "@/lib/certification/links";
 import { cn } from "@/lib/utils";
 import { EmissionLineAccordionBody } from "./emission-line-accordion-body";
-import { ROW_COLUMNS } from "./emission-line-grid";
+import { MENU_PULL, PHONE_COLUMNS, ROW_COLUMNS } from "./emission-line-grid";
 import { EmissionLineBadge } from "./emission-line-badge";
 import {
   addEntryRefusal,
   groupLines,
   lineRecords,
+  isTotalMissing,
   lineTotalText,
   openSourceLabel,
   recordsHref,
@@ -37,10 +38,29 @@ import type { EntryFormMode } from "./manual-entry-form";
 import { SourceChips } from "./emission-source-chips";
 import { AddEntryLink } from "./emission-line-body-parts";
 
-/** Line | State | Sources | Total | actions; phones stack the cells into a card. */
-const ROW_GRID = cn("grid grid-cols-[minmax(0,1fr)_auto] gap-x-12 gap-y-8 md:items-center", ROW_COLUMNS);
+/**
+ * Wide: Line | State | Sources | Total | actions. Phones: the name with its ⋯
+ * (on the open row's columns, so it stands over every other ⋯), then one meta
+ * line: state, sources and the Total at the content edge.
+ */
+const ROW_GRID = cn("grid gap-y-6 md:items-center", PHONE_COLUMNS, ROW_COLUMNS);
 const ACTION_SIZE = "size-44";
-const MENU_CELL = "col-start-2 row-start-1 -mt-8 -mr-8 md:m-0 md:col-auto";
+/** The 44px ⋯ centres on the name's first line without making the row taller. */
+const MENU_CELL = cn("col-start-3 row-start-1 -my-10 flex justify-end md:my-0 md:col-auto", MENU_PULL);
+/**
+ * The line name. Phones run it as text (inline flow), so the ⓘ and the comment
+ * mark follow its last word when it wraps; wide screens keep one centred flex line.
+ */
+const NAME_LINE = "relative min-h-24 pl-20 body-small font-medium md:flex md:items-center";
+/**
+ * The caret hangs in the name's inset in a 24px box. Phones sit that box on the
+ * text: its bottom 5px under the baseline puts its centre on the letters' centre.
+ */
+const CARET_BOX = "-ml-20 mr-6 inline-flex h-24 items-center align-[-5px] text-[var(--color-text-tertiary)]";
+/** The ⓘ and the comment mark after the name, on the caret's centre line; raised above the toggle so the ⓘ takes its own press. */
+const NAME_MARK = "relative ml-2 inline-flex shrink-0 align-[-5px]";
+/** Every cell of the phone meta line is one 28px line high, so state, sources and Total share a centre. */
+const META_CELL = "max-md:flex max-md:min-h-28 max-md:items-center";
 
 export interface LineActions {
   toggle: (line: EmissionLine) => void;
@@ -134,7 +154,7 @@ interface LineRowProps {
 
 function LineRow({ line, showGroup, scope, actions, canWrite, expanded, editingComment, undoBar }: LineRowProps) {
   const total = lineTotalText(line);
-  const quietTotal = !line.total && line.state !== "confirmedZero" && valueEntries(line).every((entry) => entry.values.length < 2);
+  const quietTotal = isTotalMissing(line);
   const bodyId = `line-body-${line.componentId}`;
   const Caret = expanded ? CaretDownIcon : CaretRightIcon;
   return (
@@ -147,31 +167,38 @@ function LineRow({ line, showGroup, scope, actions, canWrite, expanded, editingC
           ROW_GRID,
         )}
       >
-        <div className="col-start-1 row-start-1 min-w-0">
-          <div className="flex min-w-0 items-center gap-2">
+        <div className="col-span-2 col-start-1 row-start-1 min-w-0 md:col-span-1">
+          {/*
+            The name runs as text, so the ⓘ and the comment mark follow its last
+            word when it wraps. The toggle is a native button laid over the name;
+            the ⓘ sits above it and opens on its own press.
+          */}
+          <div className={NAME_LINE}>
             <button
               type="button"
+              aria-label={line.displayName}
               aria-expanded={expanded}
               aria-controls={bodyId}
               onClick={(event) => {
                 event.stopPropagation();
                 actions.toggle(line);
               }}
-              className="inline-flex min-h-24 min-w-0 items-center gap-6 text-left body-small font-medium underline-offset-4 group-hover:underline"
-            >
-              <Caret size={14} weight="bold" aria-hidden="true" className="shrink-0 text-[var(--color-text-tertiary)]" />
-              {line.displayName}
-            </button>
+              // 44px tall on a one-line name; the whole row toggles too.
+              className="absolute inset-x-0 -inset-y-10"
+            />
+            <span aria-hidden="true" className={CARET_BOX}>
+              <Caret size={14} weight="bold" />
+            </span>
+            <span aria-hidden="true" className="underline-offset-4 group-hover:underline">{line.displayName}</span>
             {line.description && (
-              // The ⓘ opens on its own press; it must not also toggle the row.
-              <span className="inline-flex shrink-0" onClick={(event) => event.stopPropagation()}>
+              <span className={NAME_MARK} onClick={(event) => event.stopPropagation()}>
                 <InfoHint label={`More about ${line.displayName}`}>
                   <span className="whitespace-pre-line">{line.description}</span>
                 </InfoHint>
               </span>
             )}
             {line.comment && (
-              <span className="inline-flex min-h-24 shrink-0 items-center px-4">
+              <span className={cn(NAME_MARK, "min-h-24 items-center px-4")}>
                 <ChatTextIcon size={14} aria-hidden="true" className="text-[var(--color-text-tertiary)]" />
                 <span className="sr-only">Has a comment</span>
               </span>
@@ -179,35 +206,41 @@ function LineRow({ line, showGroup, scope, actions, canWrite, expanded, editingC
           </div>
           {showGroup && <span className="block pl-20 body-caption text-[var(--color-text-tertiary)]">{line.groupName}</span>}
         </div>
-        <div className="col-start-1 row-start-3 self-center md:col-start-2 md:row-start-1">
-          <EmissionLineBadge state={line.state} />
-        </div>
-        <div className="col-span-2 row-start-2 min-w-0 md:col-span-1 md:col-start-3 md:row-start-1">
-          {line.state === "needsSetup" ? (
-            <Link
-              href={certificationRemovalTemplatesHref(scope.facilityId)}
-              onClick={(event) => event.stopPropagation()}
-              className="body-caption text-[var(--color-text-secondary)] underline underline-offset-4 hover:text-[var(--color-text-primary)]"
-            >
-              An admin sets this line up in the template review
-            </Link>
-          ) : (
-            <SourceChips
-              line={line}
-              ids={scope}
-              onEntries={() => !expanded && actions.toggle(line)}
-              emptyAction={canWrite && !addEntryRefusal(line) ? <AddEntryLink line={line} onAdd={() => actions.form(line, { kind: "add" })} /> : undefined}
-            />
-          )}
-        </div>
-        <div
-          className={cn(
-            "col-start-2 row-start-3 self-center text-right body-small font-medium tabular-nums",
-            "md:col-start-4 md:row-start-1",
-            quietTotal && "font-normal text-[var(--color-text-tertiary)]",
-          )}
-        >
-          {total}
+        {/* Phones: one meta line under the name; wide, its cells join the row's columns. */}
+        <div className="col-span-3 col-start-1 row-start-2 flex min-w-0 items-start gap-x-12 pl-20 md:contents">
+          <div className={cn(META_CELL, "max-md:shrink-0 md:col-start-2 md:row-start-1 md:self-center")}>
+            <EmissionLineBadge state={line.state} />
+          </div>
+          {/* Phones: never narrower than its widest source, so it wraps instead of running under the Total. */}
+          <div className={cn(META_CELL, "max-md:flex-1 md:col-start-3 md:row-start-1 md:min-w-0")}>
+            {line.state === "needsSetup" ? (
+              <Link
+                href={certificationRemovalTemplatesHref(scope.facilityId)}
+                onClick={(event) => event.stopPropagation()}
+                className="body-caption text-[var(--color-text-secondary)] underline underline-offset-4 hover:text-[var(--color-text-primary)]"
+              >
+                An admin sets this line up in the template review
+              </Link>
+            ) : (
+              <SourceChips
+                line={line}
+                ids={scope}
+                onEntries={() => !expanded && actions.toggle(line)}
+                emptyAction={canWrite && !addEntryRefusal(line) ? <AddEntryLink line={line} onAdd={() => actions.form(line, { kind: "add" })} /> : undefined}
+              />
+            )}
+          </div>
+          <div
+            className={cn(
+              "text-right body-small font-medium tabular-nums md:col-start-4 md:row-start-1 md:self-center",
+              quietTotal && "font-normal text-[var(--color-text-tertiary)]",
+              // Phones drop a missing Total (the state beside it already says so) and,
+              // while the row is open, the Total the sources table below states.
+              quietTotal || expanded ? "max-md:hidden" : cn(META_CELL, "max-md:ml-auto max-md:justify-end max-md:whitespace-nowrap"),
+            )}
+          >
+            {total}
+          </div>
         </div>
         <div className="contents md:col-start-5 md:flex md:items-center md:justify-end" onClick={(event) => event.stopPropagation()}>
           <RowMenu line={line} scope={scope} actions={actions} canWrite={canWrite} />

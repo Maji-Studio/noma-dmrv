@@ -73,6 +73,23 @@ describe("EmissionLineList", () => {
     expect(screen.getByRole("button", { name: "1 manual entry, file missing. Show manual entries" })).toBeTruthy();
   });
 
+  it("reads a Total that does not add up as Not available, never Not recorded, and drops it on phones", () => {
+    const entry = makeEntry({ values: [{ id: "v1", organizationId: "org", entryId: "entry-1", inputKey: "energy", magnitude: "3.2", unit: "MWh", massDistanceDetail: null }], total: null });
+    renderList([makeLine({ state: "needsReview", entries: [entry] })]);
+    expect(screen.queryByText("Not recorded")).toBeNull();
+    expect(screen.getByText("Not available").className).toContain("max-md:hidden");
+  });
+
+  it("keeps a figure Total on phones until the row opens, where the sources table states it", () => {
+    const line = makeLine({ state: "filled", entries: [makeEntry()], total: { magnitude: "42.5", unit: "kWh" } });
+    renderList([line]);
+    expect(screen.getByText("42.5 kWh").className).not.toContain("max-md:hidden");
+    cleanup();
+    renderList([line], true, [line.componentId]);
+    const [rowTotal] = screen.getAllByText("42.5 kWh");
+    expect(rowTotal.className).toContain("max-md:hidden");
+  });
+
   it("points Not set up lines at the template review", () => {
     renderList([makeLine({ state: "needsSetup" })]);
     expect(screen.getByRole("link", { name: "An admin sets this line up in the template review" })).toBeTruthy();
