@@ -103,8 +103,8 @@ inside batch context, with a "Batch roll-up" button back.
     a column or exit opens a tooltip with a "See details" link to the backing
     entity route — the Sankey doubles as navigation.
   - **Activities** (`?view=activity`) — the batch's recorded changes, newest
-    first, grouped by day (consecutive changes by one actor within a minute
-    share one who-and-when header), from `useCreditBatchActivity` (membership and cardinality:
+    first, as a timeline on a panel: one rail per day, each change a circle node
+    with its record-type icon, a title line and a who-and-when line, from `useCreditBatchActivity` (membership and cardinality:
     [database.md](database.md#activity-events)). Not a lineage reading: it
     renders before the roll-up loads, for batches with no runs, and hides the
     run filter. Filters by kind and record type run server side; the summary
