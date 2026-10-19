@@ -12,6 +12,7 @@ import { useState, type ReactNode } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
 import { Notice } from "@/components/ui/notice";
+import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import { InfoHint } from "@/components/ui/tooltip";
 import { useFeedstockBinStock } from "@/hooks/use-bin-movements";
 import { useFacilityClock } from "@/hooks/use-facility-context";
@@ -19,7 +20,7 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatFacilityTime } from "@/lib/date-utils";
 import { formatFacilityDateTime, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
-import { LOST_MASS_LABEL, outputStockEventLabel } from "@/lib/output-stock/labels";
+import { ESTIMATED_WATER_LABEL, LOST_MASS_LABEL, outputStockEventLabel } from "@/lib/output-stock/labels";
 import type { FeedstockLedgerEntry } from "@/types/feedstock-bin-ledger";
 import { CardTextButton, StockCard, StockChartCard } from "./stock-card";
 import { LedgerBeforeAfter, LedgerDayHeader, LedgerFacts, LedgerLine } from "./stock-ledger";
@@ -133,8 +134,8 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
     { label: "Moisture at intake", value: batch.moisturePercent === null ? MISSING_VALUE.notAvailable : formatMoisturePercent(batch.moisturePercent) },
     { label: "Received on", value: formatFacilityDateTime(batch.receivedAt, clock.timeZone) },
   ] }));
-  if (waterKg !== null && waterKg > 0) bands.push({ label: "Water, estimated", kg: waterKg, category: "existing-water", details: [
-    { label: "Water, estimated", value: formatMassKg(waterKg) },
+  if (waterKg !== null && waterKg > 0) bands.push({ label: ESTIMATED_WATER_LABEL, kg: waterKg, category: "existing-water", details: [
+    { label: ESTIMATED_WATER_LABEL, value: formatMassKg(waterKg) },
     { label: "Moisture", value: formatMoisturePercent(estimatedMoisturePercent) },
   ] });
   return <div className="flex flex-col gap-16">
@@ -146,12 +147,11 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
         {stock.error && <Notice tone="error">{stock.error.message}</Notice>}
       </>}
       figure={stock.data && <>
-        {formatMassKg(stock.data.currentWetKg)} wet
+        {formatMassKg(stock.data.currentWetKg)} wet mass
         {capacityKg != null && <span className="body-small text-[var(--color-text-tertiary)]"> of {formatMassKg(capacityKg)}</span>}
       </>}
-      caption={stock.data && <>
-        {estimatedDryKg === null ? `Dry solids: ${MISSING_VALUE.notAvailable}` : `≈ ${formatMassKg(estimatedDryKg)} dry solids`} · {estimatedMoisturePercent === null ? MISSING_VALUE.notAvailable : formatMoisturePercent(estimatedMoisturePercent)} moisture
-      </>}
+      // Dry solids only when the batches' moisture gives them; the moisture itself is in the water band's details.
+      caption={stock.data && estimatedDryKg !== null && <SecondaryFigure label="Dry solids" value={formatMassKg(estimatedDryKg)} />}
       onAdjust={onAdjust}
     >
       {stock.data && bands.length === 0 && <EmptyState icon={null} title="No stock in this bin" padding="sm" />}
