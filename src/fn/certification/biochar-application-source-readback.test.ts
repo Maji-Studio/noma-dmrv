@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
 import type { Logger } from "@/lib/log";
 
+const UNCONFIRMED_ROW_COUNT = 5;
+const EXPECTED_RECHECK_LIMIT = 3;
+const UNCHECKED_ROW_COUNT = 2;
+const SUCCESSFUL_READ_COUNT = 2;
+
 const mocks = vi.hoisted(() => ({ list: vi.fn(), record: vi.fn(), resolve: vi.fn(), graphql: vi.fn(), drift: vi.fn() }));
 vi.mock("@/db", () => ({}));
 vi.mock("@/data-access/certifier-biochar-applications", () => ({
@@ -27,6 +32,48 @@ beforeEach(() => {
 const refresh = () => refreshRemovalEvidenceLinks(ctx, "submission-1", log);
 
 describe("Removal summary evidence re-check", () => {
+  it.each([
+    { confirms: false, unconfirmedCount: UNCONFIRMED_ROW_COUNT },
+    { confirms: true, unconfirmedCount: UNCHECKED_ROW_COUNT },
+  ])("bounds rechecks while counting all persisted rows: %j", async ({ confirms, unconfirmedCount }) => {
+    mocks.list.mockResolvedValue(Array.from({ length: UNCONFIRMED_ROW_COUNT }, (_, index) => ({ ...row(), id: `journal-${index}` })));
+    mocks.graphql.mockResolvedValue(confirms ? answer(["src-a"]) : { errors: [{ message: "unavailable" }] });
+
+    expect(await refresh()).toMatchObject({ unconfirmedCount, mismatchCount: 0 });
+    expect(mocks.graphql).toHaveBeenCalledTimes(EXPECTED_RECHECK_LIMIT);
+    expect(mocks.record).toHaveBeenCalledTimes(EXPECTED_RECHECK_LIMIT);
+    expect(mocks.resolve).toHaveBeenCalledOnce();
+    expect(mocks.record.mock.calls.map(([, id]) => id)).toEqual(["journal-0", "journal-1", "journal-2"]);
+  });
+  it("starts all bounded rechecks before any GraphQL response resolves", async () => {
+    mocks.list.mockResolvedValue(Array.from({ length: UNCONFIRMED_ROW_COUNT }, (_, index) => ({ ...row(), id: `journal-${index}` })));
+    let resolveReads!: (value: ReturnType<typeof answer>) => void;
+    const pendingReads = new Promise<ReturnType<typeof answer>>(resolve => { resolveReads = resolve; });
+    mocks.graphql.mockReturnValue(pendingReads);
+
+    const summary = refresh();
+    try {
+      await vi.waitFor(() => expect(mocks.graphql).toHaveBeenCalledTimes(EXPECTED_RECHECK_LIMIT));
+      expect(mocks.record).not.toHaveBeenCalled();
+      expect(mocks.resolve).toHaveBeenCalledOnce();
+    } finally {
+      resolveReads(answer(["src-a"]));
+      await summary;
+    }
+    expect(await summary).toMatchObject({ unconfirmedCount: UNCHECKED_ROW_COUNT, mismatchCount: 0 });
+  });
+  it("isolates one rejected read while other rechecks confirm", async () => {
+    mocks.list.mockResolvedValue(Array.from({ length: EXPECTED_RECHECK_LIMIT }, (_, index) => ({ ...row(), id: `journal-${index}` })));
+    mocks.graphql.mockRejectedValueOnce(new Error("sensitive transport context"));
+
+    await expect(refresh()).resolves.toMatchObject({ unconfirmedCount: 1, mismatchCount: 0 });
+    expect(mocks.record).toHaveBeenCalledTimes(SUCCESSFUL_READ_COUNT);
+    expect(mocks.record.mock.calls.map(([, id]) => id)).toEqual(["journal-1", "journal-2"]);
+    expect(log.warn).toHaveBeenCalledWith({
+      submissionId: "submission-1", registrationId: "journal-0", externalApplicationId: "bca-test",
+      externalProjectId: "prj-test", reason: "recheck_unavailable",
+    }, "Could not refresh Application evidence links");
+  });
   it("clears an unconfirmed note on success", async () => {
     expect(await refresh()).toEqual({ unconfirmedCount: 0, mismatchCount: 0, checkedAt: "2026-10-19T12:00:00.000Z" });
     expect(mocks.record).toHaveBeenCalledWith(ctx, "journal-1", "confirmed");

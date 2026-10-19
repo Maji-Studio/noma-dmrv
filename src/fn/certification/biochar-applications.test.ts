@@ -754,6 +754,13 @@ describe("Biochar Application evidence links", () => {
     mocks.client.get.mockResolvedValue(page([]));
     mocks.client.post.mockResolvedValue(canonicalRemote());
     mocks.client.graphql.mockResolvedValue(answer(["src-a"]));
+    mocks.recordReadback.mockImplementation(async (_ctx, _id, sourceReadbackStatus) => {
+      mocks.registration = { ...mocks.registration!, sourceReadbackStatus };
+      return mocks.registration;
+    });
+    mocks.markDrift.mockImplementation(async (_ctx, _id, driftReason) => {
+      mocks.registration = { ...mocks.registration!, correctionStatus: "review_required", driftReason };
+    });
   });
   it("confirms the Source set after fresh creation", async () => {
     await ensure([sourceIntent()]);
@@ -771,6 +778,46 @@ describe("Biochar Application evidence links", () => {
     await expect(ensure([sourceIntent()])).resolves.toBeUndefined();
     expect(mocks.recordReadback).toHaveBeenCalledWith(orgCtx, "journal-1", "unconfirmed");
     expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ registrationId: "journal-1", reason: "event_not_found" }), expect.any(String));
+  });
+  it("keeps a mismatched submission stopped when retry readback has no answer", async () => {
+    mocks.client.graphql.mockResolvedValue(answer([]));
+    await expect(ensure([sourceIntent()])).rejects.toMatchObject({ name: "SafeError" });
+    expect(mocks.registration?.sourceReadbackStatus).toBe("mismatch");
+
+    mocks.markDrift.mockClear();
+    mocks.recordReadback.mockClear();
+    mocks.client.post.mockClear();
+    mocks.client.get.mockResolvedValue(canonicalRemote());
+    mocks.client.graphql.mockResolvedValue({ errors: [{ message: "unavailable" }] });
+
+    await expect(ensure([sourceIntent()])).rejects.toMatchObject({
+      name: "SafeError",
+      message: "Application APP-001: Isometric could not confirm a corrected evidence set. Retry the Removal submission later.",
+    });
+    expect(mocks.registration).toMatchObject({
+      sourceReadbackStatus: "mismatch", correctionStatus: "review_required", driftReason: "source_set_mismatch",
+    });
+    expect(mocks.recordReadback).not.toHaveBeenCalledWith(orgCtx, "journal-1", "unconfirmed");
+    expect(mocks.markDrift).toHaveBeenCalledWith(orgCtx, "journal-1", "source_set_mismatch");
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+  it("clears a mismatch and continues only after retry readback confirms the exact Source set", async () => {
+    mocks.client.graphql.mockResolvedValue(answer([]));
+    await expect(ensure([sourceIntent()])).rejects.toMatchObject({ name: "SafeError" });
+
+    mocks.markDrift.mockClear();
+    mocks.recordReadback.mockClear();
+    mocks.client.post.mockClear();
+    mocks.client.get.mockResolvedValue(canonicalRemote());
+    mocks.client.graphql.mockResolvedValue(answer(["src-a"]));
+
+    await expect(ensure([sourceIntent()])).resolves.toBeUndefined();
+    expect(mocks.registration).toMatchObject({
+      sourceReadbackStatus: "confirmed", correctionStatus: "none", driftReason: null,
+    });
+    expect(mocks.recordReadback).toHaveBeenCalledWith(orgCtx, "journal-1", "confirmed");
+    expect(mocks.markDrift).not.toHaveBeenCalled();
+    expect(mocks.client.post).not.toHaveBeenCalled();
   });
   it("leaves empty expected sets not checked without a GraphQL call", async () => {
     await ensure();
