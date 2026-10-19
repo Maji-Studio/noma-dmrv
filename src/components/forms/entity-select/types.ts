@@ -85,6 +85,13 @@ interface EntitySelectBaseProps {
   createLabel?: string;
   /** Callback when quick-add is triggered */
   onCreateNew?: () => void;
+  /**
+   * For an entity created on its own page rather than in a quick-add dialog
+   * (reactors): the "Add new" row opens this page in a new tab, so the form
+   * keeps what the operator entered. The options reload when the operator
+   * comes back to this tab. `onCreateNew` wins when both are given.
+   */
+  createHref?: string;
   /** Filter options (e.g., facilityId for filtering reactors by facility) */
   filterBy?: Record<string, string>;
   /** Upstream source value(s); changes re-enable automatic selection after a user clear. */
