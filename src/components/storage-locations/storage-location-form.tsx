@@ -32,6 +32,10 @@ import {
 import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
 import type { StorageLocation } from "@/db/schema/facilities";
 import { isBinFormulationLocked, type RecordLockView } from "@/lib/record-lock-view";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(storageLocationFormSchema);
 
 const STOCK_MODE_HINT =
   "Split keeps every production run or batch in its own bay, bag or heap, and each draw records which ones it came from. Mix is one blended pile: every draw takes from each in proportion to what it holds.";
@@ -215,7 +219,7 @@ export function StorageLocationForm({
           <FormInput
             id="capacityKg"
             type="number"
-            step="any"
+            {...numberBounds("capacityKg")}
             placeholder="e.g., 5000"
             disabled={isSubmitting}
             error={!!errors.capacityKg}

@@ -1,6 +1,5 @@
 "use client";
 
-import { MODEL_YEAR_MIN, MODEL_YEAR_MAX } from "@/schemas/model-year";
 
 import { useController, useForm, useWatch } from "react-hook-form";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
@@ -30,6 +29,10 @@ import { nextTransportDistanceSource } from "./distance-provenance";
 import { ONE_WAY_CUE, oneWayDistanceCue } from "@/lib/format-utils";
 import type { TransportLeg } from "@/db/schema";
 import { TransportEvidencePanel } from "./transport-evidence-documents";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(transportLegFormSchema);
 
 interface TransportLegFormProps {
   /** When provided, the form edits this leg; otherwise it creates a new one. */
@@ -43,7 +46,6 @@ interface TransportLegFormProps {
 const formatTransportMethod = (method: string) =>
   method.charAt(0).toUpperCase() + method.slice(1);
 
-const MIN_LOAD_MASS_KG = 0.000001;
 const isTransportLegCertifyField = (field: string) =>
   isCertifyFormField("transportLeg", field);
 
@@ -288,8 +290,7 @@ export function TransportLegForm({
               <FormInput
                 id="loadMassKg"
                 type="number"
-                step="any"
-                min={MIN_LOAD_MASS_KG}
+                {...numberBounds("loadMassKg")}
                 error={!!errors.loadMassKg}
                 {...register("loadMassKg")}
               />
@@ -308,7 +309,7 @@ export function TransportLegForm({
               />
             </FormField>
             <FormField id="modelYear" label="Model year" error={errors.modelYear?.message}>
-              <FormInput id="modelYear" type="number" min={MODEL_YEAR_MIN} max={MODEL_YEAR_MAX} step="1" error={!!errors.modelYear} {...register("modelYear")} />
+              <FormInput id="modelYear" type="number" {...numberBounds("modelYear")} error={!!errors.modelYear} {...register("modelYear")} />
             </FormField>
           </div>
         </div>

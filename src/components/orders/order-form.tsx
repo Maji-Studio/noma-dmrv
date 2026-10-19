@@ -33,6 +33,10 @@ import { MatchingOutputBins } from "./matching-output-bins";
 import { useEffect, useState } from "react";
 import { CustomerLocationDialog } from "@/components/customers/customer-location-dialog";
 import type { EditableCustomerLocation } from "@/components/customers/customer-location-form";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(orderFormSchema);
 
 // ============================================
 // Constants for select options
@@ -298,7 +302,7 @@ export function OrderForm({
             <FormInput
               id="quantityKg"
               type="number"
-              step="any"
+              {...numberBounds("quantityKg")}
               placeholder="e.g., 1000"
               disabled={isSubmitting || locked("quantityKg")}
               error={!!errors.quantityKg}

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Sample } from "@/db/schema";
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
@@ -281,4 +282,17 @@ describe("buildCreditBatchOpenItems", () => {
     Object.assign(model.milestones.ghgStatement!, period);
     expect(buildCreditBatchOpenItems({ pageModel: model }).waiting[0].title).toBe(title);
   });
+});
+
+
+it("surfaces a negative O/C_org as an unpaired H/C sample", () => {
+  const [durability] = buildDurabilityBatchSummaries([{
+    creditBatchId: "batch", creditBatchCode: "CB-1", sampling: "sampled", runs: [],
+    samples: [{ id: "sample", sampleCode: "SAM-1", hToCOrgRatio: 0.3, oToCOrgRatio: -0.1 } as Sample],
+  }]);
+  expect(durability.replicates[0]).toMatchObject({ hToCorg: 0.3, oToCorg: null });
+  expect(buildCreditBatchOpenItems({ durability }).check).toEqual([{
+    id: "unpaired:SAM-1", title: "Sample SAM-1 has H/C without paired O/C",
+    target: { tab: "samples", rowId: "sample" },
+  }]);
 });
