@@ -133,10 +133,13 @@ export function CreditBatchList({
   canManage = false,
   initialCreate = false,
   initialView = "timeline",
+  emissionsEntriesEnabled = false,
 }: {
   canManage?: boolean;
   initialCreate?: boolean;
   initialView?: CreditBatchListView;
+  /** Server flag EMISSIONS_ENTRIES_ENABLED; mounts the Emissions panel. */
+  emissionsEntriesEnabled?: boolean;
 }) {
   const [view, setView] = useState<CreditBatchListView>(initialView);
   const [createDefaults, setCreateDefaults] = useState<NewBatchRequest | null>(null);
@@ -846,6 +849,7 @@ export function CreditBatchList({
                   : batchHealthSummaries[sideSheetEntity.id],
                 isHealthLoading: healthLoading && !healthError,
                 canManage,
+                emissionsEntriesEnabled,
                 locked: sideSheetLocked,
                 activeFocusTarget:
                   sideSheetEntity.id === focusedBatchId

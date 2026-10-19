@@ -42,6 +42,7 @@ export const ACTIVITY_KIND_LABELS: Record<ActivityAction, string> = {
 /** Glossary names (GLOSSARY.md): Sample, Removal and GHG Statement keep their capitals. */
 export const ACTIVITY_RECORD_TYPE_LABELS: Record<ActivityEntityType, string> = {
   emission_entry: "Emissions entry",
+  emission_line_comment: "Line comment",
   credit_batch: "Credit batch",
   production_run: "Production run",
   feedstock: "Feedstock",
@@ -64,7 +65,7 @@ export const ACTIVITY_RECORD_TYPE_LABELS: Record<ActivityEntityType, string> = {
 
 /** Record types in custody order, then master data, for the record type filter. */
 export const ACTIVITY_RECORD_TYPE_ORDER: readonly ActivityEntityType[] = [
-  "credit_batch", "emission_entry", "feedstock", "production_run", "biochar_product", "bin_movement", "lab_sample",
+  "credit_batch", "emission_entry", "emission_line_comment", "feedstock", "production_run", "biochar_product", "bin_movement", "lab_sample",
   "order", "delivery", "transport_leg", "application", "document",
   "supplier", "supplier_location", "customer", "customer_location", "formulation",
   "removal", "ghg_statement",

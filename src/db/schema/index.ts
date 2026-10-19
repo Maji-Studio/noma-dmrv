@@ -38,3 +38,4 @@ export * from "./supplier-location-facility-distances";
 export * from "./customer-location-facility-distances";
 
 export * from "./emission-entries";
+export * from "./emission-line-comments";
