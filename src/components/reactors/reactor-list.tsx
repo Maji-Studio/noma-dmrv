@@ -70,14 +70,7 @@ function createColumns(
       accessorKey: "facilityName",
       header: "Facility",
       cell: ({ row }) => (
-        <div className="flex flex-col">
-          <span>{row.original.facilityName || MISSING_VALUE.notAvailable}</span>
-          {row.original.facilityCode && (
-            <span className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
-              {row.original.facilityCode}
-            </span>
-          )}
-        </div>
+        <span>{row.original.facilityName || MISSING_VALUE.notAvailable}</span>
       ),
     },
     {

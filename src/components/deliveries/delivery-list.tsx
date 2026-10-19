@@ -59,7 +59,6 @@ import type {
   DeliveryFormData,
 } from "@/schemas/deliveries";
 import {
-  CalendarIcon,
   PlusIcon,
   ScalesIcon,
   TruckIcon,
@@ -103,7 +102,7 @@ function createColumns(
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true, recordLink: true, recordLinkAfter: recordLockTitleMark(locks) },
+      meta: { nowrap: true, recordLink: true, recordLinkBefore: recordLockTitleMark(locks) },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -114,10 +113,7 @@ function createColumns(
       meta: { nowrap: true },
       header: "Date",
       cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <CalendarIcon size={16} className="text-[var(--color-text-tertiary)]" />
-          <span>{formatFacilityDay(row.original.deliveryDate, resolveFacilityTimezone(facilities, row.original.facilityId))}</span>
-        </div>
+        <span>{formatFacilityDay(row.original.deliveryDate, resolveFacilityTimezone(facilities, row.original.facilityId))}</span>
       ),
     },
     {
