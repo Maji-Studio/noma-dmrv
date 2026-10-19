@@ -1,5 +1,5 @@
-export { RecordLockChip, RecordLockCell, RecordLockOverviewChip } from "./record-lock-chip";
-export { recordLockColumn, recordLockTitleMark } from "./record-lock-column";
+export { RecordLockChip, RecordLockOverviewChip } from "./record-lock-chip";
+export { recordLockTitleMark } from "./record-lock-title-mark";
 export { RecordLockNotice, RecordReturnedNotice, returnedStatementPhrase } from "./record-lock-notice";
 export { RecordUsedBy } from "./record-used-by";
 export { RecordLockFormFrame, recordLockSheetProps, type RecordLockSheetOptions } from "./record-lock-sheet-props";

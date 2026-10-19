@@ -13,9 +13,9 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { recordLockColumn, recordLockSheetProps, recordLockTitleMark } from "@/components/record-locks";
+import { recordLockSheetProps, recordLockTitleMark } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -73,7 +73,6 @@ function createColumns(
   onEdit: (application: ApplicationListItem) => void,
   onDelete: (applicationId: string) => void,
   locks: RecordLockViews,
-  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<ApplicationListItem>[] {
   return [
     {
@@ -173,7 +172,6 @@ function createColumns(
         />
       ),
     },
-    recordLockColumn<ApplicationListItem>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
@@ -495,7 +493,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   // Memoize columns
   const items = applications?.items ?? [];
   const applicationLocks = useRecordLocks("application", items.map((item) => item.id));
-  const columns = createColumns(openEdit, handleDelete, applicationLocks.locks, applicationLocks.statusOf);
+  const columns = createColumns(openEdit, handleDelete, applicationLocks.locks);
   const deliveryOptions = scopedDeliveries ?? deliveries;
   const totalApplications = applications?.total ?? 0;
   const totalPages = applications?.totalPages ?? 0;

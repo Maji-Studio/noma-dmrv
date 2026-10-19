@@ -119,17 +119,3 @@ export function recordLinkVisibility<TData, TValue>(
   }
   return visible;
 }
-
-/** Visibility entries for the columns that start hidden (`meta.hiddenByDefault`). */
-export function defaultColumnVisibility<TData, TValue>(
-  columns: ColumnDef<TData, TValue>[],
-): VisibilityState {
-  const hidden: VisibilityState = {};
-  for (const column of columns) {
-    if (!column.meta?.hiddenByDefault) continue;
-    const id =
-      column.id ?? ("accessorKey" in column ? String(column.accessorKey) : undefined);
-    if (id) hidden[id] = false;
-  }
-  return hidden;
-}

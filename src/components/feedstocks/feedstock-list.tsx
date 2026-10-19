@@ -13,9 +13,9 @@ import { parseAsString, useQueryState } from "nuqs";
 import { FEEDSTOCK_DEEP_LINK_PARAM } from "@/lib/feedstock-links";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { recordLockColumn, recordLockSheetProps, recordLockTitleMark } from "@/components/record-locks";
+import { recordLockSheetProps, recordLockTitleMark } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -74,7 +74,6 @@ function createColumns(
   onEdit: (feedstock: FeedstockWithRelations) => void,
   onDelete: (feedstock: FeedstockWithRelations) => void,
   locks: RecordLockViews,
-  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<FeedstockWithRelations>[] {
   return [
     {
@@ -161,7 +160,6 @@ function createColumns(
         />
       ),
     },
-    recordLockColumn<FeedstockWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
@@ -412,7 +410,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
 
   const feedstockItems = feedstocksData?.items ?? [];
   const feedstockLocks = useRecordLocks("feedstock", feedstockItems.map((item) => item.id));
-  const columns = createColumns(openEdit, handleDelete, feedstockLocks.locks, feedstockLocks.statusOf);
+  const columns = createColumns(openEdit, handleDelete, feedstockLocks.locks);
   const totalPages = feedstocksData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,

@@ -25,7 +25,6 @@ export const stubRecordLockComponentsModule = {
   RecordLockNotice: () => null,
   RecordUsedBy: () => null,
   RecordLockFormFrame: ({ children }: { children: unknown }) => children,
-  recordLockColumn: () => ({ id: "recordLock", header: "Lock", cell: () => null }),
   recordLockTitleMark: () => () => null,
   recordLockSheetProps: () => ({}),
 };

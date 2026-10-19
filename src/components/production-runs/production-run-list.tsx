@@ -39,9 +39,9 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { StatCard } from "@/components/ui/stat-card";
 import { MassPair } from "@/components/ui/mass-pair";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { recordLockColumn, recordLockSheetProps, recordLockTitleMark } from "@/components/record-locks";
+import { recordLockSheetProps, recordLockTitleMark } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isProductionRunOutputLocked, isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
+import { isProductionRunOutputLocked, isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
@@ -84,7 +84,6 @@ function createColumns(
   onEdit: (run: ProductionRunWithRelations) => void,
   onDelete: (runId: string) => void,
   locks: RecordLockViews,
-  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<ProductionRunWithRelations>[] {
   return [
     {
@@ -149,7 +148,6 @@ function createColumns(
         />
       ),
     },
-    recordLockColumn<ProductionRunWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
@@ -381,7 +379,7 @@ export function ProductionRunList() {
     creditBatchFilter ||
     affectedRunIds.length > 0;
 
-  const columns = createColumns(openEdit, handleDelete, runLocks.locks, runLocks.statusOf);
+  const columns = createColumns(openEdit, handleDelete, runLocks.locks);
 
   useEffect(() => {
     if (!focusedRunId) {

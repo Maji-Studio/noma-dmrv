@@ -210,14 +210,13 @@ describe("DataTable without a record-link column", () => {
   });
 });
 
-describe("DataTable column defaults and record link marks", () => {
+describe("DataTable record link marks", () => {
   const markedColumns: ColumnDef<Row>[] = [
     {
       accessorKey: "code",
       header: "Code",
       meta: { recordLink: true, recordLinkBefore: (row) => (row.id === "r1" ? <span data-mark="">Sent</span> : null) },
     },
-    { accessorKey: "name", header: "Name", meta: { hiddenByDefault: true } },
   ];
 
   it("renders the mark before the record link, never inside it", () => {
@@ -228,15 +227,5 @@ describe("DataTable column defaults and record link marks", () => {
     expect(marks).toHaveLength(1);
     expect(marks[0].closest("[data-row-link]")).toBeNull();
     expect(within(container.querySelector("tbody tr") as HTMLElement).getByRole("button", { name: "SUP-001" })).toBeTruthy();
-  });
-
-  it("hides a hiddenByDefault column until turned on, and lets a caller's choice win", () => {
-    const hidden = render(<DataTable columns={markedColumns} data={rows} aria-label="Suppliers" />);
-    expect(hidden.container.querySelector("tbody")?.textContent).not.toContain("Alpha");
-    hidden.unmount();
-    const shown = render(
-      <DataTable columns={markedColumns} data={rows} columnVisibility={{ name: true }} aria-label="Suppliers" />,
-    );
-    expect(shown.container.querySelector("tbody")?.textContent).toContain("Alpha");
   });
 });

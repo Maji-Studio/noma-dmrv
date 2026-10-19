@@ -1,5 +1,5 @@
 import { LinkSimpleIcon, LockSimpleIcon, LockSimpleOpenIcon } from "@phosphor-icons/react/dist/ssr";
-import type { RecordLockStatus, RecordLockView } from "@/lib/record-lock-view";
+import type { RecordLockView } from "@/lib/record-lock-view";
 import { statusBadgeVariants } from "@/components/ui/status-badge";
 import { RECORD_LOCK_CHIP_CLASSES } from "@/lib/status-state";
 import { cn } from "@/lib/utils";
@@ -64,15 +64,4 @@ export function RecordLockSentMark({ lock, className }: { lock: RecordLockView |
  */
 export function RecordLockOverviewChip({ lock, className }: { lock: RecordLockView | undefined; className?: string }) {
   return lock?.level === "sent" ? <RecordLockChip level="sent" className={className} /> : null;
-}
-
-/**
- * A list cell: the Sent chip once the batched read answered, blank otherwise.
- * While pending the cell stays blank (a placeholder per row is noise). A failed
- * read keeps its note, since blank would wrongly read as "not sent".
- */
-export function RecordLockCell({ lock, status = "ready" }: { lock: RecordLockView | undefined; status?: RecordLockStatus }) {
-  if (lock) return <RecordLockOverviewChip lock={lock} />;
-  if (status === "error") return <span className="body-caption text-[var(--color-text-tertiary)]">{"Couldn't check"}</span>;
-  return null;
 }

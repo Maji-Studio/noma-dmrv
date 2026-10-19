@@ -43,7 +43,6 @@ import {
 import {
   RowLink,
   recordLinkVisibility,
-  defaultColumnVisibility,
   rowLinkColumnId,
   warnMissingRecordLink,
 } from "./row-link";
@@ -245,13 +244,14 @@ function DataTableRoot<TData, TValue>({
   const [sorting, setSorting] = React.useState<SortingState>(defaultSorting);
   const [globalFilter, setGlobalFilter] = React.useState("");
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(() => defaultColumnVisibility(columns));
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
   const [pagination, setPagination] = React.useState<PaginationState>({
     pageIndex: externalPageIndex ?? 0,
     pageSize: externalPageSize ?? DEFAULT_LIST_PAGE_SIZE,
   });
 
+  // Controlled state handlers
   const handleSortingChange = React.useCallback(
     (updater: SortingState | ((old: SortingState) => SortingState)) => {
       const newSorting = typeof updater === "function" ? updater(sorting) : updater;
@@ -319,8 +319,7 @@ function DataTableRoot<TData, TValue>({
   const effectiveGlobalFilter = externalGlobalFilter ?? globalFilter;
   // The record-link column is the only way to open a record by keyboard, so no
   // visibility state (including a caller's) may hide it.
-  const requestedColumnVisibility = externalColumnVisibility
-    ? { ...defaultColumnVisibility(columns), ...externalColumnVisibility } : columnVisibility;
+  const requestedColumnVisibility = externalColumnVisibility ?? columnVisibility;
   const effectiveColumnVisibility = onRowClick
     ? { ...requestedColumnVisibility, ...recordLinkVisibility(columns) }
     : requestedColumnVisibility;
@@ -346,7 +345,6 @@ function DataTableRoot<TData, TValue>({
     onGlobalFilterChange: handleGlobalFilterChange,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: handleColumnVisibilityChange,
-    initialState: { columnVisibility: defaultColumnVisibility(columns) },
     onRowSelectionChange: handleRowSelectionChange,
     onPaginationChange: handlePaginationChange,
     getCoreRowModel: getCoreRowModel(),
@@ -769,7 +767,7 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
         !column.columnDef.meta?.recordLink &&
         columnLabel(column),
     );
-  const hasVisibilityChanges = hideableColumns.some((column) => column.getIsVisible() === Boolean(column.columnDef.meta?.hiddenByDefault));
+  const hasVisibilityChanges = hideableColumns.some((column) => !column.getIsVisible());
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

@@ -40,9 +40,9 @@ import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useRef, useState } from "react";
 import { ORDER_DEEP_LINK_PARAM } from "@/lib/order-links";
 import { OrderForm } from "./order-form";
-import { recordLockColumn, recordLockSheetProps, recordLockTitleMark } from "@/components/record-locks";
+import { recordLockSheetProps, recordLockTitleMark } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { orderSheetSections } from "./order-read-sections";
 import { ILLUSTRATION_SIZE, OrderArt } from "@/components/ui/illustrations";
 
@@ -57,7 +57,6 @@ function createColumns(
   onEdit: (order: OrderWithRelations) => void,
   onDelete: (orderId: string) => void,
   locks: RecordLockViews,
-  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<OrderWithRelations>[] {
   return [
     {
@@ -121,7 +120,6 @@ function createColumns(
         return <StatusBadge status={badgeStatus} label={label} />;
       },
     },
-    recordLockColumn<OrderWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
@@ -337,7 +335,7 @@ export function OrderList() {
   };
   const hasActiveFilters = !!searchQuery || !!statusFilter || !!customerFilter;
 
-  const columns = createColumns(openEdit, handleDelete, orderLocks.locks, orderLocks.statusOf);
+  const columns = createColumns(openEdit, handleDelete, orderLocks.locks);
 
   if (!facilityId) {
     return (
