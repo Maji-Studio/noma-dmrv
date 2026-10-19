@@ -677,7 +677,9 @@ The one outcome screen for auth pages (check your email, email verified, verific
   `?customer=<id>`) it is a real `<a href>`: a plain click opens the sheet in
   place, modifier and middle clicks open the deep link in a new tab. Without
   one (reactors, formulations) it is a link-styled button. Never mark a column
-  whose cell renders its own controls. Rows and mobile cards carry no role or
+  whose cell renders its own controls; a line that needs its own link (the
+  Removal's registry record) goes in `meta.recordLinkDetails`, which renders
+  under the record link and outside it. Rows and mobile cards carry no role or
   `tabIndex`; a whole-row click is a pointer-only convenience. It opens
   the detail side sheet everywhere; explicit "View" buttons are retired (detail routes become an "Open details" item).
   `destructive: true` for irreversible actions only — **archive, restore, and

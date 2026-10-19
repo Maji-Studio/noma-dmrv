@@ -30,6 +30,7 @@ import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
+  useFacilityCertifierSummary,
   useRemovalPreflightSummaries,
   useRemovalsForFacility,
 } from "@/hooks/use-certification";
@@ -42,6 +43,8 @@ import { CORRECTION_NEEDED_LABEL, RemovalCorrectionCell } from "./removal-correc
 import { useRecordLocks } from "@/hooks/use-record-locks";
 import type { RecordLockView, RecordLockViews } from "@/lib/record-lock-view";
 import { RemovalDetailSheet } from "./removal-detail-sheet";
+import { IsometricLink } from "./isometric-link";
+import { formatRegistryRecord, registryRecordUrl } from "./registry-record";
 import {
   buildRemovalListRows,
   type RemovalListRow,
@@ -110,20 +113,61 @@ function reportingWindow(summary: RemovalListRow): string | null {
     : null;
 }
 
+/** The record link: the Removal code alone. */
 function RemovalCell({ summary }: { summary: RemovalListRow }) {
-  const window = reportingWindow(summary);
   return (
-    <span className="flex flex-col gap-2 min-w-0">
-      <span className="body-small font-mono text-[var(--color-text-primary)] truncate">
-        {summary.code}
-      </span>
+    <span className="body-small font-mono text-[var(--color-text-primary)] truncate">
+      {summary.code}
+    </span>
+  );
+}
+
+/**
+ * The lines under the Removal code, outside the record link so the registry
+ * record can open Isometric: the registry id and version once submitted, then
+ * the reporting window.
+ */
+export function RemovalCellDetails({
+  summary,
+  registryHref,
+}: {
+  summary: RemovalListRow;
+  registryHref: string | null;
+}) {
+  const window = reportingWindow(summary);
+  const { externalId } = summary;
+  if (!externalId && !window) return null;
+  return (
+    <span className="block mt-2 min-w-0">
+      {externalId && (
+        <span className="block">
+          <span className="inline-flex max-w-full min-w-0 items-center gap-4 align-top">
+            <span className="body-caption font-mono text-[var(--color-text-secondary)] truncate">
+              {formatRegistryRecord(externalId, summary.version)}
+            </span>
+            {registryHref && <IsometricLink href={registryHref} />}
+          </span>
+        </span>
+      )}
       {window && (
-        <span className="body-caption text-[var(--color-text-tertiary)]">
+        <span className="block body-caption text-[var(--color-text-tertiary)]">
           {window}
         </span>
       )}
     </span>
   );
+}
+
+/** What the list search matches in the Removal column. */
+export function removalSearchText(summary: RemovalListRow): string {
+  return [
+    summary.code,
+    summary.removalId,
+    summary.externalId,
+    reportingWindow(summary),
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function MemberBatchesCell({ summary }: { summary: RemovalListRow }) {
@@ -202,13 +246,23 @@ export function StatusCell({ summary, lock }: { summary: RemovalListRow; lock?: 
   );
 }
 
-const createColumns = (locks: RecordLockViews): ColumnDef<RemovalListRow>[] => [
+const createColumns = (
+  locks: RecordLockViews,
+  registryHref: (externalId: string) => string | null,
+): ColumnDef<RemovalListRow>[] => [
   {
     id: "removal",
-    meta: { recordLink: true },
+    meta: {
+      recordLink: true,
+      recordLinkDetails: (summary: RemovalListRow) => (
+        <RemovalCellDetails
+          summary={summary}
+          registryHref={summary.externalId ? registryHref(summary.externalId) : null}
+        />
+      ),
+    },
     header: "Removal",
-    accessorFn: (summary) =>
-      `${summary.code} ${summary.removalId} ${reportingWindow(summary) ?? ""}`,
+    accessorFn: removalSearchText,
     cell: ({ row }) => <RemovalCell summary={row.original} />,
   },
   {
@@ -255,6 +309,8 @@ function ListBody({
   );
   // One read for the page: which sent Removals Isometric returned.
   const removalLocks = useRecordLocks("removal", identityRows.map((entry) => entry.removal.id));
+  // Already cached by the certification registry guard: no extra request.
+  const certifierSummary = useFacilityCertifierSummary(facilityId);
 
   if (identities.error) {
     return (
@@ -267,7 +323,17 @@ function ListBody({
   }
 
   const rows = buildRemovalListRows(identityRows, enrichmentByRemovalId);
-  const columns = createColumns(removalLocks.locks);
+  const externalProjectId =
+    certifierSummary.data?.mapping?.externalProjectId ?? null;
+  const isProduction = identities.data?.isProduction ?? false;
+  const columns = createColumns(removalLocks.locks, (externalId) =>
+    registryRecordUrl({
+      kind: "removal",
+      externalId,
+      externalProjectId,
+      isProduction,
+    }),
+  );
   const selected = removalId
     ? rows.find((r) => r.removalId === removalId)
     : undefined;
