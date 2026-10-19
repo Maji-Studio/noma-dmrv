@@ -35,7 +35,7 @@ import {
   TestTubeIcon,
   TagIcon,
   ListChecksIcon,
-  LightningIcon,
+  CloudIcon,
   GearSixIcon,
   BuildingsIcon,
   SignOutIcon,
@@ -118,7 +118,7 @@ const navSections: NavSection[] = [
       { href: "/reactors", label: "Reactors", icon: FlaskIcon },
       { href: "/storage-locations", label: "Storage Bins", icon: PackageIcon },
       { href: "/feedstock-types", label: "Feedstock Types", icon: TagIcon },
-      { href: "/energy", label: "Energy", icon: LightningIcon },
+      { href: "/emissions", label: "Emissions", icon: CloudIcon },
     ],
   },
   {

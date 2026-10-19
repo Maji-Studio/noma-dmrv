@@ -21,6 +21,7 @@ import type { TransportLeg } from "@/db/schema";
 import { unwrap, type MutationCallbacks } from "./types";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 import { invalidateCertificationReadiness } from "./use-certification";
+import { chainOfCustodyKeys } from "./use-chain-of-custody";
 
 // ============================================
 // Query Keys
@@ -71,6 +72,7 @@ export function useCreateTransportLeg(
         ),
       });
       await queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      await queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       // Leg distance/provenance edits change certification readiness; leaving
       // the certification family fresh shows pre-mutation readiness for 30s.
       await invalidateCertificationReadiness(queryClient);
@@ -102,6 +104,7 @@ export function useUpdateTransportLeg(
         queryKey: transportLegKeys.byEntity(entityType, entityId),
       });
       await queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      await queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       // Leg distance/provenance edits change certification readiness; leaving
       // the certification family fresh shows pre-mutation readiness for 30s.
       await invalidateCertificationReadiness(queryClient);
@@ -131,6 +134,7 @@ export function useDeleteTransportLeg(
         queryKey: transportLegKeys.byEntity(entityType, entityId),
       });
       await queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      await queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       // Leg distance/provenance edits change certification readiness; leaving
       // the certification family fresh shows pre-mutation readiness for 30s.
       await invalidateCertificationReadiness(queryClient);

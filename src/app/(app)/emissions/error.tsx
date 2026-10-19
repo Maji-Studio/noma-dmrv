@@ -1,0 +1,40 @@
+"use client";
+
+// Segment-level error boundary for /emissions and /emissions/[creditBatchId].
+// Catching here keeps the (app) layout and sidebar mounted, so the operator
+// can retry without losing the facility or the overview's URL filter.
+import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
+
+export default function EmissionsErrorBoundary({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  useEffect(() => {
+    // Digest and name only, never error.message: it may carry PII (CLAUDE.md).
+    console.error("[emissions/error-boundary]", { digest: error.digest, name: error.name });
+  }, [error]);
+
+  return (
+    <div className="container-max py-32">
+      <div className="max-w-md border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-24">
+        <p className="title-chapter-title text-[var(--color-text-secondary)]">Emissions unavailable</p>
+        <h1 className="title-heading-2 mt-8">The emissions page could not be displayed.</h1>
+        <p className="body-medium mt-16 text-[var(--color-text-secondary)]">
+          Try again. If the page still does not load, share the reference below with the support team.
+        </p>
+        {error.digest && (
+          <p className="body-small mt-12 font-mono text-[var(--color-text-tertiary)]">Reference: {error.digest}</p>
+        )}
+        <div className="mt-24 flex gap-12">
+          <Button onClick={() => reset()} variant="primary">
+            Try again
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -310,6 +310,7 @@ export function FacilityCertifierForm({
           <FormField
             id="externalFacilityId"
             label="Isometric facility ID"
+            required
             error={errors.externalFacilityId?.message}
             hint="Needed to register production batches. Create the facility in Isometric Certify, then paste its fcl_… ID here."
           >

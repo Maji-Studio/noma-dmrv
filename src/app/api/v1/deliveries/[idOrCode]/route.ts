@@ -11,7 +11,7 @@ export const GET = apiRoute<Params>("api.v1.deliveries.get", "deliveries:read", 
   const data = await readDelivery(request, ctx, idOrCode);
   headers.set("ETag", deliveryEtag(data));
   return Response.json({ data }, { headers });
-});
+}, { audience: "rest" });
 
 export const PATCH = apiRoute<Params>("api.v1.deliveries.update", "deliveries:write", (request, context, { idOrCode }) =>
-  updateDeliveryResponse(request, context, idOrCode));
+  updateDeliveryResponse(request, context, idOrCode), { audience: "rest" });

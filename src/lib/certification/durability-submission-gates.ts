@@ -176,7 +176,7 @@ export function evaluateDurabilitySubmissionGates(
     }
 
     // (d) Paired submission: the submitted H/C_org population (same
-    // `isUsableNumber` predicate as the aggregation) minus the paired replicates
+    // `isUsableRatio` predicate as the aggregation) minus the paired replicates
     // eligibility already judged.
     const unpairedSampleCodes = eligibility.unpairedHToCReplicateIndexes.map(
       (index) => batch.replicateProvenance[index].sampleCode,

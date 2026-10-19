@@ -33,7 +33,7 @@ import { handleRowActivationClick } from "@/components/ui/data-table/data-table-
 import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DRY_BIOCHAR_LABEL } from "@/components/biochar-products/product-composition-components";
-import { RecordLockChip } from "@/components/record-locks/record-lock-chip";
+import { RecordLockOverviewChip } from "@/components/record-locks/record-lock-chip";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { useOutputStockBalance } from "@/hooks/use-output-stock";
@@ -155,7 +155,7 @@ export function StorageBinTile({
               {material}
             </button>
           </h3>
-          {lock && <RecordLockChip level={lock.level} className="shrink-0" />}
+          <RecordLockOverviewChip lock={lock} className="shrink-0" />
           <span className="shrink-0">
             <RowActionsMenu label={`Actions for ${bin.code}`} actions={actions} />
           </span>

@@ -33,7 +33,7 @@ export const formulationWriteTools: WriteTool[] = commands.map(command => {
   const inputSchema = schema.safeExtend(controls.shape);
   const contract = toOperationJsonSchema(inputSchema);
   return {
-    kind: "write", name: `${command}_formulation`, scope: command === "delete" ? "formulations:delete" : "formulations:write",
+    kind: "write", name: `${command}_formulation`, scope: command === "delete" ? "formulations:delete" : "formulations:write", requiredScopes: () => [command === "delete" ? "formulations:delete" : "formulations:write"],
     input: inputSchema, output: command === "delete" ? deleteOutput : itemOutput,
     annotations: { readOnlyHint: false, openWorldHint: false, idempotentHint: true, destructiveHint: command !== "create" },
     description: `${descriptions[command]} ${guidance}`,

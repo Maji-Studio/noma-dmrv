@@ -111,6 +111,7 @@ export function getRemovalPreflightRefetchInterval(
 
 export const certificationKeys = {
   removalTemplateReviewPreview: (facilityId: string, templateId: string) => ["certification", "removal-template-review-preview", facilityId, templateId] as const,
+  removalTemplateReviewEntry: (facilityId: string, templateId: string) => ["certification", "removal-template-review-entry", facilityId, templateId] as const,
   removalTemplateReview: (facilityId: string) => ["certification", "removal-template-review", facilityId] as const,
   all: ["certification"] as const,
   /** Whether a submitted Removal or GHG statement freezes the record's files. */
@@ -219,6 +220,8 @@ export function invalidateCertificationReadiness(
 ) {
   const invalidations = [
     queryClient.invalidateQueries({ queryKey: creditBatchKeys.details() }),
+    // Removal codes and the not-in-a-Removal mass on the timeline's hover cards.
+    queryClient.invalidateQueries({ queryKey: creditBatchKeys.timelineFactsPrefix() }),
     // Readiness-affecting mutations also change the batch activity history.
     queryClient.invalidateQueries({ queryKey: activityKeys.all }),
     queryClient.invalidateQueries({ queryKey: certificationKeys.all }),

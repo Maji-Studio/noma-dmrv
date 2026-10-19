@@ -1,3 +1,4 @@
+import { getOAuthConfig } from "@/lib/auth/oauth-config";
 /** Stock-moving delivery REST contracts against the worktree test database. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -40,7 +41,7 @@ async function noWrites() {
   expect(await audits(a)).toEqual([]);
 }
 async function chargedOnce(send: () => Promise<Response>) {
-  const resolved = await resolveApiContext(readRequest("/deliveries", a.writeKey));
+  const resolved = await resolveApiContext(readRequest("/deliveries", a.writeKey), getOAuthConfig().rest);
   if (!resolved.ok) throw new Error("Fixture credential was refused");
   rateBucketKeys.push(`credential:${resolved.ctx.credentialId}:write`, `organization:${a.ctx.organizationId}:write`);
   const buckets = () => db.select().from(apiRateLimitBuckets).where(inArray(apiRateLimitBuckets.bucketKey, rateBucketKeys));

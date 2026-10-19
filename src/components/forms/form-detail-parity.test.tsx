@@ -31,6 +31,7 @@ vi.mock("@/components/ui/tooltip", () => ({
 }));
 vi.mock("next/link", () => ({ default: ({ children, href }: { children: ReactNode; href: string }) => <a href={href}>{children}</a> }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilities: [{ id: "facility", timezone: "UTC" }] }) }));
+vi.mock("@/hooks/use-refresh-entity-options-on-return", () => ({ useRefreshEntityOptionsOnReturn: () => () => {} }));
 vi.mock("@/hooks/use-entities", () => ({
   useEntityOptions: () => ({ data: [], dataUpdatedAt: 0, isLoading: false, error: null }),
   useEntityById: () => ({

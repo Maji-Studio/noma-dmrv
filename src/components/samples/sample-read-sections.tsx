@@ -26,7 +26,10 @@ export function formatSamplingTime(sample: Pick<SampleWithRelations, "samplingTi
     : formatDateTime(sample.samplingTime);
 }
 
-export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSection[] {
+export function sampleSheetSections(
+  sample: SampleWithRelations,
+  options: { hideTransport?: boolean } = {},
+): DetailPanelSection[] {
   const certificationContext = { sampling: sample.sampling, durabilityOption: sample.durabilityOption };
   return [
     {
@@ -108,10 +111,13 @@ export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSec
       fields: [],
       content: <SampleDocumentsPanel sampleId={sample.id} readOnly />,
     },
-    {
-      title: "Transport",
-      fields: [],
-      content: <TransportLegsSummary entityType="sample" entityId={sample.id} />,
-    },
+    // Sample shipping is an emissions entry on the credit batch once the gate is on.
+    ...(options.hideTransport
+      ? []
+      : [{
+          title: "Transport",
+          fields: [],
+          content: <TransportLegsSummary entityType="sample" entityId={sample.id} />,
+        }]),
   ];
 }

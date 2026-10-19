@@ -378,6 +378,7 @@ function DataTableRoot<TData, TValue>({
       <RowLink
         onActivate={() => onRowClick(record)}
         href={getRowHref?.(record)}
+        before={cell.column.columnDef.meta?.recordLinkBefore?.(record)}
       >
         {content}
       </RowLink>

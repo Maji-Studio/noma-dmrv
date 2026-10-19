@@ -12,9 +12,9 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
+import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { DataTable } from "@/components/ui/data-table";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { MassPair } from "@/components/ui/mass-pair";
@@ -59,7 +59,6 @@ import type {
   DeliveryFormData,
 } from "@/schemas/deliveries";
 import {
-  CalendarIcon,
   PlusIcon,
   ScalesIcon,
   TruckIcon,
@@ -98,12 +97,11 @@ function createColumns(
   onEdit: (delivery: DeliverySheetRecord) => void,
   facilities: readonly { id: string; timezone: string }[],
   locks: RecordLockViews,
-  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<DeliveryWithRelations>[] {
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true, recordLink: true },
+      meta: { nowrap: true, recordLink: true, recordLinkBefore: recordLockTitleMark(locks) },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -114,10 +112,7 @@ function createColumns(
       meta: { nowrap: true },
       header: "Date",
       cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <CalendarIcon size={16} className="text-[var(--color-text-tertiary)]" />
-          <span>{formatFacilityDay(row.original.deliveryDate, resolveFacilityTimezone(facilities, row.original.facilityId))}</span>
-        </div>
+        <span>{formatFacilityDay(row.original.deliveryDate, resolveFacilityTimezone(facilities, row.original.facilityId))}</span>
       ),
     },
     {
@@ -186,7 +181,6 @@ function createColumns(
         />
       ),
     },
-    recordLockColumn<DeliveryWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
@@ -430,7 +424,7 @@ export function DeliveryList() {
   const deliveries = deliveriesData?.items ?? [];
   const deliveryLocks = useRecordLocks("delivery", deliveries.map((delivery) => delivery.id));
   const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("delivery", displaySideSheet?.entity?.id);
-  const columns = createColumns(openEdit, facilities, deliveryLocks.locks, deliveryLocks.statusOf);
+  const columns = createColumns(openEdit, facilities, deliveryLocks.locks);
   const totalPages = deliveriesData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -524,6 +518,8 @@ export function DeliveryList() {
           isLoading={statsLoading}
         />
       </div>
+
+      <RecordLockListNotice read={deliveryLocks} />
 
       {/* Data Table */}
       <DataTable

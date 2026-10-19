@@ -14,6 +14,7 @@ import { z } from "zod";
 import { STRICT_FORMULATION_MATCH } from "@/schemas/biochar-products";
 
 const state = vi.hoisted(() => ({ permissionChecks: 0, dialogMounts: [] as string[], listEnabled: [] as boolean[], detailIds: [] as (string | undefined)[], options: [] as EntityOption[], loading: false, canManage: false, error: null as Error | null, selected: undefined as EntityOption | undefined }));
+vi.mock("@/hooks/use-refresh-entity-options-on-return", () => ({ useRefreshEntityOptionsOnReturn: () => () => {} }));
 vi.mock("@/hooks/use-entities", () => ({
   useEntityOptions: ({ search, enabled }: { search: string; enabled: boolean }) => {
     state.listEnabled.push(enabled);

@@ -46,6 +46,9 @@ jobs:
       NOMA_TURBOPACK_BUILD_CACHE: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
       ALLOW_SELF_SIGNUP: "false"
       DISABLE_RATE_LIMIT: "true"
+      # The OAuth consent and Connected apps specs need the provider; the
+      # production gate allows a loopback origin only for hermetic CI.
+      OAUTH_PROVIDER_ENABLED: "true"
       # Playwright builds + serves a production bundle on CI
       # (playwright.config.ts), but the suite is hermetic and localhost-only.
       # Use local-fs so upload specs can round-trip bytes without external
@@ -139,6 +142,7 @@ jobs:
           BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
           ALLOW_SELF_SIGNUP=${ALLOW_SELF_SIGNUP}
           DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
+          OAUTH_PROVIDER_ENABLED=${OAUTH_PROVIDER_ENABLED}
           STORAGE_PROVIDER=${STORAGE_PROVIDER}
           STORAGE_LOCAL_FS_ROOT=${STORAGE_LOCAL_FS_ROOT}
           STORAGE_SIGNING_SECRET=${STORAGE_SIGNING_SECRET}
