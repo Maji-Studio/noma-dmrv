@@ -290,6 +290,7 @@ Notes:
   refs with no matching field (per-var warning) and abort only on a missing
   **required** field (`REQUIRED_LOCAL_VARS` / `REQUIRED_DEPLOYED_VARS` in
   `scripts/env-tpl-utils.ts`). `pnpm env:check` reports the same split.
+  It also cross-checks workflow `op://` references against each item.
 - `load-secrets-action` **fails the step** when a referenced `op://` field does
   not exist — it does not skip. Add the field before the workflow runs.
 - The `op` CLI that `load-secrets-action` installs is pinned through its
