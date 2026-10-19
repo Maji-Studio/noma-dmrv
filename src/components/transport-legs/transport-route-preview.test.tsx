@@ -80,7 +80,9 @@ describe("TransportRoutePreview", () => {
       />,
     ));
 
-    expect(rendered).toContain("Road · One way: Not recorded");
+    expect(rendered).toContain("Road");
+    expect(rendered).not.toContain("One way: Not recorded");
+    expect(rendered).not.toContain("Distance source");
     expect(rendered).not.toContain("Nothing to draw yet.");
   });
 
