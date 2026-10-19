@@ -1,7 +1,8 @@
 /**
  * The one state a credit batch shows on /credit-batches, in the Timeline and
- * the List alike: Open, Ready, Submitted or Issued, plus the count of blocking
- * items while it is Open.
+ * the List alike: Open, Ready, Submitted or Issued, plus the open to-dos while
+ * it is Open. Open to-dos are Blocking + Check items, the batch page's Overview
+ * badge; Waiting items never count.
  */
 import type { CreditBatchHealthSummary } from "@/fn/certification";
 import { deriveCreditBatchLifecycle } from "@/lib/certification/credit-batch-lifecycle";
@@ -12,12 +13,14 @@ export interface CreditBatchStateView {
   state: TimelineState | null;
   /** Blocking items; zero unless the state is Open. */
   blockingCount: number;
+  /** Blocking + Check items while Open; zero otherwise, like the page's first progress step. */
+  openTodoCount: number;
 }
 
 export function creditBatchStateOf(
   summary: CreditBatchHealthSummary | undefined,
 ): CreditBatchStateView {
-  if (!summary) return { state: null, blockingCount: 0 };
+  if (!summary) return { state: null, blockingCount: 0, openTodoCount: 0 };
   const lifecycle = deriveCreditBatchLifecycle(summary);
   const state = deriveTimelineState({
     lifecycleStepIndex: lifecycle.currentStepIndex,
@@ -25,6 +28,11 @@ export function creditBatchStateOf(
     healthState: summary.state,
     blockingCount: summary.issueCount,
   });
-  // Waiting items never count; a submitted or issued batch shows no count.
-  return { state, blockingCount: state === "blocking" ? summary.issueCount : 0 };
+  // Only an Open batch shows a count: Ready, Submitted and Issued batches show none.
+  const isOpen = state === "blocking";
+  return {
+    state,
+    blockingCount: isOpen ? summary.issueCount : 0,
+    openTodoCount: isOpen ? summary.issueCount + summary.checkCount : 0,
+  };
 }
