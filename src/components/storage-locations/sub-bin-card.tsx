@@ -38,7 +38,7 @@ export function subBinMoistureText(subBin: OutputSubBin): string {
 }
 
 function movementMass(movement: SubBinMovement): string {
-  return movement.wetMassKg === null ? `${formatMassKg(Math.abs(movement.dryMassKg))} dry` : `${formatMassKg(Math.abs(movement.wetMassKg))} wet`;
+  return movement.wetMassKg === null ? `${formatMassKg(Math.abs(movement.dryMassKg))} dry` : `${formatMassKg(Math.abs(movement.wetMassKg))} wet mass`;
 }
 
 type TapTrigger = ReactElement<{ onClick?: (event: MouseEvent) => void }>;
@@ -138,7 +138,7 @@ export function SubBinTooltip({ subBin, timeZone, trigger }: { subBin: OutputSub
       groups={[
         { label: CONTENTS_LABEL, rows: contentsRows({ dryMassKg: subBin.dryMassKg, solidsKg: subBin.solidsKg, ingredients: subBin.ingredients, waterKg }) },
         { label: MOVEMENTS_LABEL, rows: subBin.recentMovements.map((movement) => ({
-          label: `${MOVEMENT_LABELS[movement.kind]} ${movementMass(movement)}`, value: formatFacilityDateTime(movement.occurredAt, timeZone),
+          label: formatFacilityDateTime(movement.occurredAt, timeZone), value: `${MOVEMENT_LABELS[movement.kind]} ${movementMass(movement)}`,
         })) },
       ]} />
   );

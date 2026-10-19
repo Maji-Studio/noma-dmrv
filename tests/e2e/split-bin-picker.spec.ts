@@ -90,6 +90,6 @@ test.describe("Split bin picker", () => {
     await expect(contents).toContainText(/ solids/);
     await expect(contents).toContainText("Water, estimated");
     await expect(contents).not.toContainText(/\bSolids\b/);
-    await expect(page.getByText("Added 1,500 kg wet", { exact: true })).toBeVisible();
+    await expect(page.getByText("Added 1,500 kg wet mass", { exact: true })).toBeVisible();
   });
 });
