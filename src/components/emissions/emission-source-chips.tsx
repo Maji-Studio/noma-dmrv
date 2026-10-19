@@ -4,6 +4,10 @@
  *   wash (sea fill)         records made on another page; links upstream
  *   dashed warning outline  the records source exists but holds nothing
  *   plain outline           manual entries typed on this page
+ *
+ * Phones drop the boxes: each source reads as icon and text (records keep
+ * their link underline and ↗), so the line's state badge stays the only box
+ * on the row's meta line.
  */
 "use client";
 
@@ -42,7 +46,9 @@ export const SOURCE_ICON: Record<RecordsSource, Icon> = {
   applications: PlantIcon,
 };
 
-const CHIP = "inline-flex min-h-28 items-center gap-6 whitespace-nowrap px-8 body-caption";
+const CHIP = "inline-flex min-h-28 items-center gap-6 whitespace-nowrap body-caption md:px-8";
+/** Phones: the records link reads like the open row's records link, underlined. */
+const PHONE_LINK = "max-md:underline max-md:decoration-[color:var(--color-border-primary)] max-md:underline-offset-4";
 const ICON_SIZE = 14;
 const ARROW_SIZE = 12;
 
@@ -69,8 +75,8 @@ export function SourceChips({ line, ids, onEntries, interactive = true, quietTex
     const SourceIcon = SOURCE_ICON[records.source];
     const gap = !hasRecordsFigure(records);
     const look = gap
-      ? "border border-dashed border-[var(--st-wait-border)] text-[var(--st-wait)]"
-      : "border border-transparent bg-[var(--sea)] text-[var(--color-text-primary)]";
+      ? "text-[var(--st-wait)] md:border md:border-dashed md:border-[var(--st-wait-border)]"
+      : "text-[var(--color-text-primary)] md:border md:border-transparent md:bg-[var(--sea)]";
     const body = (
       <>
         <SourceIcon size={ICON_SIZE} aria-hidden="true" />
@@ -85,7 +91,7 @@ export function SourceChips({ line, ids, onEntries, interactive = true, quietTex
           href={recordsHref(records, ids)}
           onClick={(event) => event.stopPropagation()}
           aria-label={`${recordsText(records)}. ${openSourceLabel(records.source)}`}
-          className={cn(CHIP, look, TOUCH_TARGET, "hover:border-[var(--color-border-primary)]")}
+          className={cn(CHIP, look, TOUCH_TARGET, PHONE_LINK, "md:hover:border-[var(--color-border-primary)]")}
         >
           {body}
         </Link>
@@ -123,9 +129,18 @@ export function SourceChips({ line, ids, onEntries, interactive = true, quietTex
     );
   }
   if (chips.length && entryChips.length) {
-    chips.push(<span key="plus" aria-hidden="true" className="body-caption text-[var(--color-text-tertiary)]">+</span>);
+    // The + travels with the chip after it, so a wrap never leaves it at a line end.
+    const [first, ...rest] = entryChips;
+    chips.push(
+      <span key="plus" className="inline-flex items-center gap-x-8 md:gap-x-6">
+        <span aria-hidden="true" className="body-caption text-[var(--color-text-tertiary)]">+</span>
+        {first}
+      </span>,
+      ...rest,
+    );
+  } else {
+    chips.push(...entryChips);
   }
-  chips.push(...entryChips);
 
   if (!chips.length) {
     if (emptyAction) return emptyAction;
@@ -133,7 +148,7 @@ export function SourceChips({ line, ids, onEntries, interactive = true, quietTex
     const text = line.entryPolicy === "single" ? "One manual entry per credit batch" : "No records source";
     return <span className="body-caption text-[var(--color-text-tertiary)]">{text}</span>;
   }
-  return <span className="flex flex-wrap items-center gap-x-6 gap-y-4">{chips}</span>;
+  return <span className="flex flex-wrap items-center gap-x-8 md:gap-x-6 md:gap-y-4">{chips}</span>;
 }
 
 interface EntryChipProps {
@@ -145,7 +160,7 @@ interface EntryChipProps {
 }
 
 function EntryChip({ children, label, interactive, onClick, dim }: EntryChipProps) {
-  const look = cn(CHIP, "border border-[var(--color-border-tertiary)] bg-[var(--color-background-white)]", dim && "text-[var(--color-text-tertiary)]");
+  const look = cn(CHIP, "md:border md:border-[var(--color-border-tertiary)] md:bg-[var(--color-background-white)]", dim && "text-[var(--color-text-tertiary)]");
   if (!interactive || !onClick) {
     return <span className={look} aria-label={label}>{children}</span>;
   }
@@ -157,7 +172,7 @@ function EntryChip({ children, label, interactive, onClick, dim }: EntryChipProp
         event.stopPropagation();
         onClick();
       }}
-      className={cn(look, TOUCH_TARGET, "hover:border-[var(--color-border-primary)]")}
+      className={cn(look, TOUCH_TARGET, "md:hover:border-[var(--color-border-primary)]")}
     >
       {children}
     </button>

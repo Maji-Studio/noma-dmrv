@@ -290,6 +290,7 @@ Notes:
   refs with no matching field (per-var warning) and abort only on a missing
   **required** field (`REQUIRED_LOCAL_VARS` / `REQUIRED_DEPLOYED_VARS` in
   `scripts/env-tpl-utils.ts`). `pnpm env:check` reports the same split.
+  It also cross-checks workflow `op://` references against each item.
 - `load-secrets-action` **fails the step** when a referenced `op://` field does
   not exist — it does not skip. Add the field before the workflow runs.
 - The `op` CLI that `load-secrets-action` installs is pinned through its
@@ -365,6 +366,14 @@ the Settings UI uses. Without that variable the mapping is finished by hand in
 Certification Settings. The seed only reads registry catalogues and templates;
 it creates no registry business records. `reset-empty-staging` continues to
 omit registry credentials.
+
+After a `reset-seed-staging` run, check by hand that the registry connection
+works, because the scheduled live checks use their own credentials and seed
+their own mapping:
+
+1. Certification → Settings shows healthy Isometric credentials.
+2. The Mafinga facility is mapped to the sandbox project and a Removal template.
+3. `/certification/removals` opens without redirecting to Settings.
 
 ## Operational Defaults
 
