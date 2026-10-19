@@ -240,7 +240,9 @@ these areas; the entry rules and invariants live in
   is **not** dead: both delete surfaces read it as `registryBoundaryOpened`
   for the confirmation copy (`src/lib/certification/removal-external-mutation.ts`,
   consumed by `src/fn/certification/removals-hub.ts` and the certify
-  context); issue #746 decides whether it also becomes a role gate.
+  context), and it is also the role gate: once it is set, deleting needs
+  `REMOVAL_REGISTRY_DELETION_MIN_ROLE` (`src/lib/certification/removal-deletion-role.ts`,
+  issue #746).
 - **To resolve:** retire `discardLocalRemovalDraft` and port the three
   fixtures onto `claimRemovalDeletion` (which takes the same Removal row and
   artifact locks), or record why the discard seam stays. The marker and its

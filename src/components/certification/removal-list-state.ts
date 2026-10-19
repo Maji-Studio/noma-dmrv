@@ -91,16 +91,34 @@ export function buildRemovalListRows(
 }
 
 /**
+ * What a delete surface knows beyond the Removal row: whether the viewer meets
+ * the registry deletion role floor (server-computed from
+ * `REMOVAL_REGISTRY_DELETION_MIN_ROLE`, issue #746) and whether a member credit
+ * batch carries a Production Batch registration. `null` while either is still
+ * loading or failed to load.
+ */
+export interface RemovalDeleteAccess {
+  viewerCanDeleteRegistryRemovals: boolean | null;
+  hasRegisteredProductionBatches: boolean | null;
+}
+
+/**
  * Whether deleting this Removal may touch the registry: true as soon as a
  * ledger row exists (a submission attempt may have created records before it
- * recorded their IDs) or a submit attempt opened the registry boundary before
- * any ledger row. Drives the confirmation copy on both delete surfaces. No
- * role gate for now (issue #746).
+ * recorded their IDs), a submit attempt opened the registry boundary before
+ * any ledger row, or a member credit batch is registered as a Production
+ * Batch. Drives the confirmation copy and the role floor on both delete
+ * surfaces, mirroring the server's boundary check in `claimRemovalDeletion`.
  */
 export function removalDeletionTouchesRegistry(
   row: Pick<RemovalListRow, "local" | "registryBoundaryOpened">,
+  access?: Pick<RemovalDeleteAccess, "hasRegisteredProductionBatches">,
 ): boolean {
-  return row.local !== null || row.registryBoundaryOpened;
+  return (
+    row.local !== null ||
+    row.registryBoundaryOpened ||
+    access?.hasRegisteredProductionBatches === true
+  );
 }
 
 type RemovalDeleteFacts = Pick<
@@ -117,13 +135,23 @@ type RemovalDeleteFacts = Pick<
  * ledger row; `draft` and `rejected` never reached "Submission complete", but
  * an earlier version may have, which `hasFinalizedSubmission` carries. An
  * attempt still holding its lock is left alone unless it is known to be
- * interrupted. The server re-checks every rule under its own locks.
+ * interrupted. Members may delete only a Removal that never touched the
+ * registry; once it did, the viewer must meet the role floor. Unknown access
+ * hides the action rather than offering one the server would refuse. The
+ * server re-checks every rule under its own locks.
  */
-export function canDeleteRemovalRow(row: RemovalDeleteFacts): boolean {
+export function canDeleteRemovalRow(
+  row: RemovalDeleteFacts,
+  access: RemovalDeleteAccess,
+): boolean {
   const neverFinalized =
     !row.hasFinalizedSubmission &&
     (row.local === null || row.local === "draft" || row.local === "rejected");
   const attemptRunning = row.lockInFlight && !row.submissionInterrupted;
-  return neverFinalized && !attemptRunning;
+  if (!neverFinalized || attemptRunning) return false;
+  if (access.viewerCanDeleteRegistryRemovals === true) return true;
+  const boundaryKnownClosed =
+    access.hasRegisteredProductionBatches === false &&
+    !removalDeletionTouchesRegistry(row, access);
+  return boundaryKnownClosed;
 }
-
