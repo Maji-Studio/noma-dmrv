@@ -7,7 +7,10 @@
  * reversed, or null when editable. A reversed target gets already-corrected copy.
  */
 import { describe, expect, it } from "vitest";
-import { findFeedstockLossBlocker, formatFeedstockLossLockReason } from "@/lib/feedstock-loss-lock";
+import {
+  findFeedstockLossBlocker, findFeedstockLossCrossing,
+  formatFeedstockLossCrossingMessage, formatFeedstockLossLockReason,
+} from "@/lib/feedstock-loss-lock";
 import { formatFacilityDateTime } from "@/lib/format-utils";
 import type { FeedstockLedgerEntry } from "@/types/feedstock-bin-ledger";
 
@@ -127,5 +130,82 @@ describe("feedstock Lost mass lock guidance", () => {
     expect(message).toContain(formatFacilityDateTime(LATE, TIME_ZONE));
     expect(message).not.toContain(formatFacilityDateTime(EARLY, TIME_ZONE));
     expect(message).not.toBe(formatFeedstockLossLockReason(blocker, "UTC"));
+  });
+});
+
+describe("feedstock Lost mass time crossing", () => {
+  it("finds a production run draw crossed by moving a loss earlier", () => {
+    const draw = entry({ id: "draw", kind: "run_draw" });
+    const loss = entry({ occurredAt: LATE });
+    expect(findFeedstockLossCrossing([draw, loss], loss.id, EARLY)).toEqual(draw);
+  });
+
+  it.each(["ingredient_draw", "loss", "count"] as const)("finds a crossed live %s withdrawal", (kind) => {
+    const draw = entry({ id: "draw", kind });
+    const loss = entry({ occurredAt: LATE });
+    expect(findFeedstockLossCrossing([draw, loss], loss.id, EARLY)).toEqual(draw);
+  });
+
+  it.each(["ingredient_draw", "loss"] as const)("ignores a reversed %s", (kind) => {
+    const reversed = entry({ id: "reversed", kind, reversed: true });
+    const loss = entry({ occurredAt: LATE });
+    expect(findFeedstockLossCrossing([reversed, loss], loss.id, EARLY)).toBeNull();
+  });
+
+  it("ignores an intake and non-negative stock counts", () => {
+    const additions = [
+      entry({ id: "intake", kind: "intake", wetDeltaKg: INITIAL_KG }),
+      entry({ id: "zero", kind: "count", wetDeltaKg: 0 }),
+      entry({ id: "positive", kind: "count", wetDeltaKg: LOSS_KG }),
+      entry({ id: "unknown", kind: "count", wetDeltaKg: null }),
+    ];
+    const loss = entry({ occurredAt: LATE });
+    expect(findFeedstockLossCrossing([...additions, loss], loss.id, EARLY)).toBeNull();
+  });
+
+  it("does not cross a draw at exactly the replacement time", () => {
+    const draw = entry({ id: "draw", kind: "run_draw" });
+    const loss = entry({ occurredAt: LATE });
+    expect(findFeedstockLossCrossing([draw, loss], loss.id, AT)).toBeNull();
+  });
+
+  it("returns null when moving later", () => {
+    const draw = entry({ id: "draw", kind: "run_draw", occurredAt: EARLY });
+    const loss = entry();
+    expect(findFeedstockLossCrossing([draw, loss], loss.id, LATE)).toBeNull();
+  });
+
+  it("returns the first crossed withdrawal in ledger order, including tied original times", () => {
+    const intake = entry({ id: "intake", kind: "intake" });
+    const first = entry({ id: "z-draw", kind: "run_draw", recordedAt: EARLY });
+    const second = entry({ id: "a-draw", kind: "ingredient_draw" });
+    const loss = entry({ recordedAt: LATE });
+    expect(findFeedstockLossCrossing([intake, first, second, loss], loss.id, EARLY)).toEqual(first);
+  });
+
+  it("ignores withdrawals after the target and returns null for a missing target", () => {
+    const loss = entry();
+    const later = entry({ id: "later", kind: "run_draw", occurredAt: LATE });
+    expect(findFeedstockLossCrossing([loss, later], loss.id, EARLY)).toBeNull();
+    expect(findFeedstockLossCrossing([later], loss.id, EARLY)).toBeNull();
+  });
+});
+
+describe("feedstock Lost mass crossing guidance", () => {
+  it.each([
+    { kind: "run_draw", label: "production run", code: "PR-001" },
+    { kind: "ingredient_draw", label: "product ingredient", code: "BP-001" },
+    { kind: "loss", label: "lost mass", code: null },
+    { kind: "count", label: "stock count", code: null },
+  ] as const)("names the crossed $label and how to proceed", ({ kind, label, code }) => {
+    const blocker = entry({ kind, code, occurredAt: LATE, recordedAt: EARLY });
+    const message = formatFeedstockLossCrossingMessage(blocker, TIME_ZONE);
+    expect(message).toBe(
+      `Lost mass was not changed. The new time is before the ${label} ${code ?? blocker.reason}` +
+      ` (${formatFacilityDateTime(LATE, TIME_ZONE)}).` +
+      " Choose a time after it, or delete this entry and record a new loss.",
+    );
+    expect(message).not.toMatch(/[\u2013\u2014]/);
+    expect(message).not.toBe(formatFeedstockLossCrossingMessage(blocker, "UTC"));
   });
 });

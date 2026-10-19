@@ -5,7 +5,10 @@ import type { OrgContext } from '@/lib/auth/server';
 import { conflictCode } from '@/lib/conflict-ref';
 import { DomainError } from '@/lib/domain-errors';
 import { SafeError } from '@/lib/errors';
-import { findFeedstockLossBlocker, formatFeedstockLossLockReason } from '@/lib/feedstock-loss-lock';
+import {
+  findFeedstockLossBlocker, findFeedstockLossCrossing,
+  formatFeedstockLossCrossingMessage, formatFeedstockLossLockReason,
+} from '@/lib/feedstock-loss-lock';
 import { formatFacilityDateTime } from '@/lib/format-utils';
 import { STOCK_CONFLICT_ENTITY } from '@/lib/stock-conflict-entities';
 import { findMovementRequest, lockMovementRequest, requestFingerprint } from './bin-movement-requests';
@@ -99,6 +102,21 @@ export async function correctFeedstockLoss(ctx: OrgContext, input: CorrectFeedst
         blockers: [{ entity, id: blocker.sourceId ?? blocker.id,
           code: conflictCode(blocker.code ?? `${blocker.reason} (${formatFacilityDateTime(blocker.occurredAt, timeZone)})`) }],
       });
+    }
+
+    if (input.replacement) {
+      const crossing = findFeedstockLossCrossing(stock.entries, original.id, input.replacement.occurredAt.toISOString());
+      if (crossing) {
+        const [bin] = await tx.select({ facilityId: storageLocations.facilityId }).from(storageLocations).where(and(
+          eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, input.storageLocationId),
+        ));
+        if (!bin) throw new SafeError('Storage bin not found');
+        const timeZone = await getOutputStockFacilityTimezone(ctx, bin.facilityId, tx);
+        const message = formatFeedstockLossCrossingMessage(crossing, timeZone);
+        throw new DomainError('validation_failed', message, {
+          issues: [{ path: ['occurredAt'], code: 'validation_failed', message }],
+        });
+      }
     }
 
     const snapshot = { ...payload, actorId: ctx.userId, payloadHash: requestFingerprint(payload) };

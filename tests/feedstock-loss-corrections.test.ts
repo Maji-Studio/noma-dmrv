@@ -15,6 +15,7 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { ActionResult } from "@/types/actions";
+import { formatFacilityDateTime } from "@/lib/format-utils";
 import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { TEST_SITE_POSITION } from "./helpers/test-org";
 
@@ -50,6 +51,8 @@ const FUTURE_OFFSET_MS = 86_400_000;
 const INTAKE_AT = "2026-01-01T00:00:00.000Z";
 const BEFORE_INTAKE_AT = "2025-12-31T10:00:00.000Z";
 const BEFORE_LOSS_AT = "2026-01-01T08:00:00.000Z";
+const BEFORE_DRAW_AT = "2026-01-01T07:00:00.000Z";
+const BETWEEN_DRAW_AND_LOSS_AT = "2026-01-01T09:00:00.000Z";
 const LOSS_AT = "2026-01-01T10:00:00.000Z";
 const EDIT_AT = "2026-01-01T11:00:00.000Z";
 const LATER_AT = "2026-01-01T12:00:00.000Z";
@@ -357,6 +360,43 @@ describe("feedstock Lost mass corrections", { timeout: SUITE_TIMEOUT_MS }, () =>
     saved(await recordLossFn(editInput(f, original.id)));
     expect((await ledger(f)).currentWetKg).toBe(AFTER_DRAW_EDIT_KG);
   });
+
+  it("refuses moving a loss before an earlier production run draw without writing", async () => {
+    const f = await seedBin();
+    const run = await seedRunDraw(f, BEFORE_LOSS_AT);
+    const original = await recordOriginal(f);
+    const before = await ledger(f);
+    const input = editInput(f, original.id);
+    const message = `Lost mass was not changed. The new time is before the production run ${run.code}` +
+      ` (${formatFacilityDateTime(BEFORE_LOSS_AT, f.facility.timezone)}).` +
+      " Choose a time after it, or delete this entry and record a new loss.";
+    expect(await recordLossFn({ ...input, occurredAt: BEFORE_DRAW_AT })).toMatchObject({
+      success: false, code: "validation_failed", error: message,
+      issues: [{ path: ["occurredAt"], code: "validation_failed", message }],
+    });
+    expect(await rows(f)).toEqual([original]);
+    expect(await ledger(f)).toEqual(before);
+    // The refused request leaves its key available for a valid retry.
+    saved(await recordLossFn({ ...input, occurredAt: BETWEEN_DRAW_AND_LOSS_AT }));
+    expect(await rows(f)).toHaveLength(EDIT_ROWS);
+    expect((await ledger(f)).currentWetKg).toBe(AFTER_DRAW_EDIT_KG);
+  });
+
+  it.each([BETWEEN_DRAW_AND_LOSS_AT, BEFORE_LOSS_AT, LOSS_AT])(
+    "allows a replacement at %s without crossing an earlier draw", async (occurredAt) => {
+      const f = await seedBin();
+      await seedRunDraw(f, BEFORE_LOSS_AT);
+      const original = await recordOriginal(f);
+      const replacement = saved(await recordLossFn({ ...editInput(f, original.id), occurredAt }));
+      expect(replacement.occurredAt).toEqual(new Date(occurredAt));
+      const stored = await rows(f);
+      expect(stored).toHaveLength(EDIT_ROWS);
+      expect(stored.find(row => row.movementType === "adjustment")).toMatchObject({
+        correctsMovementId: original.id, occurredAt: original.occurredAt,
+      });
+      expect((await ledger(f)).currentWetKg).toBe(AFTER_DRAW_EDIT_KG);
+    },
+  );
 
   it("does not lock a loss on a later intake", async () => {
     const f = await seedBin();
