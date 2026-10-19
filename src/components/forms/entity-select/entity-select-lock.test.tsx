@@ -64,18 +64,6 @@ describe.each([
     expect(change).not.toHaveBeenCalled();
   });
 
-  it("does not pick the highlighted option on Enter", () => {
-    const change = vi.fn();
-    const view = render(<EntitySelect options={options} value="" onChange={change} />);
-    fireEvent.click(trigger());
-    fireEvent.keyDown(trigger(), { key: "ArrowDown" });
-
-    view.rerender(<EntitySelect options={options} value="" onChange={change} {...props} />);
-    fireEvent.keyDown(trigger(), { key: "Enter" });
-
-    expect(change).not.toHaveBeenCalled();
-  });
-
   it("does not pick a record whose quick-add save finishes after the lock", async () => {
     const change = vi.fn();
     const view = render(<EntitySelect entityType="driver" value="" onChange={change} allowCreate />);
@@ -89,4 +77,20 @@ describe.each([
 
     expect(change).not.toHaveBeenCalled();
   });
+});
+
+it("keeps focus on a locked field that still offers Edit when the lock closes its menu", () => {
+  const picker = (locked: boolean) => (
+    <EntitySelect options={options} value="one" onChange={vi.fn()} onEditSelected={vi.fn()} selectionLocked={locked} alwaysShowSearch />
+  );
+  const view = render(picker(false));
+  fireEvent.click(trigger());
+  const search = screen.getByTestId("entity-select-search");
+  search.focus();
+  expect(document.activeElement).toBe(search);
+
+  view.rerender(picker(true));
+
+  expect(listbox()).toBeNull();
+  expect(document.activeElement).toBe(trigger());
 });

@@ -359,11 +359,7 @@ function EntitySelectView({
   // Read at pick time, not from this render's props: async quick-add saves and
   // Base UI item handlers can call back with an older render's closure (#1177).
   const selectionBlocked = useRef(disabled || selectionLocked);
-  useLayoutEffect(() => {
-    selectionBlocked.current = disabled || selectionLocked;
-    // The lock closes the menu without closeMenu; drop the stale descendant.
-    if (!isOpen) triggerRef.current?.removeAttribute("aria-activedescendant");
-  }, [disabled, selectionLocked, isOpen]);
+  const wasOpen = useRef(isOpen);
 
   const isInsidePicker = (target: EventTarget | null) => target instanceof Node && (
     containerRef.current?.contains(target) || popupRef.current?.contains(target)
@@ -424,6 +420,16 @@ function EntitySelectView({
 
   const canEdit = Boolean(value && selectedOption && onEditSelected);
   const triggerDisabled = disabled || (selectionLocked && !canEdit);
+  useLayoutEffect(() => {
+    const lockArrived = (disabled || selectionLocked) && !selectionBlocked.current;
+    selectionBlocked.current = disabled || selectionLocked;
+    const lockClosedMenu = lockArrived && wasOpen.current && !isOpen;
+    wasOpen.current = isOpen;
+    // The lock closes the menu without closeMenu; drop the stale descendant.
+    if (!isOpen) triggerRef.current?.removeAttribute("aria-activedescendant");
+    // Unmounting the menu drops focus to the page; keep it on the field while it can take it.
+    if (lockClosedMenu && !triggerDisabled && document.activeElement === document.body) triggerRef.current?.focus();
+  }, [disabled, selectionLocked, isOpen, triggerDisabled]);
   const rows: SelectRow[] = [];
   if (!disabled && !selectionLocked) {
     if (noneOption && !searchQuery) {
