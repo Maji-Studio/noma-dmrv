@@ -7,6 +7,7 @@ import { SubmissionStreamStalledError } from "@/lib/certification/submission-pro
 
 const reactQueryMocks = vi.hoisted(() => ({
   useQueries: vi.fn(),
+  useQuery: vi.fn(),
   useMutation: vi.fn(),
   useQueryClient: vi.fn(),
 }));
@@ -21,6 +22,7 @@ import {
   getRemovalCertifyRefetchInterval,
   getRemovalPreflightRefetchInterval,
   invalidateCertificationReadiness,
+  useFacilityCertifierSummary,
   useRemovalPreflightSummaries,
   useSaveFacilityCertifierMapping,
   useSubmitGhgStatementToVerifier,
@@ -197,6 +199,24 @@ describe("invalidateCertificationReadiness", () => {
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: creditBatchKeys.details(),
+    });
+  });
+});
+
+describe("useFacilityCertifierSummary", () => {
+  it("refetches on mount by default", () => {
+    reactQueryMocks.useQuery.mockClear();
+    useFacilityCertifierSummary("facility-1");
+    expect(reactQueryMocks.useQuery.mock.calls[0][0]).not.toHaveProperty("refetchOnMount");
+  });
+
+  it("only reads the cache when asked to", () => {
+    reactQueryMocks.useQuery.mockClear();
+    useFacilityCertifierSummary("facility-1", true, { readCacheOnly: true });
+    expect(reactQueryMocks.useQuery.mock.calls[0][0]).toMatchObject({
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
     });
   });
 });

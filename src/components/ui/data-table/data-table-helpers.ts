@@ -22,6 +22,11 @@ declare module "@tanstack/react-table" {
      * outside it, so no control nests inside the link. Return null for none.
      */
     recordLinkBefore?: (row: TData) => React.ReactNode;
+    /**
+     * Lines rendered under the cell, outside the record link, so they may
+     * carry their own link (a registry record beside the record code).
+     */
+    recordLinkDetails?: (row: TData) => React.ReactNode;
   }
 }
 
