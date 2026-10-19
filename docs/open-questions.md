@@ -92,8 +92,8 @@ Deferred work lives here, never as a `TODO` in code.
 legacy arbitrary radii (five entries) must stay until token replacements preserve
 tailwind-merge overrides.
 
-- Shadow removal: 15 entries, a visual change that needs review.
-- Raw `<button>` to `Button` migration: 38 occurrences across 26 entries.
+- Shadow removal: 16 entries, a visual change that needs review.
+- Raw `<button>` to `Button` migration: 49 occurrences across 35 entries.
 
 ## Activity reads
 
