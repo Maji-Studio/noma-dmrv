@@ -4,8 +4,9 @@ import { beforeAll, expect, it, vi } from "vitest";
 import type { OutputStockHistoryEntry, OutputSubBin } from "@/types/output-stock";
 import type { FeedstockBinStock } from "@/types/feedstock-bin-ledger";
 
-const state = vi.hoisted(() => ({ output: [] as OutputStockHistoryEntry[], feedstock: undefined as FeedstockBinStock | undefined }));
-vi.mock("@/hooks/use-output-stock", () => ({ useOutputStockHistory: () => ({ data: state.output }) }));
+const state = vi.hoisted(() => ({ output: [] as OutputStockHistoryEntry[], feedstock: undefined as FeedstockBinStock | undefined, removeOutputLoss: vi.fn() }));
+vi.mock("@/hooks/use-output-stock", () => ({ useOutputStockHistory: () => ({ data: state.output }), useRemoveOutputLoss: () => ({ mutateAsync: state.removeOutputLoss, isPending: false }) }));
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn() }) }));
 vi.mock("@/hooks/use-bin-movements", () => ({ useFeedstockBinStock: () => ({ data: state.feedstock, dataUpdatedAt: Date.parse("2026-10-03T12:00:00Z") }) }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC" }) }));
 vi.mock("next/link", () => ({ default: ({ children, href, ...props }: { children: ReactNode; href: string }) => <a href={href} {...props}>{children}</a> }));
@@ -100,14 +101,46 @@ it("exposes chart details through labelled HTML buttons while the drawing is dec
   await act(async () => renderer.unmount());
 });
 
-it("offers Edit only for the latest Lost mass and explains the locked entry", async () => {
+it("offers Edit and Delete only for the latest Lost mass and explains the locked entry", async () => {
   state.output = [entry({ id: "older", editLockedReason: "Locked because newer stock entries were recorded on this bin after it." }),
     entry({ id: "latest", editLockedReason: null })];
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<OutputStockHistory storageLocationId={BIN_ID} facilityId={FACILITY_ID} triggerLabel="History" />); });
   await act(async () => renderer.root.findByType("button").props.onClick());
   expect(renderer.root.findAllByType("button").filter(button => text(button) === "Edit")).toHaveLength(1);
+  expect(renderer.root.findAllByType("button").filter(button => text(button) === "Delete")).toHaveLength(1);
   expect(JSON.stringify(renderer.toJSON())).toContain("Locked because newer stock entries were recorded on this bin after it.");
+  await act(async () => renderer.unmount());
+});
+
+it("deletes the latest output Lost mass with the shared dialog and a required reason", async () => {
+  state.output = [entry({ id: "latest", editLockedReason: null })];
+  state.removeOutputLoss.mockReset().mockResolvedValue({ movementId: "reversal" });
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<OutputStockHistory storageLocationId={BIN_ID} facilityId={FACILITY_ID} triggerLabel="History" />); });
+  await act(async () => renderer.root.findByType("button").props.onClick());
+  await act(async () => renderer.root.findAllByType("button").find(button => text(button) === "Delete")!.props.onClick());
+  expect(text(renderer.root.findByProps({ className: "title-heading-3" }))).toBe("Delete lost mass");
+  expect(JSON.stringify(renderer.toJSON())).toContain("goes back into the bin.");
+  const confirm = () => renderer.root.findAllByType("button").filter(button => text(button) === "Delete").at(-1)!.props.onClick();
+  await act(async () => confirm());
+  expect(state.removeOutputLoss).not.toHaveBeenCalled();
+  expect(JSON.stringify(renderer.toJSON())).toContain("Enter why you delete this entry.");
+  await act(async () => renderer.root.findByProps({ id: "loss-delete-reason", rows: 2 }).props.onChange({ target: { value: " Recorded twice " } }));
+  await act(async () => confirm());
+  expect(state.removeOutputLoss).toHaveBeenCalledWith(expect.objectContaining({ storageLocationId: BIN_ID, correctsMovementId: "latest", reason: "Recorded twice" }));
+  await act(async () => renderer.unmount());
+});
+
+it("says when and by whom a deleted Lost mass was deleted", async () => {
+  state.output = [entry({ id: "loss" }), entry({ id: "reverse", kind: "reversal", eventKind: "loss", correctsMovementId: "loss", dryMassKg: -8, reason: "Recorded twice",
+    recordedAt: NEXT_DAY, actorName: "Asha" })];
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<OutputStockHistory storageLocationId={BIN_ID} facilityId={FACILITY_ID} triggerLabel="History" />); });
+  await act(async () => renderer.root.findByType("button").props.onClick());
+  const markup = text(renderer.root);
+  expect(markup).toMatch(/Deleted .+ by Asha\.\s+It no longer counts toward the stock\./);
+  expect(renderer.root.findAllByType("button").filter(button => text(button) === "Delete")).toHaveLength(0);
   await act(async () => renderer.unmount());
 });
 

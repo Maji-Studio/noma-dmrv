@@ -19,6 +19,7 @@ import { StockSourceLink } from "./stock-source-link";
 import { LedgerBeforeAfter, LedgerBreak, LedgerDayHeader, LedgerFacts, LedgerLine } from "./stock-ledger";
 import { CalculationDisclosure } from "./stock-figures";
 import { OutputStockForm } from "./output-stock-form";
+import { OutputLossDeleteDialog } from "./loss-delete-dialog";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { Notice } from "@/components/ui/notice";
 
@@ -55,12 +56,15 @@ interface LedgerRowProps {
   reversedEntry?: OutputStockHistoryEntry;
   /** The correction that replaced this entry, when one did. */
   replacedBy?: OutputStockHistoryEntry;
+  /** The reversal that cancelled this entry, when one did. */
+  reversedBy?: OutputStockHistoryEntry;
   moistureEntry?: OutputStockHistoryEntry;
   reversed: boolean;
   defaultOpen: boolean;
   timeZone: string;
   facilityId: string;
   onEdit: (entry: OutputStockHistoryEntry) => void;
+  onDelete: (entry: OutputStockHistoryEntry) => void;
 }
 
 /**
@@ -68,7 +72,7 @@ interface LedgerRowProps {
  * and the dry biochar left after. Under the line: whether it still counts, the
  * bin before and after, what a correction changed, then who recorded it.
  */
-function LedgerRow({ entry, kind, reversedEntry, replacedBy, moistureEntry, reversed, defaultOpen, timeZone, facilityId, onEdit }: LedgerRowProps) {
+function LedgerRow({ entry, kind, reversedEntry, replacedBy, reversedBy, moistureEntry, reversed, defaultOpen, timeZone, facilityId, onEdit, onDelete }: LedgerRowProps) {
   const label = outputStockEventLabel(kind);
   const subject = `${label.toLowerCase()} on ${formatFacilityDateTime(entry.occurredAt, timeZone)}`;
   const recordedLater = entry.recordedAt.slice(0, 16) !== entry.occurredAt.slice(0, 16);
@@ -80,7 +84,8 @@ function LedgerRow({ entry, kind, reversedEntry, replacedBy, moistureEntry, reve
       amount={entryAmount(entry, kind)} after={formatMassKg(entry.afterDryKg)} struck={reversed} defaultOpen={defaultOpen}>
       {reversed && (
         <p className="body-caption text-[var(--color-text-secondary)]">
-          {replacedBy ? `Replaced by the correction recorded ${formatFacilityDateTime(replacedBy.recordedAt, timeZone)}.` : "Reversed."} It no longer counts toward the stock.
+          {replacedBy ? `Replaced by the correction recorded ${formatFacilityDateTime(replacedBy.recordedAt, timeZone)}.`
+            : reversedBy ? `Deleted ${formatFacilityDateTime(reversedBy.recordedAt, timeZone)}${reversedBy.actorName ? ` by ${reversedBy.actorName}` : ""}.` : "Reversed."} It no longer counts toward the stock.
         </p>
       )}
       <LedgerBeforeAfter title="Dry biochar in the bin" before={`${formatMassKg(entry.beforeDryKg)} dry`} after={`${formatMassKg(entry.afterDryKg)} dry`} />
@@ -96,7 +101,10 @@ function LedgerRow({ entry, kind, reversedEntry, replacedBy, moistureEntry, reve
         { label: "Recorded", value: `${recordedLater ? formatFacilityDateTime(entry.recordedAt, timeZone) : "At the time"}${entry.actorName ? ` by ${entry.actorName}` : ""}` },
       ]} />
       {kind === "loss" && !reversed && (entry.editLockedReason === null
-        ? <Button type="button" variant="noOutline" onClick={() => onEdit(entry)}>Edit</Button>
+        ? <div className="flex flex-wrap gap-8">
+            <Button type="button" variant="noOutline" onClick={() => onEdit(entry)}>Edit</Button>
+            <Button type="button" variant="noOutline" onClick={() => onDelete(entry)}>Delete</Button>
+          </div>
         : entry.editLockedReason ? <Notice tone="info">{entry.editLockedReason}</Notice> : null)}
       <StockSourceLink source={entry.source} facilityId={facilityId} />
       {entry.allocations.length > 0 && (
@@ -126,6 +134,7 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
   const clock = useFacilityClock(facilityId);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<OutputStockHistoryEntry | null>(null);
+  const [deleting, setDeleting] = useState<OutputStockHistoryEntry | null>(null);
   const history = useOutputStockHistory(storageLocationId, open);
   const entries = history.data ?? [];
   const correctedIds = new Set(entries.filter(entry => entry.kind === "reversal").map(entry => entry.correctsMovementId));
@@ -181,11 +190,13 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
                     timeZone={clock.timeZone}
                     reversedEntry={entry.correctsMovementId && entry.kind !== "reversal" ? entries.find(item => item.id === entry.correctsMovementId) : undefined}
                     replacedBy={entries.find(item => item.correctsMovementId === entry.id && item.kind !== "reversal")}
+                    reversedBy={entries.find(item => item.correctsMovementId === entry.id && item.kind === "reversal")}
                     moistureEntry={moistureFor(entry)}
                     reversed={isReversed(entry)}
                     defaultOpen={!!movementId}
                     facilityId={facilityId}
                     onEdit={setEditing}
+                    onDelete={setDeleting}
                   />
                 )}
               </div>;
@@ -198,5 +209,6 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
       {editing && <OutputStockForm key={editing.id} storageLocationId={storageLocationId} facilityId={facilityId} correction={editing}
         onCancel={() => setEditing(null)} onRecorded={() => setEditing(null)} />}
     </FormDialog>
+    {deleting && <OutputLossDeleteDialog key={deleting.id} entry={deleting} storageLocationId={storageLocationId} timeZone={clock.timeZone} onClose={() => setDeleting(null)} />}
   </>;
 }

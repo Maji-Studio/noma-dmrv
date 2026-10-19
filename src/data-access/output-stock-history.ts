@@ -120,8 +120,13 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   }
   const editableIds = history.filter(entry => entry.kind !== 'reversal' && ['loss', 'delivery'].includes(entry.eventKind ?? entry.kind)).map(entry => entry.id);
   const certificationLocks = await getOutputMovementCertificationLocks(ctx, reader, editableIds, rows);
+  const reversedIds = new Set(movements.filter(({ movement }) => movement.outputKind === 'reversal').map(({ movement }) => movement.correctsMovementId));
   for (const entry of history) {
     if (entry.kind === 'reversal' || !['loss', 'delivery'].includes(entry.eventKind ?? entry.kind)) continue;
+    if (reversedIds.has(entry.id)) {
+      entry.editLockedReason = 'This entry has already been corrected. Open its correction instead.';
+      continue;
+    }
     const original = movements.find(row => row.movement.id === entry.id)?.movement;
     const code = entry.deliveryId ? applicationCode.get(entry.deliveryId) : undefined;
     if (original) entry.editLockedReason = code ? deliveryAppliedLockedReason(code) : await outputMovementLockReason(ctx, storageLocationId, original.id, reader, { original, facilityId: bin.facilityId, all: rows, layers, certificationLocks: certificationLocks.get(original.id) ?? [] });

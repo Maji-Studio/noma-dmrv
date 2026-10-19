@@ -24,7 +24,7 @@ import type { FeedstockLedgerEntry } from "@/types/feedstock-bin-ledger";
 import { CardTextButton, StockCard, StockChartCard } from "./stock-card";
 import { LedgerDayHeader } from "./stock-ledger";
 import { FEEDSTOCK_ENTRY_LABELS, FeedstockLedgerRow } from "./feedstock-ledger-row";
-import { FeedstockLossDeleteDialog } from "./feedstock-loss-delete-dialog";
+import { FeedstockLossDeleteDialog } from "./loss-delete-dialog";
 import { FeedstockLossForm } from "./feedstock-loss-form";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { StockLevelChart, type StockLevelPoint } from "./stock-level-chart";
