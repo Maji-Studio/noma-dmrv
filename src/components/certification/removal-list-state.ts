@@ -29,6 +29,7 @@ export interface RemovalListRow {
   registryBoundaryOpened: boolean;
   readiness: RemovalPreflightSummary["readiness"] | null;
   evidenceHealth: RemovalPreflightSummary["evidenceHealth"];
+  evidenceLinks: RemovalPreflightSummary["evidenceLinks"] | null;
   submissionWarnings: string[];
   recentSyncEvents: RemovalPreflightSummary["recentSyncEvents"];
   enrichmentStatus: RemovalEnrichmentStatus;
@@ -82,6 +83,7 @@ export function buildRemovalListRows(
         identity.registryBoundaryOpened,
       readiness: lifecycleData?.readiness ?? null,
       evidenceHealth: data?.evidenceHealth ?? null,
+      evidenceLinks: data?.evidenceLinks ?? null,
       submissionWarnings: data?.submissionWarnings ?? [],
       recentSyncEvents: data?.recentSyncEvents ?? [],
       enrichmentStatus: enrichment.status,

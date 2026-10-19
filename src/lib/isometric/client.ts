@@ -12,7 +12,8 @@ export class IsometricApiError extends Error {
     message: string,
     public readonly status?: number,
     public readonly body?: unknown,
-    public readonly code?: "not_configured" | "network" | "http"
+    public readonly code?: "not_configured" | "network" | "http",
+    public readonly readFailureReason?: "timeout" | "unreadable_response"
   ) {
     super(message);
     this.name = "IsometricApiError";
@@ -29,6 +30,11 @@ const MAX_ATTEMPTS = 3;
 const BASE_DELAY_MS = 500;
 const MAX_DELAY_MS = 8000;
 const REQUEST_TIMEOUT_MS = 30_000;
+export const SOURCE_READBACK_TIMEOUT_MS = 10_000;
+const GRAPHQL_MAX_ATTEMPTS = 2;
+const HTTP_TOO_MANY_REQUESTS = 429;
+const HTTP_SERVER_ERROR = 500;
+const HTTP_SERVER_ERROR_END = 600;
 const MAX_RETRY_WAIT_MS = 30_000;
 // Certify's list endpoints cap `first` at 50 (Certify OpenAPI).
 const MAX_PAGE_SIZE = 50;
@@ -283,6 +289,92 @@ async function isometricRequest<T = unknown>(
   );
 }
 
+export interface GraphqlResponse<T> {
+  data?: T | null;
+  errors?: unknown;
+}
+
+export interface GraphqlRequestOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
+export type GraphqlTransport = <T>(
+  query: string,
+  variables: Record<string, unknown>,
+  options?: GraphqlRequestOptions,
+) => Promise<GraphqlResponse<T>>;
+
+/** Read-only GraphQL transport. Never logs query, variables, headers or bodies. */
+async function isometricGraphql<T>(
+  credentials: IsometricCredentials | null,
+  query: string,
+  variables: Record<string, unknown>,
+  options: GraphqlRequestOptions = {},
+): Promise<GraphqlResponse<T>> {
+  if (!credentials) {
+    throw new IsometricApiError(
+      "The registry connection is not configured for this Organization. Ask an Owner or Admin to add the connection credentials.",
+      undefined, undefined, "not_configured",
+    );
+  }
+  const url = new URL("/graphql", credentials.baseUrl).toString();
+  const body = JSON.stringify({ query, variables });
+  const timeoutMs = options.timeoutMs ?? SOURCE_READBACK_TIMEOUT_MS;
+  for (let attempt = 1; attempt <= GRAPHQL_MAX_ATTEMPTS; attempt++) {
+    options.signal?.throwIfAborted();
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
+    const onAbort = () => controller.abort(options.signal?.reason);
+    options.signal?.addEventListener("abort", onAbort, { once: true });
+    const startedAt = Date.now();
+    let response: Response | undefined;
+    let failure: IsometricApiError;
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${credentials.accessToken}`,
+          "X-Client-Secret": credentials.clientSecret,
+        },
+        body,
+        signal: controller.signal,
+      });
+      // HTTP status already establishes no answer; do not wait on an error body.
+      if (!response.ok) {
+        await response.body?.cancel();
+        throw new IsometricApiError("Isometric GraphQL HTTP refusal", response.status, undefined, "http");
+      }
+      const text = await response.text();
+      let parsed: GraphqlResponse<T>;
+      try { parsed = JSON.parse(text) as GraphqlResponse<T>; }
+      catch { throw new IsometricApiError("Isometric GraphQL response is not JSON", response.status, undefined, "http", "unreadable_response"); }
+      log.debug({ method: "POST", path: "/graphql", status: response.status, duration_ms: Date.now() - startedAt }, "isometric request ok");
+      return parsed;
+    } catch (error) {
+      if (options.signal?.aborted) throw options.signal.reason;
+      failure = response && !response.ok
+        ? new IsometricApiError("Isometric GraphQL HTTP refusal", response.status, undefined, "http")
+        : error instanceof IsometricApiError ? error
+        : new IsometricApiError("Isometric GraphQL read unavailable", undefined, undefined, "network", timedOut ? "timeout" : undefined);
+      log.warn({ method: "POST", path: "/graphql", status: response?.status, duration_ms: Date.now() - startedAt }, "isometric read failed");
+    } finally {
+      clearTimeout(timer);
+      options.signal?.removeEventListener("abort", onAbort);
+    }
+    const retryable = failure.code === "network" ||
+      (failure.code === "http" && failure.status !== undefined &&
+        (failure.status === HTTP_TOO_MANY_REQUESTS ||
+          (failure.status >= HTTP_SERVER_ERROR && failure.status < HTTP_SERVER_ERROR_END)));
+    if (!retryable || attempt === GRAPHQL_MAX_ATTEMPTS) throw failure;
+    await sleep(jitterDelayMs(attempt), options.signal);
+  }
+  throw new Error("GraphQL attempt limit must be positive");
+}
+
 type Paginated<T> = {
   nodes: T[];
   page_info: components["schemas"]["PageInfo"];
@@ -378,6 +470,7 @@ async function paginateAll<T>(
 type IsometricMethod = "GET" | "POST" | "PATCH" | "DELETE" | "PUT";
 
 export interface IsometricClient {
+  graphql: GraphqlTransport;
   get: <T = unknown>(path: string, options?: IsometricRequestOptions) => Promise<T>;
   post: <T = unknown>(
     path: string,
@@ -399,9 +492,13 @@ export interface IsometricClient {
  * registry share it, so both walk pages with the same bounds.
  */
 export function createIsometricClientFromTransport(
-  request: IsometricTransport
+  request: IsometricTransport,
+  graphql: GraphqlTransport = async () => {
+    throw new IsometricApiError("GraphQL transport is unavailable", undefined, undefined, "network");
+  },
 ): IsometricClient {
   return {
+    graphql,
     get: <T = unknown>(path: string, options?: IsometricRequestOptions) =>
       request<T>("GET", path, options),
     post: <T = unknown>(
@@ -430,7 +527,9 @@ export function createIsometricClient(
     method: IsometricMethod,
     path: string,
     options?: IsometricRequestOptions
-  ) => isometricRequest<T>(credentials, method, path, options));
+  ) => isometricRequest<T>(credentials, method, path, options),
+  <T>(query: string, variables: Record<string, unknown>, options?: GraphqlRequestOptions) =>
+    isometricGraphql<T>(credentials, query, variables, options));
 }
 
 export type IsometricEnvironment = keyof typeof ISOMETRIC_BASE_URLS;
