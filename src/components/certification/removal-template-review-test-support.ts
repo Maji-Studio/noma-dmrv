@@ -3,14 +3,25 @@
  * startup diesel line and a reviewed lab line, with the stored definition and
  * contracts the server returns behind them.
  */
+import {
+  ownValue, PYROLYSIS_DIESEL_SPLIT, SEMANTIC_BINDING_CATALOG,
+} from "@/lib/isometric/semantic-binding-catalog";
 import type { RemovalTemplateReviewEntry } from "./removal-template-review-model";
+
+/** The catalog's pyrolysis diesel binding, so the startup line takes startup diesel as a candidate. */
+const [DIESEL_BLUEPRINT, DIESEL_INPUT] = Object.entries(SEMANTIC_BINDING_CATALOG).flatMap(([blueprint, inputs]) =>
+  Object.entries(inputs).flatMap(([input, binding]) => {
+    const role = ownValue(binding.roles, "pyrolysis");
+    return role && "disambiguation" in role && role.disambiguation === PYROLYSIS_DIESEL_SPLIT ? [[blueprint, input] as const] : [];
+  }),
+)[0];
 
 export const OBSERVATION_ID = "22222222-2222-4222-8222-222222222222";
 
 export function component(id: string, displayName: string) {
   return {
-    id, displayName, description: null, blueprintKey: "fuel_usage_by_volume",
-    inputs: [{ key: "volume_of_fuel", type: "monitored", quantityKind: "volume" }],
+    id, displayName, description: null, blueprintKey: DIESEL_BLUEPRINT,
+    inputs: [{ key: DIESEL_INPUT, type: "monitored", quantityKind: "volume" }],
   };
 }
 
@@ -18,8 +29,8 @@ function baseEntry(overrides: Record<string, unknown>): RemovalTemplateReviewEnt
   return {
     templateId: "rvt_test",
     template: { id: "rvt_test", display_name: "Dark Earth Carbon Template", credit_type: "REMOVAL" },
-    observation: { id: OBSERVATION_ID, version: 3, enrichment: { cmp_startup: { volume_of_fuel: { unit: "L" } } } },
-    enrichment: { cmp_startup: { volume_of_fuel: { unit: "L" } } },
+    observation: { id: OBSERVATION_ID, version: 3, enrichment: { cmp_startup: { [DIESEL_INPUT]: { unit: "L" } } } },
+    enrichment: { cmp_startup: { [DIESEL_INPUT]: { unit: "L" } } },
     preview: false,
     isDefault: true,
     availability: "listed",
