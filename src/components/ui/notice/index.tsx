@@ -68,6 +68,11 @@ export interface NoticeProps
   action?: ReactNode;
   /** Quiet neutral card for non-error tones. Ignored for `error`. */
   boxed?: boolean;
+  /**
+   * `false` drops the live-region role, for a notice whose content changes
+   * while the user works and announces itself another way.
+   */
+  live?: boolean;
 }
 
 export function Notice({
@@ -75,6 +80,7 @@ export function Notice({
   title,
   action,
   boxed = false,
+  live = true,
   className,
   children,
   ...props
@@ -84,7 +90,7 @@ export function Notice({
 
   return (
     <div
-      role={config.role}
+      role={live ? config.role : undefined}
       data-tone={tone}
       className={cn(
         "flex flex-wrap items-start gap-x-8 gap-y-8",

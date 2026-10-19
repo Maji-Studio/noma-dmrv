@@ -620,7 +620,10 @@ test.describe("Production Run lifecycle (#254)", () => {
     await expect(cancellationReason).toBeVisible();
 
     await saveEdit(page);
-    await expect(dialog.getByText("Enter a cancellation reason.")).toBeVisible();
+    await expect(dialog.locator("#cancellationReason-error")).toHaveText("Enter a cancellation reason.");
+    await expect(
+      dialog.getByRole("link", { name: "Cancellation reason: Enter a cancellation reason." }),
+    ).toBeVisible();
 
     await cancellationReason.fill("Duplicate run entered by the operator");
     await saveEdit(page);
@@ -763,8 +766,9 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
     await submitCreate(page);
 
     await expect(
-      page.locator('[role="dialog"]').getByText(overlapText),
-    ).toBeVisible({ timeout: 10000 });
+      // The field's own message; the error summary above Save repeats it.
+      page.locator('[role="dialog"]').locator("#startTime-error"),
+    ).toHaveText(overlapText, { timeout: 10000 });
   });
 
   test("rejects an overlapping window on the same reactor", async ({
@@ -794,8 +798,9 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
     await submitCreate(page);
 
     await expect(
-      page.locator('[role="dialog"]').getByText(overlapText),
-    ).toBeVisible({ timeout: 10000 });
+      // The field's own message; the error summary above Save repeats it.
+      page.locator('[role="dialog"]').locator("#startTime-error"),
+    ).toHaveText(overlapText, { timeout: 10000 });
   });
 
   test("rejects a run starting after an unfinished (open) run", async ({
@@ -823,8 +828,9 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
     await submitCreate(page);
 
     await expect(
-      page.locator('[role="dialog"]').getByText(overlapText),
-    ).toBeVisible({ timeout: 10000 });
+      // The field's own message; the error summary above Save repeats it.
+      page.locator('[role="dialog"]').locator("#startTime-error"),
+    ).toHaveText(overlapText, { timeout: 10000 });
   });
 
   test("accepts an overnight run (end date is the next day)", async ({
@@ -879,8 +885,9 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
     await expect(page.locator('[role="dialog"] input[name="startTime"]')).toHaveValue("08:30");
     await saveEdit(page);
     await expect(
-      page.locator('[role="dialog"]').getByText(overlapText),
-    ).toBeVisible({ timeout: 10000 });
+      // The field's own message; the error summary above Save repeats it.
+      page.locator('[role="dialog"]').locator("#startTime-error"),
+    ).toHaveText(overlapText, { timeout: 10000 });
 
     // Move it to a slot clear of both runs — the edit now saves.
     await page.fill('input[name="startTime"]', "18:00");

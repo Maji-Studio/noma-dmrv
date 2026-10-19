@@ -192,6 +192,7 @@ export function TransportLegForm({
               each preview, search box, and the lat/lng pair. */}
           <PositionPicker
             idPrefix="origin"
+            fieldNames={{ lat: "originGpsLatitude", lng: "originGpsLongitude" }}
             label="From position"
             accent="orange"
             latitude={originLat ?? null}
@@ -206,6 +207,7 @@ export function TransportLegForm({
           />
           <PositionPicker
             idPrefix="destination"
+            fieldNames={{ lat: "destinationGpsLatitude", lng: "destinationGpsLongitude" }}
             label="To position"
             accent="pink"
             latitude={destinationLat ?? null}

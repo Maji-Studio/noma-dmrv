@@ -67,6 +67,8 @@ interface ApplicationEvidencePanelProps {
 
 const GIS_LABEL_ID = "gisBoundary-label";
 const GIS_ERROR_ID = "gisBoundary-error";
+/** The form field the boundary buttons stand for, for the error summary's link. */
+const GIS_FIELD_NAME = "gisBoundary";
 
 function GisReferenceField({
   boundary,
@@ -97,6 +99,7 @@ function GisReferenceField({
                 disabled={disabled}
                 onClick={onEdit}
                 aria-describedby={GIS_ERROR_ID}
+                data-field-name={GIS_FIELD_NAME}
               >
                 Replace
               </Button>
@@ -133,6 +136,7 @@ function GisReferenceField({
       disabled={disabled}
       onClick={onEdit}
       aria-describedby={GIS_ERROR_ID}
+      data-field-name={GIS_FIELD_NAME}
       className="h-auto justify-start gap-12 whitespace-normal bg-[var(--paper)] px-16 py-16 text-left normal-case tracking-normal"
     >
       <span className="flex size-40 shrink-0 items-center justify-center border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)]">

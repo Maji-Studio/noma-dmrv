@@ -3,7 +3,7 @@
 import { FormError } from "@/components/forms/form-error";
 import { FormField } from "@/components/forms/form-field";
 import { RequiredMarker } from "@/components/forms/required-marker";
-import { PositionPicker, type PositionValue } from "@/components/forms/position-picker";
+import { GPS_FIELD_NAMES, PositionPicker, type PositionValue } from "@/components/forms/position-picker";
 import { SegmentedControl } from "@/components/forms/segmented-control";
 
 export type FieldPositionMode = "derive" | "manual";
@@ -133,6 +133,7 @@ export function FieldPositionField({
       {mode === "manual" && (
         <PositionPicker
           idPrefix="gps"
+          fieldNames={GPS_FIELD_NAMES}
           label="Set the pin"
           accent="pink"
           latitude={latitude ?? null}
