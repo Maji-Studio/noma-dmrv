@@ -7,7 +7,9 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
+import * as binStockLocks from "@/data-access/lock-bin-stocks";
+import { recordStockTakeMovement } from "@/data-access/bin-movements";
 import {
   binMovements, facilities, feedstocks, feedstockTypes, organizations,
   productionRunFeedstockDraws, productionRunFeedstocks, productionRuns,
@@ -29,6 +31,8 @@ import { getFeedstockBinStockFn, recordLossFn, removeLossFn } from "@/fn/bin-mov
 
 const INITIAL_KG = 1000;
 const LOSS_KG = 120;
+const CONFIRMED_LOSS_KG = 100;
+const CONFIRMED_STOCK_KG = 900;
 const FRACTIONAL_LOSS_KG = 120.125;
 const REPLACEMENT_KG = 80;
 const LARGER_LOSS_KG = 200;
@@ -39,6 +43,7 @@ const AFTER_LOSS_KG = 880;
 const AFTER_EDIT_KG = 920;
 const AFTER_LARGER_EDIT_KG = 800;
 const AFTER_DRAW_EDIT_KG = 820;
+const AFTER_DRAW_KG = 900;
 const AFTER_TWO_LOSSES_KG = 840;
 const AFTER_LATER_INTAKE_EDIT_KG = 1920;
 const ORIGINAL_ROWS = 1;
@@ -48,6 +53,7 @@ const SINGLE_ROW = 1;
 const TAG_LENGTH = 8;
 const SUITE_TIMEOUT_MS = 30_000;
 const FUTURE_OFFSET_MS = 86_400_000;
+const LOCK_WAIT_MS = 50;
 const INTAKE_AT = "2026-01-01T00:00:00.000Z";
 const BEFORE_INTAKE_AT = "2025-12-31T10:00:00.000Z";
 const BEFORE_LOSS_AT = "2026-01-01T08:00:00.000Z";
@@ -131,22 +137,22 @@ async function seedSiblingBin(f: Fixture) {
   return bin;
 }
 
-async function seedRunDraw(f: Fixture, occurredAt: string) {
+async function seedRunDraw(f: Fixture, occurredAt: string, writer: Pick<DbTransaction, "insert"> = db, createdAt?: Date) {
   // Same canonical bin draw + batch provenance fixture pattern as
   // tests/helpers/api-feedstock-fixture.ts:seedFeedstockDraw.
-  const [reactor] = await db.insert(reactors).values({
+  const [reactor] = await writer.insert(reactors).values({
     organizationId: f.ctx.organizationId, facilityId: f.facility.id,
     code: `E2E-R-${f.tag}`, identifier: `E2E Reactor ${f.tag}`, reactorType: "auger",
   }).returning();
-  const [run] = await db.insert(productionRuns).values({
+  const [run] = await writer.insert(productionRuns).values({
     organizationId: f.ctx.organizationId, facilityId: f.facility.id, reactorId: reactor.id,
     code: `E2E-PR-${f.tag}`, status: "running", startTime: new Date(occurredAt),
     feedstockWetMassKg: DRAW_KG, feedstockMassDryKg: DRAW_KG, feedstockMoisturePercent: 0,
   }).returning();
-  await db.insert(productionRunFeedstockDraws).values({
-    organizationId: f.ctx.organizationId, productionRunId: run.id, storageLocationId: f.bin.id, wetMassKg: DRAW_KG,
+  await writer.insert(productionRunFeedstockDraws).values({
+    organizationId: f.ctx.organizationId, productionRunId: run.id, storageLocationId: f.bin.id, wetMassKg: DRAW_KG, createdAt,
   });
-  await db.insert(productionRunFeedstocks).values({
+  await writer.insert(productionRunFeedstocks).values({
     organizationId: f.ctx.organizationId, productionRunId: run.id, feedstockId: f.intake.id, wetMassUsedKg: DRAW_KG,
   });
   return run;
@@ -352,6 +358,30 @@ describe("feedstock Lost mass corrections", { timeout: SUITE_TIMEOUT_MS }, () =>
     expect(await ledger(f)).toEqual(before);
   });
 
+  it("protects a confirming 900 kg stock count from removing the preceding 100 kg loss", async () => {
+    const f = await seedBin();
+    const original = saved(await recordLossFn(lossInput(f, { lossMassKg: CONFIRMED_LOSS_KG })));
+    const count = await recordStockTakeMovement(f.ctx, {
+      storageLocationId: f.bin.id, lane: "feedstock", countedMassKg: CONFIRMED_STOCK_KG,
+      countedWetMassKg: CONFIRMED_STOCK_KG, moistureRatioUsed: 0, reason: "Confirmed stock",
+    });
+    expect(count.massDeltaKg).toBe(0);
+    const beforeRows = await rows(f);
+    const before = await ledger(f);
+    const result = await removeLossFn(removeInput(f, original.id));
+    expect(result).toMatchObject({ success: false, code: "certification_locked",
+      conflict: { entity: "storageLocation", id: f.bin.id },
+      blockers: [expect.objectContaining({ entity: "binMovement", id: count.id })],
+    });
+    if (result.success) throw new Error("Expected the confirming stock count to block removal");
+    expect(before.entries.find(entry => entry.id === original.id)).toMatchObject({ editLockedReason: result.error });
+    expect(before.entries.find(entry => entry.id === count.id)).toMatchObject({
+      kind: "count", countedWetKg: CONFIRMED_STOCK_KG, wetDeltaKg: 0, afterWetKg: CONFIRMED_STOCK_KG,
+    });
+    expect(await rows(f)).toEqual(beforeRows);
+    expect(await ledger(f)).toEqual(before);
+  });
+
   it("does not lock a loss on an earlier production run draw", async () => {
     const f = await seedBin();
     await seedRunDraw(f, BEFORE_LOSS_AT);
@@ -397,6 +427,54 @@ describe("feedstock Lost mass corrections", { timeout: SUITE_TIMEOUT_MS }, () =>
       expect((await ledger(f)).currentWetKg).toBe(AFTER_DRAW_EDIT_KG);
     },
   );
+
+  it("orders a waiting correction after a draw committed at exactly its replacement time", async () => {
+    const f = await seedBin();
+    const original = await recordOriginal(f);
+    const realLock = binStockLocks.lockBinStock;
+    let correction!: ReturnType<typeof recordLossFn>;
+    let correctionSettled = false;
+    let reachedLock!: () => void;
+    const lockAttempted = new Promise<void>(resolve => { reachedLock = resolve; });
+    await db.transaction(async tx => {
+      await realLock(f.ctx, tx, f.bin.id);
+      // Observe the real lock attempt without replacing the advisory lock.
+      const lockSpy = vi.spyOn(binStockLocks, "lockBinStock").mockImplementation((...args) => {
+        const pending = realLock(...args);
+        reachedLock();
+        return pending;
+      });
+      try {
+        correction = recordLossFn({ ...editInput(f, original.id), occurredAt: BEFORE_LOSS_AT });
+        void correction.then(() => { correctionSettled = true; });
+        await lockAttempted;
+        await new Promise(resolve => setTimeout(resolve, LOCK_WAIT_MS));
+        expect(correctionSettled).toBe(false);
+        // The holder transaction is older than the correction. Stamp this draw
+        // at insert time to model a newer draw transaction winning the lock.
+        await seedRunDraw(f, BEFORE_LOSS_AT, tx, new Date());
+      } finally {
+        lockSpy.mockRestore();
+      }
+    });
+    const replacement = saved(await correction);
+    const stock = await ledger(f);
+    expect(stock.entries).toEqual([
+      expect.objectContaining({ id: f.intake.id, beforeWetKg: 0, afterWetKg: INITIAL_KG }),
+      expect.objectContaining({ kind: "run_draw", occurredAt: BEFORE_LOSS_AT,
+        beforeWetKg: INITIAL_KG, afterWetKg: AFTER_DRAW_KG }),
+      expect.objectContaining({ id: replacement.id, occurredAt: BEFORE_LOSS_AT,
+        beforeWetKg: AFTER_DRAW_KG, afterWetKg: AFTER_DRAW_EDIT_KG }),
+      expect.objectContaining({ id: original.id, reversed: true,
+        beforeWetKg: AFTER_DRAW_EDIT_KG, afterWetKg: AFTER_DRAW_EDIT_KG }),
+    ]);
+    const draw = stock.entries.find(entry => entry.kind === "run_draw")!;
+    expect(replacement.createdAt.getTime()).toBeGreaterThan(new Date(draw.recordedAt).getTime());
+    const reversal = (await rows(f)).find(row => row.movementType === "adjustment")!;
+    expect(reversal.createdAt).toEqual(replacement.createdAt);
+    expect(stock.batches).toEqual([expect.objectContaining({ id: f.intake.id,
+      wetKg: AFTER_DRAW_EDIT_KG, dryKg: AFTER_DRAW_EDIT_KG })]);
+  });
 
   it("does not lock a loss on a later intake", async () => {
     const f = await seedBin();
@@ -454,6 +532,39 @@ describe("feedstock Lost mass corrections", { timeout: SUITE_TIMEOUT_MS }, () =>
     expect(stored.filter(row => row.correctsMovementId === original.id && row.movementType === "adjustment")).toHaveLength(SINGLE_ROW);
     expect(stored.filter(row => row.correctsMovementId === original.id && row.movementType === "loss")).toHaveLength(SINGLE_ROW);
     expect((await ledger(f)).currentWetKg).toBe(AFTER_EDIT_KG);
+  });
+
+  it("allows a second loss edit to use a caller key ending in :reversal", async () => {
+    const f = await seedBin();
+    const first = await recordOriginal(f);
+    const firstInput = editInput(f, first.id);
+    const firstReplacement = saved(await recordLossFn(firstInput));
+    const second = saved(await recordLossFn(lossInput(f, { occurredAt: LATER_AT })));
+    const secondInput = { ...editInput(f, second.id), occurredAt: LATER_AT,
+      idempotencyKey: `${firstInput.idempotencyKey}:reversal` };
+    const secondReplacement = saved(await recordLossFn(secondInput));
+    expect(saved(await recordLossFn(firstInput)).id).toBe(firstReplacement.id);
+    expect(saved(await recordLossFn(secondInput)).id).toBe(secondReplacement.id);
+    const stored = await rows(f);
+    for (const original of [first, second]) {
+      expect(stored.find(row => row.movementType === "adjustment" && row.correctsMovementId === original.id))
+        .toMatchObject({ idempotencyKey: null });
+    }
+  });
+
+  it("returns a structured conflict when removal reuses another correction's request key", async () => {
+    const f = await seedBin();
+    const first = await recordOriginal(f);
+    const input = editInput(f, first.id);
+    saved(await recordLossFn(input));
+    const second = saved(await recordLossFn(lossInput(f, { occurredAt: LATER_AT })));
+    const before = await rows(f);
+    expect(await removeLossFn({ ...removeInput(f, second.id), idempotencyKey: input.idempotencyKey }))
+      .toMatchObject({ success: false, code: "conflict",
+        conflict: { entity: "storageLocation", id: f.bin.id, code: f.bin.code },
+        error: "Lost mass was not changed because this request was already saved with different values. Close the form and start again.",
+      });
+    expect(await rows(f)).toEqual(before);
   });
 
   it("posts one correction when identical edits race", async () => {

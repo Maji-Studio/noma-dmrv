@@ -45,7 +45,7 @@ Any member can correct a feedstock Lost mass entry with a linked reversal and
 an optional replacement loss. The reversal restores exactly the original wet
 mass, at most once; omitting the replacement removes the entry. Both rows keep
 the reason and actor, and request keys make retries idempotent. A later run draw,
-live product ingredient draw, live Lost mass entry, or negative stock count locks
+live product ingredient draw, live Lost mass entry, or stock count of any delta locks
 correction in ledger order (event time, recorded time, id); later intakes do not.
 Every resulting balance must remain non-negative. History retains the reversed
 original and links its replacement without showing a separate reversal entry.

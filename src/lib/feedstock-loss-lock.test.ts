@@ -3,7 +3,7 @@
  * findFeedstockLossBlocker(entries: readonly FeedstockLedgerEntry[], entryId: string): FeedstockLedgerEntry | null
  * formatFeedstockLossLockReason(blocker: FeedstockLedgerEntry, timeZone: string): string
  * Entries are already ordered by occurredAt, recordedAt, id; entryId names an
- * existing loss. Return the first later withdrawal, the target itself if it is
+ * existing loss. Return the first later dependency, the target itself if it is
  * reversed, or null when editable. A reversed target gets already-corrected copy.
  */
 import { describe, expect, it } from "vitest";
@@ -54,14 +54,18 @@ describe("feedstock Lost mass record lock", () => {
     },
   );
 
-  it("ignores later intakes and zero or positive stock counts", () => {
+  it("ignores later intakes", () => {
     const loss = entry();
     const later = [
       entry({ id: "a-intake", kind: "intake", wetDeltaKg: INITIAL_KG, occurredAt: LATE }),
-      entry({ id: "b-unchanged", kind: "count", wetDeltaKg: 0, occurredAt: LATE }),
-      entry({ id: "c-positive", kind: "count", wetDeltaKg: LOSS_KG, occurredAt: LATE }),
     ];
     expect(findFeedstockLossBlocker([loss, ...later], loss.id)).toBeNull();
+  });
+
+  it.each([0, LOSS_KG, null])("locks on a later stock count with delta %s", (wetDeltaKg) => {
+    const loss = entry();
+    const count = entry({ id: "count", kind: "count", wetDeltaKg, occurredAt: LATE });
+    expect(findFeedstockLossBlocker([loss, count], loss.id)).toEqual(count);
   });
 
   it.each(["ingredient_draw", "loss"] as const)("ignores a reversed later %s", (kind) => {
@@ -152,15 +156,18 @@ describe("feedstock Lost mass time crossing", () => {
     expect(findFeedstockLossCrossing([reversed, loss], loss.id, EARLY)).toBeNull();
   });
 
-  it("ignores an intake and non-negative stock counts", () => {
+  it("ignores an intake", () => {
     const additions = [
       entry({ id: "intake", kind: "intake", wetDeltaKg: INITIAL_KG }),
-      entry({ id: "zero", kind: "count", wetDeltaKg: 0 }),
-      entry({ id: "positive", kind: "count", wetDeltaKg: LOSS_KG }),
-      entry({ id: "unknown", kind: "count", wetDeltaKg: null }),
     ];
     const loss = entry({ occurredAt: LATE });
     expect(findFeedstockLossCrossing([...additions, loss], loss.id, EARLY)).toBeNull();
+  });
+
+  it.each([0, LOSS_KG, null])("finds a crossed stock count with delta %s", (wetDeltaKg) => {
+    const count = entry({ id: "count", kind: "count", wetDeltaKg });
+    const loss = entry({ occurredAt: LATE });
+    expect(findFeedstockLossCrossing([count, loss], loss.id, EARLY)).toEqual(count);
   });
 
   it("does not cross a draw at exactly the replacement time", () => {

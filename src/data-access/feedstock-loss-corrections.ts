@@ -1,10 +1,11 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
+import { isPgUniqueViolation } from '@/db/errors';
 import { binMovements, storageLocations, type BinMovement } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { conflictCode } from '@/lib/conflict-ref';
 import { DomainError } from '@/lib/domain-errors';
-import { SafeError } from '@/lib/errors';
+import { ActionConflictError, SafeError } from '@/lib/errors';
 import {
   findFeedstockLossBlocker, findFeedstockLossCrossing,
   formatFeedstockLossCrossingMessage, formatFeedstockLossLockReason,
@@ -20,6 +21,8 @@ import { getOutputStockFacilityTimezone } from './output-stock-dates';
 import { OUTPUT_STOCK_FUTURE_TIME_MESSAGE } from './output-stock-post';
 import { requireOrgScope } from './utils';
 
+const RECORDED_TIME_STEP_MS = 1;
+const REQUEST_KEY_CONSTRAINT = 'bin_movements_org_idempotency_unique';
 const REPLAY_CONFLICT_MESSAGE =
   'Lost mass was not changed because this request was already saved with different values. Close the form and start again.';
 const ALREADY_CORRECTED_MESSAGE = 'This entry has already been corrected. Open its correction instead.';
@@ -119,6 +122,13 @@ export async function correctFeedstockLoss(ctx: OrgContext, input: CorrectFeedst
       }
     }
 
+    // Read wall-clock time under the bin lock: now() is the transaction start,
+    // which can predate a draw committed while this correction waited. Then step
+    // past every recorded time on the ledger, so at an equal event time the
+    // correction always sorts after the entries already there.
+    const { rows: [clock] } = await tx.execute<{ now: Date }>(sql`select clock_timestamp() as now`);
+    const createdAt = new Date(stock.entries.reduce((latest, entry) =>
+      Math.max(latest, new Date(entry.recordedAt).getTime() + RECORDED_TIME_STEP_MS), new Date(clock.now).getTime()));
     const snapshot = { ...payload, actorId: ctx.userId, payloadHash: requestFingerprint(payload) };
     const [reversal] = await tx.insert(binMovements).values({
       organizationId: ctx.organizationId,
@@ -130,7 +140,8 @@ export async function correctFeedstockLoss(ctx: OrgContext, input: CorrectFeedst
       correctsMovementId: original.id,
       reason: input.reason,
       createdBy: ctx.userId,
-      idempotencyKey: input.replacement ? `${input.idempotencyKey}:reversal` : input.idempotencyKey,
+      createdAt,
+      idempotencyKey: input.replacement ? null : input.idempotencyKey,
       inputSnapshot: { ...snapshot, kind: 'reversal' },
     }).returning();
 
@@ -146,6 +157,7 @@ export async function correctFeedstockLoss(ctx: OrgContext, input: CorrectFeedst
         correctsMovementId: original.id,
         reason: input.reason,
         createdBy: ctx.userId,
+        createdAt,
         idempotencyKey: input.idempotencyKey,
         inputSnapshot: { ...snapshot, kind: 'replacement',
           lane: 'feedstock', movementType: 'loss', massDeltaKg: -input.replacement.lossMassKg,
@@ -162,5 +174,15 @@ export async function correctFeedstockLoss(ctx: OrgContext, input: CorrectFeedst
     }
     await assertFeedstockBinLanesNotNegative(ctx, tx, [input.storageLocationId], 'save');
     return saved;
+  }).catch(async (error: unknown) => {
+    if (!isPgUniqueViolation(error, REQUEST_KEY_CONSTRAINT)) throw error;
+    // The failed transaction has rolled back before this conflict lookup.
+    const [bin] = await db.select({ code: storageLocations.code }).from(storageLocations).where(and(
+      eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, input.storageLocationId),
+    ));
+    if (!bin) throw new SafeError('Storage location not found');
+    throw new ActionConflictError(REPLAY_CONFLICT_MESSAGE, {
+      entity: STOCK_CONFLICT_ENTITY.storageLocation, id: input.storageLocationId, code: conflictCode(bin.code),
+    });
   });
 }
