@@ -46,6 +46,7 @@ function location(id: string, name: string, extra: Record<string, unknown> = {})
 }
 
 const IN_USE = "Customer location was not deleted because orders use it. Archive it instead.";
+const ARCHIVED_IN_USE = "Customer location was not deleted because orders use it.";
 
 beforeEach(() => {
   state.intent = null;
@@ -193,15 +194,20 @@ describe("CustomerSavedLocations", () => {
     await waitFor(() => expect(screen.queryByText("E2E North Block is in use")).toBeNull());
   });
 
-  it("does not offer Archive instead for an archived location refused as in use", async () => {
+  it("says only that an archived location is in use when its delete is refused", async () => {
     state.locations = [...state.locations, location("l3", "E2E Old Field", { archivedAt: ARCHIVED_AT })];
-    state.remove.mockRejectedValue(new Error(IN_USE));
+    state.remove.mockRejectedValue(new Error(ARCHIVED_IN_USE));
     render(<CustomerSavedLocations customerId="c1" />);
     fireEvent.click(screen.getByRole("button", { name: "Archived locations (1)" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete E2E Old Field" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
-    await waitFor(() => expect(state.error).toHaveBeenCalledWith(IN_USE));
-    expect(screen.queryByRole("button", { name: "Archive instead" })).toBeNull();
+    const dialog = await screen.findByRole("dialog", { name: "E2E Old Field is in use" });
+    expect(within(dialog).getByText("E2E Old Field cannot be deleted because other records still use it.")).toBeTruthy();
+    expect(within(dialog).queryByText(/archive/i)).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: "Archive instead" })).toBeNull();
+    expect(state.error).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getAllByRole("button", { name: "Close" }).find((button) => button.textContent === "Close")!);
+    await waitFor(() => expect(screen.queryByText("E2E Old Field is in use")).toBeNull());
   });
 
   it("shows the default move after a delete", async () => {
