@@ -123,7 +123,7 @@ describe("MCP documents", { timeout: READ_TIMEOUT_MS }, () => {
     await submitDocumentDelivery(a);
     const locked = await failure("confirm_document_upload", args, "certification_locked", "/ownerId");
     expect(locked.issues[0].code).toBe("certification_locked");
-    expect(JSON.stringify(locked)).toContain("Wait for Isometric to return the covering GHG Statement");
+    expect(JSON.stringify(locked)).toContain("If Isometric sends the GHG Statement back");
     await failure("request_document_upload", { ...target(), ...documentInput(), requestKey: randomUUID() }, "certification_locked", "/ownerId");
   });
 

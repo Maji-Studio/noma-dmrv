@@ -24,8 +24,8 @@ function view(level: RecordLockView["level"], heldBy: RecordLockLink[], usedBy =
   return {
     level, heldBy, usedBy, freeFields: level === "sent" ? [] : ["code"],
     howToFree: level === "sent"
-      ? "Wait for Isometric to return the covering GHG Statement, then refresh its status."
-      : level === "inUse" ? "Correct or remove the records that use it first." : null,
+      ? "If Isometric sends the GHG Statement back, refresh its status to edit again."
+      : level === "inUse" ? "To change them, first correct or remove those records." : null,
     returnedBy: [],
   };
 }
@@ -94,7 +94,7 @@ describe("RecordLockNotice", () => {
   it("names the one record that uses it as a link, with how to free it", () => {
     render(<RecordLockNotice lock={view("inUse", [RUN])} />);
     expect(screen.getByRole("status").textContent).toBe(
-      "In use by production run PR-26-004, so fields that feed its numbers are locked. Correct or remove the records that use it first.",
+      "Some fields can't be changed, because production run PR-26-004 uses its figures. To change them, first correct or remove those records.",
     );
     expect(screen.getByRole("link", { name: "production run PR-26-004" }).getAttribute("href"))
       .toBe(`/production-runs?facility=${FACILITY}&run=run-1`);
@@ -103,7 +103,7 @@ describe("RecordLockNotice", () => {
   it("names two holders and counts the rest", () => {
     render(<RecordLockNotice lock={view("inUse", [PRODUCT, DELIVERY, LOSS])} />);
     expect(screen.getByRole("status").textContent).toBe(
-      "In use by biochar product BP-26-021, delivery DL-26-003 and 1 more, so fields that feed their numbers are locked. Correct or remove the records that use it first.",
+      "Some fields can't be changed, because biochar product BP-26-021, delivery DL-26-003 and 1 more use its figures. To change them, first correct or remove those records.",
     );
     expect(screen.getAllByRole("link")).toHaveLength(2);
   });
@@ -111,7 +111,7 @@ describe("RecordLockNotice", () => {
   it("names the Removal by its period when Sent, linked to the Removals list", () => {
     render(<RecordLockNotice lock={view("sent", [REMOVAL])} />);
     expect(screen.getByRole("status").textContent).toBe(
-      "Sent with Removal Jan 1 to Mar 31, 2026, so every field is locked. Wait for Isometric to return the covering GHG Statement, then refresh its status.",
+      "Nothing can be changed, because this was sent to Isometric with Removal Jan 1 to Mar 31, 2026. If Isometric sends the GHG Statement back, refresh its status to edit again.",
     );
     expect(screen.getByRole("link").getAttribute("href")).toBe(`/certification/removals?facility=${FACILITY}&removal=removal-1`);
   });
@@ -120,13 +120,13 @@ describe("RecordLockNotice", () => {
     const { container, rerender } = render(<RecordLockNotice lock={view("inUse", [REMOVAL])} inUseLocksNothing />);
     expect(container.textContent).toBe("");
     rerender(<RecordLockNotice lock={view("sent", [REMOVAL])} inUseLocksNothing />);
-    expect(container.textContent).toContain("so every field is locked");
+    expect(container.textContent).toContain("Nothing can be changed");
   });
 
   it("names a storage bin's latest stock record as a link when there is one", () => {
     render(<RecordLockNotice lock={view("inUse", [DELIVERY])} subject="storageBin" />);
     expect(screen.getByRole("status").textContent).toBe(
-      "In use by its stock history, most recently delivery DL-26-003, so the storage type and feedstock type are locked.",
+      "Storage type and feedstock type can't be changed, because stock has already been recorded in this bin. Latest: delivery DL-26-003.",
     );
     expect(screen.getByRole("link", { name: "delivery DL-26-003" })).toBeTruthy();
   });
@@ -141,7 +141,7 @@ describe("RecordLockNotice", () => {
 
   it("names a storage bin's stock history instead of a record", () => {
     render(<RecordLockNotice lock={view("inUse", [])} subject="storageBin" />);
-    expect(screen.getByRole("status").textContent).toBe("In use by its stock history, so the storage type and feedstock type are locked.");
+    expect(screen.getByRole("status").textContent).toBe("Storage type and feedstock type can't be changed, because stock has already been recorded in this bin.");
   });
 });
 
@@ -163,7 +163,7 @@ describe("returned by Isometric", () => {
     );
     expect(screen.getByRole("link", { name: "GHG Statement Jul 1 to Sep 30, 2026" }).getAttribute("href"))
       .toBe(`/certification/ghg-statements?facility=${FACILITY}&statement=statement-1`);
-    expect(inUse.textContent).toContain("In use by production run PR-26-004");
+    expect(inUse.textContent).toContain("because production run PR-26-004 uses its figures");
   });
 
   it("names a statement back in draft, and shows the line on an Open record too", () => {

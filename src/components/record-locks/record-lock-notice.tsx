@@ -15,6 +15,8 @@ import { recordLockLinkHref, recordLockLinkText } from "./record-lock-labels";
 /** Holders named inline; the rest are counted and listed under "Used by". */
 const NAMED_HOLDERS = 2;
 
+const STORAGE_BIN_LOCKED = "Storage type and feedstock type can't be changed, because stock has already been recorded in this bin.";
+
 function HolderLink({ link }: { link: RecordLockLink }) {
   const href = recordLockLinkHref(link);
   const text = recordLockLinkText(link);
@@ -104,28 +106,27 @@ function LockLine({ lock, subject = "record", inUseLocksNothing = false }: {
   lock: RecordLockView | undefined;
   subject?: "record" | "storageBin";
   inUseLocksNothing?: boolean;
-}) {  if (!lock || lock.level === "open") return null;
+}) {
+  if (!lock || lock.level === "open") return null;
   if (lock.level === "inUse" && inUseLocksNothing) return null;
   if (subject === "storageBin") {
     return (
       <Notice tone="info" boxed data-record-lock-notice={lock.level}>
-        {lock.heldBy[0] ? (
-          <>In use by its stock history, most recently <HolderLink link={lock.heldBy[0]} />, so the storage type and feedstock type are locked.</>
-        ) : "In use by its stock history, so the storage type and feedstock type are locked."}
+        {STORAGE_BIN_LOCKED}
+        {lock.heldBy[0] && <> Latest: <HolderLink link={lock.heldBy[0]} />.</>}
       </Notice>
     );
   }
   if (lock.level === "sent") {
     return (
       <Notice tone="info" boxed data-record-lock-notice="sent">
-        Sent with <HolderList holders={lock.heldBy} />, so every field is locked. {lock.howToFree}
+        Nothing can be changed, because this was sent to Isometric with <HolderList holders={lock.heldBy} />. {lock.howToFree}
       </Notice>
     );
   }
-  const plural = lock.heldBy.length > 1;
   return (
     <Notice tone="info" boxed data-record-lock-notice="inUse">
-      In use by <HolderList holders={lock.heldBy} />, so fields that feed {plural ? "their" : "its"} numbers are locked. {lock.howToFree}
+      Some fields can{"'"}t be changed, because <HolderList holders={lock.heldBy} /> {lock.heldBy.length > 1 ? "use" : "uses"} its figures. {lock.howToFree}
     </Notice>
   );
 }

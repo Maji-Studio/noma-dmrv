@@ -39,7 +39,7 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { StatCard } from "@/components/ui/stat-card";
 import { MassPair } from "@/components/ui/mass-pair";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
+import { recordLockColumn, recordLockSheetProps, recordLockTitleMark } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { isProductionRunOutputLocked, isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { useToast } from "@/components/ui/toast";
@@ -89,7 +89,7 @@ function createColumns(
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true, recordLink: true },
+      meta: { nowrap: true, recordLink: true, recordLinkAfter: recordLockTitleMark(locks) },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>

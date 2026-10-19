@@ -283,7 +283,7 @@ it('membership refusal names an interrupted Removal and tells the operator to re
       await expect(assertRemovalAllowsCreditBatchMutation(ctx, tx, fixture.batchId, 'update', locked)).rejects.toMatchObject({
         code: 'certification_locked', message: expect.stringContaining("Held by a Removal."),
       });
-      await expect(assertRemovalAllowsCreditBatchMutation(ctx, tx, fixture.batchId, 'update', locked)).rejects.toThrow('Delete or resume the interrupted Removal');
+      await expect(assertRemovalAllowsCreditBatchMutation(ctx, tx, fixture.batchId, 'update', locked)).rejects.toThrow('delete or resume the interrupted Removal');
     });
   });
 });

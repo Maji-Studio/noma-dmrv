@@ -434,9 +434,8 @@ async function editFirstRow(page: Page) {
   // cleanly). A post-save list refetch can re-render the row and detach the
   // menu's "Edit" item mid-click, so retry the open→Edit sequence instead of
   // waiting for network idle (CI dev servers may never settle within budget).
-  // Edit is offered only once the row's lock read answers (#1119), so wait
-  // for its chip first.
-  await expect(page.locator("tbody tr").first().locator("[data-record-lock]")).toBeVisible({ timeout: 15000 });
+  // Edit is offered only once the row's lock read answers (#1119); the retry
+  // below covers that wait, since an Open row shows no chip to wait for.
   await expect(async () => {
     await page
       .locator("tbody tr")

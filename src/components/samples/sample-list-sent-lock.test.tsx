@@ -153,10 +153,10 @@ const SENT: RecordLockView = {
   heldBy: [{ kind: "removal", id: REMOVAL_ID, label: null, facilityId: FACILITY_ID, period: { startedOn: "2026-01-01", completedOn: "2026-03-31" } }],
   usedBy: [{ kind: "removal", id: REMOVAL_ID, label: null, facilityId: FACILITY_ID, period: { startedOn: "2026-01-01", completedOn: "2026-03-31" } }],
   freeFields: [],
-  howToFree: "Wait for Isometric to return the covering GHG Statement, then refresh its status.",
+  howToFree: "If Isometric sends the GHG Statement back, refresh its status to edit again.",
   returnedBy: [],
 };
-const IN_USE: RecordLockView = { ...SENT, level: "inUse", howToFree: "Correct or remove the records that use it first." };
+const IN_USE: RecordLockView = { ...SENT, level: "inUse", howToFree: "To change them, first correct or remove those records." };
 
 function textOf(renderer: ReactTestRenderer): string {
   const walk = (node: unknown): string => {
@@ -199,8 +199,8 @@ describe("Sample sheet behind a Sent Removal", () => {
     expect(harness.sheetProps?.canEdit).toBe(false);
     const text = textOf(renderer!);
     expect(text).toContain("Sent");
-    expect(text).toContain("Sent with Removal Jan 1 to Mar 31, 2026, so every field is locked.");
-    expect(text).toContain("Wait for Isometric to return the covering GHG Statement, then refresh its status.");
+    expect(text).toContain("Nothing can be changed, because this was sent to Isometric with Removal Jan 1 to Mar 31, 2026.");
+    expect(text).toContain("If Isometric sends the GHG Statement back, refresh its status to edit again.");
     const link = renderer!.root.findByType("a");
     expect(link.props.href).toBe(`/certification/removals?facility=${FACILITY_ID}&removal=${REMOVAL_ID}`);
     renderer?.unmount();
@@ -256,7 +256,7 @@ describe("Sample sheet behind a Sent Removal", () => {
     harness.query = { sample: SAMPLE_ID };
     await act(async () => { renderer = create(<SampleList />); });
     expect(harness.sheetProps?.canEdit).toBe(true);
-    expect(textOf(renderer!)).not.toContain("so every field is locked");
+    expect(textOf(renderer!)).not.toContain("Nothing can be changed");
     const cell = renderActionsCell();
     expect(harness.rowActions?.map((action) => action.label)).toEqual(["Edit", "Delete"]);
     cell.unmount();

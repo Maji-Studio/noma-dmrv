@@ -12,7 +12,7 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
+import { recordLockColumn, recordLockSheetProps, recordLockTitleMark } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
 import { DataTable } from "@/components/ui/data-table";
@@ -103,7 +103,7 @@ function createColumns(
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true, recordLink: true },
+      meta: { nowrap: true, recordLink: true, recordLinkAfter: recordLockTitleMark(locks) },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>

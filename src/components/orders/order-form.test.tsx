@@ -383,7 +383,7 @@ describe("OrderForm record lock (#1119)", () => {
     heldBy: level === "open" ? [] : [DELIVERY],
     usedBy: level === "open" ? [] : [DELIVERY],
     freeFields: level === "sent" ? [] : ["code", "quantityKg", "orderDate", "packaging"],
-    howToFree: level === "open" ? null : "Correct or remove the records that use it first.",
+    howToFree: level === "open" ? null : "To change them, first correct or remove those records.",
     returnedBy: [],
   });
 
