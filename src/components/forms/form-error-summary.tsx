@@ -8,7 +8,7 @@
  */
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   useFormState,
   type Control,
@@ -176,11 +176,16 @@ export function FormErrorSummary<
   // change would drown the field the user is editing. One line per refused
   // save instead, mounted for the whole attempt, so the summary leaving and
   // coming back while the user edits does not announce it again.
-  const announcement = submitCount === 0 ? null : (
+  // The attempt whose refusal listed fields. Adjusted while rendering, so a
+  // save that failed without field errors (a thrown action) never claims
+  // fields, and a list that empties and refills keeps the same line.
+  const [announcedAttempt, setAnnouncedAttempt] = useState(0);
+  if (visible && announcedAttempt !== submitCount) setAnnouncedAttempt(submitCount);
+  const announcement = announcedAttempt === submitCount && submitCount > 0 && !isSubmitSuccessful ? (
     <p key={submitCount} role="alert" className="sr-only">
-      {isSubmitSuccessful ? "" : ANNOUNCEMENT}
+      {ANNOUNCEMENT}
     </p>
-  );
+  ) : null;
 
   if (!visible) return announcement;
 
