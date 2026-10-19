@@ -14,7 +14,7 @@ vi.mock("./certifier-document-uploads", () => ({ releaseDocumentUploadsReference
 vi.mock("@/lib/certification/submission-lock", () => ({ acquireCertificationArtifactLocksSorted: mocks.locks }));
 import { certifierBiocharApplications } from "@/db/schema/certifier-biochar-applications";
 import { certifierRemovals, certificationSubmissions } from "@/db/schema/certification";
-import { finalizeRemovalDeletion, type RemovalDeletionClaim } from "./certifier-removal-deletion";
+import { finalizeRemovalDeletion, removalDeletionOpensRegistryBoundary, type RemovalDeletionClaim } from "./certifier-removal-deletion";
 const ctx: OrgContext = { organizationId: "org-1", userId: "user-1", orgRole: "admin", isPlatformAdmin: false };
 const lockedAt = new Date("2026-09-08T00:00:00Z");
 const claim: RemovalDeletionClaim = { removalId: "removal-1", facilityId: "facility-1", submissionIds: ["sub-1"],
@@ -75,4 +75,24 @@ it("does not delete the Removal after a production journal cleanup conflict", as
 it("requires organization scope before finalization", async () => {
   await expect(finalizeRemovalDeletion({ ...ctx, organizationId: "" }, claim, registry)).rejects.toThrow("Unauthorized");
   expect(mocks.transaction).not.toHaveBeenCalled();
+});
+
+it.each([
+  { name: "fresh Removal", facts: {}, expected: false },
+  { name: "false sticky marker", facts: { metadata: { submissionExternalMutationPossible: false } }, expected: false },
+  { name: "sticky marker", facts: { metadata: { submissionExternalMutationPossible: true } }, expected: true },
+  { name: "ledger row without a registry ID", facts: { rows: [{ externalId: null }] }, expected: true },
+  { name: "Biochar Application registration", facts: { biocharApplications: [{}] }, expected: true },
+  { name: "Removal-owned MeasurementSample", facts: { measurementSamples: [{}] }, expected: true },
+  { name: "unregistered production batch", facts: { productionBatches: [{ registrationId: null }] }, expected: false },
+  { name: "registered production batch", facts: { productionBatches: [{ registrationId: null }, { registrationId: "registration-1" }] }, expected: true },
+])("registry boundary: $name", ({ facts, expected }) => {
+  expect(removalDeletionOpensRegistryBoundary({
+    metadata: null,
+    rows: [],
+    biocharApplications: [],
+    measurementSamples: [],
+    productionBatches: [],
+    ...facts,
+  })).toBe(expected);
 });

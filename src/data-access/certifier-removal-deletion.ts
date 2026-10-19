@@ -13,7 +13,9 @@ import {
 } from "@/db/schema/certification";
 import { certifierBiocharApplications } from "@/db/schema/certifier-biochar-applications";
 import { creditBatchApplications, creditBatches } from "@/db/schema/credits";
-import type { OrgContext } from "@/lib/auth/server";
+import { hasOrgRole, type OrgContext } from "@/lib/auth/server";
+import { REMOVAL_REGISTRY_DELETION_MIN_ROLE } from "@/lib/certification/removal-deletion-role";
+import { removalMayHaveExternalMutation } from "@/lib/certification/removal-external-mutation";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import {
   SUBMISSION_ATTEMPT_OUTCOMES,
@@ -65,8 +67,9 @@ import { requireOrgScope } from "./utils";
  * a finalized status refuses deletion. Membership in a GHG Statement refuses
  * it too.
  *
- * No role floor for now: any organization member may delete, registry
- * cleanup included (decision of 2026-09-08, tracked in issue #746).
+ * Members may delete Removals that never touched the registry. Once the
+ * boundary opened, the floor in removal-deletion-role.ts requires an Owner
+ * or Admin; Platform Admins always pass.
  */
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -93,6 +96,26 @@ const REMOVAL_DELETE_MISSING_ERROR =
   "This Removal no longer exists. Refresh the page.";
 export const REMOVAL_DELETE_CHANGED_ERROR =
   "This Removal changed while it was being deleted. Refresh the page and review its status.";
+export const REMOVAL_DELETE_ROLE_ERROR =
+  "Only Owners and Admins can delete a Removal that may have records on Isometric. Ask an Owner or Admin to delete it.";
+
+/** Whether the loaded deletion facts indicate possible registry records. */
+export function removalDeletionOpensRegistryBoundary(facts: {
+  metadata: unknown;
+  rows: readonly unknown[];
+  biocharApplications: readonly unknown[];
+  measurementSamples: readonly unknown[];
+  productionBatches: readonly { registrationId: string | null }[];
+}): boolean {
+  return (
+    removalMayHaveExternalMutation(facts.metadata) ||
+    // Sources are released only when ledger rows exist, so this covers them too.
+    facts.rows.length > 0 ||
+    facts.biocharApplications.length > 0 ||
+    facts.measurementSamples.length > 0 ||
+    facts.productionBatches.some((batch) => batch.registrationId !== null)
+  );
+}
 
 export interface RemovalDeletionClaim {
   removalId: string;
@@ -308,6 +331,19 @@ export async function claimRemovalDeletion(
                 ),
               ),
             );
+    if (
+      removalDeletionOpensRegistryBoundary({
+        metadata: removal.metadata,
+        rows,
+        biocharApplications,
+        measurementSamples,
+        productionBatches,
+      }) &&
+      !hasOrgRole(ctx, REMOVAL_REGISTRY_DELETION_MIN_ROLE)
+    ) {
+      throw new SafeError(REMOVAL_DELETE_ROLE_ERROR);
+    }
+
     // Every row gets the same fresh lock, rejected ones included: the submit
     // path resumes a rejected row with an unchanged payload hash, and its
     // resume CAS refuses any row whose lock is still fresh.
