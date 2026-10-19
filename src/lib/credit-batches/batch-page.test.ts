@@ -86,14 +86,19 @@ describe("overviewBadgeCount", () => {
 });
 
 describe("creditBatchMilestones", () => {
-  it("reads Missing data with the blocking count while items block", () => {
-    const [data, removalStep, verified, issued] = creditBatchMilestones({ blockingCount: 6, pageModel: model() });
-    expect(data).toEqual({ key: "data", label: "Missing data", state: "current", caption: null, count: 6 });
+  it("reads To-dos with the Overview badge count while items block", () => {
+    // 2 Blocking + 2 Check: the step shows the same 4 as the Overview tab.
+    const [data, removalStep, verified, issued] = creditBatchMilestones({ blockingCount: 2, openCount: 4, pageModel: model() });
+    expect(data).toEqual({ key: "data", label: "To-dos", state: "current", caption: null, count: 4 });
     expect([removalStep.state, verified.state, issued.state]).toEqual(["todo", "todo", "todo"]);
   });
 
+  it("reads Data complete when only Check items remain", () => {
+    expect(creditBatchMilestones({ blockingCount: 0, openCount: 3, pageModel: model() })[0]).toEqual({ key: "data", label: "Data complete", state: "done", caption: null });
+  });
+
   it("reads Data complete without a date once nothing blocks, and names a draft Removal", () => {
-    const steps = creditBatchMilestones({ blockingCount: 0, pageModel: model({ removals: [removal()] }) });
+    const steps = creditBatchMilestones({ blockingCount: 0, openCount: 0, pageModel: model({ removals: [removal()] }) });
     expect(steps[0]).toEqual({ key: "data", label: "Data complete", state: "done", caption: null });
     expect(steps[1]).toMatchObject({ state: "current", caption: "RM-26-001 in draft" });
   });
@@ -101,6 +106,7 @@ describe("creditBatchMilestones", () => {
   it("shows the submitted share of a partly sent batch", () => {
     const steps = creditBatchMilestones({
       blockingCount: 0,
+      openCount: 0,
       pageModel: model({
         removals: [removal({ phase: "submitted", status: SUBMITTED_STATUS, submittedAt: new Date("2026-10-12T00:00:00Z") })],
         mass: { inSubmittedDryKg: 300, notInRemovalDryKg: 500 },
@@ -115,6 +121,7 @@ describe("creditBatchMilestones", () => {
     const submittedAt = new Date("2026-10-12T12:00:00Z");
     const steps = creditBatchMilestones({
       blockingCount: 0,
+      openCount: 0,
       pageModel: model({
         removals: [removal({ phase: "submitted", status: SUBMITTED_STATUS, submittedAt, dryKg: 800 })],
         mass: { inSubmittedDryKg: 800, notInRemovalDryKg: 0 },
@@ -128,15 +135,15 @@ describe("creditBatchMilestones", () => {
 
   it("dates issued credits and marks failed verification", () => {
     const base = { firstRemovalSubmittedAt: new Date("2026-10-12T00:00:00Z"), firstRemovalSubmittedCode: "RM-26-001" };
-    const issued = creditBatchMilestones({ blockingCount: 0, pageModel: model({ milestones: { ...base, ghgStatement: statement("issued", { creditsIssuedAt: "2026-11-03" }) } }) });
+    const issued = creditBatchMilestones({ blockingCount: 0, openCount: 0, pageModel: model({ milestones: { ...base, ghgStatement: statement("issued", { creditsIssuedAt: "2026-11-03" }) } }) });
     expect(issued.map((step) => step.state)).toEqual(["done", "done", "done", "done"]);
     expect(issued[3].caption).toBe("Nov 3, 2026");
-    const failed = creditBatchMilestones({ blockingCount: 0, pageModel: model({ milestones: { ...base, ghgStatement: statement("verification-failed") } }) });
+    const failed = creditBatchMilestones({ blockingCount: 0, openCount: 0, pageModel: model({ milestones: { ...base, ghgStatement: statement("verification-failed") } }) });
     expect(failed[2]).toMatchObject({ state: "failed", caption: "Verification failed" });
   });
 
   it("names the data step without a verdict while the health loads or failed", () => {
-    expect(creditBatchMilestones({ blockingCount: null, pageModel: undefined })[0]).toEqual({ key: "data", label: "Batch data", state: "current", caption: null });
+    expect(creditBatchMilestones({ blockingCount: null, openCount: 0, pageModel: undefined })[0]).toEqual({ key: "data", label: "Batch data", state: "current", caption: null });
   });
 });
 

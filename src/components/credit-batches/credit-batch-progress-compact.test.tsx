@@ -8,7 +8,7 @@ const step = (key: CreditBatchMilestone["key"], label: string, state: CreditBatc
   ({ key, label, state, caption: null, ...extra });
 
 const missing: CreditBatchMilestone[] = [
-  step("data", "Missing data", "current", { count: 2 }),
+  step("data", "To-dos", "current", { count: 4 }),
   step("removal", "Removal submitted", "todo"),
   step("verified", "Verified", "todo"),
   step("issued", "Credits issued", "todo"),
@@ -25,15 +25,15 @@ describe("progressFocusIndex", () => {
 });
 
 describe("CreditBatchProgressCompact", () => {
-  it("renders one 44px trigger naming the step, its blocking count and its place", () => {
+  it("renders one 44px trigger naming the step, its to-do count and its place", () => {
     const container = document.createElement("div");
     container.innerHTML = renderToStaticMarkup(<CreditBatchProgressCompact steps={missing} />);
     const trigger = container.querySelector('[data-testid="credit-batch-progress-trigger"]') as HTMLButtonElement;
     expect(trigger.tagName).toBe("BUTTON");
     expect(trigger.className).toContain("min-h-44");
     const text = (trigger.textContent ?? "").replace(/\s+/g, " ").trim();
-    expect(text).toBe("Missing data2Step 1 of 4");
-    expect(trigger.querySelector('[aria-label="2 blocking items"]')).not.toBeNull();
+    expect(text).toBe("To-dos4Step 1 of 4");
+    expect(trigger.querySelector('[aria-label="4 to-dos"]')).not.toBeNull();
     // The four-step list mounts only while the popover is open.
     expect(container.querySelector("ol")).toBeNull();
   });

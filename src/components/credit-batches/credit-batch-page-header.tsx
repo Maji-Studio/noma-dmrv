@@ -23,6 +23,8 @@ import {
   APPLIED_DRY_LABEL,
   creditBatchMilestones,
   isCreditBatchSent,
+  todosLabel,
+  overviewBadgeCount,
   type CreditBatchMilestone,
   type CreditBatchPrimaryAction,
 } from "@/lib/credit-batches/batch-page";
@@ -78,8 +80,8 @@ const STEP_BAR: Record<CreditBatchMilestone["state"], string> = {
  * opens the same four in a popover.
  */
 function ProgressSteps() {
-  const { pageModel, blockingCount } = useCreditBatchPage();
-  const steps = creditBatchMilestones({ blockingCount, pageModel });
+  const { pageModel, blockingCount, openItems } = useCreditBatchPage();
+  const steps = creditBatchMilestones({ blockingCount, openCount: overviewBadgeCount(openItems), pageModel });
   return (
     <>
       <CreditBatchProgressCompact steps={steps} className="sm:hidden" />
@@ -93,7 +95,7 @@ function ProgressSteps() {
                 {step.state === "failed" && <WarningCircleIcon size={16} weight="bold" className="shrink-0 text-[var(--st-bad)]" aria-hidden />}
                 {step.label}
                 {step.state === "done" && <span className="sr-only"> (done)</span>}
-                {step.count != null && <CountBadge count={step.count} blocking label={`${step.count} blocking ${step.count === 1 ? "item" : "items"}`} />}
+                {step.count != null && <CountBadge count={step.count} blocking label={todosLabel(step.count)} />}
               </span>
               {step.caption && <span className={cn("body-caption", step.state === "failed" ? "text-[var(--st-bad)]" : MUTED_TEXT)}>{step.caption}</span>}
             </span>

@@ -9,7 +9,7 @@
  */
 import { CaretDownIcon, CheckIcon, WarningCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { Popover } from "@/components/ui/popover";
-import type { CreditBatchMilestone } from "@/lib/credit-batches/batch-page";
+import { todosLabel, type CreditBatchMilestone } from "@/lib/credit-batches/batch-page";
 import { cn } from "@/lib/utils";
 import { CountBadge, FOCUS_RING, MUTED_TEXT } from "./credit-batch-page-parts";
 
@@ -44,10 +44,6 @@ export function progressFocusIndex(steps: readonly CreditBatchMilestone[]): numb
   return lastDone >= 0 ? lastDone : 0;
 }
 
-function blockingLabel(count: number): string {
-  return `${count} blocking ${count === 1 ? "item" : "items"}`;
-}
-
 /** A 16px marker per state: a check, a warning, a filled dot for now, a hollow one for later. */
 function StateMarker({ state }: { state: CreditBatchMilestone["state"] }) {
   if (state === "done") return <CheckIcon size={STATE_ICON_PX} weight="bold" className="shrink-0 text-[var(--st-ok)]" aria-hidden />;
@@ -68,7 +64,7 @@ function StepTitle({ step }: { step: CreditBatchMilestone }) {
   return (
     <span className={cn("inline-flex flex-wrap items-center gap-6 body-small", step.state === "todo" ? MUTED_TEXT : "font-medium")}>
       {step.label}
-      {step.count != null && <CountBadge count={step.count} blocking label={blockingLabel(step.count)} />}
+      {step.count != null && <CountBadge count={step.count} blocking label={todosLabel(step.count)} />}
     </span>
   );
 }

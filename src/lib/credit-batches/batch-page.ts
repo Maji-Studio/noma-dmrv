@@ -36,6 +36,16 @@ export function overviewBadgeCount(items: CreditBatchOpenItemGroups): number {
   return items.blocking.length + items.check.length;
 }
 
+/** The accessible name of the first progress step's count. */
+export function todosLabel(count: number): string {
+  return `${count} ${count === 1 ? "to-do" : "to-dos"}`;
+}
+
+/** The accessible name of the Overview tab's open-items count. */
+export function openItemsLabel(count: number): string {
+  return `${count} open ${count === 1 ? "item" : "items"}`;
+}
+
 export type CreditBatchMilestoneKey = "data" | "removal" | "verified" | "issued";
 export type CreditBatchMilestoneState = "done" | "current" | "todo" | "failed";
 
@@ -45,7 +55,7 @@ export interface CreditBatchMilestone {
   state: CreditBatchMilestoneState;
   /** A record, a share or a date; null when the step has nothing to add. */
   caption: string | null;
-  /** Blocking items holding the data step, shown as a red count. */
+  /** Open items (the Overview badge count) while the data step is held, shown as a red count. */
   count?: number;
 }
 
@@ -60,6 +70,8 @@ const SAME_MASS_TOLERANCE_KG = 0.001;
 export interface CreditBatchMilestoneInput {
   /** Blocking open items; null while the batch health is loading or failed. */
   blockingCount: number | null;
+  /** The Overview badge count (Blocking + Check), the number the first step shows. */
+  openCount: number;
   pageModel: CreditBatchPageModel | undefined;
 }
 
@@ -81,21 +93,21 @@ function removalCaption(model: CreditBatchPageModel): string | null {
 
 /**
  * The four milestones, each named for what has happened. The first reads
- * "Missing data" with the blocking count until no blocking item remains, and
- * "Batch data" while the batch health is loading or failed.
+ * "To-dos" with the Overview badge count until no blocking item remains, then
+ * "Data complete"; it reads "Batch data" while the batch health is loading or failed.
  * "Data complete" and "Verified" carry no date: none is stored.
  */
-export function creditBatchMilestones({ blockingCount, pageModel }: CreditBatchMilestoneInput): CreditBatchMilestone[] {
+export function creditBatchMilestones({ blockingCount, openCount, pageModel }: CreditBatchMilestoneInput): CreditBatchMilestone[] {
   const statement = pageModel?.milestones.ghgStatement ?? null;
   const missing = blockingCount != null && blockingCount > 0;
   const steps: { key: CreditBatchMilestoneKey; label: string; done: boolean; failed?: boolean; caption: string | null; count?: number }[] = [
     {
       key: "data",
       // Until the health answers, the step names itself without a verdict.
-      label: missing ? "Missing data" : blockingCount === 0 ? "Data complete" : "Batch data",
+      label: missing ? "To-dos" : blockingCount === 0 ? "Data complete" : "Batch data",
       done: blockingCount === 0,
       caption: null,
-      count: missing ? blockingCount : undefined,
+      count: missing ? openCount : undefined,
     },
     {
       key: "removal",
