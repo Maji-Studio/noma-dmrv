@@ -86,20 +86,20 @@ describe("overviewBadgeCount", () => {
 });
 
 describe("creditBatchMilestones", () => {
-  it("reads To-dos with the Overview badge count while items block", () => {
+  it("reads Open to-dos with the Overview badge count while items block", () => {
     // 2 Blocking + 2 Check: the step shows the same 4 as the Overview tab.
     const [data, removalStep, verified, issued] = creditBatchMilestones({ blockingCount: 2, openCount: 4, pageModel: model() });
-    expect(data).toEqual({ key: "data", label: "To-dos", state: "current", caption: null, count: 4 });
+    expect(data).toEqual({ key: "data", label: "Open to-dos", state: "current", caption: null, count: 4 });
     expect([removalStep.state, verified.state, issued.state]).toEqual(["todo", "todo", "todo"]);
   });
 
-  it("reads Data complete when only Check items remain", () => {
-    expect(creditBatchMilestones({ blockingCount: 0, openCount: 3, pageModel: model() })[0]).toEqual({ key: "data", label: "Data complete", state: "done", caption: null });
+  it("reads Ready for submission when only Check items remain", () => {
+    expect(creditBatchMilestones({ blockingCount: 0, openCount: 3, pageModel: model() })[0]).toEqual({ key: "data", label: "Ready for submission", state: "done", caption: null });
   });
 
-  it("reads Data complete without a date once nothing blocks, and names a draft Removal", () => {
+  it("reads Ready for submission without a date once nothing blocks, and names a draft Removal", () => {
     const steps = creditBatchMilestones({ blockingCount: 0, openCount: 0, pageModel: model({ removals: [removal()] }) });
-    expect(steps[0]).toEqual({ key: "data", label: "Data complete", state: "done", caption: null });
+    expect(steps[0]).toEqual({ key: "data", label: "Ready for submission", state: "done", caption: null });
     expect(steps[1]).toMatchObject({ state: "current", caption: "RM-26-001 in draft" });
   });
 

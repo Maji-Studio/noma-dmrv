@@ -70,7 +70,7 @@ test.describe("credit batch page", () => {
     // Overview stays out of the URL; its open items lead somewhere.
     await tabs.getByRole("tab", { name: /Overview/ }).click();
     await expect(page).not.toHaveURL(/[?&]tab=/);
-    const openItems = page.getByRole("region", { name: "Open items" });
+    const openItems = page.getByRole("region", { name: "Open to-dos" });
     // A seeded batch has no Samples: that open item lands on the Samples tab.
     await openItems.getByRole("button", { name: /No lab chemistry results/ }).click();
     await expect(page).toHaveURL(/[?&]tab=samples/);

@@ -117,7 +117,7 @@ function OpenItemGroups() {
 function OpenItemsPanel() {
   const { blockingCount } = useCreditBatchPage();
   return (
-    <PagePanel title="Open items" labelledBy="credit-batch-open-items">
+    <PagePanel title="Open to-dos" labelledBy="credit-batch-open-items">
       {blockingCount == null && <HealthUnavailable />}
       <OpenItemGroups />
     </PagePanel>

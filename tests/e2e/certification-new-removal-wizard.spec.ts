@@ -284,7 +284,7 @@ test.describe("Certification — New-Removal wizard", () => {
       await page.goto(
         `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
       );
-      const healthStrip = page.getByRole("region", { name: "Open items" });
+      const healthStrip = page.getByRole("region", { name: "Open to-dos" });
       // The open gap reads as the named problem…
       await expect(healthStrip).toContainText(PRODUCTION_REQUIREMENT, {
         timeout: COLD_COMPILE_TIMEOUT_MS,
@@ -319,7 +319,7 @@ test.describe("Certification — New-Removal wizard", () => {
       await page.goto(
         `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
       );
-      const healthStrip = page.getByRole("region", { name: "Open items" });
+      const healthStrip = page.getByRole("region", { name: "Open to-dos" });
       // The open production gap renders as a named problem row…
       const productionRow = healthStrip.locator("li", {
         hasText: PRODUCTION_REQUIREMENT,
@@ -376,7 +376,7 @@ test.describe("Certification — New-Removal wizard (Phase 0 cross-surface)", { 
       await page.goto(
         `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
       );
-      await expect(page.getByRole("region", { name: "Open items" })).toContainText(
+      await expect(page.getByRole("region", { name: "Open to-dos" })).toContainText(
         PRODUCTION_REQUIREMENT,
         { timeout: COLD_COMPILE_TIMEOUT_MS },
       );

@@ -36,14 +36,9 @@ export function overviewBadgeCount(items: CreditBatchOpenItemGroups): number {
   return items.blocking.length + items.check.length;
 }
 
-/** The accessible name of the first progress step's count. */
+/** The accessible name of an open to-dos count: the Overview tab badge and the first progress step. */
 export function todosLabel(count: number): string {
-  return `${count} ${count === 1 ? "to-do" : "to-dos"}`;
-}
-
-/** The accessible name of the Overview tab's open-items count. */
-export function openItemsLabel(count: number): string {
-  return `${count} open ${count === 1 ? "item" : "items"}`;
+  return `${count} open ${count === 1 ? "to-do" : "to-dos"}`;
 }
 
 export type CreditBatchMilestoneKey = "data" | "removal" | "verified" | "issued";
@@ -93,9 +88,9 @@ function removalCaption(model: CreditBatchPageModel): string | null {
 
 /**
  * The four milestones, each named for what has happened. The first reads
- * "To-dos" with the Overview badge count until no blocking item remains, then
- * "Data complete"; it reads "Batch data" while the batch health is loading or failed.
- * "Data complete" and "Verified" carry no date: none is stored.
+ * "Open to-dos" with the Overview badge count until no blocking item remains,
+ * then "Ready for submission"; it reads "Batch data" while the batch health is loading or failed.
+ * "Ready for submission" and "Verified" carry no date: none is stored.
  */
 export function creditBatchMilestones({ blockingCount, openCount, pageModel }: CreditBatchMilestoneInput): CreditBatchMilestone[] {
   const statement = pageModel?.milestones.ghgStatement ?? null;
@@ -104,7 +99,7 @@ export function creditBatchMilestones({ blockingCount, openCount, pageModel }: C
     {
       key: "data",
       // Until the health answers, the step names itself without a verdict.
-      label: missing ? "To-dos" : blockingCount === 0 ? "Data complete" : "Batch data",
+      label: missing ? "Open to-dos" : blockingCount === 0 ? "Ready for submission" : "Batch data",
       done: blockingCount === 0,
       caption: null,
       count: missing ? openCount : undefined,

@@ -8,7 +8,7 @@ const step = (key: CreditBatchMilestone["key"], label: string, state: CreditBatc
   ({ key, label, state, caption: null, ...extra });
 
 const missing: CreditBatchMilestone[] = [
-  step("data", "To-dos", "current", { count: 4 }),
+  step("data", "Open to-dos", "current", { count: 4 }),
   step("removal", "Removal submitted", "todo"),
   step("verified", "Verified", "todo"),
   step("issued", "Credits issued", "todo"),
@@ -32,8 +32,8 @@ describe("CreditBatchProgressCompact", () => {
     expect(trigger.tagName).toBe("BUTTON");
     expect(trigger.className).toContain("min-h-44");
     const text = (trigger.textContent ?? "").replace(/\s+/g, " ").trim();
-    expect(text).toBe("To-dos4Step 1 of 4");
-    expect(trigger.querySelector('[aria-label="4 to-dos"]')).not.toBeNull();
+    expect(text).toBe("Open to-dos4Step 1 of 4");
+    expect(trigger.querySelector('[aria-label="4 open to-dos"]')).not.toBeNull();
     // The four-step list mounts only while the popover is open.
     expect(container.querySelector("ol")).toBeNull();
   });

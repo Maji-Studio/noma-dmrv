@@ -41,7 +41,7 @@ import {
   CREDIT_BATCH_PAGE_TAB_LABELS,
   CREDIT_BATCH_PAGE_TABS,
   creditBatchPrimaryAction,
-  openItemsLabel,
+  todosLabel,
   overviewBadgeCount,
   type CreditBatchPageTab,
   type CreditBatchPrimaryAction,
@@ -114,7 +114,7 @@ function BatchTabs({ tabListRef }: { tabListRef: React.RefObject<HTMLDivElement 
           >
             {CREDIT_BATCH_PAGE_TAB_LABELS[key]}
             {key === "overview" && badge > 0 && (
-              <CountBadge count={badge} blocking={openItems.blocking.length > 0} label={openItemsLabel(badge)} />
+              <CountBadge count={badge} blocking={openItems.blocking.length > 0} label={todosLabel(badge)} />
             )}
           </button>
         ))}
