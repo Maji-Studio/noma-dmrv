@@ -49,10 +49,12 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
   const allReadsTicked = requestedReads.length > 0 && tickedReads.length === requestedReads.length;
   const allowedEntityCount = new Set(allowed.map(scope => scope.split(":")[0])).size;
 
+  const submittedScopes = [...new Set<string>([...allowed, ...ticked])].filter(scope => scope !== OFFLINE_ACCESS);
+
   async function decide(accept: boolean) {
     setFailed(false);
     // Accepting replaces the stored consent, so the already allowed scopes stay in it.
-    const scope = accept ? [...allowed, ...ticked, ...(offlineAccessRequested ? [OFFLINE_ACCESS] : [])].join(" ") : undefined;
+    const scope = accept ? [...submittedScopes, ...(offlineAccessRequested ? [OFFLINE_ACCESS] : [])].join(" ") : undefined;
     try {
       const url = await decision.mutateAsync({ accept, scope });
       if (!followOAuthContinuation(url, new URLSearchParams(oauthQuery))) setFailed(true);
@@ -87,7 +89,7 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
       )}
       {failed && <OAuthRestartNotice />}
       <div className="flex justify-start gap-16">
-        <Button variant="primary" size="large" busy={decision.isPending} disabled={ticked.length === 0} onClick={() => void decide(true)}>Allow</Button>
+        <Button variant="primary" size="large" busy={decision.isPending} disabled={submittedScopes.length === 0} onClick={() => void decide(true)}>Allow</Button>
         <Button size="large" disabled={decision.isPending} onClick={() => void decide(false)}>Deny</Button>
       </div>
       <p className="body-caption text-[var(--color-text-tertiary)]">

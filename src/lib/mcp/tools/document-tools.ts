@@ -98,7 +98,7 @@ export const documentWriteTools: WriteTool[] = [
   {
     kind: "write", name: "request_document_upload", ...access("write"), input: requestInput,
     output: documentUploadEnvelopeSchema, annotations,
-    description: `Request an upload for one document. requestKey is required. No dry run is available. Repeat the same requestKey to receive a fresh link while pending. ${DOCUMENT_GUIDANCE}`,
+    description: `Request an upload for one document. requestKey is required. No dry run is available. Repeat the same requestKey to receive a fresh link while pending. If you cannot make an HTTP PUT, tell the person to attach the file to the record in noma. ${DOCUMENT_GUIDANCE}`,
     async execute(context, raw) {
       const { input, dryRun, requestKey } = parseControls(raw, requestContract);
       noDryRun(dryRun);

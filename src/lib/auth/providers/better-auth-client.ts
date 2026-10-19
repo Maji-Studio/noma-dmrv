@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { OAUTH_RESTART_MESSAGE } from "@/config/oauth";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { createAuthClient } from "better-auth/react";
 import { organizationClient } from "better-auth/client/plugins";
@@ -87,14 +88,14 @@ function mapBetterAuthError(error: unknown): string {
   if (typeof error === "object" && error !== null) {
     const codes = ["code" in error ? error.code : undefined, "error" in error ? error.error : undefined];
     if (codes.some(code => typeof code === "string" && OAUTH_RESTART_ERRORS.has(code.toLowerCase()))) {
-      return "Start again from the app.";
+      return OAUTH_RESTART_MESSAGE;
     }
   }
   const rawMessage = getErrorMessage(error);
 
   if (rawMessage) {
     const message = rawMessage.toLowerCase();
-    if (OAUTH_RESTART_ERRORS.has(message)) return "Start again from the app.";
+    if (OAUTH_RESTART_ERRORS.has(message)) return OAUTH_RESTART_MESSAGE;
 
     if (message.includes("email not verified")) {
       return "Verify your email before signing in.";

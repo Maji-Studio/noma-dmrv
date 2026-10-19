@@ -8,6 +8,10 @@ import { afterEach, beforeEach, expect, it, vi, type MockInstance } from "vitest
 
 const memory = vi.hoisted(() => ({ data: {} as Record<string, unknown[]> }));
 
+vi.mock("@/data-access/oauth-provider", () => ({
+  findOAuthClientResources: async (clientId: string) => (memory.data.oauthClientResource as { clientId: string; resourceId: string }[])
+    .filter(link => link.clientId === clientId).map(link => ({ resource: link.resourceId })),
+}));
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("better-auth/adapters/drizzle", async () => {
   const { memoryAdapter } = await import("better-auth/adapters/memory");
@@ -68,11 +72,12 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-async function authorize(clientId = CLIENT_ID, redirectUri = REDIRECT_URI) {
+async function authorize(clientId = CLIENT_ID, redirectUri = REDIRECT_URI, includeResource = true) {
   const { auth } = await import("@/lib/auth/better-auth");
   const query = new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: "code",
     scope: "feedstocks:read offline_access", resource: "http://localhost:3100/api/mcp",
     code_challenge: "a".repeat(43), code_challenge_method: "S256" });
+  if (!includeResource) query.delete("resource");
   return auth.handler(new Request(`http://localhost:3100/api/auth/oauth2/authorize?${query}`));
 }
 
@@ -223,5 +228,23 @@ it("bounds stalled DNS by the metadata deadline and never dispatches late HTTPS"
   await pending;
   finishDns([{ address: PUBLIC_IP, family: 4 }]);
   await vi.advanceTimersByTimeAsync(0);
+  expect(request).not.toHaveBeenCalled();
+});
+
+it("binds a listed CIMD client's first authorization without resource to MCP", async () => {
+  const response = await authorize(CLIENT_ID, REDIRECT_URI, false);
+  expect(response.status).toBe(302);
+  const login = new URL(response.headers.get("location")!, "http://localhost:3100");
+  expect(login.pathname).toBe("/login");
+  expect(decodeURIComponent(login.search)).toContain("http://localhost:3100/api/mcp");
+  const { auth } = await import("@/lib/auth/better-auth");
+  const links = await (await auth.$context).adapter.findMany<{ resourceId: string }>({ model: "oauthClientResource",
+    where: [{ field: "clientId", value: CLIENT_ID }] });
+  expect(links.map(link => link.resourceId)).toEqual(["http://localhost:3100/api/mcp"]);
+});
+it("refuses an unlisted CIMD client without resource before fetching metadata", async () => {
+  const response = await authorize("https://claude.ai/unlisted.json", REDIRECT_URI, false);
+  expect(response.status).toBe(400);
+  expect((await response.json()).error).toBe("invalid_target");
   expect(request).not.toHaveBeenCalled();
 });

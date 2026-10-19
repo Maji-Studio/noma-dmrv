@@ -169,3 +169,12 @@ it("returns issuer on a trusted-client authorization error", async () => {
   expect(flow.code.issuer).toBe(f.config.issuer);
   expect(flow.code.error).toBe("invalid_request");
 });
+
+it.each([false, true])("revokes access and refresh through body or Basic identity (Basic: %s)", async basic => {
+  f = await createOAuthFlowFixture();
+  const token = await (await (await f.authorize()).consent()).exchange();
+  expect(token.status).toBe(200);
+  expect((await token.revoke(true, basic)).status).toBe(200);
+  expect(await token.resolve()).toMatchObject({ ok: false });
+  expect((await token.refresh()).status).toBe(400);
+});

@@ -1,3 +1,4 @@
+import { OAUTH_RESTART_MESSAGE } from "@/config/oauth";
 import { createHash } from "node:crypto";
 import { getOAuthProviderState } from "@better-auth/oauth-provider";
 import { APIError } from "better-auth/api";
@@ -15,7 +16,7 @@ export function oauthAttemptKey(sessionId: string, query: URLSearchParams, resou
 }
 
 type Identity = { user: { id: string }; session: { id: string } };
-function accessDenied(): never { throw new APIError("BAD_REQUEST", { error: "access_denied", error_description: "Start again from the app." }); }
+function accessDenied(): never { throw new APIError("BAD_REQUEST", { error: "access_denied", error_description: OAUTH_RESTART_MESSAGE }); }
 
 async function currentAttempt({ user, session }: Identity) {
   // 1.7.10 sets this at authorize and verifies oauth_query before consent/continue.

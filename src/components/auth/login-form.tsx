@@ -1,5 +1,6 @@
 "use client";
 
+import { OAUTH_RESTART_MESSAGE } from "@/config/oauth";
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -61,7 +62,7 @@ export function LoginForm() {
     if (result.success) {
       if (result.redirectUrl) {
         if (!followOAuthContinuation(result.redirectUrl, searchParams)) {
-          setServerError("Start again from the app.");
+          setServerError(OAUTH_RESTART_MESSAGE);
         }
         return;
       }

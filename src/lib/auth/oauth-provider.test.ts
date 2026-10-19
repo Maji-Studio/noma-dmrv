@@ -33,7 +33,7 @@ async function fixture() {
     hooks: { before: createAuthMiddleware(ctx => oauthBefore(ctx)) }, plugins: [createOAuthProvider()], rateLimit: { enabled: false } });
   // The installed admin registration contradicts the spec; this independent
   // fixture seeds only memory so the remaining protocol can still be checked.
-  const client = { client_id: "unit-client" };
+  const client = { client_id: "unit:client/with space" };
   storage.oauthClient.push({ id: "client", clientId: client.client_id, name: "E2E App", redirectUris: [REDIRECT],
     tokenEndpointAuthMethod: "none", requirePKCE: true, grantTypes: ["authorization_code", "refresh_token"],
     scopes: ["feedstocks:read", "offline_access"] });
@@ -44,8 +44,8 @@ async function fixture() {
   const verifier = "a".repeat(43);
   const query = new URLSearchParams({ client_id: client.client_id, redirect_uri: REDIRECT, response_type: "code", scope: "feedstocks:read offline_access",
     resource: RESOURCE, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" });
-  const request = (path: string, body?: Record<string, unknown>) => auth.handler(new Request(`${ORIGIN}/api/auth${path}`, { method: body ? "POST" : "GET",
-    headers: body ? new Headers([...headers, ["content-type", "application/x-www-form-urlencoded"]]) : headers, body: body ? new URLSearchParams(Object.entries(body).map(([key, value]) => [key, String(value)])) : undefined }));
+  const request = (path: string, body?: Record<string, unknown>, extraHeaders: Record<string, string> = {}) => auth.handler(new Request(`${ORIGIN}/api/auth${path}`, { method: body ? "POST" : "GET",
+    headers: body ? new Headers([...headers, ["content-type", "application/x-www-form-urlencoded"], ...Object.entries(extraHeaders)]) : headers, body: body ? new URLSearchParams(Object.entries(body).map(([key, value]) => [key, String(value)])) : undefined }));
   return { auth, storage, client, headers, query, verifier, request };
 }
 it("reads provider state at authorize, consent and nested authorize without a cookie fallback", async () => {
@@ -124,7 +124,9 @@ async function mint(f: Awaited<ReturnType<typeof fixture>>) {
   const data = await responseToken.json();
   return {
     refresh: () => f.request("/oauth2/token", { client_id: f.client.client_id, grant_type: "refresh_token", refresh_token: data.refresh_token }),
-    revoke: () => f.request("/oauth2/revoke", { client_id: f.client.client_id, token: data.refresh_token }),
+    revoke: (basic = false, clientId = f.client.client_id) => f.request("/oauth2/revoke",
+      { ...(basic ? {} : { client_id: clientId }), token: data.refresh_token },
+      basic ? { authorization: `Basic ${Buffer.from(`${encodeURIComponent(clientId)}:fixture-secret`).toString("base64")}` } : {}),
   };
 }
 it("owns refresh reuse and never invokes the provider's family deletion", async () => {
@@ -170,4 +172,17 @@ it("does not delegate reuse at the plugin's exact expiration boundary", async ()
     expect(state.revoked).toBe(true);
     expect(deletes.mock.calls.filter(([input]) => input.model.startsWith("oauth"))).toHaveLength(0);
   } finally { vi.useRealTimers(); }
+});
+
+it.each([false, true])("revokes the generation with body or URL-encoded Basic client identity (Basic: %s)", async basic => {
+  const f = await fixture(); const token = await mint(f);
+  expect((await token.revoke(basic)).status).toBe(200);
+  expect(state.revoked).toBe(true);
+  expect((await token.refresh()).status).toBe(400);
+});
+it.each([false, true])("does not revoke another client's generation (Basic: %s)", async basic => {
+  const f = await fixture(); const token = await mint(f);
+  expect((await token.revoke(basic, "other-client")).status).toBe(200);
+  expect(state.revoked).toBe(false);
+  expect((await token.refresh()).status).toBe(200);
 });

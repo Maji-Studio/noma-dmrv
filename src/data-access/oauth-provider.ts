@@ -35,13 +35,6 @@ export async function findOAuthClientScopes(clientId: string) {
   return client?.scopes ?? [];
 }
 
-export async function findOAuthClient(clientId: string) {
-  // org-scope-ok: platform client registry
-  const [client] = await db.select({ name: oauthClients.name, disabled: oauthClients.disabled })
-    .from(oauthClients).where(eq(oauthClients.clientId, clientId));
-  return client;
-}
-
 // org-scope-ok: session-authenticated authorization attempt; membership validated in the same query
 export async function getOAuthAttemptConsent(input: { attemptKey: string; sessionId: string; userId: string; clientId: string; resource: string }) {
   const [view] = await db.select({ organizationId: oauthAuthorizationAttempts.organizationId, name: organizations.name,

@@ -53,8 +53,9 @@ export async function createOAuthFlowFixture() {
       async refresh(extra: Record<string, unknown> = {}, extraHeaders?: HeadersInit) {
         return tokens(await request("/oauth2/token", { grant_type: "refresh_token", client_id: clientId, refresh_token: data.refresh_token, ...extra }, extraHeaders), resource);
       },
-      async revoke(refresh = true) {
-        return request("/oauth2/revoke", { client_id: clientId, token: refresh ? data.refresh_token : data.access_token });
+      async revoke(refresh = true, basic = false) {
+        return request("/oauth2/revoke", { ...(basic ? {} : { client_id: clientId }), token: refresh ? data.refresh_token : data.access_token },
+          basic ? { authorization: `Basic ${Buffer.from(`${encodeURIComponent(clientId)}:`).toString("base64")}` } : undefined);
       },
       sameTokens(other: { matches: (a: unknown, r: unknown) => boolean }) { return other.matches(data.access_token, data.refresh_token); },
       matches(access: unknown, refresh: unknown) { return data.access_token === access && data.refresh_token === refresh; },

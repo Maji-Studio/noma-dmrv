@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Notice } from "@/components/ui";
-import { OAUTH_RESTART_MESSAGE } from "@/lib/auth/oauth-client";
+import { OAUTH_RESTART_MESSAGE } from "@/config/oauth";
 import { oauthAppNameStart } from "./oauth-labels";
 
 /** The sign-in card shell, shared by the organization picker and the consent screen. */

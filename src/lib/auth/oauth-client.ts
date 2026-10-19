@@ -1,9 +1,9 @@
 "use client";
 
+import { OAUTH_RESTART_MESSAGE } from "@/config/oauth";
 import type { ActionResult } from "@/types/actions";
 import { authClient } from "./providers/better-auth-client";
 
-export const OAUTH_RESTART_MESSAGE = "Start again from the app.";
 
 /** The continuation URL, as an ActionResult so hooks can unwrap it. */
 type OAuthRedirect = ActionResult<string>;

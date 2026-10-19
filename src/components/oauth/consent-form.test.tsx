@@ -69,11 +69,11 @@ it("does not collapse a short already allowed group", () => {
   expect(container.querySelector("details")).toBeNull();
 });
 
-it("disables Allow on a step-up until a newly requested scope is ticked", () => {
+it("keeps Allow enabled when existing permissions remain after unticking new scopes", () => {
   mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["feedstocks:write"], alreadyAllowedScopes: ["feedstocks:read"], isStepUp: true }));
   render(<ConsentForm />);
   fireEvent.click(box("Feedstocks Write"));
-  expect((screen.getByRole("button", { name: "Allow" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Allow" }) as HTMLButtonElement).disabled).toBe(false);
 });
 
 it("names an unnamed app in lowercase inside the title", () => {
@@ -170,4 +170,14 @@ it("shows no Write column when only reads are requested", () => {
   render(<ConsentForm />);
   expect(screen.getByRole("columnheader", { name: "Read" })).toBeTruthy();
   expect(screen.queryByRole("columnheader", { name: "Write" })).toBeNull();
+});
+
+it("accepts forced re-consent when every requested scope is already allowed", async () => {
+  mocks.view.mockReturnValue(view({ newlyRequestedScopes: [], alreadyAllowedScopes: ["feedstocks:read"] }));
+  vi.stubGlobal("location", { assign: mocks.assign, origin: "https://noma.test", search: `?${QUERY}&prompt=consent` });
+  mocks.mutateAsync.mockResolvedValue("https://client.test/cb?code=c");
+  render(<ConsentForm />);
+  expect((screen.getByRole("button", { name: "Allow" }) as HTMLButtonElement).disabled).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Allow" }));
+  await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({ accept: true, scope: "feedstocks:read offline_access" }));
 });

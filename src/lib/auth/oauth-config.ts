@@ -9,7 +9,7 @@ export function getOAuthConfig() {
   return deriveOAuthConfig(env.NEXT_PUBLIC_APP_URL);
 }
 
-/** Provider initialization calls this once c4 registers the plugin. */
+/** createOAuthProvider calls this during plugin initialization. */
 export function assertOAuthIssuer(pluginIssuer: string, appUrl = env.NEXT_PUBLIC_APP_URL): void {
   if (pluginIssuer !== deriveOAuthConfig(appUrl).issuer) throw new Error("OAuth issuer does not match the configured app URL.");
 }

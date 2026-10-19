@@ -1,3 +1,4 @@
+import { OAUTH_RESTART_MESSAGE } from "@/config/oauth";
 import { OAUTH_CODE_LIFETIME_MS, isOAuthGenerationIdle } from "@/config/oauth";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
@@ -14,7 +15,7 @@ type AttemptBinding = AttemptIdentity & { clientId: string; resource: string };
 export type { OAuthRevocationReason } from "@/db/schema/oauth";
 
 function refuseAttempt(): never {
-  throw new DomainError("forbidden", "Start again from the app");
+  throw new DomainError("forbidden", OAUTH_RESTART_MESSAGE);
 }
 
 // org-scope-ok: session-authenticated authorization attempt; membership validated in the same query
@@ -54,7 +55,7 @@ export async function selectOAuthOrganization(input: AttemptSelection) {
 }
 
 /** The caller derives client and resource from the same verified query as the key.
- * c3's eligibility guard must also run on the returned generation before issuance.
+ * Callers must run assertGenerationEligible on the returned generation before issuance.
  */
 // org-scope-ok: session-authenticated authorization attempt; membership validated in the same query
 export async function resolveAttemptGrant(input: AttemptBinding) {

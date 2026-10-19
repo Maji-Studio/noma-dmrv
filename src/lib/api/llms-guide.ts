@@ -10,22 +10,22 @@ export const oauthGuide = `OAuth connects one member in one organization. Read f
 
 export const domainGuide = `## Feedstock intake
 
-- Weigh wet mass as received. Derive dry mass from wet mass and moisture. ${FEEDSTOCK_UNITS}
-- A feedstock record is intake into one feedstock bin: type, supplier, wet mass, moisture and delivery date. A delivery split across bins creates one record per bin.
-- Use facility-local YYYY-MM-DD, today and IANA timeZone from whoami or /me, never the device or model clock.
-- Look up ids with find_*. Read versions before edits or deletes.
-- Ask for required values; never invent them.
+- Operators weigh wet mass as received. Dry mass is derived from wet mass and moisture, not weighed for bin stock. ${FEEDSTOCK_UNITS}
+- A feedstock record is material received into one feedstock bin, with its feedstock type, supplier, wet mass, moisture and delivery date. One delivery logged into several bins creates one record per receiving bin.
+- Business dates are the facility's local YYYY-MM-DD. Use its today and IANA timeZone from whoami or /me, never the device or model clock.
+- Resolve ids through lookups. Read the current version before updating or deleting.
+- Ask for missing required values such as moisture. Never invent them.
 - ${UNTRUSTED_TEXT}
 
 ## Production runs
 
 - ${PRODUCTION_RUN_GUIDANCE}
-- Resolve reactor and bins in the run facility.
+- Resolve the reactor and bins in the run facility before writing.
 `;
 
 /**
  * Biochar product and bin stock guidance. It lives in llms.txt and the MCP tool
- * descriptions rather than the MCP server instructions, which stay under 2000 characters.
+ * descriptions rather than the MCP server instructions, whose non-OAuth guidance stays under 2000 characters.
  */
 export const biocharStockGuide = `## Biochar products and bin stock
 
@@ -37,7 +37,7 @@ export const biocharStockGuide = `## Biochar products and bin stock
 - ${OUTPUT_STOCK_NO_CORRECTIONS}
 `;
 
-/** Lab sample guidance lives in llms.txt and the MCP tool descriptions, not the MCP server instructions, which stay under 2000 characters. */
+/** Lab sample guidance lives in llms.txt and the MCP tool descriptions, not the MCP server instructions, whose non-OAuth guidance stays under 2000 characters. */
 export const labSampleGuide = `## Lab samples
 
 - ${LAB_SAMPLE_BATCHES}

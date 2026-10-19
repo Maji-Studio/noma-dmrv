@@ -3,7 +3,7 @@
  * Reached from the provider's authorize step, never linked from the app.
  */
 import { Suspense } from "react";
-import { ConsentForm } from "@/components/oauth/consent-form";
+import { ConsentForm } from "@/components/oauth";
 
 export default function OAuthConsentPage() {
   return (

@@ -3,7 +3,7 @@
  * for. Reached from the provider's authorize step, never linked from the app.
  */
 import { Suspense } from "react";
-import { OrganizationPicker } from "@/components/oauth/organization-picker";
+import { OrganizationPicker } from "@/components/oauth";
 
 export default function OAuthOrganizationPage() {
   return (

@@ -1,5 +1,7 @@
 import { MILLISECONDS_PER_SECOND, SECONDS_PER_DAY } from "./api-keys";
 
+export const OAUTH_RESTART_MESSAGE = "Start again from the app.";
+
 export const OAUTH_ACCESS_TOKEN_PREFIX = "noma_oat_";
 export const OAUTH_REFRESH_TOKEN_PREFIX = "noma_ort_";
 export const OAUTH_ACCESS_TOKEN_SECONDS = 60 * 60;

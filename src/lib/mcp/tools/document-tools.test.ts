@@ -51,6 +51,7 @@ it("describes the shell flow and untrusted files without prose dashes", () => {
     expect(tool.description).not.toMatch(/[–—]/);
   }
   expect(request().description).toContain("fresh link while pending");
+  expect(request().description).toContain("If you cannot make an HTTP PUT, tell the person to attach the file to the record in noma.");
 });
 
 const routeContext = { ctx: context(["deliveries:write"]), deadlineAt: Date.now() + OPERATION_DEADLINE_MS, requestId: "request", instance: "/api/mcp" } as ApiRouteContext;

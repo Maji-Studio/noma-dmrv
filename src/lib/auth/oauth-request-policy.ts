@@ -1,3 +1,4 @@
+import { OAUTH_RESTART_MESSAGE } from "@/config/oauth";
 import { APIError } from "better-auth/api";
 import { MILLISECONDS_PER_SECOND } from "@/config/api-keys";
 import { OAUTH_REFRESH_REPLAY_SECONDS } from "@/config/oauth";
@@ -7,7 +8,7 @@ export const OAUTH_HTTP_PATHS = new Set([
   "/oauth2/authorize", "/oauth2/token", "/oauth2/consent", "/oauth2/continue", "/oauth2/revoke",
 ]);
 
-export function refuseOAuth(error: string, description = "Start again from the app."): never {
+export function refuseOAuth(error: string, description = OAUTH_RESTART_MESSAGE): never {
   throw new APIError("BAD_REQUEST", { error, error_description: description });
 }
 

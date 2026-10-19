@@ -3,7 +3,7 @@
  * Owners and Admins also see every member's and can disconnect any.
  */
 import { redirect } from "next/navigation";
-import { ConnectedApps } from "@/components/oauth/connected-apps";
+import { ConnectedApps } from "@/components/oauth";
 import { SettingsConsole } from "@/components/settings";
 import { canOwnApiKey } from "@/lib/auth/api-scopes";
 import { oauthRolePolicy } from "@/lib/auth/oauth-role-policy";

@@ -1,14 +1,17 @@
 import { defaultKeyHasher } from "@better-auth/api-key";
 import { APIError, createAuthMiddleware } from "better-auth/api";
-import type { OAuthRefreshToken, OAuthOpaqueAccessToken } from "@better-auth/oauth-provider";
+import { env } from "@/config/env";
+import { getOAuthConfig } from "./oauth-config";
 import { OAUTH_ACCESS_TOKEN_PREFIX, OAUTH_REFRESH_TOKEN_PREFIX } from "@/config/oauth";
 import { findOAuthClientResources, findOAuthClientScopes } from "@/data-access/oauth-provider";
+import { findOAuthAuthorizationCode, findOAuthRefreshToken, findOAuthRevocationToken } from "@/data-access/oauth-token-lookups";
 import { revokeGeneration } from "@/data-access/oauth-grant-lifecycle";
 import { assertGenerationEligible } from "./oauth-eligibility";
 import { OAUTH_READ_SCOPES } from "./oauth-scopes";
 
-const OAUTH_DEFAULT_AUTHORIZE_SCOPES: readonly string[] = [...OAUTH_READ_SCOPES, "offline_access"];
 import { guardOAuthAuthorize, guardOAuthRefreshScopes, guardOAuthTokenInput, OAUTH_HTTP_PATHS, refuseOAuth, refreshDecision } from "./oauth-request-policy";
+
+const OAUTH_DEFAULT_AUTHORIZE_SCOPES: readonly string[] = [...OAUTH_READ_SCOPES, "offline_access"];
 
 type OAuthHookContext = Parameters<Parameters<typeof createAuthMiddleware>[0]>[0];
 
@@ -31,8 +34,13 @@ export async function oauthBefore(ctx: OAuthHookContext) {
     }
     if (query.resource === undefined && typeof query.client_id === "string") {
       const resources = await findOAuthClientResources(query.client_id);
-      if (resources.length !== 1) refuseOAuth("invalid_target");
-      normalized.resource = resources[0].resource;
+      if (resources.length === 0 && env.OAUTH_CIMD_CLIENT_IDS.includes(query.client_id)) {
+        // Match clientRegistrationDefaultResources; discovery still validates the client.
+        normalized.resource = getOAuthConfig().mcp;
+      } else {
+        if (resources.length !== 1) refuseOAuth("invalid_target");
+        normalized.resource = resources[0].resource;
+      }
     }
     return { context: isFormAuthorize ? { body: normalized } : { query: normalized } };
   }
@@ -48,8 +56,7 @@ export async function oauthBefore(ctx: OAuthHookContext) {
     if (body.grant_type === "authorization_code") {
       if (typeof body.code !== "string") refuseOAuth("invalid_grant");
       // Read only: consumeVerificationValue is reserved for the plugin handler.
-      const code = await ctx.context.adapter.findOne<{ value: string }>({ model: "verification",
-        where: [{ field: "identifier", value: await defaultKeyHasher(body.code) }] });
+      const code = await findOAuthAuthorizationCode(ctx.context.adapter, await defaultKeyHasher(body.code));
       // A consumed or unknown code goes to the plugin, whose replay handling
       // revokes the tokens already issued for it (RFC 6749 4.1.2).
       if (!code) return { context: { body } };
@@ -60,8 +67,7 @@ export async function oauthBefore(ctx: OAuthHookContext) {
     if (body.grant_type === "refresh_token") {
       const token = body.refresh_token;
       if (typeof token !== "string" || !token.startsWith(OAUTH_REFRESH_TOKEN_PREFIX)) return { context: { body } };
-      const row = await ctx.context.adapter.findOne<OAuthRefreshToken>({ model: "oauthRefreshToken",
-        where: [{ field: "token", value: await defaultKeyHasher(token.slice(OAUTH_REFRESH_TOKEN_PREFIX.length)) }] });
+      const row = await findOAuthRefreshToken(ctx.context.adapter, await defaultKeyHasher(token.slice(OAUTH_REFRESH_TOKEN_PREFIX.length)));
       const now = new Date();
       // Match the plugin's strict comparison: equality must still pass our reuse guard.
       if (!row || row.expiresAt < now) return { context: { body } };
@@ -75,18 +81,32 @@ export async function oauthBefore(ctx: OAuthHookContext) {
   }
   if (ctx.path === "/oauth2/revoke") {
     const token = ctx.body?.token;
+    const clientId = revokeClientId(ctx.body?.client_id, ctx.headers ?? ctx.request?.headers);
     if (typeof token === "string") {
       const refresh = token.startsWith(OAUTH_REFRESH_TOKEN_PREFIX);
       const prefix = refresh ? OAUTH_REFRESH_TOKEN_PREFIX : OAUTH_ACCESS_TOKEN_PREFIX;
       if (token.startsWith(prefix)) {
-        const row = await ctx.context.adapter.findOne<OAuthRefreshToken | OAuthOpaqueAccessToken>({
-          model: refresh ? "oauthRefreshToken" : "oauthAccessToken",
-          where: [{ field: "token", value: await defaultKeyHasher(token.slice(prefix.length)) }],
-        });
+        const row = await findOAuthRevocationToken(ctx.context.adapter, await defaultKeyHasher(token.slice(prefix.length)), refresh);
         // RFC 7009 2.1: a client may only revoke its own tokens.
-        if (row?.referenceId && row.clientId === ctx.body?.client_id) await revokeGeneration(row.referenceId, "client_revoked");
+        if (row?.referenceId && row.clientId === clientId) await revokeGeneration(row.referenceId, "client_revoked");
       }
     }
     return ctx.json({});
   }
+}
+
+/** RFC 6749 2.3.1 encodes each Basic credential as application/x-www-form-urlencoded. */
+function revokeClientId(bodyClientId: unknown, headers?: Headers): string | undefined {
+  const authorization = headers?.get("authorization");
+  if (!authorization) return typeof bodyClientId === "string" ? bodyClientId : undefined;
+  const basic = /^Basic ([A-Za-z0-9+/]+={0,2})$/i.exec(authorization);
+  if (!basic) return undefined;
+  try {
+    const credentials = Buffer.from(basic[1], "base64").toString("utf8");
+    const separator = credentials.indexOf(":");
+    if (separator < 0) return undefined;
+    const clientId = decodeURIComponent(credentials.slice(0, separator).replace(/\+/g, " "));
+    if (bodyClientId !== undefined && bodyClientId !== clientId) return undefined;
+    return clientId;
+  } catch { return undefined; }
 }

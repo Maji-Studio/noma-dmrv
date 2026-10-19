@@ -1,16 +1,13 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { z } from "zod";
 import { db, type DbTransaction } from "@/db";
 import { members, users, oauthClients, oauthConsents, oauthGrants } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { oauthRolePolicy } from "@/lib/auth/oauth-role-policy";
 import { DomainError } from "@/lib/domain-errors";
-import { expectedVersionSchema } from "@/schemas/helpers";
+import { revokeOAuthGrantSchema } from "@/schemas/oauth";
 import { revokeGeneration } from "./oauth-grant-lifecycle";
 import { assertRowVersion } from "./row-version";
 import { requireOrgScope } from "./utils";
-
-const revokeInput = z.object({ id: z.string().min(1), expectedVersion: expectedVersionSchema }).strict();
 
 async function requireManager(ctx: OrgContext, executor: typeof db | DbTransaction = db) {
   requireOrgScope(ctx);
@@ -50,7 +47,7 @@ export async function listAllOAuthGrants(ctx: OrgContext) {
 }
 export async function revokeOAuthGrant(ctx: OrgContext, input: unknown) {
   requireOrgScope(ctx);
-  const { id, expectedVersion } = revokeInput.parse(input);
+  const { id, expectedVersion } = revokeOAuthGrantSchema.parse(input);
   await db.transaction(async tx => {
     const policy = await requireManager(ctx, tx);
     const [grant] = await tx.select().from(oauthGrants)
