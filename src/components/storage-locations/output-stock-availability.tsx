@@ -79,7 +79,7 @@ export function OutputStockAvailability({ binName, dryKg, wetEstimate = null, al
       headline={wetEstimate
         ? <DerivedHeadline
             label="Available wet stock, estimate"
-            value={`≈ ${formatWetEstimate(wetEstimate.kg)} kg wet`}
+            value={`${formatWetEstimate(wetEstimate.kg)} kg wet mass`}
             // Dry stock is a balance, not a calculation: a secondary line at both levels.
             secondary={{ label: DRY_BIOCHAR_LABEL, value: dryKg == null ? null : formatMassKg(dryKg) }}
             sub={wetEstimate.basis}

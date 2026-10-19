@@ -131,11 +131,11 @@ describe("OutputStockAvailability", () => {
       await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === level)!.props.onChange());
       const text = visible(renderer.root).replace(/\s+/g, " ");
       expect(text).toContain("Available wet stock, estimate");
-      expect(text).toContain("≈ 2,833 kg wet");
+      expect(text).toContain("2,833 kg wet mass");
       expect(text).toContain("Dry biochar 2,380 kg");
       expect(text).toContain("At 16% departure moisture");
       // The dry line sits under the headline, before the batch bar.
-      expect(text.indexOf("≈ 2,833 kg wet")).toBeLessThan(text.indexOf("Dry biochar 2,380 kg"));
+      expect(text.indexOf("2,833 kg wet mass")).toBeLessThan(text.indexOf("Dry biochar 2,380 kg"));
       expect(text.indexOf("Dry biochar 2,380 kg")).toBeLessThan(text.indexOf("Batch A"));
     }
     await act(async () => renderer.unmount());
