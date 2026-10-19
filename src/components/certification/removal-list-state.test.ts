@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { RemovalHubEntry } from "@/fn/certification/certify-context";
 import type { RemovalPreflightSummary } from "@/fn/certification/overview";
 import {
@@ -6,6 +6,8 @@ import {
   canDeleteRemovalRow,
   removalDeletionTouchesRegistry,
 } from "./removal-list-state";
+
+vi.mock("@/db", () => ({}));
 
 function identity(
   id: string,
@@ -42,6 +44,7 @@ function enrichment(
     registryBoundaryOpened: false,
     readiness: { state: "ready", reasons: [], advisories: [], transportVehicleAdvisories: [] },
     evidenceHealth: null,
+    evidenceLinks: { unconfirmedCount: 1, mismatchCount: 2, checkedAt: null },
     submissionWarnings: [],
     recentSyncEvents: [],
   };
@@ -66,6 +69,7 @@ describe("buildRemovalListRows", () => {
       removalId: "removal-a",
       memberBatchCodes: ["removal-a-enriched"],
       enrichmentStatus: "available",
+      evidenceLinks: { unconfirmedCount: 1, mismatchCount: 2, checkedAt: null },
     });
     expect(rows[1]).toMatchObject({
       removalId: "removal-b",
