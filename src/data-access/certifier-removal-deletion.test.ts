@@ -4,12 +4,13 @@ import type { SQL } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 
 const mocks = vi.hoisted(() => ({ transaction: vi.fn(), select: vi.fn(), delete: vi.fn(), update: vi.fn(),
-  clear: vi.fn(), locks: vi.fn(), documents: vi.fn() }));
+  clear: vi.fn(), locks: vi.fn(), documents: vi.fn(), targets: vi.fn() }));
 vi.mock("./certification-status-activity", () => ({
   withCertificationStatusActivity: async (_ctx: unknown, _ids: string[], write: (tx: unknown) => Promise<void>, tx: unknown) => write(tx),
 }));
 vi.mock("@/db", () => ({ db: mocks }));
-vi.mock("./removal-production-batch-deletion", () => ({ clearDeletedRemovalProductionBatches: mocks.clear }));
+vi.mock("./removal-production-batch-deletion", () => ({ clearDeletedRemovalProductionBatches: mocks.clear,
+  removalProductionBatchTargets: mocks.targets }));
 vi.mock("./certifier-document-uploads", () => ({ releaseDocumentUploadsReferencedOnlyBySubmissions: mocks.documents }));
 vi.mock("@/lib/certification/submission-lock", () => ({ acquireCertificationArtifactLocksSorted: mocks.locks }));
 import { certifierBiocharApplications } from "@/db/schema/certifier-biochar-applications";
@@ -37,6 +38,7 @@ function query(rows: unknown[], table?: unknown) {
 beforeEach(() => {
   vi.resetAllMocks(); predicates.length = 0; patches.length = 0; order.length = 0;
   mocks.transaction.mockImplementation(async (run) => run(mocks));
+  mocks.targets.mockResolvedValue([]);
   mocks.select.mockReturnValueOnce(query([{ id: claim.removalId, ghgStatementId: null, metadata: { removalDeletionLockedAt: lockedAt.toISOString() } }]))
     .mockReturnValueOnce(query([{ id: "sub-1", status: "draft", lockedAt }]))
     // No batches retain a submission reservation or a Removal claim in this fixture.

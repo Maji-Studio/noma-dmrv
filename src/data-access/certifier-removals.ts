@@ -2,6 +2,7 @@ import { CODE_CONFLICT_MESSAGES, withAutoCodes } from "./code-generator";
 import { recordActivityChange } from "./activity-events";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
+import { REMOVAL_DELETE_ALREADY_DELETING_ERROR } from "./certifier-removal-deletion";
 import { assertNoRemovalBatchDeletion } from "./removal-production-batch-deletion";
 import { and, asc, desc, eq, exists, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -719,9 +720,10 @@ export async function discardLocalRemovalDraft(
 // Persist the point after which submission may create or update registry
 // Sources. This marker is intentionally sticky: once the external-write window
 // opens, a missing ledger row no longer proves that deleting the local Removal
-// is safe. Taking the Removal row lock before the shared artifact lock matches
-// discardLocalRemovalDraft's order, so either discard wins before this marker
-// (and submission stops) or recovery observes the marker and fails closed.
+// is safe. Refuse a fresh deletion lease before setting the marker so submission
+// stops before Source mirroring. Taking the Removal row lock before the shared
+// artifact lock matches discard and deletion: either cleanup wins first (and
+// submission stops), or cleanup observes the marker and enforces the boundary.
 export async function markRemovalSubmissionExternalMutationPossible(
   ctx: OrgContext,
   facilityId: string,
@@ -731,7 +733,7 @@ export async function markRemovalSubmissionExternalMutationPossible(
 
   await db.transaction(async (tx) => {
     const [removal] = await tx
-      .select({ id: certifierRemovals.id })
+      .select({ id: certifierRemovals.id, metadata: certifierRemovals.metadata })
       .from(certifierRemovals)
       .where(
         and(
@@ -744,6 +746,9 @@ export async function markRemovalSubmissionExternalMutationPossible(
       .limit(1);
     if (!removal) {
       throw new SafeError("Removal not found.");
+    }
+    if (hasFreshRemovalDeletionLease(removal.metadata)) {
+      throw new SafeError(REMOVAL_DELETE_ALREADY_DELETING_ERROR);
     }
 
     await acquireCertificationArtifactLocksSorted(tx, [

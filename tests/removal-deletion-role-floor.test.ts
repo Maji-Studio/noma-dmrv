@@ -4,7 +4,7 @@
  * Real Postgres owns claims and persistence; only the registry is faked.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents } from "@/db/schema/activity";
 import {
@@ -21,9 +21,14 @@ import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionProcesses } from "@/db/schema/production-processes";
 import {
   claimRemovalDeletion,
+  finalizeRemovalDeletion,
+  releaseRemovalDeletionClaim,
+  REMOVAL_DELETE_ALREADY_DELETING_ERROR,
   REMOVAL_DELETE_ROLE_ERROR,
   REMOVAL_DELETE_SUBMITTED_ERROR,
+  type RemovalDeletionRegistryOutcome,
 } from "@/data-access/certifier-removal-deletion";
+import { markRemovalSubmissionExternalMutationPossible } from "@/data-access/certifier-removals";
 import { deleteRemoval } from "@/fn/certification/delete-removal";
 import type { OrgContext } from "@/lib/auth/server";
 import { REMOVAL_DELETION_LEASE_KEY } from "@/lib/certification/removal-deletion-lease";
@@ -55,6 +60,16 @@ const PRIOR_LOCKED_AT = new Date("2026-01-01T00:00:00Z");
 const EXPECTED_ROLE_ERROR =
   "Only Owners and Admins can delete a Removal that may have records on Isometric. Ask an Owner or Admin to delete it.";
 const memberCtx: OrgContext = { ...makeTestOrgContext(), orgRole: "member" };
+const adminCtx: OrgContext = { ...makeTestOrgContext(), orgRole: "admin" };
+const emptyRegistryOutcome: RemovalDeletionRegistryOutcome = {
+  deletedGhgEntryIds: [],
+  deletedBiocharApplicationIds: [],
+  absentGhgEntryIds: [],
+  absentBiocharApplicationIds: [],
+  unresolvedBiocharApplicationReferences: [],
+  productionBatches: [],
+  measurementSamples: [],
+};
 const roles: Array<{ name: string; ctx: OrgContext; allowedAtRegistry: boolean }> = [
   { name: "member", ctx: memberCtx, allowedAtRegistry: false },
   {
@@ -183,7 +198,7 @@ async function expectUnchangedRefusal(
 
 async function markRegistryBoundary(fixture: Fixture) {
   await db.update(certifierRemovals)
-    .set({ metadata: { submissionExternalMutationPossible: true } })
+    .set({ metadata: sql`coalesce(${certifierRemovals.metadata}, '{}'::jsonb) || ${JSON.stringify({ submissionExternalMutationPossible: true })}::jsonb` })
     .where(eq(certifierRemovals.id, fixture.removalId));
 }
 
@@ -336,5 +351,84 @@ describe("claimRemovalDeletion role floor and refusal ordering", () => {
       () => deleteRemoval(memberCtx, fixture),
       REMOVAL_DELETE_SUBMITTED_ERROR,
     );
+  });
+});
+
+describe("Removal deletion role floor when the registry boundary opens after claim", () => {
+  it("refuses an Admin's submission marker while a Member holds the deletion lease", async () => {
+    const fixture = await createFixture();
+    const claim = await claimRemovalDeletion(memberCtx, fixture.facilityId, fixture.removalId);
+    try {
+      await expect(markRemovalSubmissionExternalMutationPossible(
+        adminCtx, fixture.facilityId, fixture.removalId,
+      )).rejects.toThrow(new SafeError(REMOVAL_DELETE_ALREADY_DELETING_ERROR));
+
+      const rows = await removalRows(fixture);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].metadata).not.toHaveProperty("submissionExternalMutationPossible");
+      expect(rows[0].metadata).toHaveProperty(REMOVAL_DELETION_LEASE_KEY, claim.lockedAt.toISOString());
+    } finally {
+      await releaseRemovalDeletionClaim(memberCtx, claim);
+    }
+  });
+
+  it("refuses Member finalization after a marker write and allows the lease to be released", async () => {
+    const fixture = await createFixture();
+    const claim = await claimRemovalDeletion(memberCtx, fixture.facilityId, fixture.removalId);
+    try {
+      // Simulate a writer bypassing the marker seam without replacing our lease.
+      await markRegistryBoundary(fixture);
+      const before = await persistedState(fixture);
+      expect(before.removals[0].metadata).toHaveProperty(REMOVAL_DELETION_LEASE_KEY, claim.lockedAt.toISOString());
+
+      await expect(finalizeRemovalDeletion(memberCtx, claim, emptyRegistryOutcome))
+        .rejects.toThrow(new SafeError(REMOVAL_DELETE_ROLE_ERROR));
+      expect(await persistedState(fixture)).toEqual(before);
+      expect(await removalRows(fixture)).toHaveLength(1);
+    } finally {
+      await releaseRemovalDeletionClaim(memberCtx, claim);
+    }
+    const [removal] = await removalRows(fixture);
+    expect(removal.metadata).not.toHaveProperty(REMOVAL_DELETION_LEASE_KEY);
+    expect(removal.metadata).toHaveProperty("submissionExternalMutationPossible", true);
+  });
+
+  it("refuses Member finalization after a Production Batch registration appears", async () => {
+    const fixture = await createFixture();
+    const claim = await claimRemovalDeletion(memberCtx, fixture.facilityId, fixture.removalId);
+    expect(claim.productionBatches).toEqual([]);
+    expect(claim.submissionIds).toEqual([]);
+    try {
+      await registerProductionBatch(fixture);
+      const before = await persistedState(fixture);
+      expect(before.ledger).toEqual([]);
+      expect(before.registrations).toHaveLength(1);
+      expect(before.removals[0].metadata).not.toHaveProperty("submissionExternalMutationPossible");
+
+      await expect(finalizeRemovalDeletion(memberCtx, claim, emptyRegistryOutcome))
+        .rejects.toThrow(new SafeError(REMOVAL_DELETE_ROLE_ERROR));
+      expect(await persistedState(fixture)).toEqual(before);
+      expect(await removalRows(fixture)).toHaveLength(1);
+    } finally {
+      await releaseRemovalDeletionClaim(memberCtx, claim);
+    }
+    const [removal] = await removalRows(fixture);
+    expect(removal.metadata).not.toHaveProperty(REMOVAL_DELETION_LEASE_KEY);
+  });
+
+  it("allows Admin finalization after a marker write opens the boundary", async () => {
+    const fixture = await createFixture();
+    const claim = await claimRemovalDeletion(adminCtx, fixture.facilityId, fixture.removalId);
+    try {
+      await markRegistryBoundary(fixture);
+      const [removal] = await removalRows(fixture);
+      expect(removal.metadata).toHaveProperty(REMOVAL_DELETION_LEASE_KEY, claim.lockedAt.toISOString());
+      expect(removal.metadata).toHaveProperty("submissionExternalMutationPossible", true);
+
+      await finalizeRemovalDeletion(adminCtx, claim, emptyRegistryOutcome);
+      expect(await removalRows(fixture)).toEqual([]);
+    } finally {
+      await releaseRemovalDeletionClaim(adminCtx, claim);
+    }
   });
 });

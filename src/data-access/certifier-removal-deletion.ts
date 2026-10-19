@@ -117,6 +117,18 @@ export function removalDeletionOpensRegistryBoundary(facts: {
   );
 }
 
+function assertRemovalDeletionRole(
+  ctx: OrgContext,
+  facts: Parameters<typeof removalDeletionOpensRegistryBoundary>[0],
+): void {
+  if (
+    removalDeletionOpensRegistryBoundary(facts) &&
+    !hasOrgRole(ctx, REMOVAL_REGISTRY_DELETION_MIN_ROLE)
+  ) {
+    throw new SafeError(REMOVAL_DELETE_ROLE_ERROR);
+  }
+}
+
 export interface RemovalDeletionClaim {
   removalId: string;
   facilityId: string;
@@ -331,18 +343,13 @@ export async function claimRemovalDeletion(
                 ),
               ),
             );
-    if (
-      removalDeletionOpensRegistryBoundary({
-        metadata: removal.metadata,
-        rows,
-        biocharApplications,
-        measurementSamples,
-        productionBatches,
-      }) &&
-      !hasOrgRole(ctx, REMOVAL_REGISTRY_DELETION_MIN_ROLE)
-    ) {
-      throw new SafeError(REMOVAL_DELETE_ROLE_ERROR);
-    }
+    assertRemovalDeletionRole(ctx, {
+      metadata: removal.metadata,
+      rows,
+      biocharApplications,
+      measurementSamples,
+      productionBatches,
+    });
 
     // Every row gets the same fresh lock, rejected ones included: the submit
     // path resumes a rejected row with an unchanged payload hash, and its
@@ -601,6 +608,18 @@ export async function finalizeRemovalDeletion(
     }
 
     await assertLedgerUnchangedSinceClaim(ctx, tx, claim);
+
+    // A marker or Production Batch registration may have appeared after claim.
+    // Recheck the role floor under the locks before any local cleanup writes.
+    const productionBatches = (await removalProductionBatchTargets(ctx, claim.removalId, tx))
+      .filter((batch) => claim.submissionIds.length > 0 || batch.registrationId !== null);
+    assertRemovalDeletionRole(ctx, {
+      metadata: removal.metadata,
+      rows: claim.submissionIds,
+      biocharApplications: claim.biocharApplications,
+      measurementSamples: claim.measurementSamples ?? [],
+      productionBatches,
+    });
 
     const previousActivityBatches: (typeof creditBatches.$inferSelect)[] = [];
     let releasedReservations: { id: string }[] = [];
