@@ -1,17 +1,9 @@
-import { normalizeTemplateDefinition, resolveLineSources } from "../src/lib/isometric/template-observations";
 /**
- * Isometric coverage check (ADR 0005 scope rules / ADR 0018, Plan §7 / B1).
+ * Isometric coverage check (ADR 0032).
  *
- * Fails CI if:
- *   1. Any (group, blueprint, input) tuple in a live Removal Template is
- *      missing from INPUT_MAPPING or the explicit sequestration bindings.
- *   2. Any tuple in the template is in PERIOD_INPUT_TUPLES (= the template
- *      itself is wrong: a period input declared as REMOVAL-scope; those
- *      belong to PROJECT-scope Components authored in the Isometric UI),
- *      unless that exact sandbox component/input is fixture-allowlisted.
- *
- * (The former PROJECT-scope drift checks against noma's LCA journal were
- * removed with the journal itself — ADR 0018.)
+ * Uses the same template line contracts as readiness and submission.
+ * Entry-only operating lines warn because emissions entries supply their values.
+ * Lines without a settled contract, forbidden lines and unmapped inputs fail.
  *
  * Source modes:
  *   --source=fixture (default)  Reads tests/fixtures/isometric-coverage.json.
@@ -23,6 +15,8 @@ import { normalizeTemplateDefinition, resolveLineSources } from "../src/lib/isom
  *   pnpm isometric:coverage-check                          # fixture mode
  *   pnpm isometric:coverage-check -- --source=db           # DB mode
  */
+import { formatUnbindableTemplateInputs } from "../src/lib/isometric/template-binding-coverage";
+import { evaluateTemplateCoverage } from "./isometric-coverage-core";
 import { config } from "dotenv";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -51,7 +45,6 @@ const facilityFixtureSchema = z.object({
   label: z.string().min(1),
   externalProjectId: z.string().min(1),
   defaultRemovalTemplateId: z.string().min(1),
-  allowedSandboxPeriodInputs: z.array(z.string().min(1)).default([]),
 });
 
 const fixtureFileSchema = z.object({
@@ -119,22 +112,13 @@ async function loadFromDb(): Promise<FacilityFixtureEntry[]> {
     label: p.facilityCode ?? p.facilityId,
     externalProjectId: p.externalProjectId,
     defaultRemovalTemplateId: p.defaultRemovalTemplateId!,
-    allowedSandboxPeriodInputs: [],
   }));
 }
 
-function periodInputAllowlistKey(tuple: {
-  group: string;
-  blueprint: string;
-  component: string;
-  input: string;
-}): string {
-  return [
-    tuple.group,
-    tuple.blueprint,
-    tuple.component.trim().toLowerCase(),
-    tuple.input,
-  ].join("/");
+function printSummary(monitoredInputs: number, components: number, entryOnly: number, failures: number): void {
+  console.log(
+    `  checked: ${monitoredInputs} monitored inputs / ${components} components; entry-only: ${entryOnly}; failures: ${failures}`,
+  );
 }
 
 async function main(): Promise<void> {
@@ -152,17 +136,6 @@ async function main(): Promise<void> {
 
   const { getIsometricClientFromEnv, listGhgEntryTemplates } = await import("../src/lib/isometric");
   const client = getIsometricClientFromEnv();
-  const {
-    lookupInputMapping,
-    lookupPeriodInputTuple,
-    resolveDatapointSource,
-  } = await import(
-    "../src/lib/isometric/transformers/datapoint"
-  );
-  const { getSequestrationInputBinding } = await import(
-    "../src/lib/isometric/transformers/sequestration-binding"
-  );
-
   let failed = 0;
 
   for (const facility of facilities) {
@@ -170,7 +143,6 @@ async function main(): Promise<void> {
       `\n[${facility.label}] project=${facility.externalProjectId} template=${facility.defaultRemovalTemplateId}`,
     );
 
-    // ── 1. Template input coverage ────────────────────────────────────
     let template;
     try {
       const templates = await listGhgEntryTemplates(client, facility.externalProjectId);
@@ -182,6 +154,7 @@ async function main(): Promise<void> {
         `  ✗ Failed to list templates: ${err instanceof Error ? err.message : err}`,
       );
       failed += 1;
+      printSummary(0, 0, 0, 1);
       continue;
     }
     if (!template) {
@@ -189,100 +162,24 @@ async function main(): Promise<void> {
         `  ✗ Template ${facility.defaultRemovalTemplateId} not found in project.`,
       );
       failed += 1;
+      printSummary(0, 0, 0, 1);
       continue;
     }
 
-    // Each group + component + input is one tuple to cover.
-    const lineSources = resolveLineSources({ definition: normalizeTemplateDefinition(template) });
-    type Tuple = {
-      componentId: string;
-      group: string;
-      blueprint: string;
-      component: string;
-      input: string;
-    };
-    const tuples: Tuple[] = [];
-    for (const group of template.groups ?? []) {
-      for (const component of group.components ?? []) {
-        for (const rtcInput of component.inputs ?? []) {
-          if (rtcInput.type !== "monitored") continue;
-          tuples.push({
-            group: group.key,
-            blueprint: component.blueprint_key,
-            component: component.display_name,
-            componentId: component.id,
-            input: rtcInput.input_key,
-          });
-        }
-      }
-    }
-    console.log(`  template monitored tuples: ${tuples.length}`);
-    const allowedSandboxPeriodInputs = new Set(
-      facility.allowedSandboxPeriodInputs,
-    );
-    const observedAllowedSandboxPeriodInputs = new Map<string, number>();
-
-    for (const t of tuples) {
-      // Scope-conflict check runs BEFORE accepting a mapping. A period tuple
-      // must fail unless its exact component name is an explicit carve-out
-      // (mirrors the guard ordering in transformers/datapoint.ts, ADR 0018).
-      const periodTuple = lookupPeriodInputTuple(
-        t.group,
-        t.blueprint,
-        t.input,
-        lineSources[t.componentId],
+    const { failures, entryOnly } = evaluateTemplateCoverage(template);
+    for (const finding of entryOnly) {
+      console.warn(
+        `  ⚠ entry-only: ${finding.componentDisplayName} (${finding.componentId}). Supply values from emissions entries.`,
       );
-      if (periodTuple) {
-        const allowlistKey = periodInputAllowlistKey(t);
-        if (allowedSandboxPeriodInputs.has(allowlistKey)) {
-          observedAllowedSandboxPeriodInputs.set(
-            allowlistKey,
-            (observedAllowedSandboxPeriodInputs.get(allowlistKey) ?? 0) + 1,
-          );
-          console.warn(
-            `  ⚠ sandbox-only period input allowlisted: ${allowlistKey}`,
-          );
-          continue;
-        }
-        console.error(
-          `  ✗ scope-conflict: template declares ${t.group}/${t.blueprint}/${t.input} as REMOVAL-scope, but it belongs to PROJECT (category="${periodTuple.category}"). Remove from template (ADR 0018).`,
-        );
-        failed += 1;
-        continue;
-      }
-      const mapping = lookupInputMapping(t.group, t.blueprint, t.input);
-      if (!mapping) {
-        if (
-          t.group === "co2-stored" &&
-          getSequestrationInputBinding(t.blueprint, t.input)
-        ) {
-          continue;
-        }
-        console.error(
-          `  ✗ missing removal input binding: ${t.group}/${t.blueprint}/${t.input}`,
-        );
-        failed += 1;
-        continue;
-      }
-      try {
-        resolveDatapointSource(mapping, lineSources[t.componentId]);
-      } catch (err) {
-        console.error(
-          `  ✗ invalid component mapping: ${t.group}/${t.blueprint}/${t.input} (${t.component}): ${err instanceof Error ? err.message : err}`,
-        );
-        failed += 1;
-      }
     }
-
-    for (const allowlistKey of allowedSandboxPeriodInputs) {
-      const observedCount =
-        observedAllowedSandboxPeriodInputs.get(allowlistKey) ?? 0;
-      if (observedCount === 1) continue;
-      console.error(
-        `  ✗ sandbox period-input allowlist entry must match exactly one live template input; found ${observedCount}: ${allowlistKey}`,
-      );
-      failed += 1;
+    for (const line of formatUnbindableTemplateInputs(failures).lines) {
+      console.error(`  ✗ ${line}`);
     }
+    failed += failures.length;
+    const components = template.groups.flatMap((group) => group.components);
+    const monitoredInputs = components.flatMap((component) => component.inputs)
+      .filter((input) => input.type === "monitored").length;
+    printSummary(monitoredInputs, components.length, entryOnly.length, failures.length);
   }
 
   if (failed > 0) {

@@ -1,12 +1,13 @@
 import { LINE_NO_MAPPING_MESSAGE, LINE_TRANSPORT_REPLACEMENT_MESSAGE, TRANSPORT_BLUEPRINT_KEY } from "./emission-line-constants";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
-import { emissionLineBindingDecision, type LineCoverageReason } from "@/lib/certification/emission-line-binding";
+import { emissionLineBindingDecision, type EmissionLineBindingDecision, type LineCoverageReason } from "@/lib/certification/emission-line-binding";
 import type { components } from "./generated/certify";
 import { ownValue } from "./semantic-binding-catalog";
 import { validateLineSources, type LineSources } from "./template-observations/line-sources";
 import { normalizeTemplateDefinition } from "./template-observations/normalize";
 
 export interface UnbindableTemplateInput {
+  state: EmissionLineBindingDecision["state"];
   groupKey: string;
   componentId: string;
   componentDisplayName: string;
@@ -31,7 +32,7 @@ export function findUnbindableTemplateInputs(
       contract: ownValue(lineSources, component.id), problems, enrichmentComplete: options.enrichmentComplete ?? true });
     if (!decision) return [];
     const finding = (inputKey: string, reason: LineCoverageReason) => ({ groupKey: group.key, componentId: component.id,
-      componentDisplayName: component.displayName, blueprintKey: component.blueprintKey, inputKey, reason });
+      componentDisplayName: component.displayName, blueprintKey: component.blueprintKey, inputKey, reason, state: decision.state });
     return [
       ...(decision.unknownInputKeys ?? []).map((inputKey) => finding(inputKey, "unmapped")),
       ...decision.inputKeys.map((inputKey) => finding(inputKey, decision.reason)),

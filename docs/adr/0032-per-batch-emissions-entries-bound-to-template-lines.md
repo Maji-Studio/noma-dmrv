@@ -1,6 +1,6 @@
 # Operating emissions are entered per credit batch and bound to Removal-template lines
 
-**Status: Proposed** (2026-10-15). [Plan](../plans/2026-10-15-template-driven-emissions.md). Supersedes the operating-emissions half of [ADR 0018](./0018-isometric-owns-project-emissions.md) and the 2026-07-27 non-goals on #291. Amends [ADR 0020](./0020-production-emissions-front-loaded-per-credit-batch.md) and [ADR 0031](./0031-operator-energy-estimates.md).
+**Status: Accepted** (2026-10-19, decided in the 19 Oct backlog round; proposed 2026-10-15). [Plan](../plans/2026-10-15-template-driven-emissions.md). Supersedes the operating-emissions half of [ADR 0018](./0018-isometric-owns-project-emissions.md) and the 2026-07-27 non-goals on #291. Amends [ADR 0020](./0020-production-emissions-front-loaded-per-credit-batch.md) and [ADR 0031](./0031-operator-energy-estimates.md).
 
 ## Context
 

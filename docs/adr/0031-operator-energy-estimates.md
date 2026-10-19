@@ -14,10 +14,10 @@
 > [open-questions.md](../open-questions.md#energy-estimates-paused-energyemission-factors---dormant));
 > resuming means rebuilding the settings form and the read.
 
-> **Proposed amendment 2026-10-15**: [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
+> **Amended 2026-10-19** (proposed 2026-10-15): [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
 > moves operating emissions onto Removals as per-batch emissions entries.
-> Estimates stay display only. The text below stays in force until ADR 0032 is
-> accepted and implemented.
+> Estimates stay display only. ADR 0032 was accepted on 2026-10-19. The text
+> below stays in force until it is fully implemented.
 
 Operators asked how much a credit batch, production run, delivery or application emitted. ADR 0018 keeps every emission figure in Isometric, so noma had nothing to answer with: `/energy` listed four all-time activity totals. The registry's numbers are not a substitute. They arrive per Removal, after submission, and only for what was submitted.
 

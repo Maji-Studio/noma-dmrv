@@ -213,8 +213,11 @@ After saving the template:
 - **Unbound fixed input:** bind a registry Datapoint; noma will not invent one.
 - **Unsupported durability component:** tier, blueprint, or input table does not
   match the implemented path.
-- **Unrecognized diesel/Safety margin component:** restore the exact display
-  name or ship a reviewed mapping change.
-- **PROJECT-scope conflict:** move the component out of the Removal template.
+- **Unsettled line contract:** review missing, proposed, unassigned or ambiguous
+  contracts. Coverage uses the same line decisions as readiness and submission
+  (ADR 0032), keyed by component ID.
+- **Forbidden line:** move the component out of the Removal template.
+- **Entry-only operating line:** coverage warns without failing; supply its values
+  from emissions entries.
 - **Missing intended Source:** fix the evidence/lineage or template target; do
   not attach every Source to every input.

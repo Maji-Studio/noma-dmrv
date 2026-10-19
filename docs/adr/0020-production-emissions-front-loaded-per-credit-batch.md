@@ -4,11 +4,11 @@ Status: accepted (2026-07-03) · Issue #349 · Partially supersedes
 [ADR 0003](./0003-removal-as-submission-unit.md) (narrows its
 "applied-biochar scoping" clause)
 
-> **Proposed amendment 2026-10-15**: [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
+> **Amended 2026-10-19** (proposed 2026-10-15): [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
 > keeps the production claim and the follow-up omission, and adds a claim per
 > emissions entry: a follow-up Removal keeps a production component when it has
-> unsent entries for it, and sends only those. The text below stays in force
-> until ADR 0032 is accepted and implemented.
+> unsent entries for it, and sends only those. ADR 0032 was accepted on
+> 2026-10-19. The text below stays in force until it is fully implemented.
 
 > **Amended 2026-07-24 — version-citation correction.** The v1.3 labels in the
 > historical Context below do not match noma's Biochar Protocol v1.2
