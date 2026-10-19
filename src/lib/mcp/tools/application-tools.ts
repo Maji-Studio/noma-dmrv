@@ -44,7 +44,7 @@ export const applicationReadTools: ReadTool[] = [
     output: itemEnvelopeSchema(deliveryApplicationBalanceRepresentationSchema),
     description: `Read delivered, applied and remaining wet kg, earliest application date and site defaults from one snapshot. Call find_deliveries first for the delivery idOrCode. Call this before record_application. Requires deliveries:read. Application writes change this balance without changing the delivery version; it is not a reservation. ${UNTRUSTED_TEXT}`,
     execute(ctx, raw) { const { idOrCode } = parseQueryInput(raw, deliveryIdentifier); return readApiDeliveryApplicationBalance(ctx, lookupIdentifier(idOrCode)); },
-    summarize: body => `Delivery application balance: ${(body.data as z.infer<typeof deliveryApplicationBalanceRepresentationSchema>).remainingWetMassKg} wet kg remaining.`,
+    summarize: body => `Delivery application balance: ${(body.data as z.infer<typeof deliveryApplicationBalanceRepresentationSchema>).remainingWetMassKg} kg wet mass remaining.`,
   },
 ];
 

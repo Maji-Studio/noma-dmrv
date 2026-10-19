@@ -151,7 +151,7 @@ export const readTools: ReadTool[] = [
     output: itemEnvelopeSchema(orderRepresentationSchema),
   }, async (ctx, { idOrCode }) => ({ data: await readApiOrder(ctx, lookupIdentifier(idOrCode)) })),
   defineRead({ name: "get_order_balance", scope: "orders:read",
-    summarize: (body) => { const row = body.data as z.infer<typeof orderBalanceRepresentationSchema>; return `Order balance: ${row.remainingWetMassKg} wet kg remaining (${row.fulfillmentStatus}).`; },
+    summarize: (body) => { const row = body.data as z.infer<typeof orderBalanceRepresentationSchema>; return `Order balance: ${row.remainingWetMassKg} kg wet mass remaining (${row.fulfillmentStatus}).`; },
     description: `${readDescriptions.orderBalance} Call find_orders first for an id or code. Call it before recording a delivery.`,
     input: resourceQueries.orders.get.extend({ idOrCode: z.string().describe("Order UUID or exact code.") }),
     output: itemEnvelopeSchema(orderBalanceRepresentationSchema),
