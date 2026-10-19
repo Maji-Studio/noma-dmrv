@@ -102,6 +102,7 @@ export function ProductionIncidentForm({
             <SegmentedControl
               id="severity"
               legend="Severity"
+              required
               disabled={isSubmitting}
               error={!!errors.severity}
               options={severityOptions}

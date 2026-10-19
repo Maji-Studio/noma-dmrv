@@ -73,7 +73,7 @@ export function SampleNutrientFields({
       {enabled && (
         <div className="grid grid-cols-1 gap-x-16 gap-y-20 pt-8 sm:grid-cols-2">
           {fields.map((field) => (
-            <FormField key={field.id} id={field.id} label={field.label} error={field.error}>
+            <FormField key={field.id} id={field.id} label={field.label} error={field.error} required>
               <FormInput
                 id={field.id}
                 type="number"

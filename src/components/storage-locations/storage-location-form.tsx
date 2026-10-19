@@ -185,6 +185,7 @@ export function StorageLocationForm({
             <SegmentedControl
               id="type"
               legend="Storage type"
+              required
               disabled={isSubmitting || identityLocked}
               error={!!errors.type}
               options={storageTypeOptions}
@@ -252,6 +253,7 @@ export function StorageLocationForm({
             <ChoiceCardGroup
               id="stockMode"
               legend="Stock mode"
+              required
               disabled={isSubmitting}
               error={!!errors.stockMode}
               stackArt
@@ -270,7 +272,7 @@ export function StorageLocationForm({
           {watchedStockMode === "split" && (
             <div className="md:col-span-2">
               <FormField id="drawOrder" label="Default draw order" hint="Which sub-bin a draw takes first. You can change the order for any draw." error={errors.drawOrder?.message} required>
-                <ChoiceCardGroup id="drawOrder" legend="Default draw order" disabled={isSubmitting}
+                <ChoiceCardGroup id="drawOrder" legend="Default draw order" required disabled={isSubmitting}
                   error={!!errors.drawOrder} stackArt options={drawOrderOptions} {...register("drawOrder")} />
               </FormField>
             </div>

@@ -357,6 +357,17 @@ The read-mode `sections` passed to `EntitySideSheet` must mirror the form's sect
 - Field-less sections render as plain numbered orientation steps — use them for previews and recaps, not required input.
 - Conditional sections may mount/unmount; numbering derives from rendered order and stays contiguous.
 
+### Required stars
+
+A red star on a label means the save refuses the field empty. The rules:
+
+- Star what the schema or the submit handler rejects when empty. Do not star a field that merely feels important, or one a blank value defaults.
+- A field required only in one state shows the star only in that state (cancellation reason when cancelled, nutrient shares while claims are on, the override distance while Override is on, the GIS reference for that evidence method).
+- A field needed for certification but not for saving gets the CERT chip below, never a star.
+- `FormField` takes `required`. Anything drawn outside a FormField (a picker label, a legend, a readout) uses `RequiredMarker` from `@/components/forms/required-marker`, imported by file path, never through the barrel. For a fieldset control (`SegmentedControl`, `ChoiceCardGroup`) also pass `required`, which adds "Required" to the sr-only legend that names the group. Do not add `aria-required`: the control would announce it twice.
+- The star adds "Required" to the label, so locate a starred field in specs with a regex or by role and a prefix match, not by exact name.
+- The guard lives at the end of `src/components/forms/form-detail-parity-forms.test.tsx`: every sheet form is submitted empty and any field that shows an error must carry a star. Its limit: Zod 4 aborts an object `superRefine` after an `invalid_type` issue and handler checks run after validation, so an empty submit never reaches a conditional requirement. Those go in its second table, which starts from a valid fixture, empties one field and asserts the star and the error together. A new conditional requirement gets a row there.
+
 ### CERT chip status
 
 A field with `certifyRequired` carries the CERT chip on its label row (`CertificationFieldTag`), in Simple and Detailed alike. It explains itself on hover and to screen readers ("Required for certification"); there is no sheet legend. `FormField` accepts `certifyStatus`; the section's `certifyRequired` controls whether the chip shows. The chip reflects the record's **saved** state, frozen — it does not flip while the user types:
