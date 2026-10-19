@@ -8,7 +8,7 @@
  */
 
 import { spawnSync } from "child_process";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
 import { join } from "path";
 
 export const VAULT = "Environment Variables";
@@ -51,6 +51,43 @@ export interface TemplateEntry {
   name: string;
   /** Field referenced inside the op:// path, or null for a literal value. */
   opField: string | null;
+}
+
+/** Parse workflow op:// references into field names grouped by item env. */
+export function parseWorkflowOpReferences(workflow: string): Map<string, Set<string>> {
+  const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const referencePattern = new RegExp(
+    `op://${escapeRegex(VAULT)}/${escapeRegex(ITEM_PREFIX)} ([A-Za-z0-9_-]+)/([A-Z_][A-Z0-9_]*)(?=["'\\s]|$)`,
+    "g"
+  );
+  const references = new Map<string, Set<string>>();
+  for (const line of workflow.split("\n")) {
+    if (line.trimStart().startsWith("#")) continue;
+    for (const [, env, field] of line.matchAll(referencePattern)) {
+      if (!references.has(env)) references.set(env, new Set());
+      references.get(env)!.add(field);
+    }
+  }
+  return references;
+}
+
+/** Workflow filenames per referenced field, grouped by 1Password item env. */
+export function readWorkflowOpReferences(): Map<string, Map<string, Set<string>>> {
+  const workflowDir = join(process.cwd(), ".github", "workflows");
+  const references = new Map<string, Map<string, Set<string>>>();
+  for (const file of readdirSync(workflowDir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!file.isFile() || !/\.ya?ml$/.test(file.name)) continue;
+    const workflow = readFileSync(join(workflowDir, file.name), "utf-8");
+    for (const [env, fields] of parseWorkflowOpReferences(workflow)) {
+      if (!references.has(env)) references.set(env, new Map());
+      const envReferences = references.get(env)!;
+      for (const field of fields) {
+        if (!envReferences.has(field)) envReferences.set(field, new Set());
+        envReferences.get(field)!.add(file.name);
+      }
+    }
+  }
+  return references;
 }
 
 /** Parse an env template (default .env.tpl) into its declared variables. */
