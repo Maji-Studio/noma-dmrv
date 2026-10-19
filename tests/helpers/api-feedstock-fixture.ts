@@ -133,7 +133,7 @@ export const committedFeedstocks = (fixture: IntakeFixture) =>
 export async function captureFeedstockState(fixture: IntakeFixture) {
   return {
     rows: await committedFeedstocks(fixture),
-    legs: await db.select().from(transportLegs).where(eq(transportLegs.organizationId, fixture.ctx.organizationId)),
+    legs: await db.select().from(transportLegs).where(eq(transportLegs.organizationId, fixture.ctx.organizationId)).orderBy(transportLegs.id),
   };
 }
 
