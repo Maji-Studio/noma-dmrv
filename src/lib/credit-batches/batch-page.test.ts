@@ -5,6 +5,7 @@ import type { RecordLockView } from "@/lib/record-lock-view";
 import {
   creditBatchMilestones,
   creditBatchPrimaryAction,
+  isCreditBatchSent,
   overviewBadgeCount,
 } from "./batch-page";
 import type { CreditBatchOpenItem } from "./open-items";
@@ -168,5 +169,19 @@ describe("creditBatchPrimaryAction", () => {
     const submitted = model({ removals: [removal({ phase: "submitted", status: SUBMITTED_STATUS })] });
     expect(creditBatchPrimaryAction({ blocking: [item("a")], pageModel: submitted, lock: undefined })).toBeNull();
     expect(creditBatchPrimaryAction({ blocking: [], pageModel: model(), lock: SENT_LOCK })).toBeNull();
+  });
+});
+
+describe("isCreditBatchSent", () => {
+  it("is false for an open batch, a draft Removal and while the model loads", () => {
+    expect(isCreditBatchSent({ pageModel: model(), lock: undefined })).toBe(false);
+    expect(isCreditBatchSent({ pageModel: model({ removals: [removal()] }), lock: undefined })).toBe(false);
+    expect(isCreditBatchSent({ pageModel: undefined, lock: undefined })).toBe(false);
+  });
+
+  it("is true once a Removal is submitted or the record lock says sent", () => {
+    expect(isCreditBatchSent({ pageModel: model({ removals: [removal({ phase: "submitted", status: SUBMITTED_STATUS })] }), lock: undefined })).toBe(true);
+    expect(isCreditBatchSent({ pageModel: model(), lock: SENT_LOCK })).toBe(true);
+    expect(isCreditBatchSent({ pageModel: undefined, lock: SENT_LOCK })).toBe(true);
   });
 });

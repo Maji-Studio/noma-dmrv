@@ -42,7 +42,7 @@ function DeliveryList({ model }: { model: CreditBatchPageModel }) {
     })
     .sort((a, b) => REMOVAL_BAR_SEGMENT_ORDER.indexOf(a.segment) - REMOVAL_BAR_SEGMENT_ORDER.indexOf(b.segment));
   return (
-    <PagePanel title="Applied biochar by delivery" labelledBy="credit-batch-deliveries">
+    <PagePanel title="Applied biochar by delivery (dry)" labelledBy="credit-batch-deliveries">
       <ul className="flex flex-col">
         {rows.map(({ slice, segment, removal }) => (
           <li
@@ -115,7 +115,7 @@ export function CreditBatchRemovalsTab() {
       <PagePanel
         title="Biochar in Removals"
         labelledBy="credit-batch-removals"
-        action={<span className="body-medium tabular-nums">{tonnesFromKg(pageModel.mass.appliedDryKg)} applied</span>}
+        action={<span className="body-medium tabular-nums">{tonnesFromKg(pageModel.mass.appliedDryKg)} applied (dry)</span>}
       >
         <DetailedRemovalBar groups={groups} facilityId={batch.facilityId} />
         <NotAppliedCaption model={pageModel} />

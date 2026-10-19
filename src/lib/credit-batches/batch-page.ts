@@ -144,14 +144,21 @@ export interface CreditBatchPrimaryActionInput {
 }
 
 /**
+ * A batch is sent once the record lock says so or a Removal holding it is
+ * submitted. The primary action and the header's Edit button both stop here.
+ */
+export function isCreditBatchSent({ pageModel, lock }: { pageModel: CreditBatchPageModel | undefined; lock: RecordLockView | undefined }): boolean {
+  return lock?.level === "sent" || !!pageModel?.removals.some((removal) => removal.phase === "submitted");
+}
+
+/**
  * The header's one state-driven button: Fix next item, then Open the draft
  * Removal, then Start Removal. None once a Removal or the batch is submitted
  * (Kenji), none while the inputs load, none when nothing is applied.
  */
 export function creditBatchPrimaryAction({ blocking, pageModel, lock }: CreditBatchPrimaryActionInput): CreditBatchPrimaryAction | null {
   if (!blocking || !pageModel) return null;
-  if (lock?.level === "sent") return null;
-  if (pageModel.removals.some((removal) => removal.phase === "submitted")) return null;
+  if (isCreditBatchSent({ pageModel, lock })) return null;
   if (blocking.length > 0) return { kind: "fix", label: FIX_NEXT_ITEM_LABEL, item: blocking[0] };
   const draft = pageModel.removals.find((removal) => removal.phase === "draft");
   if (draft) return { kind: "draft", label: `Open ${draft.code}`, removalId: draft.id };

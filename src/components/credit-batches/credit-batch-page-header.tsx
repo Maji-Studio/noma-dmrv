@@ -22,6 +22,7 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   APPLIED_DRY_LABEL,
   creditBatchMilestones,
+  isCreditBatchSent,
   type CreditBatchMilestone,
   type CreditBatchPrimaryAction,
 } from "@/lib/credit-batches/batch-page";
@@ -40,8 +41,8 @@ export interface CreditBatchHeaderActions {
   onDelete: () => void;
 }
 
-function OverflowMenu({ onDelete }: { onDelete: () => void }) {
-  const { batch, lock } = useCreditBatchPage();
+function OverflowMenu({ onDelete, sent }: { onDelete: () => void; sent: boolean }) {
+  const { batch, lock, startEdit } = useCreditBatchPage();
   const deletable = isRecordEditable(lock) && isCreditBatchDeletable(lock);
   return (
     <DropdownMenu.Root>
@@ -52,6 +53,7 @@ function OverflowMenu({ onDelete }: { onDelete: () => void }) {
         <DropdownMenu.Item render={<Link href={traceabilityBatchHref(batch.id, batch.facilityId)} />}>
           Open in Traceability
         </DropdownMenu.Item>
+        {sent && startEdit && <DropdownMenu.Item onClick={startEdit}>Edit details</DropdownMenu.Item>}
         {deletable && (
           <>
             <DropdownMenu.Separator />
@@ -103,7 +105,8 @@ function ProgressSteps() {
 }
 
 function HeaderButtons({ primary, onPrimary, onDelete }: CreditBatchHeaderActions) {
-  const { startEdit } = useCreditBatchPage();
+  const { startEdit, pageModel, lock } = useCreditBatchPage();
+  const sent = isCreditBatchSent({ pageModel, lock });
   return (
     <>
       {primary && (
@@ -111,13 +114,13 @@ function HeaderButtons({ primary, onPrimary, onDelete }: CreditBatchHeaderAction
           {primary.label}
         </Button>
       )}
-      {startEdit && (
+      {startEdit && !sent && (
         <Button variant="default" onClick={startEdit}>
           <PencilSimpleIcon size={20} aria-hidden />
           Edit
         </Button>
       )}
-      <OverflowMenu onDelete={onDelete} />
+      <OverflowMenu onDelete={onDelete} sent={sent} />
     </>
   );
 }
@@ -147,6 +150,7 @@ export function CreditBatchPageHeader(actions: CreditBatchHeaderActions) {
   );
 }
 
+const SAME_MASS_TOLERANCE_KG = 0.001;
 const VALUE_SKELETON_WIDTH_PX = 88;
 const VALUE_SKELETON_HEIGHT_PX = 28;
 
@@ -162,8 +166,9 @@ function appliedNumber(pageModel: ReturnType<typeof useCreditBatchPage>["pageMod
   if (!pageModel) return { label: APPLIED_DRY_LABEL, value: null, sub: null };
   const { appliedDryKg, notInRemovalDryKg } = pageModel.mass;
   let sub: string | null = null;
-  if (notInRemovalDryKg > 0) sub = `${formatTonnes(kgToTonnes(notInRemovalDryKg))} not in a Removal`;
-  else if (pageModel.removals.length > 0) sub = "All in Removals";
+  // Nothing in a Removal yet: "not in a Removal" would repeat the number above.
+  if (notInRemovalDryKg > 0 && appliedDryKg - notInRemovalDryKg > SAME_MASS_TOLERANCE_KG) sub = `${formatTonnes(kgToTonnes(notInRemovalDryKg))} not in a Removal`;
+  else if (notInRemovalDryKg <= 0 && pageModel.removals.length > 0) sub = "All in Removals";
   return { label: APPLIED_DRY_LABEL, value: formatTonnes(kgToTonnes(appliedDryKg)), sub };
 }
 

@@ -23,7 +23,7 @@ import { isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
 import { useCreditBatchPage } from "./credit-batch-page-context";
 import { FOCUS_RING, FocusRow, MUTED_TEXT, PagePanel, ROW_RULE } from "./credit-batch-page-parts";
 import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
-import { CompactRemovalBar, NotAppliedCaption, tonnesFromKg } from "./credit-batch-removal-bar";
+import { CompactRemovalBar, tonnesFromKg } from "./credit-batch-removal-bar";
 import { durabilityLabel } from "./credit-batch-view";
 
 type GroupKey = "blocking" | "check" | "waiting";
@@ -148,7 +148,7 @@ function RemovalsPanel() {
       labelledBy="credit-batch-overview-removals"
       action={
         <span className="inline-flex items-center gap-16">
-          <span className="body-medium tabular-nums">{tonnesFromKg(pageModel.mass.appliedDryKg)} applied</span>
+          <span className="body-medium tabular-nums">{tonnesFromKg(pageModel.mass.appliedDryKg)} applied (dry)</span>
           <button
             type="button"
             onClick={() => go("removals")}
@@ -164,7 +164,6 @@ function RemovalsPanel() {
         <p className={cn("body-small", MUTED_TEXT)}>Nothing blocks this credit batch. Start a Removal to submit its applied biochar.</p>
       )}
       <CompactRemovalBar groups={groups} facilityId={batch.facilityId} />
-      <NotAppliedCaption model={pageModel} />
     </PagePanel>
   );
 }
