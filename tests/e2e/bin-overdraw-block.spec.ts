@@ -643,7 +643,7 @@ test("edits delivery mass, links its saved source and locks it after a dependent
   await page.getByRole("button", { name: "Edit delivery", exact: true }).click();
   const wet = page.locator('input[name="deliveredWetMassKg"]');
   await expect(wet).toBeEnabled();
-  await expect(page.locator('input[name="deliveryDate"]')).toBeDisabled();
+  await expect(page.locator('input[name="deliveryDate"]')).toBeEnabled();
   await wet.fill("1900");
   await fillStockMoisture(page, "delivery", "30");
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
@@ -680,5 +680,6 @@ test("edits delivery mass, links its saved source and locks it after a dependent
   await page.getByRole("button", { name: "Edit delivery", exact: true }).click();
   await expect(wet).toBeDisabled();
   await expect(page.locator('input[name="moistureContentPercent"]')).toBeDisabled();
+  await expect(page.locator('input[name="deliveryDate"]')).toBeDisabled();
   await expect(page.getByRole("dialog")).toContainText("Correction blocked by a later lost mass:");
 });
