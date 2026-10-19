@@ -2,8 +2,6 @@
 import { useId, useState } from "react";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { Modal } from "@/components/ui";
-import { pluralize } from "@/lib/copy-utils";
-import { formatMassKg } from "@/lib/format-utils";
 import { DerivedHeadline } from "@/components/forms";
 import { formatWetEstimate } from "@/components/storage-locations/stock-preview-shared";
 import { OutputStockAvailability } from "@/components/storage-locations/output-stock-preview";
@@ -12,31 +10,21 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useMatchingOutputBins, useOutputStockBalance } from "@/hooks/use-output-stock";
 import { PackageIcon } from "@phosphor-icons/react/dist/ssr";
 import { Notice } from "@/components/ui/notice";
-import { DRY_BIOCHAR_LABEL } from "@/components/biochar-products/product-composition-components";
 
 /** Status lines under a block: caption size, secondary ink. */
 const STATUS_CLASS = "body-caption text-[var(--color-text-secondary)]";
 
 /**
- * The row's figures. Wet leads, as an estimate, and counts only the bins that
- * have one; dry gets the same honesty. A partial sum is never presented as the
- * total, the headline never switches to dry, and an unresolved figure is null
- * so the muted "Not available" applies.
+ * The row's one figure: wet mass, as an estimate, counting only the bins that
+ * have one. A partial sum says how many bins it covers so it is never read as
+ * the full stock; an unresolved figure is null so the muted "Not available"
+ * applies. Dry stock and the bin breakdown live in the dialog.
  */
-export function summarizeMatchingStock(bins: readonly MatchingOutputBin[]): { wet: string | null; dry: string | null; dryCoverage: string | null; binCount: number } {
-  const binCount = bins.length;
+export function summarizeMatchingStock(bins: readonly MatchingOutputBin[]): { wet: string | null } {
   const withWet = bins.filter(bin => bin.estimatedWetMassKg != null);
-  const withDry = bins.filter(bin => bin.dryMassKg != null);
   const wetKg = withWet.reduce((sum, bin) => sum + (bin.estimatedWetMassKg ?? 0), 0);
-  const dryKg = withDry.reduce((sum, bin) => sum + (bin.dryMassKg ?? 0), 0);
-  const coverage = (known: number) => known === binCount ? "" : ` in ${known} of ${binCount} bins`;
-  return {
-    wet: withWet.length === 0 ? null : `${formatWetEstimate(wetKg)} kg wet mass${coverage(withWet.length)}`,
-    dry: withDry.length === 0 ? null : formatMassKg(dryKg),
-    // Read after the label ("1,500 kg dry biochar in 2 of 3 bins"), so it is not part of the figure.
-    dryCoverage: withDry.length === 0 || withDry.length === binCount ? null : coverage(withDry.length).trim(),
-    binCount,
-  };
+  const coverage = withWet.length === bins.length ? "" : ` in ${withWet.length} of ${bins.length} bins`;
+  return { wet: withWet.length === 0 ? null : `${formatWetEstimate(wetKg)} kg wet mass${coverage}` };
 }
 
 /**
@@ -64,12 +52,7 @@ export function MatchingOutputBins({ facilityId, formulationId }: { facilityId: 
         aria-haspopup="dialog"
         className="flex w-full items-center justify-between gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 py-10 text-left transition-colors duration-300 hover:border-[var(--color-border-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-interaction)]"
       >
-        <DerivedHeadline
-          label="Available wet stock, estimate"
-          value={summary.wet}
-          secondary={{ label: summary.dryCoverage ? `${DRY_BIOCHAR_LABEL} ${summary.dryCoverage}` : DRY_BIOCHAR_LABEL, value: summary.dry }}
-          sub={`${summary.binCount} ${pluralize(summary.binCount, "bin", "bins")}`}
-        />
+        <DerivedHeadline label="Available" value={summary.wet} />
         <CaretRightIcon aria-hidden size={16} weight="bold" className="shrink-0 text-[var(--color-text-tertiary)]" />
       </button>
       <Modal isOpen={open} onClose={() => setOpen(false)} ariaLabelledBy={titleId} width="md">

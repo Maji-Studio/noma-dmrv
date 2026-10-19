@@ -30,7 +30,7 @@ export function DerivedHeadline({ label, value, before, secondary, sub, figureLa
    * estimate. Data, so it shows at both detail levels. Null value reads
    * "Not available".
    */
-  secondary?: { label: ReactNode; value: ReactNode; /** After the label, such as which bins the figure covers. */ trailing?: ReactNode };
+  secondary?: { label: ReactNode; value: ReactNode; };
   /** One caption line under the figure, such as the entry behind it. */
   sub?: ReactNode;
   /**
@@ -71,7 +71,6 @@ export function DerivedHeadline({ label, value, before, secondary, sub, figureLa
           label={secondary.label}
           value={secondary.value ?? MISSING_VALUE.notAvailable}
           empty={secondary.value == null}
-          trailing={secondary.trailing}
         />
       )}
       {sub != null && (

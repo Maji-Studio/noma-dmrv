@@ -30,18 +30,18 @@ describe("MatchingOutputBins", () => {
     expect(html).not.toContain("Orders do not reserve stock.");
     expect(html).not.toContain("150 kg");
   });
-  it("shows one wet total with dry as a secondary line, and the button opens the bins", () => {
+  it("shows only the available wet mass on the row, and the button opens the bins", () => {
     state.bins = [
       { id: "a", code: "B1", name: "Bin A", dryMassKg: 100, estimatedWetMassKg: 120 },
       { id: "b", code: "B2", name: "Bin B", dryMassKg: 70, estimatedWetMassKg: 80 },
     ];
     const html = renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />);
     const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
-    expect(text).toContain("Available wet stock, estimate");
-    expect(text).toContain("200 kg wet mass");
-    expect(text).toContain("170 kg dry biochar");
+    expect(text).toContain("Available 200 kg wet mass");
+    expect(text).not.toContain("Available wet stock");
+    expect(text).not.toContain("dry biochar");
+    expect(text).not.toContain("2 bins");
     expect(text).not.toContain("Tap to see");
-    expect(text).toContain("2 bins");
     expect(html).not.toContain('role="article"');
   });
   it("says how many bins a partial wet estimate covers and keeps wet as the headline", () => {
@@ -52,32 +52,20 @@ describe("MatchingOutputBins", () => {
     ];
     const summary = summarizeMatchingStock(bins);
     expect(summary.wet).toBe("170 kg wet mass in 2 of 3 bins");
-    expect(summary.dry).toBe("200 kg");
-    expect(summary.dryCoverage).toBeNull();
   });
-  it("says how many bins a partial dry sum covers", () => {
-    const summary = summarizeMatchingStock([
-      { id: "a", code: "B1", name: "A", dryMassKg: 100, estimatedWetMassKg: 120 },
-      { id: "b", code: "B2", name: "B", dryMassKg: null, estimatedWetMassKg: 50 },
-      { id: "c", code: "B3", name: "C", dryMassKg: 30, estimatedWetMassKg: 10 },
-    ]);
-    expect(summary.dry).toBe("130 kg");
-    expect(summary.dryCoverage).toBe("in 2 of 3 bins");
-    expect(summary.wet).toBe("180 kg wet mass");
-  });
-  it("reads the dry coverage after the label, not inside the figure", () => {
+  it("keeps the partial coverage on the row", () => {
     state.bins = [
       { id: "a", code: "B1", name: "A", dryMassKg: 100, estimatedWetMassKg: 120 },
-      { id: "b", code: "B2", name: "B", dryMassKg: null, estimatedWetMassKg: 50 },
+      { id: "b", code: "B2", name: "B", dryMassKg: null, estimatedWetMassKg: null },
       { id: "c", code: "B3", name: "C", dryMassKg: 30, estimatedWetMassKg: 10 },
     ];
     const text = renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
-    expect(text).toContain("130 kg dry biochar in 2 of 3 bins");
+    expect(text).toContain("Available 130 kg wet mass in 2 of 3 bins");
+    expect(text).not.toContain("dry biochar");
   });
   it("reads Not available when nothing resolves", () => {
     const summary = summarizeMatchingStock([{ id: "a", code: "B1", name: "A", dryMassKg: null, estimatedWetMassKg: null }]);
     expect(summary.wet).toBeNull();
-    expect(summary.dry).toBeNull();
   });
   it("explicitly permits an order without stock", () => {
     state.bins = [];
