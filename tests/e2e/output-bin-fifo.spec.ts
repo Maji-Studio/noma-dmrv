@@ -119,7 +119,7 @@ test.describe("Output-bin conserved FIFO", () => {
     // Matching stock informs the order, so Simple shows it.
     await expect(page.getByRole("dialog").getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
     const matching = page.getByRole("region", { name: "Matching storage bins" });
-    await matching.getByRole("button", { name: /Available wet stock, estimate/ }).click();
+    await matching.getByRole("button", { name: /^Available\b/ }).click();
     const bins = page.getByRole("dialog", { name: "Matching stock" });
     await expect(bins.getByRole("article")).toHaveCount(FIFO_MATCHING_BIN_COUNT);
     await expect(bins.getByText(f.emptyBins.at(-1)!.name, { exact: true })).toBeVisible();
