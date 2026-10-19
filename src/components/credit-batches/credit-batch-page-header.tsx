@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { isCreditBatchDeletable } from "./credit-batch-card";
 import { useCreditBatchPage } from "./credit-batch-page-context";
 import { CountBadge, IdentityChip, MUTED_TEXT } from "./credit-batch-page-parts";
+import { CREDIT_BATCH_PROGRESS_TITLE, CreditBatchProgressCompact } from "./credit-batch-progress-compact";
 import { carbonEstimateGap } from "./credit-batch-view";
 
 export interface CreditBatchHeaderActions {
@@ -69,28 +70,35 @@ const STEP_BAR: Record<CreditBatchMilestone["state"], string> = {
   todo: "bg-[var(--color-border-tertiary)]",
 };
 
-/** The four milestones as segments: a bar, the step and what it is at. */
+/**
+ * The four milestones as segments: a bar, the step and what it is at. Four
+ * across from `sm`; below it, where they would wrap, one compact row that
+ * opens the same four in a popover.
+ */
 function ProgressSteps() {
   const { pageModel, blockingCount } = useCreditBatchPage();
   const steps = creditBatchMilestones({ blockingCount, pageModel });
   return (
-    <ol className="grid grid-cols-2 gap-x-4 gap-y-16 sm:grid-cols-4" aria-label="Credit batch progress">
-      {steps.map((step) => (
-        <li key={step.key} aria-current={step.state === "current" ? "step" : undefined} className="flex min-w-0 flex-col gap-8">
-          <span aria-hidden className={cn("h-4 w-full", STEP_BAR[step.state])} />
-          <span className="flex min-w-0 flex-col gap-2 pr-12">
-            <span className={cn("inline-flex flex-wrap items-center gap-6 body-small", step.state === "todo" ? MUTED_TEXT : "font-medium")}>
-              {step.state === "done" && <CheckIcon size={16} weight="bold" className="shrink-0 text-[var(--st-ok)]" aria-hidden />}
-              {step.state === "failed" && <WarningCircleIcon size={16} weight="bold" className="shrink-0 text-[var(--st-bad)]" aria-hidden />}
-              {step.label}
-              {step.state === "done" && <span className="sr-only"> (done)</span>}
-              {step.count != null && <CountBadge count={step.count} blocking label={`${step.count} blocking ${step.count === 1 ? "item" : "items"}`} />}
+    <>
+      <CreditBatchProgressCompact steps={steps} className="sm:hidden" />
+      <ol className="hidden grid-cols-4 gap-x-4 sm:grid" aria-label={CREDIT_BATCH_PROGRESS_TITLE}>
+        {steps.map((step) => (
+          <li key={step.key} aria-current={step.state === "current" ? "step" : undefined} className="flex min-w-0 flex-col gap-8">
+            <span aria-hidden className={cn("h-4 w-full", STEP_BAR[step.state])} />
+            <span className="flex min-w-0 flex-col gap-2 pr-12">
+              <span className={cn("inline-flex flex-wrap items-center gap-6 body-small", step.state === "todo" ? MUTED_TEXT : "font-medium")}>
+                {step.state === "done" && <CheckIcon size={16} weight="bold" className="shrink-0 text-[var(--st-ok)]" aria-hidden />}
+                {step.state === "failed" && <WarningCircleIcon size={16} weight="bold" className="shrink-0 text-[var(--st-bad)]" aria-hidden />}
+                {step.label}
+                {step.state === "done" && <span className="sr-only"> (done)</span>}
+                {step.count != null && <CountBadge count={step.count} blocking label={`${step.count} blocking ${step.count === 1 ? "item" : "items"}`} />}
+              </span>
+              {step.caption && <span className={cn("body-caption", step.state === "failed" ? "text-[var(--st-bad)]" : MUTED_TEXT)}>{step.caption}</span>}
             </span>
-            {step.caption && <span className={cn("body-caption", step.state === "failed" ? "text-[var(--st-bad)]" : MUTED_TEXT)}>{step.caption}</span>}
-          </span>
-        </li>
-      ))}
-    </ol>
+          </li>
+        ))}
+      </ol>
+    </>
   );
 }
 

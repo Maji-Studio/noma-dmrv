@@ -7,6 +7,10 @@ import * as crypto from "crypto";
 import { test, expect } from "./fixtures/auth-fixtures";
 import { seedCreditBatch } from "./fixtures/seed-chain-data";
 
+/** A phone viewport, below the `sm` breakpoint where the progress folds into one row. */
+const PHONE_WIDTH_PX = 375;
+const PHONE_HEIGHT_PX = 812;
+
 test.describe("credit batch page", () => {
   test("opens from the list preview, switches tabs and follows an open item", async ({
     adminPage: page,
@@ -29,6 +33,21 @@ test.describe("credit batch page", () => {
     await expect(page).toHaveURL((url) => url.pathname === `/credit-batches/${batch.id}` && url.searchParams.get("facility") === seededData.facility.id);
     await expect(page.getByRole("heading", { level: 1, name: batch.code })).toBeVisible();
     await expect(page.getByRole("list", { name: "Credit batch progress" })).toBeVisible();
+    await expect(page.getByTestId("credit-batch-progress-trigger")).toBeHidden();
+
+    // On a phone the four milestones fold into one row that opens them from the keyboard.
+    const desktop = page.viewportSize();
+    await page.setViewportSize({ width: PHONE_WIDTH_PX, height: PHONE_HEIGHT_PX });
+    const progress = page.getByTestId("credit-batch-progress-trigger");
+    await expect(progress).toContainText(/Step \d of 4/);
+    await progress.focus();
+    await page.keyboard.press("Enter");
+    const steps = page.getByRole("dialog", { name: "Credit batch progress" }).getByRole("listitem");
+    await expect(steps).toHaveCount(4);
+    await page.keyboard.press("Escape");
+    await expect(steps).toHaveCount(0);
+    if (desktop) await page.setViewportSize(desktop);
+
     const tabs = page.getByRole("tablist", { name: "Credit batch sections" });
     await expect(tabs.getByRole("tab", { name: /Overview/ })).toHaveAttribute("aria-selected", "true");
 
