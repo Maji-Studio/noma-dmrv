@@ -21,6 +21,7 @@ import { changedOutputLayerIds, outputLayerTarget } from './output-stock-lineage
 import { getStockModeChanges } from './output-bin-stock-mode';
 import { getOutputStockFacilityTimezone } from './output-stock-dates';
 import { prepareOutputCorrection } from './output-stock-corrections';
+import { liveOutputMovementPredicate } from './output-stock-active-movements';
 import { requireOrgScope } from './utils';
 
 type Reader = Pick<DbTransaction, 'select'>;
@@ -72,15 +73,16 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   const runMap = new Map(runCodes.map(row => [row.id, row.code]));
   const before = planOutputStock(layers, input.occurredAt, { kind: 'count', wetKg: 0 });
   let plan: ReturnType<typeof planOutputStock> | null = null;
-  let blockingMessage: string | null = null;
+  let blockingMessage = correction && input.kind === 'delivery'
+    ? await deliveryTimeCrossingMessage(ctx, input, correction.original, events, reader) : null;
   // Typed twin of blockingMessage for API callers: a shortage, or a request to change.
-  let blocking: OutputStockBlocking | null = null;
+  let blocking: OutputStockBlocking | null = blockingMessage ? { kind: 'invalid_request' } : null;
   const request: OutputStockRequest = input.kind === 'count'
     ? { kind: 'count', wetKg: input.wetMassKg, moisturePercent: input.moisturePercent ?? undefined }
     : sources ? { kind: 'ordered', wetKg: input.wetMassKg, sources }
       : { kind: 'wet', wetKg: input.wetMassKg, moisturePercent: input.moisturePercent! };
   try {
-    plan = planOutputStock(planningLayers, input.occurredAt, request, policy);
+    if (!blockingMessage) plan = planOutputStock(planningLayers, input.occurredAt, request, policy);
   } catch (error) {
     if (!(error instanceof RangeError)) throw error;
     // A draw through every sub-bin the bin holds is short of the bin, not of its last sub-bin.
@@ -144,6 +146,30 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
 
 const REMOVAL_KINDS: ReadonlySet<string> = new Set(['delivery', 'loss', 'count', 'production_draw', 'product_draw', 'replacement']);
 const CODED_REASON_KINDS: ReadonlySet<string> = new Set(['delivery', 'production_draw']);
+
+/** A delivery replacement stays on the same side of every live draw, loss and count in its bin. */
+async function deliveryTimeCrossingMessage(ctx: OrgContext, input: OutputStockPreviewInput,
+  original: typeof binMovements.$inferSelect,
+  events: readonly { id: string; kind: string | null; sequence: bigint; occurredAt: Date | null; reason: string; correctsMovementId: string | null }[],
+  reader: Reader): Promise<string | null> {
+  requireOrgScope(ctx);
+  const movements = events.map(event => ({ ...event, outputKind: event.kind }));
+  const isLive = liveOutputMovementPredicate(movements);
+  const originalTime = original.occurredAt!.getTime();
+  const replacementTime = new Date(input.occurredAt).getTime();
+  const crossed = movements.find(event => {
+    if (event.id === original.id || !event.kind || !REMOVAL_KINDS.has(event.kind) || !event.occurredAt || !isLive(event)) return false;
+    const time = event.occurredAt.getTime();
+    const beforeOriginal = time < originalTime || (time === originalTime && event.sequence < original.postingSequence);
+    // The new posting sequence sorts after every existing entry at this instant.
+    const beforeReplacement = time <= replacementTime;
+    return beforeOriginal !== beforeReplacement;
+  });
+  if (!crossed) return null;
+  const at = formatFacilityDateTime(crossed.occurredAt!, await getOutputStockFacilityTimezone(ctx, input.facilityId, reader));
+  const label = CODED_REASON_KINDS.has(crossed.kind!) && crossed.reason ? crossed.reason : outputStockEventLabel(crossed.kind!);
+  return `This time moves the delivery past ${label} (${at}). Choose a time on the same side of that entry.`;
+}
 
 /**
  * Posted mix-pile removals timed after this entry. Their saved shares were

@@ -54,7 +54,7 @@ const AUTO_CODE_COUNT = 1;
 const allocationPolicySchema = z.enum(ALLOCATION_POLICIES);
 
 export type CreatedDelivery = Delivery & { savedProducts: BiocharProduct[] };
-/** A mass or moisture edit re-posts stock, so the products it touched return with their new versions. */
+/** A mass, moisture or date edit re-posts stock, returning touched products with their new versions. */
 export type UpdatedDelivery = Delivery & { savedProducts: BiocharProductRecord[] };
 
 export interface CreateDeliveryInput extends RecordDeliveryInput {
@@ -202,7 +202,6 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
         throw new SafeError('The order, facility and source bin of a posted delivery cannot be changed.');
       }
     }
-    if (data.deliveryDate && data.deliveryDate.getTime() !== existing.deliveryDate.getTime()) throw new SafeError('The date and time of a posted delivery cannot be changed. Edit its mass and moisture while no later stock entry depends on it.');
     assertRecordLockFields(lock, existing, fields);
     const rows = await getOutputStockAllocationProjection(ctx, { deliveryId }, tx);
     const isLive = liveOutputMovementPredicate(rows.map(row => row.movement));
@@ -210,9 +209,10 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
       .sort((a, b) => a.movement.postingSequence > b.movement.postingSequence ? -1 : 1)[0]?.movement;
     const massChanged = data.deliveredWetMassKg !== undefined && !recordFieldEqual('deliveredWetMassKg', existing.deliveredWetMassKg, data.deliveredWetMassKg);
     const moistureChanged = data.moistureContentPercent !== undefined && data.moistureContentPercent !== existing.moistureContentPercent;
+    const dateChanged = data.deliveryDate !== undefined && data.deliveryDate.getTime() !== existing.deliveryDate.getTime();
     let savedProducts: BiocharProductRecord[] = [];
     const sourcesChanged = data.sources !== undefined && JSON.stringify(data.sources) !== JSON.stringify(current?.inputSnapshot?.sources);
-    if (massChanged || moistureChanged || sourcesChanged) {
+    if (massChanged || moistureChanged || sourcesChanged || dateChanged) {
       const [bin] = await tx.select({ archivedAt: storageLocations.archivedAt }).from(storageLocations)
         .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, existing.storageLocationId)));
       if (bin?.archivedAt) throw deliveryValidationFailed(['storageLocationId'], 'Source bin is archived. Unarchive it before editing delivery stock.');
@@ -223,10 +223,10 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
       if (moistureChanged && data.sources === undefined && Array.isArray(savedSources)) throw new SafeError('Edit the moisture reading for each sub-bin in this delivery.');
       ({ savedProducts } = await recordOutputStockMovementInTransaction(ctx, tx, {
         storageLocationId: existing.storageLocationId, facilityId: existing.facilityId, kind: 'delivery',
-        occurredAt: existing.deliveryDate.toISOString(), wetMassKg: data.deliveredWetMassKg === undefined ? existing.deliveredWetMassKg! : data.deliveredWetMassKg!,
+        occurredAt: (data.deliveryDate ?? existing.deliveryDate).toISOString(), wetMassKg: data.deliveredWetMassKg === undefined ? existing.deliveredWetMassKg! : data.deliveredWetMassKg!,
         moisturePercent: data.moistureContentPercent ?? existing.moistureContentPercent, sources: data.sources,
         correctsMovementId: current.id, idempotencyKey: requestKey, basisFingerprint: data.basisFingerprint,
-        reason: `Delivery ${data.code ?? existing.code}: mass or moisture edited`,
+        reason: `Delivery ${data.code ?? existing.code}: mass, moisture or date edited`,
       }, { checkFormEditLock: true }));
     }
     const distanceSnapshot = existing.recordedDistanceKm == null

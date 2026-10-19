@@ -98,7 +98,7 @@ or bin stock. A completed delivery records its actual source bin, physical time,
 measured wet mass, and moisture. Its immutable layer and run allocations determine
 its dry biochar total. Future delivery times are refused in both the app and API.
 REST/MCP create previews and committed creates expose the drawn product allocations;
-PATCH changes metadata only. Mass and moisture corrections stay in the app.
+PATCH changes metadata only. Mass, moisture and date corrections stay in the app.
 See [delivery API contracts](./api.md#deliveries-on-rest-and-mcp).
 Legacy storage-inventory rows are not a stock ledger.
 
@@ -126,8 +126,8 @@ History links to the originating production run, biochar product, delivery or
 feedstock intake when the entry has one. Fix a wrong entry in the form where it
 was entered (decision 1). An output-bin Lost mass entry has an Edit action that opens its
 own form with the saved time, mass, moisture, draw and reason (decision 3).
-Delivery mass, moisture and split-bin draw readings can be edited in the delivery
-form. Both saves append a reversal and replacement, shown as Original and Corrected.
+Delivery mass, moisture, date and time, and split-bin draw readings can be edited
+in the delivery form. Both saves append a reversal and replacement, shown as Original and Corrected.
 The delivery row stays in agreement with its replacement movement.
 
 These edits use the same dependency predicate as the server correction path
@@ -136,8 +136,12 @@ stock, balance-dependent counts, applications and certification lineage lock
 protected values. Unrelated intake alone does not lock an entry. An explicitly
 ordered draw from another sub-bin does not lock stock it did not use. History
 and the delivery form show the same dependency reason as the server, which
-rechecks under the posting path's bin-stock lock. Delivery source, order,
-and date/time retain their existing posting restrictions.
+rechecks under the posting path's bin-stock lock. Delivery source and order
+retain their existing posting restrictions. Open deliveries can change date and
+time while stock at the new time suffices and no other live stock entry in the same bin
+is crossed (a draw, loss or count). Equal times use posting order: a replacement follows existing entries.
+Preview and save share the crossing check; additions and mode switches do not
+count. Future times remain refused.
 Old counts remain readable without an edit action. Feedstock Lost mass supports
 creation only; feedstock intake changes retain ADR 0027's wet-lane guard.
 
@@ -176,7 +180,9 @@ solids with expected solids: drying alone causes no loss, an excess observation
 creates no stock, and a zero count closes the exact remaining stock without a
 moisture reading.
 
-Corrections append a reversal of the original effects and a replacement. They
+Corrections append a reversal of the original effects and a replacement. Delivery
+reversals retain the original event time so physical-time chart replay cancels
+the old draw there; the replacement uses the corrected time. They
 retain actor, reason, physical and recorded times, input basis, and before/after
 balances. A reduced loss restores its original source provenance even after a
 late older intake through the existing server correction contract. The Lost mass form and delivery update use
@@ -186,7 +192,8 @@ and certification artifacts continue to block server corrections with a named re
 Preview fingerprints are checked again while holding bin and request locks.
 Repeated request keys return the saved result; changing the payload for a reused
 key fails. Delivery corrections also lock the delivery before checking for
-applications. Posted product measurements stay immutable. Delivery mass edits append corrections;
+applications. Posted product measurements stay immutable. Delivery mass, moisture
+and date edits append corrections;
 Open products and deliveries can be deleted through app operations. The writer
 appends an exact inverse of the frozen source allocations under the bin stock
 lock before removing the live record. History retains the original and its

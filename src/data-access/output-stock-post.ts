@@ -163,7 +163,10 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Sto
   const basisFingerprint = options.recordedBasisFingerprint ?? input.basisFingerprint ?? preview.basisFingerprint;
   if (correction) {
     await appendOutputStockReversal(ctx, tx, {
-      ...correction, reason: input.reason, occurredAt: new Date(input.occurredAt),
+      ...correction, reason: input.reason,
+      // Physical-time readers replay reversals. Cancel the old delivery where
+      // it happened, then place its replacement at the corrected time.
+      occurredAt: input.kind === 'delivery' ? correction.original.occurredAt! : new Date(input.occurredAt),
       idempotencyKey: `${input.idempotencyKey}:reversal`, basisFingerprint, payloadHash,
       balanceBeforeDryKg: kilograms(prepared.layers.reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0)) - correction.allocations.reduce((sum, a) => sum + grams(a.dryMassKg), BigInt(0))),
     });
