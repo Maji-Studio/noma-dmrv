@@ -45,14 +45,20 @@ export function PagePanel({
   );
 }
 
-/** Round count: red when the count blocks, quiet otherwise. The Overview tab and the data milestone share it. */
+/** The 8px status dot: the Open to-dos group headings and the unselected tabs share it. `tone` is a status color token, e.g. `bg-[var(--st-bad)]`. */
+export function StatusDot({ tone, label }: { tone: string; label?: string }) {
+  return <span className={cn("size-8 shrink-0 rounded-full", tone)} {...(label ? { role: "img", "aria-label": label } : { "aria-hidden": true })} />;
+}
+
+/** Round count: red when the count blocks, orange when it only needs a check. The selected tab and the data milestone share it. */
 export function CountBadge({ count, blocking, label }: { count: number; blocking: boolean; label: string }) {
   return (
     <span
       aria-label={label}
       className={cn(
         "inline-flex h-20 min-w-20 items-center justify-center rounded-full px-6 body-caption font-medium tabular-nums",
-        blocking ? "bg-[var(--st-bad)] text-[var(--paper)]" : "bg-[var(--sea)] text-[var(--color-text-primary)]",
+        blocking ? "bg-[var(--st-bad)]" : "bg-[var(--st-wait)]",
+        "text-[var(--paper)]",
       )}
     >
       {count}

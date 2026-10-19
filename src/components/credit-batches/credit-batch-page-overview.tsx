@@ -21,7 +21,7 @@ import { formatDate } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
 import { useCreditBatchPage } from "./credit-batch-page-context";
-import { FOCUS_RING, FocusRow, MUTED_TEXT, PagePanel, ROW_RULE } from "./credit-batch-page-parts";
+import { FOCUS_RING, FocusRow, MUTED_TEXT, PagePanel, ROW_RULE, StatusDot } from "./credit-batch-page-parts";
 import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
 import { CompactRemovalBar, tonnesFromKg } from "./credit-batch-removal-bar";
 import { durabilityLabel } from "./credit-batch-view";
@@ -97,7 +97,7 @@ function OpenItemGroups() {
         <section key={group} aria-labelledby={`open-items-${group}`} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2 border-b border-[var(--color-border-secondary)] pb-8">
             <h3 id={`open-items-${group}`} className="inline-flex items-center gap-8 body-small font-medium">
-              <span className={cn("size-8 rounded-full", GROUPS[group].dot)} aria-hidden />
+              <StatusDot tone={GROUPS[group].dot} />
               {GROUPS[group].title}
               <span className={cn("tabular-nums", MUTED_TEXT)}>{openItems[group].length}</span>
             </h3>

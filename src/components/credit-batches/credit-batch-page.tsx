@@ -64,7 +64,7 @@ import { CreditBatchEmissionsTab } from "./credit-batch-emissions-tab";
 import { CreditBatchPageProvider, useCreditBatchPage, type CreditBatchPageContextValue } from "./credit-batch-page-context";
 import { CreditBatchKeyNumbers, CreditBatchPageHeader } from "./credit-batch-page-header";
 import { CreditBatchOverview } from "./credit-batch-page-overview";
-import { CountBadge, FOCUS_RING, MUTED_TEXT } from "./credit-batch-page-parts";
+import { CountBadge, FOCUS_RING, MUTED_TEXT, StatusDot } from "./credit-batch-page-parts";
 import { CreditBatchRemovalsTab } from "./credit-batch-page-removals";
 import { CreditBatchActivitiesTab, CreditBatchProductionTab, CreditBatchSamplesTab } from "./credit-batch-page-tabs";
 import { isCreditBatchMembershipLocked, saveCreditBatchEdit } from "./credit-batch-update-patch";
@@ -114,7 +114,12 @@ function BatchTabs({ tabListRef }: { tabListRef: React.RefObject<HTMLDivElement 
               )}
             >
               {CREDIT_BATCH_PAGE_TAB_LABELS[key]}
-              {badge && <CountBadge count={badge.count} blocking={badge.blocking} label={todosLabel(badge.count)} />}
+              {badge &&
+                (tab === key ? (
+                  <CountBadge count={badge.count} blocking={badge.blocking} label={todosLabel(badge.count)} />
+                ) : (
+                  <StatusDot tone={badge.blocking ? "bg-[var(--st-bad)]" : "bg-[var(--st-wait)]"} label={todosLabel(badge.count)} />
+                ))}
             </button>
           );
         })}
