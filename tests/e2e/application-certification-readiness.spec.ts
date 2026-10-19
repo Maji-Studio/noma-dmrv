@@ -98,7 +98,7 @@ async function expectRemovalReadyWithoutApplicationEvidence(
   await page.goto(
     `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
   );
-  const checklist = page.getByRole("region", { name: "Open items" });
+  const checklist = page.getByRole("region", { name: "Open to-dos" });
   // The fixture links a fake registry project, so the batch stays unpinned
   // (plan 2026-10-15 §4.2). That template check is the only blocking item.
   await expect(
