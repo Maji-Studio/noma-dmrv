@@ -46,6 +46,8 @@ export { EntityOptionText } from "./entity-select-row";
 const EntityEditDialog = dynamic(() => import("./entity-edit-dialog").then((module) => module.EntityEditDialog));
 
 const MENU_SIDE_OFFSET = 4;
+/** `MouseEvent.button` for a middle click, which opens a link in a new tab without `click`. */
+const MIDDLE_MOUSE_BUTTON = 1;
 const MENU_COLLISION_PADDING = 8;
 // TypeScript's DOM lib does not declare focusVisible yet; browsers without it ignore it.
 const POINTER_FOCUS: FocusOptions & { focusVisible?: boolean } = { focusVisible: false };
@@ -783,6 +785,7 @@ function EntitySelectView({
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={refreshOnReturn}
+                            onAuxClick={(event) => { if (event.button === MIDDLE_MOUSE_BUTTON) refreshOnReturn?.(); }}
                             onKeyDown={(event) => {
                               if (event.key === "Enter") event.stopPropagation();
                               if (event.key === "Tab" || event.key === "Escape") handleKeyDown(event);

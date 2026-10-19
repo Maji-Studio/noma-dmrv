@@ -84,4 +84,14 @@ describe("EntitySelect create page link", () => {
     fireEvent.click(screen.getByText("Open orders"));
     expect(state.refreshOnReturn).toHaveBeenCalledOnce();
   });
+
+  it("also reloads after a middle click opens the recovery link", () => {
+    render(<EntitySelect entityType="order" onChange={vi.fn()} emptyHint={{ message: "Record the customer order first.", href: "/orders", linkLabel: "Open orders" }} />);
+    openPicker();
+
+    fireEvent(screen.getByText("Open orders"), new MouseEvent("auxclick", { bubbles: true, button: 2 }));
+    expect(state.refreshOnReturn).not.toHaveBeenCalled();
+    fireEvent(screen.getByText("Open orders"), new MouseEvent("auxclick", { bubbles: true, button: 1 }));
+    expect(state.refreshOnReturn).toHaveBeenCalledOnce();
+  });
 });
