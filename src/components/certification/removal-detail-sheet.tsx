@@ -149,10 +149,7 @@ export function RemovalReviewAction({
   return (
     <Link
       href={reviewHref}
-      className={buttonVariants({
-        variant: "primary",
-        className: "flex-1",
-      })}
+      className={buttonVariants({ variant: "primary" })}
     >
       Review &amp; submit
     </Link>
@@ -336,7 +333,7 @@ export function RemovalDetailSheet({
           </SlideOverPanel.Body>
 
           {(isActionable || canDelete) && (
-            <SlideOverPanel.Footer className="justify-stretch">
+            <SlideOverPanel.Footer>
               <RemovalReviewAction
                 isActionable={isActionable}
                 reviewHref={reviewHref}
@@ -344,7 +341,6 @@ export function RemovalDetailSheet({
               {canDelete && (
                 <Button
                   variant="destructive"
-                  className="flex-1"
                   onClick={() => setDeleteConfirmOpen(true)}
                   disabled={deleteMutation.isPending}
                 >

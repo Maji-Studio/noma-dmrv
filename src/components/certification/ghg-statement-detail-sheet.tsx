@@ -388,10 +388,9 @@ function DetailState({
       />
 
       {statementSubmission && (
-        <SlideOverPanel.Footer className="justify-stretch">
+        <SlideOverPanel.Footer>
           <Button
             variant="primary"
-            className="flex-1"
             onClick={handleRefresh}
             busy={refreshMutation.isPending}
           >
