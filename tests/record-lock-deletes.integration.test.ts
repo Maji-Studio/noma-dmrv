@@ -146,7 +146,7 @@ it('retains destination placement and its reversal pointing at the archived prod
     expect.objectContaining({ id: intake.id, allocations: intake.allocations, source: { entity: 'biocharProduct', id: f.product!.id } }),
     expect.objectContaining({ kind: 'reversal', correctsMovementId: intake.id, source: intake.source }),
   ]));
-  expect(buildStockLevelSeries(history).points.at(-1)).toMatchObject({ dryKg: 0, waterKg: 0 });
+  expect(buildStockLevelSeries(history).points).toEqual([]);
   expect((await readOutputBinAllLayers(f.ctx, f.bin.id, db, { includeArchived: true })).layers).toEqual([]);
 });
 

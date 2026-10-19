@@ -151,8 +151,10 @@ permanently lock an otherwise independent correction.
 
 The chart uses steps: dry biochar (output) or estimated solids (feedstock), plus
 hatched estimated water. Product ingredient solids are a separate solid band,
-not water. Output points replay frozen stock effects, including reversals, in
-physical-time order; explanatory moisture rows are not counted twice. Missing
+not water. The output chart cancels each corrected entry with its reversal when
+both are present and plots only the live effect in physical-time order; history
+keeps every row. Unmatched reversals remain in the chart replay so totals add up.
+Explanatory moisture rows are not counted twice. Missing
 historical wet or solids bases leave water unknown. Bay, pile-band and chart
 point details open on hover, keyboard focus or tap.
 
@@ -181,8 +183,8 @@ creates no stock, and a zero count closes the exact remaining stock without a
 moisture reading.
 
 Corrections append a reversal of the original effects and a replacement. Delivery
-reversals retain the original event time so physical-time chart replay cancels
-the old draw there; the replacement uses the corrected time. They
+reversals retain the original event time so the audit history associates the
+reversal with the original draw's time; the replacement uses the corrected time. They
 retain actor, reason, physical and recorded times, input basis, and before/after
 balances. A reduced loss restores its original source provenance even after a
 late older intake through the existing server correction contract. The Lost mass form and delivery update use

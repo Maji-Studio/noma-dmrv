@@ -164,8 +164,8 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Sto
   if (correction) {
     await appendOutputStockReversal(ctx, tx, {
       ...correction, reason: input.reason,
-      // Physical-time readers replay reversals. Cancel the old delivery where
-      // it happened, then place its replacement at the corrected time.
+      // Keep the delivery reversal at the original draw's time in the audit
+      // history; its replacement records the corrected time.
       occurredAt: input.kind === 'delivery' ? correction.original.occurredAt! : new Date(input.occurredAt),
       idempotencyKey: `${input.idempotencyKey}:reversal`, basisFingerprint, payloadHash,
       balanceBeforeDryKg: kilograms(prepared.layers.reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0)) - correction.allocations.reduce((sum, a) => sum + grams(a.dryMassKg), BigInt(0))),

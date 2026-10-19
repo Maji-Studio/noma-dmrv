@@ -48,9 +48,11 @@ it.each([EARLIER, LATER])('moves the latest delivery to %s with one correction, 
   expect(history.filter(e => e.kind === 'replacement')).toMatchObject([{ occurredAt, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80 }]);
   expect(history.filter(e => e.kind === 'reversal')).toMatchObject([{ occurredAt: STOCK_TIME, dryMassKg: -80 }]);
   expect(await getOutputBinStockView(f.ctx, f.bin.id)).toMatchObject({ dryMassKg: before.dryMassKg, estimatedWetMassKg: before.estimatedWetMassKg });
-  // The physical chart must cancel the old departure at its original instant.
+  // Only the live departure appears; the audit history keeps the correction pair.
   const points = buildStockLevelSeries(history).points;
-  expect(points.filter(p => p.t === Date.parse(STOCK_TIME)).at(-1)?.dryKg).toBe(occurredAt === EARLIER ? 920 : 1000);
+  expect(points.filter(p => p.t === Date.parse(STOCK_TIME))).toEqual([]);
+  expect(points.filter(p => p.t === Date.parse(occurredAt))).toMatchObject([{ dryKg: 920 }]);
+  expect(points.filter(p => p.label !== 'Before').every(p => p.dryKg > 0)).toBe(true);
   expect(points.at(-1)?.dryKg).toBe(920);
 });
 
