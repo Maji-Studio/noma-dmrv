@@ -2,12 +2,19 @@
  * Better Auth configuration
  * Sets up authentication with email/password and admin invite
  */
+import { createOAuthProvider } from "./oauth-provider";
+import { createOAuthCimdPlugins } from "./oauth-cimd";
+import { oauthBefore } from "./oauth-hooks";
+import { OAUTH_ENDPOINT_LIMITS } from "@/config/oauth";
 import { apiKey } from "@better-auth/api-key";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { createAccessControl } from "better-auth/plugins/access";
 import { defaultStatements, ownerAc, adminAc, memberAc } from "better-auth/plugins/organization/access";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS, API_KEY_LIVE_PREFIX, API_KEY_MAX_EXPIRY_DAYS, API_KEY_TEST_PREFIX } from "@/config/api-keys";
+import { z } from "zod";
+import { revokeDeletedMemberOAuthGrants, revokeMemberOAuthGrants } from "@/data-access/oauth-grant-lifecycle";
 import { disableOwnerApiKeys } from "@/data-access/api-credential-auth";
+import { oauthRolePolicy } from "./oauth-role-policy";
 import { canOwnApiKey } from "./api-scopes";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -144,6 +151,8 @@ function buildTrustedOrigins(): string[] {
   return [...new Set(origins)];
 }
 
+const removedMemberResult = z.object({ id: z.string(), organizationId: z.string(), userId: z.string() });
+
 const apiKeyActions = ["create", "read", "update", "delete"] as const;
 const organizationAccess = createAccessControl({ ...defaultStatements, apiKey: apiKeyActions });
 
@@ -155,6 +164,18 @@ export const auth = betterAuth({
       if (ctx.path?.startsWith("/api-key/") && (ctx.request || ctx.headers)) {
         throw new APIError("FORBIDDEN", { message: "Use organization credential actions." });
       }
+      if (env.OAUTH_PROVIDER_ENABLED) return oauthBefore(ctx);
+    }),
+    after: createAuthMiddleware(async (ctx) => {
+      // Better Auth's leave endpoint does not invoke afterRemoveMember.
+      // Only a successful, server-returned member can trigger this revocation,
+      // and only once that membership row is gone. A refused leave returns an
+      // APIError, which does not parse. After hooks do not carry the endpoint's
+      // session, so the database, not the session, confirms the removal.
+      if (ctx.path !== "/organization/leave") return;
+      const result = removedMemberResult.safeParse(ctx.context.returned);
+      if (!result.success) return;
+      await revokeDeletedMemberOAuthGrants(result.data);
     }),
   },
   database: drizzleAdapter(db, {
@@ -164,6 +185,13 @@ export const auth = betterAuth({
     // default, so opt in explicitly or those writes can commit independently.
     transaction: true,
     schema: {
+      oauthClient: schema.oauthClients,
+      oauthResource: schema.oauthResources,
+      oauthClientResource: schema.oauthClientResources,
+      oauthConsent: schema.oauthConsents,
+      oauthAccessToken: schema.oauthAccessTokens,
+      oauthRefreshToken: schema.oauthRefreshTokens,
+      oauthClientAssertion: schema.oauthClientAssertions,
       apikey: schema.apiKeys,
       user: schema.users,
       session: schema.sessions,
@@ -189,7 +217,7 @@ export const auth = betterAuth({
   },
   emailAndPassword: {
     enabled: true,
-    disableSignUp: !env.ALLOW_SELF_SIGNUP,
+    disableSignUp: true,
     requireEmailVerification: true,
     minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
     maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,
@@ -261,6 +289,7 @@ export const auth = betterAuth({
     window: 60,
     max: 100,
     customRules: {
+      ...(env.OAUTH_PROVIDER_ENABLED ? { "/oauth2/consent": OAUTH_ENDPOINT_LIMITS.consent, "/oauth2/continue": OAUTH_ENDPOINT_LIMITS.continue } : {}),
       "/sign-in/email": { window: 15 * 60, max: 10 },
       "/sign-up/email": { window: 60 * 60, max: 3 },
       "/request-password-reset": { window: 15 * 60, max: 5 },
@@ -354,6 +383,8 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    ...(env.OAUTH_PROVIDER_ENABLED ? [createOAuthProvider()] : []),
+    ...createOAuthCimdPlugins(),
     apiKey({
       references: "organization",
       defaultPrefix: env.NODE_ENV === "production" ? API_KEY_LIVE_PREFIX : API_KEY_TEST_PREFIX,
@@ -380,9 +411,13 @@ export const auth = betterAuth({
       allowUserToCreateOrganization: false,
       organizationHooks: {
         afterRemoveMember: async ({ member }) => {
+          await revokeMemberOAuthGrants(member.organizationId, member.userId, member.id);
           await disableOwnerApiKeys(member.organizationId, member.userId);
         },
         afterUpdateMemberRole: async ({ member }) => {
+          if (!oauthRolePolicy(member.role).connect) {
+            await revokeMemberOAuthGrants(member.organizationId, member.userId, member.id);
+          }
           if (!canOwnApiKey(member.role)) {
             await disableOwnerApiKeys(member.organizationId, member.userId);
           }

@@ -1,3 +1,4 @@
+import { apiKeyContext } from "../../../../tests/helpers/api-context";
 import { beforeEach, expect, it, vi } from "vitest";
 import { DomainError } from "@/lib/domain-errors";
 import { formulationLineInUse } from "@/lib/formulation-domain-errors";
@@ -15,7 +16,7 @@ const CLOCK = "2026-10-06T10:00:00.000Z";
 const DEADLINE_MS = 10_000;
 const row = { id: ID, code: "BCF-0001", name: "Blend", version: 1, biocharRatio: 0.7, description: null,
   lines: [], archivedAt: null, createdAt: CLOCK, updatedAt: CLOCK };
-const context = { ctx: { credentialId: "credential", organizationId: "org", userId: "user" }, deadlineAt: 0,
+const context = { ctx: apiKeyContext({ credentialId: "credential", organizationId: "org", userId: "user" }), deadlineAt: 0,
   requestId: "request", instance: "/api/mcp", headers: new Headers() } as unknown as ApiRouteContext;
 const args = (name: string) => name === "create_formulation" ? { name: "Blend", biocharRatio: 0.7 } : { formulationId: ID, expectedVersion: 1 };
 beforeEach(() => {

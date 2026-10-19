@@ -12,10 +12,15 @@ import {
   PositionPicker,
 } from "@/components/forms";
 import type { Facility } from "@/db/schema";
-import type {
-  CustomerLocationFormData,
-  CustomerLocationFormInput,
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+import {
+  customerLocationFormSchema,
+  type CustomerLocationFormData,
+  type CustomerLocationFormInput,
 } from "@/schemas/customers";
+
+/** Native min, max and step for the soil temperature, read from the schema. */
+const SOIL_TEMPERATURE_BOUNDS = numberInputConstraintsFor(customerLocationFormSchema)("defaultSoilTemperatureC");
 
 type CustomerLocationFormApi = UseFormReturn<
   CustomerLocationFormInput,
@@ -196,7 +201,7 @@ export function CustomerLocationFields({
           <FormInput
             id={soilTemperatureId}
             type="number"
-            step="any"
+            {...SOIL_TEMPERATURE_BOUNDS}
             placeholder="e.g., 24.5"
             disabled={isSubmitting}
             error={!!errors.defaultSoilTemperatureC}

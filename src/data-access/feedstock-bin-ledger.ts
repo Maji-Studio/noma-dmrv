@@ -7,6 +7,7 @@ import { SafeError } from '@/lib/errors';
 import { CANCELLED_PRODUCTION_RUN_STATUS } from '@/lib/production-runs/lifecycle';
 import type { FeedstockBinStock, FeedstockLedgerEntry } from '@/types/feedstock-bin-ledger';
 import { feedstockPileTimeline } from '@/lib/feedstock-pile';
+import { findFeedstockLossBlocker, formatFeedstockLossLockReason } from '@/lib/feedstock-loss-lock';
 import { requireOrgScope } from './utils';
 import { formatUtcDate, startOfFacilityDay } from '@/lib/date-utils';
 import { getOutputStockFacilityTimezone } from './output-stock-dates';
@@ -61,6 +62,10 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
   ]);
 
   const deleted = new Set((await deletedProductIds(ctx, reader)).map(row => row.id));
+  const reversals = new Map(movements.filter(({ movement }) => movement.movementType === 'adjustment' && movement.correctsMovementId)
+    .map(row => [row.movement.correctsMovementId!, row]));
+  const replacements = new Map(movements.filter(({ movement }) => movement.movementType === 'loss' && movement.correctsMovementId)
+    .map(({ movement }) => [movement.correctsMovementId!, movement.id]));
   const ingredientDraws = products.map(product => {
     const composition = product.composition as { ingredients?: { storageLocationId?: string; massKg?: number }[] };
     const ingredients = Array.isArray(composition?.ingredients) ? composition.ingredients : [];
@@ -79,10 +84,19 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
     ...ingredientDraws.filter(p => Number(p.ingredientWetKg ?? 0) > 0).map((p): Draft => ({ id: p.id, sourceId: p.id, kind: 'ingredient_draw', reversed: deleted.has(p.id), occurredAt: p.placedAt.toISOString(),
       recordedAt: p.createdAt.toISOString(), actorName: null, code: p.code, reason: '', wetDeltaKg: -Number(p.ingredientWetKg), countedWetKg: null,
       moisturePercent: null })),
-    ...movements.map(({ movement: m, actorName }): Draft => ({ id: m.id, sourceId: null, kind: m.movementType === 'loss' ? 'loss' : 'count',
-      occurredAt: (m.movementType === 'loss' ? m.occurredAt! : m.createdAt).toISOString(), recordedAt: m.createdAt.toISOString(), actorName, code: null, reason: m.reason,
-      wetDeltaKg: Number(m.massDeltaKg), countedWetKg: m.countedWetMassKg ?? m.countedMassKg,
-      moisturePercent: m.moistureRatioUsed === null ? null : Number(m.moistureRatioUsed) * PERCENT })),
+    ...movements.filter(({ movement }) => !(movement.movementType === 'adjustment' && movement.correctsMovementId))
+      .map(({ movement: m, actorName }): Draft => {
+        const reversal = m.movementType === 'loss' ? reversals.get(m.id) : undefined;
+        return { id: m.id, sourceId: null, kind: m.movementType === 'loss' ? 'loss' : 'count',
+          correctsMovementId: m.correctsMovementId,
+          ...(reversal ? { reversed: true, reversedBy: {
+            id: reversal.movement.id, reason: reversal.movement.reason, recordedAt: reversal.movement.createdAt.toISOString(),
+            actorName: reversal.actorName, replacementId: replacements.get(m.id) ?? null,
+          } } : {}),
+          occurredAt: (m.movementType === 'loss' ? m.occurredAt! : m.createdAt).toISOString(), recordedAt: m.createdAt.toISOString(), actorName, code: null, reason: m.reason,
+          wetDeltaKg: Number(m.massDeltaKg), countedWetKg: m.countedWetMassKg ?? m.countedMassKg,
+          moisturePercent: m.moistureRatioUsed === null ? null : Number(m.moistureRatioUsed) * PERCENT };
+      }),
   ].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.recordedAt.localeCompare(b.recordedAt) || a.id.localeCompare(b.id));
 
   const intakeById = new Map(batches.map(batch => [batch.id, { id: batch.id, wetKg: Number(batch.wetKg), dryKg: Number(batch.dryKg) }]));
@@ -104,6 +118,11 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
   });
 
   const currentWetKg = round(wetKg);
+  for (const entry of entries) {
+    if (entry.kind !== 'loss' || entry.reversed) continue;
+    const blocker = findFeedstockLossBlocker(entries, entry.id);
+    entry.editLockedReason = blocker ? formatFeedstockLossLockReason(blocker, timezone) : null;
+  }
   const shares = new Map(replay.batches.map(batch => [batch.id, batch]));
   const pile = batches.filter(b => Number(b.wetKg) > 0)
     .sort((a, b) => a.deliveryDate.getTime() - b.deliveryDate.getTime()

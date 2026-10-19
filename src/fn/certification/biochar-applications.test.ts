@@ -15,12 +15,13 @@ const mocks = vi.hoisted(() => ({
   claim: vi.fn(),
   confirm: vi.fn(),
   markDrift: vi.fn(),
+  recordReadback: vi.fn(),
   getProductionRegistrations: vi.fn(),
   ensureProduction: vi.fn(),
   ensureStorage: vi.fn(),
   getStorage: vi.fn(),
   withLock: vi.fn(async (_key: string, fn: () => Promise<unknown>) => fn()),
-  client: { get: vi.fn(), post: vi.fn() },
+  client: { get: vi.fn(), post: vi.fn(), graphql: vi.fn() },
 }));
 
 // Spread the real module so withBiocharApplicationRegistrationLock keeps
@@ -33,6 +34,7 @@ vi.mock("@/data-access/certifier-biochar-applications", async (importOriginal) =
   claimBiocharApplicationRegistration: mocks.claim,
   confirmBiocharApplicationRegistration: mocks.confirm,
   markBiocharApplicationDrift: mocks.markDrift,
+  recordBiocharApplicationSourceReadback: mocks.recordReadback,
 }));
 vi.mock("@/data-access/certifier-production-batches", () => ({
   getProductionBatchRegistrations: mocks.getProductionRegistrations,
@@ -167,6 +169,8 @@ function registration(
     lifecycleStatus: "creating",
     correctionStatus: "none",
     driftReason: null,
+    sourceReadbackStatus: "not_checked",
+    sourceReadbackCheckedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...patch,
@@ -739,5 +743,98 @@ describe("ensureRemovalBiocharApplications", () => {
       "remote_payload_or_identity_drift",
     );
     expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("Biochar Application evidence links", () => {
+  const sourceIntent = () => intent({ sourceIds: ["src-a"] });
+  const answer = (ids: string[]) => ({ data: { project: { __typename: "Project", biocharSpreadEvents: { nodes: [{ id: "bca-test", biocharSpreadEventSources: ids.map(id => ({ source: { id } })) }] } } } });
+  beforeEach(() => {
+    mocks.client.get.mockResolvedValue(page([]));
+    mocks.client.post.mockResolvedValue(canonicalRemote());
+    mocks.client.graphql.mockResolvedValue(answer(["src-a"]));
+    mocks.recordReadback.mockImplementation(async (_ctx, _id, sourceReadbackStatus) => {
+      mocks.registration = { ...mocks.registration!, sourceReadbackStatus };
+      return mocks.registration;
+    });
+    mocks.markDrift.mockImplementation(async (_ctx, _id, driftReason) => {
+      mocks.registration = { ...mocks.registration!, correctionStatus: "review_required", driftReason };
+    });
+  });
+  it("confirms the Source set after fresh creation", async () => {
+    await ensure([sourceIntent()]);
+    expect(mocks.confirm).toHaveBeenCalledOnce();
+    expect(mocks.recordReadback).toHaveBeenCalledWith(orgCtx, "journal-1", "confirmed");
+  });
+  it("stops submission and records Source drift on mismatch", async () => {
+    mocks.client.graphql.mockResolvedValue(answer([]));
+    await expect(ensure([sourceIntent()])).rejects.toMatchObject({ name: "SafeError", message: expect.stringContaining("APP-001") });
+    expect(mocks.recordReadback).toHaveBeenCalledWith(orgCtx, "journal-1", "mismatch");
+    expect(mocks.markDrift).toHaveBeenCalledWith(orgCtx, "journal-1", "source_set_mismatch");
+  });
+  it("continues with an unconfirmed note and warning when the event is absent", async () => {
+    mocks.client.graphql.mockResolvedValue({ data: { project: { __typename: "Project", biocharSpreadEvents: { nodes: [] } } } });
+    await expect(ensure([sourceIntent()])).resolves.toBeUndefined();
+    expect(mocks.recordReadback).toHaveBeenCalledWith(orgCtx, "journal-1", "unconfirmed");
+    expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ registrationId: "journal-1", reason: "event_not_found" }), expect.any(String));
+  });
+  it("keeps a mismatched submission stopped when retry readback has no answer", async () => {
+    mocks.client.graphql.mockResolvedValue(answer([]));
+    await expect(ensure([sourceIntent()])).rejects.toMatchObject({ name: "SafeError" });
+    expect(mocks.registration?.sourceReadbackStatus).toBe("mismatch");
+
+    mocks.markDrift.mockClear();
+    mocks.recordReadback.mockClear();
+    mocks.client.post.mockClear();
+    mocks.client.get.mockResolvedValue(canonicalRemote());
+    mocks.client.graphql.mockResolvedValue({ errors: [{ message: "unavailable" }] });
+
+    await expect(ensure([sourceIntent()])).rejects.toMatchObject({
+      name: "SafeError",
+      message: "Application APP-001: Isometric could not confirm a corrected evidence set. Retry the Removal submission later.",
+    });
+    expect(mocks.registration).toMatchObject({
+      sourceReadbackStatus: "mismatch", correctionStatus: "review_required", driftReason: "source_set_mismatch",
+    });
+    expect(mocks.recordReadback).not.toHaveBeenCalledWith(orgCtx, "journal-1", "unconfirmed");
+    expect(mocks.markDrift).toHaveBeenCalledWith(orgCtx, "journal-1", "source_set_mismatch");
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+  it("clears a mismatch and continues only after retry readback confirms the exact Source set", async () => {
+    mocks.client.graphql.mockResolvedValue(answer([]));
+    await expect(ensure([sourceIntent()])).rejects.toMatchObject({ name: "SafeError" });
+
+    mocks.markDrift.mockClear();
+    mocks.recordReadback.mockClear();
+    mocks.client.post.mockClear();
+    mocks.client.get.mockResolvedValue(canonicalRemote());
+    mocks.client.graphql.mockResolvedValue(answer(["src-a"]));
+
+    await expect(ensure([sourceIntent()])).resolves.toBeUndefined();
+    expect(mocks.registration).toMatchObject({
+      sourceReadbackStatus: "confirmed", correctionStatus: "none", driftReason: null,
+    });
+    expect(mocks.recordReadback).toHaveBeenCalledWith(orgCtx, "journal-1", "confirmed");
+    expect(mocks.markDrift).not.toHaveBeenCalled();
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+  it("leaves empty expected sets not checked without a GraphQL call", async () => {
+    await ensure();
+    expect(mocks.client.graphql).not.toHaveBeenCalled();
+    expect(mocks.recordReadback).not.toHaveBeenCalled();
+  });
+  it.each(["unconfirmed", "confirmed"] as const)("reuses a confirmed registration with %s evidence links", async sourceReadbackStatus => {
+    mocks.registration = registration({ ...submittedBody(), source_ids: ["src-a"] }, { lifecycleStatus: "confirmed", externalApplicationId: "bca-test", sourceReadbackStatus });
+    mocks.client.get.mockResolvedValue(canonicalRemote());
+    await ensure([sourceIntent()]);
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    if (sourceReadbackStatus === "confirmed") {
+      expect(mocks.client.graphql).not.toHaveBeenCalled();
+      expect(mocks.recordReadback).not.toHaveBeenCalled();
+    } else {
+      expect(mocks.client.graphql).toHaveBeenCalledOnce();
+      expect(mocks.recordReadback).toHaveBeenCalledWith(orgCtx, "journal-1", "confirmed");
+    }
   });
 });

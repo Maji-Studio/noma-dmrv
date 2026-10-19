@@ -1,3 +1,4 @@
+import { apiAudit } from "@/lib/api/audit";
 import { z } from "zod";
 import { checkFeedstockAllocations, feedstockCreateBody, representationCheckedUpdate, representationCheckedDelete, withCurrentOnStale } from "./feedstock-write-checks";
 import { remainingDeadlineMs } from "./write-checks";
@@ -27,7 +28,7 @@ export async function createFeedstockResponse(request: Request, { ctx, headers, 
   checkFeedstockAllocations(body);
   const result = await runOperation(logFeedstockDelivery, ctx, body, {
     deadlineMs: remainingDeadlineMs(deadlineAt),
-    audit: { requestId, credentialId: ctx.credentialId, transport: "rest" as const },
+    audit: apiAudit(ctx, requestId, "rest"),
     dryRun, idempotency: key ? { credentialId: ctx.credentialId, key } : undefined,
   });
   const responseBody = feedstockCreateBody(result, dryRun);
@@ -48,7 +49,7 @@ export async function mutateFeedstockResponse(request: Request, context: ApiRout
   if (!id) throw new DomainError("not_found", "Feedstock was not found.");
   const key = readIdempotencyKey(request, false);
   const options = {
-    audit: { requestId, credentialId: ctx.credentialId, transport: "rest" as const },
+    audit: apiAudit(ctx, requestId, "rest"),
     dryRun, idempotency: key ? { credentialId: ctx.credentialId, key, target: id, precondition: precondition! } : undefined,
   };
   return withCurrentOnStale(ctx, id, async () => {

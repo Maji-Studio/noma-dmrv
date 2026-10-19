@@ -111,6 +111,7 @@ export function getRemovalPreflightRefetchInterval(
 
 export const certificationKeys = {
   removalTemplateReviewPreview: (facilityId: string, templateId: string) => ["certification", "removal-template-review-preview", facilityId, templateId] as const,
+  removalTemplateReviewEntry: (facilityId: string, templateId: string) => ["certification", "removal-template-review-entry", facilityId, templateId] as const,
   removalTemplateReview: (facilityId: string) => ["certification", "removal-template-review", facilityId] as const,
   all: ["certification"] as const,
   /** Whether a submitted Removal or GHG statement freezes the record's files. */
@@ -377,6 +378,7 @@ export function useFacilityCertifierMapping(
 export function useFacilityCertifierSummary(
   facilityId: string,
   enabled = true,
+  options: { readCacheOnly?: boolean } = {},
 ) {
   return useQuery({
     queryKey: certificationKeys.facilitySummary(facilityId),
@@ -388,6 +390,11 @@ export function useFacilityCertifierSummary(
       ),
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,
+    // readCacheOnly: observe what another observer loaded; never fetch again
+    // on mount, window focus or reconnect.
+    ...(options.readCacheOnly
+      ? { refetchOnMount: false, refetchOnWindowFocus: false, refetchOnReconnect: false }
+      : {}),
   });
 }
 

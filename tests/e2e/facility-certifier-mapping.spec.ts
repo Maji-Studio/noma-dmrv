@@ -30,6 +30,7 @@ loadEnv({ path: ".env.local", override: false });
 import * as crypto from "crypto";
 import { and, eq } from "drizzle-orm";
 import { DEC_ORG_ID } from "@/db/org-defaults";
+import { formatCertifierMappingLockMessage } from "@/lib/certification/lineage-lock-message";
 import {
   createTestFacility,
   deleteTestFacility,
@@ -41,8 +42,7 @@ import * as schema from "../../src/db/schema";
 
 const SANDBOX_PROJECT_ID = process.env.ISOMETRIC_DEMO_PROJECT_ID;
 
-const UNLINK_GUARD_MESSAGE =
-  "Cannot unlink: this facility has certifier submissions. Supersede or reject them first.";
+const UNLINK_GUARD_MESSAGE = formatCertifierMappingLockMessage("unlink");
 
 const RUN_ID = crypto.randomUUID().slice(0, 8);
 

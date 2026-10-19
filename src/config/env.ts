@@ -1,3 +1,4 @@
+import { isOAuthProductionOrigin, oauthClientIdsSchema } from "./oauth-env-validation";
 import {
   emptyToUndefined,
   isHermeticCiBuildFor,
@@ -58,6 +59,9 @@ const envSchema = z.object({
     z.string().email().optional()
   ),
 
+  OAUTH_PROVIDER_ENABLED: z.enum(["true", "false"]).default("false").transform(value => value === "true"),
+  OAUTH_CIMD_CLIENT_IDS: oauthClientIdsSchema,
+
   // API infrastructure
   CRON_SECRET: z.preprocess(emptyToUndefined, z.string().min(CRON_SECRET_MIN_LENGTH).optional()),
   API_WRITES_DISABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
@@ -65,11 +69,6 @@ const envSchema = z.object({
   API_FUZZ_DISABLE_RATE_LIMIT: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
 
   // Optional
-  ALLOW_SELF_SIGNUP: z
-    .string()
-    .optional()
-    .default("false")
-    .transform((val) => val === "true"),
   ADMIN_EMAIL: z.string().email().optional(),
   DB_POOL_MAX: z.preprocess(
     emptyToUndefined,
@@ -223,6 +222,10 @@ const envSchema = z.object({
   // local-fs provider falls back to an ephemeral random secret with a warning.
 
   const isHermeticCiBuild = isHermeticCiBuildFor(data.NEXT_PUBLIC_APP_URL);
+
+  if (data.NODE_ENV === "production" && !isHermeticCiBuild && data.OAUTH_PROVIDER_ENABLED && !isOAuthProductionOrigin(data.NEXT_PUBLIC_APP_URL)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["NEXT_PUBLIC_APP_URL"], message: "Production OAuth requires an HTTPS app origin without a path, query or trailing slash." });
+  }
 
   if (data.API_FUZZ_DISABLE_RATE_LIMIT && !isHermeticCiBuild) {
     ctx.addIssue({

@@ -1,3 +1,4 @@
+import { apiAudit } from "@/lib/api/audit";
 import { DomainError } from "@/lib/domain-errors";
 import { toOperationJsonSchema } from "@/lib/operations/json-schema";
 import { runOperation } from "@/lib/operations/runner";
@@ -23,7 +24,7 @@ export async function createDeliveryResponse(request: Request, { ctx, headers, d
   rejectUnknownFields(body, createContract);
   const result = await runWithStockBasisPreview(representationCheckedRecord, ctx, body, {
     deadlineAt, dryRun,
-    audit: { requestId, credentialId: ctx.credentialId, transport: "rest" as const },
+    audit: apiAudit(ctx, requestId, "rest"),
     idempotency: key ? { credentialId: ctx.credentialId, key } : undefined,
   }, data => data.basisFingerprint, data => data.allocations);
   const responseBody = recordedDeliveryBody(result, dryRun);
@@ -50,7 +51,7 @@ export async function updateDeliveryResponse(request: Request, { ctx, headers, d
       ? { ...body, deliveryId: id, expectedVersion: version } : body;
     const result = await runOperation(representationCheckedUpdate(id, revision), ctx, input, {
       deadlineMs: remainingDeadlineMs(deadlineAt), dryRun,
-      audit: { requestId, credentialId: ctx.credentialId, transport: "rest" as const },
+      audit: apiAudit(ctx, requestId, "rest"),
       idempotency: key ? { credentialId: ctx.credentialId, key, target: id, precondition: precondition! } : undefined,
     });
     const responseBody = deliveryBody(result.data);

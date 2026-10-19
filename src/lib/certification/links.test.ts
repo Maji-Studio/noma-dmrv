@@ -10,6 +10,7 @@ import {
   productionRunDeepLinkHref,
   traceabilityActivityHref,
   traceabilityApplicationHref,
+  traceabilityBatchHref,
 } from "./links";
 
 describe("certificationEmissionEstimatesHref", () => {
@@ -150,6 +151,9 @@ describe("record deep links", () => {
     );
     expect(traceabilityActivityHref("batch/1", "facility 1")).toBe(
       "/traceability?facility=facility+1&batch=batch%2F1&view=activity",
+    );
+    expect(traceabilityBatchHref("batch/1", "facility 1")).toBe(
+      "/traceability?facility=facility+1&batch=batch%2F1",
     );
   });
 });

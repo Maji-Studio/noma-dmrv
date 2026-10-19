@@ -10,13 +10,26 @@ export interface StockLevelPoint {
 }
 export interface StockModeChange { t: number; kind: string }
 
+/** Cancel each reversal with its target when present, keeping unmatched reversals for chart totals. */
+export function liveChartEntries(entries: readonly OutputStockHistoryEntry[]): OutputStockHistoryEntry[] {
+  const entryIds = new Set(entries.map(entry => entry.id));
+  const cancelledIds = new Set<string>();
+  for (const entry of entries) {
+    if (entry.kind === "reversal" && entry.correctsMovementId !== null && entryIds.has(entry.correctsMovementId)) {
+      cancelledIds.add(entry.id);
+      cancelledIds.add(entry.correctsMovementId);
+    }
+  }
+  return entries.filter(entry => !cancelledIds.has(entry.id));
+}
+
 /**
- * Replay frozen deltas in physical time, including compensating reversals.
+ * Replay live frozen deltas in physical time after cancelling correction pairs.
  * Departure readings never reset the remaining stock. Counts carry their
  * saved wet delta; a missing historical basis leaves water unknown.
  */
 export function buildStockLevelSeries(entries: readonly OutputStockHistoryEntry[]) {
-  const ordered = [...entries].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.recordedAt.localeCompare(b.recordedAt));
+  const ordered = liveChartEntries(entries).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.recordedAt.localeCompare(b.recordedAt));
   const points: StockLevelPoint[] = [];
   const modeChanges: StockModeChange[] = [];
   let dryKg = 0;

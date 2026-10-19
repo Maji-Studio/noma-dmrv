@@ -124,7 +124,6 @@ function DetailState({
             Loading statement…
           </p>
         </SlideOverPanel.Body>
-        <CloseFooter />
       </>
     );
   }
@@ -138,7 +137,6 @@ function DetailState({
             again.
           </p>
         </SlideOverPanel.Body>
-        <CloseFooter />
       </>
     );
   }
@@ -389,11 +387,10 @@ function DetailState({
         generationUnavailableReason={generationUnavailableReason}
       />
 
-      <SlideOverPanel.Footer className="justify-stretch">
-        {statementSubmission && (
+      {statementSubmission && (
+        <SlideOverPanel.Footer>
           <Button
-            variant="default"
-            className="flex-1"
+            variant="primary"
             onClick={handleRefresh}
             busy={refreshMutation.isPending}
           >
@@ -402,25 +399,8 @@ function DetailState({
             )}
             Refresh
           </Button>
-        )}
-        <SlideOverPanel.Close>
-          <Button variant="primary" className="flex-1">
-            Close
-          </Button>
-        </SlideOverPanel.Close>
-      </SlideOverPanel.Footer>
+        </SlideOverPanel.Footer>
+      )}
     </>
-  );
-}
-
-function CloseFooter() {
-  return (
-    <SlideOverPanel.Footer className="justify-stretch">
-      <SlideOverPanel.Close>
-        <Button variant="primary" className="flex-1">
-          Close
-        </Button>
-      </SlideOverPanel.Close>
-    </SlideOverPanel.Footer>
   );
 }

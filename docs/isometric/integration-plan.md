@@ -163,15 +163,30 @@ association must match the current GHG Entry. The journal row and supplier
 reference are versioned by immutable Removal submission: supersession creates a
 fresh Biochar Application for the new GHG Entry and leaves the prior registry
 artifact intact. The documented provider response omits
-`source_ids` on both create and GET, and no REST endpoint exposes the reverse
-link. The accepted create request is therefore the attachment contract: a
-readback without `source_ids` is not drift. Returned Source IDs, when a response
-does include them, must match the exact reviewed set. The immutable local intent
-and submission snapshot retain the IDs sent. Authoritative readback through the
-GraphQL `BiocharSpreadEvent.biocharSpreadEventSources` field is tracked in
-issue #737. Registry failure
-blocks Removal submission and leaves the claim safely retryable. There is no
-gate or placeholder lifecycle.
+`source_ids` on both create and GET. REST still accepts omitted/null Source
+readback and checks any returned set. GraphQL now reads the authoritative links
+through `project.biocharSpreadEvents.biocharSpreadEventSources` after Application
+confirmation. The call uses `/graphql` at the Certify origin with both Certify
+authentication headers, a 10-second attempt timeout and at most two attempts.
+Wrong or malformed sets stop submission and record `source_set_mismatch` drift.
+No answer continues with persisted `unconfirmed` status and an ID-only warning
+unless the previous readback was a mismatch. A retry without an answer keeps that
+mismatch, restores `source_set_mismatch` drift, and stops submission until an
+authoritative exact match confirms the corrected evidence set.
+The immutable snapshot retains the expected IDs; empty expected sets are not checked.
+
+Removal summary reloads recheck only unconfirmed, lifecycle-confirmed registrations.
+Each load rechecks at most three eligible registrations concurrently with one shared
+client resolution. Rows outside that limit retain their persisted status and counts;
+a failed recheck retains the row's previous status without failing the summary.
+Success clears the note. A mismatch on refresh records the evidence status and logs
+IDs without failing the summary or marking submission drift. The summary and list
+row expose `evidenceLinks` counts and the latest check time for the UI.
+Confirmed checks are reused on submission retries. The sandbox confirmed the
+query, the auth and the REST/GraphQL id equivalence on a live Application; the
+full-submit retest on staging is tracked in
+[open questions](../open-questions-isometric.md).
+Other registry failures block submission and leave the claim safely retryable.
 
 ## Deleting a never-finalized Removal
 
@@ -423,9 +438,10 @@ Parquet and reactor MeasurementSamples are outside the approved submission route
 
 ## Operational checks
 
-- `pnpm isometric:coverage-check -- --source=fixture` validates checked-in
-  template fixtures against ordinary, durability, diesel-name, safety-margin,
-  and PROJECT-scope guards.
+- `pnpm isometric:coverage-check -- --source=fixture` fetches live templates
+  selected by the checked-in fixture and uses the same line contracts as readiness
+  and submission (ADR 0032). Entry-only operating lines warn; unsettled contracts,
+  forbidden lines and unmapped inputs fail.
 - `pnpm isometric:coverage-check -- --source=db` inspects configured facility
   templates when credentials/database access are available.
 - `.github/workflows/isometric-health.yml` performs the repository's scheduled

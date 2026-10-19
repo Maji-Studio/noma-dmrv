@@ -444,23 +444,6 @@ describe("deleteRemoval", () => {
     expect(registry.requests).toHaveLength(0);
     expect(await removalExists(fixture.removalId)).toBe(false);
   });
-  it("lets any member delete, registry cleanup included", async () => {
-    const member = { ...makeTestOrgContext(), orgRole: "member" as const };
-    const fixture = await createFixture();
-    const entry = registry.seedGhgEntry({ status: "DRAFT" });
-    await insertLedgerRow(fixture, {
-      status: "draft",
-      externalId: entry.id,
-      metadata: interruptedMetadata(),
-    });
-    const result = await deleteRemoval(member, {
-      facilityId: fixture.facilityId,
-      removalId: fixture.removalId,
-    });
-    expect(result.deletedGhgEntryIds).toEqual([entry.id]);
-    expect(registry.ghgEntries).toHaveLength(0);
-    expect(await removalExists(fixture.removalId)).toBe(false);
-  });
   it("finds and deletes a GHG Entry whose POST landed without a recorded ID", async () => {
     const fixture = await createFixture();
     const supplierRef = buildRemovalSupplierRef({

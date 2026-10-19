@@ -5,7 +5,7 @@
  * one quiet date bar per credit batch (all the same height), year navigation, and
  * a dashed "+" slot in every gap that opens "New credit batch" for that month.
  * Hover (or focus, or a first tap) on a bar shows its facts; pressing a bar
- * opens the batch.
+ * (the second tap on touch) opens the batch page, so each bar is a real link.
  */
 import { useState } from "react";
 import { CaretLeftIcon, CaretRightIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
@@ -26,6 +26,7 @@ import {
   type BarPlacement,
   type DateWindow,
 } from "@/lib/credit-batches/timeline";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { formatDateRange } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { cn } from "@/lib/utils";
@@ -156,14 +157,12 @@ export function CreditBatchTimeline({
   batches,
   facilityId,
   today,
-  onOpenBatch,
   onNewBatch,
 }: {
   batches: CreditBatchWithRelations[];
   facilityId: string;
   /** YYYY-MM-DD. */
   today: string;
-  onOpenBatch: (batch: CreditBatchWithRelations) => void;
   onNewBatch: (request: NewBatchRequest) => void;
 }) {
   const [year, setYear] = useState(() => Number(today.slice(0, 4)));
@@ -279,7 +278,7 @@ export function CreditBatchTimeline({
                             }}
                             label={`${batch.code}, ${row.feedstockName}, ${formatDateRange(batch.start, batch.end)}, ${stateLabel}${view.blockingCount > 0 ? `, Missing data ${view.blockingCount}` : ""}`}
                             className="group absolute inset-0 block outline-offset-2"
-                            onOpenBatch={() => onOpenBatch(batch.source)}
+                            href={creditBatchDeepLinkHref(batch.id, batch.source.facilityId)}
                           >
                             <Bar batch={batch} spot={spot} view={view} />
                           </BatchHoverCard>

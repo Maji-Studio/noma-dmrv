@@ -3,6 +3,16 @@ export interface FeedstockLedgerEntry {
   id: string;
   sourceId: string | null;
   reversed?: boolean;
+  correctsMovementId?: string | null;
+  reversedBy?: {
+    id: string;
+    reason: string;
+    recordedAt: string;
+    actorName: string | null;
+    replacementId: string | null;
+  } | null;
+  /** Present on live Lost mass entries; null means editable. */
+  editLockedReason?: string | null;
   kind: 'intake' | 'run_draw' | 'ingredient_draw' | 'loss' | 'count';
   /** ISO 8601 UTC instant the event physically happened. */
   occurredAt: string;
