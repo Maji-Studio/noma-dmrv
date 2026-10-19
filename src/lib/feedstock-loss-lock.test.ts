@@ -21,7 +21,7 @@ const TIME_ZONE = "Africa/Dar_es_Salaam";
 const LOSS_KG = 120;
 const INITIAL_KG = 1000;
 const AFTER_LOSS_KG = 880;
-const GUIDANCE = "Correct or remove the records that use it first.";
+const GUIDANCE = "To change this, first correct or remove the record that uses it.";
 
 function entry(overrides: Partial<FeedstockLedgerEntry> = {}): FeedstockLedgerEntry {
   return {
