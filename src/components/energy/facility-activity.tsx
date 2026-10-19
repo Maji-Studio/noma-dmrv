@@ -1,21 +1,25 @@
 /**
- * EnergyPage: where the facility's energy went over a period, and which
- * records used it (ADR 0031). One toolbar (period, credit batch), one summary
- * line, then the ranked record list. Recorded activity only (litres, kWh,
- * tonne-km); no CO2e is shown.
+ * FacilityActivity: where the facility's energy went over a period, and which
+ * records used it (ADR 0031). It sits behind the "Facility activity"
+ * disclosure on the Emissions overview. One toolbar (period, credit batch),
+ * one summary line, then the ranked record list and the totals panel.
+ * Recorded activity only (litres, kWh, tonne-km); no CO2e is shown.
+ *
+ * The period and the credit batch live in the URL (`activityPeriod`,
+ * `activityBatch`, #841) next to the overview's own keys.
  */
 "use client";
 
 import { useState } from "react";
+import { parseAsString, parseAsStringLiteral, useQueryStates } from "nuqs";
 import { ServerError } from "@/components/forms";
-import { SelectFacilityEmptyState } from "@/components/navigation";
-import { PageHeader } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useEnergyBreakdown } from "@/hooks/use-energy";
-import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { formatFacilityDate } from "@/lib/date-utils";
 import {
   DEFAULT_ENERGY_PERIOD_PRESET,
+  ENERGY_PERIOD_PRESETS,
   energyPresetPeriod,
   type EnergyPeriodPreset,
 } from "@/lib/energy/period";
@@ -35,40 +39,37 @@ import { EnergyRecordList } from "./energy-record-list";
 import { EnergySummaryLine } from "./energy-summary-line";
 import { EnergyToolbar } from "./energy-toolbar";
 
-const SUBTITLE = "Where the facility's energy went, and which records used it.";
 const LOADING_PANEL_CLASS = "h-320 w-full";
+const PRESET_KEYS = ENERGY_PERIOD_PRESETS.map((preset) => preset.key);
 
-export function EnergyPage() {
-  const { facilityId } = useFacilityContext();
+const activityParsers = {
+  activityPeriod: parseAsStringLiteral(PRESET_KEYS).withDefault(DEFAULT_ENERGY_PERIOD_PRESET),
+  activityBatch: parseAsString,
+};
+
+interface FacilityActivityProps {
+  facilityId: string;
+  /** One line under the summary, e.g. what the totals include. */
+  caption?: string;
+}
+
+export function FacilityActivity({ facilityId, caption }: FacilityActivityProps) {
   const { timeZone } = useFacilityClock(facilityId);
-  const [preset, setPreset] = useState<EnergyPeriodPreset>(DEFAULT_ENERGY_PERIOD_PRESET);
-  const [requestedBatchId, setRequestedBatchId] = useState<string | null>(null);
+  const [{ activityPeriod: preset, activityBatch: requestedBatchId }, setActivity] = useQueryStates(
+    activityParsers,
+    { history: "replace", scroll: false },
+  );
   const [scope, setScope] = useState<EnergyRecordScope>("batch");
 
   const today = formatFacilityDate(new Date(), timeZone);
   const period = energyPresetPeriod(preset, today);
-  const { data, isLoading, error } = useEnergyBreakdown(
-    facilityId ? { facilityId, from: period.from, to: period.to } : null,
-  );
-
-  if (!facilityId) {
-    return (
-      <div className="container-max page-shell">
-        <PageHeader area="infrastructure" title="Energy" subtitle={SUBTITLE} />
-        <SelectFacilityEmptyState description="Choose a facility from the sidebar to see its energy use." />
-      </div>
-    );
-  }
+  const { data, isLoading, error } = useEnergyBreakdown({ facilityId, from: period.from, to: period.to });
 
   if (error && !data) {
     return (
-      <div className="container-max py-32">
-        <ServerError
-          message={
-            error.message || "The energy figures could not be loaded. Refresh the page and try again."
-          }
-        />
-      </div>
+      <ServerError
+        message={error.message || "The activity figures could not be loaded. Refresh the page and try again."}
+      />
     );
   }
 
@@ -81,31 +82,28 @@ export function EnergyPage() {
   );
   const batchOptions = creditBatchOptions(data?.creditBatches ?? [], resolvedPeriod, data?.flows ?? []);
   const batchId = selectedBatch?.id ?? null;
-  const periodText = resolvedPeriod.from
-    ? formatDateRange(resolvedPeriod.from, resolvedPeriod.to)
-    : "";
+  const periodText = resolvedPeriod.from ? formatDateRange(resolvedPeriod.from, resolvedPeriod.to) : "";
 
   const changePreset = (next: EnergyPeriodPreset) => {
-    setPreset(next);
     const nextPeriod = energyPresetPeriod(next, today);
     const stillInPeriod = (data?.creditBatches ?? []).some(
-      (batch) =>
-        batch.id === requestedBatchId && batchReachesPeriod(batch, nextPeriod, data?.flows ?? []),
+      (batch) => batch.id === requestedBatchId && batchReachesPeriod(batch, nextPeriod, data?.flows ?? []),
     );
-    if (!stillInPeriod) setRequestedBatchId(null);
+    void setActivity({
+      activityPeriod: next === DEFAULT_ENERGY_PERIOD_PRESET ? null : next,
+      ...(stillInPeriod ? {} : { activityBatch: null }),
+    });
   };
 
   return (
-    <div className="container-max page-shell">
-      <PageHeader area="infrastructure" title="Energy" subtitle={SUBTITLE} />
-
+    <div className="flex flex-col gap-24">
       <div className="flex flex-col gap-12">
         <EnergyToolbar
           preset={preset}
           onPresetChange={changePreset}
           creditBatches={batchOptions}
           batchId={batchId}
-          onBatchChange={setRequestedBatchId}
+          onBatchChange={(next) => void setActivity({ activityBatch: next })}
         />
         {data ? (
           <EnergySummaryLine
@@ -117,6 +115,7 @@ export function EnergyPage() {
         ) : (
           <Skeleton className="h-20 w-[320px] max-w-full" />
         )}
+        {caption && <p className="body-caption text-[var(--color-text-tertiary)]">{caption}</p>}
       </div>
 
       {isLoading || !data ? (
@@ -140,10 +139,7 @@ export function EnergyPage() {
                   ? `Produced ${formatDateRange(selectedBatch.startDate, selectedBatch.endDate)}. Counted within ${periodText}.`
                   : periodText
               }
-              totals={totalsBySource(
-                flowsForBatch(data.flows, batchId),
-                gapsForBatch(data.gaps, batchId),
-              )}
+              totals={totalsBySource(flowsForBatch(data.flows, batchId), gapsForBatch(data.gaps, batchId))}
             />
           </div>
         </div>

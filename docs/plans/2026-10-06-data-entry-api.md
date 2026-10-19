@@ -654,7 +654,7 @@ lock timeout.
 
 - **c1:** Better Auth and installed plugins pinned to 1.7.10; earlier API phase
   results archived.
-- **c2:** migration 0162 adds provider tables, grant generations and immutable
+- **c2:** migration 0163 adds provider tables, grant generations and immutable
   authorization attempts, with lifecycle, membership revocation and purge seams.
 - **c3:** OAuth bearer resolution, shared eligibility, live Member role ceiling,
   separate audiences, scope step-up, audit identity and admission buckets.
