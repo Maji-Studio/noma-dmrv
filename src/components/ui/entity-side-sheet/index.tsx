@@ -110,8 +110,7 @@ interface EntitySideSheetProps {
   canEdit?: boolean;
   /**
    * A view-mode footer action that leads, ahead of Edit (a preview sheet's
-   * link to the record's own page). Edit then drops to secondary weight and
-   * the footer Close gives way to the header's close button.
+   * link to the record's own page). Edit then drops to secondary weight.
    */
   viewPrimaryAction?: React.ReactNode;
   /** The form component rendered in edit/create mode */
@@ -310,26 +309,15 @@ function EntitySideSheet({
           </SlideOverPanel.Footer>
         )}
 
-        {/* Footer — only in view mode */}
-        {isViewMode && (
-          <SlideOverPanel.Footer className="justify-stretch">
+        {/* Footer — only in view mode; the header X is the way out. A preview's
+            lead action (its link to the record's own page) comes before Edit. */}
+        {isViewMode && (canEdit || viewPrimaryAction) && (
+          <SlideOverPanel.Footer>
             {viewPrimaryAction}
             {canEdit && (
-              <Button
-                variant={viewPrimaryAction ? "default" : "primary"}
-                className="flex-1"
-                onClick={() => onModeChange("edit")}
-              >
+              <Button variant={viewPrimaryAction ? "default" : "primary"} onClick={() => onModeChange("edit")}>
                 {editLabel}
               </Button>
-            )}
-            {/* A preview's lead action takes the Close slot; the header X still closes. */}
-            {!viewPrimaryAction && (
-              <SlideOverPanel.Close>
-                <Button variant="default" className="flex-1">
-                  Close
-                </Button>
-              </SlideOverPanel.Close>
             )}
           </SlideOverPanel.Footer>
         )}

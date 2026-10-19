@@ -847,7 +847,7 @@ export function CreditBatchList({
           sideSheetEntity ? (
             <Link
               href={creditBatchDeepLinkHref(sideSheetEntity.id, sideSheetEntity.facilityId)}
-              className={buttonVariants({ variant: "primary", className: "flex-1" })}
+              className={buttonVariants({ variant: "primary" })}
             >
               Open credit batch
             </Link>

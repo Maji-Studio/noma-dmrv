@@ -37,11 +37,11 @@ function renderView(viewPrimaryAction?: ReactNode) {
 }
 
 describe("EntitySideSheet viewPrimaryAction", () => {
-  it("keeps Edit primary and Close beside it by default", () => {
-    expect(renderView()).toEqual([["Edit", "primary"], ["Close", "default"]]);
+  it("keeps Edit primary by default; the header closes the sheet", () => {
+    expect(renderView()).toEqual([["Edit", "primary"]]);
   });
 
-  it("leads with a preview's own action, drops Edit to secondary and leaves closing to the header", () => {
+  it("leads with a preview's own action and drops Edit to secondary", () => {
     const buttons = renderView(<span data-testid="lead">Open credit batch</span>);
     expect(renderer.root.findByProps({ "data-testid": "lead" }).props.children).toBe("Open credit batch");
     expect(buttons.filter(([label]) => label === "Edit" || label === "Close")).toEqual([["Edit", "default"]]);
