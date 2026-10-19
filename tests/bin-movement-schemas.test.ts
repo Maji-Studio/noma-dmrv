@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   recordLossSchema,
+  removeLossSchema,
   recordLossFormSchema,
   recordStockTakeSchema,
   stockTakeFormSchema,
@@ -10,6 +11,12 @@ const baseInput = {
   reason: "Physical stock count",
 };
 const STORAGE_LOCATION_ID = "00000000-0000-4000-8000-000000000001";
+const MOVEMENT_ID = "00000000-0000-4000-8000-000000000002";
+const REQUEST_KEY = "lost-mass-correction-form";
+const REPLACEMENT_KG = 80;
+const REASON_LIMIT = 1000;
+const REQUEST_KEY_LIMIT = 200;
+const OVER_LIMIT = 1;
 
 describe("stock-take form precision", () => {
   it("accepts high-precision feedstock wet mass for canonicalization", () => {
@@ -98,4 +105,80 @@ it("requires an explicit loss event instant in both schemas", () => {
     }
     expect(schema.safeParse({ ...loss, occurredAt: "2026-10-15T10:00:00.000Z" }).success).toBe(true);
   }
+});
+
+describe("Lost mass correction schemas", () => {
+  const removal = {
+    storageLocationId: STORAGE_LOCATION_ID,
+    correctsMovementId: MOVEMENT_ID,
+    idempotencyKey: REQUEST_KEY,
+    reason: "Corrected scale reading",
+  };
+  const replacement = {
+    ...removal,
+    lane: "feedstock",
+    occurredAt: "2026-01-01T10:00:00.000Z",
+    lossMassKg: REPLACEMENT_KG,
+  };
+
+  it("preserves the original movement id on a replacement", () => {
+    expect(recordLossSchema.parse(replacement)).toMatchObject(replacement);
+  });
+
+  it("continues to accept a new Lost mass entry without a correction id", () => {
+    expect(recordLossSchema.safeParse({ ...replacement, correctsMovementId: undefined }).success).toBe(true);
+  });
+
+  it.each(["", "not-a-uuid", null])("rejects invalid correction id %j on both commands", (correctsMovementId) => {
+    for (const schema of [recordLossSchema, removeLossSchema]) {
+      const result = schema.safeParse({ ...replacement, correctsMovementId });
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error.issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: ["correctsMovementId"] }),
+      ]));
+    }
+  });
+
+  it("removes an entry without requiring a replacement time, mass, or lane", () => {
+    expect(removeLossSchema.parse(removal)).toEqual(removal);
+  });
+
+  it.each(["storageLocationId", "correctsMovementId", "idempotencyKey", "reason"] as const)(
+    "requires %s for removal", (field) => {
+      const result = removeLossSchema.safeParse({ ...removal, [field]: undefined });
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error.issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: [field] }),
+      ]));
+    },
+  );
+
+  it.each([
+    { field: "storageLocationId", value: "not-a-uuid" },
+    { field: "reason", value: "   " },
+    { field: "reason", value: "x".repeat(REASON_LIMIT + OVER_LIMIT) },
+    { field: "idempotencyKey", value: "   " },
+    { field: "idempotencyKey", value: "x".repeat(REQUEST_KEY_LIMIT + OVER_LIMIT) },
+  ])("rejects invalid $field on removal", ({ field, value }) => {
+    const result = removeLossSchema.safeParse({ ...removal, [field]: value });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: [field] }),
+    ]));
+  });
+
+  it("trims removal reasons and request keys", () => {
+    expect(removeLossSchema.parse({ ...removal, reason: `  ${removal.reason}  `, idempotencyKey: `  ${REQUEST_KEY}  ` }))
+      .toEqual(removal);
+  });
+
+  it.each([
+    { lossMassKg: 0 },
+    { lossMassKg: -REPLACEMENT_KG },
+    { lossMassKg: undefined },
+    { occurredAt: undefined },
+    { occurredAt: "2026-01-01T10:00" },
+  ])("still validates replacement mass and time: %j", (invalid) => {
+    expect(recordLossSchema.safeParse({ ...replacement, ...invalid }).success).toBe(false);
+  });
 });
