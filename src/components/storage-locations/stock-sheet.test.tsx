@@ -11,7 +11,7 @@ vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ time
 vi.mock("next/link", () => ({ default: ({ children, href, ...props }: { children: ReactNode; href: string }) => <a href={href} {...props}>{children}</a> }));
 vi.mock("@/components/ui/modal", () => ({ Modal: ({ isOpen, children }: { isOpen: boolean; children: ReactNode }) => isOpen ? <div role="dialog">{children}</div> : null }));
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null, Tooltip: ({ children }: { children: ReactNode }) => children }));
-vi.mock("./sub-bin-card", () => ({ DetailsTooltip: ({ trigger }: { trigger: ReactNode }) => trigger, SubBinTooltip: ({ trigger }: { trigger: ReactNode }) => trigger, subBinMoistureText: () => "20%" }));
+vi.mock("./sub-bin-card", async (importOriginal) => ({ ...(await importOriginal<typeof import("./sub-bin-card")>()), DetailsTooltip: ({ trigger }: { trigger: ReactNode }) => trigger, SubBinTooltip: ({ trigger }: { trigger: ReactNode }) => trigger, subBinMoistureText: () => "20%" }));
 
 import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import { FeedstockBinBalance } from "./feedstock-bin-balance";

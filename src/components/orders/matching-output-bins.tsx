@@ -23,7 +23,7 @@ const STATUS_CLASS = "body-caption text-[var(--color-text-secondary)]";
  * total, the headline never switches to dry, and an unresolved figure is null
  * so the muted "Not available" applies.
  */
-export function summarizeMatchingStock(bins: readonly MatchingOutputBin[]): { wet: string | null; dry: string | null; binCount: number } {
+export function summarizeMatchingStock(bins: readonly MatchingOutputBin[]): { wet: string | null; dry: string | null; dryCoverage: string | null; binCount: number } {
   const binCount = bins.length;
   const withWet = bins.filter(bin => bin.estimatedWetMassKg != null);
   const withDry = bins.filter(bin => bin.dryMassKg != null);
@@ -32,7 +32,9 @@ export function summarizeMatchingStock(bins: readonly MatchingOutputBin[]): { we
   const coverage = (known: number) => known === binCount ? "" : ` in ${known} of ${binCount} bins`;
   return {
     wet: withWet.length === 0 ? null : `${formatWetEstimate(wetKg)} kg wet mass${coverage(withWet.length)}`,
-    dry: withDry.length === 0 ? null : `${formatMassKg(dryKg)}${coverage(withDry.length)}`,
+    dry: withDry.length === 0 ? null : formatMassKg(dryKg),
+    // Read after the label ("1,500 kg dry biochar in 2 of 3 bins"), so it is not part of the figure.
+    dryCoverage: withDry.length === 0 || withDry.length === binCount ? null : coverage(withDry.length).trim(),
     binCount,
   };
 }
@@ -65,7 +67,7 @@ export function MatchingOutputBins({ facilityId, formulationId }: { facilityId: 
         <DerivedHeadline
           label="Available wet stock, estimate"
           value={summary.wet}
-          secondary={{ label: DRY_BIOCHAR_LABEL, value: summary.dry }}
+          secondary={{ label: DRY_BIOCHAR_LABEL, value: summary.dry, trailing: summary.dryCoverage }}
           sub={`${summary.binCount} ${pluralize(summary.binCount, "bin", "bins")}`}
         />
         <CaretRightIcon aria-hidden size={16} weight="bold" className="shrink-0 text-[var(--color-text-tertiary)]" />

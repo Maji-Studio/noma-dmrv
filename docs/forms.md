@@ -580,8 +580,11 @@ stock family presents wet first. Only presentation changes.
   (wet estimate first, dry secondary) that opens a "Matching stock" modal with
   these cards. The row's wet figure sums only the bins that have an estimate and
   says "in N of M bins" when some do not; it never switches to dry.
-- A wet estimate is computed at a moisture, not weighed: its label always says
-  "estimate", and it reads in whole kilograms.
+- A wet estimate is computed at a moisture, not weighed, and reads in whole
+  kilograms as "N kg wet mass" with no "≈" and no "estimate" on the figure.
+  Where the figure has a label, the label says estimate ("Available wet stock,
+  estimate"); otherwise its info hint says "Estimated: …". Secondary figures
+  lead with the number ("1,500 kg dry biochar", "270 kg dry solids").
 
 ### Stock moisture readings
 
