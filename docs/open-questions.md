@@ -48,12 +48,6 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
   bar a few pixels wide. Needs a design decision for bars whose 44px hit areas
   would overlap.
 
-## Emissions entry dates (2026-10-16) - **deferred**
-
-- `src/lib/read-models/batch-emission-lines.ts:loadBatchEmissionLines` does not
-  recheck entry dates when a batch start date moves. Decide whether to refuse
-  the batch edit or stop counting entries dated before the new start date.
-
 ## Late production runs after submission (`credit-batches/late-runs`) - **parked**
 
 - `src/data-access/credit-batch-membership.ts:assertNoOverlappingCreditBatchCohort`

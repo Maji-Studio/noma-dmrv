@@ -172,6 +172,7 @@ export async function updateCreditBatchFn(
       }
     }
 
+    // The locked writer checks entry dates; withAction preserves its conflict and recovery copy.
     const creditBatch = await updateCreditBatchData(ctx, creditBatchId, updateData);
     return creditBatch;
   }, { fallbackMessage: "Failed to update credit batch", log: { message: "Failed to update credit batch", context: { op: "credit-batch:update" } } });
