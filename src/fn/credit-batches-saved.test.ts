@@ -55,6 +55,9 @@ vi.mock("@/lib/log", () => ({
 
 import { createCreditBatchFn, updateCreditBatchFn } from "./credit-batches";
 import { SAVED_DETAILS_UNAVAILABLE } from "@/lib/copy-utils";
+import { ActionConflictError } from "@/lib/errors";
+import { conflictCode } from "@/lib/conflict-ref";
+import { formatCreditBatchEntryDateConflict } from "@/lib/credit-batch-entry-dates";
 
 const ORGANIZATION_ID = "00000000-0000-4000-8000-000000000001";
 const FACILITY_ID = "00000000-0000-4000-8000-000000000002";
@@ -155,6 +158,19 @@ describe("updateCreditBatchFn", () => {
 
   beforeEach(() => {
     mocks.getCreditBatchById.mockResolvedValue({ id: BATCH_ID, code: "CB-001" });
+  });
+
+  it("preserves the entry-date conflict and recovery message without logging it", async () => {
+    const message = formatCreditBatchEntryDateConflict("CB-001", [
+      { displayName: "Lab electricity", occurredOn: "2026-01-10" },
+    ]);
+    const conflict = { entity: "credit_batch" as const, id: BATCH_ID, code: conflictCode("CB-001") };
+    mocks.updateCreditBatch.mockRejectedValue(new ActionConflictError(message, conflict));
+
+    expect(await updateCreditBatchFn({
+      creditBatchId: BATCH_ID, expectedVersion: 1, startDate: new Date("2026-01-15"),
+    })).toEqual({ success: false, code: "conflict", error: message, conflict });
+    expect(mocks.loggerError).not.toHaveBeenCalled();
   });
 
   it("reports a plain success when the roll-up loads with the batch", async () => {

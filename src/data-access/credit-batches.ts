@@ -50,6 +50,7 @@ import {
   validateProductionRunIds,
 } from "./credit-batch-membership";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
+import { syncCreditBatchEntryDates } from "./credit-batch-entry-dates";
 import {
   getFacilityCertifierWithExecutor,
   loadCreditBatchAccounting,
@@ -675,6 +676,8 @@ export async function updateCreditBatch(
         ),
       );
     }
+
+    await syncCreditBatchEntryDates(ctx, tx, existingBatch.row, effectiveStartDate, effectiveEndDate);
 
     // ADR 0016 (amended 2026-07-04): feedstock type is DECLARED, not derived.
     // Re-guard the membership against the effective declared type + refresh the
