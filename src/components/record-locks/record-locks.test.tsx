@@ -5,6 +5,7 @@ import type { RecordLockLink, RecordLockView } from "@/lib/record-lock-view";
 import { RecordLockChip, RecordLockOverviewChip, RecordLockSentMark } from "./record-lock-chip";
 import { recordLockTitleMark } from "./record-lock-title-mark";
 import { recordLockSheetProps } from "./record-lock-sheet-props";
+import { INTERRUPTED_HOW_TO_FREE, INTERRUPTED_HOW_TO_FREE_ONE, INTERRUPTED_MIXED_HOW_TO_FREE_ONE } from "@/lib/record-lock";
 import { RecordLockNotice } from "./record-lock-notice";
 import { RecordUsedBy } from "./record-used-by";
 
@@ -123,6 +124,32 @@ describe("RecordLockNotice", () => {
       "Nothing can be changed, because this was sent to Isometric with Removal Jan 1 to Mar 31, 2026. If Isometric sends the GHG Statement back, refresh its status to edit again.",
     );
     expect(screen.getByRole("link").getAttribute("href")).toBe(`/certification/removals?facility=${FACILITY}&removal=removal-1`);
+  });
+
+  it("says sending was started and not finished for an interrupted Removal", () => {
+    const interrupted = { ...view("sent", [REMOVAL]), interruptedHolders: [REMOVAL], howToFree: INTERRUPTED_HOW_TO_FREE_ONE };
+    render(<RecordLockNotice lock={interrupted} />);
+    expect(screen.getByRole("status").textContent).toBe(
+      "Nothing can be changed, because sending Removal Jan 1 to Mar 31, 2026 to Isometric was started and not finished. To edit again, delete or resume that Removal, or review its records in Isometric.",
+    );
+  });
+
+  it("names several interrupted Removals", () => {
+    const other: RecordLockLink = { ...REMOVAL, id: "removal-2", period: { startedOn: "2026-04-01", completedOn: "2026-06-30" } };
+    const interrupted = { ...view("sent", [REMOVAL, other]), interruptedHolders: [REMOVAL, other], howToFree: INTERRUPTED_HOW_TO_FREE };
+    render(<RecordLockNotice lock={interrupted} />);
+    expect(screen.getByRole("status").textContent).toBe(
+      "Nothing can be changed, because sending Removal Jan 1 to Mar 31, 2026 and Removal Apr 1 to Jun 30, 2026 to Isometric was started and not finished. To edit again, delete or resume those Removals, or review their records in Isometric.",
+    );
+  });
+
+  it("names the sent and the unfinished Removal separately when holders differ", () => {
+    const other: RecordLockLink = { ...REMOVAL, id: "removal-2", period: { startedOn: "2026-04-01", completedOn: "2026-06-30" } };
+    const mixed = { ...view("sent", [REMOVAL, other]), interruptedHolders: [other], howToFree: INTERRUPTED_MIXED_HOW_TO_FREE_ONE };
+    render(<RecordLockNotice lock={mixed} />);
+    expect(screen.getByRole("status").textContent).toBe(
+      "Nothing can be changed, because this was sent to Isometric with Removal Jan 1 to Mar 31, 2026, and sending Removal Apr 1 to Jun 30, 2026 was started and not finished. To edit again, delete or resume that Removal, and wait for Isometric to send the GHG Statement back.",
+    );
   });
 
   it("stays silent for a kind that keeps every field free while In use, but not once Sent", () => {
