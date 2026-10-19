@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({ verify: vi.fn(), session: vi.fn(), selection: 
 vi.mock("@better-auth/oauth-provider", () => ({ verifyOAuthQueryParams: mocks.verify, getOAuthProviderState: vi.fn() }));
 vi.mock("@/lib/auth/better-auth", () => ({ auth: { $context: Promise.resolve({ secret: "unit-test-secret" }) } }));
 vi.mock("@/lib/auth/providers/better-auth-server", () => ({ getBetterAuthSession: mocks.session }));
-vi.mock("@/config/env", () => ({ env: { OAUTH_PROVIDER_ENABLED: true, NEXT_PUBLIC_APP_URL: "https://noma.test" } }));
+vi.mock("@/config/env", () => ({ env: { OAUTH_PROVIDER_ENABLED: true, NEXT_PUBLIC_APP_URL: "https://noma.test", BETTER_AUTH_SECRET: "unit-oauth-secret-at-least-32-characters" } }));
 vi.mock("@/data-access/oauth-grant-lifecycle", () => ({ getOAuthOrganizationSelection: mocks.selection, selectOAuthOrganization: vi.fn(), resolveAttemptGrant: mocks.resolve }));
 vi.mock("@/data-access/oauth-credential-auth", () => ({ findOAuthClient: mocks.client }));
 vi.mock("@/data-access/oauth-provider", () => ({ findOAuthClientResources: vi.fn(), findOAuthAttempt: vi.fn(), getOAuthAttemptConsent: vi.fn() }));
