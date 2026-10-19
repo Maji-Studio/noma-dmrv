@@ -1,8 +1,10 @@
 "use client";
 
 import { CompositionCard, DerivedHeadline } from "@/components/forms";
+import { DRY_BIOCHAR_LABEL } from "@/components/biochar-products/product-composition-components";
 import { SegmentBar, SegmentKey } from "@/components/ui/segment-bar";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { WET_STOCK_DEFINITION } from "@/lib/output-stock/labels";
 import { formatMassKg } from "@/lib/format-utils";
 import type { OutputStockAllocationView } from "@/types/output-stock";
 import type { ReactNode } from "react";
@@ -10,7 +12,7 @@ import { batchSegments, formatDryKeyMass, formatWetEstimate } from "./stock-prev
 
 /** The one definition the availability block cannot show as a number. */
 const AVAILABILITY_HINT =
-  "Dry biochar is the tracked quantity. Wet stock is the mass added less the mass taken out; only a count sets moisture again. Stock stays available to every order until a delivery records the bin it left.";
+  `Dry biochar is the tracked quantity. ${WET_STOCK_DEFINITION} Stock stays available to every order until a delivery records the bin it left.`;
 
 /**
  * Which batches a draw touched, and which run produced each one.
@@ -77,12 +79,12 @@ export function OutputStockAvailability({ binName, dryKg, wetEstimate = null, al
       headline={wetEstimate
         ? <DerivedHeadline
             label="Available wet stock, estimate"
-            value={`≈ ${formatWetEstimate(wetEstimate.kg)} kg wet`}
+            value={`${formatWetEstimate(wetEstimate.kg)} kg wet mass`}
             // Dry stock is a balance, not a calculation: a secondary line at both levels.
-            secondary={{ label: "Available dry stock", value: dryKg == null ? null : formatMassKg(dryKg) }}
+            secondary={{ label: DRY_BIOCHAR_LABEL, value: dryKg == null ? null : formatMassKg(dryKg) }}
             sub={wetEstimate.basis}
           />
-        : <DerivedHeadline label="Available dry stock" value={dry} />}
+        : <DerivedHeadline label="Available dry biochar" value={dry} />}
     >
       {segments.length > 0 && <div className="flex flex-col gap-6">
         <SegmentBar label={`Batches in ${binName}`} segments={segments} />

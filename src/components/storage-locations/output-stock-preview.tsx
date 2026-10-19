@@ -11,7 +11,7 @@ import type { ReactNode } from "react";
 import { MoistureResetChange } from "./moisture-reset-change";
 import { IngredientStockInfo, StockLoadCard } from "./output-stock-load-card";
 import { StockBalanceChange, StockRows, type StockRow } from "./stock-figures";
-import { binLabel, capitalize, dryingNotice, formatWetEstimate, SPLIT_MATERIAL_LABEL, splitWetMassKg, stockCardHint } from "./stock-preview-shared";
+import { binLabel, capitalize, dryingNotice, formatWetEstimate, splitDryLabel, splitWetMassKg, stockCardHint } from "./stock-preview-shared";
 import { Notice } from "@/components/ui/notice";
 
 export { OutputStockAllocations, OutputStockAvailability } from "./output-stock-availability";
@@ -122,7 +122,7 @@ function StockMovementCard({ preview, entry, moreInfo }: { preview: Preview; ent
     >
       {/* The block's own disclosure holds the arithmetic, so the split
           contributes the bar and its key line and no second ledger. */}
-      {enteredWetKg !== null && <MoistureSplit calculation={false} wetMassKg={enteredWetKg} moisturePercent={preview.movementMoisturePercent} materialLabel={SPLIT_MATERIAL_LABEL} />}
+      {enteredWetKg !== null && <MoistureSplit calculation={false} wetMassKg={enteredWetKg} moisturePercent={preview.movementMoisturePercent} dryLabel={splitDryLabel(preview)} />}
       {notice && <Notice>{notice}</Notice>}
       {!refused && preview.moistureReset && <MoistureResetChange reset={preview.moistureReset} />}
     </CompositionCard>

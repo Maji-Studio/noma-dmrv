@@ -14,3 +14,6 @@ export const SUB_BIN_RECENT_MOVEMENTS = 3;
  * recorded as usual but held out of credit-batch slices.
  */
 export const MIX_BIN_REMOVALS_CREDITABLE = false;
+
+/** Below this a part of a bin's stock is rounding, not a row, band or key entry worth showing. */
+export const STOCK_PART_MIN_KG = 0.05;
