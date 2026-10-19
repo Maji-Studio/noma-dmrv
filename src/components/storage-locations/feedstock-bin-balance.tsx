@@ -16,37 +16,24 @@ import { InfoHint } from "@/components/ui/tooltip";
 import { useFeedstockBinStock } from "@/hooks/use-bin-movements";
 import { useFacilityClock } from "@/hooks/use-facility-context";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatFacilityTime } from "@/lib/date-utils";
 import { formatFacilityDateTime, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
-import { LOST_MASS_LABEL, outputStockEventLabel } from "@/lib/output-stock/labels";
+import { LOST_MASS_LABEL } from "@/lib/output-stock/labels";
 import type { FeedstockLedgerEntry } from "@/types/feedstock-bin-ledger";
 import { CardTextButton, StockCard, StockChartCard } from "./stock-card";
-import { LedgerBeforeAfter, LedgerDayHeader, LedgerFacts, LedgerLine } from "./stock-ledger";
+import { LedgerDayHeader } from "./stock-ledger";
+import { FEEDSTOCK_ENTRY_LABELS, FeedstockLedgerRow } from "./feedstock-ledger-row";
+import { FeedstockLossDeleteDialog } from "./feedstock-loss-delete-dialog";
+import { FeedstockLossForm } from "./feedstock-loss-form";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { StockLevelChart, type StockLevelPoint } from "./stock-level-chart";
-import { StockSourceLink } from "./stock-source-link";
 import { MixPileBay, type PileBand } from "./sub-bin-bays";
 
 const ICON_PX = 16;
 const EMPTY_ICON_PX = 32;
-const TIME_FORMAT = "HH:mm";
 const PERCENT = 100;
 const CARD_HINT = "Wet stock is what was received, minus production runs, product ingredients and lost mass. Run draws keep their saved batch shares. Other draws are estimated in proportion to what remains. Dry solids are an estimate from the batches' intake moisture.";
 const HISTORY_HINT = "Every entry that moved feedstock in or out of this bin, with the wet stock left after it.";
-
-const ENTRY_LABELS: Record<FeedstockLedgerEntry["kind"], string> = {
-  intake: outputStockEventLabel("intake"), run_draw: "Production run", ingredient_draw: "Product ingredient", loss: LOST_MASS_LABEL, count: "Stock count",
-};
-/** Icon per entry, from the shared stock-kind set. */
-const ENTRY_ICONS: Record<FeedstockLedgerEntry["kind"], string> = {
-  intake: "intake", run_draw: "production_draw", ingredient_draw: "production_draw", loss: "loss", count: "count",
-};
-
-function signedWet(kg: number | null): string {
-  if (kg === null) return MISSING_VALUE.notAvailable;
-  const sign = kg > 0 ? "+" : kg < 0 ? "−" : "";
-  return `${sign}${formatMassKg(Math.abs(kg))} wet`;
-}
 
 /** The bin's level after each entry: estimated dry solids, with the rest of the wet stock as water. */
 function feedstockStockPoints(entries: readonly FeedstockLedgerEntry[]): StockLevelPoint[] {
@@ -57,17 +44,21 @@ function feedstockStockPoints(entries: readonly FeedstockLedgerEntry[]): StockLe
     t: Date.parse(entry.occurredAt),
     dryKg: entry.estimatedDryKg!,
     waterKg: entry.estimatedDryKg === null ? null : Math.max(entry.afterWetKg - entry.estimatedDryKg, 0),
-    label: ENTRY_LABELS[entry.kind],
+    label: FEEDSTOCK_ENTRY_LABELS[entry.kind],
   }));
 }
 
-function FeedstockStockHistory({ storageLocationId, facilityId, renderTrigger }: {
+function FeedstockStockHistory({ storageLocationId, facilityId, moisturePercent, renderTrigger }: {
   storageLocationId: string;
   facilityId: string;
+  /** The pile's estimated moisture now, for the Lost mass edit form. */
+  moisturePercent: number | null;
   renderTrigger: (open: () => void, icon: ReactNode) => ReactNode;
 }) {
   const clock = useFacilityClock(facilityId);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<FeedstockLedgerEntry | null>(null);
+  const [deleting, setDeleting] = useState<FeedstockLedgerEntry | null>(null);
   const stock = useFeedstockBinStock(storageLocationId);
   const entries = stock.data?.entries ?? [];
   const timeline = entries.toReversed();
@@ -86,30 +77,22 @@ function FeedstockStockHistory({ storageLocationId, facilityId, renderTrigger }:
           {timeline.map((entry, index) => {
             const day = formatFacilityDay(entry.occurredAt, clock.timeZone);
             const newDay = index === 0 || day !== formatFacilityDay(timeline[index - 1].occurredAt, clock.timeZone);
-            const recordedLater = entry.recordedAt.slice(0, 16) !== entry.occurredAt.slice(0, 16);
             return <div key={entry.id}>
               {newDay && <LedgerDayHeader day={day} afterLabel={index === 0 ? "Wet stock after" : undefined} />}
-              <LedgerLine id={`feedstock-entry-${entry.id}`} time={formatFacilityTime(new Date(entry.occurredAt), clock.timeZone, TIME_FORMAT)}
-                iconKind={ENTRY_ICONS[entry.kind]} label={ENTRY_LABELS[entry.kind]} note={entry.reason || entry.code || undefined}
-                struck={entry.reversed}
-                amount={entry.kind === "count" && entry.countedWetKg !== null ? `${formatMassKg(entry.countedWetKg)} wet` : signedWet(entry.wetDeltaKg)}
-                after={formatMassKg(entry.afterWetKg)}>
-                <StockSourceLink facilityId={facilityId} source={entry.sourceId && (entry.kind === "intake" || entry.kind === "run_draw" || entry.kind === "ingredient_draw")
-                  ? { entity: entry.kind === "intake" ? "feedstock" : entry.kind === "run_draw" ? "productionRun" : "biocharProduct", id: entry.sourceId } : null} />
-                <LedgerBeforeAfter before={`${formatMassKg(entry.beforeWetKg)} wet`} after={`${formatMassKg(entry.afterWetKg)} wet`} />
-                <LedgerFacts facts={[
-                  ...(entry.code ? [{ label: entry.kind === "intake" ? "Batch" : entry.kind === "run_draw" ? "Run" : "Product", value: entry.code }] : []),
-                  ...(entry.moisturePercent !== null ? [{ label: "Moisture", value: formatMoisturePercent(entry.moisturePercent) }] : []),
-                  ...(entry.kind === "count" ? [{ label: "Change", value: signedWet(entry.wetDeltaKg) }] : []),
-                  ...(entry.reason ? [{ label: "Reason", value: entry.reason }] : []),
-                  { label: "Recorded", value: `${recordedLater ? formatFacilityDateTime(entry.recordedAt, clock.timeZone) : "At the time"}${entry.actorName ? ` by ${entry.actorName}` : ""}` },
-                ]} />
-              </LedgerLine>
+              <FeedstockLedgerRow entry={entry} corrected={entry.correctsMovementId ? entries.find(item => item.id === entry.correctsMovementId) : undefined}
+                timeZone={clock.timeZone} facilityId={facilityId} onEdit={setEditing} onDelete={setDeleting} />
             </div>;
           })}
         </div>}
       </div>
     </Modal>
+    <FormDialog isOpen={editing !== null} onClose={() => setEditing(null)} ariaLabel="Edit lost mass" width="md">
+      <h3 className="title-heading-3 mb-20">{LOST_MASS_LABEL}</h3>
+      {editing && <FeedstockLossForm key={editing.id} storageLocationId={storageLocationId} facilityId={facilityId} correction={editing}
+        availableKg={stock.data?.currentWetKg ?? null} moisturePercent={moisturePercent}
+        onCancel={() => setEditing(null)} onRecorded={() => setEditing(null)} />}
+    </FormDialog>
+    {deleting && <FeedstockLossDeleteDialog key={deleting.id} entry={deleting} storageLocationId={storageLocationId} timeZone={clock.timeZone} onClose={() => setDeleting(null)} />}
   </>;
 }
 
@@ -157,7 +140,7 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
       {stock.data && bands.length === 0 && <EmptyState icon={null} title="No stock in this bin" padding="sm" />}
       {bands.length > 0 && <MixPileBay label={estimatedDryKg === null ? "Wet feedstock by batch, moisture unknown" : "Feedstock solids by batch"} bands={bands} capacityKg={capacityKg} />}
     </StockCard>
-    <StockChartCard history={<FeedstockStockHistory storageLocationId={storageLocationId} facilityId={facilityId}
+    <StockChartCard history={<FeedstockStockHistory storageLocationId={storageLocationId} facilityId={facilityId} moisturePercent={estimatedMoisturePercent}
       renderTrigger={(open, icon) => <CardTextButton icon={icon} onClick={open}>History</CardTextButton>} />}>
       {stock.error ? <Notice tone="error">{stock.error.message}</Notice> : stock.isLoading ? <p role="status" className="body-caption">Loading stock history</p> : points.length > 0 ? <StockLevelChart compact points={points} timeZone={clock.timeZone} now={stock.dataUpdatedAt} solidLabel="Dry solids, estimated" /> : undefined}
     </StockChartCard>

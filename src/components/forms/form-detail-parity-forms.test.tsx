@@ -122,6 +122,7 @@ const NOT_SHEET_FORMS: Record<string, string> = {
   "components/api-keys/api-key-form.tsx": "settings dialog, no detail toggle",
   "components/oauth/consent-form.tsx": "auth page card, no detail toggle",
   "components/emissions/manual-entry-form.tsx": "emissions line drawer, no detail toggle",
+  "components/storage-locations/feedstock-loss-form.tsx": "feedstock Lost mass sheet and edit dialog, no detail toggle",
 };
 
 function ProductionSampleFormHarness() {

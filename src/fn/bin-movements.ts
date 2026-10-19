@@ -14,10 +14,11 @@
  */
 
 import { getFeedstockBinStock } from "@/data-access/feedstock-bin-ledger";
+import { correctFeedstockLoss } from "@/data-access/feedstock-loss-corrections";
+import type { ActionResult } from "@/types/actions";
+import { SafeError } from "@/lib/errors";
 import { uuidSchema } from "@/schemas/helpers";
 import { withAction } from "./with-action";
-import type { DomainIssue } from "@/lib/domain-errors";
-import type { ConflictRef } from "@/lib/conflict-ref";
 import { z } from "zod";
 import {
   createBinMovement,
@@ -27,21 +28,14 @@ import {
 import type { BinMovement } from "@/db/schema";
 import {
   recordLossSchema,
+  removeLossSchema,
   recordStockTakeSchema,
 } from "@/schemas/bin-movements";
 import { StockOverdrawError } from "@/data-access/bin-stock-guards";
 
 const LOG_MESSAGE = "bin movement action failed";
 
-export type RecordLossActionResult =
-  | { success: true; data: BinMovement }
-  | {
-      success: false;
-      error: string;
-      field?: "lossMassKg";
-      issues?: DomainIssue[];
-      conflict?: ConflictRef;
-    };
+export type RecordLossActionResult = ActionResult<BinMovement> & { field?: "lossMassKg" };
 
 export type RecordStockTakeActionResult =
   | { success: true; data: BinMovement }
@@ -82,6 +76,18 @@ export async function recordLossFn(
 ): Promise<RecordLossActionResult> {
   return withAction(async (ctx) => {
     const validated = recordLossSchema.parse(data);
+    if (validated.correctsMovementId) {
+      if (validated.lane !== "feedstock") {
+        throw new SafeError("Choose a Lost mass entry in this feedstock bin to correct.");
+      }
+      return correctFeedstockLoss(ctx, {
+        storageLocationId: validated.storageLocationId,
+        correctsMovementId: validated.correctsMovementId,
+        idempotencyKey: validated.idempotencyKey,
+        reason: validated.reason,
+        replacement: { occurredAt: new Date(validated.occurredAt), lossMassKg: validated.lossMassKg },
+      });
+    }
 
     const movement = await createBinMovement(ctx, {
       storageLocationId: validated.storageLocationId,
@@ -99,6 +105,21 @@ export async function recordLossFn(
   }, {
     fallbackMessage: "Failed to record loss",
     log: { message: LOG_MESSAGE, context: { op: "bin-movement:loss" } },
+    mapError: (error) =>
+      error instanceof StockOverdrawError
+        ? { success: false as const, error: error.message, field: "lossMassKg" as const }
+        : undefined,
+  });
+}
+
+/** Remove Lost mass by appending a bounded reversal. */
+export async function removeLossFn(data: z.infer<typeof removeLossSchema>): Promise<RecordLossActionResult> {
+  return withAction(async (ctx) => {
+    const validated = removeLossSchema.parse(data);
+    return correctFeedstockLoss(ctx, { ...validated, replacement: null });
+  }, {
+    fallbackMessage: "Failed to remove Lost mass",
+    log: { message: LOG_MESSAGE, context: { op: "bin-movement:remove-loss" } },
     mapError: (error) =>
       error instanceof StockOverdrawError
         ? { success: false as const, error: error.message, field: "lossMassKg" as const }

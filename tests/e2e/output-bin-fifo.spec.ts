@@ -255,7 +255,9 @@ test.describe("Output-bin conserved FIFO", () => {
     await loss.getByRole("button", { name: "Edit", exact: true }).click();
     const edit = page.getByRole("dialog", { name: "Edit lost mass", exact: true });
     await expect(edit.locator("#stock-wet")).toHaveValue("120");
-    await expect(edit.locator("#stock-reason")).toHaveValue("E2E FIFO spill");
+    await expect(edit.getByText("Why corrected", { exact: true }).first()).toBeVisible();
+    await expect(edit.locator("#stock-reason")).toHaveValue("");
+    await edit.locator("#stock-reason").fill("E2E FIFO scale misread");
     await edit.locator("#stock-wet").fill("60");
     await edit.getByRole("button", { name: "Save changes", exact: true }).click();
     await expect(edit).toHaveCount(0);
