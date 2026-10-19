@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/auth/server", () => ({
   resolveOrgContext: mocks.resolveOrgContext,
+  hasOrgRole: vi.fn().mockReturnValue(false),
 }));
 vi.mock("@/data-access/utils", () => ({
   requireOrgFacility: mocks.requireOrgFacility,
@@ -244,6 +245,7 @@ const endpoints: Record<string, ReadEndpoint> = {
       linkedFacilityCount: 0,
       isProduction: false,
       viewerCanManage: false,
+      viewerCanDeleteRegistryRemovals: false,
     },
     badInput: () =>
       certifierSummaryRoute(
