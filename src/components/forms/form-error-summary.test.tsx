@@ -85,13 +85,23 @@ describe("FormErrorSummary", () => {
     const summary = title.closest("[data-form-error-summary]") as HTMLElement;
     const links = within(summary).getAllByRole("link");
 
-    expect(summary.getAttribute("role")).toBe("alert");
+    // The list is not a live region; one fixed line announces each refusal.
+    expect(summary.getAttribute("role")).toBeNull();
+    expect(within(summary).getByRole("alert").textContent).toBe("Not saved. Fix the fields that show an error.");
     expect(links.map((link) => link.textContent)).toEqual([
       "Credit batch: Select a credit batch.",
       // The message already names its field, so no "Lab name:" lead.
       "Lab name is required",
       "pH: Must be between 0 and 14",
     ]);
+  });
+
+  it("reads the labels on any submit, not only a Save click", async () => {
+    render(<SampleLikeForm onValid={vi.fn()} />);
+
+    fireEvent.submit(screen.getByRole("form", { name: "Sample" }));
+
+    expect(await screen.findByRole("link", { name: "Credit batch: Select a credit batch." })).toBeTruthy();
   });
 
   it("moves focus to the first field in the form, not the first one RHF registered", async () => {
@@ -128,6 +138,37 @@ describe("FormErrorSummary", () => {
     });
     await waitFor(() => expect(screen.queryByText(/Not saved/)).toBeNull());
     expect(onValid).not.toHaveBeenCalled();
+  });
+});
+
+describe("FormErrorSummary rows", () => {
+  const rowsSchema = z.object({
+    ingredients: z.array(z.object({ sharePercent: z.coerce.number().max(100, "Enter at most 100.") })),
+  });
+
+  function RowsForm() {
+    const { control, register, handleSubmit } = useForm<z.input<typeof rowsSchema>, unknown, z.output<typeof rowsSchema>>({
+      resolver: zodResolver(rowsSchema),
+      defaultValues: { ingredients: [{ sharePercent: "10" }, { sharePercent: "120" }] },
+    });
+    return (
+      <form aria-label="Blend" onSubmit={handleSubmit(vi.fn())}>
+        {[0, 1].map((index) => (
+          <FormField key={index} id={`share-${index}`} label="Share">
+            <FormInput id={`share-${index}`} {...register(`ingredients.${index}.sharePercent`)} />
+          </FormField>
+        ))}
+        <FormActions control={control} submitLabel="Save blend" />
+      </form>
+    );
+  }
+
+  it("names the row of a field array entry", async () => {
+    render(<RowsForm />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Save blend" }));
+
+    expect(await screen.findByRole("link", { name: "Share, row 2: Enter at most 100." })).toBeTruthy();
   });
 });
 
@@ -176,6 +217,16 @@ describe("orderFieldErrors", () => {
       { path: "ingredients.0.sharePercent", message: "Enter at most 100.", label: "Share", located: true },
       { path: "unknown", message: "Check this.", label: null, located: false },
     ]);
+  });
+
+  it("finds a picker by data-field-name when its id is not the field name", () => {
+    document.body.innerHTML = `
+      <form>
+        <label for="incident-reactorId">Reactor</label>
+        <button type="button" role="combobox" id="incident-reactorId" data-field-name="reactorId">Choose</button>
+      </form>`;
+
+    expect(readFieldDirectory(document.querySelector("form")).get("reactorId")).toEqual({ label: "Reactor", index: 0 });
   });
 
   it("names a radio group by its legend", () => {

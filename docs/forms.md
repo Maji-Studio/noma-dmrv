@@ -346,8 +346,12 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
   (or legend). Focus moves to the first of them, scrolled to the middle of
   the sheet; each link focuses its field. The list follows the live errors and
   goes once none are left. Save stays pressable. It finds a field by its RHF
-  path as the control's `name` or `id`, so keep a `Controller` widget's `id`
-  equal to its field name; an error with no matching control lists unlinked.
+  path as the control's `data-field-name`, `name` or `id`: a `Controller`
+  widget keeps its `id` equal to the field name, or sets `data-field-name`
+  (`EntitySelect` takes `fieldName`, `PositionPicker` takes `fieldNames`). An
+  error with no matching control lists unlinked. The list is not a live
+  region: one sr-only alert announces each refused save, so fixing a field
+  does not re-read the whole list.
   Do not hand-roll a summary or a focus-first-error helper in a form.
 - Nested inline forms (child-entity editors, transport legs) pass `sticky={false}`.
 - Sheet forms pass `control` (the RHF `control` object). It feeds the side

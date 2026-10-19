@@ -176,6 +176,7 @@ export function CustomerLocationFields({
       <FormSection title="GPS coordinates">
         <PositionPicker
           idPrefix={positionIdPrefix}
+          fieldNames={{ lat: "gpsLatitude", lng: "gpsLongitude" }}
           label="Application site position"
           accent="pink"
           required

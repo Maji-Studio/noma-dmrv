@@ -242,6 +242,7 @@ export function SupplierLocationForm({
       <FormSection title="GPS coordinates">
         <PositionPicker
           idPrefix={positionIdPrefix}
+          fieldNames={{ lat: "gpsLatitude", lng: "gpsLongitude" }}
           label="Source location position"
           accent="orange"
           required

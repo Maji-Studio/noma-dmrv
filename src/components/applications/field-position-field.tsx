@@ -133,6 +133,7 @@ export function FieldPositionField({
       {mode === "manual" && (
         <PositionPicker
           idPrefix="gps"
+          fieldNames={{ lat: "gpsLatitude", lng: "gpsLongitude" }}
           label="Set the pin"
           accent="pink"
           latitude={latitude ?? null}

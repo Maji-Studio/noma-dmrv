@@ -123,6 +123,7 @@ export function ProductionIncidentForm({
               render={({ field }) => (
                 <EntitySelect
                   id="incident-reactorId"
+                  fieldName="reactorId"
                   entityType="reactor"
                   allowEdit
                   value={field.value ?? ""}
@@ -147,6 +148,7 @@ export function ProductionIncidentForm({
               render={({ field }) => (
                 <EntitySelect
                   id="incident-operatorId"
+                  fieldName="operatorId"
                   entityType="operator"
                   allowEdit
                   value={field.value ?? ""}

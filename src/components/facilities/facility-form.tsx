@@ -214,6 +214,7 @@ export function FacilityForm({
 
       <PositionPicker
         idPrefix="gps"
+        fieldNames={{ lat: "gpsLatitude", lng: "gpsLongitude" }}
         label="Facility position"
         required
         accent="purple"

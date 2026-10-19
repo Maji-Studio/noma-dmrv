@@ -38,6 +38,17 @@ function controlsIn(form: HTMLElement): HTMLElement[] {
   return Array.from(form.querySelectorAll<HTMLElement>(CONTROL_SELECTOR));
 }
 
+/**
+ * The RHF paths a control answers to: `data-field-name` (a picker whose `id`
+ * must stay unique, such as `FormEntitySelect`), its `name` (`register`), and
+ * its `id` (a `Controller` widget whose id is the field name).
+ */
+function pathKeys(element: HTMLElement): string[] {
+  return [element.dataset.fieldName, element.getAttribute("name"), element.id].filter(
+    (key): key is string => Boolean(key),
+  );
+}
+
 /** Visible label text, without the sr-only unit and "Required" or the star. */
 function cleanText(element: Element): string | null {
   const copy = element.cloneNode(true) as Element;
@@ -56,23 +67,34 @@ function textOfIds(ids: string, root: Document): string | null {
   return parts.length > 0 ? parts.join(" ") : null;
 }
 
-function legendOf(element: HTMLElement): string | null {
-  const legend = element.closest("fieldset")?.querySelector("legend");
+/**
+ * A group's visible name: the FormField label that points at the fieldset,
+ * else its legend (often sr-only, and worded for screen readers).
+ */
+function groupNameOf(element: HTMLElement): string | null {
+  const fieldset = element.closest("fieldset");
+  if (!fieldset) return null;
+  if (fieldset.id) {
+    const label = element.ownerDocument.querySelector(`label[for="${CSS.escape(fieldset.id)}"]`);
+    const text = label ? cleanText(label) : null;
+    if (text) return text;
+  }
+  const legend = fieldset.querySelector("legend");
   return legend ? cleanText(legend) : null;
 }
 
 /**
  * The name an operator sees for a control: a radio or checkbox in a group is
- * named by its legend (its own label is the option), anything else by its
- * label, then aria-labelledby, aria-label, then a surrounding legend.
+ * named by its group (its own label is the option), anything else by its
+ * label, then aria-labelledby, aria-label, then a surrounding group.
  */
 export function controlLabel(element: HTMLElement): string | null {
   const isOption =
     element instanceof HTMLInputElement &&
     (element.type === "radio" || element.type === "checkbox");
   if (isOption) {
-    const legend = legendOf(element);
-    if (legend) return legend;
+    const group = groupNameOf(element);
+    if (group) return group;
   }
   const labels = "labels" in element ? (element as HTMLInputElement).labels : null;
   if (labels && labels.length > 0) {
@@ -86,22 +108,19 @@ export function controlLabel(element: HTMLElement): string | null {
   }
   const ariaLabel = element.getAttribute("aria-label")?.trim();
   if (ariaLabel) return ariaLabel;
-  return legendOf(element);
+  return groupNameOf(element);
 }
 
 /**
- * Read every control in the form once, in tree order. RHF names fields by
- * path (`register` sets `name`; `Controller` widgets carry the path as `id`),
- * so both keys point at the same entry. The first control with a key wins,
- * which is the first radio of a group.
+ * Read every control in the form once, in tree order, keyed by each of its
+ * `pathKeys`. The first control with a key wins, which is the first radio of
+ * a group.
  */
 export function readFieldDirectory(form: HTMLElement | null): FieldDirectory {
   const directory = new Map<string, FieldDirectoryEntry>();
   if (!form) return directory;
   controlsIn(form).forEach((element, index) => {
-    const keys = [element.getAttribute("name"), element.id].filter(
-      (key): key is string => Boolean(key),
-    );
+    const keys = pathKeys(element);
     if (keys.length === 0) return;
     const entry = { label: controlLabel(element), index };
     for (const key of keys) {
@@ -142,17 +161,12 @@ export function locateInDirectory(
 function findControl(form: HTMLElement, path: string): HTMLElement | null {
   const controls = controlsIn(form);
   for (const own of ownPaths(path)) {
-    const match = controls.find(
-      (element) => element.getAttribute("name") === own || element.id === own,
-    );
+    const match = controls.find((element) => pathKeys(element).includes(own));
     if (match) return preferredOption(match);
   }
   const prefix = `${ownPaths(path).at(-1)}.`;
   return (
-    controls.find((element) => {
-      const name = element.getAttribute("name") ?? "";
-      return name.startsWith(prefix) || element.id.startsWith(prefix);
-    }) ?? null
+    controls.find((element) => pathKeys(element).some((key) => key.startsWith(prefix))) ?? null
   );
 }
 
@@ -171,19 +185,10 @@ function preferredOption(element: HTMLElement): HTMLElement {
   return element;
 }
 
-/**
- * Open whatever hides the control: a closed `<details>`, or a collapsed
- * disclosure panel whose trigger names it with `aria-controls`.
- */
+/** Open any closed `<details>` around the control so it can take focus. */
 function revealControl(element: HTMLElement): void {
   for (let node = element.parentElement; node; node = node.parentElement) {
     if (node instanceof HTMLDetailsElement && !node.open) node.open = true;
-    if (node.id && (node.hidden || node.hasAttribute("data-closed"))) {
-      const trigger = node.ownerDocument.querySelector<HTMLElement>(
-        `[aria-controls="${CSS.escape(node.id)}"][aria-expanded="false"]`,
-      );
-      trigger?.click();
-    }
   }
 }
 
@@ -197,7 +202,7 @@ export function focusField(form: HTMLElement | null, path: string): boolean {
   const control = findControl(form, path);
   if (!control) return false;
   revealControl(control);
-  // A revealed panel mounts or unhides on the next frame.
+  // A just-opened <details> lays out on the next frame.
   requestAnimationFrame(() => {
     control.focus({ preventScroll: true });
     control.scrollIntoView({ block: "center" });

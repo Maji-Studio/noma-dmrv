@@ -67,6 +67,11 @@ interface PositionPickerProps {
   onPositionChange: (position: PositionValue) => void;
   latitudeError?: string;
   longitudeError?: string;
+  /**
+   * The form's field paths for the pair, set as `data-field-name` on the
+   * inputs so the form error summary can link and focus them.
+   */
+  fieldNames?: { lat: string; lng: string };
   disabled?: boolean;
   required?: boolean;
   /** Marker color per entity family: orange=supplier, purple=facility, pink=field. */
@@ -99,6 +104,7 @@ export function PositionPicker({
   onPositionChange,
   latitudeError,
   longitudeError,
+  fieldNames,
   disabled = false,
   required = false,
   accent = "purple",
@@ -216,6 +222,7 @@ export function PositionPicker({
           >
             <FormInput
               id={`${idPrefix}-latitude`}
+              data-field-name={fieldNames?.lat}
               type="number"
               {...LATITUDE_BOUNDS}
               placeholder="e.g., -3.3349"
@@ -235,6 +242,7 @@ export function PositionPicker({
           >
             <FormInput
               id={`${idPrefix}-longitude`}
+              data-field-name={fieldNames?.lng}
               type="number"
               {...LONGITUDE_BOUNDS}
               placeholder="e.g., 37.3404"

@@ -24,9 +24,12 @@ import {
 
 /**
  * A long list scrolls inside the sticky footer instead of pushing the
- * fields off a phone screen.
+ * fields off a phone screen. `dvh` shrinks with the on-screen keyboard.
  */
-const LIST_HEIGHT_CLASS = "max-h-[30vh] overflow-y-auto";
+const LIST_HEIGHT_CLASS = "max-h-[20dvh] overflow-y-auto";
+
+/** Read once per refused save; the visible title keeps the live count. */
+const ANNOUNCEMENT = "Not saved. Fix the fields that show an error.";
 
 export interface FieldErrorItem {
   path: string;
@@ -45,9 +48,9 @@ function isLeafError(value: object): value is { message?: unknown; type?: unknow
  * them. Skips the form-level `root` (server errors show in ServerError),
  * errors without a message, and the empty path: the Zod resolver also files
  * each union branch's issue there, a copy of the union field's own error.
- * Takes the whole form state, not `errors`: RHF
- * updates `errors` in place, so only the form state object changes identity
- * when an error clears, and the compiler's memo must key on that.
+ * Takes the whole form state, not `errors`: RHF updates `errors` in place,
+ * so only the form state object changes identity when an error clears, and
+ * the compiler's memo must key on that.
  */
 export function listFieldErrors(
   formState: Pick<FormState<FieldValues>, "errors">,
@@ -96,20 +99,22 @@ export function orderFieldErrors(
     .map(({ item }) => item);
 }
 
+/** "Share" in the second ingredient row reads "Share, row 2". */
+function rowLabel(label: string, path: string): string {
+  const index = path.split(".").find((segment) => /^\d+$/.test(segment));
+  return index === undefined ? label : `${label}, row ${Number(index) + 1}`;
+}
+
 /** "Identifier is required" already names its field; no "Identifier:" lead. */
-function namesItsField(item: FieldErrorItem): boolean {
-  return item.label !== null && item.message.toLowerCase().startsWith(item.label.toLowerCase());
+function namesItsField(label: string, message: string): boolean {
+  return message.toLowerCase().startsWith(label.toLowerCase());
 }
 
 function ItemText({ item }: { item: FieldErrorItem }) {
-  if (!item.label || namesItsField(item)) {
-    return <span className="text-[var(--color-text-primary)] underline underline-offset-2">{item.message}</span>;
-  }
+  if (!item.label || namesItsField(item.label, item.message)) return <>{item.message}</>;
   return (
     <>
-      <span className="font-medium text-[var(--color-text-primary)] underline underline-offset-2">
-        {item.label}
-      </span>
+      <span className="font-medium">{rowLabel(item.label, item.path)}</span>
       {": "}
       {item.message}
     </>
@@ -163,14 +168,17 @@ export function FormErrorSummary<
   if (!visible) return null;
 
   return (
-    <Notice tone="error" title={countLabel(items.length)} data-form-error-summary="">
+    <Notice tone="error" live={false} title={countLabel(items.length)} data-form-error-summary="">
+      {/* The list changes as fields are fixed; announcing it whole on every
+          change would drown the field the user is editing. */}
+      <p key={submitCount} role="alert" className="sr-only">{ANNOUNCEMENT}</p>
       <ul className={`mt-4 flex flex-col gap-4 ${LIST_HEIGHT_CLASS}`}>
         {items.map((item) => (
           <li key={item.path}>
             {item.located ? (
               <a
                 href={`#${item.path}`}
-                className="block min-h-24 py-2"
+                className="block min-h-24 py-2 text-[var(--color-text-primary)] underline underline-offset-2"
                 onClick={(event) => {
                   event.preventDefault();
                   focusField(getForm(), item.path);

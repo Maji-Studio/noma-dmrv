@@ -114,10 +114,22 @@ export function FormActions<
   const block = useSubmitBlock();
   const blockedReasonId = React.useId();
   const inDialog = guardDialogCancel && dialogActions !== null;
-  // Labels and order of the fields, read on each Save press for the error
-  // summary (a field that appears later still lists, by its message).
+  // Labels and order of the fields, read on every submit of the form (a
+  // click, Enter, or requestSubmit) for the error summary. A field that
+  // appears later still lists, by its message.
   const [fieldDirectory, setFieldDirectory] = React.useState<FieldDirectory | null>(null);
-  const submitRef = React.useRef<HTMLButtonElement>(null);
+  const submitRef = React.useRef<HTMLButtonElement | null>(null);
+  const attachSubmit = (button: HTMLButtonElement | null) => {
+    submitRef.current = button;
+    const form = button?.form;
+    if (!form || !control) return;
+    const readDirectory = () => setFieldDirectory(readFieldDirectory(form));
+    form.addEventListener("submit", readDirectory, true);
+    return () => {
+      form.removeEventListener("submit", readDirectory, true);
+      submitRef.current = null;
+    };
+  };
   // The Save button's form owner: the form it sits in, or the one `formId` names.
   const getForm = () => submitRef.current?.form ?? null;
   const handleCancel = onCancel
@@ -170,13 +182,12 @@ export function FormActions<
       )}
       <div className="flex items-center justify-start gap-16">
         {showSubmit && <Button
-          ref={submitRef}
+          ref={attachSubmit}
           type={submitType}
           variant={submitVariant}
           form={formId}
           onClick={(event) => {
             if (submitType === "submit") skipNativeChecksUnlessUnparsed(event.currentTarget);
-            setFieldDirectory(readFieldDirectory(getForm()));
             onSubmitClick?.();
           }}
           disabled={isSubmitting || submitDisabled || !!block}

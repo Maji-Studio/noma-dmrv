@@ -190,6 +190,7 @@ export function SupplierQuickAddDialog({
 
         <PositionPicker
           idPrefix="supplier-quick-add-position"
+          fieldNames={{ lat: "gpsLatitude", lng: "gpsLongitude" }}
           label="Source location position"
           accent="orange"
           required
