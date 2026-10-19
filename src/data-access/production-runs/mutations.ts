@@ -40,7 +40,7 @@ import {
   withUniqueCodeGuard,
 } from "../code-generator";
 import { attachProductionRunToMatchingCreditBatch } from "../credit-batch-membership";
-import { lockActiveFacilityReference } from "../facility-reference-guards";
+import { lockActiveFacilityReference, lockFacilityReferences } from "../facility-reference-guards";
 import { lockBinStocks } from "../lock-bin-stocks";
 import {
   assertProductionRunBiocharStockNotOverdrawn,
@@ -399,8 +399,7 @@ export async function updateProductionRunInTransaction(
       ? undefined
       : normalizeProductionRunFeedstockDraws(inputFeedstockDraws);
 
-  // Moving the run to another facility requires that facility to be active
-  // (no children move under an archived parent — mirrors createProductionRun).
+  // Moving a run requires an active target facility.
   if (data.facilityId && data.facilityId !== existing.facilityId) {
     const [facility] = await tx
       .select({ id: facilities.id, archivedAt: facilities.archivedAt })
@@ -533,10 +532,10 @@ export async function updateProductionRunInTransaction(
       productionRuns.code,
       CODE_CONFLICT_MESSAGES.productionRun,
       async () => {
-    // First row locks: freeze both calendars before stock, run or lineage locks.
-    // Facility UPDATE holders take the facility before any of those children.
-    for (const facilityId of [...new Set([existing.facilityId, targetFacilityId])].sort()) {
-      await lockActiveFacilityReference(ctx, tx, facilityId);
+    // Lock both facilities before stock, run or lineage locks.
+    await lockFacilityReferences(ctx, tx, [existing.facilityId, targetFacilityId]);
+    if (targetFacilityId !== existing.facilityId) {
+      await lockActiveFacilityReference(ctx, tx, targetFacilityId);
     }
 
     if (effectiveReactorId && (data.reactorId !== undefined || data.facilityId !== undefined)) {
