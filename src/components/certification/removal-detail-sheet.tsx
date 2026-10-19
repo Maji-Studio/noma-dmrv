@@ -335,30 +335,24 @@ export function RemovalDetailSheet({
             )}
           </SlideOverPanel.Body>
 
-          <SlideOverPanel.Footer className="justify-stretch">
-            {canDelete && (
-              <Button
-                variant="destructive"
-                className="flex-1"
-                onClick={() => setDeleteConfirmOpen(true)}
-                disabled={deleteMutation.isPending}
-              >
-                {deleteCopy.actionLabel}
-              </Button>
-            )}
-            <RemovalReviewAction
-              isActionable={isActionable}
-              reviewHref={reviewHref}
-            />
-            <SlideOverPanel.Close>
-              <Button
-                variant={isActionable ? "default" : "primary"}
-                className="flex-1"
-              >
-                Close
-              </Button>
-            </SlideOverPanel.Close>
-          </SlideOverPanel.Footer>
+          {(isActionable || canDelete) && (
+            <SlideOverPanel.Footer className="justify-stretch">
+              <RemovalReviewAction
+                isActionable={isActionable}
+                reviewHref={reviewHref}
+              />
+              {canDelete && (
+                <Button
+                  variant="destructive"
+                  className="flex-1"
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  disabled={deleteMutation.isPending}
+                >
+                  {deleteCopy.actionLabel}
+                </Button>
+              )}
+            </SlideOverPanel.Footer>
+          )}
         </SlideOverPanel.Content>
       </SlideOverPanel.Root>
       {/* Sibling of the sheet, not a child, so Base UI does not treat the
