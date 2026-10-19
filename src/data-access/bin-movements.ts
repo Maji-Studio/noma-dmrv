@@ -205,8 +205,8 @@ async function createBinMovementInTransaction(
  * The ledger is append-only, so a resubmitted form would otherwise post a
  * second deduction. The request key the form instance generated serializes the
  * retry, replays the saved movement when the values match, and refuses a key
- * reused with different values. Reversing a mistaken loss is a separate
- * command that does not exist yet.
+ * reused with different values. Correcting or removing a mistaken loss uses
+ * `correctFeedstockLoss` in `./feedstock-loss-corrections`.
  */
 export async function createBinMovement(
   ctx: OrgContext,

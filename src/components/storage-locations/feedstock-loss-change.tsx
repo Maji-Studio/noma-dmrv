@@ -24,28 +24,32 @@ function ChangeBlock({ label, figure, caption, muted }: {
 /**
  * What a feedstock loss does to the bin, as two blocks with an arrow: the wet
  * stock now (with its moisture), then the wet stock once the mass
- * typed above is taken out. The after block waits for a usable mass.
+ * typed above is taken out. The after block waits for a usable mass. When an
+ * entry is changed, its original loss goes back in first.
  */
-export function FeedstockLossChange({ beforeKg, moisturePercent, lossKg, blocked }: {
+export function FeedstockLossChange({ beforeKg, moisturePercent, restoredKg = 0, lossKg, blocked }: {
   beforeKg: number | null;
   moisturePercent: number | null;
+  /** The original loss a change puts back before taking the new mass out. */
+  restoredKg?: number;
   lossKg: number | null;
   /** True while the entered mass is more than the bin holds. `lossKg` is null until the entry passes the loss field schema. */
   blocked: boolean;
 }) {
-  const afterKg = beforeKg !== null && lossKg !== null && !blocked ? beforeKg - lossKg : null;
+  const afterKg = beforeKg !== null && lossKg !== null && !blocked ? beforeKg + restoredKg - lossKg : null;
+  const afterLabel = restoredKg > 0 ? "After this change" : "After this loss";
   const beforeFigure = formatMassKg(beforeKg);
   const afterFigure = afterKg === null ? "Enter a mass" : formatMassKg(afterKg);
   const beforeCaption = moisturePercent === null ? "Wet stock" : `Wet stock, ${formatMoisturePercent(moisturePercent)} moisture`;
   return (
     <div
       role="group"
-      aria-label={`Stock now ${beforeFigure}, ${beforeCaption}. After this loss ${afterKg === null ? "not known yet" : afterFigure}`}
+      aria-label={`Stock now ${beforeFigure}, ${beforeCaption}. ${afterLabel} ${afterKg === null ? "not known yet" : afterFigure}`}
       className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-8"
     >
       <ChangeBlock label="In the bin now" figure={beforeFigure} caption={beforeCaption} />
       <ArrowRightIcon size={ICON_PX} aria-hidden="true" className="self-center text-[var(--color-icon-secondary)]" />
-      <ChangeBlock label="After this loss" figure={afterFigure} caption="Wet stock" muted={afterKg === null} />
+      <ChangeBlock label={afterLabel} figure={afterFigure} caption="Wet stock" muted={afterKg === null} />
     </div>
   );
 }
