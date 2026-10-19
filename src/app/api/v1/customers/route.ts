@@ -6,6 +6,6 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export const GET = apiRoute("api.v1.customers.list", "customers:read", async (request, { ctx, headers }) =>
-  Response.json(await readCustomerList(request, ctx), { headers }));
+  Response.json(await readCustomerList(request, ctx), { headers }), { audience: "rest" });
 
-export const POST = apiRoute("api.v1.customers.create", "customers:write", createCustomerResponse);
+export const POST = apiRoute("api.v1.customers.create", "customers:write", createCustomerResponse, { audience: "rest" });

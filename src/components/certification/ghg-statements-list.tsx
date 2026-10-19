@@ -105,6 +105,18 @@ export function deriveGhgCreateGate(summary: {
   };
 }
 
+/** The repair link both blocking notices point at: the facility's certification settings. */
+function SettingsLink({ facilityId }: { facilityId: string }) {
+  return (
+    <Link
+      href={certificationSettingsHref(facilityId)}
+      className="text-[var(--color-interaction)] underline underline-offset-2 hover:text-[var(--color-interaction-hover)]"
+    >
+      Settings
+    </Link>
+  );
+}
+
 export function CreateGateNotice({
   notice,
   facilityId,
@@ -123,20 +135,15 @@ export function CreateGateNotice({
         </p>
       ) : notice === "unlinked" ? (
         <p>
-          Link this facility to an Isometric project in Settings before creating
-          a statement.
+          Link this facility to an Isometric project in{" "}
+          <SettingsLink facilityId={facilityId} /> before creating a statement.
         </p>
       ) : (
         <p>
           This Isometric project is linked to {linkedFacilityCount} noma
           facilities. A GHG Statement covers every facility on the project. Link
           each facility to a dedicated Isometric project in{" "}
-          <Link
-            href={certificationSettingsHref(facilityId)}
-            className="text-[var(--color-interaction)] underline underline-offset-2 hover:text-[var(--color-interaction-hover)]"
-          >
-            Settings
-          </Link>{" "}
+          <SettingsLink facilityId={facilityId} />{" "}
           before creating a statement.
         </p>
       )}
