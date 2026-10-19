@@ -303,23 +303,12 @@ function EntitySideSheet({
           </SlideOverPanel.Footer>
         )}
 
-        {/* Footer — only in view mode */}
-        {isViewMode && (
-          <SlideOverPanel.Footer className="justify-stretch">
-            {canEdit && (
-              <Button
-                variant="primary"
-                className="flex-1"
-                onClick={() => onModeChange("edit")}
-              >
-                {editLabel}
-              </Button>
-            )}
-            <SlideOverPanel.Close>
-              <Button variant="default" className="flex-1">
-                Close
-              </Button>
-            </SlideOverPanel.Close>
+        {/* Footer — only in view mode; the header X is the way out. */}
+        {isViewMode && canEdit && (
+          <SlideOverPanel.Footer>
+            <Button variant="primary" onClick={() => onModeChange("edit")}>
+              {editLabel}
+            </Button>
           </SlideOverPanel.Footer>
         )}
 
