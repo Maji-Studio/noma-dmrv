@@ -486,8 +486,8 @@ the runner's retry and deadline handling. Exhausted attempts return `concurrent_
 
 Production-run creation already takes its active facility `FOR SHARE` before
 reactor `SHARE`, bin-stock advisory locks, reactor-overlap advisory lock, the
-run insert and auto-attachment. Updates take current and target active facilities
-`FOR SHARE` in id order before an optional reactor `SHARE`, sorted bin-stock
+run insert and auto-attachment. Updates take the current and target facilities
+`FOR SHARE` in id order (archived included; a changed target must also be active) before an optional reactor `SHARE`, sorted bin-stock
 advisory locks, run `UPDATE`, lineage artifacts, reactor-overlap advisory lock,
 the run/draw writes, then auto-attachment's process scope, batch artifacts and
 batch `UPDATE`. A changed run facility after discovery refuses the write.

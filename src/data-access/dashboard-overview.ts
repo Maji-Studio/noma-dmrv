@@ -184,8 +184,8 @@ export async function getDashboardOverview(
     (startDay == null || day >= startDay) && day <= nowDay;
   const inPreviousDayPeriod = (day: string) =>
     previousStartDay != null && startDay != null && day >= previousStartDay && day < startDay;
-  // One clock read for the overdue-batch list and its uncapped count.
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // One facility-local day for the overdue-batch list and its uncapped count.
+  const todayStr = nowDay;
   // Fetch back to the previous-period start so delta needs no second query.
   const fetchStartDay = previousStartDay;
 
