@@ -9,6 +9,7 @@ import {
   formatStockKg,
   isStockOverdraw,
   pickerShowsRemainingStock,
+  wholeStockDrawKg,
   productStockOverdrawMessage,
 } from "./stock-overdraw";
 
@@ -103,5 +104,27 @@ describe("pickerShowsRemainingStock", () => {
         overdrawError,
       }),
     ).toBe(false);
+  });
+});
+
+describe("wholeStockDrawKg", () => {
+  it("returns the remaining stock unchanged when it is already stored precision", () => {
+    expect(wholeStockDrawKg(600)).toBe(600);
+    expect(wholeStockDrawKg(12.345)).toBe(12.345);
+  });
+
+  it("removes float noise from the subtraction", () => {
+    expect(wholeStockDrawKg(1_000.3 - 1_000)).toBe(0.3);
+    expect(wholeStockDrawKg(0.1 + 0.2)).toBe(0.3);
+  });
+
+  it("never rounds above the stock", () => {
+    expect(wholeStockDrawKg(5.0009)).toBe(5);
+  });
+
+  it("is null when less than one storage increment remains", () => {
+    expect(wholeStockDrawKg(0)).toBeNull();
+    expect(wholeStockDrawKg(-3)).toBeNull();
+    expect(wholeStockDrawKg(0.0004)).toBeNull();
   });
 });

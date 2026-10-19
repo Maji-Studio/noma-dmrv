@@ -7,6 +7,7 @@
  */
 
 
+import { applicationDeepLinkHref } from "@/lib/application-links";
 import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { ServerError } from "@/components/forms";
@@ -77,7 +78,7 @@ function createColumns(
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -620,6 +621,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => applicationDeepLinkHref(row.id, contextFacilityId)}
         emptyMessage={
           <EmptyState
             padding="md"

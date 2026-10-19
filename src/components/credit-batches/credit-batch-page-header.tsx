@@ -29,7 +29,7 @@ import {
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { isRecordEditable } from "@/lib/record-lock-view";
 import { cn } from "@/lib/utils";
-import { isCreditBatchDeletable } from "./credit-batch-card";
+import { isCreditBatchDeletable } from "./credit-batch-list-rows";
 import { useCreditBatchPage } from "./credit-batch-page-context";
 import { CountBadge, IdentityChip, MUTED_TEXT } from "./credit-batch-page-parts";
 import { CREDIT_BATCH_PROGRESS_TITLE, CreditBatchProgressCompact } from "./credit-batch-progress-compact";

@@ -18,15 +18,25 @@ Deferred work lives here, never as a `TODO` in code.
 - `src/lib/credit-batches/open-items.ts:buildCreditBatchOpenItems`: Open-item problem
   wording for unmet checks, shared with the New Removal wizard; Kenji to decide; #1136.
 
-## Credit batch Emissions tab (2026-10-18) - **deferred**
+## Credit batch page panels (2026-10-18) - **deferred**
 
-- `src/components/credit-batches/credit-batch-emissions-tab.tsx:CreditBatchEmissionsTab`:
-  the batch page's Emissions tab points to the Energy page. `CreditBatchEmissionsPanel`
-  from #1140 mounts here behind `EMISSIONS_ENTRIES_ENABLED` once it lands; #1136.
 - `src/components/credit-batches/credit-batch-page-parts.tsx:PAGE_PANEL` is a
   feature-local panel surface (border and paper). Moving the page's panels onto
   the shared `Card` surface (`--panel-bg`, `--panel-border`, `--panel-shadow`)
   is a visual change that needs its own design check; #1156 review.
+
+## Credit batch timeline follow-ups (#1153) - **deferred**
+
+- `src/data-access/credit-batch-timeline-facts.ts:listCreditBatchTimelineFacts`
+  repeats the produced, applied and not-in-a-Removal dry-mass rule of
+  `src/data-access/credit-batch-page-model.ts:getCreditBatchPageModel`, over a
+  slice query without the page model's `applications` and `deliveries` joins.
+  Extract one shared helper so the hover card and the batch page cannot
+  disagree on credit-bearing mass.
+- `src/components/credit-batches/credit-batch-timeline.tsx:CreditBatchTimeline`
+  gives (+) slots a 44px minimum but not batch bars: a batch of a few days is a
+  bar a few pixels wide. Needs a design decision for bars whose 44px hit areas
+  would overlap.
 
 ## Emissions entry dates (2026-10-16) - **deferred**
 
@@ -75,14 +85,6 @@ Deferred work lives here, never as a `TODO` in code.
   "for now". Decide whether to resume estimates (rebuild the settings form and
   the read) or drop the table with a migration. Until then the table, its test
   cleanup in `tests/e2e/global-teardown.ts` and the dev-seed delete stay.
-
-## DataTable mobile cards (`ui/data-table`) - **deferred**
-
-- `src/components/ui/data-table/index.tsx:DataTable` renders each mobile card as
-  a `role="button"` container that holds nested buttons (the Removals list
-  Retry button, and now `CertificationStatusBadge`), which screen readers
-  announce unreliably. Fix: a semantic card with a separate record-opening
-  button or link beside its controls. It changes every DataTable consumer.
 
 ## Activity reads
 

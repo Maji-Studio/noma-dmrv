@@ -108,18 +108,18 @@ describe("Isometric project reselection", () => {
 
     await select("Isometric project", "Test project: prj_test");
     expect(screen.getByRole("combobox", { name: /^Default Removal template/ }).textContent).toBe("Test template: tpl_test");
-    expect((screen.getByRole("textbox", { name: "Isometric facility ID" }) as HTMLInputElement).value).toBe("fcl_edited");
+    expect((screen.getByRole("textbox", { name: /^Isometric facility ID/ }) as HTMLInputElement).value).toBe("fcl_edited");
     expect(acknowledgment).toHaveProperty("checked", true);
     expect(button("Save changes")).toHaveProperty("disabled", false);
 
     await select("Isometric project", "Other project: prj_other");
     expect(screen.getByRole("combobox", { name: /^Default Removal template/ }).textContent).toBe("No default");
-    expect((screen.getByRole("textbox", { name: "Isometric facility ID" }) as HTMLInputElement).value).toBe("");
+    expect((screen.getByRole("textbox", { name: /^Isometric facility ID/ }) as HTMLInputElement).value).toBe("");
     expect(acknowledgment).toHaveProperty("checked", false);
 
     await select("Isometric project", "Test project: prj_test");
     expect(screen.getByRole("combobox", { name: /^Default Removal template/ }).textContent).toBe("tpl_saved");
-    expect((screen.getByRole("textbox", { name: "Isometric facility ID" }) as HTMLInputElement).value).toBe("fcl_saved");
+    expect((screen.getByRole("textbox", { name: /^Isometric facility ID/ }) as HTMLInputElement).value).toBe("fcl_saved");
   });
 
   it("keeps connector confirmations on reselect and resets them for another project", async () => {
@@ -127,7 +127,7 @@ describe("Isometric project reselection", () => {
     render(<FacilityIsometricConnector facilityId={FACILITY_ID} />);
     await click("Manage");
     await select("Isometric project", "Test project: prj_test");
-    fireEvent.change(screen.getByRole("textbox", { name: "Isometric facility ID" }), { target: { value: "fcl_edited" } });
+    fireEvent.change(screen.getByRole("textbox", { name: /^Isometric facility ID/ }), { target: { value: "fcl_edited" } });
     const acknowledgments = screen.getAllByRole("checkbox");
     acknowledgments.forEach((checkbox) => fireEvent.click(checkbox));
     expect(button("Connect")).toHaveProperty("disabled", false);
@@ -135,7 +135,7 @@ describe("Isometric project reselection", () => {
     await select("Isometric project", "Test project: prj_test");
     acknowledgments.forEach((checkbox) => expect(checkbox).toHaveProperty("checked", true));
     expect(button("Connect")).toHaveProperty("disabled", false);
-    expect((screen.getByRole("textbox", { name: "Isometric facility ID" }) as HTMLInputElement).value).toBe("fcl_edited");
+    expect((screen.getByRole("textbox", { name: /^Isometric facility ID/ }) as HTMLInputElement).value).toBe("fcl_edited");
 
     await select("Isometric project", "Other project: prj_other");
     acknowledgments.forEach((checkbox) => expect(checkbox).toHaveProperty("checked", false));

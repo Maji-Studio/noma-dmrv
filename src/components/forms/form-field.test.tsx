@@ -117,3 +117,50 @@ describe("FormField CERT chip", () => {
     expect(markup).toContain("CERT<");
   });
 });
+
+describe("FormField cueAction", () => {
+  const action = { label: "Add all", onClick: () => undefined, ariaLabel: "Add all to mass" };
+
+  it("sits beside the cue and describes itself with it", () => {
+    const markup = renderToStaticMarkup(
+      <FormField id="mass" label="Mass" cue="1,000 kg available" cueAction={action}>
+        <input id="mass" />
+      </FormField>,
+    );
+
+    expect(markup).toContain("1,000 kg available");
+    expect(markup).toContain('aria-label="Add all to mass"');
+    expect(markup).toContain('aria-describedby="mass-cue"');
+    expect(markup).toContain(">Add all</span>");
+  });
+
+  it("is not rendered without a cue", () => {
+    const markup = renderToStaticMarkup(
+      <FormField id="mass" label="Mass" cueAction={action}>
+        <input id="mass" />
+      </FormField>,
+    );
+
+    expect(markup).not.toContain("Add all");
+  });
+
+  it("stays while an error or a warning replaces the cue's message", () => {
+    const withError = renderToStaticMarkup(
+      <FormField id="mass" label="Mass" cue="1,000 kg available" error="Enter the mass." cueAction={action}>
+        <input id="mass" />
+      </FormField>,
+    );
+    const withWarning = renderToStaticMarkup(
+      <FormField id="mass" label="Mass" cue="1,000 kg available" warning="Check the mass." cueAction={action}>
+        <input id="mass" />
+      </FormField>,
+    );
+
+    expect(withError).not.toContain("1,000 kg available");
+    expect(withError).toContain("Enter the mass.");
+    expect(withError).toContain(">Add all</span>");
+    expect(withError).toContain('aria-describedby="mass-error"');
+    expect(withWarning).toContain("Check the mass.");
+    expect(withWarning).toContain(">Add all</span>");
+  });
+});

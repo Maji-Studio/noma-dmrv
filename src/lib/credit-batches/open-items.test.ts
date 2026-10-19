@@ -190,7 +190,8 @@ describe("buildCreditBatchOpenItems", () => {
     "templateLineReview", "certificationTemplates", "certificationEmissions", "emissions",
   ])("routes emission review to %s", fixTarget => {
     const result = buildCreditBatchOpenItems({ ...batchContext, emissionLines: [{
-      componentId: "diesel", displayName: "Diesel", state: "needsReview", groupKey: "production",
+      componentId: "diesel", displayName: "Diesel", state: "needsReview", groupKey: "production", groupName: "Production", groupPosition: 0, position: 0,
+      description: null, entryPolicy: "additive", records: null,
       blueprintKey: "production", contract: undefined, automaticFigure: null, entries: [], total: null,
       blocker: { code: "lineNeedsReview", message: "Review this line", fixTarget },
     }] });
@@ -208,6 +209,12 @@ describe("buildCreditBatchOpenItems", () => {
         displayName: "Diesel",
         state: "needsReview" as const,
         groupKey: "production",
+        groupName: "Production",
+        groupPosition: 0,
+        position: 0,
+        description: null,
+        entryPolicy: "additive" as const,
+        records: null,
         blueprintKey: "production",
         contract: undefined,
         automaticFigure: null,

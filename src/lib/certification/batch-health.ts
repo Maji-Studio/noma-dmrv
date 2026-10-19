@@ -490,6 +490,9 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
  * uniformity) live in `deriveRemovalReadiness`, not here.
  */
 export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
+  const emissionIssues = new Map(facts.emissionLines
+    ?.filter((line) => line.blocker?.fixTarget === "emissions")
+    .map((line) => [line.componentId, line]));
   const checks = mergeUnmetChecksByDestination(
     [
       // A pin problem is fixed on the batch; a line problem in the template review.
@@ -500,10 +503,11 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
       })),
       ...(facts.emissionLines != null ? [{
         key: "emissions" as const, label: "Emissions", fixTarget: "emissions" as const,
-        status: facts.emissionLines.some((line) => line.blocker?.code === "entryMissingEvidence") ? "unmet" as const : "met" as const,
-        detail: [...new Set(facts.emissionLines.filter((line) => line.blocker?.code === "entryMissingEvidence").map((line) => line.displayName))].map(name => `Add a file for ${name}.`).join(" ") || undefined,
+        status: emissionIssues.size ? "unmet" as const : "met" as const,
+        detail: [...emissionIssues.values()].map((line) => line.blocker?.code === "entryMissingEvidence"
+          ? `Add a file for ${line.displayName}.` : `Check the manual entry on ${line.displayName}.`).join(" ") || undefined,
       }] : []),
-      // Line blockers that are not template blockers (no source, needs setup) are
+      // Template line blockers (no source, unassigned, needs setup) are
       // facility-level and stay in Removal readiness, like the rest of coverage.
       carbonCheck(facts),
       ...facilityEmissionsChecks(facts),

@@ -1,5 +1,6 @@
 "use client";
 
+import { entityViewHref } from "@/lib/entity-deep-link";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * SampleList component
@@ -109,7 +110,7 @@ function createColumns(
   return [
     {
       accessorKey: "sampleCode",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">
@@ -208,9 +209,12 @@ type SideSheetState =
 export function SampleList({
   initialCreate = false,
   initialCreditBatchId,
+  hideTransport = false,
 }: {
   initialCreate?: boolean;
   initialCreditBatchId?: string;
+  /** Server flag EMISSIONS_ENTRIES_ENABLED: sample shipping is an emissions entry. */
+  hideTransport?: boolean;
 }) {
   const { facilityId: contextFacilityId } = useFacilityContext();
   const createIntent = useOpenCreateIntent({
@@ -630,6 +634,7 @@ export function SampleList({
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => entityViewHref("/samples", "sample", row.id, contextFacilityId)}
         emptyMessage={
           <EmptyState
             padding="md"
@@ -705,7 +710,7 @@ export function SampleList({
         {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit Sample"
-        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity) : undefined}
+        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity, { hideTransport }) : undefined}
       >
         {isResolvingCreateContext ? (
           <div
@@ -734,6 +739,7 @@ export function SampleList({
             deferredLegs={deferredLegs}
             onDeferredLegsChange={handleDeferredLegsChange}
             onRetryDeferredLegs={retryDeferredLegs}
+            hideTransport={hideTransport}
             focusTarget={
               displaySideSheet?.mode === "edit" ? activeFocusTarget : null
             }

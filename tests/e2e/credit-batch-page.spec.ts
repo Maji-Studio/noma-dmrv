@@ -5,6 +5,7 @@
  */
 import * as crypto from "crypto";
 import { test, expect } from "./fixtures/auth-fixtures";
+import { creditBatchRow } from "./fixtures/page-helpers";
 import { seedCreditBatch } from "./fixtures/seed-chain-data";
 
 /** A phone viewport, below the `sm` breakpoint where the progress folds into one row. */
@@ -19,10 +20,9 @@ test.describe("credit batch page", () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const batch = await seedCreditBatch(seededData.facility.id, `PAGE-${tag}`, seededData.feedstockType.id);
 
-    await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
+    await page.goto(`/credit-batches?facility=${seededData.facility.id}&view=list`);
     await expect(page.locator("aside").getByText(seededData.facility.name, { exact: false })).toBeVisible();
-    const card = page.locator("article").filter({ hasText: batch.code });
-    await card.getByRole("button", { name: new RegExp(`open credit batch ${batch.code}`) }).click();
+    await creditBatchRow(page, batch.code).getByRole("button", { name: `Open credit batch ${batch.code}` }).click();
 
     // The sheet is a preview whose lead action opens the page.
     const sheet = page.getByRole("dialog");
@@ -60,7 +60,7 @@ test.describe("credit batch page", () => {
     await expect(page.getByRole("heading", { name: "Production runs", exact: true })).toBeVisible();
 
     await tabs.getByRole("tab", { name: "Emissions" }).click();
-    await expect(page.getByRole("link", { name: "Open Energy" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open emissions" })).toBeVisible();
 
     await tabs.getByRole("tab", { name: "Removals" }).click();
     await expect(page).toHaveURL(/[?&]tab=removals/);

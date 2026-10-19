@@ -551,6 +551,7 @@ function mergeFlows(flows: EnergyFlow[]): EnergyFlow[] {
 
 function firstDay(inputs: EnergyInputs): string | null {
   const days = [
+    ...(inputs.emissionEntryFlows ?? []).map((entry) => entry.day),
     ...inputs.runs.map((run) => run.day),
     ...inputs.feedstocks.map((feedstock) => feedstock.day),
     ...inputs.deliveries.map((delivery) => delivery.day),
@@ -585,7 +586,15 @@ export function buildEnergyBreakdown(
     ...applicationRecords(model, inputs),
   ].filter(inPeriod);
 
-  const { flows, gaps } = facilityFlows(model);
+  // Entries belong directly to the batch, not to a run or a downstream mass share.
+  for (const record of records) {
+    if (record.scope !== "batch") continue;
+    for (const flow of inputs.emissionEntryFlows ?? []) {
+      if (flow.creditBatchId === record.id) record.footprint.activity[flow.source] += flow.activity;
+    }
+  }
+  const { flows: automaticFlows, gaps } = facilityFlows(model);
+  const flows = mergeFlows([...automaticFlows, ...(inputs.emissionEntryFlows ?? [])]);
   return {
     from,
     to: period.to,

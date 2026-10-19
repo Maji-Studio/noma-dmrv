@@ -85,6 +85,7 @@ export interface EnergyCreditBatchInput {
 }
 
 export interface EnergyInputs {
+  emissionEntryFlows?: EnergyFlow[];
   runs: EnergyRunInput[];
   feedstocks: EnergyFeedstockInput[];
   feedstockDraws: EnergyFeedstockDrawInput[];

@@ -34,6 +34,7 @@ import {
   productionRunDeepLinkHref,
 } from "@/lib/certification/links";
 import { Notice } from "@/components/ui/notice";
+import { CreditBatchEmissionsPanel } from "./credit-batch-emissions-panel";
 
 /** Names the figure, so the headline needs no label of its own. */
 const CARBON_ESTIMATE_TITLE = "Carbon estimate, before project emissions";
@@ -273,6 +274,8 @@ interface CreditBatchSheetSectionsOptions extends CreditBatchRunsContentProps {
   activeFocusTarget?: string | null;
   /** Applied dry biochar (kg) from the page model; undefined while it loads, null when it failed. */
   appliedDryKg?: number | null;
+  /** The server's EMISSIONS_ENTRIES_ENABLED flag; set it to mount the Emissions panel between Production runs and Notes. */
+  emissionsEntriesEnabled?: boolean;
 }
 
 export function creditBatchSheetSections({
@@ -288,6 +291,7 @@ export function creditBatchSheetSections({
   locked = false,
   activeFocusTarget,
   appliedDryKg,
+  emissionsEntriesEnabled,
 }: CreditBatchSheetSectionsOptions): DetailPanelSection[] {
   const removalId = creditBatch.productionEmissionsClaimedByRemovalId ?? healthSummary?.removalId ?? null;
   const removalCode = creditBatch.productionEmissionsClaimedByRemovalId
@@ -392,6 +396,21 @@ export function creditBatchSheetSections({
         </div>
       ),
     },
+    ...(emissionsEntriesEnabled === undefined
+      ? []
+      : [
+          {
+            id: "emissions",
+            fields: [],
+            content: (
+              <CreditBatchEmissionsPanel
+                creditBatchId={creditBatch.id}
+                facilityId={creditBatch.facilityId}
+                enabled={emissionsEntriesEnabled}
+              />
+            ),
+          },
+        ]),
     {
       id: "notes",
       fields: [{ label: "Notes", value: creditBatch.siteManagementNotes }],

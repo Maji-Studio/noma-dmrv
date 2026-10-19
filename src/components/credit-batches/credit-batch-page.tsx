@@ -130,7 +130,7 @@ function BatchTabs({ tabListRef }: { tabListRef: React.RefObject<HTMLDivElement 
   );
 }
 
-function TabBody() {
+function TabBody({ emissionsEntriesEnabled }: { emissionsEntriesEnabled: boolean }) {
   const { tab, batch, pageModel, pageModelError, retryPageModel, retryingPageModel } = useCreditBatchPage();
   const needsModel = tab === "removals";
   if (needsModel && pageModelError) {
@@ -147,7 +147,7 @@ function TabBody() {
   switch (tab) {
     case "production": return <CreditBatchProductionTab />;
     case "samples": return <CreditBatchSamplesTab />;
-    case "emissions": return <CreditBatchEmissionsTab facilityId={batch.facilityId} />;
+    case "emissions": return <CreditBatchEmissionsTab creditBatchId={batch.id} facilityId={batch.facilityId} entriesEnabled={emissionsEntriesEnabled} />;
     case "removals": return <CreditBatchRemovalsTab />;
     case "activities": return <CreditBatchActivitiesTab />;
     default: return <CreditBatchOverview />;
@@ -157,9 +157,12 @@ function TabBody() {
 export function CreditBatchPage({
   creditBatchId,
   canManage,
+  emissionsEntriesEnabled = false,
 }: {
   creditBatchId: string;
   canManage: boolean;
+  /** Server flag EMISSIONS_ENTRIES_ENABLED; mounts the Emissions panel in its tab. */
+  emissionsEntriesEnabled?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -305,7 +308,7 @@ export function CreditBatchPage({
         <div className="flex min-w-0 flex-col gap-24">
           <BatchTabs tabListRef={tabListRef} />
           <div id="credit-batch-tab-panel" role="tabpanel" aria-labelledby={`credit-batch-tab-${tab}`} className="min-w-0">
-            <TabBody />
+            <TabBody emissionsEntriesEnabled={emissionsEntriesEnabled} />
           </div>
         </div>
       </div>
