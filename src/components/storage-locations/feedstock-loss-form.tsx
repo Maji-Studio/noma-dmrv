@@ -3,6 +3,7 @@
 import {
   FormField,
   FormInput,
+  FormTextarea,
   ResolvedErrorRevalidator,
 } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
@@ -81,7 +82,8 @@ export function FeedstockLossForm({
     crypto.randomUUID(),
   );
   // A change first puts the original loss back, so it can take up to that much more.
-  const restoredKg = correction?.wetDeltaKg == null ? 0 : Math.abs(correction.wetDeltaKg);
+  const restoredKg =
+    correction?.wetDeltaKg == null ? 0 : Math.abs(correction.wetDeltaKg);
   const limitKg = availableKg === null ? null : availableKg + restoredKg;
 
   const {
@@ -95,16 +97,25 @@ export function FeedstockLossForm({
   } = useForm({
     resolver: zodResolver(recordLossFormSchema),
     defaultValues: correction
-      ? { reason: correction.reason, occurredAt: correction.occurredAt, lossMassKg: restoredKg }
+      ? {
+          reason: "",
+          occurredAt: correction.occurredAt,
+          lossMassKg: restoredKg,
+        }
       : { reason: "", occurredAt: new Date().toISOString() },
   });
   const lossInput = useWatch({ control, name: "lossMassKg" });
   const reasonInput = useWatch({ control, name: "reason" });
   const lossMassKg = previewNumber(lossInput);
   // Only an entry the field schema accepts (positive, in range) previews an after figure.
-  const lossPreviewKg = recordLossFormSchema.shape.lossMassKg.safeParse(lossInput).success ? lossMassKg : null;
+  const lossPreviewKg = recordLossFormSchema.shape.lossMassKg.safeParse(
+    lossInput,
+  ).success
+    ? lossMassKg
+    : null;
   const liveStockError =
-    lossMassKg !== null && limitKg !== null &&
+    lossMassKg !== null &&
+    limitKg !== null &&
     isStockOverdraw(lossMassKg, limitKg)
       ? binStockOverdrawInlineMessage(LANE, limitKg)
       : undefined;
@@ -113,9 +124,7 @@ export function FeedstockLossForm({
       ? fieldServerError.message
       : undefined;
   const lossMassError =
-    errors.lossMassKg?.message ??
-    liveStockError ??
-    currentFieldServerError;
+    errors.lossMassKg?.message ?? liveStockError ?? currentFieldServerError;
 
   const onSubmit = handleSubmit(async (raw) => {
     setServerError(null);
@@ -138,7 +147,11 @@ export function FeedstockLossForm({
     } catch (error) {
       if (error instanceof RecordLossFieldError) {
         if (error.field === "occurredAt") {
-          setError("occurredAt", { type: "server", message: error.message }, { shouldFocus: true });
+          setError(
+            "occurredAt",
+            { type: "server", message: error.message },
+            { shouldFocus: true },
+          );
           return;
         }
         setFieldServerError({
@@ -157,7 +170,7 @@ export function FeedstockLossForm({
       setServerError(
         error instanceof Error
           ? error.message
-          : "The loss was not recorded. Check the form and try again."
+          : "The loss was not recorded. Check the form and try again.",
       );
     }
   });
@@ -165,8 +178,20 @@ export function FeedstockLossForm({
   return (
     <form onSubmit={onSubmit} className="flex flex-1 flex-col space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
-      <FormField id="occurredAt" label="Date and time" required error={errors.occurredAt?.message} cue={clock.hint}>
-        <EventTimeInput control={control} name="occurredAt" id="occurredAt" timeZone={clock.timeZone} disabled={recordLoss.isPending} />
+      <FormField
+        id="occurredAt"
+        label="Date and time"
+        required
+        error={errors.occurredAt?.message}
+        cue={clock.hint}
+      >
+        <EventTimeInput
+          control={control}
+          name="occurredAt"
+          id="occurredAt"
+          timeZone={clock.timeZone}
+          disabled={recordLoss.isPending}
+        />
       </FormField>
       <FormField
         id="loss-amount"
@@ -198,21 +223,41 @@ export function FeedstockLossForm({
 
       <FormField
         id="loss-reason"
-        label="Reason"
+        label={correction ? "Why corrected" : "Reason"}
         error={errors.reason?.message}
         required
-        helperText="What happened, such as a spoiled batch, transfer spill, or failed production run."
+        helperText={
+          correction
+            ? "What was wrong with the earlier entry, such as a misread scale."
+            : "What happened, such as a spoiled batch, transfer spill, or failed production run."
+        }
       >
-        <LossReasonChips
-          id="loss-reason"
-          rows={3}
-          value={reasonInput ?? ""}
-          onPick={(next) => setValue("reason", next, { shouldDirty: true, shouldValidate: true })}
-          placeholder="Document the loss so a verifier knows what happened"
-          disabled={recordLoss.isPending}
-          error={!!errors.reason}
-          {...register("reason")}
-        />
+        {correction ? (
+          <FormTextarea
+            id="loss-reason"
+            rows={3}
+            placeholder="Say why this entry is being corrected"
+            disabled={recordLoss.isPending}
+            error={!!errors.reason}
+            {...register("reason")}
+          />
+        ) : (
+          <LossReasonChips
+            id="loss-reason"
+            rows={3}
+            value={reasonInput ?? ""}
+            onPick={(next) =>
+              setValue("reason", next, {
+                shouldDirty: true,
+                shouldValidate: true,
+              })
+            }
+            placeholder="Document the loss so a verifier knows what happened"
+            disabled={recordLoss.isPending}
+            error={!!errors.reason}
+            {...register("reason")}
+          />
+        )}
       </FormField>
 
       <FormActions
