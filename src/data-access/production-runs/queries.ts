@@ -13,7 +13,6 @@ import {
   inArray,
   isNull,
   lte,
-  lt,
   ne,
   sql,
   SQL,
@@ -23,7 +22,6 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
-import { productionRunDateBounds } from "@/lib/production-runs/date-filter-bounds";
 import { formatLocalDate } from "@/lib/date-utils";
 import {
   productionRuns,
@@ -113,14 +111,6 @@ export async function getProductionRuns(
   if (status) {
     conditions.push(eq(productionRuns.status, status));
   }
-
-  const dateBounds = productionRunDateBounds(
-    startDate ? formatLocalDate(startDate) : undefined,
-    endDate ? formatLocalDate(endDate) : undefined,
-  );
-  // Widen UTC bounds for the start_time index, then compare exact local days.
-  if (dateBounds.start) conditions.push(gte(productionRuns.startTime, dateBounds.start));
-  if (dateBounds.endExclusive) conditions.push(lt(productionRuns.startTime, dateBounds.endExclusive));
 
   if (startDate) {
     conditions.push(gte(productionRunDateExpr(ctx.organizationId), formatLocalDate(startDate)));

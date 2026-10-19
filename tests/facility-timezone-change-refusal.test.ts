@@ -10,14 +10,19 @@ import { conflictCode } from "@/lib/conflict-ref";
 import { facilityCalendarFixture } from "./helpers/facility-calendar-fixture";
 import { ensureTestOrg, makeTestOrgContext } from "./helpers/test-org";
 
-vi.mock("@/lib/auth/server", async () => {
+vi.mock("@/lib/auth/server", async (importOriginal) => {
   const { makeTestOrgContext } = await import("./helpers/test-org");
-  return { requireOrgContext: vi.fn().mockResolvedValue(makeTestOrgContext()) };
+  return {
+    ...await importOriginal<typeof import("@/lib/auth/server")>(),
+    requireOrgContext: vi.fn().mockResolvedValue(makeTestOrgContext()),
+  };
 });
 
 const CURRENT_ZONE = "Africa/Dar_es_Salaam";
 const NEW_ZONE = "America/Los_Angeles";
 const START = "2025-09-30T22:00:00.000Z";
+const STORED_ALIAS = "Australia/Melbourne";
+const CANONICAL_ZONE = "Australia/Sydney";
 
 describe("facility time zone change refusal", () => {
   const f = facilityCalendarFixture("TZ-REFUSAL");
@@ -31,6 +36,30 @@ describe("facility time zone change refusal", () => {
     ));
     return row;
   }
+
+  it("names Timezone and explains how to save other changes", () => {
+    expect(facilityTimezoneChangeMessage("FAC-TEST", "CB-TEST", CURRENT_ZONE)).toBe(
+      "Facility FAC-TEST was not saved. Credit batch CB-TEST holds production runs dated in this facility's timezone. Set Timezone back to Africa/Dar es Salaam (UTC+3) to save your other changes.",
+    );
+  });
+
+  it.each([false, true])("preserves a stored alias when re-picking its entry (tier change: %s)", async (changeTier) => {
+    const label = changeTier ? "ALIAS-TIER" : "ALIAS";
+    const facility = await f.facility(label, STORED_ALIAS);
+    const run = await f.run(facility.id, label, START);
+    await f.batch(facility.id, run.id, label);
+    const name = `${facility.name} renamed`;
+    const saved = await updateFacility(ctx, facility.id, {
+      expectedVersion: facility.version, timezone: CANONICAL_ZONE, name,
+      ...(changeTier ? { durabilityOption: "200_year" as const } : {}),
+    });
+    const expected = {
+      name, timezone: STORED_ALIAS, version: facility.version + 1,
+      durabilityOption: changeTier ? "200_year" : facility.durabilityOption,
+    };
+    expect(saved).toMatchObject(expected);
+    expect(await savedFacility(facility.id)).toMatchObject(expected);
+  });
 
   it.each([false, true])("refuses a real change and preserves the row (tier change: %s)", async (changeTier) => {
     const facility = await f.facility(changeTier ? "TIER" : "NORMAL", CURRENT_ZONE);

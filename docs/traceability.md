@@ -60,8 +60,8 @@ until something is applied.
   `requireAuth()` — and **every** join predicate, leftJoins
   included, additionally carries `eq(<table>.organizationId, ctx.organizationId)`.
   Omitting the per-join org predicate is the default mistake here.
-- Production-run dates come from `productionRunDateExpr()`
-  (`src/data-access/production-runs/date-expr.ts`), not a raw column. New lineage
+- Production-run dates come from `productionRunDateExpr(ctx.organizationId)`
+  (`src/data-access/production-runs/date-expr.ts`), the facility-local start day. New lineage
   queries that skip it sort and display inconsistently with the rest of the app.
 - `src/lib/chain-of-custody/sankey.ts` must stay pure and dependency-light — no
   data-access, no `"use server"` imports — so it stays unit-testable. Its narrow

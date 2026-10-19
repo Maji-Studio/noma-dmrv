@@ -18,12 +18,12 @@ import {
   biocharProducts,
   creditBatches,
   deliveries,
+  facilities,
   feedstocks,
   productionRuns,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { productionRunDateBounds } from "@/lib/production-runs/date-filter-bounds";
-import { formatUtcDate } from "@/lib/date-utils";
+import { formatFacilityDate, formatUtcDate, UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
@@ -175,7 +175,7 @@ function resolveRange(range: DashboardRange): RangeBounds {
   };
 }
 
-/** Date-only columns ("YYYY-MM-DD") parse as UTC midnight — good enough for bucketing. */
+/** Preserve instant-valued points for timestamp comparisons. */
 function toMs(value: string | Date | null): number | null {
   if (value == null) return null;
   const ms = value instanceof Date ? value.getTime() : Date.parse(value);
@@ -184,11 +184,6 @@ function toMs(value: string | Date | null): number | null {
 
 function inCurrentPeriod(ms: number, bounds: RangeBounds) {
   return (bounds.startMs == null || ms >= bounds.startMs) && ms <= bounds.nowMs;
-}
-
-function inPreviousPeriod(ms: number, bounds: RangeBounds) {
-  if (bounds.previousStartMs == null || bounds.startMs == null) return false;
-  return ms >= bounds.previousStartMs && ms < bounds.startMs;
 }
 
 function deltaPercent(current: number, previous: number): number | null {
@@ -208,14 +203,26 @@ export async function getDashboardOverview(
   requireOrgScope(ctx);
 
   const bounds = resolveRange(range);
+  const [facility] = await db
+    .select({ timezone: facilities.timezone })
+    .from(facilities)
+    .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
+  const timezone = facility?.timezone ?? UNKNOWN_FACILITY_TIMEZONE;
+  const localDay = (ms: number) => formatFacilityDate(new Date(ms), timezone);
+  const startDay = bounds.startMs == null ? null : localDay(bounds.startMs);
+  const previousStartDay = bounds.previousStartMs == null ? null : localDay(bounds.previousStartMs);
+  const nowDay = localDay(bounds.nowMs);
+  const inCurrentDayPeriod = (day: string) =>
+    (startDay == null || day >= startDay) && day <= nowDay;
+  const inPreviousDayPeriod = (day: string) =>
+    previousStartDay != null && startDay != null && day >= previousStartDay && day < startDay;
   // One clock read for the overdue-batch list and its uncapped count.
   const todayStr = new Date().toISOString().slice(0, 10);
   // Fetch back to the previous-period start so delta needs no second query.
   const fetchStart =
     bounds.previousStartMs == null ? null : new Date(bounds.previousStartMs);
 
-  const fetchStartDay = fetchStart ? formatUtcDate(fetchStart) : undefined;
-  const runStartBound = productionRunDateBounds(fetchStartDay).start;
+  const fetchStartDay = previousStartDay;
 
   // Derived CO₂e stored per batch (issue #285): the same preview figure the
   // credit-batch detail page shows — the stored column no longer exists.
@@ -233,8 +240,8 @@ export async function getDashboardOverview(
         eq(creditBatches.facilityId, facilityId),
         isNull(creditBatches.archivedAt),
         ne(creditBatches.status, "rejected"),
-        ...(fetchStart
-          ? [gte(creditBatches.endDate, fetchStart.toISOString().slice(0, 10))]
+        ...(fetchStartDay
+          ? [gte(creditBatches.endDate, fetchStartDay)]
           : []),
       ),
     )
@@ -267,9 +274,7 @@ export async function getDashboardOverview(
               eq(productionRuns.facilityId, facilityId),
               isNull(productionRuns.archivedAt),
               eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS),
-              // Widen UTC bounds for the start_time index before the exact local day.
-              ...(fetchStartDay && runStartBound ? [
-                gte(productionRuns.startTime, runStartBound),
+              ...(fetchStartDay ? [
                 gte(productionRunDateExpr(ctx.organizationId), fetchStartDay),
               ] : []),
             ),
@@ -287,7 +292,7 @@ export async function getDashboardOverview(
               eq(biocharProducts.facilityId, facilityId),
               isNull(biocharProducts.archivedAt),
               ne(biocharProducts.status, "draft"),
-              ...(fetchStart ? [gte(biocharProducts.productionDate, formatUtcDate(fetchStart))] : []),
+              ...(fetchStartDay ? [gte(biocharProducts.productionDate, fetchStartDay)] : []),
             ),
           ),
         db
@@ -311,7 +316,7 @@ export async function getDashboardOverview(
               // Only material actually applied to soil counts toward KPI/mass
               // flow; `delivered` applications are not yet on the field.
               eq(applications.status, "applied"),
-              ...(fetchStart ? [gte(applications.applicationDate, fetchStart)] : []),
+              ...(fetchStartDay ? [gte(applications.applicationDate, new Date(fetchStartDay))] : []),
             ),
           ),
         batchesWithPreviews,
@@ -340,26 +345,16 @@ export async function getDashboardOverview(
 
   // ---- normalize to dated points -----------------------------------------
 
-  const runPoints = runRows
-    .map((row) => ({ ms: toMs(row.date), row }))
-    .filter((p): p is { ms: number; row: (typeof runRows)[number] } => p.ms != null);
-  const lotPoints = lotRows
-    .map((row) => ({ ms: toMs(row.productionDate), row }))
-    .filter((p): p is { ms: number; row: (typeof lotRows)[number] } => p.ms != null);
-  const applicationPoints = applicationRows
-    .map((row) => ({ ms: toMs(row.applicationDate), row }))
-    .filter(
-      (p): p is { ms: number; row: (typeof applicationRows)[number] } =>
-        p.ms != null,
-    );
-  const batchPoints = batchRows
-    .map((row) => ({ ms: toMs(row.endDate), row }))
-    .filter((p): p is { ms: number; row: (typeof batchRows)[number] } => p.ms != null);
+  const runPoints = runRows.map((row) => ({ day: row.date, row }));
+  const lotPoints = lotRows.map((row) => ({ day: row.productionDate, row }));
+  // Application dates encode calendar days as UTC-midnight timestamps.
+  const applicationPoints = applicationRows.map((row) => ({ day: formatUtcDate(row.applicationDate), row }));
+  const batchPoints = batchRows.map((row) => ({ day: row.endDate, row }));
 
   // ---- KPI assembly --------------------------------------------------------
 
-  const currentRuns = runPoints.filter((p) => inCurrentPeriod(p.ms, bounds));
-  const previousRuns = runPoints.filter((p) => inPreviousPeriod(p.ms, bounds));
+  const currentRuns = runPoints.filter((p) => inCurrentDayPeriod(p.day));
+  const previousRuns = runPoints.filter((p) => inPreviousDayPeriod(p.day));
 
   const currentFeedstockRuns = currentRuns.filter(
     (p) => p.row.feedstockMassDryKg != null,
@@ -388,10 +383,10 @@ export async function getDashboardOverview(
   );
 
   const currentApplications = applicationPoints.filter((p) =>
-    inCurrentPeriod(p.ms, bounds),
+    inCurrentDayPeriod(p.day),
   );
   const previousApplications = applicationPoints.filter((p) =>
-    inPreviousPeriod(p.ms, bounds),
+    inPreviousDayPeriod(p.day),
   );
   const appliedCurrentTons = sum(
     currentApplications.map((p) => p.row.biocharAppliedDryTons ?? 0),
@@ -400,8 +395,8 @@ export async function getDashboardOverview(
     previousApplications.map((p) => p.row.biocharAppliedDryTons ?? 0),
   );
 
-  const currentBatches = batchPoints.filter((p) => inCurrentPeriod(p.ms, bounds));
-  const previousBatches = batchPoints.filter((p) => inPreviousPeriod(p.ms, bounds));
+  const currentBatches = batchPoints.filter((p) => inCurrentDayPeriod(p.day));
+  const previousBatches = batchPoints.filter((p) => inPreviousDayPeriod(p.day));
   const currentStoredBatches = currentBatches.filter(
     (p) => storedTonnesOf(p.row.id) != null,
   );
@@ -488,7 +483,7 @@ export async function getDashboardOverview(
       )
       .map((p) => p.row.massDryKg),
   );
-  const currentLots = lotPoints.filter((p) => inCurrentPeriod(p.ms, bounds));
+  const currentLots = lotPoints.filter((p) => inCurrentDayPeriod(p.day));
   // Dry kg end to end: `massKg` is the lot's wet mass, so derive dry via the
   // recorded moisture (biochar runs 1–2%); a lot without a moisture reading
   // counts at wet mass rather than vanishing from the segment.

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { productionRuns } from "@/db/schema";
@@ -7,11 +7,15 @@ import { getProductionRuns } from "@/data-access/production-runs/queries";
 import { getProductionRunsEntity } from "@/data-access/entities/production-runs";
 import { getDashboardOverview } from "@/data-access/dashboard-overview";
 import { formatDate } from "@/lib/format-utils";
+import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { facilityCalendarFixture } from "./helpers/facility-calendar-fixture";
 import { ensureTestOrg, makeTestOrgContext } from "./helpers/test-org";
 
 const ENTITY_LIMIT = 20;
 const ISO_MONTH_LENGTH = 7;
+const FEEDSTOCK_DRY_KG = 1000;
+const BIOCHAR_DRY_KG = 200;
+const DASHBOARD_NOW = "2025-09-30T22:30:00.000Z";
 const CASES = [
   { label: "DAR", zone: "Africa/Dar_es_Salaam", start: "2025-09-30T22:00:00.000Z", day: "2025-10-01" },
   { label: "LA", zone: "America/Los_Angeles", start: "2025-10-01T06:00:00.000Z", day: "2025-09-30" },
@@ -30,6 +34,32 @@ describe("production run facility-local display dates", () => {
     }
   });
   afterAll(() => f.cleanup());
+
+  it.each(["all", "week", "month"] as const)("counts measured Dar es Salaam runs before UTC midnight (%s)", async (range) => {
+    const facility = await f.facility(`KPI-${range}`, "Africa/Dar_es_Salaam");
+    const run = await f.run(facility.id, `KPI-${range}`, "2025-09-30T22:00:00.000Z");
+    await db.update(productionRuns).set({
+      endTime: new Date("2025-09-30T22:15:00.000Z"),
+      feedstockMassDryKg: FEEDSTOCK_DRY_KG,
+      biocharDryMassKg: BIOCHAR_DRY_KG,
+    }).where(and(eq(productionRuns.id, run.id), eq(productionRuns.organizationId, ctx.organizationId)));
+
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(DASHBOARD_NOW));
+    try {
+      const dashboard = await getDashboardOverview(ctx, facility.id, range);
+      expect(dashboard.kpis).toEqual(expect.arrayContaining([
+        expect.objectContaining({ key: "feedstockProcessed", value: kgToTonnes(FEEDSTOCK_DRY_KG), detail: "dry mass into 1 run" }),
+        expect.objectContaining({ key: "biocharProduced", value: kgToTonnes(BIOCHAR_DRY_KG) }),
+      ]));
+      expect(dashboard.massFlow).toEqual(expect.arrayContaining([
+        { key: "intoRuns", tonnes: kgToTonnes(FEEDSTOCK_DRY_KG) },
+        { key: "produced", tonnes: kgToTonnes(BIOCHAR_DRY_KG) },
+      ]));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
   it("selects the facility's start day directly and in the paginated list", async () => {
     const ids = rows.map((row) => row.id);

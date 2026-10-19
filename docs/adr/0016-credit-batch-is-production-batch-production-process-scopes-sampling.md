@@ -71,7 +71,7 @@ amended 2026-07-04 (feedstock declared)
 > started on the facility's calendar. Credit batch membership continues to use
 > the facility-local end day. A facility time zone change is refused once any
 > of its production runs belongs to a credit batch. The refusal names the first
-> blocking batch by code and asks the operator to keep the current time zone;
+> blocking batch by code and asks the operator to set Timezone back;
 > saving the same time zone with other edits remains allowed. Membership is
 > neither reassigned nor revalidated as part of a facility edit.
 

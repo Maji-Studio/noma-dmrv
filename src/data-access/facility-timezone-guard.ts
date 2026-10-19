@@ -5,6 +5,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { conflictCode } from "@/lib/conflict-ref";
 import { formatTimezoneLabel } from "@/lib/date-utils";
 import { DomainError } from "@/lib/domain-errors";
+import { findTimezoneEntry } from "@/lib/timezones";
 import { requireOrgScope } from "./utils";
 
 const FIRST_BLOCKER_LIMIT = 1;
@@ -14,7 +15,14 @@ export function facilityTimezoneChangeMessage(
   batchCode: string,
   currentTimezone: string,
 ): string {
-  return `Facility ${facilityCode} was not saved. Its production runs belong to credit batch ${batchCode}, which dates them in the current time zone. Keep the time zone ${formatTimezoneLabel(currentTimezone)}.`;
+  return `Facility ${facilityCode} was not saved. Credit batch ${batchCode} holds production runs dated in this facility's timezone. Set Timezone back to ${formatTimezoneLabel(currentTimezone)} to save your other changes.`;
+}
+
+/** Re-picking a stored alias in the combobox does not change the facility zone. */
+export function isUnchangedFacilityTimezone(current: string, requested: string | undefined): boolean {
+  if (requested === undefined || requested === current) return true;
+  const currentEntry = findTimezoneEntry(current);
+  return currentEntry !== undefined && currentEntry === findTimezoneEntry(requested);
 }
 
 /** Call with the facility row locked, before writing either tier or ordinary edits. */
@@ -25,7 +33,7 @@ export async function assertFacilityTimezoneChangeAllowed(
   requestedTimezone: string | undefined,
 ): Promise<void> {
   requireOrgScope(ctx);
-  if (requestedTimezone === undefined || requestedTimezone === facility.timezone) return;
+  if (isUnchangedFacilityTimezone(facility.timezone, requestedTimezone)) return;
 
   // Residual race: run auto-attachment without a facility edit can insert after
   // this read. Locking runs here could deadlock with writers that hold a run
