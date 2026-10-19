@@ -1,7 +1,7 @@
 # Template-driven emissions entries: plan
 
 - **Owner:** Kenji Nguyen
-- **Status:** proposed; decisions settled 2026-10-15, no implementation yet
+- **Status:** accepted 2026-10-19 (ADR 0032, decided in the 19 Oct backlog round); PRs 1-3 merged, PR 4 next
 - **Last reviewed:** 2026-10-15, against `staging` @ `d34135911`; reviews on PR #1057 (§9)
 - **Decision record:** [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md) and §2 below are authoritative. Provenance only: the raw answers to two question rounds were collected on an external decisions page.
 
