@@ -31,7 +31,7 @@ export interface CreditBatchOpenItemGroups {
   waiting: readonly CreditBatchOpenItem[];
 }
 
-/** The Overview tab badge: Blocking and Check items. Waiting items never count (Kenji, 2026-10-18). */
+/** The Overview total: Blocking and Check items, used by the Overview tab badge (via `tabBadge`) and the header progress step. Waiting items never count (Kenji, 2026-10-18). */
 export function overviewBadgeCount(items: CreditBatchOpenItemGroups): number {
   return items.blocking.length + items.check.length;
 }
@@ -50,10 +50,13 @@ export interface CreditBatchTabBadge {
  */
 export function tabBadge(tab: CreditBatchPageTab, items: CreditBatchOpenItemGroups): CreditBatchTabBadge | null {
   if (tab === "activities") return null;
+  if (tab === "overview") {
+    const total = overviewBadgeCount(items);
+    return total > 0 ? { count: total, blocking: items.blocking.length > 0 } : null;
+  }
   const onTab = (item: CreditBatchOpenItem) => "tab" in item.target && item.target.tab === tab;
-  const blocking = tab === "overview" ? items.blocking.length : items.blocking.filter(onTab).length;
-  const check = tab === "overview" ? items.check.length : items.check.filter(onTab).length;
-  const count = blocking + check;
+  const blocking = items.blocking.filter(onTab).length;
+  const count = blocking + items.check.filter(onTab).length;
   return count > 0 ? { count, blocking: blocking > 0 } : null;
 }
 
