@@ -67,7 +67,7 @@ export function MatchingOutputBins({ facilityId, formulationId }: { facilityId: 
         <DerivedHeadline
           label="Available wet stock, estimate"
           value={summary.wet}
-          secondary={{ label: DRY_BIOCHAR_LABEL, value: summary.dry, trailing: summary.dryCoverage }}
+          secondary={{ label: summary.dryCoverage ? `${DRY_BIOCHAR_LABEL} ${summary.dryCoverage}` : DRY_BIOCHAR_LABEL, value: summary.dry }}
           sub={`${summary.binCount} ${pluralize(summary.binCount, "bin", "bins")}`}
         />
         <CaretRightIcon aria-hidden size={16} weight="bold" className="shrink-0 text-[var(--color-text-tertiary)]" />

@@ -100,7 +100,7 @@ test.describe("Output-bin conserved FIFO", () => {
     // Wet leads (200 kg at 50% moisture); the dry biochar the bin tracks is the secondary figure under it.
     const stock = page.getByRole("region", { name: "Stock", exact: true });
     await expect(stock).toContainText("200 kg wet mass");
-    await expect(stock.getByText("dry biochar", { exact: true }).locator("xpath=preceding-sibling::span[1]")).toHaveText("100 kg");
+    await expect(stock.getByText("100 kg dry biochar", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Adjust stock", exact: true })).toBeVisible();
     await evidence(page, info, "pure-product-stock");
   });
@@ -199,14 +199,14 @@ test.describe("Output-bin conserved FIFO", () => {
     await page.getByRole("table", { name: "Applications", exact: true }).getByText(application.code, { exact: true }).click();
     await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
     // Dry biochar applied is data: a secondary line under the product mass at both levels.
-    await expect(page.getByRole("dialog").getByText("dry biochar applied", { exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog").getByText(/\d kg dry biochar applied$/)).toBeVisible();
     // Both levels carry the bar and its key line: which batches were applied and
     // how much dry biochar each gave. The ledger's shares are explanation, Detailed only.
     const appliedBar = page.getByRole("dialog").getByRole("img", { name: /^Applied dry biochar/ });
     await expect(appliedBar).toBeVisible();
     await expect(page.getByRole("dialog").getByRole("table", { name: /^Applied batches/ })).toHaveCount(0);
     await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
-    await expect(page.getByRole("dialog").getByText("dry biochar applied", { exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog").getByText(/\d kg dry biochar applied$/)).toBeVisible();
     await expect(appliedBar).toBeVisible();
     // The ledger carries the per-batch totals and shares; the disclosure adds
     // only the production runs behind each batch.
