@@ -33,10 +33,9 @@ import {
 import type { Page } from "@playwright/test";
 import { fillStockMoisture } from "./helpers/stock-moisture";
 
-/** A tonnes figure as the List view prints it, e.g. "4.50 t". */
-const TONNES = /^\d+\.\d{2} t$/;
-/** The application is edited from 5000 kg to 3000 kg. */
-const EDITED_SHARE = 3000 / 5000;
+/** 5000 kg applied from a delivery at 10% moisture, then edited to 3000 kg: dry is 90% of each. */
+const APPLIED_DRY_BEFORE = "4.50 t";
+const APPLIED_DRY_AFTER = "2.70 t";
 
 async function createApplicationForLineage(
   page: Page,
@@ -108,10 +107,7 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
 
     const row = creditBatchRow(page, lineage.creditBatchCode);
     await expect(row).toBeVisible({ timeout: 10000 });
-    const appliedDry = row.locator("[data-applied-dry]");
-    await expect(appliedDry).toHaveText(TONNES, { timeout: 10000 });
-    const before = Number.parseFloat((await appliedDry.textContent()) ?? "");
-    expect(before).toBeGreaterThan(0);
+    await expect(row.locator("[data-applied-dry]")).toHaveText(APPLIED_DRY_BEFORE, { timeout: 10000 });
 
     // Navigate to /applications via the sidebar (client-side nav — the
     // QueryClient created once in providers.tsx survives the route change).
@@ -131,18 +127,16 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
     // Back to /credit-batches, again via client-side nav — no page.reload(),
     // no page.goto(). This is the exact scenario the fix targets: a query
     // that was cached under refetchOnWindowFocus:false must have been
-    // invalidated by the application mutation, or this would still read 5.00.
+    // invalidated by the application mutation, or this would still read 4.50 t.
     await page.locator("nav").getByRole("link", { name: "Credit Batches" }).click();
     await page.waitForURL(/\/credit-batches(\?|$)/);
     await page.waitForLoadState("networkidle");
     // The sidebar link opens the timeline; the row figures live in the list view.
     await page.getByRole("button", { name: "List", exact: true }).click();
 
-    // 5000 kg became 3000 kg of the same product, so the dry figure scales by 3/5.
-    const appliedDryAfter = creditBatchRow(page, lineage.creditBatchCode).locator("[data-applied-dry]");
-    await expect(appliedDryAfter).toHaveText(TONNES, { timeout: 10000 });
-    await expect
-      .poll(async () => Number.parseFloat((await appliedDryAfter.textContent()) ?? ""), { timeout: 10000 })
-      .toBeCloseTo(before * EDITED_SHARE, 1);
+    // 5000 kg became 3000 kg of the same delivery: the dry figure follows.
+    await expect(creditBatchRow(page, lineage.creditBatchCode).locator("[data-applied-dry]")).toHaveText(APPLIED_DRY_AFTER, {
+      timeout: 10000,
+    });
   });
 });
