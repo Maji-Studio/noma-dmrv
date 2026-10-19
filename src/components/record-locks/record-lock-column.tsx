@@ -1,6 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import type { RecordLockStatus, RecordLockViews } from "@/lib/record-lock-view";
-import { RecordLockCell, RecordLockOverviewChip } from "./record-lock-chip";
+import { RecordLockCell, RecordLockSentMark } from "./record-lock-chip";
 import { RECORD_LOCK_LEVEL_LABELS } from "./record-lock-labels";
 
 /** The "Lock" column every record list shares (Sent chips only, hidden until turned on under Columns), fed by one batched read per page. */
@@ -22,11 +22,17 @@ export function recordLockColumn<T extends { id: string }>(
 }
 
 /**
- * The Sent mark right after a list's record link (`meta.recordLinkAfter`).
- * It sits outside the link and shows nothing unless the record is Sent.
+ * The Sent lock icon right before a list's record link (`meta.recordLinkBefore`).
+ * It sits outside the link and shows only when the record is Sent. Every other
+ * row keeps an empty slot of the same width, so the codes stay aligned.
  */
 export function recordLockTitleMark<T extends { id: string }>(locks: RecordLockViews) {
   return function titleMark(row: T) {
-    return <RecordLockOverviewChip lock={locks[row.id]} className="shrink-0" />;
+    return (
+      <>
+        <RecordLockSentMark lock={locks[row.id]} />
+        {locks[row.id]?.level === "sent" ? null : <span aria-hidden className="inline-block w-[1em] shrink-0" />}
+      </>
+    );
   };
 }

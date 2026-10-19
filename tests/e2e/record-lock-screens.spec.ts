@@ -94,7 +94,7 @@ test.describe("Record locks on screen", () => {
       await page.goto(`/samples?facility=${seededData.facility.id}`);
       await waitForFacilityHydration(page, seededData.facility.name);
       const row = page.getByRole("row").filter({ hasText: sampleCode });
-      await expect(row.locator('[data-record-lock="sent"]')).toHaveText("Sent");
+      await expect(row.getByRole("img", { name: "Sent" })).toBeVisible();
       await expect(row.getByRole("button", { name: `Actions for ${sampleCode}` })).toHaveCount(0);
 
       await row.click();

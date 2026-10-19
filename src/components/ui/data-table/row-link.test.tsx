@@ -215,12 +215,12 @@ describe("DataTable column defaults and record link marks", () => {
     {
       accessorKey: "code",
       header: "Code",
-      meta: { recordLink: true, recordLinkAfter: (row) => (row.id === "r1" ? <span data-mark="">Sent</span> : null) },
+      meta: { recordLink: true, recordLinkBefore: (row) => (row.id === "r1" ? <span data-mark="">Sent</span> : null) },
     },
     { accessorKey: "name", header: "Name", meta: { hiddenByDefault: true } },
   ];
 
-  it("renders the mark beside the record link, never inside it", () => {
+  it("renders the mark before the record link, never inside it", () => {
     const { container } = render(
       <DataTable columns={markedColumns} data={rows} onRowClick={vi.fn()} aria-label="Suppliers" />,
     );

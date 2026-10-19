@@ -35,6 +35,28 @@ export function RecordLockChip({ level, className }: { level: RecordLockView["le
   );
 }
 
+const SENT_MARK_SIZE = "1em";
+
+/**
+ * The bare Sent lock icon for list rows, shown before the record code. Text
+ * size, the Sent chip's colour, and a name for screen readers and hover. It is
+ * not focusable: the code beside it is the row's one control.
+ */
+export function RecordLockSentMark({ lock, className }: { lock: RecordLockView | undefined; className?: string }) {
+  if (lock?.level !== "sent") return null;
+  return (
+    <span
+      role="img"
+      aria-label={RECORD_LOCK_LEVEL_LABELS.sent}
+      title="Sent to Isometric"
+      data-record-lock="sent"
+      className={cn("inline-flex shrink-0 text-[var(--st-run)]", className)}
+    >
+      <LockSimpleIcon size={SENT_MARK_SIZE} weight="bold" aria-hidden />
+    </span>
+  );
+}
+
 /**
  * Overview surfaces (list cells, board tiles, cards) show the chip only once a
  * record is Sent. Nearly every record with data downstream is In use, so Open

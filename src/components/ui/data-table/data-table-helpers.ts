@@ -23,10 +23,10 @@ declare module "@tanstack/react-table" {
      */
     hiddenByDefault?: boolean;
     /**
-     * Only with `recordLink`: a mark rendered right after the record link,
+     * Only with `recordLink`: a mark rendered right before the record link,
      * outside it, so no control nests inside the link. Return null for none.
      */
-    recordLinkAfter?: (row: TData) => React.ReactNode;
+    recordLinkBefore?: (row: TData) => React.ReactNode;
   }
 }
 

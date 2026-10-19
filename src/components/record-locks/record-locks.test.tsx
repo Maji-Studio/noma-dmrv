@@ -2,8 +2,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RecordLockLink, RecordLockView } from "@/lib/record-lock-view";
-import { RecordLockCell, RecordLockChip, RecordLockOverviewChip } from "./record-lock-chip";
-import { recordLockColumn } from "./record-lock-column";
+import { RecordLockCell, RecordLockChip, RecordLockOverviewChip, RecordLockSentMark } from "./record-lock-chip";
+import { recordLockColumn, recordLockTitleMark } from "./record-lock-column";
 import { recordLockSheetProps } from "./record-lock-sheet-props";
 import { RecordLockNotice } from "./record-lock-notice";
 import { RecordUsedBy } from "./record-used-by";
@@ -61,6 +61,24 @@ describe("overview surfaces show only Sent", () => {
   it("shows Sent in a list cell and the overview chip", () => {
     render(<><RecordLockCell lock={view("sent", [REMOVAL])} /><RecordLockOverviewChip lock={view("sent", [REMOVAL])} /></>);
     expect(screen.getAllByText("Sent")).toHaveLength(2);
+  });
+
+  it("marks only Sent with a named lock icon, and keeps the slot for other rows", () => {
+    const mark = recordLockTitleMark<{ id: string }>({ a: view("inUse", [RUN]), b: view("sent", [REMOVAL]) });
+    const open = render(<>{mark({ id: "a" })}</>);
+    expect(screen.queryByRole("img", { name: "Sent" })).toBeNull();
+    expect(open.container.querySelector("span[aria-hidden]")).not.toBeNull();
+    open.unmount();
+    render(<>{mark({ id: "b" })}</>);
+    const icon = screen.getByRole("img", { name: "Sent" });
+    expect(icon.getAttribute("title")).toBe("Sent to Isometric");
+    expect(icon.textContent).toBe("");
+  });
+
+  it("renders no sent mark for Open or In use", () => {
+    const { container } = render(<><RecordLockSentMark lock={view("open", [])} /><RecordLockSentMark lock={undefined} /></>);
+    expect(container.textContent).toBe("");
+    expect(container.firstChild).toBeNull();
   });
 
   it("stays blank while pending, and says so when the read failed", () => {
