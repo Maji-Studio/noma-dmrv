@@ -8,7 +8,7 @@ import { canonicalJson } from "@/lib/canonical-json";
 import { SafeError } from "@/lib/errors";
 import {
   fullFingerprint, isEnrichmentComplete, normalizeTemplateDefinition, resolveLineSources,
-  semanticFingerprint, validateLineSources, lineNeedsReview,
+  semanticFingerprint, validateLineSources, lineNeedsReview, withoutUnacceptableProposals,
   type GhgEntryTemplate, type LineContract, type TemplateEnrichment,
 } from "@/lib/isometric/template-observations";
 import { assertRowVersion, nextVersion, staleRowVersion } from "./row-version";
@@ -93,7 +93,7 @@ export async function observeTemplate(ctx: OrgContext, input: {
       eq(observations.semanticFingerprint, semantic), eq(observations.fullFingerprint, full),
     )).limit(1);
     const lineSources = withTemplateOrder(input.template,
-      existing && latest?.id === existing.id ? existing.lineSources
+      existing && latest?.id === existing.id ? withoutUnacceptableProposals(definition, existing.lineSources)
         : resolveLineSources({ definition, previous: latest }));
     const sourcesChanged = existing && canonicalJson(existing.lineSources) !== canonicalJson(lineSources);
     const now = new Date(Math.max(Date.now(), (latest?.lastObservedAt.getTime() ?? 0) + OBSERVATION_ORDER_TICK_MS));
