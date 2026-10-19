@@ -10,7 +10,7 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { PreviewCard } from "@base-ui/react/preview-card";
-import { CalendarBlankIcon, LeafIcon, WarningCircleIcon } from "@phosphor-icons/react/dist/ssr";
+import { CalendarBlankIcon, LeafIcon } from "@phosphor-icons/react/dist/ssr";
 import { StatusBadge, type StatusValue } from "@/components/ui/status-badge";
 import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
@@ -90,7 +90,6 @@ function HoverCardBody({ batch }: { batch: HoverCardBatch }) {
       </div>
       {batch.todoCount > 0 && (
         <div className={cn("flex items-center gap-8 px-16 py-8 body-small font-medium", STATE_TONE.blocking.tint)}>
-          <WarningCircleIcon size={16} weight="fill" className={cn("shrink-0", STATE_TONE.blocking.text)} aria-hidden />
           {OPEN_TODOS_LABEL}
           <BlockingCount count={batch.todoCount} role="img" aria-label={todosLabel(batch.todoCount)} />
         </div>
