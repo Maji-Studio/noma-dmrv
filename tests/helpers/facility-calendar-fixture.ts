@@ -1,13 +1,16 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  creditBatchProductionRuns, creditBatches, facilities, feedstockTypes,
+  creditBatchProductionRuns, creditBatches, facilities, feedstocks, feedstockTypes, samples,
   productionProcesses, productionRuns, reactors,
 } from "@/db/schema";
+import { cleanupFeedstockFixtureParents, feedstockFixtureValues } from "./feedstock-fixture";
 import { TEST_ORG_ID, TEST_SITE_POSITION } from "./test-org";
 
 const TAG_LENGTH = 8;
 const RUN_DURATION_MS = 60 * 60 * 1000;
+const SAMPLE_TOTAL_CARBON_PERCENT = 80;
+const SAMPLE_ORGANIC_CARBON_PERCENT = 78;
 
 /** Minimal persisted records for calendar reads and facility edit guards. */
 export function facilityCalendarFixture(prefix: string) {
@@ -16,6 +19,8 @@ export function facilityCalendarFixture(prefix: string) {
   const reactorIds: string[] = [];
   const runIds: string[] = [];
   const batchIds: string[] = [];
+  const sampleIds: string[] = [];
+  const feedstockIds: string[] = [];
   const processIds: string[] = [];
   const feedstockTypeIds: string[] = [];
   const organizationId = TEST_ORG_ID;
@@ -47,7 +52,7 @@ export function facilityCalendarFixture(prefix: string) {
     return row;
   }
 
-  async function batch(facilityId: string, runId: string, label: string) {
+  async function batch(facilityId: string, runId: string | null, label: string) {
     const code = `${prefix}-${label}-${tag}`;
     const [feedstockType] = await db.insert(feedstockTypes).values({
       organizationId, code: `FT-${code}`, name: `Calendar feedstock ${code}`,
@@ -64,13 +69,45 @@ export function facilityCalendarFixture(prefix: string) {
       startDate: "2025-10-01", endDate: "2025-10-31",
     }).returning();
     batchIds.push(row.id);
-    await db.insert(creditBatchProductionRuns).values({
+    if (runId) await db.insert(creditBatchProductionRuns).values({
       organizationId, creditBatchId: row.id, productionRunId: runId,
     });
     return row;
   }
 
+  async function sample(creditBatchId: string, label: string) {
+    const [row] = await db.insert(samples).values({
+      organizationId, creditBatchId, sampleCode: `S-${prefix}-${label}-${tag}`,
+      samplingTime: new Date("2025-10-01T09:00:00.000Z"),
+      totalCarbonPercent: SAMPLE_TOTAL_CARBON_PERCENT, organicCarbonPercent: SAMPLE_ORGANIC_CARBON_PERCENT,
+    }).returning();
+    sampleIds.push(row.id);
+    return row;
+  }
+
+  async function feedstock(facilityId: string, label: string, deliveryDay: string, massDryKg: number) {
+    const code = `${prefix}-${label}-${tag}`;
+    const [type] = await db.insert(feedstockTypes).values({
+      organizationId, code: `FT-${code}`, name: `Calendar feedstock ${code}`,
+      category: "forestry", usage: "pyrolysis",
+    }).returning();
+    feedstockTypeIds.push(type.id);
+    const [row] = await db.insert(feedstocks).values(await feedstockFixtureValues(db, {
+      organizationId, facilityId, feedstockTypeId: type.id, code: `FS-${code}`,
+      massDryKg, deliveryDate: new Date(deliveryDay),
+    })).returning();
+    feedstockIds.push(row.id);
+    return row;
+  }
+
   async function cleanup() {
+    if (sampleIds.length) await db.delete(samples).where(and(
+      eq(samples.organizationId, organizationId), inArray(samples.id, sampleIds),
+    ));
+    if (feedstockIds.length) await db.delete(feedstocks).where(and(
+      eq(feedstocks.organizationId, organizationId), inArray(feedstocks.id, feedstockIds),
+    ));
+    await cleanupFeedstockFixtureParents(db);
     if (batchIds.length) await db.delete(creditBatchProductionRuns).where(and(
       eq(creditBatchProductionRuns.organizationId, organizationId),
       inArray(creditBatchProductionRuns.creditBatchId, batchIds),
@@ -95,5 +132,5 @@ export function facilityCalendarFixture(prefix: string) {
     ));
   }
 
-  return { facility, run, batch, cleanup };
+  return { facility, run, batch, sample, feedstock, cleanup };
 }

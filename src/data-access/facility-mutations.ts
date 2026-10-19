@@ -13,7 +13,7 @@ import { assertRowVersion, nextVersion } from "./row-version";
 import { acquireFacilityDurabilityLock } from "./facility-durability-lock";
 import { guardFacilityName } from "./unique-name-guards";
 import { requireOrgScope } from "./utils";
-import { assertFacilityTimezoneChangeAllowed, isUnchangedFacilityTimezone } from "./facility-timezone-guard";
+import { resolveFacilityTimezoneEdit } from "./facility-timezone-guard";
 
 /** Entity key on a facility's expected-version conflict. */
 export const FACILITY_CONFLICT_ENTITY = "facility";
@@ -173,8 +173,7 @@ export async function updateFacility(
         expectedVersion,
         actualVersion: locked.version,
       });
-      await assertFacilityTimezoneChangeAllowed(ctx, tx, locked, data.timezone);
-      if (isUnchangedFacilityTimezone(locked.timezone, data.timezone)) delete nonTierData.timezone;
+      nonTierData.timezone = await resolveFacilityTimezoneEdit(ctx, tx, locked, data.timezone);
       return updateFacilityRow(ctx, tx, facilityId, nonTierData);
     });
   }
@@ -189,8 +188,7 @@ export async function updateFacility(
       actualVersion: lockedExisting.version,
     });
 
-    await assertFacilityTimezoneChangeAllowed(ctx, tx, lockedExisting, data.timezone);
-    if (isUnchangedFacilityTimezone(lockedExisting.timezone, data.timezone)) delete data.timezone;
+    data.timezone = await resolveFacilityTimezoneEdit(ctx, tx, lockedExisting, data.timezone);
 
     if (data.durabilityOption === lockedExisting.durabilityOption) {
       const nonTierData = { ...data };

@@ -79,7 +79,6 @@ export type DashboardRange = "week" | "month" | "all";
 const ATTENTION_PER_CHECK = 4;
 /** Total attention-queue cap, flags first. */
 const ATTENTION_TOTAL = 8;
-const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEK_DAYS = 7;
 const MONTH_DAYS = 30;
 
@@ -154,38 +153,6 @@ export interface DashboardOverview extends DashboardStationsData {
   attentionTotal: number;
 }
 
-interface RangeBounds {
-  /** Current-period start (ms); null = unbounded ("all"). */
-  startMs: number | null;
-  /** Previous-period start (ms); null when no delta comparison applies. */
-  previousStartMs: number | null;
-  nowMs: number;
-}
-
-function resolveRange(range: DashboardRange): RangeBounds {
-  const nowMs = Date.now();
-  if (range === "all") {
-    return { startMs: null, previousStartMs: null, nowMs };
-  }
-  const spanMs = (range === "week" ? WEEK_DAYS : MONTH_DAYS) * DAY_MS;
-  return {
-    startMs: nowMs - spanMs,
-    previousStartMs: nowMs - 2 * spanMs,
-    nowMs,
-  };
-}
-
-/** Preserve instant-valued points for timestamp comparisons. */
-function toMs(value: string | Date | null): number | null {
-  if (value == null) return null;
-  const ms = value instanceof Date ? value.getTime() : Date.parse(value);
-  return Number.isNaN(ms) ? null : ms;
-}
-
-function inCurrentPeriod(ms: number, bounds: RangeBounds) {
-  return (bounds.startMs == null || ms >= bounds.startMs) && ms <= bounds.nowMs;
-}
-
 function deltaPercent(current: number, previous: number): number | null {
   if (previous <= 0) return null;
   return ((current - previous) / previous) * 100;
@@ -202,15 +169,15 @@ export async function getDashboardOverview(
 ): Promise<DashboardOverview> {
   requireOrgScope(ctx);
 
-  const bounds = resolveRange(range);
+  const now = new Date();
   const [facility] = await db
     .select({ timezone: facilities.timezone })
     .from(facilities)
     .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
   const timezone = facility?.timezone ?? UNKNOWN_FACILITY_TIMEZONE;
-  const nowDay = formatFacilityDate(new Date(bounds.nowMs), timezone);
+  const nowDay = formatFacilityDate(now, timezone);
   const periodDays = range === "week" ? WEEK_DAYS : MONTH_DAYS;
-  // Include today in the N calendar days, independently of instant bounds.
+  // Include today in the N calendar days.
   const startDay = range === "all" ? null : addDaysIso(nowDay, -(periodDays - 1));
   const previousStartDay = startDay == null ? null : addDaysIso(startDay, -periodDays);
   const inCurrentDayPeriod = (day: string) =>
@@ -220,9 +187,6 @@ export async function getDashboardOverview(
   // One clock read for the overdue-batch list and its uncapped count.
   const todayStr = new Date().toISOString().slice(0, 10);
   // Fetch back to the previous-period start so delta needs no second query.
-  const fetchStart =
-    bounds.previousStartMs == null ? null : new Date(bounds.previousStartMs);
-
   const fetchStartDay = previousStartDay;
 
   // Derived CO₂e stored per batch (issue #285): the same preview figure the
@@ -332,7 +296,7 @@ export async function getDashboardOverview(
               eq(feedstocks.organizationId, ctx.organizationId),
               eq(feedstocks.facilityId, facilityId),
               isNull(feedstocks.archivedAt),
-              ...(fetchStart ? [gte(feedstocks.deliveryDate, fetchStart)] : []),
+              ...(fetchStartDay ? [gte(feedstocks.deliveryDate, new Date(fetchStartDay))] : []),
             ),
           ),
       ]),
@@ -472,7 +436,7 @@ export async function getDashboardOverview(
   // ---- mass flow along the chain -------------------------------------------
 
   const feedstockPoints = feedstockRows.map((row) => ({
-    ms: toMs(row.deliveryDate),
+    day: row.deliveryDate == null ? null : formatUtcDate(row.deliveryDate),
     row,
   }));
   // Feedstocks may predate the delivery-date backfill; undated rows only
@@ -480,7 +444,7 @@ export async function getDashboardOverview(
   const deliveredKg = sum(
     feedstockPoints
       .filter((p) =>
-        p.ms == null ? bounds.startMs == null : inCurrentPeriod(p.ms, bounds),
+        p.day == null ? range === "all" : inCurrentDayPeriod(p.day),
       )
       .map((p) => p.row.massDryKg),
   );

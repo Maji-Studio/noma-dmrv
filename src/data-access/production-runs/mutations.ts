@@ -34,7 +34,7 @@ import {
 } from "@/lib/production-runs/lifecycle";
 import { and, eq, isNull } from "drizzle-orm";
 import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
-import { assertRowVersion, nextVersion } from "../row-version";
+import { assertRowVersion, nextVersion, staleRowVersion } from "../row-version";
 import {
   CODE_CONFLICT_MESSAGES,
   withUniqueCodeGuard,
@@ -533,8 +533,10 @@ export async function updateProductionRunInTransaction(
       productionRuns.code,
       CODE_CONFLICT_MESSAGES.productionRun,
       async () => {
-    if (data.facilityId !== undefined) {
-      await lockActiveFacilityReference(ctx, tx, data.facilityId);
+    // First row locks: freeze both calendars before stock, run or lineage locks.
+    // Facility UPDATE holders take the facility before any of those children.
+    for (const facilityId of [...new Set([existing.facilityId, targetFacilityId])].sort()) {
+      await lockActiveFacilityReference(ctx, tx, facilityId);
     }
 
     if (effectiveReactorId && (data.reactorId !== undefined || data.facilityId !== undefined)) {
@@ -570,6 +572,9 @@ export async function updateProductionRunInTransaction(
       expectedVersion: data.expectedVersion,
       actualVersion: locked.version,
     });
+    if (locked.facilityId !== existing.facilityId) {
+      throw staleRowVersion(PRODUCTION_RUN_CONFLICT_ENTITY, productionRunId);
+    }
     const lockedFeedstockStorageLocationIds =
       await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
     assertProductionRunStockSnapshot(

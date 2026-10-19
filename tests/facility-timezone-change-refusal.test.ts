@@ -39,7 +39,7 @@ describe("facility time zone change refusal", () => {
 
   it("names Timezone and explains how to save other changes", () => {
     expect(facilityTimezoneChangeMessage("FAC-TEST", "CB-TEST", CURRENT_ZONE)).toBe(
-      "Facility FAC-TEST was not saved. Credit batch CB-TEST holds production runs dated in this facility's timezone. Set Timezone back to Africa/Dar es Salaam (UTC+3) to save your other changes.",
+      "Facility FAC-TEST was not saved. Credit batch CB-TEST holds production runs or Samples dated in this facility's timezone. Set Timezone back to Africa/Dar es Salaam (UTC+3) to save your other changes.",
     );
   });
 
@@ -83,6 +83,39 @@ describe("facility time zone change refusal", () => {
       expectedVersion: facility.version, timezone: CURRENT_ZONE, name,
     });
     expect(saved).toMatchObject({ name, timezone: CURRENT_ZONE, version: facility.version + 1 });
+  });
+
+  it.each([false, true])("refuses a batch with Samples and no runs (tier change: %s)", async (changeTier) => {
+    const label = changeTier ? "SAMPLE-TIER" : "SAMPLE";
+    const facility = await f.facility(label, CURRENT_ZONE);
+    const batch = await f.batch(facility.id, null, label);
+    await f.sample(batch.id, label);
+
+    await expect(updateFacility(ctx, facility.id, {
+      expectedVersion: facility.version, timezone: NEW_ZONE,
+      ...(changeTier ? { durabilityOption: "200_year" as const } : {}),
+    })).rejects.toMatchObject({
+      code: "conflict",
+      message: facilityTimezoneChangeMessage(facility.code, batch.code, CURRENT_ZONE),
+      conflict: { entity: "credit_batch", id: batch.id, code: batch.code },
+    });
+    expect(await savedFacility(facility.id)).toEqual(facility);
+  });
+
+  it.each(["Sample", "run"] as const)("orders both blocker causes by code (%s first)", async (firstCause) => {
+    const facility = await f.facility(`MIXED-${firstCause}`, CURRENT_ZONE);
+    const run = await f.run(facility.id, `MIXED-${firstCause}`, START);
+    const sampleBatch = await f.batch(facility.id, null, `MIXED-${firstCause}-${firstCause === "Sample" ? "A" : "Z"}`);
+    const runBatch = await f.batch(facility.id, run.id, `MIXED-${firstCause}-${firstCause === "run" ? "A" : "Z"}`);
+    await f.sample(sampleBatch.id, `MIXED-${firstCause}`);
+    const firstBatch = firstCause === "Sample" ? sampleBatch : runBatch;
+
+    await expect(updateFacility(ctx, facility.id, {
+      expectedVersion: facility.version, timezone: NEW_ZONE,
+    })).rejects.toMatchObject({
+      code: "conflict",
+      conflict: { entity: "credit_batch", id: firstBatch.id, code: firstBatch.code },
+    });
   });
 
   it.each([false, true])("allows a change without credit batch membership (has run: %s)", async (hasRun) => {

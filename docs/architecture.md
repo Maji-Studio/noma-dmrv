@@ -454,10 +454,12 @@ client retries changed-set conflicts. The runner retries deadlocks (40P01),
 serialization failures (40001) and lock timeouts (55P03), and owns after-commit
 storage draining.
 
-Explicit credit-batch membership create, update and delete discover the batch,
-current/prospective runs and certification artifacts unlocked, then lock sorted
-artifacts, sorted facilities `FOR SHARE`, sorted runs `FOR UPDATE` on create or
-membership refresh, the target production-process advisory scope, and the batch
+Explicit credit-batch membership create, update and delete discover the batch's
+facility unlocked, then lock current and target facilities `FOR SHARE` in id
+order before reading facility-local membership dates or taking other locks.
+They then discover current/prospective runs and certification artifacts, lock
+sorted artifacts, sorted runs `FOR UPDATE` on create or membership refresh,
+the target production-process advisory scope, and the batch
 `FOR UPDATE` with its version
 check (insert on create). Both artifact helpers use
 `acquireCertificationArtifactLocksSorted` and its global key ordering; create
@@ -482,6 +484,34 @@ All three membership writers use `src/lib/db/transaction-retry.ts`
 shared with the runner, for 40P01, 40001 and 55P03. Production-run writers retain
 the runner's retry and deadline handling. Exhausted attempts return `concurrent_write_retry`.
 
+Production-run creation already takes its active facility `FOR SHARE` before
+reactor `SHARE`, bin-stock advisory locks, reactor-overlap advisory lock, the
+run insert and auto-attachment. Updates take current and target active facilities
+`FOR SHARE` in id order before an optional reactor `SHARE`, sorted bin-stock
+advisory locks, run `UPDATE`, lineage artifacts, reactor-overlap advisory lock,
+the run/draw writes, then auto-attachment's process scope, batch artifacts and
+batch `UPDATE`. A changed run facility after discovery refuses the write.
+Archived facilities cannot accept run updates; facility archive also archives
+its runs. The pre-facility operator, reference and generated-code checks are
+unlocked reads. API calls may first claim an idempotency record; none of the
+facility UPDATE holders acquire those infrastructure records.
+
+Sample writers discover their batches' facilities unlocked, take sorted facility
+`SHARE`, sorted lineage artifacts, sorted batch `UPDATE`, then Sample `UPDATE`
+(on edits/deletes), and revalidate lineage before writing. A batch that moved
+facilities during discovery refuses the write instead of taking a late facility
+lock. Sample create, moves and time edits resolve dates only under this scope.
+
+These facility shares serialize membership and Sample date checks with facility
+time zone edits, which take facility `UPDATE` before checking for existing runs
+or Samples in credit batches. A zone edit that wins is visible to the writer;
+a writer that commits first makes a later zone change refuse. Facility archive,
+restore and Removal creation also take facility `UPDATE` before child locks.
+Durability edits take their advisory lock before facility `UPDATE`; mapping
+adoption takes its mapping advisory locks before facility `UPDATE` and batches.
+Membership and Sample writers never acquire those advisory locks. Run creation
+needs no extra facility lock for this rule.
+
 `src/db/schema/*` defines tables and types; `src/data-access/*` owns queries and
 permission checks; pooling defaults are centralized in `src/db/pool-config.ts`
 (`resolveAppPoolConfig`) and applied by `src/db/index.ts`. See
@@ -496,8 +526,9 @@ locked after a row. Sample ancestors are their credit batch or legacy run;
 applications use their delivery; internal children use their archive-bearing
 parent. Archive's `NO KEY UPDATE` conflicts with `FOR SHARE`. Parent retirement
 uses owner, mirror, document order; Source mirroring never locks an owner.
-Sample and delivery writers use artifacts before rows. Existing feedstock, order and production-run inversions remain subject to the runner's bounded
-retry. Application writers now use the runner and the artifacts-first sequence
+Sample writers take facility shares before artifacts and child rows; delivery
+writers use artifacts before rows. Existing feedstock, order and production-run
+inversions remain subject to the runner's bounded retry. Application writers now use the runner and the artifacts-first sequence
 above, closing their document-write inversion. Membership refresh also takes
 artifacts before runs. The remaining production-run and membership cycles are
 tracked in the [lock-order follow-up](./open-questions-architecture.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).

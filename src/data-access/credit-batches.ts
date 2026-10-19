@@ -590,6 +590,7 @@ export async function updateCreditBatch(
     updateData.siteManagementNotes = updateFields.siteManagementNotes || null;
 
   const committed = await retryTransaction(() => db.transaction(async (tx) => {
+    // Preparation locks current/target facilities in id order before dates or artifacts.
     const attemptUpdateData = { ...updateData };
     const prepared = await prepareCreditBatchMembershipWrite(ctx, tx, id, updateFields, shouldRefreshMembership);
     const { snapshot: declarationSnapshot, currentProductionRunIds } = prepared;
@@ -641,8 +642,8 @@ export async function updateCreditBatch(
       ? formatUtcDate(updateFields.endDate)
       : existingBatch.endDate;
 
-    // Preparation reads the provider before facility locks to discover runs.
-    // Re-resolve after those locks: a concurrent mapping change may have won.
+    // Preparation holds both facilities FOR SHARE before discovering runs;
+    // the provider stays stable through this write.
     const targetCertifier = await resolveCreditBatchCertifier(ctx, tx, targetFacilityId);
     assertCreditBatchProductionWindow(effectiveStartDate, effectiveEndDate, targetCertifier.provider);
 

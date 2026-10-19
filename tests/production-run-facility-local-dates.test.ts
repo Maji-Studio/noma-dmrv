@@ -39,7 +39,7 @@ describe("production run facility-local display dates", () => {
   });
   afterAll(() => f.cleanup());
 
-  it.each(["all", "week", "month"] as const)("counts measured Dar es Salaam runs before UTC midnight (%s)", async (range) => {
+  it.each(["all", "week", "month"] as const)("counts Dar es Salaam runs and delivered feedstock before UTC midnight (%s)", async (range) => {
     const facility = await f.facility(`KPI-${range}`, "Africa/Dar_es_Salaam");
     const run = await f.run(facility.id, `KPI-${range}`, "2025-09-30T22:00:00.000Z");
     await db.update(productionRuns).set({
@@ -47,6 +47,8 @@ describe("production run facility-local display dates", () => {
       feedstockMassDryKg: FEEDSTOCK_DRY_KG,
       biocharDryMassKg: BIOCHAR_DRY_KG,
     }).where(and(eq(productionRuns.id, run.id), eq(productionRuns.organizationId, ctx.organizationId)));
+
+    await f.feedstock(facility.id, `DELIVERED-${range}`, "2025-10-01", FEEDSTOCK_DRY_KG);
 
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(DASHBOARD_NOW));
@@ -57,6 +59,7 @@ describe("production run facility-local display dates", () => {
         expect.objectContaining({ key: "biocharProduced", value: kgToTonnes(BIOCHAR_DRY_KG) }),
       ]));
       expect(dashboard.massFlow).toEqual(expect.arrayContaining([
+        { key: "delivered", tonnes: kgToTonnes(FEEDSTOCK_DRY_KG) },
         { key: "intoRuns", tonnes: kgToTonnes(FEEDSTOCK_DRY_KG) },
         { key: "produced", tonnes: kgToTonnes(BIOCHAR_DRY_KG) },
       ]));
