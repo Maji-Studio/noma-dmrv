@@ -13,7 +13,6 @@ vi.mock("@/config/env", () => ({
   env: {
     NEXT_PUBLIC_APP_URL: "http://localhost:3100",
     BETTER_AUTH_SECRET: "unit-test-secret-with-at-least-32-characters",
-    ALLOW_SELF_SIGNUP: false,
   },
 }));
 
