@@ -55,8 +55,9 @@ amended 2026-07-04 (feedstock declared)
 > citations below do not change this ADR's production-batch/process grain.
 
 > **Amendment (2026-10-19, issue #1099):** a completed production run joins the
-> credit batch whose inclusive window contains its end date, with organization,
-> facility and feedstock still matching. A month's set of completed runs is known
+> credit batch whose inclusive window contains the day it ended on the facility's
+> calendar, in its time zone, with organization, facility and feedstock still matching.
+> A month's set of completed runs is known
 > once the month ends; cross-month runs join the later month. A run from 30 September
 > to 2 October therefore joins October. Lists and dashboards still date runs by
 > their start. The registered Production Batch still spans the earliest member

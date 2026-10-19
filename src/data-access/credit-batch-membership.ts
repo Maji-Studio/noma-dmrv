@@ -102,7 +102,7 @@ export async function lockCreditBatchProductionRuns(
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
       status: productionRuns.status,
-      membershipDate: productionRunMembershipDateExpr(),
+      membershipDate: productionRunMembershipDateExpr(ctx.organizationId),
     })
     .from(productionRuns)
     .where(and(
@@ -368,7 +368,7 @@ export async function validateProductionRunIds(
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
       status: productionRuns.status,
-      membershipDate: productionRunMembershipDateExpr(),
+      membershipDate: productionRunMembershipDateExpr(ctx.organizationId),
     })
     .from(productionRuns)
     .where(and(
@@ -638,8 +638,8 @@ export async function findMatchingUnassignedProductionRunIds(
         eq(productionRuns.organizationId, ctx.organizationId),
         eq(productionRuns.facilityId, params.facilityId),
         eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS),
-        gte(productionRunMembershipDateExpr(), startStr),
-        lte(productionRunMembershipDateExpr(), endStr),
+        gte(productionRunMembershipDateExpr(ctx.organizationId), startStr),
+        lte(productionRunMembershipDateExpr(ctx.organizationId), endStr),
         isNull(productionRuns.archivedAt),
         isNull(creditBatchProductionRuns.creditBatchId),
       ),
@@ -663,9 +663,9 @@ export async function findMatchingUnassignedProductionRunIds(
 
 /**
  * Attach one completed run to the credit batch identified by its facility,
- * single feedstock type, and end date. Called inside the production-run
- * write transaction after feedstock allocation is final, so membership and
- * sample back-filling commit atomically with completion.
+ * single feedstock type, and facility-local end day. Called inside the
+ * production-run write transaction after feedstock allocation is final,
+ * so membership commits atomically with completion.
  */
 export async function attachProductionRunToMatchingCreditBatch(
   ctx: OrgContext,
@@ -679,7 +679,7 @@ export async function attachProductionRunToMatchingCreditBatch(
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
       status: productionRuns.status,
-      membershipDate: productionRunMembershipDateExpr(),
+      membershipDate: productionRunMembershipDateExpr(ctx.organizationId),
     })
     .from(productionRuns)
     .where(

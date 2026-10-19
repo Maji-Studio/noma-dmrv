@@ -29,7 +29,11 @@ import {
 import { requireOrgScope } from "./utils";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
 import { getFacilityCertifierWithExecutor } from "./credit-batch-accounting";
-import { productionRunDateExpr, productionRunMembershipDateExpr } from "./production-runs/date-expr";
+import {
+  productionRunDateExpr,
+  productionRunFacilityStartDateExpr,
+  productionRunMembershipDateExpr,
+} from "./production-runs/date-expr";
 
 const CREDIT_BATCH_PREVIEW_PRODUCTION_RUN_STATUSES = [
   "running",
@@ -95,9 +99,9 @@ export async function getCreditBatchProductionRunOptions(
       params.endDate,
       certifier,
     );
-    // COALESCE(end_time, start_time)::date, using the shared membership seam.
-    // Runs without an end time are previewed by their start date.
-    const previewDate = sql<string>`coalesce(${productionRunMembershipDateExpr()}, ${productionRunDateExpr()})`;
+    // Use facility-local days for the window, including the start-day fallback
+    // for running runs without an end time. The returned display date stays UTC.
+    const previewDate = sql<string>`coalesce(${productionRunMembershipDateExpr(ctx.organizationId)}, ${productionRunFacilityStartDateExpr(ctx.organizationId)})`;
     conditions.push(
       gte(previewDate, startStr),
       lte(previewDate, endStr),
