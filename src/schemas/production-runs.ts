@@ -392,7 +392,7 @@ export function makeProductionRunFormSchema(
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ["endTime"],
-            message: `A ${violation.status} run needs an end date and time.`,
+            message: `A ${violation.status} run needs an end time.`,
           });
           break;
         case "complete-output-bin-required":

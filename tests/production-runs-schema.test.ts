@@ -372,7 +372,7 @@ describe("makeProductionRunFormSchema DST gap and fold", () => {
     ]);
     // Exactly one message, on the field the operator typed into: an unresolved
     // start must not also fire "End must be after start" or the terminal-run
-    // "needs an end date and time" check.
+    // "needs an end time" check.
     expect(messagesFor(result, "endTime")).toEqual([]);
   });
 
