@@ -31,7 +31,9 @@ it("asks first-time for reads only, with no delete column", () => {
   mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["feedstocks:read", "feedstocks:write"] }));
   render(<ConsentForm />);
   expect(screen.getByRole("heading", { name: "Allow Claude to use noma?" })).toBeTruthy();
-  expect(screen.getByText("Claude (claude.ai) wants to act for you in E2E Mafinga Biochar.")).toBeTruthy();
+  expect(screen.getByText("It wants to act for you in E2E Mafinga Biochar.")).toBeTruthy();
+  // The card names the host the app identifies as and the one it returns to.
+  expect(screen.getAllByText("claude.ai")).toHaveLength(2);
   expect(box("Feedstocks Read").checked).toBe(true);
   expect(box("Feedstocks Write").checked).toBe(false);
   expect(screen.queryByRole("columnheader", { name: "Delete" })).toBeNull();
@@ -80,7 +82,9 @@ it("names an unnamed app in lowercase inside the title", () => {
   mocks.view.mockReturnValue(view({ clientName: null }));
   render(<ConsentForm />);
   expect(screen.getByRole("heading", { name: "Allow this app to use noma?" })).toBeTruthy();
-  expect(screen.getByText(/^This app \(claude\.ai\) wants to act for you/)).toBeTruthy();
+  expect(screen.getByText("This app")).toBeTruthy();
+  // The card names the host the app identifies as and the one it returns to.
+  expect(screen.getAllByText("claude.ai")).toHaveLength(2);
 });
 
 it("reads the signed query on the client only", () => {

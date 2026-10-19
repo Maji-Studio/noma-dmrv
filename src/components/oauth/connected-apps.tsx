@@ -42,7 +42,7 @@ function ConnectedAppsManager({ organizationId, organizationName, userId, canMan
   return (
     <div className="flex flex-col gap-32">
       <section className="flex flex-col gap-16" aria-labelledby="connected-apps-own">
-        <h3 id="connected-apps-own" className="title-heading-3">Your connections</h3>
+        <h2 id="connected-apps-own" className="title-heading-3">Your connections</h2>
         {own.length === 0 ? (
           <EmptyState icon={<PlugsConnectedIcon size={EMPTY_ICON_SIZE} />} padding="sm" title="No connected apps"
             description="Apps you connect to noma, such as Claude, appear here." />
@@ -50,7 +50,7 @@ function ConnectedAppsManager({ organizationId, organizationName, userId, canMan
       </section>
       {canManageAll && (
         <section className="flex flex-col gap-16" aria-labelledby="connected-apps-all">
-          <h3 id="connected-apps-all" className="title-heading-3">All members</h3>
+          <h2 id="connected-apps-all" className="title-heading-3">All members</h2>
           {query.data.length === 0 ? (
             <EmptyState icon={<PlugsConnectedIcon size={EMPTY_ICON_SIZE} />} padding="sm" title="No connected apps"
               description="Apps that members connect to this organization appear here." />

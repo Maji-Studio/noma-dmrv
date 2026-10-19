@@ -42,7 +42,7 @@ export function OrganizationPicker() {
       <OAuthAppIdentity name={clientName} host={clientHost} />
       {memberships.length === 0 ? (
         <EmptyState icon={<BuildingsIcon size={EMPTY_ICON_SIZE} />} padding="sm"
-          title="You are not a member of an organization yet. Ask an Owner to invite you." />
+          title="No organizations yet" description="Ask an Owner to invite you." />
       ) : (
         <form className="flex flex-col gap-24" onSubmit={event => { event.preventDefault(); if (selected) void submit(selected); }}>
           <ChoiceCardGroup

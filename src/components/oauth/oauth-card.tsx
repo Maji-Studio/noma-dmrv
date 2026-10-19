@@ -7,11 +7,12 @@ import { oauthAppNameStart } from "./oauth-labels";
 export function OAuthCard({ title, intro, children }: { title: string; intro?: ReactNode; children: ReactNode }) {
   return (
     <div className="w-full max-w-[400px] mx-auto px-16 sm:px-0">
-      <div className="mb-24 text-center flex flex-col gap-12">
-        <h1 className="title-heading-3">{title}</h1>
-        {intro && <p className="body-medium text-[var(--color-text-secondary)]">{intro}</p>}
+      {/* Balanced lines: a long app or organization name must not leave one word alone on the last line. */}
+      <div className="mb-24 text-center flex flex-col gap-8">
+        <h1 className="title-heading-3 text-balance">{title}</h1>
+        {intro && <p className="body-medium text-balance text-[var(--color-text-secondary)]">{intro}</p>}
       </div>
-      <div className="bg-[var(--color-background-white)] rounded-none border border-[var(--color-border-primary)] p-32 shadow-sm flex flex-col gap-24">
+      <div className="bg-[var(--color-background-white)] rounded-none border border-[var(--color-border-primary)] p-24 sm:p-32 shadow-sm flex flex-col gap-24">
         {children}
       </div>
     </div>

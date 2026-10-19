@@ -108,3 +108,18 @@ it("never says null for an app without a name", () => {
   expect(within(dialog).getByText("Disconnect this app? It stops working in E2E Mafinga Biochar at once. Records it saved stay.")).toBeTruthy();
   expect(document.body.textContent).not.toContain("null");
 });
+
+it("shows a long app host and name in full, never truncated", () => {
+  const host = "claude.ai.attacker.example.with-a-very-long-subdomain-chain.test";
+  const name = "Claude for a very long organization workspace name that wraps";
+  list([grant({ clientId: `https://${host}/oauth/metadata`, name })]);
+  render(<ConnectedApps {...props} />);
+  const own = screen.getByRole("list", { name: "Your connections" });
+  // The host is the one thing a person can verify, so all of it shows.
+  for (const text of [host, name]) {
+    const node = within(own).getByText(text);
+    expect(node.textContent).toBe(text);
+    expect(node.className).not.toMatch(/\btruncate\b/);
+    expect(node.className).toMatch(/\bwhitespace-normal\b/);
+  }
+});
