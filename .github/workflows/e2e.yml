@@ -44,7 +44,6 @@ jobs:
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
       NOMA_HERMETIC_CI: "true"
       NOMA_TURBOPACK_BUILD_CACHE: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
-      ALLOW_SELF_SIGNUP: "false"
       DISABLE_RATE_LIMIT: "true"
       # Playwright builds + serves a production bundle on CI
       # (playwright.config.ts), but the suite is hermetic and localhost-only.
@@ -137,7 +136,6 @@ jobs:
           DATABASE_URL=${DATABASE_URL}
           NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
           BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
-          ALLOW_SELF_SIGNUP=${ALLOW_SELF_SIGNUP}
           DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
           STORAGE_PROVIDER=${STORAGE_PROVIDER}
           STORAGE_LOCAL_FS_ROOT=${STORAGE_LOCAL_FS_ROOT}

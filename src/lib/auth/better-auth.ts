@@ -189,7 +189,7 @@ export const auth = betterAuth({
   },
   emailAndPassword: {
     enabled: true,
-    disableSignUp: !env.ALLOW_SELF_SIGNUP,
+    disableSignUp: true,
     requireEmailVerification: true,
     minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
     maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,

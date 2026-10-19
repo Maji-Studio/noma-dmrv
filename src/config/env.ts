@@ -65,11 +65,6 @@ const envSchema = z.object({
   API_FUZZ_DISABLE_RATE_LIMIT: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
 
   // Optional
-  ALLOW_SELF_SIGNUP: z
-    .string()
-    .optional()
-    .default("false")
-    .transform((val) => val === "true"),
   ADMIN_EMAIL: z.string().email().optional(),
   DB_POOL_MAX: z.preprocess(
     emptyToUndefined,
