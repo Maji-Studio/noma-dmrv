@@ -128,3 +128,31 @@ describe("previewSampleRatios", () => {
     expect(previewSampleRatios(NO_INPUTS).oToCOrgSource).toBeNull();
   });
 });
+
+
+describe("unusable ratio previews", () => {
+  it.each([-1, NaN, Infinity, -Infinity])("hides invalid element percentages: %s", value => {
+    expect(previewSampleRatios({ ...NO_INPUTS, totalHydrogenPercent: value,
+      totalOxygenPercent: value, organicCarbonPercent: 70 }))
+      .toMatchObject({ hToCOrgRatio: null, oToCOrgRatio: null });
+  });
+
+  it.each([-90, 0, NaN, Infinity, -Infinity, Number.MIN_VALUE])("hides ratios with unusable carbon: %s", value => {
+    expect(previewSampleRatios({ ...NO_INPUTS, totalHydrogenPercent: 2,
+      totalOxygenPercent: 10, organicCarbonPercent: value }))
+      .toMatchObject({ hToCOrgRatio: null, oToCOrgRatio: null });
+  });
+
+  it.each([-0.1, NaN, Infinity, -Infinity])("hides an invalid lab O/C_org: %s", value => {
+    expect(previewSampleRatios({ ...NO_INPUTS, oToCOrgRatio: value }))
+      .toMatchObject({ oToCOrgRatio: null, oToCOrgSource: null });
+  });
+
+  it("keeps zero lab and calculated ratios usable", () => {
+    expect(previewSampleRatios({ ...NO_INPUTS, oToCOrgRatio: 0 }))
+      .toMatchObject({ oToCOrgRatio: 0, oToCOrgSource: "lab" });
+    expect(previewSampleRatios({ ...NO_INPUTS, totalHydrogenPercent: 0,
+      totalOxygenPercent: 0, organicCarbonPercent: 70 }))
+      .toMatchObject({ hToCOrgRatio: 0, oToCOrgRatio: 0 });
+  });
+});

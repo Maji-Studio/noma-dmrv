@@ -47,9 +47,6 @@ import {
   PURE_PRODUCT_BIN_FILTER,
   type BiocharProductFormData,
 } from "@/schemas/biochar-products";
-import {
-  MASS_KG_INPUT_STEP,
-} from "@/schemas/helpers";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CubeIcon, FactoryIcon, ListChecksIcon } from "@phosphor-icons/react/dist/ssr";
@@ -62,6 +59,10 @@ import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
 import { Notice } from "@/components/ui/notice";
 import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
 import { recordInUseFreeFields } from "@/lib/record-lock";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(biocharProductEntrySchema);
 
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
@@ -579,8 +580,7 @@ export function BiocharProductForm({
             <FormInput
               id="waterAddedKg"
               type="number"
-              step={MASS_KG_INPUT_STEP}
-              min="0"
+              {...numberBounds("waterAddedKg")}
               placeholder="e.g., 50"
               disabled={isSubmitting || isEditMode}
               error={!!errors.waterAddedKg}
@@ -595,8 +595,7 @@ export function BiocharProductForm({
             <FormInput
               id="densityKgM3"
               type="number"
-              step="any"
-              min="0"
+              {...numberBounds("densityKgM3")}
               placeholder="e.g., 350"
               disabled={isSubmitting || locked("densityKgM3")}
               error={!!errors.densityKgM3}
