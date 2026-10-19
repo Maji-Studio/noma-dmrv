@@ -83,6 +83,13 @@ describe("overview surfaces show only Sent", () => {
       unmount();
     }
   });
+
+  it("drops the In use badge where In use locks nothing, keeping Sent", () => {
+    const inUse = recordLockSheetProps({ lock: view("inUse", [RUN]), status: "ready", inUseLocksNothing: true });
+    expect(inUse.titleBadge).toBeUndefined();
+    render(<>{recordLockSheetProps({ lock: view("sent", [REMOVAL]), status: "ready", inUseLocksNothing: true }).titleBadge}</>);
+    expect(screen.getByText("Sent")).toBeTruthy();
+  });
 });
 
 describe("RecordLockNotice", () => {
