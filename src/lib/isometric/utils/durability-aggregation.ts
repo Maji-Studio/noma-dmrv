@@ -32,7 +32,7 @@
 
 import type { Sample } from "@/db/schema";
 import { pluralize } from "@/lib/copy-utils";
-import { isUsableNumber } from "@/lib/calculations/biochar-eligibility";
+import { isUsableNumber, isUsableRatio } from "@/lib/calculations/biochar-eligibility";
 import {
   SOIL_TEMPERATURE_FLOOR_C,
   SOIL_TEMPERATURE_SUBDIVIDE_SPREAD_C,
@@ -42,7 +42,7 @@ import { clampFactor } from "./aggregation";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-// `isUsableNumber` is the eligibility module's predicate, so the H/C_org
+// `isUsableRatio` is the eligibility module's predicate, so the H/C_org
 // population submitted here is exactly the one the durability gates judge.
 
 /** A replicate mean plus its sample (n−1) standard deviation. */
@@ -136,7 +136,7 @@ export function buildPerBatchDurabilityData(
 
     const hValues = batch.samples
       .map((s) => s.hToCOrgRatio)
-      .filter(isUsableNumber);
+      .filter(isUsableRatio);
     const totalValues = batch.samples
       .map((s) => s.totalCarbonPercent)
       .filter(isUsableNumber);

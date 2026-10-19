@@ -3,7 +3,7 @@
  * server share this module so the saved ratios can never disagree.
  *
  * - H/C_org is always calculated from hydrogen and organic carbon, or null
- *   when either is missing or organic carbon is zero. A lab H/C_org is never
+ *   when inputs are unusable or organic carbon is not positive. A lab H/C_org is never
  *   taken, and a cleared input clears the ratio.
  * - O/C_org is calculated whenever oxygen is present. A lab O/C_org is kept
  *   only when the sample has no oxygen figure.
@@ -13,6 +13,7 @@
  * Pure and client-safe: no server-only imports.
  */
 
+import { isUsableRatio } from "./biochar-eligibility";
 import { SafeError } from "@/lib/errors";
 import { RATIO_INPUT_MAX } from "@/schemas/helpers";
 
@@ -77,16 +78,16 @@ export class SampleRatioCapError extends SafeError {
 }
 
 function atomicRatio(elementPercent: number | null | undefined, molarMass: number, organicCarbonPercent: number | null | undefined): number | null {
-  if (elementPercent == null || organicCarbonPercent == null || organicCarbonPercent === 0) return null;
+  if (!isUsableRatio(elementPercent) || !isUsableRatio(organicCarbonPercent) || organicCarbonPercent === 0) return null;
   return (elementPercent / molarMass) / (organicCarbonPercent / SAMPLE_RATIO_MOLAR_MASS.carbon);
 }
 
-/** Atomic H/C_org, `(H% / 1.008) / (Corg% / 12.011)`, unrounded; null without both inputs or with zero organic carbon. */
+/** Atomic H/C_org, `(H% / 1.008) / (Corg% / 12.011)`, unrounded; null for unusable inputs or non-positive organic carbon. */
 export function calculateHToCOrgRatio(hydrogenPercent: number | null | undefined, organicCarbonPercent: number | null | undefined): number | null {
   return atomicRatio(hydrogenPercent, SAMPLE_RATIO_MOLAR_MASS.hydrogen, organicCarbonPercent);
 }
 
-/** Atomic O/C_org, `(O% / 15.999) / (Corg% / 12.011)`, unrounded; null without both inputs or with zero organic carbon. */
+/** Atomic O/C_org, `(O% / 15.999) / (Corg% / 12.011)`, unrounded; null for unusable inputs or non-positive organic carbon. */
 export function calculateOToCOrgRatio(oxygenPercent: number | null | undefined, organicCarbonPercent: number | null | undefined): number | null {
   return atomicRatio(oxygenPercent, SAMPLE_RATIO_MOLAR_MASS.oxygen, organicCarbonPercent);
 }
@@ -105,14 +106,24 @@ function rounded(value: number | null): number | null {
   return value === null ? null : roundSampleRatio(value);
 }
 
-/** The ratios a sample will be saved with, without refusing any. For live form display. */
-export function previewSampleRatios(input: SampleRatioInputs): SampleRatioPreview {
+/** Rounded ratios before preview filtering or persistence cap checks. */
+function roundedSampleRatios(input: SampleRatioInputs): SampleRatioPreview {
   const hToCOrgRatio = rounded(calculateHToCOrgRatio(input.totalHydrogenPercent, input.organicCarbonPercent));
   if (input.totalOxygenPercent != null) {
     return { hToCOrgRatio, oToCOrgRatio: rounded(calculateOToCOrgRatio(input.totalOxygenPercent, input.organicCarbonPercent)), oToCOrgSource: "calculated" };
   }
-  const lab = input.oToCOrgRatio ?? null;
+  const lab = isUsableRatio(input.oToCOrgRatio) ? input.oToCOrgRatio : null;
   return { hToCOrgRatio, oToCOrgRatio: lab, oToCOrgSource: lab === null ? null : "lab" };
+}
+
+/** Live form ratios; negative and non-finite results remain unavailable. */
+export function previewSampleRatios(input: SampleRatioInputs): SampleRatioPreview {
+  const ratios = roundedSampleRatios(input);
+  return {
+    ...ratios,
+    hToCOrgRatio: isUsableRatio(ratios.hToCOrgRatio) ? ratios.hToCOrgRatio : null,
+    oToCOrgRatio: isUsableRatio(ratios.oToCOrgRatio) ? ratios.oToCOrgRatio : null,
+  };
 }
 
 /**
@@ -122,7 +133,7 @@ export function previewSampleRatios(input: SampleRatioInputs): SampleRatioPrevie
  * input schema already caps it.
  */
 export function deriveSampleRatios(input: SampleRatioInputs): DerivedSampleRatios {
-  const preview = previewSampleRatios(input);
+  const preview = roundedSampleRatios(input);
   const notices: SampleRatioNotice[] = [];
   const calculated: [SampleRatioField, number | null][] = [
     ["hToCOrgRatio", preview.hToCOrgRatio],

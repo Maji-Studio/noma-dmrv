@@ -386,3 +386,23 @@ describe("buildSoilTemperatureGate (200-year-scoped blocker + advisory)", () => 
     expect(gate.warnings).toEqual([]);
   });
 });
+
+
+describe("unusable H/C_org aggregation", () => {
+  it("excludes negative ratios but retains zero and non-ratio chemistry", () => {
+    const [result] = buildPerBatchDurabilityData([batch("batch", "CB-1", [], [
+      sample({ hToCOrgRatio: -0.6, totalCarbonPercent: 60 }),
+      sample({ hToCOrgRatio: 0, totalCarbonPercent: 80 }),
+      sample({ hToCOrgRatio: 0.6, totalCarbonPercent: 100 }),
+    ])]);
+    expect(result).toMatchObject({ sampled: true, replicateCount: 2,
+      hToCorgRatio: { mean: 0.3 }, totalCarbonPercent: { mean: 80 } });
+  });
+
+  it("treats a batch with only negative ratios as unsampled", () => {
+    const [result] = buildPerBatchDurabilityData([batch("batch", "CB-1", [], [
+      sample({ hToCOrgRatio: -0.3 }),
+    ])]);
+    expect(result).toMatchObject({ sampled: false, replicateCount: 0, hToCorgRatio: null });
+  });
+});

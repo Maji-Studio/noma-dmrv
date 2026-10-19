@@ -2,7 +2,7 @@ import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
   O_TO_C_ORG_ELIGIBILITY_MAX,
-  isUsableNumber,
+  isUsableRatio,
 } from "@/lib/calculations/biochar-eligibility";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import type { BatchHealth } from "@/lib/certification/batch-health";
@@ -36,11 +36,11 @@ export interface CreditBatchOpenItemsInput {
 
 function outlierTitle(replicate: DurabilitySummaryReplicate): string {
   const limits: string[] = [];
-  if (isUsableNumber(replicate.hToCorg) && replicate.hToCorg >= H_TO_C_ORG_ELIGIBILITY_MAX) {
+  if (isUsableRatio(replicate.hToCorg) && replicate.hToCorg >= H_TO_C_ORG_ELIGIBILITY_MAX) {
     const comparison = replicate.hToCorg === H_TO_C_ORG_ELIGIBILITY_MAX ? "at" : "above";
     limits.push(`H/Corg ${comparison} the ${H_TO_C_ORG_ELIGIBILITY_MAX} limit`);
   }
-  if (isUsableNumber(replicate.oToCorg) && replicate.oToCorg >= O_TO_C_ORG_ELIGIBILITY_MAX) {
+  if (isUsableRatio(replicate.oToCorg) && replicate.oToCorg >= O_TO_C_ORG_ELIGIBILITY_MAX) {
     const comparison = replicate.oToCorg === O_TO_C_ORG_ELIGIBILITY_MAX ? "at" : "above";
     limits.push(`O/Corg ${comparison} the ${O_TO_C_ORG_ELIGIBILITY_MAX} limit`);
   }

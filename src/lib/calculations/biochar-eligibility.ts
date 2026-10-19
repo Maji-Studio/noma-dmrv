@@ -42,18 +42,27 @@ export const MINIMUM_REPLICATES_PER_BATCH = 3;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+/** A number is usable when present and finite. */
+export function isUsableNumber(
+  value: number | null | undefined,
+): value is number {
+  return value != null && Number.isFinite(value);
+}
+
 /**
- * A chemistry value is usable only when present and finite. Exported so the
+ * A chemistry ratio is usable only when present, finite and not negative
+ * (zero counts). Table 2 ratios divide measured percentages by atomic weights,
+ * so a negative one is a typo and counts as missing. Exported so the
  * durability gates count the same complete-chemistry replicate set this module
  * uses for `usableReplicateCount`, and so the durability aggregation submits the
  * same H/C_org population the gates judge. Section 8.3.1 requires at least
  * three representative Samples from the credit batch; incomplete chemistry
  * cannot satisfy that minimum.
  */
-export function isUsableNumber(
+export function isUsableRatio(
   value: number | null | undefined,
 ): value is number {
-  return value != null && Number.isFinite(value);
+  return isUsableNumber(value) && value >= 0;
 }
 
 function meanOf(values: number[]): number | null {
@@ -90,7 +99,7 @@ export interface RunEligibilityResult {
    */
   outlierReplicateIndexes: number[];
   /**
-   * Replicates carrying BOTH a usable H/C_org and O/C_org — the set the
+   * Replicates carrying BOTH a finite, non-negative H/C_org and O/C_org — the set the
    * eligibility verdict is judged on (D8). The §4 replicate-sufficiency gate
    * counts these (complete-chemistry replicates), not raw rows, so a sampled run
    * with incomplete chemistry can never read eligible on a single paired sample.
@@ -110,7 +119,8 @@ export interface RunEligibilityResult {
 /**
  * Evaluate a production run's eligibility from its replicate samples. The
  * thresholds are applied to the replicate MEAN (D8); individually out-of-spec
- * replicates are returned in `outlierReplicateIndexes` as advisories.
+ * replicates are returned in `outlierReplicateIndexes` as advisories. Negative
+ * and non-finite ratios are treated as missing in means, pairs and outliers.
  */
 export function evaluateRunEligibility(
   replicates: ReplicateRatios[],
@@ -119,10 +129,10 @@ export function evaluateRunEligibility(
 
   const hValues = replicates
     .map((r) => r.hToCOrgRatio)
-    .filter(isUsableNumber);
+    .filter(isUsableRatio);
   const oValues = replicates
     .map((r) => r.oToCOrgRatio)
-    .filter(isUsableNumber);
+    .filter(isUsableRatio);
 
   const meanHToCOrgRatio = meanOf(hValues);
   const meanOToCOrgRatio = meanOf(oValues);
@@ -154,7 +164,7 @@ export function evaluateRunEligibility(
   // uses the paired set.
   const pairedReplicates = replicates.filter(
     (r): r is { hToCOrgRatio: number; oToCOrgRatio: number } =>
-      isUsableNumber(r.hToCOrgRatio) && isUsableNumber(r.oToCOrgRatio),
+      isUsableRatio(r.hToCOrgRatio) && isUsableRatio(r.oToCOrgRatio),
   );
   const usableReplicateCount = pairedReplicates.length;
   const pairedMeanHToCOrgRatio = meanOf(
@@ -165,7 +175,7 @@ export function evaluateRunEligibility(
   );
   const unpairedHToCReplicateIndexes: number[] = [];
   replicates.forEach((r, index) => {
-    if (isUsableNumber(r.hToCOrgRatio) && !isUsableNumber(r.oToCOrgRatio)) {
+    if (isUsableRatio(r.hToCOrgRatio) && !isUsableRatio(r.oToCOrgRatio)) {
       unpairedHToCReplicateIndexes.push(index);
     }
   });
@@ -180,10 +190,10 @@ export function evaluateRunEligibility(
   const outlierReplicateIndexes: number[] = [];
   replicates.forEach((r, index) => {
     const hOut =
-      isUsableNumber(r.hToCOrgRatio) &&
+      isUsableRatio(r.hToCOrgRatio) &&
       r.hToCOrgRatio >= H_TO_C_ORG_ELIGIBILITY_MAX;
     const oOut =
-      isUsableNumber(r.oToCOrgRatio) &&
+      isUsableRatio(r.oToCOrgRatio) &&
       r.oToCOrgRatio >= O_TO_C_ORG_ELIGIBILITY_MAX;
     if (hOut || oOut) outlierReplicateIndexes.push(index);
   });

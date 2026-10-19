@@ -25,7 +25,7 @@
  */
 
 import versions from "../../../docs/isometric/versions.json";
-import { MINIMUM_REPLICATES_PER_BATCH } from "./biochar-eligibility";
+import { isUsableRatio, MINIMUM_REPLICATES_PER_BATCH } from "./biochar-eligibility";
 
 // ── Pinned protocol constants ────────────────────────────────────────────────
 
@@ -259,10 +259,10 @@ export function computeApplicationCo2eStored(
 
   if (!isUsableNumber(input.dryMassTonnes)) missingInputs.push("dryMassTonnes");
   if (!isUsableNumber(input.soilTemperatureC)) missingInputs.push("soilTemperatureC");
-  if (!isUsableNumber(input.hToCorgRatio)) missingInputs.push("hToCorgRatio");
+  if (!isUsableRatio(input.hToCorgRatio)) missingInputs.push("hToCorgRatio");
 
   if (missingInputs.length > 0 || carbon.value == null || !isUsableNumber(input.dryMassTonnes)
-    || !isUsableNumber(input.soilTemperatureC) || !isUsableNumber(input.hToCorgRatio)) {
+    || !isUsableNumber(input.soilTemperatureC) || !isUsableRatio(input.hToCorgRatio)) {
     return {
       co2eStoredTonnes: null,
       fDurable: null,
