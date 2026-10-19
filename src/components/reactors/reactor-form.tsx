@@ -25,6 +25,10 @@ import {
   type ReactorType,
 } from "@/schemas/reactors";
 import type { Reactor } from "@/db/schema/facilities";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(reactorFormSchema);
 
 // ============================================
 // Constants for select options
@@ -164,7 +168,7 @@ export function ReactorForm({
             <FormInput
               id="capacityTph"
               type="number"
-              step="any"
+              {...numberBounds("capacityTph")}
               placeholder="e.g., 3"
               disabled={isSubmitting}
               error={!!errors.capacityTph}

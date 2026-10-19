@@ -22,6 +22,10 @@ import {
   type ProductionSampleFormData,
 } from "@/schemas/production-samples";
 import type { ProductionSampleWithRelations } from "@/data-access/production-samples";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(productionSampleFormSchema);
 
 // ============================================
 // Component
@@ -148,7 +152,7 @@ export function ProductionSampleForm({
             <FormInput
               id="weightGrams"
               type="number"
-              step="any"
+              {...numberBounds("weightGrams")}
               placeholder="e.g. 250"
               disabled={isSubmitting}
               error={!!errors.weightGrams}
@@ -164,7 +168,7 @@ export function ProductionSampleForm({
             <FormInput
               id="volumeMl"
               type="number"
-              step="any"
+              {...numberBounds("volumeMl")}
               placeholder="e.g. 500"
               disabled={isSubmitting}
               error={!!errors.volumeMl}
@@ -180,7 +184,7 @@ export function ProductionSampleForm({
             <FormInput
               id="temperatureC"
               type="number"
-              step="any"
+              {...numberBounds("temperatureC")}
               placeholder="e.g. 550"
               disabled={isSubmitting}
               error={!!errors.temperatureC}
@@ -211,7 +215,7 @@ export function ProductionSampleForm({
             <FormInput
               id="fixedCarbonPercent"
               type="number"
-              step="any"
+              {...numberBounds("fixedCarbonPercent")}
               placeholder="e.g. 75.0"
               disabled={isSubmitting}
               error={!!errors.fixedCarbonPercent}
@@ -227,7 +231,7 @@ export function ProductionSampleForm({
             <FormInput
               id="volatileMatterPercent"
               type="number"
-              step="any"
+              {...numberBounds("volatileMatterPercent")}
               placeholder="e.g. 15.0"
               disabled={isSubmitting}
               error={!!errors.volatileMatterPercent}
@@ -243,7 +247,7 @@ export function ProductionSampleForm({
             <FormInput
               id="ashContentPercent"
               type="number"
-              step="any"
+              {...numberBounds("ashContentPercent")}
               placeholder="e.g. 4.8"
               disabled={isSubmitting}
               error={!!errors.ashContentPercent}

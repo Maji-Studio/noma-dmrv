@@ -148,6 +148,31 @@ Masses are backed by `numeric(14,3)` columns. A hand-rolled `z.number().positive
 
 Same reasoning for `PG_INTEGER_MAX` on integer columns, and `RATIO_INPUT_MAX` (9.999999) for ratio fields backed by `numeric(7,6)` whose domain exceeds `[0, 1]` (H:C org, O:C org). True 0–1 fractions keep their own `.max(1)`.
 
+### Native number constraints
+
+A number input's native `min`, `max` and `step` come from the Zod schema that
+validates it, never from hand-typed numbers. Build a lookup once at module
+level and spread it onto the input:
+
+```typescript
+const numberBounds = numberInputConstraintsFor(sampleFormSchema);
+<FormInput id="totalCarbonPercent" type="number" {...numberBounds("totalCarbonPercent")} … />
+```
+
+`numberInputConstraintsFor` (`@/lib/number-input-constraints`) unwraps
+preprocess pipes, nullables and `"" | number` unions, reads array elements
+(`"ingredients.sharePercent"`) and throws on an unknown path. `step` is the
+schema's `multipleOf`, 1 for an integer, else `"any"`; an exclusive bound
+(`.positive()`) becomes the next step, or the bound itself with `"any"`. For a
+lone field schema use `numberInputConstraints(latitudeSchema)`. A form may set
+`step` after the spread when its display precision differs (formulation
+shares). `number-input-bounds-coverage.test.ts` fails on a number input with no
+bounds spread and no `min`.
+
+The native attributes give the spinner its range and expose min and max to
+assistive tech. They never block a save: `FormActions`' submit button carries
+`formNoValidate`, so the schema's messages are the only ones an operator sees.
+
 ### GPS coordinates
 
 Facilities, supplier locations and customer locations require a GPS pair to
@@ -327,6 +352,7 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
 - When the actions render **inside an owning parent form**, pass `submitType="button"` + `onSubmitClick` — nesting `<form>` elements is invalid HTML.
 - `formId` is the escape hatch when extension content must render between the fields and the CTA: the CTA lives outside the `<form>` and points back at it by id.
 - `submitDisabled` gates on an unmet precondition (e.g. an unchecked acknowledgement).
+- The submit button carries `formNoValidate` (see [Native number constraints](#native-number-constraints)); a nested `submitType="button"` does not need it.
 
 ### FormSpine
 

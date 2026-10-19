@@ -27,6 +27,10 @@ import {
 } from "@/schemas/certification";
 import { useSaveFacilityEmissionConfig } from "@/hooks/use-certification";
 import type { CertifierProjectRow } from "@/data-access/certification";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(facilityEmissionConfigSchema);
 
 interface EmissionEstimatesFormProps {
   facilityId: string;
@@ -149,7 +153,7 @@ export function EmissionEstimatesForm({
           <FormInput
             id="defaultSoilTemperatureC"
             type="number"
-            step="any"
+            {...numberBounds("defaultSoilTemperatureC")}
             readOnly={isSubmitting}
             error={!!errors.defaultSoilTemperatureC}
             {...register("defaultSoilTemperatureC")}

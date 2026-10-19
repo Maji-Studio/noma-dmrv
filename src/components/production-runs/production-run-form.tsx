@@ -35,6 +35,7 @@ import { useEntityById } from "@/hooks/use-entities";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import {
   formatProductionRunStatus,
+  productionRunFormSchema,
   type ProductionRunFormData,
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
@@ -57,6 +58,10 @@ import { ProductionRunFeedstockDrawRow } from "./production-run-feedstock-draw-r
 import { ProductionRunMixBinNotice } from "./production-run-mix-bin-notice";
 import { summarizeFeedstockWetInput } from "./production-run-feedstock-input";
 import { isProductionRunOutputLocked, type RecordLockView } from "@/lib/record-lock-view";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(productionRunFormSchema);
 
 // ============================================
 // Constants for select options
@@ -630,7 +635,7 @@ export function ProductionRunForm({
             <FormInput
               id="feedingRateKgHr"
               type="number"
-              step="any"
+              {...numberBounds("feedingRateKgHr")}
               placeholder="e.g. 420"
               disabled={isSubmitting}
               error={!!errors.feedingRateKgHr}
@@ -644,7 +649,7 @@ export function ProductionRunForm({
             <FormInput
               id="residenceTimeMinutes"
               type="number"
-              step="1"
+              {...numberBounds("residenceTimeMinutes")}
               placeholder="e.g. 30"
               disabled={isSubmitting}
               error={!!errors.residenceTimeMinutes}
@@ -762,7 +767,7 @@ export function ProductionRunForm({
             <FormInput
               id="dieselOperationLiters"
               type="number"
-              step="any"
+              {...numberBounds("dieselOperationLiters")}
               placeholder="e.g. 50"
               disabled={isSubmitting}
               error={!!errors.dieselOperationLiters}
@@ -783,7 +788,7 @@ export function ProductionRunForm({
             <FormInput
               id="dieselGensetLiters"
               type="number"
-              step="any"
+              {...numberBounds("dieselGensetLiters")}
               placeholder="e.g. 25"
               disabled={isSubmitting}
               error={!!errors.dieselGensetLiters}
@@ -804,7 +809,7 @@ export function ProductionRunForm({
             <FormInput
               id="preprocessingFuelLiters"
               type="number"
-              step="any"
+              {...numberBounds("preprocessingFuelLiters")}
               placeholder="e.g. 10"
               disabled={isSubmitting}
               error={!!errors.preprocessingFuelLiters}
@@ -825,7 +830,7 @@ export function ProductionRunForm({
             <FormInput
               id="electricityKwh"
               type="number"
-              step="any"
+              {...numberBounds("electricityKwh")}
               placeholder="e.g. 100"
               disabled={isSubmitting}
               error={!!errors.electricityKwh}

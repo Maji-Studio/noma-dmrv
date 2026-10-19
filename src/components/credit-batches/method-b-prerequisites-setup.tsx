@@ -17,6 +17,10 @@ import {
   recordMethodBPrerequisitesSchema,
   type RecordMethodBPrerequisitesInput,
 } from "@/schemas/production-process";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(recordMethodBPrerequisitesSchema);
 
 const MOISTURE_OPTIONS = MOISTURE_PATHWAYS.map((value) => ({
   value,
@@ -117,7 +121,7 @@ export function MethodBPrerequisitesSetup({
             <FormInput
               id="method-b-agreed-baseline"
               type="number"
-              min={METHOD_B_MINIMUM_METHOD_A_SAMPLES}
+              {...numberBounds("agreedBaselineSize")}
               error={!!errors.agreedBaselineSize}
               disabled={recordPrerequisites.isPending}
               {...register("agreedBaselineSize")}

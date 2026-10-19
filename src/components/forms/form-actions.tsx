@@ -158,10 +158,15 @@ export function FormActions<
         </Notice>
       )}
       <div className="flex items-center justify-start gap-16">
+        {/* formNoValidate: the schema's own messages explain a refusal, so the
+            browser's constraint bubbles (from the native min, max and step the
+            inputs carry) never block the submit. Enter submits through this
+            button too. */}
         {showSubmit && <Button
           type={submitType}
           variant={submitVariant}
           form={formId}
+          formNoValidate={submitType === "submit" ? true : undefined}
           onClick={onSubmitClick}
           disabled={isSubmitting || submitDisabled || !!block}
           aria-describedby={block ? blockedReasonId : undefined}
