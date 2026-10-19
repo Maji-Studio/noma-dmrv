@@ -133,9 +133,9 @@ export function updateAssignment(current: LineAssignment, change: Partial<LineAs
   return next;
 }
 
-/** The template's read is incomplete: no observation, or an input left unread. */
+/** The template's read is incomplete: no units or factors read, or an input left unread. */
 export function isNotFullyRead(entry: RemovalTemplateReviewEntry): boolean {
-  return entry.availability === "listed" && (!entry.observation || entry.enrichmentProblems.length > 0);
+  return entry.availability === "listed" && (!entry.enrichment || entry.enrichmentProblems.length > 0);
 }
 
 export function templateName(entry: RemovalTemplateReviewEntry): string {
@@ -144,7 +144,7 @@ export function templateName(entry: RemovalTemplateReviewEntry): string {
 
 /** Fixed factors Isometric reports as deprecated, or null when it reports none. */
 export function deprecatedFactorCount(entry: RemovalTemplateReviewEntry): number | null {
-  const flags = Object.values(entry.observation?.enrichment ?? {})
+  const flags = Object.values(entry.enrichment ?? {})
     .flatMap((inputs) => Object.values(inputs))
     .flatMap((input) => ("status" in input || input.deprecated == null ? [] : [input.deprecated]));
   return flags.length === 0 ? null : flags.filter(Boolean).length;
