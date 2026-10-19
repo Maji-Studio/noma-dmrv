@@ -42,7 +42,7 @@ const lockAt = (level: RecordLockView["level"]): RecordLockView => ({
 function renderRow(overrides: Partial<Parameters<typeof CreditBatchListRow>[0]> = {}) {
   const props = {
     creditBatch,
-    view: { state: "blocking" as const, blockingCount: 3 },
+    view: { state: "blocking" as const, blockingCount: 2, openTodoCount: 3 },
     readinessStatus: "ready" as const,
     facts,
     factsStatus: "ready" as const,
@@ -59,13 +59,15 @@ function renderRow(overrides: Partial<Parameters<typeof CreditBatchListRow>[0]> 
 describe("CreditBatchListRow", () => {
   it("shows code, feedstock, dates, the timeline state and the dry applied figure", () => {
     const { row } = renderRow();
-    for (const text of ["Chicken manure", "Open", "Missing data", "Applied (dry)", "0.32 t"]) {
+    for (const text of ["Chicken manure", "Open to-dos", "Applied (dry)", "0.32 t"]) {
       expect(within(row).getAllByText(text).length).toBeGreaterThan(0);
     }
     // A phone drops the shared "CB-" prefix; the code stays whole in the text and the link's name.
     expect(within(row).getByRole("link", { name: "Open credit batch CB-26-009" }).textContent).toBe("CB-26-009");
     expect(row.textContent).toContain("Aug 1 to Aug 31, 2026");
     expect(row.textContent).not.toContain("0.70");
+    expect(row.textContent).not.toContain("Missing data");
+    expect(within(row).getByLabelText("3 open to-dos").textContent).toBe("3");
   });
 
   it("opens the batch page from the row, and the code is a real link to it", () => {
@@ -87,7 +89,7 @@ describe("CreditBatchListRow", () => {
     renderRow({ lock: lockAt("inUse") });
     expect(document.querySelector("[data-record-lock]")).toBeNull();
     cleanup();
-    renderRow({ lock: lockAt("sent"), view: { state: "submitted", blockingCount: 0 } });
+    renderRow({ lock: lockAt("sent"), view: { state: "submitted", blockingCount: 0, openTodoCount: 0 } });
     expect(document.querySelector("[data-record-lock='sent']")?.textContent).toContain("Sent");
   });
 });

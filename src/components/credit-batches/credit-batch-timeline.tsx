@@ -16,6 +16,7 @@ import { useCreditBatchHealthSummaries } from "@/hooks/use-certification";
 import { useCreditBatchTimelineFacts } from "@/hooks/use-credit-batches";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { creditBatchStateOf, type CreditBatchStateView } from "@/lib/credit-batches/batch-state";
+import { todosLabel } from "@/lib/credit-batches/batch-page";
 import {
   groupByFeedstock,
   dayPercentOfYear,
@@ -121,12 +122,12 @@ function Bar({ batch, spot, view }: { batch: TimelineBatch; spot: BarPlacement; 
         )}
       </span>
       {/* The count sits on the corner so the code keeps the bar's width. */}
-      {view.blockingCount > 0 && (
+      {view.openTodoCount > 0 && (
         <BlockingCount
-          count={view.blockingCount}
+          count={view.openTodoCount}
           className="absolute -top-8 right-0 z-10"
           role="img"
-          aria-label={`Missing data ${view.blockingCount}`}
+          aria-label={todosLabel(view.openTodoCount)}
         />
       )}
     </span>
@@ -272,11 +273,11 @@ export function CreditBatchTimeline({
                               startDate: batch.start,
                               endDate: batch.end,
                               state: view.state,
-                              blockingCount: view.blockingCount,
+                              todoCount: view.openTodoCount,
                               facts: facts[batch.id],
                               factsStatus: factsFailed ? "failed" : factsQuery.isLoading ? "loading" : "ready",
                             }}
-                            label={`${batch.code}, ${row.feedstockName}, ${formatDateRange(batch.start, batch.end)}, ${stateLabel}${view.blockingCount > 0 ? `, Missing data ${view.blockingCount}` : ""}`}
+                            label={`${batch.code}, ${row.feedstockName}, ${formatDateRange(batch.start, batch.end)}, ${stateLabel}${view.openTodoCount > 0 ? `, ${todosLabel(view.openTodoCount)}` : ""}`}
                             className="group absolute inset-0 block outline-offset-2"
                             href={creditBatchDeepLinkHref(batch.id, batch.source.facilityId)}
                           >

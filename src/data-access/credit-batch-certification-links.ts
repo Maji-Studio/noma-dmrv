@@ -8,6 +8,7 @@ import { requireOrgScope } from "./utils";
 export interface CreditBatchCertificationLink {
   id: string;
   facilityId: string;
+  removalTemplateId: string | null;
   removalId: string | null;
   removalCode: string | null;
   productionEmissionsClaimedByRemovalId: string | null;
@@ -28,6 +29,7 @@ export async function listCreditBatchCertificationLinks(
     .selectDistinct({
       id: creditBatches.id,
       facilityId: creditBatches.facilityId,
+      removalTemplateId: creditBatches.removalTemplateId,
       removalId: creditBatchApplications.removalId,
       removalCode: certifierRemovals.code,
       productionEmissionsClaimedByRemovalId: creditBatches.productionEmissionsClaimedByRemovalId,
@@ -65,6 +67,7 @@ export async function listCreditBatchCertificationLinks(
   return rows.map((row) => ({
     id: row.id,
     facilityId: row.facilityId,
+    removalTemplateId: row.removalTemplateId,
     removalId: row.removalId,
     removalCode: row.removalCode,
     productionEmissionsClaimedByRemovalId: row.productionEmissionsClaimedByRemovalId,

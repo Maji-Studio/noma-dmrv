@@ -26,6 +26,7 @@ import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
 import { cn } from "@/lib/utils";
+import { OPEN_TODOS_LABEL, todosLabel } from "@/lib/credit-batches/batch-page";
 import { BlockingCount, MUTED, STATE_TONE, StateMark } from "./credit-batch-timeline-parts";
 
 const STATE_MARK_PX = 10;
@@ -101,20 +102,13 @@ function BatchState({
       {view.state ? (
         <span className="inline-flex items-center gap-6 body-small font-medium">
           <StateMark state={view.state} size={STATE_MARK_PX} />
-          {STATE_TONE[view.state].title}
+          {view.openTodoCount > 0 ? OPEN_TODOS_LABEL : STATE_TONE[view.state].title}
+          {view.openTodoCount > 0 && <BlockingCount count={view.openTodoCount} role="img" aria-label={todosLabel(view.openTodoCount)} />}
         </span>
       ) : readinessStatus === "loading" ? (
         <Skeleton width={STATE_SKELETON_WIDTH_PX} height={SKELETON_HEIGHT_PX} />
       ) : (
         <span className={cn("body-small", MUTED)}>{MISSING_VALUE.notAvailable}</span>
-      )}
-      {view.blockingCount > 0 && (
-        <span className={cn("inline-flex items-center gap-6 body-small", MUTED)}>
-          {/* Named in words where a row has room; a phone shows the timeline's count bubble alone. */}
-          <span className="max-xl:sr-only">Missing data</span>
-          <BlockingCount count={view.blockingCount} aria-hidden />
-          <span className="sr-only">{view.blockingCount}</span>
-        </span>
       )}
       <LockChip lock={lock} className="hidden xl:inline-flex" />
     </span>
