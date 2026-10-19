@@ -78,11 +78,8 @@ test.describe("credit batch page", () => {
     await expect(page).toHaveURL(/[?&]tab=samples/);
     await expect(page.getByTestId("credit-batch-durability-panel")).toBeVisible();
 
-    // Fix next item follows the first blocking item: the Removal template on the Overview.
-    await page.getByRole("button", { name: "Fix next item" }).click();
-    await expect(page).toHaveURL(/[?&]focus=removal-template/);
-    await expect(page).not.toHaveURL(/[?&]tab=/);
-    await expect(page.locator('[data-focus-target="removal-template"]')).toBeVisible();
+    // While items block, the header offers no primary button: the Overview shows what is open.
+    await expect(page.getByRole("button", { name: "Fix next item" })).toHaveCount(0);
   });
 
   test("answers a not-found for another facility", async ({ adminPage: page, seededData }) => {

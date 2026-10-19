@@ -146,10 +146,9 @@ describe("creditBatchPrimaryAction", () => {
     expect(creditBatchPrimaryAction({ blocking: [], pageModel: undefined, lock: undefined })).toBeNull();
   });
 
-  it("fixes the first blocking item first", () => {
-    const first = item("first");
-    expect(creditBatchPrimaryAction({ blocking: [first, item("second")], pageModel: model({ removals: [removal()] }), lock: undefined }))
-      .toEqual({ kind: "fix", label: "Fix next item", item: first });
+  it("offers nothing while a blocking item exists", () => {
+    expect(creditBatchPrimaryAction({ blocking: [item("first"), item("second")], pageModel: model({ removals: [removal()] }), lock: undefined })).toBeNull();
+    expect(creditBatchPrimaryAction({ blocking: [item("first")], pageModel: model(), lock: undefined })).toBeNull();
   });
 
   it("opens the draft Removal before starting a new one", () => {

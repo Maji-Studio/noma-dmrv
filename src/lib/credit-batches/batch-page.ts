@@ -129,11 +129,9 @@ export function creditBatchMilestones({ blockingCount, pageModel }: CreditBatchM
 }
 
 export type CreditBatchPrimaryAction =
-  | { kind: "fix"; label: string; item: CreditBatchOpenItem }
   | { kind: "draft"; label: string; removalId: string }
   | { kind: "start"; label: string };
 
-export const FIX_NEXT_ITEM_LABEL = "Fix next item";
 export const START_REMOVAL_LABEL = "Start Removal";
 
 export interface CreditBatchPrimaryActionInput {
@@ -152,14 +150,15 @@ export function isCreditBatchSent({ pageModel, lock }: { pageModel: CreditBatchP
 }
 
 /**
- * The header's one state-driven button: Fix next item, then Open the draft
- * Removal, then Start Removal. None once a Removal or the batch is submitted
- * (Kenji), none while the inputs load, none when nothing is applied.
+ * The header's one state-driven button: Open the draft Removal, then Start
+ * Removal. None while a blocking item exists (the Overview already shows what
+ * is open), none once a Removal or the batch is submitted (Kenji), none while
+ * the inputs load, none when nothing is applied.
  */
 export function creditBatchPrimaryAction({ blocking, pageModel, lock }: CreditBatchPrimaryActionInput): CreditBatchPrimaryAction | null {
   if (!blocking || !pageModel) return null;
   if (isCreditBatchSent({ pageModel, lock })) return null;
-  if (blocking.length > 0) return { kind: "fix", label: FIX_NEXT_ITEM_LABEL, item: blocking[0] };
+  if (blocking.length > 0) return null;
   const draft = pageModel.removals.find((removal) => removal.phase === "draft");
   if (draft) return { kind: "draft", label: `Open ${draft.code}`, removalId: draft.id };
   if (pageModel.mass.notInRemovalDryKg > 0) return { kind: "start", label: START_REMOVAL_LABEL };

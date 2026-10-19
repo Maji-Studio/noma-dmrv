@@ -238,8 +238,7 @@ export function CreditBatchPage({
 
   // Removals are made in the certification workspace, behind its registry guard.
   const onPrimary = (action: CreditBatchPrimaryAction) => {
-    if (action.kind === "fix") openItem(action.item);
-    else if (action.kind === "draft") router.push(certificationRemovalsHref({ facility: batch.facilityId, removal: action.removalId }));
+    if (action.kind === "draft") router.push(certificationRemovalsHref({ facility: batch.facilityId, removal: action.removalId }));
     else router.push(certificationRemovalsHref({ facility: batch.facilityId, [CREATE_INTENT_PARAM]: "true" }));
   };
 
