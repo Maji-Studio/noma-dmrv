@@ -116,7 +116,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
         : { tab: "emissions", rowId: line.componentId };
       check.push({
         id: `emission:${line.componentId}`,
-        title: `${line.displayName} needs review`,
+        title: `${line.displayName} needs a check`,
         detail: line.blocker?.message,
         target,
       });

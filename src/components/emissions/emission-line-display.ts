@@ -203,7 +203,7 @@ export function manualEntriesText(count: number): string {
 export function valueEntries(line: EmissionLine): EmissionEntry[] {
   return line.entries.filter((entry) => entry.kind === "value" && entry.counts);
 }
-/** Entries that stopped counting after a template change (Needs review). */
+/** Entries that stopped counting after a template change (Check entry). */
 export function stoppedEntries(line: EmissionLine): EmissionEntry[] {
   return line.entries.filter((entry) => !entry.counts);
 }

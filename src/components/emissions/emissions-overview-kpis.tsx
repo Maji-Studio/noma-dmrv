@@ -11,6 +11,7 @@ import { CheckCircleIcon, FileXIcon, ListChecksIcon, WarningIcon } from "@phosph
 import { StatCard } from "@/components/ui";
 import type { FacilityEmissionsOverviewBatch } from "@/hooks/use-emissions-overview";
 import { formatCount } from "@/lib/copy-utils";
+import { EMISSION_LINE_STATE_LABELS } from "@/lib/certification/emission-lines";
 import { cn } from "@/lib/utils";
 import {
   emissionsOverviewHref,
@@ -55,7 +56,7 @@ export function EmissionsOverviewKpis({ facet, query, facilityId, isLoading }: E
     },
     {
       status: "review",
-      title: "Needs review",
+      title: EMISSION_LINE_STATE_LABELS.needsReview,
       value: sum((batch) => batch.lineCounts.needsReview),
       description: inBatches(count("review")),
       icon: <WarningIcon size={ICON_SIZE} weight="bold" />,

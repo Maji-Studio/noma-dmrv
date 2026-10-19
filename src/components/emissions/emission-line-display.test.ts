@@ -48,10 +48,10 @@ describe("units and totals", () => {
     expect(displayUnit("kWh")).toBe("kWh");
   });
 
-  it("shows Not recorded, a confirmed zero and Needs setup", () => {
+  it("shows Not recorded, a confirmed zero and Not set up", () => {
     expect(lineTotalText(makeLine())).toBe("Not recorded");
     expect(lineTotalText(makeLine({ state: "confirmedZero", unit: "km" }))).toBe("0 km");
-    expect(lineTotalText(makeLine({ state: "needsSetup" }))).toBe("Needs setup");
+    expect(lineTotalText(makeLine({ state: "needsSetup" }))).toBe("Not set up");
     expect(lineTotalText(makeLine({ state: "filled", total: { magnitude: "19880", unit: "kWh" } }))).toBe("19,880 kWh");
   });
 

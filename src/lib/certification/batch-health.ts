@@ -490,7 +490,7 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
         detail: [...emissionIssues.values()].map((line) => line.blocker?.code === "entryMissingEvidence"
           ? `Add a file for ${line.displayName}.` : `Check the manual entry on ${line.displayName}.`).join(" ") || undefined,
       }] : []),
-      // Template line blockers (no source, unassigned, needs setup) are
+      // Template line blockers (no source, unassigned, not set up) are
       // facility-level and stay in Removal readiness, like the rest of coverage.
       carbonCheck(facts),
       ...facilityEmissionsChecks(facts),
