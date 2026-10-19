@@ -5,9 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
 export const VARIANTS = [
-  { key: "A", name: "Disclosure under each entry" },
-  { key: "B", name: "Popover on the wet total" },
-  { key: "C", name: "Stacked bars" },
+  { key: "A1", name: "Flat table, every figure a column" },
+  { key: "A2", name: "Days, parts table in each entry" },
+  { key: "A3", name: "What is in the bin, then plain movements" },
 ] as const;
 
 export type VariantKey = (typeof VARIANTS)[number]["key"];
