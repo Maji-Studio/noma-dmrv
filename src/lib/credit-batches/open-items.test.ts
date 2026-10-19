@@ -86,7 +86,7 @@ describe("buildCreditBatchOpenItems", () => {
     });
   });
 
-  it("uses requirement wording and routes local fixes and external records", () => {
+  it("names the problem for unmet checks and routes local fixes and external records", () => {
     const result = buildCreditBatchOpenItems({ ...batchContext,
       health: {
         state: "incomplete",
@@ -96,24 +96,28 @@ describe("buildCreditBatchOpenItems", () => {
             key: "carbon",
             label: "Carbon",
             requirementLabel: "Sample data complete",
+            unmetLabel: "No Sample data",
             status: "unmet",
           },
           {
             key: "emissions",
             label: "Emissions",
             requirementLabel: "Emissions recorded",
+            unmetLabel: "Emissions not recorded",
             status: "unmet",
           },
           {
             key: "template",
             label: "Template",
             requirementLabel: "Template resolved",
+            unmetLabel: "Template has unresolved parts",
             status: "unmet",
           },
           {
             key: "transport",
             label: "Transport",
             requirementLabel: "Distances recorded",
+            unmetLabel: "Distances not recorded",
             status: "unmet",
             affectedRecords: [{
               id: "location",
@@ -126,16 +130,17 @@ describe("buildCreditBatchOpenItems", () => {
             key: "production",
             label: "Production",
             requirementLabel: "Production linked",
+            unmetLabel: "No production linked",
             status: "met",
           },
         ],
       },
     });
     expect(result.blocking.map(row => [row.title, row.target])).toEqual([
-      ["Sample data complete", { tab: "samples" }],
-      ["Emissions recorded", { tab: "emissions" }],
-      ["Template resolved", { href: "/certification/settings?section=removal-templates&facility=facility" }],
-      ["Distances recorded", { href: "/customers?location=location" }],
+      ["No Sample data", { tab: "samples" }],
+      ["Emissions not recorded", { tab: "emissions" }],
+      ["Template has unresolved parts", { href: "/certification/settings?section=removal-templates&facility=facility" }],
+      ["Distances not recorded", { href: "/customers?location=location" }],
     ]);
   });
 
@@ -155,7 +160,7 @@ describe("buildCreditBatchOpenItems", () => {
 
   it("keeps a requirement's reasoning for its ⓘ", () => {
     const result = buildCreditBatchOpenItems({ ...batchContext, health: { state: "incomplete", issueCount: 1, checks: [{
-      key: "production", label: "Production", requirementLabel: "Linked production data", status: "unmet",
+      key: "production", label: "Production", requirementLabel: "Linked production data", unmetLabel: "No production run linked", status: "unmet",
       whyDetail: "Every applied tonne traces to a production run.",
     }] } });
     expect(result.blocking[0].why).toBe("Every applied tonne traces to a production run.");
@@ -165,7 +170,7 @@ describe("buildCreditBatchOpenItems", () => {
     "creditBatchTemplate", "batchDetails", "labSamples", "emissions",
     "templateLineReview", "certificationTemplates", "certificationEmissions", "productionRuns",
   ])("preserves the repair destination for %s", fixTarget => {
-    const check = { key: "template" as const, label: "Template", requirementLabel: "Template ready",
+    const check = { key: "template" as const, label: "Template", requirementLabel: "Template ready", unmetLabel: "Template not ready",
       status: "unmet" as const, fixTarget };
     const localTargets = {
       creditBatchTemplate: { tab: "overview", rowId: CREDIT_BATCH_TEMPLATE_ROW },

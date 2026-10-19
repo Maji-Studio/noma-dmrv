@@ -26,6 +26,7 @@ import {
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { InfoHint } from "@/components/ui/tooltip";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
+import { certCheckLabel } from "@/lib/certification/requirement-labels";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { certificationSettingsHref } from "@/lib/certification/links";
 import { CREDIT_BATCH_READY_LABEL } from "@/lib/certification/credit-batch-lifecycle";
@@ -214,12 +215,10 @@ function IncompleteCard({
               key={`${check.key}:${check.issueKey ?? index}`}
               className="flex flex-col gap-4"
             >
-              {/* One plain-language requirement string, identical to the batch
-                  page's checklist (Phase 0) — never the affirmative "…complete"
-                  label next to a "Missing:" line. Protocol reasoning sits behind
-                  the ⓘ "Why?" (Phase 1). */}
+              {/* The named problem, identical to the batch page's open item
+                  (certCheckLabel). Protocol reasoning sits behind the ⓘ "Why?". */}
               <span className="inline-flex items-center gap-6 body-caption font-medium text-[var(--color-text-secondary)]">
-                {check.requirementLabel}
+                {certCheckLabel(check)}
                 {check.whyDetail && (
                   <InfoHint label="Why is this required?">
                     {check.whyDetail}

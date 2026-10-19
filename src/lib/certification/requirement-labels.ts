@@ -9,9 +9,11 @@
  * and drifted across surfaces (the batch page said "…missing" while the removal
  * wizard said "…complete" for the SAME check). This module gives every check a
  * single neutral `requirementLabel` — a plain statement of the requirement that
- * reads correctly with a ✓ or a ✗ — plus a `whyDetail` the ⓘ "Why?" affordance
- * expands (Phase 1). Every readiness surface renders `requirementLabel`, so they
- * can never phrase the same requirement differently again.
+ * reads correctly with a ✓ — an `unmetLabel` that names the problem while the
+ * check is unmet, plus a `whyDetail` the ⓘ "Why?" affordance
+ * expands (Phase 1). Every readiness surface renders these labels through
+ * `certCheckLabel`, so they can never phrase the same requirement differently
+ * again.
  *
  * Strictly client-safe: plain strings, no imports. Registry/lab vocabulary and
  * the reasoning live in `whyDetail` (tucked behind ⓘ), never on the primary
@@ -48,6 +50,12 @@ export interface CertRequirementMeta {
    */
   requirementLabel: string;
   /**
+   * The problem, named, for a check that is not met ("No production run
+   * linked"). Shown instead of `requirementLabel` only while the check is
+   * unmet, so an open item says what is wrong rather than what is required.
+   */
+  unmetLabel: string;
+  /**
    * The reasoning + protocol/registry vocabulary, surfaced only behind an ⓘ
    * "Why?" affordance (Phase 1) so the primary label stays plain.
    */
@@ -60,71 +68,105 @@ export const CERT_REQUIREMENT_META: Record<
 > = {
   carbon: {
     requirementLabel: "Lab chemistry results",
+    unmetLabel: "No lab chemistry results",
     whyDetail:
       "The durability method needs lab chemistry for this credit batch's Samples. For 1000-year credits, record mean random reflectance (R₀), non-reactive carbon, and each standard deviation across at least three Samples. These figures set how much stored carbon can be claimed as permanent.",
   },
   facilityEmissions: {
     requirementLabel: "Facility reference soil temperature",
+    unmetLabel: "No reference soil temperature for the facility",
     whyDetail:
       "The 200-year durability calculation uses the facility's reference soil temperature to estimate the durable carbon fraction. Configure it in certification emission estimates before certifying affected batches.",
   },
   feedstockTypeMapping: {
     requirementLabel: "Feedstock type registry link",
+    unmetLabel: "Feedstock type not linked to the registry",
     whyDetail:
       "A credit batch declares the pyrolysis feedstock type submitted with its Isometric production batch. Link the local feedstock type to the matching Isometric catalogue entry before submitting.",
   },
   production: {
     requirementLabel: "Linked production data",
+    unmetLabel: "No production run linked",
     whyDetail:
       "This batch's applications must trace back to at least one production run so the Removal can attribute the pyrolysed biochar mass and its production emissions. With no linked run there is nothing to submit.",
   },
   measurementDates: {
     requirementLabel: "Production and application dates",
+    unmetLabel: "Production or application date not accepted",
     whyDetail:
       "These dates tell Isometric when production finished and when the reporting period ended. Future dates cannot be submitted.",
   },
   transport: {
     requirementLabel: "Transport legs recorded",
+    unmetLabel: "Transport legs not recorded",
     whyDetail:
       "Each transport step the registry template requires (moving feedstock in, biochar out) needs a recorded leg with mass and distance so its emissions can be accounted for. A missing category can't be estimated for you.",
   },
   transportUniformity: {
     requirementLabel: "Transport legs aggregate cleanly",
+    unmetLabel: "Transport legs don't match across batches",
     whyDetail:
       "When several batches are pooled into one Removal, their transport legs in each category must share a calculation method and transport mode, with a positive load mass on every leg. Review the recorded methods, modes and load masses before submitting.",
   },
   entityReadiness: {
     requirementLabel: "Certifier fields on linked records",
+    unmetLabel: "Certifier fields not filled on linked records",
     whyDetail:
       "The certifier requires fields on the production runs and Samples linked to this credit batch. Missing production or lab fields block the Removal. Complete each listed field before grouping the batch.",
   },
   mapping: {
     requirementLabel: "Facility linked to a registry project",
+    unmetLabel: "Facility not linked to a registry project",
     whyDetail:
       "Removals are submitted into an Isometric project. Until this facility is linked to one in certification settings there is no registry destination, so nothing downstream can be evaluated.",
   },
   credentials: {
     requirementLabel: "Organization Isometric credentials",
+    unmetLabel: "No Isometric credentials for the organization",
     whyDetail:
       "Each organization uses its own encrypted Isometric access token and client secret. A Platform Admin must configure them before the organization can read from or submit to the registry.",
   },
   emissions: {
     requirementLabel: "Emissions",
+    unmetLabel: "Emission entries without a file",
     whyDetail: "Emissions entries with a value need a file before the Removal can be submitted.",
   },
   template: {
     requirementLabel: "Removal template resolved",
+    unmetLabel: "Removal template has unresolved parts",
     whyDetail:
       "The facility's default Removal template defines the inputs and transport categories the registry expects. Every referenced component must be available before a Removal can be assembled.",
   },
   evidence: {
     requirementLabel: "Registry value sources linked",
+    unmetLabel: "Registry value sources not linked",
     whyDetail:
       "Registry value sources are sent automatically when you submit. Noma then verifies that each source reached the correct registry field.",
   },
   durability: {
     requirementLabel: "Sampling & durability eligibility",
+    unmetLabel: "Not enough eligible Samples",
     whyDetail:
       "Each credit batch in the Removal needs enough qualifying lab Samples, with chemistry inside the method's limits, before its carbon can be claimed. The submit step runs the same check.",
   },
 };
+
+/** Suffix that turns a per-field entity readiness label ("Proof of delivery") into its unmet form. */
+export const ENTITY_FIELD_UNMET_SUFFIX = "not complete";
+
+/** The unmet form of a per-field entity readiness label: "Proof of delivery not complete". */
+export function entityFieldUnmetLabel(fieldLabel: string): string {
+  return `${fieldLabel} ${ENTITY_FIELD_UNMET_SUFFIX}`;
+}
+
+/**
+ * The label a readiness surface shows for one check: the problem while the
+ * check is unmet, the neutral requirement otherwise.
+ */
+export function certCheckLabel(check: {
+  status: string;
+  requirementLabel: string;
+  unmetLabel: string;
+}): string {
+  return check.status === "unmet" ? check.unmetLabel : check.requirementLabel;
+}

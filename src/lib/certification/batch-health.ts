@@ -23,7 +23,7 @@ import {
   defaultProductionReadinessGap,
   type ProductionReadinessGap,
 } from "./production-readiness";
-import { CERT_REQUIREMENT_META } from "./requirement-labels";
+import { CERT_REQUIREMENT_META, entityFieldUnmetLabel } from "./requirement-labels";
 import {
   removalTemplateBlockerDestination,
   type RemovalTemplateBlocker,
@@ -82,6 +82,8 @@ export interface BatchHealthCheck {
    * `deriveBatchHealth` from `CERT_REQUIREMENT_META`.
    */
   requirementLabel: string;
+  /** The problem, named; rendered instead of `requirementLabel` while unmet (`certCheckLabel`). */
+  unmetLabel: string;
   /** Protocol/lab context for the ⓘ "Why?" affordance (Phase 1). */
   whyDetail?: string;
   status: BatchHealthCheckStatus;
@@ -116,9 +118,10 @@ export interface BatchEntityReadinessIssue {
  */
 type BatchHealthCheckBase = Omit<
   BatchHealthCheck,
-  "requirementLabel" | "whyDetail"
+  "requirementLabel" | "unmetLabel" | "whyDetail"
 > & {
   requirementLabel?: string;
+  unmetLabel?: string;
 };
 
 export interface BatchTransportFact {
@@ -194,6 +197,8 @@ const TRANSPORT_LABEL = "Transport legs present";
 const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_PREVIEW_LIMIT = 3;
 const MERGED_CHECK_SEPARATOR = " · ";
+/** One open item for lineage and configuration blockers found by the submit-time build. */
+const SUBMISSION_BLOCKERS_LABEL = "Submission blockers";
 
 function carbonCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
   const missingInputs = Array.from(
@@ -394,6 +399,9 @@ function mergeUnmetChecksByDestination(
       requirementLabel:
         mergeCheckText(existing.requirementLabel, check.requirementLabel) ??
         existing.requirementLabel,
+      unmetLabel:
+        mergeCheckText(existing.unmetLabel, check.unmetLabel) ??
+        existing.unmetLabel,
       whyDetail: mergeCheckText(existing.whyDetail, check.whyDetail),
       issueKey: [existing.issueKey ?? existing.key, check.issueKey ?? check.key]
         .join("+"),
@@ -423,6 +431,7 @@ function entityReadinessChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] 
       issueKey: issue.key,
       label: ENTITY_READINESS_LABEL,
       requirementLabel: issue.label,
+      unmetLabel: entityFieldUnmetLabel(issue.label),
       status: "unmet",
       detail: `${issue.affectedRecords.length} ${issue.affectedRecords.length === 1 ? "record needs" : "records need"} attention`,
       fixTarget: issue.fixTarget,
@@ -448,7 +457,8 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
     key: blocker.fixTarget === "feedstocks" ? "transport" : "entityReadiness",
     issueKey: `submission-${blocker.fixTarget}`,
     label: "Submission requirements complete",
-    requirementLabel: "Resolve submission blockers",
+    requirementLabel: SUBMISSION_BLOCKERS_LABEL,
+    unmetLabel: SUBMISSION_BLOCKERS_LABEL,
     status: "unmet",
     detail: blocker.detail,
     fixTarget: blocker.fixTarget,
@@ -459,7 +469,8 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
     key: "entityReadiness",
     issueKey: "submission-batchDetails",
     label: "Submission requirements complete",
-    requirementLabel: "Resolve submission blockers",
+    requirementLabel: SUBMISSION_BLOCKERS_LABEL,
+    unmetLabel: SUBMISSION_BLOCKERS_LABEL,
     status: "unmet",
     detail: [...new Set(blockers)].join(MERGED_CHECK_SEPARATOR),
     fixTarget: "batchDetails",
@@ -521,6 +532,7 @@ function withRequirementMeta(check: BatchHealthCheckBase): BatchHealthCheck {
   return {
     ...check,
     requirementLabel: check.requirementLabel ?? meta.requirementLabel,
+    unmetLabel: check.unmetLabel ?? meta.unmetLabel,
     whyDetail: meta.whyDetail,
   };
 }

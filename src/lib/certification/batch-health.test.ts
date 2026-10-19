@@ -216,6 +216,22 @@ describe("deriveBatchHealth", () => {
       "PR-1",
       "PR-2",
     ]);
+    // Each per-field issue names its problem while unmet.
+    expect(issues.map((issue) => issue.unmetLabel)).toEqual([
+      "Production-run evidence not complete",
+      "Sample evidence not complete",
+    ]);
+  });
+
+  it("names lineage and configuration blockers as one Submission blockers item", () => {
+    const result = deriveBatchHealth(
+      facts({ durabilityConfigurationBlockers: ["Set the batch durability."] }),
+    );
+    const blocker = result.checks.find(
+      (check) => check.issueKey === "submission-batchDetails",
+    );
+    expect(blocker?.requirementLabel).toBe("Submission blockers");
+    expect(blocker?.unmetLabel).toBe("Submission blockers");
   });
 
   it("merges overlapping carbon and sample gaps into one lab action", () => {
@@ -246,6 +262,9 @@ describe("deriveBatchHealth", () => {
     );
     expect(open[0]?.requirementLabel).toBe(
       "Lab chemistry results · Sample evidence",
+    );
+    expect(open[0]?.unmetLabel).toBe(
+      "No lab chemistry results · Sample evidence not complete",
     );
     expect(open[0]?.whyDetail).toContain(
       CERT_REQUIREMENT_META.carbon.whyDetail,
@@ -323,6 +342,7 @@ describe("deriveBatchHealth", () => {
       expect(check.requirementLabel).toBe(
         CERT_REQUIREMENT_META[check.key].requirementLabel,
       );
+      expect(check.unmetLabel).toBe(CERT_REQUIREMENT_META[check.key].unmetLabel);
       expect(check.whyDetail).toBe(CERT_REQUIREMENT_META[check.key].whyDetail);
     }
     // The carbon gap now reads as its neutral requirement, so it never

@@ -6,6 +6,7 @@ import {
 } from "@/lib/calculations/biochar-eligibility";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import type { BatchHealth } from "@/lib/certification/batch-health";
+import { certCheckLabel } from "@/lib/certification/requirement-labels";
 import {
   batchHealthFixLinkFor,
   resolveBatchHealthFixTarget,
@@ -106,7 +107,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     }
     blocking.push({
       id: `health:${healthCheck.key}:${healthCheck.issueKey ?? fix}`,
-      title: healthCheck.requirementLabel,
+      title: certCheckLabel(healthCheck),
       detail: healthCheck.detail,
       ...(healthCheck.whyDetail ? { why: healthCheck.whyDetail } : {}),
       target,

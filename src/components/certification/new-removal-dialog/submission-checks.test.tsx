@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { ENTITY_READINESS_CHECK_DISPLAY_LIMIT, type RemovalRequirementCheck } from "@/lib/certification/readiness";
+import { CERT_REQUIREMENT_META } from "@/lib/certification/requirement-labels";
 import { SubmissionChecks } from "./submission-checks";
 
 vi.mock("next/link", () => ({
@@ -23,6 +24,7 @@ const CHECKS = [
   key,
   label: requirementLabel,
   requirementLabel,
+  unmetLabel: CERT_REQUIREMENT_META[key as RemovalRequirementCheck["key"]].unmetLabel,
   status: "met",
 })) as RemovalRequirementCheck[];
 
@@ -71,6 +73,7 @@ describe("SubmissionChecks", () => {
         key,
         label: "Transport check",
         requirementLabel: "Transport check",
+        unmetLabel: "Transport problem",
         status: "unmet" as const,
         transportCategory: category,
         detail: `${category} ${key} needs attention`,
@@ -99,7 +102,8 @@ describe("SubmissionChecks", () => {
     expect(html).toContain("8 checks passed");
     expect(html).toMatch(/<h3[^>]*>\s*What to fix\s*<\/h3>/);
     expect(html).not.toContain("<button");
-    expect(html).toContain("Removal template resolved");
+    expect(html).toContain("Removal template has unresolved parts");
+    expect(html).not.toContain("Removal template resolved");
     expect(html).toContain("No default Removal template is selected.");
     expect(html).toContain(
       'href="/certification/settings?section=certifier&amp;facility=facility-1"',
@@ -118,7 +122,7 @@ describe("SubmissionChecks", () => {
       />,
     );
 
-    expect(html).toContain("Production lineage complete");
+    expect(html).toContain("No production run linked");
     expect(html).toContain(
       "No applications fall in this batch&#x27;s crediting period.",
     );
@@ -194,7 +198,7 @@ describe("SubmissionChecks", () => {
     expect(bothHtml).toContain("PR-26-001");
     expect(bothHtml).toContain("AP-26-001");
     expect(bothHtml).toMatch(/<li[^>]*>[\s\S]*PR-26-001/);
-    expect(bothHtml).toContain("Future dates");
+    expect(bothHtml).toContain("Production or application date not accepted");
     expect(bothHtml).toContain(
       "Correct these dates, or wait until both dates have passed.",
     );
@@ -215,6 +219,7 @@ describe("SubmissionChecks", () => {
             key: "evidence",
             label: "Registry value sources linked",
             requirementLabel: "Registry value sources linked",
+            unmetLabel: "Registry value sources not linked",
             status: "warning",
             detail: "2 files will upload on submit",
           },

@@ -493,6 +493,8 @@ export interface RemovalRequirementCheck {
    * (Phase 0). Attached uniformly from `CERT_REQUIREMENT_META`.
    */
   requirementLabel: string;
+  /** The problem, named; rendered instead of `requirementLabel` while unmet (`certCheckLabel`). */
+  unmetLabel: string;
   /** Protocol/lab context for the ⓘ "Why?" affordance (Phase 1). */
   whyDetail?: string;
   /**
@@ -512,7 +514,7 @@ export interface RemovalRequirementCheck {
 
 type RemovalRequirementCheckBase = Omit<
   RemovalRequirementCheck,
-  "requirementLabel" | "whyDetail"
+  "requirementLabel" | "unmetLabel" | "whyDetail"
 >;
 
 function withRequirementMeta(
@@ -522,6 +524,7 @@ function withRequirementMeta(
   return {
     ...check,
     requirementLabel: meta.requirementLabel,
+    unmetLabel: meta.unmetLabel,
     whyDetail: meta.whyDetail,
   };
 }

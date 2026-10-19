@@ -12,6 +12,7 @@ import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { InfoHint } from "@/components/ui/tooltip";
 import { ENTITY_READINESS_CHECK_DISPLAY_LIMIT, type RemovalRequirementCheck } from "@/lib/certification/readiness";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
+import { certCheckLabel } from "@/lib/certification/requirement-labels";
 import { transportRepairDestination } from "@/lib/isometric/semantic-binding-catalog";
 import { certificationSettingsHref } from "@/lib/certification/links";
 import {
@@ -156,12 +157,6 @@ function fixLinksFor(
   }
 }
 
-function checkHeading(check: RemovalRequirementCheck): string {
-  return check.key === "measurementDates"
-    ? "Future dates"
-    : check.requirementLabel;
-}
-
 function dateGuidance(dateCount: number): string {
   if (dateCount === 1) {
     return "Correct this date, or wait until it has passed.";
@@ -197,7 +192,7 @@ function CheckRow({
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <span className="inline-flex items-center gap-4 body-caption text-[var(--color-text-secondary)]">
-          {checkHeading(check)}
+          {certCheckLabel(check)}
           {check.whyDetail && (
             <InfoHint label="Why is this required?">{check.whyDetail}</InfoHint>
           )}

@@ -247,19 +247,20 @@ test.describe("Certification — New-Removal wizard", () => {
     }
   });
 
-  // The one readiness source (Phase 0) renders this neutral requirement label
-  // — from `CERT_REQUIREMENT_META` — on every surface. A runless batch is
-  // deterministically missing its production data, so this row is always open.
-  const PRODUCTION_REQUIREMENT = "Linked production data";
-  // The retired problem-phrased headline the batch page used to show for this
-  // same gap — its absence proves the migration to the shared requirement label.
+  // The one readiness source renders an unmet check by its named problem
+  // (`unmetLabel` in `CERT_REQUIREMENT_META`) on every surface. A runless batch
+  // is deterministically missing its production data, so this row is always open.
+  const PRODUCTION_REQUIREMENT = "No production run linked";
+  // The neutral requirement label; it names a passing check only, never an open one.
+  const NEUTRAL_PRODUCTION_LABEL = "Linked production data";
+  // The retired problem-phrased headline from before the shared labels.
   const OLD_PRODUCTION_HEADLINE = "Production data not linked";
   // Phase 1 tucks the raw protocol reasoning behind an ⓘ "Why?" so the primary
   // requirement label stays plain. Distinctive substring of the production
   // check's `whyDetail` (from CERT_REQUIREMENT_META), only present once opened.
   const PRODUCTION_WHY_DETAIL = "trace back to at least one production run";
 
-  test("batch checklist shows the neutral requirement label, not the old contradictory copy (Phase 0)", async ({
+  test("batch open items name the problem for an unmet check, from the shared labels", async ({
     adminPage: page,
     seededData,
     cleanupTestData,
@@ -284,11 +285,12 @@ test.describe("Certification — New-Removal wizard", () => {
         `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
       );
       const healthStrip = page.getByRole("region", { name: "Open items" });
-      // The open gap reads as the plain requirement…
+      // The open gap reads as the named problem…
       await expect(healthStrip).toContainText(PRODUCTION_REQUIREMENT, {
         timeout: COLD_COMPILE_TIMEOUT_MS,
       });
-      // …never the old problem-phrased headline (or an affirmative "…complete").
+      // …never the neutral requirement or the retired headline.
+      await expect(healthStrip).not.toContainText(NEUTRAL_PRODUCTION_LABEL);
       await expect(healthStrip).not.toContainText(OLD_PRODUCTION_HEADLINE);
     } finally {
       await batch?.cleanup();
@@ -304,7 +306,7 @@ test.describe("Certification — New-Removal wizard", () => {
 
     const facilityId = seededData.facility.id;
     const testRunId = seededData.facility.code.replace(/^E2E-FAC-/, "");
-    // Same hermetic seed as the Phase 0 test above (no certifier mapping → no
+    // Same hermetic seed as the test above (no certifier mapping → no
     // Isometric call), so this runs in PR CI.
     let batch: SeededIncompleteBatch | undefined;
 
@@ -318,7 +320,7 @@ test.describe("Certification — New-Removal wizard", () => {
         `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
       );
       const healthStrip = page.getByRole("region", { name: "Open items" });
-      // The open production gap renders as a plain requirement row…
+      // The open production gap renders as a named problem row…
       const productionRow = healthStrip.locator("li", {
         hasText: PRODUCTION_REQUIREMENT,
       });
@@ -351,7 +353,7 @@ test.describe("Certification — New-Removal wizard (Phase 0 cross-surface)", { 
     "Requires ISOMETRIC_DEMO_PROJECT_ID (real sandbox project) to link the facility.",
   );
 
-  const PRODUCTION_REQUIREMENT = "Linked production data";
+  const PRODUCTION_REQUIREMENT = "No production run linked";
 
   test("shows the same plain-language gap string on the batch page and the wizard", async ({
     adminPage: page,
@@ -468,10 +470,10 @@ test.describe("Certification — New-Removal wizard (Phase 2 readiness workspace
       // Production lineage and sample completeness are independent: fixing the
       // application path must not reveal a previously hidden lab blocker.
       await expect(
-        dialog.getByText("Linked production data").first(),
+        dialog.getByText("No production run linked").first(),
       ).toBeVisible();
       await expect(
-        dialog.getByText("Lab chemistry results").first(),
+        dialog.getByText("No lab chemistry results").first(),
       ).toBeVisible();
       // …and carries its own deep link to the exact fix (this batch has no
       // linked production run → Production runs), mirroring the batch page's own

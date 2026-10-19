@@ -55,7 +55,7 @@ test.describe("credit batch page", () => {
     await expect(page).not.toHaveURL(/[?&]tab=/);
     const openItems = page.getByRole("region", { name: "Open items" });
     // A seeded batch has no Samples: that open item lands on the Samples tab.
-    await openItems.getByRole("button", { name: /Lab chemistry results/ }).click();
+    await openItems.getByRole("button", { name: /No lab chemistry results/ }).click();
     await expect(page).toHaveURL(/[?&]tab=samples/);
     await expect(page.getByTestId("credit-batch-durability-panel")).toBeVisible();
 
