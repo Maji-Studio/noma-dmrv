@@ -6,7 +6,7 @@ export interface OperationDocument {
   operationId: string;
   description: string;
   "x-required-scope": ApiScope | null;
-  security?: { bearerAuth: never[] }[];
+  security?: ({ bearerAuth: never[] } | { oauth2: string[] })[];
   parameters?: unknown[];
   requestBody?: unknown;
   responses: Record<string, unknown>;
@@ -14,7 +14,7 @@ export interface OperationDocument {
 export type Paths = Record<string, Record<string, OperationDocument>>;
 
 export function privateOperation(operationId: string, scope: ApiScope | undefined, description: string, responses: Record<string, unknown>, parameters: unknown[] = []): OperationDocument {
-  return { operationId, description: `${description} Required scope: ${scope ?? "none (any authenticated API key)"}.`, "x-required-scope": scope ?? null, parameters, responses };
+  return { operationId, description: `${description} Required scope: ${scope ?? "none (any authenticated API credential)"}.`, "x-required-scope": scope ?? null, parameters, responses };
 }
 export function operationInput(schema: Parameters<typeof toOperationJsonSchema>[0]): JsonSchema {
   const result = toOperationJsonSchema(schema);

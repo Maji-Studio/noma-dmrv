@@ -1,3 +1,4 @@
+import { apiKeyContext } from "../../../tests/helpers/api-context";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
 import { DomainError } from "@/lib/domain-errors";
@@ -10,6 +11,7 @@ vi.mock("@/lib/log", () => ({ logger: { error: vi.fn() } }));
 // Admission is covered in route.test.ts; these cases exercise the handlers.
 vi.mock("./guards", () => ({
   preAuthGuard: vi.fn(async () => ({ response: null, result: null })),
+  credentialAdmissionGuard: vi.fn(async () => ({ response: null, result: null })),
   postAuthGuard: vi.fn(async () => ({ ok: true, headers: new Headers() })),
 }));
 vi.mock("@/lib/operations/runner", () => ({ runOperation: mocks.run }));
@@ -30,7 +32,7 @@ beforeEach(() => {
   vi.setSystemTime(START);
   mocks.resolve.mockImplementation(async () => {
     vi.setSystemTime(START + AUTH_MS);
-    return { ok: true, ctx: { orgRole: "admin", scopes: ["lab-samples:write", "lab-samples:delete"], credentialId: "key" } };
+    return { ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: ["lab-samples:write", "lab-samples:delete"], credentialId: "key" }) };
   });
   // Stop after observing admission, before response serialization.
   mocks.run.mockRejectedValue(new DomainError("not_found", "Lab sample was not found."));
@@ -50,7 +52,7 @@ function invoke(method: "POST" | "PATCH" | "DELETE", elapsed: number) {
     return getReader();
   });
   return apiRoute("test", method === "DELETE" ? "lab-samples:delete" : "lab-samples:write",
-    method === "POST" ? createLabSampleResponse : (req, context) => mutateLabSampleResponse(req, context, ID, method),
+    method === "POST" ? createLabSampleResponse : (req, context) => mutateLabSampleResponse(req, context, ID, method), { audience: "rest" },
   )(request);
 }
 

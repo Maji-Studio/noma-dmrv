@@ -19,6 +19,7 @@ import { usePathname } from "next/navigation";
 import {
   BuildingsIcon,
   KeyIcon,
+  PlugsConnectedIcon,
   SlidersHorizontalIcon,
   TruckIcon,
   UsersIcon,
@@ -27,6 +28,7 @@ import { PageHeader, SettingsRail, type SettingsSectionMeta } from "@/components
 import {
   SETTINGS_DEFAULTS_HREF,
   SETTINGS_API_KEYS_HREF,
+  SETTINGS_CONNECTED_APPS_HREF,
   SETTINGS_MEMBERS_HREF,
   SETTINGS_VEHICLES_AND_CREW_HREF,
 } from "@/lib/settings/links";
@@ -93,6 +95,15 @@ export function SettingsConsole({
     tier: "organization",
     label: "Vehicles and crew",
     icon: TruckIcon,
+  });
+
+  // Every member can connect an app (Q99) and sees their own connections (Q95).
+  sections.push({
+    key: SETTINGS_CONNECTED_APPS_HREF,
+    href: SETTINGS_CONNECTED_APPS_HREF,
+    tier: "organization",
+    label: "Connected apps",
+    icon: PlugsConnectedIcon,
   });
 
   if (canManageApiKeys || isPlatformAdmin) {

@@ -1,7 +1,8 @@
+import { apiKeyContext } from "../../../../../../../tests/helpers/api-context";
 import { beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ log: vi.fn(), pre: vi.fn(), post: vi.fn(), resolve: vi.fn(), read: vi.fn() }));
-vi.mock("@/lib/api/guards", () => ({ preAuthGuard: mocks.pre, postAuthGuard: mocks.post }));
+vi.mock("@/lib/api/guards", () => ({ preAuthGuard: mocks.pre, credentialAdmissionGuard: vi.fn(async () => ({ response: null, result: null })), postAuthGuard: mocks.post }));
 vi.mock("@/lib/auth/api-context", () => ({ resolveApiContext: mocks.resolve }));
 vi.mock("@/lib/read-models/api-output-bin-stock", () => ({ readApiOutputBinStock: mocks.read }));
 vi.mock("@/lib/log", () => ({ logger: { error: mocks.log } }));
@@ -9,7 +10,7 @@ import { GET } from "./route";
 
 const BIN_CODE = "OB-2";
 const PATH = `/api/v1/storage-locations/${BIN_CODE}/stock`;
-const ctx = { organizationId: "org", orgRole: "admin", scopes: ["biochar-products:read"] };
+const ctx = apiKeyContext({ organizationId: "org", orgRole: "admin", scopes: ["biochar-products:read"] });
 
 beforeEach(() => {
   vi.resetAllMocks();

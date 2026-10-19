@@ -19,8 +19,8 @@ describe("API credential headers", () => {
       .toEqual({ ok: false, denial: "credential_header_unsupported" });
   });
   it("ignores cookies alongside a bearer", () => {
-    expect(parseApiCredential(new Headers({ authorization: "bEaReR key", cookie: "session=value" })))
-      .toEqual({ ok: true, key: "key" });
+    expect(parseApiCredential(new Headers({ authorization: "bEaReR noma_test_key", cookie: "session=value" })))
+      .toEqual({ ok: true, key: "noma_test_key", kind: "api-key" });
   });
   it("refuses cookies alone and never falls back from a bad bearer", () => {
     expect(parseApiCredential(new Headers({ cookie: "session=value" })))
@@ -29,4 +29,11 @@ describe("API credential headers", () => {
       .toEqual({ ok: false, denial: "credential_malformed" });
     expect(parseApiCredential(new Headers())).toEqual({ ok: false, denial: "credential_missing" });
   });
+});
+
+it.each([['noma_live_value', 'api-key'], ['noma_test_value', 'api-key'], ['noma_oat_value', 'oauth']])("classifies %s by prefix", (key, kind) => {
+  expect(parseApiCredential(new Headers({ authorization: `Bearer ${key}` }))).toEqual({ ok: true, key, kind });
+});
+it.each(['noma_ort_value', 'eyJhbGci.eyJzdWI.signature', 'unknown', 'noma_oat_'])("refuses %s without another credential path", key => {
+  expect(parseApiCredential(new Headers({ authorization: `Bearer ${key}` }))).toEqual({ ok: false, denial: 'credential_invalid' });
 });

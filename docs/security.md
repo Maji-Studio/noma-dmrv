@@ -154,6 +154,44 @@ Non-obvious semantics only:
 - **`GEO_PROVIDER`** — `ors` default, `stub` = hermetic test fixtures. See
   [ADR 0009](./adr/0009-provider-agnostic-server-proxied-geo.md).
 
+### OAuth provider and client controls
+
+| Variable | Values and default | Validation and production gate |
+|---|---|---|
+| `OAUTH_PROVIDER_ENABLED` | `true` or `false`; default `false` | When on in production, `NEXT_PUBLIC_APP_URL` must equal an HTTPS origin with no path, query or trailing slash. Only hermetic CI skips this origin gate. |
+| `OAUTH_CIMD_CLIENT_IDS` | Comma-separated exact HTTPS metadata URLs; default empty (no CIMD) | Every environment requires a path and public DNS host, with no IP literal, local/special hostname, credentials, port, query or fragment. Production keeps the same validation. |
+
+[Env gates](../src/config/oauth-env-validation.ts) and
+[provider wiring](../src/lib/auth/oauth-provider.ts) fail closed. Keep the flag
+off everywhere until the [staging proof](./api.md#connecting-claude-and-chatgpt).
+Production OAuth starts only after the production domain split: the issuer and
+both audiences embed the app host, so moving hosts invalidates connections.
+Never copy a staging issuer into production.
+
+[CIMD](../src/lib/auth/oauth-cimd.ts) matches the complete `client_id` URL against
+`OAUTH_CIMD_CLIENT_IDS`, including persisted-client resolution. A trusted host
+alone grants nothing. Its [fetch transport](../src/lib/auth/oauth-cimd-transport.ts)
+refuses private/special DNS addresses and redirects, bounds response size and
+time, and pins the checked public address. Dynamic registration stays off.
+Server-side preregistration requires the live Platform Admin create privilege;
+HTTP client-management endpoints remain closed. See [auth](./auth.md#oauth-connections).
+
+To disable a client, an authorized operator sets `oauth_clients.disabled` to
+true. This blocks API resolution and the plugin's token path. A concurrent CIMD
+refetch can overwrite it, so re-check after a minute. Remove its exact identity
+from `OAUTH_CIMD_CLIENT_IDS` and redeploy to prevent later discovery. Removing an
+id alone does not revoke stored tokens: existing access tokens can live out
+their hour. Keep the client disabled, or revoke its generations when immediate
+revocation is required. Do not log tokens or raw metadata containing secrets.
+
+The [pnpm patch](../patches/@better-auth__oauth-provider@1.7.10.patch) makes
+`invalidateRefreshFamily` refuse rather than delete tokens across organizations
+and resources. Re-check the patch on **every Better Auth upgrade**, together
+with the refresh race and endpoint-lockdown suites in [testing](./testing.md#oauth-suites).
+The application hook owns reuse and revocation; the patch is its backstop.
+
+### Variables read outside envSchema
+
 Read directly from `process.env`, **not** validated by `env.ts`:
 
 - `LOG_LEVEL` — validated in `src/lib/log/index.ts`: `trace`, `debug`, `info`,

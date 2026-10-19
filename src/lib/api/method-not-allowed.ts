@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { hasRoleAndScope } from "@/lib/auth/api-scopes";
+import { principalAllows } from "@/lib/auth/api-scopes";
 import { ApiHttpError } from "./http-error";
 import { getApiMethodEntry, isV1ApiPath, type ApiMethodEntry } from "./method-table";
 import { problemResponse } from "./problem";
@@ -27,10 +27,10 @@ export async function guardApiMethod(request: Request): Promise<Response | null>
   if (entry?.public) return methodNotAllowedResponse(entry, instance, randomUUID());
 
   return apiRoute("api.v1.method-not-allowed", undefined, async (_request, context) =>
-    methodNotAllowedResponse(entry!, context.instance, context.requestId), {
+    methodNotAllowedResponse(entry!, context.instance, context.requestId), { audience: "rest",
     prepare: async (received, { ctx }) => {
       // Unknown and invisible paths have the same authenticated refusal, with no Allow.
-      if (!entry || !entry.scopes.some((scope) => scope === null || hasRoleAndScope(ctx, scope))) {
+      if (!entry || !entry.scopes.some((scope) => scope === null || principalAllows(ctx, scope))) {
         throw new ApiHttpError(NOT_FOUND_STATUS, "not_found", NOT_FOUND_DETAIL);
       }
       // Refusing a method performs no write and must not trigger the write kill switch.

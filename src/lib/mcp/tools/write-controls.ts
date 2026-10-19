@@ -1,3 +1,4 @@
+import { apiAudit } from "@/lib/api/audit";
 import { z } from "zod";
 import { API_IDEMPOTENCY_KEY_MAX_LENGTH, FEEDSTOCK_REPRESENTATION_REVISION } from "@/config/api-rest";
 import type { ApiRouteContext } from "@/lib/api/route";
@@ -34,7 +35,7 @@ export function parseControls(raw: unknown, contract: JsonSchema) {
 export function writeOptions(context: ApiRouteContext, dryRun: boolean, key?: string, target?: string, version?: number, revision = FEEDSTOCK_REPRESENTATION_REVISION) {
   return {
     deadlineMs: remainingDeadlineMs(context.deadlineAt), dryRun,
-    audit: { requestId: context.requestId, credentialId: context.ctx.credentialId, transport: "mcp" as const },
+    audit: apiAudit(context.ctx, context.requestId, "mcp"),
     idempotency: key ? { credentialId: context.ctx.credentialId, key,
       ...(target ? { target, precondition: representationEtag(version!, revision) } : {}),
     } : undefined,
@@ -46,7 +47,7 @@ export function writeOptions(context: ApiRouteContext, dryRun: boolean, key?: st
 export function stockWriteOptions(context: ApiRouteContext, dryRun: boolean, key?: string, target?: string) {
   return {
     deadlineAt: context.deadlineAt, dryRun,
-    audit: { requestId: context.requestId, credentialId: context.ctx.credentialId, transport: "mcp" as const },
+    audit: apiAudit(context.ctx, context.requestId, "mcp"),
     idempotency: key ? { credentialId: context.ctx.credentialId, key, ...(target ? { target } : {}) } : undefined,
   };
 }

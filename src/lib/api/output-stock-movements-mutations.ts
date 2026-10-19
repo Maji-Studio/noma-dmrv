@@ -1,3 +1,4 @@
+import { apiAudit } from "@/lib/api/audit";
 import { DomainError } from "@/lib/domain-errors";
 import { toOperationJsonSchema } from "@/lib/operations/json-schema";
 import { runWithStockBasisPreview } from "@/lib/operations/stock-basis-preview";
@@ -30,7 +31,7 @@ export async function recordOutputStockMovementResponse(request: Request, { ctx,
   const input = body !== null && typeof body === "object" && !Array.isArray(body) ? { ...body, storageLocationId } : body;
   const result = await runWithStockBasisPreview(representationCheckedRecord, ctx, input, {
     deadlineAt, dryRun,
-    audit: { requestId, credentialId: ctx.credentialId, transport: "rest" as const },
+    audit: apiAudit(ctx, requestId, "rest"),
     idempotency: key ? { credentialId: ctx.credentialId, key, target: storageLocationId } : undefined,
   }, (data) => data.basisFingerprint);
   if (result.replayed) headers.set("Idempotent-Replayed", "true");
