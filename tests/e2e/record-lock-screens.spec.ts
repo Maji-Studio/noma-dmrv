@@ -35,7 +35,7 @@ test.describe("Record locks on screen", () => {
       const sheet = page.getByRole("dialog");
 
       await expect(sheet.locator('[data-record-lock="inUse"]')).toHaveText("In use");
-      await expect(sheet.getByText(`In use by delivery E2E-DEL-${tag}`)).toBeVisible();
+      await expect(sheet.getByText(`delivery E2E-DEL-${tag} uses its figures`)).toBeVisible();
       await expect(sheet.getByRole("link", { name: `Delivery E2E-DEL-${tag}`, exact: true })).toBeVisible();
 
       await sheet.getByRole("button", { name: "Edit order" }).click();
@@ -94,14 +94,14 @@ test.describe("Record locks on screen", () => {
       await page.goto(`/samples?facility=${seededData.facility.id}`);
       await waitForFacilityHydration(page, seededData.facility.name);
       const row = page.getByRole("row").filter({ hasText: sampleCode });
-      await expect(row.locator('[data-record-lock="sent"]')).toHaveText("Sent");
+      await expect(row.getByRole("img", { name: "Sent" })).toBeVisible();
       await expect(row.getByRole("button", { name: `Actions for ${sampleCode}` })).toHaveCount(0);
 
       await row.click();
       await waitForSideSheet(page);
       const sheet = page.getByRole("dialog");
       await expect(sheet.locator('[data-record-lock="sent"]')).toHaveText("Sent");
-      await expect(sheet.getByText("Sent with Removal Jan 1 to Mar 31, 2026, so every field is locked.")).toBeVisible();
+      await expect(sheet.getByText("Nothing can be changed, because this was sent to Isometric with Removal Jan 1 to Mar 31, 2026.")).toBeVisible();
       await expect(sheet.getByRole("link", { name: "Removal Jan 1 to Mar 31, 2026" }).first())
         .toHaveAttribute("href", new RegExp(`removal=${removal.removalId}`));
       await expect(sheet.getByRole("button", { name: "Edit Sample" })).toHaveCount(0);

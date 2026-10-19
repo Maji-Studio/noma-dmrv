@@ -43,4 +43,17 @@ describe('archived storage board tile', () => {
     expect(stopPropagation).toHaveBeenCalled();
     await act(async () => renderer.unmount());
   });
+  it('shows the lock chip only once the bin is Sent', async () => {
+    const lockAt = (level: 'open' | 'inUse' | 'sent') => ({ level, heldBy: [], usedBy: [], freeFields: [], howToFree: null, returnedBy: [] });
+    const textFor = async (level: 'open' | 'inUse' | 'sent') => {
+      let renderer!: ReactTestRenderer;
+      await act(async () => { renderer = create(<StorageBinTile bin={bin} lock={lockAt(level)} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
+      const text = JSON.stringify(renderer.toJSON());
+      await act(async () => renderer.unmount());
+      return text;
+    };
+    expect(await textFor('open')).not.toContain('data-record-lock');
+    expect(await textFor('inUse')).not.toContain('data-record-lock');
+    expect(await textFor('sent')).toContain('"data-record-lock":"sent"');
+  });
 });

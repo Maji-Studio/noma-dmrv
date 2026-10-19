@@ -12,9 +12,9 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
-import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
+import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { MassPair } from "@/components/ui/mass-pair";
 import { StatCard } from "@/components/ui/stat-card";
 import { useToast } from "@/components/ui/toast";
@@ -123,12 +123,11 @@ function createColumns(
   onEdit: (product: BiocharProductWithRelations) => void,
   onDelete: (productId: string) => void,
   locks: RecordLockViews,
-  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<BiocharProductWithRelations>[] {
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true, recordLink: true },
+      meta: { nowrap: true, recordLink: true, recordLinkBefore: recordLockTitleMark(locks) },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -189,7 +188,6 @@ function createColumns(
       cell: ({ row }) =>
         row.original.storageLocation?.name || MISSING_VALUE.notSet,
     },
-    recordLockColumn<BiocharProductWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
@@ -461,7 +459,7 @@ export function BiocharProductList() {
     displaySideSheet?.mode === "view" ? displaySideSheet.entity : null;
   const isSubmitting = createProduct.isPending || updateProduct.isPending;
 
-  const columns = createColumns(openEdit, setDeletingProductId, productLocks.locks, productLocks.statusOf);
+  const columns = createColumns(openEdit, setDeletingProductId, productLocks.locks);
 
   if (!contextFacilityId) {
     return (
@@ -512,6 +510,8 @@ export function BiocharProductList() {
           isLoading={isLoading}
         />
       </div>
+
+      <RecordLockListNotice read={productLocks} />
 
       {/* Data Table */}
       <DataTable

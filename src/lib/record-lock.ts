@@ -26,6 +26,24 @@ interface RecordUpdateInputs {
 import type { LocalSubmissionStatus } from "@/lib/certification/status";
 import { getMetadataValue } from "@/lib/certification/submission-metadata";
 
+/** The second sentence of the In use notice: what to do. The default `howToFree` of an In use lock. */
+export const IN_USE_HOW_TO_FREE = "To change them, first correct or remove those records.";
+/** The same sentence when one record holds the lock. */
+export const IN_USE_HOW_TO_FREE_ONE = "To change them, first correct or remove that record.";
+/** The refusal variants: a refusal message has no "them" to point back at. */
+export const IN_USE_REFUSAL_HOW_TO_FREE = "To change this, first correct or remove the records that use it.";
+export const IN_USE_REFUSAL_HOW_TO_FREE_ONE = "To change this, first correct or remove the record that uses it.";
+
+/**
+ * The In use sentence for a surface and holder count. Only for the default
+ * `howToFree`; a lock with its own sentence keeps it.
+ */
+export function inUseHowToFree(surface: "notice" | "refusal", holderCount: number): string {
+  const one = holderCount === 1;
+  if (surface === "notice") return one ? IN_USE_HOW_TO_FREE_ONE : IN_USE_HOW_TO_FREE;
+  return one ? IN_USE_REFUSAL_HOW_TO_FREE_ONE : IN_USE_REFUSAL_HOW_TO_FREE;
+}
+
 const TERMINAL_ATTEMPT_STATUSES: ReadonlySet<LocalSubmissionStatus> = new Set(["submitted", "accepted", "rejected", "superseded"]);
 const REMOTELY_SUBMITTED_STATUSES: ReadonlySet<LocalSubmissionStatus> = new Set(["submitted", "accepted"]);
 
@@ -144,11 +162,11 @@ function recordLock<Kind extends keyof RecordUpdateInputs>(facts: RecordLockFact
     const interrupted = facts.removals.some(removal => isSentRemoval(removal) && !removal.statements.length &&
       removal.submissions.some(submission => submission.status !== "submitted" && submission.status !== "accepted"));
     return { level: "sent", heldBy, freeFields: [], howToFree: interrupted
-      ? "Delete or resume the interrupted Removal, or review its records in Isometric."
-      : "Wait for Isometric to return the covering GHG Statement, then refresh its status." };
+      ? "To edit again, delete or resume the interrupted Removal, or review its records in Isometric."
+      : "If Isometric sends the GHG Statement back, refresh its status to edit again." };
   }
   if (facts.dependents.length) return { level: "inUse", heldBy: facts.dependents, freeFields,
-    howToFree: "Correct or remove the records that use it first.", ...returnedBy(facts) };
+    howToFree: IN_USE_HOW_TO_FREE, ...returnedBy(facts) };
   return { level: "open", heldBy: [], freeFields, howToFree: null, ...returnedBy(facts) };
 }
 
@@ -180,7 +198,11 @@ export function recordInUseFreeFields(kind: RecordLockKind): readonly string[] {
 /** Every lock refusal names its holder, then explains how to free the record. */
 export function withRecordLockGuidance(message: string, lock: RecordLock): string {
   if (lock.level === "open") return message;
-  return `${message}${formatRecordLockHolders(lock)} ${lock.howToFree ?? "Correct or remove the records that use it first."}`;
+  // The notice's "them" points at the fields it just named; a refusal message has no such referent.
+  const howToFree = lock.level === "inUse" && (!lock.howToFree || lock.howToFree === IN_USE_HOW_TO_FREE)
+    ? inUseHowToFree("refusal", lock.heldBy.length)
+    : lock.howToFree;
+  return `${message}${formatRecordLockHolders(lock)} ${howToFree}`;
 }
 
 const HOLDER_LABELS: Record<string, string> = {
