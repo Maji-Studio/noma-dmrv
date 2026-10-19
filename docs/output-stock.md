@@ -109,7 +109,7 @@ shares, including physical residuals whose dry grams were already attributed.
 
 ## Operator stock sheets
 
-Every bin uses the same stock card and a separate Stock over time card. Split
+Every bin uses the same stock card and a separate Stock over time card. The headline reads "200 kg wet mass" with "90 kg dry biochar" under it: no approximation sign and no "estimated" in the figures. "Estimated" lives in the details, the chart key and the ⓘ tooltip, and the line under the bays says how they are drawn. Split
 output bins show fixed-width bays in the bin's default draw order, wrapping when
 needed, with a key below. Mix and feedstock bins show one pile. A lone vessel
 fills against the configured capacity and lists its parts beside it. Multiple
@@ -156,7 +156,11 @@ both are present and plots only the live effect in physical-time order; history
 keeps every row. Unmatched reversals remain in the chart replay so totals add up.
 Explanatory moisture rows are not counted twice. Missing
 historical wet or solids bases leave water unknown. Bay, pile-band and chart
-point details open on hover, keyboard focus or tap.
+point details open on hover, keyboard focus or tap. A product bin's bays and
+pile bands name their parts as the product composition does (dry biochar,
+"<ingredient> solids", estimated water): `getOutputSubBins` splits each layer's
+ingredient solids by the product's saved ingredient snapshots, pro rata, since
+a draw takes a blend as mixed. Presentation only; nothing posts from the split.
 
 Feedstock's org-scoped `feedstock-bin-ledger.ts` reads completed intakes,
 production-run draws, product ingredient draws, losses and old counts. The pile

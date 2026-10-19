@@ -30,7 +30,7 @@ export function DerivedHeadline({ label, value, before, secondary, sub, figureLa
    * estimate. Data, so it shows at both detail levels. Null value reads
    * "Not available".
    */
-  secondary?: { label: ReactNode; value: ReactNode };
+  secondary?: { label: ReactNode; value: ReactNode; };
   /** One caption line under the figure, such as the entry behind it. */
   sub?: ReactNode;
   /**

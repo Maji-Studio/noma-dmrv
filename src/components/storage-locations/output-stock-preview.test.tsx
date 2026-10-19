@@ -112,7 +112,7 @@ describe("OutputStockAvailability", () => {
       binName="Product bin" dryKg={1150} allocations={rain.allocations} actions={<button>Stock history</button>}
     />);
     expect(html).toContain("Batch A 900 kg");
-    expect(html).toContain("Available dry stock");
+    expect(html).toContain("Available dry biochar");
     expect(html).toContain("1,150 kg dry biochar");
     expect(html).not.toContain("wet");
     expect(html).toContain("Stock history");
@@ -131,12 +131,12 @@ describe("OutputStockAvailability", () => {
       await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === level)!.props.onChange());
       const text = visible(renderer.root).replace(/\s+/g, " ");
       expect(text).toContain("Available wet stock, estimate");
-      expect(text).toContain("≈ 2,833 kg wet");
-      expect(text).toContain("Available dry stock 2,380 kg");
+      expect(text).toContain("2,833 kg wet mass");
+      expect(text).toContain("2,380 kg dry biochar");
       expect(text).toContain("At 16% departure moisture");
       // The dry line sits under the headline, before the batch bar.
-      expect(text.indexOf("≈ 2,833 kg wet")).toBeLessThan(text.indexOf("Available dry stock"));
-      expect(text.indexOf("Available dry stock")).toBeLessThan(text.indexOf("Batch A"));
+      expect(text.indexOf("2,833 kg wet mass")).toBeLessThan(text.indexOf("2,380 kg dry biochar"));
+      expect(text.indexOf("2,380 kg dry biochar")).toBeLessThan(text.indexOf("Batch A"));
     }
     await act(async () => renderer.unmount());
   });
@@ -196,12 +196,13 @@ describe("StockMovementCard", () => {
     expect(text).toContain("Wet stock in bin, estimate");
     expect(text).toMatch(/≈ 500\s+490 kg/);
     expect(text).toContain("10 kg wet lost at 30% moisture");
-    expect(text).toMatch(/Dry solids\s+7 kg/);
+    // A biochar bin's dry part is dry biochar itself, so the bar names it.
+    expect(text).toMatch(/Dry biochar\s+7 kg/);
     expect(text).toMatch(/Water\s+3 kg/);
     expect(card.markup()).toContain('"data-moisture-segment":"dry"');
     expect(card.renderer.root.findAll(node => node.props.role === "group" && node.props["aria-label"] === "Dry biochar in bin: 350 kg before, 343 kg after")).toHaveLength(1);
-    expect(text.indexOf("Wet stock in bin")).toBeLessThan(text.indexOf("Dry solids"));
-    expect(text.indexOf("Dry solids")).toBeLessThan(text.indexOf("Dry biochar in bin"));
+    expect(text.indexOf("Wet stock in bin")).toBeLessThan(text.search(/Dry biochar\s+7 kg/));
+    expect(text.search(/Dry biochar\s+7 kg/)).toBeLessThan(text.indexOf("Dry biochar in bin"));
     // The entered figures are the inputs, not the consequence, so none of them
     // is readable until the disclosure is opened.
     expect(text).not.toContain("Wet removed");
@@ -282,7 +283,7 @@ describe("StockMovementCard", () => {
   it("shows what a reading resets as an estimate block, an arrow and a reading block", async () => {
     const moistureReset = { layerCodes: ["B-0419"], before: { moisturePercent: 35, wetKg: 675.48 }, after: { moisturePercent: 33, wetKg: 655.32 } };
     const card = await render({ ...loss, moistureReset });
-    expect(card.text()).toMatch(/Moisture updated ·\s*B-0419\s*Estimate\s*35(\.0)?%\s*≈ 675 kg wet\s*Reading\s*33(\.0)?%\s*≈ 655 kg wet/);
+    expect(card.text()).toMatch(/Moisture updated ·\s*B-0419\s*Estimate\s*35(\.0)?%\s*675 kg wet mass\s*Reading\s*33(\.0)?%\s*655 kg wet mass/);
     await act(async () => card.renderer.unmount());
     const refused = await render({ ...loss, moistureReset, blockingMessage: "Loss exceeds the dry biochar in this bin." });
     expect(refused.text()).not.toContain("Moisture updated");
