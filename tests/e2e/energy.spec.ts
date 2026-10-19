@@ -1,7 +1,12 @@
 /**
- * Energy page (ADR 0031): recorded activity per run, a ranked list that
- * expands a row, and a record code that opens its own side sheet. No CO2e is
- * shown and Certification settings has no emission factors section.
+ * Facility activity on the Emissions page (ADR 0031, epic #1058): the old
+ * /energy route redirects to /emissions with its query kept; the activity
+ * shows recorded activity per run, a ranked list that expands a row, and a
+ * record code that opens its own side sheet. No CO2e is shown and
+ * Certification settings has no emission factors section.
+ *
+ * `activity=true` opens the "Facility activity" disclosure, and the
+ * redirect keeps it.
  *
  * The run is inserted straight into the seeded facility with its energy
  * readings.
@@ -17,7 +22,7 @@ const RUN_HOURS_AGO = 30;
 const RUN_LENGTH_HOURS = 6;
 const MS_PER_HOUR = 60 * 60 * 1000;
 
-test.describe("Energy page", () => {
+test.describe("Emissions page, facility activity", () => {
   test("lists a run, expands its activity and links to the run", async ({
     adminPage: page,
     seededData,
@@ -45,7 +50,10 @@ test.describe("Energy page", () => {
         biocharDryMassKg: 270,
       });
 
-      await page.goto(`/energy?facility=${facilityId}`);
+      await page.goto(`/energy?facility=${facilityId}&activity=true`);
+      await expect(page).toHaveURL(/\/emissions\?.*facility=/);
+      await expect(page).toHaveURL(/activity=true/);
+      await expect(page.getByRole("heading", { level: 1, name: "Emissions" })).toBeVisible();
       await page.getByRole("tab", { name: "Production runs" }).click();
       const runLink = page.getByRole("link", { name: code });
       await expect(runLink).toBeVisible();

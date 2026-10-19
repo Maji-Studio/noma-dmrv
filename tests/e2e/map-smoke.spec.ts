@@ -15,6 +15,7 @@
  */
 
 import type { Page } from "@playwright/test";
+import { SWIFTSHADER_ARGS } from "./fixtures/swiftshader";
 import {
   MAP_SMOKE_FIXTURE_ORIGIN,
   MAP_SMOKE_STYLE_URL,
@@ -23,7 +24,6 @@ import { test, expect } from "./fixtures";
 import { fullExtentVectorTile, mapSmokeStyle } from "./helpers/map-smoke-tiles";
 
 const MAP_SMOKE_PATH = "/e2e/map-smoke";
-const SWIFTSHADER_ARGS = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"];
 const TILE_PATH = /^\/tiles\/\d+\/\d+\/\d+\.pbf$/;
 const WORKER_OR_GPU_ERROR = /worker|GPUInitializationError|WebGL/i;
 // Covers first-hit Turbopack compilation of the map chunk in local dev runs.

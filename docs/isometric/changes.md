@@ -818,3 +818,10 @@ Earlier implementation notes are archived by date:
 - [`2026-06-10 to 2026-06-20`](../archive/isometric-changes-archive-2026-06-10-to-06-20.md)
 - [`2026-05-26 to 2026-06-08`](../archive/isometric-changes-archive-2026-05-26-to-06-08.md)
 - [`2026-02 to 2026-05-24`](../archive/isometric-changes-archive-2026-02-to-05-24.md)
+
+## 2026-10-16: stored-entry display facts
+
+Batch health uses batch-scoped stored entries and automatic figures.
+Facility Energy activity includes counting entries only on reviewed facility
+energy sources. These local changes remain behind `EMISSIONS_ENTRIES_ENABLED`;
+PR 4 owns Removal-flow zero confirmation and registry contribution compilation.

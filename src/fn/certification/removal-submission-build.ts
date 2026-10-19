@@ -747,6 +747,7 @@ export async function buildRemovalSubmissionBuild(args: {
   } = resolveTemplateInputs({
     template: removalTemplate,
     lineSources: args.prepared.lineSources,
+    emissionLines: ctx.emissionLines,
     blueprintsByKey,
     agg,
     externalProjectId,
