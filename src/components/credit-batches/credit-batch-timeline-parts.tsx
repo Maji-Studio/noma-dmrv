@@ -35,16 +35,16 @@ const TONE_BY_STATE_CLASS: Record<StatusStateClass, Tone> = {
 };
 
 const STATE_TITLE: Record<TimelineState, string> = {
-  blocking: "Needs work",
+  blocking: "Open",
   ready: "Ready",
   submitted: "Submitted",
   issued: "Issued",
 };
 
-/** Solid, tint and edge per state, for bars, hover cards and the legend. */
 /** The tone of a bar whose state has not loaded. */
 export const UNKNOWN_TONE = TONE_BY_STATE_CLASS[getStatusState("unknown")];
 
+/** Solid, tint and edge per state, for bars, hover cards and the legend. */
 export const STATE_TONE: Record<TimelineState, Tone & { title: string }> = {
   blocking: { ...TONE_BY_STATE_CLASS[getStatusState(STATE_STATUS.blocking)], title: STATE_TITLE.blocking },
   ready: { ...TONE_BY_STATE_CLASS[getStatusState(STATE_STATUS.ready)], title: STATE_TITLE.ready },
