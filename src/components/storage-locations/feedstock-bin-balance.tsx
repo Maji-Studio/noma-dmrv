@@ -147,7 +147,7 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
         {stock.error && <Notice tone="error">{stock.error.message}</Notice>}
       </>}
       figure={stock.data && <>
-        {formatMassKg(stock.data.currentWetKg)} wet
+        {formatMassKg(stock.data.currentWetKg)} wet mass
         {capacityKg != null && <span className="body-small text-[var(--color-text-tertiary)]"> of {formatMassKg(capacityKg)}</span>}
       </>}
       // Dry solids only when the batches' moisture gives them; the moisture itself is in the water band's details.

@@ -39,7 +39,7 @@ describe("MatchingOutputBins", () => {
     const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
     expect(text).toContain("Available wet stock, estimate");
     expect(text).toContain("200 kg wet mass");
-    expect(text).toContain("Dry biochar 170 kg");
+    expect(text).toContain("170 kg dry biochar");
     expect(text).not.toContain("Tap to see");
     expect(text).toContain("2 bins");
     expect(html).not.toContain('role="article"');
@@ -95,7 +95,7 @@ describe("MatchingOutputBins", () => {
     expect(html).toContain("Available wet stock, estimate");
     expect(html).toContain("118 kg wet");
     expect(html).toContain("Wet mass added less wet mass taken out");
-    expect(html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")).toContain("Dry biochar 100 kg");
+    expect(html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")).toContain("100 kg dry biochar");
   });
   it.each(["loading", "error"] as const)("keeps stock informational when details are %s", status => {
     state[status] = true;
