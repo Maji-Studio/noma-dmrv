@@ -49,7 +49,17 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   const modeChanges = await getStockModeChanges(ctx, bin.id, reader);
   const stockMode = stockModeAt(bin.stockMode, modeChanges, input.occurredAt);
   const policy = resolveDrawPolicy(stockMode, bin.drawOrder);
-  if (sources && stockMode !== 'split') throw new DomainError('validation_failed', 'Only a split bin takes a sub-bin order.', { issues: [{ path: ['sources'], code: 'validation_failed', message: 'Only a split bin takes a sub-bin order.' }] });
+  let blockingMessage: string | null = null;
+  if (sources && stockMode !== 'split') {
+    if (input.kind !== 'delivery' || !correction || input.sources !== undefined) throw new DomainError('validation_failed', 'Only a split bin takes a sub-bin order.', { issues: [{ path: ['sources'], code: 'validation_failed', message: 'Only a split bin takes a sub-bin order.' }] });
+    // Saved sub-bin readings cannot supply a measured moisture for the mixed pile.
+    const merge = modeChanges.filter(change => change.to === 'mix' && change.at <= input.occurredAt)
+      .sort((a, b) => a.at.localeCompare(b.at)).at(-1);
+    const at = merge ? formatFacilityDateTime(merge.at, await getOutputStockFacilityTimezone(ctx, input.facilityId, reader)) : null;
+    blockingMessage = at
+      ? `This time is after the bin was merged on ${at}. A load drawn by sub-bin cannot move past the merge. Choose a time before it.`
+      : 'This time is in a mix bin. A load drawn by sub-bin must stay at a time when the bin was split.';
+  }
   if (!sources && input.moisturePercent == null && !(input.kind === 'count' && input.wetMassKg === 0)) throw new SafeError('Enter the measured moisture.');
   // Reducing a loss restores its own saved provenance, even after a late intake.
   // An eligible delivery correction may intentionally use the newly known FIFO.
@@ -73,7 +83,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   const runMap = new Map(runCodes.map(row => [row.id, row.code]));
   const before = planOutputStock(layers, input.occurredAt, { kind: 'count', wetKg: 0 });
   let plan: ReturnType<typeof planOutputStock> | null = null;
-  let blockingMessage = correction && input.kind === 'delivery'
+  blockingMessage ??= correction && input.kind === 'delivery'
     ? await deliveryTimeCrossingMessage(ctx, input, correction.original, events, reader) : null;
   // Typed twin of blockingMessage for API callers: a shortage, or a request to change.
   let blocking: OutputStockBlocking | null = blockingMessage ? { kind: 'invalid_request' } : null;

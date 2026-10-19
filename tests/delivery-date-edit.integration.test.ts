@@ -196,6 +196,48 @@ it('allows crossing a stock-mode merge without treating it as a draw', async () 
   expect(await updateDelivery(f.ctx, delivery.id, { expectedVersion: delivery.version, deliveryDate: new Date(target) })).toMatchObject({ deliveryDate: new Date(target) });
 });
 
+async function subBinDeliveryBeforeMerge() {
+  const f = await fixture();
+  await db.update(facilities).set({ timezone: 'Africa/Dar_es_Salaam' }).where(and(eq(facilities.organizationId, f.ctx.organizationId), eq(facilities.id, f.facility.id)));
+  const other = await postProduct(f, { massKg: 50 });
+  const sources = [{ layerId: other.id, moisturePercent: 0 }, { layerId: f.product!.id, moisturePercent: 20 }];
+  const delivery = await createDelivery(f.ctx, { ...await deliveryInput(f, 100), sources });
+  await updateStorageLocation(f.ctx, f.bin.id, { expectedVersion: f.bin.version, stockMode: 'mix', mergedAt: new Date(LATER) });
+  return { f, delivery };
+}
+
+it.each([LATER, '2026-09-16T12:00:00.000Z'])('refuses moving an inherited sub-bin delivery to %s with the merge time and no writes', async target => {
+  const { f, delivery } = await subBinDeliveryBeforeMerge();
+  const beforeHistory = await getOutputStockHistory(f.ctx, f.bin.id);
+  const beforeDelivery = await storedDelivery(f, delivery.id);
+  const beforeStock = await getOutputBinStockView(f.ctx, f.bin.id);
+  const preview = await previewOutputStock(f.ctx, { ...await correctionInput(f, delivery.id, target), moisturePercent: undefined });
+  expect(preview.blockingMessage).toBe('This time is after the bin was merged on Sep 15, 2026, 15:00. A load drawn by sub-bin cannot move past the merge. Choose a time before it.');
+  expect(preview.allocations).toEqual([]);
+  expect(preview.afterDryKg).toBe(preview.beforeDryKg);
+  await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: delivery.version, deliveryDate: new Date(target) }))
+    .rejects.toThrow(preview.blockingMessage!);
+  expect(await storedDelivery(f, delivery.id)).toEqual(beforeDelivery);
+  expect(await getOutputStockHistory(f.ctx, f.bin.id)).toEqual(beforeHistory);
+  expect(await getOutputBinStockView(f.ctx, f.bin.id)).toEqual(beforeStock);
+});
+
+it('keeps inherited sub-bin readings when moving a delivery before the later merge', async () => {
+  const { f, delivery } = await subBinDeliveryBeforeMerge();
+  const target = '2026-09-15T06:00:00.000Z';
+  const preview = await previewOutputStock(f.ctx, { ...await correctionInput(f, delivery.id, target), moisturePercent: undefined });
+  expect(preview).toMatchObject({ blockingMessage: null, stockMode: 'split', removedDryKg: 90 });
+  expect(await updateDelivery(f.ctx, delivery.id, { expectedVersion: delivery.version, deliveryDate: new Date(target) }))
+    .toMatchObject({ deliveryDate: new Date(target), deliveredWetMassKg: 100, massDryKg: 90, moistureContentPercent: 10 });
+  const history = await getOutputStockHistory(f.ctx, f.bin.id);
+  const original = history.find(e => e.kind === 'delivery')!;
+  const replacement = history.find(e => e.kind === 'replacement')!;
+  expect(replacement).toMatchObject({ occurredAt: target, dryMassKg: 90 });
+  expect(replacement.allocations).toHaveLength(original.allocations.length);
+  expect(replacement.allocations).toEqual(expect.arrayContaining(original.allocations.map(a => ({ ...a, runs: expect.arrayContaining(a.runs) }))));
+  expect(await getOutputBinStockView(f.ctx, f.bin.id)).toMatchObject({ dryMassKg: 960 });
+});
+
 it('leaves Lost mass time corrections able to cross an independent draw', async () => {
   const f = await fixture();
   const other = await postProduct(f, { massKg: 100 });
