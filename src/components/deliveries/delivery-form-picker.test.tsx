@@ -127,19 +127,20 @@ it("shows the recorded distance even when the order already has a different live
   expect((screen.getByRole("spinbutton", { name: /One-way distance/ }) as HTMLInputElement).value).toBe("12");
 });
 
-it("allows latest delivery mass edits and keeps its event time locked", () => {
+it("allows an Open delivery's mass, moisture and event time to be edited", () => {
   state.locked = false;
   render(<DeliveryForm delivery={delivery} onSubmit={vi.fn()} />, { wrapper });
   expect(screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }).hasAttribute("disabled")).toBe(false);
   expect(screen.getByRole("spinbutton", { name: /^Biochar product moisture/ }).hasAttribute("disabled")).toBe(false);
-  expect(screen.getByLabelText(/Delivery date and time/).hasAttribute("disabled")).toBe(true);
+  expect(screen.getByLabelText(/Delivery date and time/).hasAttribute("disabled")).toBe(false);
 });
 
-it("locks delivery mass and moisture with the newer-stock reason", () => {
+it("locks delivery date, mass and moisture with the newer-stock reason", () => {
   state.locked = true;
   render(<DeliveryForm delivery={delivery} onSubmit={vi.fn()} />, { wrapper });
   expect(screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }).hasAttribute("disabled")).toBe(true);
   expect(screen.getByRole("spinbutton", { name: /^Biochar product moisture/ }).hasAttribute("disabled")).toBe(true);
+  expect(screen.getByLabelText(/Delivery date and time/).hasAttribute("disabled")).toBe(true);
   expect(screen.getByText("Locked because newer stock entries were recorded on this bin after it.")).toBeTruthy();
 });
 
