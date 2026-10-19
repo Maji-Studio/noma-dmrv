@@ -124,3 +124,27 @@ describe("returned Removals", () => {
     expect(recordLocks.productionRun({ dependents: [], removals: [{ id: "removal", submissions: [{ status: "rejected" }], statements: [] }] }).returnedBy).toBeUndefined();
   });
 });
+
+describe("interrupted Removals", () => {
+  const interrupted = (id: string) => ({ id, label: id, submissions: [{ status: "draft" }], statements: [] });
+
+  it("marks the Sent lock interrupted and words the refusal for one Removal", async () => {
+    const { withRecordLockGuidance } = await import("./record-lock");
+    const lock = recordLocks.feedstock({ dependents: [], removals: [interrupted("REM-1")] });
+    expect(lock).toMatchObject({ level: "sent", interrupted: true });
+    expect(withRecordLockGuidance("No.", lock))
+      .toBe("No. Held by Removal REM-1. To edit again, delete or resume that Removal, or review its records in Isometric.");
+  });
+
+  it("words the refusal for several Removals", async () => {
+    const { withRecordLockGuidance } = await import("./record-lock");
+    const lock = recordLocks.feedstock({ dependents: [], removals: [interrupted("REM-1"), interrupted("REM-2")] });
+    expect(withRecordLockGuidance("No.", lock))
+      .toBe("No. Held by Removal REM-1, Removal REM-2. To edit again, delete or resume those Removals, or review their records in Isometric.");
+  });
+
+  it("does not mark a submitted Removal interrupted", () => {
+    const lock = recordLocks.feedstock({ dependents: [], removals: [{ id: "r", submissions: [{ status: "submitted" }], statements: [] }] });
+    expect(lock.interrupted).toBeUndefined();
+  });
+});

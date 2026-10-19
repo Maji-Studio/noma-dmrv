@@ -118,6 +118,13 @@ function LockLine({ lock, subject = "record", inUseLocksNothing = false }: {
       </Notice>
     );
   }
+  if (lock.level === "sent" && lock.interrupted) {
+    return (
+      <Notice tone="info" boxed data-record-lock-notice="sent">
+        Nothing can be changed, because sending <HolderList holders={lock.heldBy} /> to Isometric was started and not finished. {lock.howToFree}
+      </Notice>
+    );
+  }
   if (lock.level === "sent") {
     return (
       <Notice tone="info" boxed data-record-lock-notice="sent">

@@ -34,6 +34,10 @@ export const IN_USE_HOW_TO_FREE_ONE = "To change them, first correct or remove t
 export const IN_USE_REFUSAL_HOW_TO_FREE = "To change this, first correct or remove the records that use it.";
 export const IN_USE_REFUSAL_HOW_TO_FREE_ONE = "To change this, first correct or remove the record that uses it.";
 
+/** The Sent sentence when sending was started and not finished: what to do, for one or several Removals. */
+export const INTERRUPTED_HOW_TO_FREE_ONE = "To edit again, delete or resume that Removal, or review its records in Isometric.";
+export const INTERRUPTED_HOW_TO_FREE = "To edit again, delete or resume those Removals, or review their records in Isometric.";
+
 /**
  * The In use sentence for a surface and holder count. Only for the default
  * `howToFree`; a lock with its own sentence keeps it.
@@ -117,6 +121,8 @@ export interface RecordLock<Field extends string = string> {
   /** Fields accepted while In use, subject to ordinary validation and stock sufficiency. */
   freeFields: readonly Field[];
   howToFree: string | null;
+  /** Sent only: sending was started and not finished, so the records were not sent. */
+  interrupted?: boolean;
   /** Open or In use only: the returned Removals whose resubmission will carry corrections. */
   returnedBy?: readonly RecordLockReturn[];
 }
@@ -161,9 +167,9 @@ function recordLock<Kind extends keyof RecordUpdateInputs>(facts: RecordLockFact
   if (heldBy.length) {
     const interrupted = facts.removals.some(removal => isSentRemoval(removal) && !removal.statements.length &&
       removal.submissions.some(submission => submission.status !== "submitted" && submission.status !== "accepted"));
-    return { level: "sent", heldBy, freeFields: [], howToFree: interrupted
-      ? "To edit again, delete or resume the interrupted Removal, or review its records in Isometric."
-      : "If Isometric sends the GHG Statement back, refresh its status to edit again." };
+    if (interrupted) return { level: "sent", heldBy, freeFields: [], interrupted: true,
+      howToFree: heldBy.length > 1 ? INTERRUPTED_HOW_TO_FREE : INTERRUPTED_HOW_TO_FREE_ONE };
+    return { level: "sent", heldBy, freeFields: [], howToFree: "If Isometric sends the GHG Statement back, refresh its status to edit again." };
   }
   if (facts.dependents.length) return { level: "inUse", heldBy: facts.dependents, freeFields,
     howToFree: IN_USE_HOW_TO_FREE, ...returnedBy(facts) };

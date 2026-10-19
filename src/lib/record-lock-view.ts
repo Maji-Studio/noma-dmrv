@@ -43,6 +43,8 @@ export interface RecordLockView {
   usedBy: RecordLockLink[];
   freeFields: string[];
   howToFree: string | null;
+  /** Sent only: sending was started and not finished (see `RecordLock.interrupted`). */
+  interrupted?: boolean;
   /** Open or In use after Isometric returned a sent Removal; empty otherwise. */
   returnedBy: RecordLockReturnView[];
   /** Storage bins only: the distinct formulations of the products stored in it (null is pure biochar). */
