@@ -7,13 +7,16 @@
  * it inside the form at both levels. Every `*-form.tsx` is either covered here or
  * listed in `NOT_SHEET_FORMS` with its reason; a new form fails the inventory.
  *
+ * The same render seam hosts the required marker guards at the end of the file
+ * (see `form-required-markers-harness.tsx`).
+ *
  * Data hooks are neutralised at the React Query seam, so every query reads as
  * settled and empty and no server action runs. That is enough for parity: a
  * form can only differ between the levels through a level reader, and those
  * are the primitives exercised with data in `form-detail-parity.test.tsx`.
  */
 import { NuqsTestingAdapter } from "nuqs/adapters/testing";
-import type { ReactElement, ReactNode } from "react";
+import type { ComponentProps, ReactElement, ReactNode } from "react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
@@ -66,10 +69,20 @@ vi.mock("@/hooks/use-facility-context", () => ({
 }));
 
 import { renderBothLevels, sourceFiles } from "./form-detail-parity-harness";
+import { DistanceOverrideField } from "@/components/transport-legs/distance-override-field";
+import { FieldPositionField } from "@/components/applications/field-position-field";
+import { ApplicationEvidencePanel } from "@/components/applications/application-evidence-panel";
+import { RequiredMarker } from "./required-marker";
+import { FormEntitySelect } from "./entity-select/form-entity-select";
+import { FormField } from "./form-field";
+import { ChoiceCardGroup } from "./choice-card-group";
+import { EventTimeInput } from "./event-time-input";
+import { change, conditionalRequired, requiredMarkers } from "./form-required-markers-harness";
 import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
 import { FeedstockForm } from "@/components/feedstocks/feedstock-form";
 import { OutputStockForm } from "@/components/storage-locations/output-stock-form";
 import { StorageLocationForm } from "@/components/storage-locations/storage-location-form";
+import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import { ProductionRunForm } from "@/components/production-runs/production-run-form";
 import { ProductionIncidentForm } from "@/components/production-runs/production-incident-form";
 import { ProductionSampleForm } from "@/components/production-runs/production-sample-form";
@@ -255,5 +268,85 @@ describe("sheet form detail level parity", () => {
     if (shows) expect(simple.text).toContain(shows);
     expect(detailed.items).toEqual(simple.items);
     expect(detailed.text).toEqual(simple.text);
+  });
+});
+
+/**
+ * Fields that refuse an empty submit without carrying the star, each with the
+ * reason: the rule is one of several fields, so no single input is required.
+ */
+const REFUSES_EMPTY_WITHOUT_STAR: Record<string, string[]> = {
+  "production sample": ["weightGrams"], // at least one measured value, any field
+};
+
+describe("required markers match what a form needs to submit", () => {
+  it.each(CREATE_CASES)("$name form stars every field an empty submit refuses", async ({ name, element }) => {
+    const { starred, failing, markerCount } = await requiredMarkers(<NuqsTestingAdapter>{element}</NuqsTestingAdapter>);
+    // Every star renders the shared RequiredMarker.
+    expect(markerCount).toBeGreaterThanOrEqual(starred.length);
+    const allowed = REFUSES_EMPTY_WITHOUT_STAR[name] ?? [];
+    const unstarred = failing.filter(id => !starred.includes(id) && !allowed.includes(id));
+    expect(unstarred).toEqual([]);
+    // The exemptions stay honest: an exempt field still refuses an empty submit.
+    for (const id of allowed) expect(failing).toContain(id);
+  });
+
+  it.each([
+    ["running", ["reactorId", "startDate", "startTime", "feedstockDraws.0.storageLocationId", "feedstockDraws.0.wetMassKg"]],
+    ["complete", ["reactorId", "startDate", "startTime", "endDate", "endTime", "feedstockDraws.0.storageLocationId", "feedstockDraws.0.wetMassKg", "feedstockMoisturePercent", "biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"]],
+    ["failed", ["reactorId", "startDate", "startTime", "endDate", "endTime", "feedstockDraws.0.storageLocationId", "feedstockDraws.0.wetMassKg", "feedstockMoisturePercent"]],
+    ["cancelled", ["reactorId", "cancellationReason", "startDate", "startTime", "feedstockDraws.0.storageLocationId", "feedstockDraws.0.wetMassKg"]],
+  ] as const)("production run stars the fields a %s run needs, and no others", async (status, expected) => {
+    const run = as<ProductionRunWithRelations>({ id: "run", facilityId: "facility", reactorId: "reactor", status, startTime: DAY, endTime: DAY, feedstockDraws: [{ storageLocationId: "bin", storageLocationName: "Feedstock bin", wetMassKg: 1000 }], feedstocks: [], totalFeedstockWetMassKg: 1000 });
+    const { starred } = await requiredMarkers(<NuqsTestingAdapter><ProductionRunForm onSubmit={noop} productionRun={run} /></NuqsTestingAdapter>, { submit: false });
+    expect([...starred].sort()).toEqual([...expected].sort());
+  });
+});
+
+const NOW_ISO = "2026-09-01T10:00:00.000Z";
+const UUID_A = "11111111-1111-4111-8111-111111111111";
+const UUID_B = "22222222-2222-4222-8222-222222222222";
+type Case = { name: string; target: Parameters<typeof conditionalRequired>[1]; element: ReactElement; empty?: Parameters<typeof conditionalRequired>[2] };
+const application = (overrides: object) => as<NonNullable<ComponentProps<typeof ApplicationForm>["application"]>>({ id: "application", deliveryId: UUID_A, applicationDate: DAY, biocharAppliedTons: 5, fieldSizeHa: 1.5, evidenceMethod: "location", ...overrides });
+const delivery = (overrides: object) => as<NonNullable<ComponentProps<typeof DeliveryForm>["delivery"]>>({ id: "delivery", facilityId: "facility", orderId: UUID_A, storageLocationId: UUID_B, deliveryDate: DAY, deliveredWetMassKg: 100, moistureContentPercent: 20, status: "delivered", ...overrides });
+const CONDITIONAL_CASES: Case[] = [
+  { name: "cancellation reason", target: "cancellationReason", element: <ProductionRunForm onSubmit={noop} productionRun={as<ProductionRunWithRelations>({ id: "run", facilityId: "facility", reactorId: "reactor", status: "cancelled", startTime: DAY, endTime: null, cancellationReason: null, feedstockDraws: [], feedstocks: [], totalFeedstockWetMassKg: 0 })} /> },
+  { name: "delivery wet mass", target: "deliveredWetMassKg", element: <DeliveryForm onSubmit={noop} delivery={delivery({ deliveredWetMassKg: null })} /> },
+  { name: "nutrient share", target: "phosphorusPercent", element: <SampleForm onSubmit={noop} sample={as({ id: "sample", creditBatchId: UUID_A, samplingTime: DAY, analysisDate: DAY, labName: "Lab", totalCarbonPercent: 80, organicCarbonPercent: 75, durabilityOption: "200_year", nutrientClaimEnabled: true })} /> },
+  { name: "override distance", target: "distanceKmOverride", element: <DeliveryForm onSubmit={noop} delivery={delivery({})} />,
+    empty: async root => { await change(() => root.findAllByType(DistanceOverrideField)[0]!.props.onOverride()); } },
+  { name: "application GPS, set manually", target: "gps-latitude", element: <ApplicationForm onSubmit={noop} application={application({ gpsLatitude: 1, gpsLongitude: 2 })} />,
+    empty: async root => {
+      await change(() => root.findByType(FieldPositionField).props.onModeChange("manual"));
+      await change(() => root.findByType(FieldPositionField).props.onPositionChange({ lat: null, lng: null }));
+    } },
+  { name: "application GIS reference", target: root => ({ starred: root.findAllByType(RequiredMarker).length > 0 && root.findByType(ApplicationEvidencePanel).props.mode === "boundary", error: root.findByType(ApplicationEvidencePanel).props.error }), element: <ApplicationForm onSubmit={noop} application={application({ evidenceMethod: "boundary", gisBoundary: null, gpsLatitude: 1, gpsLongitude: 2 })} /> },
+  { name: "storage bin feedstock type", target: root => { const field = root.findAll(node => node.type === FormEntitySelect && node.props.name === "feedstockTypeId")[0]!.findByType(FormField); return { starred: Boolean(field.props.required), error: field.props.error }; }, element: <StorageLocationForm onSubmit={noop} storageLocation={as({ id: "bin", facilityId: "facility", type: "feedstock_bin", name: "Feedstock bin", feedstockTypeId: null })} /> },
+  { name: "storage bin merge time", target: "mergedAt", element: <StorageLocationForm onSubmit={noop} storageLocation={as({ id: "bin", facilityId: UUID_A, type: "biochar_bin", stockMode: "split", drawOrder: "newest_first", name: "Biochar bin" })} />,
+    empty: async root => {
+      await change(() => root.findAllByType(ChoiceCardGroup).find(node => node.props.id === "stockMode")!.props.onChange({ target: { value: "mix", name: "stockMode" }, type: "change" }));
+      await change(() => root.findAllByType(EventTimeInput)[0]!.findByType("input").props.onChange({ target: { value: "" } }));
+    } },
+  { name: "biochar product moisture", target: "moistureContentPercent", element: <BiocharProductForm onSubmit={noop} product={as({
+    id: "product", facilityId: UUID_A, placedAt: NOW_ISO, massKg: 350, waterAddedKg: 50, moistureContentPercent: null, formulationId: UUID_A, storageLocationId: UUID_B,
+    sourceBiocharStorageLocationId: UUID_A, composition: { ingredients: [] },
+  })} /> },
+];
+
+/**
+ * Starts from a valid fixture and empties one conditionally required field, so
+ * the empty-submit guard's blind spot (Zod aborts a superRefine after an
+ * invalid_type issue; handler checks run after validation) cannot hide it.
+ * Not in this table, each covered by a focused test instead: the over-allocation
+ * justification and the ingredient moisture (conditional-required-markers.test.tsx,
+ * the forms need bins and formulations the query seam cannot supply) and the
+ * output stock moisture (shown only once the stock preview picks a single reading).
+ */
+describe("a conditionally required field carries the star and the error together", () => {
+  it.each(CONDITIONAL_CASES)("$name", async ({ target, element, empty }) => {
+    const result = await conditionalRequired(<NuqsTestingAdapter>{element}</NuqsTestingAdapter>, target, empty);
+    expect(result.starred).toBe(true);
+    expect(result.error).toBeTruthy();
+    expect(result.markerCount).toBeGreaterThan(0);
   });
 });
