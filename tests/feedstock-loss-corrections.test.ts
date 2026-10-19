@@ -597,6 +597,19 @@ describe("feedstock Lost mass corrections", { timeout: SUITE_TIMEOUT_MS }, () =>
     expect((await ledger(f)).currentWetKg).toBe(INITIAL_KG);
   });
 
+  it("replays a correction retried with uppercase ids instead of conflicting", async () => {
+    const f = await seedBin();
+    const original = await recordOriginal(f);
+    const edit = editInput(f, original.id);
+    const first = saved(await recordLossFn(edit));
+    const upper = { storageLocationId: f.bin.id.toUpperCase(), correctsMovementId: original.id.toUpperCase() };
+    expect(saved(await recordLossFn({ ...edit, ...upper })).id).toBe(first.id);
+    const removal = removeInput(f, first.id);
+    const removed = saved<BinMovement>(await removeLossFn(removal));
+    const retry = await removeLossFn({ ...removal, storageLocationId: f.bin.id.toUpperCase(), correctsMovementId: first.id.toUpperCase() });
+    expect(saved<BinMovement>(retry).id).toBe(removed.id);
+  });
+
   it("posts one reversal when identical removals race", async () => {
     const f = await seedBin();
     const original = await recordOriginal(f);

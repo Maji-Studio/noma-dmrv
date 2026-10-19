@@ -139,6 +139,19 @@ describe("Lost mass correction schemas", () => {
     }
   });
 
+  it("lowercases uppercase ids on both commands so the request fingerprint is case-stable", () => {
+    const upper = {
+      storageLocationId: STORAGE_LOCATION_ID.toUpperCase(),
+      correctsMovementId: MOVEMENT_ID.toUpperCase(),
+    };
+    for (const schema of [recordLossSchema, removeLossSchema]) {
+      expect(schema.parse({ ...replacement, ...upper })).toMatchObject({
+        storageLocationId: STORAGE_LOCATION_ID,
+        correctsMovementId: MOVEMENT_ID,
+      });
+    }
+  });
+
   it("removes an entry without requiring a replacement time, mass, or lane", () => {
     expect(removeLossSchema.parse(removal)).toEqual(removal);
   });
