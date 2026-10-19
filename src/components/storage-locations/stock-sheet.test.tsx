@@ -4,8 +4,9 @@ import { beforeAll, expect, it, vi } from "vitest";
 import type { OutputStockHistoryEntry, OutputSubBin } from "@/types/output-stock";
 import type { FeedstockBinStock } from "@/types/feedstock-bin-ledger";
 
-const state = vi.hoisted(() => ({ output: [] as OutputStockHistoryEntry[], feedstock: undefined as FeedstockBinStock | undefined }));
-vi.mock("@/hooks/use-output-stock", () => ({ useOutputStockHistory: () => ({ data: state.output }) }));
+const state = vi.hoisted(() => ({ output: [] as OutputStockHistoryEntry[], feedstock: undefined as FeedstockBinStock | undefined,
+  balance: undefined as { beforeEstimatedWetKg: number | null; beforeDryKg: number; lane: "product" | "biochar" } | undefined }));
+vi.mock("@/hooks/use-output-stock", () => ({ useOutputStockHistory: () => ({ data: state.output }), useOutputStockBalance: (bin: unknown) => ({ data: bin ? state.balance : undefined }) }));
 vi.mock("@/hooks/use-bin-movements", () => ({ useFeedstockBinStock: () => ({ data: state.feedstock, dataUpdatedAt: Date.parse("2026-10-03T12:00:00Z") }) }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC" }) }));
 vi.mock("next/link", () => ({ default: ({ children, href, ...props }: { children: ReactNode; href: string }) => <a href={href} {...props}>{children}</a> }));
@@ -37,20 +38,42 @@ it("keeps old counts and corrections readable, folds reversals, groups days and 
     entry({ id: "count", kind: "count", occurredAt: NEXT_DAY, wetMassKg: 95, reason: "Old count" }),
     entry({ id: "delivery", kind: "delivery", occurredAt: NEXT_DAY, source: { entity: "delivery", id: "delivery-id" } }),
     entry({ id: "mix", kind: "merge", occurredAt: NEXT_DAY })];
+  state.balance = { beforeEstimatedWetKg: 1100, beforeDryKg: 737, lane: "product" };
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<OutputStockHistory storageLocationId={BIN_ID} facilityId={FACILITY_ID} triggerLabel="History" />); });
   await act(async () => renderer.root.findByType("button").props.onClick());
-  const markup = JSON.stringify(renderer.toJSON());
-  expect(markup).toContain("Original");
-  expect(markup).toContain("Corrected");
-  expect(renderer.root.findAllByType("svg").filter(node => node.props["aria-label"] === "to")).toHaveLength(5);
-  expect(markup).toContain("Stock count");
+  const markup = text(renderer.root);
+  // Wet mass leads, the dry biochar under it.
+  expect(markup).toContain("1,100 kg wet mass");
+  expect(renderer.root.findByType(SecondaryFigure).props).toMatchObject({ label: "Dry biochar", value: "737 kg" });
+  // The correction is its own entry; the entry it replaced stays, struck, as Replaced.
+  expect(markup).toContain("Corrected lost mass: 5 kg wet mass");
+  expect(markup).toContain("Replaced");
+  expect(markup).toContain("Replaces");
+  expect(markup).toContain("Counted 95 kg wet mass");
   expect(markup).toContain("Switched to mix");
-  expect(markup).not.toContain("Correct entry");
+  expect(markup).not.toMatch(/Not available|Unknown until/);
   expect(renderer.root.findAllByType("details")).toHaveLength(4);
   expect(renderer.root.findAllByType("a").map(link => link.props.href)).toEqual([stockSourceHref({ entity: "delivery", id: "delivery-id" }, FACILITY_ID)]);
-  // One day heading for the loss and correction, one for the following day's actions.
-  expect(renderer.root.findAllByType("div").filter(node => node.props.className?.includes("pb-4 pt-12"))).toHaveLength(2);
+  // One day heading for the loss and correction, one for the following day's actions, each with the stock at day end.
+  expect(renderer.root.findAllByType("h4").map(text)).toHaveLength(2);
+  expect(renderer.root.findAllByType("h4").every(node => text(node).includes("at day end"))).toBe(true);
+  await act(async () => renderer.unmount());
+});
+
+it("leads with the dry biochar and links adding stock when the last batch added has no moisture reading", async () => {
+  state.output = [entry({ id: "product", kind: "intake", moisturePercent: null, wetMassKg: 0, dryMassKg: -120, wetDeltaKg: 0, solidsDeltaKg: 120 })];
+  state.balance = { beforeEstimatedWetKg: null, beforeDryKg: 120, lane: "product" };
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<OutputStockHistory storageLocationId={BIN_ID} facilityId={FACILITY_ID} triggerLabel="History" />); });
+  await act(async () => renderer.root.findByType("button").props.onClick());
+  const markup = text(renderer.root);
+  expect(markup).toContain("120 kg dry biochar");
+  expect(markup).toContain("The last batch added has no moisture reading, so there is no wet mass. Record one when");
+  expect(markup).toContain("Added 120 kg dry biochar");
+  expect(markup).not.toContain("wet mass at day end");
+  const link = renderer.root.findAllByType("a").find(node => text(node) === "adding stock");
+  expect(link?.props.href).toBe(`/biochar-products?facility=${FACILITY_ID}&create=true`);
   await act(async () => renderer.unmount());
 });
 

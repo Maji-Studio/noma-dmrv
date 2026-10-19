@@ -10,6 +10,8 @@ import { getOutputStockAllocationProjection, readOutputBinAllLayers, UnresolvedO
 import { getOutputMovementCertificationLocks, outputMovementLockReason } from './output-stock-edit-lock';
 import { requireOrgScope } from './utils';
 import { deliveryAppliedLockedReason } from '@/lib/output-stock/labels';
+import { entryIngredientSolids } from '@/lib/output-stock/entry-ingredient-solids';
+import { savedIngredientSolids } from './output-stock-ingredients';
 
 /**
  * Intake facts retain their recorded wet mass; movement facts remain immutable.
@@ -100,6 +102,15 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
     history.push({ ...intake, id: `${movement.id}:placement`, kind: 'reversal', correctsMovementId: intake.id,
       recordedAt: movement.createdAt.toISOString(), reason: movement.reason,
       dryMassKg: -intake.dryMassKg, wetDeltaKg: -(intake.wetDeltaKg ?? 0), solidsDeltaKg: intake.solidsDeltaKg == null ? null : -intake.solidsDeltaKg });
+  }
+  if (bin.type === 'product_bin') {
+    // Each entry's ingredient solids by material, in the shares its products saved: the history's per-part changes.
+    const saved = await savedIngredientSolids(ctx, products.map(p => p.id), reader);
+    const productDryKg = new Map(products.map(p => [p.id, sources.filter(s => s.biocharProductId === p.id).reduce((sum, s) => sum + Number(s.allocatedDryMassKg), 0)]));
+    for (const entry of history) {
+      const parts = entryIngredientSolids({ dryChangeKg: -entry.dryMassKg, solidsChangeKg: entry.solidsDeltaKg ?? null, draws: entry.allocations, productDryKg, saved });
+      if (parts.some(part => part.solidsKg !== 0)) entry.ingredientSolidsDeltas = parts;
+    }
   }
   history.sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
   let balance = 0;
