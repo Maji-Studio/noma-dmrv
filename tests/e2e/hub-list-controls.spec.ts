@@ -1,6 +1,7 @@
 import * as crypto from "crypto";
 import { test, expect, createTestFacility, deleteTestFacility } from "./fixtures";
 import { seedCreditBatch } from "./fixtures/seed-chain-data";
+import { creditBatchRow, creditBatchRows } from "./fixtures/page-helpers";
 
 const PAGED_ITEM_COUNT = 11;
 const DEFAULT_PAGE_SIZE = 10;
@@ -76,7 +77,7 @@ test.describe("Hub list controls", () => {
 
     await adminPage.goto(`/credit-batches?facility=${seededData.facility.id}&view=list`);
     await expect(
-      adminPage.locator("article").filter({ hasText: `HUB-${tag}` }).first(),
+      creditBatchRows(adminPage).filter({ hasText: `HUB-${tag}` }).first(),
     ).toBeVisible({ timeout: 15000 });
 
     const pageSize = adminPage.getByLabel("Rows per page");
@@ -90,8 +91,8 @@ test.describe("Hub list controls", () => {
     await pageSize.selectOption(String(EXPANDED_PAGE_SIZE));
     await expect(adminPage.getByText("Page 1 of 1", { exact: true })).toBeVisible();
 
-    const firstCard = adminPage.locator("article").filter({ hasText: batches[0].code });
-    await firstCard.getByRole("button", { name: `Actions for credit batch ${batches[0].code}` }).click();
+    const firstRow = creditBatchRow(adminPage, batches[0].code);
+    await firstRow.getByRole("button", { name: `Actions for credit batch ${batches[0].code}` }).click();
     const editItem = adminPage.getByRole("menuitem", { name: "Edit" });
     const deleteItem = adminPage.getByRole("menuitem", { name: "Delete" });
     await expect(editItem).not.toHaveClass(/st-bad/);
@@ -99,7 +100,7 @@ test.describe("Hub list controls", () => {
     await expect(adminPage).toHaveURL(/\/credit-batches\?facility=.*view=list/);
     await adminPage.keyboard.press("Escape");
 
-    await firstCard.click();
+    await firstRow.click();
     await expect(adminPage).toHaveURL(new RegExp(`[?&]batch=${batches[0].id}`));
     await expect(
       adminPage

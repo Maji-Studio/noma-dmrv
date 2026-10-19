@@ -10,6 +10,7 @@ import type { Page } from "@playwright/test";
 import { test, expect, type SeededChainData } from "./fixtures";
 import {
   ACTION_LABEL_PREFIX,
+  creditBatchRows,
   expectNoEntityOptions,
   getCreatedActionCode,
   getListedActionCodes,
@@ -283,6 +284,6 @@ test.describe("Application + Credit Batch UI CRUD", () => {
 
     // Verify credit batch appears in list
     await page.waitForLoadState("networkidle");
-    await expect(page.locator("article").first()).toBeVisible({ timeout: 10000 });
+    await expect(creditBatchRows(page).first()).toBeVisible({ timeout: 10000 });
   });
 });

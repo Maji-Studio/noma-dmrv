@@ -15,6 +15,7 @@ import { deleteOutputApplicationFixtures, deleteOutputDeliveryFixtures, deleteOu
 import { test, expect } from "./fixtures";
 import {
   ACTION_LABEL_PREFIX,
+  creditBatchRows,
   dismissCertifierLinkDialog,
   getCreatedActionCode,
   getListedActionCodes,
@@ -624,7 +625,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.locator('[role="dialog"]').locator('button:has-text("Create credit batch")').click();
       await waitForSideSheetClose(page);
 
-      await expect(page.locator("article").first()).toBeVisible({ timeout: 10000 });
+      await expect(creditBatchRows(page).first()).toBeVisible({ timeout: 10000 });
     });
 
     // ─── 8. SAMPLE ─────────────────────────────────────────
