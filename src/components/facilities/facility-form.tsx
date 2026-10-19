@@ -8,6 +8,7 @@ import {
   FormField,
   FormInput,
   FormSection,
+  GPS_FIELD_NAMES,
   PositionPicker,
   ResolvedErrorRevalidator,
 } from "@/components/forms";
@@ -214,7 +215,7 @@ export function FacilityForm({
 
       <PositionPicker
         idPrefix="gps"
-        fieldNames={{ lat: "gpsLatitude", lng: "gpsLongitude" }}
+        fieldNames={GPS_FIELD_NAMES}
         label="Facility position"
         required
         accent="purple"

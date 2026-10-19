@@ -57,6 +57,9 @@ export interface PositionValue {
   lng: number | null;
 }
 
+/** The usual RHF paths of a GPS pair, for `fieldNames`. */
+export const GPS_FIELD_NAMES = { lat: "gpsLatitude", lng: "gpsLongitude" } as const;
+
 interface PositionPickerProps {
   /** Prefix for the generated input ids (e.g. "gps" → "gps-latitude"). */
   idPrefix: string;

@@ -193,22 +193,25 @@ export function FormErrorSummary<
     <>
       {announcement}
       <Notice tone="error" live={false} title={countLabel(items.length)} data-form-error-summary="">
-        <ul className={`mt-4 flex flex-col gap-4 ${LIST_HEIGHT_CLASS}`}>
+        <ul className={`mt-4 flex flex-col ${LIST_HEIGHT_CLASS}`}>
           {items.map((item) => (
             <li key={item.path}>
               {item.located ? (
                 <a
                   href={`#${item.path}`}
-                  className="block min-h-24 py-2 text-[var(--color-text-primary)] underline underline-offset-2"
+                  className="flex min-h-44 items-center py-4 text-[var(--color-text-primary)] underline underline-offset-2"
                   onClick={(event) => {
                     event.preventDefault();
                     focusField(getForm(), item.path);
                   }}
                 >
-                  <ItemText item={item} />
+                  {/* One span keeps the label and message flowing as text. */}
+                  <span>
+                    <ItemText item={item} />
+                  </span>
                 </a>
               ) : (
-                <p className="py-2">{item.message}</p>
+                <p className="flex min-h-44 items-center py-4">{item.message}</p>
               )}
             </li>
           ))}
