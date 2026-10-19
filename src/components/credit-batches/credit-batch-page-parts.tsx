@@ -45,6 +45,9 @@ export function PagePanel({
   );
 }
 
+/** The to-do colors, defined once: Blocking is red, Check is orange. Dots, the tab count and the group headings read from here. */
+export const TODO_TONE = { blocking: "bg-[var(--st-bad)]", check: "bg-[var(--st-wait)]" } as const;
+
 /** The 8px status dot: the Open to-dos group headings and the unselected tabs share it. `tone` is a status color token, e.g. `bg-[var(--st-bad)]`. */
 export function StatusDot({ tone, label }: { tone: string; label?: string }) {
   return <span className={cn("size-8 shrink-0 rounded-full", tone)} {...(label ? { role: "img", "aria-label": label } : { "aria-hidden": true })} />;
@@ -57,7 +60,7 @@ export function CountBadge({ count, blocking, label }: { count: number; blocking
       aria-label={label}
       className={cn(
         "inline-flex h-20 min-w-20 items-center justify-center rounded-full px-6 body-caption font-medium tabular-nums",
-        blocking ? "bg-[var(--st-bad)]" : "bg-[var(--st-wait)]",
+        blocking ? TODO_TONE.blocking : TODO_TONE.check,
         "text-[var(--paper)]",
       )}
     >

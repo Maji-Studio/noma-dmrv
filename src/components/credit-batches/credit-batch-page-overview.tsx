@@ -21,7 +21,7 @@ import { formatDate } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
 import { useCreditBatchPage } from "./credit-batch-page-context";
-import { FOCUS_RING, FocusRow, MUTED_TEXT, PagePanel, ROW_RULE, StatusDot } from "./credit-batch-page-parts";
+import { FOCUS_RING, FocusRow, MUTED_TEXT, PagePanel, ROW_RULE, StatusDot, TODO_TONE } from "./credit-batch-page-parts";
 import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
 import { CompactRemovalBar, tonnesFromKg } from "./credit-batch-removal-bar";
 import { durabilityLabel } from "./credit-batch-view";
@@ -29,8 +29,8 @@ import { durabilityLabel } from "./credit-batch-view";
 type GroupKey = "blocking" | "check" | "waiting";
 
 const GROUPS: Record<GroupKey, { title: string; help: string; dot: string }> = {
-  blocking: { title: "Blocking", help: "Fix these before the next Removal.", dot: "bg-[var(--st-bad)]" },
-  check: { title: "Check", help: "Worth a look. These do not stop a Removal.", dot: "bg-[var(--st-wait)]" },
+  blocking: { title: "Blocking", help: "Fix these before the next Removal.", dot: TODO_TONE.blocking },
+  check: { title: "Check", help: "Worth a look. These do not stop a Removal.", dot: TODO_TONE.check },
   waiting: { title: "Waiting", help: "With someone else. Nothing to do yet.", dot: "bg-[var(--st-off)]" },
 };
 
