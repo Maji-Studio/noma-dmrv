@@ -63,7 +63,7 @@ import {
 } from "@/db/schema/production";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
 import { getFacilityCertifierWithExecutor } from "./credit-batch-accounting";
-import { productionRunDateExpr } from "./production-runs/date-expr";
+import { productionRunMembershipDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
 import { DomainError } from "@/lib/domain-errors";
 import { formatCount, pluralize } from "@/lib/copy-utils";
@@ -77,7 +77,7 @@ export interface LockedCreditBatchProductionRun {
   code: string;
   facilityId: string;
   status: string;
-  date: string;
+  membershipDate: string | null;
 }
 
 /**
@@ -92,6 +92,7 @@ export async function lockCreditBatchProductionRuns(
   productionRunIds: readonly string[],
   options?: { skipLocked?: boolean },
 ): Promise<LockedCreditBatchProductionRun[]> {
+  requireOrgScope(ctx);
   const sortedRunIds = [...new Set(productionRunIds)].sort();
   if (sortedRunIds.length === 0) return [];
 
@@ -101,7 +102,7 @@ export async function lockCreditBatchProductionRuns(
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
       status: productionRuns.status,
-      date: productionRunDateExpr(),
+      membershipDate: productionRunMembershipDateExpr(),
     })
     .from(productionRuns)
     .where(and(
@@ -334,7 +335,7 @@ export async function lockCreditBatchForUpdate(
 
 /**
  * Validate that all production run IDs exist, belong to the credit batch's
- * facility and production window, and are not already assigned elsewhere.
+ * facility, end inside its production window, and are not assigned elsewhere.
  */
 export async function validateProductionRunIds(
   ctx: OrgContext,
@@ -347,6 +348,7 @@ export async function validateProductionRunIds(
   excludeCreditBatchId?: string,
   lockedRows?: readonly LockedCreditBatchProductionRun[],
 ): Promise<void> {
+  requireOrgScope(ctx);
   if (productionRunIds.length === 0) return;
 
   // Reject duplicates
@@ -366,7 +368,7 @@ export async function validateProductionRunIds(
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
       status: productionRuns.status,
-      date: productionRunDateExpr(),
+      membershipDate: productionRunMembershipDateExpr(),
     })
     .from(productionRuns)
     .where(and(
@@ -405,7 +407,7 @@ export async function validateProductionRunIds(
       certifier,
     );
     const outsideWindow = rows.filter((r) => {
-      return r.date < startStr || r.date > endStr;
+      return r.membershipDate == null || r.membershipDate < startStr || r.membershipDate > endStr;
     });
 
     if (outsideWindow.length > 0) {
@@ -573,7 +575,7 @@ export async function assertDeclaredFeedstockType(
 }
 
 /**
- * Find every currently unassigned completed run inside a declared cohort.
+ * Find every unassigned completed run whose end date is inside the cohort window.
  * Feedstock identity is resolved from the run's actual feedstock links; empty
  * and mixed-feedstock runs stay unassigned because they cannot belong to a
  * single-feedstock credit batch.
@@ -589,6 +591,7 @@ export async function findMatchingUnassignedProductionRunIds(
     endDate: string | Date;
   },
 ): Promise<string[]> {
+  requireOrgScope(ctx);
   const { startStr, endStr } = assertCreditBatchProductionWindow(
     params.startDate,
     params.endDate,
@@ -635,8 +638,8 @@ export async function findMatchingUnassignedProductionRunIds(
         eq(productionRuns.organizationId, ctx.organizationId),
         eq(productionRuns.facilityId, params.facilityId),
         eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS),
-        gte(productionRunDateExpr(), startStr),
-        lte(productionRunDateExpr(), endStr),
+        gte(productionRunMembershipDateExpr(), startStr),
+        lte(productionRunMembershipDateExpr(), endStr),
         isNull(productionRuns.archivedAt),
         isNull(creditBatchProductionRuns.creditBatchId),
       ),
@@ -660,7 +663,7 @@ export async function findMatchingUnassignedProductionRunIds(
 
 /**
  * Attach one completed run to the credit batch identified by its facility,
- * single feedstock type, and production date. Called inside the production-run
+ * single feedstock type, and end date. Called inside the production-run
  * write transaction after feedstock allocation is final, so membership and
  * sample back-filling commit atomically with completion.
  */
@@ -676,7 +679,7 @@ export async function attachProductionRunToMatchingCreditBatch(
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
       status: productionRuns.status,
-      date: productionRunDateExpr(),
+      membershipDate: productionRunMembershipDateExpr(),
     })
     .from(productionRuns)
     .where(
@@ -687,7 +690,7 @@ export async function attachProductionRunToMatchingCreditBatch(
     )
     .limit(1);
 
-  if (!run || run.status !== COMPLETED_PRODUCTION_RUN_STATUS) return null;
+  if (!run || run.status !== COMPLETED_PRODUCTION_RUN_STATUS || run.membershipDate == null) return null;
 
   const [existingMembership] = await tx
     .select({
@@ -726,8 +729,8 @@ export async function attachProductionRunToMatchingCreditBatch(
     existingMembership &&
     (
       run.facilityId !== existingMembership.facilityId ||
-      run.date < existingMembership.startDate ||
-      run.date > existingMembership.endDate ||
+      run.membershipDate < existingMembership.startDate ||
+      run.membershipDate > existingMembership.endDate ||
       feedstockTypeId !== existingMembership.feedstockTypeId
     )
   ) {
@@ -757,8 +760,8 @@ export async function attachProductionRunToMatchingCreditBatch(
         eq(creditBatches.organizationId, ctx.organizationId),
         eq(creditBatches.facilityId, run.facilityId),
         eq(creditBatches.feedstockTypeId, feedstockTypeId),
-        lte(creditBatches.startDate, run.date),
-        gte(creditBatches.endDate, run.date),
+        lte(creditBatches.startDate, run.membershipDate),
+        gte(creditBatches.endDate, run.membershipDate),
         isNull(creditBatches.archivedAt),
       ),
     )
@@ -777,7 +780,7 @@ export async function attachProductionRunToMatchingCreditBatch(
     .from(creditBatches)
     .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, ctx.organizationId),
       eq(creditBatches.facilityId, run.facilityId), eq(creditBatches.feedstockTypeId, feedstockTypeId),
-      lte(creditBatches.startDate, run.date), gte(creditBatches.endDate, run.date), isNull(creditBatches.archivedAt)))
+      lte(creditBatches.startDate, run.membershipDate), gte(creditBatches.endDate, run.membershipDate), isNull(creditBatches.archivedAt)))
     .for("update");
   if (!lockedBatch) return null;
   try {

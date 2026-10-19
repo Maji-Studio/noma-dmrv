@@ -11,3 +11,11 @@ import { productionRuns } from "@/db/schema";
 export function productionRunDateExpr(): SQL<string> {
   return sql<string>`(${productionRuns.startTime})::date`;
 }
+
+/**
+ * The end date decides credit batch membership (#1099, ADR 0016).
+ * `productionRunDateExpr()` remains the start date for displays and lists.
+ */
+export function productionRunMembershipDateExpr(): SQL<string | null> {
+  return sql<string | null>`(${productionRuns.endTime})::date`;
+}

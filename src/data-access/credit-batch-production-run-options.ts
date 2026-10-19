@@ -7,6 +7,7 @@ import {
   isNull,
   lte,
   or,
+  sql,
 } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
@@ -28,7 +29,7 @@ import {
 import { requireOrgScope } from "./utils";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
 import { getFacilityCertifierWithExecutor } from "./credit-batch-accounting";
-import { productionRunDateExpr } from "./production-runs/date-expr";
+import { productionRunDateExpr, productionRunMembershipDateExpr } from "./production-runs/date-expr";
 
 const CREDIT_BATCH_PREVIEW_PRODUCTION_RUN_STATUSES = [
   "running",
@@ -94,9 +95,12 @@ export async function getCreditBatchProductionRunOptions(
       params.endDate,
       certifier,
     );
+    // COALESCE(end_time, start_time)::date, using the shared membership seam.
+    // Runs without an end time are previewed by their start date.
+    const previewDate = sql<string>`coalesce(${productionRunMembershipDateExpr()}, ${productionRunDateExpr()})`;
     conditions.push(
-      gte(productionRunDateExpr(), startStr),
-      lte(productionRunDateExpr(), endStr),
+      gte(previewDate, startStr),
+      lte(previewDate, endStr),
     );
   }
 

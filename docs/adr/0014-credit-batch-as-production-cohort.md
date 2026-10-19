@@ -19,6 +19,7 @@ submission unit) and ADR 0011 (credit-batch-anchored chain of custody).
 > **Amended 2026-07-23.** A credit batch may be declared before production
 > starts. Completed runs attach automatically when organization, facility,
 > feedstock, and production date match the declared cohort.
+> Membership now uses the run's end date: see the [ADR 0016 amendment (2026-10-19, #1099)](./0016-credit-batch-is-production-batch-production-process-scopes-sampling.md).
 >
 > **Amended 2026-07-24 — version-citation correction.** The v1.3 labels in the
 > historical Context below are not the applicable local pins. Read the cited
