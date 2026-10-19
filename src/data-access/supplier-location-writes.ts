@@ -1,4 +1,4 @@
-import { and, count, eq, ne } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { suppliers, supplierLocations, type SupplierLocation } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -14,6 +14,7 @@ import { upsertLocationFacilityDistances, withLocationFacilityDistances } from "
 import { assertRowVersion, nextVersion } from "./row-version";
 import { SUPPLIER_LOCATION_ORDER } from "./supplier-detail";
 import { requireOrgScope } from "./utils";
+import { demoteDefaultPartyLocation } from "./party-location-default";
 
 const SUPPLIER_LOCATION_CONFLICT_ENTITY = "supplierLocation";
 
@@ -80,20 +81,7 @@ export async function createSupplierLocationInTransaction(
 
   // Clear the prior default first so the partial unique index never sees two.
   if (makeDefault) {
-    const siblings = await tx.select().from(supplierLocations).where(and(
-      eq(supplierLocations.supplierId, supplierId), eq(supplierLocations.organizationId, ctx.organizationId), eq(supplierLocations.isDefault, true),
-    ));
-    const demoted = await tx
-      .update(supplierLocations)
-      .set({ version: nextVersion(supplierLocations.version), isDefault: false, updatedAt: new Date() })
-      .where(
-        and(
-          eq(supplierLocations.supplierId, supplierId),
-          eq(supplierLocations.organizationId, ctx.organizationId),
-          eq(supplierLocations.isDefault, true),
-        ),
-      ).returning();
-    for (const sibling of demoted) captureLocation?.(sibling.id, siblings.find(row => row.id === sibling.id)!, sibling);
+    await demoteDefaultPartyLocation(ctx, tx, { kind: "supplier", parentId: supplierId, captureLocation });
   }
 
   const [location] = await tx
@@ -208,22 +196,7 @@ export async function updateSupplierLocationInTransaction(ctx: OrgContext, tx: D
 
   // Promoting this location to default demotes the supplier's current default.
   if (data.isDefault === true) {
-    const siblings = await tx.select().from(supplierLocations).where(and(
-      eq(supplierLocations.supplierId, supplierId), eq(supplierLocations.organizationId, ctx.organizationId),
-      eq(supplierLocations.isDefault, true), ne(supplierLocations.id, locationId),
-    ));
-    const demoted = await tx
-      .update(supplierLocations)
-      .set({ version: nextVersion(supplierLocations.version), isDefault: false, updatedAt: new Date() })
-      .where(
-        and(
-          eq(supplierLocations.supplierId, supplierId),
-          eq(supplierLocations.organizationId, ctx.organizationId),
-          eq(supplierLocations.isDefault, true),
-          ne(supplierLocations.id, locationId)
-        )
-      ).returning();
-    for (const sibling of demoted) captureLocation?.(sibling.id, siblings.find(row => row.id === sibling.id)!, sibling);
+    await demoteDefaultPartyLocation(ctx, tx, { kind: "supplier", parentId: supplierId, exceptLocationId: locationId, captureLocation });
   }
 
   const [updated] = await tx

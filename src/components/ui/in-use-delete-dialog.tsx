@@ -1,7 +1,8 @@
 /**
  * Dialog shown when the server refuses a delete because records still use the
  * row. It replaces the confirm dialog: Archive instead is the primary action
- * (omit `onArchive` when archiving would be refused too, and only Close shows).
+ * (omit `onArchive` when archiving would be refused too or the row is already
+ * archived: only Close shows and the explanation drops the archive suggestion).
  */
 "use client";
 
@@ -45,7 +46,7 @@ export function InUseDeleteDialog({
             {children ?? (
               <>
                 <p>{`${label} cannot be deleted because other records still use it.`}</p>
-                <p>Archive it instead. Existing records keep it, while pickers hide it.</p>
+                {onArchive && <p>Archive it instead. Existing records keep it, while pickers hide it.</p>}
               </>
             )}
           </div>
