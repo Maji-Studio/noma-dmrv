@@ -32,7 +32,7 @@ async function render() {
 it("reads dry biochar as the secondary figure under the wet estimate", async () => {
   state.wetKg = 200; state.subBins = [subBin];
   const renderer = await render();
-  expect(JSON.stringify(renderer.toJSON())).toContain("≈ 200 kg wet");
+  expect(JSON.stringify(renderer.toJSON())).toContain("200 kg wet mass");
   expect(renderer.root.findByType(SecondaryFigure).props).toMatchObject({ label: "Dry biochar", value: "90 kg" });
   await act(async () => renderer.unmount());
 });

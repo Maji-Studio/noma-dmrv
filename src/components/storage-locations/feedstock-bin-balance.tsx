@@ -151,7 +151,7 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
         {capacityKg != null && <span className="body-small text-[var(--color-text-tertiary)]"> of {formatMassKg(capacityKg)}</span>}
       </>}
       // Dry solids only when the batches' moisture gives them; the moisture itself is in the water band's details.
-      caption={stock.data && estimatedDryKg !== null && <SecondaryFigure label="Dry solids, estimated" value={formatMassKg(estimatedDryKg)} />}
+      caption={stock.data && estimatedDryKg !== null && <SecondaryFigure label="Dry solids" value={formatMassKg(estimatedDryKg)} />}
       onAdjust={onAdjust}
     >
       {stock.data && bands.length === 0 && <EmptyState icon={null} title="No stock in this bin" padding="sm" />}

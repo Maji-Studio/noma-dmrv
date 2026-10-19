@@ -209,11 +209,11 @@ export function StorageBinTile({
  * the sheet shows.
  */
 function TileFigure({ feedstock, massKg, wetEstimateKg }: { feedstock: boolean; massKg: number | null; wetEstimateKg: number | null }) {
-  if (!feedstock && wetEstimateKg != null && wetEstimateKg > 0) return `≈ ${formatWetEstimate(wetEstimateKg)} kg wet`;
+  if (!feedstock && wetEstimateKg != null && wetEstimateKg > 0) return `${formatWetEstimate(wetEstimateKg)} kg wet mass`;
   if (massKg == null) return MISSING_VALUE.notAvailable;
   if (massKg === 0) return "Empty";
   if (feedstock) return `${formatMassKg(massKg)} wet`;
-  return wetEstimateKg == null ? `${formatMassKg(massKg)} dry biochar` : `≈ ${formatWetEstimate(wetEstimateKg)} kg wet`;
+  return wetEstimateKg == null ? `${formatMassKg(massKg)} dry biochar` : `${formatWetEstimate(wetEstimateKg)} kg wet mass`;
 }
 
 /**
