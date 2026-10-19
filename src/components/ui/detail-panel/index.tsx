@@ -468,10 +468,9 @@ function EntityDetailPanel({
         </SlideOverPanel.Body>
 
         {onEdit && (
-          <SlideOverPanel.Footer className="justify-stretch">
+          <SlideOverPanel.Footer>
             <Button
               variant="primary"
-              className="flex-1"
               onClick={() => {
                 onOpenChange(false);
                 onEdit();
@@ -479,11 +478,6 @@ function EntityDetailPanel({
             >
               {editLabel}
             </Button>
-            <SlideOverPanel.Close>
-              <Button variant="default" className="flex-1">
-                Close
-              </Button>
-            </SlideOverPanel.Close>
           </SlideOverPanel.Footer>
         )}
       </SlideOverPanel.Content>
