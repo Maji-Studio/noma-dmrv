@@ -31,7 +31,6 @@ import { assertCreditBatchProductionWindow } from "./credit-batch-production-win
 import { getFacilityCertifierWithExecutor } from "./credit-batch-accounting";
 import {
   productionRunDateExpr,
-  productionRunFacilityStartDateExpr,
   productionRunMembershipDateExpr,
 } from "./production-runs/date-expr";
 
@@ -100,8 +99,8 @@ export async function getCreditBatchProductionRunOptions(
       certifier,
     );
     // Use facility-local days for the window, including the start-day fallback
-    // for running runs without an end time. The returned display date stays UTC.
-    const previewDate = sql<string>`coalesce(${productionRunMembershipDateExpr(ctx.organizationId)}, ${productionRunFacilityStartDateExpr(ctx.organizationId)})`;
+    // for running runs without an end time. The returned display date is the local start day.
+    const previewDate = sql<string>`coalesce(${productionRunMembershipDateExpr(ctx.organizationId)}, ${productionRunDateExpr(ctx.organizationId)})`;
     conditions.push(
       gte(previewDate, startStr),
       lte(previewDate, endStr),
@@ -120,7 +119,7 @@ export async function getCreditBatchProductionRunOptions(
     .select({
       id: productionRuns.id,
       code: productionRuns.code,
-      date: productionRunDateExpr(),
+      date: productionRunDateExpr(ctx.organizationId),
       status: productionRuns.status,
       biocharStorageName: storageLocations.name,
       biocharOutputKg: productionRuns.biocharOutputKg,

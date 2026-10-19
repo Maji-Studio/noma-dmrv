@@ -13,6 +13,7 @@ import { assertRowVersion, nextVersion } from "./row-version";
 import { acquireFacilityDurabilityLock } from "./facility-durability-lock";
 import { guardFacilityName } from "./unique-name-guards";
 import { requireOrgScope } from "./utils";
+import { assertFacilityTimezoneChangeAllowed } from "./facility-timezone-guard";
 
 /** Entity key on a facility's expected-version conflict. */
 export const FACILITY_CONFLICT_ENTITY = "facility";
@@ -36,9 +37,13 @@ async function lockFacilityRow(
   ctx: OrgContext,
   tx: DbTransaction,
   facilityId: string,
-): Promise<{ durabilityOption: string; version: number; updatedAt: Date }> {
+): Promise<Pick<Facility, "id" | "code" | "timezone" | "durabilityOption" | "version" | "updatedAt">> {
+  requireOrgScope(ctx);
   const [locked] = await tx
     .select({
+      id: facilities.id,
+      code: facilities.code,
+      timezone: facilities.timezone,
       durabilityOption: facilities.durabilityOption,
       version: facilities.version,
       updatedAt: facilities.updatedAt,
@@ -156,8 +161,8 @@ export async function updateFacility(
   if (!tierChangeRequested) {
     // Strip a stale echoed tier so this cheap path cannot revert a concurrent
     // real tier edit. It still takes no durability lock and runs no ledger
-    // probe; the transaction exists only so the facility's own row lock spans
-    // the version check and the write it guards (issue #768).
+    // probe. The facility row lock spans the version check, time zone guard
+    // and the write they protect.
     const nonTierData = { ...data };
     delete nonTierData.durabilityOption;
     return db.transaction(async (tx) => {
@@ -168,6 +173,7 @@ export async function updateFacility(
         expectedVersion,
         actualVersion: locked.version,
       });
+      await assertFacilityTimezoneChangeAllowed(ctx, tx, locked, data.timezone);
       return updateFacilityRow(ctx, tx, facilityId, nonTierData);
     });
   }
@@ -181,6 +187,8 @@ export async function updateFacility(
       expectedVersion,
       actualVersion: lockedExisting.version,
     });
+
+    await assertFacilityTimezoneChangeAllowed(ctx, tx, lockedExisting, data.timezone);
 
     if (data.durabilityOption === lockedExisting.durabilityOption) {
       const nonTierData = { ...data };

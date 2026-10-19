@@ -66,6 +66,15 @@ amended 2026-07-04 (feedstock declared)
 > keep their members and accept no automatic joins. Runs already assigned by
 > their start date are not repaired under the pre-production database policy.
 
+> **Amendment (2026-10-19, issue #1175, following PR #1173):** lists,
+> dashboards, date filters and run-derived product dates use the day the run
+> started on the facility's calendar. Credit batch membership continues to use
+> the facility-local end day. A facility time zone change is refused once any
+> of its production runs belongs to a credit batch. The refusal names the first
+> blocking batch by code and asks the operator to keep the current time zone;
+> saving the same time zone with other edits remains allowed. Membership is
+> neither reassigned nor revalidated as part of a facility edit.
+
 ## Current conservative rules
 
 Kenji's #942 q7 decision retains the one-calendar-month credit-batch cap and

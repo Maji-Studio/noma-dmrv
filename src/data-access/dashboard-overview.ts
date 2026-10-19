@@ -22,6 +22,7 @@ import {
   productionRuns,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { productionRunDateBounds } from "@/lib/production-runs/date-filter-bounds";
 import { formatUtcDate } from "@/lib/date-utils";
 import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
@@ -213,6 +214,9 @@ export async function getDashboardOverview(
   const fetchStart =
     bounds.previousStartMs == null ? null : new Date(bounds.previousStartMs);
 
+  const fetchStartDay = fetchStart ? formatUtcDate(fetchStart) : undefined;
+  const runStartBound = productionRunDateBounds(fetchStartDay).start;
+
   // Derived CO₂e stored per batch (issue #285): the same preview figure the
   // credit-batch detail page shows — the stored column no longer exists.
   // The walk is set-based (one lineage read for every batch id), so it starts
@@ -252,7 +256,7 @@ export async function getDashboardOverview(
       Promise.all([
         db
           .select({
-            date: productionRunDateExpr(),
+            date: productionRunDateExpr(ctx.organizationId),
             feedstockMassDryKg: productionRuns.feedstockMassDryKg,
             biocharDryMassKg: productionRuns.biocharDryMassKg,
           })
@@ -263,9 +267,11 @@ export async function getDashboardOverview(
               eq(productionRuns.facilityId, facilityId),
               isNull(productionRuns.archivedAt),
               eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS),
-              ...(fetchStart
-                ? [gte(productionRunDateExpr(), fetchStart.toISOString().slice(0, 10))]
-                : []),
+              // Widen UTC bounds for the start_time index before the exact local day.
+              ...(fetchStartDay && runStartBound ? [
+                gte(productionRuns.startTime, runStartBound),
+                gte(productionRunDateExpr(ctx.organizationId), fetchStartDay),
+              ] : []),
             ),
           ),
         db
@@ -611,6 +617,7 @@ async function getAttentionItems(
   facilityId: string,
   todayStr: string,
 ): Promise<DashboardAttentionItem[]> {
+  requireOrgScope(ctx);
   const orgId = ctx.organizationId;
 
   const rows: AttentionRow[] = await unionAll(
@@ -619,7 +626,7 @@ async function getAttentionItems(
         kind: attentionKind("run-mass"),
         id: productionRuns.id,
         code: productionRuns.code,
-        dateDay: dayColumn(productionRunDateExpr()),
+        dateDay: dayColumn(productionRunDateExpr(ctx.organizationId)),
         dateMs: noInstant,
         ord: branchOrdinal(desc(productionRuns.startTime)),
       })

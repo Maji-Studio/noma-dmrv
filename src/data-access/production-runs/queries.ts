@@ -13,6 +13,7 @@ import {
   inArray,
   isNull,
   lte,
+  lt,
   ne,
   sql,
   SQL,
@@ -22,6 +23,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
+import { productionRunDateBounds } from "@/lib/production-runs/date-filter-bounds";
 import { formatLocalDate } from "@/lib/date-utils";
 import {
   productionRuns,
@@ -112,19 +114,25 @@ export async function getProductionRuns(
     conditions.push(eq(productionRuns.status, status));
   }
 
+  const dateBounds = productionRunDateBounds(
+    startDate ? formatLocalDate(startDate) : undefined,
+    endDate ? formatLocalDate(endDate) : undefined,
+  );
+  // Widen UTC bounds for the start_time index, then compare exact local days.
+  if (dateBounds.start) conditions.push(gte(productionRuns.startTime, dateBounds.start));
+  if (dateBounds.endExclusive) conditions.push(lt(productionRuns.startTime, dateBounds.endExclusive));
+
   if (startDate) {
-    // Inclusive-day range on the run's calendar date (derived from start_time).
-    conditions.push(gte(productionRunDateExpr(), formatLocalDate(startDate)));
+    conditions.push(gte(productionRunDateExpr(ctx.organizationId), formatLocalDate(startDate)));
   }
 
   if (endDate) {
-    conditions.push(lte(productionRunDateExpr(), formatLocalDate(endDate)));
+    conditions.push(lte(productionRunDateExpr(ctx.organizationId), formatLocalDate(endDate)));
   }
 
   const whereClause = and(...conditions);
 
-  // Build sort clause. The "date" sort key now orders by start_time (the run's
-  // instant), which sorts identically to the old date column but breaks ties.
+  // Keep chronological instant ordering, including across facility time zones.
   const sortColumn = {
     code: productionRuns.code,
     date: productionRuns.startTime,
@@ -156,7 +164,7 @@ export async function getProductionRuns(
       id: productionRuns.id,
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
-      date: productionRunDateExpr(),
+      date: productionRunDateExpr(ctx.organizationId),
       status: productionRuns.status,
       cancellationReason: productionRuns.cancellationReason,
       startTime: productionRuns.startTime,
@@ -381,7 +389,7 @@ export async function getProductionRunById(
       id: productionRuns.id,
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
-      date: productionRunDateExpr(),
+      date: productionRunDateExpr(ctx.organizationId),
       status: productionRuns.status,
       cancellationReason: productionRuns.cancellationReason,
       startTime: productionRuns.startTime,
