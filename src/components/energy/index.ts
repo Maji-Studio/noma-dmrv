@@ -1,1 +1,1 @@
-export { EnergyPage } from "./energy-page";
+export { FacilityActivity } from "./facility-activity";

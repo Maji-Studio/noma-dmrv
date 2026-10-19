@@ -209,9 +209,12 @@ type SideSheetState =
 export function SampleList({
   initialCreate = false,
   initialCreditBatchId,
+  hideTransport = false,
 }: {
   initialCreate?: boolean;
   initialCreditBatchId?: string;
+  /** Server flag EMISSIONS_ENTRIES_ENABLED: sample shipping is an emissions entry. */
+  hideTransport?: boolean;
 }) {
   const { facilityId: contextFacilityId } = useFacilityContext();
   const createIntent = useOpenCreateIntent({
@@ -707,7 +710,7 @@ export function SampleList({
         {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit Sample"
-        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity) : undefined}
+        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity, { hideTransport }) : undefined}
       >
         {isResolvingCreateContext ? (
           <div
@@ -736,6 +739,7 @@ export function SampleList({
             deferredLegs={deferredLegs}
             onDeferredLegsChange={handleDeferredLegsChange}
             onRetryDeferredLegs={retryDeferredLegs}
+            hideTransport={hideTransport}
             focusTarget={
               displaySideSheet?.mode === "edit" ? activeFocusTarget : null
             }

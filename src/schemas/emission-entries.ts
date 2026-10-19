@@ -3,7 +3,7 @@ import { uuidSchema, expectedVersionSchema } from "@/schemas/helpers";
 import { ENTRY_DECIMAL_PATTERN } from "@/lib/certification/emission-entry-rules";
 import type { QuantityKind } from "@/lib/isometric/template-observations/types";
 
-const MAX_ENTRY_TEXT_LENGTH = 4000;
+export const MAX_ENTRY_TEXT_LENGTH = 4000;
 const MAX_ENTRY_INPUTS = 2;
 const MAX_MAGNITUDE_LENGTH = 100;
 const magnitude = z
@@ -27,15 +27,23 @@ export const createEmissionEntrySchema = z.object({
   creditBatchId: uuidSchema(),
   componentId: z.string().min(1),
   ...fields,
+  occurredOn: fields.occurredOn.optional(),
 });
 export const emissionEntryVersionSchema = z.object({
   id: uuidSchema(),
   expectedVersion: expectedVersionSchema,
 });
+export type RestoreEmissionEntryInput = z.infer<typeof emissionEntryVersionSchema>;
 export const updateEmissionEntrySchema = emissionEntryVersionSchema.extend({
   occurredOn: fields.occurredOn.optional(),
   note: fields.note,
   values: fields.values.optional(),
 });
+export const replaceEmissionEntrySchema = emissionEntryVersionSchema.extend({
+  occurredOn: fields.occurredOn.optional(),
+  note: fields.note,
+  values: fields.values,
+});
+export type ReplaceEmissionEntryInput = z.infer<typeof replaceEmissionEntrySchema>;
 export type CreateEmissionEntryInput = z.infer<typeof createEmissionEntrySchema>;
 export type UpdateEmissionEntryInput = z.infer<typeof updateEmissionEntrySchema>;

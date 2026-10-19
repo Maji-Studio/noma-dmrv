@@ -3,6 +3,14 @@ import { getTableColumns } from "drizzle-orm";
 import { diffActivityChanges, activityFieldPolicies } from "./activity-changes";
 
 describe("activity change capture", () => {
+  it("retains earlier line comment wording and the batch link, ignoring attribution and versions", () => {
+    expect(diffActivityChanges("emission_line_comment",
+      { body: "Earlier wording", updatedBy: "user-a", version: 1 },
+      { body: "Current wording", updatedBy: "user-b", version: 2 },
+    )).toEqual({ changedFields: ["body"], changes: { body: { from: "Earlier wording", to: "Current wording" } } });
+    expect(diffActivityChanges("emission_line_comment", null, { creditBatchId: "batch", componentId: "line", body: "Context" }).changes)
+      .toEqual({ creditBatchId: { from: null, to: "batch" }, componentId: { from: null, to: "line" }, body: { from: null, to: "Context" } });
+  });
   it("compares decimals exactly and omits unchanged re-sent fields", () => {
     expect(diffActivityChanges("feedstock", { massWetKg: "1.50", notes: "private", version: 1 },
       { massWetKg: "1.5", notes: "private", version: 2 })).toEqual({ changedFields: [], changes: {} });

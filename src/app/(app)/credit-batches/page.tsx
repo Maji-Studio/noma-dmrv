@@ -9,6 +9,7 @@ import {
   isCreateIntentValue,
 } from "@/lib/create-intent";
 import { getOrgContext } from "@/lib/auth/server";
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 
 export default async function CreditBatchesPage({
   searchParams,
@@ -24,6 +25,7 @@ export default async function CreditBatchesPage({
   return (
     <CreditBatchList
       canManage={canManage}
+      emissionsEntriesEnabled={emissionsEntriesEnabled()}
       initialCreate={isCreateIntentValue(query[CREATE_INTENT_PARAM])}
     />
   );

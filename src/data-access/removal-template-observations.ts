@@ -1,5 +1,5 @@
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { removalTemplateObservations as observations, type RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
 import type { CertifierProvider } from "@/schemas/credit-batches";
@@ -13,6 +13,7 @@ import {
 } from "@/lib/isometric/template-observations";
 import { assertRowVersion, nextVersion, staleRowVersion } from "./row-version";
 import { requireOrgScope, type Executor } from "./utils";
+import { withTemplateOrder } from "@/lib/isometric/template-observations/template-order";
 
 const OBSERVATION_ORDER_TICK_MS = 1;
 
@@ -29,6 +30,29 @@ export async function getLatestTemplateObservation(ctx: OrgContext, provider: Ce
     eq(observations.externalTemplateId, externalTemplateId),
   )).orderBy(desc(observations.lastObservedAt), desc(observations.id)).limit(1);
   return row ?? null;
+}
+
+/** Latest stored observation once per distinct template, without a query loop. */
+export async function getLatestTemplateObservations(
+  ctx: OrgContext, provider: CertifierProvider, externalTemplateIds: string[],
+  executor: Pick<typeof db, "selectDistinctOn"> = db,
+): Promise<RemovalTemplateObservation[]> {
+  requireOrgScope(ctx);
+  if (!externalTemplateIds.length) return [];
+  return executor.selectDistinctOn([observations.externalTemplateId]).from(observations).where(and(
+    eq(observations.organizationId, ctx.organizationId), eq(observations.provider, provider),
+    inArray(observations.externalTemplateId, [...new Set(externalTemplateIds)]),
+  )).orderBy(observations.externalTemplateId, desc(observations.lastObservedAt), desc(observations.id));
+}
+
+export async function getTemplateObservationsByIds(
+  ctx: OrgContext, ids: string[], executor: Executor = db,
+): Promise<RemovalTemplateObservation[]> {
+  requireOrgScope(ctx);
+  if (!ids.length) return [];
+  return executor.select().from(observations).where(and(
+    eq(observations.organizationId, ctx.organizationId), inArray(observations.id, [...new Set(ids)]),
+  ));
 }
 
 export async function getTemplateObservationById(ctx: OrgContext, id: string, executor: Executor = db): Promise<RemovalTemplateObservation | null> {
@@ -68,8 +92,9 @@ export async function observeTemplate(ctx: OrgContext, input: {
     const [existing] = await tx.select().from(observations).where(and(templateScope,
       eq(observations.semanticFingerprint, semantic), eq(observations.fullFingerprint, full),
     )).limit(1);
-    const lineSources = existing && latest?.id === existing.id ? existing.lineSources
-      : resolveLineSources({ definition, previous: latest });
+    const lineSources = withTemplateOrder(input.template,
+      existing && latest?.id === existing.id ? existing.lineSources
+        : resolveLineSources({ definition, previous: latest }));
     const sourcesChanged = existing && canonicalJson(existing.lineSources) !== canonicalJson(lineSources);
     const now = new Date(Math.max(Date.now(), (latest?.lastObservedAt.getTime() ?? 0) + OBSERVATION_ORDER_TICK_MS));
     const [row] = await tx.insert(observations).values({
@@ -129,7 +154,7 @@ export async function reviewLineContracts(ctx: OrgContext, input: ReviewLineCont
       if (assignment.scope !== "operating" && (assignment.automaticSource || assignment.entryPolicy !== "none")) {
         throw new SafeError("Only operating lines can use automatic sources or entries.");
       }
-      lineSources[id] = { ...assignment, origin: "reviewed" };
+      lineSources[id] = { ...assignment, origin: "reviewed", templateOrder: lineSources[id]?.templateOrder };
     }
     const problems = validateLineSources(row.definition, lineSources).filter((problem) => problem.code !== "unassigned");
     if (problems.length) throw new SafeError("Choose valid, distinct sources and entry policies for the Removal template lines.");

@@ -20,7 +20,8 @@ noma records none of these numbers, so the template cannot be filled. The #291 d
 
 1. **Emissions entries.** An operator records each operating emission as an entry on exactly one credit batch, with its evidence. An entry is bound to a template line by template ID, component ID and input key, never by display name. Entries can be edited until a Removal sends them.
 2. **On top of automatic sources.** An entry on a line noma also fills from records (run diesel, run kWh) adds to the automatic figure, and the sum is sent. Lines whose inputs combine by multiplying, or that hold readings, take at most one entry per batch: gas concentration with mass flow, and meter readings. Paired inputs are never summed one input at a time, so a Removal that would group two such entries for the same line is refused.
-3. **Recorded zeros.** A line with nothing entered shows "Not recorded" on the batch and on the Removal, never 0. The Removal flow confirms all empty lines in one step and records a zero per line, with who and when. A recorded zero belongs to the Removal that confirmed it and is never sent by another. An unconfirmed empty line blocks submission. noma never sends a zero nobody confirmed.
+3. **Recorded zeros.** A line with nothing entered shows "Not recorded" on the batch and on the Removal, never 0. The Removal flow confirms all empty lines in one step and records a zero per line, with who and when. A Removal-confirmed zero belongs to the Removal that confirmed it and is never sent by another. An unconfirmed empty line blocks submission. noma never sends a zero nobody confirmed.
+   - **2026-10-17 reversal:** Kenji dropped the per-line zero action in the #1140 review. Empty lines read "Not recorded", each row offers "Add manual entry", and only the Removal-flow confirmation writes zeros owned by that Removal.
 4. **Evidence is required for certification.** An entry without a file blocks the Removal. Recorded zeros need no file, and fixed template factors are never asked for. Files reach Isometric as Sources on the exact datapoint.
 5. **Each credit batch keeps its template.** A batch pins the facility's default Removal template when it is created. Changing the default never moves existing batches.
 6. **Template copies.** noma stores each normalized template definition it observes, with a fingerprint. A change review compares the copy that entries were written against with the current one, and flags removed, changed and added lines.
@@ -47,6 +48,7 @@ noma records none of these numbers, so the template cannot be filled. The #291 d
 
 ## Consequences
 
+- One editable line comment per credit batch and component ID stays in noma; it is never sent to Isometric and never changes line state, batch health or Removal blockers. Earlier wording stays in activity; entry notes remain separate.
 - noma becomes the system of record for these numbers and their evidence, as it already is for runs and samples.
 - `MAPPING_REVISION` changes, which supersedes earlier Removal versions. This is acceptable before production.
 - Sample transport legs stop feeding Removals. Sample shipping is entered per line instead, so two lab lines can no longer receive the same total.
