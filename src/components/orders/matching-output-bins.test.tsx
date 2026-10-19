@@ -53,6 +53,7 @@ describe("MatchingOutputBins", () => {
     const summary = summarizeMatchingStock(bins);
     expect(summary.wet).toBe("170 kg wet mass in 2 of 3 bins");
     expect(summary.dry).toBe("200 kg");
+    expect(summary.dryCoverage).toBeNull();
   });
   it("says how many bins a partial dry sum covers", () => {
     const summary = summarizeMatchingStock([
@@ -60,8 +61,18 @@ describe("MatchingOutputBins", () => {
       { id: "b", code: "B2", name: "B", dryMassKg: null, estimatedWetMassKg: 50 },
       { id: "c", code: "B3", name: "C", dryMassKg: 30, estimatedWetMassKg: 10 },
     ]);
-    expect(summary.dry).toBe("130 kg in 2 of 3 bins");
+    expect(summary.dry).toBe("130 kg");
+    expect(summary.dryCoverage).toBe("in 2 of 3 bins");
     expect(summary.wet).toBe("180 kg wet mass");
+  });
+  it("reads the dry coverage after the label, not inside the figure", () => {
+    state.bins = [
+      { id: "a", code: "B1", name: "A", dryMassKg: 100, estimatedWetMassKg: 120 },
+      { id: "b", code: "B2", name: "B", dryMassKg: null, estimatedWetMassKg: 50 },
+      { id: "c", code: "B3", name: "C", dryMassKg: 30, estimatedWetMassKg: 10 },
+    ];
+    const text = renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    expect(text).toContain("130 kg dry biochar in 2 of 3 bins");
   });
   it("reads Not available when nothing resolves", () => {
     const summary = summarizeMatchingStock([{ id: "a", code: "B1", name: "A", dryMassKg: null, estimatedWetMassKg: null }]);
