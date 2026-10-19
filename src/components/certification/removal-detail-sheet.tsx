@@ -49,6 +49,7 @@ import { removalDeletionCopy } from "./removal-deletion-copy";
 import { Notice } from "@/components/ui/notice";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import { RemovalCorrectionNotice } from "./removal-correction-needed";
+import { RemovalEvidenceLinksNotice } from "./removal-evidence-links-notice";
 
 interface RemovalDetailSheetProps {
   summary: RemovalListRow;
@@ -230,6 +231,7 @@ export function RemovalDetailSheet({
 
             <SubmissionStatusSection summary={summary} status={workflowStatus} />
             <RemovalCorrectionNotice lock={lock} />
+            <RemovalEvidenceLinksNotice links={summary.evidenceLinks} />
 
             {summary.externalId && (
               <RemovalCarbonBreakdown

@@ -345,3 +345,48 @@ export async function markBiocharApplicationDrift(
       ),
     );
 }
+
+
+/** Records only the evidence readback; lifecycle and correction state are separate. */
+export async function recordBiocharApplicationSourceReadback(
+  ctx: OrgContext,
+  registrationId: string,
+  status: Exclude<CertifierBiocharApplication["sourceReadbackStatus"], "not_checked">,
+): Promise<CertifierBiocharApplication> {
+  requireOrgScope(ctx);
+  const [row] = await db.update(certifierBiocharApplications)
+    .set({ sourceReadbackStatus: status, sourceReadbackCheckedAt: sql`now()`, updatedAt: sql`now()` })
+    .where(and(
+      eq(certifierBiocharApplications.organizationId, ctx.organizationId),
+      eq(certifierBiocharApplications.id, registrationId),
+    )).returning();
+  if (!row) throw new Error("Biochar Application registration is unavailable");
+  return row;
+}
+
+export async function listBiocharApplicationSourceReadbacks(
+  ctx: OrgContext,
+  removalSubmissionId: string,
+) {
+  requireOrgScope(ctx);
+  const rows = await db.select({
+    id: certifierBiocharApplications.id,
+    externalApplicationId: certifierBiocharApplications.externalApplicationId,
+    externalProjectId: certifierStorageLocations.externalProjectId,
+    submittedPayload: certifierBiocharApplications.submittedPayload,
+    lifecycleStatus: certifierBiocharApplications.lifecycleStatus,
+    sourceReadbackStatus: certifierBiocharApplications.sourceReadbackStatus,
+    sourceReadbackCheckedAt: certifierBiocharApplications.sourceReadbackCheckedAt,
+  }).from(certifierBiocharApplications)
+    .innerJoin(certifierStorageLocations, and(
+      eq(certifierStorageLocations.id, certifierBiocharApplications.storageLocationRegistrationId),
+      eq(certifierStorageLocations.organizationId, ctx.organizationId),
+    ))
+    .where(and(
+      eq(certifierBiocharApplications.organizationId, ctx.organizationId),
+      eq(certifierBiocharApplications.removalSubmissionId, removalSubmissionId),
+    ));
+  return rows.map(({ submittedPayload, ...row }) => ({
+    ...row, expectedSourceIds: submittedPayload.source_ids ?? [],
+  }));
+}

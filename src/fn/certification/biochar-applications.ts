@@ -1,3 +1,4 @@
+import { checkBiocharApplicationSourceReadback } from "./biochar-application-source-readback";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import {
   getStorageLocationRegistration,
@@ -352,6 +353,17 @@ async function ensureBiocharApplication(args: {
               remote?.ghg_entry_id ?? registration!.observedGhgEntryId ?? null,
             observedRemovalId:
               remote?.removal_id ?? registration!.observedRemovalId ?? null,
+          });
+          await checkBiocharApplicationSourceReadback({
+            orgCtx: args.orgCtx,
+            client,
+            registrationId: registration!.id,
+            applicationCode: args.intent.applicationCode,
+            externalProjectId: args.intent.externalProjectId,
+            externalApplicationId,
+            expectedSourceIds: body.source_ids ?? [],
+            sourceReadbackStatus: registration!.sourceReadbackStatus,
+            log: args.log,
           });
         },
         failureMessagePrefix: `Biochar Application ${args.intent.applicationCode} could not be created`,

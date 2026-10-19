@@ -285,6 +285,18 @@ export class FakeIsometricRegistry {
     body: unknown,
     ApiError: ApiErrorCtor,
   ): unknown {
+    if (method === "POST" && path === "/graphql") {
+      const { variables } = body as { variables: { projectId: string; ids: string[] } };
+      const nodes = this.biocharApplications
+        .filter(record => record.project_id === variables.projectId && variables.ids.includes(record.id))
+        .map(record => ({
+          id: record.id,
+          biocharSpreadEventSources: Array.isArray(record.source_ids)
+            ? record.source_ids.map(id => ({ source: { id } }))
+            : record.source_ids,
+        }));
+      return { data: { project: { __typename: "Project", biocharSpreadEvents: { nodes } } } };
+    }
     if (method === "POST" && path === "/datapoints") {
       return this.create(this.datapoints, "dpt", body, ApiError);
     }
@@ -787,7 +799,10 @@ export function createFakeClientModule(actual: ClientModule): ClientModule {
       actual.IsometricApiError,
     ) as Promise<T>;
 
-  const client = actual.createIsometricClientFromTransport(request);
+  const client = actual.createIsometricClientFromTransport(request,
+    <T>(query: string, variables: Record<string, unknown>) =>
+      request<import("@/lib/isometric/client").GraphqlResponse<T>>("POST", "/graphql", { body: { query, variables } }),
+  );
 
   return {
     ...actual,
