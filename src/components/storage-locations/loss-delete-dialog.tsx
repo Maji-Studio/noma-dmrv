@@ -10,6 +10,7 @@ import type { RemoveLossData } from "@/schemas/bin-movements";
 import type { FeedstockLedgerEntry } from "@/types/feedstock-bin-ledger";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { useState } from "react";
+import { outputEntryMass } from "./output-entry-mass";
 
 const REASON_REQUIRED = "Enter why you delete this entry.";
 const CONFLICT_MESSAGE = "This entry was already changed from this dialog. Close it and check the stock history.";
@@ -98,6 +99,5 @@ export function FeedstockLossDeleteDialog({ entry, ...props }: EntryDialogProps<
 /** An output bin names the entry the way its history line does: wet when weighed wet, else dry. */
 export function OutputLossDeleteDialog({ entry, ...props }: EntryDialogProps<OutputStockHistoryEntry>) {
   const remove = useRemoveOutputLoss();
-  const amount = entry.wetMassKg === null ? `${formatMassKg(Math.abs(entry.dryMassKg))} dry` : `${formatMassKg(entry.wetMassKg)} wet`;
-  return <LossDeleteDialog {...props} remove={remove} movementId={entry.id} occurredAt={entry.occurredAt} amount={amount} />;
+  return <LossDeleteDialog {...props} remove={remove} movementId={entry.id} occurredAt={entry.occurredAt} amount={outputEntryMass(entry)} />;
 }

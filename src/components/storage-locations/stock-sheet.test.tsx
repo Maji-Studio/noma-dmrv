@@ -161,11 +161,14 @@ it("charts feedstock after its first intake when a run was dated earlier without
 
 it('crosses out a deleted product placement while retaining the product link', async () => {
   state.output = [entry({ id: 'product', kind: 'intake', dryMassKg: -80, source: { entity: 'biocharProduct', id: 'product' } }),
-    entry({ id: 'placement-reversal', kind: 'reversal', correctsMovementId: 'product', dryMassKg: 80 })];
+    entry({ id: 'placement-reversal', kind: 'reversal', correctsMovementId: 'product', dryMassKg: 80, recordedAt: NEXT_DAY, actorName: 'Asha' })];
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<OutputStockHistory storageLocationId={BIN_ID} facilityId={FACILITY_ID} triggerLabel="History" />); });
   await act(async () => renderer.root.findByType('button').props.onClick());
   expect(JSON.stringify(renderer.toJSON())).toContain('line-through');
+  // A deleted product reads like a deleted Lost mass: when and by whom, not a bare "Reversed."
+  expect(text(renderer.root)).toMatch(/Deleted Oct 2, 2026, 12:00 by Asha\.\s*It no longer counts toward the stock\./);
+  expect(text(renderer.root)).not.toContain('Reversed.');
   expect(renderer.root.findAllByType('a').map(link => link.props.href)).toContain(stockSourceHref({ entity: 'biocharProduct', id: 'product' }, FACILITY_ID));
   await act(async () => renderer.unmount());
 });

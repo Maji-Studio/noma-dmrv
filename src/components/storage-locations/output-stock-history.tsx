@@ -20,6 +20,8 @@ import { LedgerBeforeAfter, LedgerBreak, LedgerDayHeader, LedgerFacts, LedgerLin
 import { CalculationDisclosure } from "./stock-figures";
 import { OutputStockForm } from "./output-stock-form";
 import { OutputLossDeleteDialog } from "./loss-delete-dialog";
+import { outputEntryMass } from "./output-entry-mass";
+import { reversalCaption } from "@/lib/loss-correction-messages";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { Notice } from "@/components/ui/notice";
 
@@ -46,7 +48,7 @@ function entryAmount(entry: OutputStockHistoryEntry, kind: string): string {
   if (kind === "count") return entry.wetMassKg === null ? `${formatMassKg(entry.afterDryKg)} dry` : `${formatMassKg(entry.wetMassKg)} wet`;
   // dryMassKg is signed: removals positive, intakes negative.
   const sign = entry.dryMassKg > 0 ? "−" : entry.dryMassKg < 0 ? "+" : "";
-  return entry.wetMassKg === null ? `${sign}${formatMassKg(Math.abs(entry.dryMassKg))} dry` : `${sign}${formatMassKg(entry.wetMassKg)} wet`;
+  return `${sign}${outputEntryMass(entry)}`;
 }
 
 interface LedgerRowProps {
@@ -84,8 +86,8 @@ function LedgerRow({ entry, kind, reversedEntry, replacedBy, reversedBy, moistur
       amount={entryAmount(entry, kind)} after={formatMassKg(entry.afterDryKg)} struck={reversed} defaultOpen={defaultOpen}>
       {reversed && (
         <p className="body-caption text-[var(--color-text-secondary)]">
-          {replacedBy ? `Replaced by the correction recorded ${formatFacilityDateTime(replacedBy.recordedAt, timeZone)}.`
-            : reversedBy ? `Deleted ${formatFacilityDateTime(reversedBy.recordedAt, timeZone)}${reversedBy.actorName ? ` by ${reversedBy.actorName}` : ""}.` : "Reversed."} It no longer counts toward the stock.
+          {reversalCaption(replacedBy ? { recordedAt: replacedBy.recordedAt, actorName: replacedBy.actorName, replaced: true }
+            : reversedBy ? { recordedAt: reversedBy.recordedAt, actorName: reversedBy.actorName, replaced: false } : null, timeZone)}
         </p>
       )}
       <LedgerBeforeAfter title="Dry biochar in the bin" before={`${formatMassKg(entry.beforeDryKg)} dry`} after={`${formatMassKg(entry.afterDryKg)} dry`} />
