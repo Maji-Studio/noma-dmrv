@@ -3,6 +3,7 @@
 /** PROTOTYPE floating variant bar. Hidden in production builds. */
 import { useCallback, useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { STATES, type MonthState } from "./report";
 import { CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react/dist/ssr";
 
 const VARIANTS = [
@@ -11,16 +12,16 @@ const VARIANTS = [
   { key: "C", name: "Month sheet" },
 ] as const;
 
-export function PrototypeSwitcher({ current, empty }: { current: string; empty: boolean }) {
+export function PrototypeSwitcher({ current, state }: { current: string; state: MonthState }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
 
   const go = useCallback(
-    (key: string, emptyFlag: boolean) => {
+    (key: string, nextState: MonthState) => {
       const next = new URLSearchParams(params.toString());
       next.set("variant", key);
-      if (emptyFlag) next.set("state", "empty");
+      if (nextState !== "full") next.set("state", nextState);
       else next.delete("state");
       router.replace(`${pathname}?${next.toString()}`);
     },
@@ -30,9 +31,9 @@ export function PrototypeSwitcher({ current, empty }: { current: string; empty: 
   const step = useCallback(
     (delta: number) => {
       const i = VARIANTS.findIndex((v) => v.key === current);
-      go(VARIANTS[(i + delta + VARIANTS.length) % VARIANTS.length].key, empty);
+      go(VARIANTS[(i + delta + VARIANTS.length) % VARIANTS.length].key, state);
     },
-    [current, empty, go],
+    [current, state, go],
   );
 
   useEffect(() => {
@@ -52,7 +53,7 @@ export function PrototypeSwitcher({ current, empty }: { current: string; empty: 
   return (
     <div
       data-prototype-bar
-      className="fixed bottom-16 left-1/2 z-50 flex -translate-x-1/2 items-center gap-8 bg-[var(--ink)] px-12 py-8 text-[var(--paper)]"
+      className="fixed bottom-16 left-1/2 z-50 flex max-w-[calc(100vw-16px)] flex-wrap justify-center -translate-x-1/2 items-center gap-8 bg-[var(--ink)] px-12 py-8 text-[var(--paper)]"
     >
       <button type="button" aria-label="Previous variant" onClick={() => step(-1)} className="flex h-32 w-32 items-center justify-center">
         <CaretLeftIcon size={16} weight="bold" />
@@ -63,13 +64,17 @@ export function PrototypeSwitcher({ current, empty }: { current: string; empty: 
       <button type="button" aria-label="Next variant" onClick={() => step(1)} className="flex h-32 w-32 items-center justify-center">
         <CaretRightIcon size={16} weight="bold" />
       </button>
-      <button
-        type="button"
-        onClick={() => go(current, !empty)}
-        className="body-caption border border-[var(--paper)] px-8 py-4"
-      >
-        {empty ? "Show data" : "Empty month"}
-      </button>
+{STATES.map((st) => (
+        <button
+          key={st.key}
+          type="button"
+          onClick={() => go(current, st.key)}
+          aria-pressed={state === st.key}
+          className={`body-caption border border-[var(--paper)] px-8 py-4 ${state === st.key ? "bg-[var(--paper)] text-[var(--ink)]" : ""}`}
+        >
+          {st.name}
+        </button>
+      ))}
     </div>
   );
 }
