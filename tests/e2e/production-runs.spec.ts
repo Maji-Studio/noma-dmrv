@@ -620,7 +620,10 @@ test.describe("Production Run lifecycle (#254)", () => {
     await expect(cancellationReason).toBeVisible();
 
     await saveEdit(page);
-    await expect(dialog.getByText("Enter a cancellation reason.")).toBeVisible();
+    await expect(dialog.locator("#cancellationReason-error")).toHaveText("Enter a cancellation reason.");
+    await expect(
+      dialog.getByRole("link", { name: "Cancellation reason: Enter a cancellation reason." }),
+    ).toBeVisible();
 
     await cancellationReason.fill("Duplicate run entered by the operator");
     await saveEdit(page);
