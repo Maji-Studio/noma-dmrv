@@ -17,6 +17,8 @@ import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import type { TimelineState } from "@/lib/credit-batches/timeline";
+import { OPEN_TODOS_LABEL, todosLabel } from "@/lib/credit-batches/batch-page";
+import { CountBadge } from "./credit-batch-page-parts";
 import { cn } from "@/lib/utils";
 import { MUTED, STATE_TONE } from "./credit-batch-timeline-parts";
 
@@ -44,7 +46,8 @@ export interface HoverCardBatch {
   startDate: string;
   endDate: string;
   state: TimelineState | null;
-  blockingCount: number;
+  /** Blocking + Check items while Open, the same count as the batch page's Overview badge. */
+  todoCount: number;
   facts: CreditBatchTimelineFacts | undefined;
   /** Whether `facts` is still loading or could not be loaded, so a gap is not read as a missing measurement. */
   factsStatus: "loading" | "failed" | "ready";
@@ -86,10 +89,11 @@ function HoverCardBody({ batch }: { batch: HoverCardBatch }) {
           </span>
         </div>
       </div>
-      {batch.blockingCount > 0 && (
+      {batch.todoCount > 0 && (
         <div className={cn("flex items-center gap-8 px-16 py-8 body-small font-medium", STATE_TONE.blocking.tint)}>
           <WarningCircleIcon size={16} weight="fill" className={cn("shrink-0", STATE_TONE.blocking.text)} aria-hidden />
-          {`Missing data ${batch.blockingCount}`}
+          {OPEN_TODOS_LABEL}
+          <CountBadge count={batch.todoCount} blocking label={todosLabel(batch.todoCount)} />
         </div>
       )}
       <dl className="grid grid-cols-2 gap-12 border-t border-[var(--color-border-tertiary)] px-16 py-12">

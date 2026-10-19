@@ -36,6 +36,9 @@ export function overviewBadgeCount(items: CreditBatchOpenItemGroups): number {
   return items.blocking.length + items.check.length;
 }
 
+/** What the first progress step and the list status call an Open batch with work left. */
+export const OPEN_TODOS_LABEL = "Open to-dos";
+
 /** The accessible name of an open to-dos count: the Overview tab badge and the first progress step. */
 export function todosLabel(count: number): string {
   return `${count} open ${count === 1 ? "to-do" : "to-dos"}`;
@@ -99,7 +102,7 @@ export function creditBatchMilestones({ blockingCount, openCount, pageModel }: C
     {
       key: "data",
       // Until the health answers, the step names itself without a verdict.
-      label: missing ? "Open to-dos" : blockingCount === 0 ? "Ready for submission" : "Batch data",
+      label: missing ? OPEN_TODOS_LABEL : blockingCount === 0 ? "Ready for submission" : "Batch data",
       done: blockingCount === 0,
       caption: null,
       count: missing ? openCount : undefined,
