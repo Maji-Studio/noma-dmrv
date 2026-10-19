@@ -39,9 +39,9 @@ export const SETTINGS_CONSOLE_MAX_WIDTH_CLASS = "max-w-[1160px]";
 const ADMIN_ORGANIZATIONS_HREF = "/admin/organizations";
 
 interface SettingsConsoleProps {
-  /** Pane title. Also the rail row that renders as selected. */
+  /** Page title. Also the rail row that renders as selected. */
   title: string;
-  /** One line under the pane title, explaining what the pane configures. */
+  /** The pane's first line, explaining what it configures. */
   caption: string;
   /** Who may change what is in this pane, for the pane footnote. */
   access: string;
@@ -148,15 +148,15 @@ export function SettingsConsole({
         {/* A presentational card, so a plain div: as a `section` it became an
             ancestor of every pane's own sections, and a `section`-scoped query
             for one of them silently widened to the whole pane. */}
+        {/* No pane title: the page title above already names the category, and
+            the rail marks it, so a second copy in the pane only repeated it. */}
         <div className="border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)]">
-          <div className="flex flex-col gap-4 border-b-[1px] border-[var(--clr-dark-purple-10)] bg-[var(--sea)] px-24 py-16">
-            <h2 className="title-heading-3">{title}</h2>
-            <p className="body-caption text-[var(--color-text-tertiary)]">
+          <div className="flex flex-col gap-24 p-24">
+            <p className="body-small text-[var(--color-text-secondary)]">
               {caption}
             </p>
+            {children}
           </div>
-
-          <div className="p-24">{children}</div>
 
           <div className="border-t-[1px] border-[var(--clr-dark-purple-10)] px-24 py-16">
             <span className="body-caption text-[var(--color-text-tertiary)]">

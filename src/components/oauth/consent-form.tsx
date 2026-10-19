@@ -13,7 +13,7 @@ import { useOAuthQuery } from "@/hooks/use-oauth-query";
 import { followOAuthContinuation } from "@/lib/auth/oauth-continuation";
 import { SETTINGS_CONNECTED_APPS_HREF } from "@/lib/settings/links";
 import { OAuthAppIdentity, OAuthCard, OAuthRestartNotice } from "./oauth-card";
-import { oauthAppName, oauthAppNameStart } from "./oauth-labels";
+import { oauthAppName } from "./oauth-labels";
 
 /** An already allowed group longer than this many entities folds away. The request itself never does. */
 const ALLOWED_FOLD_LIMIT = 5;
@@ -62,8 +62,8 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
   }
 
   return (
-    <OAuthCard title={`Allow ${clientName} to use noma?`}
-      intro={`${oauthAppNameStart(view.clientName)}${clientHost ? ` (${clientHost})` : ""} wants to act for you in ${organization.name}.`}>
+    // The card names the app and its host, so the intro only adds where it will act.
+    <OAuthCard title={`Allow ${clientName} to use noma?`} intro={`It wants to act for you in ${organization.name}.`}>
       <OAuthAppIdentity name={view.clientName} host={clientHost} redirectHost={redirectHost} />
       <div className="flex flex-col gap-12">
         {requestedReads.length > 0 && (
@@ -73,7 +73,7 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
               disabled={decision.isPending}
               onChange={event => setTicked(event.target.checked
                 ? [...new Set([...ticked, ...requestedReads])] : ticked.filter(scope => !isRead(scope)))} />
-            <span className="body-medium">Allow reading everything listed</span>
+            <span className="body-small font-medium">Allow reading everything listed</span>
           </label>
         )}
         {/* What the app asks for now is always on screen: it is the decision. */}
@@ -83,7 +83,7 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
         {allowed.length > 0 && <AlreadyAllowed scopes={allowed} entityCount={allowedEntityCount} />}
       </div>
       {offlineAccessRequested && (
-        <p className="body-small text-[var(--color-text-secondary)]">
+        <p className="body-caption text-[var(--color-text-secondary)]">
           Stay connected: {clientName} can keep working without asking you to sign in again
         </p>
       )}
