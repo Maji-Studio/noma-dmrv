@@ -15,6 +15,9 @@ export const openRecordLocksModule = {
   useRecordLocks: () => ({
     locks: new Proxy({}, { get: () => OPEN_LOCK }),
     statusOf: () => "ready" as const,
+    failed: false,
+    retry: () => undefined,
+    retrying: false,
   }),
   useRecordLock: () => ({ lock: OPEN_LOCK, status: "ready" as const }),
 };
@@ -23,6 +26,7 @@ export const openRecordLocksModule = {
 export const stubRecordLockComponentsModule = {
   RecordLockChip: () => null,
   RecordLockNotice: () => null,
+  RecordLockListNotice: () => null,
   RecordUsedBy: () => null,
   RecordLockFormFrame: ({ children }: { children: unknown }) => children,
   recordLockTitleMark: () => () => null,

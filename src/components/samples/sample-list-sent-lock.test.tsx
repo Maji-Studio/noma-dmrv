@@ -83,7 +83,7 @@ vi.mock("@/hooks/use-create-with-evidence", () => ({
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 
 vi.mock("@/hooks/use-record-locks", () => ({
-  useRecordLocks: () => ({ locks: harness.lock ? { [SAMPLE_ID]: harness.lock } : {}, statusOf: () => harness.lockStatus }),
+  useRecordLocks: () => ({ locks: harness.lock ? { [SAMPLE_ID]: harness.lock } : {}, statusOf: () => harness.lockStatus, failed: harness.lockStatus === "error", retry: harness.retry, retrying: false }),
   useRecordLock: (_kind: string, id: string | null | undefined) => ({ lock: id ? harness.lock : undefined, status: harness.lockStatus, retry: harness.retry, retrying: false }),
 }));
 

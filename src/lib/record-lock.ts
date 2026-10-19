@@ -26,10 +26,23 @@ interface RecordUpdateInputs {
 import type { LocalSubmissionStatus } from "@/lib/certification/status";
 import { getMetadataValue } from "@/lib/certification/submission-metadata";
 
-/** The second sentence of the In use notice: what to do. */
+/** The second sentence of the In use notice: what to do. The default `howToFree` of an In use lock. */
 export const IN_USE_HOW_TO_FREE = "To change them, first correct or remove those records.";
 /** The same sentence when one record holds the lock. */
 export const IN_USE_HOW_TO_FREE_ONE = "To change them, first correct or remove that record.";
+/** The refusal variants: a refusal message has no "them" to point back at. */
+export const IN_USE_REFUSAL_HOW_TO_FREE = "To change this, first correct or remove the records that use it.";
+export const IN_USE_REFUSAL_HOW_TO_FREE_ONE = "To change this, first correct or remove the record that uses it.";
+
+/**
+ * The In use sentence for a surface and holder count. Only for the default
+ * `howToFree`; a lock with its own sentence keeps it.
+ */
+export function inUseHowToFree(surface: "notice" | "refusal", holderCount: number): string {
+  const one = holderCount === 1;
+  if (surface === "notice") return one ? IN_USE_HOW_TO_FREE_ONE : IN_USE_HOW_TO_FREE;
+  return one ? IN_USE_REFUSAL_HOW_TO_FREE_ONE : IN_USE_REFUSAL_HOW_TO_FREE;
+}
 
 const TERMINAL_ATTEMPT_STATUSES: ReadonlySet<LocalSubmissionStatus> = new Set(["submitted", "accepted", "rejected", "superseded"]);
 const REMOTELY_SUBMITTED_STATUSES: ReadonlySet<LocalSubmissionStatus> = new Set(["submitted", "accepted"]);
@@ -187,7 +200,7 @@ export function withRecordLockGuidance(message: string, lock: RecordLock): strin
   if (lock.level === "open") return message;
   // The notice's "them" points at the fields it just named; a refusal message has no such referent.
   const howToFree = lock.level === "inUse" && (!lock.howToFree || lock.howToFree === IN_USE_HOW_TO_FREE)
-    ? "To change this, first correct or remove the records that use it."
+    ? inUseHowToFree("refusal", lock.heldBy.length)
     : lock.howToFree;
   return `${message}${formatRecordLockHolders(lock)} ${howToFree}`;
 }

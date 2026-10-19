@@ -39,7 +39,7 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { StatCard } from "@/components/ui/stat-card";
 import { MassPair } from "@/components/ui/mass-pair";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { recordLockSheetProps, recordLockTitleMark } from "@/components/record-locks";
+import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { isProductionRunOutputLocked, isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { useToast } from "@/components/ui/toast";
@@ -503,6 +503,8 @@ export function ProductionRunList() {
         <StatCard title="Running" value={statsData?.runningCount ?? 0} icon={<ClockIcon size={24} weight="bold" />} description="Currently active runs" isLoading={statsLoading} />
         <StatCard title="Completed" value={statsData?.completedCount ?? 0} icon={<CheckCircleIcon size={24} weight="bold" />} description="Finished production runs" isLoading={statsLoading} />
       </div>
+
+      <RecordLockListNotice read={runLocks} />
 
       {/* Data Table */}
       <DataTable

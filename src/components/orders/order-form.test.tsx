@@ -406,7 +406,7 @@ describe("OrderForm record lock (#1119)", () => {
   it("leaves every field editable and shows no lock line while Open", () => {
     const fields = renderLocked("open");
     expect(Object.values(fields).some(isDisabled)).toBe(false);
-    expect(screen.queryByText(/In use by/)).toBeNull();
+    expect(document.querySelector("[data-record-lock-notice]")).toBeNull();
   });
 
   // The lock line itself renders once, from the sheet (`editNotice`).

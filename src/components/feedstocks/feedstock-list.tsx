@@ -13,7 +13,7 @@ import { parseAsString, useQueryState } from "nuqs";
 import { FEEDSTOCK_DEEP_LINK_PARAM } from "@/lib/feedstock-links";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { recordLockSheetProps, recordLockTitleMark } from "@/components/record-locks";
+import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -555,6 +555,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
 
       {/* Stats */}
       {stats}
+
+      <RecordLockListNotice read={feedstockLocks} />
 
       {/* Data Table */}
       <DataTable
