@@ -35,10 +35,22 @@ export function RecordLockChip({ level, className }: { level: RecordLockView["le
   );
 }
 
-/** A list cell: the chip once the batched read answered, a quiet word before. */
+/**
+ * Overview surfaces (list cells, board tiles, cards) show the chip only once a
+ * record is Sent. Nearly every record with data downstream is In use, so Open
+ * and In use say nothing there; the sheet header and edit form keep all three.
+ */
+export function RecordLockOverviewChip({ lock, className }: { lock: RecordLockView | undefined; className?: string }) {
+  return lock?.level === "sent" ? <RecordLockChip level="sent" className={className} /> : null;
+}
+
+/**
+ * A list cell: the Sent chip once the batched read answered, blank otherwise.
+ * While pending the cell stays blank (a placeholder per row is noise). A failed
+ * read keeps its note, since blank would wrongly read as "not sent".
+ */
 export function RecordLockCell({ lock, status = "ready" }: { lock: RecordLockView | undefined; status?: RecordLockStatus }) {
-  if (lock) return <RecordLockChip level={lock.level} />;
-  if (status === "pending") return <span className="body-caption text-[var(--color-text-tertiary)]">Checking…</span>;
+  if (lock) return <RecordLockOverviewChip lock={lock} />;
   if (status === "error") return <span className="body-caption text-[var(--color-text-tertiary)]">{"Couldn't check"}</span>;
   return null;
 }

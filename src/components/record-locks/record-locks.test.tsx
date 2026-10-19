@@ -2,7 +2,9 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RecordLockLink, RecordLockView } from "@/lib/record-lock-view";
-import { RecordLockChip } from "./record-lock-chip";
+import { RecordLockCell, RecordLockChip, RecordLockOverviewChip } from "./record-lock-chip";
+import { recordLockColumn } from "./record-lock-column";
+import { recordLockSheetProps } from "./record-lock-sheet-props";
 import { RecordLockNotice } from "./record-lock-notice";
 import { RecordUsedBy } from "./record-used-by";
 
@@ -46,6 +48,40 @@ describe("RecordLockChip", () => {
     expect(open).not.toBe(inUse);
     expect([open, inUse].some((classes) => /--st-(wait|run|ok|bad)/.test(classes))).toBe(false);
     expect(sent).toContain("--st-run");
+  });
+});
+
+describe("overview surfaces show only Sent", () => {
+  it.each([["open", "Open"], ["inUse", "In use"]] as const)("hides %s in a list cell and the overview chip", (level, label) => {
+    const { container } = render(<><RecordLockCell lock={view(level, [RUN])} /><RecordLockOverviewChip lock={view(level, [RUN])} /></>);
+    expect(container.textContent).toBe("");
+    expect(screen.queryByText(label)).toBeNull();
+  });
+
+  it("shows Sent in a list cell and the overview chip", () => {
+    render(<><RecordLockCell lock={view("sent", [REMOVAL])} /><RecordLockOverviewChip lock={view("sent", [REMOVAL])} /></>);
+    expect(screen.getAllByText("Sent")).toHaveLength(2);
+  });
+
+  it("stays blank while pending, and says so when the read failed", () => {
+    const { container, rerender } = render(<RecordLockCell lock={undefined} status="pending" />);
+    expect(container.textContent).toBe("");
+    rerender(<RecordLockCell lock={undefined} status="error" />);
+    expect(container.textContent).toBe("Couldn't check");
+  });
+
+  it("sorts and exports the column by Sent only", () => {
+    const column = recordLockColumn<{ id: string }>({ a: view("inUse", [RUN]), b: view("sent", [REMOVAL]) });
+    const accessor = (column as unknown as { accessorFn: (row: { id: string }) => string }).accessorFn;
+    expect([accessor({ id: "a" }), accessor({ id: "b" })]).toEqual(["", "Sent"]);
+  });
+
+  it("keeps all three levels in the sheet header badge", () => {
+    for (const [level, label] of [["open", "Open"], ["inUse", "In use"], ["sent", "Sent"]] as const) {
+      const { unmount } = render(<>{recordLockSheetProps({ lock: view(level, [RUN]), status: "ready" }).titleBadge}</>);
+      expect(screen.getByText(label)).toBeTruthy();
+      unmount();
+    }
   });
 });
 

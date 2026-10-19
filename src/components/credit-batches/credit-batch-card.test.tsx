@@ -93,6 +93,17 @@ describe("CreditBatchCard", () => {
     ]);
   });
 
+  it("shows the lock chip only once the batch is Sent", () => {
+    const chipFor = (level: "open" | "inUse" | "sent") =>
+      renderToStaticMarkup(CreditBatchCard({
+        creditBatch, onView: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn(),
+        lock: { level, heldBy: [], usedBy: [], freeFields: [], howToFree: null, returnedBy: [] },
+      }));
+    expect(chipFor("open")).not.toContain("data-record-lock");
+    expect(chipFor("inUse")).not.toContain("data-record-lock");
+    expect(chipFor("sent")).toContain('data-record-lock="sent"');
+  });
+
   it("activates the view action from the keyboard title button", () => {
     const onView = vi.fn();
     const view = CreditBatchCard({

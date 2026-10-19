@@ -12,7 +12,7 @@ import type { CreditBatchHealthSummary } from "@/fn/certification";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { CreditBatchLifecycleRail } from "./credit-batch-lifecycle";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { RecordLockChip } from "@/components/record-locks/record-lock-chip";
+import { RecordLockOverviewChip } from "@/components/record-locks/record-lock-chip";
 import { isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
 
 interface CreditBatchCardProps {
@@ -63,7 +63,7 @@ export function CreditBatchCard({
             <CertificateIcon size={12} weight="bold" />
             {creditBatch.code}
           </span>
-          <span className="ml-auto">{lock && <RecordLockChip level={lock.level} />}</span>
+          <span className="ml-auto"><RecordLockOverviewChip lock={lock} /></span>
           <RowActionsMenu
             label={`Actions for credit batch ${creditBatch.code}`}
             actions={[

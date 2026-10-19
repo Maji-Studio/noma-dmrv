@@ -1,4 +1,4 @@
-export { RecordLockChip, RecordLockCell } from "./record-lock-chip";
+export { RecordLockChip, RecordLockCell, RecordLockOverviewChip } from "./record-lock-chip";
 export { recordLockColumn } from "./record-lock-column";
 export { RecordLockNotice, RecordReturnedNotice, returnedStatementPhrase } from "./record-lock-notice";
 export { RecordUsedBy } from "./record-used-by";
