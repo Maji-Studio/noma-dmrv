@@ -54,6 +54,16 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
   recheck entry dates when a batch start date moves. Decide whether to refuse
   the batch edit or stop counting entries dated before the new start date.
 
+## Late production runs after submission (`credit-batches/late-runs`) - **parked**
+
+- `src/data-access/credit-batch-membership.ts:assertNoOverlappingCreditBatchCohort`
+  keeps one credit batch per facility and feedstock for any day. A production
+  run completed after its batch's Removal was submitted therefore has no batch
+  and is not credited. Parked on 2026-10-19 (#674, closed): Kenji keeps the
+  one-batch rule until a real late run needs crediting. Isometric's protocol
+  says nothing either way about two Removals or GHG Statements with overlapping
+  dates, so reopening this starts with asking Isometric.
+
 ## Record-lock follow-ups
 
 - `src/data-access/record-lock-lineage.ts:readRecordLockLineage`: Isometric exposes

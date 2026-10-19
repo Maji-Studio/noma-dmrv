@@ -717,3 +717,9 @@ Three failure-path gaps, each a surprising mode before a registry write:
 - **Current handling**: Certification → Settings shows the pinned versions from `docs/isometric/versions.json` (#1092). The column is nullable and the mapping action never sets it, so the submit preflight normally warns "missing" and records a sync event.
 - **Options**: (a) let the operator record the Certify project's protocol version per project, so the preflight can detect a mismatch; (b) drop the column and the preflight warning, since the Certify API exposes no protocol version and the pin is global.
 - **To resolve**: Kenji picks one. Not decided in #1092.
+
+### Corrections after finalization (`isometric/post-finalization-correction`, opened 2026-10-19) - **parked**
+
+- **Anchor**: `src/lib/isometric/production-batches.ts:createProductionBatch` and `src/data-access/certifier-removal-deletion.ts:finalizeRemovalDeletion`.
+- **Current handling**: Certify has no PATCH for Production Batches or MeasurementSamples. Before finalization, deleting the Removal removes the owned registry records and is the correction path. After finalization, noma builds no replacement flow: the operator is told to contact an admin or Isometric.
+- **Parked** on 2026-10-19 (Kenji, epic #632): #1112 (replace a registered batch) and #1113 (show superseded resources) are closed until a real case appears. Reopening this starts with asking Isometric whether it accepts a replacement resource after finalization or amends on its side.
