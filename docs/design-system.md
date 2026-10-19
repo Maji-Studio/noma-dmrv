@@ -178,6 +178,10 @@ area. Date and time inputs get this from `TEMPORAL_INPUT_CLASSES` in the shared
 The entity select popover separates options with spacing, a hover fill and a
 selected fill, not per-row rules, and uses Phosphor icons. The search box and
 the "Edit <name>" and "Add new" footer rows are part of the same menu, not boxed apart.
+When the entity is created on its own page rather than in a quick-add dialog
+(reactors), "Add new" opens that page's create sheet in a new tab (`createHref`,
+open-in-new-tab icon) so the form keeps its entries, and the options reload when
+the operator comes back. An empty list's `emptyHint` link reloads the same way.
 All menu rows have a minimum 44px touch target. The portalled menu flips to fit
 the available viewport; touch opens it without focusing search. Give the trigger
 the `FormField` id (`FormEntitySelect` does) so the field label names it.

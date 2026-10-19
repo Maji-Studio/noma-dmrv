@@ -80,8 +80,11 @@ describe("CreditBatchListRow", () => {
     expect(props.onOpen).toHaveBeenCalledTimes(1);
   });
 
-  it("shows In use and Sent, but not the default Open lock", () => {
+  it("shows only the Sent lock, not Open or In use", () => {
     renderRow();
+    expect(document.querySelector("[data-record-lock]")).toBeNull();
+    cleanup();
+    renderRow({ lock: lockAt("inUse") });
     expect(document.querySelector("[data-record-lock]")).toBeNull();
     cleanup();
     renderRow({ lock: lockAt("sent"), view: { state: "submitted", blockingCount: 0 } });

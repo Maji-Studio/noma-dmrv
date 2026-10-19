@@ -32,8 +32,10 @@ export function recordLockSubmitBlock({ lock, status, retry, retrying }: RecordL
  */
 export function recordLockSheetProps(options: RecordLockSheetOptions) {
   const { lock, status, retry, retrying, subject, inUseLocksNothing } = options;
+  // In use that locks nothing has no line below, so the chip would claim a lock that isn't there.
+  const showChip = !!lock && !(lock.level === "inUse" && inUseLocksNothing);
   return {
-    titleBadge: lock ? <RecordLockChip level={lock.level} /> : undefined,
+    titleBadge: showChip ? <RecordLockChip level={lock.level} /> : undefined,
     viewModeNotice: (
       <RecordLockNotice lock={lock} status={status} onRetry={retry} retrying={retrying} subject={subject} inUseLocksNothing={inUseLocksNothing} />
     ),

@@ -97,10 +97,9 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.credentials.outcome == 'success' }}
         run: pnpm test:isometric-health
 
-      # Asserts every (group, blueprint,
-      # input) tuple in the live template has an ordinary or sequestration
-      # binding. The fixture has no period-input exceptions; PROJECT-scope
-      # tuples fail. No DB required.
+      # Uses readiness/submission line contracts (ADR 0032) for live templates.
+      # Entry-only lines warn; unsettled contracts, forbidden lines and unmapped
+      # inputs fail. No DB required.
       - name: Live template input coverage (fixture-selected templates)
         id: coverage
         if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.credentials.outcome == 'success' }}
@@ -153,7 +152,7 @@ jobs:
           - Setup failure: inspect the failed setup step; reproduce install with \`pnpm install --frozen-lockfile\`.
           - Credentials failure: check OP_SERVICE_ACCOUNT_TOKEN and the three Isometric fields in the staging 1Password item; confirm they belong to the sandbox demo project's organization. Never paste credentials into logs.
           - API failure: with sandbox credentials, ISOMETRIC_ENVIRONMENT=sandbox and ISOMETRIC_DEMO_PROJECT_ID configured, run \`pnpm test:isometric-health\`.
-          - Coverage failure: with sandbox credentials configured, run \`pnpm isometric:coverage-check -- --source=fixture\`; inspect live template bindings and the explicit fixture allowlist.
+          - Coverage failure: with sandbox credentials configured, run \`pnpm isometric:coverage-check -- --source=fixture\`; inspect live template line contracts and reported input bindings (ADR 0032). Entry-only lines warn; unsettled contracts, forbidden lines and unmapped inputs fail.
           - OpenAPI failure: run \`pnpm regenerate-certify-types\`; inspect fetch/generation errors or review \`git diff -- src/lib/isometric/generated/certify.d.ts\` before committing an intentional type refresh.
           - Skipped or cancelled checks are incomplete, never evidence of health. Fix prerequisites and rerun the workflow.
           EOF

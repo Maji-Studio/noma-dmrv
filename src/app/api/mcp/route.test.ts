@@ -1,3 +1,4 @@
+import { apiKeyContext } from "../../../../tests/helpers/api-context";
 import { DOCUMENT_GUIDANCE } from "@/lib/operations/document-guidance";
 import { DOCUMENT_CONFIRM_DEADLINE_MS } from "@/config/documents";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -55,7 +56,7 @@ vi.mock("@/lib/read-models/api-output-stock-movements", () => ({ readApiOutputSt
 vi.mock("@/lib/mcp/server", { spy: true });
 vi.mock("@/config/env", () => ({ env: mocks.env }));
 vi.mock("@/lib/auth/api-context", () => ({ resolveApiContext: mocks.resolve }));
-vi.mock("@/lib/api/guards", () => ({ preAuthGuard: mocks.pre, postAuthGuard: mocks.post }));
+vi.mock("@/lib/api/guards", () => ({ preAuthGuard: mocks.pre, credentialAdmissionGuard: vi.fn(async () => ({ response: null, result: null })), postAuthGuard: mocks.post }));
 vi.mock("@/lib/read-models/api-me", () => ({ readApiMe: mocks.me }));
 vi.mock("@/lib/log", () => ({ logger: { error: mocks.log } }));
 // Real argument parsers and cursor codecs; readers never connect to a database.
@@ -109,11 +110,11 @@ it("returns the shared domain guidance during initialize", async () => {
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.env.API_WRITES_DISABLED = false;
-  mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: API_SCOPES, organizationId: "org-1" } });
+  mocks.resolve.mockResolvedValue({ ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: [...API_SCOPES], organizationId: "org-1" }) });
   mocks.pre.mockResolvedValue({ response: null, result: null });
   mocks.post.mockResolvedValue({ ok: true, headers: new Headers(rateHeaders) });
   mocks.me.mockResolvedValue({ organization: { id: "org-1", name: "Test" }, facilities: [], role: "admin", scopes: API_SCOPES,
-    credential: { id: "key-1", name: null, expiresAt: "2027-01-01T00:00:00.000Z" } });
+    credential: { kind: "api-key", id: "key-1", name: null, expiresAt: "2027-01-01T00:00:00.000Z" } });
 });
 afterEach(() => vi.useRealTimers());
 
@@ -123,9 +124,9 @@ describe("authenticated MCP read route", () => {
     expect(mocks.pre).not.toHaveBeenCalled();
     expect(mocks.resolve).not.toHaveBeenCalled();
   });
-  it("refuses GET and DELETE", () => {
-    expect(GET().status).toBe(405);
-    expect(DELETE().status).toBe(405);
+  it("refuses authenticated GET and DELETE", async () => {
+    expect((await GET(new Request(ENDPOINT))).status).toBe(405);
+    expect((await DELETE(new Request(ENDPOINT, { method: "DELETE" }))).status).toBe(405);
   });
   it("challenges missing credentials at HTTP level", async () => {
     mocks.resolve.mockResolvedValue({ ok: false, denial: "credential_missing" });
@@ -213,7 +214,7 @@ describe("authenticated MCP read route", () => {
     expect(result.serverInfo.version).toBe(API_VERSION);
   });
   it("filters discovery and makes hidden and unknown tool calls indistinguishable", async () => {
-    mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: [] } });
+    mocks.resolve.mockResolvedValue({ ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: [] }) });
     const { result } = await body(await POST(rpc("tools/list")));
     expect(result.tools.map((tool: { name: string }) => tool.name)).toEqual(["whoami"]);
     expect((await body(await call("find_feedstocks"))).error).toEqual((await body(await call("unknown"))).error);
@@ -257,7 +258,7 @@ describe("authenticated MCP read route", () => {
     const now = Date.now();
     mocks.resolve.mockImplementation(async () => {
       vi.setSystemTime(now + OPERATION_DEADLINE_MS);
-      return { ok: true, ctx: { orgRole: "admin", scopes: [] } };
+      return { ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: [] }) };
     });
     expect(await body(await call("whoami"))).toMatchObject({ result: { isError: true, structuredContent: { code: "deadline_exceeded" } } });
     expect(mocks.me).not.toHaveBeenCalled();
@@ -360,7 +361,7 @@ it.each([undefined, "", "a b", "é"])("reports requestKey %j at its argument pat
   });
 });
 it("publishes scoped write hints and optional requestKey", async () => {
-  mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: ["feedstocks:write"] } });
+  mocks.resolve.mockResolvedValue({ ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: ["feedstocks:write"] }) });
   const { result } = await body(await POST(rpc("tools/list")));
   expect(result.tools.map((tool: { name: string }) => tool.name)).toEqual(["whoami", "log_feedstock_delivery", "update_feedstock", "request_document_upload", "confirm_document_upload"]);
   for (const tool of result.tools.filter((tool: { name: string }) => ["log_feedstock_delivery", "update_feedstock"].includes(tool.name))) {
@@ -374,7 +375,7 @@ it("publishes scoped write hints and optional requestKey", async () => {
 
 
 it("keeps write tools hidden for a read-only key", async () => {
-  mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: ["feedstocks:read"] } });
+  mocks.resolve.mockResolvedValue({ ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: ["feedstocks:read"] }) });
   const { result } = await body(await POST(rpc("tools/list")));
   expect(result.tools.map((tool: { name: string }) => tool.name)).toEqual(["whoami", "find_feedstocks", "get_feedstock", "find_documents", "get_document_download_url"]);
   for (const name of ["log_feedstock_delivery", "update_feedstock", "delete_feedstock"]) {
@@ -424,7 +425,7 @@ it.each([...LOCATION_WRITE_TOOLS, "record_application", "update_application", "d
   });
 });
 it("authorizes the selected document owner before executing a visible tool", async () => {
-  mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: ["deliveries:read"], organizationId: "org-1" } });
+  mocks.resolve.mockResolvedValue({ ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: ["deliveries:read"], organizationId: "org-1" }) });
   const response = await body(await call("find_documents", { ownerType: "feedstock", ownerId: "FS-1" }));
   expect(response.result).toMatchObject({ isError: true, structuredContent: { code: "missing_scope", issues: [] } });
 });
@@ -435,7 +436,7 @@ it.each([
   ["formulations:write", ["create_formulation", "update_formulation", "archive_formulation", "restore_formulation"]],
   ["formulations:delete", ["delete_formulation"]],
 ] as const)("exposes the master-data formulation tools by %s scope", async (scope, expected) => {
-  mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: [scope], organizationId: "org-1" } });
+  mocks.resolve.mockResolvedValue({ ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: [scope], organizationId: "org-1" }) });
   const { result } = await body(await POST(rpc("tools/list")));
   expect(result.tools.filter((tool: { name: string }) => FORMULATION_WRITE_TOOLS.includes(tool.name))
     .map((tool: { name: string }) => tool.name)).toEqual(expected);
@@ -450,7 +451,7 @@ it.each([
 it.each(["supplier", "customer"] as const)("exposes the master-data %s tools only with their matching scope", async kind => {
   const commands = ["create", "update", "delete", "archive", "restore"];
   for (const permission of ["read", "write", "delete"] as const) {
-    mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: [`${kind}s:${permission}`], organizationId: "org-1" } });
+    mocks.resolve.mockResolvedValue({ ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: [`${kind}s:${permission}`], organizationId: "org-1" }) });
     const listing = await body(await POST(rpc("tools/list")));
     const names = listing.result.tools.map((tool: { name: string }) => tool.name);
     for (const command of commands) {
@@ -470,7 +471,7 @@ it.each(["supplier", "customer"] as const)("exposes the master-data %s tools onl
 it.each(["supplier", "customer"] as const)("hides %s location commands without their matching scope", async kind => {
   const commands = LOCATION_WRITE_TOOLS.filter(name => name.includes(`_${kind}_`));
   for (const permission of ["read", "write", "delete"] as const) {
-    mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: [`${kind}s:${permission}`], organizationId: "org-1" } });
+    mocks.resolve.mockResolvedValue({ ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: [`${kind}s:${permission}`], organizationId: "org-1" }) });
     const listing = await body(await POST(rpc("tools/list")));
     const names = listing.result.tools.map((tool: { name: string }) => tool.name);
     for (const name of commands) {

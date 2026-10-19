@@ -66,6 +66,10 @@ import {
   wholeStockDrawKg,
 } from "@/lib/stock-overdraw";
 import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(applicationFormSchema);
 
 // ============================================
 // Constants for select options
@@ -498,7 +502,7 @@ export function ApplicationForm({
             <FormInput
               id="biocharAppliedKg"
               type="number"
-              step="any"
+              {...numberBounds("biocharAppliedKg")}
               placeholder="e.g., 5000"
               disabled={isSubmitting || locked("appliedWetMassKg")}
               error={!!biocharAppliedError}
@@ -532,7 +536,7 @@ export function ApplicationForm({
             <FormInput
               id="fieldSizeHa"
               type="number"
-              step="any"
+              {...numberBounds("fieldSizeHa")}
               placeholder="e.g., 2.5"
               disabled={isSubmitting}
               error={!!errors.fieldSizeHa}
@@ -684,7 +688,7 @@ export function ApplicationForm({
             <FormInput
               id="soilTemperatureC"
               type="number"
-              step="any"
+              {...numberBounds("soilTemperatureC")}
               placeholder="e.g., 25.0"
               disabled={isSubmitting}
               error={!!errors.soilTemperatureC}

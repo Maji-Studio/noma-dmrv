@@ -17,6 +17,11 @@ declare module "@tanstack/react-table" {
      * hidden. Never mark a column whose cell renders its own controls.
      */
     recordLink?: boolean;
+    /**
+     * Only with `recordLink`: a mark rendered right before the record link,
+     * outside it, so no control nests inside the link. Return null for none.
+     */
+    recordLinkBefore?: (row: TData) => React.ReactNode;
   }
 }
 

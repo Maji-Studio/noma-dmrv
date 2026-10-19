@@ -1,10 +1,11 @@
+import { getOAuthConfig } from "@/lib/auth/oauth-config";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { createApiKey } from "@/data-access/api-keys";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { resolveApiContext } from "@/lib/auth/api-context";
-import { hasRoleAndScope, type ApiScope } from "@/lib/auth/api-scopes";
+import { principalAllows, type ApiScope } from "@/lib/auth/api-scopes";
 import { apiRoute } from "@/lib/api/route";
 import { toolFailure } from "@/lib/mcp/results";
 import { readTools } from "@/lib/mcp/tools/read-tools";
@@ -49,15 +50,15 @@ describe("supplier archive API", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, () => {
       { key: (await createApiKey(a.ctx, { name: "Delete fixture", scopes: ["suppliers:delete"], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS })).key, write: false, delete: true },
     ];
     for (const permissions of permissionKeys) {
-      const resolution = await resolveApiContext(lookupRequest("suppliers", "", permissions.key));
+      const resolution = await resolveApiContext(lookupRequest("suppliers", "", permissions.key), getOAuthConfig().rest);
       expect(resolution.ok).toBe(true);
       if (!resolution.ok) throw new Error("Fixture key did not resolve");
       for (const operation of ["create", "update", "archive", "restore", "delete"]) {
         const scope: ApiScope = operation === "delete" ? "suppliers:delete" : "suppliers:write";
         const allowed = operation === "delete" ? permissions.delete : permissions.write;
-        expect(hasRoleAndScope(resolution.ctx, scope)).toBe(allowed);
+        expect(principalAllows(resolution.ctx, scope)).toBe(allowed);
         // Exercise the shared admission boundary before commit 3 adds the write routes.
-        const handler = apiRoute(`${operation}_supplier`, scope, async () => new Response(null, { status: 204 }));
+        const handler = apiRoute(`${operation}_supplier`, scope, async () => new Response(null, { status: 204 }), { audience: "rest" });
         const response = await handler(new Request("http://localhost:3100/api/v1/suppliers", { method: "POST", headers: { authorization: `Bearer ${permissions.key}` } }));
         if (allowed) expect(response.status).toBe(204);
         else await lookupProblem(response, 403, "missing_scope");
@@ -67,7 +68,7 @@ describe("supplier archive API", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, () => {
 
   it("keeps the existing MCP lookup in parity for archive filters and cursors", async () => {
     await db.insert(suppliers).values([0, 1].map(index => ({ organizationId: a.ctx.organizationId, code: `MCP-ARCHIVED-${index}`, name: `Archived recipe ${index}`, archivedAt: new Date() })));
-    const resolution = await resolveApiContext(lookupRequest("suppliers", "", a.key));
+    const resolution = await resolveApiContext(lookupRequest("suppliers", "", a.key), getOAuthConfig().rest);
     if (!resolution.ok) throw new Error("Fixture key did not resolve");
     const tool = readTools.find(tool => tool.name === "find_suppliers")!;
     const rest = await (await LIST(lookupRequest("suppliers", "?archived=true&limit=1", a.key))).json();

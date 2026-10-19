@@ -7,7 +7,7 @@ export const maxDuration = 30;
 
 type Params = { idOrCode: string };
 export const GET = apiRoute<Params>("api.v1.suppliers.locations.list", "suppliers:read", async (request, { ctx, headers }, { idOrCode }) =>
-  Response.json(await readSupplierLocationList(request, ctx, idOrCode), { headers }));
+  Response.json(await readSupplierLocationList(request, ctx, idOrCode), { headers }), { audience: "rest" });
 
 export const POST = apiRoute<Params>("api.v1.suppliers.locations.add", "suppliers:write", (request, context, { idOrCode }) =>
-  addSupplierLocationResponse(request, context, idOrCode));
+  addSupplierLocationResponse(request, context, idOrCode), { audience: "rest" });

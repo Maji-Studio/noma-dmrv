@@ -16,7 +16,7 @@ import Link from "next/link";
 import { EyeIcon, PencilSimpleIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import { RowActionsMenu } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
-import { RecordLockChip } from "@/components/record-locks/record-lock-chip";
+import { RecordLockOverviewChip } from "@/components/record-locks/record-lock-chip";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
 import type { CreditBatchStateView } from "@/lib/credit-batches/batch-state";
@@ -121,9 +121,9 @@ function BatchState({
   );
 }
 
-/** An Open record lock is the default and would echo the Open state; only In use and Sent show. */
+/** Overview rows show the lock only once Sent, like every other list (#1162). */
 function LockChip({ lock, className }: { lock: RecordLockView | undefined; className?: string }) {
-  return lock && lock.level !== "open" ? <RecordLockChip level={lock.level} className={className} /> : null;
+  return <RecordLockOverviewChip lock={lock} className={className} />;
 }
 
 export function CreditBatchListRow({

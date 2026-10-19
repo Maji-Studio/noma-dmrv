@@ -14,8 +14,8 @@ export const GET = apiRoute<Params>("api.v1.lab-samples.get", "lab-samples:read"
   const data = await readLabSample(ctx, idOrCode);
   headers.set("ETag", labSampleEtag(data));
   return Response.json({ data }, { headers });
-});
+}, { audience: "rest" });
 export const PATCH = apiRoute<Params>("api.v1.lab-samples.update", "lab-samples:write", (request, context, { idOrCode }) =>
-  mutateLabSampleResponse(request, context, idOrCode, "PATCH"));
+  mutateLabSampleResponse(request, context, idOrCode, "PATCH"), { audience: "rest" });
 export const DELETE = apiRoute<Params>("api.v1.lab-samples.delete", "lab-samples:delete", (request, context, { idOrCode }) =>
-  mutateLabSampleResponse(request, context, idOrCode, "DELETE"));
+  mutateLabSampleResponse(request, context, idOrCode, "DELETE"), { audience: "rest" });
