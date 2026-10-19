@@ -1,7 +1,7 @@
 /** Real handlers, credentials and Postgres; run by explicit path only. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { binMovements, biocharProducts, facilities } from "@/db/schema";
 import { POST as MCP } from "@/app/api/mcp/route";
@@ -36,8 +36,8 @@ const INVENTORY = ["find_deliveries", "get_delivery", "record_delivery", "update
 
 async function stockState(f: ApiDeliveryWriteFixture) {
   return {
-    movements: await db.select().from(binMovements).where(eq(binMovements.organizationId, f.ctx.organizationId)),
-    products: await db.select().from(biocharProducts).where(eq(biocharProducts.organizationId, f.ctx.organizationId)),
+    movements: await db.select().from(binMovements).where(eq(binMovements.organizationId, f.ctx.organizationId)).orderBy(asc(binMovements.id)),
+    products: await db.select().from(biocharProducts).where(eq(biocharProducts.organizationId, f.ctx.organizationId)).orderBy(asc(biocharProducts.id)),
   };
 }
 

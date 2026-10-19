@@ -1,7 +1,7 @@
 /** Real UI actions, REST and MCP against the worktree test database. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { binMovements, biocharProducts, facilities, orders, storageLocations } from "@/db/schema";
 import { POST as MCP } from "@/app/api/mcp/route";
@@ -144,8 +144,8 @@ async function refuse(transport: Transport, changes: Record<string, unknown>, id
 
 async function stockState(f: ApiDeliveryWriteFixture) {
   return {
-    movements: await db.select().from(binMovements).where(eq(binMovements.organizationId, f.ctx.organizationId)),
-    products: await db.select().from(biocharProducts).where(eq(biocharProducts.organizationId, f.ctx.organizationId)),
+    movements: await db.select().from(binMovements).where(eq(binMovements.organizationId, f.ctx.organizationId)).orderBy(asc(binMovements.id)),
+    products: await db.select().from(biocharProducts).where(eq(biocharProducts.organizationId, f.ctx.organizationId)).orderBy(asc(biocharProducts.id)),
   };
 }
 
