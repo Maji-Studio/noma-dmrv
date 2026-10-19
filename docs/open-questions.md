@@ -31,12 +31,6 @@ Deferred work lives here, never as a `TODO` in code.
   bar a few pixels wide. Needs a design decision for bars whose 44px hit areas
   would overlap.
 
-## Emissions entry dates (2026-10-16) - **deferred**
-
-- `src/lib/read-models/batch-emission-lines.ts:loadBatchEmissionLines` does not
-  recheck entry dates when a batch start date moves. Decide whether to refuse
-  the batch edit or stop counting entries dated before the new start date.
-
 ## Record-lock follow-ups
 
 - `src/data-access/record-lock-lineage.ts:readRecordLockLineage`: Isometric exposes
