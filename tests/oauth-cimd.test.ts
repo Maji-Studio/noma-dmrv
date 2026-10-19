@@ -9,6 +9,10 @@ import { afterEach, beforeEach, expect, it, vi, type MockInstance } from "vitest
 const memory = vi.hoisted(() => ({ data: {} as Record<string, unknown[]> }));
 
 vi.mock("@/data-access/oauth-provider", () => ({
+  findOAuthClientScopes: async (clientId: string) => {
+    const client = (memory.data.oauthClient as { clientId: string; scopes?: string[] }[]).find(client => client.clientId === clientId);
+    return client ? client.scopes ?? [] : undefined;
+  },
   findOAuthClientResources: async (clientId: string) => (memory.data.oauthClientResource as { clientId: string; resourceId: string }[])
     .filter(link => link.clientId === clientId).map(link => ({ resource: link.resourceId })),
 }));
@@ -72,11 +76,12 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-async function authorize(clientId = CLIENT_ID, redirectUri = REDIRECT_URI, includeResource = true) {
+async function authorize(clientId = CLIENT_ID, redirectUri = REDIRECT_URI, includeResource = true, includeScope = true) {
   const { auth } = await import("@/lib/auth/better-auth");
   const query = new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: "code",
     scope: "feedstocks:read offline_access", resource: "http://localhost:3100/api/mcp",
     code_challenge: "a".repeat(43), code_challenge_method: "S256" });
+  if (!includeScope) query.delete("scope");
   if (!includeResource) query.delete("resource");
   return auth.handler(new Request(`http://localhost:3100/api/auth/oauth2/authorize?${query}`));
 }
@@ -247,4 +252,14 @@ it("refuses an unlisted CIMD client without resource before fetching metadata", 
   expect(response.status).toBe(400);
   expect((await response.json()).error).toBe("invalid_target");
   expect(request).not.toHaveBeenCalled();
+});
+
+it("defaults the first scope-less listed CIMD authorization to reads and offline access", async () => {
+  const { OAUTH_READ_SCOPES, OAUTH_GRANTABLE_SCOPES } = await import("@/lib/auth/oauth-scopes");
+  body = JSON.stringify({ ...JSON.parse(body), scope: [...OAUTH_GRANTABLE_SCOPES, "offline_access"].join(" ") });
+  const response = await authorize(CLIENT_ID, REDIRECT_URI, false, false);
+  expect(response.status).toBe(302);
+  const login = new URL(response.headers.get("location")!, "http://localhost:3100");
+  expect(login.pathname).toBe("/login");
+  expect(login.searchParams.get("scope")?.split(" ").sort()).toEqual([...OAUTH_READ_SCOPES, "offline_access"].sort());
 });

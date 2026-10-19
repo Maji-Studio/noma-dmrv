@@ -14,6 +14,10 @@ these areas; the entry rules and invariants live in
 - **`api/oauth-client-admin-ui`:** `src/lib/auth/oauth-provider.ts:createOAuthProvider`
   permits Platform Admin server-side creation only. Add a guarded client admin
   screen for registration and disabling; preserve the closed HTTP endpoints.
+- **`api/oauth-purge-batches`:** `src/data-access/oauth-purge.ts` deletes expired
+  attempts, tokens and assertions in one statement each, unlike the bounded
+  batches of the other purge helpers. Volumes are small before production; batch
+  it before connections are on in production (PR #1161 review round 2).
 - **`api/dpop`:** `src/lib/auth/oauth-request-policy.ts:guardOAuthTokenInput`
   refuses proofs and `src/lib/auth/oauth-context.ts:resolveOAuthContext` refuses
   sender-bound rows. Full DPoP needs proof, nonce and replay validation before

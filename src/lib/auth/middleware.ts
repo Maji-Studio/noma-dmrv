@@ -93,7 +93,8 @@ export async function updateSession(request: NextRequest) {
   }
 
   // If authenticated and on an auth page, redirect to app
-  if (isAuthenticated && isAuthRoute) {
+  const isOAuthLogin = pathname === "/login" && request.nextUrl.searchParams.has("sig") && request.nextUrl.searchParams.has("ba_param");
+  if (isAuthenticated && isAuthRoute && !isOAuthLogin) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

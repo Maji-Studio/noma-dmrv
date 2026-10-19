@@ -6,7 +6,7 @@ import { createAuthMiddleware } from "better-auth/api";
 
 const state = vi.hoisted(() => ({ attempt: undefined as undefined | { memberId: string; organizationId: string }, revoked: false, picker: false }));
 vi.mock("@/config/env", () => ({ env: { NEXT_PUBLIC_APP_URL: "http://localhost:3100" } }));
-vi.mock("@/data-access/oauth-provider", () => ({ findOAuthAttempt: async () => state.attempt, findOAuthClientResources: async () => [{ resource: "http://localhost:3100/api/mcp" }] }));
+vi.mock("@/data-access/oauth-provider", () => ({ findOAuthOfflineGenerations: async () => [], findOAuthAttempt: async () => state.attempt, findOAuthClientResources: async () => [{ resource: "http://localhost:3100/api/mcp" }] }));
 vi.mock("@/data-access/oauth-grant-lifecycle", () => ({
   getOAuthOrganizationSelection: async () => ({ memberships: [{ memberId: "member", organizationId: "org" }], autoSelectOrganizationId: state.picker ? null : "org" }),
   selectOAuthOrganization: async () => { state.attempt = { memberId: "member", organizationId: "org" }; },

@@ -129,3 +129,22 @@ describe("OAuth discovery proxy boundary", () => {
     expect(getSessionMock).toHaveBeenCalledOnce();
   });
 });
+
+describe("OAuth login continuation", () => {
+  it("lets an authenticated user reach login with the provider's signed query", async () => {
+    getSessionMock.mockResolvedValue({ user: { emailVerified: true } });
+    const { updateSession } = await import("@/lib/auth/middleware");
+    const response = await updateSession(new NextRequest("http://localhost:3100/login?sig=signature&ba_param=1"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+  it.each(["/login", "/login?prompt=login", "/login?sig=signature", "/login?ba_param=1", "/forgot-password?sig=signature&ba_param=1", "/login/child?sig=signature&ba_param=1"])(
+    "keeps the authenticated redirect for %s", async path => {
+      getSessionMock.mockResolvedValue({ user: { emailVerified: true } });
+      const { updateSession } = await import("@/lib/auth/middleware");
+      const response = await updateSession(new NextRequest(`http://localhost:3100${path}`));
+      expect(response.status).toBe(307);
+      expect(new URL(response.headers.get("location")!).pathname).toBe("/dashboard");
+    },
+  );
+});

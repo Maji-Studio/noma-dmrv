@@ -1,4 +1,4 @@
-import { and, eq, gt } from "drizzle-orm";
+import { and, arrayContains, eq, gt, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { oauthAuthorizationAttempts, oauthClientResources, oauthClients, oauthGrants, oauthConsents, organizations, members, sessions, users } from "@/db/schema";
 
@@ -32,7 +32,7 @@ export async function isPlatformAdminUser(userId: string) {
 export async function findOAuthClientScopes(clientId: string) {
   // org-scope-ok: platform client registry
   const [client] = await db.select({ scopes: oauthClients.scopes }).from(oauthClients).where(eq(oauthClients.clientId, clientId));
-  return client?.scopes ?? [];
+  return client ? client.scopes ?? [] : undefined;
 }
 
 // org-scope-ok: session-authenticated authorization attempt; membership validated in the same query
@@ -54,4 +54,15 @@ export async function getOAuthAttemptConsent(input: { attemptKey: string; sessio
       eq(oauthAuthorizationAttempts.clientId, input.clientId), eq(oauthAuthorizationAttempts.resource, input.resource),
       gt(oauthAuthorizationAttempts.expiresAt, new Date())));
   return view;
+}
+
+// org-scope-ok: authenticated user's prior consent across organizations, bound to client and resource
+export async function findOAuthOfflineGenerations(userId: string, clientId: string, resource: string) {
+  // org-scope-ok: authenticated user's prior consent across organizations, bound to client and resource
+  return db.select({ id: oauthGrants.id }).from(oauthGrants)
+    .innerJoin(oauthConsents, and(eq(oauthConsents.referenceId, oauthGrants.id),
+      eq(oauthConsents.userId, oauthGrants.userId), eq(oauthConsents.clientId, oauthGrants.clientId)))
+    .where(and(eq(oauthGrants.userId, userId), eq(oauthGrants.clientId, clientId),
+      eq(oauthGrants.resource, resource), isNull(oauthGrants.revokedAt),
+      arrayContains(oauthConsents.scopes, ["offline_access"])));
 }

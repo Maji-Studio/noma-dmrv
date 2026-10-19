@@ -178,3 +178,49 @@ it.each([false, true])("revokes access and refresh through body or Basic identit
   expect(await token.resolve()).toMatchObject({ ok: false });
   expect((await token.refresh()).status).toBe(400);
 });
+
+it("keeps offline access when step-up requests only the challenged API scopes", async () => {
+  f = await createOAuthFlowFixture();
+  await f.connect();
+  const flow = await f.authorize({ scope: "feedstocks:read feedstocks:write" });
+  expect(flow.location.pathname).toBe("/oauth/consent");
+  expect(flow.location.searchParams.get("scope")?.split(" ")).toContain("offline_access");
+  const token = await (await flow.consent()).exchange();
+  expect(token.status).toBe(200);
+  expect(token.hasRefresh).toBe(true);
+  const refreshed = await token.refresh();
+  expect(refreshed.status).toBe(200);
+  expect(await refreshed.resolve()).toMatchObject({ ok: true });
+});
+
+it.each(["first connection", "without offline consent", "revoked", "other resource", "other user"])(
+  "does not add offline access for %s", async reason => {
+    f = await createOAuthFlowFixture();
+    if (reason !== "first connection") {
+      const original = await f.connect({ scope: reason === "without offline consent" ? "feedstocks:read" : undefined });
+      const { eq } = await import("drizzle-orm");
+      if (reason === "revoked") await original.revoke();
+      if (reason === "other resource") await f.db.update(f.tables.oauthGrants).set({ resource: f.config.rest }).where(eq(f.tables.oauthGrants.clientId, f.clientId));
+      if (reason === "other user") await f.db.update(f.tables.oauthGrants).set({ userId: f.actorId }).where(eq(f.tables.oauthGrants.clientId, f.clientId));
+    }
+    const flow = await f.authorize({ scope: "feedstocks:read feedstocks:write" });
+    expect(flow.location.pathname).toBe("/oauth/consent");
+    expect(flow.location.searchParams.get("scope")?.split(" ")).not.toContain("offline_access");
+    const token = await (await flow.consent()).exchange();
+    expect(token.status).toBe(200);
+    expect(token.hasRefresh).toBe(false);
+  },
+);
+
+it("prompt=login reaches the login page through middleware with an existing session", async () => {
+  f = await createOAuthFlowFixture();
+  const flow = await f.authorize({ query: { prompt: "login" }, pick: false });
+  expect(flow.location.pathname).toBe("/login");
+  expect(flow.location.searchParams.has("sig")).toBe(true);
+  expect(flow.location.searchParams.has("ba_param")).toBe(true);
+  const { NextRequest } = await import("next/server");
+  const { updateSession } = await import("@/lib/auth/middleware");
+  const response = await updateSession(new NextRequest(flow.location, { headers: f.headers }));
+  expect(response.status).toBe(200);
+  expect(response.headers.get("location")).toBeNull();
+});

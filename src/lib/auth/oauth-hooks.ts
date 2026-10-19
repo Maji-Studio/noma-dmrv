@@ -1,9 +1,9 @@
 import { defaultKeyHasher } from "@better-auth/api-key";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { env } from "@/config/env";
 import { getOAuthConfig } from "./oauth-config";
 import { OAUTH_ACCESS_TOKEN_PREFIX, OAUTH_REFRESH_TOKEN_PREFIX } from "@/config/oauth";
-import { findOAuthClientResources, findOAuthClientScopes } from "@/data-access/oauth-provider";
+import { findOAuthClientResources, findOAuthClientScopes, findOAuthOfflineGenerations } from "@/data-access/oauth-provider";
 import { findOAuthAuthorizationCode, findOAuthRefreshToken, findOAuthRevocationToken } from "@/data-access/oauth-token-lookups";
 import { revokeGeneration } from "@/data-access/oauth-grant-lifecycle";
 import { assertGenerationEligible } from "./oauth-eligibility";
@@ -24,12 +24,13 @@ export async function oauthBefore(ctx: OAuthHookContext) {
     guardOAuthAuthorize(query);
     // The raw URL preserves repeated parameters before endpoint schema parsing.
     if (ctx.request && new URL(ctx.request.url).searchParams.getAll("resource").length > 1) refuseOAuth("invalid_target");
-    // No persistence: normalize before the provider signs the authorization.
+    // Normalize before the provider signs the authorization.
     const normalized: Record<string, unknown> = { ...query };
     // Without a scope the plugin would request every client scope, writes
     // included; read first (decision 123), keeping the connection alive.
     if ((typeof query.scope !== "string" || query.scope.trim() === "") && typeof query.client_id === "string") {
-      const registered = new Set(await findOAuthClientScopes(query.client_id));
+      const clientScopes = await findOAuthClientScopes(query.client_id);
+      const registered = new Set(clientScopes ?? (env.OAUTH_CIMD_CLIENT_IDS.includes(query.client_id) ? OAUTH_DEFAULT_AUTHORIZE_SCOPES : []));
       normalized.scope = OAUTH_DEFAULT_AUTHORIZE_SCOPES.filter(scope => registered.has(scope)).join(" ");
     }
     if (query.resource === undefined && typeof query.client_id === "string") {
@@ -40,6 +41,19 @@ export async function oauthBefore(ctx: OAuthHookContext) {
       } else {
         if (resources.length !== 1) refuseOAuth("invalid_target");
         normalized.resource = resources[0].resource;
+      }
+    }
+    if (typeof normalized.scope === "string" && !normalized.scope.split(/\s+/).includes("offline_access") &&
+      typeof normalized.client_id === "string" && typeof normalized.resource === "string") {
+      const session = await getSessionFromCtx(ctx);
+      if (session) {
+        const generations = await findOAuthOfflineGenerations(session.user.id, normalized.client_id, normalized.resource);
+        for (const generation of generations) {
+          if ((await assertGenerationEligible(generation, new Date())).ok) {
+            normalized.scope = `${normalized.scope} offline_access`.trim();
+            break;
+          }
+        }
       }
     }
     return { context: isFormAuthorize ? { body: normalized } : { query: normalized } };
