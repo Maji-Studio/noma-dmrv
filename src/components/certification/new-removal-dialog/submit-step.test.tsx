@@ -11,6 +11,10 @@ const state = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
   discardMutate: vi.fn(),
   discardReset: vi.fn(),
+  deleteAccess: {
+    viewerCanDeleteRegistryRemovals: true as boolean | null,
+    hasRegisteredProductionBatches: false as boolean | null,
+  },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -79,6 +83,10 @@ vi.mock("@/hooks/use-certification", () => ({
     error: null,
     refetch: vi.fn(),
   }),
+}));
+
+vi.mock("@/hooks/use-removal-delete-access", () => ({
+  useRemovalDeleteAccess: () => state.deleteAccess,
 }));
 
 vi.mock("@/lib/certification/readiness", () => ({
@@ -150,6 +158,10 @@ beforeEach(() => {
   state.toastSuccess.mockReset();
   state.discardMutate.mockReset();
   state.discardReset.mockReset();
+  state.deleteAccess = {
+    viewerCanDeleteRegistryRemovals: true,
+    hasRegisteredProductionBatches: false,
+  };
 });
 
 describe("SubmitStep", () => {
@@ -319,6 +331,83 @@ describe("SubmitStep", () => {
       "Removal deleted. Credit batches are available again.",
     );
     await act(async () => renderer?.unmount());
+  });
+
+  describe("role floor (issue #746)", () => {
+    const IDLE_MUTATION = {
+      mutate: vi.fn(),
+      isPending: false,
+      isSuccess: false,
+      data: undefined,
+      error: null,
+      reset: vi.fn(),
+    } as never;
+    const REGISTRY_CONTEXT = {
+      ...CONTEXT,
+      latestSubmission: {
+        status: "draft",
+        lockedAt: null,
+        metadata: { lastAttemptOutcome: "interrupted" },
+      },
+    } as RemovalCertifyContext;
+    const MARKER_CONTEXT = {
+      ...CONTEXT,
+      registryBoundaryOpened: true,
+    } as RemovalCertifyContext;
+
+    async function renderStep(ctx: RemovalCertifyContext) {
+      let renderer: ReactTestRenderer | undefined;
+      await act(async () => {
+        renderer = create(
+          <SubmitStep
+            removalId="removal-1"
+            facilityId="facility-1"
+            facilityName="Tanzania facility"
+            ctx={ctx}
+            onDone={vi.fn()}
+            submitMutation={IDLE_MUTATION}
+          />,
+        );
+      });
+      return renderer!;
+    }
+
+    it("lets a member discard a draft that never touched the registry", async () => {
+      state.deleteAccess = { viewerCanDeleteRegistryRemovals: false, hasRegisteredProductionBatches: false };
+      const renderer = await renderStep(CONTEXT);
+      expect(findButton(renderer, "Discard draft")).toBeDefined();
+      await act(async () => renderer.unmount());
+    });
+
+    it.each([
+      ["a ledger row", REGISTRY_CONTEXT, false],
+      ["the external mutation marker", MARKER_CONTEXT, false],
+      ["a registered Production Batch", CONTEXT, true],
+    ] as const)("hides deletion from a member once %s opened the boundary", async (_label, ctx, registeredBatch) => {
+      state.deleteAccess = { viewerCanDeleteRegistryRemovals: false, hasRegisteredProductionBatches: registeredBatch };
+      const renderer = await renderStep(ctx);
+      expect(findButton(renderer, "Delete Removal")).toBeUndefined();
+      expect(findButton(renderer, "Discard draft")).toBeUndefined();
+      await act(async () => renderer.unmount());
+    });
+
+    it.each([
+      ["a ledger row", REGISTRY_CONTEXT, false],
+      ["the external mutation marker", MARKER_CONTEXT, false],
+      ["a registered Production Batch", CONTEXT, true],
+    ] as const)("offers deletion to an Owner or Admin once %s opened the boundary", async (_label, ctx, registeredBatch) => {
+      state.deleteAccess = { viewerCanDeleteRegistryRemovals: true, hasRegisteredProductionBatches: registeredBatch };
+      const renderer = await renderStep(ctx);
+      expect(findButton(renderer, "Delete Removal")).toBeDefined();
+      await act(async () => renderer.unmount());
+    });
+
+    it("waits for the viewer role before offering a registry deletion", async () => {
+      state.deleteAccess = { viewerCanDeleteRegistryRemovals: null, hasRegisteredProductionBatches: false };
+      const renderer = await renderStep(REGISTRY_CONTEXT);
+      expect(findButton(renderer, "Delete Removal")).toBeUndefined();
+      await act(async () => renderer.unmount());
+    });
   });
 
   it("does not offer deletion once a submission completed", async () => {

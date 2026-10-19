@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { useRemovalDeleteAccess } from "@/hooks/use-removal-delete-access";
 import { useToast } from "@/components/ui/toast";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { DetailField, DetailSection } from "@/components/ui/detail-panel";
@@ -189,11 +190,17 @@ export function RemovalDetailSheet({
   // anyway; this just stops offering a dead-end control).
   const isActionable = workflowStatus.isActionable;
 
-  // Deletion mirrors the server rule: never-finalized only. With registry
-  // history the draft GHG Entry and Biochar Applications are removed from
-  // Isometric before the local record goes. No role gate yet (issue #746).
-  const touchesRegistry = removalDeletionTouchesRegistry(summary);
-  const canDelete = canDeleteRemovalRow(summary);
+  // Deletion mirrors the server rule: never-finalized only, and once the
+  // Removal touched the registry only viewers at the role floor (issue #746).
+  // With registry history the draft GHG Entry and Biochar Applications are
+  // removed from Isometric before the local record goes.
+  const deleteAccess = useRemovalDeleteAccess(
+    facilityId,
+    summary.removalId,
+    open,
+  );
+  const touchesRegistry = removalDeletionTouchesRegistry(summary, deleteAccess);
+  const canDelete = canDeleteRemovalRow(summary, deleteAccess);
   const deleteCopy = removalDeletionCopy(touchesRegistry);
   const deleteMutation = useDeleteRemoval();
   const toast = useToast();

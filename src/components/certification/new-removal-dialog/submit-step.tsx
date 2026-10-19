@@ -30,6 +30,7 @@ import {
   useDeleteRemoval,
   useRemovalCompilation,
 } from "@/hooks/use-certification";
+import { useRemovalDeleteAccess } from "@/hooks/use-removal-delete-access";
 import {
   canDeleteRemovalRow,
   removalDeletionTouchesRegistry,
@@ -109,7 +110,9 @@ export function SubmitStep({
     allowsRemovalSubmission(readiness.state) && compilationReady === true;
   // Anything short of "Submission complete" may be deleted. Once a ledger
   // row exists the server removes whatever the attempt created on Isometric
-  // before releasing the batches. No role gate yet (issue #746).
+  // before releasing the batches; from then on only viewers at the role floor
+  // may delete it (issue #746).
+  const deleteAccess = useRemovalDeleteAccess(facilityId, removalId);
   const deleteFacts = {
     local: ctx.latestSubmission?.status ?? null,
     lockInFlight: ctx.latestSubmission
@@ -121,11 +124,14 @@ export function SubmitStep({
     hasFinalizedSubmission: ctx.hasFinalizedSubmission,
     registryBoundaryOpened: ctx.registryBoundaryOpened,
   };
-  const hasRegistryHistory = removalDeletionTouchesRegistry(deleteFacts);
+  const hasRegistryHistory = removalDeletionTouchesRegistry(
+    deleteFacts,
+    deleteAccess,
+  );
   const canDeleteRemoval =
     ctx.linkedGhgStatement === null &&
     !submitMutation.isPending &&
-    canDeleteRemovalRow(deleteFacts);
+    canDeleteRemovalRow(deleteFacts, deleteAccess);
   const deleteCopy = removalDeletionCopy(hasRegistryHistory);
 
   const deleteDialog = (
