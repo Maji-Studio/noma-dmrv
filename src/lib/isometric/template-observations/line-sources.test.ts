@@ -6,7 +6,7 @@ import olderSandbox from "../../../../tests/fixtures/isometric/sandbox-template.
 import { acceptAllProposals } from "./test-support";
 import {
   lineNeedsReview, AUTOMATIC_SOURCE_IDS, allowedEntryPolicies, catalogCandidates, effectiveContract,
-  isAcceptableProposal, normalizeTemplateDefinition, resolveLineSources, validateLineSources,
+  isAcceptableProposal, normalizeTemplateDefinition, resolveLineSources, validateLineSources, withoutUnacceptableProposals,
   type GhgEntryTemplate, type LineContract, type LineSources, type TemplateComponent,
 } from "./index";
 
@@ -90,6 +90,7 @@ describe("line contracts", () => {
     pyrolysis.components.find((line) => line.id === GENSET)!.displayName = "Renamed generator";
     pyrolysis.components.push({ ...component(GENSET), id: "rtc_new_diesel" });
     pyrolysis.components.push({ ...component("rtc_1KVFZ1MY9SBXFWVN"), id: "rtc_new_electricity" });
+    // Remove the original so the new electricity figure is unshared; shared case: "drops a new proposal while preserving the settled owner".
     pyrolysis.components = pyrolysis.components.filter((line) => line.id !== "rtc_1KVFZ1MY9SBXFWVN");
     const previous = { definition, lineSources: resolveLineSources({ definition }) };
     const sources = resolveLineSources({ definition: next, previous });
@@ -142,6 +143,45 @@ describe("acceptable proposals", () => {
   const lone = { groups: [{ ...group, components: [trucks[0]] }] };
   const proposal: LineContract = { scope: "operating", automaticSource: "feedstock-transport", entryPolicy: "additive", origin: "proposed" };
   const unassigned: LineContract = { scope: "unassigned", entryPolicy: "none", origin: "proposed" };
+
+  it("drops stored proposals sharing a figure without mutating the snapshot, retaining order", () => {
+    const sources: LineSources = Object.fromEntries(trucks.map((truck, position) => [truck.id,
+      { ...proposal, templateOrder: { groupPosition: 0, position } },
+    ]));
+    const before = structuredClone(sources);
+    const filtered = withoutUnacceptableProposals(shared, sources);
+    expect(filtered).not.toBe(sources);
+    for (const truck of trucks) {
+      expect(filtered[truck.id]).toEqual({ ...unassigned, templateOrder: sources[truck.id].templateOrder });
+    }
+    expect(sources).toEqual(before);
+    expect(withoutUnacceptableProposals(shared, filtered)).toStrictEqual(filtered);
+  });
+
+  it.each(["bootstrap", "carried", "reviewed"] as const)("keeps a settled %s owner when dropping a stored proposal", (origin) => {
+    const sources: LineSources = { [trucks[0].id]: { ...proposal, origin }, [trucks[1].id]: { ...proposal } };
+    const before = structuredClone(sources);
+    expect(withoutUnacceptableProposals(shared, sources)).toEqual({ [trucks[0].id]: sources[trucks[0].id], [trucks[1].id]: unassigned });
+    expect(sources).toEqual(before);
+  });
+
+  it("returns equal contracts when valid proposals and settled contracts need no drops", () => {
+    const sources: LineSources = {
+      [trucks[0].id]: { ...proposal, templateOrder: { groupPosition: 0, position: 0 } },
+      [trucks[1].id]: { scope: "operating", entryPolicy: "additive", origin: "reviewed" },
+    };
+    const before = structuredClone(sources);
+    const filtered = withoutUnacceptableProposals(shared, sources);
+    expect(filtered).not.toBe(sources);
+    expect(filtered).toStrictEqual(before);
+    expect(sources).toStrictEqual(before);
+  });
+
+  it("rejects a stored proposal for a component absent from the definition", () => {
+    const sources: LineSources = { [trucks[1].id]: { ...proposal } };
+    expect(isAcceptableProposal(lone, sources, trucks[1].id)).toBe(false);
+    expect(withoutUnacceptableProposals(lone, sources)).toEqual({ [trucks[1].id]: unassigned });
+  });
 
   it("drops both fresh proposals sharing their only catalog candidate", () => {
     const sources = resolveLineSources({ definition: shared });

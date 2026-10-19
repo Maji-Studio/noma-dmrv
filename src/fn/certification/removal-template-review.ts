@@ -11,7 +11,7 @@ import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgRole } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import { listComponentBlueprints, listGhgEntryTemplates } from "@/lib/isometric";
-import { allowedEntryPolicies, lineNeedsReview, catalogCandidates, compareTemplateObservations, enrichmentProblems, normalizeTemplateDefinition, resolveLineSources, validateLineSources, type ComponentChange, type LineSources, type TemplateDefinition } from "@/lib/isometric/template-observations";
+import { allowedEntryPolicies, lineNeedsReview, catalogCandidates, compareTemplateObservations, enrichmentProblems, normalizeTemplateDefinition, resolveLineSources, validateLineSources, withoutUnacceptableProposals, type ComponentChange, type LineSources, type TemplateDefinition } from "@/lib/isometric/template-observations";
 import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/load-enrichment";
 import { canonicalJson } from "@/lib/canonical-json";
 import {
@@ -134,7 +134,7 @@ export async function loadRemovalTemplateReviewEntry(input: RemovalTemplateRevie
       loadTemplateEnrichment(client, template, await listComponentBlueprints(client)),
     ]);
     const lineSources = latest && canonicalJson(latest.definition) === canonicalJson(definition)
-      ? latest.lineSources
+      ? withoutUnacceptableProposals(definition, latest.lineSources)
       : resolveLineSources({ definition, previous: latest ?? undefined });
     return {
       templateId: template.id, template, observation: null, preview: true,
