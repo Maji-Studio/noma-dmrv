@@ -366,6 +366,14 @@ Certification Settings. The seed only reads registry catalogues and templates;
 it creates no registry business records. `reset-empty-staging` continues to
 omit registry credentials.
 
+After a `reset-seed-staging` run, check by hand that the registry connection
+works, because the scheduled live checks use their own credentials and seed
+their own mapping:
+
+1. Certification → Settings shows healthy Isometric credentials.
+2. The Mafinga facility is mapped to the sandbox project and a Removal template.
+3. `/certification/removals` opens without redirecting to Settings.
+
 ## Operational Defaults
 
 - Better Auth rate limits are on by default, stricter for auth-sensitive
