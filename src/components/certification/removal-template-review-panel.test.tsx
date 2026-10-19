@@ -41,28 +41,28 @@ const OBSERVATION_ID = "22222222-2222-4222-8222-222222222222";
 function component(id: string, displayName: string) {
   return {
     id, displayName, description: null, blueprintKey: "fuel_usage_by_volume",
-    inputs: [{ key: "volume", type: "monitored", quantityKind: "volume" }],
+    inputs: [{ key: "volume_of_fuel", type: "monitored", quantityKind: "volume" }],
   };
 }
 
-function entry(overrides: Record<string, unknown> = {}): RemovalTemplateReviewEntry {
+function baseEntry(overrides: Record<string, unknown>): RemovalTemplateReviewEntry {
   return {
     templateId: "rvt_test",
     template: { id: "rvt_test", display_name: "Dark Earth Carbon Template", credit_type: "REMOVAL" },
-    observation: { id: OBSERVATION_ID, version: 3, enrichment: { cmp_startup: { volume: { unit: "L" } } } },
-    enrichment: { cmp_startup: { volume: { unit: "L" } } },
+    observation: { id: OBSERVATION_ID, version: 3, enrichment: { cmp_startup: { volume_of_fuel: { unit: "L" } } } },
+    enrichment: { cmp_startup: { volume_of_fuel: { unit: "L" } } },
     preview: false,
     isDefault: true,
     availability: "listed",
     changes: {},
     lines: [
       {
-        component: component("cmp_startup", "Startup diesel usage"), groupKey: "operations", groupName: "Operations",
+        component: component("cmp_startup", "Startup diesel usage"), groupKey: "pyrolysis", groupName: "Operations",
         contract: { scope: "operating", automaticSource: "run-startup-diesel", entryPolicy: "additive", origin: "proposed" },
         catalogCandidates: ["run-startup-diesel"], allowedEntryPolicies: ["none", "additive"], change: "added",
       },
       {
-        component: component("cmp_lab", "Lab electricity"), groupKey: "operations", groupName: "Operations",
+        component: component("cmp_lab", "Lab electricity"), groupKey: "pyrolysis", groupName: "Operations",
         contract: { scope: "operating", entryPolicy: "additive", origin: "reviewed" },
         catalogCandidates: [], allowedEntryPolicies: ["none", "additive"], change: "unchanged",
       },
@@ -71,6 +71,21 @@ function entry(overrides: Record<string, unknown> = {}): RemovalTemplateReviewEn
     lineSourceProblems: [{ code: "unassigned", componentId: "cmp_startup" }],
     ...overrides,
   } as unknown as RemovalTemplateReviewEntry;
+}
+
+/** The stored definition and contracts behind the lines, as the server returns them. */
+function entry(overrides: Record<string, unknown> = {}): RemovalTemplateReviewEntry {
+  const base = baseEntry(overrides);
+  if (!base.observation) return base;
+  const groups = new Map<string, RemovalTemplateReviewEntry["lines"]>();
+  for (const line of base.lines) groups.set(line.groupKey, [...(groups.get(line.groupKey) ?? []), line]);
+  const definition = {
+    groups: [...groups].map(([key, lines]) => ({
+      id: key, key, displayName: lines[0].groupName, description: "", components: lines.map((line) => line.component),
+    })),
+  };
+  const lineSources = Object.fromEntries(base.lines.map((line) => [line.component.id, line.contract]));
+  return { ...base, observation: { ...base.observation, definition, lineSources } } as RemovalTemplateReviewEntry;
 }
 
 beforeEach(() => {
@@ -110,7 +125,7 @@ describe("RemovalTemplateReviewPanel", () => {
     mocks.data = [];
     mocks.previewEntry = entry({
       templateId: "rvt_new", observation: null, preview: true, isDefault: false, enrichment: {},
-      enrichmentProblems: [{ code: "unknown-enrichment", componentId: "cmp_startup", inputKey: "volume" }],
+      enrichmentProblems: [{ code: "unknown-enrichment", componentId: "cmp_startup", inputKey: "volume_of_fuel" }],
     });
     render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage templateId="rvt_new" />);
     mocks.refetch.mockClear();
@@ -172,6 +187,45 @@ describe("RemovalTemplateReviewPanel", () => {
     });
   });
 
+  it("does not offer a proposal that another line's figure would refuse (#1198)", async () => {
+    const lastMile = {
+      ...entry().lines[0],
+      component: component("cmp_last_mile", "Last mile startup diesel"),
+    };
+    mocks.data = [entry({
+      lines: [...entry().lines, lastMile],
+      lineSourceProblems: [
+        { code: "ambiguous", componentId: "cmp_startup" }, { code: "ambiguous", componentId: "cmp_last_mile" },
+      ],
+    })];
+    render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage />);
+
+    expect(screen.queryByRole("button", { name: /Accept proposal/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Change Startup diesel usage" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Change Last mile startup diesel" })).toBeTruthy();
+  });
+
+  it("stops offering a proposal once another unsaved line takes its figure", async () => {
+    const generator = {
+      ...entry().lines[0],
+      component: component("cmp_genset", "Generator diesel usage"),
+      contract: { scope: "unassigned", entryPolicy: "none", origin: "proposed" },
+    };
+    mocks.data = [entry({ lines: [...entry().lines, generator] })];
+    render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage />);
+    expect(screen.getByRole("button", { name: "Accept proposal for Startup diesel usage" })).toBeTruthy();
+
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Change Generator diesel usage" })); });
+    await act(async () => {
+      fireEvent.change(document.getElementById("rvt_test-cmp_genset-scope")!, { target: { value: "operating" } });
+    });
+    await act(async () => {
+      fireEvent.change(document.getElementById("rvt_test-cmp_genset-source")!, { target: { value: "run-startup-diesel" } });
+    });
+
+    expect(screen.queryByRole("button", { name: "Accept proposal for Startup diesel usage" })).toBeNull();
+  });
+
   it("assigns a contract through the line controls", async () => {
     render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage />);
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Change Startup diesel usage" })); });
@@ -192,7 +246,7 @@ describe("RemovalTemplateReviewPanel", () => {
       lines: [
         ...entry().lines,
         {
-          component: component("cmp_genset", "Generator diesel usage"), groupKey: "operations", groupName: "Operations",
+          component: component("cmp_genset", "Generator diesel usage"), groupKey: "pyrolysis", groupName: "Operations",
           contract: { scope: "operating", automaticSource: "run-genset-diesel", entryPolicy: "additive", origin: "reviewed" },
           catalogCandidates: ["run-genset-diesel"], allowedEntryPolicies: ["none", "additive"], change: "unchanged",
         },
@@ -213,13 +267,13 @@ describe("RemovalTemplateReviewPanel", () => {
     const lab = screen.getByText("Lab electricity").closest("li")!;
 
     expect([...startup.querySelectorAll("th")].map((cell) => cell.textContent)).toEqual(["Input", "Measures", "Unit"]);
-    expect([...startup.querySelectorAll("tbody td")].map((cell) => cell.textContent)).toEqual(["volume", "Volume", "L"]);
-    expect([...lab.querySelectorAll("tbody td")].map((cell) => cell.textContent)).toEqual(["volume", "Volume", "Not available"]);
+    expect([...startup.querySelectorAll("tbody td")].map((cell) => cell.textContent)).toEqual(["volume_of_fuel", "Volume", "L"]);
+    expect([...lab.querySelectorAll("tbody td")].map((cell) => cell.textContent)).toEqual(["volume_of_fuel", "Volume", "Not available"]);
   });
 
   it("disables saving and offers a retry while the template is not fully read", async () => {
     mocks.data = [entry({
-      enrichmentProblems: [{ code: "unknown-enrichment", componentId: "cmp_startup", inputKey: "volume" }],
+      enrichmentProblems: [{ code: "unknown-enrichment", componentId: "cmp_startup", inputKey: "volume_of_fuel" }],
     })];
     render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage />);
 

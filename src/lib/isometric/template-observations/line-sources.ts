@@ -58,6 +58,20 @@ export function validateLineSources(definition: TemplateDefinition, lineSources:
   return problems;
 }
 
+/**
+ * Single check for "would accepting this proposal fail validation". The Accept
+ * proposal control and "accept all proposals" (#1163) both call this rather than
+ * re-deriving the condition. Collisions (ambiguous) are reported on every owner
+ * of a figure, including pending proposals, so all lines this check accepts can
+ * be accepted together in one save.
+ */
+export function isAcceptableProposal(definition: TemplateDefinition, lineSources: LineSources, componentId: string): boolean {
+  const contract = ownValue(lineSources, componentId);
+  if (!contract || contract.origin !== "proposed" || contract.scope === "unassigned") return false;
+  const accepted: LineSources = { ...lineSources, [componentId]: { ...contract, origin: "reviewed" } };
+  return !validateLineSources(definition, accepted).some((problem) => problem.componentId === componentId && problem.code !== "unassigned");
+}
+
 export function resolveLineSources({ definition, previous }: {
   definition: TemplateDefinition;
   previous?: { definition: TemplateDefinition; lineSources: LineSources };
@@ -86,6 +100,17 @@ export function resolveLineSources({ definition, previous }: {
         sources[component.id] = { scope: "unassigned", entryPolicy: "none", origin: "proposed" };
       }
     }
+  }
+  // noma has no precedence rule between lines sharing a figure: none is proposed
+  // it and the operator decides. Every proposal noma makes can be accepted and
+  // saved as is. Check the built snapshot before applying any replacements.
+  const rejected = Object.entries(sources).filter(([id, contract]) =>
+    contract.origin === "proposed" && contract.scope !== "unassigned" && !isAcceptableProposal(definition, sources, id),
+  );
+  for (const [id, contract] of rejected) {
+    sources[id] = { scope: "unassigned", entryPolicy: "none", origin: "proposed",
+      ...(contract.templateOrder ? { templateOrder: contract.templateOrder } : {}),
+    };
   }
   return sources;
 }

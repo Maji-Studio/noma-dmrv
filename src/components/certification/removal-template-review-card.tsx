@@ -32,6 +32,7 @@ import {
 import { RawIdentifiers } from "./removal-template-mapping-view";
 import { RemovalTemplateLineRow } from "./removal-template-line-row";
 import {
+  canAcceptProposal,
   changeSummary,
   DEPRECATED_FACTORS_LABEL,
   deprecatedFactorCount,
@@ -259,6 +260,7 @@ export function RemovalTemplateReviewCard({
                         showChange={hasEarlierRead}
                         // Without a read there is no observation to save against.
                         canManage={canManage && !!entry.observation}
+                        canAcceptProposal={canAcceptProposal(entry, line, pending)}
                         draft={pending[id]}
                         editing={!!editing[id]}
                         onDraftChange={(draft) => setDraft(id, draft)}

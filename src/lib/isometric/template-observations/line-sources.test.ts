@@ -6,8 +6,8 @@ import olderSandbox from "../../../../tests/fixtures/isometric/sandbox-template.
 import { acceptAllProposals } from "./test-support";
 import {
   lineNeedsReview, AUTOMATIC_SOURCE_IDS, allowedEntryPolicies, catalogCandidates, effectiveContract,
-  normalizeTemplateDefinition, resolveLineSources, validateLineSources,
-  type GhgEntryTemplate, type LineSources, type TemplateComponent,
+  isAcceptableProposal, normalizeTemplateDefinition, resolveLineSources, validateLineSources,
+  type GhgEntryTemplate, type LineContract, type LineSources, type TemplateComponent,
 } from "./index";
 
 const definitions = [sandbox, cula, production, olderSandbox].map((fixture) => normalizeTemplateDefinition(fixture as GhgEntryTemplate));
@@ -90,6 +90,7 @@ describe("line contracts", () => {
     pyrolysis.components.find((line) => line.id === GENSET)!.displayName = "Renamed generator";
     pyrolysis.components.push({ ...component(GENSET), id: "rtc_new_diesel" });
     pyrolysis.components.push({ ...component("rtc_1KVFZ1MY9SBXFWVN"), id: "rtc_new_electricity" });
+    pyrolysis.components = pyrolysis.components.filter((line) => line.id !== "rtc_1KVFZ1MY9SBXFWVN");
     const previous = { definition, lineSources: resolveLineSources({ definition }) };
     const sources = resolveLineSources({ definition: next, previous });
     expect(sources[GENSET]).toMatchObject({ origin: "carried", automaticSource: "run-genset-diesel" });
@@ -128,6 +129,103 @@ describe("line contracts", () => {
     const sources: LineSources = { rtc_new: { scope: "operating", automaticSource: "run-electricity", entryPolicy: "additive", origin: "reviewed" } };
     const next = { groups: [{ ...definition.groups.find((group) => group.key === "pyrolysis")!, components: [{ ...component(GENSET), id: "rtc_new" }] }] };
     expect(resolveLineSources({ definition: next, previous: { definition: { groups: [] }, lineSources: sources } }).rtc_new.scope).toBe("unassigned");
+  });
+});
+
+describe("acceptable proposals", () => {
+  const group = definitions[1].groups.find((candidate) => candidate.key === "biomass-feedstock-transport")!;
+  const trucks = [
+    { ...group.components[0], id: "rtc_new_truck", displayName: "Biomass transportation to processing site via truck" },
+    { ...group.components[0], id: "rtc_last_mile", displayName: "Last mile feedstock transport" },
+  ];
+  const shared = { groups: [{ ...group, components: trucks }] };
+  const lone = { groups: [{ ...group, components: [trucks[0]] }] };
+  const proposal: LineContract = { scope: "operating", automaticSource: "feedstock-transport", entryPolicy: "additive", origin: "proposed" };
+  const unassigned: LineContract = { scope: "unassigned", entryPolicy: "none", origin: "proposed" };
+
+  it("drops both fresh proposals sharing their only catalog candidate", () => {
+    const sources = resolveLineSources({ definition: shared });
+    for (const truck of trucks) {
+      expect(truck.blueprintKey).toBe("transport");
+      expect(truck.inputs.filter((input) => input.type === "monitored")).toEqual([
+        { key: "distance", quantityKind: "distance", type: "monitored" },
+        { key: "mass", quantityKind: "mass", type: "monitored" },
+      ]);
+      expect(catalogCandidates(truck, group.key)).toEqual(["feedstock-transport"]);
+      expect(sources[truck.id]).toEqual(unassigned);
+      expect(sources[truck.id].automaticSource).toBeUndefined();
+      expect(isAcceptableProposal(shared, sources, truck.id)).toBe(false);
+    }
+    expect(validateLineSources(shared, sources).filter((problem) => problem.code === "ambiguous")).toEqual([]);
+  });
+
+  it("drops a new proposal while preserving the settled owner", () => {
+    const settled = { groups: [group] };
+    const original = resolveLineSources({ definition: settled });
+    const next = { groups: [{ ...group, components: [...group.components, trucks[0]] }] };
+    const sources = resolveLineSources({ definition: next });
+    expect(catalogCandidates(trucks[0], group.key)).toEqual(["feedstock-transport"]);
+    expect(original[group.components[0].id]).toMatchObject({ origin: "bootstrap", automaticSource: "feedstock-transport" });
+    expect(sources[group.components[0].id]).toEqual(original[group.components[0].id]);
+    expect(sources[trucks[0].id]).toEqual(unassigned);
+    expect(validateLineSources(next, sources).filter((problem) => problem.code !== "unassigned")).toEqual([]);
+  });
+
+  it("drops colliding pending proposals carried from an older observation, retaining order", () => {
+    const templateOrder = { groupPosition: 0, position: 0 };
+    const previous = { definition: shared, lineSources: {
+      [trucks[0].id]: { ...proposal, templateOrder },
+      [trucks[1].id]: { ...proposal },
+    } };
+    const before = structuredClone(previous);
+    const sources = resolveLineSources({ definition: shared, previous });
+    expect(sources[trucks[0].id]).toEqual({ ...unassigned, templateOrder });
+    expect(sources[trucks[1].id]).toEqual(unassigned);
+    expect(previous).toEqual(before);
+  });
+
+  it("keeps a lone new proposal with an unshared candidate", () => {
+    const sources = resolveLineSources({ definition: lone });
+    expect(sources[trucks[0].id]).toEqual(proposal);
+    expect(isAcceptableProposal(lone, sources, trucks[0].id)).toBe(true);
+  });
+
+  it("drops a carried proposal with a single entry policy and automatic figure", () => {
+    const previous = { definition: lone, lineSources: { [trucks[0].id]: { ...proposal, entryPolicy: "single" as const } } };
+    expect(isAcceptableProposal(lone, previous.lineSources, trucks[0].id)).toBe(false);
+    expect(resolveLineSources({ definition: lone, previous })[trucks[0].id]).toEqual(unassigned);
+  });
+
+  it("checks only pending assigned proposals without mutating the input", () => {
+    const sources: LineSources = { [trucks[0].id]: { ...proposal } };
+    const before = structuredClone(sources);
+    expect(isAcceptableProposal(lone, sources, "rtc_missing")).toBe(false);
+    expect(isAcceptableProposal(lone, sources, "toString")).toBe(false);
+    expect(isAcceptableProposal(lone, sources, trucks[0].id)).toBe(true);
+    expect(sources).toEqual(before);
+    for (const origin of ["bootstrap", "carried", "reviewed"] as const) {
+      expect(isAcceptableProposal(lone, { [trucks[0].id]: { ...proposal, origin } }, trucks[0].id)).toBe(false);
+    }
+    expect(isAcceptableProposal(lone, { [trucks[0].id]: unassigned }, trucks[0].id)).toBe(false);
+    for (const origin of ["proposed", "reviewed"] as const) {
+      const collision = { ...sources, [trucks[1].id]: { ...proposal, origin } };
+      const beforeCollision = structuredClone(collision);
+      expect(isAcceptableProposal(shared, collision, trucks[0].id)).toBe(false);
+      expect(collision).toEqual(beforeCollision);
+    }
+  });
+
+  it("allows all acceptable proposals to be accepted together", () => {
+    const next = { groups: [
+      ...shared.groups,
+      { ...definition.groups.find((candidate) => candidate.key === "biochar-transport")!, components: [{ ...trucks[0], id: "rtc_delivery" }] },
+      { ...definition.groups.find((candidate) => candidate.key === "pyrolysis")!, components: [{ ...component("rtc_1KVFZ1MY9SBXFWVN"), id: "rtc_electricity" }] },
+    ] };
+    const sources = resolveLineSources({ definition: next });
+    const acceptable = Object.fromEntries(Object.entries(sources).filter(([id]) => isAcceptableProposal(next, sources, id)));
+    expect(Object.keys(acceptable).sort()).toEqual(["rtc_delivery", "rtc_electricity"]);
+    const accepted = { ...sources, ...acceptAllProposals(acceptable) };
+    expect(validateLineSources(next, accepted).filter((problem) => problem.code !== "unassigned")).toEqual([]);
   });
 });
 
