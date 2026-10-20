@@ -6,7 +6,7 @@ description: Ask Codex CLI (gpt-6.1-sol, high reasoning) to run local app verifi
 Delegate **local app verification** (browser automation, screenshots, app launch, runtime
 inspection) to the Codex CLI (gpt-6.1-sol, high reasoning) with computer use. This is the
 way to verify UI behavior when computer use is available and allowed; **claude-in-chrome is the
-fallback**. In auto mode the Playwright path is the default (next section). Codex output is
+fallback**. In auto mode the Playwright path is the default (see Shared invocation rules). Codex output is
 **evidence, not authority** — read the report and screenshots and judge them yourself.
 
 Do **not** use this for ordinary code reading, typechecking, linting, or tests Claude can run
@@ -28,8 +28,7 @@ When a command below runs in the background (`codex exec` or a stdin-fed `codex 
   `-s danger-full-access` and every credential-materialization workaround (verified
   2026-07-09, mixed on 2026-10-17). Verify with a throwaway Playwright spec on the project's
   authenticated-page fixture (see the project's testing docs and its UI verification notes) and
-  read the PNGs. Try the codex path at most once per session; on a denial, switch to Playwright
-  without retrying variants. Read-only codex runs (`-s read-only`) are unaffected.
+  read the PNGs. Interactive sessions may use the codex path; in auto mode go straight to Playwright. Read-only codex runs (`-s read-only`) are unaffected.
 - Locate the binary with the PATH-then-bundle fallback and always call it via `"$CODEX"`:
   ```bash
   CODEX="$(command -v codex || echo "$HOME/Library/pnpm/bin/codex")"
@@ -89,6 +88,8 @@ When a command below runs in the background (`codex exec` or a stdin-fed `codex 
 ## Example prompt skeleton
 
 ```text
+<Safety preamble, verbatim>
+
 Repository: /Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv
 Artifact directory: <ARTIFACT_DIR> (save screenshots here; write your report to report.md here)
 

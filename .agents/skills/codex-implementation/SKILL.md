@@ -90,6 +90,8 @@ When a command below runs in the background (`codex exec` or a stdin-fed `codex 
 
 ## Example Prompt
 
+Start every prompt with the safety preamble, verbatim.
+
 ```text
 Repository: <task worktree from scripts/worktree.sh new, never the main checkout> (branch: <current>)
 Artifact directory: <ARTIFACT_DIR> (write your report to report.md here)

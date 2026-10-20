@@ -102,7 +102,7 @@ The target flags are **mutually exclusive with a custom prompt** (re-verified on
 ```
 
 Prefer Mode B whenever task-specific context matters (it usually does); use Mode A for a
-plain no-context review.
+plain no-context review. Mode A carries no safety preamble, so use Mode B whenever the safety rules matter (always, in auto mode).
 
 ### 4. Verify before presenting
 
@@ -120,10 +120,12 @@ residual test gaps.
 
 Write this into `$PROMPT`, adding task-specific context (requirements the change must meet,
 risky areas, expected behavior, files Claude is unsure about) where useful. In Mode B the
-first line MUST name the target, e.g. `Target: the diff of this branch against the base
+first line after the safety preamble MUST name the target, e.g. `Target: the diff of this branch against the base
 branch staging (git diff staging...HEAD).` or `Target: all uncommitted changes.`
 
 ```text
+<Safety preamble, verbatim>
+
 Target: <the exact diff to review>
 
 Review these changes for bugs, regressions, security issues, requirement mismatches, meaningful

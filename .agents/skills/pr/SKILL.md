@@ -1,6 +1,6 @@
 ---
 name: pr
-description: "Use when writing a PR body."
+description: "Use when writing a PR body, and when a PR is ready to merge (merge page, merge OK, /handoff)."
 metadata:
   credits:
     skill: show-me
