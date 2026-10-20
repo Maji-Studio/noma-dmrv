@@ -284,6 +284,7 @@ function BatchCard({
           <div className="flex flex-wrap items-center gap-12">
             <Button
               variant="default"
+              className="min-h-44 md:min-h-0"
               busy={mine && actions.busy}
               disabled={actions.busy}
               onClick={() =>
@@ -322,6 +323,7 @@ function BatchCard({
           {editable && (
             <Button
               variant="default"
+              className="min-h-44 md:min-h-0"
               busy={mine && actions.busy}
               disabled={actions.busy}
               onClick={() => actions.undoZeros(scope)}
