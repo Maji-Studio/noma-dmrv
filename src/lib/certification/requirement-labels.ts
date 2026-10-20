@@ -70,6 +70,11 @@ export const NO_REMOVAL_TEMPLATE_LABEL = "No Removal template chosen";
 /** The unmet Emissions label when an entry needs checking rather than a file. */
 export const EMISSION_ENTRIES_TO_CHECK_LABEL = "Emissions entries to check";
 
+/** Who settles lines to decide, for a viewer who can't: members read this instead of a Decide lines link. */
+export function linesDecidedByOwnerOrAdmin(count: number): string {
+  return `An Owner or Admin decides ${count === 1 ? "it" : "them"} in Removal templates.`;
+}
+
 /** The unmet Lines decided label when no line is undecided: the read or the lines are the problem. */
 export const TEMPLATE_LINES_NOT_READY_LABEL = "Template lines not ready";
 

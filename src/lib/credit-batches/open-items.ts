@@ -5,8 +5,11 @@ import {
   isUsableRatio,
 } from "@/lib/calculations/biochar-eligibility";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
-import type { BatchHealth } from "@/lib/certification/batch-health";
-import { certCheckLabel } from "@/lib/certification/requirement-labels";
+import type { BatchHealth, BatchHealthFixTarget } from "@/lib/certification/batch-health";
+import {
+  certCheckLabel,
+  linesDecidedByOwnerOrAdmin,
+} from "@/lib/certification/requirement-labels";
 import {
   batchHealthFixLinkFor,
   resolveBatchHealthFixTarget,
@@ -34,9 +37,11 @@ export interface CreditBatchOpenItem {
   detail?: string;
   /** The protocol reasoning behind a requirement, shown behind an ⓘ. */
   why?: string;
+  /** Where the row leads; null when the viewer can't act on it (a member and lines to decide). */
   target:
     | { tab: "overview" | "production" | "samples" | "emissions" | "removals"; rowId?: string }
-    | { href: string };
+    | { href: string }
+    | null;
 }
 
 export interface CreditBatchOpenItemsInput {
@@ -46,6 +51,8 @@ export interface CreditBatchOpenItemsInput {
   durability?: DurabilityBatchSummary;
   emissionLines?: readonly BatchEmissionLine[];
   pageModel?: CreditBatchPageModel;
+  /** Owner or Admin. Members get no link to decide lines, which only Owners and Admins can do. */
+  canManage: boolean;
 }
 
 function outlierTitle(replicate: DurabilitySummaryReplicate): string {
@@ -79,7 +86,22 @@ const DOCUMENT_WARNING_ITEMS: Record<SampleDocumentWarningKey, CreditBatchOpenIt
   },
 };
 
+/**
+ * What a member reads instead of a link to decide lines in Removal templates;
+ * null when the row is not lines to decide or the viewer can act.
+ */
+function memberTemplateText(
+  fixTarget: BatchHealthFixTarget | null | undefined,
+  canManage: boolean,
+  linesToDecide: number,
+): string | null {
+  if (canManage) return null;
+  if (fixTarget === "templateLineReview") return linesDecidedByOwnerOrAdmin(linesToDecide);
+  return null;
+}
+
 export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
+  const canManage = input.canManage;
   const blocking: CreditBatchOpenItem[] = [];
   const check: CreditBatchOpenItem[] = [];
   const waiting: CreditBatchOpenItem[] = [];
@@ -88,7 +110,12 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     if (healthCheck.status !== "unmet") continue;
     const fix = resolveBatchHealthFixTarget(healthCheck);
     let target: CreditBatchOpenItem["target"];
-    if (fix === "labSamples") {
+    let detail = healthCheck.detail;
+    const memberText = memberTemplateText(fix, canManage, healthCheck.linesToDecide ?? 0);
+    if (memberText) {
+      target = null;
+      detail = memberText;
+    } else if (fix === "labSamples") {
       target = { tab: "samples" };
     } else if (fix === "emissions") {
       target = { tab: "emissions" };
@@ -108,7 +135,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     blocking.push({
       id: `health:${healthCheck.key}:${healthCheck.issueKey ?? fix}`,
       title: certCheckLabel(healthCheck),
-      detail: healthCheck.detail,
+      detail,
       ...(healthCheck.whyDetail ? { why: healthCheck.whyDetail } : {}),
       target,
     });
@@ -141,7 +168,8 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       const fixTarget = line.blocker?.fixTarget;
       const settingsFix = fixTarget === "templateLineReview" || fixTarget === "templateLines" ||
         fixTarget === "certificationTemplates" || fixTarget === "certificationEmissions";
-      const target: CreditBatchOpenItem["target"] = settingsFix
+      const memberText = memberTemplateText(fixTarget, canManage, 1);
+      const target: CreditBatchOpenItem["target"] = memberText ? null : settingsFix
         ? { href: batchHealthFixLinkFor(
             { key: "emissions", fixTarget },
             input.facilityId,
@@ -151,7 +179,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       check.push({
         id: `emission:${line.componentId}`,
         title: `${line.displayName}: ${EMISSION_LINE_STATE_LABELS.needsReview}`,
-        detail: line.blocker?.message,
+        detail: memberText ?? line.blocker?.message,
         target,
       });
     }

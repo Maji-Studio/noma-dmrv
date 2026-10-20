@@ -23,6 +23,7 @@ import {
   listUngroupedCreditBatches,
 } from "@/data-access/certifier-removals";
 import {
+  batchLinesToDecide,
   deriveBatchHealth,
   type BatchHealthState,
 } from "@/lib/certification/batch-health";
@@ -86,6 +87,8 @@ export interface CreditBatchHealthSummary {
   state: BatchHealthState;
   /** Count of unmet (blocking) checks; 0 when ready. */
   issueCount: number;
+  /** Template lines without a saved decision, from the Lines decided check (`batchLinesToDecide`); 0 when none. */
+  linesToDecide: number;
   /** Non-blocking Check items, using the batch page's open-items builder. */
   checkCount: number;
   /** The latest Removal containing this batch, or null before its first one. */
@@ -418,9 +421,11 @@ export async function loadCreditBatchHealthSummaries(
         recordLock: locksById.get(batchId)!,
         state: health.state,
         issueCount: health.issueCount,
+        linesToDecide: batchLinesToDecide(health),
         checkCount: buildCreditBatchOpenItems({
           facilityId: validFacilityId,
           creditBatchId: batchId,
+          canManage: orgCtx.isPlatformAdmin || orgCtx.orgRole === "owner" || orgCtx.orgRole === "admin",
           health,
           durability: durabilityByBatch.get(batchId),
           emissionLines: emissionDisplayByBatch?.get(batchId)?.lines,
