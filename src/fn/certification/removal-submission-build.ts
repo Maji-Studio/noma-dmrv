@@ -1,3 +1,4 @@
+import { getFacilityById } from "@/data-access/facilities";
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 export { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
@@ -704,7 +705,9 @@ export async function buildRemovalSubmissionBuild(args: {
 
   const agg = transportAgg;
   const latestApplicationTime = resolveLatestApplicationTime(ctx.lineages);
+  const facility = await getFacilityById(orgCtx, ctx.facilityId);
   assertReportingWindowNotInverted({
+    facilityTimezone: facility.timezone,
     lineages: ctx.lineages,
     runStartTimeByRunId: new Map(
       ctx.runs.map((run) => [run.id, run.startTime]),

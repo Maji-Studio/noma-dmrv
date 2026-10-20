@@ -11,7 +11,7 @@
  * out of a submission snapshot for the resume path.
  */
 import type { CertificationSubmissionRow } from "@/data-access/certification";
-import { formatUtcDate } from "@/lib/date-utils";
+import { formatFacilityDate, formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { z } from "zod";
 
@@ -132,15 +132,16 @@ export function assertRemovalDatesNotFuture(args: {
 // on a lineage whose run start cannot be resolved. Compares at DATE
 // granularity (what gets POSTed and stamped): form-entered application dates
 // are UTC midnight, so a millisecond comparison would wrongly block a
-// same-UTC-day application against a mid-day run start (issue #320 caveat 4).
+// same-facility-day application against a mid-day run start (issue #320 caveat 4).
 export function assertReportingWindowNotInverted(args: {
   lineages: {
     application: { applicationDate: Date; code: string };
     productionRun: { id: string; code: string } | null;
   }[];
   runStartTimeByRunId: ReadonlyMap<string, Date>;
+  facilityTimezone: string;
 }): void {
-  const { lineages, runStartTimeByRunId } = args;
+  const { lineages, runStartTimeByRunId, facilityTimezone } = args;
   for (const lineage of lineages) {
     const run = lineage.productionRun;
     const runStartTime = run ? runStartTimeByRunId.get(run.id) : undefined;
@@ -151,7 +152,7 @@ export function assertReportingWindowNotInverted(args: {
       );
     }
     const applicationDate = formatUtcDate(lineage.application.applicationDate);
-    const runStartDate = formatUtcDate(runStartTime);
+    const runStartDate = formatFacilityDate(runStartTime, facilityTimezone);
     if (applicationDate < runStartDate) {
       throw new SafeError(
         `Application ${lineage.application.code} is dated ${applicationDate}, ` +

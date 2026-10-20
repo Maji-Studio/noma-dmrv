@@ -52,6 +52,7 @@ const BLOCKING_EXTERNAL_MUTATIONS = new Set<unknown>([
 // are in place when its top-level imports resolve.
 // ---------------------------------------------------------------------------
 
+vi.mock("@/data-access/facilities", () => ({ getFacilityById: vi.fn(async () => ({ timezone: "UTC" })) }));
 vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-removals");

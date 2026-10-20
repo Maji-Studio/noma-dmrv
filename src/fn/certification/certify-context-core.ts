@@ -1,3 +1,4 @@
+import { getFacilityById } from "@/data-access/facilities";
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { frozenEntriesForAttempt, loadRemovalEntryContext } from "./removal-entry-context";
 import { loadBatchEmissionContext } from "./batch-emission-context";
@@ -305,6 +306,7 @@ export async function buildRemovalContext(
   const runIds = Array.from(
     new Set([...appliedRunIds, ...productionClaimRunIds]),
   );
+  const facility = await getFacilityById(orgCtx, scope.facilityId);
   const runs =
     runIds.length > 0
       ? await getProductionRunsForCertification(orgCtx, runIds)
@@ -400,6 +402,7 @@ export async function buildRemovalContext(
     durabilityConfigurationBlockers: durabilityConfigBlockers,
     templateTierBlocker,
     futureDatedMeasurements: collectFutureDatedMeasurements({
+      facilityTimezone: facility.timezone,
       runs,
       samples: batchesWithSamples.flatMap((batch) => batch.samples),
       lineages,

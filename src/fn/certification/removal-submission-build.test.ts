@@ -9,6 +9,8 @@ import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupport
 import { findUnbindableTemplateInputs as findCoverage, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("@/data-access/facilities", () => ({ getFacilityById: vi.fn(async () => ({ timezone: "UTC" })) }));
+
 vi.mock("./source-candidates", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./source-candidates")>()),
   collectCandidateSourceDocumentsForRemoval: vi.fn(),
