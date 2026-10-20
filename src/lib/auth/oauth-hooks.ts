@@ -7,11 +7,9 @@ import { findOAuthClientResources, findOAuthClientScopes, findOAuthOfflineGenera
 import { findOAuthAuthorizationCode, findOAuthRefreshToken, findOAuthRevocationToken } from "@/data-access/oauth-token-lookups";
 import { revokeGeneration } from "@/data-access/oauth-grant-lifecycle";
 import { assertGenerationEligible } from "./oauth-eligibility";
-import { OAUTH_READ_SCOPES } from "./oauth-scopes";
+import { OAUTH_REQUESTABLE_SCOPES } from "./oauth-scopes";
 
 import { guardOAuthAuthorize, guardOAuthRefreshScopes, guardOAuthTokenInput, OAUTH_HTTP_PATHS, refuseOAuth, refreshDecision } from "./oauth-request-policy";
-
-const OAUTH_DEFAULT_AUTHORIZE_SCOPES: readonly string[] = [...OAUTH_READ_SCOPES, "offline_access"];
 
 type OAuthHookContext = Parameters<Parameters<typeof createAuthMiddleware>[0]>[0];
 
@@ -26,12 +24,12 @@ export async function oauthBefore(ctx: OAuthHookContext) {
     if (ctx.request && new URL(ctx.request.url).searchParams.getAll("resource").length > 1) refuseOAuth("invalid_target");
     // Normalize before the provider signs the authorization.
     const normalized: Record<string, unknown> = { ...query };
-    // Without a scope the plugin would request every client scope, writes
-    // included; read first (decision 123), keeping the connection alive.
+    // Offer registered reads and writes plus offline access. Round 14 Q100
+    // supersedes decision 123: reads start ticked, writes start unticked.
     if ((typeof query.scope !== "string" || query.scope.trim() === "") && typeof query.client_id === "string") {
       const clientScopes = await findOAuthClientScopes(query.client_id);
-      const registered = new Set(clientScopes ?? (env.OAUTH_CIMD_CLIENT_IDS.includes(query.client_id) ? OAUTH_DEFAULT_AUTHORIZE_SCOPES : []));
-      normalized.scope = OAUTH_DEFAULT_AUTHORIZE_SCOPES.filter(scope => registered.has(scope)).join(" ");
+      const registered = new Set(clientScopes ?? (env.OAUTH_CIMD_CLIENT_IDS.includes(query.client_id) ? OAUTH_REQUESTABLE_SCOPES : []));
+      normalized.scope = OAUTH_REQUESTABLE_SCOPES.filter(scope => registered.has(scope)).join(" ");
     }
     if (query.resource === undefined && typeof query.client_id === "string") {
       const resources = await findOAuthClientResources(query.client_id);

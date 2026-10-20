@@ -5,6 +5,7 @@ export const OAUTH_RESTART_MESSAGE = "Start again from the app.";
 export const OAUTH_ACCESS_TOKEN_PREFIX = "noma_oat_";
 export const OAUTH_REFRESH_TOKEN_PREFIX = "noma_ort_";
 export const OAUTH_ACCESS_TOKEN_SECONDS = 60 * 60;
+export const OAUTH_STEP_UP_TTL_MS = 15 * 60 * MILLISECONDS_PER_SECOND;
 export const OAUTH_CODE_SECONDS = 10 * 60;
 export const OAUTH_CODE_LIFETIME_MS = OAUTH_CODE_SECONDS * MILLISECONDS_PER_SECOND;
 export const OAUTH_IDLE_DAYS = 30;

@@ -38,9 +38,9 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
   const clientName = oauthAppName(view.clientName);
   const newScopes = view.newlyRequestedScopes as ApiScope[];
   const allowed = view.alreadyAllowedScopes as ApiScope[];
-  // Q91: a first connection starts with reads ticked; writes are ticked only
-  // when an existing connection asks for them, because the person asked for that action.
-  const [ticked, setTicked] = useState<ApiScope[]>(() => isStepUp ? newScopes : newScopes.filter(isRead));
+  // Round 14 Q100: reads start ticked on first consent. Step-up ticks only
+  // the pending refused operation, since discovery may request every scope.
+  const [ticked, setTicked] = useState<ApiScope[]>(() => isStepUp ? newScopes.filter(scope => view.stepUpScopes.includes(scope)) : newScopes.filter(isRead));
   const [failed, setFailed] = useState(false);
   const decision = useOAuthConsentDecision(oauthQuery);
 

@@ -1,9 +1,10 @@
 import { expect, it } from "vitest";
 import { API_SCOPES } from "./api-scopes";
-import { OAUTH_GRANTABLE_SCOPES, OAUTH_READ_SCOPES, oauthRoleCeiling, parseOAuthScopes } from "./oauth-scopes";
+import { OAUTH_GRANTABLE_SCOPES, OAUTH_READ_SCOPES, OAUTH_REQUESTABLE_SCOPES, oauthRoleCeiling, parseOAuthScopes } from "./oauth-scopes";
 
 it("grants every read and write, never deletes or identity scopes", () => {
   expect([...OAUTH_GRANTABLE_SCOPES]).toEqual(API_SCOPES.filter(scope => !scope.endsWith(":delete")));
+  expect(OAUTH_REQUESTABLE_SCOPES).toEqual([...OAUTH_GRANTABLE_SCOPES, "offline_access"]);
   expect(OAUTH_READ_SCOPES).toEqual(API_SCOPES.filter(scope => scope.endsWith(":read")));
 });
 it.each(["owner", "admin", "member"])("allows %s the grantable ceiling", role => {

@@ -211,8 +211,9 @@ it("adds an invalid-token challenge for OAuth with the route resource metadata",
   expect(challenge).toContain('error="invalid_token"');
   expect(challenge).toContain('/.well-known/oauth-protected-resource/api/mcp"');
   expect(challenge).toContain("feedstocks:read");
-  expect(challenge).not.toContain(":write");
-  expect(challenge).not.toContain("offline_access");
+  expect(challenge).toContain("feedstocks:write");
+  expect(challenge).toContain("offline_access");
+  expect(challenge).not.toContain(":delete");
 });
 it("adds a step-up union for OAuth missing scope only", () => {
   env.OAUTH_PROVIDER_ENABLED = true;

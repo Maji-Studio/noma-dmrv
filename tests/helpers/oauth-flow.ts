@@ -46,6 +46,11 @@ export async function createOAuthFlowFixture() {
     return {
       status: response.status, error: data.error as string | undefined, scope: data.scope as string | undefined,
       hasRefresh: typeof data.refresh_token === "string",
+      request(path = resource, init: RequestInit = {}) {
+        const headers = new Headers(init.headers);
+        headers.set("authorization", `Bearer ${data.access_token}`);
+        return new Request(new URL(path, resource), { ...init, headers });
+      },
       async resolve() {
         const { resolveApiContext } = await import("@/lib/auth/api-context");
         return resolveApiContext(new Request(resource, { headers: { authorization: `Bearer ${data.access_token}` } }), resource);

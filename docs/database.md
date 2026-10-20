@@ -65,6 +65,11 @@ unique index permits one unrevoked binding per organization, user, client and
 resource. Creation sets `last_used_at` to `created_at`; management revocation
 increments `version` once and preserves the first reason.
 
+The expiring `verification` store keeps pending step-up hints under an
+`oauth-step-up:` identifier containing the exact user, client and organization
+tuple. A deterministic primary key makes replacement atomic. Hints grant no
+authority; consent ignores them after 15 minutes, including after accept or deny.
+
 `oauth_authorization_attempts` binds one verified authorization query to one
 organization and session. Selection is insert-only. Resolution locks the
 attempt and the live membership, then reuses or creates a generation. A stored

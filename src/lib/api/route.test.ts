@@ -8,8 +8,9 @@ import { ApiHttpError } from "./http-error";
 import { problemResponse } from "./problem";
 import { apiRoute } from "./route";
 
-const mocks = vi.hoisted(() => ({ resolve: vi.fn(), log: vi.fn(), pre: vi.fn(), post: vi.fn() }));
+const mocks = vi.hoisted(() => ({ resolve: vi.fn(), log: vi.fn(), pre: vi.fn(), post: vi.fn(), record: vi.fn() }));
 vi.mock("@/lib/auth/api-context", () => ({ resolveApiContext: mocks.resolve }));
+vi.mock("@/data-access/oauth-step-up", () => ({ recordOAuthStepUp: mocks.record }));
 vi.mock("./guards", () => ({ preAuthGuard: mocks.pre, credentialAdmissionGuard: vi.fn(async () => ({ response: null, result: null })), postAuthGuard: mocks.post }));
 vi.mock("@/lib/log", () => ({ logger: { error: mocks.log } }));
 beforeEach(() => {
@@ -232,4 +233,22 @@ it.each(["noma_ort_synthetic", "eyJhbGciOiJub25lIn0.e30.signature"])("challenges
     expect(response.status).toBe(401);
     expect(response.headers.get("www-authenticate")).toContain('error="invalid_token"');
   } finally { env.OAUTH_PROVIDER_ENABLED = enabled; }
+});
+
+it.each([false, true])("records REST step-up without changing the 403 when storage fails=%s", async fails => {
+  const wasEnabled = env.OAUTH_PROVIDER_ENABLED;
+  env.OAUTH_PROVIDER_ENABLED = true;
+  try {
+    const ctx = { ...apiKeyContext({ scopes: ["feedstocks:read"] }),
+      principal: { kind: "oauth" as const, userId: "user", credentialId: "grant", oauthClientId: "client" } };
+    mocks.resolve.mockResolvedValue({ ok: true, ctx });
+    if (fails) mocks.record.mockRejectedValueOnce(new Error("Storage unavailable"));
+    const handler = vi.fn();
+    const response = await apiRoute("test", "feedstocks:write", handler, { audience: "rest" })(request());
+    expect(response.status).toBe(403);
+    expect(response.headers.get("www-authenticate")).toContain('error="insufficient_scope", scope="feedstocks:read feedstocks:write"');
+    expect(mocks.record).toHaveBeenCalledWith({ userId: ctx.userId, clientId: "client", organizationId: ctx.organizationId }, ["feedstocks:write"]);
+    expect(handler).not.toHaveBeenCalled();
+    expect(mocks.post).not.toHaveBeenCalled();
+  } finally { env.OAUTH_PROVIDER_ENABLED = wasEnabled; }
 });
