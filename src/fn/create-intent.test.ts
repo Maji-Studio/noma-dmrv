@@ -6,6 +6,7 @@ vi.mock("@/lib/auth/server", () => ({ requireOrgContext: auth }));
 vi.mock("@/lib/operations/runner", () => ({ runOperationInProcess: run }));
 vi.mock("@/lib/operations/orders", () => ({ recordOrder: { id: "record_order" } }));
 vi.mock("@/data-access/orders", () => ({}));
+vi.mock("@/data-access/order-stats", () => ({}));
 vi.mock("@/data-access/utils", () => ({}));
 vi.mock("@/lib/log", () => ({ logger: { error: vi.fn() }, sanitizeErrorMessage: vi.fn() }));
 
