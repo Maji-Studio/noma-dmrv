@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getLatestTemplateObservation, reviewLineContracts } from "@/data-access/removal-template-observations";
 import { getCertifierProjectByFacility } from "@/data-access/certification";
@@ -89,7 +90,8 @@ describe("switch readiness", () => {
   const input = { creditBatchId: id, removalTemplateId: fixture.id, expectedVersion: 7 };
   const template = { ...fixture, groups: [] } as IsometricGhgEntryTemplate;
   const observation = { definition: { groups: [] }, lineSources: {}, enrichment: {} };
-  const refusal = { success: false, error: "Decide this template's lines in Removal templates before choosing it." };
+  const linesRefusal = { success: false, error: REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview };
+  const readRefusal = { success: false, error: REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead };
 
   beforeEach(() => {
     vi.mocked(getCreditBatchById).mockResolvedValue({ facilityId: id, removalTemplateId: "old" } as never);
@@ -97,18 +99,31 @@ describe("switch readiness", () => {
   });
 
   it("refuses an unobserved template before any read can be stored", async () => {
-    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(refusal);
+    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(readRefusal);
     expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
     expect(listComponentBlueprints).not.toHaveBeenCalled();
     expect(persistSwitch).not.toHaveBeenCalled();
   });
 
-  it("refuses an incomplete stored read before refreshing it", async () => {
+  it("names the line decisions when the stored read also has enrichment problems", async () => {
     vi.mocked(getLatestTemplateObservation).mockResolvedValue({
       ...observation, definition: normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate),
     } as never);
-    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(refusal);
+    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(linesRefusal);
     expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
+    expect(persistSwitch).not.toHaveBeenCalled();
+  });
+
+  it("names an incomplete stored read when every line is decided", async () => {
+    const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
+    const lineSources = Object.fromEntries(definition.groups.flatMap((group) => group.components.map((component) => [
+      component.id, { scope: "operating", entryPolicy: "none", origin: "reviewed" },
+    ])));
+    vi.mocked(getLatestTemplateObservation).mockResolvedValue({ ...observation, definition, lineSources } as never);
+
+    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(readRefusal);
+    expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
+    expect(persistSwitch).not.toHaveBeenCalled();
   });
 
   it("refuses an undecided line before refreshing it", async () => {
@@ -117,8 +132,9 @@ describe("switch readiness", () => {
         components: [{ id: "pending", displayName: "Pending", blueprintKey: "unknown", inputs: [], description: null }],
       }] },
     } as never);
-    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(refusal);
+    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(linesRefusal);
     expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
+    expect(persistSwitch).not.toHaveBeenCalled();
   });
 
   it("checks the refreshed read and preserves the version argument on a ready switch", async () => {
@@ -130,13 +146,34 @@ describe("switch readiness", () => {
     expect(persistSwitch).toHaveBeenCalledWith(ctx, input);
   });
 
-  it("refuses when the refreshed read becomes incomplete", async () => {
+  it("names an enrichment-only failure in the refreshed read", async () => {
     vi.mocked(getLatestTemplateObservation).mockResolvedValue(observation as never);
     vi.mocked(loadRemovalTemplateFacts).mockResolvedValue({
       template, observation, blueprintsForTemplate: [],
       enrichmentProblems: [{ componentId: "line", inputKey: "value", code: "unknown-enrichment" }], lineSourceProblems: [],
     } as never);
-    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(refusal);
+    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(readRefusal);
+    expect(persistSwitch).not.toHaveBeenCalled();
+  });
+
+  it("names new line decisions in the refreshed read", async () => {
+    vi.mocked(getLatestTemplateObservation).mockResolvedValue(observation as never);
+    vi.mocked(listGhgEntryTemplates).mockResolvedValue([fixture as IsometricGhgEntryTemplate]);
+    vi.mocked(loadRemovalTemplateFacts).mockResolvedValue({
+      template: fixture, observation, blueprintsForTemplate: [], enrichmentProblems: [], lineSourceProblems: [],
+    } as never);
+
+    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(linesRefusal);
+    expect(persistSwitch).not.toHaveBeenCalled();
+  });
+
+  it("names a missing refreshed read", async () => {
+    vi.mocked(getLatestTemplateObservation).mockResolvedValue(observation as never);
+    vi.mocked(loadRemovalTemplateFacts).mockResolvedValue({
+      template, observation: null, blueprintsForTemplate: [], enrichmentProblems: [], lineSourceProblems: [],
+    } as never);
+
+    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(readRefusal);
     expect(persistSwitch).not.toHaveBeenCalled();
   });
 
@@ -174,7 +211,7 @@ it("uses the accurate non-Removal refusal for Switch template", async () => {
   vi.mocked(getCreditBatchById).mockResolvedValue({ facilityId: id } as never);
   vi.mocked(listGhgEntryTemplates).mockResolvedValue([{ ...fixture, credit_type: "REDUCTION" } as IsometricGhgEntryTemplate]);
   expect(await switchCreditBatchRemovalTemplate({ creditBatchId: id, removalTemplateId: fixture.id, expectedVersion: 1 }))
-    .toEqual({ success: false, error: "This template is not a Removal template. Choose a Removal template for this credit batch." });
+    .toEqual({ success: false, error: REMOVAL_TEMPLATE_BLOCKERS.notRemovalTemplate });
   expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
 });
 

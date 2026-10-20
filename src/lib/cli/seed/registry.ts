@@ -93,7 +93,7 @@ export async function seedRegistryAndTypes(facilityId: string, counts: SeedCount
   const externalProjectId = await resolveProjectId(facilityId, credentials.externalProjectId);
   let registryStatus: string;
   if (credentials.externalFacilityId) {
-    // Empty template is the UI default. Linking a project does not submit anything.
+    // Choose the default template in Removal templates, not in the mapping. Linking a project does not submit anything.
     await unwrap("link registry project", saveFacilityCertifierMapping({
       facilityId, externalProjectId, protocolSlug: DEFAULT_PROTOCOL_SLUG,
       externalFacilityId: credentials.externalFacilityId, confirmProduction: false,

@@ -22,7 +22,7 @@ import { withAction } from "../with-action";
 import { loadRemovalTemplateFacts } from "./removal-template-facts";
 import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
 import { removalTemplateReviewLines as reviewLines } from "@/lib/certification/removal-template-review-lines";
-import { isTemplateReady } from "@/lib/certification/removal-template-readiness";
+import { isTemplateReady, linesToDecideCount } from "@/lib/certification/removal-template-readiness";
 import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
 
 async function readOnlyEntry(
@@ -116,24 +116,30 @@ export async function switchCreditBatchRemovalTemplate(input: SwitchCreditBatchR
     if (!template) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFound);
     if (template.credit_type !== "REMOVAL") throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.notRemovalTemplate);
     const changingTemplate = batch.removalTemplateId !== parsed.removalTemplateId;
-    const notReadyMessage = "Decide this template's lines in Removal templates before choosing it.";
     if (changingTemplate) {
       const latest = await getLatestTemplateObservation(ctx, ISOMETRIC_PROVIDER, template.id);
-      if (!latest || !isTemplateReady({
-        availability: "listed", template, observation: latest,
+      if (!latest) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
+      const storedRead = {
+        availability: "listed" as const, template, observation: latest,
         enrichmentProblems: enrichmentProblems(latest.definition, latest.enrichment),
         lineSourceProblems: validateLineSources(latest.definition, latest.lineSources),
         lines: reviewLines(latest.definition, latest.lineSources, {}, [], template),
-      })) throw new SafeError(notReadyMessage);
+      };
+      if (!isTemplateReady(storedRead)) throw new SafeError(linesToDecideCount(storedRead) > 0
+        ? REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview : REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
     }
     const facts = await loadRemovalTemplateFacts(ctx, { client, template, externalProjectId: mapping.externalProjectId, blueprints: await listComponentBlueprints(client) });
     // A failed read is not a line to decide: say what actually blocks the switch.
     if (changingTemplate && !facts.observation) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
-    if (changingTemplate && !isTemplateReady({
-      availability: "listed", template, observation: facts.observation,
-      enrichmentProblems: facts.enrichmentProblems, lineSourceProblems: facts.lineSourceProblems,
-      lines: reviewLines(normalizeTemplateDefinition(template), facts.observation?.lineSources ?? {}, {}, facts.blueprintsForTemplate, template),
-    })) throw new SafeError(notReadyMessage);
+    if (changingTemplate) {
+      const refreshedRead = {
+        availability: "listed" as const, template, observation: facts.observation,
+        enrichmentProblems: facts.enrichmentProblems, lineSourceProblems: facts.lineSourceProblems,
+        lines: reviewLines(normalizeTemplateDefinition(template), facts.observation?.lineSources ?? {}, {}, facts.blueprintsForTemplate, template),
+      };
+      if (!isTemplateReady(refreshedRead)) throw new SafeError(linesToDecideCount(refreshedRead) > 0
+        ? REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview : REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
+    }
     return switchTemplate(ctx, parsed);
   });
 }

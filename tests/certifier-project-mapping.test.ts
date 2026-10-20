@@ -268,9 +268,40 @@ describe("facility default Removal template", () => {
     expect(updated).toEqual({
       ...original, defaultRemovalTemplateId: input.removalTemplateId, updatedAt: updated.updatedAt,
     });
-    await expect(updateFacilityDefaultRemovalTemplate({ ...ctx, organizationId: "foreign-org" }, input)).rejects.toThrow(/project link changed/);
+    await expect(updateFacilityDefaultRemovalTemplate({ ...ctx, organizationId: "foreign-org" }, input)).rejects.toThrow(new SafeError("Facility not found or archived."));
     await expect(updateFacilityDefaultRemovalTemplate(ctx, { ...input, externalProjectId: "stale-project" })).rejects.toThrow(/project link changed/);
     expect((await getCertifierProjectByFacility(ctx, facilityId))?.defaultRemovalTemplateId).toBe(input.removalTemplateId);
+  });
+
+  it("refuses a member context and preserves the mapping", async () => {
+    const facilityId = await createFacility();
+    const ctx = makeTestOrgContext(USER_ID);
+    const externalProjectId = "prj_default_member";
+    const original = await upsertCertifierProject(ctx, {
+      facilityId, provider: "isometric", externalFacilityId: `fcl_test_${facilityId}`,
+      externalProjectId, defaultRemovalTemplateId: "template-original",
+    });
+
+    await expect(updateFacilityDefaultRemovalTemplate({ ...ctx, orgRole: "member" }, {
+      facilityId, externalProjectId, removalTemplateId: "template-chosen",
+    })).rejects.toThrow(new SafeError("You don't have permission to perform this action."));
+    expect(await getCertifierProjectByFacility(ctx, facilityId)).toEqual(original);
+  });
+
+  it("refuses an archived facility and preserves the mapping", async () => {
+    const facilityId = await createFacility();
+    const ctx = makeTestOrgContext(USER_ID);
+    const externalProjectId = "prj_default_archived";
+    const original = await upsertCertifierProject(ctx, {
+      facilityId, provider: "isometric", externalFacilityId: `fcl_test_${facilityId}`,
+      externalProjectId, defaultRemovalTemplateId: "template-original",
+    });
+    await archiveFacility(ctx, facilityId, await masterDataVersion(ctx, "facilities", facilityId));
+
+    await expect(updateFacilityDefaultRemovalTemplate(ctx, {
+      facilityId, externalProjectId, removalTemplateId: "template-chosen",
+    })).rejects.toThrow(new SafeError("Facility not found or archived."));
+    expect(await getCertifierProjectByFacility(ctx, facilityId)).toEqual(original);
   });
 });
 
