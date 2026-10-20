@@ -296,7 +296,7 @@ export function ApplyStep({ data, template, answers, overrides, makeDefault, set
         <h3 className="body-small font-medium text-[var(--color-text-primary)]">What changes</h3>
         <ul className="flex list-disc flex-col gap-4 pl-20 body-small text-[var(--color-text-secondary)]">
           {makeDefault && <li>{`New credit batches start on ${template.name}.`}</li>}
-          {setBatches && without.length > 0 && <li>{`${formatCount(without.length, "credit batch", "credit batches")} pass the Template set check of New Removal.`}</li>}
+          {setBatches && without.length > 0 && <li>{`${formatCount(without.length, "credit batch", "credit batches")} ${without.length === 1 ? "passes" : "pass"} the Template set check of New Removal.`}</li>}
           <li>{`${formatCount(entries, "component")} ${entries === 1 ? "takes" : "take"} an emissions entry on each credit batch. Emissions lists them as Not recorded until someone records a value or a zero.`}</li>
           <li>{`The component decisions apply to every facility that uses ${template.name}.`}</li>
         </ul>
