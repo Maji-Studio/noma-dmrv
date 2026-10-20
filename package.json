@@ -18,6 +18,7 @@
     "db:wait": "tsx src/lib/cli/wait-for-db.ts",
     "db:assert-local": "tsx src/lib/cli/assert-local-db.ts",
     "db:generate": "drizzle-kit generate",
+    "db:renumber": "tsx scripts/db-renumber.ts",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:verify-schema": "tsx src/lib/cli/verify-db-schema.ts",
