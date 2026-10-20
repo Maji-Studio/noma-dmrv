@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { previewProductionRunCreditBatchFn } from "@/fn/production-runs";
+import { previewProductionRunCreditBatchFn } from "@/fn/production-run-credit-batch-preview";
 import { unwrap } from "@/hooks/types";
 import type { ProductionRunCreditBatchPreviewInput } from "@/schemas/production-run-credit-batch-preview";
 import { creditBatchKeys } from "./credit-batch-query-keys";

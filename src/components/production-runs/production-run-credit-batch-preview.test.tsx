@@ -20,7 +20,7 @@ import {
 type Answer = ActionResult<ProductionRunCreditBatchPreview>;
 const calls: Array<{ input: ProductionRunCreditBatchPreviewInput; resolve: (answer: Answer) => void }> = [];
 
-vi.mock("@/fn/production-runs", () => ({
+vi.mock("@/fn/production-run-credit-batch-preview", () => ({
   previewProductionRunCreditBatchFn: (input: ProductionRunCreditBatchPreviewInput) =>
     new Promise<Answer>((resolve) => calls.push({ input, resolve })),
 }));
