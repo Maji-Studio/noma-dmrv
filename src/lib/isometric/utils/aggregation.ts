@@ -1,4 +1,3 @@
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { positiveOrNull } from "@/lib/calculations/transport-leg";
 import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
@@ -335,7 +334,7 @@ export function aggregateProductionRuns(
     // `enrichWithTransportLegs`.
     feedstockTransportMassDistanceTonneKm: null,
     biocharTransportMassDistanceTonneKm: null,
-    sampleTransportMassDistanceTonneKm: emissionsEntriesEnabled() ? null : 0,
+    sampleTransportMassDistanceTonneKm: null,
     earliestStartTime,
     latestEndTime,
     sourceProductionRunIds,
@@ -362,24 +361,17 @@ export function enrichWithTransportLegs<T extends AggregatedProductionRunData>(
 ): Omit<T, keyof AggregatedProductionRunData> & AggregatedProductionRunData {
   const feedstock = aggregateTransportMassDistance(legs.feedstock, "Feedstock");
   const biochar = aggregateBiocharTransportMassDistance(legs.biochar);
-  const sample = aggregateTransportMassDistance(emissionsEntriesEnabled() ? [] : legs.sample, "Sample");
   const newWarnings = [
     feedstock.warning,
     biochar.warning,
-    sample.warning,
   ].filter((w): w is string => w !== null);
 
   return {
     ...agg,
     feedstockTransportMassDistanceTonneKm: feedstock.massDistanceTonneKm,
     biocharTransportMassDistanceTonneKm: biochar.massDistanceTonneKm,
-    // Sample shipment is optional, so an empty category collapses to 0 (a
-    // true "no sample transport" value); feedstock/biochar stay null when
-    // empty so a forgotten required leg fails closed at submit. A blocked
-    // sample category (mixed factor / missing mass) yields its warning above
-    // AND falls back to 0 here. After activation, null means no automatic
-    // source; retired legs produce neither a value nor a warning.
-    sampleTransportMassDistanceTonneKm: emissionsEntriesEnabled() ? null : sample.massDistanceTonneKm ?? 0,
+    // Sample shipping has no automatic source. Retired legs provide no value or warning.
+    sampleTransportMassDistanceTonneKm: null,
     warnings: [...agg.warnings, ...newWarnings],
   };
 }

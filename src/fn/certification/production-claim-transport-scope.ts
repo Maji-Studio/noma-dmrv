@@ -1,5 +1,4 @@
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
-import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import { collectTransportEntityIds } from "@/lib/isometric";
 import { includesProductionInputs } from "./production-claim-policy";
 
@@ -46,29 +45,19 @@ export function collectProductionClaimAwareTransportEntityIds(args: {
   removalId: string | null;
   memberBatches: ProductionClaimScopeBatch[];
   lineages: ChainOfCustodyData[];
-  batchesWithSamples: CreditBatchWithSamples[];
 }): ReturnType<typeof collectTransportEntityIds> {
   const productionBatches = args.memberBatches.filter((batch) =>
     batchIncludesProductionInputs(batch, args.removalId),
   );
-  const productionBatchIds = new Set(
-    productionBatches.map((batch) => batch.id),
-  );
   const productionRunIds = new Set(
     productionBatches.flatMap((batch) => batch.productionRunIds),
   );
-  const all = collectTransportEntityIds(
-    args.lineages,
-    args.batchesWithSamples,
-  );
+  const all = collectTransportEntityIds(args.lineages);
   const production = collectTransportEntityIds(
     args.lineages.filter((lineage) =>
       lineage.productionRun
         ? productionRunIds.has(lineage.productionRun.id)
         : false,
-    ),
-    args.batchesWithSamples.filter((batch) =>
-      productionBatchIds.has(batch.creditBatchId),
     ),
   );
   return {

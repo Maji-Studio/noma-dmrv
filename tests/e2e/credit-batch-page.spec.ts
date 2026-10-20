@@ -58,7 +58,7 @@ test.describe("credit batch page", () => {
     await expect(page.getByRole("heading", { name: "Production runs", exact: true })).toBeVisible();
 
     await tabs.getByRole("tab", { name: "Emissions" }).click();
-    await expect(page.getByRole("link", { name: "Open emissions" })).toBeVisible();
+    await expect(page.getByTestId("credit-batch-emissions-panel")).toBeVisible();
 
     await tabs.getByRole("tab", { name: "Removals" }).click();
     await expect(page).toHaveURL(/[?&]tab=removals/);

@@ -8,7 +8,6 @@ import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getLatestTemplateObservation } from "@/data-access/removal-template-observations";
 import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
 import { deriveBatchEmissionLines } from "@/lib/certification/emission-lines";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { withRemovedEntryComponents } from "@/lib/certification/emission-line-definition";
 import { REMOVAL_TEMPLATE_BLOCKERS, removalTemplateBlocker, type RemovalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 import { isEnrichmentComplete, validateLineSources } from "@/lib/isometric/template-observations";
@@ -32,10 +31,7 @@ export async function loadBatchEmissionLines(ctx: OrgContext, facilityId: string
   if (!observation) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
   // Display read: a delivery without load mass leaves delivery transport unrecorded, like the overview.
   const automaticFacts = await loadBatchEmissionAutomaticFacts(ctx, facilityId, creditBatchId);
-  // Like the overview and readiness, stored entries count only while entries are switched on.
-  const { entries, previousObservations } = emissionsEntriesEnabled()
-    ? await loadBatchEmissionEntryFacts(ctx, creditBatchId, observation)
-    : { entries: [], previousObservations: new Map<string, EntryObservation | null>() };
+  const { entries, previousObservations } = await loadBatchEmissionEntryFacts(ctx, creditBatchId, observation);
   const comments = await listEmissionLineComments(ctx, creditBatchId);
   return { status: "ready", lines: buildBatchEmissionLines(observation, entries, previousObservations, automaticFacts, comments) };
 }

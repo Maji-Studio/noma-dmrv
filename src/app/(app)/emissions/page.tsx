@@ -5,8 +5,7 @@
  * layout.
  */
 import { EmissionsOverview } from "@/components/emissions";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 
 export default function EmissionsRoute() {
-  return <EmissionsOverview entriesEnabled={emissionsEntriesEnabled()} />;
+  return <EmissionsOverview />;
 }

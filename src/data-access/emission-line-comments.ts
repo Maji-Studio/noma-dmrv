@@ -3,7 +3,6 @@ import { db, type DbTransaction } from "@/db";
 import { emissionLineComments } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
-import { requireEmissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import {
@@ -50,7 +49,6 @@ async function lockCommentBatch(ctx: OrgContext, tx: DbTransaction, creditBatchI
 
 export async function setEmissionLineComment(ctx: OrgContext, input: SetEmissionLineCommentInput) {
   requireOrgScope(ctx);
-  requireEmissionsEntriesEnabled();
   const data = setEmissionLineCommentSchema.parse(input);
   return db.transaction(async (tx) => {
     const batch = await lockCommentBatch(ctx, tx, data.creditBatchId, data.facilityId);
@@ -96,7 +94,6 @@ export async function setEmissionLineComment(ctx: OrgContext, input: SetEmission
 
 export async function deleteEmissionLineComment(ctx: OrgContext, input: DeleteEmissionLineCommentInput) {
   requireOrgScope(ctx);
-  requireEmissionsEntriesEnabled();
   const data = deleteEmissionLineCommentSchema.parse(input);
   return db.transaction(async (tx) => {
     const initial = await getEmissionLineComment(ctx, data.id, tx);

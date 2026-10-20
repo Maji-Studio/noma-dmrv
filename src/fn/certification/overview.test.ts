@@ -24,7 +24,6 @@ vi.mock("./certify-context-core", () => ({ buildCreditBatchContexts: vi.fn(), lo
 vi.mock("./biochar-application-source-readback", () => ({}));
 vi.mock("@/lib/certification/batch-health", () => ({ deriveBatchHealth: vi.fn(), batchLinesToDecide: vi.fn() }));
 vi.mock("@/lib/certification/batch-health-facts", () => ({ toBatchHealthFacts: vi.fn() }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: vi.fn() }));
 vi.mock("@/lib/read-models/batches-emission-lines", () => ({ loadBatchesEmissionLines: vi.fn() }));
 
 import { requireOrgContext } from "@/lib/auth/server";
@@ -32,7 +31,6 @@ import { requireOrgFacility } from "@/data-access/utils";
 import { listCreditBatchCertificationLinks } from "@/data-access/credit-batch-certification-links";
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { batchLinesToDecide, deriveBatchHealth } from "@/lib/certification/batch-health";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { loadBatchesEmissionLines } from "@/lib/read-models/batches-emission-lines";
 import { buildCreditBatchContexts } from "./certify-context-core";
 import { loadCreditBatchHealthSummaries } from "./overview";
@@ -59,7 +57,6 @@ const emissionLines = [{ componentId: "diesel", displayName: "Diesel", state: "n
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(requireOrgContext).mockResolvedValue(ctx);
-  vi.mocked(emissionsEntriesEnabled).mockReturnValue(true);
   vi.mocked(listCreditBatchCertificationLinks).mockResolvedValue(batches as never);
   vi.mocked(buildCreditBatchContexts).mockResolvedValue({ contextsByBatch: Object.fromEntries(ids.map(id => [id, { facilityId }])) } as never);
   vi.mocked(deriveBatchHealth).mockReturnValue(health);
@@ -90,13 +87,6 @@ it("uses the page builder for document, outlier, unpaired and emission Check ite
   expect(getCreditBatchesWithSamples).toHaveBeenCalledExactlyOnceWith(ctx, ids);
   expect(loadBatchesEmissionLines).toHaveBeenCalledExactlyOnceWith(ctx, batches);
   expect(requireOrgFacility).toHaveBeenCalledWith(ctx, facilityId);
-});
-
-it("excludes emission Check items and skips their bulk reads when the page flag is off", async () => {
-  vi.mocked(emissionsEntriesEnabled).mockReturnValue(false);
-  const result = await loadCreditBatchHealthSummaries(facilityId, ids);
-  expect(result).toMatchObject({ success: true, data: { [ids[0]]: { checkCount: 3 } } });
-  expect(loadBatchesEmissionLines).not.toHaveBeenCalled();
 });
 
 it("keeps the request bound and rejects foreign batches before loading Check inputs", async () => {

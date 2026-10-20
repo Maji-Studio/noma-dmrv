@@ -3,11 +3,6 @@ import { makeTestOrgContext } from "../../tests/helpers/test-org";
 
 const mocks = vi.hoisted(() => ({ select: vi.fn() }));
 vi.mock("@/db", () => ({ db: { select: mocks.select } }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({
-  requireEmissionsEntriesEnabled: vi.fn(() => {
-    throw new Error("Writes disabled");
-  }),
-}));
 import { listEmissionEntries } from "./emission-entries";
 
 beforeEach(() => vi.clearAllMocks());

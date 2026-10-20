@@ -12,7 +12,6 @@ import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { getLatestTemplateObservation, getTemplateObservationById } from "./removal-template-observations";
 import { SafeError } from "@/lib/errors";
-import { requireEmissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import {
   emissionEntryCounts,
   normalizedEntryValues,
@@ -214,7 +213,6 @@ export async function tombstoneEmissionZeros(
 }
 export async function createEmissionEntry(ctx: OrgContext, input: CreateEmissionEntryInput) {
   requireOrgScope(ctx);
-  requireEmissionsEntriesEnabled();
   const data = createEmissionEntrySchema.parse(input);
   return db.transaction(async (tx) => {
     const { batch, facility, observation } = await lockedBatch(ctx, tx, data.creditBatchId);
@@ -281,7 +279,6 @@ async function createEmissionEntryInTransaction(
 /** Retire a stopped value and carry its evidence to a fresh current-template entry. */
 export async function replaceEmissionEntry(ctx: OrgContext, input: ReplaceEmissionEntryInput) {
   requireOrgScope(ctx);
-  requireEmissionsEntriesEnabled();
   const data = replaceEmissionEntrySchema.parse(input);
   return mutateEntry(ctx, data.id, data.expectedVersion, async (tx, entry, context) => {
     if (entry.kind !== "value") throw new SafeError("Only value entries can be entered again.");
@@ -315,7 +312,6 @@ export async function replaceEmissionEntry(ctx: OrgContext, input: ReplaceEmissi
 
 export async function updateEmissionEntry(ctx: OrgContext, input: UpdateEmissionEntryInput) {
   requireOrgScope(ctx);
-  requireEmissionsEntriesEnabled();
   const data = updateEmissionEntrySchema.parse(input);
   return mutateEntry(ctx, data.id, data.expectedVersion, async (tx, entry, context) => {
     // A single-line date is fixed, including when a client still sends its date field.
@@ -395,7 +391,6 @@ async function mutateEntry<T>(
 }
 export async function confirmEmissionEntry(ctx: OrgContext, id: string, expectedVersion: number) {
   requireOrgScope(ctx);
-  requireEmissionsEntriesEnabled();
   return mutateEntry(ctx, id, expectedVersion, async (tx, entry, { observation }) => {
     const previous = await getTemplateObservationById(ctx, entry.observationId, tx);
     if (!previous || !emissionEntryCounts(previous, observation, entry.componentId).canConfirm)
@@ -417,7 +412,6 @@ export async function confirmEmissionEntry(ctx: OrgContext, id: string, expected
 }
 export async function deleteEmissionEntry(ctx: OrgContext, id: string, expectedVersion: number) {
   requireOrgScope(ctx);
-  requireEmissionsEntriesEnabled();
   return mutateEntry(
     ctx,
     id,
@@ -444,7 +438,6 @@ export async function deleteEmissionEntry(ctx: OrgContext, id: string, expectedV
 /** Undo keeps the original values and files. Batch deletion alone retires their documents. */
 export async function restoreEmissionEntry(ctx: OrgContext, input: RestoreEmissionEntryInput) {
   requireOrgScope(ctx);
-  requireEmissionsEntriesEnabled();
   const data = emissionEntryVersionSchema.parse(input);
   const [initial] = await db.select().from(emissionEntries).where(and(
     eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, data.id),

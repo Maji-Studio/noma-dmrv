@@ -151,13 +151,13 @@ describe("lab sample writers race", { timeout: SUITE_TIMEOUT_MS }, () => {
     const leg = () => createTransportLeg(f.ctx, { entityType: "sample", entityId: created.id, distanceKm: 10, loadMassKg: 1,
       transportMethodType: "road", calculationMethodType: "distance_based" });
     const remove = () => runOperation(deleteLabSample, f.ctx, { labSampleId: created.id, expectedVersion: 1 }, { pool: writerPool });
-    const [first, second] = await queueOnBatch(f, legFirst ? [leg, remove] : [remove, leg]);
-    expect(first.ok).toBe(true);
+    // Sample legs fail before taking the batch lock, regardless of delete order.
     if (legFirst) {
-      // The delete took the leg with the sample.
-      expect(second.ok).toBe(true);
+      await expect(leg()).rejects.toThrow("Record sample shipping as an emissions entry on a credit batch.");
+      expect((await queueOnBatch(f, [remove]))[0].ok).toBe(true);
     } else {
-      expect(second).toMatchObject({ ok: false, error: { message: SAMPLE_NOT_FOUND } });
+      expect((await queueOnBatch(f, [remove]))[0].ok).toBe(true);
+      await expect(leg()).rejects.toThrow("Record sample shipping as an emissions entry on a credit batch.");
     }
     expect(await sampleRows(f)).toEqual([]);
     expect(await db.select().from(transportLegs).where(eq(transportLegs.organizationId, f.ctx.organizationId))).toEqual([]);

@@ -1,4 +1,3 @@
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 /**
  * Facility-scoped certification structure checks for the dashboard.
  *
@@ -10,7 +9,6 @@ import {
   and,
   count,
   eq,
-  isNotNull,
   isNull,
   or,
   sql,
@@ -20,9 +18,7 @@ import { db } from "@/db";
 import { countRows } from "@/db/aggregate";
 import {
   biocharProducts,
-  creditBatches,
   feedstocks,
-  samples,
   supplierLocations,
   suppliers,
   transportLegs,
@@ -43,7 +39,7 @@ export interface DashboardStructuralGapCounts {
 }
 
 export interface TransportGapTarget {
-  entityType: "feedstock" | "biochar" | "sample";
+  entityType: "feedstock" | "biochar";
   entityId: string;
 }
 
@@ -113,7 +109,6 @@ function parentEditorHref(
   const targetRoutes = {
     feedstock: { path: "/feedstocks", queryKey: "feedstock" },
     biochar: { path: "/biochar-products", queryKey: "biocharProduct" },
-    sample: { path: "/samples", queryKey: "sample" },
   } as const;
   const route = targetRoutes[target.entityType];
   return buildEntityDeepLink({
@@ -129,7 +124,6 @@ function transportTargetForm(target: TransportGapTarget | null): string {
   const formNames: Record<TransportGapTarget["entityType"], string> = {
     feedstock: "Feedstock form",
     biochar: "Biochar product form",
-    sample: "Sample form",
   };
   return formNames[target?.entityType ?? "feedstock"];
 }
@@ -238,7 +232,6 @@ export async function loadDashboardStructuralGapCounts(
       .select({
         feedstock: transportGapSelection("feedstock"),
         biochar: transportGapSelection("biochar"),
-        sample: transportGapSelection("sample"),
       })
       .from(transportLegs)
       .leftJoin(
@@ -257,21 +250,6 @@ export async function loadDashboardStructuralGapCounts(
           eq(biocharProducts.organizationId, orgId),
         ),
       )
-      .leftJoin(
-        samples,
-        and(
-          eq(transportLegs.entityType, "sample"),
-          eq(transportLegs.entityId, samples.id),
-          eq(samples.organizationId, orgId),
-        ),
-      )
-      .leftJoin(
-        creditBatches,
-        and(
-          eq(samples.creditBatchId, creditBatches.id),
-          eq(creditBatches.organizationId, orgId),
-        ),
-      )
       .where(
         and(
           eq(transportLegs.organizationId, orgId),
@@ -284,11 +262,6 @@ export async function loadDashboardStructuralGapCounts(
               eq(biocharProducts.facilityId, facilityId),
               isNull(biocharProducts.archivedAt),
             ),
-            and(
-              !emissionsEntriesEnabled() ? isNotNull(samples.id) : sql`false`,
-              eq(creditBatches.facilityId, facilityId),
-              isNull(creditBatches.archivedAt),
-            ),
           ),
         ),
       ),
@@ -297,7 +270,6 @@ export async function loadDashboardStructuralGapCounts(
   const transport = addTransportGapRows([
     { ...transportRow.feedstock, entityType: "feedstock" },
     { ...transportRow.biochar, entityType: "biochar" },
-    { ...transportRow.sample, entityType: "sample" },
   ]);
 
   return {
