@@ -68,10 +68,11 @@ export function MassPair({
               figure.recorded
                 ? "font-mono tabular-nums text-[var(--color-text-primary)]"
                 : "text-[var(--color-text-tertiary)]",
-              isCompact
+              // A missing figure is a placeholder, not a headline value: small
+              // regular text, so two of them never run into each other.
+              isCompact || !figure.recorded
                 ? "text-[length:var(--text-body-small)] leading-[var(--text-body-small--line-height)]"
-                : "text-[length:var(--text-body-large)] leading-[var(--text-body-large--line-height)]",
-              figure.recorded && !isCompact && "font-semibold",
+                : "text-[length:var(--text-body-large)] leading-[var(--text-body-large--line-height)] font-semibold",
             )}
           >
             {figure.value}
