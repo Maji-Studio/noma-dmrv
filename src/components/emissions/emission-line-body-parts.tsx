@@ -226,7 +226,7 @@ export function NothingYet({ line, className }: { line: EmissionLine; className?
   const text = line.entryPolicy === "single"
     ? "No manual entry yet. One manual entry counts for the whole credit batch."
     : line.entryPolicy === "none"
-      ? "No automatic datapoints yet. This line takes no manual entries."
+      ? "No automatic datapoints yet. This component takes no manual entries."
       : "No automatic datapoints and no manual entries yet.";
   return <p className={cn("body-small text-[var(--color-text-tertiary)]", className)}>{text}</p>;
 }
@@ -249,7 +249,7 @@ export function ReviewNotice({ line, scope }: { line: EmissionLine; scope: Emiss
   const undecided = line.blocker?.code === "lineNeedsReview" && line.blocker.fixTarget === "templateLineReview";
   return (
     <Notice tone="warning" action={<TemplateReviewLink scope={scope} undecided={undecided} />}>
-      {line.blocker?.message ?? "This line has no decision yet. An Owner or Admin decides it in Removal templates."}
+      {line.blocker?.message ?? "This component has no decision yet. An Owner or Admin decides it in Removal templates."}
     </Notice>
   );
 }

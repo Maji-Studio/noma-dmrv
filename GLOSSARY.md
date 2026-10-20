@@ -59,7 +59,7 @@ _On screen_: manual entry; the screen calls the part that comes from forms and
 routes "From records".
 _Avoid_: activity (reserved for the history log).
 
-**Line comment**:
+**Component comment**:
 One editable comment on a credit batch's Removal-template component, identified by
 component ID. It stays in noma and never changes the component's state or blocks a Removal.
 Earlier wording stays in the activity log. Each emissions entry keeps its own note.
@@ -533,8 +533,8 @@ and whether it takes **emissions entries**. A template's component decisions
 are made once, and every facility and credit batch using that template follows
 them. noma proposes a decision where it can; an Owner or Admin decides. Say
 "template component" only where "component" alone is ambiguous. The emissions
-pages still call a component with its state a "line".
-_Avoid_: line, template line, template input.
+pages use the same word.
+_Avoid_: line, emission line, template line, template input.
 
 **Components to decide**:
 The components without a saved decision, always shown with their count

@@ -79,7 +79,7 @@ export function validateEmissionEntry(args: {
     throw new SafeError("This template component does not allow entries. Review its setup.");
   }
   if (line.entryPolicy === "single" && args.activeValueCount > 0)
-    throw new SafeError("This line already has an entry. Edit that entry instead.");
+    throw new SafeError("This component already has an entry. Edit that entry instead.");
   const shape = line.component.inputs.filter((input) => input.type === "monitored");
   if (
     args.values.length !== shape.length ||

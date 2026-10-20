@@ -102,7 +102,7 @@ export function CreditBatchEmissionsPanel({
     <PanelSection>
       <div className="flex flex-col gap-8">
         <span className="body-caption text-[var(--color-text-tertiary)]">
-          {open.length} of {lines.length} {lines.length === 1 ? "line" : "lines"} still open
+          {open.length} of {lines.length} {lines.length === 1 ? "component" : "components"} still open
         </span>
         <SheetLinkRows>
           {open.map((line) => (

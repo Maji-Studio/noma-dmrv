@@ -35,7 +35,7 @@ export async function getEmissionLineComment(ctx: OrgContext, id: string, execut
   const [comment] = await executor.select().from(emissionLineComments).where(and(
     eq(emissionLineComments.organizationId, ctx.organizationId), eq(emissionLineComments.id, id),
   ));
-  if (!comment) throw new DomainError("not_found", "Line comment was not found.");
+  if (!comment) throw new DomainError("not_found", "Component comment was not found.");
   return comment;
 }
 
@@ -67,7 +67,7 @@ export async function setEmissionLineComment(ctx: OrgContext, input: SetEmission
     )).for("update");
     if (before) {
       if (data.expectedVersion === undefined)
-        throw new DomainError("conflict", "This line already has a comment. Refresh and edit that comment.");
+        throw new DomainError("conflict", "This component already has a comment. Refresh and edit that comment.");
       if (data.id !== before.id) throw staleRowVersion("emission_line_comment", data.id!);
       assertRowVersion({ entity: "emission_line_comment", id: before.id,
         expectedVersion: data.expectedVersion, actualVersion: before.version });

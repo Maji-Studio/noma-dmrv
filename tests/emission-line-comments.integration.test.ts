@@ -127,7 +127,7 @@ it("creates, edits with a version, conflicts, and hard deletes while retaining w
   ]);
   const [gone, live] = [...records.values()];
   expect(gone).toMatchObject({ label: null, deleted: true });
-  expect(live).toMatchObject({ label: "Line comment", deleted: false, facilityId: lineage.facilityId });
+  expect(live).toMatchObject({ label: "Component comment", deleted: false, facilityId: lineage.facilityId });
 });
 
 it("serializes competing creates into one success and one conflict", async () => {

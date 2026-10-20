@@ -123,7 +123,7 @@ describe("add manual entry", () => {
     const single = makeLine({ entryPolicy: "single" });
     expect(addEntryRefusal(single)).toBeNull();
     expect(addEntryRefusal({ ...single, entries: [makeEntry()] })).toBe("One manual entry per credit batch");
-    expect(addEntryRefusal(makeLine({ entryPolicy: "none" }))).toBe("This line takes no manual entries");
+    expect(addEntryRefusal(makeLine({ entryPolicy: "none" }))).toBe("This component takes no manual entries");
   });
 
   it("splits a mass-distance input into mass and distance and sends the exact product", () => {

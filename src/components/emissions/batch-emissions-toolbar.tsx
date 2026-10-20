@@ -1,5 +1,5 @@
 /**
- * Above the line list: the KPI strip (Lines open and Files missing apply
+ * Above the line list: the KPI strip (Components open and Files missing apply
  * their chip), the state chips with counts and the sort select.
  */
 "use client";
@@ -24,8 +24,8 @@ interface KpiCell { label: string; value: string; detail: string; filter?: LineF
 
 export function BatchKpiStrip({ kpis, filter, onFilter }: { kpis: BatchKpis; filter: LineFilter | null; onFilter: (next: LineFilter | null) => void }) {
   const cells: KpiCell[] = [
-    { label: "Lines open", value: String(kpis.open), detail: `of ${kpis.total} lines`, filter: "open" },
-    { label: "Files missing", value: String(kpis.filesMissing), detail: kpis.filesMissing === 1 ? "line" : "lines", filter: "missing" },
+    { label: "Components open", value: String(kpis.open), detail: `of ${kpis.total} components`, filter: "open" },
+    { label: "Files missing", value: String(kpis.filesMissing), detail: kpis.filesMissing === 1 ? "component" : "components", filter: "missing" },
     { label: "Manual entries this month", value: String(kpis.entriesThisMonth), detail: "" },
     { label: "Last entry", value: kpis.lastEntryAt ? formatDate(kpis.lastEntryAt) : MISSING_VALUE.none, detail: "" },
   ];
@@ -92,7 +92,7 @@ export function LineToolbar({ counts, filter, sort, onFilter, onSort }: LineTool
   return (
     <div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
       <div className="-mx-16 overflow-x-auto px-16 sm:mx-0 sm:px-0">
-        <div role="group" aria-label="Show lines" className="flex w-max border-[1.5px] border-[var(--clr-dark-purple-20)]">
+        <div role="group" aria-label="Show components" className="flex w-max border-[1.5px] border-[var(--clr-dark-purple-20)]">
           {LINE_CHIPS.map((chip, index) => {
             const active = filter === chip.filter;
             const count = counts[chip.count];
@@ -116,7 +116,7 @@ export function LineToolbar({ counts, filter, sort, onFilter, onSort }: LineTool
           })}
         </div>
       </div>
-      <DataTable.FilterSelect value={sort} onChange={(event) => onSort(event.target.value as LineSort)} aria-label="Sort lines">
+      <DataTable.FilterSelect value={sort} onChange={(event) => onSort(event.target.value as LineSort)} aria-label="Sort components">
         {LINE_SORTS.map((option) => (
           <option key={option} value={option}>{`Sort: ${LINE_SORT_LABELS[option].toLowerCase()}`}</option>
         ))}
