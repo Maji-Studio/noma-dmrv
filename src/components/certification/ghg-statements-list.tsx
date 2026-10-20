@@ -394,14 +394,14 @@ function ListBody({ facilityId }: { facilityId: string }) {
   return (
     <>
       <section className="flex flex-col gap-16">
-        <div className="flex items-center justify-between gap-24">
+        <div className="flex flex-wrap items-center justify-between gap-x-24 gap-y-12">
           <h2 className="title-heading-3">
             Statements{" "}
             <span className="body-small text-[var(--color-text-tertiary)]">
               ({statements.length})
             </span>
           </h2>
-          <div className="flex flex-wrap items-center justify-end gap-12">
+          <div className="flex max-w-full flex-wrap items-center gap-12">
             <Button
               variant="default"
               onClick={syncFromRegistry}
