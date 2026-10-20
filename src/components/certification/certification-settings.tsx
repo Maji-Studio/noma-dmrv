@@ -82,6 +82,7 @@ import { RegistrySourceVisibilitySettings } from "./registry-source-visibility-s
 import { SettingsRail, type SettingsSectionMeta } from "@/components/ui";
 import { RemovalTemplateDiagnosticPanel } from "./removal-template-diagnostic-panel";
 import { RemovalTemplateReviewPanel } from "./removal-template-review-panel";
+import { ProtoSwitcher, TemplateSetupProto, useProtoParams } from "./template-setup-proto";
 import { useUnsavedPaneGuard } from "./use-unsaved-pane-guard";
 
 const SECTION_CERTIFIER = CERTIFICATION_SETTINGS_CERTIFIER_SECTION;
@@ -175,6 +176,9 @@ export function CertificationSettings() {
   // click on another section asks before the pane unmounts and drops them.
   const guard = useUnsavedPaneGuard();
 
+  // PROTOTYPE (#1276): `?variant=` swaps the Removal templates pane.
+  const proto = useProtoParams();
+
   const soilTierActive =
     selectedFacility?.durabilityOption === SOIL_MODELLED_TIER;
 
@@ -229,10 +233,11 @@ export function CertificationSettings() {
     tier: "facility",
     label: "Removal templates",
     icon: ListChecksIcon,
-    caption:
-      "Choose the facility default and decide each component. Components to decide block Removals.",
+    caption: proto.variant
+      ? "The template this facility's credit batches use."
+      : "Choose the facility default and decide each component. Components to decide block Removals.",
     access: "Owners and Admins",
-    content: facilityId ? (
+    content: proto.variant ? <TemplateSetupProto /> : facilityId ? (
       <RemovalTemplateReviewPanel
         key={`removal-template-review-${facilityId}`}
         facilityId={facilityId}
@@ -393,6 +398,7 @@ export function CertificationSettings() {
         )}
       </div>
       {guard.dialog}
+      <ProtoSwitcher />
     </div>
   );
 }
