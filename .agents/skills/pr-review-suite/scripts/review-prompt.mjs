@@ -86,6 +86,7 @@ export function createPrompt({
   spec,
   practiceDefinition,
 }) {
+  const globalContextFiles = contextFiles.filter((entry) => entry.source === "global");
   const modelLabel = model === "codex" ? "Codex gpt-6-astra" : "Claude Opus";
   const specText =
     practice !== "spec"
@@ -143,8 +144,12 @@ ${diff.patch}
 
 Base-branch context files (repo path -> base-branch copy to read):
 ${contextFiles
+  .filter((entry) => entry.source !== "global")
   .map((entry) => `${entry.path} -> ${entry.absolute}`)
-  .join("\n")}
+  .join("\n")}${globalContextFiles.length ? `
+
+Global design skill (copied from the operator's machine, not the base branch):
+${globalContextFiles.map((entry) => `${entry.path} -> ${entry.absolute}`).join("\n")}` : ""}
 
 ${specText}
 

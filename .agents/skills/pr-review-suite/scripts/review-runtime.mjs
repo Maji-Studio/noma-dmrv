@@ -2,17 +2,20 @@ import { spawn } from "node:child_process";
 import process from "node:process";
 
 export const DEFAULT_MODELS = ["codex", "opus"];
-export const DEFAULT_PRACTICES = ["standards", "spec", "deep-correctness"];
+export const DEFAULT_PRACTICES = ["standards", "spec", "deep-correctness", "design"];
 export const DEFAULT_TIMEOUT_MINUTES = 20;
 export const DEFAULT_CONCURRENCY = 2;
 export const DEFAULT_COMMAND_TIMEOUT_MS = 5 * 60 * 1000;
 const SIGKILL_GRACE_MS = 5000;
+const UI_FILE_EXTENSIONS = [".tsx", ".jsx", ".css", ".scss", ".html", ".vue", ".svelte"];
+const UI_TEST_FILENAME_PATTERN = /\.(?:test|spec)\./;
+const UI_TEST_PATH_PATTERN = /(?:^|\/)(?:e2e|tests|__tests__|__mocks__)(?:\/|$)/;
 
 export function usage() {
   return `
 Usage:
   run-pr-review-suite.mjs [--pr <number|url|branch>] [--spec <path>]
-    [--models codex,opus] [--practices standards,spec,deep-correctness]
+    [--models codex,opus] [--practices standards,spec,deep-correctness,design]
     [--timeout-minutes 20] [--concurrency 2]
     [--artifact-dir <path>] (--publish | --dry-run | --plan)
   run-pr-review-suite.mjs --self-test
@@ -80,6 +83,30 @@ export function parseArgs(argv) {
   validateSelection("model", options.models, DEFAULT_MODELS);
   validateSelection("practice", options.practices, DEFAULT_PRACTICES);
   return options;
+}
+
+export function selectPractices({ practices, spec, changedFiles, basePracticeReference }) {
+  const skippedPractices = new Map();
+  const hasUiChanges = changedFiles.some((path) =>
+    UI_FILE_EXTENSIONS.some((extension) => path.endsWith(extension)) &&
+    !UI_TEST_FILENAME_PATTERN.test(path.split("/").at(-1)) &&
+    !UI_TEST_PATH_PATTERN.test(path),
+  );
+  for (const practice of practices) {
+    if (practice === "spec" && !spec) {
+      skippedPractices.set(practice, "No spec available");
+    } else if (practice === "design") {
+      if (!hasUiChanges) {
+        skippedPractices.set(practice, "No UI files changed");
+      } else if (!/^## Design\r?$/m.test(basePracticeReference || "")) {
+        skippedPractices.set(practice, "No Design practice in the base branch");
+      }
+    }
+  }
+  return {
+    practices: practices.filter((practice) => !skippedPractices.has(practice)),
+    skippedPractices,
+  };
 }
 
 function splitList(value) {
