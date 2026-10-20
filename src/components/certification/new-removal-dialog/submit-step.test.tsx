@@ -62,6 +62,8 @@ vi.mock("@/components/ui/tooltip", () => ({
   InfoHint: () => null,
 }));
 
+vi.mock("./components-sent", () => ({ ComponentsSent: () => null }));
+
 vi.mock("@/components/forms", () => ({
   ServerError: ({ message }: { message: string }) => <div>{message}</div>,
 }));

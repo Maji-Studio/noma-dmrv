@@ -128,3 +128,29 @@ it("selects explicitly reviewed additions for a new version without changing old
     expect(filterCandidateSourcesForSubmissionLifecycle([...currentCandidates, durability], row)).toEqual([frozenOperatorCandidate, currentTransportLedgerCandidate, durability]);
   });
 });
+
+const entryCandidate = (documentId: string): CandidateSourceDocument => ({
+  documentId,
+  binding: {
+    nomaRole: "emission_entry", nomaRoleLabel: "Emissions entry",
+    lineage: { entityType: "emission_entry", entityId: "entry", entityLabel: "Emissions entry" },
+    intendedTarget: { kind: "explicit", componentId: "component", inputKey: "energy" },
+    mappingRevision: "source-bindings-v1",
+  },
+});
+
+it.each([
+  { status: "draft" as const, refreshed: false },
+  { status: "draft" as const, refreshed: true },
+  { status: "submitted" as const, refreshed: false },
+  { status: "accepted" as const, refreshed: false },
+])("takes entry files from the manifest in force for $status (reviewed: $refreshed)", ({ status, refreshed }) => {
+  const staleEntry = entryCandidate("stale-entry-file");
+  const currentEntry = entryCandidate("current-entry-file");
+  const frozen = [frozenOperatorCandidate, staleEntry];
+  const row = submission({ status, payloadSnapshot: { semantic: { candidateSources: frozen } },
+    metadata: refreshed ? { evidenceRefreshCandidates: frozen } : {} });
+  expect(filterCandidateSourcesForSubmissionLifecycle([currentEntry], row)).toEqual([frozenOperatorCandidate, currentEntry]);
+  // Deletion, a date outside the window, or ownership by another draft all remove the candidate.
+  expect(filterCandidateSourcesForSubmissionLifecycle([], row)).toEqual([frozenOperatorCandidate]);
+});

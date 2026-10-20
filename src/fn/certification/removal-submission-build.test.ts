@@ -95,6 +95,7 @@ describe("buildRemovalSubmissionBuild", () => {
   it("keeps template-tier compatibility as an independent compile blocker", () => {
     const blocker = removalTemplateTierCompatibilityBlocker(
       {
+        facilityTimezone: "Africa/Dar_es_Salaam",
         batchesWithSamples: [{ durabilityOption: "200_year" }],
       } as RemovalSubmissionContext,
       {
@@ -116,6 +117,7 @@ describe("buildRemovalSubmissionBuild", () => {
   it("does not accept the deprecated key for a newly configured 1,000-year template", () => {
     const blocker = removalTemplateTierCompatibilityBlocker(
       {
+        facilityTimezone: "Africa/Dar_es_Salaam",
         batchesWithSamples: [{ durabilityOption: "1000_year" }],
       } as RemovalSubmissionContext,
       {
@@ -141,7 +143,7 @@ describe("buildRemovalSubmissionBuild", () => {
     const compiled = await compileRemovalSubmission({
       orgCtx: TEST_ORG_CONTEXT,
       removalId: "rem-test-missing-readiness",
-      ctx: {} as RemovalSubmissionContext,
+      ctx: { facilityTimezone: "Africa/Dar_es_Salaam" } as RemovalSubmissionContext,
       prepared: {
         lineSources: {},
         removalTemplate: {
@@ -151,7 +153,6 @@ describe("buildRemovalSubmissionBuild", () => {
         } as never,
         blueprintsByKey: new Map(),
         externalProjectId: "prj-test",
-        allowPeriodInputStub: false,
         hasDurabilityComponents: false,
       },
     });
@@ -168,6 +169,7 @@ describe("buildRemovalSubmissionBuild", () => {
       orgCtx: TEST_ORG_CONTEXT,
       removalId: "rem-test-no-sequestration",
       ctx: {
+        facilityTimezone: "Africa/Dar_es_Salaam",
         submissionLineageBlockers: [],
         entityReadinessGaps: [],
         submissionWarnings: [],
@@ -181,7 +183,6 @@ describe("buildRemovalSubmissionBuild", () => {
         } as never,
         blueprintsByKey: new Map(),
         externalProjectId: "prj-test",
-        allowPeriodInputStub: false,
         hasDurabilityComponents: false,
       },
       sourceIds: ["src-test"],
@@ -262,7 +263,7 @@ describe("buildRemovalSubmissionBuild", () => {
   });
 
   it.each(["entityReadinessGaps", "submissionLineageBlockers"] as const)("fails closed when %s was not evaluated", async (missing) => {
-    const ctx = { entityReadinessGaps: [], submissionLineageBlockers: [], [missing]: undefined } as unknown as RemovalSubmissionContext;
+    const ctx = { facilityTimezone: "Africa/Dar_es_Salaam", entityReadinessGaps: [], submissionLineageBlockers: [], [missing]: undefined } as unknown as RemovalSubmissionContext;
 
     await expect(
       buildRemovalSubmissionBuild({
@@ -274,7 +275,6 @@ describe("buildRemovalSubmissionBuild", () => {
           removalTemplate: { groups: [] } as never,
           blueprintsByKey: new Map(),
           externalProjectId: "prj-test-missing-readiness",
-          allowPeriodInputStub: false,
           hasDurabilityComponents: false,
         },
       }),
@@ -288,6 +288,7 @@ describe("buildRemovalSubmissionBuild", () => {
 
   it("blocks entity certification gaps before preparing registry inputs", async () => {
     const ctx = {
+      facilityTimezone: "Africa/Dar_es_Salaam",
       submissionLineageBlockers: [],
       entityReadinessGaps: [
         "Application APP-TEST-001: Upload the application logbook",
@@ -304,7 +305,6 @@ describe("buildRemovalSubmissionBuild", () => {
           removalTemplate: { groups: [] } as never,
           blueprintsByKey: new Map(),
           externalProjectId: "prj-test-1",
-          allowPeriodInputStub: false,
           hasDurabilityComponents: false,
         },
       }),
@@ -321,6 +321,7 @@ describe("buildRemovalSubmissionBuild", () => {
       { entityId: "FS-1", distanceKm: 10, loadMassKg: 100 },
     ]);
     const ctx = {
+      facilityTimezone: "Africa/Dar_es_Salaam",
       entityReadinessGaps: [],
       submissionLineageBlockers: buildSubmissionLineageBlockers([], missing, { "FS-2": "FS-2" }, ["feedstock"]),
     } as unknown as RemovalSubmissionContext;
@@ -333,7 +334,6 @@ describe("buildRemovalSubmissionBuild", () => {
         removalTemplate: { groups: [] } as never,
         blueprintsByKey: new Map(),
         externalProjectId: "prj-test",
-        allowPeriodInputStub: false,
         hasDurabilityComponents: false,
       },
     })).rejects.toThrow("Removal submission blocked:\nFeedstock FS-2 has no usable transport leg.");
@@ -343,14 +343,14 @@ describe("buildRemovalSubmissionBuild", () => {
     const lineages = [{ application: { id: "app-1", code: "AP-1" }, delivery: {
       id: "delivery-1", code: "D-0012", customerLocationId: "location-1", proofOfDeliveryCount: 0,
     }, order: null }] as RemovalSubmissionContext["lineages"];
-    const ctx = { entityReadinessGaps: [],
+    const ctx = { facilityTimezone: "Africa/Dar_es_Salaam", entityReadinessGaps: [],
       submissionLineageBlockers: buildSubmissionLineageBlockers(lineages, [], {}, []),
     } as unknown as RemovalSubmissionContext;
     await expect(buildRemovalSubmissionBuild({
       orgCtx: TEST_ORG_CONTEXT, removalId: "rem-missing-proof", ctx,
       prepared: {
         lineSources: {}, removalTemplate: { groups: [] } as never, blueprintsByKey: new Map(),
-        externalProjectId: "prj-test", allowPeriodInputStub: false, hasDurabilityComponents: false },
+        externalProjectId: "prj-test", hasDurabilityComponents: false },
     })).rejects.toThrow("Delivery D-0012 has no proof of delivery");
   });
 
@@ -360,6 +360,7 @@ describe("buildRemovalSubmissionBuild", () => {
       distanceKmOverride: null, recordedDistanceKm: null,
     }, order: null }] as RemovalSubmissionContext["lineages"];
     const ctx = {
+      facilityTimezone: "Africa/Dar_es_Salaam",
       entityReadinessGaps: [],
       submissionLineageBlockers: buildSubmissionLineageBlockers(lineages, [], {}, ["biochar"]),
     } as unknown as RemovalSubmissionContext;
@@ -368,12 +369,15 @@ describe("buildRemovalSubmissionBuild", () => {
       prepared: {
         lineSources: {},
         removalTemplate: { groups: [] } as never, blueprintsByKey: new Map(),
-        externalProjectId: "prj-test", allowPeriodInputStub: false, hasDurabilityComponents: false,
+        externalProjectId: "prj-test", hasDurabilityComponents: false,
       },
     })).rejects.toThrow("Delivery DL-1 has no positive transport distance");
   });
 
-  it("builds the Safety margin from dry mass with the Inventory Source attached", async () => {
+  it.each([
+    { scenario: "builds the Safety margin from dry mass with the Inventory Source attached", inverted: false },
+    { scenario: "refuses an application on the UTC day before the run's facility day", inverted: true },
+  ])("$scenario", async ({ inverted }) => {
     const inventoryBinding = classifyRemovalSourceCandidate({
       documentType: "pdf",
       metadata: { logbookEvidenceType: "inventory" },
@@ -471,7 +475,7 @@ describe("buildRemovalSubmissionBuild", () => {
     const run = {
       id: "run-1",
       code: "RUN-001",
-      startTime: new Date("2026-01-01T00:00:00Z"),
+      startTime: new Date(inverted ? "2026-01-01T22:30:00Z" : "2026-01-01T00:00:00Z"),
       endTime: new Date("2026-01-02T00:00:00Z"),
       biocharDryMassKg: 1_200,
       feedstockMassDryKg: 4_000,
@@ -482,6 +486,7 @@ describe("buildRemovalSubmissionBuild", () => {
       samples: [],
     } as unknown as ProductionRunForCertification;
     const ctx = {
+      facilityTimezone: "Africa/Dar_es_Salaam",
       submissionLineageBlockers: [],
       entityReadinessGaps: [],
       lineages: [
@@ -489,10 +494,10 @@ describe("buildRemovalSubmissionBuild", () => {
           application: {
             id: "application-1",
             code: "APP-001",
-            applicationDate: new Date("2026-01-03T00:00:00Z"),
+            applicationDate: new Date(inverted ? "2026-01-01T00:00:00Z" : "2026-01-03T00:00:00Z"),
           },
           delivery: { id: "delivery-1", proofOfDeliveryCount: 1, status: "delivered", customerLocationId: "location-1" },
-          productionRun: { id: "run-1" },
+          productionRun: { id: "run-1", code: "RUN-001" },
           feedstocks: [],
           warnings: [],
         },
@@ -529,7 +534,7 @@ describe("buildRemovalSubmissionBuild", () => {
       binding: inventoryBinding!,
     };
 
-    const build = await buildRemovalSubmissionBuild({
+    const buildPromise = buildRemovalSubmissionBuild({
       orgCtx: TEST_ORG_CONTEXT,
       removalId: "removal-1",
       ctx,
@@ -538,12 +543,19 @@ describe("buildRemovalSubmissionBuild", () => {
         removalTemplate: template,
         blueprintsByKey,
         externalProjectId: "project-1",
-        allowPeriodInputStub: false,
         hasDurabilityComponents: false,
       },
       candidateSourceDocuments: [sourceCandidate],
       sourceBindingCandidates: [sourceCandidate],
     });
+
+    if (inverted) {
+      await expect(buildPromise).rejects.toThrow(
+        "Application APP-001 is dated 2026-01-01, before its production run RUN-001 started 2026-01-02. Correct the application date before submitting.",
+      );
+      return;
+    }
+    const build = await buildPromise;
 
     expect(build.monitored).toContainEqual(
       expect.objectContaining({
@@ -735,10 +747,10 @@ describe("buildRemovalSubmissionBuild", () => {
 it.each([unsupportedTemplate(), production as RegistryComponents["schemas"]["GhgEntryTemplate"]])("stops compilation before building a GHG entry for unbindable inputs", async (removalTemplate) => {
   const builder = vi.spyOn(ghgEntry, "buildCreateGhgEntryRequest");
   const compiled = await compileRemovalSubmission({
-    orgCtx: TEST_ORG_CONTEXT, removalId: "blocked-removal", ctx: {} as RemovalSubmissionContext,
+    orgCtx: TEST_ORG_CONTEXT, removalId: "blocked-removal", ctx: { facilityTimezone: "Africa/Dar_es_Salaam" } as RemovalSubmissionContext,
     prepared: {
         lineSources: reviewedTemplateSources(removalTemplate),
-        removalTemplate, blueprintsByKey: new Map(), externalProjectId: "project", allowPeriodInputStub: false, hasDurabilityComponents: true },
+        removalTemplate, blueprintsByKey: new Map(), externalProjectId: "project", hasDurabilityComponents: true },
   });
   expect(builder).not.toHaveBeenCalled();
   builder.mockRestore();

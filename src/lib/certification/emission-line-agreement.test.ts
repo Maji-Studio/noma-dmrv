@@ -57,6 +57,7 @@ it.each(cases)("coverage, readiness and submission agree for %s", (name, code, r
   if (code === "lineNeedsReview") expect(lines[0].blocker?.fixTarget).toBe("templateLineReview");
   expect(coverage[0]?.reason).toBe(reason);
   const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], {
+    facilityTimezone: "UTC",
     templatesById: { [template.id]: { template, observation: { lineSources: sources }, enrichmentProblems: [],
       lineSourceProblems: validateLineSources(normalizeTemplateDefinition(template), sources),
       blueprintsForTemplate: [], unresolvedBlueprintKeys: [], unbindableTemplateInputs: coverage, requiredTransportCategories: [],
@@ -77,7 +78,7 @@ it.each(cases)("coverage, readiness and submission agree for %s", (name, code, r
   expect(buildRemovalRequirementsChecklist(facts).find((check) => check.key === "templateLines")?.status).toBe(code ? "unmet" : "met");
   const agg = { ...aggregateProductionRuns([{ id: "run", code: "RUN", startTime: new Date("2026-10-01"), endTime: new Date("2026-10-02"), electricityKwh: 10 } as ProductionRunForCertification]), weightedOrganicCarbonPercent: null, weightedHToCorgRatio: null, weightedOToCorgRatio: null } satisfies AggregatedProductionData;
   const compile = () => resolveTemplateInputs({ template, lineSources: sources, blueprintsByKey: new Map((enrichment.blueprints as IsometricComponentBlueprint[]).map((blueprint) => [blueprint.key, blueprint])), agg,
-    externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: true, omitProductionComponents: false });
+    externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], omitProductionComponents: false });
   if (code) {
     const blocker = lines[0].blocker!;
     const namesLine = code === "lineHasNoSource" || code === "lineNeedsSetup" || code === "forbiddenLine";

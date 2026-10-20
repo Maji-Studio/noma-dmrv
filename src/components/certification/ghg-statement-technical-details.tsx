@@ -119,7 +119,11 @@ export function GhgStatementTechnicalDetails({
             never disagree on rounding. */}
         <Row
           label="Pending issuable CO₂e"
-          value={formatCo2e(remote?.pending_total_co2e_removed_kg ?? null)}
+          value={
+            remote?.pending_total_co2e_removed_kg == null
+              ? "null"
+              : formatCo2e(remote.pending_total_co2e_removed_kg)
+          }
         />
         <Row
           label="Latest report"

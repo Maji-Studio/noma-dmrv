@@ -178,8 +178,8 @@ describe("ProcessFlowPreview", () => {
 
     expect(noOutput).not.toContain("data-mass-flow");
     expect(noOutput).toContain("Record the biochar wet mass to draw the flow.");
-    // No yield resolves, so the headline names the missing figure, not a basis.
-    expect(text(<ProcessFlowPreview {...run} biocharKg={null} biocharMoisturePercent={null} biocharDryKg={null} />)).toContain("Yield Not available");
+    // No yield resolves, so the headline is left out; the line above names what is missing.
+    expect(text(<ProcessFlowPreview {...run} biocharKg={null} biocharMoisturePercent={null} biocharDryKg={null} />)).not.toContain("Yield");
     expect(neither).toContain("Record the feedstock wet mass and the biochar wet mass to draw the flow.");
   });
 });

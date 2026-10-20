@@ -13,7 +13,7 @@ import { useWatch, type Control } from "react-hook-form";
 import { CreditBatchLine } from "@/components/credit-batches/credit-batch-line";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useProductionRunCreditBatchPreview } from "@/hooks/use-production-run-credit-batch-preview";
-import { combineDateAndTime, formatLocalDate } from "@/lib/date-utils";
+import { resolveRunWindow } from "@/lib/production-runs/run-window";
 import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 import type { ProductionRunCreditBatchPreviewInput } from "@/schemas/production-run-credit-batch-preview";
 import {
@@ -46,22 +46,6 @@ export interface CreditBatchPreviewContext {
 
 const WATCHED_FIELDS = ["status", "startDate", "startTime", "endDate", "endTime", "feedstockDraws"] as const;
 
-function dayString(value: unknown): string | null {
-  if (typeof value === "string") return value || null;
-  return value instanceof Date ? formatLocalDate(value) : null;
-}
-
-/** The instant a facility wall-clock date and time name, or null while unfinished or invalid. */
-function instant(date: string | null, time: unknown, timeZone: string): string | null {
-  if (!date || typeof time !== "string" || !time) return null;
-  try {
-    const value = combineDateAndTime(date, time, timeZone);
-    return Number.isNaN(value.getTime()) ? null : value.toISOString();
-  } catch {
-    return null;
-  }
-}
-
 /**
  * The preview request for the form values. Like the save, an end time
  * without an end date reads on the start date.
@@ -70,8 +54,7 @@ export function buildCreditBatchPreviewInput(
   values: CreditBatchPreviewFormValues,
   context: CreditBatchPreviewContext,
 ): ProductionRunCreditBatchPreviewInput {
-  const startDate = dayString(values.startDate);
-  const endDate = dayString(values.endDate) ?? startDate;
+  const { start, end } = resolveRunWindow(values, context.timeZone);
   const binIds = (values.feedstockDraws ?? [])
     .map((draw) => draw?.storageLocationId)
     .filter((id): id is string => !!id);
@@ -79,8 +62,8 @@ export function buildCreditBatchPreviewInput(
     facilityId: context.facilityId || null,
     productionRunId: context.productionRunId ?? null,
     status: values.status,
-    startTime: instant(startDate, values.startTime, context.timeZone),
-    endTime: context.clearEndTime ? null : instant(endDate, values.endTime, context.timeZone),
+    startTime: start?.toISOString() ?? null,
+    endTime: context.clearEndTime ? null : (end?.toISOString() ?? null),
     feedstockStorageLocationIds: [...new Set(binIds)].sort(),
   };
 }
