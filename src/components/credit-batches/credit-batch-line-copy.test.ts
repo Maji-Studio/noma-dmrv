@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   errorLineCopy,
-  noneYetLineCopy,
-  notYetDeterminedLineCopy,
+  missingLineCopy,
   pendingLineCopy,
 } from "./credit-batch-line-copy";
 
@@ -17,15 +17,9 @@ describe("shared credit batch line copy", () => {
     expect(copy.lead).not.toContain("None yet");
   });
 
-  it("None yet is a neutral answer with an optional explanation", () => {
-    expect(noneYetLineCopy("Because.")).toMatchObject({ lead: "Credit batch: None yet", tone: "neutral", info: "Because.", retry: false });
-    expect(noneYetLineCopy().info).toBeNull();
-  });
-
-  it("Not yet determined does not imply a search found nothing", () => {
-    const copy = notYetDeterminedLineCopy("Needs a facility.");
-    expect(copy.lead).toBe("Credit batch: Not yet determined");
-    expect(copy.info).toBe("Needs a facility.");
-    expect(copy.lead).not.toMatch(/none|no credit batch/i);
+  it("composes a missing line from the shared vocabulary", () => {
+    const copy = missingLineCopy(MISSING_VALUE.notSet, "Needs a batch.");
+    expect(copy).toMatchObject({ lead: "Credit batch: Not set", info: "Needs a batch.", tone: "neutral", batches: [], retry: false });
+    expect(missingLineCopy(MISSING_VALUE.notAvailable).info).toBeNull();
   });
 });

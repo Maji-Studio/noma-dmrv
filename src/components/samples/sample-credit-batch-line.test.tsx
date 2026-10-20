@@ -24,10 +24,10 @@ describe("SampleCreditBatchLine", () => {
     expect(screen.getByRole("status").textContent).toContain("Credit batch: CB-26-009");
   });
 
-  it("says Not yet determined with nothing selected, and does not look the batch up", () => {
-    summary.mockReturnValue({ data: undefined, isError: false, isFetching: false, refetch: vi.fn() });
+  it("says Not set with nothing selected, and does not look the batch up", () => {
+    summary.mockReturnValue({ data: undefined, isError: false, isSuccess: false, isFetching: false, refetch: vi.fn() });
     render(<SampleCreditBatchLine creditBatchId="" />);
-    expect(screen.getByRole("status").textContent).toContain("Credit batch: Not yet determined");
+    expect(screen.getByRole("status").textContent).toContain("Credit batch: Not set");
     expect(screen.queryByRole("link")).toBeNull();
     expect(summary).toHaveBeenCalledWith("", false);
   });
@@ -43,5 +43,12 @@ describe("SampleCreditBatchLine", () => {
     render(<SampleCreditBatchLine creditBatchId="batch-1" />);
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("says Not available, with no Retry, when the lookup succeeded but the batch is gone", () => {
+    summary.mockReturnValue({ data: null, isError: false, isSuccess: true, isFetching: false, refetch: vi.fn() });
+    render(<SampleCreditBatchLine creditBatchId="batch-1" />);
+    expect(screen.getByRole("status").textContent).toContain("Credit batch: Not available");
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   });
 });

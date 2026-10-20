@@ -27,7 +27,9 @@ export function SampleCreditBatchLine({ creditBatchId }: SampleCreditBatchLinePr
       ? { state: "error" }
       : summary.data
         ? { state: "selected", batch: { id: creditBatchId, code: summary.data.creditBatchCode } }
-        : { state: "pending" };
+        : summary.isSuccess
+          ? { state: "unavailable" }
+          : { state: "pending" };
 
   return (
     <CreditBatchLine

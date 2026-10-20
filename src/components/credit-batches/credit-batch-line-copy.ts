@@ -6,6 +6,8 @@
  * characterises) stays with its form and returns the same shape.
  */
 
+import type { MissingValueCopy } from "@/lib/copy-utils";
+
 /** A credit batch named in the line, rendered as a link. */
 export interface CreditBatchLineBatch {
   id: string;
@@ -37,8 +39,6 @@ export const CREDIT_BATCH_INFO_LABEL = "How the credit batch is chosen";
 
 export const CREDIT_BATCH_LINE_PENDING = "Checking credit batch...";
 export const CREDIT_BATCH_LINE_ERROR = "Credit batch could not be checked.";
-export const CREDIT_BATCH_LINE_NONE_YET = "Credit batch: None yet";
-export const CREDIT_BATCH_LINE_NOT_YET_DETERMINED = "Credit batch: Not yet determined";
 
 export const CREDIT_BATCH_LINE_BASE: Omit<CreditBatchLineCopy, "lead"> = {
   tone: "neutral",
@@ -59,12 +59,10 @@ export function errorLineCopy(): CreditBatchLineCopy {
   return { ...CREDIT_BATCH_LINE_BASE, tone: "warning", lead: CREDIT_BATCH_LINE_ERROR, retry: true };
 }
 
-/** A successful check found no batch. `info` says why that is fine. */
-export function noneYetLineCopy(info: string | null = null): CreditBatchLineCopy {
-  return { ...CREDIT_BATCH_LINE_BASE, lead: CREDIT_BATCH_LINE_NONE_YET, info };
-}
-
-/** Inputs are missing: `info` names what is needed, without implying a search found nothing. */
-export function notYetDeterminedLineCopy(info: string | null = null): CreditBatchLineCopy {
-  return { ...CREDIT_BATCH_LINE_BASE, lead: CREDIT_BATCH_LINE_NOT_YET_DETERMINED, info };
+/**
+ * The line has no batch to name. The token comes from the shared
+ * missing-value vocabulary, never hand-written; `info` says why.
+ */
+export function missingLineCopy(token: MissingValueCopy, info: string | null = null): CreditBatchLineCopy {
+  return { ...CREDIT_BATCH_LINE_BASE, lead: `Credit batch: ${token}`, info };
 }
