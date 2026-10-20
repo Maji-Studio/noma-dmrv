@@ -16,6 +16,7 @@ import {
   type FormState,
 } from "react-hook-form";
 import { Notice } from "@/components/ui/notice";
+import { pluralize } from "@/lib/copy-utils";
 import {
   focusField,
   locateInDirectory,
@@ -30,6 +31,10 @@ const LIST_HEIGHT_CLASS = "max-h-[20dvh] overflow-y-auto";
 
 /** Read once per refused save; the visible title keeps the live count. */
 const ANNOUNCEMENT = "Not saved. Fix the fields that show an error.";
+const LOCKED_ANNOUNCEMENT = "Not saved. The fields you changed are locked.";
+
+/** `setError` type of a lock refusal (see `useSaveRefusal`): worded apart from a fix. */
+export const LOCKED_ERROR_TYPE = "locked";
 
 export interface FieldErrorItem {
   path: string;
@@ -37,6 +42,8 @@ export interface FieldErrorItem {
   label: string | null;
   /** False when no control in the form matches the path: shown, not linked. */
   located: boolean;
+  /** A lock refusal: counted as locked, not as a field to fix. */
+  locked?: boolean;
 }
 
 function isLeafError(value: object): value is { message?: unknown; type?: unknown } {
@@ -54,13 +61,13 @@ function isLeafError(value: object): value is { message?: unknown; type?: unknow
  */
 export function listFieldErrors(
   formState: Pick<FormState<FieldValues>, "errors">,
-): Array<{ path: string; message: string }> {
-  const items: Array<{ path: string; message: string }> = [];
+): Array<{ path: string; message: string; locked?: boolean }> {
+  const items: Array<{ path: string; message: string; locked?: boolean }> = [];
   const visit = (value: unknown, path: string) => {
     if (typeof value !== "object" || value === null) return;
     if (isLeafError(value)) {
       if (typeof value.message === "string" && value.message.length > 0) {
-        items.push({ path, message: value.message });
+        items.push({ path, message: value.message, ...(value.type === LOCKED_ERROR_TYPE ? { locked: true } : {}) });
       }
       return;
     }
@@ -81,7 +88,7 @@ export function listFieldErrors(
  * only, without a link.
  */
 export function orderFieldErrors(
-  errors: Array<{ path: string; message: string }>,
+  errors: Array<{ path: string; message: string; locked?: boolean }>,
   directory: FieldDirectory | null,
 ): FieldErrorItem[] {
   return errors
@@ -128,8 +135,17 @@ export function ItemText({ item }: { item: FieldErrorItem }) {
   );
 }
 
-function countLabel(count: number): string {
-  return `Not saved. Fix ${count} ${count === 1 ? "field" : "fields"}.`;
+/**
+ * "Not saved. Fix 2 fields." A lock is not a fix: "Not saved. 2 fields are
+ * locked." Both together: "Not saved. Fix 1 field. 2 fields are locked."
+ */
+function countLabel(items: readonly FieldErrorItem[]): string {
+  const locked = items.filter((item) => item.locked).length;
+  const toFix = items.length - locked;
+  const parts = ["Not saved."];
+  if (toFix > 0) parts.push(`Fix ${toFix} ${pluralize(toFix, "field")}.`);
+  if (locked > 0) parts.push(`${locked} ${pluralize(locked, "field")} ${locked === 1 ? "is" : "are"} locked.`);
+  return parts.join(" ");
 }
 
 interface FormErrorSummaryProps<
@@ -179,11 +195,13 @@ export function FormErrorSummary<
   // The attempt whose refusal listed fields. Adjusted while rendering, so a
   // save that failed without field errors (a thrown action) never claims
   // fields, and a list that empties and refills keeps the same line.
-  const [announcedAttempt, setAnnouncedAttempt] = useState(0);
-  if (visible && announcedAttempt !== submitCount) setAnnouncedAttempt(submitCount);
+  const [announced, setAnnounced] = useState({ attempt: 0, lockedOnly: false });
+  const lockedOnly = items.every((item) => item.locked);
+  if (visible && announced.attempt !== submitCount) setAnnounced({ attempt: submitCount, lockedOnly });
+  const announcedAttempt = announced.attempt;
   const announcement = announcedAttempt === submitCount && submitCount > 0 && !isSubmitSuccessful ? (
     <p key={submitCount} role="alert" className="sr-only">
-      {ANNOUNCEMENT}
+      {announced.lockedOnly ? LOCKED_ANNOUNCEMENT : ANNOUNCEMENT}
     </p>
   ) : null;
 
@@ -192,7 +210,7 @@ export function FormErrorSummary<
   return (
     <>
       {announcement}
-      <Notice tone="error" live={false} title={countLabel(items.length)} data-form-error-summary="">
+      <Notice tone="error" live={false} title={countLabel(items)} data-form-error-summary="">
         <ul className={`mt-4 flex flex-col ${LIST_HEIGHT_CLASS}`}>
           {items.map((item) => (
             <li key={item.path}>
