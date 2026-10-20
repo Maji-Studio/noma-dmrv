@@ -368,6 +368,14 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
 - When the actions render **inside an owning parent form**, pass `submitType="button"` + `onSubmitClick` — nesting `<form>` elements is invalid HTML.
 - `formId` is the escape hatch when extension content must render between the fields and the CTA: the CTA lives outside the `<form>` and points back at it by id.
 - `submitDisabled` gates on an unmet precondition (e.g. an unchecked acknowledgement).
+- **Association preview.** `preview` takes one `FormFooterPreview` line,
+  rendered under the error summary and the Save blocker, directly above the
+  buttons: what saving associates the record with. The Production Run form
+  shows the credit batch the run joins, is expected to join, or belongs to
+  (#1164); the other operational forms will reuse the slot. The server answers
+  from the unsaved values with the save path's own rule, so the browser holds
+  no copy of it. The line never blocks Save, and it shows "Checking" whenever
+  its last answer is not for the current inputs.
 - The submit skips the browser's constraint bubbles except for unparsed number text (see [Native number constraints](#native-number-constraints)); a nested `submitType="button"` is untouched.
 
 ### FormSpine

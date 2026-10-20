@@ -41,6 +41,7 @@ import {
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
 import { ProcessFlowPreview } from "./production-run-process-flow-preview";
+import { ProductionRunCreditBatchPreview } from "./production-run-credit-batch-preview";
 
 import {
   productionRunMassBalanceFeedback,
@@ -880,6 +881,14 @@ export function ProductionRunForm({
         errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
+        preview={
+          <ProductionRunCreditBatchPreview
+            control={control}
+            facilityId={watchedFacilityId}
+            productionRunId={productionRun?.id}
+            timeZone={formTimezone}
+          />
+        }
       />
     </div>
   );

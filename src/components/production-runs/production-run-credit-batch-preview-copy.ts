@@ -1,0 +1,181 @@
+/**
+ * The words of the Production Run footer's credit batch line (#1164), one
+ * entry per preview state. Pure, so every state's copy is tested without a
+ * server. Membership itself is decided on the server; this only phrases it.
+ */
+import { formatDateRange, formatDayString } from "@/lib/format-utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
+import type {
+  CreditBatchPreviewBatch,
+  ProductionRunCreditBatchPreview,
+  ProductionRunCreditBatchPreviewBasis,
+} from "@/types/production-run-credit-batch-preview";
+
+/** The line while a check runs or after it failed, on top of the server states. */
+export type ProductionRunCreditBatchPreviewView =
+  | { state: "pending" }
+  | { state: "error" }
+  | ProductionRunCreditBatchPreview;
+
+export interface CreditBatchPreviewCopy {
+  tone: "neutral" | "warning";
+  /** Text before the batch links. */
+  lead: string;
+  /** Batches named in the line, each a link to its page. */
+  batches: CreditBatchPreviewBatch[];
+  /** Text after the batch links. */
+  tail: string;
+  /** The ⓘ explanation, or null when the line says it all. */
+  info: string | null;
+  /** The check failed: offer Retry. */
+  retry: boolean;
+  busy: boolean;
+}
+
+const BASE: Omit<CreditBatchPreviewCopy, "lead"> = {
+  tone: "neutral",
+  batches: [],
+  tail: "",
+  info: null,
+  retry: false,
+  busy: false,
+};
+
+/** The line's label for the ⓘ, so a screen reader names what it explains. */
+export const CREDIT_BATCH_INFO_LABEL = "How the credit batch is chosen";
+
+const INCOMPLETE_LEAD = {
+  facility: "Choose a facility in the sidebar to see the credit batch.",
+  start: "Enter the start date and time to see the credit batch.",
+  end: "Enter the end date and time to see the credit batch.",
+  feedstock: "Choose a source bin to see the credit batch.",
+} as const;
+
+const END_DAY_RULE =
+  "A completed run joins the credit batch that covers its end day at the facility, for its feedstock.";
+
+function zoneName(timeZone: string): string {
+  return timeZone.replace(/_/g, " ");
+}
+
+/** "Matched on the end day, Oct 2, 2026 (Africa/Dar es Salaam), at Mafinga Facility with Forestry waste." */
+function matchedOn(basis: ProductionRunCreditBatchPreviewBasis): string {
+  const day = `${formatDayString(basis.day)} (${zoneName(basis.timeZone)})`;
+  const what = basis.dayBasis === "end" ? "the end day" : "the start day";
+  return `Matched on ${what}, ${day}, at ${basis.facilityName} with ${basis.feedstockTypeName}.`;
+}
+
+/** Why a start day stands in, said every time it does. */
+const START_DAY_STANDS_IN =
+  "This run has no end time yet, so its start day stands in. Once it is completed, it joins the batch that covers its end day, which can be another one.";
+
+function windowLabel(batch: CreditBatchPreviewBatch): string {
+  return ` (${formatDateRange(batch.startDate, batch.endDate)})`;
+}
+
+function joinInfo(basis: ProductionRunCreditBatchPreviewBasis, expected: boolean): string {
+  if (basis.dayBasis === "start") return `${START_DAY_STANDS_IN} ${matchedOn(basis)}`;
+  if (expected) return `A running run joins when it is completed, by its end day. ${matchedOn(basis)}`;
+  return `${matchedOn(basis)} The whole run joins this batch.`;
+}
+
+function memberCopy(
+  preview: Extract<ProductionRunCreditBatchPreview, { state: "member" }>,
+): CreditBatchPreviewCopy {
+  const { batch, basis, conflict } = preview;
+  const base = { ...BASE, lead: "In credit batch ", batches: [batch] };
+  switch (conflict) {
+    case null:
+      return { ...base, tail: windowLabel(batch), info: basis ? matchedOn(basis) : null };
+    case "outside-window":
+      return {
+        ...base,
+        tone: "warning",
+        tail: `${windowLabel(batch)}. This end day is outside it, so the save is refused.`,
+        info: "A run stays in its credit batch. To move it, remove it from the batch on the credit batch page first.",
+      };
+    case "facility":
+      return {
+        ...base,
+        tone: "warning",
+        tail: ". It belongs to another facility, so the save is refused.",
+        info: "A run stays in its credit batch. To move it, remove it from the batch on the credit batch page first.",
+      };
+    case "feedstock":
+      return {
+        ...base,
+        tone: "warning",
+        tail: ". These source bins hold another feedstock type, so the save is refused.",
+        info: "A credit batch holds one feedstock type. To change the source bins, remove the run from the batch on the credit batch page first.",
+      };
+    case "reopen":
+      return {
+        ...base,
+        tone: "warning",
+        tail: ". Remove the run from the batch before reopening it.",
+        info: null,
+      };
+  }
+}
+
+export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreviewView): CreditBatchPreviewCopy {
+  switch (view.state) {
+    case "pending":
+      return { ...BASE, lead: "Checking credit batch...", busy: true };
+    case "error":
+      return { ...BASE, tone: "warning", lead: "Credit batch could not be checked.", retry: true };
+    case "not-applicable":
+      return {
+        ...BASE,
+        lead: `Credit batch: ${MISSING_VALUE.notApplicable}`,
+        info: "Failed and cancelled runs do not join a credit batch.",
+      };
+    case "incomplete":
+      return {
+        ...BASE,
+        lead: INCOMPLETE_LEAD[view.missing],
+        info: view.missing === "facility" ? null : END_DAY_RULE,
+      };
+    case "mixed-feedstock":
+      return {
+        ...BASE,
+        tone: "warning",
+        lead: `No credit batch: the source bins hold ${view.feedstockTypeCount} feedstock types.`,
+        info: "A credit batch holds one feedstock type, so this run stays unassigned. You can still save it.",
+      };
+    case "member":
+      return memberCopy(view);
+    case "match":
+      return {
+        ...BASE,
+        lead: view.expected ? "Expected credit batch: " : "Joins credit batch ",
+        batches: [view.batch],
+        tail: `${windowLabel(view.batch)}${view.basis.dayBasis === "start" ? ", by start day" : ""}`,
+        info: joinInfo(view.basis, view.expected),
+      };
+    case "locked":
+      return {
+        ...BASE,
+        tone: "warning",
+        lead: "Credit batch ",
+        batches: [view.batch],
+        tail: " is locked, so the run stays unassigned.",
+        info: `Its Removal was submitted, so no run can join it. You can still save the run. ${matchedOn(view.basis)}`,
+      };
+    case "ambiguous":
+      return {
+        ...BASE,
+        tone: "warning",
+        lead: `More than one credit batch covers ${formatDayString(view.basis.day)}: `,
+        batches: view.batches,
+        tail: ".",
+        info: "The run joins none of them until only one batch covers this day. Change the batch windows on the credit batch page.",
+      };
+    case "no-match":
+      return {
+        ...BASE,
+        lead: `No credit batch covers ${formatDayString(view.basis.day)}${view.basis.dayBasis === "start" ? " (start day)" : ""} yet.`,
+        info: `You can save the run. ${view.expected ? "Once completed, it" : "It"} joins a credit batch automatically when one is created that covers this day at ${view.basis.facilityName} with ${view.basis.feedstockTypeName}.`,
+      };
+  }
+}
