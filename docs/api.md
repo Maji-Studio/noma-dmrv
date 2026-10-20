@@ -103,7 +103,7 @@ Tested on staging 2026-10-20:
 | Client | First consent | Write with the grant | Step-up from Read only | Disconnect in the client |
 |---|---|---|---|---|
 | claude.ai chat | Three choices; a token narrower than requested is accepted | Saves | Inline Connect card, then claude.ai resends the call; consent preselects only the refused area | Does not revoke at noma |
-| Cowork | Same | Saves | Shows "Forbidden", no Connect card (anthropics/claude-ai-mcp#931) | Does not revoke at noma |
+| Cowork | Same connector and grant as chat | Saves | Shows "Forbidden", no Connect card (anthropics/claude-ai-mcp#931) | Same connector as chat |
 
 - Cowork workaround: choose Read and write, or the needed areas, on first consent.
 - claude.ai chat gives the model only a tool result's text, so
