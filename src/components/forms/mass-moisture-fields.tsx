@@ -25,7 +25,6 @@ import type { ReactNode } from "react";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { FormField } from "./form-field";
 import { FormInput } from "./form-input";
-import { DetailedOnly } from "./form-detail-context";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 import { moistureReadingGuidance, type MoistureFieldEstimate } from "@/lib/output-stock/moisture-guidance";
@@ -221,10 +220,9 @@ interface MassMoistureFieldsProps {
  *
  * The split is unframed on purpose: it is not a separate panel of output, it is
  * what the two inputs above it mean, so the bar and its key sit directly under
- * them and move as they change. `MoistureSplit` decides how much of the
- * calculation to show from the form detail level. Both levels draw the split
- * once wet mass or moisture has a value. Before that, the unresolved state is
- * explanation of what will appear, so only Detailed shows it.
+ * them and move as they change. The split is drawn once wet mass or moisture
+ * has a value; before that its unresolved state would only explain what will
+ * appear, so nothing renders. `MoistureSplit` keeps the ledger behind its (i).
  */
 export function MassMoistureFields({
   wet,
@@ -263,9 +261,9 @@ export function MassMoistureFields({
           {addedWaterField}
         </div>
       )}
-      {/* Hidden while nothing inside has content, so Simple adds no empty grid row. */}
+      {/* Hidden while nothing inside has content, so it adds no empty grid row. */}
       <div data-testid="mass-moisture-split" className="md:col-span-2 [&:not(:has(*:not(:empty)))]:hidden">
-        <DetailedOnly unless={started}>{split}</DetailedOnly>
+        {started && split}
         {splitFooter}
       </div>
     </div>

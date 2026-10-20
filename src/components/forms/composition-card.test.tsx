@@ -1,93 +1,76 @@
-import { useState } from "react";
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useForm } from "react-hook-form";
-import { beforeAll, describe, expect, it, vi } from "vitest";
-
-// The caption's InfoHint is a Base UI tooltip, which needs a DOM this node
-// environment does not have.
-vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null }));
+import { afterEach, describe, expect, it } from "vitest";
 import { CompositionCard } from "./composition-card";
 import { DerivedHeadline } from "./derived-headline";
-import { FormDetailControl, FormDetailProvider } from "./form-detail-context";
 
-beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
-function History() {
-  const [value, setValue] = useState("original");
-  return <input aria-label="History correction" value={value} onChange={() => setValue("correction draft")} />;
-}
-function Form() {
-  const { formState } = useForm({ defaultValues: { mass: 100 } });
-  return <form><output>{formState.isDirty ? "dirty" : "clean"}</output><CompositionCard title="Bin composition" calculation={<History />}><p>100 kg</p></CompositionCard></form>;
-}
-it("starts collapsed, keeps correction drafts mounted, and never submits or dirties the form", async () => {
-  let renderer!: ReactTestRenderer;
-  await act(async () => { renderer = create(<Form />); });
-  const button = () => renderer.root.findByType("button");
-  expect(button().props["aria-label"]).toBe("Show calculation for bin composition");
-  const panel = () => renderer.root.findByProps({ id: button().props["aria-controls"] });
-  expect(button().props.type).toBe("button");
-  expect(button().props["data-presentation-control"]).toBe(true);
-  expect(button().props["aria-expanded"]).toBe(false);
-  expect(panel().props.hidden).toBe(true);
-  await act(async () => button().props.onClick());
-  expect(panel().props.hidden).toBe(false);
-  await act(async () => renderer.root.findByType("input").props.onChange());
-  await act(async () => button().props.onClick());
-  await act(async () => button().props.onClick());
-  expect(renderer.root.findByType("input").props.value).toBe("correction draft");
-  expect(renderer.root.findByType("output").children).toEqual(["clean"]);
-  await act(async () => renderer.unmount());
-});
+afterEach(cleanup);
 
-function visible(node: ReactTestInstance | string): string {
-  return typeof node === "string" ? node : node.props.hidden ? "" : node.children.map(visible).join(" ");
-}
-
-function Block() {
+function Block({ explanation = <p>Batch ledger</p> }: { explanation?: React.ReactNode }) {
   return (
     <CompositionCard
       title="Bin stock"
+      hint="What the bin holds."
       headline={<DerivedHeadline label="Wet stock in bin, estimate" before="≈ 1,420" value="1,110 kg" sub="310 kg wet mass removed at 22.7% moisture" />}
-      detail={<p>Dry biochar pair</p>}
-      calculation={<p>Batch ledger</p>}
+      explanation={explanation}
       actions={<button type="button">Stock history</button>}
     >
       <p>Split bar</p>
+      <p>Dry biochar in bin 540 → 135 kg</p>
     </CompositionCard>
   );
 }
 
-describe("detail levels", () => {
-  it("shows caption, headline, picture and actions at both levels; Detailed adds only explanation", async () => {
-    let renderer!: ReactTestRenderer;
-    await act(async () => { renderer = create(<FormDetailProvider scope="block"><FormDetailControl /><Block /></FormDetailProvider>); });
-    const simple = visible(renderer.root);
-    for (const text of ["Bin stock", "≈ 1,420", "1,110 kg", "310 kg wet mass removed", "Split bar", "Stock history"]) expect(simple).toContain(text);
-    for (const text of ["Dry biochar pair", "Show calculation"]) expect(simple).not.toContain(text);
-    await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
-    const detailed = visible(renderer.root);
-    for (const text of ["Bin stock", "1,110 kg", "Split bar", "Dry biochar pair", "Show calculation", "Stock history"]) expect(detailed).toContain(text);
-    expect(detailed).not.toContain("Batch ledger");
-    await act(async () => renderer.unmount());
+describe("CompositionCard", () => {
+  it("shows caption, headline, picture, short lines and actions; the explanation waits behind the (i)", () => {
+    render(<Block />);
+    for (const text of ["Bin stock", "≈ 1,420", "1,110 kg", "310 kg wet mass removed", "Split bar", "Dry biochar in bin 540 → 135 kg", "Stock history"]) {
+      expect(screen.getByText(new RegExp(text.replace(/[≈→.()]/g, "\\$&")))).toBeTruthy();
+    }
+    expect(screen.queryByText("Batch ledger")).toBeNull();
+    expect(screen.queryByText(/Show calculation/)).toBeNull();
+    expect(screen.queryByRole("radio")).toBeNull();
   });
 
-  it("shows the whole block outside a detail provider", async () => {
-    let renderer!: ReactTestRenderer;
-    await act(async () => { renderer = create(<Block />); });
-    expect(visible(renderer.root)).toContain("Dry biochar pair");
-    expect(visible(renderer.root)).toContain("Show calculation");
-    await act(async () => renderer.unmount());
+  it("opens the definition and the explanation from one (i) on a press, and closes on Escape", async () => {
+    render(<Block />);
+    const info = screen.getAllByRole("button", { name: "How bin stock is worked out" });
+    expect(info).toHaveLength(1);
+    expect(info[0].getAttribute("type")).toBe("button");
+    expect(info[0].hasAttribute("data-presentation-control")).toBe(true);
+    fireEvent.click(info[0]);
+    expect(await screen.findByText("Batch ledger")).toBeTruthy();
+    expect(screen.getByText("What the bin holds.")).toBeTruthy();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    await screen.findByRole("button", { name: "How bin stock is worked out" });
   });
 
-  it("leaves out a figure it cannot derive yet, keeping the reason when there is one", async () => {
-    let renderer!: ReactTestRenderer;
-    await act(async () => { renderer = create(<DerivedHeadline label="Yield" value={null} />); });
-    expect(renderer.toJSON()).toBeNull();
-    await act(async () => renderer.unmount());
-    await act(async () => { renderer = create(<DerivedHeadline label="Yield" value={null} sub="Needs a feedstock mass" />); });
-    expect(visible(renderer.root)).toContain("Yield");
-    expect(visible(renderer.root)).toContain("Needs a feedstock mass");
-    expect(visible(renderer.root)).not.toContain("Not available");
-    await act(async () => renderer.unmount());
+  it("keeps the plain definition hint when there is no explanation", () => {
+    render(<Block explanation={null} />);
+    expect(screen.queryByRole("button", { name: "How bin stock is worked out" })).toBeNull();
+    expect(screen.getByRole("button", { name: "About bin stock" })).toBeTruthy();
+  });
+
+  it("never submits or dirties the form when the (i) is pressed", () => {
+    function Form() {
+      const { formState } = useForm({ defaultValues: { mass: 100 } });
+      return <form><output>{formState.isDirty ? "dirty" : "clean"}</output><Block /></form>;
+    }
+    const { container } = render(<Form />);
+    fireEvent.click(screen.getByRole("button", { name: "How bin stock is worked out" }));
+    expect(container.querySelector("output")?.textContent).toBe("clean");
+  });
+});
+
+describe("DerivedHeadline", () => {
+  it("leaves out a figure it cannot derive yet, keeping the reason when there is one", () => {
+    const { container } = render(<DerivedHeadline label="Yield" value={null} />);
+    expect(container.innerHTML).toBe("");
+    cleanup();
+    render(<DerivedHeadline label="Yield" value={null} sub="Needs a feedstock mass" />);
+    expect(screen.getByText(/Yield/)).toBeTruthy();
+    expect(screen.getByText(/Needs a feedstock mass/)).toBeTruthy();
+    expect(screen.queryByText(/Not available/)).toBeNull();
   });
 });

@@ -17,9 +17,8 @@
  * denominator. Until both wet masses are entered nothing is drawn to scale:
  * an unresolved bar names the masses still to enter.
  *
- * Both levels show the yield headline and the flow, because the flow is what
- * the masses above add up to. Detailed adds only the yield arithmetic behind
- * Show calculation.
+ * The yield headline and the flow are always visible, because the flow is what
+ * the masses above add up to. The yield arithmetic opens from the caption's (i).
  */
 "use client";
 
@@ -193,7 +192,7 @@ export function ProcessFlowPreview(props: ProcessFlowProps) {
         label={yieldLabel}
         value={basis.yieldPercent === null ? null : formatPercent(basis.yieldPercent, { digits: YIELD_DIGITS })}
       />}
-      calculation={basis.yieldPercent !== null ? <YieldCalculation basis={basis} label={yieldLabel} /> : undefined}
+      explanation={basis.yieldPercent !== null ? <YieldCalculation basis={basis} label={yieldLabel} /> : undefined}
     >
       {diagram ? (
         <MassFlowSankey diagram={diagram} />

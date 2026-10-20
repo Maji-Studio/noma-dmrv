@@ -37,10 +37,10 @@ const ENTRY_VERB: Record<Exclude<StockEntryKind, "count">, string> = {
  * against one bin (a correction, a loss, a count, a delivery load), `load` for
  * a surface that shows several bins at once (the product form).
  *
- * The preview is decision info, so both levels show the headline (the bin's
- * stock before and after), the picture, notices, refusals and blockers. Only
- * explanation waits for Detailed: the dry pair under a wet headline and the
- * figures and batch draw behind Show calculation.
+ * The preview is decision info: the headline (the bin's stock before and
+ * after), the picture, the dry biochar pair under a wet headline, notices,
+ * refusals and blockers are always visible. Explanation, the figures and the
+ * batch draw, opens from the caption's (i).
  *
  * `entry` is what the operator typed on a movement surface: its kind names the
  * movement in the headline's caption ("310 kg wet mass removed at 22.7% moisture"),
@@ -79,9 +79,9 @@ export function OutputStockPreview({ variant = "load", preview, entry, moreInfo,
  * stock before and after, labelled as an estimate because it is the tracked
  * solids at the moisture entered here, not a weighing. Its caption is the entry
  * itself. Under it the entered wet mass as a moisture split, then the one
- * notice a drying only count needs, then the tracked dry balance as a row in
- * Detailed: stock is kept in dry biochar, only the presentation leads wet. The
- * entered figures and the FIFO draw sit behind "Show calculation".
+ * notice a drying only count needs, then the tracked dry balance as a row:
+ * stock is kept in dry biochar, only the presentation leads wet. The entered
+ * figures and the FIFO draw sit behind the caption's (i).
  *
  * Without a moisture there is no wet estimate to show, so the dry balance takes
  * the headline instead of a made up figure. The ingredient lane tracks wet stock
@@ -114,17 +114,17 @@ function StockMovementCard({ preview, entry, moreInfo }: { preview: Preview; ent
           ? <DerivedHeadline label={wet.label} value={wet.current} sub={line} />
           : <DerivedHeadline label={wet.label} before={wet.before} value={wet.after} figureLabel={wet.figureLabel} sub={line} />
         : dryPair}
-      detail={wet ? dryPair : undefined}
-      calculation={rows.length > 0 || ledger ? <>
+      explanation={rows.length > 0 || ledger ? <>
         {rows.length > 0 && <StockRows label="Figures behind this movement" rows={rows} />}
         {ledger}
       </> : undefined}
     >
-      {/* The block's own disclosure holds the arithmetic, so the split
-          contributes the bar and its key line and no second ledger. */}
+      {/* The block's own (i) holds the arithmetic, so the split contributes
+          the bar and its key line and no second ledger. */}
       {enteredWetKg !== null && <MoistureSplit calculation={false} wetMassKg={enteredWetKg} moisturePercent={preview.movementMoisturePercent} dryLabel={splitDryLabel(preview)} />}
       {notice && <Notice>{notice}</Notice>}
       {!refused && preview.moistureReset && <MoistureResetChange reset={preview.moistureReset} />}
+      {wet && dryPair}
     </CompositionCard>
   );
 }

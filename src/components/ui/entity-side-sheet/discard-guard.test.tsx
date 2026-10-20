@@ -4,14 +4,13 @@ import { Controller, useForm, useFormState } from "react-hook-form";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { EntitySideSheet, type SideSheetMode } from "./index";
 import { useSideSheetActions } from "./side-sheet-context";
-import { DetailedOnly } from "@/components/forms/form-detail-context";
 
 vi.mock("@/components/ui/slide-over-panel", () => {
   const Wrapper = ({ children }: { children: ReactNode }) => <div>{children}</div>;
   return { SlideOverPanel: {
     Root: ({ children, onOpenChange }: { children: ReactNode; onOpenChange: (open: boolean) => void }) => <div><button onClick={() => onOpenChange(false)}>Close sheet</button>{children}</div>,
     Content: Wrapper, Title: Wrapper, Description: Wrapper, Footer: Wrapper, Close: Wrapper,
-    Header: ({ children, actions }: { children: ReactNode; actions: ReactNode }) => <header>{children}{actions}</header>,
+    Header: ({ children }: { children: ReactNode }) => <header>{children}</header>,
     Body: ({ children, ...props }: { children: ReactNode }) => <main {...props}>{children}</main>,
   } };
 });
@@ -27,7 +26,6 @@ function EditableFields() {
     <Controller name="reason" control={control} render={({ field }) => <input {...field} />} />
     <output>{isDirty ? "dirty" : "clean"}</output>
     <p role="alert">Mandatory evidence is missing</p>
-    <DetailedOnly><p>Optional provenance</p></DetailedOnly>
     <button onClick={() => actions?.cancel()}>Cancel form</button>
   </>;
 }
@@ -42,8 +40,8 @@ afterEach(async () => { if (renderer) await act(async () => renderer.unmount());
 
 const close = vi.fn();
 const changeMode = vi.fn();
-function sheet(mode: SideSheetMode = "edit", open = true, record = "one") {
-  return <EntitySideSheet detailToggle detailScope={record} open={open} onOpenChange={close} mode={mode} onModeChange={changeMode} title="Record">
+function sheet(mode: SideSheetMode = "edit", open = true) {
+  return <EntitySideSheet open={open} onOpenChange={close} mode={mode} onModeChange={changeMode} title="Record">
     <EditableFields />
   </EntitySideSheet>;
 }
@@ -51,25 +49,19 @@ async function mount(mode: SideSheetMode = "edit") {
   close.mockClear(); changeMode.mockClear();
   await act(async () => { renderer = create(sheet(mode), { createNodeMock: element => element.type === "main" ? { contains: () => true, querySelector: () => null, scrollTop: 0 } : null }); });
 }
-async function select(value: string) {
-  await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === value)!.props.onChange());
-}
 function button(text: string) { return renderer.root.findAllByType("button").find(node => node.children.includes(text))!; }
-function simpleSelected() { return renderer.root.findAllByType("input").find(node => node.props.value === "simple")!.props.checked; }
+function reason() { return renderer.root.findAllByType("input").find(node => node.props.name === "reason")!; }
 
-describe("sheet detail presentation", () => {
-  it.each(["view", "edit", "create"] as const)("starts %s in Simple and places the only switch in heading chrome", async mode => {
+describe("sheet discard guard", () => {
+  it.each(["view", "edit", "create"] as const)("renders %s without a Simple or Detailed switch", async mode => {
     await mount(mode);
-    expect(simpleSelected()).toBe(true);
-    expect(renderer.root.findByType("header").findAllByType("fieldset")).toHaveLength(1);
     // The read-only wrapper (`data-submit-block-fieldset`) is not a switch.
-    expect(renderer.root.findByType("main").findAll((node) => node.type === "fieldset" && !node.props["data-submit-block-fieldset"])).toHaveLength(0);
+    expect(renderer.root.findAll(node => node.type === "fieldset" && !node.props["data-submit-block-fieldset"])).toHaveLength(0);
+    expect(renderer.root.findAll(node => node.type === "input" && node.props.type === "radio")).toHaveLength(0);
   });
 
-  it("toggles without dirty/discard, keeps warnings, and ignores presentation events in the body", async () => {
+  it("ignores presentation events in the body, such as a press on an (i), and keeps warnings", async () => {
     await mount();
-    await select("detailed"); await select("simple");
-    expect(renderer.root.findByType("output").children).toEqual(["clean"]);
     expect(renderer.root.findByProps({ role: "alert" }).children).toEqual(["Mandatory evidence is missing"]);
     await act(async () => renderer.root.findByType("main").props.onChangeCapture({ target: { closest: () => ({}) } }));
     await act(async () => button("Cancel form").props.onClick());
@@ -77,24 +69,14 @@ describe("sheet detail presentation", () => {
     expect(renderer.root.findAllByType("aside")).toHaveLength(0);
   });
 
-  it("preserves actual RHF edits through repeated toggles and guards Cancel", async () => {
+  it("guards Cancel after an actual RHF edit", async () => {
     await mount();
-    await act(async () => renderer.root.findAllByType("input").find(node => node.props.name === "reason")!.props.onChange({ target: { value: "Edited reason" } }));
-    await select("detailed"); await select("simple");
-    expect(renderer.root.findAllByType("input").find(node => node.props.name === "reason")!.props.value).toBe("Edited reason");
+    await act(async () => reason().props.onChange({ target: { value: "Edited reason" } }));
+    expect(reason().props.value).toBe("Edited reason");
     expect(renderer.root.findByType("output").children).toEqual(["dirty"]);
     await act(async () => button("Cancel form").props.onClick());
     expect(renderer.root.findAllByType("aside")).toHaveLength(1);
     expect(changeMode).not.toHaveBeenCalled();
-  });
-
-  it("resets on mode, record, close and reopen boundaries", async () => {
-    await mount();
-    for (const [mode, open, record] of [["view", true, "one"], ["edit", true, "one"], ["edit", true, "two"], ["edit", false, "two"], ["edit", true, "two"]] as const) {
-      await select("detailed");
-      await act(async () => renderer.update(sheet(mode, open, record)));
-      expect(simpleSelected()).toBe(true);
-    }
   });
 
   it("still guards native edits", async () => {

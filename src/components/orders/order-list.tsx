@@ -454,10 +454,8 @@ export function OrderList() {
       </DataTable>
 
       {/* Unified Side Sheet */}
-      {/* Both modes: the form hides matching stock in Simple too. */}
       <EntitySideSheet
         numberedSections
-        detailToggle
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheetMode}

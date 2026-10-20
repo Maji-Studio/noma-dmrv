@@ -2,15 +2,10 @@
  * Delivery stock — which batches this delivery drew, by dry biochar.
  *
  * The saved wet measurement, as corrected, leads; then the bar with one block
- * per batch drawn and a key line naming each batch and its dry mass. Both
- * levels show them. Detailed adds the ledger with each batch's share of the
- * total.
- *
- * The action row carries `Show calculation` (Detailed) for the production runs
- * behind each batch. The calculation deliberately holds runs only: the ledger
- * above it already totals every batch, and two breakdowns of the same draw read
- * as two competing answers. The card draws its rule only above the calculation
- * control, so Simple has none. Stock history lives on the storage bin, not here.
+ * per batch drawn and a key line naming each batch and its dry mass. The
+ * caption's (i) opens the ledger with each batch's share of the total and the
+ * production runs behind each batch. Stock history lives on the storage bin,
+ * not here.
  */
 "use client";
 import { CompositionCard, CompositionLedger } from "@/components/forms";
@@ -52,11 +47,12 @@ export function DeliveryStockDetails({ deliveryId, storageLocationId, wetMassKg,
   return <>
     {history.error && <Notice tone="error">{history.error.message}</Notice>}
     <CompositionCard
-      ruleOnlyWithCalculation
       title="Delivery stock"
       hint={DELIVERY_STOCK_HINT}
-      calculation={groups.length > 0 ? <SourceRunGroups label="Source production runs per delivered batch" groups={groups} /> : undefined}
-      detail={<CompositionLedger hideZero label="Delivered batches" totalLabel={TOTAL_LABEL} total={current ? current.dryMassKg : dryMassKg} segments={segments} />}
+      explanation={<>
+        <CompositionLedger hideZero label="Delivered batches" totalLabel={TOTAL_LABEL} total={current ? current.dryMassKg : dryMassKg} segments={segments} />
+        {groups.length > 0 && <SourceRunGroups label="Source production runs per delivered batch" groups={groups} />}
+      </>}
     >
       {/* The saved wet measurement as corrected leads: it is the one number the
           delivery's own field can no longer show. Then the batches, so the block
