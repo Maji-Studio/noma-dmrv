@@ -490,6 +490,7 @@ export function SampleList({
   };
 
   const openCreate = () => {
+    createSample.startDraft();
     createIntent.clear();
     setFocusedSampleId(null);
     setDeepLinkMode(null);

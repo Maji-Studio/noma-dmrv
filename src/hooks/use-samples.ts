@@ -110,7 +110,7 @@ export function useCreateSample(
   const queryClient = useQueryClient();
   const intent = useCreateIntentKey();
 
-  return useMutation({
+  const mutation = useMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.sample),
     mutationFn: async (data: CreateSampleData) => unwrap(await createSampleFn(data, { intentKey: intent.current() })),
     onMutate: async (variables) => {
@@ -144,6 +144,8 @@ export function useCreateSample(
       await callbacks?.onSettled?.(data, error, variables);
     },
   });
+  // Call when a create sheet or dialog opens: each draft gets its own key.
+  return { ...mutation, startDraft: intent.rotate };
 }
 
 /**

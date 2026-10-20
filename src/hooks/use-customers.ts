@@ -575,7 +575,7 @@ export function useCreateCustomerLocation(
   const queryClient = useQueryClient();
   const intent = useCreateIntentKey();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: async (data: CreateCustomerLocationData) => {
       const result = await createCustomerLocationFn(data, { intentKey: intent.current() });
       if (!result.success) {
@@ -619,6 +619,8 @@ export function useCreateCustomerLocation(
       await callbacks?.onSettled?.(data, error, variables);
     },
   });
+  // Call when a create sheet or dialog opens: each draft gets its own key.
+  return { ...mutation, startDraft: intent.rotate };
 }
 
 /**

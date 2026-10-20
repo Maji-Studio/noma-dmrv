@@ -623,6 +623,16 @@ export default async function globalTeardown() {
       // Organization deletion also cascades any attempts not yet bound to a client.
       await client.query(`DELETE FROM organizations WHERE name LIKE 'E2E OAuth Organization %'`);
 
+      // App create intents (#1238) saved by E2E users in the test organization.
+      // The credential is `app-form:<userId>` and E2E user ids start `e2e-`. The
+      // worker fixtures delete their users first, so match the id, not a join.
+      // Nothing outside DEC_ORG_ID is touched.
+      await client.query(`
+        DELETE FROM api_idempotency_records
+        WHERE organization_id = $1
+          AND credential_id LIKE 'app-form:e2e-%'
+      `, [DEC_ORG_ID]);
+
       // Sessions for E2E users
       await client.query(`DELETE FROM session WHERE user_id LIKE 'e2e-%'`);
 

@@ -108,7 +108,7 @@ export function useCreateFormulation(
   const queryClient = useQueryClient();
   const intent = useCreateIntentKey();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: async (data: CreateFormulationData) => {
       const result = await createFormulationFn(data, { intentKey: intent.current() });
       if (!result.success) {
@@ -139,6 +139,8 @@ export function useCreateFormulation(
       await callbacks?.onSettled?.(data, error, variables);
     },
   });
+  // Call when a create sheet or dialog opens: each draft gets its own key.
+  return { ...mutation, startDraft: intent.rotate };
 }
 
 /**

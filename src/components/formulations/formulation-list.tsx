@@ -271,7 +271,7 @@ export function FormulationList() {
     setLifecycleError(null);
   };
 
-  const openCreate = () => { setFormError(null); setSideSheet({ mode: "create", entity: null }); };
+  const openCreate = () => { createFormulation.startDraft(); setFormError(null); setSideSheet({ mode: "create", entity: null }); };
   const openView = (formulation: FormulationWithIngredients) => { setFormError(null); setSideSheet({ mode: "view", entity: formulation }); };
   const openEdit = (formulation: FormulationWithIngredients) => { setFormError(null); setSideSheet({ mode: "edit", entity: formulation }); };
   const closeSideSheet = () => { setSideSheet(null); setFormError(null); };

@@ -45,7 +45,7 @@ vi.mock("@/hooks/use-organization-settings", () => ({
   useOrganizationDefaultValues: () => ({ defaults: { defaultCountry: "Tanzania" } }),
 }));
 vi.mock("@/hooks/use-customers", () => ({
-  useCreateCustomerLocation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateCustomerLocation: () => ({ startDraft: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useUpdateCustomerLocation: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock("@/components/forms/entity-select/quick-add-dialog-shell", () => ({

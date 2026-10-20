@@ -38,6 +38,27 @@ it("reuses the draft key after failure and rotates after success, including acro
   client.clear();
 });
 
+it("sends a new key after a failed save when a new create draft starts", async () => {
+  create.mockReset();
+  const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  const { result, unmount } = renderHook(() => useCreateOrder(), {
+    wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+  });
+  create.mockResolvedValue({ success: false, code: "outcome_unknown", error: "Save again" });
+  const input = {} as CreateOrderData;
+  await act(async () => { await expect(result.current.mutateAsync(input)).rejects.toThrow("Save again"); });
+  // A retry inside the same open draft keeps the key.
+  await act(async () => { await expect(result.current.mutateAsync(input)).rejects.toThrow("Save again"); });
+  // The sheet closes and a new create sheet opens.
+  act(() => { result.current.startDraft(); });
+  await act(async () => { await expect(result.current.mutateAsync(input)).rejects.toThrow("Save again"); });
+  const keys = create.mock.calls.map(([, options]) => options.intentKey);
+  expect(keys[1]).toBe(keys[0]);
+  expect(keys[2]).not.toBe(keys[0]);
+  unmount();
+  client.clear();
+});
+
 it("keeps an application intent when its action returns a failure result", async () => {
   const client = new QueryClient();
   const { result, unmount } = renderHook(() => useCreateApplication(), {

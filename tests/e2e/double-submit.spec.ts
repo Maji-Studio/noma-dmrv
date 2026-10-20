@@ -11,7 +11,8 @@ import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../src/db/schema";
 import { createDbConnection } from "./fixtures/db";
 import { test, expect } from "./fixtures";
-import { selectEntity, waitForSideSheet, waitForSideSheetClose } from "./fixtures/page-helpers";
+import { selectEntity, selectFirstEntity, waitForSideSheet, waitForSideSheetClose } from "./fixtures/page-helpers";
+import { seedCreditBatch } from "./fixtures/seed-chain-data";
 
 const VIEWPORT = { width: 1440, height: 1000 };
 /** The sidebar footer shows the signed-in email; evidence crops it off. */
@@ -19,6 +20,11 @@ const SIDEBAR_WIDTH_PX = 240;
 const WET_KG = 1500;
 const MOISTURE_PERCENT = 20;
 const ORDER_KG = "150.5";
+const LAB_REPORT = {
+  name: "double-submit-lab-report.pdf",
+  mimeType: "application/pdf",
+  buffer: Buffer.from("%PDF-1.4\n% e2e double submit probe\n"),
+};
 /** Lets a late second request commit before the database is read. */
 const SETTLE_MS = 1500;
 
@@ -89,6 +95,37 @@ test.describe("Double-click on Create", () => {
 
       const created = await db.select({ id: schema.orders.id }).from(schema.orders).where(scope);
       expect(created).toHaveLength(1);
+    } finally {
+      await pool.end();
+    }
+  });
+
+  test("saves one Sample with its lab report", async ({ adminPage: page, seededData }) => {
+    const { db, pool } = createDbConnection();
+    try {
+      const batch = await seedCreditBatch(seededData.facility.id, crypto.randomUUID().slice(0, 8).toUpperCase(), seededData.feedstockType.id);
+      await openCreateSheet(page, `/samples?facility=${seededData.facility.id}`, seededData.facility.name, "New Sample");
+      const dialog = page.getByRole("dialog", { name: "Create Sample" });
+      await selectFirstEntity(page, "Credit Batch");
+      const samplingTime = dialog.locator('input[name="samplingTime"]');
+      await expect(samplingTime).toBeEnabled();
+      // The fixture facility uses UTC.
+      await samplingTime.fill(new Date().toISOString().slice(0, 16));
+      await page.fill('input[name="totalCarbonPercent"]', "75");
+      await page.fill('input[name="organicCarbonPercent"]', "70");
+      await dialog.locator("#sample-deferred-documents-upload").setInputFiles(LAB_REPORT);
+      await expect(dialog.getByText(LAB_REPORT.name)).toBeVisible();
+
+      await dialog.getByRole("button", { name: "Create Sample", exact: true }).dblclick();
+      await waitForSideSheetClose(page);
+      await page.waitForTimeout(SETTLE_MS);
+
+      const created = await db.select({ id: schema.samples.id }).from(schema.samples)
+        .where(and(eq(schema.samples.organizationId, DEC_ORG_ID), eq(schema.samples.creditBatchId, batch.id)));
+      expect(created).toHaveLength(1);
+      const attached = await db.select({ id: schema.documents.id }).from(schema.documents)
+        .where(and(eq(schema.documents.organizationId, DEC_ORG_ID), eq(schema.documents.entityType, "sample"), eq(schema.documents.entityId, created[0]!.id)));
+      expect(attached).toHaveLength(1);
     } finally {
       await pool.end();
     }

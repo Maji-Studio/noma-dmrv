@@ -110,7 +110,7 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
   const queryClient = useQueryClient();
   const intent = useCreateIntentKey();
 
-  return useMutation({
+  const mutation = useMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.feedstock),
     mutationFn: async (data: CreateFeedstockData) => unwrap(await createFeedstockFn(data, { intentKey: intent.current() })),
     onSuccess: async (data, variables) => {
@@ -136,6 +136,8 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
     },
     onError: callbacks?.onError,
   });
+  // Call when a create sheet or dialog opens: each draft gets its own key.
+  return { ...mutation, startDraft: intent.rotate };
 }
 
 export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRelations, UpdateFeedstockData>) {

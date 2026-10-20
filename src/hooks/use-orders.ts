@@ -108,7 +108,7 @@ export function useCreateOrder(
   const queryClient = useQueryClient();
   const intent = useCreateIntentKey();
 
-  return useMutation({
+  const mutation = useMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.order),
     mutationFn: async (data: CreateOrderData) => unwrap(await createOrderFn(data, { intentKey: intent.current() })),
     onMutate: async (variables) => {
@@ -133,6 +133,8 @@ export function useCreateOrder(
       await callbacks?.onSettled?.(data, error, variables);
     },
   });
+  // Call when a create sheet or dialog opens: each draft gets its own key.
+  return { ...mutation, startDraft: intent.rotate };
 }
 
 /**

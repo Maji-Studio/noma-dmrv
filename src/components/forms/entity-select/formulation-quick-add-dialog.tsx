@@ -31,6 +31,11 @@ export function FormulationQuickAddDialog({
   onSuccess = () => undefined,
 }: FormulationQuickAddDialogProps) {
   const intent = useCreateIntentKey();
+  // The shell stays mounted while closed: closing ends the draft and its key.
+  const close = () => {
+    intent.rotate();
+    onClose();
+  };
   const { error, isSubmitting, handleSubmit } = useQuickAddSubmit<FormulationFormData>({
     entityType: "formulation",
     // `createFormulationFn` answers with the full formulation; the select only
@@ -52,20 +57,20 @@ export function FormulationQuickAddDialog({
       };
     },
     onSuccess,
-    onClose,
+    onClose: close,
   });
 
   return (
     <QuickAddDialogShell
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={close}
       title="New formulation"
       width="lg"
       testId="formulation-quick-add-dialog"
     >
       <FormulationForm
         onSubmit={handleSubmit}
-        onCancel={onClose}
+        onCancel={close}
         isSubmitting={isSubmitting}
         errorMessage={error ?? undefined}
         submitLabel="Create formulation"

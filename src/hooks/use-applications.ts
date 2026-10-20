@@ -104,7 +104,7 @@ export function useCreateApplication() {
   const queryClient = useQueryClient();
   const intent = useCreateIntentKey();
 
-  return useMutation({
+  const mutation = useMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.application),
     mutationFn: (data: ApplicationFormData) => createApplicationFn(applicationOperationInput(data), { intentKey: intent.current() }),
     onSuccess: (result) => {
@@ -122,6 +122,8 @@ export function useCreateApplication() {
       invalidateCertificationReadiness(queryClient);
     },
   });
+  // Call when a create sheet or dialog opens: each draft gets its own key.
+  return { ...mutation, startDraft: intent.rotate };
 }
 
 /**
