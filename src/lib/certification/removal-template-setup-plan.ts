@@ -48,13 +48,15 @@ export function setupPlan(definition: TemplateDefinition, lineSources: LineSourc
   }
   const hasReviewed = Object.values(lineSources).some((line) => line.origin === "reviewed" || line.origin === "carried");
   const usedSources = new Set(plan.decided.flatMap((line) => line.contract?.automaticSource ?? []));
+  const availableCandidates = (line: SetupComponent) =>
+    catalogCandidates(line.component, line.groupKey).filter((source) => !usedSources.has(source));
   const consumed = new Set<string>();
   for (const line of pending) {
     const id = line.component.id;
     if (consumed.has(id)) continue;
-    const candidates = catalogCandidates(line.component, line.groupKey).filter((source) => !usedSources.has(source));
+    const candidates = availableCandidates(line);
     const competitors = candidates.length === 1 ? pending.filter((other) => {
-      const sources = catalogCandidates(other.component, other.groupKey);
+      const sources = availableCandidates(other);
       return sources.length === 1 && sources[0] === candidates[0];
     }) : [];
     if (competitors.length > 1) {

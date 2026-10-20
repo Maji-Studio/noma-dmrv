@@ -3,6 +3,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { ApplyRemovalTemplateSetupInput } from "@/schemas/removal-template-setup";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { fullFingerprint, normalizeTemplateDefinition, resolveLineSources, semanticFingerprint, validateLineSources } from "@/lib/isometric/template-observations";
+import { setupPlanFingerprint } from "@/lib/certification/removal-template-setup-fingerprint";
 
 const mocks = vi.hoisted(() => ({ facility: vi.fn(), mapping: vi.fn(), templates: vi.fn(), latest: vi.fn(), previous: vi.fn(), facts: vi.fn(), preview: vi.fn(), apply: vi.fn(), transaction: vi.fn(), batches: vi.fn(), facilityGuard: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
@@ -24,7 +25,7 @@ import { applyRemovalTemplateSetupCore, loadRemovalTemplateSetupCore } from "./r
 afterEach(() => vi.unstubAllEnvs());
 
 const ctx: OrgContext = { organizationId: "org", userId: "user", orgRole: "admin", isPlatformAdmin: false };
-const input: ApplyRemovalTemplateSetupInput = { facilityId: "facility", removalTemplateId: fixture.id, fingerprints: { semanticFingerprint: "semantic", fullFingerprint: "full" }, answers: {}, overrides: {}, makeDefault: true, batches: [] };
+const input: ApplyRemovalTemplateSetupInput = { facilityId: "facility", removalTemplateId: fixture.id, fingerprints: { semanticFingerprint: "semantic", fullFingerprint: "full" }, planFingerprint: "plan", answers: {}, overrides: {}, makeDefault: true, batches: [] };
 const definition = normalizeTemplateDefinition(fixture as Parameters<typeof normalizeTemplateDefinition>[0]);
 const observation = { id: "observation", version: 1, definition, enrichment: {}, lineSources: resolveLineSources({ definition }), ...input.fingerprints };
 beforeEach(() => {
@@ -67,6 +68,15 @@ it("previews an unused template even when it has a stored observation", async ()
   expect(mocks.preview).toHaveBeenCalledWith({}, fixture, [], observation, fixture.project_id);
   expect(mocks.facts).not.toHaveBeenCalled();
   expect(mocks.transaction).not.toHaveBeenCalled();
+});
+it("fingerprints a preview without a stored observation the same way as the first observed plan", async () => {
+  mocks.latest.mockResolvedValue(null);
+  const preview = await loadRemovalTemplateSetupCore(ctx, input.facilityId);
+  expect(mocks.facts).not.toHaveBeenCalled();
+  mocks.mapping.mockResolvedValue({ externalProjectId: fixture.project_id, defaultRemovalTemplateId: fixture.id });
+  const stored = await loadRemovalTemplateSetupCore(ctx, input.facilityId);
+  expect(preview.fitting[0].planFingerprint).toBe(setupPlanFingerprint(preview.fitting[0].plan));
+  expect(preview.fitting[0].planFingerprint).toBe(stored.fitting[0].planFingerprint);
 });
 it("keeps an added decision visible when an unused template already has a matching observation", async () => {
   const added = definition.groups.flatMap((group) => group.components)[0];

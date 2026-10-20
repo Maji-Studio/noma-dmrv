@@ -10,6 +10,7 @@ import { STALE_VERSION_CONFLICT_CODE } from "@/lib/stale-version";
 import { DomainError } from "@/lib/domain-errors";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { assignmentsFromPlan, setupPlan, templateFitsFacility } from "@/lib/certification/removal-template-setup-plan";
+import { setupPlanFingerprint } from "@/lib/certification/removal-template-setup-fingerprint";
 import { reviewLineSources } from "@/lib/certification/removal-template-review-sources";
 import { hasMissingFixedDatapoint } from "@/lib/certification/template-fixed-datapoints";
 import { enrichmentProblems, lineNeedsReview, validateLineSources } from "@/lib/isometric/template-observations";
@@ -51,6 +52,7 @@ export async function applySetupInTransaction(ctx: OrgContext, tx: DbTransaction
   if (!row || row.id !== observed.id || row.version !== observed.version || row.semanticFingerprint !== input.fingerprints.semanticFingerprint || row.fullFingerprint !== input.fingerprints.fullFingerprint) throw staleSetupTemplate(template.id);
   const sources = reviewLineSources(row.lineSources);
   const plan = setupPlan(row.definition, sources, validateLineSources(row.definition, row.lineSources));
+  if (setupPlanFingerprint(plan) !== input.planFingerprint) throw staleSetupTemplate(template.id);
   const assignments = assignmentsFromPlan(plan, input.answers, input.overrides);
   if (Object.keys(assignments).length) row = await reviewLineContractsInTransaction(ctx, tx, { observationId: row.id, expectedVersion: row.version, assignments });
   const reviewedSources = reviewLineSources(row.lineSources);

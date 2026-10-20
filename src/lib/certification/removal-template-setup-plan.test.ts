@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import * as catalog from "@/lib/isometric/template-observations/catalog-sources";
 import sandbox from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { normalizeTemplateDefinition, resolveLineSources, validateLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
 import { SafeError } from "@/lib/errors";
@@ -109,6 +110,34 @@ it("rejects an answer not offered by a decision", () => {
   const plan = planFor(protocolDefaultFixture());
   const answers = Object.fromEntries(plan.decisions.map((decision) => [decision.id, "forged"]));
   expect(() => assignmentsFromPlan(plan, answers, {})).toThrow("Answer every");
+});
+
+it.each([1, 2])("includes a disambiguated component in a clash with %i single-candidate components", (competitorCount) => {
+  const definition = normalizeTemplateDefinition(protocolDefaultFixture());
+  const pyrolysis = definition.groups.find((group) => group.key === "pyrolysis")!;
+  const diesel = pyrolysis.components.find((component) => component.blueprintKey === "fuel_usage_by_volume")!;
+  const decided = { ...diesel, id: "decided" };
+  const pending = { ...diesel, id: "disambiguated" };
+  const competitors = Array.from({ length: competitorCount }, (_, index) => ({ ...diesel, id: `single-${index}` }));
+  // Model catalog roles offering only the remaining source beside the split role.
+  const catalogCandidates = catalog.catalogCandidates;
+  vi.spyOn(catalog, "catalogCandidates").mockImplementation((component, groupKey) =>
+    component.id.startsWith("single-") ? ["run-startup-diesel"] : catalogCandidates(component, groupKey));
+  definition.groups = [{ ...pyrolysis, components: [decided, pending, ...competitors] }];
+  const sources = resolveLineSources({ definition });
+  sources[decided.id] = { scope: "operating", automaticSource: "run-genset-diesel", entryPolicy: "additive", origin: "reviewed" };
+  const plan = setupPlan(definition, sources, validateLineSources(definition, sources));
+  const ids = [...plan.decided, ...plan.defaults, ...plan.decisions.flatMap((decision) => decision.components)].map((line) => line.component.id);
+  expect(ids.sort()).toEqual([decided, pending, ...competitors].map((component) => component.id).sort());
+  expect(plan.decisions).toHaveLength(1);
+  const [clash] = plan.decisions;
+  expect(clash.kind).toBe("clash");
+  for (const option of clash.options) {
+    const assignments = assignmentsFromPlan(plan, { [clash.id]: option.id }, {});
+    expect(Object.values(assignments).filter((assignment) => assignment.automaticSource === "run-startup-diesel")).toHaveLength(1);
+    const reviewed = Object.fromEntries(Object.entries(assignments).map(([id, assignment]) => [id, { ...assignment, origin: "reviewed" as const }]));
+    expect(validateLineSources(definition, { ...sources, ...reviewed })).toEqual([]);
+  }
 });
 
 it("puts noma's existing proposal first for an added component without answering it", () => {
