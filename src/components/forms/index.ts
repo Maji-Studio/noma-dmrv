@@ -4,6 +4,7 @@
  */
 
 export { FormActions } from "./form-actions";
+export { FormFooterPreview, type FormFooterPreviewProps } from "./form-footer-preview";
 export { FormError } from "./form-error";
 export { ServerError } from "./server-error";
 export { FormField } from "./form-field";

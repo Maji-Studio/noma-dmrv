@@ -70,7 +70,10 @@ import { formatCount, pluralize } from "@/lib/copy-utils";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { lockProductionProcessScope } from "./production-processes";
 import { requireOrgScope } from "./utils";
+import { creditBatchMemberConflict } from "./credit-batch-member-fit";
 import { CreditBatchLineageChangedError, isCreditBatchMembershipLockedBySubmission, lockCreditBatchArtifacts } from "./credit-batch-certification-lock";
+
+export { creditBatchMemberConflict } from "./credit-batch-member-fit";
 
 export interface LockedCreditBatchProductionRun {
   id: string;
@@ -729,12 +732,9 @@ export async function attachProductionRunToMatchingCreditBatch(
   );
   if (
     existingMembership &&
-    (
-      run.facilityId !== existingMembership.facilityId ||
-      run.membershipDate < existingMembership.startDate ||
-      run.membershipDate > existingMembership.endDate ||
-      feedstockTypeId !== existingMembership.feedstockTypeId
-    )
+    creditBatchMemberConflict(existingMembership, {
+      facilityId: run.facilityId, feedstockTypeId, day: run.membershipDate,
+    }) !== null
   ) {
     throw new SafeError(
       `Production run ${run.code} cannot be edited outside its declared cohort while it belongs to credit batch ${existingMembership.creditBatchCode}.`,
@@ -751,23 +751,9 @@ export async function attachProductionRunToMatchingCreditBatch(
     facilityId: run.facilityId,
     feedstockTypeId,
   });
-  const matchingBatches = await tx
-    .select({
-      id: creditBatches.id,
-      code: creditBatches.code,
-    })
-    .from(creditBatches)
-    .where(
-      and(
-        eq(creditBatches.organizationId, ctx.organizationId),
-        eq(creditBatches.facilityId, run.facilityId),
-        eq(creditBatches.feedstockTypeId, feedstockTypeId),
-        lte(creditBatches.startDate, run.membershipDate),
-        gte(creditBatches.endDate, run.membershipDate),
-        isNull(creditBatches.archivedAt),
-      ),
-    )
-    .orderBy(creditBatches.id);
+  const matchingBatches = await findCreditBatchesCoveringDay(ctx, tx, {
+    facilityId: run.facilityId, feedstockTypeId, day: run.membershipDate,
+  });
 
   if (matchingBatches.length === 0) return null;
   if (matchingBatches.length > 1) {
@@ -816,4 +802,26 @@ export async function attachProductionRunToMatchingCreditBatch(
 
   await recordMembershipActivity(ctx, tx, batch.id, [], [productionRunId], { source: "system" });
   return batch.id;
+}
+
+/** The shared, inclusive cohort predicate for preview and automatic attachment. */
+export async function findCreditBatchesCoveringDay(
+  ctx: OrgContext,
+  executor: Pick<DbTransaction, "select">,
+  input: { facilityId: string; feedstockTypeId: string; day: string },
+) {
+  requireOrgScope(ctx);
+  return executor.select({
+    id: creditBatches.id,
+    code: creditBatches.code,
+    startDate: creditBatches.startDate,
+    endDate: creditBatches.endDate,
+  }).from(creditBatches).where(and(
+    eq(creditBatches.organizationId, ctx.organizationId),
+    eq(creditBatches.facilityId, input.facilityId),
+    eq(creditBatches.feedstockTypeId, input.feedstockTypeId),
+    lte(creditBatches.startDate, input.day),
+    gte(creditBatches.endDate, input.day),
+    isNull(creditBatches.archivedAt),
+  )).orderBy(creditBatches.id);
 }

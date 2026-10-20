@@ -19,6 +19,14 @@ vi.mock("@/components/forms/entity-select", () => ({
 }));
 vi.mock("./production-run-feedstock-draw-row", () => ({ ProductionRunFeedstockDrawRow: () => null }));
 vi.mock("./production-run-mix-bin-notice", () => ({ ProductionRunMixBinNotice: () => null }));
+// The footer line has its own tests; here it only marks its place in the footer.
+const previewProps: Array<{ clearEndTime: boolean }> = [];
+vi.mock("./production-run-credit-batch-preview", () => ({
+  ProductionRunCreditBatchPreview: (props: { clearEndTime: boolean }) => {
+    previewProps.push(props);
+    return <p data-testid="credit-batch-preview" />;
+  },
+}));
 vi.mock("./production-readings-field", () => ({ ProductionReadingsField: () => null }));
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null, Tooltip: ({ children }: { children: ReactNode }) => children }));
 
@@ -39,7 +47,7 @@ const savedRun = {
   biocharStorageLocationId: "44444444-4444-4444-8444-444444444444",
 } as unknown as ProductionRunWithRelations;
 
-afterEach(() => { cleanup(); pickers.length = 0; });
+afterEach(() => { cleanup(); pickers.length = 0; previewProps.length = 0; });
 
 describe("ProductionRunForm reactor picker", () => {
   it("links to creating a reactor at the run's facility", () => {
@@ -53,6 +61,18 @@ describe("ProductionRunForm reactor picker", () => {
   });
 });
 
+describe("ProductionRunForm credit batch line", () => {
+  it("puts the credit batch line in the footer, directly before Save", () => {
+    render(<ProductionRunForm onSubmit={vi.fn()} />);
+    const line = screen.getByTestId("credit-batch-preview");
+    const save = screen.getByRole("button", { name: "Create production run" });
+    // Outside the <form>, in the footer, and before the buttons.
+    expect(line.closest("form")).toBeNull();
+    expect(line.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(save.getAttribute("form")).toBe(document.querySelector("form")!.id);
+  });
+});
+
 describe("ProductionRunForm reopening", () => {
   it.each(["complete", "failed"] as const)("reopens a saved %s run without touching its end fields", async (status) => {
     const onSubmit = vi.fn();
@@ -62,7 +82,10 @@ describe("ProductionRunForm reopening", () => {
     expect(endDate.value).toBe("2026-07-15");
     expect(endTime.value).toBe("12:00");
 
+    expect(previewProps.at(-1)?.clearEndTime).toBe(false);
     fireEvent.click(screen.getByRole("radio", { name: "Running" }));
+    // The credit batch line ignores the end time the save is about to clear.
+    expect(previewProps.at(-1)?.clearEndTime).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Update production run" }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());

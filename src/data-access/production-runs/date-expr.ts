@@ -16,10 +16,21 @@ export function productionRunMembershipDateExpr(organizationId: string): SQL<str
  * Qualified columns also preserve correlation in Drizzle single-table selects.
  */
 function productionRunFacilityDateExpr<T extends string | null>(timestamp: SQL, organizationId: string): SQL<T> {
+  return facilityDateExpr<T>(timestamp, sql`"production_runs"."facility_id"`, organizationId);
+}
+
+/** Resolve an ISO instant on the facility calendar, using its org-scoped zone. */
+export function facilityInstantDateExpr(organizationId: string, facilityId: string, iso: string): SQL<string | null> {
+  // Stored timestamp columns are UTC wall clock; normalize the parameter to
+  // that same representation before applying the shared conversion.
+  return facilityDateExpr<string | null>(sql`(${iso}::timestamptz AT TIME ZONE 'UTC')`, sql`${facilityId}`, organizationId);
+}
+
+function facilityDateExpr<T extends string | null>(timestamp: SQL, facilityId: SQL, organizationId: string): SQL<T> {
   return sql<T>`(${timestamp} AT TIME ZONE 'UTC' AT TIME ZONE (
     SELECT "facilities"."timezone"
     FROM "facilities"
-    WHERE "facilities"."id" = "production_runs"."facility_id"
+    WHERE "facilities"."id" = ${facilityId}
       AND "facilities"."organization_id" = ${organizationId}
   ))::date`;
 }

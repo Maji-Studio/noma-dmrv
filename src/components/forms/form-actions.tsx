@@ -4,6 +4,9 @@
  * all entity forms: left-aligned, primary action first, nothing after it.
  * Sticky by default (side-sheet forms); pass `sticky={false}` for nested
  * inline forms (e.g. transport legs, child-entity editors).
+ *
+ * Footer order, top to bottom: action error, refused-field summary, why Save
+ * is off, the optional association `preview`, then the buttons.
  */
 "use client";
 
@@ -77,6 +80,12 @@ interface FormActionsProps<
   submitType?: "submit" | "button";
   /** Click handler for a non-submit action button. */
   onSubmitClick?: () => void;
+  /**
+   * One quiet line directly above the buttons saying what saving associates
+   * the record with, such as the credit batch a run joins (#1164). It informs
+   * only: it never disables Save. Hidden with the footer on read-only forms.
+   */
+  preview?: React.ReactNode;
 }
 
 export function FormActions<
@@ -101,6 +110,7 @@ export function FormActions<
   guardDialogCancel = sticky,
   submitType = "submit",
   onSubmitClick,
+  preview,
 }: FormActionsProps<TFieldValues, TContext, TTransformed>) {
   // A sticky CTA row inside an EntitySideSheet routes Cancel through the
   // sheet (edit -> back to read view, create -> guarded close) so every sheet
@@ -180,6 +190,7 @@ export function FormActions<
           {block.reason}
         </Notice>
       )}
+      {preview}
       <div className="flex items-center justify-start gap-16">
         {showSubmit && <Button
           ref={attachSubmit}

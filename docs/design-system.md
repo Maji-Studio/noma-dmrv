@@ -166,7 +166,10 @@ change; the record lock notices use it. Keep
 `alert` for blocking errors; do not upgrade a warning to it. Field-level
 feedback stays in `FormField` (`error`, `warning`), not a Notice. `ServerError`
 renders through `Notice`. For loading failures with a retry, pass the button as
-`action`.
+`action`. `FormFooterPreview` (`@/components/forms`), the association line
+above Save ([forms.md](./forms.md#formactions)), is a Notice that passes
+`infoIcon`: its info tone leads with the subject's icon, because its own ⓘ sits
+in the line.
 
 ### Flat controls
 
