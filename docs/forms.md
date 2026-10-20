@@ -376,7 +376,7 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
 
 ### Double submit
 
-`disabled={isSubmitting}` turns on only after a render, so a double-click sends two saves (#1238). Every form guards its submit twice:
+`disabled={isSubmitting}` turns on only after a render, so a double-click sends two saves (#1238). Every form uses the latch below; runner-backed create hooks also send an intent key. The storage bin forms are the exception: they keep their own request keys (the emissions entry form likewise has its own latch).
 
 - Wrap the RHF handler: `const latched = useLatchedSubmit(); <form onSubmit={latched(handleSubmit(...))}>`. The inner handler must `return` or `await` the save, or the latch lets go before the server answers.
 - Create hooks backed by `runOperationInProcess` send a draft intent key (`useCreateIntentKey`). The hook rotates it after a successful save and exposes `startDraft()`: call it when a create sheet or dialog opens, or when a dialog that stays mounted closes. A retry inside one open draft keeps the key and replays the first save.

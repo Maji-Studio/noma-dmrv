@@ -26,6 +26,9 @@ const harness = vi.hoisted(() => ({
   onSubmit: null as SubmitHandler | null,
   onModeChange: null as ModeChange | null,
   sheet: { open: false, mode: "view" as string },
+  startDraft: vi.fn(),
+  createIntentOpen: false,
+  onOpenChange: null as ((open: boolean) => void) | null,
 }));
 
 vi.mock("nuqs", () => ({
@@ -46,7 +49,7 @@ vi.mock("@/hooks/use-samples", () => ({
     error: null,
     isSuccess: true,
   }),
-  useCreateSample: () => ({ startDraft: vi.fn(), isPending: false, mutateAsync: vi.fn() }),
+  useCreateSample: () => ({ startDraft: harness.startDraft, isPending: false, mutateAsync: vi.fn() }),
   useUpdateSample: () => ({ isPending: false, mutateAsync: harness.update }),
   useDeleteSample: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));
@@ -66,7 +69,7 @@ vi.mock("@/hooks/use-list-pagination", () => ({
   useReconcileListPage: () => undefined,
 }));
 vi.mock("@/hooks/use-open-create-intent", () => ({
-  useOpenCreateIntent: () => ({ isOpen: false, context: null, clear: vi.fn() }),
+  useOpenCreateIntent: () => ({ isOpen: harness.createIntentOpen, context: null, clear: () => { harness.createIntentOpen = false; } }),
 }));
 vi.mock("@/hooks/use-create-with-evidence", () => ({
   useCreateWithEvidence: () => ({
@@ -111,10 +114,12 @@ vi.mock("@/components/ui/entity-side-sheet", () => ({
     open: boolean;
     mode: string;
     onModeChange: ModeChange;
+    onOpenChange: (open: boolean) => void;
     children?: ReactNode;
   }) => {
     harness.sheet = { open: props.open, mode: props.mode };
     harness.onModeChange = props.onModeChange;
+    harness.onOpenChange = props.onOpenChange;
     return props.open ? <div>{props.children}</div> : null;
   },
 }));
@@ -143,6 +148,22 @@ describe("SampleList deep-linked sheet", () => {
     harness.update.mockReset().mockResolvedValue(undefined);
     harness.onSubmit = null;
     harness.onModeChange = null;
+    harness.onOpenChange = null;
+    harness.createIntentOpen = false;
+    harness.startDraft.mockReset();
+  });
+
+  it("starts a new create draft when a deep-linked create sheet closes", async () => {
+    harness.query = {};
+    harness.createIntentOpen = true;
+    await act(async () => { renderer = create(<SampleList />); });
+    expect(harness.sheet).toEqual({ open: true, mode: "create" });
+    expect(harness.startDraft).not.toHaveBeenCalled();
+    await act(async () => { harness.onOpenChange?.(false); });
+    await act(async () => { renderer?.update(<SampleList />); });
+    expect(harness.startDraft).toHaveBeenCalledOnce();
+    expect(harness.sheet.open).toBe(false);
+    renderer?.unmount();
   });
 
   it("saves and closes a sheet deep-linked straight into edit mode", async () => {

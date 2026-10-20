@@ -9,6 +9,8 @@ import type { Page, TestInfo } from "@playwright/test";
 import { and, eq } from "drizzle-orm";
 import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../src/db/schema";
+import { retireDocumentsForEntities } from "@/data-access/documents";
+import { processPendingStorageObjectDeletions } from "@/data-access/storage-object-deletions";
 import { createDbConnection } from "./fixtures/db";
 import { test, expect } from "./fixtures";
 import { selectEntity, selectFirstEntity, waitForSideSheet, waitForSideSheetClose } from "./fixtures/page-helpers";
@@ -100,8 +102,10 @@ test.describe("Double-click on Create", () => {
     }
   });
 
-  test("saves one Sample with its lab report", async ({ adminPage: page, seededData }) => {
+  test("saves one Sample with its lab report", async ({ adminPage: page, seededData, testUsers }) => {
     const { db, pool } = createDbConnection();
+    const ctx = { organizationId: DEC_ORG_ID, userId: testUsers.admin.id, orgRole: "owner" as const, isPlatformAdmin: true };
+    const sampleIds: string[] = [];
     try {
       const batch = await seedCreditBatch(seededData.facility.id, crypto.randomUUID().slice(0, 8).toUpperCase(), seededData.feedstockType.id);
       await openCreateSheet(page, `/samples?facility=${seededData.facility.id}`, seededData.facility.name, "New Sample");
@@ -122,11 +126,18 @@ test.describe("Double-click on Create", () => {
 
       const created = await db.select({ id: schema.samples.id }).from(schema.samples)
         .where(and(eq(schema.samples.organizationId, DEC_ORG_ID), eq(schema.samples.creditBatchId, batch.id)));
+      sampleIds.push(...created.map((row) => row.id));
       expect(created).toHaveLength(1);
       const attached = await db.select({ id: schema.documents.id }).from(schema.documents)
         .where(and(eq(schema.documents.organizationId, DEC_ORG_ID), eq(schema.documents.entityType, "sample"), eq(schema.documents.entityId, created[0]!.id)));
       expect(attached).toHaveLength(1);
     } finally {
+      // The teardown sweep removes the Sample; its uploaded file goes through
+      // the app's own retire path so the stored object is deleted too.
+      if (sampleIds.length > 0) {
+        await db.transaction((tx) => retireDocumentsForEntities(ctx, tx, sampleIds.map((entityId) => ({ entityType: "sample", entityId })), "system"));
+        await processPendingStorageObjectDeletions(ctx);
+      }
       await pool.end();
     }
   });

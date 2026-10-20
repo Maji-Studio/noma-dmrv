@@ -18,6 +18,7 @@
  */
 import { Pool } from "pg";
 import { DEC_ORG_ID } from "@/db/org-defaults";
+import { APP_FORM_CREDENTIAL_PREFIX } from "@/config/operations";
 import { isLocalHost } from "../helpers/local-host";
 import { E2E_CERTIFIER_ORG_ID_PREFIX } from "./fixtures/certifier-credentials";
 
@@ -630,8 +631,8 @@ export default async function globalTeardown() {
       await client.query(`
         DELETE FROM api_idempotency_records
         WHERE organization_id = $1
-          AND credential_id LIKE 'app-form:e2e-%'
-      `, [DEC_ORG_ID]);
+          AND credential_id LIKE $2 || 'e2e-%'
+      `, [DEC_ORG_ID, APP_FORM_CREDENTIAL_PREFIX]);
 
       // Sessions for E2E users
       await client.query(`DELETE FROM session WHERE user_id LIKE 'e2e-%'`);
