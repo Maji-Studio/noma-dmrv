@@ -628,7 +628,6 @@ export async function buildRemovalSubmissionBuild(args: {
     removalTemplate,
     blueprintsByKey,
     externalProjectId,
-    allowPeriodInputStub,
     hasDurabilityComponents,
   } = args.prepared;
 
@@ -760,7 +759,6 @@ export async function buildRemovalSubmissionBuild(args: {
     externalProjectId,
     sourceIds: datapointSourceIds,
     sourceBindingPlan,
-    allowPeriodInputStub,
     omitProductionComponents: !hasProductionContribution,
   });
   const hasOnly1000YearBatches =

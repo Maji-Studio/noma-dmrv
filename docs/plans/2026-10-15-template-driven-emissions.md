@@ -59,7 +59,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 
 **Binding**
 - The catalog is keyed blueprint → input → roles by group (`SEMANTIC_BINDING_CATALOG`, `SemanticInputBinding`, `src/lib/isometric/semantic-binding-catalog.ts`). Role strategies are `aggregated-datapoint`, `measurement-sample` and `project-scope-forbidden`.
-- `PERIOD_INPUT_TUPLES` (`src/lib/isometric/datapoint-mapping.ts`) is the ADR 0018 guard. The sandbox's zero stub is `allowsPeriodInputStub`.
+- `PERIOD_INPUT_TUPLES` (`src/lib/isometric/datapoint-mapping.ts`) is the ADR 0018 guard. The former sandbox zero stub is removed under §4.5.
 - The two diesel components are told apart by display name (`PYROLYSIS_DIESEL_SPLIT`, `resolveDatapointSource`).
 - `findUnbindableTemplateInputs` (`src/lib/isometric/template-binding-coverage.ts`) flags `unmapped | ambiguous | project-scope | unrecognized-component`.
 - The only place that has `component.id`, the template input and the aggregate together is `resolveTemplateInputs`, which calls `buildCreateDatapointRequest` (`src/lib/isometric/transformers/datapoint.ts`).
@@ -307,7 +307,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - A line can carry entries only when its contract is `operating` with an entry policy other than `none`. An entry existing on it is not enough.
 - Additive entries go alongside an automatic source when the contract has both, including entry-only follow-ups.
 - `forbidden` and `unassigned` lines stay blocked.
-- Part 3 removes the sandbox zero stub together with the nightly E2E update.
+- The sandbox zero stub is removed in every environment. Empty operating components need entries or Removal-confirmed zeros; the nightly E2E template selector applies the same guard.
 
 **Snapshot and hash**
 - `semanticPayload` gains the semantic fingerprint and a contribution manifest per input: entry id, `contentRevision`, values and evidence document ids. Any change that alters what is sent therefore moves `payloadHash`.

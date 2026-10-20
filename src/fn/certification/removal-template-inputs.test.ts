@@ -9,6 +9,7 @@ import { normalizeTemplateDefinition, resolveLineSources, validateLineSources, t
 import type { AggregatedProductionData } from "@/lib/isometric/utils/aggregation";
 import type { IsometricComponentBlueprint } from "@/lib/isometric/projects";
 import { resolveTemplateInputs } from "./removal-template-inputs";
+import { EMPTY_REMOVAL_LINE } from "@/lib/certification/emission-entry-messages";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 
 const sandbox = sandboxFixture as GhgEntryTemplate;
@@ -35,7 +36,7 @@ function compile(template: GhgEntryTemplate, lineSources: LineSources) {
   expect(validateLineSources(normalizeTemplateDefinition(template), lineSources)).toEqual([]);
   expect(findUnbindableTemplateInputs(template, { lineSources })).toEqual([]);
   return resolveTemplateInputs({ template, lineSources, blueprintsByKey, agg,
-    externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: false, omitProductionComponents: false,
+    externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], omitProductionComponents: false,
   });
 }
 
@@ -113,7 +114,7 @@ it("leaves incomplete template reads to the template blocker and still refuses i
   const lineSources = resolveLineSources({ definition: normalizeTemplateDefinition(template) });
   expect(findUnbindableTemplateInputs(template, { lineSources, enrichmentComplete: false })).toEqual([]);
   expect(() => resolveTemplateInputs({ template, lineSources, enrichmentComplete: false, blueprintsByKey, agg,
-    externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: true, omitProductionComponents: true,
+    externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], omitProductionComponents: true,
   })).toThrow(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
 });
 
@@ -144,7 +145,7 @@ function compileEntries(blueprintKey: string, paired = false, followup = false, 
     contenders: [{ contenderKind: "draft", removalId: "removal", createdAt: "2026-01-01", creditBatchIds: ["batch"], window }],
     entries: [entry], lineSources: sources, monitoredInputs: inputs.map((input) => ({ ...input, componentId: component.id })) });
   return resolveTemplateInputs({ template, lineSources: sources, entryContributions: contributions, blueprintsByKey, agg,
-    externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: false, omitProductionComponents: followup });
+    externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], omitProductionComponents: followup });
 }
 it("adds entries to automatic electricity", () => {
   expect(compileEntries("grid_electricity_use").monitored[0].quantity.magnitude).toBe(22);
@@ -158,7 +159,22 @@ it("compiles gas concentration and mass flow from the same single entry", () => 
   expect(compileEntries("ghg_direct_emissions", true).monitored.map((input) => input.quantity.magnitude)).toEqual([2, 3]);
 });
 
-it("compiles a Removal-confirmed zero with no evidence", () => {
+it.each(["sandbox", "production"])("blocks an empty operating component in %s until recorded", (environment) => {
+  vi.stubEnv("ISOMETRIC_ENVIRONMENT", environment);
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
+  const template = structuredClone(sandbox);
+  const group = template.groups.find((group) => group.components.some((component) => component.blueprint_key === "ghg_direct_emissions"))!;
+  const component = group.components.find((component) => component.blueprint_key === "ghg_direct_emissions")!;
+  template.groups = [{ ...group, components: [component] }];
+  const lineSources: LineSources = { [component.id]: { scope: "operating", entryPolicy: "single", origin: "reviewed" } };
+  expect(() => resolveTemplateInputs({ template, lineSources, blueprintsByKey, agg,
+    externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], omitProductionComponents: false,
+    entryContributions: { manifest: [], inputs: [], entrySet: [], selectedEntryIds: [], sentSingleComponentIds: [], blockers: [] },
+  })).toThrow(EMPTY_REMOVAL_LINE);
+});
+
+it.each(["sandbox", "production"])("compiles a Removal-confirmed zero with no evidence in %s", (environment) => {
+  vi.stubEnv("ISOMETRIC_ENVIRONMENT", environment);
   const result = compileEntries("ghg_direct_emissions", true, false, true);
   expect(result.monitored.map((input) => input.quantity.magnitude)).toEqual([0, 0]);
   expect([...result.datapointBodyByKey.values()].every((body) => body.source_ids?.length === 0)).toBe(true);
@@ -174,7 +190,7 @@ it("omits an already-sent single component on a follow-up", () => {
   template.groups = [{ ...group, components: [component] }];
   const result = resolveTemplateInputs({ template, lineSources: { [component.id]: { scope: "operating", origin: "reviewed", entryPolicy: "single" } },
     entryContributions: { manifest: [], inputs: [], entrySet: [], selectedEntryIds: [], sentSingleComponentIds: [component.id], blockers: [] },
-    blueprintsByKey, agg, externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: false, omitProductionComponents: true });
+    blueprintsByKey, agg, externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], omitProductionComponents: true });
   expect(result.monitored).toEqual([]);
   expect(result.omittedTemplateComponentIds).toEqual([component.id]);
 });
@@ -204,7 +220,7 @@ it.each([false, true])("runs follow-up line derivation through compilation, incl
   expect(resolved.emissionLines).toHaveLength(mixed ? 4 : 2);
   expect(resolved.emissionLines!.every((line) => !line.blocker)).toBe(true);
   const result = resolveTemplateInputs({ template, lineSources: sources, emissionLines: resolved.emissionLines, entryContributions: contributions,
-    blueprintsByKey, agg, externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: false, omitProductionComponents: !mixed });
+    blueprintsByKey, agg, externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], omitProductionComponents: !mixed });
   expect(result.omittedTemplateComponentIds).toHaveLength(mixed ? 0 : 1);
   expect(result.monitored).toHaveLength(mixed ? 2 : 1);
   expect(result.monitored.find((input) => sources[input.removalTemplateComponentId].automaticSource === "delivery-transport")!.quantity.magnitude).toBe(agg.biocharTransportMassDistanceTonneKm);

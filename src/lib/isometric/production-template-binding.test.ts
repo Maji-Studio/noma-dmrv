@@ -82,7 +82,7 @@ describe("production template binding coverage", () => {
     expect(findUnbindableTemplateInputs(renamed).some((input) => input.componentId === "rtc_1KWKNGJZY1S0CMBS")).toBe(true);
   });
 
-  it.each([false, true])("agrees with actual datapoint builds (sandbox stubs: %s)", (allowPeriodInputStub) => {
+  it("agrees with actual datapoint builds", () => {
     const findings = findUnbindableTemplateInputs(template);
     for (const group of template.groups) for (const component of group.components) {
       for (const input of component.inputs) {
@@ -103,7 +103,7 @@ describe("production template binding coverage", () => {
           // Snapshot has no complete REST blueprint metadata. Use explicit test
           // units for supported mappings; rejected tuples fail before unit checks.
           blueprintInput: { input_key: input.input_key, compatible_unit: accepted?.unit ?? "dimensionless", quantity_kind: input.quantity_kind, data_shape: "SCALAR", description: "" },
-          agg, projectId: template.project_id, supplierRefId: "test-production-coverage", allowPeriodInputStub,
+          agg, projectId: template.project_id, supplierRefId: "test-production-coverage",
         });
         expect(findings.some((finding) => finding.componentId === component.id && (finding.inputKey === input.input_key || component.blueprint_key === "transport"))).toBe(shouldReject);
         if (shouldReject) {
