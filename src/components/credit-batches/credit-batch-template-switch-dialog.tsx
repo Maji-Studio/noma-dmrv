@@ -32,6 +32,7 @@ import { useToast } from "@/components/ui/toast";
 import { useSwitchCreditBatchRemovalTemplate } from "@/hooks/use-removal-template-review";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { Notice } from "@/components/ui/notice";
+import type { TemplateReadiness } from "@/components/certification/removal-template-review-model";
 import { certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
 import { getStaleVersionConflict, toSaveErrorMessage } from "@/lib/stale-version";
 import {
@@ -39,6 +40,7 @@ import {
   type SwitchRemovalTemplateFormValues,
 } from "@/schemas/removal-template-review";
 
+const CHECKING_NOTE = "Checking";
 const DIALOG_TITLE_ID = "credit-batch-template-switch-title";
 
 // A batch with no pin sets its first template; a pinned one switches.
@@ -78,14 +80,6 @@ export interface CreditBatchTemplateSwitchDialogProps {
   /** Readiness could not be read: only the current template stays selectable. */
   readinessError?: boolean;
   onRetryReadiness?: () => void;
-}
-
-export interface TemplateReadiness {
-  ready: boolean;
-  /** Why it cannot be chosen yet: "3 lines to decide", "Not set up yet". */
-  reason?: string;
-  /** Lines without a decision; only then does the link say "Decide lines". */
-  toDecide?: number;
 }
 
 export function CreditBatchTemplateSwitchDialog(props: CreditBatchTemplateSwitchDialogProps) {
@@ -141,19 +135,22 @@ function SwitchTemplateForm({
       ? [{ template, reason: state.reason, toDecide: state.toDecide ?? 0 }] : [];
   });
   const notReadyIds = new Set(notReady.map(({ template }) => template.id));
+  // A template with no readiness entry (loading, or newly added) is not known to be ready.
+  const checking = (id: string) => !readinessError && !readiness?.has(id);
   const options = removalTemplates.map((template) => {
     const current = template.id === creditBatch.removalTemplateId;
     const notes = [
       current ? "Current template" : template.id === defaultTemplateId ? "Facility default" : undefined,
       notReadyIds.has(template.id) ? readiness?.get(template.id)?.reason : undefined,
+      !current && checking(template.id) ? CHECKING_NOTE : undefined,
     ].filter(Boolean);
     return {
       id: template.id,
       code: template.id,
       name: template.display_name,
       subtitle: notes.length ? notes.join(", ") : undefined,
-      // Without readiness nothing but the current template is known to be choosable.
-      disabled: notReadyIds.has(template.id) || (readinessError && !current),
+      // Only the current template and templates known to be ready can be chosen.
+      disabled: !current && readiness?.get(template.id)?.ready !== true,
     };
   });
   const unchanged = field.value === baseline.removalTemplateId;

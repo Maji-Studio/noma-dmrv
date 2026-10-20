@@ -210,4 +210,49 @@ describe("CreditBatchTemplateSwitchDialog", () => {
     expect(screen.queryByRole("link", { name: /^Decide lines/ })).toBeNull();
     expect(screen.getByRole("link", { name: /^Open Removal templates/ }).getAttribute("href")).toContain("template=rvt_new");
   });
+
+  it("enables a non-current template only when it is known to be ready", async () => {
+    const readiness = new Map([
+      ["rvt_old", { ready: false, reason: "2 lines to decide", toDecide: 2 }],
+      ["rvt_other", { ready: true }],
+      ["rvt_undecided", { ready: false, reason: "2 lines to decide", toDecide: 2 }],
+      ["rvt_unread", { ready: false, reason: "Not fully read" }],
+    ]);
+    const templates = [
+      ...TEMPLATES,
+      { id: "rvt_other", display_name: "Ready Template", credit_type: "REMOVAL" },
+      { id: "rvt_undecided", display_name: "Undecided Template", credit_type: "REMOVAL" },
+      { id: "rvt_unread", display_name: "Unread Template", credit_type: "REMOVAL" },
+    ] as IsometricGhgEntryTemplate[];
+    render(
+      <CreditBatchTemplateSwitchDialog
+        isOpen onClose={onClose} onStale={onStale} creditBatch={BATCH} defaultTemplateId={null}
+        templates={templates} templatesLoading={false} templatesError={null} readiness={readiness}
+      />,
+    );
+    await screen.findByRole("dialog", { name: "Switch template" });
+    const select = document.getElementById("removalTemplateId") as HTMLSelectElement;
+    const disabled = (id: string) => [...select.options].find((candidate) => candidate.value === id)!.disabled;
+    expect(disabled("rvt_old")).toBe(false);
+    expect(disabled("rvt_other")).toBe(false);
+    // rvt_new has no readiness entry (still loading or newly added): not known to be ready.
+    expect(disabled("rvt_new")).toBe(true);
+    expect(disabled("rvt_undecided")).toBe(true);
+    expect(disabled("rvt_unread")).toBe(true);
+    expect(screen.getAllByRole("link", { name: /^Decide lines/ })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: /^Open Removal templates/ })).toHaveLength(1);
+  });
+
+  it("keeps a template without a readiness entry disabled while readiness loads", async () => {
+    render(
+      <CreditBatchTemplateSwitchDialog
+        isOpen onClose={onClose} onStale={onStale} creditBatch={BATCH} defaultTemplateId={null}
+        templates={TEMPLATES} templatesLoading={false} templatesError={null} readiness={new Map()} readinessLoading
+      />,
+    );
+    await screen.findByRole("dialog", { name: "Switch template" });
+    const select = document.getElementById("removalTemplateId") as HTMLSelectElement;
+    expect([...select.options].find((candidate) => candidate.value === "rvt_new")!.disabled).toBe(true);
+    expect([...select.options].find((candidate) => candidate.value === "rvt_old")!.disabled).toBe(false);
+  });
 });

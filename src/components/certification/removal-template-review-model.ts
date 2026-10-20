@@ -19,8 +19,11 @@ import type { ComponentEnrichment, EntryPolicy, QuantityKind } from "@/lib/isome
 import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
 import { isTemplateReady, linesToDecideCount } from "@/lib/certification/removal-template-readiness";
 import { sectionTemplateLines, type TemplateLineSection } from "@/lib/isometric/template-observations/template-sections";
+import { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE } from "@/lib/certification/requirement-labels";
 
-export { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE } from "@/lib/certification/requirement-labels";
+export { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE };
+/** Section grouping, lines still to decide and readiness, under the names the review uses. */
+export { isTemplateReady, linesToDecideCount, sectionTemplateLines };
 
 export type RemovalTemplateReviewEntry = NonNullable<
   ReturnType<typeof useRemovalTemplateReview>["data"]
@@ -205,20 +208,23 @@ export function countedLabel(name: string, count: number): string {
   return `${name} (${count})`;
 }
 
-/**
- * Lines as Isometric's template page shows them: Mitigated, then Emitted, each
- * group in Isometric's order with its count, lines by name.
- */
-export function sectionLines(lines: readonly RemovalTemplateReviewLine[]) {
-  return sectionTemplateLines(lines);
+/** The title of a template no one has set up yet. */
+export const NOT_SET_UP_TITLE = "Not set up yet";
+
+/** Whether a Removal template can be chosen for a credit batch, and why not. */
+export interface TemplateReadiness {
+  ready: boolean;
+  /** Why it cannot be chosen yet: "3 lines to decide", "Not set up yet". */
+  reason?: string;
+  /** Lines without a decision; only then does the link say "Decide lines". */
+  toDecide?: number;
 }
 
-/** Lines still to decide on this template. */
-export function toDecideCount(entry: RemovalTemplateReviewEntry): number {
-  return linesToDecideCount(entry);
-}
-
-/** No lines to decide, read in full, and stored: a credit batch can choose it. */
-export function isReady(entry: RemovalTemplateReviewEntry): boolean {
-  return isTemplateReady(entry);
+/** Why a template cannot be chosen yet, in the words Removal templates uses. */
+export function templateReadiness(entry: RemovalTemplateReviewEntry): TemplateReadiness {
+  if (isTemplateReady(entry)) return { ready: true };
+  const toDecide = linesToDecideCount(entry);
+  if (toDecide > 0) return { ready: false, reason: linesToDecideLabel(toDecide), toDecide };
+  if (entry.enrichmentProblems.length > 0) return { ready: false, reason: TEMPLATE_NOT_FULLY_READ_TITLE };
+  return { ready: false, reason: NOT_SET_UP_TITLE };
 }

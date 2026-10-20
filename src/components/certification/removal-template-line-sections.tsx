@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
 import {
   countedLabel,
   SECTION_LABELS,
-  sectionLines,
+  sectionTemplateLines,
   type RemovalTemplateReviewLine,
 } from "./removal-template-review-model";
 
@@ -23,7 +23,7 @@ export interface RemovalTemplateLineSectionsProps {
 export function RemovalTemplateLineSections({ lines, idPrefix, renderLine }: RemovalTemplateLineSectionsProps) {
   return (
     <div className="flex flex-col gap-20">
-      {sectionLines(lines).map((section) => {
+      {sectionTemplateLines(lines).map((section) => {
         const headingId = `${idPrefix}-${section.section}`;
         return (
           <section key={section.section} aria-labelledby={headingId} className="flex flex-col gap-12">

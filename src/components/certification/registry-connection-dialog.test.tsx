@@ -19,8 +19,6 @@ const mocks = vi.hoisted(() => ({
   configured: true,
   saveKeys: vi.fn(),
   saveMapping: vi.fn(),
-  templatesError: null as Error | null,
-  liveTemplates: true,
 }));
 vi.mock("@/hooks/use-certifier-credentials", () => ({
   useOrgCertifierCredentialsStatus: () => ({ data: { configured: mocks.configured, accessTokenLast4: "Uwhl" }, isLoading: false }),
@@ -36,7 +34,6 @@ vi.mock("@/hooks/use-certification", async (importOriginal) => ({
   useFacilityCertifierMapping: () => ({ data: loaderData, isLoading: false }),
   useFacilityCertifierSummary: () => ({ data: { viewerCanManage: true } }),
   useDeleteFacilityCertifierMapping: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useIsometricProjectTemplates: () => ({ data: mocks.liveTemplates ? [{ id: "tpl_test", display_name: "Test template", credit_type: "REMOVAL" }] : undefined, isLoading: false, error: mocks.templatesError }),
   useSaveFacilityCertifierMapping: () => ({ mutateAsync: mocks.saveMapping, isPending: false }),
 }));
 
@@ -52,8 +49,6 @@ beforeEach(() => {
   loaderData.availableTemplates = [];
   loaderData.linkHints = [];
   loaderData.isProduction = false;
-  mocks.templatesError = null;
-  mocks.liveTemplates = true;
   mocks.saveKeys.mockResolvedValue({ verification: { ok: true, message: "Connection tested." } });
   mocks.saveMapping.mockResolvedValue({});
 });

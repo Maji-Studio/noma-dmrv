@@ -46,14 +46,18 @@ import {
   deprecatedFactorCount,
   isNotFullyRead,
   lineNeedsReview,
+  NOT_SET_UP_TITLE,
   problemMessages,
   reviewCountSummary,
+  linesToDecideCount,
   TEMPLATE_NOT_FULLY_READ_TITLE,
   TO_DECIDE_LABEL,
   templateName,
   type LineAssignment,
   type RemovalTemplateReviewEntry,
 } from "./removal-template-review-model";
+
+const SET_UP_TEMPLATE_LABEL = "Set up template";
 
 export interface RemovalTemplateReviewCardProps {
   entry: RemovalTemplateReviewEntry;
@@ -198,6 +202,7 @@ export function RemovalTemplateReviewCard({
     }
   };
 
+  const hasLinesToDecide = linesToDecideCount(entry) > 0;
   const startDeciding = async () => {
     try {
       await startSetup.mutateAsync({ facilityId, removalTemplateId: entry.templateId });
@@ -283,16 +288,16 @@ export function RemovalTemplateReviewCard({
             {entry.preview && (
               <Notice
                 tone="info"
-                title="Not set up yet"
+                title={NOT_SET_UP_TITLE}
                 action={canManage ? (
                   <Button size="small" variant="primary" busy={startSetup.isPending} onClick={() => void startDeciding()}>
-                    {DECIDE_LINES_LINK_LABEL}
+                    {hasLinesToDecide ? DECIDE_LINES_LINK_LABEL : SET_UP_TEMPLATE_LABEL}
                   </Button>
                 ) : undefined}
               >
                 {canManage
-                  ? "No facility default or credit batch uses this template yet. Decide its lines so credit batches can use it."
-                  : "No facility default or credit batch uses this template yet. Ask an Owner or Admin to decide its lines."}
+                  ? `No facility default or credit batch uses this template yet. ${hasLinesToDecide ? "Decide its lines" : "Set it up"} so credit batches can use it.`
+                  : `No facility default or credit batch uses this template yet. Ask an Owner or Admin to ${hasLinesToDecide ? "decide its lines" : "set it up"}.`}
               </Notice>
             )}
             {notFullyRead && (

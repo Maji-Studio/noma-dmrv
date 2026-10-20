@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { SelectableBatch } from "@/fn/certification";
 import { Footer } from "./index";
+import { certificationRemovalTemplatesHref } from "@/lib/certification/links";
 import { SelectBatchesStep, setupGapCopy } from "./select-batches-step";
 
 vi.mock("next/link", () => ({
@@ -52,10 +53,9 @@ describe("SelectBatchesStep", () => {
     expect(html).not.toContain("Ready to certify");
     expect(html).toContain("1,000-year biochar sequestration");
     expect(html).not.toContain("biochar_sequestration_1000_year");
-    expect(html).toContain(
-      'href="/certification/settings?section=certifier&amp;facility=facility-1"',
-    );
-    expect(html).toContain("Review certification settings");
+    expect(html).toContain(certificationRemovalTemplatesHref("facility-1").replace("&", "&amp;"));
+    expect(html).toContain("Open Removal templates");
+    expect(html).not.toContain("Review certification settings");
     expect(html).not.toContain("CO₂e preview");
   });
 
@@ -131,7 +131,8 @@ describe("setupGapCopy", () => {
 
     expect(copy.message).toContain("1,000-year biochar sequestration");
     expect(copy.message).not.toContain("biochar_sequestration_1000_year");
-    expect(copy.action?.label).toBe("Review certification settings");
+    expect(copy.message).toContain("Choose another default in Removal templates.");
+    expect(copy.action).toEqual({ label: "Open Removal templates", target: "removalTemplates" });
   });
 });
 
@@ -143,7 +144,18 @@ it("renders the unbindable component guidance and settings action", () => {
   expect(html).toContain('<ul class="list-disc pl-16">');
   for (const line of lines) expect(html).toContain(`<li>${line}</li>`);
   expect(html).not.toContain('class="whitespace-pre-line"');
-  expect(html).toContain("Review certification settings");
+  expect(html).toContain(certificationRemovalTemplatesHref("facility-1").replace("&", "&amp;"));
+  expect(html).toContain("Decide lines");
+  expect(html).not.toContain("Review certification settings");
+});
+
+it("sends template gaps about lines to decide to Decide lines", () => {
+  const inputs = findUnbindableTemplateInputs(unsupportedTemplate());
+  const toDecide = [{ ...inputs[0], reason: "unassigned" as const }];
+  expect(setupGapCopy({ kind: "template_unbindable", inputs: toDecide }).action)
+    .toEqual({ label: "Decide lines", target: "removalTemplates" });
+  expect(setupGapCopy({ kind: "template_unbindable", inputs: [{ ...inputs[0], reason: "unmapped" as const }] }).action)
+    .toEqual({ label: "Open Removal templates", target: "removalTemplates" });
 });
 
 

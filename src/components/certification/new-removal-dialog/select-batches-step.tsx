@@ -28,7 +28,7 @@ import { InfoHint } from "@/components/ui/tooltip";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import { certCheckLabel } from "@/lib/certification/requirement-labels";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
-import { certificationRemovalTemplatesHref, certificationSettingsHref } from "@/lib/certification/links";
+import { certificationRemovalTemplatesHref, certificationSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
 import { CREDIT_BATCH_READY_LABEL } from "@/lib/certification/credit-batch-lifecycle";
 import {
   facilityBlueprintLabel,
@@ -92,10 +92,11 @@ export function setupGapCopy(gap: FacilitySetupGap): {
       };
     case "template_unbindable": {
       const { lead, lines } = formatUnbindableTemplateInputs(gap.inputs);
+      const toDecide = gap.inputs.some((input) => input.reason === "unassigned" || input.reason === "ambiguous");
       return {
         message: lead,
         lines,
-        action: { label: "Review certification settings", target: "certifier" },
+        action: { label: toDecide ? DECIDE_LINES_LINK_LABEL : OPEN_REMOVAL_TEMPLATES_LINK_LABEL, target: "removalTemplates" },
       };
     }
     case "blueprint_keys": {
@@ -104,8 +105,8 @@ export function setupGapCopy(gap: FacilitySetupGap): {
         message:
           `The selected Removal template uses ${gap.keys.length} ` +
           `${gap.keys.length === 1 ? "component" : "components"} the registry cannot load: ` +
-          `${labels.join(", ")}. Choose another template or ask an Admin to update the Isometric project.`,
-        action: { label: "Review certification settings", target: "certifier" },
+          `${labels.join(", ")}. Choose another default in Removal templates.`,
+        action: { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, target: "removalTemplates" },
       };
     }
   }
