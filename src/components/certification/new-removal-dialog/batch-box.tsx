@@ -86,9 +86,16 @@ function BatchHeading({ batch, facilityId }: { batch: SelectableBatch; facilityI
   );
 }
 
-function DryMass({ tons }: { tons: number | null }) {
+/** Applied dry mass; an unknown mass reads as the placeholder, not a zero. */
+function DryMass({ tons, className }: { tons: number | null; className?: string }) {
   return (
-    <span className="body-small font-mono tabular-nums whitespace-nowrap text-[var(--color-text-primary)]">
+    <span
+      className={cn(
+        "body-small font-mono tabular-nums whitespace-nowrap text-right",
+        tons == null ? "text-[var(--color-text-tertiary)]" : "text-[var(--color-text-primary)]",
+        className,
+      )}
+    >
       {formatTonnes(tons)}
     </span>
   );
@@ -149,24 +156,26 @@ export function NotReadyBatchBox({
   facilityId: string;
 }) {
   return (
-    <li className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-12 gap-y-4 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] py-12 pr-16 pl-44">
-      <span className="flex min-w-0 flex-col gap-2">
+    // Phone: the checklist link takes its own row so the status line keeps
+    // the width. From sm it sits beside the status line.
+    <li className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-12 gap-y-2 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] pt-12 pr-16 pb-4 pl-44 sm:pb-12">
+      <span className="col-start-1 row-start-1 min-w-0">
         <BatchHeading batch={batch} facilityId={facilityId} />
+      </span>
+      <DryMass tons={batch.appliedDryTons} className="col-start-2 row-start-1" />
+      <span className="col-span-2 row-start-2 sm:col-span-1">
         <StatusLine>{batchIssueLine(batch.health)}</StatusLine>
       </span>
-      <span className="flex flex-col items-end">
-        <DryMass tons={batch.appliedDryTons} />
-        <Link
-          href={creditBatchDeepLinkHref(batch.id, facilityId)}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={`${OPEN_CHECKLIST_LABEL} for ${batch.code}`}
-          className="inline-flex min-h-44 items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
-        >
-          {OPEN_CHECKLIST_LABEL}
-          <ArrowSquareOutIcon size={LINK_ICON} aria-hidden />
-        </Link>
-      </span>
+      <Link
+        href={creditBatchDeepLinkHref(batch.id, facilityId)}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`${OPEN_CHECKLIST_LABEL} for ${batch.code}`}
+        className="col-start-1 row-start-3 inline-flex min-h-44 items-center gap-4 justify-self-start body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline sm:col-start-2 sm:row-start-2 sm:min-h-0 sm:justify-self-end"
+      >
+        {OPEN_CHECKLIST_LABEL}
+        <ArrowSquareOutIcon size={LINK_ICON} aria-hidden />
+      </Link>
     </li>
   );
 }
