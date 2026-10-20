@@ -18,12 +18,18 @@ import { ListIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { SidebarContent } from "./sidebar-content";
+import {
+  PrototypeMobileBrand,
+  useSidebarPrototypeVariant,
+} from "./settings-prototype-chrome";
 
 export function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
   const [lastPath, setLastPath] = useState(pathname);
   const isMobile = useIsMobile();
+  // Prototype only (prototype/settings-simplification): null without ?variant.
+  const prototypeVariant = useSidebarPrototypeVariant();
 
   // The drawer (and its focus trap + scroll lock) only belongs below `md`. If
   // the viewport grows to desktop while it's open — rotate, resize — the popup
@@ -49,6 +55,11 @@ export function MobileNav() {
       {/* bg uses --clr-dark-purple (#0f021a) — the closest token; the previous
           hardcoded #0c0114 had no matching design token. */}
       <header className="md:hidden sticky top-0 z-30 flex items-center justify-between h-56 px-16 border-b border-[var(--color-white-10)] bg-[var(--clr-dark-purple)]">
+        {prototypeVariant === "A" ||
+        prototypeVariant === "B" ||
+        prototypeVariant === "D" ? (
+          <PrototypeMobileBrand variant={prototypeVariant} />
+        ) : (
         <Link href="/dashboard" className="flex items-center gap-10 min-w-0">
           <div className="size-28 bg-[var(--clr-purple)] flex items-center justify-center shrink-0">
             <span className="text-white font-bold text-[length:var(--text-xxs)] leading-none">
@@ -59,6 +70,7 @@ export function MobileNav() {
             Dark Earth Carbon
           </span>
         </Link>
+        )}
 
         <Dialog.Trigger
           className="flex items-center justify-center size-44 -mr-10 text-[var(--color-white-75)] hover:text-white transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clr-purple)]"
