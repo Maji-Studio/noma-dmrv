@@ -9,7 +9,6 @@ import type { BatchHealth, BatchHealthFixTarget } from "@/lib/certification/batc
 import {
   certCheckLabel,
   linesDecidedByOwnerOrAdmin,
-  TEMPLATE_LINES_FIXED_BY_OWNER_OR_ADMIN,
 } from "@/lib/certification/requirement-labels";
 import {
   batchHealthFixLinkFor,
@@ -52,8 +51,8 @@ export interface CreditBatchOpenItemsInput {
   durability?: DurabilityBatchSummary;
   emissionLines?: readonly BatchEmissionLine[];
   pageModel?: CreditBatchPageModel;
-  /** Owner or Admin. Members get no Decide lines link, since Removal templates is theirs. Defaults to true. */
-  canManage?: boolean;
+  /** Owner or Admin. Members get no link to decide lines, which only Owners and Admins can do. */
+  canManage: boolean;
 }
 
 function outlierTitle(replicate: DurabilitySummaryReplicate): string {
@@ -88,8 +87,8 @@ const DOCUMENT_WARNING_ITEMS: Record<SampleDocumentWarningKey, CreditBatchOpenIt
 };
 
 /**
- * What a member reads instead of a link to Removal templates, which only Owners
- * and Admins can use; null when the row's fix is not there or the viewer can act.
+ * What a member reads instead of a link to decide lines in Removal templates;
+ * null when the row is not lines to decide or the viewer can act.
  */
 function memberTemplateText(
   fixTarget: BatchHealthFixTarget | null | undefined,
@@ -98,12 +97,11 @@ function memberTemplateText(
 ): string | null {
   if (canManage) return null;
   if (fixTarget === "templateLineReview") return linesDecidedByOwnerOrAdmin(linesToDecide);
-  if (fixTarget === "templateLines") return TEMPLATE_LINES_FIXED_BY_OWNER_OR_ADMIN;
   return null;
 }
 
 export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
-  const canManage = input.canManage ?? true;
+  const canManage = input.canManage;
   const blocking: CreditBatchOpenItem[] = [];
   const check: CreditBatchOpenItem[] = [];
   const waiting: CreditBatchOpenItem[] = [];

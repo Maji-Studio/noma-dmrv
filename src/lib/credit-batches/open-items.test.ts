@@ -18,7 +18,7 @@ import {
   CREDIT_BATCH_TEMPLATE_ROW,
 } from "./open-items";
 
-const batchContext = { facilityId: "facility", creditBatchId: "batch" };
+const batchContext = { facilityId: "facility", creditBatchId: "batch", canManage: true };
 
 function fixture() {
   const [durability] = buildDurabilityBatchSummaries([{
@@ -169,7 +169,7 @@ describe("buildCreditBatchOpenItems", () => {
 
   it.each<BatchHealthFixTarget>([
     "creditBatchTemplate", "batchDetails", "labSamples", "emissions",
-    "templateLineReview", "certificationTemplates", "certificationEmissions", "productionRuns",
+    "templateLineReview", "templateLines", "certificationTemplates", "certificationEmissions", "productionRuns",
   ])("preserves the repair destination for %s", fixTarget => {
     const check = { key: "templateSet" as const, label: "Template", requirementLabel: "Template ready", unmetLabel: "Template not ready",
       status: "unmet" as const, fixTarget };
@@ -188,7 +188,7 @@ describe("buildCreditBatchOpenItems", () => {
   });
 
   it.each<BatchHealthFixTarget>([
-    "templateLineReview", "certificationTemplates", "certificationEmissions", "emissions",
+    "templateLineReview", "templateLines", "certificationTemplates", "certificationEmissions", "emissions",
   ])("routes emission review to %s", fixTarget => {
     const result = buildCreditBatchOpenItems({ ...batchContext, emissionLines: [{
       componentId: "diesel", displayName: "Diesel", state: "needsReview", groupKey: "production", groupName: "Production", groupPosition: 0, position: 0,
@@ -224,19 +224,25 @@ describe("buildCreditBatchOpenItems", () => {
     expect(owner.check[0].target).toEqual({ href: batchHealthFixLinkFor({ key: "emissions", fixTarget: "templateLineReview" }, "facility", "batch").href });
   });
 
-  it("gives a member no Removal templates link on a template line problem", () => {
+  it.each([false, true])("keeps the Removal templates link on a template line problem when canManage is %s", canManage => {
     const check = { key: "templateLines" as const, label: "Lines decided", requirementLabel: "Lines decided", unmetLabel: "Template not fully read",
       status: "unmet" as const, fixTarget: "templateLines" as const, detail: "Some inputs could not be read from Isometric." };
-    const input = { ...batchContext, health: { state: "incomplete" as const, issueCount: 1, checks: [check] } };
-
-    const member = buildCreditBatchOpenItems({ ...input, canManage: false });
-    expect(member.blocking[0]).toMatchObject({
-      title: "Template not fully read", detail: "An Owner or Admin fixes this in Removal templates.", target: null,
+    const line = {
+      componentId: "diesel", displayName: "Diesel", state: "needsReview" as const, groupKey: "production", groupName: "Production", groupPosition: 0, position: 0,
+      description: null, entryPolicy: "additive" as const, records: null,
+      blueprintKey: "production", contract: undefined, automaticFigure: null, entries: [], total: null,
+      blocker: { code: "lineNeedsReview" as const, message: "Some inputs could not be read from Isometric.", fixTarget: "templateLines" as const },
+    };
+    const result = buildCreditBatchOpenItems({ ...batchContext, canManage,
+      health: { state: "incomplete", issueCount: 1, checks: [check] }, emissionLines: [line] });
+    expect(result.blocking[0]).toMatchObject({
+      title: "Template not fully read", detail: check.detail,
+      target: { href: batchHealthFixLinkFor(check, "facility", "batch").href },
     });
-
-    const owner = buildCreditBatchOpenItems({ ...input, canManage: true });
-    expect(owner.blocking[0].detail).toBe("Some inputs could not be read from Isometric.");
-    expect(owner.blocking[0].target).toEqual({ href: batchHealthFixLinkFor(check, "facility", "batch").href });
+    expect(result.check[0]).toMatchObject({
+      detail: line.blocker.message,
+      target: { href: batchHealthFixLinkFor({ key: "emissions", fixTarget: "templateLines" }, "facility", "batch").href },
+    });
     expect(batchHealthFixLinkFor(check, "facility", "batch").label).toBe("Open Removal templates");
   });
 
