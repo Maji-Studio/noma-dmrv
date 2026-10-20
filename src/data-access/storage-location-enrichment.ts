@@ -79,7 +79,7 @@ export interface StorageLocationWithFacility extends StorageLocation {
     batchCount: number;
     currentMassKg: number | null;
     dryMassKg?: number | null;
-    biocharEquivalentKg: number | null;
+    biocharEquivalentKg: number;
     formulationNames: string[];
     appliedApplicationCount: number;
     appliedDryMassKg: number;
@@ -240,19 +240,21 @@ export async function enrichStorageLocationRows(
                 biocharProducts.waterAddedKg,
               ),
             ),
-            // SUM skips unknown products and is NULL when none is known, so an
-            // unrecorded dry mass never reads as 0 kg.
-            biocharEquivalentKg: sql<number | null>`
-              SUM(
-                ${productDryBiocharKgSql(
-                  biocharProducts.id,
-                  biocharProducts.massKg,
-                  biocharProducts.moistureContentPercent,
-                  biocharProducts.composition,
-                  ctx.organizationId,
-                )}
+            // Source columns are NOT NULL, so a sum of 0 means nothing was received.
+            biocharEquivalentKg: numericAggregate(sql<number>`
+              COALESCE(
+                SUM(
+                  ${productDryBiocharKgSql(
+                    biocharProducts.id,
+                    biocharProducts.massKg,
+                    biocharProducts.moistureContentPercent,
+                    biocharProducts.composition,
+                    ctx.organizationId,
+                  )}
+                ),
+                0
               )
-            `.mapWith((value) => (value === null ? null : Number(value))),
+            `),
             formulationNames: sql<string | null>`
               string_agg(DISTINCT ${formulations.name}, ', ' ORDER BY ${formulations.name})
             `,
@@ -536,7 +538,7 @@ export async function enrichStorageLocationRows(
         batchCount: Number(productInventoryRow?.batchCount ?? 0),
         currentMassKg: outputStock?.estimatedWetMassKg ?? null,
         dryMassKg: outputStock?.availableDryKg ?? null,
-        biocharEquivalentKg: productInventoryRow?.biocharEquivalentKg ?? null,
+        biocharEquivalentKg: productInventoryRow?.biocharEquivalentKg ?? 0,
         formulationNames: splitAggregateLabels(
           productInventoryRow?.formulationNames ?? null
         ),

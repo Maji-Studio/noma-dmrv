@@ -73,7 +73,7 @@ describe("product bin lifetime biochar received", () => {
     })).rejects.toBe(ROLLBACK);
   });
 
-  it("reports no figure, not 0 kg, for a bin that never received product", async () => {
+  it("reports 0 kg received for a bin that never received product", async () => {
     await expect(db.transaction(async tx => {
       vi.spyOn(db, "transaction").mockImplementation(async callback => callback(tx));
       vi.spyOn(db, "select").mockImplementation(tx.select.bind(tx));
@@ -85,7 +85,7 @@ describe("product bin lifetime biochar received", () => {
           ...bin, facilityCode: parents.facility.code, facilityName: parents.facility.name,
           feedstockTypeName: null, formulationName: parents.pure.name,
         }]);
-        expect(enriched.productInventory.biocharEquivalentKg).toBeNull();
+        expect(enriched.productInventory.biocharEquivalentKg).toBe(0);
       } finally {
         vi.restoreAllMocks();
       }
