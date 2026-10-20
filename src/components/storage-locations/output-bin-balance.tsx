@@ -55,16 +55,6 @@ export function mixPileBands(layers: OutputSubBin[], dryKg: number | null, wetKg
 }
 
 /**
- * The card's headline: the wet estimate operators find on site. Without one,
- * the dry biochar the bin tracks is the only honest figure and takes its place,
- * as it does on the board's tile.
- */
-function stockFigure(wetKg: number | null, dryKg: number | null): string {
-  if (wetKg === null && dryKg === null) return MISSING_VALUE.notAvailable;
-  return outputStockFigure(wetKg, dryKg ?? 0);
-}
-
-/**
  * An output bin's stock card: the wet estimate operators plan loads by, the
  * tracked dry biochar under it, a split bin's sub-bins as bays or a mix bin
  * as one pile, then the stock action and the history.
@@ -99,11 +89,10 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
         {subBins.error && <Notice tone="error">{subBins.error.message}</Notice>}
       </>}
       figure={ready && <>
-        {stockFigure(wetKg, dryKg)}
+        {outputStockFigure(wetKg)}
         {capacityKg != null && <span className="body-small text-[var(--color-text-tertiary)]"> of {formatMassKg(capacityKg)}</span>}
       </>}
-      // Dry biochar sits under the wet figure only while wet leads; without a wet estimate it is the headline itself.
-      caption={ready && wetKg !== null && dryKg !== null && <SecondaryFigure label={DRY_BIOCHAR_LABEL} value={formatMassKg(dryKg)} />}
+      caption={ready && dryKg !== null && <SecondaryFigure label={DRY_BIOCHAR_LABEL} value={formatMassKg(dryKg)} />}
       onAdjust={onAdjust}
     >
       {ready && layers.length === 0 && <EmptyState icon={null} title="No stock in this bin" padding="sm" />}

@@ -4,7 +4,7 @@
  */
 import { formatCompositionMass, type MassSegment } from "@/components/forms/composition-ledger";
 import { batchAccentFill } from "@/components/ui/segment-bar";
-import { formatMassKg } from "@/lib/format-utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import type { AffectedStockPreview as Preview, OutputStockBalanceView } from "@/types/output-stock";
 
 /**
@@ -52,12 +52,15 @@ export function formatWetEstimate(kg: number): string {
 }
 
 /**
- * An output bin's headline figure: the wet mass operators find on site, or,
- * without a wet figure, the dry biochar the bin tracks. The stock card, the
- * board's tile and the stock history all read a bin this way.
+ * An output bin's headline figure: the wet mass operators find on site. Every
+ * run and product enters its bin with a wet mass (a complete run must carry
+ * moisture, output and a bin), so the figure is known once the stock is read;
+ * a figure that still cannot be derived reads as Not available, never as the
+ * dry biochar. The stock card, the board's tile and the stock history all read
+ * a bin this way.
  */
-export function outputStockFigure(wetKg: number | null, dryKg: number): string {
-  return wetKg === null ? `${formatMassKg(dryKg)} dry biochar` : `${formatWetEstimate(wetKg)} kg wet mass`;
+export function outputStockFigure(wetKg: number | null): string {
+  return wetKg === null ? MISSING_VALUE.notAvailable : `${formatWetEstimate(wetKg)} kg wet mass`;
 }
 
 /**

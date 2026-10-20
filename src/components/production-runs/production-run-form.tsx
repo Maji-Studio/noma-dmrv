@@ -111,8 +111,6 @@ interface ProductionRunFormProps {
   deferredAttachments?: UseDeferredAttachmentsResult;
   /** The saved run's lock: a product, stock entry or count fixes its output basis. */
   lock?: RecordLockView;
-  /** Create only: the biochar bin to open with, from a bin's "adding stock" link. */
-  initialBiocharStorageLocationId?: string;
 }
 export function ProductionRunForm({
   productionRun,
@@ -124,7 +122,6 @@ export function ProductionRunForm({
   children,
   deferredAttachments,
   lock,
-  initialBiocharStorageLocationId,
 }: ProductionRunFormProps) {
   const formId = useId();
   const isEditMode = !!productionRun;
@@ -167,7 +164,7 @@ export function ProductionRunForm({
     electricityKwh: productionRun?.electricityKwh ?? null,
     biocharOutputKg: productionRun?.biocharOutputKg ?? null,
     biocharMoisturePercent: productionRun?.biocharMoisturePercent ?? null,
-    biocharStorageLocationId: productionRun ? (productionRun.biocharStorageLocationId ?? "") : (initialBiocharStorageLocationId ?? ""),
+    biocharStorageLocationId: productionRun?.biocharStorageLocationId ?? "",
   };
   type ProductionRunFormValues = typeof defaultValues;
   const resolver: Resolver<

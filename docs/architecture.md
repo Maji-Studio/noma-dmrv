@@ -227,10 +227,9 @@ Quick-Add lets a form create a missing prerequisite without leaving the page:
 schemas in `src/schemas/quick-add.ts` (minimal fields only); after create call
 `seedEntityCache()` from `@/components/forms/entity-select/cache-utils` to
 populate the dropdown; `useOpenCreateIntent()` opens create dialogs from
-`?create=true` deep links, with an optional context parameter for the form (an
-output bin's "adding stock" link passes `?bin=`, read back through the org-scoped
-bin lookup in `useAddStockBin`). `FormEntitySelect` auto-clears when parent values
-change via `dependsOn` (backed by the standalone `useClearOnDependencyChange`).
+`?create=true` deep links, with an optional context parameter for the form.
+`FormEntitySelect` auto-clears when parent values change via `dependsOn`
+(backed by the standalone `useClearOnDependencyChange`).
 See [forms.md](./forms.md).
 
 The vehicle, driver and operator quick-add dialogs also edit: pass the loaded
