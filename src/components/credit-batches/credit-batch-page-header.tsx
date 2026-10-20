@@ -18,7 +18,7 @@ import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { creditBatchListHref } from "@/lib/certification/batch-health-links";
 import { traceabilityBatchHref } from "@/lib/certification/links";
-import { LOAD_FAILED } from "@/lib/copy-utils";
+import { LOAD_FAILED, MISSING_VALUE } from "@/lib/copy-utils";
 import {
   APPLIED_DRY_LABEL,
   creditBatchMilestones,
@@ -161,10 +161,10 @@ interface KeyNumber {
   /**
    * Null while its query loads: a skeleton, never a missing-value token.
    * `{ reason }` stands in for a figure there is none of: a failed read says
-   * so, and a derived figure (`reason: null`) is left out, with `sub` saying
-   * why. A left-out figure with no `sub` drops its cell.
+   * so, and a derived figure not yet computed says that, with `sub` saying why.
+   * The cell always stays, so the strip keeps three columns.
    */
-  value: string | null | { reason: string | null };
+  value: string | null | { reason: string };
   sub: string | null;
 }
 
@@ -190,7 +190,7 @@ export function CreditBatchKeyNumbers() {
     appliedNumber(pageModel, !!pageModelError),
     {
       label: "Carbon estimate",
-      value: estimate == null ? { reason: null } : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`,
+      value: estimate == null ? { reason: MISSING_VALUE.notYetComputed } : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`,
       sub: estimate == null ? carbonEstimateGap(batch.co2eStoredPreview?.missingInputs ?? []) : "Before project emissions",
     },
     {
@@ -204,9 +204,9 @@ export function CreditBatchKeyNumbers() {
             ? "Enough for a sampled credit batch"
             : `A sampled credit batch needs ${summary.minimumReplicates}`,
     },
-  ].filter((cell) => !(typeof cell.value === "object" && cell.value?.reason === null && cell.sub == null));
+  ];
   return (
-    <dl className={cn("grid grid-cols-1 border border-[var(--color-border-secondary)] bg-[var(--paper)]", cells.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+    <dl className="grid grid-cols-1 border border-[var(--color-border-secondary)] bg-[var(--paper)] sm:grid-cols-3">
       {cells.map((cell) => (
         <div
           key={cell.label}
@@ -218,7 +218,7 @@ export function CreditBatchKeyNumbers() {
               <Skeleton width={VALUE_SKELETON_WIDTH_PX} height={VALUE_SKELETON_HEIGHT_PX} />
             ) : typeof cell.value === "string" ? (
               <span className="title-heading-3 tabular-nums">{cell.value}</span>
-            ) : cell.value.reason && (
+            ) : (
               <span className={cn("body-small", MUTED_TEXT)}>{cell.value.reason}</span>
             )}
             {cell.sub && <span className={cn("body-caption", MUTED_TEXT)}>{cell.sub}</span>}

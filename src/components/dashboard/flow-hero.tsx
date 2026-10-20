@@ -21,7 +21,6 @@ import { FlowHeroDefs } from "./flow-hero-defs";
 import { FlowHeroMobile } from "./flow-hero-mobile";
 import { FlowHeroScene } from "./flow-hero-scene";
 import { FLOW_HERO_VIEWS, type FlowHeroView } from "./flow-hero-types";
-import { LOAD_FAILED } from "@/lib/copy-utils";
 
 /** Placeholder stations while loading — keeps the ghosted art fully drawn. */
 const EMPTY_SEGMENT_TONNES = 0;
@@ -54,7 +53,8 @@ const placeholderStations = (isLoading: boolean): DashboardStation[] => (
   key,
   name,
   total: 0,
-  totalLabel: isLoading ? "Loading" : LOAD_FAILED,
+  // Not loading means no stations arrived, not that a read failed (a failed read never reaches this component).
+  totalLabel: isLoading ? "Loading" : "",
   attention: 0,
   reasons: [],
   href: "#",

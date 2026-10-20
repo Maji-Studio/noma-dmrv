@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  inputUnitLabel,
   MISSING_TEMPLATE_NAME,
   NOT_SET_UP_TITLE,
   templateName,
@@ -58,5 +59,24 @@ describe("templateName", () => {
   it("names a template Isometric no longer lists, keeping Isometric capitalised", () => {
     expect(templateName(entry({ availability: "missing", template: null }))).toBe(MISSING_TEMPLATE_NAME);
     expect(MISSING_TEMPLATE_NAME).toBe("Template not found on Isometric");
+  });
+});
+
+describe("inputUnitLabel", () => {
+  it("shows the unit Isometric gave", () => {
+    expect(inputUnitLabel({ volume_of_fuel: { unit: "L" } }, "volume_of_fuel")).toBe("L");
+  });
+
+  it("says the unit was not read when there is no enrichment", () => {
+    expect(inputUnitLabel(undefined, "volume_of_fuel")).toBe("Unit not read");
+    expect(inputUnitLabel({}, "volume_of_fuel")).toBe("Unit not read");
+  });
+
+  it("says the unit was not read when the input's read failed", () => {
+    expect(inputUnitLabel({ volume_of_fuel: { status: "unknown" } }, "volume_of_fuel")).toBe("Unit not read");
+  });
+
+  it("says Isometric gives no unit only for an entry it read with an empty unit", () => {
+    expect(inputUnitLabel({ volume_of_fuel: { unit: "" } }, "volume_of_fuel")).toBe("Isometric gives no unit");
   });
 });

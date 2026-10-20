@@ -16,7 +16,7 @@ import {
   type LineSources,
 } from "@/lib/isometric/template-observations/line-sources";
 import type { ComponentEnrichment, EntryPolicy, QuantityKind } from "@/lib/isometric/template-observations/types";
-import { humanizeEnum, ISOMETRIC_GIVES_NO_UNIT, MISSING_VALUE } from "@/lib/copy-utils";
+import { humanizeEnum, ISOMETRIC_GIVES_NO_UNIT, MISSING_VALUE, UNIT_NOT_READ } from "@/lib/copy-utils";
 import { isTemplateReady, linesToDecideCount } from "@/lib/certification/removal-template-readiness";
 import { sectionTemplateLines, type TemplateLineSection } from "@/lib/isometric/template-observations/template-sections";
 import { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE } from "@/lib/certification/requirement-labels";
@@ -114,10 +114,15 @@ export function quantityKindLabel(kind: QuantityKind): string {
   return humanizeEnum(kind);
 }
 
-/** The unit Isometric gave this input, or the reason when it gave none. */
+/**
+ * The unit Isometric gave this input. Without an enrichment, or with an entry
+ * whose read failed, the unit was not read; only an entry read successfully
+ * with an empty unit is Isometric giving none.
+ */
 export function inputUnitLabel(enrichment: ComponentEnrichment | undefined, inputKey: string): string {
   const input = enrichment?.[inputKey];
-  return input && "unit" in input && input.unit ? input.unit : ISOMETRIC_GIVES_NO_UNIT;
+  if (!input || !("unit" in input)) return UNIT_NOT_READ;
+  return input.unit || ISOMETRIC_GIVES_NO_UNIT;
 }
 
 /**
