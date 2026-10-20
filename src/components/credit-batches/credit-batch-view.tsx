@@ -338,6 +338,7 @@ export function creditBatchSheetSections({
           canManage={canManage}
           locked={locked}
           activeFocusTarget={activeFocusTarget}
+          linesToDecide={healthSummary?.linesToDecide ?? 0}
         />
       ),
     },

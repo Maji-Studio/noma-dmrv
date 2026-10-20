@@ -22,6 +22,7 @@ import { EntitySideSheet } from "@/components/ui/entity-side-sheet";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
 import { useToast } from "@/components/ui/toast";
 import { useBatchDurabilitySummary, useBatchHealth } from "@/hooks/use-certification";
+import { batchLinesToDecide } from "@/lib/certification/batch-health";
 import {
   useCreditBatch,
   useCreditBatchPageModel,
@@ -294,6 +295,7 @@ export function CreditBatchPage({
     openItems,
     blockingCount: blocking ? blocking.length : null,
     healthError: health.error,
+    linesToDecide: batchLinesToDecide(health.data),
     retryHealth: () => void health.refetch(),
     retryingHealth: health.isFetching,
     lock,

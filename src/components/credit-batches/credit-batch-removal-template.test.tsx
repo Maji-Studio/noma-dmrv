@@ -9,16 +9,6 @@ vi.mock("@/hooks/use-credit-batches", () => ({
   useCreditBatch: () => ({ data: undefined, refetch: vi.fn() }),
 }));
 vi.mock("@/hooks/use-certification", () => ({
-  // The batch's Lines decided check, as the readiness model builds it.
-  useBatchHealth: () => ({
-    data: {
-      state: mocks.linesToDecide ? "incomplete" : "ready",
-      issueCount: mocks.linesToDecide ? 1 : 0,
-      checks: mocks.linesToDecide
-        ? [{ key: "templateLines", status: "unmet", linesToDecide: mocks.linesToDecide }]
-        : [],
-    },
-  }),
   useFacilityCertifierSummary: () => ({
     data: { mapping: { externalProjectId: "prj_test", defaultRemovalTemplateId: "rvt_new" } },
     isLoading: false, isSuccess: true,
@@ -37,6 +27,7 @@ function mount(canManage: boolean, locked = false, activeFocusTarget?: string) {
       canManage={canManage}
       locked={locked}
       activeFocusTarget={activeFocusTarget}
+      linesToDecide={mocks.linesToDecide}
     />,
   );
 }

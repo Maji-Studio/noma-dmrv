@@ -205,7 +205,7 @@ function LockMark({ text }: { text: string }) {
 
 /** Batch details: the definition, sampling, notes and the Removal template. Edit starts from the header. */
 function DetailsPanel() {
-  const { batch, lock, canManage, focus } = useCreditBatchPage();
+  const { batch, lock, canManage, focus, linesToDecide } = useCreditBatchPage();
   const sent = lock?.level === "sent";
   const membershipLocked = isCreditBatchMembershipLocked(lock);
   // When everything is locked the panel says so once and the rows stay quiet.
@@ -223,7 +223,7 @@ function DetailsPanel() {
           <DetailRow label="Notes" value={batch.siteManagementNotes?.trim() || null} />
         </dl>
         <div className="border-t border-[var(--color-border-secondary)] pt-16">
-          <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} locked={sent} activeFocusTarget={focus} />
+          <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} locked={sent} activeFocusTarget={focus} linesToDecide={linesToDecide} />
         </div>
       </PagePanel>
     </FocusRow>

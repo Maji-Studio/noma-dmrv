@@ -21,11 +21,10 @@ import { Button } from "@/components/ui/button";
 import { DetailField } from "@/components/ui/detail-panel";
 import { Notice } from "@/components/ui/notice";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
-import { useBatchHealth, useFacilityCertifierSummary, useIsometricProjectTemplates } from "@/hooks/use-certification";
+import { useFacilityCertifierSummary, useIsometricProjectTemplates } from "@/hooks/use-certification";
 import { useCreditBatch } from "@/hooks/use-credit-batches";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { REMOVAL_TEMPLATE_LANDING_LINE } from "@/lib/certification/removal-template-blockers";
-import { batchLinesToDecide } from "@/lib/certification/batch-health";
 import { certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL } from "@/lib/certification/links";
 import { linesToDecideLabel } from "@/lib/certification/requirement-labels";
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
@@ -40,6 +39,11 @@ export interface CreditBatchRemovalTemplateProps {
   locked: boolean;
   /** The deep-link focus target, when this sheet was opened by one. */
   activeFocusTarget?: string | null;
+  /**
+   * The batch's Lines decided count (`batchLinesToDecide`), from the health the
+   * page or the list already loads; 0 when none or not loaded yet.
+   */
+  linesToDecide: number;
 }
 
 /**
@@ -58,6 +62,7 @@ export function CreditBatchRemovalTemplate({
   canManage,
   locked,
   activeFocusTarget,
+  linesToDecide: undecidedLines,
 }: CreditBatchRemovalTemplateProps) {
   const [switching, setSwitching] = useState(false);
   // The sheet holds a snapshot; the pin and version come from the live record
@@ -75,9 +80,7 @@ export function CreditBatchRemovalTemplate({
   const pinnedMissing = !!pinnedId && lookupSettled && !pinned;
   const namePending = !!pinnedId && !pinned && !lookupSettled && !templates.isError && (summary.isLoading || templates.isLoading);
   const value = pinnedId ? pinned?.display_name ?? MISSING_VALUE.notAvailable : null;
-  // The count the batch's Lines decided check carries; the page shares this query.
-  const health = useBatchHealth(batch.id, !!pinnedId);
-  const linesToDecide = pinnedId && !pinnedMissing ? batchLinesToDecide(health.data) : 0;
+  const linesToDecide = pinnedId && !pinnedMissing ? undecidedLines : 0;
 
   // The two Notices below already say why an unpinned or vanished pin needs
   // attention, so the focus callout stays quiet there rather than repeat them.
