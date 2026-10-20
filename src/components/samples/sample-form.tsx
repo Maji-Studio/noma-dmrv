@@ -54,6 +54,7 @@ import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
 import { SampleDerivedRatios } from "./sample-derived-ratios";
 import { SampleEligibilityAdvisory } from "./sample-eligibility-advisory";
 import { SampleBatchProgress } from "./sample-batch-progress";
+import { SampleCreditBatchLine } from "./sample-credit-batch-line";
 import { SampleNutrientFields } from "./sample-nutrient-fields";
 import {
   SampleEvidenceSection,
@@ -985,6 +986,7 @@ export function SampleForm({
         errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
+        preview={<SampleCreditBatchLine creditBatchId={watchedCreditBatchId} facilityId={contextFacilityId} />}
       />
     </div>
   );

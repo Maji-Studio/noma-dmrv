@@ -5,6 +5,13 @@
  */
 import { formatDateRange, formatDayString } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import {
+  CREDIT_BATCH_INFO_LABEL,
+  CREDIT_BATCH_LINE_BASE,
+  errorLineCopy,
+  pendingLineCopy,
+  type CreditBatchLineCopy,
+} from "@/components/credit-batches/credit-batch-line-copy";
 import type {
   CreditBatchPreviewBatch,
   ProductionRunCreditBatchPreview,
@@ -17,32 +24,11 @@ export type ProductionRunCreditBatchPreviewView =
   | { state: "error" }
   | ProductionRunCreditBatchPreview;
 
-export interface CreditBatchPreviewCopy {
-  tone: "neutral" | "warning";
-  /** Text before the batch links. */
-  lead: string;
-  /** Batches named in the line, each a link to its page. */
-  batches: CreditBatchPreviewBatch[];
-  /** Text after the batch links. */
-  tail: string;
-  /** The ⓘ explanation, or null when the line says it all. */
-  info: string | null;
-  /** The check failed: offer Retry. */
-  retry: boolean;
-  busy: boolean;
-}
+export type CreditBatchPreviewCopy = CreditBatchLineCopy;
 
-const BASE: Omit<CreditBatchPreviewCopy, "lead"> = {
-  tone: "neutral",
-  batches: [],
-  tail: "",
-  info: null,
-  retry: false,
-  busy: false,
-};
+const BASE = CREDIT_BATCH_LINE_BASE;
 
-/** The line's label for the ⓘ, so a screen reader names what it explains. */
-export const CREDIT_BATCH_INFO_LABEL = "How the credit batch is chosen";
+export { CREDIT_BATCH_INFO_LABEL };
 
 const INCOMPLETE_LEAD = {
   facility: "Choose a facility in the sidebar to see the credit batch.",
@@ -135,9 +121,9 @@ function memberCopy(
 export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreviewView): CreditBatchPreviewCopy {
   switch (view.state) {
     case "pending":
-      return { ...BASE, lead: "Checking credit batch...", busy: true };
+      return pendingLineCopy();
     case "error":
-      return { ...BASE, tone: "warning", lead: "Credit batch could not be checked.", retry: true };
+      return errorLineCopy();
     case "not-applicable":
       return {
         ...BASE,
