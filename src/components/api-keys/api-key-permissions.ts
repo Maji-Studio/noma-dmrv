@@ -37,3 +37,24 @@ export function permissionSummary(scopes: readonly ApiScope[]) {
     return actions.length ? [`${row.label}: ${actions.map((action) => API_PERMISSION_LABELS[action]).join(", ")}`] : [];
   }).join("; ") || MISSING_VALUE.none;
 }
+
+const EVERYTHING = "everything";
+const ACCESS_VERBS = { read: "reads", write: "saves", delete: "deletes" } as const;
+
+/**
+ * The short permission line for lists, such as "Reads everything; saves Feedstocks, Orders".
+ * An action granted on every entity that offers it collapses to "everything"; otherwise the entities are named.
+ */
+export function compactPermissionSummary(scopes: readonly ApiScope[]): string {
+  const granted = new Set<string>(scopes);
+  const parts = API_PERMISSION_ACTIONS.flatMap((action) => {
+    const offered = API_PERMISSION_ROWS.filter((row) => row.scopes.some((scope) => scope.endsWith(`:${action}`)));
+    const held = offered.filter((row) => granted.has(`${row.entity}:${action}`));
+    if (!held.length) return [];
+    const what = held.length === offered.length ? EVERYTHING : held.map((row) => row.label).join(", ");
+    return [`${ACCESS_VERBS[action]} ${what}`];
+  });
+  if (!parts.length) return MISSING_VALUE.none;
+  const line = parts.join("; ");
+  return line.charAt(0).toUpperCase() + line.slice(1);
+}

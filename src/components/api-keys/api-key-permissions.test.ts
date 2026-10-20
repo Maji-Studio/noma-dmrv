@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
-import { API_KEY_DEFAULT_SCOPES, API_PERMISSION_ROWS, permissionSummary } from "./api-key-permissions";
+import { API_SCOPES } from "@/lib/auth/api-scopes";
+import { API_KEY_DEFAULT_SCOPES, API_PERMISSION_ROWS, compactPermissionSummary, permissionSummary } from "./api-key-permissions";
 it("offers production permissions and defaults new workflow reads on and mutations off", () => {
   expect(API_PERMISSION_ROWS).toContainEqual({ entity: "production-runs", label: "Production runs", scopes: ["production-runs:read", "production-runs:write", "production-runs:delete"] });
   expect(API_PERMISSION_ROWS).toContainEqual({ entity: "reactors", label: "Reactors", scopes: ["reactors:read"] });
@@ -66,4 +67,19 @@ it.each(["suppliers", "customers"])("keeps %s reads on and mutations opt-in", en
   expect(API_KEY_DEFAULT_SCOPES).toContain(`${entity}:read`);
   expect(API_KEY_DEFAULT_SCOPES).not.toContain(`${entity}:write`);
   expect(API_KEY_DEFAULT_SCOPES).not.toContain(`${entity}:delete`);
+});
+
+const ALL_READS = API_SCOPES.filter((scope) => scope.endsWith(":read"));
+
+it.each([
+  ["reads everything", ALL_READS, "Reads everything"],
+  ["reads everything and writes some", [...ALL_READS, "feedstocks:write", "orders:write"], "Reads everything; saves Feedstocks, Orders"],
+  ["reads everything, writes some, deletes one", [...ALL_READS, "feedstocks:write", "orders:delete"], "Reads everything; saves Feedstocks; deletes Orders"],
+  ["writes everything", API_SCOPES.filter((scope) => scope.endsWith(":write")), "Saves everything"],
+  ["everything", API_SCOPES, "Reads everything; saves everything; deletes everything"],
+  ["partial read only", ["feedstocks:read", "orders:read"], "Reads Feedstocks, Orders"],
+  ["write without read", ["deliveries:write"], "Saves Deliveries"],
+  ["no access", [], "None"],
+] as const)("compact summary: %s", (_name, scopes, line) => {
+  expect(compactPermissionSummary(scopes)).toBe(line);
 });
