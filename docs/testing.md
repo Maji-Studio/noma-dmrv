@@ -384,20 +384,21 @@ See [the Vitest migration preflight](#vitest-only-runs-against-a-throwaway-datab
 ## Stale mocks: lint rule and pre-push hook
 
 A hand-written `vi.mock` factory silently drops any export added to the mocked
-module later, which is how #1278 and #1279 went red on CI while targeted local
-runs passed. Two guards:
+module later, so CI can fail while targeted local runs pass. Two guards:
 
 - **Lint:** `vi.mock("@/config/env", factory)` and `vi.mock("@/db/schema", factory)`
   must call `importOriginal` and spread the result
   (`...(await importOriginal<typeof import("@/config/env")>())`), then override
   only what the test needs. `vi.mock(path)` without a factory, and a factory
   that only throws (a "must not load" tripwire), are allowed.
-- **Pre-push:** `.githooks/pre-push` runs two bounded stages on the `src/` and
+- **Pre-push:** `.githooks/pre-push` runs two stages on the `src/` and
   `tests/` files changed since the merge-base with `origin/staging`:
   1. Always: changed test files plus test files that `vi.mock(` a changed
      module by its `@/` alias path (`src/lib/api/problem.ts` matches
      `@/lib/api/problem`; an index file also matches its directory and
-     `/index`). `pnpm vitest run`; a failure blocks the push.
+     `/index`). `pnpm vitest run`; a failure blocks the push. This stage has no
+     time limit and can include DB-backed specs, so start Postgres
+     (`pnpm docker:up`) first.
   2. Then `pnpm vitest related --run`, cut off after
      `PRE_PUSH_RELATED_TIMEOUT_SECONDS` (default 300, overridable by env). On a
      cut-off it prints one line, CI runs the rest, and the push goes through; a
@@ -406,12 +407,12 @@ runs passed. Two guards:
   It skips when only docs or other non-code files changed and on deletion-only
   pushes, and never runs the full suite (CI does). `new` in `scripts/worktree.sh`
   enables it with `git config --worktree core.hooksPath .githooks`, which stays
-  local to that worktree (the repo already sets `extensions.worktreeConfig`). In
-  an older checkout run that command once yourself. Skip it for one push with
+  local to that worktree; `new` enables `extensions.worktreeConfig` on the shared
+  repo first. In a worktree not created by `new`, run that command once
+  yourself. Skip it for one push with
   `git push --no-verify`.
 - **Known gaps:** the lint selector misses an aliased `vi`, a factory passed by
-  identifier, and the `vi.mock(import("@/config/env"), ...)` form (none used
-  today). The stage 1 match ignores relative-path mocks.
+  identifier, and the `vi.mock(import("@/config/env"), ...)` form. The stage 1 match ignores relative-path mocks.
 
 ## E2E data naming is a hard contract
 
