@@ -203,7 +203,6 @@ export function FeedstockLossForm({
         unit="kg"
         error={lossMassError}
         required
-        helperText="The mass removed from the bin through spoilage, spillage, or write-off."
       >
         <FormInput
           id="loss-amount"

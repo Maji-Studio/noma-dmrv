@@ -70,8 +70,8 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
       // Lifetime running total of source biochar across every product ever
       // stored here, never decremented on delivery — qualified so it cannot
       // be read as stock still on hand next to "Current product mass"
-      // (DR-002 / PB-26-001).
-      label: "Biochar received, all time",
+      // (DR-002 / PB-26-001). Dry basis, like "Applied, dry" beside it (#1251).
+      label: "Biochar received, dry, all time",
       value: formatMassKg(storageLocation.productInventory.biocharEquivalentKg),
     },
     {
