@@ -1,5 +1,15 @@
 # Isometric Docs Change Log
 
+## 2026-10-20: Remove the sandbox zero stub
+
+Removed the sandbox-only period-input escape hatch and its submission plumbing
+in every environment, independently of the emissions-entry activation gate.
+Missing operating inputs now require records, entries or Removal-confirmed
+zeros on Empty components. Project-level scope guards remain. The E2E template
+selector uses the same coverage check and supplies no implicit zeros.
+See [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md)
+and [plan §4.5, Guard](../plans/2026-10-15-template-driven-emissions.md#45-submission-snapshots-and-claims-pr-4).
+
 ## 2026-10-20: Emissions entry evidence binding
 
 Entry files now bind as `emission_entry` Sources to every contributed component/input

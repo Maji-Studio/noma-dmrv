@@ -119,8 +119,10 @@ function templateHasUnboundFixedInput(template: RawRemovalTemplate): boolean {
 }
 
 /**
- * A fresh observation compiles only when every line has a settled contract
- * that binds, the same coverage submission runs (entry-only lines block).
+ * A fresh observation compiles only when every component has a settled
+ * contract that binds. This uses the same coverage check as submission:
+ * entry-only components need recorded values or confirmed zeros, so they
+ * block this fixture, which supplies neither. Sandbox never fills them with zeros.
  */
 function templateCompilesOnFirstRead(template: RawRemovalTemplate): boolean {
   const ghgTemplate = template as unknown as IsometricGhgEntryTemplate;

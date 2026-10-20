@@ -130,7 +130,6 @@ describe("submitRemoval — happy path", () => {
           ]),
         ),
         externalProjectId: ctx.mapping!.externalProjectId,
-        allowPeriodInputStub: false,
         hasDurabilityComponents: false,
       },
     });
@@ -157,7 +156,6 @@ describe("submitRemoval — happy path", () => {
           ]),
         ),
         externalProjectId: "prj-repointed",
-        allowPeriodInputStub: false,
         hasDurabilityComponents: false,
       },
     });

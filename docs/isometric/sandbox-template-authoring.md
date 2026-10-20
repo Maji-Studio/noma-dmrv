@@ -130,19 +130,17 @@ with a zero.
 
 ## PROJECT-scope components
 
-Do not place these monitored tuples in a Removal/GHG Entry template:
+Establishment and end-of-life components belong in Isometric at project scope
+and remain forbidden on Removals. Operating components, including staff travel,
+direct gases, storage fuel, lab electricity and sampling consumables, need a
+reviewed operating contract and a supported source under
+[ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
 
-- staff travel;
-- pyrolyzer direct-gas concentration or mass flow;
-- biochar-storage fuel;
-- sampling-consumable mass;
-- laboratory electricity;
-- miscellaneous LCA overhead other than the exact `Safety margin` carve-out.
-
-Where applicable, the operator authors them as PROJECT-scope Components in
-Isometric and attaches the supporting LCA Source there. noma intentionally has
-no project-emissions journal. The scope guard in `datapoint.ts` rejects a
-Removal template that crosses this boundary.
+Period inputs are never stubbed. Missing operating
+inputs require records, emissions entries or explicit zero confirmation on
+Empty components. The E2E template selector supplies no entries or confirmed
+zeros, so it rejects entry-only components using the normal submission coverage
+check. noma keeps no project-emissions journal.
 
 ## Fixed inputs
 

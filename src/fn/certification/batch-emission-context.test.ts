@@ -252,7 +252,7 @@ it.each([false, true])("keeps removed-entry blockers in Removal readiness (group
   expect(resolveTemplateInputs({ template: resolved.removalTemplate!, lineSources: resolved.lineSources,
     emissionLines: resolved.emissionLines, blueprintsByKey: new Map(),
     agg: {} as Parameters<typeof resolveTemplateInputs>[0]["agg"], externalProjectId: "project",
-    sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: true, omitProductionComponents: false,
+    sourceIds: [], sourceBindingPlan: [], omitProductionComponents: false,
   })).toMatchObject({ monitored: [], fixed: [], datapointBodyByKey: new Map() });
   expect(live.template.groups).toEqual([]);
   expect(live.observation.definition.groups).toEqual([]);

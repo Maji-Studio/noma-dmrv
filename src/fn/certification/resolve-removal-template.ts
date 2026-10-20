@@ -12,6 +12,9 @@ import { lineNeedsReview, validateLineSources, type LineSources } from "@/lib/is
 import { removalTemplateBlocker, type RemovalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 import type { FacilityCertifierFacts } from "./facility-certifier-facts";
 
+/** A datapoint fixed in the template, read with the observation's enrichment. */
+export interface FixedInputValue { componentId: string; inputKey: string; magnitude: number; unit: string }
+
 /** Only freshly listed templates may compile. Stored observations never substitute for a deleted template. */
 export function resolveRemovalTemplate(
   batches: readonly { id?: string; removalTemplateId: string | null }[],
@@ -26,6 +29,7 @@ export function resolveRemovalTemplate(
     removalTemplate: null as IsometricGhgEntryTemplate | null, lineSources: {} as LineSources,
     templateBlockers: [removalTemplateBlocker(code)],
     blueprintsForTemplate: [], unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], requiredTransportCategories: [],
+    fixedInputValues: [] as FixedInputValue[],
   });
   const result = resolveBatchPin(batches);
   if ("code" in result) return unresolved(result.code);
@@ -65,6 +69,15 @@ export function resolveRemovalTemplate(
     emissionLines, emissionLinesByBatchId, undecidedLineIds,
     removalTemplate: facts.template, lineSources: facts.observation?.lineSources ?? {}, templateBlockers,
     blueprintsForTemplate: facts.blueprintsForTemplate, unresolvedBlueprintKeys: facts.unresolvedBlueprintKeys,
+    fixedInputValues: fixedInputValues(definition, facts.observation?.enrichment),
     unbindableTemplateInputs: contributions ? findUnbindableTemplateInputs(facts.template, { lineSources: facts.observation?.lineSources, entriesCanSubmit: true, enrichmentComplete: facts.enrichmentProblems.length === 0 }) : facts.unbindableTemplateInputs, requiredTransportCategories: facts.requiredTransportCategories,
   };
+}
+
+function fixedInputValues(definition: ReturnType<typeof normalizeTemplateDefinition>, enrichment: Record<string, Record<string, unknown>> | undefined): FixedInputValue[] {
+  return definition.groups.flatMap((group) => group.components.flatMap((component) => component.inputs.flatMap((input) => {
+    const enriched = input.type === "fixed" ? enrichment?.[component.id]?.[input.key] as { unit?: string; fixedValue?: string | number | null } | undefined : undefined;
+    const magnitude = enriched?.fixedValue == null ? NaN : Number(enriched.fixedValue);
+    return enriched?.unit && Number.isFinite(magnitude) ? [{ componentId: component.id, inputKey: input.key, magnitude, unit: enriched.unit }] : [];
+  })));
 }

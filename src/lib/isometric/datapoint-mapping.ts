@@ -59,11 +59,6 @@ export function resolveDatapointSource(
 // contract is the only carve-out; display labels carry no binding authority.
 const PERIOD_INPUT_TUPLES = projectPeriodInputTuples();
 
-/** ADR 0005: only sandbox submissions may use zero stubs for period inputs. */
-export function allowsPeriodInputStub(environment: string | undefined): boolean {
-  return environment === "sandbox";
-}
-
 export function lookupPeriodInputTuple(
   groupKey: string,
   blueprintKey: string,

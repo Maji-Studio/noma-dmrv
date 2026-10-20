@@ -30,6 +30,9 @@ const RECORD_SOURCES: Record<AutomaticSourceId, EmissionRecordSource> = {
   "delivery-transport": "deliveries", sequestration: "applications",
 };
 export interface EmissionLineEntryFact {
+  /** Present on stored entries; the Removal's "Components sent" list reads them. */
+  id?: string;
+  documentCount?: number;
   componentId: string; kind: "value" | "zero"; hasEvidence: boolean;
   confirmedForRemovalId?: string | null;
   total: EmissionFigure | null; counts: boolean; reason?: string | null; unitMismatch?: boolean;
