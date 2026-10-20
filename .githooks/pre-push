@@ -6,6 +6,15 @@
 
 BASE_REF=origin/staging
 
+# Pushes that only delete remote refs have nothing to test (stdin: local_ref local_sha remote_ref remote_sha).
+refs=0
+updates=0
+while read -r _ local_sha _ _; do
+  refs=$((refs + 1))
+  case "$local_sha" in *[!0]*) updates=$((updates + 1)) ;; esac
+done
+[ "$refs" -gt 0 ] && [ "$updates" -eq 0 ] && exit 0
+
 root=$(git rev-parse --show-toplevel) || exit 0
 cd "$root" || exit 0
 
