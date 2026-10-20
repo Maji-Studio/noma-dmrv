@@ -119,7 +119,7 @@ export function deriveRemovalEntryContributions(args: {
     }
     if (!owned) continue;
     if (!entry.counts || entry.unitMismatch) {
-      result.blockers.push({ code: "lineNeedsReview", message: entry.reason ?? "Enter the values again for the current template line.", fixTarget: "emissions", creditBatchId: entry.creditBatchId, lineRef: { componentId: entry.componentId, displayName: entry.componentId } });
+      result.blockers.push({ code: "lineNeedsReview", message: entry.reason ?? "Enter the values again for the current component.", fixTarget: "emissions", creditBatchId: entry.creditBatchId, lineRef: { componentId: entry.componentId, displayName: entry.componentId } });
       continue;
     }
     if (entry.kind === "value" && !entry.evidenceDocumentIds.length) result.blockers.push({ code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", creditBatchId: entry.creditBatchId, lineRef: { componentId: entry.componentId, displayName: entry.componentId } });
@@ -130,7 +130,7 @@ export function deriveRemovalEntryContributions(args: {
     const entries = selected.filter((entry) => entry.componentId === componentId).sort((a, b) => a.id.localeCompare(b.id));
     const values = entries.filter((entry) => entry.kind === "value");
     if (args.lineSources[componentId].entryPolicy === "single" && values.length > 1) {
-      result.blockers.push({ code: "singleLineMultipleEntries", message: "This line has values on more than one credit batch. Create separate Removals for these batches.", fixTarget: "emissions", creditBatchId: values[0].creditBatchId, lineRef: { componentId, displayName: componentId } });
+      result.blockers.push({ code: "singleLineMultipleEntries", message: "This component has values on more than one credit batch. Create separate Removals for these batches.", fixTarget: "emissions", creditBatchId: values[0].creditBatchId, lineRef: { componentId, displayName: componentId } });
       continue;
     }
     // A value supersedes that batch's zero, even if a caller supplied stale facts.
@@ -140,7 +140,7 @@ export function deriveRemovalEntryContributions(args: {
       for (const entry of counting) {
         const value = entry.kind === "zero" ? { magnitude: "0", unit: input.unit } : entry.values.find((value) => value.inputKey === input.inputKey);
         if (!value || value.unit !== input.unit || canonicalDecimal(value.magnitude) === undefined) {
-          result.blockers.push({ code: "lineNeedsReview", message: "Enter the values again for the current template line.", fixTarget: "emissions", creditBatchId: entry.creditBatchId, lineRef: { componentId: entry.componentId, displayName: entry.componentId } });
+          result.blockers.push({ code: "lineNeedsReview", message: "Enter the values again for the current component.", fixTarget: "emissions", creditBatchId: entry.creditBatchId, lineRef: { componentId: entry.componentId, displayName: entry.componentId } });
           continue;
         }
         manifest.entries.push({ entryId: entry.id, creditBatchId: entry.creditBatchId, contentRevision: entry.contentRevision, kind: entry.kind,

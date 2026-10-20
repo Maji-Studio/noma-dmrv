@@ -1,3 +1,4 @@
+import { withRemovedEntryComponents } from "./emission-line-definition";
 import { ENTRY_HAS_NO_REMOVAL } from "@/lib/certification/emission-entry-messages";
 import { deriveBatchEmissionLines, type BatchEmissionLineFacts } from "./emission-lines";
 import type { RemovalEntryContributions, RemovalEntryFact } from "./removal-emission-contributions";
@@ -33,4 +34,33 @@ export function deriveRemovalBatchEmissionLines(
 
 export function isEmptyRemovalEmissionLine(line: { state: string; blocker?: { code: string } }) {
   return line.state === "empty" && line.blocker?.code === "lineHasNoSource";
+}
+
+export interface RemovalEmissionBatchFacts extends BatchEmissionLineFacts {
+  entries: readonly (BatchEmissionLineFacts["entries"][number] & RemovalEntryFact & { observationId: string })[];
+  previousObservations?: Parameters<typeof withRemovedEntryComponents>[2];
+  entriesWithoutRemoval?: readonly string[];
+}
+
+/** Resolve the gate and Empty components from the same loaded facts, including sent singles. */
+export function deriveRemovalEmissionLines(
+  batches: Record<string, RemovalEmissionBatchFacts>,
+  contributions?: RemovalEntryContributions,
+) {
+  const emissionLinesByBatchId = Object.fromEntries(Object.entries(batches).map(([batchId, facts]) => {
+    const entries = facts.entries;
+    return [batchId, deriveRemovalBatchEmissionLines({
+      ...facts,
+      definition: withRemovedEntryComponents(facts.definition, entries, facts.previousObservations ?? new Map()),
+      automaticFigures: Object.fromEntries(Object.entries(facts.automaticFigures).filter(([source]) =>
+        !facts.omittedAutomaticSources?.some((id) => id === source))),
+      entries: entries.filter((entry) => !contributions || (contributions.ownedEntryIds ?? contributions.selectedEntryIds).includes(entry.id)),
+      entriesCanSubmit: !!contributions,
+    }, batchId, { entries, entriesWithoutRemoval: facts.entriesWithoutRemoval }, contributions)];
+  }));
+  return { emissionLinesByBatchId, emptyLinesByBatchId: emptyRemovalEmissionLines(emissionLinesByBatchId) };
+}
+
+export function emptyRemovalEmissionLines<T extends { state: string; blocker?: { code: string } }>(linesByBatchId: Record<string, T[]>) {
+  return Object.fromEntries(Object.entries(linesByBatchId).map(([id, lines]) => [id, lines.filter(isEmptyRemovalEmissionLine)]));
 }

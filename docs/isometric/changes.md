@@ -1,12 +1,23 @@
 # Isometric Docs Change Log
 
+## 2026-10-20: Removal entry claims and frozen payloads (#1242)
+
+With `EMISSIONS_ENTRIES_ENABLED` on, emissions entries and recorded zeros feed
+Removal inputs with per-entry reservation and sending claims. The contribution
+manifest participates in the payload hash. `PRODUCTION_CLAIM_POLICY` is now
+`application-slice-delivery-entry-contributions-v2`, bumping `MAPPING_REVISION`
+in every environment. Mutation-free claimed drafts with an older revision are
+retired for review; attempts with possible registry writes require reconciliation.
+The flag remains off by default, preserving the automatic-input path. Migration
+0166 freezes `payload_snapshot` after draft, except its `journaled` recovery key.
+
 ## 2026-10-16: Emissions entries behind EMISSIONS_ENTRIES_ENABLED (#1058)
 
 Added the `emission_entries` and `emission_entry_values` tables and the
 `emission_entry` document owner for entry evidence. Writes are behind
 `EMISSIONS_ENTRIES_ENABLED`, which is off by default; the flag also refuses new
-sample transport legs. No binding or submitted value changed. Entry aggregation
-for submission remains deferred to PR 4. See [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
+sample transport legs. This table addition changed no binding or submitted value;
+Removal input compilation is covered by #1242 above. See [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
 
 ## 2026-10-16: Energy page estimates and the Emission factors settings section removed (#1091)
 

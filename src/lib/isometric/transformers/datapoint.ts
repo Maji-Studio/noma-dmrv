@@ -204,7 +204,7 @@ export function buildCreateDatapointRequest(
   }
   const contract = lineContract && effectiveContract(lineContract);
   if (args.entryContribution) {
-    if (contract?.scope !== "operating" || contract.entryPolicy === "none") throw new SafeError("This template line does not allow emissions entries.");
+    if (contract?.scope !== "operating" || contract.entryPolicy === "none") throw new SafeError("This component does not take manual entries.");
     const unit = canonicalUnit(blueprintInput.quantity_kind, blueprintInput.compatible_unit);
     if (!unit || args.entryContribution.unit !== unit || rtcInput.quantity_kind !== blueprintInput.quantity_kind) throw new SafeError("The emissions entry unit does not match this template input.");
     let figure = args.entryContribution;

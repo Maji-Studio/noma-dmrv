@@ -1,9 +1,8 @@
-import { deriveRemovalBatchEmissionLines } from "@/lib/certification/removal-emission-lines";
+import { deriveRemovalEmissionLines } from "@/lib/certification/removal-emission-lines";
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
 import type { BatchEmissionContext } from "./batch-emission-context";
 import { type BatchEmissionLine } from "@/lib/certification/emission-lines";
-import { withRemovedEntryComponents } from "@/lib/certification/emission-line-definition";
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
 import { withTemplateOrder } from "@/lib/isometric/template-observations/template-order";
 import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
@@ -38,23 +37,21 @@ export function resolveRemovalTemplate(
   if (facts.lineSourceProblems.length) {
     templateBlockers.push(removalTemplateBlocker("templateLinesNeedReview"));
   }
-  const derive = (batchId?: string) => deriveRemovalBatchEmissionLines({
-    definition: withRemovedEntryComponents(normalizeTemplateDefinition(facts.template),
-      batchId ? batchFacts[batchId]?.entries ?? [] : [],
-      batchId ? batchFacts[batchId]?.previousObservations ?? new Map() : new Map()),
-    lineSources: withTemplateOrder(facts.template, facts.observation!.lineSources),
-    problems: facts.lineSourceProblems, enrichmentComplete: facts.enrichmentProblems.length === 0,
-    automaticFigures: batchId ? batchFacts[batchId]?.automaticFigures ?? {} : {},
-    omittedAutomaticSources: batchId ? batchFacts[batchId]?.omittedAutomaticSources : [],
-    entries: (batchId ? batchFacts[batchId]?.entries ?? [] : []).filter((entry) => !contributions || (contributions.ownedEntryIds ?? contributions.selectedEntryIds).includes(entry.id)),
-    entriesCanSubmit: !!contributions,
-  }, batchId, batchId ? batchFacts[batchId] : undefined, contributions);
-  const emissionLinesByBatchId: Record<string, BatchEmissionLine[]> = {};
-  if (facts.observation) for (const batch of batches) {
-    if (batch.id) emissionLinesByBatchId[batch.id] = derive(batch.id);
-  }
-  const emissionLines = !facts.observation ? null : Object.keys(emissionLinesByBatchId).length
-    ? Object.values(emissionLinesByBatchId).flat() : derive();
+  const batchIds = batches.flatMap((batch) => batch.id ? [batch.id] : []);
+  const { emissionLinesByBatchId: resolvedLines } = deriveRemovalEmissionLines(!facts.observation ? {} : Object.fromEntries(
+    (batchIds.length ? batchIds : [""]).map((id) => [id, {
+      definition: normalizeTemplateDefinition(facts.template),
+      lineSources: withTemplateOrder(facts.template, facts.observation!.lineSources),
+      problems: facts.lineSourceProblems, enrichmentComplete: facts.enrichmentProblems.length === 0,
+      automaticFigures: batchFacts[id]?.automaticFigures ?? {},
+      omittedAutomaticSources: batchFacts[id]?.omittedAutomaticSources,
+      entries: batchFacts[id]?.entries ?? [],
+      previousObservations: batchFacts[id]?.previousObservations,
+      entriesWithoutRemoval: batchFacts[id]?.entriesWithoutRemoval,
+    }]),
+  ), contributions);
+  const emissionLinesByBatchId = batchIds.length ? resolvedLines : {};
+  const emissionLines = !facts.observation ? null : Object.values(resolvedLines).flat();
   return {
     emissionLines, emissionLinesByBatchId,
     removalTemplate: facts.template, lineSources: facts.observation?.lineSources ?? {}, templateBlockers,

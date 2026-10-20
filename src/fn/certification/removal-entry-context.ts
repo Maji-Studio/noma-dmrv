@@ -6,8 +6,8 @@ import { omittedProductionSources } from "@/lib/certification/removal-emission-l
 import type { OrgContext } from "@/lib/auth/server";
 import { loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
-import { deriveRemovalEntryContributions, deriveRemovalEntryWindow, isLiveEntryReservation } from "@/lib/certification/removal-emission-contributions";
-import { canonicalUnit } from "@/lib/isometric/template-observations/units";
+import { deriveRemovalEntryWindow } from "@/lib/certification/removal-emission-contributions";
+import { deriveRemovalEntryInputs } from "@/lib/certification/removal-entry-inputs";
 import type { BatchEmissionContext } from "./batch-emission-context";
 import type { FacilityCertifierFacts } from "./facility-certifier-facts";
 import type { RemovalScope } from "./removal-scope";
@@ -27,26 +27,11 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
   const contenders = Object.values(facts)[0]?.contenders ?? [];
   const reservations = await loadEmissionEntryReservations(ctx,
     [...new Set(entries.flatMap((entry) => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []))]);
-  const nowMs = Date.now();
-  const reservationOwners = new Map(reservations.map((reservation) => [reservation.submissionId, {
-    removalId: reservation.removalId, live: isLiveEntryReservation(reservation, nowMs),
-  }]));
-  const contributions = deriveRemovalEntryContributions({
+  const contributions = deriveRemovalEntryInputs({
     removalId: scope.removalId, memberBatchIds: scope.memberBatches.map((batch) => batch.id),
     window: deriveRemovalEntryWindow(scope.memberBatches, scope.lineages.map((lineage) => lineage.application.applicationDate)),
-    contenders, entries: entries.map((entry) => {
-      const reservation = entry.sendReservedBySubmissionId ? reservationOwners.get(entry.sendReservedBySubmissionId) : undefined;
-      return { ...entry, reservedByRemovalId: reservation?.live ? reservation.removalId : frozenEntrySet ? scope.removalId : null,
-        reservationKnownInactive: !reservation?.live };
-    }),
+    contenders, entries, reservations, nowMs: Date.now(), frozen: !!frozenEntrySet, observation,
     entriesWithoutRemoval: frozenEntrySet ? [] : Object.values(facts).flatMap((batch) => batch.entriesWithoutRemoval ?? []),
-    lineSources: observation.lineSources,
-    monitoredInputs: observation.definition.groups.flatMap((group) => group.components.flatMap((component) => component.inputs.flatMap((input) => {
-      if (input.type !== "monitored") return [];
-      const enriched = observation.enrichment[component.id]?.[input.key];
-      const unit = enriched && !("status" in enriched) ? canonicalUnit(input.quantityKind, enriched.unit) : undefined;
-      return unit ? [{ componentId: component.id, inputKey: input.key, unit }] : [];
-    }))),
   });
   if (frozenChanged) contributions.blockers.push({ code: "lineNeedsReview", message: EMISSION_ENTRIES_CHANGED,
     fixTarget: "emissions", creditBatchId: scope.memberBatches[0].id });
