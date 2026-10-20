@@ -108,7 +108,8 @@ describe("Product read view levels", () => {
     });
     const shown = text(renderer.root);
     expect(shown).toContain("50.125 kg");
-    expect(shown).toContain("Chicken manure solids Not available");
+    expect(shown).toContain("Chicken manure solids");
+    expect(shown).not.toContain("Not available");
     // The key reads at save precision too, not only the saved field.
     expect(shown).toContain("Water added 50.125 kg");
     expect(renderer.root.findAll(node => node.props.role === "img")).toHaveLength(0);

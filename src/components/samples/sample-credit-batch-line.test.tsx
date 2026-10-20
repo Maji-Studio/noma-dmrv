@@ -45,10 +45,10 @@ describe("SampleCreditBatchLine", () => {
     expect(screen.queryByRole("link")).toBeNull();
   });
 
-  it("says Not available, with no Retry, when the lookup succeeded but the batch is gone", () => {
+  it("says the batch was not found, with no Retry, when the lookup succeeded but the batch is gone", () => {
     summary.mockReturnValue({ data: null, isError: false, isSuccess: true, isFetching: false, refetch: vi.fn() });
     render(<SampleCreditBatchLine creditBatchId="batch-1" />);
-    expect(screen.getByRole("status").textContent).toContain("Credit batch: Not available");
+    expect(screen.getByRole("status").textContent).toContain("Credit batch not found");
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   });
 });

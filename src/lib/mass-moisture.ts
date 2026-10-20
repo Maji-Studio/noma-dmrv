@@ -286,28 +286,31 @@ export function formatWetDryMass({
 /**
  * Stock pair in the words of the selected bin caption, for option subtitles
  * and captions: "2,500 kg wet mass, 1,500 kg dry biochar". An estimated wet figure
- * reads "≈ 2,500 kg wet mass"; a missing figure keeps its side and names the gap
- * ("dry biochar not available").
+ * reads "≈ 2,500 kg wet mass". A missing figure is a stock balance or an
+ * estimate, so its side is left out ("1,500 kg dry biochar"); pass `missing`
+ * when the gap is an operator's ("wet mass not recorded"). Empty when neither
+ * side has a figure or a gap to name.
  */
 export function formatWetDryStock({
   wetKg,
   dryKg,
   estimatedWet = false,
-  missing = MISSING_VALUE.notAvailable,
+  missing,
 }: {
   wetKg: number | null | undefined;
   dryKg: number | null | undefined;
   estimatedWet?: boolean;
+  /** A token naming the gap on a missing side, instead of leaving the side out. */
   missing?: string;
 }): string {
-  const gap = missing.toLowerCase();
+  const gap = missing?.toLowerCase();
   const recorded = (kg: number | null | undefined): kg is number =>
     kg != null && Number.isFinite(kg);
   const wet = recorded(wetKg)
     ? `${estimatedWet ? "≈ " : ""}${formatSplitMass(wetKg)} wet mass`
-    : `wet mass ${gap}`;
-  const dry = recorded(dryKg) ? `${formatSplitMass(dryKg)} dry biochar` : `dry biochar ${gap}`;
-  return `${wet}, ${dry}`;
+    : gap ? `wet mass ${gap}` : null;
+  const dry = recorded(dryKg) ? `${formatSplitMass(dryKg)} dry biochar` : gap ? `dry biochar ${gap}` : null;
+  return [wet, dry].filter((side): side is string => side !== null).join(", ");
 }
 
 /**

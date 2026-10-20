@@ -79,10 +79,15 @@ describe("detail levels", () => {
     await act(async () => renderer.unmount());
   });
 
-  it("names a figure it cannot derive yet", async () => {
+  it("leaves out a figure it cannot derive yet, keeping the reason when there is one", async () => {
     let renderer!: ReactTestRenderer;
     await act(async () => { renderer = create(<DerivedHeadline label="Yield" value={null} />); });
-    expect(visible(renderer.root)).toContain("Not available");
+    expect(renderer.toJSON()).toBeNull();
+    await act(async () => renderer.unmount());
+    await act(async () => { renderer = create(<DerivedHeadline label="Yield" value={null} sub="Needs a feedstock mass" />); });
+    expect(visible(renderer.root)).toContain("Yield");
+    expect(visible(renderer.root)).toContain("Needs a feedstock mass");
+    expect(visible(renderer.root)).not.toContain("Not available");
     await act(async () => renderer.unmount());
   });
 });

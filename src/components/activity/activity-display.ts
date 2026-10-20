@@ -21,7 +21,7 @@ import { biocharProductDeepLinkHref } from "@/lib/biochar-product-links";
 import { ghgStatementDeepLinkHref } from "@/lib/ghg-statement-links";
 import { sampleDetailHref } from "@/lib/sample-create-intent";
 import { documentOwnerActivityType, parseDocumentActivityReasonCode } from "@/lib/activity-entity-type";
-import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
+import { humanizeEnum, UNKNOWN_USER } from "@/lib/copy-utils";
 import { DRY_MASS_FIELD_LABEL, MOISTURE_FIELD_LABEL, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import { DOCUMENT_TYPE_LABELS, type DocumentType } from "@/schemas/documents";
 
@@ -102,11 +102,11 @@ export interface ActivityActorDisplay {
 export function activityActorDisplay(item: Pick<ActivityItem, "actor" | "source">): ActivityActorDisplay {
   if (!item.actor) {
     const name = ACTORLESS_SOURCE_LABELS[item.source];
-    return name ? { name, missing: false, channel: null } : { name: MISSING_VALUE.notAvailable, missing: true, channel: null };
+    return name ? { name, missing: false, channel: null } : { name: UNKNOWN_USER, missing: true, channel: null };
   }
   const channel = SOURCE_CHANNEL_LABELS[item.source];
   return {
-    name: item.actor.name ?? MISSING_VALUE.notAvailable,
+    name: item.actor.name ?? UNKNOWN_USER,
     missing: item.actor.name == null,
     channel: channel ? `via ${channel}` : null,
   };

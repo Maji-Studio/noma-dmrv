@@ -49,9 +49,12 @@ const UNIT_ATOM_DISPLAY: Record<string, string> = { tonne: "t", "m^3": "m³" };
 const MASS_ATOMS = new Set(["mg", "g", "kg", "tonne"]);
 const DISTANCE_ATOMS = new Set(["m", "km", "mi"]);
 
+/** What a stored magnitude that will not parse as a number shows in its place. */
+export const UNREADABLE_FIGURE = "Unreadable figure";
+
 export function formatMagnitude(magnitude: string | number): string {
   const value = Number(magnitude);
-  return Number.isFinite(value) ? NUMBER_FORMAT.format(value) : MISSING_VALUE.notAvailable;
+  return Number.isFinite(value) ? NUMBER_FORMAT.format(value) : UNREADABLE_FIGURE;
 }
 
 /** "km * tonne" reads "t·km"; "mg / kg" reads "mg/kg"; "tonne" reads "t". */
@@ -221,17 +224,18 @@ function entryFigureText(entry: EmissionEntry): string {
 /**
  * The row Total: the server total, the single entry's pair, a zero, or a
  * missing token. A line that holds figures the server could not add up (units
- * that differ, an entry that stopped counting) reads Not available, never Not
- * recorded: something was recorded.
+ * that differ, an entry that stopped counting) has no sum, so the Total is
+ * left out (null), never Not recorded: something was recorded, and the
+ * line's state already says it needs review.
  */
-export function lineTotalText(line: EmissionLine): string {
+export function lineTotalText(line: EmissionLine): string | null {
   if (line.state === "needsSetup") return EMISSION_LINE_STATE_LABELS.needsSetup;
   if (line.total) return formatFigure(line.total);
   const values = valueEntries(line);
   if (values.length === 1 && values[0].values.length > 1) return entryFigureText(values[0]);
   if (line.state === "confirmedZero") return `0 ${displayUnit(line.unit)}`.trim();
   const recorded = hasRecordsFigure(line.records) || line.entries.some((entry) => entry.kind === "value");
-  return recorded ? MISSING_VALUE.notAvailable : MISSING_VALUE.notRecorded;
+  return recorded ? null : MISSING_VALUE.notRecorded;
 }
 
 /** The Total is a missing token, not a figure: phones drop it, since the state already says so. */

@@ -36,7 +36,7 @@ import { RecordLockOverviewChip } from "@/components/record-locks/record-lock-ch
 import type { RecordLockView } from "@/lib/record-lock-view";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { useOutputStockBalance } from "@/hooks/use-output-stock";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { LOAD_FAILED } from "@/lib/copy-utils";
 import { formatDate, formatDateTime, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import { outputStockFigure } from "./stock-preview-shared";
@@ -182,7 +182,7 @@ export function StorageBinTile({
                     : "text-[var(--color-text-primary)]"
               }`}
             >
-              {!loading && <TileFigure feedstock={bin.type === "feedstock_bin"} massKg={massKg} wetEstimateKg={wetEstimateKg} />}
+              {!loading && <TileFigure feedstock={bin.type === "feedstock_bin"} massKg={massKg} wetEstimateKg={wetEstimateKg} readFailed={!!output.error} />}
             </span>
             {needsReconciliation && (
               <ReconcileLink bin={bin} onReconcile={onReconcile} />
@@ -205,11 +205,12 @@ export function StorageBinTile({
  * bin leads with its wet estimate. A positive wet estimate wins over a dry
  * biochar that rounds to nothing, so the tile never says Empty over wet stock
  * the sheet shows. An archived bin has no stock read, so the dry biochar it
- * holds is its one figure.
+ * holds is its one figure. A failed stock read says so; a stock figure the
+ * bin does not carry is a derived balance, so the slot stays empty.
  */
-function TileFigure({ feedstock, massKg, wetEstimateKg }: { feedstock: boolean; massKg: number | null; wetEstimateKg: number | null }) {
+function TileFigure({ feedstock, massKg, wetEstimateKg, readFailed }: { feedstock: boolean; massKg: number | null; wetEstimateKg: number | null; readFailed: boolean }) {
   if (!feedstock && wetEstimateKg != null && wetEstimateKg > 0) return outputStockFigure(wetEstimateKg, 0);
-  if (massKg == null) return MISSING_VALUE.notAvailable;
+  if (massKg == null) return readFailed ? LOAD_FAILED : null;
   if (massKg === 0) return "Empty";
   if (feedstock) return `${formatMassKg(massKg)} wet mass`;
   return outputStockFigure(wetEstimateKg, massKg);

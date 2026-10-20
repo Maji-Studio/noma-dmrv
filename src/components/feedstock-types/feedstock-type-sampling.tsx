@@ -6,7 +6,8 @@ import { ServerError } from "@/components/forms/server-error";
 import { ConfirmActionDialog } from "@/components/certification/confirm-action-dialog";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { MISSING_VALUE, formatCount } from "@/lib/copy-utils";
+import type { MethodBEligibility } from "@/lib/certification/method-b-eligibility";
 import {
   useMethodBEligibility,
   useStartNewProductionProcess,
@@ -17,6 +18,16 @@ const MOISTURE_PATHWAY_LABELS: Record<string, string> = {
   consistent_target_moisture: "Consistent target moisture",
   measured_every_batch: "Moisture measured for every batch",
 };
+
+/** Why unsampled batches are not open yet: the Samples still short and the prerequisites still missing. */
+function unsampledGap(status: Pick<MethodBEligibility, "eligibleSampleCount" | "agreedBaselineSize" | "prerequisitesRecorded">): string {
+  const short = Math.max(0, status.agreedBaselineSize - status.eligibleSampleCount);
+  const needs = [
+    short > 0 ? `${formatCount(short, "more Sample")}` : null,
+    status.prerequisitesRecorded ? null : "the Method-B prerequisites",
+  ].filter((need): need is string => need !== null);
+  return needs.length > 0 ? `Needs ${needs.join(" and ")}` : "Not open yet";
+}
 
 interface FeedstockTypeSamplingProps {
   facilityId: string;
@@ -90,7 +101,7 @@ export function FeedstockTypeSampling({
             Unsampled batches
           </span>
           <span className="body-medium font-medium text-[var(--color-text-primary)]">
-            {status.unsampledAllowed ? "Available" : "Not available"}
+            {status.unsampledAllowed ? "Available" : unsampledGap(status)}
           </span>
         </div>
       </div>

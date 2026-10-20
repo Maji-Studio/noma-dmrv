@@ -63,9 +63,10 @@ describe("MatchingOutputBins", () => {
     expect(text).toContain("Available 130 kg wet mass in 2 of 3 bins");
     expect(text).not.toContain("dry biochar");
   });
-  it("reads Not available when nothing resolves", () => {
+  it("leaves the figure out and says why when nothing resolves", () => {
     const summary = summarizeMatchingStock([{ id: "a", code: "B1", name: "A", dryMassKg: null, estimatedWetMassKg: null }]);
     expect(summary.wet).toBeNull();
+    expect(summary.gap).toBe("No wet estimate in the bin");
   });
   it("explicitly permits an order without stock", () => {
     state.bins = [];

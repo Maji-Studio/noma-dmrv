@@ -40,7 +40,7 @@ import type { ReactorWithRelations } from "@/data-access/reactors";
 import type { Reactor } from "@/db/schema";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { formatTotalThroughputTph } from "./reactor-throughput";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { FACILITY_NOT_FOUND } from "@/lib/copy-utils";
 import { reactorSheetSections } from "./reactor-read-sections";
 import { ILLUSTRATION_SIZE, ReactorArt } from "@/components/ui/illustrations";
 
@@ -70,7 +70,7 @@ function createColumns(
       accessorKey: "facilityName",
       header: "Facility",
       cell: ({ row }) => (
-        <span>{row.original.facilityName || MISSING_VALUE.notAvailable}</span>
+        <span>{row.original.facilityName || FACILITY_NOT_FOUND}</span>
       ),
     },
     {

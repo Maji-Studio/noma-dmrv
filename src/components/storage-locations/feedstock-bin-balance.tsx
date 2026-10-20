@@ -16,7 +16,7 @@ import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import { InfoHint } from "@/components/ui/tooltip";
 import { useFeedstockBinStock } from "@/hooks/use-bin-movements";
 import { useFacilityClock } from "@/hooks/use-facility-context";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { NO_MOISTURE_READING } from "@/lib/copy-utils";
 import { formatFacilityDateTime, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { ESTIMATED_WATER_LABEL, LOST_MASS_LABEL } from "@/lib/output-stock/labels";
@@ -113,9 +113,10 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
   const waterKg = estimatedDryKg === null ? null : Math.max(currentWetKg - estimatedDryKg, 0);
   const bands: PileBand[] = (stock.data?.batches ?? []).filter((batch) => batch.wetKg > 0).map((batch) => ({ label: batch.code, kg: estimatedDryKg === null ? batch.wetKg : batch.dryKg ?? 0, details: [
     { label: "In the pile now", value: `${formatMassKg(batch.wetKg)} wet mass` },
-    { label: "Share of the pile", value: currentWetKg > 0 ? `${Math.round((batch.wetKg / currentWetKg) * PERCENT)}%` : MISSING_VALUE.notAvailable },
+    // A share is derived, so an empty pile leaves the row out.
+    ...(currentWetKg > 0 ? [{ label: "Share of the pile", value: `${Math.round((batch.wetKg / currentWetKg) * PERCENT)}%` }] : []),
     { label: "Received", value: `${formatMassKg(batch.intakeWetKg)} wet mass` },
-    { label: "Moisture at intake", value: batch.moisturePercent === null ? MISSING_VALUE.notAvailable : formatMoisturePercent(batch.moisturePercent) },
+    { label: "Moisture at intake", value: batch.moisturePercent === null ? NO_MOISTURE_READING : formatMoisturePercent(batch.moisturePercent) },
     { label: "Received on", value: formatFacilityDateTime(batch.receivedAt, clock.timeZone) },
   ] }));
   if (waterKg !== null && waterKg > 0) bands.push({ label: ESTIMATED_WATER_LABEL, kg: waterKg, category: "existing-water", details: [

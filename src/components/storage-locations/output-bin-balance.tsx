@@ -4,7 +4,6 @@ import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import { useFacilityClock } from "@/hooks/use-facility-context";
 import { useOutputStockBalance, useOutputStockHistory, useOutputSubBins } from "@/hooks/use-output-stock";
 import { STOCK_PART_MIN_KG } from "@/config/output-stock";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { DRY_BIOCHAR_LABEL } from "@/components/biochar-products/product-composition-components";
@@ -39,7 +38,8 @@ export function mixPileBands(layers: OutputSubBin[], dryKg: number | null, wetKg
   const waterKg = wetKg === null ? 0 : wetKg - solidsKg;
   return [
     ...layers.map((layer) => ({ label: layer.code, kg: layer.dryMassKg, details: [
-      { label: "Share of dry biochar", value: dryKg ? `${Math.round((layer.dryMassKg / dryKg) * PERCENT)}%` : MISSING_VALUE.notAvailable },
+      // A share is derived, so a bin without dry stock leaves the row out.
+      ...(dryKg ? [{ label: "Share of dry biochar", value: `${Math.round((layer.dryMassKg / dryKg) * PERCENT)}%` }] : []),
       // A batch in a pile has no wet estimate of its own, so it has no water row.
       ...contentsRows({ dryMassKg: layer.dryMassKg, solidsKg: layer.solidsKg, ingredients: layer.ingredients, waterKg: null }),
       { label: "Added", value: formatFacilityDateTime(layer.placedAt, timeZone) },
@@ -49,7 +49,8 @@ export function mixPileBands(layers: OutputSubBin[], dryKg: number | null, wetKg
     ] })),
     ...(waterKg >= STOCK_PART_MIN_KG ? [{ label: ESTIMATED_WATER_LABEL, kg: waterKg, category: "existing-water" as const, details: [
       { label: ESTIMATED_WATER_LABEL, value: formatMassKg(waterKg) },
-      { label: "Moisture", value: moisturePercent === null ? MISSING_VALUE.notAvailable : formatMoisturePercent(moisturePercent) },
+      // The pile's moisture is an estimate, so without one the row is left out.
+      ...(moisturePercent === null ? [] : [{ label: "Moisture", value: formatMoisturePercent(moisturePercent) }]),
     ] }] : []),
   ];
 }

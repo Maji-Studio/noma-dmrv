@@ -14,7 +14,6 @@ import type {
   StatusHistoryEntityType,
   SubmissionStatusHistoryEntry,
 } from "@/lib/certification/status-history";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDate, formatDateTime } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { describeStatusChangeActor } from "./status-change-actor";
@@ -130,7 +129,7 @@ function StatusHistoryList({ entries }: { entries: SubmissionStatusHistoryEntry[
               ) : (
                 // Changed before recording began, at a time nothing marks.
                 <span className="text-[var(--color-text-tertiary)]">
-                  {MISSING_VALUE.notAvailable}
+                  Date unknown
                 </span>
               )}
             </div>

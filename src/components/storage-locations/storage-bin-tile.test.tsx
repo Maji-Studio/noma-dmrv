@@ -18,11 +18,12 @@ describe('archived storage board tile', () => {
     expect(JSON.stringify(renderer.toJSON())).toContain('100 kg');
     await act(async () => renderer.unmount());
   });
-  it('shows unavailable stock without calling it empty or adding a mass unit', async () => {
+  it('leaves out a stock figure it does not have, without calling it empty or adding a mass unit', async () => {
     let renderer!: ReactTestRenderer;
     await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, biocharInventory: { ...bin.biocharInventory, dryMassKg: null } }} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
     const text = JSON.stringify(renderer.toJSON());
-    expect(text).toContain('Not available');
+    expect(text).not.toContain('Not available');
+    expect(text).not.toContain(' kg');
     expect(text).not.toContain('Empty');
     expect(text).not.toContain('dry biochar');
     await act(async () => renderer.unmount());

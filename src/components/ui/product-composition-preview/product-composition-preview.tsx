@@ -15,7 +15,8 @@
  * - `components`: the surface already split every part into solids and water
  *   (`productCompositionComponents` in `@/components/biochar-products`), so an
  *   ingredient's own water joins the water part instead of counting as solids.
- *   Missing parts read "Not available" and the bar stays unresolved. The form
+ *   A part that cannot be derived keeps its name with no figure, and the bar
+ *   stays unresolved. The form
  *   passes live parts; the product read view passes the saved snapshot with
  *   its total as `headline`, `formatMass` at save precision and the saved
  *   basis under the arithmetic.
@@ -68,7 +69,7 @@ export type ProductCompositionPartKind = "biochar" | "ingredient" | "water" | "a
 
 /**
  * One part of the product, already split. `massKg` is null when the part
- * cannot be derived, and the key then reads "Not available" for it.
+ * cannot be derived, and the key then names the part with no figure.
  */
 export interface ProductCompositionPart {
   label: string;
@@ -306,9 +307,12 @@ function formatCompositionArithmetic(
   wetMassKg: number | null | undefined,
   segments: readonly MassSegment[],
   format: SegmentFormat,
-): string {
-  const parts = segments.map((segment) => format(segment.mass)).join(" + ");
-  return `${wetLabel} is the sum of its parts: ${parts} = ${format(resolvedMass(wetMassKg))}.`;
+): string | null {
+  const totalKg = resolvedMass(wetMassKg);
+  const masses = segments.map((segment) => segment.mass);
+  if (totalKg === null || masses.some((mass) => mass === null)) return null;
+  const parts = (masses as number[]).map(format).join(" + ");
+  return `${wetLabel} is the sum of its parts: ${parts} = ${format(totalKg)}.`;
 }
 
 function UnresolvedBar() {
@@ -343,11 +347,12 @@ export function ProductCompositionPreview({
   const segments = split
     ? (partsResolve(split, resolvedMass(wetMassKg)) ? split : null)
     : resolveSegments({ wetMassKg, dryBiocharKg, ingredients, addedWaterKg, dryLabel, remainderLabel });
-  // A split with some parts known still names each part, so a missing one
-  // reads "Not available" instead of vanishing from the product.
+  // A split with some parts known still names each part, so a part whose mass
+  // cannot be derived keeps its label in the key, with no figure.
   const partlyKnown = split !== null && split.some((segment) => segment.mass !== null);
 
   const totalKg = resolvedMass(wetMassKg);
+  const knownDryKg = resolvedMass(dryBiocharKg);
   const flow = segments && sources && components && totalKg !== null
     ? productFlowDiagram(sources, components, wetLabel, totalKg, formatMass)
     : null;
@@ -370,9 +375,9 @@ export function ProductCompositionPreview({
     // the rest of the product is still missing.
     <div className="flex flex-col gap-6">
       <UnresolvedBar />
-      {!split && resolvedMass(dryBiocharKg) !== null && (
+      {!split && knownDryKg !== null && (
         <p className="body-caption tabular-nums text-[var(--color-text-secondary)]">
-          {dryLabel} {formatMass(resolvedMass(dryBiocharKg))}
+          {dryLabel} {formatMass(knownDryKg)}
         </p>
       )}
       <p className="body-caption text-[var(--color-text-tertiary)]">{UNRESOLVED_COPY}</p>

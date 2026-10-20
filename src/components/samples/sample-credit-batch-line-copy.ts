@@ -16,7 +16,8 @@ import {
 export const SAMPLE_CREDIT_BATCH_INFO_LABEL = "Which credit batch this Sample belongs to";
 
 const SELECTED_INFO = "This Sample characterises the credit batch chosen above.";
-const UNAVAILABLE_INFO = "This credit batch could not be found. Choose another credit batch above.";
+const UNAVAILABLE_LEAD = "Credit batch not found";
+const UNAVAILABLE_INFO = "Choose another credit batch above.";
 const EMPTY_INFO = "Choose a credit batch above. A Sample characterises one credit batch.";
 
 export type SampleCreditBatchLineView =
@@ -41,7 +42,8 @@ function describeUnlabeled(view: SampleCreditBatchLineView): CreditBatchLineCopy
     case "error":
       return errorLineCopy();
     case "unavailable":
-      return missingLineCopy(MISSING_VALUE.notAvailable, UNAVAILABLE_INFO);
+      // The lookup answered and the batch is gone, so the line says that, not a token.
+      return { ...CREDIT_BATCH_LINE_BASE, lead: UNAVAILABLE_LEAD, info: UNAVAILABLE_INFO };
     case "selected":
       return { ...CREDIT_BATCH_LINE_BASE, lead: "Credit batch: ", batches: [view.batch], info: SELECTED_INFO };
   }

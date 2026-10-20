@@ -7,7 +7,11 @@ import {
   CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
   DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
 } from "@/lib/isometric/storage-blueprints";
-import { buildRemovalTemplateDiagnostic } from "./removal-template-diagnostic";
+import {
+  BLUEPRINT_NOT_RESOLVED,
+  buildRemovalTemplateDiagnostic,
+  INPUT_NOT_IN_BLUEPRINT,
+} from "./removal-template-diagnostic";
 
 function template(
   blueprintKey: string,
@@ -292,5 +296,26 @@ describe("buildRemovalTemplateDiagnostic", () => {
       "unsupported-component",
     );
     expect(diagnostic.aggregateStatus).toBe("missing");
+    // noma did not resolve the blueprint, so the gap is not blamed on Isometric.
+    expect(diagnostic.groups[0].components[0].inputs[0].expected).toEqual(
+      expect.objectContaining({ dataShape: BLUEPRINT_NOT_RESOLVED, unit: BLUEPRINT_NOT_RESOLVED }),
+    );
+  });
+
+  it("names a template input missing from the resolved blueprint", () => {
+    const diagnostic = buildRemovalTemplateDiagnostic({
+      template: template("grid_electricity_use", [
+        { key: "not_in_blueprint", quantityKind: "energy" },
+      ]),
+      blueprints: [
+        blueprint("grid_electricity_use", [
+          { key: "electricity_use", quantityKind: "energy", unit: "kWh" },
+        ]),
+      ],
+    });
+
+    expect(diagnostic.groups[0].components[0].inputs[0].expected).toEqual(
+      expect.objectContaining({ dataShape: INPUT_NOT_IN_BLUEPRINT, unit: INPUT_NOT_IN_BLUEPRINT }),
+    );
   });
 });

@@ -141,7 +141,11 @@ export function SampleDocumentsPanel({
                   {doc.fileName}
                 </span>
                 <span className="body-caption text-[var(--color-text-tertiary)]">
-                  {DOCUMENT_TYPE_LABELS[doc.documentType]} · {formatFileSize(doc.fileSizeBytes)} · {doc.visibility}
+                  {[
+                    DOCUMENT_TYPE_LABELS[doc.documentType],
+                    doc.fileSizeBytes == null ? null : formatFileSize(doc.fileSizeBytes),
+                    doc.visibility,
+                  ].filter(Boolean).join(" · ")}
                 </span>
               </div>
               <a

@@ -17,14 +17,15 @@ const STATUS_CLASS = "body-caption text-[var(--color-text-secondary)]";
 /**
  * The row's one figure: wet mass, as an estimate, counting only the bins that
  * have one. A partial sum says how many bins it covers so it is never read as
- * the full stock; an unresolved figure is null so the muted "Not available"
- * applies. Dry stock and the bin breakdown live in the dialog.
+ * the full stock. With no wet estimate in any bin the figure is left out and
+ * `gap` says so. Dry stock and the bin breakdown live in the dialog.
  */
-export function summarizeMatchingStock(bins: readonly MatchingOutputBin[]): { wet: string | null } {
+export function summarizeMatchingStock(bins: readonly MatchingOutputBin[]): { wet: string | null; gap: string | null } {
   const withWet = bins.filter(bin => bin.estimatedWetMassKg != null);
   const wetKg = withWet.reduce((sum, bin) => sum + (bin.estimatedWetMassKg ?? 0), 0);
   const coverage = withWet.length === bins.length ? "" : ` in ${withWet.length} of ${bins.length} bins`;
-  return { wet: withWet.length === 0 ? null : `${formatWetEstimate(wetKg)} kg wet mass${coverage}` };
+  if (withWet.length === 0) return { wet: null, gap: `No wet estimate in ${bins.length === 1 ? "the bin" : `the ${bins.length} bins`}` };
+  return { wet: `${formatWetEstimate(wetKg)} kg wet mass${coverage}`, gap: null };
 }
 
 /**
@@ -52,7 +53,7 @@ export function MatchingOutputBins({ facilityId, formulationId }: { facilityId: 
         aria-haspopup="dialog"
         className="flex w-full items-center justify-between gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 py-10 text-left transition-colors duration-300 hover:border-[var(--color-border-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-interaction)]"
       >
-        <DerivedHeadline label="Available" value={summary.wet} />
+        <DerivedHeadline label="Available" value={summary.wet} sub={summary.gap ?? undefined} />
         <CaretRightIcon aria-hidden size={16} weight="bold" className="shrink-0 text-[var(--color-text-tertiary)]" />
       </button>
       <Modal isOpen={open} onClose={() => setOpen(false)} ariaLabelledBy={titleId} width="md">

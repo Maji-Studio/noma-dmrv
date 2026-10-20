@@ -180,7 +180,8 @@ export function ProcessFlowPreview(props: ProcessFlowProps) {
   const { sourceBinName, reactorName, destinationBinName } = props;
   if (!sourceBinName && !reactorName && !destinationBinName) return null;
   const basis = resolveBasis(props);
-  // Until a yield resolves there is no basis to name, only the figure missing.
+  // Until a yield resolves there is no basis to name; the headline is left out
+  // and the line under the flow names the masses still missing.
   const yieldLabel = basis.yieldPercent === null ? "Yield" : `${basis.dry ? "Dry" : "Wet"} yield`;
   const diagram = processFlowDiagram(props);
 

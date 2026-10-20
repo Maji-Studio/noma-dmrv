@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { RemovalCompilationView } from "@/fn/certification";
+import { NO_LEGS_RECORDED } from "@/fn/certification/removal-ledger-preview";
 import { RemovalEmissionsLedger } from "./removal-emissions-ledger";
 
 describe("RemovalEmissionsLedger", () => {
@@ -19,6 +20,7 @@ describe("RemovalEmissionsLedger", () => {
             input: "Mass and distance",
             magnitude: 42,
             unit: "t·km",
+            missingReason: null,
           }],
           inputsUnavailable: false,
           creditBatches: [{ id: "batch-1", code: "CB-001" }],
@@ -76,8 +78,35 @@ describe("RemovalEmissionsLedger", () => {
       />,
     );
 
-    expect(html).toContain("Not available");
+    expect(html).not.toContain("Not available");
     expect(html).toContain("Complete the source data checks");
     expect(html).not.toContain("<table");
+  });
+
+  it("keeps a required input it cannot sum, with the reason in its value", () => {
+    const html = renderToStaticMarkup(
+      <RemovalEmissionsLedger
+        compilation={{ estimatedStoredCo2eTonnes: null } as RemovalCompilationView}
+        ledger={{
+          inputs: [
+            { id: "feedstock-transport", component: "Feedstock transport", input: "Mass and distance", magnitude: null, unit: "t·km", missingReason: NO_LEGS_RECORDED },
+            { id: "biochar-dry-mass", component: "Stored carbon", input: "Biochar, dry mass", magnitude: 3, unit: "t", missingReason: null },
+          ],
+          inputsUnavailable: false,
+          creditBatches: [],
+          productionRuns: [],
+          applications: [{ id: "application-1", code: "AP-001", deliveryCode: "DL-001", creditBatchIds: [] }],
+          claims: [],
+        }}
+        facilityId="facility-1"
+        isLoading={false}
+      />,
+    );
+
+    expect(html).toContain("Biochar, dry mass");
+    expect(html).toContain("Feedstock transport");
+    expect(html).toContain(NO_LEGS_RECORDED);
+    expect(html).not.toContain("t·km");
+    expect(html).toContain("No credit batch");
   });
 });

@@ -103,9 +103,9 @@ describe("SelectBatchesStep", () => {
     expect(html).not.toContain("Link production data");
     expect(html).toContain('aria-label="Open to-dos for CB-2"');
     expect(html).toContain('href="/credit-batches/batch-2?facility=facility-1"');
-    // Only ready batches can be selected; unknown dry mass is not a zero.
+    // Only ready batches can be selected; an unknown dry mass is left out, not a zero.
     expect(html).not.toContain("Select credit batch for Jul 1 to Jul 31, 2026, CB-2");
-    expect(html).toContain("Not available");
+    expect(html).not.toContain("0.00 t dry");
   });
 
   it("names a single open check without a count tail", () => {

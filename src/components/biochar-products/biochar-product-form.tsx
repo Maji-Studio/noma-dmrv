@@ -99,8 +99,8 @@ export function BiocharSourceMassFields({
 
 /**
  * The product composition under the mix fields, at both levels once the
- * biochar or an ingredient has a mass. Before that it is a key of
- * "Not available" rows that only explains what will appear, so only Detailed
+ * biochar or an ingredient has a mass. Before that it is a key of named
+ * parts with no figures that only explains what will appear, so only Detailed
  * shows it. Stock history lives on the storage bin, not here.
  */
 export function ProductCompositionBlock({

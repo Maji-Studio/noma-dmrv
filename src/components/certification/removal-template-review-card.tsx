@@ -83,7 +83,7 @@ function DeprecationFact({ entry }: { entry: RemovalTemplateReviewEntry }) {
     <div className="flex flex-col gap-2">
       <span className="body-caption text-[var(--color-text-tertiary)]">{DEPRECATED_FACTORS_LABEL}</span>
       <span className="body-small text-[var(--color-text-tertiary)]">
-        {count === 0 ? MISSING_VALUE.none : `${MISSING_VALUE.notAvailable}. Isometric does not report deprecated factors.`}
+        {count === 0 ? MISSING_VALUE.none : "Isometric does not report deprecated factors."}
       </span>
     </div>
   );

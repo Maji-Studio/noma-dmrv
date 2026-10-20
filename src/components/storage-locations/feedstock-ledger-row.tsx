@@ -27,8 +27,9 @@ const ENTRY_ICONS: Record<FeedstockLedgerEntry["kind"], string> = {
   intake: "intake", run_draw: "production_draw", ingredient_draw: "production_draw", loss: "loss", count: "count",
 };
 
+/** Null is an intake recorded without a wet mass, an operator gap. */
 function signedWet(kg: number | null): string {
-  if (kg === null) return MISSING_VALUE.notAvailable;
+  if (kg === null) return `Wet mass ${MISSING_VALUE.notRecorded.toLowerCase()}`;
   const sign = kg > 0 ? "+" : kg < 0 ? "−" : "";
   return `${sign}${formatMassKg(Math.abs(kg))} wet mass`;
 }

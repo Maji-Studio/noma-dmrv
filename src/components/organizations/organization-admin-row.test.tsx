@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModalProps } from "@/components/ui/modal";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { OrganizationAdminRow } from "./organization-admin-row";
 
 const state = vi.hoisted(() => ({
@@ -107,7 +106,7 @@ describe("OrganizationAdminRow API access", () => {
 
   it("disables the toggle while the state is unavailable", async () => {
     await render(undefined);
-    expect(text(tree.root)).toContain(`API access: ${MISSING_VALUE.notAvailable}`);
+    expect(text(tree.root)).toContain("API access: Could not load");
     expect(button("Turn API access off").props.disabled).toBe(true);
     expect(state.mutate).not.toHaveBeenCalled();
   });

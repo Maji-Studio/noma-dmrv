@@ -20,6 +20,6 @@ describe("shared credit batch line copy", () => {
   it("composes a missing line from the shared vocabulary", () => {
     const copy = missingLineCopy(MISSING_VALUE.notSet, "Needs a batch.");
     expect(copy).toMatchObject({ lead: "Credit batch: Not set", info: "Needs a batch.", tone: "neutral", batches: [], retry: false });
-    expect(missingLineCopy(MISSING_VALUE.notAvailable).info).toBeNull();
+    expect(missingLineCopy(MISSING_VALUE.notYetComputed).info).toBeNull();
   });
 });

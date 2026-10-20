@@ -175,7 +175,7 @@ describe("DetailField certification status", () => {
     },
   );
 
-  it.each(["notRecorded", "notAvailable", "notYetComputed"] as const)(
+  it.each(["notRecorded", "notSet", "notYetComputed"] as const)(
     "never reads a declared %s field as satisfied",
     (situation) => {
       const markup = renderToStaticMarkup(

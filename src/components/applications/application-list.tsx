@@ -100,7 +100,8 @@ function createColumns(
         return (
           <div className="flex flex-col">
             <span className="text-[var(--color-text-primary)]">
-              {customerName ?? MISSING_VALUE.notAvailable}
+              {/* A delivery without an order has no customer: the relation was never chosen. */}
+              {customerName ?? MISSING_VALUE.notSet}
             </span>
             {locationName && (
               <span className="text-[var(--text-s)] text-[var(--color-text-tertiary)]">{locationName}</span>

@@ -372,12 +372,14 @@ still sees the facility time; do not swap in `formatInTimeZone`. Input side:
 
 ## Missing values
 
-**Never hand-write a missing-value string in a component.** Every formatter in
-`@/lib/format-utils` and `@/lib/mass-moisture` absorbs null itself and returns
-one of the six shared tokens in `MISSING_VALUE` (`@/lib/copy-utils`), so a
-component's job is to pass the nullable value straight through. The six
-situations and the rule for picking between them are in
-[ux-writing.md](./ux-writing.md).
+**Never hand-write a missing-value token in a component.** Every formatter
+for a recorded value in `@/lib/format-utils` and `@/lib/mass-moisture` absorbs
+null itself and returns one of the shared tokens in `MISSING_VALUE`
+(`@/lib/copy-utils`), so a component's job is to pass the nullable value
+straight through. Formatters for derived figures (`formatCo2e`, `formatTonnes`,
+`formatFileSize`) take a number only: when there is no figure the caller leaves
+it out or says why. The situations, the reasons and the rule for picking
+between them are in [ux-writing.md](./ux-writing.md).
 
 Three seams carry it:
 
@@ -386,7 +388,7 @@ Three seams carry it:
   coalesce are counts. Aggregate with `sumNullable` / `sumNullableBy`
   (`@/lib/nullable-sum`), which returns null when nothing was reported. When a
   readout carries its own unit, suppress the unit with the value
-  (`hero-kpi-band.tsx` is the reference) so nothing reads "Not available tph".
+  (`hero-kpi-band.tsx` is the reference) so nothing reads "Not recorded tph".
 - **`DetailField` / `DetailPanelField`** (`@/components/ui/detail-panel`) — pass
   the raw nullable `value` plus `emptySituation` when the field means something
   other than "not recorded". The field renders the token in the one placeholder

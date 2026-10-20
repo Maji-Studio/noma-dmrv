@@ -29,7 +29,7 @@ import {
 } from "@/lib/credit-batches/timeline";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { formatDateRange } from "@/lib/format-utils";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { LOAD_FAILED } from "@/lib/copy-utils";
 import { cn } from "@/lib/utils";
 import { BatchHoverCard } from "./credit-batch-timeline-hover-card";
 import {
@@ -72,7 +72,7 @@ type BatchView = CreditBatchStateView;
 
 /** What the bar's label says while its state is not known. */
 function pendingStateLabel(readinessFailed: boolean): string {
-  return readinessFailed ? MISSING_VALUE.notAvailable : "Loading";
+  return readinessFailed ? LOAD_FAILED : "Loading";
 }
 
 /** Opens a scroll box with today in the middle, once per year shown. */
