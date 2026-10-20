@@ -166,7 +166,9 @@ function WizardBody({
   const facilitySetupComplete = selectable.data?.facilitySetupComplete ?? false;
   const showEmptyStep =
     step === "empty" ||
-    (!!emptyQuery.data && hasEmptyComponentsStep(emptyQuery.data));
+    (!!landing.data &&
+      !!emptyQuery.data &&
+      hasEmptyComponentsStep(emptyQuery.data));
   const steps = showEmptyStep
     ? [SELECT_STEP, EMPTY_STEP, SUBMIT_STEP]
     : [SELECT_STEP, SUBMIT_STEP];
