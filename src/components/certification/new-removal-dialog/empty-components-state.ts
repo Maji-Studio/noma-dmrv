@@ -69,3 +69,29 @@ export function recordedAt(batch: RemovalEmptyComponentsBatch): Date | null {
   const times = batch.zeros.map((zero) => new Date(zero.createdAt).getTime());
   return times.length ? new Date(Math.min(...times)) : null;
 }
+
+export interface StepRow {
+  componentId: string;
+  name: string;
+  recorded: boolean;
+}
+
+/** Open and recorded components in one list, in template order (group, then component). */
+export function stepRows(batch: RemovalEmptyComponentsBatch): StepRow[] {
+  return [
+    ...batch.lines.map((line) => ({
+      componentId: line.componentId,
+      name: line.displayName,
+      recorded: false,
+      position: line.position,
+    })),
+    ...batch.zeros.map((zero) => ({
+      componentId: zero.componentId,
+      name: zero.displayName ?? zero.componentId,
+      recorded: true,
+      position: zero.position,
+    })),
+  ]
+    .sort((a, b) => a.position - b.position)
+    .map((row) => ({ componentId: row.componentId, name: row.name, recorded: row.recorded }));
+}

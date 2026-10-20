@@ -34,6 +34,7 @@ import {
   componentsWord,
   recordedAt,
   recordedNote,
+  stepRows,
 } from "./empty-components-state";
 
 const LINK_ICON_SIZE = 12;
@@ -195,37 +196,36 @@ function BatchCard({
 
       {(open > 0 || recorded > 0) && (
         <ul className="flex flex-col" aria-label={`Components in ${batch.code}`}>
-          {batch.lines.map((line) => (
-            <li
-              key={line.componentId}
-              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-12 px-16 py-4 body-small [border-top:var(--row-divider)]"
-            >
-              <span className="min-w-0">{line.displayName}</span>
-              <Link
-                href={emissionsBatchHref(batch.creditBatchId)}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`Add entry for ${line.displayName}`}
-                className="inline-flex min-h-44 items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline md:min-h-32"
+          {stepRows(batch).map((row) =>
+            row.recorded ? (
+              <li
+                key={row.componentId}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-12 px-16 py-8 body-small [border-top:var(--row-divider)]"
               >
-                Add entry
-                <ArrowSquareOutIcon size={LINK_ICON_SIZE} aria-hidden />
-              </Link>
-            </li>
-          ))}
-          {batch.zeros.map((zero) => (
-            <li
-              key={zero.id}
-              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-12 px-16 py-8 body-small [border-top:var(--row-divider)]"
-            >
-              <span className="min-w-0">
-                {zero.displayName ?? zero.componentId}
-              </span>
-              <span className="body-caption text-[var(--color-text-secondary)]">
-                Recorded zero
-              </span>
-            </li>
-          ))}
+                <span className="min-w-0">{row.name}</span>
+                <span className="body-caption text-[var(--color-text-secondary)]">
+                  Recorded zero
+                </span>
+              </li>
+            ) : (
+              <li
+                key={row.componentId}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-12 px-16 py-4 body-small [border-top:var(--row-divider)]"
+              >
+                <span className="min-w-0">{row.name}</span>
+                <Link
+                  href={emissionsBatchHref(batch.creditBatchId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Add entry for ${row.name}`}
+                  className="inline-flex min-h-44 items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline md:min-h-32"
+                >
+                  Add entry
+                  <ArrowSquareOutIcon size={LINK_ICON_SIZE} aria-hidden />
+                </Link>
+              </li>
+            ),
+          )}
         </ul>
       )}
 

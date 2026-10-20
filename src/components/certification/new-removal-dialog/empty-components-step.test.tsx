@@ -33,10 +33,10 @@ function batch(overrides: { lines?: string[]; zeros?: Array<{ name: string; note
   return {
     creditBatchId: BATCH_ID,
     code: "CB-26-001",
-    lines: (overrides.lines ?? []).map((name) => ({ componentId: `c-${name}`, displayName: name, group: "G", description: null })),
+    lines: (overrides.lines ?? []).map((name, index) => ({ componentId: `c-${name}`, displayName: name, group: "G", description: null, position: index })),
     zeros: (overrides.zeros ?? []).map((zero) => ({
       id: `z-${zero.name}`, componentId: `c-${zero.name}`, displayName: zero.name,
-      note: zero.note ?? null, authorId: "user-1", createdAt: new Date("2026-10-20T10:00:00Z"),
+      position: ["A", "B", "C"].indexOf(zero.name), note: zero.note ?? null, authorId: "user-1", createdAt: new Date("2026-10-20T10:00:00Z"),
     })),
   };
 }
@@ -104,6 +104,12 @@ describe("EmptyComponentsStep", () => {
     expect(mocks.undo).toHaveBeenCalledWith({
       removalId: REMOVAL_ID, creditBatchId: BATCH_ID, expectedRemovalVersion: 6,
     });
+  });
+
+  it("lists recorded components in template order, not the order they were written", () => {
+    renderStep({ removalVersion: 1, batches: [batch({ zeros: [{ name: "C" }, { name: "A" }, { name: "B" }] })] });
+    const rows = screen.getByRole("list", { name: "Components in CB-26-001" }).querySelectorAll("li");
+    expect([...rows].map((row) => row.textContent?.replace("Recorded zero", ""))).toEqual(["A", "B", "C"]);
   });
 
   it("says so when a batch has nothing empty", () => {

@@ -5,15 +5,18 @@ import {
   hasEmptyComponentsStep,
   landingStep,
   openComponentCount,
+  stepRows,
 } from "./empty-components-state";
 
+const POSITIONS: Record<string, number> = { a: 0, b: 1, c: 2, d: 3 };
+
 function line(componentId: string) {
-  return { componentId, displayName: componentId, group: "Group", description: null };
+  return { componentId, displayName: componentId, group: "Group", description: null, position: POSITIONS[componentId] ?? 99 };
 }
 function zero(componentId: string) {
   return {
     id: `zero-${componentId}`, componentId, note: null, authorId: "user-1",
-    createdAt: new Date("2026-10-20T10:00:00Z"), displayName: componentId,
+    createdAt: new Date("2026-10-20T10:00:00Z"), displayName: componentId, position: POSITIONS[componentId] ?? 99,
   };
 }
 function data(batches: Array<{ code: string; lines?: string[]; zeros?: string[] }>): RemovalEmptyComponents {
@@ -75,5 +78,21 @@ describe("continueRefusal", () => {
     const refusal = continueRefusal(data([{ code: "CB-1", zeros: ["a"] }]));
     expect(refusal.reason).toBeNull();
     expect(openComponentCount(data([{ code: "CB-1", zeros: ["a"] }]))).toBe(0);
+  });
+});
+
+describe("stepRows", () => {
+  it("lists open and recorded components in template order, whatever the order the server returned", () => {
+    const batch = data([{ code: "CB-1", lines: ["c", "a"], zeros: ["d", "b"] }]).batches[0];
+    expect(stepRows(batch).map((row) => `${row.componentId}:${row.recorded}`)).toEqual([
+      "a:false", "b:true", "c:false", "d:true",
+    ]);
+  });
+
+  it("keeps the same order before and after the components are recorded", () => {
+    const open = stepRows(data([{ code: "CB-1", lines: ["a", "b", "c"] }]).batches[0]);
+    // The writer returns recorded zeros in entry order, not template order.
+    const confirmed = stepRows(data([{ code: "CB-1", zeros: ["c", "a", "b"] }]).batches[0]);
+    expect(confirmed.map((row) => row.componentId)).toEqual(open.map((row) => row.componentId));
   });
 });
