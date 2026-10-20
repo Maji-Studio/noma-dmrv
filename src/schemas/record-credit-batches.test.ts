@@ -4,7 +4,7 @@ import { recordCreditBatchesSchema } from "./record-credit-batches";
 const RECORD_ID = "aa989267-fc30-4bcf-a76b-263a6b4ee4ac";
 
 describe("recordCreditBatchesSchema", () => {
-  it.each(["feedstock", "delivery", "application"])("accepts a saved %s and normalizes its UUID", kind => {
+  it.each(["feedstock", "biochar-product", "delivery", "application"])("accepts a saved %s and normalizes its UUID", kind => {
     expect(recordCreditBatchesSchema.parse({ kind, id: RECORD_ID.toUpperCase() }))
       .toEqual({ kind, id: RECORD_ID });
   });

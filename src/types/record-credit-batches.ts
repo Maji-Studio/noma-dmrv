@@ -8,6 +8,9 @@ export interface RecordCreditBatch {
 
 export interface RecordCreditBatches {
   batches: RecordCreditBatch[];
-  /** A mix-bin application is held out of credit batches (ADR 0030); `batches` is empty by design. */
+  /**
+   * True for a mix-bin application with no Removal-owned slices; batches is empty.
+   * Products retain source provenance and return false (ADR 0030).
+   */
   heldOut: boolean;
 }

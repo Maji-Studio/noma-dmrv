@@ -60,9 +60,9 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
 
 ## Credit batch line on other forms (#1164, #1059) - **deferred**
 
-- `src/components/forms/form-actions.tsx:FormActions` `preview`: Biochar Product
-  and Emissions entry still need their credit batch line (#1059 section 2),
-  each from its own provenance, not its date. Emissions entry waits for #1242.
+- `src/components/forms/form-actions.tsx:FormActions` `preview`: Emissions entry
+  still needs its credit batch line (#1059 section 2), from its own
+  provenance, not its date. It waits for #1242.
 
 ## Record-lock follow-ups
 
