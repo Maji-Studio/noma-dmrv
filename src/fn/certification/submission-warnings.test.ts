@@ -65,5 +65,5 @@ it("exposes dropped facts as nonblocking advisories with the same message", asyn
   const { buildSubmissionAdvisories } = await import("./submission-warnings");
   const args = { removalTemplate: cula, lineSources: resolveLineSources({ definition: normalizeTemplateDefinition(cula) }),
     runs: [{ electricityKwh: 10, startTime: new Date("2026-10-01") } as ProductionRunForCertification], lineages: [] };
-  expect(buildSubmissionAdvisories(args)).toEqual([{ code: "droppedRecordedFact", fixTarget: "templateLineReview", message: buildSubmissionWarnings(args)[0] }]);
+  expect(buildSubmissionAdvisories(args)).toEqual([{ code: "droppedRecordedFact", fixTarget: "templateLines", message: buildSubmissionWarnings(args)[0] }]);
 });

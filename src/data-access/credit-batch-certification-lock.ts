@@ -24,7 +24,7 @@ export class CreditBatchLineageChangedError extends SafeError {
 
 async function readCreditBatchRemovals(
   ctx: OrgContext,
-  tx: DbTransaction,
+  tx: Pick<DbTransaction, "select">,
   creditBatchId: string,
   lock = false,
 ) {
@@ -105,8 +105,28 @@ async function creditBatchMembershipLock(
     throw new CreditBatchLineageChangedError();
   }
 
-  const facts = await readRecordLockLineage(ctx, tx, removals.map(row => ({ removalId: row.id, ghgStatementId: row.ghgStatementId })), true);
+  return readMembershipLock(ctx, tx, removals, true);
+}
+
+async function readMembershipLock(
+  ctx: OrgContext,
+  executor: Pick<DbTransaction, "select">,
+  removals: CreditBatchRemovals,
+  fresh = false,
+) {
+  const facts = await readRecordLockLineage(ctx, executor, removals.map(row => ({ removalId: row.id, ghgStatementId: row.ghgStatementId })), fresh);
   return recordLocks.creditBatch({ removals: facts, dependents: [] });
+}
+
+/** Read cached submission lineage without row/advisory locks or registry calls. */
+export async function readCreditBatchMembershipSubmissionLock(
+  ctx: OrgContext,
+  executor: Pick<DbTransaction, "select">,
+  creditBatchId: string,
+): Promise<boolean> {
+  requireOrgScope(ctx);
+  const removals = await readCreditBatchRemovals(ctx, executor, creditBatchId, false);
+  return (await readMembershipLock(ctx, executor, removals)).level === "sent";
 }
 
 export async function isCreditBatchMembershipLockedBySubmission(ctx: OrgContext, tx: DbTransaction, creditBatchId: string, lockedRemovals: CreditBatchRemovals): Promise<boolean> {

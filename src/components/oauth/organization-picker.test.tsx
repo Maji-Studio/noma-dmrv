@@ -60,6 +60,14 @@ it("shows an empty state without memberships", () => {
   expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
 });
 
+it("tells a Platform Admin without memberships to join an organization as a member", () => {
+  mocks.choices.mockReturnValue(data({ memberships: [], preselectedOrganizationId: null, isPlatformAdmin: true }));
+  render(<OrganizationPicker />);
+  expect(screen.getByRole("heading", { name: "Join an organization first" })).toBeTruthy();
+  expect(screen.getByText(/Apps connect as a member of an organization\. Platform Admins are not members/)).toBeTruthy();
+  expect(screen.queryByText("Ask an Owner to invite you.")).toBeNull();
+});
+
 it("submits the pick and follows a safe continuation", async () => {
   mocks.choices.mockReturnValue(data());
   mocks.mutateAsync.mockResolvedValue("/oauth/consent?sig=next");

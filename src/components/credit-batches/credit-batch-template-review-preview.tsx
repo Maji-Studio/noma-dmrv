@@ -1,19 +1,20 @@
 /**
  * The line review status of the Removal template chosen in the switch dialog,
- * read live from Isometric before the switch: how many lines need review, or
- * that every line is reviewed. Lines that need review, and a template Isometric
- * did not return in full, block the batch's Removals until an Owner or Admin
- * settles them in the Removal templates review. The preview never blocks the
+ * read live from Isometric before the switch: how many lines are still to
+ * decide, or that every line is decided. Lines to decide, and a template
+ * Isometric did not return in full, block the batch's Removals until an Owner
+ * or Admin settles them in Removal templates. The preview never blocks the
  * switch itself, so a failed read offers a retry and nothing more.
  */
 "use client";
 
 import Link from "next/link";
-import { TEMPLATE_NOT_FULLY_READ_TITLE } from "@/components/certification/removal-template-review-model";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
+import { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE } from "@/components/certification/removal-template-review-model";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { useRemovalTemplateReviewPreview } from "@/hooks/use-removal-template-review";
-import { certificationRemovalTemplatesHref } from "@/lib/certification/links";
+import { certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
 
 export interface TemplateReviewPreviewProps {
   facilityId: string;
@@ -23,10 +24,6 @@ export interface TemplateReviewPreviewProps {
 }
 
 const NOT_FULLY_READ_COPY = "Isometric did not return every unit or factor.";
-
-function needsReviewTitle(count: number): string {
-  return `${count} ${count === 1 ? "line needs" : "lines need"} review`;
-}
 
 export function TemplateReviewPreview({ facilityId, removalTemplateId, creditBatchCode }: TemplateReviewPreviewProps) {
   const preview = useRemovalTemplateReviewPreview(facilityId, removalTemplateId, !!removalTemplateId);
@@ -58,25 +55,28 @@ export function TemplateReviewPreview({ facilityId, removalTemplateId, creditBat
   const { needsReviewCount, enrichmentProblems } = preview.data;
   const notFullyRead = enrichmentProblems.length > 0;
   if (needsReviewCount === 0 && !notFullyRead) {
-    return <Notice tone="info">All lines in this template are reviewed.</Notice>;
+    return <Notice tone="info">All lines in this template are decided.</Notice>;
   }
 
   const blocked = needsReviewCount > 0
-    ? `Removals for ${creditBatchCode} stay blocked until an Owner or Admin reviews ${needsReviewCount === 1 ? "it" : "them"}.`
+    ? `Removals for ${creditBatchCode} stay blocked until an Owner or Admin decides ${needsReviewCount === 1 ? "it" : "them"}.`
     : `Removals for ${creditBatchCode} stay blocked until the template is read in full.`;
   return (
     <Notice
       tone="warning"
-      title={needsReviewCount > 0 ? needsReviewTitle(needsReviewCount) : TEMPLATE_NOT_FULLY_READ_TITLE}
+      title={needsReviewCount > 0 ? linesToDecideLabel(needsReviewCount) : TEMPLATE_NOT_FULLY_READ_TITLE}
       action={
         // A new tab, so this dialog and its unsaved choice stay open.
         <Link
           href={certificationRemovalTemplatesHref(facilityId, removalTemplateId)}
           target="_blank"
           rel="noreferrer"
-          className="body-small underline underline-offset-2"
+          className="inline-flex items-center gap-4 body-small underline underline-offset-2"
         >
-          Review lines in a new tab
+          {/* "Decide lines" only when there are lines to decide; a read problem has none. */}
+          {needsReviewCount > 0 ? DECIDE_LINES_LINK_LABEL : OPEN_REMOVAL_TEMPLATES_LINK_LABEL}
+          <ArrowSquareOutIcon size={12} aria-hidden />
+          <span className="sr-only"> (opens in a new tab)</span>
         </Link>
       }
     >
