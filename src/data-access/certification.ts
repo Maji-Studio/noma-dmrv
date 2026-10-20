@@ -1,7 +1,8 @@
 import { formatCertifierMappingLockMessage } from "@/lib/certification/lineage-lock-message";
 import { DomainError } from "@/lib/domain-errors";
+import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 import { insertDocument } from "./documents";
-import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
 import {
@@ -617,6 +618,11 @@ export async function getLatestSubmissionsForEntities(
   // batched read must not leak another facility's ledger rows.
   expectedFacilityId?: string,
   executor: Tx | typeof db = db,
+  // `submitted` keeps only rows that record a submission, so a newer draft
+  // version does not hide an earlier submission: "ledger" needs submitted_at,
+  // "verifier" needs metadata.submittedToVerifierAt (a GHG Statement reaches the
+  // verifier later than its ledger submitted_at, which stamps registry creation).
+  options: { submitted?: "ledger" | "verifier" } = {},
 ): Promise<Map<string, CertificationSubmissionRow>> {
   requireOrgScope(ctx);
   if (key.localEntityIds.length === 0) return new Map();
@@ -630,6 +636,12 @@ export async function getLatestSubmissionsForEntities(
         eq(certificationSubmissions.localEntityType, key.localEntityType),
         inArray(certificationSubmissions.localEntityId, key.localEntityIds),
         eq(certificationSubmissions.organizationId, ctx.organizationId),
+        options.submitted === "ledger"
+          ? isNotNull(certificationSubmissions.submittedAt)
+          : undefined,
+        options.submitted === "verifier"
+          ? sql`${certificationSubmissions.metadata}->>${SUBMISSION_METADATA_KEYS.submittedToVerifierAt} is not null`
+          : undefined,
       ),
     )
     .orderBy(
