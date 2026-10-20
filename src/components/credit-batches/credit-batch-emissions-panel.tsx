@@ -44,17 +44,13 @@ function PanelSection({ children }: { children: React.ReactNode }) {
 export function CreditBatchEmissionsPanel({
   creditBatchId,
   facilityId,
-  enabled,
 }: {
   creditBatchId: string;
   facilityId: string;
-  /** The server's EMISSIONS_ENTRIES_ENABLED flag, passed down by the page. */
-  enabled: boolean;
 }) {
   const { data: lines, isLoading, error, refetch, isRefetching } = useBatchEmissionLines(
-    enabled && facilityId && creditBatchId ? { facilityId, creditBatchId } : null,
+    facilityId && creditBatchId ? { facilityId, creditBatchId } : null,
   );
-  if (!enabled) return null;
 
   if (isEmissionLinesBlocked(error)) {
     return (

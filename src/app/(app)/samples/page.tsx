@@ -6,7 +6,6 @@
 
 import { SampleList } from "@/components/samples";
 import { SAMPLE_CREATE_CREDIT_BATCH_PARAM } from "@/lib/sample-create-intent";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import {
   CREATE_INTENT_PARAM,
   isCreateIntentValue,
@@ -33,7 +32,6 @@ export default async function SamplesPage({
     <SampleList
       initialCreate={isCreateIntentValue(query[CREATE_INTENT_PARAM])}
       initialCreditBatchId={creditBatch}
-      hideTransport={emissionsEntriesEnabled()}
     />
   );
 }

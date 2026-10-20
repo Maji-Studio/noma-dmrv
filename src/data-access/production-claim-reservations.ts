@@ -2,7 +2,6 @@ import { releaseSubmissionReservations } from "./submission-reservation-release"
 import { EMISSION_ENTRIES_CHANGED } from "@/lib/certification/emission-entry-messages";
 import { emissionEntryCanBeReserved } from "@/lib/certification/emission-entry-reservation";
 import { DomainError } from "@/lib/domain-errors";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { recordActivityChange } from "./activity-events";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { nextVersion } from "./row-version";
@@ -83,7 +82,7 @@ export async function reserveProductionEmissionsClaims(
   },
 ): Promise<void> {
   requireOrgScope(ctx);
-  const entryClaim = emissionsEntriesEnabled() ? args.entryClaim : undefined;
+  const entryClaim = args.entryClaim;
   const productionIds = [...new Set(args.creditBatchIds)].sort();
   const ids = [...new Set([...productionIds, ...(entryClaim?.memberBatchIds ?? [])])].sort();
   if (ids.length === 0 && !entryClaim?.frozenEntrySet.length) return;

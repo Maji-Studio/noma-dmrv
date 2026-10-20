@@ -5,9 +5,8 @@ import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import { loadEntrySourceContributions } from "./emission-entry-source-context";
 
 const mocks = vi.hoisted(() => ({
-  enabled: vi.fn(), scope: vi.fn(), observations: vi.fn(), facts: vi.fn(), latest: vi.fn(), registry: vi.fn(),
+  scope: vi.fn(), observations: vi.fn(), facts: vi.fn(), latest: vi.fn(), registry: vi.fn(),
 }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: mocks.enabled }));
 vi.mock("./removal-scope", () => ({ resolveScopeForRemoval: mocks.scope }));
 vi.mock("@/data-access/removal-template-observations", () => ({ getLatestTemplateObservations: mocks.observations }));
 vi.mock("./batch-emission-context", () => ({ loadBatchEmissionContext: mocks.facts }));
@@ -47,7 +46,6 @@ const facts: BatchEmissionContext = { batch: {
 } };
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.enabled.mockReturnValue(true);
   mocks.scope.mockResolvedValue(scope);
   mocks.observations.mockResolvedValue([observation]);
   mocks.facts.mockResolvedValue(structuredClone(facts));
@@ -82,11 +80,4 @@ it("does not freeze entries from a crashed unreserved draft", async () => {
 it("keeps local read failures visible", async () => {
   mocks.observations.mockRejectedValue(new Error("Local read failed"));
   await expect(loadEntrySourceContributions(ctx, "removal")).rejects.toThrow("Local read failed");
-});
-it("does no entry reads with the gate off", async () => {
-  mocks.enabled.mockReturnValue(false);
-  expect(await loadEntrySourceContributions(ctx, "removal")).toBeUndefined();
-  expect(mocks.scope).not.toHaveBeenCalled();
-  expect(mocks.observations).not.toHaveBeenCalled();
-  expect(mocks.facts).not.toHaveBeenCalled();
 });

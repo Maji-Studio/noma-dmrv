@@ -379,14 +379,12 @@ export function SubmitStep({
         }
       />
 
-      {ctx.emissionsEntriesEnabled && (
-        <ComponentsSent
-          ctx={ctx}
-          facilityId={facilityId}
-          review={compilationQuery.data?.review ?? null}
-          isLoading={compilationQuery.isLoading}
-        />
-      )}
+      <ComponentsSent
+        ctx={ctx}
+        facilityId={facilityId}
+        review={compilationQuery.data?.review ?? null}
+        isLoading={compilationQuery.isLoading}
+      />
 
       <RemovalEmissionsLedger
         compilation={compilationQuery.data ?? null}

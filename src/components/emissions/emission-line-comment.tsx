@@ -41,18 +41,17 @@ const MENU_CELL = cn("col-start-3 row-start-1 md:col-start-5 -mt-2 flex justify-
 interface LineCommentProps {
   line: EmissionLine;
   scope: EmissionBatchScope;
-  canWrite: boolean;
   editing: boolean;
   onEditingChange: (editing: boolean) => void;
 }
 
 /** The comment row: the saved comment, or its editor while adding or editing. Nothing when there is neither. */
-export function LineComment({ line, scope, canWrite, editing, onEditingChange }: LineCommentProps) {
-  if (editing && canWrite) {
+export function LineComment({ line, scope, editing, onEditingChange }: LineCommentProps) {
+  if (editing) {
     return <CommentEditor line={line} scope={scope} onDone={() => onEditingChange(false)} />;
   }
   if (!line.comment) return null;
-  return <CommentView line={line} scope={scope} canWrite={canWrite} onEdit={() => onEditingChange(true)} />;
+  return <CommentView line={line} scope={scope} onEdit={() => onEditingChange(true)} />;
 }
 
 function CommentLabel({ htmlFor }: { htmlFor?: string }) {
@@ -65,7 +64,7 @@ function CommentLabel({ htmlFor }: { htmlFor?: string }) {
   return htmlFor ? <label htmlFor={htmlFor} className={LABEL_CELL}>{content}</label> : <span className={LABEL_CELL}>{content}</span>;
 }
 
-function CommentView({ line, scope, canWrite, onEdit }: { line: EmissionLine; scope: EmissionBatchScope; canWrite: boolean; onEdit: () => void }) {
+function CommentView({ line, scope, onEdit }: { line: EmissionLine; scope: EmissionBatchScope; onEdit: () => void }) {
   const remove = useCommentDelete(line, scope);
   const comment = line.comment;
   if (!comment) return null;
@@ -76,17 +75,15 @@ function CommentView({ line, scope, canWrite, onEdit }: { line: EmissionLine; sc
         <span className="sr-only">Comment: </span>
         {comment.body}
       </p>
-      {canWrite && (
-        <span className={MENU_CELL}>
-          <EntryMenu
-            label="Actions for the comment"
-            items={[
-              { label: "Edit comment", onSelect: onEdit },
-              { label: "Delete comment", onSelect: remove.request, destructive: true },
-            ]}
-          />
-        </span>
-      )}
+      <span className={MENU_CELL}>
+        <EntryMenu
+          label="Actions for the comment"
+          items={[
+            { label: "Edit comment", onSelect: onEdit },
+            { label: "Delete comment", onSelect: remove.request, destructive: true },
+          ]}
+        />
+      </span>
       {remove.dialog}
     </div>
   );

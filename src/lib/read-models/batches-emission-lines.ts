@@ -2,7 +2,6 @@ import type { OrgContext } from "@/lib/auth/server";
 import { listEmissionEntriesForBatches } from "@/data-access/emission-entries";
 import { getLatestTemplateObservations, getTemplateObservationsByIds } from "@/data-access/removal-template-observations";
 import { loadBatchesEmissionAutomaticFacts } from "@/data-access/batch-emission-automatic-figures";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
 import { buildBatchEmissionLines } from "./batch-emission-lines";
 
@@ -23,7 +22,7 @@ export async function loadBatchesEmissionLines(
   const templateIds = [...new Set(batches.flatMap((batch) => batch.removalTemplateId ? [batch.removalTemplateId] : []))];
   const [observations, storedEntries, automatic] = await Promise.all([
     getLatestTemplateObservations(ctx, "isometric", templateIds),
-    emissionsEntriesEnabled() ? listEmissionEntriesForBatches(ctx, ids) : Promise.resolve([]),
+    listEmissionEntriesForBatches(ctx, ids),
     loadBatchesEmissionAutomaticFacts(ctx, ids),
   ]);
   const byTemplate = new Map(observations.map((observation) => [observation.externalTemplateId, observation]));

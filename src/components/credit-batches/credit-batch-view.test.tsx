@@ -1,3 +1,4 @@
+vi.mock("@/hooks/use-emission-entries", () => ({ useBatchEmissionLines: () => ({ data: [], isLoading: false, error: null }) }));
 import type { ReactNode } from "react";
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { FormDetailControl, FormDetailProvider } from "@/components/forms/form-detail-context";

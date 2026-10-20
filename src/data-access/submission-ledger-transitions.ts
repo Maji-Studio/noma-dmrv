@@ -65,7 +65,6 @@ export async function markSubmissionSubmitted(
         })
         .where(and(eq(certificationSubmissions.id, args.supersedePreviousId), eq(certificationSubmissions.organizationId, ctx.organizationId)));
     }
-    // Not flag-gated: entries reserved while the flag was on must still be stamped.
     if (args.productionEmissionsClaim) {
       // Match reservation/value writers: all member batches in id order, then entries.
       const members = await tx.select({ creditBatchId: creditBatchApplications.creditBatchId }).from(creditBatchApplications)
@@ -285,4 +284,3 @@ export async function clearTerminalStatusForResubmit(
       .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
   }, tx, origin);
 }
-

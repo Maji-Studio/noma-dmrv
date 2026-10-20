@@ -35,13 +35,12 @@ const RECORDS_DATE = "Whole credit batch";
 interface SourcesTableProps {
   line: EmissionLine;
   scope: EmissionBatchScope;
-  canWrite: boolean;
   model: ReturnType<typeof lineBodyModel>;
   onForm: (mode: EntryFormMode) => void;
   onDeleteEntry: (line: EmissionLine, entry: EmissionEntry) => void;
 }
 
-export function SourcesTable({ line, scope, canWrite, model, onForm, onDeleteEntry }: SourcesTableProps) {
+export function SourcesTable({ line, scope, model, onForm, onDeleteEntry }: SourcesTableProps) {
   const { records } = model;
   const entryCount = model.values.length + model.stopped.length;
   const groupLabel = entryCount > 1 ? "Manual entries" : "Manual entry";
@@ -72,7 +71,6 @@ export function SourcesTable({ line, scope, canWrite, model, onForm, onDeleteEnt
           line={line}
           entry={entry}
           scope={scope}
-          canWrite={canWrite}
           groupLabel={index === 0 ? groupLabel : null}
           onEdit={() => onForm({ kind: "edit", entry })}
           onDelete={() => onDeleteEntry(line, entry)}
@@ -84,7 +82,6 @@ export function SourcesTable({ line, scope, canWrite, model, onForm, onDeleteEnt
           line={line}
           entry={entry}
           scope={scope}
-          canWrite={canWrite}
           groupLabel={!model.values.length && index === 0 ? groupLabel : null}
           canEnterAgain={model.takesEntries}
           onEnterAgain={() => onForm({ kind: "again", entry })}
@@ -118,11 +115,10 @@ function EntrySource({ groupLabel, dateText, muted }: { groupLabel: string | nul
   );
 }
 
-function EntryRow({ line, entry, scope, canWrite, groupLabel, onEdit, onDelete }: {
+function EntryRow({ line, entry, scope, groupLabel, onEdit, onDelete }: {
   line: EmissionLine;
   entry: EmissionEntry;
   scope: EmissionBatchScope;
-  canWrite: boolean;
   groupLabel: string | null;
   onEdit: () => void;
   onDelete: () => void;
@@ -135,7 +131,7 @@ function EntryRow({ line, entry, scope, canWrite, groupLabel, onEdit, onDelete }
       <EntrySource groupLabel={groupLabel} dateText={dateText} />
       <span role="cell" className={DATE_CELL}>{dateText}</span>
       <span role="cell" className={DETAIL_CELL}>
-        <EntryEvidence entry={entry} scope={scope} canWrite={canWrite} actions={actions} />
+        <EntryEvidence entry={entry} scope={scope} actions={actions} />
       </span>
       <span role="cell" className={AMOUNT_CELL}>
         {figures.map((figure) => <span key={figure}>{figure}</span>)}
@@ -143,17 +139,16 @@ function EntryRow({ line, entry, scope, canWrite, groupLabel, onEdit, onDelete }
         {detail && <span className="body-caption text-[var(--color-text-tertiary)]">{detail}</span>}
       </span>
       <span role="cell" className={MENU_CELL}>
-        {canWrite && <EntryMenu label={`Actions for the manual entry, ${dateText}`} items={actions.items} />}
+        <EntryMenu label={`Actions for the manual entry, ${dateText}`} items={actions.items} />
       </span>
     </div>
   );
 }
 
-function StoppedRow({ line, entry, scope, canWrite, groupLabel, canEnterAgain, onEnterAgain, onDelete }: {
+function StoppedRow({ line, entry, scope, groupLabel, canEnterAgain, onEnterAgain, onDelete }: {
   line: EmissionLine;
   entry: EmissionEntry;
   scope: EmissionBatchScope;
-  canWrite: boolean;
   groupLabel: string | null;
   canEnterAgain: boolean;
   onEnterAgain: () => void;
@@ -168,15 +163,15 @@ function StoppedRow({ line, entry, scope, canWrite, groupLabel, canEnterAgain, o
       <span role="cell" className={cn(DATE_CELL, "text-[var(--color-text-tertiary)]")}>{dateText}</span>
       <span role="cell" className={cn(DETAIL_CELL, "flex flex-col items-start gap-8")}>
         <span className="body-caption text-[var(--st-wait)]">{stoppedEntryMessage(entry, canEnterAgain)}</span>
-        {canWrite && entry.canConfirm && <Button size="small" variant="primary" busy={confirming} onClick={() => void confirmEntry()}>Confirm</Button>}
-        {canWrite && !entry.canConfirm && canEnterAgain && <Button size="small" variant="primary" onClick={onEnterAgain}>Enter again</Button>}
+        {entry.canConfirm && <Button size="small" variant="primary" busy={confirming} onClick={() => void confirmEntry()}>Confirm</Button>}
+        {!entry.canConfirm && canEnterAgain && <Button size="small" variant="primary" onClick={onEnterAgain}>Enter again</Button>}
         {error && <ServerError message={error} />}
       </span>
       <span role="cell" className={cn(AMOUNT_CELL, "text-[var(--color-text-tertiary)] line-through")}>
         {figures.map((figure) => <span key={figure}>{figure}</span>)}
       </span>
       <span role="cell" className={MENU_CELL}>
-        {canWrite && <EntryMenu label={`Actions for the stopped manual entry, ${dateText}`} items={[{ label: "Delete", onSelect: onDelete, destructive: true }]} />}
+        <EntryMenu label={`Actions for the stopped manual entry, ${dateText}`} items={[{ label: "Delete", onSelect: onDelete, destructive: true }]} />
       </span>
     </div>
   );

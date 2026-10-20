@@ -1,4 +1,3 @@
-import { emissionsEntriesEnabledSchema } from "./emissions-entries";
 import { isOAuthProductionOrigin, oauthClientIdsSchema } from "./oauth-env-validation";
 import {
   emptyToUndefined,
@@ -43,7 +42,6 @@ function isValidStoragePrefix(value: string): boolean {
  * Ensures all required env vars are present and valid
  */
 const envSchema = z.object({
-  EMISSIONS_ENTRIES_ENABLED: emissionsEntriesEnabledSchema,
   // Database
   DATABASE_URL: z.string().url(),
 

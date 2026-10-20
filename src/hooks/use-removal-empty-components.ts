@@ -59,7 +59,6 @@ export function useRemovalEmptyComponents(
     queryFn: () => readEmptyComponents(removalId!),
     enabled: enabled && !!removalId,
     staleTime: 0,
-    // The server refuses the read while entries are switched off: do not retry.
     retry: false,
     refetchOnWindowFocus: refetchOnFocus ? "always" : false,
   });
@@ -100,8 +99,7 @@ interface ZeroScope {
 
 /**
  * Where a New Removal opens: the empty components step while any is
- * unconfirmed, the submit step otherwise, and straight to submit when the
- * emissions entries switch is off (the server supplies it on the context).
+ * unconfirmed, the submit step otherwise.
  * Resolved once per opening: later edits must not move the operator, so the
  * key sits outside `certificationKeys.all`, which every write invalidates.
  */
@@ -115,14 +113,13 @@ export function useRemovalLanding(
     queryKey: removalLandingKeys.removal(removalId ?? ""),
     queryFn: async () => {
       // The dialog reads the same context: share it instead of loading it twice.
-      const ctx = await queryClient.ensureQueryData(
+      await queryClient.ensureQueryData(
         removalCertifyContextQueryOptions(facilityId, removalId!),
       );
-      if (!ctx.emissionsEntriesEnabled) return { entriesEnabled: false, step: "submit" as const };
       const empties = await readEmptyComponents(removalId!).catch((error: unknown) => {
         throw new EmptyComponentsCheckError(error instanceof Error ? error.message : "Check failed");
       });
-      return { entriesEnabled: true, step: landingStep(empties) };
+      return { step: landingStep(empties) };
     },
     enabled: enabled && !!removalId,
     // Once per opening: stable while the dialog is open, gone when it closes, so

@@ -3,13 +3,11 @@ import { db, type DbTransaction } from "@/db";
 import { creditBatches, facilities, emissionEntries } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
-import { requireEmissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { requireOrgScope } from "./utils";
 import { nextVersion } from "./row-version";
 
 export async function lockEmissionEntry(ctx: OrgContext, tx: DbTransaction, id: string, options: { includeDeleted?: boolean } = {}) {
   requireOrgScope(ctx);
-  requireEmissionsEntriesEnabled();
   const [entry] = await tx
     .select()
     .from(emissionEntries)

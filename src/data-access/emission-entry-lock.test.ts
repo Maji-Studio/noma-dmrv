@@ -5,9 +5,6 @@ import { makeTestOrgContext } from "../../tests/helpers/test-org";
 import { assertEmissionEntryDocumentWritable, lockEmissionEntryBatch, lockEmissionEntryDocumentOwner } from "./emission-entry-lock";
 
 vi.mock("@/db", () => ({ db: {} }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({
-  requireEmissionsEntriesEnabled: vi.fn(),
-}));
 const ctx = makeTestOrgContext();
 const locks: unknown[][] = [];
 function transaction(results: unknown[][]) {

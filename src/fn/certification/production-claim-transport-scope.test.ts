@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
-import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import {
   collectProductionClaimAwareRequiredTransportCategories,
   collectProductionClaimAwareTransportEntityIds,
@@ -29,16 +28,6 @@ function lineage(args: {
     biocharProduct: { id: args.biocharProductId },
     feedstocks: [{ id: args.feedstockId }],
   } as ChainOfCustodyData;
-}
-
-function batchWithSample(
-  creditBatchId: string,
-  sampleId: string,
-): CreditBatchWithSamples {
-  return {
-    creditBatchId,
-    samples: [{ id: sampleId }],
-  } as unknown as CreditBatchWithSamples;
 }
 
 describe("production-claim-aware transport requirements", () => {
@@ -98,15 +87,11 @@ describe("production-claim-aware transport requirements", () => {
             feedstockId: "feedstock-unclaimed",
           }),
         ],
-        batchesWithSamples: [
-          batchWithSample("batch-prior", "sample-prior"),
-          batchWithSample("batch-unclaimed", "sample-unclaimed"),
-        ],
       }),
     ).toEqual({
       feedstockIds: ["feedstock-unclaimed", "batch-unclaimed-feedstock"],
       biocharProductIds: ["product-prior", "product-unclaimed"],
-      sampleIds: ["sample-unclaimed"],
+      sampleIds: [],
     });
   });
 });

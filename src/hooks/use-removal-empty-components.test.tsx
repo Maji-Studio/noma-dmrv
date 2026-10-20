@@ -25,7 +25,7 @@ function wrapper(client: QueryClient) {
 }
 
 beforeEach(() => {
-  mocks.context.mockReset().mockResolvedValue({ success: true, data: { emissionsEntriesEnabled: true } });
+  mocks.context.mockReset().mockResolvedValue({ success: true, data: {} });
   mocks.empties.mockReset();
 });
 
@@ -44,14 +44,6 @@ describe("useRemovalLanding", () => {
     const second = renderHook(() => useRemovalLanding("removal-1", "facility-1", true), { wrapper: wrapper(client) });
     await waitFor(() => expect(second.result.current.data?.step).toBe("submit"));
     expect(mocks.empties).toHaveBeenCalledTimes(2);
-  });
-
-  it("does not read the empty components when entries are switched off", async () => {
-    const client = new QueryClient();
-    mocks.context.mockResolvedValue({ success: true, data: { emissionsEntriesEnabled: false } });
-    const view = renderHook(() => useRemovalLanding("removal-1", "facility-1", true), { wrapper: wrapper(client) });
-    await waitFor(() => expect(view.result.current.data).toEqual({ entriesEnabled: false, step: "submit" }));
-    expect(mocks.empties).not.toHaveBeenCalled();
   });
 
   it("keeps the landing while the dialog stays open, even when the data later changes", async () => {

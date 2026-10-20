@@ -14,18 +14,12 @@ import { EmissionLinesBlockedError } from "@/lib/certification/emission-lines-bl
 import { REMOVAL_TEMPLATE_BLOCKERS, removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 
 const line = (componentId: string, label: string, state: string) => ({ componentId, label, state });
-const render_ = (enabled = true) => render(<CreditBatchEmissionsPanel creditBatchId="cb-1" facilityId="f-1" enabled={enabled} />);
+const render_ = () => render(<CreditBatchEmissionsPanel creditBatchId="cb-1" facilityId="f-1" />);
 
 beforeEach(() => { query.data = undefined; query.isLoading = false; query.error = null; });
 afterEach(cleanup);
 
 describe("CreditBatchEmissionsPanel", () => {
-  it("renders nothing when the gate is off", () => {
-    query.data = [line("a", "Diesel", "empty")];
-    const { container } = render_(false);
-    expect(container.firstChild).toBeNull();
-  });
-
   it("lists only open lines with their state and links to the batch", () => {
     query.data = [line("a", "Diesel", "empty"), line("b", "Grid", "filled"), line("c", "Lab", "missingEvidence"), line("d", "Zero", "confirmedZero")];
     render_();

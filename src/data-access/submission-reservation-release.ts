@@ -32,7 +32,6 @@ export async function releaseSubmissionReservations(ctx: OrgContext, tx: DbTrans
       ),
     )
     .returning();
-  // Not flag-gated: a reservation made while the flag was on must still be released.
   const releasedEntries = await tx.update(emissionEntries).set({
     sendReservedBySubmissionId: null, version: nextVersion(emissionEntries.version), updatedAt: sql`now()`,
   }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.sendReservedBySubmissionId, submissionId))).returning();

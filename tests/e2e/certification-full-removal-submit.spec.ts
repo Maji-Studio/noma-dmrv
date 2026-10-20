@@ -145,12 +145,10 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       await dialog.getByRole("button", { name: "Continue", exact: true }).click();
 
       // ── Empty components: confirm them before submitting ────────────────
-      // This branch only runs with EMISSIONS_ENTRIES_ENABLED on; with the flag
-      // off the step does not exist and the flow is unchanged.
-      // With emissions entries switched on, a component with nothing recorded
-      // for this Removal blocks submission until it has an entry or a recorded
-      // zero. The step appears only then. The rail marks no step current until
-      // the landing resolves, so waiting for either one is unambiguous.
+      // A component with nothing recorded for this Removal blocks submission
+      // until it has an entry or a recorded zero. The step appears only then.
+      // The rail marks no step current until the landing resolves, so waiting
+      // for either one is unambiguous.
       const emptyComponentsHeading = dialog.getByRole("heading", {
         name: "Empty components",
         level: 3,

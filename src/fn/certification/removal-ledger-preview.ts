@@ -1,4 +1,3 @@
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { type RemovalRunSummary } from "@/lib/certification/mass-accounting";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
@@ -171,21 +170,6 @@ export function buildRemovalLedgerPreview(args: {
             aggregate.biocharTransportMassDistanceTonneKm,
             "t·km",
             transportGap(aggregate.biocharTransportMassDistanceTonneKm, args.transportLegs.biochar.length),
-          ),
-        );
-      }
-      if (
-        !emissionsEntriesEnabled() &&
-        args.requiredTransportCategories.includes("sample") &&
-        (aggregate.sampleTransportMassDistanceTonneKm ?? 0) > 0
-      ) {
-        inputs.push(
-          input(
-            "sample-transport",
-            "Sample transport",
-            "Mass and distance",
-            aggregate.sampleTransportMassDistanceTonneKm,
-            "t·km",
           ),
         );
       }

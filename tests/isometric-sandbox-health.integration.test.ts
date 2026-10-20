@@ -181,14 +181,11 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
             .filter((c) => c.blueprint_key === "mass_distance_based_ci_emissions")
             .map((c) => ({ groupKey: g.key, component: c })),
         );
-        // Feedstock and biochar remain automatic. Sample shipping is entry-only
-        // after EMISSIONS_ENTRIES_ENABLED activation; its stable legacy mapping
-        // remains available only with the gate off. Drift closes on activation.
+        // Feedstock and biochar remain automatic. Sample shipping is entry-only.
         const transportGroupKeys = transportComponents.map((t) => t.groupKey);
         expect(transportGroupKeys).toContain("biomass-feedstock-transport");
         expect(transportGroupKeys).toContain("biochar-transport");
 
-        const { emissionsEntriesEnabled } = await import("@/lib/certification/emissions-entry-gate");
         for (const { groupKey, component } of transportComponents) {
           const input = component.inputs.find(
             (i) => i.input_key === "mass_distance",
@@ -199,7 +196,7 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
             "mass_distance_based_ci_emissions",
             "mass_distance",
           );
-          if (groupKey === "sampling-required-for-mrv" && emissionsEntriesEnabled()) {
+          if (groupKey === "sampling-required-for-mrv") {
             expect(mapping).toBeUndefined();
             continue;
           }

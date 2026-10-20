@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
-import type { CreditBatchDurabilityInput } from "@/lib/isometric/utils/durability-aggregation";
 import { collectTransportEntityIds } from "@/lib/isometric/utils/transport-lineage";
 
 function lineage(
@@ -20,18 +19,9 @@ function lineage(
   } as ChainOfCustodyData;
 }
 
-function batch(id: string, sampleIds: string[]): CreditBatchDurabilityInput {
-  return {
-    creditBatchId: id,
-    creditBatchCode: id.toUpperCase(),
-    runs: [],
-    samples: sampleIds.map((sid) => ({ id: sid })),
-  } as unknown as CreditBatchDurabilityInput;
-}
-
 describe("collectTransportEntityIds", () => {
-  it("returns empty arrays when no lineages or batches are provided", () => {
-    expect(collectTransportEntityIds([], [])).toEqual({
+  it("returns empty arrays when no lineages are provided", () => {
+    expect(collectTransportEntityIds([])).toEqual({
       feedstockIds: [],
       biocharProductIds: [],
       sampleIds: [],
@@ -45,7 +35,6 @@ describe("collectTransportEntityIds", () => {
         lineage({ biocharProduct: { id: "bp-2" } as never }),
         lineage({ biocharProduct: { id: "bp-1" } as never }), // dup
       ],
-      [],
     );
     expect(result.biocharProductIds.sort()).toEqual(["bp-1", "bp-2"]);
   });
@@ -63,29 +52,19 @@ describe("collectTransportEntityIds", () => {
           feedstocks: [{ id: "fs-b" } as never, { id: "fs-c" } as never],
         }),
       ],
-      [],
     );
     expect(result.feedstockIds.sort()).toEqual(["fs-a", "fs-b", "fs-c"]);
-  });
-
-  it("collects sample IDs from every batch, deduped (issue #309: samples anchor on batches)", () => {
-    const result = collectTransportEntityIds(
-      [],
-      [batch("cb-1", ["s-1", "s-2"]), batch("cb-2", ["s-2", "s-3"])],
-    );
-    expect(result.sampleIds.sort()).toEqual(["s-1", "s-2", "s-3"]);
   });
 
   it("handles lineages with missing biocharProduct without throwing", () => {
     const result = collectTransportEntityIds(
       [lineage({ biocharProduct: null })],
-      [],
     );
     expect(result.biocharProductIds).toEqual([]);
   });
 
-  it("handles batches with no samples without producing entries", () => {
-    const result = collectTransportEntityIds([], [batch("cb-1", [])]);
+  it("keeps sample transport IDs empty", () => {
+    const result = collectTransportEntityIds([]);
     expect(result.sampleIds).toEqual([]);
   });
 });

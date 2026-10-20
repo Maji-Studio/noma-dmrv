@@ -47,7 +47,10 @@ it("counts unique records and retains batch delivery shares with a constant numb
   expect(facts.b.automaticFigures["delivery-transport"]).toEqual({ magnitude: "4.004", unit: "km * tonne" });
   expect(loadCreditBatchRollups).toHaveBeenCalledExactlyOnceWith(ctx, ["a", "b"], { includeRunForwards: true }, expect.anything());
   expect(getProductionRunsForCertification).toHaveBeenCalledExactlyOnceWith(ctx, ["a", "b"], expect.anything());
-  expect(getTransportLegsForEntities).toHaveBeenCalledTimes(2);
+  expect(getTransportLegsForEntities).toHaveBeenCalledExactlyOnceWith(ctx, "feedstock", ["feedstock"], expect.anything());
+  expect(getSamplesByCreditBatchIds).not.toHaveBeenCalled();
+  expect(facts.a.automaticRecordCounts?.["sample-transport"]).toBe(0);
+  expect(facts.a.automaticFigures["sample-transport"]).toBeNull();
   expect(loadBiocharDeliveryTransportLegs).toHaveBeenCalledTimes(1);
   expect(getEmissionAutomaticMasses).toHaveBeenCalledTimes(1);
 });

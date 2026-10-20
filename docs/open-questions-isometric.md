@@ -127,10 +127,9 @@ The remaining #893 work is to include observation identity and contracts in
 immutable submission snapshots and draft recompilation checks (plan §4.5, PR 4).
 Entry-only period-input lines now block coverage in every environment until
 entries compile. Only the datapoint-builder stub plumbing remains, to be removed
-when entries compile (plan §4.5). Sample transport legs still feed the known
-bootstrap sample lines that have an automatic source. Retire those legs and
-replace their contributions with per-line entries in the app, API and MCP
-when entries compile (plan §4.5).
+when entries compile (plan §4.5). Sample transport legs no longer feed any
+line: sample shipping lines take only per-line entries (#1324). Old legs are
+deleted per organization with the retirement CLI (plan §5).
 
 ### Fixed datapoint deprecation signal (`isometric/fixed-datapoint-deprecation`)
 

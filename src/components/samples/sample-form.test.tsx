@@ -62,10 +62,10 @@ beforeEach(() => { batch.data = undefined; batch.status = "pending"; });
 afterEach(cleanup);
 
 describe("SampleForm transport step", () => {
-  it.each([[false, 1], [true, 0]])("with hideTransport=%s renders %i Transport steps", (hideTransport, count) => {
+  it("hides the Transport step", () => {
     loadBatch();
-    const { queryAllByTestId } = render(<SampleForm creditBatchId={saved.creditBatchId!} onSubmit={vi.fn()} hideTransport={hideTransport} />);
-    expect(queryAllByTestId("sample-transport-step")).toHaveLength(count);
+    const { queryAllByTestId } = render(<SampleForm creditBatchId={saved.creditBatchId!} onSubmit={vi.fn()} />);
+    expect(queryAllByTestId("sample-transport-step")).toHaveLength(0);
   });
 });
 

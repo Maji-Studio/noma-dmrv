@@ -333,7 +333,7 @@ async function seedFixture(): Promise<Fixture> {
     totalCarbonPercent: 80, organicCarbonPercent: 75, inorganicCarbonPercent: 5,
     ...SAMPLE_TIER_EVIDENCE,
   }).returning();
-  const leg = await createTransportLeg(ctx, { entityType: "sample", entityId: sample.id,
+  const leg = await createTransportLeg(ctx, { entityType: "feedstock", entityId: seeded.feedstockId,
     distanceKm: 10, loadMassKg: 1, transportMethodType: "road", calculationMethodType: "distance_based",
   });
   const ids: Record<EntityKey, string> = {
@@ -456,7 +456,7 @@ it("derived transport upserts bump the existing row", async () => {
     await tx.update(feedstocks).set({ distanceKmOverride: 10, distanceSource: "manual" }).where(eq(feedstocks.id, feedstock.id));
     await syncFeedstockTransportLeg(f.ctx, tx, feedstock.id, { refreshFromLocation: true });
   });
-  const [before] = await db.select().from(transportLegs).where(eq(transportLegs.entityId, feedstock.id));
+  const [before] = (await db.select().from(transportLegs).where(eq(transportLegs.entityId, feedstock.id))).filter(row => row.isDerived);
   expect(before).toBeDefined();
   await db.transaction(async tx => {
     await tx.update(feedstocks).set({ distanceKmOverride: 20, distanceSource: "manual" }).where(eq(feedstocks.id, feedstock.id));

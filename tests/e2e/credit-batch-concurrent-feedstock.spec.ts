@@ -261,7 +261,8 @@ test("concurrent same-month credit batches keep separate feedstock cohorts and r
       }
       const args: unknown = request.postDataJSON();
       const input: unknown = Array.isArray(args) && args.length === 1 ? args[0] : null;
-      if (typeof input !== "object" || input === null || !("creditBatchId" in input) || input.creditBatchId !== first.creditBatchId) {
+      // Only the batch update carries productionRunIds; the Emissions panel read also names the batch.
+      if (typeof input !== "object" || input === null || !("creditBatchId" in input) || input.creditBatchId !== first.creditBatchId || !("productionRunIds" in input)) {
         await route.continue();
         return;
       }

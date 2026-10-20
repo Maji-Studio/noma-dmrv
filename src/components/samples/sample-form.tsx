@@ -9,8 +9,8 @@
  * 1000-year sections appear when the batch is 1000-year, nutrient fields with
  * the claim checkbox.
  *
- * Spine steps (Evidence & Transport sit OUTSIDE the `<form>` element — they
- * nest their own forms — but FormSpine numbers them on the same rail):
+ * The Evidence step sits outside the form so its document editor can nest
+ * its own form. FormSpine numbers it on the same rail:
  * 1. Sample information - credit batch, samplingTime, lab details
  * 2. Lab analysis - carbon, ash and elemental percentages in one grid
  * 3. Physical properties - bulkDensity, pH, saltContent, moisture
@@ -19,7 +19,6 @@
  * Optional 1000-year measurements: mean R₀ reflectance and TGA carbon
  * 5. Nutrient claims (conditional) - P, K, Mg, Ca, Fe
  * 6. Evidence & documents
- * 7. Transport (lab shipment legs)
  */
 "use client";
 
@@ -56,14 +55,9 @@ import { SampleEligibilityAdvisory } from "./sample-eligibility-advisory";
 import { SampleBatchProgress } from "./sample-batch-progress";
 import { SampleCreditBatchLine } from "./sample-credit-batch-line";
 import { SampleNutrientFields } from "./sample-nutrient-fields";
-import {
-  SampleEvidenceSection,
-  SampleTransportSection,
-} from "./sample-trailing-sections";
+import { SampleEvidenceSection } from "./sample-trailing-sections";
 import type { SampleWithRelations } from "@/data-access/samples";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
-import type { TransportLegFormData } from "@/schemas/transport-legs";
-import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
   O_TO_C_ORG_ELIGIBILITY_MAX,
@@ -99,12 +93,6 @@ interface SampleFormProps {
   deferredAttachments?: UseDeferredAttachmentsResult;
   onRetryDeferredAttachments?: (key?: string) => Promise<unknown>;
   onRemoveDeferredAttachment?: (key: string) => void;
-  deferredLegs?: TransportLegFormData[];
-  onDeferredLegsChange?: (legs: TransportLegFormData[]) => void;
-  onRetryDeferredLegs?: () => Promise<void>;
-  focusTarget?: EntityFocusTarget | null;
-  /** Sample shipping is recorded as an emissions entry; drop the Transport step. */
-  hideTransport?: boolean;
 }
 
 export function SampleForm({
@@ -118,11 +106,6 @@ export function SampleForm({
   deferredAttachments,
   onRetryDeferredAttachments,
   onRemoveDeferredAttachment,
-  deferredLegs,
-  onDeferredLegsChange,
-  onRetryDeferredLegs,
-  focusTarget,
-  hideTransport = false,
 }: SampleFormProps) {
   const latched = useLatchedSubmit();
   const formId = useId();
@@ -343,8 +326,7 @@ export function SampleForm({
 
   return (
     <div className="space-y-20">
-      {/* The spine wraps the <form> AND the trailing field-less steps (Evidence,
-          Transport) that must live outside it — one continuous numbered rail. */}
+      {/* The spine numbers the form and the Evidence step on one rail. */}
       <FormSpine control={control}>
       <form id={formId} onSubmit={handleFormSubmit}>
         <ResolvedErrorRevalidator control={control} trigger={trigger} />
@@ -955,8 +937,7 @@ export function SampleForm({
 
       </form>
 
-      {/* ── Trailing field-less steps — outside the <form> (their editors nest
-             their own forms), numbered by the spine as the final two steps. ── */}
+      {/* Evidence stays outside the form because its editor nests a form. */}
       <SampleEvidenceSection
         sample={sample}
         isEditMode={isEditMode}
@@ -965,17 +946,6 @@ export function SampleForm({
         onRemoveAttachment={onRemoveDeferredAttachment}
         isSubmitting={isSubmitting}
       />
-      {!hideTransport && (
-        <SampleTransportSection
-          sample={sample}
-          isEditMode={isEditMode}
-          deferredLegs={deferredLegs}
-          onDeferredLegsChange={onDeferredLegsChange}
-          onRetryLegs={onRetryDeferredLegs}
-          focusTarget={focusTarget}
-          isSubmitting={isSubmitting}
-        />
-      )}
       </FormSpine>
 
       <FormActions

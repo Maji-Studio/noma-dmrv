@@ -75,7 +75,10 @@ describe("contract-based template coverage", () => {
       .toContainEqual(expect.objectContaining({ componentId: first.id, reason: "project-scope" }));
   });
   it("reports unsupported paired transport with repair guidance", () => {
-    const findings = coverage(unsupportedTemplate());
+    const pairedTransport = unsupportedTemplate();
+    // Sample shipping is entry-only; this regression covers the two automatic paired transports.
+    for (const group of pairedTransport.groups) group.components = group.components.filter((component) => component.id !== "sample-shipment");
+    const findings = coverage(pairedTransport);
     expect(findings).toHaveLength(2);
     expect(findings.every((finding) => finding.reason === "unmapped")).toBe(true);
     const formatted = formatUnbindableTemplateInputs(findings);

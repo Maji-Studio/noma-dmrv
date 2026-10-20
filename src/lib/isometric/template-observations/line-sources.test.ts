@@ -1,6 +1,4 @@
-beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
-afterEach(() => { vi.unstubAllEnvs(); });
-import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
+import { describe, expect, it } from "vitest";
 import sandbox from "../../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import cula from "../../../../tests/fixtures/isometric/cula-template-2026-10-15.json";
 import production from "../../../../tests/fixtures/isometric/production-template-2026-07-03.json";
@@ -70,7 +68,7 @@ describe("line contracts", () => {
     const sources = resolveLineSources({ definition });
     sources[GENSET].entryPolicy = "single";
     sources[STARTUP].automaticSource = "run-genset-diesel";
-    sources.rtc_1KVFZ1MY9SBXFWVN.automaticSource = "sample-transport";
+    sources.rtc_1KVFZ1MY9SBXFWVN.automaticSource = "feedstock-dry-mass";
     const problems = validateLineSources(definition, sources);
     expect(problems).toContainEqual({ code: "single-with-automatic-source", componentId: GENSET });
     expect(problems).toContainEqual({ code: "disallowed-entry-policy", componentId: GENSET });
@@ -106,7 +104,6 @@ describe("line contracts", () => {
     expect(sources.rtc_new_electricity.origin).toBe("proposed");
     expect(previous.lineSources[GENSET].origin).toBe("bootstrap");
   });
-
 
   it("lists stable IDs only for sources present in the catalog", () => {
     expect(AUTOMATIC_SOURCE_IDS).toEqual([
@@ -302,17 +299,16 @@ describe("lineNeedsReview", () => {
   });
 });
 
-it.each([false, true])("makes legacy sample contracts entry-only without changing stored sources (gate: %s)", (enabled) => {
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
+it("makes legacy sample contracts entry-only without changing stored sources", () => {
   const legacy = definitions[2];
   const sources = resolveLineSources({ definition: legacy });
   const stored = sources.rtc_1KWKNGJZY1S0HNRT;
   expect(stored.automaticSource).toBe("sample-transport");
-  expect(effectiveContract(stored).automaticSource).toBe(enabled ? undefined : "sample-transport");
+  expect(effectiveContract(stored).automaticSource).toBe(undefined);
   expect(effectiveContract(stored).entryPolicy).toBe("additive");
   const group = legacy.groups.find((group) => group.components.some((component) => component.id === "rtc_1KWKNGJZY1S0HNRT"))!;
   const line = group.components.find((component) => component.id === "rtc_1KWKNGJZY1S0HNRT")!;
-  expect(catalogCandidates(line, group.key).includes("sample-transport")).toBe(!enabled);
+  expect(catalogCandidates(line, group.key).includes("sample-transport")).toBe(false);
   expect(validateLineSources(legacy, sources)).toEqual([]);
 });
 
@@ -321,8 +317,6 @@ it.each(["bootstrap", "carried", "reviewed"] as const)("reopens a settled %s sam
   const sources = resolveLineSources({ definition: legacy });
   const id = "rtc_1KWKNGJZY1S0HNRT";
   sources[id] = { ...sources[id], entryPolicy: "none", origin };
-  expect(lineNeedsReview(id, sources[id], validateLineSources(legacy, sources))).toBe(false);
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
   const problems = validateLineSources(legacy, sources);
   expect(problems).toContainEqual({ componentId: id, code: "retired-automatic-source" });
   expect(lineNeedsReview(id, sources[id], problems)).toBe(true);

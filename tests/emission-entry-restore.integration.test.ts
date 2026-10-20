@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, certificationSubmissions, creditBatches, documents, emissionEntries,
@@ -9,11 +9,6 @@ import { cleanupLineageFixture, createLineageFixture, type LineageFixture } from
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 // DB-backed. Written for the supervisor to run; never part of the offline unit command.
-const gate = vi.hoisted(() => ({ enabled: true }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({
-  emissionsEntriesEnabled: () => gate.enabled,
-  requireEmissionsEntriesEnabled: () => { if (!gate.enabled) throw new Error("Disabled"); },
-}));
 const userId = `restore-entry-${crypto.randomUUID()}`;
 const ctx = makeTestOrgContext(userId);
 const templateId = `restore-template-${crypto.randomUUID()}`;
@@ -48,7 +43,6 @@ beforeAll(async () => {
   await db.update(creditBatches).set({ removalTemplateId: templateId }).where(eq(creditBatches.id, fixture.batchId));
 });
 afterEach(async () => {
-  gate.enabled = true;
   if (entryIds.length) {
     await db.delete(documents).where(and(eq(documents.organizationId, ctx.organizationId), inArray(documents.entityId, entryIds)));
     await db.delete(emissionEntryValues).where(inArray(emissionEntryValues.entryId, entryIds));
@@ -100,14 +94,11 @@ it("restores the original values and files, bumps both versions, and captures be
   expect(await db.select().from(storageObjectDeletions).where(eq(storageObjectDeletions.storageKey, file.storageKey!))).toEqual([]);
 });
 
-it("refuses a stale version, foreign org, disabled gate, duplicate restore and unknown id", async () => {
+it("refuses a stale version, foreign org, duplicate restore and unknown id", async () => {
   const input = await deleted();
   await expect(restoreEmissionEntry(ctx, { ...input, expectedVersion: 1 })).rejects.toMatchObject({ code: "stale_version" });
   await expect(restoreEmissionEntry({ ...ctx, organizationId: "foreign" }, input)).rejects.toThrow("not found");
   await expect(restoreEmissionEntry(ctx, { ...input, id: crypto.randomUUID() })).rejects.toThrow("not found");
-  gate.enabled = false;
-  await expect(restoreEmissionEntry(ctx, input)).rejects.toThrow("Disabled");
-  gate.enabled = true;
   const row = await restoreEmissionEntry(ctx, input);
   await expect(restoreEmissionEntry(ctx, { id: row.id, expectedVersion: row.version })).rejects.toThrow("already restored");
 });

@@ -2,7 +2,6 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { documents, transportLegs } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { requireEmissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { SafeError } from "@/lib/errors";
 import { deleteTransportLeg } from "./transport-legs";
 import { requireOrgScope } from "./utils";
@@ -36,7 +35,6 @@ export async function listSampleTransportRetirementCandidates(ctx: OrgContext) {
 export async function deleteSampleTransportLegForRetirement(ctx: OrgContext, id: string, expectedVersion: number): Promise<boolean> {
   requireOrgScope(ctx);
   requireRetirementAuthority(ctx);
-  requireEmissionsEntriesEnabled();
   const [leg] = await db.select({ id: transportLegs.id }).from(transportLegs).where(and(
     eq(transportLegs.organizationId, ctx.organizationId),
     eq(transportLegs.entityType, "sample"),

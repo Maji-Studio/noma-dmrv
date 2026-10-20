@@ -6,7 +6,6 @@ vi.mock("@/data-access/facility-emissions-overview", () => ({ loadFacilityEmissi
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntriesForBatches: vi.fn() }));
 vi.mock("@/data-access/removal-template-observations", () => ({ getLatestTemplateObservations: vi.fn(), getTemplateObservationsByIds: vi.fn() }));
 vi.mock("@/data-access/batch-emission-automatic-figures", () => ({ loadBatchesEmissionAutomaticFacts: vi.fn() }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: vi.fn() }));
 // Prevent importing the detail loader's unused database dependencies in this unit suite.
 vi.mock("@/data-access/emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: vi.fn() }));
 vi.mock("@/data-access/credit-batches", () => ({ getCreditBatchById: vi.fn() }));
@@ -15,7 +14,6 @@ import { loadFacilityEmissionsOverviewScope } from "@/data-access/facility-emiss
 import { listEmissionEntriesForBatches } from "@/data-access/emission-entries";
 import { getLatestTemplateObservations, getTemplateObservationsByIds } from "@/data-access/removal-template-observations";
 import { loadBatchesEmissionAutomaticFacts } from "@/data-access/batch-emission-automatic-figures";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { loadBatchesEmissionLines } from "./batches-emission-lines";
 import { loadFacilityEmissionsOverview } from "./facility-emissions-overview";
 
@@ -45,7 +43,6 @@ beforeEach(() => {
   vi.useFakeTimers();
   // It is still October in Los Angeles, even though UTC has crossed into November.
   vi.setSystemTime(new Date("2026-11-01T03:00:00Z"));
-  vi.mocked(emissionsEntriesEnabled).mockReturnValue(true);
   vi.mocked(loadFacilityEmissionsOverviewScope).mockResolvedValue({ timezone: "America/Los_Angeles", batches: [batch, { ...batch, id: "old", code: "CB-1", startDate: "2026-09-01" }] } as never);
   vi.mocked(getLatestTemplateObservations).mockResolvedValue([observation] as never);
   vi.mocked(getTemplateObservationsByIds).mockResolvedValue([]);
@@ -73,14 +70,6 @@ it("derives all six states, facility-month counts and last occurrence with bulk 
   expect(getTemplateObservationsByIds).toHaveBeenCalledExactlyOnceWith(ctx, ["missing"]);
   expect(listEmissionEntriesForBatches).toHaveBeenCalledExactlyOnceWith(ctx, ["new", "old"]);
   expect(loadBatchesEmissionAutomaticFacts).toHaveBeenCalledExactlyOnceWith(ctx, ["new", "old"]);
-});
-
-it("ignores entries behind the disabled flag and keeps the overview shape", async () => {
-  vi.mocked(emissionsEntriesEnabled).mockReturnValue(false);
-  const result = await loadFacilityEmissionsOverview(ctx, "facility");
-  expect(result.batches[0]).toMatchObject({ entriesThisMonth: 0, lastEntryOn: null,
-    lineCounts: { total: 6, open: 6, notRecorded: 5, needsSetup: 1 } });
-  expect(listEmissionEntriesForBatches).not.toHaveBeenCalled();
 });
 
 it("shows one setup item for an unpinned or unread template without failing other batches", async () => {

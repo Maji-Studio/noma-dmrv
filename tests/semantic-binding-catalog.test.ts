@@ -1,5 +1,3 @@
-beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
-afterEach(() => { vi.unstubAllEnvs(); });
 import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
 /**
  * Parity for the semantic binding catalog (#636): the catalog's projections
@@ -11,7 +9,7 @@ import type { LineContract } from "@/lib/isometric/template-observations/line-so
  * with transform functions reduced to their transformRevision. Change them
  * only together with an intentional binding change.
  */
-import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   lookupSourceFact,
   SEMANTIC_BINDING_CATALOG,
@@ -189,13 +187,17 @@ describe("semantic binding catalog parity", () => {
     expect(JSON.parse(JSON.stringify(INPUT_MAPPING))).toEqual(PRE_CATALOG_INPUT_MAPPING);
   });
 
-  it("resolves every pre-catalog tuple identically", () => {
+  it("resolves every active pre-catalog tuple and refuses retired sample transport", () => {
     for (const [group, blueprint, input] of triples(PRE_CATALOG_INPUT_MAPPING)) {
       const entry = lookupInputMapping(group, blueprint, input);
       const frozen = PRE_CATALOG_INPUT_MAPPING[
         group as keyof typeof PRE_CATALOG_INPUT_MAPPING
       ] as FrozenTable[string];
-      expect(entry, `${group}/${blueprint}/${input}`).toMatchObject(frozen[blueprint][input]);
+      if (frozen[blueprint][input].source === "sampleTransportMassDistanceTonneKm") {
+        expect(entry, `${group}/${blueprint}/${input}`).toBeUndefined();
+      } else {
+        expect(entry, `${group}/${blueprint}/${input}`).toMatchObject(frozen[blueprint][input]);
+      }
     }
   });
 
@@ -242,7 +244,11 @@ describe("semantic binding catalog parity", () => {
 
   it("gives every bound source fact a provenance and a repair destination", () => {
     for (const [group, blueprint, input] of triples(INPUT_MAPPING)) {
-      const entry = INPUT_MAPPING[group][blueprint][input];
+      const entry = lookupInputMapping(group, blueprint, input);
+      if (!entry) {
+        expect(INPUT_MAPPING[group][blueprint][input].source).toBe("sampleTransportMassDistanceTonneKm");
+        continue;
+      }
       for (const source of [entry.source, ...Object.values(entry.sourceByComponent ?? {})]) {
         const fact = lookupSourceFact(source);
         expect(fact?.provenance, source).toBeTruthy();
@@ -286,24 +292,21 @@ describe("semantic binding catalog parity", () => {
   });
 });
 
-it.each([false, true])("keeps the mapping revision stable while retiring sample runtime lookups (gate: %s)", async (enabled) => {
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
+it("keeps the mapping revision stable while retiring sample runtime lookups", async () => {
   const { buildMappingRevisionInput } = await import("@/lib/isometric/transformers/datapoint");
   const { payloadHash } = await import("@/lib/isometric/utils/payload-hash");
   expect(payloadHash(buildMappingRevisionInput())).toBe(ENTRY_CONTRIBUTION_MAPPING_REVISION);
   expect(MAPPING_REVISION).toBe(ENTRY_CONTRIBUTION_MAPPING_REVISION);
   expect(INPUT_MAPPING["sampling-required-for-mrv"].mass_distance_based_ci_emissions.mass_distance.source).toBe("sampleTransportMassDistanceTonneKm");
-  expect(lookupInputMapping("sampling-required-for-mrv", "mass_distance_based_ci_emissions", "mass_distance") === undefined).toBe(enabled);
-  expect(lookupSourceFact("sampleTransportMassDistanceTonneKm") === undefined).toBe(enabled);
+  expect(lookupInputMapping("sampling-required-for-mrv", "mass_distance_based_ci_emissions", "mass_distance") === undefined).toBe(true);
+  expect(lookupSourceFact("sampleTransportMassDistanceTonneKm") === undefined).toBe(true);
 });
 
-it("keeps fresh module-load projections identical across activation states", async () => {
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
+it("keeps fresh module-load projections stable", async () => {
   vi.resetModules();
   const activated = await import("@/lib/isometric/transformers/datapoint");
   expect(activated.MAPPING_REVISION).toBe(ENTRY_CONTRIBUTION_MAPPING_REVISION);
   expect(JSON.parse(JSON.stringify(activated.INPUT_MAPPING))).toEqual(PRE_CATALOG_INPUT_MAPPING);
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false");
   vi.resetModules();
   expect((await import("@/lib/isometric/transformers/datapoint")).MAPPING_REVISION).toBe(activated.MAPPING_REVISION);
 });

@@ -2,7 +2,6 @@
 
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { buildDurabilityBatchSummaries } from "@/lib/certification/durability-batch-summary";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
 import { loadBatchesEmissionLines } from "@/lib/read-models/batches-emission-lines";
 import { getRemovalCodes } from "@/data-access/removal-codes";
@@ -391,10 +390,7 @@ export async function loadCreditBatchHealthSummaries(
     );
     const [batchesWithSamples, emissionDisplayByBatch] = await Promise.all([
       getCreditBatchesWithSamples(orgCtx, ids),
-      // Match the page's flag: hidden Emissions panels contribute no Check items.
-      emissionsEntriesEnabled()
-        ? loadBatchesEmissionLines(orgCtx, ids.map((id) => batchRowById.get(id)!))
-        : Promise.resolve(undefined),
+      loadBatchesEmissionLines(orgCtx, ids.map((id) => batchRowById.get(id)!)),
     ]);
     const durabilityByBatch = new Map(
       buildDurabilityBatchSummaries(batchesWithSamples).map((summary) => [summary.creditBatchId, summary]),

@@ -1,5 +1,10 @@
 # Isometric Docs Change Log
 
+## 2026-10-20: Emissions entries always on
+
+The activation flag is removed. Entries and sample-leg retirement apply in every environment.
+No binding, revision or schema change. Run the retirement CLI per organization to delete old sample legs.
+
 ## 2026-10-20: Remove the sandbox zero stub
 
 Removed the sandbox-only period-input escape hatch and its submission plumbing

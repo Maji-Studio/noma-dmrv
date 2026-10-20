@@ -1,4 +1,4 @@
-import { assert, afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
+import { assert, afterAll, beforeAll, beforeEach, expect, it } from "vitest";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, creditBatches, emissionLineComments, organizations, removalTemplateObservations, users } from "@/db/schema";
@@ -12,13 +12,6 @@ import { loadFacilityEmissionsOverview } from "@/lib/read-models/facility-emissi
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
 import { createLineageFixture, cleanupLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
-
-// The gate reads process.env, so the switch is the real variable.
-const flag = {
-  get enabled() { return process.env.EMISSIONS_ENTRIES_ENABLED === "true"; },
-  set enabled(value: boolean) { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", value ? "true" : "false"); },
-};
-flag.enabled = true;
 
 const userId = `line-comment-user-${crypto.randomUUID()}`;
 const editorId = `line-comment-editor-${crypto.randomUUID()}`;
@@ -73,7 +66,6 @@ beforeAll(async () => {
   ));
 });
 beforeEach(async () => {
-  flag.enabled = true;
   await db.delete(emissionLineComments).where(and(
     eq(emissionLineComments.organizationId, TEST_ORG_ID),
     inArray(emissionLineComments.creditBatchId, [lineage.batchId, otherBatch.batchId]),
@@ -204,14 +196,7 @@ it("joins only matching current-template components and keeps all derived emissi
   }
 });
 
-it("reads saved comments with the flag off and refuses both writes", async () => {
+it("reads saved comments", async () => {
   const created = await setEmissionLineComment(ctx, input());
-  flag.enabled = false;
-  try {
-    expect(await getEmissionLineComment(ctx, created.id)).toEqual(created);
-    await expect(setEmissionLineComment(ctx, { ...input(), id: created.id, expectedVersion: created.version })).rejects.toThrow("not available");
-    await expect(deleteEmissionLineComment(ctx, { id: created.id, expectedVersion: created.version })).rejects.toThrow("not available");
-  } finally {
-    flag.enabled = true;
-  }
+  expect(await getEmissionLineComment(ctx, created.id)).toEqual(created);
 });

@@ -9,7 +9,6 @@ import type { FacilityCertifierFacts } from "@/fn/certification/facility-certifi
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import * as isometric from "@/lib/isometric";
 vi.mock("@/data-access/emission-entry-contenders", () => ({ loadEmissionEntryReservations: vi.fn(async () => []) }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => true }));
 
 it("heals a crashed unreserved draft after a new entry is added and submits a new version", async () => {
   const org = makeTestOrgContext(USER_ID);

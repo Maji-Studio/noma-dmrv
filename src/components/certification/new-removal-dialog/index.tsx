@@ -133,7 +133,7 @@ function WizardBody({
 }) {
   // A new or reopened Removal has no chosen step yet: it lands where the
   // server's answer sends it, resolved once (the empty components while any is
-  // unconfirmed, the submit step otherwise and whenever entries are switched off).
+  // unconfirmed, the submit step otherwise).
   const [chosenStep, setChosenStep] = useState<StepKey | null>(
     resumeRemovalId ? null : "select",
   );
@@ -146,9 +146,8 @@ function WizardBody({
 
   const landing = useRemovalLanding(removalId, facilityId, chosenStep === null);
   const step: StepKey | null = chosenStep ?? landing.data?.step ?? null;
-  const entriesEnabled = landing.data?.entriesEnabled ?? false;
   const emptyQuery = useRemovalEmptyComponents(removalId, {
-    enabled: entriesEnabled,
+    enabled: !!landing.data,
     refetchOnFocus: step === "empty",
   });
   const actions = useEmptyComponentsActions();
@@ -167,7 +166,7 @@ function WizardBody({
   const facilitySetupComplete = selectable.data?.facilitySetupComplete ?? false;
   const showEmptyStep =
     step === "empty" ||
-    (entriesEnabled &&
+    (!!landing.data &&
       !!emptyQuery.data &&
       hasEmptyComponentsStep(emptyQuery.data));
   const steps = showEmptyStep

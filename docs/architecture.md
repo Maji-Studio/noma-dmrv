@@ -41,8 +41,7 @@ components (UI)
   a new key create a separate entry. App replay uses the store's existing
   retention period. Quick-add dialogs that submit through `useQuickAddSubmit`
   (formulation, driver, operator) hold the same draft key with
-  `useCreateIntentKey` directly. Pending Sample transport legs pass one key per
-  leg. API key creation is the one keyed create outside the runner: a retry
+  `useCreateIntentKey` directly. API key creation is the one keyed create outside the runner: a retry
   replaces the unseen key instead of replaying it (docs/auth.md).
   The action shape is `withAction((ctx) => runOperationInProcess(op, ctx, input))`.
   `src/lib/operations/registry.ts` is the explicit allowlist of exposed

@@ -1,6 +1,5 @@
 import type { OrgContext } from "@/lib/auth/server";
 import { getLatestSubmission } from "@/data-access/certification-submissions";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { ISOMETRIC_PROVIDER, REMOVAL_ENTITY_TYPE, REMOVAL_SUBMISSION_TYPE } from "@/lib/isometric/utils/constants";
 import { resolveScopeForRemoval } from "./removal-scope";
 import { getLatestTemplateObservations } from "@/data-access/removal-template-observations";
@@ -11,7 +10,6 @@ import { frozenEntriesForAttempt, loadRemovalEntryContext } from "./removal-entr
  * Compilation still loads fresh registry facts and fails closed independently.
  */
 export async function loadEntrySourceContributions(ctx: OrgContext, removalId: string) {
-  if (!emissionsEntriesEnabled()) return undefined;
   const scope = await resolveScopeForRemoval(ctx, removalId);
   const observations = await getLatestTemplateObservations(ctx, ISOMETRIC_PROVIDER,
     [...new Set(scope.memberBatches.flatMap((batch) => batch.removalTemplateId ? [batch.removalTemplateId] : []))]);

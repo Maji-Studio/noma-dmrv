@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -13,13 +13,7 @@ import { ActionConflictError } from "@/lib/errors";
 import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { TEST_SITE_POSITION, TEST_ORG_ID, ensureTestOrg, makeTestOrgContext } from "./helpers/test-org";
 
-// Real DB and writers. Only the feature switch is controlled by the suite.
-// The gate reads process.env, so the switch is the real variable.
-const flag = {
-  get enabled() { return process.env.EMISSIONS_ENTRIES_ENABLED === "true"; },
-  set enabled(value: boolean) { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", value ? "true" : "false"); },
-};
-flag.enabled = true;
+// Real DB and writers.
 
 const tag = crypto.randomUUID();
 const userId = `batch-entry-dates-${tag}`;
@@ -85,7 +79,6 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  flag.enabled = true;
   const caseTag = crypto.randomUUID();
   const [facility] = await db.insert(facilities).values({
     ...TEST_SITE_POSITION, organizationId: TEST_ORG_ID, timezone: "UTC",
@@ -105,7 +98,6 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  flag.enabled = true;
   const entries = await db.select({ id: emissionEntries.id }).from(emissionEntries)
     .where(eq(emissionEntries.creditBatchId, batch.id));
   if (entries.length) await db.delete(emissionEntryValues).where(inArray(emissionEntryValues.entryId, entries.map((entry) => entry.id)));
@@ -187,11 +179,10 @@ it("allows a later end without re-dating or revising any entry", async () => {
   expect((await stored()).entries).toEqual(before.entries);
 });
 
-it("ignores tombstoned entries and still guards live entries when the feature is off", async () => {
+it("ignores tombstoned entries and still guards live entries", async () => {
   const deleted = await createEntry("2026-06-05");
   await deleteEmissionEntry(ctx, deleted.id, deleted.version);
   await createEntry("2026-06-20");
-  flag.enabled = false;
   const saved = await updateCreditBatch(ctx, batch.id, { expectedVersion: batch.version, startDate: new Date("2026-06-10") });
   const before = await stored();
   await expect(updateCreditBatch(ctx, batch.id, {

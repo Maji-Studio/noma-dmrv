@@ -1,4 +1,5 @@
-import { lookupInputMapping, lookupPeriodInputTuple } from "../src/lib/isometric/datapoint-mapping";
+import { lookupBindingTriple } from "../src/lib/isometric/semantic-binding-projections";
+import { INPUT_MAPPING, lookupPeriodInputTuple } from "../src/lib/isometric/datapoint-mapping";
 import { TRANSPORT_BLUEPRINT_KEY } from "../src/lib/isometric/emission-line-constants";
 import {
   findUnbindableTemplateInputs,
@@ -17,9 +18,10 @@ function hasKnownComponentShape(template: GhgEntryTemplate, finding: UnbindableT
   const component = template.groups.find((group) => group.key === groupKey)
     ?.components.find((component) => component.id === componentId);
   if (!component) return false;
-  // Omit contracts: entry-only lines still need a catalog triple for every monitored input.
+  // Inspect the stable catalog shape, including retired automatic sample sources.
+  // Runtime lookup intentionally hides those sources; entries still support their inputs.
   return component.inputs.filter((input) => input.type === "monitored").every((input) =>
-    lookupInputMapping(groupKey, blueprintKey, input.input_key) ||
+    lookupBindingTriple(INPUT_MAPPING, groupKey, blueprintKey, input.input_key) ||
     lookupPeriodInputTuple(groupKey, blueprintKey, input.input_key),
   );
 }
