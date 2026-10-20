@@ -1,4 +1,5 @@
 import { API_KEY_LIVE_PREFIX, API_KEY_TEST_PREFIX } from "@/config/api-keys";
+import { TOOL_TEXT_SEPARATOR } from "@/lib/mcp/results";
 
 export interface ToolCall {
   id: string;
@@ -35,9 +36,9 @@ function object(value: unknown): Record<string, unknown> {
 /** Accept JSON wrappers and the summary plus compact JSON emitted by MCP. */
 function parseResultText(text: string): unknown {
   try { return JSON.parse(text); } catch { /* Try the JSON after the summary. */ }
-  const separator = text.lastIndexOf("\n\n");
+  const separator = text.lastIndexOf(TOOL_TEXT_SEPARATOR);
   if (separator !== -1) {
-    try { return JSON.parse(text.slice(separator + "\n\n".length)); } catch { /* Plain result text. */ }
+    try { return JSON.parse(text.slice(separator + TOOL_TEXT_SEPARATOR.length)); } catch { /* Plain result text. */ }
   }
   return undefined;
 }

@@ -1,3 +1,4 @@
+import { toolText } from "@/lib/mcp/results";
 import { apiActivityWhere } from "./helpers/api-activity";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { inArray } from "drizzle-orm";
@@ -172,7 +173,7 @@ it("answers the kill switch inside MCP while REST stays HTTP 503", async () => {
   switches.writesDisabled = true;
   const result = await call("log_feedstock_delivery", { ...intake(), requestKey: crypto.randomUUID() });
   expect(result)
-    .toMatchObject({ isError: true, content: [{ type: "text", text: `API writes are temporarily disabled.\n\n${JSON.stringify(result.structuredContent)}` }],
+    .toMatchObject({ isError: true, content: [{ type: "text", text: toolText("API writes are temporarily disabled.", result.structuredContent) }],
       structuredContent: { code: "api_writes_disabled", retryable: true, detail: "API writes are temporarily disabled." } });
   expect((await call("whoami", {})).isError).toBeUndefined();
   const rest = await postFeedstock(fixture);

@@ -1,3 +1,4 @@
+import { toolText } from "@/lib/mcp/results";
 import { apiKeyContext } from "../../../../tests/helpers/api-context";
 import { DOCUMENT_GUIDANCE } from "@/lib/operations/document-guidance";
 import { DOCUMENT_CONFIRM_DEADLINE_MS } from "@/config/documents";
@@ -200,7 +201,7 @@ describe("authenticated MCP read route", () => {
     expect(response.status).toBe(200);
     const payload = await body(response);
     expect(payload).toMatchObject({ result: {
-      content: [{ type: "text", text: `Organization Test, 0 facilities, role admin.\n\n${JSON.stringify(payload.result.structuredContent)}` }],
+      content: [{ type: "text", text: toolText("Organization Test, 0 facilities, role admin.", payload.result.structuredContent) }],
       structuredContent: { data: { organization: { id: "org-1" } } },
     } });
     expect(mocks.me).toHaveBeenCalledOnce();
@@ -349,7 +350,7 @@ it("answers the write switch inside MCP and keeps reads working", async () => {
   expect(response.status).toBe(200);
   const payload = await body(response);
   expect(payload).toMatchObject({ result: { isError: true,
-    content: [{ type: "text", text: `API writes are temporarily disabled.\n\n${JSON.stringify(payload.result.structuredContent)}` }],
+    content: [{ type: "text", text: toolText("API writes are temporarily disabled.", payload.result.structuredContent) }],
     structuredContent: { code: "api_writes_disabled", retryable: true, detail: "API writes are temporarily disabled." },
   } });
   expect((await body(await call("whoami"))).result.isError).toBeUndefined();

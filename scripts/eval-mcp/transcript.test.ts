@@ -1,3 +1,4 @@
+import { toolText } from "@/lib/mcp/results";
 import { expect, it } from "vitest";
 import { parseTranscript, redactKeys } from "./transcript";
 
@@ -67,7 +68,7 @@ it("preserves the call count when an interrupted stream ends with a partial even
 
 it.each(["plain-text", "summary-json"])("retains application warnings from %s results", shape => {
   const body = { data: { id: "application" }, warnings: ["Check the facility reference temperature."] };
-  const text = shape === "summary-json" ? `Recorded application.\n\n${JSON.stringify(body)}` : JSON.stringify(body);
+  const text = shape === "summary-json" ? toolText("Recorded application.", body) : JSON.stringify(body);
   const events = [
     { type: "assistant", message: { content: [{ type: "tool_use", id: "write", name: "mcp__noma__record_application", input: {} }] } },
     { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "write", content: text }] } },
@@ -83,7 +84,7 @@ it("recognizes nested errors after a summary and ignores plain summaries", () =>
       { type: "tool_use", id: "plain", name: "mcp__noma__whoami", input: {} },
     ] } },
     { type: "user", message: { content: [
-      { type: "tool_result", tool_use_id: "error", content: [{ type: "text", text: 'Request failed.\n\n{"isError":true}' }] },
+      { type: "tool_result", tool_use_id: "error", content: [{ type: "text", text: toolText("Request failed.", { isError: true }) }] },
       { type: "tool_result", tool_use_id: "plain", content: [{ type: "text", text: "Plain summary.\n\nNo JSON here." }] },
     ] } },
   ];
@@ -97,7 +98,7 @@ it.each(["structured", "wrapped-text", "plain-text", "summary-json"])("retains t
   const event = shape === "structured"
     ? { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "stock" }] }, tool_use_result: wrapped }
     : { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "stock",
-      content: [{ type: "text", text: shape === "summary-json" ? `Summary.\n\n${JSON.stringify(body)}` : JSON.stringify(shape === "wrapped-text" ? wrapped : body) }] }] } };
+      content: [{ type: "text", text: shape === "summary-json" ? toolText("Summary.", body) : JSON.stringify(shape === "wrapped-text" ? wrapped : body) }] }] } };
   const parsed = parseTranscript([use, event].map((value) => JSON.stringify(value)).join("\n"));
   expect(parsed.calls[0]).toMatchObject({ stockResult: body, resultAfterCalls: 1, isError: false });
 });
@@ -109,7 +110,7 @@ it.each(["structured", "wrapped-text", "plain-text", "summary-json"])("retains p
   const event = shape === "structured"
     ? { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "find" }] }, tool_use_result: wrapped }
     : { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "find",
-      content: [{ type: "text", text: shape === "summary-json" ? `Summary.\n\n${JSON.stringify(body)}` : JSON.stringify(shape === "wrapped-text" ? wrapped : body) }] }] } };
+      content: [{ type: "text", text: shape === "summary-json" ? toolText("Summary.", body) : JSON.stringify(shape === "wrapped-text" ? wrapped : body) }] }] } };
   const parsed = parseTranscript([use, event].map(value => JSON.stringify(value)).join("\n"));
   expect(parsed.calls[0]).toMatchObject({ partyRows: body.data, isError: false });
 });
@@ -121,7 +122,7 @@ it.each(["structured", "wrapped-text", "plain-text", "summary-json"])("retains a
   const event = shape === "structured"
     ? { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "create" }] }, tool_use_result: wrapped }
     : { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "create", is_error: true,
-      content: [{ type: "text", text: shape === "summary-json" ? `Summary.\n\n${JSON.stringify(body)}` : JSON.stringify(shape === "wrapped-text" ? wrapped : body) }] }] } };
+      content: [{ type: "text", text: shape === "summary-json" ? toolText("Summary.", body) : JSON.stringify(shape === "wrapped-text" ? wrapped : body) }] }] } };
   const parsed = parseTranscript([use, event].map(value => JSON.stringify(value)).join("\n"));
   expect(parsed.calls[0]).toMatchObject({ partyResult: body, isError: true });
 });

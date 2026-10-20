@@ -17,8 +17,15 @@ export const toolErrorSchema = problemSchema.pick({ code: true, detail: true, re
     preview: z.union([problemSchema.shape.preview.unwrap().loose(), cascadePreviewSchema]).optional().describe("Fresh stock or order cascade preview after stock_basis_changed or cascade_changed."),
   });
 
+export const TOOL_TEXT_SEPARATOR = "\n\n";
+
+/** MCP text wire format: summary, blank line, compact JSON. */
+export function toolText(summary: string, body: Record<string, unknown>): string {
+  return `${summary}${TOOL_TEXT_SEPARATOR}${JSON.stringify(body)}`;
+}
+
 export function toolSuccess(structuredContent: Record<string, unknown>, text: string) {
-  return { content: [{ type: "text" as const, text: `${text}\n\n${JSON.stringify(structuredContent)}` }], structuredContent };
+  return { content: [{ type: "text" as const, text: toolText(text, structuredContent) }], structuredContent };
 }
 
 export function writesDisabledResult() {
