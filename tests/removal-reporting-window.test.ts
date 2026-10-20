@@ -165,34 +165,34 @@ describe("resolveRemovalReportingWindow", () => {
     expect(message).not.toMatch(EN_OR_EM_DASH);
   });
 
-  // Expected outcomes from origin/staging's UTC guard and completion rule.
+  // UTC facilities keep the UTC refusal and the same-day completion floor.
   it.each([
     {
       scenario: "earlier day refusal",
       application: "2026-07-28T00:00:00Z",
-      oldCompletedOn: null,
+      expectedCompletedOn: null,
     },
     {
       scenario: "same day earlier application",
       application: "2026-07-29T00:00:00Z",
-      oldCompletedOn: "2026-07-29T15:30:00Z",
+      expectedCompletedOn: "2026-07-29T15:30:00Z",
     },
     {
       scenario: "same instant",
       application: "2026-07-29T15:30:00Z",
-      oldCompletedOn: "2026-07-29T15:30:00Z",
+      expectedCompletedOn: "2026-07-29T15:30:00Z",
     },
     {
       scenario: "same day later application",
       application: "2026-07-29T18:00:00Z",
-      oldCompletedOn: "2026-07-29T18:00:00Z",
+      expectedCompletedOn: "2026-07-29T18:00:00Z",
     },
     {
       scenario: "later day",
       application: "2026-07-30T00:00:00Z",
-      oldCompletedOn: "2026-07-30T00:00:00Z",
+      expectedCompletedOn: "2026-07-30T00:00:00Z",
     },
-  ])("matches origin/staging for UTC inputs: $scenario", ({ application, oldCompletedOn }) => {
+  ])("keeps the UTC refusal and completion rule for UTC facilities: $scenario", ({ application, expectedCompletedOn }) => {
     const earliestProductionStartTime = new Date("2026-07-29T06:00:00Z");
     const latestProductionEndTime = new Date("2026-07-29T15:30:00Z");
     const latestApplicationTime = new Date(application);
@@ -202,7 +202,7 @@ describe("resolveRemovalReportingWindow", () => {
       latestApplicationTime,
       facilityTimezone: "UTC",
     });
-    if (oldCompletedOn === null) {
+    if (expectedCompletedOn === null) {
       expect(thrownMessage(resolve)).toBe(
         "Latest application date 2026-07-28 precedes latest production end date 2026-07-29. " +
           "Correct the application date before submitting.",
@@ -210,7 +210,7 @@ describe("resolveRemovalReportingWindow", () => {
     } else {
       expect(resolve()).toEqual({
         startedOn: earliestProductionStartTime,
-        completedOn: new Date(oldCompletedOn),
+        completedOn: new Date(expectedCompletedOn),
       });
     }
   });
