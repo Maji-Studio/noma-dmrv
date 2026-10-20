@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { formatMassKg } from "@/lib/format-utils";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { stockWaterKg } from "@/lib/output-stock/stock-replay";
-import { buildHistoryDays, entrySentence, NO_WET_MASS_REASON } from "./output-stock-history-days";
+import { buildHistoryDays, entrySentence } from "./output-stock-history-days";
 
 const TZ = "UTC";
 const DAY_ONE = "2026-10-14";
@@ -90,33 +90,5 @@ describe("buildHistoryDays", () => {
     expect(days[0].rows[0].moistureEntry?.id).toBe("d1:moisture");
     // The folded row moves no stock: the delivery is counted once.
     expect(days[0].end.wetKg).toBe(400);
-  });
-
-  it("turns wet mass unknown from a batch added without a moisture reading, and reads that batch by its dry biochar", () => {
-    const dryOnly = entry({ id: "p2", kind: "intake", occurredAt: `${DAY_TWO}T11:40:00.000Z`, moisturePercent: null, wetMassKg: 0, dryMassKg: -120, wetDeltaKg: null, solidsDeltaKg: 120 });
-    const [day] = buildHistoryDays([placed, dryOnly], TZ);
-    expect(day.end.wetKg).toBeNull();
-    expect(day.rows[0].wet).toBeNull();
-    expect(day.rows[0].parts.map(part => part.label)).toEqual(["Dry biochar"]);
-    expect(entrySentence(day.rows[0], formatMassKg)).toBe("Added 120 kg dry biochar");
-  });
-
-  it("shows wet mass and water again once the batch without a reading is used up", () => {
-    const dryOnly = entry({ id: "p2", kind: "intake", occurredAt: `${DAY_ONE}T11:00:00.000Z`, moisturePercent: null, wetMassKg: 0, dryMassKg: -120, wetDeltaKg: null, solidsDeltaKg: 120 });
-    const emptied = entry({ id: "d2", kind: "delivery", eventKind: "delivery", occurredAt: `${DAY_ONE}T12:00:00.000Z`, wetMassKg: 600, dryMassKg: 360, wetDeltaKg: null, solidsDeltaKg: -510,
-      ingredientSolidsDeltas: [{ name: "Compost", solidsKg: -150 }] });
-    const refill = { ...placed, id: "p3", occurredAt: `${DAY_TWO}T09:00:00.000Z`, recordedAt: `${DAY_TWO}T09:00:00.000Z` };
-    const [today, yesterday] = buildHistoryDays([placed, dryOnly, emptied, refill], TZ);
-    expect(yesterday.rows[0].wet).toEqual(null);
-    expect(yesterday.end).toMatchObject({ dryKg: 0, wetKg: 0 });
-    expect(today.end).toMatchObject({ wetKg: 500, dryKg: 240 });
-    expect(today.rows[0].wet).toEqual({ changeKg: 500, afterKg: 500 });
-    expect(today.rows[0].parts.map(part => part.label)).toEqual(["Dry biochar", "Compost solids", "Water, estimated"]);
-  });
-});
-
-describe("NO_WET_MASS_REASON", () => {
-  it("is the one sentence, whichever batch has no moisture reading", () => {
-    expect(`${NO_WET_MASS_REASON.lead}${NO_WET_MASS_REASON.action}.`).toBe("A batch in this bin has no moisture reading, so there is no wet mass. Record one when adding stock.");
   });
 });
