@@ -90,6 +90,11 @@ export function serveMcp(request: Request, context: ApiRouteContext): Promise<Re
         return toolFailure(error, context, tool.name);
       }
     });
-  }, { serverInfo: { name: "noma-dmrv", version: API_VERSION }, instructions: mcpInstructions });
+  }, {
+    serverInfo: { name: "noma-dmrv", version: API_VERSION }, instructions: mcpInstructions,
+    // Stateless per-request serving cannot push list changes; advertising them
+    // holds listen streams open until the function times out.
+    capabilities: { tools: { listChanged: false } },
+  });
   return handler(request);
 }
