@@ -158,7 +158,10 @@ only the key id, never the plaintext. The transaction runs on a dedicated
 connection because Better Auth issues the key through the shared pool, and an
 advisory try-lock refuses an overlapping request with the same intent instead
 of letting it wait and replace a key that is about to be returned. The draft
-key rotates once a create response arrives and when the dialog closes.
+key rotates once a successful create response arrives and when the dialog closes.
+The transaction locks the issuing membership before issuance and re-checks its
+identity, role and verified email through that connection afterward, so a
+concurrent demotion waits until the owner row is visible to revocation.
 
 The Better Auth `hooks.before` rejects all HTTP `/api/auth/api-key/*` calls,
 including create, update, delete, get and list. Only header-free, server-side

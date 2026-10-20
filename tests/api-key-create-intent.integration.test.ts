@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Pool } from "pg";
 import { afterAll, afterEach, beforeEach, expect, it, vi } from "vitest";
-import { db } from "@/db";
+import { db, withDedicatedLockConnection } from "@/db";
 import { apiIdempotencyRecords, apiKeyOwners, apiKeys, members, organizations, users } from "@/db/schema";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { APP_FORM_CREDENTIAL_PREFIX } from "@/config/operations";
@@ -27,6 +27,7 @@ afterAll(() => {
   else process.env.DB_POOL_CONNECTION_TIMEOUT_MS = poolEnv.timeout;
 });
 const CONTENDER_TIMEOUT_MS = 2_000;
+const DEMOTION_WAIT_MS = 100;
 
 let ctx: OrgContext;
 let other: OrgContext;
@@ -94,11 +95,17 @@ it("rolls back replacement and disables the new key when the membership re-check
   const intentKey = randomUUID();
   const first = await createApiKey(ctx, input, intentKey);
   const originalRecord = await outcome(intentKey);
-  const member = await credentialAuth.findApiCredentialMember(ctx.organizationId, ctx.userId);
-  const guard = vi.spyOn(credentialAuth, "findApiCredentialMember")
-    .mockResolvedValueOnce(member).mockResolvedValueOnce({ ...member, id: randomUUID() });
-  await expect(createApiKey(ctx, input, intentKey)).rejects.toMatchObject({ code: "forbidden" });
+  const original = auth.api.createApiKey;
+  const guard = vi.spyOn(auth.api, "createApiKey").mockImplementationOnce(async (...args) => {
+    const result = await original(...args);
+    await db.update(users).set({ emailVerified: false }).where(eq(users.id, ctx.userId));
+    return result;
+  });
+  await expect(createApiKey(ctx, input, intentKey)).rejects.toMatchObject({
+    code: "forbidden", message: "Credential owner membership changed during issuance.",
+  });
   guard.mockRestore();
+  await db.update(users).set({ emailVerified: true }).where(eq(users.id, ctx.userId));
   expect(await outcome(intentKey)).toEqual(originalRecord);
   const rows = await db.select({ id: apiKeys.id, enabled: apiKeys.enabled }).from(apiKeys)
     .where(eq(apiKeys.referenceId, ctx.organizationId));
@@ -108,6 +115,57 @@ it("rolls back replacement and disables the new key when the membership re-check
     .where(eq(apiKeyOwners.organizationId, ctx.organizationId))).toEqual([{ id: first.id }]);
   const retry = await createApiKey(ctx, input, intentKey);
   expect(await outcome(intentKey)).toEqual([{ id: originalRecord[0].id, outcome: { kind: "success", data: { id: retry.id } } }]);
+});
+
+it("waits for keyed issuance before demotion revokes the key permanently", async () => {
+  const member = await credentialAuth.findApiCredentialMember(ctx.organizationId, ctx.userId);
+  await db.update(members).set({ role: "admin" }).where(and(
+    eq(members.id, member.id), eq(members.organizationId, ctx.organizationId), eq(members.userId, ctx.userId),
+  ));
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const updating = Promise.withResolvers<void>();
+  const original = auth.api.createApiKey;
+  vi.spyOn(auth.api, "createApiKey").mockImplementationOnce(async (...args) => {
+    const result = await original(...args);
+    entered.resolve();
+    await release.promise;
+    return result;
+  });
+  const creating = createApiKey(ctx, input, randomUUID());
+  let demotion: Promise<void> | undefined;
+  let created: Awaited<typeof creating>;
+  try {
+    await Promise.race([entered.promise, creating]);
+    // A dedicated writer avoids pool starvation; the platform-admin path also
+    // locks the organization, masking the member-row race with the owner FK.
+    demotion = withDedicatedLockConnection(async (tx) => {
+      updating.resolve();
+      await tx.update(members).set({ role: "member" }).where(and(
+        eq(members.id, member.id), eq(members.organizationId, ctx.organizationId), eq(members.userId, ctx.userId),
+      ));
+      await credentialAuth.disableOwnerApiKeys(ctx.organizationId, ctx.userId, tx);
+    });
+    await updating.promise;
+    expect(await Promise.race([
+      demotion.then(() => "completed"),
+      new Promise<string>(resolve => setTimeout(() => resolve("waiting"), DEMOTION_WAIT_MS)),
+    ])).toBe("waiting");
+  } finally {
+    release.resolve();
+    created = await creating;
+    await demotion;
+  }
+  const state = () => db.select({ enabled: apiKeys.enabled, revokedAt: apiKeyOwners.revokedAt })
+    .from(apiKeys).innerJoin(apiKeyOwners, eq(apiKeyOwners.credentialId, apiKeys.id))
+    .where(and(eq(apiKeys.id, created.id), eq(apiKeys.referenceId, ctx.organizationId),
+      eq(apiKeyOwners.organizationId, ctx.organizationId)));
+  const revoked = await state();
+  expect(revoked).toEqual([{ enabled: false, revokedAt: expect.any(Date) }]);
+  await db.update(members).set({ role: "admin" }).where(and(
+    eq(members.id, member.id), eq(members.organizationId, ctx.organizationId), eq(members.userId, ctx.userId),
+  ));
+  expect(await state()).toEqual(revoked);
 });
 
 it.each([false, true])("refuses a concurrent claim before issuing another key (replay: %s)", async (replay) => {

@@ -68,7 +68,7 @@ export async function createApiKey(ctx: OrgContext, input: unknown, intentKey?: 
   const parsed = createApiKeySchema.parse(input);
   let issuedId: string | undefined;
 
-  const issue = async (executor: Pick<typeof db, "insert">) => {
+  const issue = async (executor: Pick<typeof db, "insert" | "select">) => {
     const result = await auth.api.createApiKey({
       body: {
         name: parsed.name,
@@ -85,10 +85,16 @@ export async function createApiKey(ctx: OrgContext, input: unknown, intentKey?: 
       organizationId: ctx.organizationId,
       memberId: member.id,
     });
-    // Re-check live membership after issuance; the owner FK also pins membership
-    // until a keyed transaction commits, so removal hooks can revoke the owner.
-    const currentMember = await requireCredentialManager(ctx);
-    if (currentMember.id !== member.id) {
+    // Keyed issuance re-checks through its transaction while holding the member lock.
+    const currentMember = intentKey
+      ? (await executor.select({ id: members.id, role: members.role, emailVerified: users.emailVerified })
+        .from(members)
+        .innerJoin(users, eq(users.id, members.userId))
+        .where(and(eq(members.organizationId, ctx.organizationId), eq(members.userId, ctx.userId)))
+        .limit(1))[0]
+      : await requireCredentialManager(ctx);
+    if (!currentMember || currentMember.id !== member.id
+      || !canOwnApiKey(currentMember.role) || !currentMember.emailVerified) {
       throw new DomainError("forbidden", "Credential owner membership changed during issuance.");
     }
     return { id: result.id, key: result.key, name: result.name, expiresAt: result.expiresAt };
@@ -116,6 +122,13 @@ export async function createApiKey(ctx: OrgContext, input: unknown, intentKey?: 
         await tx.delete(apiKeys).where(and(
           eq(apiKeys.id, previous.id), eq(apiKeys.referenceId, ctx.organizationId),
         ));
+      }
+      // Serialize role updates and deletes with owner visibility at commit.
+      const [lockedMember] = await tx.select({ id: members.id }).from(members)
+        .where(and(eq(members.id, member.id), eq(members.organizationId, ctx.organizationId), eq(members.userId, ctx.userId)))
+        .for("no key update");
+      if (!lockedMember) {
+        throw new DomainError("forbidden", "Credential owner membership changed during issuance.");
       }
       const result = await issue(tx);
       await recordIdempotencyOutcome(ctx, tx, claim.recordId, { id: result.id });
