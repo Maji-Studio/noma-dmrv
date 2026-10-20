@@ -13,6 +13,10 @@ import { oauthAppNameStart, oauthRoleLabel } from "./oauth-labels";
 
 const EMPTY_ICON_SIZE = 32;
 const TITLE = "Choose an organization";
+const EMPTY_TITLE = "No organizations yet";
+const EMPTY_DESCRIPTION = "Ask an Owner to invite you.";
+const EMPTY_ADMIN_TITLE = "Join an organization first";
+const EMPTY_ADMIN_DESCRIPTION = "Apps connect as a member of an organization. Platform Admins are not members, so invite yourself to one in Settings, then connect again.";
 
 export function OrganizationPicker() {
   // The signed query is the request's identity; it exists only in the browser.
@@ -25,7 +29,7 @@ export function OrganizationPicker() {
   if (oauthQuery === "" || choices.isError) return <OAuthCard title={TITLE}><OAuthRestartNotice /></OAuthCard>;
   if (!choices.data) return <OAuthCard title={TITLE}><Skeleton className="h-160 w-full" /></OAuthCard>;
 
-  const { clientName, clientHost, memberships, preselectedOrganizationId } = choices.data;
+  const { clientName, clientHost, memberships, preselectedOrganizationId, isPlatformAdmin } = choices.data;
   const selected = picked ?? preselectedOrganizationId;
   const usable = memberships.some(membership => !membership.disabledReason);
 
@@ -42,7 +46,8 @@ export function OrganizationPicker() {
       <OAuthAppIdentity name={clientName} host={clientHost} />
       {memberships.length === 0 ? (
         <EmptyState icon={<BuildingsIcon size={EMPTY_ICON_SIZE} />} padding="sm"
-          title="No organizations yet" description="Ask an Owner to invite you." />
+          title={isPlatformAdmin ? EMPTY_ADMIN_TITLE : EMPTY_TITLE}
+          description={isPlatformAdmin ? EMPTY_ADMIN_DESCRIPTION : EMPTY_DESCRIPTION} />
       ) : (
         <form className="flex flex-col gap-24" onSubmit={event => { event.preventDefault(); if (selected) void submit(selected); }}>
           <ChoiceCardGroup
