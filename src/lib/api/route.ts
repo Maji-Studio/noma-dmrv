@@ -6,6 +6,7 @@ import { principalAllows, type ApiScope } from "@/lib/auth/api-scopes";
 import { deadlineExceeded, DomainError } from "@/lib/domain-errors";
 import { toActionFailure } from "@/fn/action-errors";
 import { actionFailureResponse, apiDenialResponse, apiHttpErrorResponse, apiResponseHeaders, rateLimitHeaders } from "./problem";
+import { apiScopeDenialResponse } from "./scope-denial";
 import { logApiError, shouldLogDomainError, unexpectedApiErrorResponse } from "./route-error";
 import { ApiHttpError } from "./http-error";
 import { preAuthGuard, credentialAdmissionGuard, postAuthGuard } from "./guards";
@@ -24,7 +25,7 @@ async function admitApiRequest(
   access: "read" | "write", context: ApiRouteContext, scope: ApiScope | undefined, ipResult: RateLimitResult | null, writesDisabledInHandler?: boolean,
 ) {
   if (scope && !principalAllows(context.ctx, scope)) {
-    return { ok: false as const, response: apiDenialResponse("missing_scope", context.instance, context.requestId, { role: context.ctx.orgRole, oauth: context.ctx.principal.kind === "oauth", scopes: context.ctx.scopes, requiredScopes: [scope] }) };
+    return { ok: false as const, response: await apiScopeDenialResponse(context.ctx, context.instance, context.requestId, [scope]) };
   }
   return postAuthGuard(context.ctx, {
     requestId: context.requestId, instance: context.instance,

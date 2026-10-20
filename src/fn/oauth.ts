@@ -4,7 +4,8 @@ import { getOAuthOrganizationSelection, selectOAuthOrganization, resolveAttemptG
 import { getOAuthAttemptConsent, isPlatformAdminUser } from "@/data-access/oauth-provider";
 import { listOwnOAuthGrants, listAllOAuthGrants, revokeOAuthGrant } from "@/data-access/oauth-grants";
 import { assertGenerationEligible } from "@/lib/auth/oauth-eligibility";
-import { parseOAuthScopes } from "@/lib/auth/oauth-scopes";
+import { findOAuthStepUp } from "@/data-access/oauth-step-up";
+import { oauthRoleCeiling, parseOAuthScopes } from "@/lib/auth/oauth-scopes";
 import { oauthRolePolicy } from "@/lib/auth/oauth-role-policy";
 import { oauthQuerySchema, selectOAuthOrganizationSchema, revokeOAuthGrantSchema } from "@/schemas/oauth";
 import { withAction } from "./with-action";
@@ -35,16 +36,19 @@ export async function getOAuthConsentViewFn(input: unknown) {
     const { attempt, query, display } = await verifiedOAuthRequest(oauthQuerySchema.parse(input).oauthQuery);
     if (query.get("ba_pl") !== attempt.sessionId) refuseOAuthAction();
     const grant = await resolveAttemptGrant(attempt);
-    if (!(await assertGenerationEligible(grant, new Date())).ok) refuseOAuthAction();
+    const eligibility = await assertGenerationEligible(grant, new Date());
+    if (!eligibility.ok) refuseOAuthAction();
     const view = await getOAuthAttemptConsent(attempt);
     if (!view) refuseOAuthAction();
     const requested = parseOAuthScopes(query.get("scope") ?? "");
-    const apiScopes = requested.filter(scope => scope !== "offline_access");
+    const ceiling = oauthRoleCeiling(eligibility.role);
+    const apiScopes = requested.filter(scope => scope !== "offline_access").filter(scope => ceiling.has(scope));
     if (!apiScopes.length) refuseOAuthAction();
     const allowed = new Set(view.consentScopes ?? []);
     const newlyRequestedScopes = apiScopes.filter(scope => !allowed.has(scope));
+    const pending = new Set(await findOAuthStepUp({ userId: attempt.userId, clientId: attempt.clientId, organizationId: view.organizationId }));
     return { ...display, organization: { id: view.organizationId, name: view.name },
-      newlyRequestedScopes,
+      newlyRequestedScopes, stepUpScopes: newlyRequestedScopes.filter(scope => pending.has(scope)),
       alreadyAllowedScopes: apiScopes.filter(scope => allowed.has(scope)),
       offlineAccessRequested: requested.includes("offline_access"), isStepUp: view.consentScopes !== null && newlyRequestedScopes.length > 0 };
   });

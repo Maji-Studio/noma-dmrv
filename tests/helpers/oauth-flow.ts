@@ -2,7 +2,7 @@ import { createHash, createHmac, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { expect } from "vitest";
 
-export async function createOAuthFlowFixture() {
+export async function createOAuthFlowFixture(options: { scope?: string } = {}) {
   const { auth } = await import("@/lib/auth/better-auth");
   const { db } = await import("@/db");
   const tables = await import("@/db/schema");
@@ -28,7 +28,7 @@ export async function createOAuthFlowFixture() {
   const client = await auth.api.adminCreateOAuthClient({ headers: sessionHeaders(adminToken), body: {
     client_name: "E2E OAuth flow", redirect_uris: [redirectUri], token_endpoint_auth_method: "none",
     grant_types: ["authorization_code", "refresh_token"], response_types: ["code"],
-    scope: "feedstocks:read feedstocks:write offline_access", resources: [config.mcp, config.rest],
+    scope: options.scope ?? "feedstocks:read feedstocks:write offline_access", resources: [config.mcp, config.rest],
   } });
   const clientId = client.client_id;
   const [session] = await db.select().from(tables.sessions).where(eq(tables.sessions.id, f.sessionId));
@@ -46,6 +46,11 @@ export async function createOAuthFlowFixture() {
     return {
       status: response.status, error: data.error as string | undefined, scope: data.scope as string | undefined,
       hasRefresh: typeof data.refresh_token === "string",
+      request(path = resource, init: RequestInit = {}) {
+        const headers = new Headers(init.headers);
+        headers.set("authorization", `Bearer ${data.access_token}`);
+        return new Request(new URL(path, resource), { ...init, headers });
+      },
       async resolve() {
         const { resolveApiContext } = await import("@/lib/auth/api-context");
         return resolveApiContext(new Request(resource, { headers: { authorization: `Bearer ${data.access_token}` } }), resource);

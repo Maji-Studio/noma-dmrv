@@ -1,6 +1,6 @@
 import { env } from "@/config/env";
 import { beforeEach, expect, it, vi } from "vitest";
-import { actionFailureResponse, apiDenialResponse, problemResponse } from "./problem";
+import { actionFailureResponse, apiDenialResponse, oauthStepUpChallengeApplies, problemResponse } from "./problem";
 import type { DomainErrorCode } from "@/lib/domain-errors";
 import { problemSchema, customerDeleteConflictSchema } from "./problem-schema";
 import { conflictCode } from "@/lib/conflict-ref";
@@ -211,8 +211,9 @@ it("adds an invalid-token challenge for OAuth with the route resource metadata",
   expect(challenge).toContain('error="invalid_token"');
   expect(challenge).toContain('/.well-known/oauth-protected-resource/api/mcp"');
   expect(challenge).toContain("feedstocks:read");
-  expect(challenge).not.toContain(":write");
-  expect(challenge).not.toContain("offline_access");
+  expect(challenge).toContain("feedstocks:write");
+  expect(challenge).toContain("offline_access");
+  expect(challenge).not.toContain(":delete");
 });
 it("adds a step-up union for OAuth missing scope only", () => {
   env.OAUTH_PROVIDER_ENABLED = true;
@@ -220,6 +221,19 @@ it("adds a step-up union for OAuth missing scope only", () => {
   expect(response.status).toBe(403);
   expect(response.headers.get("www-authenticate")).toContain('error="insufficient_scope", scope="feedstocks:read feedstocks:write"');
   expect(apiDenialResponse("missing_scope", "/api/v1/feedstocks", "id").headers.has("www-authenticate")).toBe(false);
+});
+
+it("shares step-up eligibility across denials, provider state, principals, scopes and role ceilings", () => {
+  const challenge = { oauth: true, role: "member", requiredScopes: ["feedstocks:write"] as const };
+  expect(oauthStepUpChallengeApplies("missing_scope", challenge)).toBe(false);
+  env.OAUTH_PROVIDER_ENABLED = true;
+  expect(oauthStepUpChallengeApplies("missing_scope", challenge)).toBe(true);
+  expect(oauthStepUpChallengeApplies("insufficient_role", challenge)).toBe(false);
+  expect(oauthStepUpChallengeApplies("missing_scope", { ...challenge, oauth: false })).toBe(false);
+  expect(oauthStepUpChallengeApplies("missing_scope", { ...challenge, role: "unknown" })).toBe(false);
+  expect(oauthStepUpChallengeApplies("missing_scope", { ...challenge, requiredScopes: [] })).toBe(false);
+  expect(oauthStepUpChallengeApplies("missing_scope", { ...challenge, requiredScopes: undefined })).toBe(false);
+  expect(oauthStepUpChallengeApplies("missing_scope", { ...challenge, requiredScopes: ["feedstocks:write", "orders:delete"] })).toBe(false);
 });
 
 it.each([false, true])("gates REST and MCP discovery challenges when enabled=%s", (enabled) => {

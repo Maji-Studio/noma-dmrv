@@ -66,13 +66,13 @@ it("checks eligibility on a whitespace-padded authorization_code grant", async (
   await f.db.delete(f.tables.members).where(eq(f.tables.members.id, f.memberIds[0]));
   expect((await code.exchange({ grant_type: "authorization_code " })).status).toBe(400);
 });
-it("defaults a missing scope to the read set", async () => {
+it("defaults a missing scope to registered reads, writes and offline access", async () => {
   f = await createOAuthFlowFixture();
   const flow = await f.authorize({ scope: "" });
   expect(flow.location.pathname).toBe("/oauth/consent");
   const requested = new URL(flow.location).searchParams.get("scope") ?? "";
   // The test client registers feedstocks:read, feedstocks:write and offline_access.
-  expect(requested.split(" ").sort()).toEqual(["feedstocks:read", "offline_access"]);
+  expect(requested.split(" ").sort()).toEqual(["feedstocks:read", "feedstocks:write", "offline_access"]);
 });
 it("a replayed code revokes the tokens already issued for it", async () => {
   f = await createOAuthFlowFixture();

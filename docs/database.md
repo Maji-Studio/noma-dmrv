@@ -65,6 +65,12 @@ unique index permits one unrevoked binding per organization, user, client and
 resource. Creation sets `last_used_at` to `created_at`; management revocation
 increments `version` once and preserves the first reason.
 
+The expiring `verification` store keeps pending step-up hints under an
+`oauth-step-up:` identifier containing the exact user, client and organization
+tuple. A deterministic primary key makes replacement atomic. Hints grant no
+authority; consent ignores them after 15 minutes, including after accept or deny,
+and the OAuth purge removes expired hints.
+
 `oauth_authorization_attempts` binds one verified authorization query to one
 organization and session. Selection is insert-only. Resolution locks the
 attempt and the live membership, then reuses or creates a generation. A stored
@@ -101,9 +107,9 @@ changes keep connections under the default policy. If Member connections are
 disabled there, both membership role hooks revoke on demotion to Member.
 
 The authenticated API purge cron deletes expired attempts, unconsented pending
-generations older than a day, expired plugin tokens and expired client
-assertions. Pending cleanup also requires no token rows. An expired refresh
-row remains while an access token still references it, preventing the plugin's
+generations older than a day, expired plugin tokens, expired client assertions
+and expired step-up hints. Pending cleanup also requires no token rows. An expired
+refresh row remains while an access token still references it, preventing the plugin's
 cascade FK from deleting an unexpired access token. Revoked generations remain
 for attribution. Purge queries are explicit cross-organization system seams.
 

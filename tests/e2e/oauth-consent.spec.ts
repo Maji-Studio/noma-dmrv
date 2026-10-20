@@ -1,12 +1,13 @@
 import { expect, test as base, type Page } from "@playwright/test";
 import {
-  authorizeUrl, createE2EOAuthClient, createE2EOAuthPerson, E2E_OAUTH_CALLBACK_PATH, readE2EOAuthConsentScopes, removeE2EOAuthClient, removeE2EOAuthPerson,
+  authorizeUrl, createE2EOAuthClient, createE2EOAuthPerson, E2E_OAUTH_CALLBACK_PATH, readE2EOAuthConsentScopes, removeE2EOAuthClient, removeE2EOAuthPerson, seedE2EOAuthStepUp,
   type E2EOAuthClient, type E2EOAuthPerson,
 } from "./fixtures/oauth-helpers";
 
 const UI_TIMEOUT_MS = 30_000;
 const READ_SCOPES = "feedstocks:read orders:read offline_access";
 const STEP_UP_SCOPES = "feedstocks:read feedstocks:write orders:read offline_access";
+const ALL_SCOPES = STEP_UP_SCOPES;
 const CLIENT_SCOPES = ["feedstocks:read", "feedstocks:write", "orders:read", "offline_access"];
 
 const test = base.extend<{ client: E2EOAuthClient; person: E2EOAuthPerson }>({
@@ -41,7 +42,7 @@ async function expectCallback(page: Page, expected: { code?: boolean; error?: st
 }
 
 test("a signed-out start goes through sign-in, the picker and a read-only consent to a code", async ({ page, client, person }) => {
-  await page.goto(authorizeUrl(client, READ_SCOPES, "e2e-state-1"));
+  await page.goto(authorizeUrl(client, ALL_SCOPES, "e2e-state-1"));
   await signIn(page, person);
 
   await expect(page.getByRole("heading", { name: "Choose an organization", level: 1 })).toBeVisible({ timeout: UI_TIMEOUT_MS });
@@ -52,15 +53,35 @@ test("a signed-out start goes through sign-in, the picker and a read-only consen
 
   await expect(page.getByRole("heading", { name: "Allow E2E OAuth client to use noma?", level: 1 })).toBeVisible({ timeout: UI_TIMEOUT_MS });
   await expect(page.getByText(/wants to act for you in E2E OAuth Organization B\./)).toBeVisible();
-  await expect(page.getByRole("checkbox", { name: "Feedstocks Read", exact: true })).toBeChecked();
-  await expect(page.getByRole("checkbox", { name: "Feedstocks Write", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("columnheader", { name: "Delete" })).toHaveCount(0);
+  // Writes are offered, but Read only is the default and the board stays closed.
+  await expect(page.getByRole("radio", { name: /^Read only/ })).toBeChecked();
+  await expect(page.getByRole("radio", { name: /^Read and write/ })).not.toBeChecked();
+  await expect(page.getByRole("table")).toHaveCount(0);
   await expect(page.getByText("Stay connected: E2E OAuth client can keep working without asking you to sign in again")).toBeVisible();
   await page.getByRole("button", { name: "Allow", exact: true }).click();
   await expectCallback(page, { state: "e2e-state-1" });
+  expect((await readE2EOAuthConsentScopes(client.clientId, person.userId)).sort()).toEqual(READ_SCOPES.split(" ").sort());
 });
 
-test("the same scopes skip consent, and a step-up asks again with the new write ticked", async ({ page, client, person }) => {
+test("Choose per area: a write switched on brings its read, and only the picked scopes are stored", async ({ page, client, person }) => {
+  await page.goto(authorizeUrl(client, ALL_SCOPES, "e2e-state-7"));
+  await signIn(page, person);
+  await page.getByRole("radio", { name: /E2E OAuth Organization A/ }).check({ force: true });
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Allow E2E OAuth client to use noma?", level: 1 })).toBeVisible({ timeout: UI_TIMEOUT_MS });
+
+  await page.getByRole("radio", { name: /^Choose per area/ }).check({ force: true });
+  await expect(page.getByRole("checkbox", { name: "Orders, write", exact: true })).toHaveCount(0);
+  await page.getByRole("checkbox", { name: "Orders, read", exact: true }).uncheck({ force: true });
+  await page.getByRole("checkbox", { name: "Feedstocks, read", exact: true }).uncheck({ force: true });
+  await page.getByRole("checkbox", { name: "Feedstocks, write", exact: true }).check({ force: true });
+  await expect(page.getByRole("checkbox", { name: "Feedstocks, read", exact: true })).toBeChecked();
+  await page.getByRole("button", { name: "Allow", exact: true }).click();
+  await expectCallback(page, { state: "e2e-state-7" });
+  expect((await readE2EOAuthConsentScopes(client.clientId, person.userId)).sort()).toEqual(["feedstocks:read", "feedstocks:write", "offline_access"]);
+});
+
+test("the same scopes skip consent, and a step-up lists the refused write first with New, ticked", async ({ page, client, person }) => {
   await page.goto(authorizeUrl(client, READ_SCOPES, "e2e-state-2"));
   await signIn(page, person);
   await page.getByRole("radio", { name: /E2E OAuth Organization A/ }).check({ force: true });
@@ -74,14 +95,19 @@ test("the same scopes skip consent, and a step-up asks again with the new write 
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expectCallback(page, { state: "e2e-state-3" });
 
-  // Step-up: the new write is ticked because the app asked for that action.
-  await page.goto(authorizeUrl(client, STEP_UP_SCOPES, "e2e-state-4"));
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Allow E2E OAuth client to use noma?", level: 1 })).toBeVisible({ timeout: UI_TIMEOUT_MS });
-  await expect(page.getByRole("checkbox", { name: "Feedstocks Write", exact: true })).toBeChecked();
-  await expect(page.getByText("Already allowed").first()).toBeVisible();
-  await page.getByRole("button", { name: "Allow", exact: true }).click();
-  await expectCallback(page, { state: "e2e-state-4" });
+  // Step-up: the write the app was refused is ticked and marked New, because the 403 left a hint.
+  const clearHint = await seedE2EOAuthStepUp({ client, organizationId: person.organizations[0].id, userId: person.userId, scopes: ["feedstocks:write"] });
+  try {
+    await page.goto(authorizeUrl(client, STEP_UP_SCOPES, "e2e-state-4"));
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Allow E2E OAuth client to use noma?", level: 1 })).toBeVisible({ timeout: UI_TIMEOUT_MS });
+    await expect(page.getByRole("radio")).toHaveCount(0);
+    await expect(page.getByRole("checkbox", { name: "Feedstocks, write", exact: true })).toBeChecked();
+    await expect(page.getByRole("row", { name: /Feedstocks.*New/ })).toBeVisible();
+    await expect(page.getByText("Orders, read, already allowed")).toBeVisible();
+    await page.getByRole("button", { name: "Allow", exact: true }).click();
+    await expectCallback(page, { state: "e2e-state-4" });
+  } finally { await clearHint(); }
   // Accepting replaces the stored consent, so it must keep what was already allowed and offline_access.
   expect((await readE2EOAuthConsentScopes(client.clientId, person.userId)).sort()).toEqual(STEP_UP_SCOPES.split(" ").sort());
 });

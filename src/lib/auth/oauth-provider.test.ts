@@ -6,7 +6,7 @@ import { createAuthMiddleware } from "better-auth/api";
 
 const state = vi.hoisted(() => ({ attempt: undefined as undefined | { memberId: string; organizationId: string }, revoked: false, picker: false }));
 vi.mock("@/config/env", () => ({ env: { NEXT_PUBLIC_APP_URL: "http://localhost:3100", BETTER_AUTH_SECRET: "unit-oauth-secret-at-least-32-characters" } }));
-vi.mock("@/data-access/oauth-provider", () => ({ findOAuthOfflineGenerations: async () => [], findOAuthAttempt: async () => state.attempt, findOAuthClientResources: async () => [{ resource: "http://localhost:3100/api/mcp" }] }));
+vi.mock("@/data-access/oauth-provider", () => ({ findOAuthClientScopes: async () => ["feedstocks:read", "feedstocks:write", "offline_access"], findOAuthOfflineGenerations: async () => [], findOAuthAttempt: async () => state.attempt, findOAuthClientResources: async () => [{ resource: "http://localhost:3100/api/mcp" }] }));
 vi.mock("@/data-access/oauth-grant-lifecycle", () => ({
   getOAuthOrganizationSelection: async () => ({ memberships: [{ memberId: "member", organizationId: "org" }], autoSelectOrganizationId: state.picker ? null : "org" }),
   selectOAuthOrganization: async () => { state.attempt = { memberId: "member", organizationId: "org" }; },
@@ -36,7 +36,7 @@ async function fixture() {
   const client = { client_id: "unit:client/with space" };
   storage.oauthClient.push({ id: "client", clientId: client.client_id, name: "E2E App", redirectUris: [REDIRECT],
     tokenEndpointAuthMethod: "none", requirePKCE: true, grantTypes: ["authorization_code", "refresh_token"],
-    scopes: ["feedstocks:read", "offline_access"] });
+    scopes: ["feedstocks:read", "feedstocks:write", "offline_access"] });
   storage.oauthClientResource.push({ id: "link", clientId: client.client_id, resourceId: RESOURCE });
   const ctx = await auth.$context;
   const signed = `session-token.${createHmac("sha256", SECRET).update("session-token").digest("base64")}`;
@@ -185,4 +185,25 @@ it.each([false, true])("does not revoke another client's generation (Basic: %s)"
   expect((await token.revoke(basic, "other-client")).status).toBe(200);
   expect(state.revoked).toBe(false);
   expect((await token.refresh()).status).toBe(200);
+});
+
+it.each([false, true])("offers registered writes on scope-less authorization (form: %s)", async form => {
+  const f = await fixture();
+  f.query.delete("scope");
+  const response = form ? await f.request("/oauth2/authorize", Object.fromEntries(f.query))
+    : await f.request(`/oauth2/authorize?${f.query}`);
+  expect(response.status).toBe(302);
+  const consent = new URL(response.headers.get("location")!, ORIGIN);
+  expect(consent.pathname).toBe("/oauth/consent");
+  expect(consent.searchParams.get("scope")?.split(" ").sort()).toEqual(["feedstocks:read", "feedstocks:write", "offline_access"]);
+  const decision = await f.auth.api.oauth2Consent({ asResponse: false, headers: f.headers,
+    request: new Request(`${ORIGIN}/api/auth/oauth2/consent`, { method: "POST", headers: f.headers }),
+    body: { accept: true, scope: "feedstocks:read offline_access", oauth_query: consent.search.slice(1) } });
+  const token = await f.request("/oauth2/token", { grant_type: "authorization_code", client_id: f.client.client_id,
+    code: new URL(decision.url).searchParams.get("code"), code_verifier: f.verifier, redirect_uri: REDIRECT, resource: RESOURCE });
+  expect(token.status).toBe(200);
+  expect((await token.json()).scope.split(" ").sort()).toEqual(["feedstocks:read", "offline_access"]);
+  for (const model of ["oauthConsent", "oauthAccessToken", "oauthRefreshToken"]) {
+    expect(f.storage[model][0].scopes).toEqual(["feedstocks:read", "offline_access"]);
+  }
 });

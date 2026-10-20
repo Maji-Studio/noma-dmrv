@@ -11,7 +11,7 @@ import { documentNotFound, resolveApiDocumentOwner } from "@/lib/read-models/api
 import { requestDocumentUploadBodyInput } from "@/schemas/document-input";
 import { canonicalUuid } from "./canonical-uuid";
 import { lookupIdentifier } from "./lookup-query";
-import { apiDenialResponse } from "./problem";
+import { apiScopeDenialResponse } from "./scope-denial";
 import { mutationQuerySchema, parseApiQuery } from "./query";
 import { readIdempotencyKey, readJsonBody, readOptionalJsonBody } from "./request-body";
 import { documentEtag } from "./representation-etags";
@@ -30,7 +30,7 @@ export function documentWriteHandler(ownerType: ApiDocumentOwnerType, kind: Writ
   const owner = API_DOCUMENT_OWNERS[ownerType];
   return apiRoute<Params>(`api.v1.${owner.path}.documents.${kind}`, owner.writeScope, async (request, context, params) => {
     const { ctx, headers, deadlineAt, requestId, instance } = context;
-    if (!canAccessOwnerDocuments(ctx, ownerType, "write")) return apiDenialResponse("missing_scope", instance, requestId, { role: ctx.orgRole, oauth: ctx.principal.kind === "oauth", scopes: ctx.scopes, requiredScopes: [owner.writeScope] });
+    if (!canAccessOwnerDocuments(ctx, ownerType, "write")) return apiScopeDenialResponse(ctx, instance, requestId, [owner.writeScope]);
     const { dryRun } = parseApiQuery(request, mutationQuerySchema);
     if (dryRun) throw new DomainError("validation_failed", NO_DRY_RUN);
     const audit = apiAudit(ctx, requestId, "rest");

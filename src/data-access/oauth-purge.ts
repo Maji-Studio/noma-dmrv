@@ -1,8 +1,18 @@
-import { and, eq, gt, isNull, lt, lte, notExists } from "drizzle-orm";
+import { and, eq, gt, isNull, like, lt, lte, notExists } from "drizzle-orm";
 import { db } from "@/db";
-import { oauthAccessTokens, oauthAuthorizationAttempts, oauthClientAssertions, oauthConsents, oauthGrants, oauthRefreshTokens } from "@/db/schema";
+import { oauthAccessTokens, oauthAuthorizationAttempts, oauthClientAssertions, oauthConsents, oauthGrants, oauthRefreshTokens, verifications } from "@/db/schema";
+import { OAUTH_STEP_UP_NAMESPACE } from "@/config/oauth";
 
 const PENDING_RETENTION_MS = 24 * 60 * 60 * 1_000;
+
+// org-scope-ok: system cron purges expired OAuth step-up hints across organizations
+export async function purgeExpiredOAuthStepUpHints(now = new Date()) {
+  // org-scope-ok: system cron purges only the expired OAuth step-up verification namespace
+  const rows = await db.delete(verifications).where(and(
+    like(verifications.identifier, `${OAUTH_STEP_UP_NAMESPACE}%`), lte(verifications.expiresAt, now),
+  )).returning({ id: verifications.id });
+  return rows.length;
+}
 
 // org-scope-ok: system cron purges expired authorization attempts across organizations
 export async function purgeExpiredOAuthAttempts(now = new Date()) {

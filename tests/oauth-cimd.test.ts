@@ -254,12 +254,12 @@ it("refuses an unlisted CIMD client without resource before fetching metadata", 
   expect(request).not.toHaveBeenCalled();
 });
 
-it("defaults the first scope-less listed CIMD authorization to reads and offline access", async () => {
-  const { OAUTH_READ_SCOPES, OAUTH_GRANTABLE_SCOPES } = await import("@/lib/auth/oauth-scopes");
-  body = JSON.stringify({ ...JSON.parse(body), scope: [...OAUTH_GRANTABLE_SCOPES, "offline_access"].join(" ") });
+it("defaults the first scope-less listed CIMD authorization to requestable scopes", async () => {
+  const { OAUTH_REQUESTABLE_SCOPES } = await import("@/lib/auth/oauth-scopes");
+  body = JSON.stringify({ ...JSON.parse(body), scope: OAUTH_REQUESTABLE_SCOPES.join(" ") });
   const response = await authorize(CLIENT_ID, REDIRECT_URI, false, false);
   expect(response.status).toBe(302);
   const login = new URL(response.headers.get("location")!, "http://localhost:3100");
   expect(login.pathname).toBe("/login");
-  expect(login.searchParams.get("scope")?.split(" ").sort()).toEqual([...OAUTH_READ_SCOPES, "offline_access"].sort());
+  expect(login.searchParams.get("scope")?.split(" ").sort()).toEqual([...OAUTH_REQUESTABLE_SCOPES].sort());
 });

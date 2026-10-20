@@ -6,6 +6,8 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
 import { and, eq, inArray } from "drizzle-orm";
+import { OAUTH_STEP_UP_TTL_MS } from "../../../src/config/oauth";
+import { stepUpKey } from "../../../src/lib/auth/oauth-step-up-key";
 import * as schema from "../../../src/db/schema";
 import { createDbConnection } from "./db";
 
@@ -154,4 +156,19 @@ export async function readE2EOAuthConsentScopes(clientId: string, userId: string
       .where(and(eq(schema.oauthConsents.clientId, clientId), eq(schema.oauthConsents.userId, userId)));
     return rows.flatMap(row => row.scopes);
   } finally { await pool.end(); }
+}
+
+/** The hint a 403 insufficient_scope leaves, so the next consent preticks what the app actually asked for. Returns its cleanup. */
+export async function seedE2EOAuthStepUp(input: { client: E2EOAuthClient; organizationId: string; userId: string; scopes: string[] }): Promise<() => Promise<void>> {
+  const { identifier, id } = stepUpKey({ userId: input.userId, clientId: input.client.clientId, organizationId: input.organizationId });
+  const now = new Date();
+  const { db, pool } = createDbConnection();
+  try {
+    await db.insert(schema.verifications).values({ id, identifier, value: JSON.stringify(input.scopes), createdAt: now, updatedAt: now,
+      expiresAt: new Date(now.getTime() + OAUTH_STEP_UP_TTL_MS) });
+  } finally { await pool.end(); }
+  return async () => {
+    const connection = createDbConnection();
+    try { await connection.db.delete(schema.verifications).where(eq(schema.verifications.id, id)); } finally { await connection.pool.end(); }
+  };
 }

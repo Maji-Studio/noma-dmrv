@@ -52,16 +52,20 @@ REST and MCP tokens are not interchangeable: the other audience gives 401
 [Grantable scopes](../src/lib/auth/oauth-scopes.ts) are the API `:read` and
 `:write` set, never `:delete`. Unknown or delete scopes give `invalid_scope`.
 Owner, Admin and Member have the same OAuth ceiling; domain guards still apply.
-Start with reads. A missing authorize scope defaults to registered read scopes
-plus `offline_access`. Request `offline_access` to keep the connection through
-rotating refresh tokens; consent preserves it without a checkbox. Access tokens
+The first consent offers grantable reads and writes; reads start ticked and
+writes start unticked. A missing authorize scope defaults to registered grantable
+scopes plus `offline_access`. Request `offline_access` to keep the connection
+through rotating refresh tokens; consent preserves it without a checkbox. Access tokens
 last one hour; 30 days without API use ends the connection. Refresh is not use.
 
 With `OAUTH_PROVIDER_ENABLED=true`, 401 challenges include the audience's
-`resource_metadata` and read scopes; OAuth bearer denials add
-`error="invalid_token"`. Missing grantable scopes return 403 `missing_scope`
+`resource_metadata` and all requestable scopes, including `offline_access`.
+OAuth bearer denials add `error="invalid_token"`. Missing grantable scopes return 403 `missing_scope`
 with `error="insufficient_scope"` and the union of current and required scopes
-in `WWW-Authenticate`. Re-authorize with that union for step-up consent. MCP lists
+in `WWW-Authenticate`. Re-authorize with that union for step-up consent; only
+the last refused operation is preselected, using a user/client/organization hint
+that expires after 15 minutes.
+Consent offers only scopes within the live organization role ceiling. MCP lists
 grantable writes before they are allowed, then checks argument-dependent scopes
 before dispatch. Deletes stay hidden. Keys keep their scope-filtered tool list
 and existing scope refusals. With the flag off, 401s carry only the bare Bearer
