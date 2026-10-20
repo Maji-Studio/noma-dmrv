@@ -85,17 +85,19 @@ it("keeps a missing observation as a retryable failure, not a blocker", async ()
   expect(loadCreditBatchRollups).not.toHaveBeenCalled();
 });
 
-// The current resolver only derives missing or mixed pins from batch inputs.
-it.each(["notRemovalTemplate", "templateNotFound", "mixedTemplatePins"] as const)(
-  "preserves a %s resolver blocker before loading accounting", async (code) => {
-    pinOverride.code = code;
-    await expect(loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch")).resolves.toEqual({
-      status: "blocked", blocker: removalTemplateBlocker(code),
-    });
-    expect(getLatestTemplateObservation).not.toHaveBeenCalled();
-    expect(loadCreditBatchRollups).not.toHaveBeenCalled();
-  },
-);
+// resolveBatchPin only derives unpinned or mixed pins from batch inputs, so
+// notRemovalTemplate and templateNotFound cannot come out of this read (a
+// pinned but unobserved template takes the retryable path above) and are not
+// tested here. The single-batch read cannot yield mixed pins either; the mock
+// keeps the passthrough honest if the resolver ever grows more codes.
+it("preserves a mixedTemplatePins resolver blocker before loading accounting", async () => {
+  pinOverride.code = "mixedTemplatePins";
+  await expect(loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch")).resolves.toEqual({
+    status: "blocked", blocker: removalTemplateBlocker("mixedTemplatePins"),
+  });
+  expect(getLatestTemplateObservation).not.toHaveBeenCalled();
+  expect(loadCreditBatchRollups).not.toHaveBeenCalled();
+});
 
 it("keeps a missing batch as a real failure", async () => {
   vi.mocked(getCreditBatchById).mockResolvedValue(null);
