@@ -1,7 +1,9 @@
+import { deriveRemovalEmissionLines } from "@/lib/certification/removal-emission-lines";
+import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
+import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 import type { BatchEmissionContext } from "./batch-emission-context";
-import { deriveBatchEmissionLines, type BatchEmissionLine } from "@/lib/certification/emission-lines";
-import { withRemovedEntryComponents } from "@/lib/certification/emission-line-definition";
+import { type BatchEmissionLine } from "@/lib/certification/emission-lines";
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
 import { withTemplateOrder } from "@/lib/isometric/template-observations/template-order";
 import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
@@ -15,6 +17,7 @@ export function resolveRemovalTemplate(
   batches: readonly { id?: string; removalTemplateId: string | null }[],
   facilityFacts: FacilityCertifierFacts,
   batchFacts: BatchEmissionContext = {},
+  contributions?: RemovalEntryContributions,
 ) {
   const unresolved = (code: "unpinnedTemplate" | "mixedTemplatePins" | "templateNotFound") => ({
     undecidedLineIds: [] as string[],
@@ -43,25 +46,25 @@ export function resolveRemovalTemplate(
   const undecidedLineIds = sources ? [...new Set(definition.groups.flatMap((group) => group.components
     .filter((component) => lineNeedsReview(component.id, ownValue(sources, component.id), problems))
     .map((component) => component.id)))] : [];
-  const derive = (batchId?: string) => deriveBatchEmissionLines({
-    definition: withRemovedEntryComponents(definition,
-      batchId ? batchFacts[batchId]?.entries ?? [] : [],
-      batchId ? batchFacts[batchId]?.previousObservations ?? new Map() : new Map()),
-    lineSources: withTemplateOrder(facts.template, facts.observation!.lineSources),
-    problems: facts.lineSourceProblems, enrichmentComplete: facts.enrichmentProblems.length === 0,
-    automaticFigures: batchId ? batchFacts[batchId]?.automaticFigures ?? {} : {},
-    entries: batchId ? batchFacts[batchId]?.entries ?? [] : [],
-  });
-  const emissionLinesByBatchId: Record<string, BatchEmissionLine[]> = {};
-  if (facts.observation) for (const batch of batches) {
-    if (batch.id) emissionLinesByBatchId[batch.id] = derive(batch.id);
-  }
-  const emissionLines = !facts.observation ? null : Object.keys(emissionLinesByBatchId).length
-    ? Object.values(emissionLinesByBatchId).flat() : derive();
+  const batchIds = batches.flatMap((batch) => batch.id ? [batch.id] : []);
+  const { emissionLinesByBatchId: resolvedLines } = deriveRemovalEmissionLines(!facts.observation ? {} : Object.fromEntries(
+    (batchIds.length ? batchIds : [""]).map((id) => [id, {
+      definition,
+      lineSources: withTemplateOrder(facts.template, facts.observation!.lineSources),
+      problems: facts.lineSourceProblems, enrichmentComplete: facts.enrichmentProblems.length === 0,
+      automaticFigures: batchFacts[id]?.automaticFigures ?? {},
+      omittedAutomaticSources: batchFacts[id]?.omittedAutomaticSources,
+      entries: batchFacts[id]?.entries ?? [],
+      previousObservations: batchFacts[id]?.previousObservations,
+      entriesWithoutRemoval: batchFacts[id]?.entriesWithoutRemoval,
+    }]),
+  ), contributions);
+  const emissionLinesByBatchId = batchIds.length ? resolvedLines : {};
+  const emissionLines = !facts.observation ? null : Object.values(resolvedLines).flat();
   return {
     emissionLines, emissionLinesByBatchId, undecidedLineIds,
     removalTemplate: facts.template, lineSources: facts.observation?.lineSources ?? {}, templateBlockers,
     blueprintsForTemplate: facts.blueprintsForTemplate, unresolvedBlueprintKeys: facts.unresolvedBlueprintKeys,
-    unbindableTemplateInputs: facts.unbindableTemplateInputs, requiredTransportCategories: facts.requiredTransportCategories,
+    unbindableTemplateInputs: contributions ? findUnbindableTemplateInputs(facts.template, { lineSources: facts.observation?.lineSources, entriesCanSubmit: true, enrichmentComplete: facts.enrichmentProblems.length === 0 }) : facts.unbindableTemplateInputs, requiredTransportCategories: facts.requiredTransportCategories,
   };
 }

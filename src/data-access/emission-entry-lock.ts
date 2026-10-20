@@ -82,6 +82,7 @@ export async function assertEmissionEntryDocumentWritable(
   if (!tx) return db.transaction((transaction) => assertEmissionEntryDocumentWritable(ctx, id, transaction));
   const owner = await lockEmissionEntryDocumentOwner(ctx, tx, id);
   if (owner.archived) throw new DomainError("not_found", "Credit batch was not found.");
+  if (owner.entry.kind === "zero") throw new DomainError("validation_failed", "Recorded zeros cannot have files.");
   return lockWritableEmissionEntry(ctx, tx, id);
 }
 export async function bumpEmissionEntryEvidence(

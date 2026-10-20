@@ -1,3 +1,5 @@
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
+import { frozenEntriesForAttempt, loadRemovalEntryContext } from "./removal-entry-context";
 import { loadBatchEmissionContext } from "./batch-emission-context";
 import { getRemovalCodes } from "@/data-access/removal-codes";
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
@@ -95,8 +97,33 @@ export async function buildRemovalContext(
   scope: RemovalScope,
   facilityFacts: FacilityCertifierFacts,
 ): Promise<RemovalSubmissionContext> {
+  // Load removal-owned facts up-front so every short-circuit carries them.
+  const [latestSubmission, hasFinalized, linkedGhgStatement] =
+    await Promise.all([
+      scope.removalId
+        ? getLatestSubmission(orgCtx, {
+            provider: ISOMETRIC_PROVIDER,
+            submissionType: REMOVAL_SUBMISSION_TYPE,
+            localEntityType: REMOVAL_ENTITY_TYPE,
+            localEntityId: scope.removalId,
+          })
+        : Promise.resolve(null),
+      scope.removalId
+        ? hasFinalizedSubmission(orgCtx, {
+            provider: ISOMETRIC_PROVIDER,
+            submissionType: REMOVAL_SUBMISSION_TYPE,
+            localEntityType: REMOVAL_ENTITY_TYPE,
+            localEntityId: scope.removalId,
+          })
+        : Promise.resolve(false),
+      loadLinkedGhgStatementStatus(orgCtx, scope.removal),
+    ]);
   const batchEmissionFacts = await loadBatchEmissionContext(orgCtx, scope.facilityId, scope.memberBatches, facilityFacts);
-  const templateFacts = resolveRemovalTemplate(scope.memberBatches, facilityFacts, batchEmissionFacts);
+  const frozenEntrySet = emissionsEntriesEnabled() ? frozenEntriesForAttempt(latestSubmission, batchEmissionFacts) : undefined;
+  const loadedRemovalEntries = await loadRemovalEntryContext(orgCtx, scope, batchEmissionFacts, facilityFacts, frozenEntrySet);
+  const removalEntryContext = loadedRemovalEntries && { contributions: loadedRemovalEntries.contributions,
+    observationId: loadedRemovalEntries.observationId, semanticFingerprint: loadedRemovalEntries.semanticFingerprint };
+  const templateFacts = resolveRemovalTemplate(scope.memberBatches, facilityFacts, loadedRemovalEntries?.batchFacts ?? batchEmissionFacts, removalEntryContext?.contributions);
   const isProduction = env.ISOMETRIC_ENVIRONMENT === "production";
   const memberBatches: MemberCreditBatch[] =
     scope.memberBatches.map(toMemberCreditBatchView);
@@ -124,27 +151,7 @@ export async function buildRemovalContext(
     applicationSlices: b.applicationSlices,
   }));
 
-  // Load removal-owned facts up-front so every short-circuit carries them.
-  const [latestSubmission, hasFinalized, linkedGhgStatement] =
-    await Promise.all([
-      scope.removalId
-        ? getLatestSubmission(orgCtx, {
-            provider: ISOMETRIC_PROVIDER,
-            submissionType: REMOVAL_SUBMISSION_TYPE,
-            localEntityType: REMOVAL_ENTITY_TYPE,
-            localEntityId: scope.removalId,
-          })
-        : Promise.resolve(null),
-      scope.removalId
-        ? hasFinalizedSubmission(orgCtx, {
-            provider: ISOMETRIC_PROVIDER,
-            submissionType: REMOVAL_SUBMISSION_TYPE,
-            localEntityType: REMOVAL_ENTITY_TYPE,
-            localEntityId: scope.removalId,
-          })
-        : Promise.resolve(false),
-      loadLinkedGhgStatementStatus(orgCtx, scope.removal),
-    ]);
+  // The removal-owned facts above are loaded before the entry context.
   const deletionInProgress = hasFreshRemovalDeletionLease(scope.removal?.metadata);
   const registryBoundaryOpened = removalMayHaveExternalMutation(
     scope.removal?.metadata ?? null,
@@ -246,6 +253,7 @@ export async function buildRemovalContext(
       mapping: facilityFacts.mapping,
       project: facilityFacts.project,
       ...templateFacts,
+      removalEntryContext,
       memberBatches: memberBatchesWithSubmissionGates,
       feedstockTypeMappingGaps,
       transportCoverage: EMPTY_TRANSPORT_COVERAGE,
@@ -378,6 +386,7 @@ export async function buildRemovalContext(
     mapping: facilityFacts.mapping,
     project: facilityFacts.project,
     ...templateFacts,
+    removalEntryContext,
     requiredTransportCategories,
     memberBatches: memberBatchesWithSubmissionGates,
     feedstockTypeMappingGaps,

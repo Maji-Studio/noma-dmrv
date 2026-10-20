@@ -584,6 +584,8 @@ describe("buildRemovalSubmissionBuild", () => {
 
     const snapshot = materializeRemovalSubmissionSnapshot({
       compiled: {
+        templateObservationId: "observation",
+        frozenEntrySet: [{ entryId: "entry", contentRevision: 7 }],
         monitored: [],
         fixed: [],
         datapointBodyByKey: new Map(),
@@ -606,6 +608,8 @@ describe("buildRemovalSubmissionBuild", () => {
       supersedePreviousId: null,
     });
 
+    expect(snapshot.payloadSnapshot.templateObservationId).toBe("observation");
+    expect(snapshot.payloadSnapshot.frozenEntrySet).toEqual([{ entryId: "entry", contentRevision: 7 }]);
     expect(snapshot.payloadSnapshot.sourceBindingPlan).toEqual(
       sourceBindingPlan,
     );

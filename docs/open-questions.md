@@ -87,10 +87,6 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
 
 ## Activity recording gaps (`activity/deferred-writers`) - **deferred**
 
-- 2026-10-16: `src/data-access/emission-entries.ts:tombstoneEmissionZeros` must
-  record activity in PR 4, before zero rows can be written. Its coverage
-  exemption is temporary until that writer is enabled.
-
 - `src/data-access/certifier-removals.ts:updateRemovalDates` changes Removal dates
   without an event. Define value-free lifecycle events alongside the existing
   registry status events.

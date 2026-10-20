@@ -275,6 +275,11 @@ all three membership transactions. It retries 40P01, 40001 and 55P03; production
 run writers still take runs before artifacts. The residual order is tracked in
 `data/production-run-artifact-order` and `data/lock-order`.
 
+`certification_submissions.payload_snapshot` is guarded by migration 0167's
+`refuse_frozen_submission_payload_update` trigger. Leaving draft freezes the
+payload, with `payload_snapshot_frozen` retaining that freeze through retries
+and status resets. Only the `journaled` recovery key remains mutable.
+
 ## Numeric Column Families
 
 `src/db/schema/numeric-families.ts` (migration `0066`) exports `massKg`, `tonnes`, `ppm`, `fraction`, `percent`, and `emissionFactor` (kg CO₂e per activity unit, migration `0120`), all exact `numeric(p,s)`.
@@ -582,7 +587,11 @@ All domain references include `organization_id`. `version` changes on every writ
 `content_revision` changes for values, dates, template confirmation and uploaded
 evidence. Notes change only the version. Membership writers lock the batch before
 the entry; evidence writers lock the entry. Reserved or sent entries refuse edits.
-Deletion tombstones the entry and keeps its values and evidence.
+Ordinary entry deletion tombstones the entry and keeps its values and evidence.
+Removal draft deletion first records an activity tombstone, then hard-deletes
+its never-sent recorded zeros, including already tombstoned zeros. The zero-owner
+CHECK requires `confirmed_for_removal_id`; its organization-scoped NO ACTION FK
+prevents retaining those zeros after their owning Removal is deleted.
 
 `emission_entry_values.magnitude` is an unconstrained PostgreSQL numeric read as
 decimal text. Values are non-negative and finite. Optional `mass_distance_detail`

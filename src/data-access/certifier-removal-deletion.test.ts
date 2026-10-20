@@ -12,6 +12,7 @@ vi.mock("@/db", () => ({ db: mocks }));
 vi.mock("./removal-production-batch-deletion", () => ({ clearDeletedRemovalProductionBatches: mocks.clear,
   removalProductionBatchTargets: mocks.targets }));
 vi.mock("./certifier-document-uploads", () => ({ releaseDocumentUploadsReferencedOnlyBySubmissions: mocks.documents }));
+vi.mock("./emission-entry-deletion", () => ({ releaseDeletedRemovalEntries: vi.fn() }));
 vi.mock("@/lib/certification/submission-lock", () => ({ acquireCertificationArtifactLocksSorted: mocks.locks }));
 import { certifierBiocharApplications } from "@/db/schema/certifier-biochar-applications";
 import { certifierRemovals, certificationSubmissions } from "@/db/schema/certification";

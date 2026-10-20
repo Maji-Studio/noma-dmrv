@@ -102,7 +102,7 @@ export async function listEmissionEntriesForBatches(
     )
     .orderBy(asc(emissionEntryValues.inputKey));
   const counts = await executor
-    .select({ entryId: documents.entityId, count: sql<number>`count(*)::int` })
+    .select({ entryId: documents.entityId, count: sql<number>`count(*)::int`, evidenceDocumentIds: sql<string[]>`array_agg(${documents.id} order by ${documents.id})` })
     .from(documents)
     .where(
       and(
@@ -119,14 +119,15 @@ export async function listEmissionEntriesForBatches(
     group.push(value);
     valuesByEntry.set(value.entryId, group);
   }
-  const countsByEntry = new Map(counts.map((row) => [row.entryId, row.count]));
+  const countsByEntry = new Map(counts.map((row) => [row.entryId, row]));
   return entries.map((entry) => ({
     ...entry,
     values: valuesByEntry.get(entry.id) ?? [],
-    documentCount: countsByEntry.get(entry.id) ?? 0,
+    documentCount: countsByEntry.get(entry.id)?.count ?? 0,
+    evidenceDocumentIds: countsByEntry.get(entry.id)?.evidenceDocumentIds ?? [],
   }));
 }
-async function lockedBatch(
+export async function lockedBatch(
   ctx: OrgContext,
   tx: DbTransaction,
   creditBatchId: string,
@@ -175,7 +176,12 @@ export async function tombstoneEmissionZeros(
   entry: { creditBatchId: string; removalTemplateId: string; componentId: string },
 ) {
   requireOrgScope(ctx);
-  await tx
+  const before = await tx.select().from(emissionEntries).where(and(
+    eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.creditBatchId, entry.creditBatchId),
+    eq(emissionEntries.componentId, entry.componentId), eq(emissionEntries.kind, "zero"), isNull(emissionEntries.deletedAt),
+  )).orderBy(emissionEntries.id).for("update");
+  if (!before.length) return;
+  const saved = await tx
     .update(emissionEntries)
     .set({
       deletedAt: new Date(),
@@ -203,7 +209,8 @@ export async function tombstoneEmissionZeros(
               or ${certificationSubmissions.status} in ('submitted', 'accepted'))
         )`,
       ),
-    );
+    ).returning();
+  for (const row of saved) await recordEmissionEntryActivity(ctx, tx, "deleted", { ...before.find((item) => item.id === row.id)!, values: [] }, { ...row, values: [] });
 }
 export async function createEmissionEntry(ctx: OrgContext, input: CreateEmissionEntryInput) {
   requireOrgScope(ctx);
@@ -351,6 +358,7 @@ export async function updateEmissionEntry(ctx: OrgContext, input: UpdateEmission
       })
       .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id)))
       .returning();
+    if (entry.kind === "value" && contentChanged) await tombstoneEmissionZeros(ctx, tx, saved);
     await recordEmissionEntryActivity(ctx, tx, "updated", entry, { ...saved, values });
     return getEmissionEntry(ctx, entry.id, tx);
   });
@@ -402,7 +410,7 @@ export async function confirmEmissionEntry(ctx: OrgContext, id: string, expected
       })
       .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, id)))
       .returning();
-    if (entry.kind === "value") await tombstoneEmissionZeros(ctx, tx, saved);
+    if (entry.kind === "value" && !emissionEntryCounts(previous, observation, entry.componentId).counts) await tombstoneEmissionZeros(ctx, tx, saved);
     await recordEmissionEntryActivity(ctx, tx, "updated", entry, { ...saved, values: entry.values });
     return getEmissionEntry(ctx, id, tx);
   });

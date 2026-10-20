@@ -45,8 +45,8 @@ it("counts unique records and retains batch delivery shares with a constant numb
   expect(facts.b.automaticFigures["run-electricity"]).toBeNull();
   expect(facts.a.automaticFigures["delivery-transport"]).toEqual({ magnitude: "2.002", unit: "km * tonne" });
   expect(facts.b.automaticFigures["delivery-transport"]).toEqual({ magnitude: "4.004", unit: "km * tonne" });
-  expect(loadCreditBatchRollups).toHaveBeenCalledExactlyOnceWith(ctx, ["a", "b"], { includeRunForwards: true });
-  expect(getProductionRunsForCertification).toHaveBeenCalledExactlyOnceWith(ctx, ["a", "b"]);
+  expect(loadCreditBatchRollups).toHaveBeenCalledExactlyOnceWith(ctx, ["a", "b"], { includeRunForwards: true }, expect.anything());
+  expect(getProductionRunsForCertification).toHaveBeenCalledExactlyOnceWith(ctx, ["a", "b"], expect.anything());
   expect(getTransportLegsForEntities).toHaveBeenCalledTimes(2);
   expect(loadBiocharDeliveryTransportLegs).toHaveBeenCalledTimes(1);
   expect(getEmissionAutomaticMasses).toHaveBeenCalledTimes(1);
@@ -61,4 +61,13 @@ it("keeps delivery counts when their figure is unknown and leaves other figures 
   expect(facts.a.automaticRecordCounts?.["delivery-transport"]).toBe(1);
   expect(facts.a.automaticFigures["delivery-transport"]).toBeNull();
   expect(facts.a.automaticFigures["run-electricity"]?.magnitude).toBe("12");
+});
+
+it("threads the supplied transaction to every automatic-facts reader", async () => {
+  const tx = {} as Parameters<typeof loadBatchesEmissionAutomaticFacts>[3];
+  await loadBatchesEmissionAutomaticFacts(ctx, ["a", "b"], {}, tx);
+  for (const reader of [loadCreditBatchRollups, getProductionRunsForCertification, getSamplesByCreditBatchIds,
+    getTransportLegsForEntities, loadBiocharDeliveryTransportLegs, getEmissionAutomaticMasses]) {
+    for (const call of vi.mocked(reader).mock.calls) expect(call.at(-1)).toBe(tx);
+  }
 });

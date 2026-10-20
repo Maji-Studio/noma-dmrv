@@ -53,6 +53,8 @@ export const emissionEntries = pgTable(
   (t) => [
     unique("emission_entries_id_org_unique").on(t.id, t.organizationId),
     index("emission_entries_org_batch_idx").on(t.organizationId, t.creditBatchId),
+    index("emission_entries_sent_by_removal_idx").on(t.sentByRemovalId).where(sql`${t.sentByRemovalId} is not null`),
+    index("emission_entries_send_reserved_by_submission_idx").on(t.sendReservedBySubmissionId).where(sql`${t.sendReservedBySubmissionId} is not null`),
     foreignKey({
       columns: [t.creditBatchId, t.organizationId],
       foreignColumns: [creditBatches.id, creditBatches.organizationId],

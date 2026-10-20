@@ -52,7 +52,7 @@ import {
   biocharTransportEvidenceDocumentCount,
   transportEvidenceDocumentCount,
 } from "./transport-evidence-projections";
-import { requireOrgScope } from "./utils";
+import { requireOrgScope, type Executor } from "./utils";
 import { lockSampleParent } from "./samples/write-scope";
 
 export type TransportEntityType = TransportEntityTypeValue;
@@ -184,11 +184,12 @@ export async function getTransportLegsForEntities(
   ctx: OrgContext,
   entityType: TransportEntityType,
   entityIds: string[],
+  executor: Executor = db,
 ): Promise<TransportLeg[]> {
   requireOrgScope(ctx);
   if (entityIds.length === 0) return [];
 
-  return db
+  return executor
     .select()
     .from(transportLegs)
     .where(

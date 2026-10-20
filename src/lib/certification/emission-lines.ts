@@ -1,3 +1,4 @@
+import { EMPTY_REMOVAL_LINE } from "@/lib/certification/emission-entry-messages";
 import { DomainError } from "@/lib/domain-errors";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 import type { AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
@@ -36,7 +37,9 @@ export interface EmissionLineEntryFact {
 export interface BatchEmissionLineFacts {
   definition: TemplateDefinition; lineSources: LineSources; problems: readonly LineSourceProblem[];
   enrichmentComplete: boolean;
+  entriesCanSubmit?: boolean;
   automaticFigures: Partial<Record<AutomaticSourceId, EmissionFigure | null>>;
+  omittedAutomaticSources?: readonly AutomaticSourceId[];
   automaticRecordCounts?: Partial<Record<AutomaticSourceId, number>>;
   entries: readonly EmissionLineEntryFact[];
 }
@@ -70,7 +73,7 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
   return facts.definition.groups.flatMap((group, groupIndex) => group.components.map((component, componentIndex) => {
     const stored = ownValue(facts.lineSources, component.id);
     const contract = stored ? effectiveContract(stored) : undefined;
-    const decision = emissionLineBindingDecision({ component, groupKey: group.key, contract: stored, problems, enrichmentComplete: facts.enrichmentComplete });
+    const decision = emissionLineBindingDecision({ component, groupKey: group.key, contract: stored, problems, enrichmentComplete: facts.enrichmentComplete, entriesCanSubmit: facts.entriesCanSubmit });
     const entries = facts.entries.filter((entry) => entry.componentId === component.id);
     const counting = entries.filter((entry) => entry.counts);
     const values = counting.filter((entry) => entry.kind === "value");
@@ -88,7 +91,12 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
       blocker = { code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     } else if (automaticFigure || values.length) state = "filled";
     else if (counting.some((entry) => entry.kind === "zero")) state = "confirmedZero";
-    else { state = "empty"; blocker = decision?.blocker; }
+    else if (contract?.automaticSource && facts.omittedAutomaticSources?.includes(contract.automaticSource)) { state = "filled"; blocker = undefined; }
+    else { state = "empty"; blocker = decision?.blocker;
+      if (facts.entriesCanSubmit && contract?.scope === "operating" && contract.entryPolicy !== "none") {
+        blocker = { code: "lineHasNoSource", message: EMPTY_REMOVAL_LINE, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+      }
+    }
     // A paired-input value has no scalar total. Do not show a partial sum.
     const figures = [
       ...(automaticFigure ? [automaticFigure] : []), ...values.flatMap((entry) => entry.total ? [entry.total] : []),

@@ -1,3 +1,6 @@
+import { sumFigures, type EmissionFigure } from "@/lib/certification/emission-lines";
+import { canonicalUnit } from "../template-observations/units";
+import { effectiveContract } from "../template-observations/line-sources";
 import { removalLineBlockerMessage } from "@/lib/certification/removal-blockers";
 import { emissionLineBindingDecision } from "@/lib/certification/emission-line-binding";
 import { type LineContract } from "../template-observations/line-sources";
@@ -130,7 +133,7 @@ function declarativeSequestrationBindingRevision(
   return blueprints;
 }
 
-const PRODUCTION_CLAIM_POLICY = "application-slice-delivery-only-v1";
+const PRODUCTION_CLAIM_POLICY = "application-slice-delivery-entry-contributions-v2";
 
 export function buildMappingRevisionInput(
   sequestrationBindings: MappingRevisionSequestrationBindings =
@@ -154,6 +157,8 @@ export interface BuildCreateDatapointArgs {
   // Display label for operator messages only.
   componentDisplayName?: string;
   lineContract?: LineContract;
+  entryContribution?: EmissionFigure;
+  omitAutomaticProduction?: boolean;
   rtcInput: GhgEntryTemplateComponentInput;
   blueprintInput: ComponentBlueprintInput;
   agg: AggregatedProductionData;
@@ -192,10 +197,27 @@ export function buildCreateDatapointRequest(
     allowPeriodInputStub,
   } = args;
   if (lineContract) {
-    const decision = emissionLineBindingDecision({ groupKey, contract: lineContract, problems: [], enrichmentComplete: true,
+    const decision = emissionLineBindingDecision({ groupKey, contract: lineContract, problems: [], enrichmentComplete: true, entriesCanSubmit: !!args.entryContribution,
       component: { id: "", displayName: componentDisplayName ?? "", description: null, blueprintKey: componentBlueprintKey,
         inputs: [{ key: rtcInput.input_key, type: rtcInput.type, quantityKind: rtcInput.quantity_kind }] } });
     if (decision) throw new SafeError(removalLineBlockerMessage(decision.blocker));
+  }
+  const contract = lineContract && effectiveContract(lineContract);
+  if (args.entryContribution) {
+    if (contract?.scope !== "operating" || contract.entryPolicy === "none") throw new SafeError("This component does not take manual entries.");
+    const unit = canonicalUnit(blueprintInput.quantity_kind, blueprintInput.compatible_unit);
+    if (!unit || args.entryContribution.unit !== unit || rtcInput.quantity_kind !== blueprintInput.quantity_kind) throw new SafeError("The emissions entry unit does not match this template input.");
+    let figure = args.entryContribution;
+    const mapping = lookupInputMapping(groupKey, componentBlueprintKey, rtcInput.input_key, lineContract);
+    if (contract.automaticSource && mapping && agg[resolveDatapointSource(mapping, lineContract)] != null && !(args.omitAutomaticProduction && mapping?.bucket === "production")) {
+      const automatic = buildCreateDatapointRequest({ ...args, entryContribution: undefined });
+      const automaticUnit = canonicalUnit(blueprintInput.quantity_kind, automatic.quantity.unit ?? "");
+      figure = sumFigures([figure, { magnitude: String(automatic.quantity.magnitude), unit: automaticUnit ?? "" }])!;
+    }
+    const magnitude = Number(figure.magnitude);
+    if (!Number.isFinite(magnitude)) throw new SafeError("The emissions entry value is too large to submit.");
+    return { description: "Recorded emissions entries", display_name: blueprintInput.input_key, project_id: projectId,
+      quantity: { magnitude, unit: blueprintInput.compatible_unit }, source_ids: sourceIds ?? [], supplier_reference_id: supplierRefId, type: "REPORTED" };
   }
   const inputKey = rtcInput.input_key;
   const componentLabel =

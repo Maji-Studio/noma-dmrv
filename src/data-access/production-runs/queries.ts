@@ -543,12 +543,13 @@ export async function getProductionRunStats(
 // Operational run facts for certification. Lab Samples are loaded by credit batch.
 export async function getProductionRunsForCertification(
   ctx: OrgContext,
-  runIds: string[]
+  runIds: string[],
+  executor: Executor = db,
 ): Promise<ProductionRunForCertification[]> {
   requireOrgScope(ctx);
   if (runIds.length === 0) return [];
 
-  const runs = await db
+  const runs = await executor
     .select({
       ...getTableColumns(productionRuns),
       hasReadingsFile: hasUploadedProductionReadingsFile(

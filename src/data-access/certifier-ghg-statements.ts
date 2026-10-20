@@ -732,6 +732,7 @@ export async function listFinalizingRemovalsForFacility(
         status: latest.status,
         externalId: latest.externalId,
         payloadSnapshot: latest.payloadSnapshot,
+        payloadSnapshotFrozen: latest.payloadSnapshotFrozen,
         payloadHash: latest.payloadHash,
         metadata: latest.metadata,
         submittedAt: latest.submittedAt,
