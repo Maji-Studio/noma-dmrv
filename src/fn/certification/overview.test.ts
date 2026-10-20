@@ -9,7 +9,10 @@ import { overviewBadgeCount } from "@/lib/credit-batches/batch-page";
 // No database module or external service is used by this action unit suite.
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/lib/auth/server", () => ({ requireOrgContext: vi.fn() }));
-vi.mock("@/config/env", () => ({ env: { ISOMETRIC_ENVIRONMENT: "sandbox" } }));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: { ISOMETRIC_ENVIRONMENT: "sandbox" } };
+});
 vi.mock("@/data-access/utils", () => ({ requireOrgFacility: vi.fn() }));
 vi.mock("@/data-access/removal-codes", () => ({ getRemovalCodes: vi.fn(async () => new Map()) }));
 vi.mock("@/data-access/credit-batch-certification-links", () => ({ listCreditBatchCertificationLinks: vi.fn() }));
