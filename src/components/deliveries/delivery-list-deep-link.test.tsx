@@ -19,6 +19,8 @@ const harness = vi.hoisted(() => ({
   sheet: { open: false, mode: "view" as string },
   formError: undefined as string | undefined,
   formDelivery: null as Record<string, unknown> | null,
+  fetch: vi.fn(),
+  onDistanceRefreshed: null as null | (() => Promise<void>),
 }));
 
 vi.mock("nuqs", () => ({
@@ -42,7 +44,7 @@ vi.mock("@/hooks/use-deliveries", () => ({
   useCreateDelivery: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useUpdateDelivery: () => ({ isPending: false, mutateAsync: harness.update }),
   useDeleteDelivery: () => ({ isPending: false, mutateAsync: vi.fn() }),
-  useFetchDeliveryWithRelations: () => vi.fn(),
+  useFetchDeliveryWithRelations: () => harness.fetch,
 }));
 vi.mock("@/hooks/use-credit-batches", () => ({
   useCreditBatches: () => ({ data: [], isLoading: false, error: null }),
@@ -105,7 +107,8 @@ vi.mock("@/components/ui/entity-side-sheet", () => ({
 }));
 vi.mock("./delivery-read-sections", () => ({ deliverySheetSections: () => [] }));
 vi.mock("./delivery-form", () => ({
-  DeliveryForm: (props: { onSubmit: SubmitHandler; errorMessage?: string; delivery: Record<string, unknown> }) => {
+  DeliveryForm: (props: { onSubmit: SubmitHandler; errorMessage?: string; delivery: Record<string, unknown>; onDistanceRefreshed?: () => Promise<void> }) => {
+    harness.onDistanceRefreshed = props.onDistanceRefreshed ?? null;
     harness.formError = props.errorMessage;
     harness.formDelivery = props.delivery;
     harness.onSubmit = props.onSubmit;
@@ -200,4 +203,31 @@ describe("DeliveryList deep-linked sheet", () => {
     renderer?.unmount();
   });
 
+  it("resolves a distance refresh only once the form holds the new version, so Save sends it", async () => {
+    harness.query = { delivery: DELIVERY_ID, mode: "edit" };
+    const refreshed = { ...DELIVERY, version: DELIVERY.version + 1 };
+    let landFetch!: () => void;
+    harness.fetch.mockReset().mockReturnValue(new Promise((resolve) => { landFetch = () => resolve(refreshed); }));
+    await act(async () => { renderer = create(<DeliveryList />); });
+
+    let settled = false;
+    let reload!: Promise<void>;
+    await act(async () => {
+      reload = harness.onDistanceRefreshed!().then(() => { settled = true; });
+    });
+    // The detail fetch is still in flight: the caller must keep waiting.
+    expect(harness.fetch).toHaveBeenCalledWith(DELIVERY_ID);
+    expect(settled).toBe(false);
+    expect(harness.formDelivery?.version).toBe(DELIVERY.version);
+
+    await act(async () => {
+      landFetch();
+      await reload;
+    });
+    expect(harness.formDelivery?.version).toBe(refreshed.version);
+
+    await act(async () => { await harness.onSubmit?.({ distanceNote: "Updated" }, () => false); });
+    expect(harness.update).toHaveBeenCalledWith(expect.objectContaining({ deliveryId: DELIVERY_ID, expectedVersion: refreshed.version }));
+    renderer?.unmount();
+  });
 });

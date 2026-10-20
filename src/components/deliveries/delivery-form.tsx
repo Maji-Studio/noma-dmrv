@@ -81,7 +81,8 @@ interface DeliveryFormProps {
   deferredAttachments?: UseDeferredAttachmentsResult;
   focusTarget?: EntityFocusTarget | null;
   /** A refresh from location saved a new version: reopen the form on it. */
-  onDistanceRefreshed?: () => void;
+  /** Resolves once the sheet holds the refreshed record (and its new version). */
+  onDistanceRefreshed?: () => Promise<void>;
 }
 
 export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, errorMessage, submitLabel, deferredAttachments, focusTarget, onDistanceRefreshed }: DeliveryFormProps) {

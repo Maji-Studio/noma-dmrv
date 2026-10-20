@@ -80,7 +80,8 @@ const refusal = new ConflictError(
 const mocks = vi.hoisted(() => ({
   form: undefined as
     | {
-        feedstock?: { code?: string };
+        feedstock?: { code?: string; version?: number };
+        onDistanceRefreshed?: () => Promise<void>;
         serverError?: string;
         serverErrorAction?: unknown;
         onSubmit: (data: unknown) => Promise<void> | void;
@@ -89,6 +90,7 @@ const mocks = vi.hoisted(() => ({
   updateRejection: undefined as unknown,
   deleteMutation: vi.fn(),
   updateMutation: vi.fn(),
+  fetch: vi.fn(),
 }));
 
 vi.mock("nuqs", () => ({
@@ -107,7 +109,7 @@ vi.mock("@/hooks/use-feedstocks", () => ({
     isLoading: false,
     error: null,
   }),
-  useFetchFeedstock: () => vi.fn(),
+  useFetchFeedstock: () => mocks.fetch,
   useFeedstock: () => ({
     data: feedstock,
     error: null,
@@ -306,6 +308,39 @@ describe("FeedstockList stale delete", () => {
     expect(textOf(renderer, "delete-error")).toBe(
       "Feedstock FS-001 was not deleted. It changed since the list loaded. Review it before deleting.",
     );
+    act(() => renderer.unmount());
+  });
+});
+
+describe("FeedstockList refresh from location", () => {
+  it("resolves the refresh only once the form holds the new version, so Save sends it", async () => {
+    mocks.updateRejection = new Error("Feedstock was not saved. Try again.");
+    const refreshed = { ...feedstock, version: feedstock.version + 1 } as FeedstockWithRelations;
+    let landFetch!: () => void;
+    mocks.fetch.mockReset().mockReturnValue(new Promise((resolve) => { landFetch = () => resolve(refreshed); }));
+    const renderer = renderList();
+
+    let settled = false;
+    let reload!: Promise<void>;
+    await act(async () => {
+      reload = mocks.form!.onDistanceRefreshed!().then(() => { settled = true; });
+    });
+    // The record fetch is delayed: the refresh dialog must keep waiting.
+    expect(mocks.fetch).toHaveBeenCalledWith(FEEDSTOCK_ID);
+    expect(settled).toBe(false);
+    expect(mocks.form?.feedstock?.version).toBe(feedstock.version);
+
+    await act(async () => {
+      landFetch();
+      await reload;
+    });
+    expect(mocks.form?.feedstock?.version).toBe(refreshed.version);
+    await act(async () => {
+      await mocks.form?.onSubmit(draft);
+    });
+    expect(mocks.updateMutation).toHaveBeenLastCalledWith(expect.objectContaining({
+      feedstockId: FEEDSTOCK_ID, expectedVersion: refreshed.version,
+    }));
     act(() => renderer.unmount());
   });
 });

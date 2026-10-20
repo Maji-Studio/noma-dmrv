@@ -24,6 +24,7 @@ const CONFIRM_TITLE = "Refresh distance from location?";
 // Short, so it fits beside Cancel in the 400px confirm dialog; the title names the location.
 const CONFIRM_LABEL = "Refresh";
 const REFRESH_FAILED_MESSAGE = "The distance was not refreshed. Try again.";
+const RELOAD_FAILED_MESSAGE = "The distance was refreshed, but the form could not reload it. Close the record and open it again before saving.";
 
 const RECORD_NOUNS: Record<TransportDistanceTarget["entityType"], string> = {
   feedstock: "feedstock",
@@ -58,11 +59,15 @@ function DistanceRefreshDialog({
   recordCode: string;
   /** A refused version or a new lock changes what the next attempt sees. */
   onRefused: () => void;
-  onRefreshed?: (refreshed: TransportDistanceDrift) => void;
+  /** Resolves once the caller holds the refreshed record; the dialog waits for it. */
+  onRefreshed?: (refreshed: TransportDistanceDrift) => Promise<void> | void;
 }) {
   const refresh = useRefreshTransportDistance(target.entityType);
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
+  // The refresh committed a new version; Save stays out of reach until the
+  // form holds it, or it would send the old one.
+  const [reloading, setReloading] = useState(false);
   const noun = RECORD_NOUNS[target.entityType];
   const close = () => {
     setError(null);
@@ -70,15 +75,26 @@ function DistanceRefreshDialog({
   };
   const confirm = async () => {
     setError(null);
+    let refreshed: TransportDistanceDrift;
     try {
-      const refreshed = await refresh.mutateAsync({ entityId: target.entityId, expectedVersion: drift.expectedVersion });
-      close();
-      toast.success(`Distance for ${recordCode} refreshed to ${formatDistanceKm(refreshed.recordedDistanceKm)}.`);
-      onRefreshed?.(refreshed);
+      refreshed = await refresh.mutateAsync({ entityId: target.entityId, expectedVersion: drift.expectedVersion });
     } catch (refusal) {
       setError(toSaveErrorMessage(refusal, REFRESH_FAILED_MESSAGE));
       onRefused();
+      return;
     }
+    setReloading(true);
+    let reloaded = true;
+    try {
+      await onRefreshed?.(refreshed);
+    } catch {
+      reloaded = false;
+    } finally {
+      setReloading(false);
+    }
+    close();
+    toast.success(`Distance for ${recordCode} refreshed to ${formatDistanceKm(refreshed.recordedDistanceKm)}.`);
+    if (!reloaded) toast.error(RELOAD_FAILED_MESSAGE);
   };
 
   return (
@@ -103,7 +119,7 @@ function DistanceRefreshDialog({
       }
       confirmLabel={CONFIRM_LABEL}
       busyLabel="Refreshing…"
-      isPending={refresh.isPending}
+      isPending={refresh.isPending || reloading}
       confirmDisabled={drift.hasSubmittedRemoval}
       errorMessage={error ?? undefined}
     />
@@ -154,8 +170,11 @@ export const SAVE_BEFORE_REFRESH_REASON = "Save or discard your changes first.";
 interface DistanceDriftActionProps extends TransportDistanceDriftNoticeProps {
   /** Why the action is unavailable, shown beside it (unsaved form edits). */
   disabledReason?: string | null;
-  /** The refresh committed a new version: the form must reload the record. */
-  onRefreshed: (refreshed: TransportDistanceDrift) => void;
+  /**
+   * The refresh committed a new version: the form must reload the record.
+   * The dialog stays pending until the returned promise settles.
+   */
+  onRefreshed: (refreshed: TransportDistanceDrift) => Promise<void> | void;
 }
 
 /**
