@@ -11,7 +11,7 @@ vi.mock("@/components/forms/section-label", () => ({ SectionLabel: ({ children }
 
 import { CreditBatchEmissionsPanel } from "./credit-batch-emissions-panel";
 import { EmissionLinesBlockedError } from "@/lib/certification/emission-lines-blocked-error";
-import { removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
+import { REMOVAL_TEMPLATE_BLOCKERS, removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 
 const line = (componentId: string, label: string, state: string) => ({ componentId, label, state });
 const render_ = (enabled = true) => render(<CreditBatchEmissionsPanel creditBatchId="cb-1" facilityId="f-1" enabled={enabled} />);
@@ -55,11 +55,11 @@ describe("CreditBatchEmissionsPanel", () => {
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   });
 
-  it("sends a line-review blocker to the template review", () => {
-    query.error = new EmissionLinesBlockedError(removalTemplateBlocker("templateNotFullyRead"));
+  it("shows Retry for a template that is still being read", () => {
+    query.error = new Error(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
     render_();
-    expect(screen.getByRole("link", { name: "Review template lines" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Set template" })).toBeNull();
   });
 
   it("keeps Retry for a real load failure", () => {

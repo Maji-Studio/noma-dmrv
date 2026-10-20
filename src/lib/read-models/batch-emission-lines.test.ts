@@ -39,7 +39,7 @@ import { getEmissionAutomaticMasses } from "@/data-access/emission-automatic-mas
 import { getTemplateObservationById } from "@/data-access/removal-template-observations";
 import { getLatestTemplateObservation } from "@/data-access/removal-template-observations";
 import { loadBatchEmissionLines } from "./batch-emission-lines";
-import { removalTemplateBlocker, type RemovalTemplateBlockerCode } from "@/lib/certification/removal-template-blockers";
+import { REMOVAL_TEMPLATE_BLOCKERS, removalTemplateBlocker, type RemovalTemplateBlockerCode } from "@/lib/certification/removal-template-blockers";
 import { SafeError } from "@/lib/errors";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { normalizeTemplateDefinition, resolveLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
@@ -77,11 +77,11 @@ it("returns an unpinned template blocker before loading accounting", async () =>
   expect(loadCreditBatchRollups).not.toHaveBeenCalled();
 });
 
-it("returns a template not fully read blocker before loading accounting", async () => {
+it("keeps a missing observation as a retryable failure, not a blocker", async () => {
   vi.mocked(getLatestTemplateObservation).mockResolvedValue(null);
-  await expect(loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch")).resolves.toEqual({
-    status: "blocked", blocker: removalTemplateBlocker("templateNotFullyRead"),
-  });
+  await expect(loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch")).rejects.toThrow(
+    new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead),
+  );
   expect(loadCreditBatchRollups).not.toHaveBeenCalled();
 });
 

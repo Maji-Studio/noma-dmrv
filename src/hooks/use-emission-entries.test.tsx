@@ -38,7 +38,7 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
-it.each(["unpinnedTemplate", "notRemovalTemplate", "templateNotFound", "templateNotFullyRead"] as const)(
+it.each(["unpinnedTemplate", "notRemovalTemplate", "templateNotFound"] as const)(
   "exposes %s as a typed error without retrying", async (code) => {
     const blocker = removalTemplateBlocker(code);
     vi.mocked(getBatchEmissionLinesFn).mockResolvedValue({ success: true, data: { status: "blocked", blocker } });

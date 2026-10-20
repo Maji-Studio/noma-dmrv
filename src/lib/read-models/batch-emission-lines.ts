@@ -10,7 +10,7 @@ import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
 import { deriveBatchEmissionLines } from "@/lib/certification/emission-lines";
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { withRemovedEntryComponents } from "@/lib/certification/emission-line-definition";
-import { removalTemplateBlocker, type RemovalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
+import { REMOVAL_TEMPLATE_BLOCKERS, removalTemplateBlocker, type RemovalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 import { isEnrichmentComplete, validateLineSources } from "@/lib/isometric/template-observations";
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
 import type { BatchEmissionLineFacts } from "@/lib/certification/emission-lines";
@@ -28,7 +28,8 @@ export async function loadBatchEmissionLines(ctx: OrgContext, facilityId: string
   const pin = resolveBatchPin([batch]);
   if ("code" in pin) return { status: "blocked", blocker: removalTemplateBlocker(pin.code) };
   const observation = await getLatestTemplateObservation(ctx, "isometric", pin.pin);
-  if (!observation) return { status: "blocked", blocker: removalTemplateBlocker("templateNotFullyRead") };
+  // Transient: other reads on the page write the observation, so keep the normal retry path.
+  if (!observation) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
   // Display read: a delivery without load mass leaves delivery transport unrecorded, like the overview.
   const automaticFacts = await loadBatchEmissionAutomaticFacts(ctx, facilityId, creditBatchId);
   // Like the overview and readiness, stored entries count only while entries are switched on.
