@@ -130,6 +130,13 @@ pnpm db:reset         # local only — destructive
 
 See [auth.md](./auth.md) for the flow and route protection.
 
+### OAuth Connector Debugging
+
+- `vercel logs` returns only the newest 50 lines unless filtered. Use
+  `vercel logs -q 'requestPath:/api/mcp'`.
+- Reloading a noma consent page invalidates it ("Start again from the app").
+  Restart from the client.
+
 ### Auth Change Didn't Take Effect (role/permission edits)
 
 Do not blame the 5-minute Better Auth cookie cache for a stale authorization

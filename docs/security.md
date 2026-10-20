@@ -160,8 +160,8 @@ Non-obvious semantics only:
 | `OAUTH_CIMD_CLIENT_IDS` | Comma-separated exact HTTPS metadata URLs; default empty (no CIMD) | Every environment requires a path and public DNS host, with no IP literal, local/special hostname, credentials, port, query or fragment. Production keeps the same validation. |
 
 [Env gates](../src/config/oauth-env-validation.ts) and
-[provider wiring](../src/lib/auth/oauth-provider.ts) fail closed. Keep the flag
-off everywhere until the [staging proof](./api.md#connecting-claude-and-chatgpt).
+[provider wiring](../src/lib/auth/oauth-provider.ts) fail closed. The flag is on for
+staging ([tested clients](./api.md#connecting-claude-and-chatgpt)).
 Production OAuth starts only after the production domain split: the issuer and
 both audiences embed the app host, so moving hosts invalidates connections.
 Never copy a staging issuer into production.
