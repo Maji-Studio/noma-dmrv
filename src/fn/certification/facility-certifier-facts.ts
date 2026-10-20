@@ -1,4 +1,5 @@
 import type { OrgContext } from "@/lib/auth/server";
+import { getFacilityById } from "@/data-access/facilities";
 import { hasCertifierCredentials, resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { getCertifierProjectByFacility, type CertifierProjectRow } from "@/data-access/certification";
 import { listPinnedRemovalTemplateIds } from "@/data-access/credit-batch-removal-template";
@@ -9,6 +10,7 @@ import type { TransportCategory } from "./certify-transport-coverage";
 import { loadRemovalTemplateFacts, type RemovalTemplateFacts } from "./removal-template-facts";
 
 export interface FacilityCertifierFacts {
+  facilityTimezone: string;
   hasOrgCredentials: boolean;
   mapping: CertifierProjectRow | null;
   project: IsometricProject | null;
@@ -29,15 +31,17 @@ const UNRESOLVED_FACILITY_FACTS = {
 };
 
 export async function loadFacilityCertifierFacts(orgCtx: OrgContext, facilityId: string, options: { refreshEnrichment?: boolean } = {}): Promise<FacilityCertifierFacts> {
-  const [mapping, hasOrgCredentials] = await Promise.all([
+  const [facility, mapping, hasOrgCredentials] = await Promise.all([
+    getFacilityById(orgCtx, facilityId),
     getCertifierProjectByFacility(orgCtx, facilityId, ISOMETRIC_PROVIDER),
     hasCertifierCredentials(orgCtx, ISOMETRIC_PROVIDER),
   ]);
-  if (!mapping || !hasOrgCredentials) return { hasOrgCredentials, mapping, project: null, ...UNRESOLVED_FACILITY_FACTS };
+  const facilityTimezone = facility.timezone;
+  if (!mapping || !hasOrgCredentials) return { facilityTimezone, hasOrgCredentials, mapping, project: null, ...UNRESOLVED_FACILITY_FACTS };
   const pinnedIds = await listPinnedRemovalTemplateIds(orgCtx, facilityId);
   // Avoid a remote registry dependency until a template id exists to resolve.
   if (!mapping.defaultRemovalTemplateId && pinnedIds.length === 0) {
-    return { hasOrgCredentials, mapping, project: null, ...UNRESOLVED_FACILITY_FACTS };
+    return { facilityTimezone, hasOrgCredentials, mapping, project: null, ...UNRESOLVED_FACILITY_FACTS };
   }
   const client = await resolveIsometricClient(orgCtx);
   const [projects, templates, blueprints] = await Promise.all([
@@ -53,7 +57,7 @@ export async function loadFacilityCertifierFacts(orgCtx: OrgContext, facilityId:
   }
   const defaultFacts = mapping.defaultRemovalTemplateId ? templatesById[mapping.defaultRemovalTemplateId] : null;
   return {
-    hasOrgCredentials, mapping, project: projects.find((project) => project.id === mapping.externalProjectId) ?? null,
+    facilityTimezone, hasOrgCredentials, mapping, project: projects.find((project) => project.id === mapping.externalProjectId) ?? null,
     defaultTemplate: defaultFacts?.template ?? null,
     missingDefaultTemplateId: defaultFacts ? null : mapping.defaultRemovalTemplateId,
     templatesById,

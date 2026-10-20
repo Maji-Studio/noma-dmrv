@@ -114,6 +114,7 @@ function context(args: {
   hasSoilReference: boolean;
 }): RemovalSubmissionContext {
   return {
+    facilityTimezone: "UTC",
     facilityId: FACILITY,
     removalId: REMOVAL,
     mapping: { externalProjectId: "prj_TEST" },
