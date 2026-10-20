@@ -71,6 +71,33 @@ For every finding, `basis` must name the violated rule or invariant, `evidence`
 must name the execution path, and `problem` must state the observable
 consequence. Do not report speculative preferences.
 
+## Design
+
+The orchestrator runs this practice only when the diff changes UI files, and
+skips it when the base branch's practices file has no Design section.
+
+Apply, as review criteria:
+
+- `maji-design-app` step 5, "Self-check before the user sees it"
+  (provided as `global-skills/maji-design-app/SKILL.md` in the context files):
+  filler such as eyebrows, lines under a heading that restate it, helper text
+  that repeats the label, and the same fact shown twice. The test for each:
+  delete it; would anyone miss it?
+- The project design skill's review list and owning docs are provided from the
+  base branch in the context files:
+  `.agents/skills/<project>-design/SKILL.md` § "Design review (advisory)" and
+  the reference file it names. In noma that is `noma-design` and
+  `references/design-review.md`.
+
+Judge from the diff and the files it touches. Screenshots in the PR body are
+evidence too. A hit from a report-only design check script is a lead to
+confirm, not a finding.
+
+`basis` names the rule and its owning doc section. `evidence` gives
+`path:line`. `problem` states what the user sees. If a criteria file cannot be
+read, say so in `residual_risks` instead of guessing the rule. Do not report
+code structure, requirements or correctness here; other practices own them.
+
 ## Output and aggregation
 
 Each model report stays separate beneath its practice:
@@ -85,6 +112,10 @@ Each model report stays separate beneath its practice:
 ### Opus
 
 ## Deep Correctness
+### Codex (gpt-6-astra)
+### Opus
+
+## Design
 ### Codex (gpt-6-astra)
 ### Opus
 ```
