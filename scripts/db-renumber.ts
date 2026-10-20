@@ -1,6 +1,6 @@
 /** Regenerate branch migrations offline from origin/staging's metadata. */
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, existsSync, writeFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -85,15 +85,22 @@ function main(): void {
     // Removing the whole directory prevents branch-only snapshots surviving checkout.
     rmSync(metadata, { recursive: true });
     execFileSync("git", ["checkout", "origin/staging", "--", "drizzle/meta"], { stdio: "inherit" });
-    execFileSync("pnpm", ["exec", "drizzle-kit", "generate", "--name", name], {
-      stdio: "inherit",
-      env: { ...process.env, DATABASE_URL: OFFLINE_DATABASE_URL },
-    });
+    const generate = (extra: string[]): void => {
+      execFileSync("pnpm", ["exec", "drizzle-kit", "generate", ...extra, "--name", name], {
+        stdio: "inherit",
+        env: { ...process.env, DATABASE_URL: OFFLINE_DATABASE_URL },
+      });
+    };
+    generate([]);
 
     const generatedFile = join(directory, `${nextTag}.sql`);
     const previousSql = readFileSync(join(backupDirectory, `${branchOnly.at(-1)!}.sql`));
-    const generatedSql = readFileSync(generatedFile);
-    if (generatedSql.equals(previousSql)) {
+    if (!existsSync(generatedFile)) {
+      // No schema diff: the branch migration was hand-written SQL only (triggers, functions, data).
+      generate(["--custom"]);
+      writeFileSync(generatedFile, previousSql);
+      console.log("No schema changes found; kept the hand-written SQL as a custom migration.");
+    } else if (readFileSync(generatedFile).equals(previousSql)) {
       console.log("Generated SQL is identical to the last branch migration's backed-up SQL.");
     } else {
       console.warn(`WARNING: Generated SQL differs from the last branch migration. Re-apply hand-written SQL from ${backupDirectory}.`);
