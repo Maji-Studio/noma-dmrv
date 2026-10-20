@@ -423,6 +423,13 @@ failure:
 Never name a fixture entity `Test Facility 1`. Check `global-teardown.ts` before adding a
 spec that creates a table it doesn't yet sweep.
 
+## PR screenshots
+
+Evidence tooling (upload; one marked `Screenshots (head <sha>)` block inside the PR body's `## Evidence` section) lives in
+`scripts/pr-evidence/`; see its README. Start the dev server with `NEXT_PUBLIC_SHOT_MODE=true`
+to hide the sidebar account text and the Next.js dev indicator before capturing. Never set it
+on a deployment.
+
 ## Safety guards (don't "fix" them)
 
 - `playwright.config.ts` **throws** unless `NEXT_PUBLIC_APP_URL` resolves to
