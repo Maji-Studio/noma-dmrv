@@ -4,11 +4,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { REMOVAL_TEMPLATE_LANDING_LINE } from "@/lib/certification/removal-template-blockers";
 import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
 
-const mocks = vi.hoisted(() => ({ pin: "rvt_new" as string | null, listed: ["rvt_new"] as string[] }));
+const mocks = vi.hoisted(() => ({ pin: "rvt_new" as string | null, listed: ["rvt_new"] as string[], linesToDecide: 0 }));
 vi.mock("@/hooks/use-credit-batches", () => ({
   useCreditBatch: () => ({ data: undefined, refetch: vi.fn() }),
 }));
 vi.mock("@/hooks/use-certification", () => ({
+  // The batch's Lines decided check, as the readiness model builds it.
+  useBatchHealth: () => ({
+    data: {
+      state: mocks.linesToDecide ? "incomplete" : "ready",
+      issueCount: mocks.linesToDecide ? 1 : 0,
+      checks: mocks.linesToDecide
+        ? [{ key: "templateLines", status: "unmet", linesToDecide: mocks.linesToDecide }]
+        : [],
+    },
+  }),
   useFacilityCertifierSummary: () => ({
     data: { mapping: { externalProjectId: "prj_test", defaultRemovalTemplateId: "rvt_new" } },
     isLoading: false, isSuccess: true,
@@ -37,6 +47,7 @@ const landingLine = () => document.querySelector("p[role='status']");
 beforeEach(() => {
   mocks.pin = "rvt_new";
   mocks.listed = ["rvt_new"];
+  mocks.linesToDecide = 0;
   Element.prototype.scrollIntoView = vi.fn();
 });
 afterEach(cleanup);
@@ -65,6 +76,42 @@ describe("CreditBatchRemovalTemplate", () => {
     mount(false);
     expect(screen.getByText("Not set")).toBeTruthy();
     expect(screen.getByText("This credit batch has no Removal template. Ask an Owner or Admin to choose one.")).toBeTruthy();
+  });
+
+  describe("while the template has lines to decide", () => {
+    const LEAD = "17 lines to decide, so this credit batch can't go into a Removal.";
+
+    it("tells a member who decides them, with no link", () => {
+      mocks.linesToDecide = 17;
+      mount(false);
+      expect(screen.getByText(`${LEAD} An Owner or Admin decides them in Removal templates.`)).toBeTruthy();
+      expect(screen.queryByRole("link", { name: "Decide lines" })).toBeNull();
+    });
+
+    it("gives Owners and Admins the Decide lines link to this template", () => {
+      mocks.linesToDecide = 17;
+      mount(true);
+      expect(screen.getByText(LEAD)).toBeTruthy();
+      expect(screen.getByRole("link", { name: "Decide lines" }).getAttribute("href")).toBe(
+        "/certification/settings?section=removal-templates&facility=facility-1&template=rvt_new",
+      );
+    });
+
+    it("keeps it for a batch a Removal locks", () => {
+      mocks.linesToDecide = 1;
+      mount(false, true);
+      expect(screen.getByText("1 line to decide, so this credit batch can't go into a Removal. An Owner or Admin decides it in Removal templates.")).toBeTruthy();
+    });
+
+    it("says nothing when every line is decided or the pin is gone", () => {
+      mount(true);
+      expect(screen.queryByText(/lines? to decide/)).toBeNull();
+      cleanup();
+      mocks.linesToDecide = 17;
+      mocks.listed = [];
+      mount(true);
+      expect(screen.queryByText(/lines? to decide/)).toBeNull();
+    });
   });
 
   describe("opened by a readiness blocker link", () => {
