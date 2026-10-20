@@ -29,7 +29,7 @@ const facilities = [
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilities, selectedFacility: facilities[0] }) }));
 vi.mock("@/hooks/use-organization-settings", () => ({ useOrganizationDefaultValues: () => ({ defaults: { defaultCountry: "Tanzania" } }) }));
 vi.mock("@/hooks/use-suppliers", () => ({
-  useCreateSupplierWithLocations: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateSupplierWithLocations: () => ({ startDraft: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useCreateSupplierLocation: () => ({ startDraft: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useUpdateSupplierLocation: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));

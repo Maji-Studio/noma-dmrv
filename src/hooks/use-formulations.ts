@@ -1,4 +1,4 @@
-import { useCreateIntentKey } from "./use-create-intent-key";
+import { useIntentMutation } from "./use-create-intent-key";
 import { invalidateEntityTypeQueries } from "./entity-query-keys";
 import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 /**
@@ -106,11 +106,10 @@ export function useCreateFormulation(
   callbacks?: MutationCallbacks<FormulationWithIngredients, CreateFormulationData>
 ) {
   const queryClient = useQueryClient();
-  const intent = useCreateIntentKey();
 
-  const mutation = useMutation({
-    mutationFn: async (data: CreateFormulationData) => {
-      const result = await createFormulationFn(data, { intentKey: intent.current() });
+  return useIntentMutation({
+    mutationFn: async (data: CreateFormulationData, intentKey) => {
+      const result = await createFormulationFn(data, { intentKey });
       if (!result.success) {
         throwActionError(result);
       }
@@ -120,7 +119,6 @@ export function useCreateFormulation(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
-      intent.rotate();
       invalidateEntityTypeQueries(queryClient, "formulation");
       // Invalidate all formulation lists
       queryClient.invalidateQueries({ queryKey: formulationKeys.lists() });
@@ -139,8 +137,6 @@ export function useCreateFormulation(
       await callbacks?.onSettled?.(data, error, variables);
     },
   });
-  // Call when a create sheet or dialog opens: each draft gets its own key.
-  return { ...mutation, startDraft: intent.rotate };
 }
 
 /**

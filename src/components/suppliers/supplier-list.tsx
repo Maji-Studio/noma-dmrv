@@ -368,7 +368,7 @@ export function SupplierList() {
     setLifecycleError(null);
   };
 
-  const openCreate = () => { clearDeepLink(); setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
+  const openCreate = () => { createSupplier.startDraft(); clearDeepLink(); setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
   const openView = (supplier: SupplierWithRelations) => { clearDeepLink(); setSideSheet({ entity: supplier, mode: "view" }); };
   const openEdit = (supplier: SupplierWithRelations) => { clearDeepLink(); setCreateError(null); setUpdateError(null); setSideSheet({ entity: supplier, mode: "edit" }); };
   const closeSideSheet = () => { clearDeepLink(); setSideSheet(null); setCreateError(null); setUpdateError(null); setLifecycleError(null); };

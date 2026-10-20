@@ -1,4 +1,4 @@
-import { useCreateIntentKey } from "./use-create-intent-key";
+import { useIntentMutation } from "./use-create-intent-key";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
@@ -108,16 +108,14 @@ export function useCreateSample(
   callbacks?: MutationCallbacks<SampleWithRelations, CreateSampleData>
 ) {
   const queryClient = useQueryClient();
-  const intent = useCreateIntentKey();
 
-  const mutation = useMutation({
+  return useIntentMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.sample),
-    mutationFn: async (data: CreateSampleData) => unwrap(await createSampleFn(data, { intentKey: intent.current() })),
+    mutationFn: async (data: CreateSampleData, intentKey) => unwrap(await createSampleFn(data, { intentKey })),
     onMutate: async (variables) => {
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
-      intent.rotate();
       // Invalidate all sample lists
       queryClient.invalidateQueries({ queryKey: sampleKeys.lists() });
       // Invalidate stats
@@ -144,8 +142,6 @@ export function useCreateSample(
       await callbacks?.onSettled?.(data, error, variables);
     },
   });
-  // Call when a create sheet or dialog opens: each draft gets its own key.
-  return { ...mutation, startDraft: intent.rotate };
 }
 
 /**

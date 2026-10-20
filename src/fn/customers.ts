@@ -115,7 +115,8 @@ export async function getCustomerLocationsFn(
 
 /** Create the customer and its locations in one transaction; any failure rolls back both. */
 export async function createCustomerWithLocationsFn(
-  data: z.infer<typeof createCustomerWithLocationsSchema>
+  data: z.infer<typeof createCustomerWithLocationsSchema>,
+  options?: CreateIntentOptions
 ): Promise<ActionResult<CreatedCustomerWithLocations>> {
   return withAction(
     async (ctx) => {
@@ -139,7 +140,7 @@ export async function createCustomerWithLocationsFn(
           isDefault: location.isDefault,
           defaultSoilTemperatureC: location.defaultSoilTemperatureC,
         })),
-      });
+      }, createIntentOptionsSchema.parse(options));
       return result;
     },
     {
