@@ -107,8 +107,9 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   for (const r of receipts) history.push({ id: r.id, kind: 'intake', occurredAt: r.occurredAt, recordedAt: r.recordedAt.toISOString(), actorName: null,
     reason: `Intake ${r.code}`, wetMassKg: r.wet, moisturePercent: r.moisture, dryMassKg: -r.dry, beforeDryKg: 0, afterDryKg: 0,
     correctsMovementId: null, deliveryId: null, source: { entity: bin.type === 'product_bin' ? 'biocharProduct' : 'productionRun', id: r.id },
-    // A batch added without a moisture reading has no wet basis, so its wet change has no figure.
-    wetDeltaKg: r.moisture === null ? null : r.wet, solidsDeltaKg: r.solids, allocations: [{ layerId: r.id, code: r.code, wetMassKg: r.wet, dryMassKg: r.dry, runs: r.runs }] });
+    // Every batch enters with its wet mass: a product's moisture is required, and the database
+    // refuses a complete run without moisture, output above zero and a bin (production_runs_complete_has_output).
+    wetDeltaKg: r.wet, solidsDeltaKg: r.solids, allocations: [{ layerId: r.id, code: r.code, wetMassKg: r.wet, dryMassKg: r.dry, runs: r.runs }] });
   for (const [productId, movement] of new Map(deletedPlacements.map(row => [row.id, row.movement]))) {
     const intake = history.find(entry => entry.kind === 'intake' && entry.id === productId);
     if (!intake) continue;

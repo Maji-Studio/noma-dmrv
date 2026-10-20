@@ -52,12 +52,15 @@ export function formatWetEstimate(kg: number): string {
 }
 
 /**
- * An output bin's headline figure: the wet mass operators find on site, or,
- * without a wet figure, the dry biochar the bin tracks. The stock card, the
+ * An output bin's headline figure: the wet mass operators find on site. Every
+ * run and product enters its bin with a wet mass (a complete run must carry
+ * moisture, output and a bin, #1255), so the figure is known once the stock is
+ * read. A wet figure that is still missing is a defect, not a state: the known
+ * dry biochar stands in, never a placeholder (Kenji, #1243). The stock card, the
  * board's tile and the stock history all read a bin this way.
  */
 export function outputStockFigure(wetKg: number | null, dryKg: number): string {
-  return wetKg === null ? `${formatMassKg(dryKg)} dry biochar` : `${formatWetEstimate(wetKg)} kg wet mass`;
+  return wetKg !== null ? `${formatWetEstimate(wetKg)} kg wet mass` : `${formatMassKg(dryKg)} dry biochar`;
 }
 
 /**

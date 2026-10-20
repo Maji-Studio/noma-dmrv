@@ -2,13 +2,13 @@
  * The output bin's stock replayed from its history: the one rule the stock
  * chart and the history both read. Live entries replay their frozen changes
  * in physical time, so a back-dated entry lands where it happened, and a
- * correction pair cancels out. Dry biochar always has a figure. Wet mass and
- * solids turn unknown at an entry with no figure for them, and become known
- * again when the bin is emptied or a movement's own frozen balance after it
- * gives one (a count whose reading sets the estimate, or a draw that used up
- * the batch with no moisture basis). A frozen balance only counts while it is
- * current: once an earlier-dated entry was recorded after it was saved, the
- * balance never saw that entry and the figure stays unknown.
+ * correction pair cancels out. Dry biochar always has a figure, and so does
+ * every intake's wet mass (a run must carry moisture to complete). Solids,
+ * and the wet mass of a movement whose saved snapshot has no figure for it,
+ * turn unknown at that entry, and become known again when the bin is emptied
+ * or a movement's own frozen balance after it gives one. A frozen balance only
+ * counts while it is current: once an earlier-dated entry was recorded after
+ * it was saved, the balance never saw that entry and the figure stays unknown.
  */
 import { STOCK_PART_MIN_KG } from "@/config/output-stock";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";

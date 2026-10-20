@@ -56,13 +56,12 @@ describe('archived storage board tile', () => {
     expect(renderer.root.findAllByType(SecondaryFigure)).toHaveLength(0);
     await act(async () => renderer.unmount());
   });
-  it('falls back to dry biochar when nothing dates a moisture', async () => {
+  it('shows the known dry biochar, never a placeholder, if a wet figure is ever missing', async () => {
     preview.mockReturnValue({ data: { beforeDryKg: 90, beforeEstimatedWetKg: null }, error: undefined } as never);
     let renderer!: ReactTestRenderer;
     await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, archivedAt: null } as never} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
     const text = JSON.stringify(renderer.toJSON());
     expect(text).toContain('90 kg dry biochar');
-    expect(text).not.toContain('kg wet');
     expect(text).not.toContain('Not available');
     expect(renderer.root.findAllByType(SecondaryFigure)).toHaveLength(0);
     await act(async () => renderer.unmount());

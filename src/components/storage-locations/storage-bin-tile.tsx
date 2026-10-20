@@ -18,8 +18,7 @@
  * The figure is the wet mass, because that is what an operator finds on site.
  * Biochar and product bins track dry biochar, so it reads under the wet
  * estimate as a smaller secondary figure, the same pair the detail sheet's
- * stock card shows. Without a wet estimate the dry biochar is the only honest
- * figure and takes its place.
+ * stock card shows.
  *
  * Every mass here is fixed kg (`formatMassKg`), matching the detail sheet the
  * tile opens: a tile reading "1.5 t" above a sheet reading "1,470 kg" for the
@@ -203,17 +202,17 @@ export function StorageBinTile({
 
 /**
  * The tile's one figure. A feedstock bin's stock is its wet mass. An output
- * bin leads with its wet estimate, and falls back to the dry biochar it tracks
- * when nothing dates a moisture. A positive wet estimate wins over a dry
+ * bin leads with its wet estimate. A positive wet estimate wins over a dry
  * biochar that rounds to nothing, so the tile never says Empty over wet stock
- * the sheet shows.
+ * the sheet shows. An archived bin has no stock read, so the dry biochar it
+ * holds is its one figure.
  */
 function TileFigure({ feedstock, massKg, wetEstimateKg }: { feedstock: boolean; massKg: number | null; wetEstimateKg: number | null }) {
-  if (!feedstock && wetEstimateKg != null && wetEstimateKg > 0) return outputStockFigure(wetEstimateKg, massKg ?? 0);
+  if (!feedstock && wetEstimateKg != null && wetEstimateKg > 0) return outputStockFigure(wetEstimateKg, 0);
   if (massKg == null) return MISSING_VALUE.notAvailable;
   if (massKg === 0) return "Empty";
   if (feedstock) return `${formatMassKg(massKg)} wet mass`;
-  return outputStockFigure(wetEstimateKg ?? null, massKg);
+  return outputStockFigure(wetEstimateKg, massKg);
 }
 
 /**

@@ -24,7 +24,6 @@ import type {
 } from "@/data-access/storage-locations";
 import {
   getStorageLocationsFn,
-  getStorageLocationFn,
   createStorageLocationFn,
   archiveStorageLocationFn,
   restoreStorageLocationFn,
@@ -35,7 +34,7 @@ import { facilityKeys } from "@/hooks/use-facilities";
 import { invalidateEntityTypeQueries } from "@/hooks/entity-query-keys";
 import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 
-import { unwrap, type MutationCallbacks, type OptimisticUpdateOptions } from "./types";
+import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 
 // ============================================
@@ -84,20 +83,6 @@ export function useStorageLocations(
     // rail's on-hand figures to zero for the length of the round trip. Keeping
     // the previous page means the control the operator just used stays put.
     placeholderData: keepPreviousData,
-  });
-}
-
-/**
- * One storage bin with its facility, read through the org-scoped lookup; idle
- * without an id. A create form reads the bin a deep link asks it to open with.
- */
-export function useStorageLocation(storageLocationId: string | null) {
-  return useQuery({
-    queryKey: storageLocationKeys.detailWithFacility(storageLocationId ?? ""),
-    queryFn: async () => unwrap(await getStorageLocationFn({ storageLocationId: storageLocationId! })),
-    enabled: storageLocationId !== null,
-    // The create form waits on this read; a bin it cannot read opens the form without one, not after retries.
-    retry: false,
   });
 }
 

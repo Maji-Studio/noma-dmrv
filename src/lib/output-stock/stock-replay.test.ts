@@ -11,7 +11,7 @@ function entry(values: Partial<OutputStockHistoryEntry> & Pick<OutputStockHistor
 
 /** 100 kg wet at 20 % moisture: 80 kg dry biochar. */
 const measured = entry({ id: "b1", kind: "intake", wetMassKg: 100, dryMassKg: -80, wetDeltaKg: 100, solidsDeltaKg: 80 });
-/** A batch added without a moisture reading: 50 kg dry biochar, no wet figure. */
+/** An entry with no wet figure: 50 kg dry biochar. The database now refuses a run without moisture; the replay still handles any entry without a figure. */
 const unmeasured = entry({ id: "b2", kind: "intake", occurredAt: AT(10), recordedAt: AT(10), moisturePercent: null, dryMassKg: -50, wetDeltaKg: null, solidsDeltaKg: 50 });
 
 const last = (entries: OutputStockHistoryEntry[]) => replayStock(entries).at(-1)?.after;

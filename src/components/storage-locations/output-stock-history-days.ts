@@ -127,11 +127,14 @@ const NOUNS: Record<string, string> = {
   intake: "addition", delivery: "delivery", loss: "lost mass", count: "stock count", production_draw: "withdrawal", product_draw: "withdrawal",
 };
 
-/** The entry's own size: what was weighed (wet mass) or, without a wet figure, the dry biochar it moved. */
+/**
+ * The entry's own size: what was weighed (wet mass). Every run and product
+ * enters with a wet mass; a movement whose saved snapshot has no wet figure
+ * reads by the dry biochar it moved.
+ */
 export function entryAmount(entry: OutputStockHistoryEntry, kind: string, format: (kg: number) => string): string {
   if (kind === "count") return entry.wetMassKg === null ? `${format(entry.afterDryKg)} dry biochar` : `${format(entry.wetMassKg)} wet mass`;
-  const wet = entry.kind === "intake" && entry.moisturePercent === null ? null : entry.wetMassKg;
-  return wet === null ? `${format(Math.abs(entry.dryMassKg))} dry biochar` : `${format(wet)} wet mass`;
+  return entry.wetMassKg === null ? `${format(Math.abs(entry.dryMassKg))} dry biochar` : `${format(entry.wetMassKg)} wet mass`;
 }
 
 /** The line an entry reads as: "Added 300 kg wet mass", "Corrected delivery: 250 kg wet mass". */
@@ -141,8 +144,3 @@ export function entrySentence(row: Pick<HistoryRow, "entry" | "kind" | "replaces
   return `${VERBS[row.kind] ?? "Changed"} ${amount}`;
 }
 
-/** Why the bin has no wet mass, when it has none: one sentence, its last words linking to where stock is added. */
-export const NO_WET_MASS_REASON = {
-  lead: "A batch in this bin has no moisture reading, so there is no wet mass. Record one when ",
-  action: "adding stock",
-} as const;

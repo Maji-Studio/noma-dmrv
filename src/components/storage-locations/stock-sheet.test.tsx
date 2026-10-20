@@ -59,25 +59,26 @@ it("keeps old counts and corrections readable, folds reversals, groups days and 
   // The correction and the entry it replaced link to each other.
   expect(renderer.root.findAllByType("a").map(link => link.props.href)).toEqual([stockSourceHref({ entity: "delivery", id: "delivery-id" }, FACILITY_ID),
     "#output-movement-loss", "#output-movement-fixed"]);
-  // One day heading for the loss and correction, one for the following day's actions, each with the stock at day end.
+  // One day heading for the loss and correction, one for the following day's actions. These entries carry no wet
+  // figure, so no heading shows a stock at day end (a replayed dry balance here would read below zero).
   expect(renderer.root.findAllByType("h4").map(text)).toHaveLength(2);
-  expect(renderer.root.findAllByType("h4").every(node => text(node).includes("at day end"))).toBe(true);
+  expect(renderer.root.findAllByType("h4").some(node => /at day end/.test(text(node)))).toBe(false);
   await act(async () => renderer.unmount());
 });
 
-it("leads with the dry biochar and links adding stock into this bin when a batch has no moisture reading", async () => {
-  state.output = [entry({ id: "product", kind: "intake", moisturePercent: null, wetMassKg: 0, dryMassKg: -120, wetDeltaKg: null, solidsDeltaKg: 120 })];
-  state.balance = { beforeEstimatedWetKg: null, beforeDryKg: 120, lane: "product" };
+it("leads with the wet mass of a product added to the bin, with the dry biochar under it", async () => {
+  state.output = [entry({ id: "product", kind: "intake", moisturePercent: 20, wetMassKg: 150, dryMassKg: -120, wetDeltaKg: 150, solidsDeltaKg: 120 })];
+  state.balance = { beforeEstimatedWetKg: 150, beforeDryKg: 120, lane: "product" };
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<OutputStockHistory storageLocationId={BIN_ID} facilityId={FACILITY_ID} triggerLabel="History" />); });
   await act(async () => renderer.root.findByType("button").props.onClick());
   const markup = text(renderer.root);
-  expect(markup).toContain("120 kg dry biochar");
-  expect(markup).toContain("A batch in this bin has no moisture reading, so there is no wet mass. Record one when");
-  expect(markup).toContain("Added 120 kg dry biochar");
-  expect(markup).not.toContain("wet mass at day end");
-  const link = renderer.root.findAllByType("a").find(node => text(node) === "adding stock");
-  expect(link?.props.href).toBe(`/biochar-products?facility=${FACILITY_ID}&create=true&bin=${BIN_ID}`);
+  expect(markup).toContain("150 kg wet mass");
+  expect(markup).toContain("Added 150 kg wet mass");
+  expect(markup).toMatch(/150 kg wet mass\s+at day end/);
+  expect(markup).not.toContain("no moisture reading");
+  expect(renderer.root.findByType(SecondaryFigure).props).toMatchObject({ label: "Dry biochar", value: "120 kg" });
+  expect(renderer.root.findAllByType("a").filter(node => text(node) === "adding stock")).toHaveLength(0);
   await act(async () => renderer.unmount());
 });
 
