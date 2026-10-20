@@ -15,7 +15,9 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { EmissionLineBadge } from "@/components/emissions/emission-line-badge";
 import { isOpen } from "@/components/emissions/emission-line-display";
 import { emissionsBatchHref } from "@/components/emissions/emissions-overview-query";
+import { TemplateSetupNotice } from "@/components/emissions/template-setup-notice";
 import { useBatchEmissionLines } from "@/hooks/use-emission-entries";
+import { isEmissionLinesBlocked } from "@/lib/certification/emission-lines-blocked-error";
 import { cn } from "@/lib/utils";
 import { SheetLinkRows } from "@/components/ui/sheet-link-row";
 
@@ -54,6 +56,13 @@ export function CreditBatchEmissionsPanel({
   );
   if (!enabled) return null;
 
+  if (isEmissionLinesBlocked(error)) {
+    return (
+      <PanelSection>
+        <TemplateSetupNotice blocker={error.blocker} facilityId={facilityId} creditBatchId={creditBatchId} />
+      </PanelSection>
+    );
+  }
   if (error) {
     return (
       <PanelSection>

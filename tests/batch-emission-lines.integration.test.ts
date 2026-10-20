@@ -1,9 +1,10 @@
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { assert, afterAll, beforeAll, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { creditBatches, creditBatchProductionRuns, productionRuns, removalTemplateObservations } from "@/db/schema";
 import { observeTemplate } from "@/data-access/removal-template-observations";
 import { loadBatchEmissionLines } from "@/lib/read-models/batch-emission-lines";
+import { removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 import type { GhgEntryTemplate } from "@/lib/isometric/template-observations";
 import fixture from "./fixtures/isometric/sandbox-template-2026-10-15.json";
 import { createLineageFixture, cleanupLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";
@@ -48,13 +49,17 @@ afterAll(async () => {
   await db.delete(removalTemplateObservations).where(and(eq(removalTemplateObservations.organizationId, TEST_ORG_ID), eq(removalTemplateObservations.externalTemplateId, template.id)));
 });
 it("loads pinned lines using all and only the batch's runs, including unapplied output", async () => {
-  const lines = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+  const linesResult = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+  assert(linesResult.status === "ready");
+  const lines = linesResult.lines;
   expect(lines).toHaveLength(1);
   expect(lines[0]).toMatchObject({ componentId: group.components[0].id, state: "filled", automaticFigure: { magnitude: "20", unit: "kWh" }, total: { magnitude: "20", unit: "kWh" }, entries: [], comment: null });
 });
 it("rejects a cross-organization batch read", async () => {
   await expect(loadBatchEmissionLines({ ...ctx, organizationId: `other-${crypto.randomUUID()}` }, lineage.facilityId, lineage.batchId)).rejects.toThrow();
 });
-it("refuses an unpinned batch", async () => {
-  await expect(loadBatchEmissionLines(ctx, foreignBatch.facilityId, foreignBatch.batchId)).rejects.toThrow("Choose a Removal template");
+it("returns a blocker for an unpinned batch", async () => {
+  await expect(loadBatchEmissionLines(ctx, foreignBatch.facilityId, foreignBatch.batchId)).resolves.toEqual({
+    status: "blocked", blocker: removalTemplateBlocker("unpinnedTemplate"),
+  });
 });
