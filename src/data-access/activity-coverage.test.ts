@@ -158,6 +158,7 @@ const ACTIVITY_COVERAGE = {
     setSubmissionTerminalStatus: { status: "direct" },
     attachReportDocument: { status: "direct" },
     updateFacilityEmissionConfig: { status: "exempt", reason: "Facility energy configuration has no entity activity type." },
+    updateFacilityDefaultRemovalTemplate: { status: "exempt", reason: "The facility default Removal template is reference configuration without an entity activity type." },
     deleteCertifierProject: { status: "exempt", reason: "Registry project mapping deletion changes reference configuration without an entity activity type." },
     updateSubmissionMetadata: { status: "direct" },
   },

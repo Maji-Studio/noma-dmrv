@@ -17,6 +17,8 @@ import {
 } from "@/lib/isometric/template-observations/line-sources";
 import type { ComponentEnrichment, EntryPolicy, QuantityKind } from "@/lib/isometric/template-observations/types";
 import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
+import { isTemplateReady, linesToDecideCount } from "@/lib/certification/removal-template-readiness";
+import { sectionTemplateLines, type TemplateLineSection } from "@/lib/isometric/template-observations/template-sections";
 
 export { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE } from "@/lib/certification/requirement-labels";
 
@@ -192,13 +194,31 @@ export function reviewCountSummary(lineCount: number, toDecide: number): string 
     : `${toDecide} of ${plural(lineCount, "line", "lines")} to decide.`;
 }
 
-/** Lines in template order, grouped under their template group. */
-export function groupLines(lines: readonly RemovalTemplateReviewLine[]) {
-  const groups = new Map<string, { key: string; name: string; lines: RemovalTemplateReviewLine[] }>();
-  for (const line of lines) {
-    const group = groups.get(line.groupKey) ?? { key: line.groupKey, name: line.groupName, lines: [] };
-    group.lines.push(line);
-    groups.set(line.groupKey, group);
-  }
-  return [...groups.values()];
+/** Isometric's section names on its template page. */
+export const SECTION_LABELS: Record<TemplateLineSection, string> = {
+  mitigated: "Mitigated",
+  emitted: "Emitted",
+};
+
+/** "Pyrolysis (3)", as Isometric counts a section or group. */
+export function countedLabel(name: string, count: number): string {
+  return `${name} (${count})`;
+}
+
+/**
+ * Lines as Isometric's template page shows them: Mitigated, then Emitted, each
+ * group in Isometric's order with its count, lines by name.
+ */
+export function sectionLines(lines: readonly RemovalTemplateReviewLine[]) {
+  return sectionTemplateLines(lines);
+}
+
+/** Lines still to decide on this template. */
+export function toDecideCount(entry: RemovalTemplateReviewEntry): number {
+  return linesToDecideCount(entry);
+}
+
+/** No lines to decide, read in full, and stored: a credit batch can choose it. */
+export function isReady(entry: RemovalTemplateReviewEntry): boolean {
+  return isTemplateReady(entry);
 }

@@ -28,7 +28,7 @@ import { InfoHint } from "@/components/ui/tooltip";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import { certCheckLabel } from "@/lib/certification/requirement-labels";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
-import { certificationSettingsHref } from "@/lib/certification/links";
+import { certificationRemovalTemplatesHref, certificationSettingsHref } from "@/lib/certification/links";
 import { CREDIT_BATCH_READY_LABEL } from "@/lib/certification/credit-batch-lifecycle";
 import {
   facilityBlueprintLabel,
@@ -58,19 +58,20 @@ interface SelectBatchesStepProps {
 export function setupGapCopy(gap: FacilitySetupGap): {
   message: string;
   lines?: string[];
-  action: { label: string; toSettings: true } | null;
+  /** Certifier for the project link, Removal templates for anything about the template. */
+  action: { label: string; target: "certifier" | "removalTemplates" } | null;
 } {
   switch (gap.kind) {
     case "project_link":
       return {
         message:
           "This facility isn't linked to an Isometric project yet. Link it before grouping batches.",
-        action: { label: "Link facility in certification settings", toSettings: true },
+        action: { label: "Link facility in certification settings", target: "certifier" },
       };
     case "external_facility_id":
       return {
         message: "This facility is linked, but its Isometric facility ID is not set.",
-        action: { label: "Set Isometric facility ID in certification settings", toSettings: true },
+        action: { label: "Set Isometric facility ID in certification settings", target: "certifier" },
       };
     case "credentials":
       return {
@@ -82,19 +83,19 @@ export function setupGapCopy(gap: FacilitySetupGap): {
       return {
         message:
           "This facility is linked, but no default Removal template is set for it.",
-        action: { label: "Choose a template in certification settings", toSettings: true },
+        action: { label: "Choose a default in Removal templates", target: "removalTemplates" },
       };
     case "template_resolution":
       return {
-        message: `The configured Removal template (${gap.templateId}) is no longer available in the registry. Select another template.`,
-        action: { label: "Re-select template in certification settings", toSettings: true },
+        message: `The default Removal template (${gap.templateId}) is no longer available in the registry. Choose another default.`,
+        action: { label: "Choose a default in Removal templates", target: "removalTemplates" },
       };
     case "template_unbindable": {
       const { lead, lines } = formatUnbindableTemplateInputs(gap.inputs);
       return {
         message: lead,
         lines,
-        action: { label: "Review certification settings", toSettings: true },
+        action: { label: "Review certification settings", target: "certifier" },
       };
     }
     case "blueprint_keys": {
@@ -104,7 +105,7 @@ export function setupGapCopy(gap: FacilitySetupGap): {
           `The selected Removal template uses ${gap.keys.length} ` +
           `${gap.keys.length === 1 ? "component" : "components"} the registry cannot load: ` +
           `${labels.join(", ")}. Choose another template or ask an Admin to update the Isometric project.`,
-        action: { label: "Review certification settings", toSettings: true },
+        action: { label: "Review certification settings", target: "certifier" },
       };
     }
   }
@@ -303,7 +304,7 @@ export function SelectBatchesStep({
               action={
                 copy.action && (
                   <Link
-                    href={certificationSettingsHref(facilityId)}
+                    href={copy.action.target === "removalTemplates" ? certificationRemovalTemplatesHref(facilityId) : certificationSettingsHref(facilityId)}
                     className="inline-flex items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
                   >
                     {copy.action.label}

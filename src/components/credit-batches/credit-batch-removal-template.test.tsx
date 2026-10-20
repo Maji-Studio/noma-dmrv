@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => ({ pin: "rvt_new" as string | null, listed: ["rvt
 vi.mock("@/hooks/use-credit-batches", () => ({
   useCreditBatch: () => ({ data: undefined, refetch: vi.fn() }),
 }));
+vi.mock("@/hooks/use-removal-template-review", () => ({
+  useRemovalTemplateReview: () => ({ data: undefined, isLoading: false }),
+  useSwitchCreditBatchRemovalTemplate: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
 vi.mock("@/hooks/use-certification", () => ({
   useFacilityCertifierSummary: () => ({
     data: { mapping: { externalProjectId: "prj_test", defaultRemovalTemplateId: "rvt_new" } },

@@ -18,11 +18,13 @@ import { Notice } from "@/components/ui/notice";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { useFacilityCertifierSummary, useIsometricProjectTemplates } from "@/hooks/use-certification";
 import { useCreditBatch } from "@/hooks/use-credit-batches";
+import { useRemovalTemplateReview } from "@/hooks/use-removal-template-review";
+import { isReady, linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE, toDecideCount, type RemovalTemplateReviewEntry } from "@/components/certification/removal-template-review-model";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { REMOVAL_TEMPLATE_LANDING_LINE } from "@/lib/certification/removal-template-blockers";
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { RawIdentifiers } from "@/components/certification/removal-template-mapping-view";
-import { CreditBatchTemplateSwitchDialog } from "./credit-batch-template-switch-dialog";
+import { CreditBatchTemplateSwitchDialog, type TemplateReadiness } from "./credit-batch-template-switch-dialog";
 
 export interface CreditBatchRemovalTemplateProps {
   creditBatch: Pick<CreditBatchWithRelations, "id" | "code" | "facilityId" | "version" | "removalTemplateId">;
@@ -32,6 +34,15 @@ export interface CreditBatchRemovalTemplateProps {
   locked: boolean;
   /** The deep-link focus target, when this sheet was opened by one. */
   activeFocusTarget?: string | null;
+}
+
+/** Why a template cannot be chosen yet, in the words Removal templates uses. */
+function templateReadiness(entry: RemovalTemplateReviewEntry): TemplateReadiness {
+  if (isReady(entry)) return { ready: true };
+  const toDecide = toDecideCount(entry);
+  if (toDecide > 0) return { ready: false, reason: linesToDecideLabel(toDecide) };
+  if (entry.enrichmentProblems.length > 0) return { ready: false, reason: TEMPLATE_NOT_FULLY_READ_TITLE };
+  return { ready: false, reason: "Not set up yet" };
 }
 
 export function CreditBatchRemovalTemplate({
@@ -50,6 +61,11 @@ export function CreditBatchRemovalTemplate({
   const projectId = summary.data?.mapping?.externalProjectId ?? null;
   const needsTemplates = !!pinnedId || switching;
   const templates = useIsometricProjectTemplates(needsTemplates ? projectId : null);
+  // Readiness comes from Removal templates, read only while the dialog is open.
+  const review = useRemovalTemplateReview(batch.facilityId, switching && canManage);
+  const readiness = review.data
+    ? new Map(review.data.map((entry) => [entry.templateId, templateReadiness(entry)]))
+    : undefined;
 
   const pinned = pinnedId ? templates.data?.find((template) => template.id === pinnedId) : undefined;
   const lookupSettled = !!projectId && templates.isSuccess;
@@ -111,6 +127,8 @@ export function CreditBatchRemovalTemplate({
           templates={templates.data}
           templatesLoading={summary.isLoading || templates.isLoading}
           templatesError={templates.error}
+          readiness={readiness}
+          readinessLoading={review.isLoading}
           unavailableReason={summary.isSuccess && !projectId
             ? "Link this facility to an Isometric project in Certification settings first."
             : undefined}

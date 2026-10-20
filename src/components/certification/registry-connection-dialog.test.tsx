@@ -101,24 +101,20 @@ describe("Isometric project reselection", () => {
       defaultRemovalTemplateId: "tpl_saved", externalFacilityId: "fcl_saved",
     } as NonNullable<FacilityCertifierMapping["mapping"]>;
     render(<FacilityCertifierDialog isOpen onClose={close} facilityId={FACILITY_ID} loaderData={loaderData} />);
-    await select("Default Removal template", "Test template: tpl_test");
     await change("externalFacilityId", "fcl_edited");
     const acknowledgment = screen.getByRole("checkbox", { name: "I intend to share this project across facilities." });
     fireEvent.click(acknowledgment);
 
     await select("Isometric project", "Test project: prj_test");
-    expect(screen.getByRole("combobox", { name: /^Default Removal template/ }).textContent).toBe("Test template: tpl_test");
     expect((screen.getByRole("textbox", { name: /^Isometric facility ID/ }) as HTMLInputElement).value).toBe("fcl_edited");
     expect(acknowledgment).toHaveProperty("checked", true);
     expect(button("Save changes")).toHaveProperty("disabled", false);
 
     await select("Isometric project", "Other project: prj_other");
-    expect(screen.getByRole("combobox", { name: /^Default Removal template/ }).textContent).toBe("No default");
     expect((screen.getByRole("textbox", { name: /^Isometric facility ID/ }) as HTMLInputElement).value).toBe("");
     expect(acknowledgment).toHaveProperty("checked", false);
 
     await select("Isometric project", "Test project: prj_test");
-    expect(screen.getByRole("combobox", { name: /^Default Removal template/ }).textContent).toBe("tpl_saved");
     expect((screen.getByRole("textbox", { name: /^Isometric facility ID/ }) as HTMLInputElement).value).toBe("fcl_saved");
   });
 
@@ -143,20 +139,12 @@ describe("Isometric project reselection", () => {
   });
 });
 
-it.each(["live", "loader"])("keeps retained %s templates selectable after a query error", async (source) => {
-  mocks.templatesError = new Error("Background refetch failed");
-  mocks.liveTemplates = source === "live";
-  if (source === "loader") loaderData.availableTemplates = [{
-    id: "tpl_test", display_name: "Test template", credit_type: "REMOVAL",
-  } as FacilityCertifierMapping["availableTemplates"][number]];
+it("does not ask for a default Removal template when linking a project", async () => {
   await mount();
   await select("Isometric project", "Test project: prj_test");
-  await select("Default Removal template", "Test template: tpl_test");
-  expect(screen.queryByText("Error loading options")).toBeNull();
-  await change("externalFacilityId", "fcl_test");
-  await submit(1);
-  await waitFor(() => expect(mocks.saveMapping).toHaveBeenCalledWith(expect.objectContaining({ defaultRemovalTemplateId: "tpl_test" })));
+  expect(screen.queryByRole("combobox", { name: /^Default Removal template/ })).toBeNull();
 });
+
 
 describe("registry connection dialog", () => {
   it("masks saved keys and hides both save and link until there is work to do", async () => {
@@ -232,13 +220,12 @@ describe("registry connection dialog", () => {
     const link = screen.getByRole("button", { name: "Link project" });
     expect(link.className).toContain("border-[var(--color-border-primary)]");
     expect(link.className).toContain("bg-transparent");
-    await select("Default Removal template", "Test template: tpl_test");
+    await change("externalFacilityId", "fcl_test");
     await dismiss();
     expect(close).not.toHaveBeenCalled();
     await click("Keep editing");
-    await change("externalFacilityId", "fcl_test");
     await submit(1);
-    expect(mocks.saveMapping).toHaveBeenCalledWith(expect.objectContaining({ facilityId: FACILITY_ID, externalProjectId: "prj_test", defaultRemovalTemplateId: "tpl_test" }));
+    expect(mocks.saveMapping).toHaveBeenCalledWith(expect.objectContaining({ facilityId: FACILITY_ID, externalProjectId: "prj_test" }));
     expect(close).toHaveBeenCalledOnce();
   });
 

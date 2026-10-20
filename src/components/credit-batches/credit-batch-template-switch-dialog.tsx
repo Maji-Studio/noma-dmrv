@@ -6,10 +6,11 @@
  * The server refuses a switch on a batch a submitted Removal holds, and a stale
  * version; both come back as the form error and the dialog stays open.
  *
- * Once another template is chosen, the dialog previews its line review: how
- * many lines are to decide (they block the batch's Removals until an Owner or
- * Admin decides them) or that all are decided. The preview informs the choice
- * and never blocks the switch.
+ * Only ready templates can be chosen: read in full, set up, and with no lines
+ * to decide. A template that is not ready stays in the list, disabled, with its
+ * count ("3 lines to decide"), and the dialog links each one to Removal
+ * templates ("Decide lines"). The batch's current template stays selectable
+ * even when it is not ready. The server refuses a template that is not ready.
  *
  * The form sends the batch version it opened on, never a refetched one, so a
  * concurrent switch is refused instead of overwritten (#768). After a stale
@@ -19,6 +20,8 @@
 "use client";
 
 import { useContext, useState } from "react";
+import Link from "next/link";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
 import { useController, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { EntitySelect, FormActions, FormField } from "@/components/forms";
@@ -28,7 +31,8 @@ import { FormDialogContext } from "@/components/ui/form-dialog-context";
 import { useToast } from "@/components/ui/toast";
 import { useSwitchCreditBatchRemovalTemplate } from "@/hooks/use-removal-template-review";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
-import { TemplateReviewPreview } from "./credit-batch-template-review-preview";
+import { Notice } from "@/components/ui/notice";
+import { certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL } from "@/lib/certification/links";
 import { getStaleVersionConflict, toSaveErrorMessage } from "@/lib/stale-version";
 import {
   switchRemovalTemplateFormSchema,
@@ -64,6 +68,19 @@ export interface CreditBatchTemplateSwitchDialogProps {
   templatesError: Error | null;
   /** Why no template can be listed (no project link), shown under the select. */
   unavailableReason?: string;
+  /**
+   * Each listed template's readiness, from Removal templates. Absent while it
+   * loads or when it could not be read; the server still refuses a template
+   * that is not ready.
+   */
+  readiness?: ReadonlyMap<string, TemplateReadiness>;
+  readinessLoading?: boolean;
+}
+
+export interface TemplateReadiness {
+  ready: boolean;
+  /** Why it cannot be chosen yet: "3 lines to decide", "Not set up yet". */
+  reason?: string;
 }
 
 export function CreditBatchTemplateSwitchDialog(props: CreditBatchTemplateSwitchDialogProps) {
@@ -83,6 +100,8 @@ function SwitchTemplateForm({
   templatesLoading,
   templatesError,
   unavailableReason,
+  readiness,
+  readinessLoading = false,
 }: CreditBatchTemplateSwitchDialogProps) {
   const {
     control,
@@ -108,16 +127,27 @@ function SwitchTemplateForm({
   const copy = creditBatch.removalTemplateId ? SWITCH_COPY : SET_COPY;
 
   // Only Removal templates can be pinned; the action refuses anything else.
-  const options = (templates ?? [])
-    .filter((template) => template.credit_type === "REMOVAL")
-    .map((template) => ({
+  const removalTemplates = (templates ?? []).filter((template) => template.credit_type === "REMOVAL");
+  const notReady = removalTemplates.flatMap((template) => {
+    const state = readiness?.get(template.id);
+    return state && !state.ready && template.id !== creditBatch.removalTemplateId
+      ? [{ template, reason: state.reason }] : [];
+  });
+  const notReadyIds = new Set(notReady.map(({ template }) => template.id));
+  const options = removalTemplates.map((template) => {
+    const current = template.id === creditBatch.removalTemplateId;
+    const notes = [
+      current ? "Current template" : template.id === defaultTemplateId ? "Facility default" : undefined,
+      notReadyIds.has(template.id) ? readiness?.get(template.id)?.reason : undefined,
+    ].filter(Boolean);
+    return {
       id: template.id,
       code: template.id,
       name: template.display_name,
-      subtitle: template.id === creditBatch.removalTemplateId
-        ? "Current template"
-        : template.id === defaultTemplateId ? "Facility default" : undefined,
-    }));
+      subtitle: notes.length ? notes.join(", ") : undefined,
+      disabled: notReadyIds.has(template.id),
+    };
+  });
   const unchanged = field.value === baseline.removalTemplateId;
 
   const reloadLatest = () => {
@@ -172,7 +202,7 @@ function SwitchTemplateForm({
           optionLabel="Removal template"
           placeholder="Select a template"
           options={options}
-          isLoading={templatesLoading}
+          isLoading={templatesLoading || readinessLoading}
           disabled={!!unavailableReason}
           loadError={options.length === 0 ? templatesError : null}
           error={!!errors.removalTemplateId}
@@ -182,12 +212,28 @@ function SwitchTemplateForm({
         />
       </FormField>
 
-      {!unchanged && !unavailableReason && (
-        <TemplateReviewPreview
-          facilityId={creditBatch.facilityId}
-          removalTemplateId={field.value}
-          creditBatchCode={creditBatch.code}
-        />
+      {!unavailableReason && notReady.length > 0 && (
+        <Notice tone="info" title="Not ready for credit batches">
+          <ul className="flex flex-col gap-8">
+            {notReady.map(({ template, reason }) => (
+              <li key={template.id} className="flex flex-wrap items-baseline gap-x-8 gap-y-2">
+                <span className="body-small text-[var(--color-text-primary)]">{template.display_name}</span>
+                {reason && <span className="body-caption text-[var(--color-text-tertiary)]">{reason}</span>}
+                {/* A new tab, so this dialog and its unsaved choice stay open. */}
+                <Link
+                  href={certificationRemovalTemplatesHref(creditBatch.facilityId, template.id)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-4 body-small underline underline-offset-2"
+                >
+                  {DECIDE_LINES_LINK_LABEL}
+                  <ArrowSquareOutIcon size={12} aria-hidden />
+                  <span className="sr-only"> {`for ${template.display_name} (opens in a new tab)`}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Notice>
       )}
 
       <FormActions

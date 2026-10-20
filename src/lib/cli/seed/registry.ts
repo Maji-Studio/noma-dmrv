@@ -96,7 +96,7 @@ export async function seedRegistryAndTypes(facilityId: string, counts: SeedCount
     // Empty template is the UI default. Linking a project does not submit anything.
     await unwrap("link registry project", saveFacilityCertifierMapping({
       facilityId, externalProjectId, protocolSlug: DEFAULT_PROTOCOL_SLUG,
-      externalFacilityId: credentials.externalFacilityId, defaultRemovalTemplateId: "", confirmProduction: false,
+      externalFacilityId: credentials.externalFacilityId, confirmProduction: false,
     }));
     counts.add("registry mappings");
     registryStatus = `credentials stored + facility mapped to ${externalProjectId}`;

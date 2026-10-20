@@ -150,5 +150,10 @@ it("renders the unbindable component guidance and settings action", () => {
 it("directs a missing external facility ID to certification settings", () => {
   const copy = setupGapCopy({ kind: "external_facility_id" });
   expect(copy.message).toContain("Isometric facility ID");
-  expect(copy.action?.toSettings).toBe(true);
+  expect(copy.action?.target).toBe("certifier");
+});
+
+it("sends a missing default Removal template to Removal templates", () => {
+  const copy = setupGapCopy({ kind: "default_template" });
+  expect(copy.action).toEqual({ label: "Choose a default in Removal templates", target: "removalTemplates" });
 });

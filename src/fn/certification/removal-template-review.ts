@@ -4,14 +4,14 @@ import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-
 
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getCertifierProjectByFacility } from "@/data-access/certification";
-import { resolveIsometricClient } from "@/data-access/certifier-credentials";
-import { switchCreditBatchRemovalTemplate as switchTemplate } from "@/data-access/credit-batch-removal-template";
+import { hasCertifierCredentials, resolveIsometricClient } from "@/data-access/certifier-credentials";
+import { listPinnedRemovalTemplateIds, switchCreditBatchRemovalTemplate as switchTemplate } from "@/data-access/credit-batch-removal-template";
 import { getLatestTemplateObservation, getPreviousTemplateObservation, reviewLineContracts } from "@/data-access/removal-template-observations";
 import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgRole } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
-import { listComponentBlueprints, listGhgEntryTemplates } from "@/lib/isometric";
-import { allowedEntryPolicies, lineNeedsReview, catalogCandidates, compareTemplateObservations, enrichmentProblems, normalizeTemplateDefinition, resolveLineSources, validateLineSources, withoutUnacceptableProposals, type ComponentChange, type LineSources, type TemplateDefinition } from "@/lib/isometric/template-observations";
+import { listComponentBlueprints, listGhgEntryTemplates, type IsometricClient, type IsometricComponentBlueprint, type IsometricGhgEntryTemplate } from "@/lib/isometric";
+import { lineNeedsReview, compareTemplateObservations, enrichmentProblems, normalizeTemplateDefinition, resolveLineSources, validateLineSources, withoutUnacceptableProposals, type ComponentChange } from "@/lib/isometric/template-observations";
 import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/load-enrichment";
 import { canonicalJson } from "@/lib/canonical-json";
 import {
@@ -19,41 +19,79 @@ import {
   type RemovalTemplateReviewPreviewInput, type ReviewRemovalTemplateLinesInput, type SwitchCreditBatchRemovalTemplateInput,
 } from "@/schemas/removal-template-review";
 import { withAction } from "../with-action";
-import { loadFacilityCertifierFacts } from "./facility-certifier-facts";
 import { loadRemovalTemplateFacts } from "./removal-template-facts";
-import { ISOMETRIC_PROVIDER } from "./shared";
+import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
+import { removalTemplateReviewLines as reviewLines } from "@/lib/certification/removal-template-review-lines";
+import { isTemplateReady } from "@/lib/certification/removal-template-readiness";
+import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
 
-function reviewLines(definition: TemplateDefinition, lineSources: LineSources, changes: Record<string, ComponentChange>) {
-  return definition.groups.flatMap((group) => group.components.map((component) => ({
-    component, groupKey: group.key, groupName: group.displayName,
-    contract: lineSources[component.id] ?? { scope: "unassigned" as const, entryPolicy: "none" as const, origin: "proposed" as const },
-    catalogCandidates: catalogCandidates(component, group.key), allowedEntryPolicies: allowedEntryPolicies(component),
-    change: changes[component.id] ?? ("added" as ComponentChange),
-  })));
+async function readOnlyEntry(
+  client: IsometricClient, template: IsometricGhgEntryTemplate, blueprints: IsometricComponentBlueprint[],
+  latest: RemovalTemplateObservation | null,
+) {
+  const definition = normalizeTemplateDefinition(template);
+  const enrichment = await loadTemplateEnrichment(client, template, blueprints);
+  const lineSources = latest && canonicalJson(latest.definition) === canonicalJson(definition)
+    ? withoutUnacceptableProposals(definition, latest.lineSources)
+    : resolveLineSources({ definition, previous: latest ?? undefined });
+  return {
+    templateId: template.id, template, observation: null, preview: true,
+    availability: "listed" as const, enrichment,
+    changes: {} as Record<string, ComponentChange>,
+    lines: reviewLines(definition, lineSources, {}, blueprints, template),
+    enrichmentProblems: enrichmentProblems(definition, enrichment),
+    lineSourceProblems: validateLineSources(definition, lineSources),
+  };
 }
 
 export async function loadRemovalTemplateReview(facilityId: string) {
   return withAction(async (ctx) => {
     const id = loadRemovalTemplateReviewSchema.parse(facilityId);
     await requireOrgFacility(ctx, id);
-    const facts = await loadFacilityCertifierFacts(ctx, id);
-    return Promise.all(facts.removalTemplateIds.map(async (templateId) => {
-      const current = facts.templatesById[templateId];
+    const mapping = await getCertifierProjectByFacility(ctx, id, ISOMETRIC_PROVIDER);
+    if (!mapping || !await hasCertifierCredentials(ctx, ISOMETRIC_PROVIDER)) return [];
+    const pinnedIds = await listPinnedRemovalTemplateIds(ctx, id);
+    const client = await resolveIsometricClient(ctx);
+    const [templates, blueprints] = await Promise.all([
+      safeListIfConfigured(() => listGhgEntryTemplates(client, mapping.externalProjectId)),
+      safeListIfConfigured(() => listComponentBlueprints(client)),
+    ]);
+    const removalTemplates = templates.filter((template) => template.credit_type === "REMOVAL");
+    const templateIds = [...new Set([
+      ...(mapping.defaultRemovalTemplateId ? [mapping.defaultRemovalTemplateId] : []),
+      ...pinnedIds, ...removalTemplates.map((template) => template.id),
+    ])];
+    const entries = [];
+    // Keep observation transactions ordered to limit pool pressure.
+    for (const templateId of templateIds) {
+      const template = removalTemplates.find((candidate) => candidate.id === templateId);
+      const isDefault = templateId === mapping.defaultRemovalTemplateId;
+      const isPinned = pinnedIds.includes(templateId);
+      const latest = template && !isDefault && !isPinned
+        ? await getLatestTemplateObservation(ctx, ISOMETRIC_PROVIDER, templateId) : null;
+      if (template && !isDefault && !isPinned && !latest) {
+        entries.push({ ...await readOnlyEntry(client, template, blueprints, null), isDefault, isPinned });
+        continue;
+      }
+      const current = template ? await loadRemovalTemplateFacts(ctx, {
+        client, template, externalProjectId: mapping.externalProjectId, blueprints,
+      }) : null;
       const observation = current?.observation ?? null;
       const previous = observation ? await getPreviousTemplateObservation(ctx, ISOMETRIC_PROVIDER, templateId, observation.id) : null;
       const changes = observation && previous ? compareTemplateObservations(previous, observation) : {};
       const definition = observation?.definition ?? (current ? normalizeTemplateDefinition(current.template) : null);
-      return {
+      entries.push({
         templateId, template: current?.template ?? null, observation,
-        isDefault: templateId === facts.mapping?.defaultRemovalTemplateId,
+        isDefault, isPinned,
         availability: current ? "listed" as const : "missing" as const,
         preview: false as boolean,
         enrichment: observation?.enrichment ?? null,
         changes,
-        lines: definition ? reviewLines(definition, observation?.lineSources ?? {}, changes) : [],
+        lines: definition ? reviewLines(definition, observation?.lineSources ?? {}, changes, current?.blueprintsForTemplate ?? [], current?.template) : [],
         enrichmentProblems: current?.enrichmentProblems ?? [], lineSourceProblems: current?.lineSourceProblems ?? [],
-      };
-    }));
+      });
+    }
+    return entries;
   });
 }
 
@@ -77,7 +115,23 @@ export async function switchCreditBatchRemovalTemplate(input: SwitchCreditBatchR
     const template = templates.find((candidate) => candidate.id === parsed.removalTemplateId);
     if (!template) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFound);
     if (template.credit_type !== "REMOVAL") throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.notRemovalTemplate);
-    await loadRemovalTemplateFacts(ctx, { client, template, externalProjectId: mapping.externalProjectId, blueprints: await listComponentBlueprints(client) });
+    const changingTemplate = batch.removalTemplateId !== parsed.removalTemplateId;
+    const notReadyMessage = "Decide this template's lines in Removal templates before choosing it.";
+    if (changingTemplate) {
+      const latest = await getLatestTemplateObservation(ctx, ISOMETRIC_PROVIDER, template.id);
+      if (!latest || !isTemplateReady({
+        availability: "listed", template, observation: latest,
+        enrichmentProblems: enrichmentProblems(latest.definition, latest.enrichment),
+        lineSourceProblems: validateLineSources(latest.definition, latest.lineSources),
+        lines: reviewLines(latest.definition, latest.lineSources, {}, [], template),
+      })) throw new SafeError(notReadyMessage);
+    }
+    const facts = await loadRemovalTemplateFacts(ctx, { client, template, externalProjectId: mapping.externalProjectId, blueprints: await listComponentBlueprints(client) });
+    if (changingTemplate && !isTemplateReady({
+      availability: "listed", template, observation: facts.observation,
+      enrichmentProblems: facts.enrichmentProblems, lineSourceProblems: facts.lineSourceProblems,
+      lines: reviewLines(normalizeTemplateDefinition(template), facts.observation?.lineSources ?? {}, {}, facts.blueprintsForTemplate, template),
+    })) throw new SafeError(notReadyMessage);
     return switchTemplate(ctx, parsed);
   });
 }
@@ -128,23 +182,15 @@ export async function loadRemovalTemplateReviewEntry(input: RemovalTemplateRevie
     const template = templates.find((candidate) => candidate.id === removalTemplateId);
     if (!template) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFound);
     if (template.credit_type !== "REMOVAL") throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.notRemovalTemplate);
-    const definition = normalizeTemplateDefinition(template);
-    const [latest, enrichment] = await Promise.all([
+    const [latest, blueprints, pinnedIds] = await Promise.all([
       getLatestTemplateObservation(ctx, ISOMETRIC_PROVIDER, template.id),
-      loadTemplateEnrichment(client, template, await listComponentBlueprints(client)),
+      listComponentBlueprints(client),
+      listPinnedRemovalTemplateIds(ctx, facilityId),
     ]);
-    const lineSources = latest && canonicalJson(latest.definition) === canonicalJson(definition)
-      ? withoutUnacceptableProposals(definition, latest.lineSources)
-      : resolveLineSources({ definition, previous: latest ?? undefined });
     return {
-      templateId: template.id, template, observation: null, preview: true,
+      ...await readOnlyEntry(client, template, blueprints, latest),
       isDefault: template.id === mapping.defaultRemovalTemplateId,
-      availability: "listed" as const,
-      enrichment,
-      changes: {} as Record<string, ComponentChange>,
-      lines: reviewLines(definition, lineSources, {}),
-      enrichmentProblems: enrichmentProblems(definition, enrichment),
-      lineSourceProblems: validateLineSources(definition, lineSources),
+      isPinned: pinnedIds.includes(template.id),
     };
   });
 }

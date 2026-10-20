@@ -7,8 +7,34 @@ import { unwrap } from "./types";
 import { certificationKeys } from "./use-certification";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 import { activityKeys } from "./activity-query-keys";
+import { setFacilityDefaultRemovalTemplate, startRemovalTemplateSetup } from "@/fn/certification/removal-template-setup";
+import type { SetFacilityDefaultRemovalTemplateInput, StartRemovalTemplateSetupInput } from "@/schemas/removal-template-setup";
+import { invalidateOnboardingProgress } from "./use-onboarding";
 
 const REVIEW_STALE_MS = 60_000;
+
+export function useSetFacilityDefaultRemovalTemplate() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: SetFacilityDefaultRemovalTemplateInput) => unwrap(await setFacilityDefaultRemovalTemplate(input)),
+    onSuccess: async (_data, input) => {
+      invalidateOnboardingProgress(client, input.facilityId);
+      await Promise.all([
+        client.invalidateQueries({ queryKey: certificationKeys.all }),
+        client.invalidateQueries({ queryKey: creditBatchKeys.all }),
+        client.invalidateQueries({ queryKey: activityKeys.all }),
+      ]);
+    },
+  });
+}
+
+export function useStartRemovalTemplateSetup() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: StartRemovalTemplateSetupInput) => unwrap(await startRemovalTemplateSetup(input)),
+    onSuccess: () => client.invalidateQueries({ queryKey: certificationKeys.all }),
+  });
+}
 export function useRemovalTemplateReview(facilityId: string, enabled = true) {
   return useQuery({
     queryKey: certificationKeys.removalTemplateReview(facilityId),

@@ -329,7 +329,11 @@ export async function upsertCertifierProject(
                     else null
                   end`
                 : values.protocolVersion,
-            defaultRemovalTemplateId: values.defaultRemovalTemplateId,
+            defaultRemovalTemplateId: input.defaultRemovalTemplateId === undefined
+              ? existing?.externalProjectId === values.externalProjectId
+                ? existing.defaultRemovalTemplateId
+                : null
+              : values.defaultRemovalTemplateId,
             externalFacilityId: values.externalFacilityId,
             metadata: values.metadata,
             updatedAt: sql`now()`,
@@ -355,6 +359,23 @@ export async function upsertCertifierProject(
     },
     () => withExternalFacilityConflictGuard(values.externalFacilityId, runUpsert),
   );
+}
+
+export async function updateFacilityDefaultRemovalTemplate(
+  ctx: OrgContext,
+  input: { facilityId: string; externalProjectId: string; removalTemplateId: string },
+): Promise<CertifierProjectRow> {
+  requireOrgScope(ctx);
+  const [row] = await db.update(certifierProjects).set({
+    defaultRemovalTemplateId: input.removalTemplateId, updatedAt: sql`now()`,
+  }).where(and(
+    eq(certifierProjects.organizationId, ctx.organizationId),
+    eq(certifierProjects.facilityId, input.facilityId),
+    eq(certifierProjects.provider, "isometric"),
+    eq(certifierProjects.externalProjectId, input.externalProjectId),
+  )).returning();
+  if (!row) throw new SafeError("The facility's Isometric project link changed. Refresh and try again.");
+  return row;
 }
 
 export interface FacilityEmissionConfigInput {

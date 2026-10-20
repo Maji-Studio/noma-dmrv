@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   getCertifierProjectByFacility,
+  updateFacilityDefaultRemovalTemplate,
   upsertCertifierProject,
 } from "@/data-access/certification";
 import { db } from "@/db";
@@ -236,6 +237,40 @@ describe("upsertCertifierProject protocol version", () => {
       "isometric",
     );
     expect(mapping?.protocolVersion).toBe("1.2");
+  });
+});
+
+describe("facility default Removal template", () => {
+  it("preserves the default on the same project and clears it on a project change", async () => {
+    const facilityId = await createFacility();
+    const ctx = makeTestOrgContext(USER_ID);
+    const mapping = {
+      facilityId, provider: "isometric" as const,
+      externalFacilityId: `fcl_test_${facilityId}`, externalProjectId: "prj_default_original",
+    };
+    await upsertCertifierProject(ctx, { ...mapping, defaultRemovalTemplateId: "template-original" });
+    const unchanged = await upsertCertifierProject(ctx, mapping);
+    expect(unchanged.defaultRemovalTemplateId).toBe("template-original");
+    const rebound = await upsertCertifierProject(ctx, { ...mapping, externalProjectId: "prj_default_new" });
+    expect(rebound.defaultRemovalTemplateId).toBeNull();
+  });
+
+  it("changes only the default and refuses foreign scope or a stale project", async () => {
+    const facilityId = await createFacility();
+    const ctx = makeTestOrgContext(USER_ID);
+    const externalProjectId = "prj_default_setter";
+    const original = await upsertCertifierProject(ctx, {
+      facilityId, provider: "isometric", externalFacilityId: `fcl_test_${facilityId}`,
+      externalProjectId, protocolVersion: "1.1",
+    });
+    const input = { facilityId, externalProjectId, removalTemplateId: "template-chosen" };
+    const updated = await updateFacilityDefaultRemovalTemplate(ctx, input);
+    expect(updated).toEqual({
+      ...original, defaultRemovalTemplateId: input.removalTemplateId, updatedAt: updated.updatedAt,
+    });
+    await expect(updateFacilityDefaultRemovalTemplate({ ...ctx, organizationId: "foreign-org" }, input)).rejects.toThrow(/project link changed/);
+    await expect(updateFacilityDefaultRemovalTemplate(ctx, { ...input, externalProjectId: "stale-project" })).rejects.toThrow(/project link changed/);
+    expect((await getCertifierProjectByFacility(ctx, facilityId))?.defaultRemovalTemplateId).toBe(input.removalTemplateId);
   });
 });
 
