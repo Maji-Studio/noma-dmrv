@@ -162,9 +162,10 @@ key rotates once a successful create response arrives and when the dialog closes
 After claiming the intent, the transaction issues through Better Auth before
 deleting the previous key or locking the issuing membership. Holding no locks
 on those rows during issuance avoids pool wait cycles with expired-key cleanup
-or membership writes. It then deletes the previous key, locks the membership,
-binds the owner and re-checks identity, role and verified email through that
-connection before recording the outcome. A demotion after the membership lock
+or membership writes. It then locks the membership, deletes the previous key
+(member before key rows, the order membership writers use), binds the owner and
+re-checks identity, role and verified email through that connection before
+recording the outcome. A demotion after the membership lock
 waits until the owner row is visible to revocation.
 
 The Better Auth `hooks.before` rejects all HTTP `/api/auth/api-key/*` calls,

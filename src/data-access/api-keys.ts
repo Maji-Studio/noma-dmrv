@@ -123,18 +123,19 @@ export async function createApiKey(ctx: OrgContext, input: unknown, intentKey?: 
       // Hold no member/previous-key row locks while Better Auth uses the pool:
       // its membership writes or expired-key cleanup could otherwise wait on us.
       const result = await issue();
-      if (claim.kind === "replay") {
-        const previous = createdKeyOutcomeSchema.parse(claim.outcome);
-        await tx.delete(apiKeys).where(and(
-          eq(apiKeys.id, previous.id), eq(apiKeys.referenceId, ctx.organizationId),
-        ));
-      }
       // After pooled issuance, serialize role updates/deletes with owner visibility.
+      // Member first, then key rows: the membership writers lock in that order.
       const [lockedMember] = await tx.select({ id: members.id }).from(members)
         .where(and(eq(members.id, member.id), eq(members.organizationId, ctx.organizationId), eq(members.userId, ctx.userId)))
         .for("no key update");
       if (!lockedMember) {
         throw new DomainError("forbidden", "Credential owner membership changed during issuance.");
+      }
+      if (claim.kind === "replay") {
+        const previous = createdKeyOutcomeSchema.parse(claim.outcome);
+        await tx.delete(apiKeys).where(and(
+          eq(apiKeys.id, previous.id), eq(apiKeys.referenceId, ctx.organizationId),
+        ));
       }
       await bindOwner(tx, result);
       await recordIdempotencyOutcome(ctx, tx, claim.recordId, { id: result.id });

@@ -9,6 +9,7 @@ import { APP_FORM_CREDENTIAL_PREFIX } from "@/config/operations";
 import { createApiKey } from "@/data-access/api-keys";
 import * as credentialAuth from "@/data-access/api-credential-auth";
 import * as idempotency from "@/data-access/api-idempotency-records";
+import { updateMemberRoleAsPlatformAdmin } from "@/data-access/organizations";
 import { auth } from "@/lib/auth/better-auth";
 import { resolveApiContext } from "@/lib/auth/api-context";
 import { getOAuthConfig } from "@/lib/auth/oauth-config";
@@ -233,4 +234,88 @@ it.each([false, true])("refuses a concurrent claim before issuing another key (r
   }
   expect(await db.select({ id: apiKeys.id, enabled: apiKeys.enabled }).from(apiKeys)
     .where(eq(apiKeys.referenceId, ctx.organizationId))).toEqual([{ id: winner.id, enabled: true }]);
+});
+
+// A replay overlapping a membership writer: both must finish, never 40P01.
+async function setRole(memberId: string, role: "admin" | "member") {
+  await db.update(members).set({ role }).where(and(
+    eq(members.id, memberId), eq(members.organizationId, ctx.organizationId), eq(members.userId, ctx.userId),
+  ));
+}
+async function expectUnusable(key: string) {
+  expect(await resolveApiContext(new Request("http://localhost:3100/api/v1/me", {
+    headers: { authorization: `Bearer ${key}` },
+  }), getOAuthConfig().rest)).toMatchObject({ ok: false });
+}
+
+it("finishes a replay overlapping a platform-admin demotion, leaving the new key revoked", async () => {
+  const member = await credentialAuth.findApiCredentialMember(ctx.organizationId, ctx.userId);
+  await setRole(member.id, "admin");
+  const intentKey = randomUUID();
+  const first = await createApiKey(ctx, input, intentKey);
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const original = idempotency.recordIdempotencyOutcome;
+  vi.spyOn(idempotency, "recordIdempotencyOutcome").mockImplementationOnce(async (...args) => {
+    // Issued, member locked, previous key deleted, owner bound; nothing committed.
+    entered.resolve();
+    await release.promise;
+    return original(...args);
+  });
+  const replaying = createApiKey(ctx, input, intentKey);
+  let demotion: Promise<void> | undefined;
+  let created: Awaited<typeof replaying>;
+  try {
+    await Promise.race([entered.promise, replaying]);
+    demotion = updateMemberRoleAsPlatformAdmin({ ...ctx, isPlatformAdmin: true }, member.id, "member");
+    expect(await Promise.race([
+      demotion.then(() => "completed"),
+      new Promise<string>(resolve => setTimeout(() => resolve("waiting"), DEMOTION_WAIT_MS)),
+    ])).toBe("waiting");
+  } finally {
+    release.resolve();
+    created = await replaying;
+    await demotion;
+  }
+  expect(await keyIds()).toEqual([{ id: created.id }]);
+  expect(first.id).not.toBe(created.id);
+  await setRole(member.id, "admin");
+  expect(await db.select({ enabled: apiKeys.enabled, revokedAt: apiKeyOwners.revokedAt })
+    .from(apiKeys).innerJoin(apiKeyOwners, eq(apiKeyOwners.credentialId, apiKeys.id))
+    .where(and(eq(apiKeys.id, created.id), eq(apiKeys.referenceId, ctx.organizationId))))
+    .toEqual([{ enabled: false, revokedAt: expect.any(Date) }]);
+  await expectUnusable(created.key);
+});
+
+it("locks the member before the previous key, so a member-first demotion cannot deadlock a replay", async () => {
+  const member = await credentialAuth.findApiCredentialMember(ctx.organizationId, ctx.userId);
+  await setRole(member.id, "admin");
+  const intentKey = randomUUID();
+  const first = await createApiKey(ctx, input, intentKey);
+  const memberLocked = Promise.withResolvers<void>();
+  let demotion: Promise<void> | undefined;
+  const original = auth.api.createApiKey;
+  vi.spyOn(auth.api, "createApiKey").mockImplementationOnce(async (...args) => {
+    const issued = await original(...args);
+    // Better Auth's role update order: member row first, then the owner and key rows.
+    demotion = withDedicatedLockConnection(async (tx) => {
+      await tx.update(members).set({ role: "member" }).where(and(
+        eq(members.id, member.id), eq(members.organizationId, ctx.organizationId), eq(members.userId, ctx.userId),
+      ));
+      memberLocked.resolve();
+      await new Promise(resolve => setTimeout(resolve, DEMOTION_WAIT_MS));
+      await credentialAuth.disableOwnerApiKeys(ctx.organizationId, ctx.userId, tx);
+    });
+    await memberLocked.promise;
+    return issued;
+  });
+  // The demotion commits first; the re-check then refuses and the new key is disabled.
+  await expect(createApiKey(ctx, input, intentKey)).rejects.toMatchObject({ code: "forbidden" });
+  await demotion;
+  await setRole(member.id, "admin");
+  const rows = await db.select({ id: apiKeys.id, enabled: apiKeys.enabled }).from(apiKeys)
+    .where(eq(apiKeys.referenceId, ctx.organizationId));
+  expect(rows).toHaveLength(2);
+  expect(rows.every(row => !row.enabled)).toBe(true);
+  await expectUnusable(first.key);
 });
