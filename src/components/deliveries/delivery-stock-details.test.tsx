@@ -9,7 +9,7 @@ vi.mock("@/hooks/use-output-stock", () => ({
 import { DeliveryStockDetails } from "./delivery-stock-details";
 
 afterEach(cleanup);
-const OPEN_INFO = { name: "How delivery stock is worked out" };
+const OPEN_INFO = { name: "About Delivery stock" };
 
 it("shows the bar and the corrected wet mass inline, and puts the ledger behind the (i)", async () => {
   const original: OutputStockHistoryEntry = { id: "original", deliveryId: "delivery", kind: "delivery", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [] };

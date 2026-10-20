@@ -16,7 +16,7 @@ describe("application allocation display", () => {
     expect(container.textContent).toContain("450 kg");
     expect(container.textContent).toContain("125 kg");
     expect(container.textContent).not.toContain("78.3%");
-    fireEvent.click(screen.getByRole("button", { name: "How applied batches is worked out" }));
+    fireEvent.click(screen.getByRole("button", { name: "About Applied batches" }));
     expect((await screen.findAllByText("78.3%")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("21.7%").length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Source production runs per applied batch")).toBeTruthy();

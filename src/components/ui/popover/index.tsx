@@ -61,6 +61,13 @@ interface PopoverProps {
   className?: string;
   /** Also open while a mouse hovers the trigger (desktop). Default: press only. */
   openOnHover?: boolean;
+  /**
+   * Set false when `trigger` is not a native `<button>` (a `span` with
+   * `role="button"` and `tabIndex={0}`). A native button inside a disabled
+   * `<fieldset>` is disabled too, so a read-only form's explanations would not
+   * open; Base UI wires Enter and Space onto a non-native trigger itself.
+   */
+  nativeTrigger?: boolean;
 }
 
 function Popover({
@@ -71,6 +78,7 @@ function Popover({
   align = "start",
   className,
   openOnHover = false,
+  nativeTrigger = true,
 }: PopoverProps) {
   const triggerRef = React.useRef<HTMLButtonElement | null>(null);
   const popupRef = React.useRef<HTMLDivElement | null>(null);
@@ -89,6 +97,7 @@ function Popover({
       <BasePopover.Trigger
         ref={triggerRef}
         render={trigger}
+        nativeButton={nativeTrigger}
         openOnHover={openOnHover}
         delay={HOVER_OPEN_DELAY_MS}
         closeDelay={HOVER_CLOSE_DELAY_MS}

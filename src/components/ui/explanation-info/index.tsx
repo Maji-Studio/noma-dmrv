@@ -15,7 +15,10 @@
  * One (i) per block. When the block also has a one-sentence definition, pass it
  * as `hint`: it leads the panel and no second (i) is drawn beside this one.
  *
- * The trigger looks like `InfoHint` (same glyph, size, colour) and keeps its
+ * The trigger is a `span` with `role="button"`, not a native button: a native
+ * button inside the `<fieldset disabled>` of a read-only form is disabled, and a
+ * locked record must still open its explanations. Enter and Space work as on a
+ * button. It looks like `InfoHint` (same glyph, size, colour) and keeps its
  * 24px hit area, the WCAG 2.5.8 floor the design system sanctions for inline
  * glyphs. `data-presentation-control` keeps the sheet's unsaved-change
  * heuristic from reading a press on it as an edit.
@@ -46,14 +49,16 @@ function ExplanationInfo({ title, hint, children, className }: ExplanationInfoPr
   return (
     <Popover
       openOnHover
+      nativeTrigger={false}
       title={title}
       className={PANEL_CLASS}
       trigger={(
-        <button
-          type="button"
+        <span
+          role="button"
+          tabIndex={0}
           data-presentation-control
           data-explanation-info
-          aria-label={`How ${title.toLowerCase()} is worked out`}
+          aria-label={`About ${title}`}
           className={cn(
             "inline-flex min-h-24 min-w-24 shrink-0 items-center justify-center align-middle",
             "text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]",
@@ -63,7 +68,7 @@ function ExplanationInfo({ title, hint, children, className }: ExplanationInfoPr
           )}
         >
           <InfoIcon size={ICON_PX} weight="bold" aria-hidden />
-        </button>
+        </span>
       )}
     >
       <div className="flex flex-col gap-12">

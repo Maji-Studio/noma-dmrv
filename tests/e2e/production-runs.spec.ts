@@ -175,7 +175,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
       // The "Total wet input" recap is gone; the composition ledger behind the
       // split's (i) carries the summed wet mass. With no biochar mass yet the
       // process flow is not drawn and names the mass still to record instead.
-      await page.getByRole("button", { name: /^How feedstock composition is worked out$/ }).click();
+      await page.getByRole("button", { name: /^About Feedstock composition$/ }).click();
       await expect(
         page.getByRole("table", { name: /^Feedstock composition/ })
           .getByRole("row").filter({ hasText: "Wet total" }),

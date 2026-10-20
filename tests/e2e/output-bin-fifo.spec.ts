@@ -167,14 +167,14 @@ test.describe("Output-bin conserved FIFO", () => {
     await expect(preview.getByText(/Dry solids\s+1,400 kg/)).toBeVisible();
     await expect(preview.getByRole("group", { name: "Dry biochar in bin: 1,500 kg before, 350 kg after" })).toBeVisible();
     await expect(page.getByRole("table", { name: /^Batches this movement draws from/ })).toHaveCount(0);
-    await preview.getByRole("button", { name: /^How .* is worked out$/ }).click();
+    await preview.locator("[data-explanation-info]").click();
     const draw = page.getByRole("table", { name: /^Batches this movement draws from/ });
     await expect(draw.getByRole("row").filter({ hasText: f.products[0].code })).toContainText("900 kg");
     await expect(draw.getByRole("row").filter({ hasText: f.products[1].code })).toContainText("250 kg");
     await expect(draw.getByRole("row").filter({ hasText: "Dry biochar in this movement" })).toContainText("1,150 kg");
     await evidence(page, info, "spanning-delivery-preview");
     await expect(preview.getByRole("button", { name: "Stock history", exact: true })).toHaveCount(0);
-    // An outside press closes the panel without touching the form.
+    // Escape closes the panel without touching the form.
     await page.keyboard.press("Escape");
     await expect(draw).toHaveCount(0);
     await page.getByRole("button", { name: "Create delivery", exact: true }).click();
@@ -205,7 +205,7 @@ test.describe("Output-bin conserved FIFO", () => {
     const appliedBar = page.getByRole("dialog").getByRole("img", { name: /^Applied dry biochar/ });
     await expect(appliedBar).toBeVisible();
     await expect(page.getByRole("table", { name: /^Applied batches/ })).toHaveCount(0);
-    await page.getByRole("button", { name: "How applied batches is worked out", exact: true }).click();
+    await page.getByRole("button", { name: "About Applied batches", exact: true }).click();
     // The ledger carries the per-batch totals and shares; the same panel adds
     // the production runs behind each batch.
     const appliedLedger = page.getByRole("table", { name: /^Applied batches/ });

@@ -373,24 +373,25 @@ function SplitKey({
 }
 
 /**
- * The arithmetic behind the ledger, in one sentence per step. It states the
- * rule and then the same rule with this record's numbers, so an operator can
- * check the figure without leaving the form.
+ * The dry mass arithmetic, in one sentence. It states the rule and then the
+ * same rule with this record's numbers, so an operator can check the figure
+ * without leaving the form. This is the line that stays inline.
  */
 function formatSplitArithmetic({
   split,
   dryMassIsStored,
-  addedWaterState,
 }: {
   split: MassSplit;
   dryMassIsStored: boolean;
-  addedWaterState: AddedWaterState | null;
 }): string {
-  const base = dryMassIsStored
+  return dryMassIsStored
     ? `Dry mass comes from the saved record. Water is the wet mass minus the dry mass: ${formatSplitMass(split.wetKg)} - ${formatSplitMass(split.dryKg)} = ${formatSplitMass(split.waterKg)}.`
     : `Dry = wet × (1 - moisture). ${formatSplitMass(split.wetKg)} × (1 - ${formatMoisturePercent(split.moisturePercent)}) = ${formatSplitMass(split.dryKg)}.`;
-  if (!addedWaterState) return base;
-  return `${base} Added water raises the wet mass and leaves dry mass unchanged: ${formatSplitMass(split.wetKg)} + ${formatSplitMass(addedWaterState.addedWaterKg)} = ${formatSplitMass(addedWaterState.finalSplit.wetKg)}.`;
+}
+
+/** The added water step. Explanation, so it sits in the (i) panel, not under the key. */
+function formatAddedWaterArithmetic(split: MassSplit, addedWaterState: AddedWaterState): string {
+  return `Added water raises the wet mass and leaves dry mass unchanged: ${formatSplitMass(split.wetKg)} + ${formatSplitMass(addedWaterState.addedWaterKg)} = ${formatSplitMass(addedWaterState.finalSplit.wetKg)}.`;
 }
 
 function UnresolvedBar({ height, widthPercent = PERCENT_SCALE }: { height: string; widthPercent?: number }) {
@@ -565,11 +566,16 @@ export function MoistureSplit({
                   : []),
               ]}
             />
+            {addedWaterState && (
+              <p className="body-caption text-[var(--color-text-tertiary)]">
+                {formatAddedWaterArithmetic(split, addedWaterState)}
+              </p>
+            )}
             {note && <p className="body-caption">{note}</p>}
           </ExplanationInfo>
         </div>
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          {formatSplitArithmetic({ split, dryMassIsStored, addedWaterState })}
+          {formatSplitArithmetic({ split, dryMassIsStored })}
         </p>
       </div>
     </div>

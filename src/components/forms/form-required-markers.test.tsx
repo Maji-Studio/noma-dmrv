@@ -1,5 +1,7 @@
 /**
- * Required marker guards: every sheet form renders in create mode and is
+ * Sheet form inventory (every `*-form.tsx` is covered or named as not a sheet
+ * form; section and field order of the reworked forms; stock previews render)
+ * and the required marker guards: every sheet form renders in create mode and is
  * submitted empty, and every field it refuses carries the star
  * (`form-required-markers-harness.tsx`). Conditional requirements start from a
  * valid fixture and empty one field.
@@ -70,6 +72,8 @@ import { FormField } from "./form-field";
 import { ChoiceCardGroup } from "./choice-card-group";
 import { EventTimeInput } from "./event-time-input";
 import { change, conditionalRequired, renderForm, requiredMarkers } from "./form-required-markers-harness";
+import { inventory } from "../../../tests/helpers/render-inventory";
+import { sourceFiles } from "../../../tests/helpers/source-files";
 import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
 import { FeedstockForm } from "@/components/feedstocks/feedstock-form";
 import { OutputStockForm } from "@/components/storage-locations/output-stock-form";
@@ -101,6 +105,21 @@ const noop = () => undefined;
 /** Fixtures carry only the fields each form reads. */
 const as = <T,>(value: object) => value as unknown as T;
 const DAY = new Date("2026-09-01T10:00:00Z");
+
+/** `*-form.tsx` files that are not sheet forms, so the sheet inventory skips them. */
+const NOT_SHEET_FORMS: Record<string, string> = {
+  "components/auth/forgot-password-form.tsx": "auth page",
+  "components/auth/login-form.tsx": "auth page",
+  "components/auth/reset-password-form.tsx": "auth page",
+  "components/auth/set-password-form.tsx": "auth page",
+  "components/organizations/invitation-bootstrap-form.tsx": "onboarding page",
+  "components/settings/organization-defaults-form.tsx": "settings page",
+  "components/admin/emission-estimates-form.tsx": "admin page",
+  "components/api-keys/api-key-form.tsx": "settings dialog",
+  "components/oauth/consent-form.tsx": "auth page card",
+  "components/emissions/manual-entry-form.tsx": "emissions line drawer",
+  "components/storage-locations/feedstock-loss-form.tsx": "feedstock Lost mass sheet and edit dialog",
+};
 
 function ProductionSampleFormHarness() {
   const deferredAttachments = useDeferredAttachments();
@@ -139,12 +158,101 @@ const CREATE_CASES: FormCase[] = [
   { file: "components/transport-legs/transport-leg-form.tsx", name: "transport leg", element: <TransportLegForm onSubmit={noop} onCancel={noop} /> },
 ];
 
+/** One edit-mode case per family, from a saved entity. */
+const EDIT_CASES: FormCase[] = [
+  { file: "components/feedstocks/feedstock-form.tsx", name: "feedstock delivery (edit)", element: <FeedstockForm onSubmit={noop} feedstock={as({
+    id: "feedstock", facilityId: "facility", deliveryDate: DAY, supplierId: "supplier", supplierName: "Supplier", feedstockTypeId: "type", feedstockTypeName: "Maize cobs",
+    massWetKg: 1000, moistureContentPercent: 20, massDryKg: 800, storageLocationId: "bin", transportDistanceKm: 20, notes: null,
+  })} /> },
+  { file: "components/production-runs/production-run-form.tsx", name: "production run (edit)", element: <ProductionRunForm onSubmit={noop} productionRun={as({
+    id: "run", facilityId: "facility", reactorId: "reactor", status: "complete", startTime: DAY, endTime: DAY, feedstockDraws: [{ storageLocationId: "bin", storageLocationName: "Feedstock bin", wetMassKg: 1000 }],
+    feedstocks: [], totalFeedstockWetMassKg: 1000, feedstockMoisturePercent: 20, biocharOutputKg: 300, biocharMoisturePercent: 10, biocharStorageLocationId: "biochar-bin",
+  })} /> },
+  { file: "components/biochar-products/biochar-product-form.tsx", name: "biochar product (edit)", element: <BiocharProductForm onSubmit={noop} product={as({
+    id: "product", facilityId: "facility", placedAt: "2026-09-21T12:00:00.000Z", massKg: 350, waterAddedKg: 50, moistureContentPercent: 5, sourceAllocatedDryMassKg: 200,
+    formulationId: "formulation", storageLocationId: "destination", sourceBiocharStorageLocationId: "source", composition: { ingredients: [] },
+  })} /> },
+  { file: "components/orders/order-form.tsx", name: "order (edit)", element: <OrderForm onSubmit={noop} order={as({
+    id: "order", facilityId: "facility", customerId: "customer", customerLocationId: "location", formulationId: "formulation", orderDate: DAY, quantityKg: 2000, packaging: "loose",
+  })} /> },
+  { file: "components/deliveries/delivery-form.tsx", name: "delivery (edit)", element: <DeliveryForm onSubmit={noop} delivery={as({
+    id: "delivery", facilityId: "facility", orderId: "order", storageLocationId: "bin", deliveryDate: DAY, deliveredWetMassKg: 100, moistureContentPercent: 20, status: "delivered",
+  })} /> },
+  { file: "components/applications/application-form.tsx", name: "application (edit)", element: <ApplicationForm onSubmit={noop} application={as({
+    id: "application", deliveryId: "delivery", applicationDate: DAY, biocharAppliedTons: 5, fieldSizeHa: 1.5, evidenceMethod: "location",
+  })} /> },
+  { file: "components/credit-batches/credit-batch-form.tsx", name: "credit batch (edit)", element: <CreditBatchForm onSubmit={noop} creditBatch={as({
+    id: "batch", facilityId: "facility", feedstockTypeId: "type", startDate: "2026-01-01", endDate: "2026-01-31", productionRunIds: ["run"], appliedWeightTons: 12,
+  })} /> },
+  { file: "components/samples/sample-form.tsx", name: "sample (edit)", element: <SampleForm onSubmit={noop} sample={as({
+    id: "sample", creditBatchId: "batch", samplingTime: DAY, analysisDate: DAY, labName: "Lab", organicCarbonPercent: 75, durabilityOption: "200_year", nutrientClaimEnabled: false,
+  })} /> },
+  { file: "components/customers/customer-form.tsx", name: "customer (edit)", element: <CustomerForm onSubmit={noop} customerId="customer" customer={as({ id: "customer", name: "Customer", cropType: "Maize" })} /> },
+  { file: "components/suppliers/supplier-form.tsx", name: "supplier (edit)", element: <SupplierForm onSubmit={noop} supplierId="supplier" supplier={as({ id: "supplier", name: "Supplier" })} /> },
+  { file: "components/facilities/facility-form.tsx", name: "facility (edit)", element: <FacilityForm onSubmit={noop} facility={as({ id: "facility", name: "Mafinga", country: "TZ", timezone: "Africa/Dar_es_Salaam", durabilityOption: "200_year" })} /> },
+  { file: "components/reactors/reactor-form.tsx", name: "reactor (edit)", element: <ReactorForm onSubmit={noop} reactor={as({ id: "reactor", facilityId: "facility", identifier: "R-1", reactorType: "batch", nominalThroughputTph: 0.5 })} /> },
+  { file: "components/feedstock-types/feedstock-type-form.tsx", name: "feedstock type (edit)", element: <FeedstockTypeForm onSubmit={noop} feedstockType={as({ id: "type", name: "Maize cobs", code: "FT-001", category: "agricultural", usage: "pyrolysis" })} /> },
+  { file: "components/storage-locations/storage-location-form.tsx", name: "storage bin (edit)", element: <StorageLocationForm onSubmit={noop} storageLocation={as({ id: "bin", facilityId: "facility", type: "product_bin", stockMode: "mix", name: "Mix bin", formulationId: "formulation" })} /> },
+  { file: "components/formulations/formulation-form.tsx", name: "formulation (edit)", element: <FormulationForm onSubmit={noop} formulation={as({ id: "formulation", name: "Mix", description: null, biocharRatio: 0.6, ingredients: [{ feedstockTypeId: "manure", ratio: 0.4, feedstockType: { name: "Manure" } }] })} /> },
+];
+
 beforeAll(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   // Pickers listen for outside clicks; this node suite has no DOM.
   vi.stubGlobal("document", { addEventListener: () => undefined, removeEventListener: () => undefined });
 });
 afterAll(() => { vi.unstubAllGlobals(); });
+
+describe("sheet form inventory", () => {
+  it("covers every sheet form, or names why a form is not one", () => {
+    const forms = sourceFiles().map(file => file.path).filter(path => path.endsWith("-form.tsx"));
+    const covered = new Set([...CREATE_CASES, ...EDIT_CASES].map(entry => entry.file));
+    expect(forms.filter(path => !covered.has(path) && !(path in NOT_SHEET_FORMS)).sort()).toEqual([]);
+    // Every sheet form also has a create case.
+    expect(new Set(CREATE_CASES.map(entry => entry.file)).size).toBe(covered.size);
+  });
+
+  it.each([...CREATE_CASES, ...EDIT_CASES])("$name form renders its inputs, and its stock preview where it has one", async ({ element, shows }) => {
+    const renderer = await renderForm(<NuqsTestingAdapter>{element}</NuqsTestingAdapter>);
+    const view = inventory(renderer.root);
+    expect(view.items.some(item => item.startsWith("input:"))).toBe(true);
+    if (shows) expect(view.text).toContain(shows);
+    await act(async () => renderer.unmount());
+  });
+
+  it.each([
+    {
+      name: "formulation", file: "components/formulations/formulation-form.tsx",
+      sections: ["section:(untitled)", "section:Blend composition by volume", "section:(untitled)"],
+      createFields: ["field:Formulation name", "field:Volume share", "field:Description"],
+      editFields: ["field:Formulation name", "field:Volume share", "field:Blend material", "field:Volume share", "field:Description"],
+    },
+    {
+      name: "reactor", file: "components/reactors/reactor-form.tsx",
+      sections: ["section:(untitled)", "section:Reactor configuration"],
+      createFields: ["field:Identifier", "field:Reactor type", "field:Nominal throughput (tph)"],
+      editFields: ["field:Identifier", "field:Reactor type", "field:Nominal throughput (tph)"],
+    },
+    {
+      name: "credit batch", file: "components/credit-batches/credit-batch-form.tsx",
+      sections: ["section:Batch definition", "section:(untitled)"],
+      createFields: ["field:Feedstock type", "field:Start date", "field:End date", "field:Notes"],
+      editFields: ["field:Feedstock type", "field:Start date", "field:End date", "field:Notes"],
+    },
+  ])("keeps $name create/edit sections and fields in order without generic headings or the auto-fill cue", async ({ file, sections, createFields, editFields }) => {
+    for (const { cases, fields } of [{ cases: CREATE_CASES, fields: createFields }, { cases: EDIT_CASES, fields: editFields }]) {
+      const formCase = cases.find(entry => entry.file === file)!;
+      const renderer = await renderForm(<NuqsTestingAdapter>{formCase.element}</NuqsTestingAdapter>);
+      const view = inventory(renderer.root);
+      expect(view.items.filter(item => item.startsWith("section:"))).toEqual(sections);
+      expect(view.items.filter(item => item.startsWith("field:"))).toEqual(fields);
+      for (const removed of ["Required information", "Additional information", "Auto-fills the remaining share"]) {
+        expect(view.text).not.toContain(removed);
+      }
+      await act(async () => renderer.unmount());
+    }
+  });
+});
 
 describe("storage bin form", () => {
   it.each([

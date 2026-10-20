@@ -101,13 +101,13 @@ describe("ProcessFlowPreview", () => {
   it("keeps the yield arithmetic behind the caption's (i)", async () => {
     const html = renderToStaticMarkup(<ProcessFlowPreview {...run} />);
 
-    expect(html).toContain("How process flow is worked out");
+    expect(html).toContain("About Process flow");
     expect(html).not.toContain("Show calculation");
     expect(html).not.toContain("Dry feedstock in");
     expect(html).not.toContain("biochar out / feedstock in");
 
     render(<ProcessFlowPreview {...run} />);
-    fireEvent.click(screen.getByRole("button", { name: "How process flow is worked out" }));
+    fireEvent.click(screen.getByRole("button", { name: "About Process flow" }));
     expect(await screen.findByText("Dry feedstock in")).toBeTruthy();
     expect(screen.getByText("Dry biochar out")).toBeTruthy();
     expect(screen.getByText("Dry yield = biochar out / feedstock in. 45 kg / 90 kg = 50%.")).toBeTruthy();
@@ -124,7 +124,7 @@ describe("ProcessFlowPreview", () => {
 
   it("offers no (i) for the arithmetic until a yield resolves", () => {
     const html = renderToStaticMarkup(<ProcessFlowPreview {...run} biocharKg={null} biocharMoisturePercent={null} biocharDryKg={null} />);
-    expect(html).not.toContain("How process flow is worked out");
+    expect(html).not.toContain("About Process flow");
   });
 
   it("falls back to a wet flow, with water and conversion loss as one exit, when the output dry mass is unresolved", () => {

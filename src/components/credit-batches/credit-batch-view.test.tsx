@@ -88,7 +88,7 @@ function carbonEstimateMarkup(
 async function openedCarbonEstimate(options: Parameters<typeof creditBatchSheetSections>[0]): Promise<HTMLElement> {
   const content = creditBatchSheetSections(options).find((section) => section.title === "Production runs")?.content;
   render(<>{content}</>);
-  fireEvent.click(screen.getByRole("button", { name: /^How carbon estimate.* is worked out$/ }));
+  fireEvent.click(screen.getByRole("button", { name: /^About Carbon estimate/ }));
   return screen.findByRole("dialog");
 }
 
@@ -286,7 +286,7 @@ it("leads the carbon estimate with the figure and keeps the input quantities beh
   // second list competing with it.
   expect(shown).not.toContain("Feedstock dry mass");
   expect(screen.queryByText("These inputs are not in the estimate.")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: /^How carbon estimate.* is worked out$/ }));
+  fireEvent.click(screen.getByRole("button", { name: /^About Carbon estimate/ }));
   expect(await screen.findByText("Feedstock dry mass")).toBeTruthy();
   expect(screen.getByText("Grid electricity")).toBeTruthy();
   expect(screen.getByText(/These inputs are not in the estimate\./)).toBeTruthy();

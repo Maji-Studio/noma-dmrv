@@ -360,23 +360,27 @@ export function creditBatchSheetSections({
           ...(appliedDryKg === null ? { valuePresent: false } : {}),
         },
         ...(durabilityResult?.fDurable != null
-          ? [{ label: "Durability estimate (capped)", value: formatDurabilityPercent(durabilityResult.fDurable) }]
+          ? [{
+              label: "Durability estimate (capped)",
+              value: formatDurabilityPercent(durabilityResult.fDurable),
+              // How the estimate was reached: the raw figure, the cap and the
+              // preview's provenance. Explanation, so it opens from an (i).
+              explanationTitle: "Durability estimate",
+              explanation: durabilityResult.rawFDurable != null ? (
+                <StockRows
+                  label="Durability estimate basis"
+                  rows={[
+                    { label: "Raw durability estimate", value: formatDurabilityPercent(durabilityResult.rawFDurable) },
+                    { label: "Durability cap applied", value: durabilityResult.durabilityCapped ? "Yes" : "No" },
+                    // Provenance rows: one the preview does not carry is left out.
+                    ...(preview?.componentKey ? [{ label: "Preview component", value: preview.componentKey }] : []),
+                    ...(preview?.formulaVersion ? [{ label: "Preview formula", value: preview.formulaVersion }] : []),
+                  ]}
+                />
+              ) : undefined,
+            }]
           : []),
       ],
-      // How the durability estimate was reached: the raw figure, the cap and
-      // the preview's provenance. Explanation, so it opens from an (i).
-      explanation: durabilityResult?.rawFDurable != null && durabilityResult.fDurable != null ? (
-        <StockRows
-          label="Durability estimate basis"
-          rows={[
-            { label: "Raw durability estimate", value: formatDurabilityPercent(durabilityResult.rawFDurable) },
-            { label: "Durability cap applied", value: durabilityResult.durabilityCapped ? "Yes" : "No" },
-            // Provenance rows: one the preview does not carry is left out.
-            ...(preview?.componentKey ? [{ label: "Preview component", value: preview.componentKey }] : []),
-            ...(preview?.formulaVersion ? [{ label: "Preview formula", value: preview.formulaVersion }] : []),
-          ]}
-        />
-      ) : undefined,
     },
     {
       title: "Production runs",

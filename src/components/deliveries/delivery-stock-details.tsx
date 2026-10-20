@@ -49,10 +49,10 @@ export function DeliveryStockDetails({ deliveryId, storageLocationId, wetMassKg,
     <CompositionCard
       title="Delivery stock"
       hint={DELIVERY_STOCK_HINT}
-      explanation={<>
+      explanation={segments.length > 0 ? <>
         <CompositionLedger hideZero label="Delivered batches" totalLabel={TOTAL_LABEL} total={current ? current.dryMassKg : dryMassKg} segments={segments} />
         {groups.length > 0 && <SourceRunGroups label="Source production runs per delivered batch" groups={groups} />}
-      </>}
+      </> : undefined}
     >
       {/* The saved wet measurement as corrected leads: it is the one number the
           delivery's own field can no longer show. Then the batches, so the block

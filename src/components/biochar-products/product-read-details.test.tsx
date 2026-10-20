@@ -77,7 +77,7 @@ describe("Product read view", () => {
       expect(shown).not.toContain(hidden);
     }
 
-    fireEvent.click(screen.getByRole("button", { name: "How product composition is worked out" }));
+    fireEvent.click(screen.getByRole("button", { name: "About Product composition" }));
     const panel = text(await screen.findByRole("dialog"));
     expect(panel).toContain("% of total");
     expect(panel).toContain("Wet biochar product is the sum of its parts: 200 kg + 80 kg + 70 kg + 50 kg = 400 kg.");

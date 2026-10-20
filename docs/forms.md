@@ -575,7 +575,7 @@ formula version, held allocations. It sits behind an (i).
   with `openOnHover`, so it opens on mouse hover (desktop) and on a tap, click,
   Enter or Space (touch, keyboard); Escape, an outside press, the close button or
   a second press closes it, so a panel never traps the field being edited. The
-  trigger is a real button named "How {title} is worked out", looks like
+  trigger is a `span` with `role="button"` named "About {title}" (a native button inside a read-only form's `<fieldset disabled>` would be disabled, and a locked record must still open its explanations), looks like
   `InfoHint`, keeps its 24px hit area and carries `data-presentation-control`, so
   a press on it never marks a sheet dirty. The panel is up to 420px wide and
   never wider than the viewport minus 32px; it scrolls past the Popover's max
@@ -588,12 +588,16 @@ formula version, held allocations. It sits behind an (i).
   entry: the dry mass formula sentence under each moisture split
   (`formatSplitArithmetic` in `ui/moisture-split`) and the dry biochar before →
   after line on a stock movement ("Dry biochar in bin 540 → 135 kg"). Add no
-  third without a decision in `docs/design-decisions.md`. Other inline text is
-  reserved for error messages.
+  third without a decision in `docs/design-decisions.md`. Other explanation
+  goes behind the (i).
 - **Read sections:** `DetailPanelSection.explanation` (titled sections only)
-  opens from the (i) beside the section title, after the section's `hint`.
-  `credit-batch-view`, `product-composition-preview` and the other read builders
-  use it or a `CompositionCard`.
+  opens from the (i) beside the section title, after the section's `hint`;
+  `DetailPanelField.explanation` does the same beside one figure's label, when a
+  section holds several (`explanationTitle` names it). Read sheets build their
+  sections in a named builder (`*-read-sections.tsx`, returning
+  `DetailPanelSection[]`), never inline in the list;
+  `src/components/read-sheets.test.tsx` fails for a builder without a
+  case.
 - **No "Add X" reveals** for fillable fields. A field may still appear when an
   earlier answer makes it relevant (a cancellation reason, an over-allocation
   justification). Keep long sheets calm by grouping, pairing and unit

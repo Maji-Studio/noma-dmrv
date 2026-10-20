@@ -14,7 +14,7 @@ function text(html: string): string {
 /** Opens the block's (i) and returns the panel's text: the ledger and the arithmetic live there. */
 async function explanation(element: ReactElement): Promise<string> {
   render(element);
-  fireEvent.click(screen.getByRole("button", { name: "How product composition is worked out" }));
+  fireEvent.click(screen.getByRole("button", { name: "About Product composition" }));
   return (await screen.findByRole("dialog")).textContent ?? "";
 }
 

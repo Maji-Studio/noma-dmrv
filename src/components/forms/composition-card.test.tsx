@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useForm } from "react-hook-form";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { CompositionCard } from "./composition-card";
 import { DerivedHeadline } from "./derived-headline";
 
@@ -35,31 +35,49 @@ describe("CompositionCard", () => {
 
   it("opens the definition and the explanation from one (i) on a press, and closes on Escape", async () => {
     render(<Block />);
-    const info = screen.getAllByRole("button", { name: "How bin stock is worked out" });
+    const info = screen.getAllByRole("button", { name: "About Bin stock" });
     expect(info).toHaveLength(1);
-    expect(info[0].getAttribute("type")).toBe("button");
     expect(info[0].hasAttribute("data-presentation-control")).toBe(true);
     fireEvent.click(info[0]);
     expect(await screen.findByText("Batch ledger")).toBeTruthy();
     expect(screen.getByText("What the bin holds.")).toBeTruthy();
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
-    await screen.findByRole("button", { name: "How bin stock is worked out" });
+    await waitFor(() => expect(screen.queryByText("Batch ledger")).toBeNull());
+    expect(screen.queryByText("What the bin holds.")).toBeNull();
+  });
+
+  it("opens from the keyboard", async () => {
+    render(<Block />);
+    const info = screen.getByRole("button", { name: "About Bin stock" });
+    info.focus();
+    fireEvent.keyDown(info, { key: "Enter" });
+    fireEvent.keyUp(info, { key: "Enter" });
+    expect(await screen.findByText("Batch ledger")).toBeTruthy();
   });
 
   it("keeps the plain definition hint when there is no explanation", () => {
-    render(<Block explanation={null} />);
-    expect(screen.queryByRole("button", { name: "How bin stock is worked out" })).toBeNull();
+    const { container } = render(<Block explanation={null} />);
+    expect(container.querySelector("[data-explanation-info]")).toBeNull();
     expect(screen.getByRole("button", { name: "About bin stock" })).toBeTruthy();
   });
 
-  it("never submits or dirties the form when the (i) is pressed", () => {
+  it("never submits or dirties the form when the (i) is pressed", async () => {
+    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
     function Form() {
-      const { formState } = useForm({ defaultValues: { mass: 100 } });
-      return <form><output>{formState.isDirty ? "dirty" : "clean"}</output><Block /></form>;
+      const { register, formState } = useForm({ defaultValues: { mass: "100" } });
+      return <form onSubmit={onSubmit}><input aria-label="Mass" {...register("mass")} /><output>{formState.isDirty ? "dirty" : "clean"}</output><Block /></form>;
     }
-    const { container } = render(<Form />);
-    fireEvent.click(screen.getByRole("button", { name: "How bin stock is worked out" }));
-    expect(container.querySelector("output")?.textContent).toBe("clean");
+    render(<Form />);
+    const info = screen.getByRole("button", { name: "About Bin stock" });
+    fireEvent.click(info);
+    await screen.findByText("Batch ledger");
+    fireEvent.keyDown(info, { key: "Enter" });
+    fireEvent.keyUp(info, { key: "Enter" });
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText("clean")).toBeTruthy();
+    // The same output turns dirty on a real edit, so the assertion can fail.
+    fireEvent.input(screen.getByLabelText("Mass"), { target: { value: "120" } });
+    await waitFor(() => expect(screen.getByText("dirty")).toBeTruthy());
   });
 });
 

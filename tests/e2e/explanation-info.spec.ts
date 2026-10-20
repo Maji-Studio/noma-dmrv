@@ -22,7 +22,7 @@ async function settledBox(control: Locator) {
  * everywhere else. The sheet has one view, no Simple or Detailed switch, and an
  * open panel never traps the field being edited.
  */
-const SPLIT_FORMULA = /^Dry mass comes from the saved record\. Water is the wet mass minus the dry mass: 50 kg - 42\.5 kg = 7\.5 kg\.$/;
+const SPLIT_FORMULA = /^Dry = wet × \(1 - moisture\)\. 50 kg × \(1 - 15%\) = 42\.5 kg\.$/;
 
 for (const width of [1440, 390]) {
   test(`the feedstock split explains itself behind an (i) at ${width}px`, async ({ adminPage: page, seededData }) => {
@@ -35,9 +35,10 @@ for (const width of [1440, 390]) {
     await expect(dialog.getByRole("radio", { name: "Detailed", exact: true })).toHaveCount(0);
 
     await selectEntity(page, "Source Bin", seededData.feedstockStorageLocation.id, seededData.feedstockStorageLocation.name);
-    // Nothing explains an empty split, so no (i) and no unresolved bar yet.
-    const info = dialog.getByRole("button", { name: "How feedstock composition is worked out" });
+    // Nothing explains an empty split, so there is no (i) and no unresolved bar before the first value.
+    const info = dialog.getByRole("button", { name: "About Feedstock composition" });
     await expect(info).toHaveCount(0);
+    await expect(dialog.getByText(/not recorded/i)).toHaveCount(0);
     await dialog.locator('input[name="feedstockDraws.0.wetMassKg"]').fill("50");
     await dialog.locator('input[name="feedstockMoisturePercent"]').fill("15");
 
@@ -56,6 +57,9 @@ for (const width of [1440, 390]) {
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(width);
     if (width < 500) expect(box!.width).toBeLessThanOrEqual(width - 32);
+    // An open panel adds no horizontal scroll to the sheet or the page.
+    expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
     // An outside press closes it and still reaches the field being edited.
     const moisture = dialog.locator('input[name="feedstockMoisturePercent"]');
@@ -82,7 +86,7 @@ test("a mouse hover opens the explanation on desktop", async ({ adminPage: page,
   await selectEntity(page, "Source Bin", seededData.feedstockStorageLocation.id, seededData.feedstockStorageLocation.name);
   await dialog.locator('input[name="feedstockDraws.0.wetMassKg"]').fill("50");
   await dialog.locator('input[name="feedstockMoisturePercent"]').fill("15");
-  const info = dialog.getByRole("button", { name: "How feedstock composition is worked out" });
+  const info = dialog.getByRole("button", { name: "About Feedstock composition" });
   const box = await settledBox(info);
   // A real pointer arrives over several moves.
   await page.mouse.move(box.x - 60, box.y - 40);

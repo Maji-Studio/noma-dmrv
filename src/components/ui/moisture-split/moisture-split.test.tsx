@@ -110,12 +110,12 @@ describe("MoistureSplit", () => {
 
     render(<MoistureSplit wetMassKg={4000} moisturePercent={20} materialLabel="Feedstock" />);
     expect(screen.queryByText(TABLE_HEADER)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "How feedstock composition is worked out" }));
+    fireEvent.click(screen.getByRole("button", { name: "About Feedstock composition" }));
     expect(await screen.findByText(TABLE_HEADER)).toBeTruthy();
     expect(screen.getByText("Wet total")).toBeTruthy();
   });
 
-  it("includes added water in the final wet mass and draws it separately", () => {
+  it("includes added water in the final wet mass and draws it separately", async () => {
     const html = renderToStaticMarkup(
       <MoistureSplit
         wetMassKg={450}
@@ -135,9 +135,14 @@ describe("MoistureSplit", () => {
     expect(html).toContain("Water before addition 45 kg");
     expect(html).toContain("Water added 50 kg");
     expect(html).toContain("Final moisture 19%");
-    expect(html).toContain(
+    // Only the dry mass sentence stays inline; the added water step waits in the (i).
+    expect(html).toContain("Dry = wet × (1 - moisture).");
+    expect(html).not.toContain("Added water raises the wet mass");
+    render(<MoistureSplit wetMassKg={450} moisturePercent={10} addedWaterKg={50} materialLabel="Biochar" />);
+    fireEvent.click(screen.getByRole("button", { name: "About Biochar composition" }));
+    expect(await screen.findByText(
       "Added water raises the wet mass and leaves dry mass unchanged: 450 kg + 50 kg = 500 kg.",
-    );
+    )).toBeTruthy();
   });
 
   it("keeps a supplied note in the (i) panel when added water is present", async () => {
@@ -152,7 +157,7 @@ describe("MoistureSplit", () => {
 
     expect(screen.queryByText("Moisture from delivery record")).toBeNull();
     expect(screen.getByText(/Water added 50 kg/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "How material composition is worked out" }));
+    fireEvent.click(screen.getByRole("button", { name: "About Material composition" }));
     expect(await screen.findByText("Moisture from delivery record")).toBeTruthy();
   });
 

@@ -16,8 +16,8 @@ function readable(node: Node): string {
 }
 
 /** Opens the block's (i) and returns the panel's text. */
-async function openInfo(name: RegExp | string): Promise<string> {
-  fireEvent.click(screen.getByRole("button", { name }));
+async function openInfo(): Promise<string> {
+  fireEvent.click(document.querySelector("[data-explanation-info]")!);
   return readable(await screen.findByRole("dialog"));
 }
 
@@ -55,12 +55,12 @@ describe("OutputStockPreview", () => {
 
   it("holds the entered figures and the source runs behind the caption's (i)", async () => {
     const html = renderToStaticMarkup(<OutputStockPreview preview={rain} />);
-    expect(html).toContain("How product bin is worked out");
+    expect(html).toContain("About Product bin");
     expect(html).not.toContain("Show calculation");
     for (const hidden of ["Wet removed", "Batch breakdown", "Source run Run A"]) expect(html).not.toContain(hidden);
 
     render(<OutputStockPreview preview={rain} />);
-    const panel = await openInfo("How product bin is worked out");
+    const panel = await openInfo();
     expect(panel).toContain("Wet removed");
     expect(panel).toContain("2,000 kg");
     expect(panel).toContain("Wet estimate in bin");
@@ -96,7 +96,7 @@ describe("OutputStockPreview", () => {
     expect(container.textContent).toContain("More info");
     expect(container.textContent).not.toContain("Dry solids removed");
     // Dry solids stay in the (i); the ingredient lane is tracked wet.
-    const panel = await openInfo(/^How .* is worked out$/);
+    const panel = await openInfo();
     expect(panel).toContain("Dry solids removed");
     expect(container.textContent).not.toContain("dry biochar");
   });
@@ -107,7 +107,7 @@ describe("OutputStockPreview", () => {
     expect(html).toContain("100 kg wet mass added");
     expect(html).toContain("Dry solids 70 kg");
     render(<OutputStockPreview preview={added} />);
-    expect(await openInfo(/^How .* is worked out$/)).toContain("Dry biochar added");
+    expect(await openInfo()).toContain("Dry biochar added");
   });
 
   it("keeps a blocker visible and its source breakdown behind the (i)", async () => {
@@ -117,7 +117,7 @@ describe("OutputStockPreview", () => {
     expect(html).toContain("Insufficient dry stock");
     expect(html).not.toContain("Batch breakdown");
     render(<OutputStockPreview preview={blocked} />);
-    expect(await openInfo(/^How .* is worked out$/)).toContain("Batch breakdown");
+    expect(await openInfo()).toContain("Batch breakdown");
   });
 
   it("explains excess counts without claiming new stock", () => {
@@ -143,7 +143,7 @@ describe("OutputStockAvailability", () => {
     expect(html).not.toContain("Source run Run A");
     expect(html).not.toMatch(/before|after/i);
     render(block);
-    expect(await openInfo("How product bin is worked out")).toContain("Source run Run A");
+    expect(await openInfo()).toContain("Source run Run A");
   });
 
   it("leads with the wet estimate at its basis and reads the dry stock as a secondary line", () => {
@@ -164,7 +164,7 @@ describe("OutputStockAvailability", () => {
     const html = renderToStaticMarkup(<OutputStockAvailability binName="Empty bin" dryKg={0} />);
     expect(html).toContain("0 kg dry biochar");
     expect(html).not.toContain("Batch breakdown");
-    expect(html).not.toContain("is worked out");
+    expect(html).not.toContain("data-explanation-info");
   });
 });
 
@@ -197,7 +197,7 @@ describe("StockMovementCard", () => {
       container,
       markup: () => container.innerHTML,
       text: () => readable(container),
-      open: () => openInfo(/^How .* is worked out$/),
+      open: () => openInfo(),
     };
   }
 

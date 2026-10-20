@@ -30,6 +30,7 @@
 
 
 import * as React from "react";
+import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { cn } from "@/lib/utils";
 import {
   isMissingValueCopy,
@@ -176,6 +177,12 @@ interface DetailFieldProps {
   value: React.ReactNode;
   /** Explanation behind an ⓘ beside the label, mirroring the form field's. */
   hint?: React.ReactNode;
+  /**
+   * Tables or arithmetic behind this one figure. The label's single ⓘ opens
+   * them, after the `hint`. Titled by `explanationTitle`, else the label.
+   */
+  explanation?: React.ReactNode;
+  explanationTitle?: string;
   className?: string;
   certifyRequired?: boolean;
   /** Override the value-derived saved status for composite requirements. */
@@ -277,6 +284,8 @@ function DetailField({
   label,
   value,
   hint,
+  explanation,
+  explanationTitle,
   className,
   certifyRequired,
   certifyStatus,
@@ -297,7 +306,9 @@ function DetailField({
       <span className="flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
         {label}
         {certifyRequired && <CertificationFieldTag status={resolvedCertifyStatus} />}
-        {hint != null && <InfoHint side="top" label={`More about ${label}`}>{hint}</InfoHint>}
+        {explanation != null && explanation !== false
+          ? <ExplanationInfo title={explanationTitle ?? label} hint={hint}>{explanation}</ExplanationInfo>
+          : hint != null && <InfoHint side="top" label={`More about ${label}`}>{hint}</InfoHint>}
       </span>
       <span
         className={cn("body-medium break-words", valueClassName)}
@@ -354,6 +365,10 @@ export interface DetailPanelField {
   value: React.ReactNode;
   /** Explanation behind an ⓘ beside the label, mirroring the form field's. */
   hint?: React.ReactNode;
+  /** Tables or arithmetic behind this figure: the label's one ⓘ opens them, after the `hint`. */
+  explanation?: React.ReactNode;
+  /** Names the panel and the ⓘ; defaults to the label. */
+  explanationTitle?: string;
   certifyRequired?: boolean;
   certifyStatus?: CertFieldStatus;
   /** Which missing-value token stands in when `value` is empty. Defaults to `notRecorded`. */
@@ -422,6 +437,8 @@ function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
                   label={field.label}
                   value={field.value}
                   hint={field.hint}
+                  explanation={field.explanation}
+                  explanationTitle={field.explanationTitle}
                   certifyRequired={field.certifyRequired}
                   certifyStatus={field.certifyStatus}
                   emptySituation={field.emptySituation}

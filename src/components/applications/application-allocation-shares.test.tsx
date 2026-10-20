@@ -27,7 +27,7 @@ it("carries the bar and its key inline, and the ledger and run split behind the 
   expect(inline).not.toContain("% of total");
   expect(inline).not.toContain("PR-26-001");
 
-  fireEvent.click(screen.getByRole("button", { name: "How applied batches is worked out" }));
+  fireEvent.click(screen.getByRole("button", { name: "About Applied batches" }));
   expect(await screen.findByText("% of total")).toBeTruthy();
   const runs = screen.getByLabelText("Source production runs per applied batch");
   expect(within(runs).getByText(/PR-26-001/)).toBeTruthy();

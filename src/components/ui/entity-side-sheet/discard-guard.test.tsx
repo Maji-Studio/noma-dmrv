@@ -1,7 +1,9 @@
+// @vitest-environment jsdom
 import { useEffect, type ReactNode } from "react";
-import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { Controller, useForm, useFormState } from "react-hook-form";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { EntitySideSheet, type SideSheetMode } from "./index";
 import { useSideSheetActions } from "./side-sheet-context";
 
@@ -23,67 +25,63 @@ function EditableFields() {
   const actions = useSideSheetActions();
   useEffect(() => actions?.reportDirty(isDirty), [actions, isDirty]);
   return <>
-    <Controller name="reason" control={control} render={({ field }) => <input {...field} />} />
+    <Controller name="reason" control={control} render={({ field }) => <input aria-label="Reason" {...field} />} />
     <output>{isDirty ? "dirty" : "clean"}</output>
     <p role="alert">Mandatory evidence is missing</p>
+    <span>Mass<ExplanationInfo title="Mass">Arithmetic</ExplanationInfo></span>
     <button onClick={() => actions?.cancel()}>Cancel form</button>
   </>;
 }
 
-let renderer: ReactTestRenderer;
-beforeAll(() => {
-  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
-  vi.stubGlobal("requestAnimationFrame", () => 1);
-  vi.stubGlobal("cancelAnimationFrame", () => undefined);
-});
-afterEach(async () => { if (renderer) await act(async () => renderer.unmount()); });
+afterEach(cleanup);
 
 const close = vi.fn();
 const changeMode = vi.fn();
-function sheet(mode: SideSheetMode = "edit", open = true) {
-  return <EntitySideSheet open={open} onOpenChange={close} mode={mode} onModeChange={changeMode} title="Record">
-    <EditableFields />
-  </EntitySideSheet>;
-}
-async function mount(mode: SideSheetMode = "edit") {
+function mount(mode: SideSheetMode = "edit") {
   close.mockClear(); changeMode.mockClear();
-  await act(async () => { renderer = create(sheet(mode), { createNodeMock: element => element.type === "main" ? { contains: () => true, querySelector: () => null, scrollTop: 0 } : null }); });
+  return render(<EntitySideSheet open onOpenChange={close} mode={mode} onModeChange={changeMode} title="Record">
+    <EditableFields />
+  </EntitySideSheet>);
 }
-function button(text: string) { return renderer.root.findAllByType("button").find(node => node.children.includes(text))!; }
-function reason() { return renderer.root.findAllByType("input").find(node => node.props.name === "reason")!; }
 
 describe("sheet discard guard", () => {
-  it.each(["view", "edit", "create"] as const)("renders %s without a Simple or Detailed switch", async mode => {
-    await mount(mode);
-    // The read-only wrapper (`data-submit-block-fieldset`) is not a switch.
-    expect(renderer.root.findAll(node => node.type === "fieldset" && !node.props["data-submit-block-fieldset"])).toHaveLength(0);
-    expect(renderer.root.findAll(node => node.type === "input" && node.props.type === "radio")).toHaveLength(0);
+  it.each(["view", "edit", "create"] as const)("renders %s without a Simple or Detailed switch", mode => {
+    const { container } = mount(mode);
+    expect(container.querySelector('input[type="radio"]')).toBeNull();
   });
 
-  it("ignores presentation events in the body, such as a press on an (i), and keeps warnings", async () => {
-    await mount();
-    expect(renderer.root.findByProps({ role: "alert" }).children).toEqual(["Mandatory evidence is missing"]);
-    await act(async () => renderer.root.findByType("main").props.onChangeCapture({ target: { closest: () => ({}) } }));
-    await act(async () => button("Cancel form").props.onClick());
+  it("keeps the warning and lets a press on an (i) open its panel without dirtying the form", async () => {
+    mount();
+    expect(screen.getByRole("alert").textContent).toBe("Mandatory evidence is missing");
+    fireEvent.click(screen.getByRole("button", { name: "About Mass" }));
+    expect(await screen.findByText("Arithmetic")).toBeTruthy();
+    expect(screen.getByText("clean")).toBeTruthy();
+    // A clean form leaves without the discard dialog.
+    fireEvent.click(screen.getByRole("button", { name: "Cancel form" }));
     expect(changeMode).toHaveBeenCalledWith("view");
-    expect(renderer.root.findAllByType("aside")).toHaveLength(0);
+    expect(document.querySelector("aside")).toBeNull();
   });
 
-  it("guards Cancel after an actual RHF edit", async () => {
-    await mount();
-    await act(async () => reason().props.onChange({ target: { value: "Edited reason" } }));
-    expect(reason().props.value).toBe("Edited reason");
-    expect(renderer.root.findByType("output").children).toEqual(["dirty"]);
-    await act(async () => button("Cancel form").props.onClick());
-    expect(renderer.root.findAllByType("aside")).toHaveLength(1);
+  it("guards Cancel after an actual RHF edit", () => {
+    mount();
+    fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Edited reason" } });
+    expect(screen.getByText("dirty")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel form" }));
+    expect(document.querySelector("aside")).not.toBeNull();
     expect(changeMode).not.toHaveBeenCalled();
   });
 
-  it("still guards native edits", async () => {
-    await mount("create");
-    await act(async () => renderer.root.findByType("main").props.onInputCapture({ target: { closest: () => null } }));
-    await act(async () => button("Close sheet").props.onClick());
+  it("still guards native edits", () => {
+    mount("create");
+    fireEvent.input(screen.getByLabelText("Reason"), { target: { value: "x" } });
+    fireEvent.click(screen.getByRole("button", { name: "Close sheet" }));
     expect(close).not.toHaveBeenCalled();
-    expect(renderer.root.findAllByType("aside")).toHaveLength(1);
+    expect(document.querySelector("aside")).not.toBeNull();
+  });
+
+  it("opens an (i) inside a disabled fieldset, as a locked record shows", async () => {
+    render(<fieldset disabled><ExplanationInfo title="Yield">Arithmetic</ExplanationInfo></fieldset>);
+    fireEvent.click(screen.getByRole("button", { name: "About Yield" }));
+    expect(await screen.findByText("Arithmetic")).toBeTruthy();
   });
 });
