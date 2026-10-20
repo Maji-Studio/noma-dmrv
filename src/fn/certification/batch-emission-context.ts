@@ -28,7 +28,7 @@ export async function loadBatchEmissionContext(
   ctx: OrgContext, facilityId: string,
   batches: readonly { id: string; removalTemplateId: string | null }[],
   facilityFacts: EntryTemplateContext,
-  claimedAttempt?: { removalId: string; submissionId: string },
+  claimedAttempt?: { removalId: string; submissionId?: string },
 ): Promise<BatchEmissionContext> {
   const result: BatchEmissionContext = {};
   if (!emissionsEntriesEnabled()) return result;

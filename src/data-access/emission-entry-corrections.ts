@@ -62,9 +62,10 @@ export function emissionCorrectionWindow(ctx: OrgContext, tx: DbTransaction, bat
 }
 
 /** New attempts are allowed only after the registry returned the prior submission.
+ * Recovery of possible remote effects retains the locks without reopening entry writes.
  * Called before the claim's own artifact lock so the union keeps global order.
  */
-export async function lockRemovalEntryCorrectionAttempt(ctx: OrgContext, tx: DbTransaction, removalId: string, excludeSubmissionId?: string) {
+export async function lockRemovalEntryCorrectionAttempt(ctx: OrgContext, tx: DbTransaction, removalId: string, excludeSubmissionId?: string, reconcileExternalMutation = false) {
   requireOrgScope(ctx);
   if (!emissionsEntriesEnabled()) return;
   const prior = await tx.select().from(certificationSubmissions).where(and(
@@ -78,7 +79,7 @@ export async function lockRemovalEntryCorrectionAttempt(ctx: OrgContext, tx: DbT
   const lineage = await getLockedCertifiedLineageForBatches(ctx, tx, members.map((row) => row.id), excludeSubmissionId);
   const facts = lineage.map((row) => row.recordLockRemoval);
   const removal = facts.find((fact) => fact.id === removalId);
-  if (!removal || !isRemovalCorrectionWindowOpen(removal, facts))
+  if (!reconcileExternalMutation && (!removal || !isRemovalCorrectionWindowOpen(removal, facts)))
     throw new SafeError("This Removal is sent. If Isometric sends the GHG Statement back, refresh its status to correct it.");
 }
 

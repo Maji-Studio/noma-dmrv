@@ -1,3 +1,4 @@
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -143,7 +144,7 @@ export async function reviewLineContracts(ctx: OrgContext, input: ReviewLineCont
     if (latest?.id !== row.id) throw staleRowVersion("removal_template_observation", row.id);
     if (!isEnrichmentComplete(row.definition, row.enrichment)) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
     const componentIds = new Set(row.definition.groups.flatMap((group) => group.components.map((component) => component.id)));
-    const currentProblems = validateLineSources(row.definition, row.lineSources);
+    const currentProblems = validateLineSources(row.definition, row.lineSources, { entriesEnabled: emissionsEntriesEnabled() });
     const lineSources = { ...row.lineSources };
     for (const [id, assignment] of Object.entries(input.assignments)) {
       if (!componentIds.has(id)) throw new SafeError("Template component not found.");
@@ -155,7 +156,7 @@ export async function reviewLineContracts(ctx: OrgContext, input: ReviewLineCont
       }
       lineSources[id] = { ...assignment, origin: "reviewed", templateOrder: lineSources[id]?.templateOrder };
     }
-    const problems = validateLineSources(row.definition, lineSources).filter((problem) => problem.code !== "unassigned");
+    const problems = validateLineSources(row.definition, lineSources, { entriesEnabled: emissionsEntriesEnabled() }).filter((problem) => problem.code !== "unassigned");
     if (problems.length) throw new SafeError("Choose valid, distinct sources and entry policies for the Removal template components.");
     const [reviewed] = await tx.update(observations).set({
       lineSources, reviewedAt: new Date(), reviewedByUserId: ctx.userId,

@@ -54,8 +54,8 @@ it.each(["bootstrap", "carried", "reviewed"] as const)("keeps stored production 
     vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", String(enabled));
     const facts = await loadRemovalTemplateFacts(makeTestOrgContext(), { client: {} as never, externalProjectId: template.project_id, template, blueprints: [] });
     const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], { facilityTimezone: "UTC", templatesById: { [template.id]: facts } } as unknown as FacilityCertifierFacts);
-    expect(resolved.templateBlockers.some(blocker => blocker.code === "templateLinesNeedReview")).toBe(enabled && origin === "reviewed");
-    expect(resolved.undecidedLineIds.includes(id)).toBe(enabled && origin === "reviewed");
+    expect(resolved.templateBlockers.some(blocker => blocker.code === "templateLinesNeedReview")).toBe(enabled && origin !== "bootstrap");
+    expect(resolved.undecidedLineIds.includes(id)).toBe(enabled && origin !== "bootstrap");
 
   }
 });

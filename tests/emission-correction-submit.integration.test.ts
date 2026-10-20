@@ -46,7 +46,7 @@ afterEach(async () => {
   await db.delete(users).where(eq(users.id, userId));
 });
 
-it("submits a returned Removal with a newly added value and zero through the real claim and freshness path", async () => {
+it.each([false, true])("submits a returned Removal through claim and freshness, interrupted before reservation: %s", async (interrupt) => {
   // Restore transaction lock exports hidden by the general orchestrator harness.
   Object.assign(await import("@/data-access/facility-durability-lock"),
     await vi.importActual("@/data-access/facility-durability-lock"));
@@ -115,7 +115,7 @@ it("submits a returned Removal with a newly added value and zero through the rea
   vi.mocked(context.resolveScopeForRemoval).mockResolvedValue({ memberBatches: [] } as unknown as RemovalScope);
   vi.mocked(context.loadRemovalSubmissionContext).mockImplementation(async (_org, _id, options) => {
     const facts = await loadBatchEmissionContext(org, f.facilityId, scope.memberBatches, facilityFacts,
-      options?.claimedSubmissionId ? { removalId: f.removalId, submissionId: options.claimedSubmissionId } : undefined);
+      { removalId: f.removalId, submissionId: options?.claimedSubmissionId });
     const entries = await loadRemovalEntryContext(org, scope, facts, facilityFacts);
     const result = makeContext(undefined, { facilityId: f.facilityId, removalId: f.removalId, removalTemplate: template, lineSources,
       latestSubmission: null, memberBatchClaims: [], batchesWithSamples, removalEntryContext: entries });
@@ -130,6 +130,18 @@ it("submits a returned Removal with a newly added value and zero through the rea
   vi.mocked(sources.resolveSourceBindingCandidates).mockImplementation(async (_ctx, args) => args.candidates.map(candidate => ({ ...candidate, sourceId: `src-${candidate.documentId}` })));
   vi.mocked(isometric.createDatapoint).mockImplementation(vi.fn(fakeExternalIds("dp")) as never);
   vi.mocked(isometric.createGhgEntry).mockImplementation(vi.fn(fakeExternalIds("rmv")) as never);
+  if (interrupt) {
+    // Model process loss: the committed draft survives without failure cleanup.
+    vi.mocked(reservations.rejectSubmissionAndReleaseProductionClaims).mockResolvedValueOnce(undefined);
+    vi.mocked(reservations.reserveProductionEmissionsClaims).mockRejectedValueOnce(new Error("Interrupted before reservation"));
+    await expect(submitRemoval({ orgCtx: org, removalId: f.removalId })).rejects.toThrow("Interrupted before reservation");
+    const latest = await realClaims.getLatestSubmission(org, { provider: "isometric", localEntityType: "removal", submissionType: "removal", localEntityId: f.removalId });
+    expect(latest).toMatchObject({ status: "draft", version: 2 });
+    expect(await getEmissionEntry(org, added.id)).toMatchObject({ sentByRemovalId: null, sendReservedBySubmissionId: null });
+    expect(isometric.createGhgEntry).not.toHaveBeenCalled();
+    await db.update(certificationSubmissions).set({ lockedAt: new Date(0) }).where(and(
+      eq(certificationSubmissions.organizationId, org.organizationId), eq(certificationSubmissions.id, latest!.id)));
+  }
   await expect(submitRemoval({ orgCtx: org, removalId: f.removalId })).resolves.toMatchObject({ version: 2 });
   for (const id of [added.id, ...zeros.entryIds]) expect(await getEmissionEntry(org, id)).toMatchObject({ sentByRemovalId: f.removalId, sendReservedBySubmissionId: null });
   const [old] = await db.select().from(certificationSubmissions).where(and(eq(certificationSubmissions.organizationId, org.organizationId), eq(certificationSubmissions.id, prior.id)));

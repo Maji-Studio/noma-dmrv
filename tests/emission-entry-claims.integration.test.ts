@@ -491,7 +491,7 @@ it("gates createDraft on the real correction window before claiming a new versio
   expect(await correctionClaim()).toMatchObject({ kind: "claimed", resumed: false, row: { version: 2 } });
 });
 
-it("rechecks the window on resume and excludes only the resumed attempt", async () => {
+it("rechecks the window for a mutation-free resume and excludes only the resumed attempt", async () => {
   await sentCorrectionEntry();
   correctionRemote.status = "FAILED_VERIFICATION";
   const claimed = await correctionClaim();
@@ -602,4 +602,17 @@ it("allows validated evidence-refresh recovery after a returned submission and i
   expect(await listEmissionEntryDraftContenders(ctx, [fixture.batchId], db,
     { removalId: fixture.removalId, submissionId: refreshed.row.id })).toContainEqual(expect.objectContaining({ removalId: fixture.removalId, contenderKind: "correction" }));
   expect(await listEmissionEntryDraftContenders(ctx, [fixture.batchId])).toEqual([]);
+});
+
+
+it.each(["possible", "confirmed", "externalId"] as const)("reconciles a correction with %s remote effects after the window closes", async (effect) => {
+  await sentCorrectionEntry();
+  correctionRemote.status = "FAILED_VERIFICATION";
+  const claimed = await correctionClaim();
+  if (claimed.kind !== "claimed") throw new Error("Expected a correction draft");
+  await db.update(certificationSubmissions).set({ lockedAt: new Date(0),
+    ...(effect === "externalId" ? { externalId: "remote-correction" } : { metadata: { externalMutation: effect } }),
+  }).where(and(eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.id, claimed.row.id)));
+  correctionRemote.status = "AWAITING_VERIFICATION";
+  expect(await correctionClaim()).toMatchObject({ kind: "claimed", resumed: true, row: { id: claimed.row.id, version: 2 } });
 });

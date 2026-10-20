@@ -346,11 +346,11 @@ it.each([1, 2])("normalizes stored automatic transport pairs for fixture %s, pre
     const lineSources = resolveLineSources({ definition });
     lineSources[id] = { ...lineSources[id], automaticSource: "feedstock-transport", entryPolicy: "additive", origin };
     const resolved = resolveLineSources({ definition, previous: { definition, lineSources } });
-    expect(resolved[id].entryPolicy).toBe(origin === "reviewed" ? "additive" : "none");
+    expect(resolved[id].entryPolicy).toBe((origin === "reviewed" || origin === "carried") ? "additive" : "none");
     expect(validateLineSources(definition, resolved, { entriesEnabled: false })).toEqual(origin === "proposed" ? [{ code: "unassigned", componentId: id }] : []);
     const problems = validateLineSources(definition, resolved, { entriesEnabled: true });
-    expect(problems).toEqual(origin === "reviewed" ? [{ code: "disallowed-entry-policy", componentId: id }] : origin === "proposed" ? [{ code: "unassigned", componentId: id }] : []);
-    expect(lineNeedsReview(id, resolved[id], problems)).toBe(origin === "reviewed" || origin === "proposed");
+    expect(problems).toEqual((origin === "reviewed" || origin === "carried") ? [{ code: "disallowed-entry-policy", componentId: id }] : origin === "proposed" ? [{ code: "unassigned", componentId: id }] : []);
+    expect(lineNeedsReview(id, resolved[id], problems)).toBe((origin === "reviewed" || origin === "carried") || origin === "proposed");
     // A second observation must never silently normalize an admin's decision.
     expect(resolveLineSources({ definition, previous: { definition, lineSources: resolved } })[id].entryPolicy).toBe(resolved[id].entryPolicy);
   }

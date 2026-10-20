@@ -54,7 +54,7 @@ export function buildBatchEmissionLines(
   return deriveBatchEmissionLines({
     definition,
     lineSources: observation.lineSources,
-    problems: validateLineSources(observation.definition, observation.lineSources),
+    problems: validateLineSources(observation.definition, observation.lineSources, { entriesEnabled: emissionsEntriesEnabled() }),
     enrichmentComplete: isEnrichmentComplete(observation.definition, observation.enrichment),
     ...automaticFacts,
     entries,

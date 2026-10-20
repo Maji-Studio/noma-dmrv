@@ -1,3 +1,4 @@
+import { submissionHasRemoteEffect } from "@/lib/record-lock";
 import { lockRemovalEntryCorrectionAttempt } from "./emission-entry-corrections";
 import { isRemovalDeletionLeased } from "./removal-deletion-lease";
 /**
@@ -328,7 +329,9 @@ async function resumeDraft<H>(
     await lockAndVerifyMapping(ctx, tx, args.guard);
     if (args.key.localEntityType === "removal" && args.key.submissionType === "removal") {
       const candidate = await getLatestSubmissionWithExecutor(ctx, tx, args.key);
-      await lockRemovalEntryCorrectionAttempt(ctx, tx, args.key.localEntityId, candidate?.id);
+      // Keep the lineage artifact locks, but remote effects must always be reconcilable.
+      const reconcile = !!candidate && submissionHasRemoteEffect(candidate);
+      await lockRemovalEntryCorrectionAttempt(ctx, tx, args.key.localEntityId, candidate?.id, reconcile);
     }
     await lockSubmissionArtifact(tx, args.key);
     if (await isRemovalDeletionLeased(ctx, args.key, tx)) return { kind: "blocked", reason: "in-flight" };

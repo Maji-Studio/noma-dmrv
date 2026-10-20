@@ -1,5 +1,7 @@
 "use server";
 
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
+
 import { automaticSourceAvailable } from "@/lib/isometric/template-observations/catalog-sources";
 import type { LineSources } from "@/lib/isometric/template-observations/line-sources";
 
@@ -52,7 +54,7 @@ async function readOnlyEntry(
     changes: {} as Record<string, ComponentChange>,
     lines: reviewLines(definition, reviewLineSources(lineSources), {}, blueprints, template),
     enrichmentProblems: enrichmentProblems(definition, enrichment),
-    lineSourceProblems: validateLineSources(definition, lineSources),
+    lineSourceProblems: validateLineSources(definition, lineSources, { entriesEnabled: emissionsEntriesEnabled() }),
   };
 }
 
@@ -135,7 +137,7 @@ export async function switchCreditBatchRemovalTemplate(input: SwitchCreditBatchR
       const storedRead = {
         availability: "listed" as const, template, observation: latest,
         enrichmentProblems: enrichmentProblems(latest.definition, latest.enrichment),
-        lineSourceProblems: validateLineSources(latest.definition, latest.lineSources),
+        lineSourceProblems: validateLineSources(latest.definition, latest.lineSources, { entriesEnabled: emissionsEntriesEnabled() }),
         lines: reviewLines(latest.definition, reviewLineSources(latest.lineSources), {}, [], template),
       };
       if (!isTemplateReady(storedRead)) throw new SafeError(linesToDecideCount(storedRead) > 0

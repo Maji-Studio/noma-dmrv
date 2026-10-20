@@ -1,3 +1,4 @@
+import { legacyTransportObservation } from "../../../tests/helpers/legacy-transport-observation";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
@@ -505,4 +506,21 @@ describe("read-only entry enrichment reuse", () => {
     expect(observeRemovalTemplate).not.toHaveBeenCalled();
     expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
   });
+});
+
+
+it.each([false, true])("switches to a reviewed legacy transport pair only with entries off: %s", async (enabled) => {
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", String(enabled));
+  const { template, observation } = legacyTransportObservation();
+  const input = { creditBatchId: id, removalTemplateId: template.id, expectedVersion: 7 };
+  vi.mocked(getCreditBatchById).mockResolvedValue({ facilityId: id, removalTemplateId: "old" } as never);
+  vi.mocked(listGhgEntryTemplates).mockResolvedValue([template]);
+  vi.mocked(getLatestTemplateObservation).mockResolvedValue(observation as never);
+  vi.mocked(loadRemovalTemplateFacts).mockResolvedValue({ template, observation, blueprintsForTemplate: [],
+    enrichmentProblems: [], lineSourceProblems: validateLineSources(observation.definition, observation.lineSources, { entriesEnabled: enabled }),
+  } as never);
+  const result = await switchCreditBatchRemovalTemplate(input);
+  expect(result.success).toBe(!enabled);
+  if (enabled) expect(persistSwitch).not.toHaveBeenCalled();
+  else expect(persistSwitch).toHaveBeenCalledWith(ctx, input);
 });

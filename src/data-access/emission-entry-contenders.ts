@@ -1,3 +1,5 @@
+import { decideSubmissionClaim } from "@/lib/isometric/utils/submission-claim";
+import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { isSubmittedAttempt, isRemovalCorrectionWindowOpen } from "@/lib/record-lock";
 import { getCertifiedLineageForBatches } from "./certification-lineage-guards";
 import { emissionCorrectionBatchIds } from "./emission-entry-corrections";
@@ -14,7 +16,7 @@ import { deriveRemovalEntryWindow, type EntryContender } from "@/lib/certificati
 import { requireOrgScope, type Executor } from "./utils";
 
 /** Every unsubmitted Removal is a contender, even before it acquires a ledger row. */
-export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBatchIds: string[], executor: Executor & Pick<typeof db, "selectDistinct"> = db, claimedAttempt?: { removalId: string; submissionId: string }): Promise<EntryContender[]> {
+export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBatchIds: string[], executor: Executor & Pick<typeof db, "selectDistinct"> = db, claimedAttempt?: { removalId: string; submissionId?: string }): Promise<EntryContender[]> {
   requireOrgScope(ctx);
   if (!creditBatchIds.length) return [];
   const enabled = emissionsEntriesEnabled();
@@ -41,13 +43,19 @@ export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBa
   });
   let excludeSubmissionId: string | undefined;
   if (claimedAttempt && ids.includes(claimedAttempt.removalId)) {
-    const [latest] = await executor.select({ id: certificationSubmissions.id, status: certificationSubmissions.status,
-      version: certificationSubmissions.version }).from(certificationSubmissions).where(and(
+    const [latest] = await executor.select().from(certificationSubmissions).where(and(
       eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.provider, "isometric"),
       eq(certificationSubmissions.localEntityType, "removal"), eq(certificationSubmissions.submissionType, "removal"),
       eq(certificationSubmissions.localEntityId, claimedAttempt.removalId),
     )).orderBy(desc(certificationSubmissions.version)).limit(1);
-    if (latest?.id === claimedAttempt.submissionId && latest.status === "draft" && latest.version > 1) excludeSubmissionId = latest.id;
+    // Only the submission read for this Removal can recover its exact latest draft.
+    // Ordinary reads and mutation authorization retain the full lineage.
+    const resumable = latest && !claimedAttempt.submissionId && decideSubmissionClaim({
+      latest, payloadHash: latest.payloadHash ?? "", now: Date.now(), lockTtlMs: LOCK_TTL_MS,
+      policy: { onSubmittedHashChanged: "supersede", allowEvidenceRefresh: true },
+    }).kind === "resume";
+    if (latest?.status === "draft" && latest.version > 1 &&
+      (latest.id === claimedAttempt.submissionId || resumable)) excludeSubmissionId = latest.id;
   }
   const statementReads: StatementReads = new Map();
   const lineageReads = new Map<string, ReturnType<typeof getCertifiedLineageForBatches>>();

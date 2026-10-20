@@ -82,7 +82,7 @@ export function normalizeStoredLineSources(definition: TemplateDefinition, lineS
   const components = new Map(definition.groups.flatMap((group) => group.components.map((component) => [component.id, component] as const)));
   return Object.fromEntries(Object.entries(lineSources).map(([id, contract]) => {
     const component = components.get(id);
-    return [id, component && contract.origin !== "reviewed" && isLegacyAutomaticPair(component, contract)
+    return [id, component && (contract.origin === "bootstrap" || contract.origin === "proposed") && isLegacyAutomaticPair(component, contract)
       ? { ...contract, entryPolicy: "none" } : { ...contract }];
   }));
 }

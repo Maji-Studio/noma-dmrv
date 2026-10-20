@@ -147,3 +147,13 @@ it("carries the facility zone when there are no applications", async () => {
   expect(result.facilityTimezone).toBe(timezone);
   expect(collectFutureDatedMeasurements).not.toHaveBeenCalled();
 });
+
+
+it.each([undefined, "claimed-draft"])("forwards the submission read scope for correction recovery: %s", async (claimedSubmissionId) => {
+  vi.mocked(resolveScopeForRemoval).mockResolvedValue(scope);
+  const facilityFacts = facts(fixture as GhgEntryTemplate);
+  vi.mocked(loadFacilityCertifierFacts).mockResolvedValue(facilityFacts);
+  await loadRemovalSubmissionContext(ctx, "removal-1", { claimedSubmissionId });
+  expect(loadBatchEmissionContext).toHaveBeenCalledWith(ctx, scope.facilityId, scope.memberBatches, facilityFacts,
+    { removalId: "removal-1", submissionId: claimedSubmissionId });
+});
