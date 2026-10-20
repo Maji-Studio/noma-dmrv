@@ -156,7 +156,7 @@ const navSections: NavSection[] = [
 ];
 
 /**
- * Admin section — appended to the nav only for users with the admin role.
+ * Platform section — appended to the nav only for Platform Admins.
  *
  * One item, because the organization directory is the only surface that lives
  * under `/admin`. It used to point at an `/admin` hub whose other two tiles
@@ -165,7 +165,7 @@ const navSections: NavSection[] = [
  * `?facility=` param is skipped.
  */
 const adminSection: NavSection = {
-  title: "Admin",
+  title: "Platform",
   accent: SECTION_ACCENTS.admin,
   items: [
     {

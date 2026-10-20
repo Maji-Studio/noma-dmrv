@@ -18,7 +18,7 @@ export async function enterDefaultOrganization(page: Page): Promise<void> {
     .filter({ hasText: DEFAULT_ORGANIZATION_NAME });
 
   await expect(organization).toBeVisible();
-  const enterButton = organization.getByRole("button", { name: "Enter" });
+  const enterButton = organization.getByRole("button", { name: "Open" });
 
   await enterButton.click();
   // Next dev can drop the first action after compiling a sibling route.

@@ -1,5 +1,5 @@
 /**
- * Admin — Organizations. Platform Admins list every organization, enter any
+ * Platform: Organizations. Platform Admins list every organization, open any
  * one (sets the session's active org), and create the first org. Access is
  * gated by the parent admin layout's requireAdmin() guard.
  *
@@ -13,11 +13,7 @@ import { OrganizationsAdmin } from "@/components/organizations/organizations-adm
 export default function AdminOrganizationsPage() {
   return (
     <div className="container-max page-shell">
-      <PageHeader
-        eyebrow="Admin"
-        title="Organizations"
-        subtitle="Enter an organization to work inside its workspace."
-      />
+      <PageHeader eyebrow="Platform" title="Organizations" />
 
       <OrganizationsAdmin />
     </div>

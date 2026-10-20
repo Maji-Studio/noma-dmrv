@@ -151,8 +151,17 @@ test.describe("Organization foundation UI", () => {
       createSection.getByRole("button", { name: "Create organization" }),
     ).toBeEnabled();
 
-    await organization.getByRole("button", { name: "Enter" }).click();
+    await organization.getByRole("button", { name: "Open" }).click();
     await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
+
+    // A Platform Admin without a membership works under the Platform Admin bar.
+    const bar = page.getByRole("region", { name: "Platform Admin" });
+    await expect(bar).toContainText(`Platform Admin in ${ORGANIZATION_NAME}`);
+    await expect(bar.getByRole("link", { name: "Back to Platform" })).toHaveAttribute(
+      "href",
+      "/admin/organizations",
+    );
+    await expect(page.getByText(`Now working in ${ORGANIZATION_NAME}`)).toBeVisible();
   });
 
   test("single-organization sidebar renders the active organization as a dashboard link", async ({
