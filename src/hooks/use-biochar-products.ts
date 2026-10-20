@@ -18,6 +18,7 @@ import {
   deleteBiocharProductFn,
   getBiocharProductByIdFn,
   getBiocharProductsFn,
+  getBiocharProductStatsFn,
   updateBiocharProductFn,
 } from "@/fn/biochar-products";
 import type {
@@ -41,6 +42,9 @@ export const biocharProductKeys = {
   lists: () => [...biocharProductKeys.all, "list"] as const,
   list: (filters?: Partial<BiocharProductFilterData>) =>
     [...biocharProductKeys.lists(), filters] as const,
+  stats: (filters?: { facilityId?: string }) =>
+    [...biocharProductKeys.all, "stats", filters] as const,
+  statsPrefix: () => [...biocharProductKeys.all, "stats"] as const,
   details: () => [...biocharProductKeys.all, "detail"] as const,
   detail: (id: string) => [...biocharProductKeys.details(), id] as const,
   options: () => [...biocharProductKeys.all, "options"] as const,
@@ -51,6 +55,15 @@ export const biocharProductKeys = {
 // ============================================
 // Biochar Product Query Hooks
 // ============================================
+
+export function useBiocharProductStats(facilityId?: string, options?: { enabled?: boolean }) {
+  const filters = { facilityId };
+  return useQuery({
+    queryKey: biocharProductKeys.stats(filters),
+    queryFn: async () => unwrap(await getBiocharProductStatsFn(filters)),
+    enabled: options?.enabled,
+  });
+}
 
 /**
  * Hook to fetch paginated list of biochar products with filtering
@@ -102,6 +115,7 @@ export function useCreateBiocharProduct(
     onSuccess: async (data, variables) => {
       // Invalidate all biochar product lists
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.options() });
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
@@ -210,6 +224,7 @@ export function useUpdateBiocharProduct(
 
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.options() });
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "biocharProduct");
@@ -315,6 +330,7 @@ export function useDeleteBiocharProduct(
       queryClient.removeQueries({ queryKey: biocharProductKeys.detail(variables.productId) });
       // Invalidate lists for consistency
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.options() });
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
@@ -349,6 +365,7 @@ export function useDeleteBiocharProduct(
 
       if (error instanceof StaleVersionError) {
         queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
         queryClient.invalidateQueries({ queryKey: biocharProductKeys.detail(variables.productId) });
       }
       await callbacks?.onError?.(error, variables);
@@ -356,6 +373,7 @@ export function useDeleteBiocharProduct(
     onSettled: async (data, error, variables) => {
       // Refetch lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
 
       await callbacks?.onSettled?.(data, error, variables);
     },

@@ -64,7 +64,8 @@ export interface BiocharProductWithRelations extends BiocharProduct {
   } | null;
 }
 
-function sourceAllocationAggregate(ctx: OrgContext) {
+export function sourceAllocationAggregate(ctx: OrgContext) {
+  requireOrgScope(ctx);
   return db
     .select({
       biocharProductId: biocharProductSourceAllocations.biocharProductId,

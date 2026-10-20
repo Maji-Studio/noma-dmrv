@@ -16,6 +16,7 @@ vi.mock("@/hooks/use-production-runs", () => ({
 }));
 vi.mock("@/hooks/use-biochar-products", () => ({
   useBiocharProducts: () => ({ data: { items: [state.row], totalPages: 1 } }),
+  useBiocharProductStats: () => ({ data: undefined, isLoading: false, isError: false }),
   useBiocharProduct: () => ({}), useCreateBiocharProduct: () => ({}), useUpdateBiocharProduct: () => ({}),
   useDeleteBiocharProduct: () => ({ mutateAsync: state.remove }),
 }));
