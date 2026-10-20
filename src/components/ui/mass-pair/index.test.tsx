@@ -63,4 +63,12 @@ describe("MassPair", () => {
       expect(classTokens).not.toContain("body-small");
     }
   });
+
+  it("says Not recorded once when neither figure is recorded", () => {
+    const html = renderToStaticMarkup(<MassPair wetKg={null} dryKg={null} />);
+
+    expect(html.match(/Not recorded/g)).toHaveLength(1);
+    expect(html).not.toContain("font-mono");
+    expect(html).toContain("text-[var(--color-text-tertiary)]");
+  });
 });

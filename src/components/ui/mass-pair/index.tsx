@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   formatRecordedMass,
   MASS_MOISTURE_LABELS,
@@ -29,6 +30,24 @@ export function MassPair({
     { label: dryLabel, value: formatRecordedMass(dryKg) },
   ];
   const isCompact = variant === "compact";
+  const bothMissing = figures.every(
+    (figure) => figure.value === MISSING_VALUE.notRecorded,
+  );
+
+  // Two bold "Not recorded" figures collide in a narrow card. When neither
+  // side has a figure, say it once in the quiet missing-value style.
+  if (bothMissing && !isCompact) {
+    return (
+      <p
+        className={cn(
+          "body-small text-[var(--color-text-tertiary)]",
+          className,
+        )}
+      >
+        {MISSING_VALUE.notRecorded}
+      </p>
+    );
+  }
 
   return (
     <dl
