@@ -211,6 +211,13 @@ export async function getLockedCertifiedLineage(
   return lockLineage(tx, (fresh) => lineageQuery(ctx, tx, target, fresh));
 }
 
+/** A multi-batch entry operation locks the union in one artifact pass. */
+export async function getLockedCertifiedLineageForBatches(ctx: OrgContext, tx: DbTransaction, batchIds: readonly string[]) {
+  requireOrgScope(ctx);
+  if (!batchIds.length) return [];
+  return lockLineage(tx, (fresh) => resolveLineage(ctx, tx, inArray(creditBatches.id, [...batchIds]), fresh));
+}
+
 /**
  * The locked lineage of every feedstock and delivery in `targets`, resolved in
  * one query. Used when a shared reference (a vehicle) changes a value those

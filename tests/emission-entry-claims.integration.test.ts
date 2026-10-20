@@ -1,3 +1,9 @@
+import type { PoolClient } from "pg";
+import { pgSchema, integer, text } from "drizzle-orm/pg-core";
+import { listEmissionEntryDraftContenders } from "@/data-access/emission-entry-contenders";
+import { removalEntryOwner } from "@/lib/certification/removal-emission-contributions";
+import { withGhgVerifierSubmissionLock } from "@/data-access/ghg-verifier-submission-lock";
+import { buildProductionBatchReference } from "@/lib/isometric/production-batches";
 import { requestDocumentUploadInTransaction, confirmDocumentUploadInTransaction, uploadFactsFor } from "@/data-access/document-writes";
 import { cleanupDocumentUploads } from "./helpers/document-upload-cleanup";
 import { documents } from "@/db/schema";
@@ -12,7 +18,7 @@ import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, certificationSubmissions, creditBatchApplications, creditBatches, emissionEntries, emissionEntryValues,
-  removalTemplateObservations, users, certifierRemovals, organizations, facilities } from "@/db/schema";
+  removalTemplateObservations, users, certifierRemovals, certifierGhgStatements, certifierProductionBatches, organizations, facilities } from "@/db/schema";
 import { createEmissionEntry, deleteEmissionEntry, getEmissionEntry, updateEmissionEntry } from "@/data-access/emission-entries";
 import { assertEmissionEntryDocumentWritable } from "@/data-access/emission-entry-lock";
 import { recordEmissionZeros } from "@/data-access/emission-zeros";
@@ -26,16 +32,24 @@ import { cleanupLineageFixture, createLineageFixture, type LineageFixture } from
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
 
 vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => true, requireEmissionsEntriesEnabled: () => {} }));
+const correctionRemote = vi.hoisted(() => ({ status: "AWAITING_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: ["correction-original"] }));
+vi.mock("@/lib/isometric/ghg-statements", () => ({ getGhgStatement: async () => correctionRemote }));
+vi.mock("@/data-access/certifier-credentials", () => ({ resolveIsometricClient: async () => ({}) }));
 const userId = `entry-claims-${crypto.randomUUID()}`;
 const ctx = { ...makeTestOrgContext(userId), orgRole: "owner" as const };
 let fixture: LineageFixture;
 let second: LineageFixture | undefined;
 let observation: typeof removalTemplateObservations.$inferSelect;
 const NEWER_DOCUMENT_COUNT = 201;
+const CORRECTION_LOCK_WAIT_MS = 5_000;
+const correctionActivity = pgSchema("pg_catalog").view("pg_stat_activity", {
+  pid: integer("pid"), waitEventType: text("wait_event_type"),
+}).existing();
 const shape = [{ key: "electricity_use", type: "monitored" as const, quantityKind: "energy" as const }];
 beforeAll(async () => { await ensureTestOrg(); });
 beforeEach(async () => {
   await db.insert(users).values({ id: userId, email: `${userId}@example.test`, emailVerified: true }).onConflictDoNothing();
+  correctionRemote.status = "AWAITING_VERIFICATION";
   fixture = await createLineageFixture("none");
   [observation] = await db.insert(removalTemplateObservations).values({
     organizationId: TEST_ORG_ID, provider: "isometric", externalProjectId: "project", externalTemplateId: `claims-${crypto.randomUUID()}`,
@@ -333,4 +347,102 @@ it.each(["writable", "reserved", "sent"] as const)("upload confirmation preserve
   } finally {
     await cleanupDocumentUploads(ctx, [document.id]);
   }
+});
+
+async function sentCorrectionEntry() {
+  const entry = await value();
+  const original = await draft([{ entryId: entry.id, contentRevision: entry.contentRevision }]);
+  await reserve(original);
+  await markSubmissionSubmitted(ctx, original.id, { externalId: "correction-original", expectedLockedAt: original.lockedAt!,
+    productionEmissionsClaim: { removalId: fixture.removalId, creditBatchIds: [fixture.batchId] } });
+  const [statement] = await db.insert(certifierGhgStatements).values({ organizationId: ctx.organizationId,
+    facilityId: fixture.facilityId, reportingPeriodEndOn: "2026-06-30" }).returning();
+  fixture.ghgStatementId = statement.id;
+  await db.update(certifierRemovals).set({ ghgStatementId: statement.id }).where(eq(certifierRemovals.id, fixture.removalId));
+  await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId, provider: "isometric",
+    submissionType: "ghg_statement", localEntityType: "ghgStatement", localEntityId: statement.id,
+    externalId: "correction-statement", version: 1, status: "submitted", submittedAt: new Date(),
+    metadata: { remoteStatus: "DRAFT", removalIds: ["correction-original"] } });
+  return { entry: await getEmissionEntry(ctx, entry.id), original, statement };
+}
+
+it("refuses a sent entry before the return and edits it after a fresh FAILED_VERIFICATION read", async () => {
+  const { entry } = await sentCorrectionEntry();
+  const input = { id: entry.id, expectedVersion: entry.version, occurredOn: "2026-06-11" };
+  await expect(updateEmissionEntry(ctx, input)).rejects.toThrow("reserved or sent");
+  correctionRemote.status = "FAILED_VERIFICATION";
+  expect((await updateEmissionEntry(ctx, input)).occurredOn).toBe("2026-06-11");
+});
+
+it("assigns a new eligible entry to the returned Removal ahead of a draft", async () => {
+  await sentCorrectionEntry();
+  correctionRemote.status = "FAILED_VERIFICATION";
+  second = await createLineageFixture("none");
+  await db.update(creditBatchApplications).set({ creditBatchId: fixture.batchId }).where(eq(creditBatchApplications.removalId, second.removalId));
+  const entry = await value();
+  const { entries } = await loadBatchEmissionEntryFacts(ctx, fixture.batchId, observation);
+  const contenders = await listEmissionEntryDraftContenders(ctx, [fixture.batchId]);
+  expect(contenders.find((row) => row.removalId === fixture.removalId)?.contenderKind).toBe("correction");
+  expect(removalEntryOwner(entries.find((row) => row.id === entry.id)!, contenders)).toBe(fixture.removalId);
+});
+
+it("supersedes the old attempt and stamps the current set without releasing tombstoned claims", async () => {
+  const { entry, original } = await sentCorrectionEntry();
+  correctionRemote.status = "FAILED_VERIFICATION";
+  await deleteEmissionEntry(ctx, entry.id, entry.version);
+  const added = await value();
+  const next = await draft([{ entryId: added.id, contentRevision: added.contentRevision }], fixture.removalId, 2);
+  await reserve(next);
+  await markSubmissionSubmitted(ctx, next.id, { externalId: "correction-next", supersedePreviousId: original.id,
+    expectedLockedAt: next.lockedAt!, productionEmissionsClaim: { removalId: fixture.removalId, creditBatchIds: [fixture.batchId] } });
+  const rows = await db.select().from(emissionEntries).where(eq(emissionEntries.creditBatchId, fixture.batchId));
+  expect(rows.every((row) => row.sentByRemovalId === fixture.removalId && !row.sendReservedBySubmissionId)).toBe(true);
+  expect(rows.find((row) => row.id === entry.id)?.deletedAt).not.toBeNull();
+  const [prior] = await db.select().from(certificationSubmissions).where(eq(certificationSubmissions.id, original.id));
+  expect(prior.status).toBe("superseded");
+});
+
+it("serializes a sent-entry write behind statement submission's lineage lock", async () => {
+  const { entry, statement } = await sentCorrectionEntry();
+  correctionRemote.status = "FAILED_VERIFICATION";
+  let release!: () => void;
+  let acquired!: () => void;
+  const ready = new Promise<void>((resolve) => { acquired = resolve; });
+  const hold = new Promise<void>((resolve) => { release = resolve; });
+  const submission = withGhgVerifierSubmissionLock(ctx, statement.id, async () => {
+    acquired();
+    await hold;
+    correctionRemote.status = "AWAITING_VERIFICATION";
+  });
+  await ready;
+  let writerPid: number | undefined;
+  const writerAcquired = (client: PoolClient) => { writerPid = (client as PoolClient & { processID: number }).processID; };
+  db.$client.once("acquire", writerAcquired);
+  const edit = updateEmissionEntry(ctx, { id: entry.id, expectedVersion: entry.version, occurredOn: "2026-06-11" });
+  const refused = expect(edit).rejects.toThrow("reserved or sent");
+  try {
+    await vi.waitFor(async () => {
+      expect(writerPid).toBeDefined();
+      const [activity] = await db.select().from(correctionActivity).where(eq(correctionActivity.pid, writerPid!));
+      expect(activity?.waitEventType).toBe("Lock");
+    }, { timeout: CORRECTION_LOCK_WAIT_MS });
+  } finally {
+    db.$client.off("acquire", writerAcquired);
+    release();
+    await submission;
+    await refused;
+  }
+});
+
+it("finalizes a ledger-less Removal with registered and unregistered member batches", async () => {
+  second = await createLineageFixture("none");
+  await db.update(creditBatchApplications).set({ removalId: fixture.removalId }).where(eq(creditBatchApplications.removalId, second.removalId));
+  await db.insert(certifierProductionBatches).values({ organizationId: ctx.organizationId, creditBatchId: fixture.batchId,
+    externalProductionBatchId: "registered-deletion", supplierReference: buildProductionBatchReference({ creditBatchId: fixture.batchId }),
+    massKg: 1, startedOn: "2026-06-01", endedOn: "2026-06-30", payloadHash: "registered-deletion" });
+  const claim = await claimRemovalDeletion(ctx, fixture.facilityId, fixture.removalId);
+  expect(claim.submissionIds).toEqual([]);
+  await finalizeRemovalDeletion(ctx, claim, { deletedGhgEntryIds: [], deletedBiocharApplicationIds: [], absentGhgEntryIds: [], absentBiocharApplicationIds: [], unresolvedBiocharApplicationReferences: [],
+    productionBatches: (claim.productionBatches ?? []).map((batch) => ({ creditBatchId: batch.creditBatchId, externalId: batch.externalProductionBatchId, outcome: "absent" as const })) });
+  expect(await db.select().from(creditBatchApplications).where(eq(creditBatchApplications.removalId, fixture.removalId))).toEqual([]);
 });

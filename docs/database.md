@@ -585,8 +585,15 @@ by a database trigger. See [ADR 0022](./adr/0022-method-b-is-computed-eligibilit
 `emission_entries` binds one batch entry to a template observation and component.
 All domain references include `organization_id`. `version` changes on every write;
 `content_revision` changes for values, dates, template confirmation and uploaded
-evidence. Notes change only the version. Membership writers lock the batch before
-the entry; evidence writers lock the entry. Reserved or sent entries refuse edits.
+evidence. Notes change only the version. Membership and evidence writers lock lineage artifacts, then the facility, batch
+and entry. Reserved entries refuse edits. Sent entries reopen only with the
+emissions feature enabled and fresh returned-statement facts under the shared
+certification lineage locks. Unknown or stale statuses and in-flight lineage
+submissions keep the correction window closed. The window also controls date
+edits and sent-zero replacement; dates must stay within the Removal's entry window.
+Correction state compares the last submitted contribution manifest with the
+current contribution and is never stored. A new attempt reserves the current set
+and supersedes the prior attempt without transferring its entry claims.
 Ordinary entry deletion tombstones the entry and keeps its values and evidence.
 Removal draft deletion first records an activity tombstone, then hard-deletes
 its never-sent recorded zeros, including already tombstoned zeros. The zero-owner

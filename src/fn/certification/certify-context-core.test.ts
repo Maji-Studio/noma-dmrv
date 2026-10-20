@@ -1,3 +1,4 @@
+vi.mock("@/data-access/removal-entry-correction", () => ({ loadRemovalEntryCorrection: vi.fn(async () => ({ windowOpen: false, correctionNeeded: false, changedComponentIds: [], message: null })) }));
 import { beforeEach, expect, it, vi } from "vitest";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";

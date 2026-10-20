@@ -1,3 +1,6 @@
+import { isRemovalCorrectionWindowOpen } from "@/lib/record-lock";
+import { readRecordLockLineage } from "./record-lock-lineage";
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -12,27 +15,43 @@ import { requireOrgScope, type Executor } from "./utils";
 export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBatchIds: string[], executor: Executor = db): Promise<EntryContender[]> {
   requireOrgScope(ctx);
   if (!creditBatchIds.length) return [];
+  const enabled = emissionsEntriesEnabled();
   const members = await executor.select({ removalId: creditBatchApplications.removalId }).from(creditBatchApplications)
     .where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.creditBatchId, creditBatchIds)));
   const ids = [...new Set(members.flatMap((member) => member.removalId ? [member.removalId] : []))];
   if (!ids.length) return [];
-  const rows = await executor.select({ removalId: certifierRemovals.id, createdAt: certifierRemovals.createdAt, metadata: certifierRemovals.metadata,
+  const rows = await executor.select({ removalId: certifierRemovals.id, createdAt: certifierRemovals.createdAt, metadata: certifierRemovals.metadata, ghgStatementId: certifierRemovals.ghgStatementId,
     creditBatchId: creditBatches.id, startDate: creditBatches.startDate, applicationDate: applications.applicationDate })
     .from(certifierRemovals)
     .innerJoin(creditBatchApplications, and(eq(creditBatchApplications.removalId, certifierRemovals.id), eq(creditBatchApplications.organizationId, ctx.organizationId)))
     .innerJoin(creditBatches, and(eq(creditBatches.id, creditBatchApplications.creditBatchId), eq(creditBatches.organizationId, ctx.organizationId)))
     .innerJoin(applications, and(eq(applications.id, creditBatchApplications.applicationId), eq(applications.organizationId, ctx.organizationId)))
-    .where(and(eq(certifierRemovals.organizationId, ctx.organizationId), inArray(certifierRemovals.id, ids),
-      sql`not exists (select 1 from ${certificationSubmissions} where
-        ${certificationSubmissions.organizationId} = ${ctx.organizationId}
-        and ${certificationSubmissions.localEntityId} = ${certifierRemovals.id}
-        and ${certificationSubmissions.localEntityType} = 'removal'
-        and ${certificationSubmissions.submissionType} = 'removal'
-        and (${certificationSubmissions.submittedAt} is not null or ${certificationSubmissions.status} in ('submitted', 'accepted')))`));
-  return ids.flatMap((removalId) => {
+    .where(and(eq(certifierRemovals.organizationId, ctx.organizationId), inArray(certifierRemovals.id, ids), enabled ? undefined : sql`not exists (
+      select 1 from ${certificationSubmissions} where ${certificationSubmissions.organizationId} = ${ctx.organizationId}
+      and ${certificationSubmissions.localEntityId} = ${certifierRemovals.id}
+      and ${certificationSubmissions.localEntityType} = 'removal' and ${certificationSubmissions.submissionType} = 'removal'
+      and (${certificationSubmissions.submittedAt} is not null or ${certificationSubmissions.status} in ('submitted', 'accepted')))`));
+  if (!enabled) return ids.flatMap((removalId) => {
     const group = rows.filter((row) => row.removalId === removalId && !hasFreshRemovalDeletionLease(row.metadata));
     const window = deriveRemovalEntryWindow(group, group.map((row) => row.applicationDate));
     return window ? [{ contenderKind: "draft" as const, removalId, createdAt: group[0].createdAt.toISOString(),
+      creditBatchIds: [...new Set(group.map((row) => row.creditBatchId))], window }] : [];
+  });
+  const memberBatchIds = [...new Set(rows.map((row) => row.creditBatchId))];
+  const sharedMembers = memberBatchIds.length ? await executor.select({ removalId: certifierRemovals.id,
+    ghgStatementId: certifierRemovals.ghgStatementId, creditBatchId: creditBatchApplications.creditBatchId })
+    .from(creditBatchApplications).innerJoin(certifierRemovals, and(eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, creditBatchApplications.removalId)))
+    .where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.creditBatchId, memberBatchIds))) : [];
+  const facts = await readRecordLockLineage(ctx, executor, sharedMembers, emissionsEntriesEnabled());
+  return ids.flatMap((removalId) => {
+    const group = rows.filter((row) => row.removalId === removalId && !hasFreshRemovalDeletionLease(row.metadata));
+    const fact = facts.find((item) => item.id === removalId);
+    const shared = facts.filter((item) => sharedMembers.some((row) => row.removalId === item.id && group.some((member) => member.creditBatchId === row.creditBatchId)));
+    const correction = !!fact && emissionsEntriesEnabled() && isRemovalCorrectionWindowOpen(fact, shared);
+    const submitted = fact?.submissions.some((submission) => submission.submittedAt || ["submitted", "accepted"].includes(submission.status));
+    if (submitted && !correction) return [];
+    const window = deriveRemovalEntryWindow(group, group.map((row) => row.applicationDate));
+    return window ? [{ contenderKind: correction ? "correction" as const : "draft" as const, removalId, createdAt: group[0].createdAt.toISOString(),
       creditBatchIds: [...new Set(group.map((row) => row.creditBatchId))], window }] : [];
   });
 }

@@ -1,3 +1,4 @@
+import { lockEmissionCorrectionScope, revalidateEmissionCorrectionScope, emissionCorrectionWindow } from "./emission-entry-corrections";
 import { and, eq, isNull } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { creditBatches, facilities, emissionEntries } from "@/db/schema";
@@ -27,7 +28,7 @@ export async function lockEmissionEntry(ctx: OrgContext, tx: DbTransaction, id: 
 export async function lockWritableEmissionEntry(ctx: OrgContext, tx: DbTransaction, id: string, options: { includeDeleted?: boolean } = {}) {
   requireOrgScope(ctx);
   const entry = await lockEmissionEntry(ctx, tx, id, options);
-  if (entry.sentByRemovalId || entry.sendReservedBySubmissionId)
+  if ((entry.sentByRemovalId && !emissionCorrectionWindow(ctx, tx, entry.creditBatchId, entry.sentByRemovalId)) || entry.sendReservedBySubmissionId)
     throw new DomainError(
       "certification_locked",
       "This emissions entry is reserved or sent. It cannot be changed.",
@@ -37,6 +38,7 @@ export async function lockWritableEmissionEntry(ctx: OrgContext, tx: DbTransacti
 /** Discover unlocked, then lock facility before batch, matching facility archive. */
 export async function lockEmissionEntryBatch(ctx: OrgContext, tx: DbTransaction, creditBatchId: string) {
   requireOrgScope(ctx);
+  await lockEmissionCorrectionScope(ctx, tx, creditBatchId);
   const [initial] = await tx.select().from(creditBatches)
     .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, creditBatchId)));
   if (!initial) throw new DomainError("not_found", "Credit batch was not found.");
@@ -49,6 +51,7 @@ export async function lockEmissionEntryBatch(ctx: OrgContext, tx: DbTransaction,
     .for("update");
   if (!batch) throw new DomainError("not_found", "Credit batch was not found.");
   if (batch.facilityId !== initial.facilityId) throw emissionEntryParentChanged();
+  await revalidateEmissionCorrectionScope(ctx, tx, creditBatchId);
   return { batch, facility };
 }
 export function emissionEntryParentChanged() {

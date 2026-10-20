@@ -37,9 +37,9 @@ it("reads org-scoped entry documents and binds only IDs in the manifest on every
 });
 it("fails closed when a manifest file is absent or not uploaded", async () => {
   mocks.documents.mockResolvedValue([]);
-  await expect(collect()).rejects.toThrow(EMISSION_ENTRY_FILE_UNAVAILABLE);
+  await expect(collect()).rejects.toThrow(EMISSION_ENTRY_FILE_UNAVAILABLE("Emissions entry"));
   mocks.documents.mockResolvedValue([{ id: "frozen-file", entityId: "entry", uploadStatus: "pending" }]);
-  await expect(collect()).rejects.toThrow(EMISSION_ENTRY_FILE_UNAVAILABLE);
+  await expect(collect()).rejects.toThrow(EMISSION_ENTRY_FILE_UNAVAILABLE("Emissions entry"));
 });
 it("does not walk entries absent from the contribution manifest", async () => {
   expect(await collect({ ...contributions, manifest: [], entrySet: [] })).toEqual([]);
@@ -68,7 +68,7 @@ it("loads multiple entries in one manifest-id query", async () => {
 });
 it("refuses a document belonging to a different manifest entry and logs only identifiers", async () => {
   mocks.documents.mockResolvedValue([{ id: "frozen-file", entityId: "different-entry", uploadStatus: "uploaded" }]);
-  await expect(collect()).rejects.toThrow(EMISSION_ENTRY_FILE_UNAVAILABLE);
+  await expect(collect()).rejects.toThrow(EMISSION_ENTRY_FILE_UNAVAILABLE("Emissions entry"));
   expect(mocks.warn).toHaveBeenCalledWith({ removalId: "removal", documentId: "frozen-file", entryId: "entry",
     targets: [{ componentId: "component", inputKey: "energy" }],
   }, expect.any(String));
@@ -80,7 +80,7 @@ it("logs ids at the fn boundary before rethrowing changed-entry and duplicate-fi
   const duplicate = structuredClone(contributions);
   duplicate.manifest[0].entries.push({ ...duplicate.manifest[0].entries[0], entryId: "other-entry" });
   duplicate.entrySet.push({ entryId: "other-entry", contentRevision: 3 });
-  await expect(collect(duplicate)).rejects.toThrow(EMISSION_ENTRY_FILE_DUPLICATE);
+  await expect(collect(duplicate)).rejects.toThrow(EMISSION_ENTRY_FILE_DUPLICATE("Emissions entry"));
   expect(mocks.warn).toHaveBeenLastCalledWith({ removalId: "removal", documentId: "frozen-file", entryId: "other-entry", otherEntryId: "entry" }, expect.any(String));
   expect(mocks.documents).not.toHaveBeenCalled();
 });

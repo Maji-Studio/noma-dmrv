@@ -1,3 +1,4 @@
+vi.mock("./emission-entry-corrections", () => ({ lockEmissionCorrectionScope: vi.fn(), revalidateEmissionCorrectionScope: vi.fn(), emissionCorrectionWindow: vi.fn() }));
 import { beforeEach, expect, it, vi } from "vitest";
 import type { DbTransaction } from "@/db";
 import { creditBatches, emissionEntries, facilities } from "@/db/schema";

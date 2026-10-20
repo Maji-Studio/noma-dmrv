@@ -1,3 +1,4 @@
+import { lockRemovalEntryCorrectionAttempt } from "./emission-entry-corrections";
 import { isRemovalDeletionLeased } from "./removal-deletion-lease";
 /**
  * Submission ledger — claim choreography.
@@ -387,6 +388,8 @@ async function createDraft<H>(
   try {
     const run = async (tx: DbTransaction): Promise<ClaimOutcome> => {
       await lockAndVerifyMapping(ctx, tx, args.guard);
+      if (args.key.localEntityType === "removal" && args.key.submissionType === "removal")
+        await lockRemovalEntryCorrectionAttempt(ctx, tx, args.key.localEntityId);
       await lockSubmissionArtifact(tx, args.key);
       if (await isRemovalDeletionLeased(ctx, args.key, tx)) return { kind: "blocked", reason: "in-flight" };
       // Recovery may delete a purely local Removal after the optimistic

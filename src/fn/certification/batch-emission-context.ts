@@ -1,3 +1,5 @@
+import { loadRemovalEntryCorrection } from "@/data-access/removal-entry-correction";
+import type { EntryCorrectionState } from "@/lib/certification/removal-entry-correction";
 import { listEmissionEntryDraftContenders, listEmissionEntryAvailableApplications, loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
 import { isLiveEntryReservation, entriesWithoutRemoval, type EntryContender } from "@/lib/certification/removal-emission-contributions";
 import type { OrgContext } from "@/lib/auth/server";
@@ -19,7 +21,7 @@ export interface EntryTemplateContext {
 }
 
 export type BatchEmissionContext = Record<string,
-  Pick<BatchEmissionLineFacts, "automaticFigures" | "omittedAutomaticSources"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>> & { productionReservationSubmissionId?: string | null; contenders?: EntryContender[]; entriesWithoutRemoval?: string[] }>;
+  Pick<BatchEmissionLineFacts, "automaticFigures" | "omittedAutomaticSources"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>> & { corrections?: EntryCorrectionState[]; productionReservationSubmissionId?: string | null; contenders?: EntryContender[]; entriesWithoutRemoval?: string[] }>;
 
 /** Batch-wide facts, even when the Removal carries only some applications. */
 export async function loadBatchEmissionContext(
@@ -70,6 +72,10 @@ export async function loadBatchEmissionContext(
     const entries = deriveEmissionEntryFacts(stored, observation, previousObservations);
     result[id] = { productionReservationSubmissionId: rollups[id].batch.productionEmissionsClaimReservedBySubmissionId, entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
       entriesWithoutRemoval: entriesWithoutRemoval(entries, contenders, liveReservationIds, availableApplications) };
+  }
+  for (const contender of contenders.filter((item) => item.contenderKind === "correction")) {
+    const correction = await loadRemovalEntryCorrection(ctx, contender.removalId);
+    for (const id of contender.creditBatchIds) if (result[id]) (result[id].corrections ??= []).push(correction);
   }
   return result;
 }

@@ -18,7 +18,7 @@ export function deriveRemovalEntryWindow(
   return { start: starts[0], end: ends[ends.length - 1] };
 }
 export interface EntryContender {
-  contenderKind: "draft";
+  contenderKind: "draft" | "correction";
   removalId: string;
   createdAt: string;
   creditBatchIds: readonly string[];
@@ -76,7 +76,7 @@ export function removalEntryOwner(entry: RemovalEntryFact, contenders: readonly 
   if (entry.sendReservedBySubmissionId && !entry.reservationKnownInactive) return null;
   return contenders.filter((draft) => draft.creditBatchIds.includes(entry.creditBatchId) && inWindow(entry, draft.window) &&
     (entry.kind !== "zero" || entry.confirmedForRemovalId === draft.removalId))
-    .sort((a, b) => a.window.end.localeCompare(b.window.end) || a.createdAt.localeCompare(b.createdAt) || a.removalId.localeCompare(b.removalId))[0]?.removalId ?? null;
+    .sort((a, b) => Number(b.contenderKind === "correction") - Number(a.contenderKind === "correction") || a.window.end.localeCompare(b.window.end) || a.createdAt.localeCompare(b.createdAt) || a.removalId.localeCompare(b.removalId))[0]?.removalId ?? null;
 }
 
 /** Shared by batch reads and the transactional zero writer. */

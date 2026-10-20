@@ -137,6 +137,7 @@ export interface BatchTransportFact {
 }
 
 export interface BatchHealthFacts {
+  entryCorrections?: import("./removal-entry-correction").EntryCorrectionState[];
   emissionLines?: BatchEmissionLine[] | null;
   warnings?: string[];
   /** The same Sample document warnings as typed keys, for surfaces with their own wording. */
@@ -498,6 +499,7 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
  * uniformity) live in `deriveRemovalReadiness`, not here.
  */
 export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
+  const correctionMessages = facts.entryCorrections?.flatMap((state) => state.message ? [state.message] : []) ?? [];
   const emissionIssues = new Map(facts.emissionLines
     ?.filter((line) => line.blocker?.fixTarget === "emissions")
     .map((line) => [line.componentId, line]));
@@ -528,10 +530,10 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
       }),
       ...(facts.emissionLines != null ? [{
         key: "emissions" as const, label: "Emissions", fixTarget: "emissions" as const,
-        status: emissionIssues.size ? "unmet" as const : "met" as const,
-        detail: [...emissionIssues.values()].map((line) => line.blocker?.code === "entryHasNoRemoval"
+        status: emissionIssues.size || correctionMessages.length ? "unmet" as const : "met" as const,
+        detail: [correctionMessages.join(" "), [...emissionIssues.values()].map((line) => line.blocker?.code === "entryHasNoRemoval"
           ? line.blocker.message : line.blocker?.code === "entryMissingEvidence"
-          ? `Add a file for ${line.displayName}.` : `Check the manual entry on ${line.displayName}.`).join(" ") || undefined,
+          ? `Add a file for ${line.displayName}.` : `Check the manual entry on ${line.displayName}.`).join(" ")].filter(Boolean).join(" ") || undefined,
       }] : []),
       // Template line blockers (no source, unassigned, not set up) are
       // facility-level and stay in Removal readiness, like the rest of coverage.

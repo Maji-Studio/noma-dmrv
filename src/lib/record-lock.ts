@@ -176,6 +176,14 @@ export function isReturnedRemoval(removal: RecordLockRemoval): boolean {
     removal.statements.length > 0 && removal.statements.every(isReturnedStatement);
 }
 
+/** Entry corrections use the existing returned state and every shared lineage holder. */
+export function isRemovalCorrectionWindowOpen(removal: RecordLockRemoval, lineage: readonly RecordLockRemoval[] = [removal]): boolean {
+  return isReturnedRemoval(removal) && lineage.every((holder) =>
+    holder.submissions.every((submission) => !submission.inFlight && isTerminalAttemptStatus(submission.status)) &&
+    holder.statements.every((statement) => statement.fresh && !statement.inFlight &&
+      (statement.status === "DRAFT" || statement.status === "FAILED_VERIFICATION")));
+}
+
 function returnedBy(facts: RecordLockFacts): Pick<RecordLock, "returnedBy"> {
   const returned = facts.removals.filter(isReturnedRemoval).map(removal => ({
     removalId: removal.id, statements: removal.statements.map(statement => ({ id: statement.id, status: statement.status })),

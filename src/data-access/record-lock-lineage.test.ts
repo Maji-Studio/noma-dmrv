@@ -46,11 +46,11 @@ it("logs only safe identifiers and error classification when refresh fails", asy
   warn.mockRestore();
 });
 
-function statementReader(): Pick<DbTransaction, "select"> {
+function statementReader(status = "FAILED_VERIFICATION"): Pick<DbTransaction, "select"> {
   let reads = 0;
   const common = { createdAt: null, lockedAt: null, status: "submitted" };
   const removal = { ...common, id: "removal-submission", localEntityId: "removal", externalId: "entry", submittedAt: new Date("2026-10-01"), metadata: {} };
-  const statement = { ...common, id: "statement-submission", localEntityId: "statement", externalId: "remote-statement", submittedAt: null, metadata: { remoteStatus: "FAILED_VERIFICATION" } };
+  const statement = { ...common, id: "statement-submission", localEntityId: "statement", externalId: "remote-statement", submittedAt: null, metadata: { remoteStatus: status } };
   return { select: () => ({ from: (table: unknown) => ({ where: () => table === certificationSubmissions ? (reads++ === 0 ? [removal] : [statement]) : [] }) }) } as unknown as Pick<DbTransaction, "select">;
 }
 
@@ -63,4 +63,11 @@ it("keeps Sent without making a request when the transaction has no refresh budg
   const [removal] = await readRecordLockLineage(makeTestOrgContext(), tx, [{ removalId: "removal", ghgStatementId: "statement" }], true);
   expect(isSentRemoval(removal)).toBe(true);
   expect(getGhgStatement).not.toHaveBeenCalled();
+});
+
+it("discovers a Certify web verifier submission from an unmarked saved DRAFT", async () => {
+  const { getGhgStatement } = await import("@/lib/isometric/ghg-statements");
+  vi.mocked(getGhgStatement).mockResolvedValue({ status: "DRAFT", submitted_at: "2026-10-02", ghg_entry_ids: ["entry"] } as Awaited<ReturnType<typeof getGhgStatement>>);
+  const [removal] = await readRecordLockLineage(makeTestOrgContext(), statementReader("DRAFT"), [{ removalId: "removal", ghgStatementId: "statement" }], true);
+  expect(isSentRemoval(removal)).toBe(false);
 });

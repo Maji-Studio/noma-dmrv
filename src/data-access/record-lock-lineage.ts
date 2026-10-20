@@ -75,8 +75,7 @@ async function readStatement(ctx: OrgContext, tx: Pick<DbTransaction, "select">,
     removalExternalIds: Array.isArray(getMetadataValue(row.metadata, "removalIds")) ? getMetadataValue(row.metadata, "removalIds") as string[] : [],
     inFlight: isLockedInFlight(row) || !isTerminalAttemptStatus(row.status),
   };
-  const canReopen = savedStatus === "FAILED_VERIFICATION" || (savedStatus === "DRAFT" && fact.submittedToVerifier);
-  if (!fresh || !row.externalId || fact.inFlight || !canReopen) return fact;
+  if (!fresh || !row.externalId || fact.inFlight) return fact;
   try {
     const { resolveIsometricClient } = await import("./certifier-credentials");
     const key = `${ctx.organizationId}:${row.externalId}`;

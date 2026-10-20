@@ -1,5 +1,6 @@
+import { emissionCorrectionWindow } from "./emission-entry-corrections";
 import { entryLine, resolveEmissionEntryDate } from "@/lib/certification/emission-entry-rules";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   emissionEntries,
@@ -173,7 +174,7 @@ async function writeValues(ctx: OrgContext, tx: DbTransaction, id: string, value
 export async function tombstoneEmissionZeros(
   ctx: OrgContext,
   tx: DbTransaction,
-  entry: { creditBatchId: string; removalTemplateId: string; componentId: string },
+  entry: { creditBatchId: string; removalTemplateId: string; componentId: string; occurredOn: string },
 ) {
   requireOrgScope(ctx);
   const before = await tx.select().from(emissionEntries).where(and(
@@ -181,6 +182,11 @@ export async function tombstoneEmissionZeros(
     eq(emissionEntries.componentId, entry.componentId), eq(emissionEntries.kind, "zero"), isNull(emissionEntries.deletedAt),
   )).orderBy(emissionEntries.id).for("update");
   if (!before.length) return;
+  const correctableIds = before.filter((zero) => {
+    const window = zero.sentByRemovalId && !zero.sendReservedBySubmissionId
+      ? emissionCorrectionWindow(ctx, tx, zero.creditBatchId, zero.sentByRemovalId) : undefined;
+    return window && entry.occurredOn >= window.start && entry.occurredOn <= window.end;
+  }).map((zero) => zero.id);
   const saved = await tx
     .update(emissionEntries)
     .set({
@@ -198,8 +204,9 @@ export async function tombstoneEmissionZeros(
         eq(emissionEntries.kind, "zero"),
         sql`${emissionEntries.confirmedForRemovalId} is not null`,
         isNull(emissionEntries.deletedAt),
-        isNull(emissionEntries.sentByRemovalId),
         isNull(emissionEntries.sendReservedBySubmissionId),
+        or(correctableIds.length ? inArray(emissionEntries.id, correctableIds) : undefined, and(
+        isNull(emissionEntries.sentByRemovalId),
         sql`not exists (
           select 1 from ${certificationSubmissions}
           where ${certificationSubmissions.organizationId} = ${ctx.organizationId}
@@ -207,7 +214,7 @@ export async function tombstoneEmissionZeros(
             and ${certificationSubmissions.localEntityType} = 'removal'
             and (${certificationSubmissions.submittedAt} is not null
               or ${certificationSubmissions.status} in ('submitted', 'accepted'))
-        )`,
+        )`)),
       ),
     ).returning();
   for (const row of saved) await recordEmissionEntryActivity(ctx, tx, "deleted", { ...before.find((item) => item.id === row.id)!, values: [] }, { ...row, values: [] });
@@ -299,6 +306,11 @@ export async function replaceEmissionEntry(ctx: OrgContext, input: ReplaceEmissi
       creditBatchId: entry.creditBatchId, componentId: entry.componentId,
       occurredOn: data.occurredOn, note: data.note, values: data.values,
     }, context);
+    if (entry.sentByRemovalId) {
+      const window = emissionCorrectionWindow(ctx, tx, entry.creditBatchId, entry.sentByRemovalId);
+      if (!window || replacement.occurredOn < window.start || replacement.occurredOn > window.end)
+        throw new SafeError("Keep the entry date within this Removal's period.");
+    }
     // Documents have polymorphic owners, not an entry-document join table.
     // Keep retained evidence and live uploads; failed uploads remain on the old row.
     // Owner locks precede these document row locks, matching the upload writers.
@@ -341,6 +353,11 @@ export async function updateEmissionEntry(ctx: OrgContext, input: UpdateEmission
         dateDefaulted: data.occurredOn === undefined,
       });
     }
+    if (entry.sentByRemovalId && data.occurredOn) {
+      const window = emissionCorrectionWindow(ctx, tx, entry.creditBatchId, entry.sentByRemovalId);
+      if (!window || data.occurredOn < window.start || data.occurredOn > window.end)
+        throw new SafeError("Keep the entry date within this Removal's period.");
+    }
     const contentChanged =
       (data.occurredOn !== undefined && data.occurredOn !== entry.occurredOn) ||
       (data.values !== undefined &&
@@ -377,7 +394,7 @@ async function mutateEntry<T>(
   requireOrgScope(ctx);
   return db.transaction(async (tx) => {
     const initial = await getEmissionEntry(ctx, id, tx);
-    // Facility, batch, then entry, including confirmation and deletion. No lineage guard applies.
+    // Lineage artifacts, facility, batch, then entry, including confirmation and deletion.
     const context = await lockedBatch(
       ctx,
       tx,

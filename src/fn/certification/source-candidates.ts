@@ -460,7 +460,7 @@ async function collectEntrySourceDocuments(orgCtx: OrgContext, contributions?: R
           componentId: target.kind === "explicit" ? target.componentId : undefined, inputKey: target.inputKey,
         })),
       }, "Contributing emissions entry file unavailable");
-      throw new SafeError(EMISSION_ENTRY_FILE_UNAVAILABLE);
+      throw new SafeError(EMISSION_ENTRY_FILE_UNAVAILABLE(binding.lineage.entityLabel));
     }
     return { document, binding };
   });
