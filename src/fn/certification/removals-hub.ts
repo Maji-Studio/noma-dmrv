@@ -1,10 +1,10 @@
 import { env } from "@/config/env";
 import { requireOrgFacility } from "@/data-access/utils";
+import { hasFinalizedSubmission } from "@/data-access/certification-submissions";
 import {
-  getLatestSubmission,
-  hasFinalizedSubmission,
-} from "@/data-access/certification-submissions";
-import type { CertificationSubmissionRow } from "@/data-access/certification";
+  getLatestSubmissionsForEntities,
+  type CertificationSubmissionRow,
+} from "@/data-access/certification";
 import {
   getCreditBatchesByRemovalId,
   listRemovalsForFacility,
@@ -55,6 +55,12 @@ export async function loadRemovalsForFacility(
       listRemovalsForFacility(orgCtx, facilityId),
       listUngroupedCreditBatches(orgCtx, facilityId),
     ]);
+    const submissions = await getLatestSubmissionsForEntities(orgCtx, {
+      provider: ISOMETRIC_PROVIDER,
+      submissionType: REMOVAL_SUBMISSION_TYPE,
+      localEntityType: REMOVAL_ENTITY_TYPE,
+      localEntityIds: removalRows.map((removal) => removal.id),
+    });
     // Bounded chunks preserve order without bursting the connection pool.
     const removals: RemovalHubEntry[] = [];
     for (let i = 0; i < removalRows.length; i += FANOUT_CONCURRENCY) {
@@ -66,15 +72,14 @@ export async function loadRemovalsForFacility(
             localEntityType: REMOVAL_ENTITY_TYPE,
             localEntityId: removal.id,
           };
-          const [batches, latestSubmission, finalized] = await Promise.all([
+          const [batches, finalized] = await Promise.all([
             getCreditBatchesByRemovalId(orgCtx, removal.id),
-            getLatestSubmission(orgCtx, key),
             hasFinalizedSubmission(orgCtx, key),
           ]);
           return {
             removal,
             memberBatches: batches.map((b) => ({ id: b.id, code: b.code })),
-            latestSubmission,
+            latestSubmission: submissions.get(removal.id) ?? null,
             hasFinalizedSubmission: finalized,
             deletionInProgress: hasFreshRemovalDeletionLease(removal.metadata),
             registryBoundaryOpened: removalMayHaveExternalMutation(

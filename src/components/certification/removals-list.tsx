@@ -38,6 +38,7 @@ import {
 import { deriveRemovalWorkflowStatus } from "@/lib/certification/status";
 import { formatDateRange } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { SubmittedOnCell, submittedOnText } from "./submitted-on-cell";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import { NewRemovalDialog } from "./new-removal-dialog";
 import { CORRECTION_NEEDED_LABEL, RemovalCorrectionCell } from "./removal-correction-needed";
@@ -266,6 +267,10 @@ function BatchesColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
   return <MemberBatchesCell summary={row.original} />;
 }
 
+function SubmittedOnColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
+  return <SubmittedOnCell state={row.original.submittedOn} />;
+}
+
 function StatusColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
   const locks = useContext(RemovalLocksContext);
   return <StatusCell summary={row.original} lock={locks[row.original.removalId]} />;
@@ -295,6 +300,12 @@ const createColumns = (
     header: "Credit batches",
     accessorFn: (summary) => summary.memberBatchCodes.join(" "),
     cell: BatchesColumnCell,
+  },
+  {
+    id: "submittedOn",
+    header: "Submitted on",
+    accessorFn: (summary) => submittedOnText(summary.submittedOn),
+    cell: SubmittedOnColumnCell,
   },
   {
     id: "status",

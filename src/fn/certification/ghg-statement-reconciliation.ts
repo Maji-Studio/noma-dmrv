@@ -1,4 +1,5 @@
 import { ghgStatusRegistryAt } from "@/lib/isometric/utils/ghg-status-registry-at";
+import { REGISTRY_DISCOVERY_SOURCE } from "@/lib/certification/submission-source";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { z } from "zod";
 import type { OrgContext } from "@/lib/auth/server";
@@ -306,7 +307,7 @@ export async function reconcileRegistryGhgStatement(
     localEntityId: statement.id,
   };
   const semanticPayload = {
-    source: "registry-discovery",
+    source: REGISTRY_DISCOVERY_SOURCE,
     externalId: args.remote.id,
     projectId: args.externalProjectId,
     endOn: period.endOn,
