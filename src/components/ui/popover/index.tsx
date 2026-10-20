@@ -73,10 +73,15 @@ function Popover({
   openOnHover = false,
 }: PopoverProps) {
   const triggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const popupRef = React.useRef<HTMLDivElement | null>(null);
   return (
     <BasePopover.Root
       onOpenChange={(open, details) => {
-        if (!open && RETURN_FOCUS_REASONS.has(details.reason)) {
+        if (open || !RETURN_FOCUS_REASONS.has(details.reason)) return;
+        // Only when focus was in the popup or lost: a hover-opened popover must
+        // not pull focus from a control the user is typing in.
+        const active = document.activeElement;
+        if (!active || active === document.body || popupRef.current?.contains(active)) {
           triggerRef.current?.focus({ preventScroll: true });
         }
       }}
@@ -98,6 +103,7 @@ function Popover({
           className="z-[var(--z-layer-popover)]"
         >
           <BasePopover.Popup
+            ref={popupRef}
             className={cn(
               "flex flex-col",
               "w-[min(320px,calc(100vw-32px))] max-h-[min(420px,var(--available-height))]",
