@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import {
   applicationOutputAllocations, applications, biocharProducts, biocharProductSourceAllocations,
-  binMovements, creditBatchApplications, creditBatchProductionRuns, creditBatches,
+  binMovements, certifierRemovals, creditBatchApplications, creditBatchProductionRuns, creditBatches,
   customerLocations, customers, deliveries, facilities, feedstocks, feedstockTypes,
   formulations, orders, organizations, outputStockAllocations, outputStockRunAllocations,
   productionProcesses, productionRunFeedstocks, productionRuns, reactors, storageLocations, suppliers,
@@ -13,6 +13,7 @@ import { getRecordCreditBatches } from "@/data-access/record-credit-batches";
 import { inDeliveryCreditBatchLineage } from "@/data-access/credit-batch-lineage-filter";
 import { PRO_RATA_POLICY } from "@/lib/output-stock";
 import { feedstockFixtureValues } from "./helpers/feedstock-fixture";
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import {
   insertOutputApplicationFixture, insertOutputDeliveryFixture,
   outputOrderFixtureValues, outputProductFixtureValues,
@@ -46,7 +47,7 @@ describe("saved record credit batches (real database)", () => {
   afterAll(async () => {
     // Every row belongs to this suite's private organization, including helper parents.
     for (const table of [
-      creditBatchApplications, applicationOutputAllocations, applications,
+      creditBatchApplications, certifierRemovals, applicationOutputAllocations, applications,
       outputStockRunAllocations, outputStockAllocations, binMovements, deliveries, orders,
       biocharProductSourceAllocations, biocharProducts, creditBatchProductionRuns,
       productionRunFeedstocks, productionRuns, creditBatches, productionProcesses,
@@ -179,16 +180,22 @@ describe("saved record credit batches (real database)", () => {
       .toEqual([f.late.id, f.early.id]);
   });
 
-  it("uses saved application slices before source-run memberships", async () => {
+  it("unions saved application slices with positive source-run memberships and deduplicates batches", async () => {
     const f = await fixture();
+    // Keep only batch B's share, so batch A can only be reached through its slice.
+    await db.delete(applicationOutputAllocations).where(and(
+      eq(applicationOutputAllocations.organizationId, organizationId),
+      eq(applicationOutputAllocations.applicationId, f.application.id),
+      ne(applicationOutputAllocations.productionRunId, f.runB.id),
+    ));
     await db.insert(creditBatchApplications).values({
-      ...org, applicationId: f.application.id, creditBatchId: f.late.id,
+      ...org, applicationId: f.application.id, creditBatchId: f.early.id,
       allocatedWetMassKg: MASS_KG, allocatedDryMassKg: MASS_KG,
     });
     expect(await getRecordCreditBatches(ctx, { kind: "application", id: f.application.id }))
-      .toEqual({ batches: [batch(f.late)], heldOut: false });
+      .toEqual({ batches: [batch(f.early), batch(f.late)], heldOut: false });
     await db.insert(creditBatchApplications).values({
-      ...org, applicationId: f.application.id, creditBatchId: f.early.id,
+      ...org, applicationId: f.application.id, creditBatchId: f.late.id,
       allocatedWetMassKg: MASS_KG, allocatedDryMassKg: MASS_KG,
     });
     expect(await getRecordCreditBatches(ctx, { kind: "application", id: f.application.id }))
@@ -274,7 +281,7 @@ describe("saved record credit batches (real database)", () => {
     expect(await getRecordCreditBatches(ctx, { kind: "delivery", id: f.delivery.id })).toEqual({ batches: [], heldOut: false });
   });
 
-  it("holds out a mix-bin application even when slices exist, and releases a reversed mix draw", async () => {
+  it("holds out a mix-bin application with only unowned slices, and releases a reversed mix draw", async () => {
     const f = await fixture();
     await db.update(outputStockAllocations).set({ basisSnapshot: { policy: PRO_RATA_POLICY } })
       .where(eq(outputStockAllocations.deliveryId, f.delivery.id));
@@ -285,6 +292,30 @@ describe("saved record credit batches (real database)", () => {
     });
     expect(await getRecordCreditBatches(ctx, { kind: "application", id: f.application.id })).toEqual({ batches: [], heldOut: true });
     await reverseDelivery(f, PRO_RATA_POLICY);
+    expect(await getRecordCreditBatches(ctx, { kind: "application", id: f.application.id }))
+      .toEqual({ batches: [batch(f.early), batch(f.late)], heldOut: false });
+  });
+
+  it("returns only Removal-owned slices for a held-out application with heldOut false", async () => {
+    const f = await fixture();
+    await db.update(outputStockAllocations).set({ basisSnapshot: { policy: PRO_RATA_POLICY } })
+      .where(and(
+        eq(outputStockAllocations.organizationId, organizationId),
+        eq(outputStockAllocations.deliveryId, f.delivery.id),
+      ));
+    const [removal] = await insertRemovalFixture(db, {
+      ...org, facilityId: f.early.facilityId,
+    });
+    await db.insert(creditBatchApplications).values([f.early, f.late].map(target => ({
+      ...org, applicationId: f.application.id, creditBatchId: target.id,
+      allocatedWetMassKg: MASS_KG, allocatedDryMassKg: MASS_KG,
+    })));
+    await db.update(creditBatchApplications).set({ removalId: removal.id }).where(and(
+      eq(creditBatchApplications.organizationId, organizationId),
+      eq(creditBatchApplications.applicationId, f.application.id),
+      eq(creditBatchApplications.creditBatchId, f.early.id),
+    ));
+    // Batch B has both an unowned slice and a positive share, neither of which is credited.
     expect(await getRecordCreditBatches(ctx, { kind: "application", id: f.application.id }))
       .toEqual({ batches: [batch(f.early)], heldOut: false });
   });
