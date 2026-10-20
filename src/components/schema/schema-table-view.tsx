@@ -143,7 +143,7 @@ const columnDefs = [
       if (!val) {
         return (
           <span className="text-[var(--color-text-tertiary)]">
-            {MISSING_VALUE.notAvailable}
+            No description
           </span>
         );
       }

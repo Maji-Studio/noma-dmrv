@@ -144,7 +144,8 @@ function ReplicateRow({ r }: { r: DurabilitySummaryReplicate }) {
         </span>
       </td>
       <td className="px-10 py-8 body-caption text-[var(--color-text-secondary)]">
-        {r.productionRunCode ?? MISSING_VALUE.notAvailable}
+        {/* No run is a batch-level sample, as in `sampleProvenanceLabel`; a run outside the batch has no code here. */}
+        {r.productionRunCode ?? (r.productionRunId ? "Run not in this batch" : "Batch Sample")}
         {r.samplingDay ? ` · ${r.samplingDay}` : ""}
       </td>
       <td className="px-10 py-8 text-right tabular-nums body-caption text-[var(--color-text-secondary)]">

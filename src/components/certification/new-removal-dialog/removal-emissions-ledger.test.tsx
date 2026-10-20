@@ -76,8 +76,33 @@ describe("RemovalEmissionsLedger", () => {
       />,
     );
 
-    expect(html).toContain("Not available");
+    expect(html).not.toContain("Not available");
     expect(html).toContain("Complete the source data checks");
     expect(html).not.toContain("<table");
+  });
+
+  it("leaves out an input that cannot be summed", () => {
+    const html = renderToStaticMarkup(
+      <RemovalEmissionsLedger
+        compilation={{ estimatedStoredCo2eTonnes: null } as RemovalCompilationView}
+        ledger={{
+          inputs: [
+            { id: "diesel", component: "Production", input: "Diesel", magnitude: null, unit: "L" },
+            { id: "biochar-dry-mass", component: "Stored carbon", input: "Biochar, dry mass", magnitude: 3, unit: "t" },
+          ],
+          inputsUnavailable: false,
+          creditBatches: [],
+          productionRuns: [],
+          applications: [{ id: "application-1", code: "AP-001", deliveryCode: "DL-001", creditBatchIds: [] }],
+          claims: [],
+        }}
+        facilityId="facility-1"
+        isLoading={false}
+      />,
+    );
+
+    expect(html).toContain("Biochar, dry mass");
+    expect(html).not.toContain("Diesel");
+    expect(html).toContain("No credit batch");
   });
 });

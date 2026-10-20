@@ -625,9 +625,10 @@ never remounts when the first value arrives). Explanation parts stay mounted beh
 `DerivedHeadline` is the block's one figure, at most one per block: a caption
 label, the figure with its unit and approximation in the value ("≈ 1,110 kg",
 so the label stays a plain name), an optional muted `before` value and arrow for
-a change, and an optional `sub` caption naming the entry behind it. `null` reads
-"Not available". Pass `figureLabel` so a before and after pair is announced as
-one phrase.
+a change, and an optional `sub` caption naming the entry behind it. A `null`
+figure is left out: the label stays with `sub` saying why, and with no `sub`
+the headline renders nothing. Pass `figureLabel` so a before and after pair is
+announced as one phrase.
 
 Disclosure state is separate from form state and must never submit or dirty the
 form. Keep stateful history/correction controls mounted while hiding their

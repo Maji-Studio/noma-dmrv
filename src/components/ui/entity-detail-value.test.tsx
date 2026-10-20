@@ -30,13 +30,13 @@ describe("EntityDetailValue", () => {
     const markup = render("bin-1");
 
     expect(markup).toContain("animate-skeleton");
-    expect(markup).not.toContain(MISSING_VALUE.notAvailable);
+    expect(markup).not.toContain("Record not found");
   });
 
-  it("reports a settled empty lookup as not available", () => {
+  it("says a settled empty lookup found no record", () => {
     query.result = { data: null, isPending: false };
 
-    expect(render("bin-1")).toContain(MISSING_VALUE.notAvailable);
+    expect(render("bin-1")).toContain("Record not found");
   });
 
   it("renders the resolved name", () => {

@@ -21,7 +21,7 @@ import { FlowHeroDefs } from "./flow-hero-defs";
 import { FlowHeroMobile } from "./flow-hero-mobile";
 import { FlowHeroScene } from "./flow-hero-scene";
 import { FLOW_HERO_VIEWS, type FlowHeroView } from "./flow-hero-types";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { LOAD_FAILED } from "@/lib/copy-utils";
 
 /** Placeholder stations while loading — keeps the ghosted art fully drawn. */
 const EMPTY_SEGMENT_TONNES = 0;
@@ -40,7 +40,8 @@ const LEGEND: { label: string; state: StatusStateClass }[] = [
   { label: "Running", state: "in-progress" },
 ];
 
-const PLACEHOLDER_STATIONS: DashboardStation[] = (
+/** The ghost stations drawn while the stations load, or when they could not be loaded. */
+const placeholderStations = (isLoading: boolean): DashboardStation[] => (
   [
     ["suppliers", "Suppliers"],
     ["feedstock", "Feedstock"],
@@ -53,7 +54,7 @@ const PLACEHOLDER_STATIONS: DashboardStation[] = (
   key,
   name,
   total: 0,
-  totalLabel: MISSING_VALUE.notAvailable,
+  totalLabel: isLoading ? "Loading" : LOAD_FAILED,
   attention: 0,
   reasons: [],
   href: "#",
@@ -75,7 +76,7 @@ export function FlowHero({
   const isEmpty =
     !isLoading && stations != null && stations.every((station) => station.total === 0);
   const ghosted = isLoading || isEmpty;
-  const sceneStations = stations && !isLoading ? stations : PLACEHOLDER_STATIONS;
+  const sceneStations = stations && !isLoading ? stations : placeholderStations(isLoading);
   const sceneFlow = massFlow && !isLoading ? massFlow : PLACEHOLDER_FLOW;
 
   return (

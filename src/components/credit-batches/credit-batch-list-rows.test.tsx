@@ -97,9 +97,9 @@ describe("CreditBatchListRow", () => {
 describe("appliedDryLabel", () => {
   it("waits while loading and never falls back to a figure it does not have", () => {
     expect(appliedDryLabel(facts, "loading")).toBeNull();
-    expect(appliedDryLabel(facts, "failed")).toBe("Not available");
-    expect(appliedDryLabel(undefined, "ready")).toBe("Not available");
-    expect(appliedDryLabel(facts, "ready")).toBe("0.32 t");
+    expect(appliedDryLabel(facts, "failed")).toEqual({ reason: "Could not load" });
+    expect(appliedDryLabel(undefined, "ready")).toEqual({ leftOut: true });
+    expect(appliedDryLabel(facts, "ready")).toEqual({ figure: "0.32 t" });
   });
 });
 

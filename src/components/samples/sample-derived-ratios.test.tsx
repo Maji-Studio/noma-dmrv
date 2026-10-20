@@ -60,7 +60,9 @@ it("names a ratio it cannot derive and surfaces a refused derived value", async 
   await act(async () => {
     renderer = create(<SampleDerivedRatios hToCOrgRatio={null} oToCOrgRatio={null} hydrogenPercent={null} oxygenPercent={null} organicCarbonPercent={null} oToCFromLab={false} error="Ratio is above the saved precision." {...certify} />);
   });
-  expect(visible(renderer.root)).toContain("Not available");
+  expect(visible(renderer.root)).toContain("Needs hydrogen and organic carbon");
+  expect(visible(renderer.root)).toContain("Needs oxygen and organic carbon, or the O:C org ratio");
+  expect(visible(renderer.root)).not.toContain("Not available");
   expect(renderer.root.findByProps({ role: "alert" }).children.join("")).toContain("above the saved precision");
   await act(async () => renderer.unmount());
 });

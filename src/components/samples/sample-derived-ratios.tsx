@@ -25,9 +25,25 @@ function formatRatio(value: number | null): string {
   return value == null ? MISSING_VALUE.notRecorded : formatSampleRatio(value);
 }
 
-function DerivedRatio({ label, value, certifyRequired, certifyStatus }: {
+/** Why a ratio has no figure: the entries it is calculated from that are still empty. */
+function ratioGap(numeratorPercent: number | null, numeratorName: string, organicCarbonPercent: number | null): string | null {
+  const missing = [
+    numeratorPercent == null ? numeratorName : null,
+    organicCarbonPercent == null || organicCarbonPercent === 0 ? "organic carbon" : null,
+  ].filter((name): name is string => name !== null);
+  return missing.length > 0 ? `Needs ${missing.join(" and ")}` : null;
+}
+
+/** O:C org also takes the lab ratio entered above, so its reason offers that too. */
+function withLabRatio(gap: string | null): string | null {
+  return gap ? `${gap}, or the O:C org ratio` : null;
+}
+
+function DerivedRatio({ label, value, gap, certifyRequired, certifyStatus }: {
   label: string;
   value: number | null;
+  /** Why there is no figure, when the empty inputs say so. */
+  gap: string | null;
   certifyRequired?: boolean;
   certifyStatus?: CertFieldStatus;
 }) {
@@ -38,6 +54,7 @@ function DerivedRatio({ label, value, certifyRequired, certifyStatus }: {
         {certifyRequired && <CertificationFieldTag status={certifyStatus} />}
       </span>}
       value={value == null ? null : formatRatio(value)}
+      sub={value == null ? gap ?? undefined : undefined}
     />
   );
 }
@@ -85,10 +102,15 @@ export function SampleDerivedRatios({
           <DerivedRatio
             label="H:C org"
             value={hToCOrgRatio}
+            gap={ratioGap(hydrogenPercent, "hydrogen", organicCarbonPercent)}
             certifyRequired={certifyRequired("hToCOrgRatio")}
             certifyStatus={certifyStatus("hToCOrgRatio")}
           />
-          <DerivedRatio label="O:C org" value={oToCOrgRatio} />
+          <DerivedRatio
+            label="O:C org"
+            value={oToCOrgRatio}
+            gap={oToCFromLab ? "Needs the O:C org ratio" : withLabRatio(ratioGap(oxygenPercent, "oxygen", organicCarbonPercent))}
+          />
         </div>
         {error && <p role="alert" className="body-caption text-[var(--st-bad)]">{error}</p>}
       </>}

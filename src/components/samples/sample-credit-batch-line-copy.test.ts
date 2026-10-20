@@ -17,11 +17,11 @@ describe("describeSampleCreditBatchLine", () => {
     expect(copy.info).toContain("Choose a credit batch");
   });
 
-  it("says Not available, without Retry, when the batch is gone", () => {
+  it("says the batch was not found, without Retry, when the batch is gone", () => {
     const copy = describeSampleCreditBatchLine({ state: "unavailable" });
-    expect(copy.lead).toBe("Credit batch: Not available");
+    expect(copy.lead).toBe("Credit batch not found");
     expect(copy.retry).toBe(false);
-    expect(copy.info).toContain("could not be found");
+    expect(copy.info).toContain("Choose another credit batch");
   });
 
   it("covers pending and failed lookups", () => {

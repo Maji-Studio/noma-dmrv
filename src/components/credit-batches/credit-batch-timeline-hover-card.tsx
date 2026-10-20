@@ -15,7 +15,7 @@ import { StatusBadge, type StatusValue } from "@/components/ui/status-badge";
 import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { LOAD_FAILED } from "@/lib/copy-utils";
 import type { TimelineState } from "@/lib/credit-batches/timeline";
 import { OPEN_TODOS_LABEL, todosLabel } from "@/lib/credit-batches/batch-page";
 import { cn } from "@/lib/utils";
@@ -52,13 +52,15 @@ export interface HoverCardBatch {
   factsStatus: "loading" | "failed" | "ready";
 }
 
-function tonnesOrMissing(kg: number | null | undefined, status: HoverCardBatch["factsStatus"]): string {
+/** A sum, so a batch the facts do not cover leaves the figure out (null). */
+function tonnesOrMissing(kg: number | null | undefined, status: HoverCardBatch["factsStatus"]): string | null {
   if (status === "loading") return "Loading";
-  if (status === "failed") return MISSING_VALUE.notAvailable;
-  return kg == null ? MISSING_VALUE.notAvailable : formatTonnes(kgToTonnes(kg));
+  if (status === "failed") return LOAD_FAILED;
+  return kg == null ? null : formatTonnes(kgToTonnes(kg));
 }
 
-function Figure({ label, value }: { label: string; value: string }) {
+function Figure({ label, value }: { label: string; value: string | null }) {
+  if (value === null) return null;
   return (
     <div className="flex flex-col gap-2">
       <dt className={cn("body-caption", MUTED)}>{label}</dt>

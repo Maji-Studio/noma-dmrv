@@ -9,22 +9,27 @@
  * | Situation | Token | Means |
  * | --- | --- | --- |
  * | `notRecorded` | "Not recorded" | The operator could have entered this and did not. |
- * | `notAvailable` | "Not available" | The app cannot read or derive the value. |
  * | `notSet` | "Not set" | A setting, option, or relation nobody has chosen yet. |
  * | `none` | "None" | The value is a collection and the collection is empty. |
  * | `notApplicable` | "Not applicable" | The field does not apply to this record at all. |
  * | `notYetComputed` | "Not yet computed" | The app will produce this value once upstream work finishes. |
  *
+ * There is no catch-all for "the app has no value here". When no token fits,
+ * say why in a few words where the code knows the reason ("No moisture
+ * reading", "Unreadable date"), and leave a derived figure (a sum, an
+ * estimate, a share) out instead of printing a placeholder. Never guess a
+ * reason the code cannot know at that point.
+ *
  * Which token a **formatter** returns is decided by what its input is, not by
  * its unit. A formatter that receives a value an operator records (a mass, a
  * percentage, a date, a distance) returns `notRecorded` when that value is
- * null, and `notAvailable` when it receives a value it cannot parse. A
- * formatter that receives a value the app derives (CO₂e, aggregated tonnes,
- * file size) returns `notAvailable`, because there was never an operator to
- * record it.
+ * null, and a short reason when it cannot parse it. A formatter for a value
+ * the app derives (CO₂e, aggregated tonnes, file size) takes a number only, so
+ * its caller decides where the figure goes when there is none.
  *
- * Never hand-write a missing-value string in a component, never invent a
- * seventh phrasing, and never use an en dash or em dash as a placeholder.
+ * Never hand-write a token in a component, never invent a new token, and
+ * never use an en dash or em dash as a placeholder. The full rule is in
+ * `docs/ux-writing.md`.
  */
 
 /**
@@ -36,10 +41,33 @@
 export const SAVED_DETAILS_UNAVAILABLE =
   "The record was saved, but its details could not be loaded.";
 
+/** The reason a stored date or date-time that will not parse shows in place of the value. */
+export const UNREADABLE_DATE = "Unreadable date";
+
+/** The reason a stored time of day that will not parse shows in place of the value. */
+export const UNREADABLE_TIME = "Unreadable time";
+
+/** What a value says when the read that should supply it failed. */
+export const LOAD_FAILED = "Could not load";
+
+/** An input or component whose unit Isometric leaves empty. */
+export const ISOMETRIC_GIVES_NO_UNIT = "Isometric gives no unit";
+
+/** What a registry record says when the ID noma saved no longer resolves on Isometric. */
+export const NOT_FOUND_ON_ISOMETRIC = "Not found on Isometric";
+
+/** A stock part or batch with no moisture reading to split or describe it by. */
+export const NO_MOISTURE_READING = "No moisture reading";
+
+/** A list cell whose facility lookup found no facility in the organisation. */
+export const FACILITY_NOT_FOUND = "Facility not found";
+
+/** Who made a change when the recorded user row is gone or carries no name. */
+export const UNKNOWN_USER = "Unknown user";
+
 /** The situations a missing value can name. One situation, one token. */
 export type MissingValueSituation =
   | "notRecorded"
-  | "notAvailable"
   | "notApplicable"
   | "none"
   | "notSet"
@@ -54,8 +82,6 @@ export type MissingValueSituation =
 export const MISSING_VALUE = {
   /** Operator omission: a field they could have filled and left blank. */
   notRecorded: "Not recorded",
-  /** The app cannot read or derive it: a failed lookup, an unparseable stored value, a derived figure whose inputs are missing. */
-  notAvailable: "Not available",
   /** The field does not apply to this record, so nobody will ever fill it. */
   notApplicable: "Not applicable",
   /** An empty collection. "None" is an answer, not a gap. */
@@ -93,8 +119,15 @@ export function missingValueSituation(
   return SITUATION_BY_COPY.get(value) ?? null;
 }
 
-/** Return whether a rendered value is one of the shared missing-value labels. */
+/** Shared reasons a formatter returns in place of a value, so presence checks still read them as a gap. */
+const FORMATTER_REASONS: ReadonlySet<string> = new Set([UNREADABLE_DATE, UNREADABLE_TIME]);
+
+/**
+ * Return whether a rendered value is one of the shared missing-value labels,
+ * or a shared formatter reason such as "Unreadable date".
+ */
 export function isMissingValueCopy(value: unknown): boolean {
+  if (typeof value === "string" && FORMATTER_REASONS.has(value)) return true;
   return missingValueSituation(value) !== null;
 }
 

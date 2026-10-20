@@ -35,7 +35,7 @@ import {
   DEFAULT_PROTOCOL_LABEL,
   DEFAULT_PROTOCOL_SLUG,
 } from "@/config/certification";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { LOAD_FAILED, MISSING_VALUE } from "@/lib/copy-utils";
 import { EnvBanner } from "./env-banner";
 import { Notice } from "@/components/ui/notice";
 
@@ -75,7 +75,7 @@ export function FacilityIsometricConnector({
   const status = isLoading
     ? "Loading…"
     : error || !data
-      ? MISSING_VALUE.notAvailable
+      ? `${LOAD_FAILED} the connection`
       : projectLabel
         ? `Connected to ${projectLabel}`
         : MISSING_VALUE.notSet;

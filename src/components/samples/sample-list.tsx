@@ -609,7 +609,7 @@ export function SampleList({
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
         <StatCard title="Total Samples" value={statsData?.totalSamples ?? 0} icon={<FlaskIcon size={24} weight="bold" />} isLoading={statsLoading} />
-        <StatCard title="Avg total carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? MISSING_VALUE.notAvailable} icon={<LeafIcon size={24} weight="bold" />} isLoading={statsLoading} />
+        <StatCard title="Avg total carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? <span className="body-small font-normal text-[var(--color-text-tertiary)]">No total carbon results</span>} icon={<LeafIcon size={24} weight="bold" />} isLoading={statsLoading} />
         <StatCard title="200-Year" value={statsData?.samples200Year ?? 0} icon={<FireIcon size={24} weight="bold" />} description="Standard durability" isLoading={statsLoading} />
         <StatCard title="1000-Year" value={statsData?.samples1000Year ?? 0} icon={<CertificateIcon size={24} weight="bold" />} description="Enhanced durability" isLoading={statsLoading} />
       </div>

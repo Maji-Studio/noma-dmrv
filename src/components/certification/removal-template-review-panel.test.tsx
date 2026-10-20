@@ -220,7 +220,7 @@ describe("RemovalTemplateReviewPanel", () => {
 
     expect([...startup.querySelectorAll("th")].map((cell) => cell.textContent)).toEqual(["Input", "Measures", "Unit"]);
     expect([...startup.querySelectorAll("tbody td")].map((cell) => cell.textContent)).toEqual(["volume_of_fuel", "Volume", "L"]);
-    expect([...lab.querySelectorAll("tbody td")].map((cell) => cell.textContent)).toEqual(["volume_of_fuel", "Volume", "Not available"]);
+    expect([...lab.querySelectorAll("tbody td")].map((cell) => cell.textContent)).toEqual(["volume_of_fuel", "Volume", "Isometric gives no unit"]);
   });
 
   it("disables saving and offers a retry while the template is not fully read", async () => {

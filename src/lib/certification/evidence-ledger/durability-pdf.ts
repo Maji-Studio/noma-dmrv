@@ -20,7 +20,7 @@
  */
 import { createElement as h, type ReactElement } from "react";
 import { Document, Page, StyleSheet, Text } from "@react-pdf/renderer";
-import { formatCount, MISSING_VALUE, pluralize } from "@/lib/copy-utils";
+import { FACILITY_NOT_FOUND, formatCount, MISSING_VALUE, pluralize } from "@/lib/copy-utils";
 import { C, MONO, SANS, Text_, renderLedgerToBuffer, t, theme, v } from "./pdf-theme";
 import type {
   DurabilityLedgerModel,
@@ -42,8 +42,11 @@ const nfi = (n: number): string =>
   n.toLocaleString("en-US", { maximumFractionDigits: 0 });
 
 // "mean ± s.d." for a column, at the given precision; mean alone when s.d. null.
+/** A column with no replicate to average says so rather than print a placeholder. */
+const NO_USABLE_REPLICATE = "No usable replicate";
+
 function stat(value: LedgerStat | null, fmt: (n: number) => string): string {
-  if (value == null) return MISSING_VALUE.notAvailable;
+  if (value == null) return NO_USABLE_REPLICATE;
   return value.stdDev == null
     ? fmt(value.mean)
     : `${fmt(value.mean)} ± ${fmt(value.stdDev)}`;
@@ -165,7 +168,7 @@ function masthead(model: DurabilityLedgerModel): ReactElement {
     v(styles.metaPair, {}, t(styles.metaLabel, label), t(styles.metaVal, val));
   const right = v(styles.metaCol, {},
     pair("Member batches", model.memberBatchCodes ?? MISSING_VALUE.none),
-    pair("Facility", model.facilityName ?? MISSING_VALUE.notAvailable),
+    pair("Facility", model.facilityName ?? FACILITY_NOT_FOUND),
     pair("Registry project", model.externalProjectId ?? MISSING_VALUE.notSet),
     pair(
       "Batches reconciled",
@@ -187,7 +190,7 @@ function ratioCell(
   return v({ width }, {},
     t(
       [styles.ratioVal, { color }],
-      mean == null ? MISSING_VALUE.notAvailable : nf3(mean),
+      mean == null ? NO_USABLE_REPLICATE : nf3(mean),
     ),
     t(styles.ratioRule, `< ${ceiling}`),
   );

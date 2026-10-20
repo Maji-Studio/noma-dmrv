@@ -21,7 +21,7 @@ import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
 import type { CreditBatchStateView } from "@/lib/credit-batches/batch-state";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { LOAD_FAILED } from "@/lib/copy-utils";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
@@ -55,11 +55,19 @@ export function isCreditBatchDeletable(lock: RecordLockView | undefined): boolea
   return !!lock && lock.level !== "sent" && !lock.usedBy.some((link) => link.kind === "sample");
 }
 
-/** The row's dry applied biochar: never the wet figure, never a guess. */
-export function appliedDryLabel(facts: CreditBatchTimelineFacts | undefined, status: FactsStatus): string | null {
+/**
+ * The row's dry applied biochar: never the wet figure, never a guess. `null`
+ * while the facts load. A failed read says so; a batch the facts do not cover
+ * leaves the figure out, since it is only a sum.
+ */
+export function appliedDryLabel(
+  facts: CreditBatchTimelineFacts | undefined,
+  status: FactsStatus,
+): { figure: string } | { reason: string } | { leftOut: true } | null {
   if (status === "loading") return null;
-  if (status === "failed" || !facts) return MISSING_VALUE.notAvailable;
-  return formatTonnes(kgToTonnes(facts.appliedDryKg));
+  if (status === "failed") return { reason: LOAD_FAILED };
+  if (!facts) return { leftOut: true };
+  return { figure: formatTonnes(kgToTonnes(facts.appliedDryKg)) };
 }
 
 export function creditBatchRowActions({
@@ -107,8 +115,8 @@ function BatchState({
         </span>
       ) : readinessStatus === "loading" ? (
         <Skeleton width={STATE_SKELETON_WIDTH_PX} height={SKELETON_HEIGHT_PX} />
-      ) : (
-        <span className={cn("body-small", MUTED)}>{MISSING_VALUE.notAvailable}</span>
+      ) : readinessStatus === "failed" && (
+        <span className={cn("body-small", MUTED)}>{LOAD_FAILED}</span>
       )}
       <LockChip lock={lock} className="hidden xl:inline-flex" />
     </span>
@@ -188,19 +196,16 @@ export function CreditBatchListRow({
             {creditBatch.productionRunCount}
           </span>
           <span className="inline-flex shrink-0 items-baseline gap-6 xl:col-start-5 xl:row-start-1 xl:justify-end">
-            <span className={cn("body-caption xl:sr-only", MUTED)}>{APPLIED_DRY_LABEL}</span>
+            {/* The column keeps its slot so the grid stays aligned; a left-out figure drops its caption too. */}
+            {(applied === null || !("leftOut" in applied)) && (
+              <span className={cn("body-caption xl:sr-only", MUTED)}>{APPLIED_DRY_LABEL}</span>
+            )}
             {applied === null ? (
               <Skeleton width={FIGURE_SKELETON_WIDTH_PX} height={SKELETON_HEIGHT_PX} />
-            ) : (
-              <span
-                data-applied-dry
-                className={cn(
-                  "body-small tabular-nums",
-                  applied === MISSING_VALUE.notAvailable ? "text-[var(--color-text-tertiary)]" : "font-medium",
-                )}
-              >
-                {applied}
-              </span>
+            ) : "figure" in applied ? (
+              <span data-applied-dry className="body-small font-medium tabular-nums">{applied.figure}</span>
+            ) : "reason" in applied && (
+              <span data-applied-dry className="body-small tabular-nums text-[var(--color-text-tertiary)]">{applied.reason}</span>
             )}
           </span>
         </div>

@@ -1,7 +1,7 @@
 /**
  * HeroKpiBand — the Flow Hero's 4-stat band: one bordered strip divided into
  * equal cells (mono micro label over a bold value), per the hero design.
- * "Not available" means no data in range, never a fabricated zero; the delta vs the
+ * A null value means no data in the period and says so, never a fabricated zero; the delta vs the
  * previous equal period rides along as a quiet mono suffix.
  *
  * Cells avoid <p>/<h*> elements — the global element type rules are unlayered
@@ -11,13 +11,14 @@
 
 import type { DashboardKpi } from "@/data-access/dashboard-overview";
 import { InfoHint } from "@/components/ui/tooltip";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 
 /** Pinned so server and client format the number identically (no hydration drift). */
 const NUMBER_LOCALE = "en-US";
 
-function formatValue(kpi: DashboardKpi): string {
-  if (kpi.value == null) return MISSING_VALUE.notAvailable;
+/** What a KPI says in place of its figure when the period has no data for it. */
+export const KPI_NO_DATA = "No data in this period";
+
+function formatValue(kpi: DashboardKpi & { value: number }): string {
   const digits = Math.abs(kpi.value) >= 100 ? 0 : 1;
   return kpi.value.toLocaleString(NUMBER_LOCALE, {
     minimumFractionDigits: digits,
@@ -76,7 +77,9 @@ export function HeroKpiBand({ kpis, isLoading }: HeroKpiBandProps) {
             )}
           </div>
           <div className="mt-6 text-[26px] font-bold leading-[1.15] text-[var(--ink)]">
-            {formatValue(kpi)}
+            {kpi.value == null ? (
+              <span className="body-small font-normal text-[var(--color-text-tertiary)]">{KPI_NO_DATA}</span>
+            ) : formatValue({ ...kpi, value: kpi.value })}
             {kpi.value != null && (
               // The type class resets margins, so the gap sits on a wrapper.
               <span className="ml-4">

@@ -43,7 +43,7 @@ export function batchSegments(allocations: readonly OutputStockBalanceView[]): M
 
 /** Whole kilograms without the unit, for the muted before figure of a pair. */
 /** Key figures under a wet headline: batches are tracked dry, so they say so. */
-export function formatDryKeyMass(kg: number | null): string {
+export function formatDryKeyMass(kg: number): string {
   return `${formatCompositionMass(kg)} dry`;
 }
 

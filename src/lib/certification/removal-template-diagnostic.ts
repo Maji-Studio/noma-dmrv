@@ -28,7 +28,7 @@ import {
   attachRemovalCompilationToDiagnostic,
   type RemovalTemplateDiagnosticCompilation,
 } from "./removal-template-diagnostic-resolution";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { ISOMETRIC_GIVES_NO_UNIT, MISSING_VALUE } from "@/lib/copy-utils";
 
 export type { RemovalTemplateDiagnosticCompilation } from "./removal-template-diagnostic-resolution";
 
@@ -129,6 +129,8 @@ export interface BuildRemovalTemplateDiagnosticArgs {
   blueprints?: readonly IsometricComponentBlueprint[];
   compilation?: RemovalTemplateDiagnosticCompilation | null;
 }
+
+const ISOMETRIC_GIVES_NO_DATA_SHAPE = "Isometric gives no data shape";
 
 const GHG_ENTRY_INPUT_PATH =
   "/ghg-entries.ghg_entry_template_components[].inputs[]";
@@ -248,9 +250,9 @@ function buildOrdinaryInputs(args: {
       inputKey: input.input_key,
     });
     const expected = {
-      dataShape: blueprintInput?.data_shape ?? MISSING_VALUE.notAvailable,
+      dataShape: blueprintInput?.data_shape ?? ISOMETRIC_GIVES_NO_DATA_SHAPE,
       quantityKind: blueprintInput?.quantity_kind ?? input.quantity_kind,
-      unit: blueprintInput?.compatible_unit ?? MISSING_VALUE.notAvailable,
+      unit: blueprintInput?.compatible_unit ?? ISOMETRIC_GIVES_NO_UNIT,
     };
 
     if (!blueprint) {
@@ -260,7 +262,7 @@ function buildOrdinaryInputs(args: {
         presentInTemplate: true,
         expected,
         nomaSource: "No local blueprint contract",
-        transform: MISSING_VALUE.notAvailable,
+        transform: MISSING_VALUE.notApplicable,
         wirePath: GHG_ENTRY_INPUT_PATH,
         evidenceRoles,
         status: "unsupported-component" as const,
@@ -279,7 +281,7 @@ function buildOrdinaryInputs(args: {
         presentInTemplate: true,
         expected,
         nomaSource: "No matching blueprint input",
-        transform: MISSING_VALUE.notAvailable,
+        transform: MISSING_VALUE.notApplicable,
         wirePath: GHG_ENTRY_INPUT_PATH,
         evidenceRoles,
         status: "template-contract-drift" as const,
@@ -353,7 +355,7 @@ function buildOrdinaryInputs(args: {
         presentInTemplate: true,
         expected,
         nomaSource: "No noma dMRV source",
-        transform: MISSING_VALUE.notAvailable,
+        transform: MISSING_VALUE.notApplicable,
         wirePath: "/datapoints -> " + GHG_ENTRY_INPUT_PATH,
         evidenceRoles,
         status: "missing-noma-mapping" as const,
@@ -456,16 +458,16 @@ function buildSequestrationInputs(args: {
       dataShape:
         binding?.dataShape ??
         blueprintInput?.data_shape ??
-        MISSING_VALUE.notAvailable,
+        ISOMETRIC_GIVES_NO_DATA_SHAPE,
       quantityKind:
         expectedQuantityKind ??
         blueprintInput?.quantity_kind ??
         input?.quantity_kind ??
-        MISSING_VALUE.notAvailable,
+        "Isometric gives no quantity kind",
       unit:
         sourceContract?.wireUnit ??
         blueprintInput?.compatible_unit ??
-        MISSING_VALUE.notAvailable,
+        ISOMETRIC_GIVES_NO_UNIT,
     };
     const raw = inputRaw({
       templateId: template.id,
@@ -534,7 +536,8 @@ function buildSequestrationInputs(args: {
           : "No supported noma dMRV source"),
       transform: sourceContract
         ? transformLabel(sourceContract.transformRevision)
-        : MISSING_VALUE.notAvailable,
+        // No noma source, so no transform applies.
+        : MISSING_VALUE.notApplicable,
       wirePath: measurementPath,
       evidenceRoles,
       status,

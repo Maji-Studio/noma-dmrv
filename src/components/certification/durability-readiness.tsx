@@ -22,7 +22,6 @@ import {
   type DurabilitySummaryEligibility,
 } from "@/lib/certification/durability-batch-summary";
 import type { ValueWithStdDev } from "@/lib/isometric/utils/durability-aggregation";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { describeUnpairedHToCSamples } from "@/lib/certification/durability-submission-gates";
 
 type Tone = "ok" | "wait" | "bad" | "off";
@@ -74,17 +73,19 @@ function ReadinessChip({
   );
 }
 
+/** What a submitted figure says when the batch has no usable replicate for it. */
+export const NO_USABLE_REPLICATE = "No usable replicate";
+
 /**
  * Format a submitted mean ± sample std-dev for display. `"0.412 ± 0.018"`, or
- * just the mean when there's a single replicate (no std-dev), or "Not available"
- * when the
- * batch has no usable replicate for the figure.
+ * just the mean when there's a single replicate (no std-dev), or "No usable
+ * replicate" when the batch has no usable replicate for the figure.
  */
 export function formatDurabilityStat(
   stat: ValueWithStdDev | null,
   digits = 3,
 ): string {
-  if (stat == null) return MISSING_VALUE.notAvailable;
+  if (stat == null) return NO_USABLE_REPLICATE;
   const mean = stat.mean.toFixed(digits);
   return stat.stdDev == null ? mean : `${mean} ± ${stat.stdDev.toFixed(digits)}`;
 }

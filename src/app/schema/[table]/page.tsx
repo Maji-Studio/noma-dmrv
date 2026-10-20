@@ -303,7 +303,7 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
                       )}
                     </td>
                     <td className="py-[8px] px-[12px] body-small text-[var(--color-text-secondary)]">
-                      {descriptions[col.name] ?? <span className="text-[var(--color-text-tertiary)]">Not available</span>}
+                      {descriptions[col.name] ?? <span className="text-[var(--color-text-tertiary)]">No description</span>}
                     </td>
                   </tr>
                 ))}

@@ -18,7 +18,7 @@ import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { creditBatchListHref } from "@/lib/certification/batch-health-links";
 import { traceabilityBatchHref } from "@/lib/certification/links";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { LOAD_FAILED } from "@/lib/copy-utils";
 import {
   APPLIED_DRY_LABEL,
   creditBatchMilestones,
@@ -158,13 +158,18 @@ const VALUE_SKELETON_HEIGHT_PX = 28;
 
 interface KeyNumber {
   label: string;
-  /** Null while its query loads: a skeleton, never a missing-value token. */
-  value: string | null;
+  /**
+   * Null while its query loads: a skeleton, never a missing-value token.
+   * `{ reason }` stands in for a figure there is none of: a failed read says
+   * so, and a derived figure (`reason: null`) is left out, with `sub` saying
+   * why. A left-out figure with no `sub` drops its cell.
+   */
+  value: string | null | { reason: string | null };
   sub: string | null;
 }
 
 function appliedNumber(pageModel: ReturnType<typeof useCreditBatchPage>["pageModel"], failed: boolean): KeyNumber {
-  if (!pageModel && failed) return { label: APPLIED_DRY_LABEL, value: MISSING_VALUE.notAvailable, sub: null };
+  if (!pageModel && failed) return { label: APPLIED_DRY_LABEL, value: { reason: LOAD_FAILED }, sub: null };
   if (!pageModel) return { label: APPLIED_DRY_LABEL, value: null, sub: null };
   const { appliedDryKg, notInRemovalDryKg } = pageModel.mass;
   let sub: string | null = null;
@@ -185,12 +190,12 @@ export function CreditBatchKeyNumbers() {
     appliedNumber(pageModel, !!pageModelError),
     {
       label: "Carbon estimate",
-      value: estimate == null ? MISSING_VALUE.notAvailable : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`,
+      value: estimate == null ? { reason: null } : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`,
       sub: estimate == null ? carbonEstimateGap(batch.co2eStoredPreview?.missingInputs ?? []) : "Before project emissions",
     },
     {
       label: "Samples",
-      value: !summary ? (durability.isError ? MISSING_VALUE.notAvailable : null) : sampled ? `${summary.usableReplicateCount} of ${summary.minimumReplicates}` : String(summary.sampleCount),
+      value: !summary ? (durability.isError ? { reason: LOAD_FAILED } : null) : sampled ? `${summary.usableReplicateCount} of ${summary.minimumReplicates}` : String(summary.sampleCount),
       sub: !summary
         ? null
         : !sampled
@@ -199,9 +204,9 @@ export function CreditBatchKeyNumbers() {
             ? "Enough for a sampled credit batch"
             : `A sampled credit batch needs ${summary.minimumReplicates}`,
     },
-  ];
+  ].filter((cell) => !(typeof cell.value === "object" && cell.value?.reason === null && cell.sub == null));
   return (
-    <dl className="grid grid-cols-1 border border-[var(--color-border-secondary)] bg-[var(--paper)] sm:grid-cols-3">
+    <dl className={cn("grid grid-cols-1 border border-[var(--color-border-secondary)] bg-[var(--paper)]", cells.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
       {cells.map((cell) => (
         <div
           key={cell.label}
@@ -211,8 +216,10 @@ export function CreditBatchKeyNumbers() {
           <dd className="flex min-w-0 flex-col items-end gap-2 text-right sm:items-start sm:text-left">
             {cell.value == null ? (
               <Skeleton width={VALUE_SKELETON_WIDTH_PX} height={VALUE_SKELETON_HEIGHT_PX} />
-            ) : (
+            ) : typeof cell.value === "string" ? (
               <span className="title-heading-3 tabular-nums">{cell.value}</span>
+            ) : cell.value.reason && (
+              <span className={cn("body-small", MUTED_TEXT)}>{cell.value.reason}</span>
             )}
             {cell.sub && <span className={cn("body-caption", MUTED_TEXT)}>{cell.sub}</span>}
           </dd>
