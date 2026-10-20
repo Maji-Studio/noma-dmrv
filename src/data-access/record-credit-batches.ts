@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   applications, biocharProducts,
@@ -20,6 +20,14 @@ const batchSelection = {
   endDate: creditBatches.endDate,
 };
 
+/** The org's credit batches a lineage predicate matches, in window order. */
+function batchesWhere(ctx: OrgContext, lineage: SQL): Promise<RecordCreditBatch[]> {
+  return db.select(batchSelection).from(creditBatches).where(and(
+    eq(creditBatches.organizationId, ctx.organizationId),
+    lineage,
+  )).orderBy(creditBatches.startDate, creditBatches.code);
+}
+
 /** Read saved provenance only; record dates never choose a credit batch. */
 export async function getRecordCreditBatches(
   ctx: OrgContext,
@@ -33,10 +41,7 @@ export async function getRecordCreditBatches(
   await assertSameOrg(ctx, table, input.id);
 
   if (input.kind === "biochar-product") {
-    const batches = await db.select(batchSelection).from(creditBatches).where(and(
-      eq(creditBatches.organizationId, ctx.organizationId),
-      inCreditBatchLineage(ctx, creditBatches.id, input.id),
-    )).orderBy(creditBatches.startDate, creditBatches.code);
+    const batches = await batchesWhere(ctx, inCreditBatchLineage(ctx, creditBatches.id, input.id));
     // ADR 0030 holds out application slices, not the product's source provenance.
     return { batches, heldOut: false };
   }
@@ -59,18 +64,12 @@ export async function getRecordCreditBatches(
     }
 
     // Otherwise include the union of frozen slices and positive source-run shares.
-    const batches = await db.select(batchSelection).from(creditBatches).where(and(
-      eq(creditBatches.organizationId, ctx.organizationId),
-      inApplicationCreditBatchLineage(ctx, creditBatches.id, input.id),
-    )).orderBy(creditBatches.startDate, creditBatches.code);
+    const batches = await batchesWhere(ctx, inApplicationCreditBatchLineage(ctx, creditBatches.id, input.id));
     return { batches, heldOut: false };
   }
 
   if (input.kind === "delivery") {
-    const batches = await db.select(batchSelection).from(creditBatches).where(and(
-      eq(creditBatches.organizationId, ctx.organizationId),
-      inDeliveryCreditBatchLineage(ctx, creditBatches.id, input.id),
-    )).orderBy(creditBatches.startDate, creditBatches.code);
+    const batches = await batchesWhere(ctx, inDeliveryCreditBatchLineage(ctx, creditBatches.id, input.id));
     return { batches, heldOut: false };
   }
 
