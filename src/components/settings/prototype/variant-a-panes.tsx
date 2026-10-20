@@ -2,96 +2,31 @@
 
 /**
  * Throwaway: pane bodies for prototype variant A (one console by scope).
- * Every save is a stub toast.
+ * The registry panes live in `variant-a-registry-panes.tsx`. Every save is a
+ * stub toast.
  */
-import { useState, type ReactNode } from "react";
 import {
-  CheckCircleIcon,
   DotsThreeVerticalIcon,
   PlusIcon,
-  CloudIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { Button, DropdownMenu, EmptyState, Notice } from "@/components/ui";
-import { useToast } from "@/components/ui/toast";
+import { Button, DropdownMenu, Notice } from "@/components/ui";
 import {
   FormField,
   FormInput,
   FormSelect,
-  SegmentedControl,
 } from "@/components/forms";
+import { fixtures } from "./abd-fixtures";
 import {
-  fixtures,
-  PROTOTYPE_SAVE_TOAST,
-  type PrototypeFacility,
-} from "./abd-fixtures";
-import type { PrototypeActiveOrg } from "./abd-active-org";
+  AReadRow,
+  ASaveRow,
+  ASection,
+  ASegmented,
+  ATextAction,
+  useSaveStub,
+  type APaneProps,
+} from "./variant-a-parts";
 
-export interface APaneProps {
-  active: PrototypeActiveOrg;
-  facility: PrototypeFacility;
-  goTo: (pane: string) => void;
-  openOrg: (orgId: string) => void;
-}
-
-function useSaveStub() {
-  const toast = useToast();
-  return () => toast.info(PROTOTYPE_SAVE_TOAST);
-}
-
-function ASection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-16 border-t border-[var(--color-border-secondary)] pt-20 first:border-t-0 first:pt-0">
-      <h2 className="body-small font-medium">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function AReadRow({ label, value, action }: { label: string; value: ReactNode; action?: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-16">
-      <div className="flex min-w-0 flex-col gap-2">
-        <span className="body-small text-[var(--color-text-secondary)]">{label}</span>
-        <span className="body-medium break-words">{value}</span>
-      </div>
-      {action && <div className="shrink-0">{action}</div>}
-    </div>
-  );
-}
-
-function ASaveRow({ label = "Save changes" }: { label?: string }) {
-  const save = useSaveStub();
-  return (
-    <div className="flex">
-      <Button variant="primary" onClick={save}>
-        {label}
-      </Button>
-    </div>
-  );
-}
-
-function ASegmented({
-  id,
-  legend,
-  options,
-  initial,
-}: {
-  id: string;
-  legend: string;
-  options: readonly string[];
-  initial: string;
-}) {
-  const [value, setValue] = useState(initial);
-  return (
-    <SegmentedControl
-      id={id}
-      legend={legend}
-      options={options.map((o) => ({ value: o, label: o }))}
-      value={value}
-      onValueChange={setValue}
-    />
-  );
-}
+export type { APaneProps } from "./variant-a-parts";
 
 const COUNTRY_OPTIONS = [
   { value: "Tanzania", label: "Tanzania" },
@@ -267,78 +202,6 @@ export function AMembersPane({ active }: APaneProps) {
   );
 }
 
-export function ARegistryPane({ active, goTo }: APaneProps) {
-  const save = useSaveStub();
-  const reg = fixtures.registry;
-  return (
-    <div className="flex flex-col gap-24 content-measure-form">
-      <ASection title="Connection">
-        <AReadRow label="Registry" value={`${reg.name} (${reg.environment})`} />
-        <AReadRow
-          label="Isometric keys"
-          value={
-            <span className="inline-flex items-center gap-6">
-              <CheckCircleIcon size={16} weight="fill" className="text-[var(--st-ok)]" aria-hidden />
-              Saved, {reg.keyHint}
-            </span>
-          }
-          action={active.canManage ? <Button onClick={save}>Replace keys</Button> : undefined}
-        />
-      </ASection>
-      <ASection title="Project">
-        <FormField id="a-project" label="Isometric project">
-          <FormInput id="a-project" defaultValue={reg.project} />
-        </FormField>
-        <AReadRow label="Protocol" value={reg.protocol} />
-        <FormField id="a-template" label="Default Removal template">
-          <FormSelect
-            id="a-template"
-            options={[
-              { value: reg.defaultRemovalTemplate, label: reg.defaultRemovalTemplate },
-              { value: "Biochar in agricultural soils (200-year)", label: "Biochar in agricultural soils (200-year)" },
-            ]}
-            defaultValue={reg.defaultRemovalTemplate}
-          />
-        </FormField>
-        <Notice
-          tone="warning"
-          title={`${reg.componentsToDecide} components to decide`}
-          action={
-            <Button size="small" onClick={save}>
-              Decide components
-            </Button>
-          }
-        >
-          Removals on this template wait until they are decided.
-        </Notice>
-      </ASection>
-      <ASection title="Sources">
-        <FormField id="a-visibility" label="Default visibility">
-          <FormSelect
-            id="a-visibility"
-            options={[
-              { value: "private", label: "Private: verifier only" },
-              { value: "public", label: "Public on the registry" },
-            ]}
-            defaultValue="private"
-          />
-        </FormField>
-      </ASection>
-      <Notice
-        tone="info"
-        action={
-          <button type="button" className="body-small underline" onClick={() => goTo("registry-link")}>
-            Open Facility, Registry link
-          </button>
-        }
-      >
-        Each facility links its own Isometric facility.
-      </Notice>
-      {active.canManage && <ASaveRow />}
-    </div>
-  );
-}
-
 export function ADevelopersPane({ active, goTo }: APaneProps) {
   const save = useSaveStub();
   return (
@@ -348,9 +211,7 @@ export function ADevelopersPane({ active, goTo }: APaneProps) {
         value="On"
         action={
           active.isPlatformAdminInside ? (
-            <button type="button" className="body-small underline" onClick={() => goTo("organizations")}>
-              Change in Platform, Organizations
-            </button>
+            <ATextAction onClick={() => goTo("organizations")}>Change in Platform, Organizations</ATextAction>
           ) : undefined
         }
       />
@@ -402,75 +263,8 @@ export function ASitePane({ facility }: APaneProps) {
       <FormField id="a-fac-tz" label="Timezone">
         <FormSelect id="a-fac-tz" options={TIMEZONE_OPTIONS} defaultValue={facility.timezone} />
       </FormField>
-      <FormField id="a-fac-tier" label="Durability tier">
-        <ASegmented
-          id="a-fac-tier"
-          legend="Durability tier"
-          options={["200-year", "1000-year"]}
-          initial={facility.durabilityTier}
-        />
-      </FormField>
       <ASaveRow />
     </div>
-  );
-}
-
-export function ARegistryLinkPane({ facility, goTo }: APaneProps) {
-  const save = useSaveStub();
-  return (
-    <div className="flex flex-col gap-24 content-measure-form" key={facility.id}>
-      {facility.registryFacility ? (
-        <FormField id="a-fcl" label="Isometric facility">
-          <FormInput id="a-fcl" defaultValue={facility.registryFacility} />
-        </FormField>
-      ) : (
-        <AReadRow
-          label="Isometric facility"
-          value="Not set"
-          action={
-            <Button variant="primary" onClick={save}>
-              Link Isometric facility
-            </Button>
-          }
-        />
-      )}
-      <AReadRow label="Soil temperature" value={facility.soilTemperature} />
-      <Notice
-        tone="info"
-        action={
-          <button type="button" className="body-small underline" onClick={() => goTo("registry")}>
-            Open Organization, Registry
-          </button>
-        }
-      >
-        Project, protocol and Removal template are set once for the organization.
-      </Notice>
-      {facility.registryFacility && <ASaveRow />}
-    </div>
-  );
-}
-
-export function AEmissionsPane({ facility }: APaneProps) {
-  const save = useSaveStub();
-  if (facility.durabilityTier === "1000-year") {
-    return (
-      <EmptyState
-        padding="md"
-        icon={<CloudIcon size={40} />}
-        title="Not used on the 1000-year tier"
-        description={`${facility.name} certifies on the 1000-year tier, so it needs no emission estimates.`}
-      />
-    );
-  }
-  return (
-    <ul className="flex flex-col border-t border-[var(--clr-dark-purple-10)]">
-      {["Grid electricity by process stage", "Staff travel"].map((name) => (
-        <li key={name} className="flex items-center justify-between gap-12 border-b border-[var(--clr-dark-purple-10)] py-12">
-          <span className="body-medium">{name}</span>
-          <Button onClick={save}>Edit</Button>
-        </li>
-      ))}
-    </ul>
   );
 }
 
@@ -526,12 +320,22 @@ export function AOrganizationsPane({ active, openOrg }: APaneProps) {
   );
 }
 
-export function ADiagnosticsPane() {
+const CONNECTION_LABEL: Record<APaneProps["registry"], string> = {
+  none: "No registry",
+  "keys-missing": "Keys not saved",
+  connected: "Connected",
+  failing: "Connection failing",
+};
+
+export function ADiagnosticsPane({ active, registry }: APaneProps) {
   return (
     <div className="flex flex-col gap-16 content-measure-form">
-      <AReadRow label="Last Isometric sync" value={fixtures.diagnostics.lastSync} />
+      <AReadRow label={`Isometric connection of ${active.name}`} value={CONNECTION_LABEL[registry]} />
+      <AReadRow
+        label="Last Isometric sync"
+        value={registry === "connected" ? fixtures.diagnostics.lastSync : fixtures.registry.lastGoodCheck}
+      />
       <AReadRow label="Failed submissions" value={String(fixtures.diagnostics.failedSubmissions)} />
-      <AReadRow label="Template mapping" value="Read only" />
     </div>
   );
 }

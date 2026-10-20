@@ -90,7 +90,30 @@ export const fixtures = {
     sourceVisibility: "Private: verifier only",
     defaultRemovalTemplate: "Biochar in agricultural soils",
     componentsToDecide: 3,
+    /** Variant A additions. */
+    lastCheck: "Oct 20, 2026, 09:41",
+    lastGoodCheck: "Oct 18, 2026, 16:05",
+    removalTemplates: [
+      "Biochar in agricultural soils",
+      "Biochar in agricultural soils (200-year)",
+    ],
+    /** Component decisions of the default Removal template. Names invented. */
+    components: [
+      { name: "Carbon-rich substance sequestration", decided: true },
+      { name: "Feedstock transportation", decided: true },
+      { name: "Biochar production energy", decided: false },
+      { name: "Biochar transportation", decided: true },
+      { name: "Embodied emissions of equipment", decided: false },
+      { name: "Leakage", decided: false },
+    ],
   },
+  /** Platform: how noma fills Isometric template inputs. Variant A only. */
+  templateMapping: [
+    { input: "Applied biochar mass", source: "Applications, dry mass" },
+    { input: "Feedstock transport distance", source: "Feedstock deliveries, transport legs" },
+    { input: "Genset diesel", source: "Emissions entries, litres" },
+    { input: "Random reflectance", source: "Samples, lab results" },
+  ],
   facilities: [
     {
       id: "fac-mafinga",
@@ -100,6 +123,7 @@ export const fixtures = {
       durabilityTier: "1000-year",
       registryFacility: "fcl_1K9YJ4M2TZ8QWERT",
       soilTemperature: "Not applicable",
+      soilReferenceC: null as number | null,
       removalTemplate: null as string | null,
       emissions: "Not used on the 1000-year tier",
     },
@@ -111,6 +135,7 @@ export const fixtures = {
       durabilityTier: "200-year",
       registryFacility: null as string | null,
       soilTemperature: "21.4 °C",
+      soilReferenceC: 21.4 as number | null,
       removalTemplate: "Biochar in agricultural soils (200-year)" as string | null,
       emissions: "2 emission estimates",
     },
