@@ -45,7 +45,7 @@ export function RegistrySourceVisibilitySettings() {
             : "Private: verifier only"}
         </span>
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          Organization Owners and Admins manage this policy.
+          Organization Admins manage this policy.
         </p>
         <PolicyTimingCopy />
       </div>

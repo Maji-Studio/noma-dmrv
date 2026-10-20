@@ -86,7 +86,7 @@ async function seedFixture(): Promise<Fixture> {
   const ctx: OrgContext = {
     organizationId,
     userId,
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   };
 

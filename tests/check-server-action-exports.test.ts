@@ -38,7 +38,7 @@ const SHARED_FILES: Record<string, string> = {
 export interface OrgContext {
   userId: string;
   organizationId: string;
-  orgRole: "owner" | "admin" | "member" | null;
+  orgRole: "admin" | "member" | null;
   isPlatformAdmin: boolean;
 }
 export function requireOrgRole(ctx: OrgContext, role: "admin"): void {

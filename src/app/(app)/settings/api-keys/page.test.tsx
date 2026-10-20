@@ -9,12 +9,12 @@ vi.mock("@/components/settings", () => ({ SettingsConsole: () => null }));
 
 describe("API key settings route", () => {
   it.each([
-    ["owner", false, true],
+    ["admin", false, true],
     ["admin", false, true],
     ["member", false, false],
     [null, true, false],
     ["member", true, false],
-    ["owner", true, true],
+    ["admin", true, true],
   ])("gates controls by live membership role %s (platform %s)", async (orgRole, isPlatformAdmin, expected) => {
     context.mockResolvedValue({ orgRole, isPlatformAdmin, organizationId: "org-1" });
     const view = await ApiKeysPage();

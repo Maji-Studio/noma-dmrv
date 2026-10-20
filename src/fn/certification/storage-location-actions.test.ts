@@ -191,7 +191,7 @@ describe("application Storage Location actions", () => {
   it("preserves actionable provider diagnostics in the failed event", async () => {
     mocks.ensure.mockRejectedValue(
       new IsometricApiError(
-        "The registry connection is not configured for this Organization. Ask an Owner or Admin to add the connection credentials.",
+        "The registry connection is not configured for this Organization. Ask an Admin to add the connection credentials.",
         undefined,
         undefined,
         "not_configured",
@@ -202,7 +202,7 @@ describe("application Storage Location actions", () => {
       syncApplicationStorageLocation(APPLICATION_ID),
     ).resolves.toMatchObject({
       success: false,
-      error: expect.stringMatching(/Owner or Admin/),
+      error: expect.stringMatching(/Admin/),
     });
 
     expect(mocks.appendEvent).toHaveBeenCalledWith(
@@ -210,7 +210,7 @@ describe("application Storage Location actions", () => {
       expect.objectContaining({
         entityId: `prj-test:${CUSTOMER_LOCATION_ID}`,
         status: "failed",
-        errorMessage: expect.stringMatching(/Owner or Admin/),
+        errorMessage: expect.stringMatching(/Admin/),
       }),
     );
   });

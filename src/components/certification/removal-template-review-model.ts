@@ -38,7 +38,7 @@ export const SCOPE_LABELS: Record<LineScope, string> = {
   unassigned: MISSING_VALUE.notSet,
 };
 
-/** The scopes an Owner or Admin can assign. Unassigned is the absence of one. */
+/** The scopes an Admin can assign. Unassigned is the absence of one. */
 export const ASSIGNABLE_SCOPES = ["operating", "forbidden"] as const satisfies readonly LineScope[];
 
 export const ENTRY_POLICY_LABELS: Record<EntryPolicy, string> = {

@@ -2,17 +2,17 @@ import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { organizations, users } from "@/db/schema";
+import { members, organizations, users } from "@/db/schema";
 
 vi.mock("@/lib/auth/server", () => ({
   requirePlatformAdmin: vi.fn().mockResolvedValue({}),
 }));
 
-import { createOrganizationWithOwner } from "@/data-access/organizations";
+import { createOrganizationWithAdmin } from "@/data-access/organizations";
 
 let triggerName: string | null = null;
 let functionName: string | null = null;
-let ownerUserId: string | null = null;
+let adminUserId: string | null = null;
 let organizationSlug: string | null = null;
 
 afterEach(async () => {
@@ -25,26 +25,44 @@ afterEach(async () => {
   if (organizationSlug) {
     await db.delete(organizations).where(eq(organizations.slug, organizationSlug));
   }
-  if (ownerUserId) {
-    await db.delete(users).where(eq(users.id, ownerUserId));
+  if (adminUserId) {
+    await db.delete(users).where(eq(users.id, adminUserId));
   }
   triggerName = null;
   functionName = null;
-  ownerUserId = null;
+  adminUserId = null;
   organizationSlug = null;
 });
 
 describe("organization creation transaction", () => {
-  it("rolls back the organization when Owner creation fails", async () => {
+  it("makes the selected account the first Admin", async () => {
+    adminUserId = randomUUID();
+    organizationSlug = `creation-${randomUUID()}`;
+    await db.insert(users).values({
+      id: adminUserId,
+      email: `${adminUserId}@example.test`,
+      name: "Test",
+      emailVerified: true,
+    });
+    const org = await createOrganizationWithAdmin({
+      name: "Creation test",
+      slug: organizationSlug,
+      adminUserId,
+    });
+    expect(await db.select().from(members).where(eq(members.organizationId, org.id)))
+      .toMatchObject([{ userId: adminUserId, role: "admin" }]);
+  });
+
+  it("rolls back the organization when Admin creation fails", async () => {
     const suffix = randomUUID().replaceAll("-", "");
     triggerName = `test_fail_member_${suffix}`;
     functionName = `test_fail_member_fn_${suffix}`;
-    ownerUserId = `owner-${suffix}`;
+    adminUserId = `owner-${suffix}`;
     organizationSlug = `rollback-${suffix}`;
     await db.insert(users).values({
-      id: ownerUserId,
+      id: adminUserId,
       email: `${organizationSlug}@example.test`,
-      name: "Rollback Owner",
+      name: "Rollback Admin",
       emailVerified: true,
     });
 
@@ -55,7 +73,7 @@ describe("organization creation transaction", () => {
           SELECT 1 FROM organizations
           WHERE id = NEW.organization_id AND slug = '${organizationSlug}'
         ) THEN
-          RAISE EXCEPTION 'injected Owner creation failure';
+          RAISE EXCEPTION 'injected Admin creation failure';
         END IF;
         RETURN NEW;
       END;
@@ -68,10 +86,10 @@ describe("organization creation transaction", () => {
     `));
 
     await expect(
-      createOrganizationWithOwner({
+      createOrganizationWithAdmin({
         name: "Rollback Organization",
         slug: organizationSlug,
-        ownerUserId,
+        adminUserId,
       }),
     ).rejects.toThrow();
 

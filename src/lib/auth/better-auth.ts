@@ -9,13 +9,14 @@ import { OAUTH_ENDPOINT_LIMITS } from "@/config/oauth";
 import { apiKey } from "@better-auth/api-key";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { createAccessControl } from "better-auth/plugins/access";
-import { defaultStatements, ownerAc, adminAc, memberAc } from "better-auth/plugins/organization/access";
+import { defaultStatements, ownerAc, memberAc } from "better-auth/plugins/organization/access";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS, API_KEY_LIVE_PREFIX, API_KEY_MAX_EXPIRY_DAYS, API_KEY_TEST_PREFIX } from "@/config/api-keys";
 import { z } from "zod";
 import { revokeDeletedMemberOAuthGrants, revokeMemberOAuthGrants } from "@/data-access/oauth-grant-lifecycle";
 import { disableOwnerApiKeys } from "@/data-access/api-credential-auth";
 import { oauthRolePolicy } from "./oauth-role-policy";
 import { canOwnApiKey } from "./api-scopes";
+import { assertOrganizationRole, translateLastAdminError, validateOrganizationRoleInput } from "./organization-role-policy";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
@@ -159,6 +160,7 @@ const organizationAccess = createAccessControl({ ...defaultStatements, apiKey: a
 export const auth = betterAuth({
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
+      validateOrganizationRoleInput(ctx.path, ctx.body);
       // HTTP callers cannot bypass the guarded application actions. Block reads
       // too, so plugin responses cannot expose credential hashes or metadata.
       if (ctx.path?.startsWith("/api-key/") && (ctx.request || ctx.headers)) {
@@ -167,6 +169,7 @@ export const auth = betterAuth({
       if (env.OAUTH_PROVIDER_ENABLED) return oauthBefore(ctx);
     }),
     after: createAuthMiddleware(async (ctx) => {
+      translateLastAdminError(ctx.context.returned);
       // Better Auth's leave endpoint does not invoke afterRemoveMember.
       // Only a successful, server-returned member can trigger this revocation,
       // and only once that membership row is gone. A refused leave returns an
@@ -399,17 +402,25 @@ export const auth = betterAuth({
       startingCharactersConfig: { shouldStore: false },
     }),
     organization({
+      // 1.7.10 uses creatorRole in remove, demote, invite and leave checks.
+      // ownerAc supplies organization:delete, which adminAc omits.
+      creatorRole: "admin",
       ac: organizationAccess,
       roles: {
-        owner: organizationAccess.newRole({ ...ownerAc.statements, apiKey: apiKeyActions }),
-        admin: organizationAccess.newRole({ ...adminAc.statements, apiKey: apiKeyActions }),
+        admin: organizationAccess.newRole({ ...ownerAc.statements, apiKey: apiKeyActions }),
         member: organizationAccess.newRole(memberAc.statements),
       },
       // Organization creation is reserved for app-level Platform Admins. The
-      // guarded server action uses the server-only userId path so the selected
-      // user, rather than the acting Platform Admin, becomes the Owner.
+      // guarded server action creates the org and selected Admin membership
+      // atomically in data-access; the acting Platform Admin is not enrolled.
       allowUserToCreateOrganization: false,
       organizationHooks: {
+        beforeAddMember: async ({ member }) => {
+          assertOrganizationRole(member.role);
+        },
+        beforeAcceptInvitation: async ({ invitation }) => {
+          assertOrganizationRole(invitation.role);
+        },
         afterRemoveMember: async ({ member }) => {
           await revokeMemberOAuthGrants(member.organizationId, member.userId, member.id);
           await disableOwnerApiKeys(member.organizationId, member.userId);
@@ -426,7 +437,7 @@ export const auth = betterAuth({
           try {
             await seedOrgDefaults(db, organization.id);
           } catch (error) {
-            // Organization and owner membership are already committed before
+            // Organization and admin membership are already committed before
             // this hook runs. Starter types are optional and can be recreated,
             // so do not turn a recoverable seed failure into a wedged retry.
             logger.error(

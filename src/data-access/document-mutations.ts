@@ -42,7 +42,7 @@ export async function deleteDocumentInTransaction(ctx: OrgContext, tx: DbTransac
 }
 export async function setDocumentVisibilityInTransaction(ctx: OrgContext, tx: DbTransaction, input: z.infer<typeof setVisibilitySchema> & { expectedVersion: number }, capture?: CaptureActivity): Promise<DocumentRow> {
   requireOrgScope(ctx);
-  if (!hasOrgRole(ctx, "admin")) throw new DomainError("forbidden", "Only organization owners and admins can change file visibility.");
+  if (!hasOrgRole(ctx, "admin")) throw new DomainError("forbidden", "Only organization admins can change file visibility.");
   const data = setVisibilitySchema.parse(input);
   const row = await lockDocument(ctx, tx, data.documentId);
   assertRowVersion({ entity: "document", id: row.id, expectedVersion: input.expectedVersion, actualVersion: row.version });

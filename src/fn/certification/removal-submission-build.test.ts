@@ -46,7 +46,7 @@ import * as sources from "./source-candidates";
 const TEST_ORG_CONTEXT = {
   userId: "removal-submission-build-user",
   organizationId: "removal-submission-build-org",
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 } as const;
 

@@ -9,7 +9,7 @@ vi.mock("@/lib/certification/emissions-entry-gate", () => ({ requireEmissionsEnt
 } }));
 import { deleteTransportLeg } from "./transport-legs";
 import { deleteSampleTransportLegForRetirement, listSampleTransportRetirementCandidates } from "./sample-transport-retirement";
-const ctx: OrgContext = { organizationId: "org", userId: "admin-id", orgRole: "owner", isPlatformAdmin: true };
+const ctx: OrgContext = { organizationId: "org", userId: "admin-id", orgRole: "admin", isPlatformAdmin: true };
 afterEach(() => { state.enabled = true; state.rows = []; vi.clearAllMocks(); });
 
 it("requires organization scope and Platform Admin authority before reads", async () => {

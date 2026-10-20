@@ -2,7 +2,7 @@ vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: async () => ({
     userId: "user",
     organizationId: "org",
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   }),
 }));

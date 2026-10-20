@@ -17,8 +17,8 @@ it("scopes lists and versioned revocation by live membership, organization and o
   await f.consent(grant.id);
   expect(await listOwnOAuthGrants(f.ctx)).toMatchObject([{ id: grant.id, scopes: ["feedstocks:read"] }]);
   await expect(listAllOAuthGrants(f.ctx)).rejects.toMatchObject({ code: "forbidden" });
-  await expect(listAllOAuthGrants({ ...f.ctx, orgRole: "owner" })).rejects.toMatchObject({ code: "forbidden" });
-  const owner = { ...f.ctx, userId: f.actorId, orgRole: "owner" as const };
+  await expect(listAllOAuthGrants({ ...f.ctx, orgRole: "admin" })).rejects.toMatchObject({ code: "forbidden" });
+  const owner = { ...f.ctx, userId: f.actorId, orgRole: "admin" as const };
   expect(await listOwnOAuthGrants(owner)).toEqual([]);
   expect(await listAllOAuthGrants(owner)).toMatchObject([{ id: grant.id }]);
   const foreign = { ...f.ctx, organizationId: f.orgIds[1] };
@@ -32,7 +32,7 @@ it("scopes lists and versioned revocation by live membership, organization and o
   await expect(revokeOAuthGrant(f.ctx, { id: grant.id, expectedVersion: 1 })).rejects.toMatchObject({ code: "stale_version" });
 });
 
-it("lets an Owner disconnect another person but refuses a Member", async () => {
+it("lets an Admin disconnect another person but refuses a Member", async () => {
   const attempt = f.attempt();
   await selectOAuthOrganization(attempt);
   const grant = await resolveAttemptGrant({ ...attempt, clientId: f.clientId, resource: OAUTH_TEST_RESOURCE });

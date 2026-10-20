@@ -86,7 +86,7 @@ export function OrganizationDefaultsForm() {
     return (
       <EmptyState
         icon={<SlidersHorizontalIcon size={32} />}
-        title="Only Organization Owners and Admins can change operating defaults"
+        title="Only Organization Admins can change operating defaults"
         description="Ask one to make changes."
         padding="sm"
       />

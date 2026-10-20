@@ -62,7 +62,7 @@ beforeEach(() => {
   mocks.requireOrgContext.mockResolvedValue({
     organizationId: "org",
     userId: "user",
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   });
 });

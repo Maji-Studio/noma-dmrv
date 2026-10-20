@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { activityChangeLabels, resolveActivityRecords } from "./activity-record-labels";
 it("keeps future entity types readable without asserting they were deleted", async () => {
-  const labels = await resolveActivityRecords({ organizationId: "org", userId: "user", orgRole: "owner", isPlatformAdmin: false }, [
+  const labels = await resolveActivityRecords({ organizationId: "org", userId: "user", orgRole: "admin", isPlatformAdmin: false }, [
     { entityType: "future_record", entityId: "entry-1", action: "created" },
   ]);
   expect(labels.get("future_record:entry-1")).toEqual({ label: "future record entry-1", deleted: false, facilityId: null, facilityTimezone: null });

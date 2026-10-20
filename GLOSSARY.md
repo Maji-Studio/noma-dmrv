@@ -301,7 +301,7 @@ began; treating eligibility as a stored unlock.
 The three off-system agreements with Isometric that must be recorded on
 a **production process** before its first *unsampled* credit batch: the
 agreed baseline size (floor 30), the random-sampling-plan/PDD reference,
-and the declared moisture pathway. Recording them is an owner/admin
+and the declared moisture pathway. Recording them is an admin
 action and is what enables Method B for that process — there is no
 separate unlock flag. A sample count can never infer them. _Avoid_:
 "unlock" as a distinct stored state; capturing these per credit batch.
@@ -458,7 +458,7 @@ verifier status to a Removal.
 **GHG Statement report**:
 The supplier-generated, versioned PDF that explains one **GHG Statement** and
 its authoritative Isometric GHG Entry totals to the verifier. noma prepares a
-frozen version from live registry facts, an Owner/Admin reviews and approves
+frozen version from live registry facts, an Admin reviews and approves
 it, and Statement submission supplies its URL to Isometric. Versions progress
 *prepared → approved → submitted*; their frozen content is never overwritten,
 while lifecycle metadata and the revocable token digest advance in place.
@@ -530,8 +530,7 @@ operators now confirm empty components as a **Recorded zero** instead.
 **Removal template**:
 The Isometric template (credit type REMOVAL) a **Removal** is built from. It
 lists the components Isometric expects, in groups. Each facility has one
-default Removal template; a new **credit batch** starts on it, and an Owner or
-Admin can switch a batch to another. A template is set up in Settings, Removal
+default Removal template; a new **credit batch** starts on it, and an Admin can switch a batch to another. A template is set up in Settings, Removal
 templates, where its components are decided.
 _Avoid_: GHG entry template (the registry's API name), template pin, active
 template.
@@ -542,7 +541,7 @@ builds each component from a component blueprint, and groups components into
 component groups. Its decision covers its scope, its **automatic datapoints**
 and whether it takes **emissions entries**. A template's component decisions
 are made once, and every facility and credit batch using that template follows
-them. noma proposes a decision where it can; an Owner or Admin decides. Say
+them. noma proposes a decision where it can; an Admin decides. Say
 "template component" only where "component" alone is ambiguous. The emissions
 pages use the same word.
 _Avoid_: line, emission line, template line, template input.
@@ -742,11 +741,16 @@ _Avoid_: superadmin, root.
 
 **Member**:
 A user's belonging to an **Organization**, carrying one org role —
-*Owner* (first user, full control, an org never loses its last owner),
-*Admin* (manages members and org settings; registry-facing submissions
-are Admin-and-up), or *Member* (day-to-day MRV data entry). A user may
+*Admin* (full organization control) or *Member* (day-to-day MRV data entry). A user may
 hold memberships in several Organizations, though one is the norm.
 _Avoid_: teammate, seat.
+
+**Admin**:
+An Organization role with full control of its settings and members, including
+registry-facing submissions and organization deletion. The first member is an
+Admin. An Organization must keep at least one Admin: the last Admin cannot be
+demoted, removed, or leave until another member becomes an Admin. Replaces the
+former Owner role. Distinct from **Platform Admin**.
 
 ### Connected apps
 

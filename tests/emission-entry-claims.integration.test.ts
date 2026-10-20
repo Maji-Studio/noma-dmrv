@@ -27,7 +27,7 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } fr
 
 vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => true, requireEmissionsEntriesEnabled: () => {} }));
 const userId = `entry-claims-${crypto.randomUUID()}`;
-const ctx = { ...makeTestOrgContext(userId), orgRole: "owner" as const };
+const ctx = { ...makeTestOrgContext(userId), orgRole: "admin" as const };
 let fixture: LineageFixture;
 let second: LineageFixture | undefined;
 let observation: typeof removalTemplateObservations.$inferSelect;

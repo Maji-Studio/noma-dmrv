@@ -73,8 +73,8 @@ export function resolveBootstrapMode(
 
 /**
  * Ensure the default organization exists and the Platform Admin has no member
- * row. Local/test resets also create a dev teammate Owner; production never
- * creates shared credentials and relies on invitations for the first real Owner.
+ * row. Local/test resets also create a dev teammate Admin; production never
+ * creates shared credentials and relies on invitations for the first real Admin.
  */
 export async function ensureOrgFoundation(
   db: EnsureAdminDb,
@@ -148,17 +148,17 @@ export async function ensureOrgFoundation(
       id: crypto.randomUUID(),
       organizationId: DEC_ORG_ID,
       userId: teammate.id,
-      role: 'owner',
+      role: 'admin',
     });
-  } else if (teammateMembership.role !== 'owner') {
+  } else if (teammateMembership.role !== 'admin') {
     await db
       .update(schema.members)
-      .set({ role: 'owner' })
+      .set({ role: 'admin' })
       .where(eq(schema.members.id, teammateMembership.id));
   }
 
   console.log(
-    `Ensured organization organizationId=${DEC_ORG_ID} with teammate owner`,
+    `Ensured organization organizationId=${DEC_ORG_ID} with teammate admin`,
   );
 }
 

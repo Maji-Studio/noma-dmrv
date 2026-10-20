@@ -182,7 +182,7 @@ describe("production organization foundation", () => {
         id: crypto.randomUUID(),
         organizationId: DEC_ORG_ID,
         userId: adminUserId,
-        role: "owner",
+        role: "admin",
       });
       vi.stubEnv("NODE_ENV", "production");
       await ensureOrgFoundation(db, adminUserId, TEST_PASSWORD_HASH);
@@ -260,7 +260,7 @@ describe("production organization foundation", () => {
         : [];
 
       expect(teammate).toBeDefined();
-      expect(membership?.role).toBe("owner");
+      expect(membership?.role).toBe("admin");
     } finally {
       await db.delete(users).where(eq(users.id, adminUserId));
       await restoreFoundation(snapshot);

@@ -1,14 +1,14 @@
 /**
  * One Removal template in Removal templates: its name, whether it is the
- * facility default (an Owner or Admin makes another one the default here),
+ * facility default (an Admin makes another one the default here),
  * what changed since the last read, whether Isometric returned it in full, and
  * every line laid out like Isometric's template page (Mitigated and Emitted,
  * groups with counts) with noma's decision per line.
  *
  * A template no default or credit batch uses is shown from a live read and
- * stores nothing until an Owner or Admin starts deciding its lines.
+ * stores nothing until an Admin starts deciding its lines.
  *
- * Owners and Admins collect line assignments as a React Hook Form draft keyed
+ * Admins collect line assignments as a React Hook Form draft keyed
  * by component id, so the dialog and sheet unsaved-changes guards see it, and
  * save them together against the observation and version the first draft was
  * made on.
@@ -297,7 +297,7 @@ export function RemovalTemplateReviewCard({
               >
                 {canManage
                   ? `No facility default or credit batch uses this template yet. ${hasLinesToDecide ? "Decide its components" : "Set it up"} so credit batches can use it.`
-                  : `No facility default or credit batch uses this template yet. Ask an Owner or Admin to ${hasLinesToDecide ? "decide its components" : "set it up"}.`}
+                  : `No facility default or credit batch uses this template yet. Ask an Admin to ${hasLinesToDecide ? "decide its components" : "set it up"}.`}
               </Notice>
             )}
             {notFullyRead && (
@@ -315,7 +315,7 @@ export function RemovalTemplateReviewCard({
             )}
             {!canManage && reviewCount > 0 && (
               <Notice tone="info">
-                Ask an Owner or Admin to decide the components marked {TO_DECIDE_LABEL}.
+                Ask an Admin to decide the components marked {TO_DECIDE_LABEL}.
               </Notice>
             )}
             <DeprecationFact entry={entry} />

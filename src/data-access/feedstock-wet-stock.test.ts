@@ -5,7 +5,7 @@ import { allocateFeedstockWetMass, assertFeedstockWetDrawWithinStock } from "./f
 
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("./lane-stock-derivation", () => ({ deriveLaneStock: async () => [{ feedstockStockWetKg: 50 }] }));
-const ctx = { organizationId: "org", userId: "user", orgRole: "owner" as const, isPlatformAdmin: false };
+const ctx = { organizationId: "org", userId: "user", orgRole: "admin" as const, isPlatformAdmin: false };
 const path = ["feedstockDraws", 1, "storageLocationId"];
 
 it("reports the available stock from the locked guard", async () => {

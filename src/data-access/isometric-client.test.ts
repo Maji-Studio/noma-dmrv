@@ -89,7 +89,7 @@ describe("organization-scoped Isometric client", () => {
     expect(error).toBeInstanceOf(IsometricApiError);
     expect(error).toMatchObject({
       code: "not_configured",
-      message: "The registry connection is not configured for this Organization. Ask an Owner or Admin to add the connection credentials.",
+      message: "The registry connection is not configured for this Organization. Ask an Admin to add the connection credentials.",
       status: undefined,
     });
     expect(fetchMock).not.toHaveBeenCalled();

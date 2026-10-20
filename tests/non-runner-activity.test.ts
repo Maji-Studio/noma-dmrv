@@ -48,7 +48,7 @@ let ctx: OrgContext;
 let fixture: Awaited<ReturnType<typeof createActivityWriteFixture>>;
 
 beforeEach(async () => {
-  ctx = { organizationId: `activity-writes-${crypto.randomUUID()}`, userId: `activity-actor-${crypto.randomUUID()}`, orgRole: "owner", isPlatformAdmin: false };
+  ctx = { organizationId: `activity-writes-${crypto.randomUUID()}`, userId: `activity-actor-${crypto.randomUUID()}`, orgRole: "admin", isPlatformAdmin: false };
   fixture = await createActivityWriteFixture(ctx);
   __setStorageProviderForTests(new RetirementStorageProvider());
 });

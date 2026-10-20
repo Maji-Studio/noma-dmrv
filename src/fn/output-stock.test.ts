@@ -26,7 +26,7 @@ import { postOutputStockFn, removeOutputLossFn } from "./output-stock";
 
 const BIN_ID = "00000000-0000-4000-8000-000000000001";
 const FACILITY_ID = "00000000-0000-4000-8000-000000000002";
-const ctx = { organizationId: "org", userId: "user", orgRole: "owner", isPlatformAdmin: false };
+const ctx = { organizationId: "org", userId: "user", orgRole: "admin", isPlatformAdmin: false };
 const command = {
   storageLocationId: BIN_ID, facilityId: FACILITY_ID, occurredAt: "2026-09-14T12:00:00.000Z", kind: "loss" as const,
   wetMassKg: 10, moisturePercent: 20, expectedProductVersions: {}, basisFingerprint: "basis", idempotencyKey: "form-key", reason: "Spilled",

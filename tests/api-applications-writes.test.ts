@@ -211,7 +211,7 @@ it("refuses submitted lineage metadata PATCH and DELETE with certification_locke
   await ensureTestOrg();
   const ctx = makeTestOrgContext(f.ctx.userId);
   const memberId = randomUUID();
-  await db.insert(members).values({ id: memberId, organizationId: ctx.organizationId, userId: ctx.userId, role: "owner" });
+  await db.insert(members).values({ id: memberId, organizationId: ctx.organizationId, userId: ctx.userId, role: "admin" });
   const credential = await createApiKey(ctx, { name: "Submitted application writes", scopes: ["applications:read", "applications:write", "applications:delete"], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS });
   const lineage = await createLineageFixture("removal");
   const previousKey = key;

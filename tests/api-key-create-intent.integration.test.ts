@@ -36,7 +36,7 @@ let ctx: OrgContext;
 let other: OrgContext;
 const input = { name: "Intent integration", scopes: ["feedstocks:read"], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS };
 
-// Same verified Owner/member setup as api-credentials.test.ts, with one user in two orgs.
+// Same verified Admin/member setup as api-credentials.test.ts, with one user in two orgs.
 beforeEach(async () => {
   ctx = { ...makeTestOrgContext(`api-intent-user-${randomUUID()}`), organizationId: `api-intent-${randomUUID()}` };
   other = { ...ctx, organizationId: `api-intent-other-${randomUUID()}` };
@@ -45,7 +45,7 @@ beforeEach(async () => {
   })));
   await db.insert(users).values({ id: ctx.userId, name: "API intent owner", email: `${ctx.userId}@example.test`, emailVerified: true });
   await db.insert(members).values([ctx, other].map(({ organizationId }) => ({
-    id: randomUUID(), organizationId, userId: ctx.userId, role: "owner",
+    id: randomUUID(), organizationId, userId: ctx.userId, role: "admin",
   })));
 });
 afterEach(async () => {

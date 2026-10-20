@@ -15,7 +15,7 @@ import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/lo
 import { loadRemovalTemplateReview, loadRemovalTemplateReviewEntry, reviewRemovalTemplateLines, switchCreditBatchRemovalTemplate } from "./removal-template-review";
 import { canAcceptProposal, problemMessages } from "@/components/certification/removal-template-review-model";
 
-const ctx = vi.hoisted((): OrgContext => ({ userId: "review-user", organizationId: "review-org", orgRole: "owner", isPlatformAdmin: false }));
+const ctx = vi.hoisted((): OrgContext => ({ userId: "review-user", organizationId: "review-org", orgRole: "admin", isPlatformAdmin: false }));
 vi.mock("../with-action", async () => {
   const { mockWithAction } = await import("../../../tests/helpers/mock-with-action");
   return mockWithAction(ctx);
@@ -44,7 +44,7 @@ beforeEach(() => {
   vi.mocked(getLatestTemplateObservation).mockResolvedValue(null);
   vi.mocked(listPinnedRemovalTemplateIds).mockResolvedValue([]);
   vi.mocked(listComponentBlueprints).mockResolvedValue([]);
-  ctx.orgRole = "owner";
+  ctx.orgRole = "admin";
   vi.mocked(loadTemplateEnrichment).mockResolvedValue({});
   vi.mocked(requireOrgFacility).mockResolvedValue(undefined as never);
   vi.mocked(getCertifierProjectByFacility).mockResolvedValue({ externalProjectId: fixture.project_id } as never);
@@ -238,7 +238,7 @@ describe("Removal template action guards", () => {
     expect(reviewLineContracts).not.toHaveBeenCalled();
     expect(getCreditBatchById).not.toHaveBeenCalled();
   });
-  it.each(["owner", "admin"] as const)("permits %s reviews with server-resolved scope", async (role) => {
+  it.each(["admin"] as const)("permits %s reviews with server-resolved scope", async (role) => {
     ctx.orgRole = role;
     vi.mocked(reviewLineContracts).mockResolvedValue({ id } as never);
     const input = { observationId: id, expectedVersion: 1, assignments: {} };

@@ -15,7 +15,7 @@ const actions = {
   onOpenRegistry: vi.fn(),
 };
 const empty: OnboardingStatus = {
-  isOwnerOrAdmin: true, isOrgOwnerOrAdmin: true,
+  canManage: true, isOrgAdmin: true,
   facilityCount: 0, supplierCount: 0, facility: null,
 };
 let renderer: ReactTestRenderer;

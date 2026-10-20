@@ -1,7 +1,7 @@
 /**
  * One line of a Removal template in the line review: what the line is, its
  * inputs with their quantity kind and unit, where its values come from (scope,
- * automatic datapoints, emissions entries), and for an Owner or Admin the controls
+ * automatic datapoints, emissions entries), and for an Admin the controls
  * to accept a proposal or assign a contract. Only a component to decide
  * takes an assignment; a settled line is read-only, as the server enforces.
  *

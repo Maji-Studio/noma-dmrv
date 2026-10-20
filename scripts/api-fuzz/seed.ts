@@ -90,9 +90,9 @@ async function main(): Promise<void> {
   await db.transaction(async (tx) => {
     await tx.insert(organizations).values({ id: organizationId, name: FIXTURE_LABEL, slug: `api-fuzz-${organizationId}` });
     await tx.insert(users).values({ id: userId, email: `${userId}@example.test`, name: FIXTURE_LABEL, emailVerified: true });
-    await tx.insert(members).values({ id: randomUUID(), organizationId, userId, role: "owner" });
+    await tx.insert(members).values({ id: randomUUID(), organizationId, userId, role: "admin" });
   });
-  const ctx = { organizationId, userId, orgRole: "owner" as const, isPlatformAdmin: false };
+  const ctx = { organizationId, userId, orgRole: "admin" as const, isPlatformAdmin: false };
   // A 200-year facility. Mean R0 and TGA are optional for Samples at either tier.
   const facility = await createFacility(ctx, {
     ...TEST_SITE_POSITION, code: "FUZZ-FAC", name: FIXTURE_LABEL, country: "FR", timezone: FACILITY_TIME_ZONE,

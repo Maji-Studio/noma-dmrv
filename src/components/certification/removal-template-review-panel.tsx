@@ -3,9 +3,9 @@
  * settings, the one place a Removal template is set up. Lists every Removal
  * template of the facility's Isometric project (the default first, then the
  * ones credit batches use), each with its lines and noma's decision per line.
- * An Owner or Admin chooses the facility default here.
+ * An Admin chooses the facility default here.
  *
- * Every viewer can read it; `canManage` (server-computed, Owner or Admin) adds
+ * Every viewer can read it; `canManage` (server-computed, Admin) adds
  * the assignment controls. The review reads the templates live from Isometric,
  * so Retry is a refetch of the same query.
  */

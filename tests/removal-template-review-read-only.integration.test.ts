@@ -39,7 +39,7 @@ const SESSION_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const tag = randomUUID();
 const organizationId = `preview-observations-${tag}`;
 const userId = `preview-user-${tag}`;
-const ctx: OrgContext = { userId, organizationId, orgRole: "owner", isPlatformAdmin: false };
+const ctx: OrgContext = { userId, organizationId, orgRole: "admin", isPlatformAdmin: false };
 let facilityId: string;
 let template: GhgEntryTemplate;
 let enrichment: TemplateEnrichment;
@@ -47,7 +47,7 @@ let enrichment: TemplateEnrichment;
 beforeAll(async () => {
   await db.insert(organizations).values({ id: organizationId, name: "Preview observation tests", slug: organizationId });
   await db.insert(users).values({ id: userId, email: `${tag}@preview-observations.test`, emailVerified: true });
-  await db.insert(members).values({ id: randomUUID(), userId, organizationId, role: "owner" });
+  await db.insert(members).values({ id: randomUUID(), userId, organizationId, role: "admin" });
   const [facility] = await db.insert(facilities).values({
     ...TEST_SITE_POSITION, organizationId, timezone: "UTC", code: `FAC-PREVIEW-${tag}`, name: "Preview observation tests",
   }).returning();

@@ -53,22 +53,29 @@ workspace and document read keeps normal organization scoping.
 
 ## Roles and active organization
 
-`users.role` distinguishes a global Platform Admin (`admin`) from a normal user (`user`). Organization membership lives in `members` with the hierarchy Owner ⊃ Admin ⊃ Member. See [organization.md](./organization.md).
+`users.role` distinguishes a global Platform Admin (`admin`) from a normal user (`user`). Organization membership lives in `members` with the hierarchy Admin ⊃ Member. See [organization.md](./organization.md).
 
 - **Session cookie cache is on with `maxAge: 5 * 60`.** Changes to cached session fields — notably an org switch's `activeOrganizationId` — can take up to 5 minutes to show up. `getOrgContext()` re-reads membership on every call, so revocations are immediate. `getUser()` deliberately re-reads `users.role` from the DB, so `requireAdmin` is not subject to this lag.
 - **`getOrgContext()` returns `null`, it does not throw,** when an `activeOrganizationId` is set but the user is neither a member nor a Platform Admin. Do not read `null` as "signed out".
 - **`resolveOrgContext()` is the same resolution with the reason attached** — `{ ok: true, ctx }`, or `{ ok: false, denial }` where `denial` is `"unauthenticated"` (no session) or `"no-organization"` (signed in, but no active organization or not a member of it). `getOrgContext()` and `requireOrgContext()` are thin wrappers over it and discard the reason. Only an HTTP transport needs it: the private read handlers (`src/app/api/reads/read-response.ts`) answer **401** for `"unauthenticated"` and **403** for `"no-organization"`, because a signed-out caller can fix it by signing in and a wrongly-scoped one cannot. Server actions have no status code to choose and keep using `requireOrgContext()`. Both denials are authorization answers, never a 400.
 - **`OrgContext.orgRole` is `null` for a Platform Admin acting inside an org they don't belong to.** Never compare or rank `ctx.orgRole` directly — that wrongly denies Platform Admins. Use `requireOrgRole(ctx, minRole)`, which short-circuits on `isPlatformAdmin` first.
 - **How `activeOrganizationId` gets set:** every successful explicit switch persists `users.lastActiveOrganizationId`. On session creation, the hook restores that organization only after revalidating current access. If it is missing or stale, ordinary users receive their first membership ordered by membership creation time then id; Platform Admins receive the first organization ordered by organization creation time then id. Users with no accessible organizations remain without an active org. The saved id is a preference, never an authorization grant.
-- **`allowUserToCreateOrganization: false`** — orgs are created only through the Platform-Admin-guarded server action, which makes the *selected* user the Owner, not the acting admin. `afterCreateOrganization` seeds starter types via `seedOrgDefaults` and deliberately swallows failures rather than wedging the create.
-- **The CLI org-context seam is `runWithCliOrgContext` (`src/lib/cli/org-context.ts`).** A CLI (today the Mafinga seed) has no session, so it runs server actions inside an org context written to an `AsyncLocalStorage` that `resolveOrgContext()` reads first. The seam accepts identity IDs only and verifies them itself: the user must hold `users.role = 'admin'` and the organization must exist, and the context it builds is always Owner plus Platform Admin. It refuses to run when `NODE_ENV=production` without `ALLOW_DEV_BOOTSTRAP=1`. The storage lives in `src/lib/auth/cli-org-context-store.ts` and only that CLI module may write to it, so `src/lib/auth/server.ts` exports the read side alone. **Request code must never import either module**: a request resolves its context from the session.
+- **`allowUserToCreateOrganization: false`** — orgs are created only through the Platform-Admin-guarded server action, which makes the *selected* user an Admin, not the acting admin. `afterCreateOrganization` seeds starter types via `seedOrgDefaults` and deliberately swallows failures rather than wedging the create.
+- **The CLI org-context seam is `runWithCliOrgContext` (`src/lib/cli/org-context.ts`).** A CLI (today the Mafinga seed) has no session, so it runs server actions inside an org context written to an `AsyncLocalStorage` that `resolveOrgContext()` reads first. The seam accepts identity IDs only and verifies them itself: the user must hold `users.role = 'admin'` and the organization must exist, and the context it builds is always Admin plus Platform Admin. It refuses to run when `NODE_ENV=production` without `ALLOW_DEV_BOOTSTRAP=1`. The storage lives in `src/lib/auth/cli-org-context-store.ts` and only that CLI module may write to it, so `src/lib/auth/server.ts` exports the read side alone. **Request code must never import either module**: a request resolves its context from the session.
 - **`users.role` is declared `input: false`** on the Better Auth additionalField, so it can never be set through self-service signup. Role is assigned only by the admin-bootstrap CLI (`src/lib/cli/ensure-admin-core.ts`) or a Platform Admin path.
 
 The deliberate `// org-scope-ok:` credential-verification seam,
 `verifyIsometricCredentialsForOrganization(ctx, organizationId)`, uses the same
-management guard as credential writes: Owners and Admins may verify their active
+management guard as credential writes: Admins may verify their active
 organization, and only Platform Admins may verify another organization. It
 returns only the project count from `listProjects`.
+
+The organization plugin uses `creatorRole: "admin"` and grants Admin the former
+Owner permissions, including organization deletion. Both the plugin and the
+Platform Admin membership writers refuse demoting, removing, or leaving as the
+last Admin. Plugin errors tell the user to promote another member first. Role
+inputs accept only a single `admin` or `member`; the plugin's built-in `owner`
+and multi-role inputs are rejected.
 
 ## Server actions
 
@@ -95,7 +102,7 @@ Data-access functions take an `OrgContext` and call `requireOrgScope(ctx)` — t
 - **`assertSameOrg()` must be passed the current `tx` as its `executor`** when called inside a transaction — reading through the global pool from inside a transaction starves the pool under parallel load. See `src/data-access/utils.ts`.
 - `organizationId` is never accepted from form data; cross-org IDs resolve as absent rather than disclosing another org's data.
 
-Registry credentials are owned per organization and managed by its Owners and Admins (and by Platform Admins), gated on the server-computed `viewerCanManage` rather than on `users.role`. Ordinary members use them through scoped certification flows but cannot read or replace the stored secrets.
+Registry credentials are owned per organization and managed by its Admins (and by Platform Admins), gated on the server-computed `viewerCanManage` rather than on `users.role`. Ordinary members use them through scoped certification flows but cannot read or replace the stored secrets.
 
 ## Rate limiting
 
@@ -108,7 +115,7 @@ Two distinct limiters — a real trip hazard:
 
 Signup is invite-only: public signup is off in code (`disableSignUp: true` in `src/lib/auth/better-auth.ts`), with no env flag to turn it on. Users join through an organization invite or the admin bootstrap CLI.
 
-Organization Admins and Owners invite from organization settings; Better Auth enforces invitation and membership changes server-side. Re-inviting the same email cancels the stale pending invite. Email delivery is best-effort — the inviter always gets a copyable accept link. `/admin/users` redirects to `/settings/organization`.
+Organization Admins invite from organization settings; Better Auth enforces invitation and membership changes server-side. Re-inviting the same email cancels the stale pending invite. Email delivery is best-effort — the inviter always gets a copyable accept link. `/admin/users` redirects to `/settings/organization`.
 
 ## Better Auth schema and credential identity
 
@@ -140,7 +147,7 @@ on a prefix. Production-mode staging builds also use the live prefix.
 
 Credential management goes through `src/fn/api-keys.ts` (`withAction`, strict
 Zod schemas) into `src/data-access/api-keys.ts`. Every management action checks
-live, verified Owner/Admin membership. Unlike normal organization actions, a
+live, verified Admin membership. Unlike normal organization actions, a
 Platform Admin has **no membership override** here. The organization comes
 from the resolved context, never the payload. Creation requires an explicit
 `expiresIn` in seconds, at most 365 days; the plugin's defensive default is
@@ -175,7 +182,7 @@ per-key rate limiter are disabled. Last-used timestamps still update during
 verification. REST rate budgets belong to the REST transport.
 
 The plugin's organization access control adds `apiKey` management permissions
-to Owner/Admin while preserving the existing organization permissions.
+to Admin while preserving the existing organization permissions.
 `afterRemoveMember` and `afterUpdateMemberRole` disable the affected user's
 keys in that organization and record `credential_owner_removed`; promotion or
 re-admission does not restore those credentials. Platform Admin membership overrides disable keys in their existing database
@@ -192,7 +199,7 @@ issuance and deleted users.
 ### API key settings
 
 Manage credentials at `/settings/api-keys` in the settings console. Live
-organization Owners and Admins can create keys, edit names and permissions,
+organization Admins can create keys, edit names and permissions,
 and revoke keys. Members and Platform Admins without that membership role
 see an explanation without management controls. Creation shows the plaintext
 once with a copy button; closing the dialog clears it. Revoked keys remain
@@ -225,7 +232,7 @@ when its hook has disabled the key. The v1 vocabulary is `feedstocks:read`,
 `feedstocks:write`, `feedstocks:delete`, and read-only `facilities`, `suppliers`,
 `feedstock-types`, `storage-locations`, `vehicles`, and `drivers`. Plugin
 permissions are `{ entity: [action] }`; wildcards grant nothing. `hasScope`
-checks the credential alone, and `principalAllows` intersects API keys with Owner/Admin and OAuth with its
+checks the credential alone, and `principalAllows` intersects API keys with Admin and OAuth with its
 live role ceiling, then checks the requested scope. Operation/domain guards must still enforce the remaining
 operation permission.
 
@@ -246,8 +253,7 @@ calls an organization-scoped data-access read. Expiry is an ISO UTC instant.
 
 ## OAuth connections
 
-OAuth lets a member connect an app as themselves in one organization. Owner,
-Admin and Member may connect; API keys remain Owner/Admin credentials for scripts
+OAuth lets a member connect an app as themselves in one organization. Admin and Member may connect; API keys remain Admin credentials for scripts
 and internal agents. Neither path has a Platform Admin membership override.
 `ApiContext.principal.kind` distinguishes them; OAuth uses the grant generation
 id as `credentialId` for rate limits, idempotency and audit, with `oauthClientId`
@@ -301,7 +307,7 @@ a stored refresh row without it is `invalid_grant`. Browser sign-out revokes
 that session's access tokens, but refresh can continue the connection.
 
 [Membership hooks](../src/lib/auth/better-auth.ts) revoke on removal and on a
-role change that no longer permits connecting. Owner/Admin/Member transitions
+role change that no longer permits connecting. Admin/Member transitions
 keep OAuth connections; API keys still disable on role changes. Self-service
 `/organization/leave` has an after-hook because the plugin skips
 `afterRemoveMember`; it verifies the returned membership is gone before revoking
@@ -366,5 +372,5 @@ cross-organization state and toggle it at `/admin/organizations`, through
 `src/fn/organization-api-access.ts:setOrganizationApiAccessFn` and its guarded
 data-access seam. Turning it off requires confirmation: every API key in that
 organization stops working until access is restored, without revoking the
-keys. Organization Owners/Admins without Platform Admin access cannot toggle
+keys. Organization Admins without Platform Admin access cannot toggle
 it. Restoring access still requires each credential to pass its normal checks.

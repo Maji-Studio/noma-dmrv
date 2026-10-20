@@ -4,7 +4,7 @@ import type { SQL } from 'drizzle-orm';
 import type { DbTransaction } from '@/db';
 import type { OrgContext } from '@/lib/auth/server';
 import { assertProductionRunOutputBasisChange } from './product-dependencies';
-const ctx: OrgContext = { organizationId: 'org', userId: 'user', orgRole: 'owner', isPlatformAdmin: false };
+const ctx: OrgContext = { organizationId: 'org', userId: 'user', orgRole: 'admin', isPlatformAdmin: false };
 
 describe('unresolved production repair dependencies', () => {
   it('blocks a balance-dependent count even when the old completion date is missing', async () => {

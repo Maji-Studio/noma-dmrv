@@ -20,7 +20,7 @@ const ACCESS_TOKEN = "e2e-onboarding-access-9999";
 const OWNER = {
   id: USER_ID,
   email: `test-onboarding-owner-${RUN_TAG}@e2e.local`,
-  name: "E2E Onboarding Owner",
+  name: "E2E Onboarding Admin",
   role: "user" as const,
   password: "TestPassword123!",
 };
@@ -59,7 +59,7 @@ test.describe("First-run onboarding", () => {
         id: `e2e-onboarding-member-${RUN_TAG}`,
         organizationId: ORG_ID,
         userId: USER_ID,
-        role: "owner",
+        role: "admin",
       });
     });
 

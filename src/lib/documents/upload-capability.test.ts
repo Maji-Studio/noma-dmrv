@@ -9,7 +9,7 @@ vi.mock("@/lib/operations/document-upload-renewal", () => ({ renewDocumentUpload
 vi.mock("@/lib/operations/runner", () => ({ runOperation: vi.fn() }));
 vi.mock("@/lib/storage", () => ({ getStorageProvider: vi.fn() }));
 
-const ctx = { userId: "user", organizationId: "org", orgRole: "owner", isPlatformAdmin: false } satisfies OrgContext;
+const ctx = { userId: "user", organizationId: "org", orgRole: "admin", isPlatformAdmin: false } satisfies OrgContext;
 const signingInstant = Date.parse("2026-10-15T10:00:00Z");
 const leaseMs = 5_500;
 const signingDelayMs = 2_000;

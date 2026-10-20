@@ -217,7 +217,7 @@ these areas; the entry rules and invariants live in
 ### An Organization cannot be renamed (`tenancy/organization-rename`, opened 2026-07-28)
 
 - `organizations.name` and `slug` (`src/db/schema/auth.ts`) are settable only at
-  creation, through `createOrganizationWithOwner`
+  creation, through `createOrganizationWithAdmin`
   (`src/data-access/organizations.ts`). There is no `updateOrganization`, so a
   typo at onboarding is permanent and shows in the sidebar brand, the settings
   subtitle, and every invitation email.
@@ -498,7 +498,7 @@ follow-up, not permission to weaken the current guard.
 - **To resolve:** build the rule engine first. When it exists, the override
   surface is `/settings/defaults`
   (`src/components/settings/organization-defaults-form.tsx`) — the table
-  `organization_settings` and its Owner/Admin gate are already in place. Keep
+  `organization_settings` and its Admin gate are already in place. Keep
   the distinction that page is built on: advisory thresholds may be
   org-editable, certification gates may not.
 

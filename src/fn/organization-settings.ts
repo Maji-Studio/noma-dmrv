@@ -2,7 +2,7 @@
 
 /**
  * Organization operating defaults. Any member reads them — their forms are
- * seeded from these values — and only Owners/Admins write.
+ * seeded from these values — and only Admins write.
  */
 import {
   getOrganizationDefaults,
@@ -26,7 +26,6 @@ export async function loadOrganizationDefaults(): Promise<
     defaults: await getOrganizationDefaults(ctx),
     viewerCanManage:
       ctx.isPlatformAdmin ||
-      ctx.orgRole === "owner" ||
       ctx.orgRole === "admin",
   }));
 }

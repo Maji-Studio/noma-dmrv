@@ -256,7 +256,7 @@ minutes, and uploads `api-fuzz-report/junit.xml` even after test failures.
 Locally, install `uv` and prepare an empty, migrated local database whose name
 contains a `test` or `e2e` segment. Export `DATABASE_URL` and the app environment
 before seeding; the seed does not load env files. Use the workflow's hermetic
-env block for production-build parity. The seed creates a verified Owner, the
+env block for production-build parity. The seed creates a verified Admin, the
 intake prerequisites, a driver, vehicle, supplier location, committed feedstock
 intake, a reactor and a closed production run through the operation runner (the run
 draws from its own second bin, so the feedstock cases keep their stock). For

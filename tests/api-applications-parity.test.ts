@@ -190,7 +190,7 @@ it("validates Q79 on the merged update state equally", async () => {
 }, TIMEOUT);
 it("refuses submitted lineage updates and deletes equally", async () => {
   await ensureTestOrg(); const f = fixtures.get("action")!; const ctx = makeTestOrgContext(f.ctx.userId); const memberId = randomUUID();
-  await db.insert(members).values({ id: memberId, organizationId: ctx.organizationId, userId: ctx.userId, role: "owner" });
+  await db.insert(members).values({ id: memberId, organizationId: ctx.organizationId, userId: ctx.userId, role: "admin" });
   const credential = await createApiKey(ctx, { name: "Parity submitted applications", scopes: ["applications:read", "applications:write", "applications:delete"], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS });
   const lineage = await createLineageFixture("removal");
   const locked = { ...f, ctx, applicationKey: credential.key };

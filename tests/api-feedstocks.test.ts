@@ -37,7 +37,7 @@ beforeEach(async () => {
   b = await createIntakeFixture(`rest-b-${randomUUID()}`);
   for (const fixture of [a, b]) {
     await db.insert(users).values({ id: fixture.ctx.userId, email: `${fixture.ctx.userId}@example.test`, name: "REST fixture", emailVerified: true });
-    await db.insert(members).values({ id: randomUUID(), organizationId: fixture.ctx.organizationId, userId: fixture.ctx.userId, role: "owner" });
+    await db.insert(members).values({ id: randomUUID(), organizationId: fixture.ctx.organizationId, userId: fixture.ctx.userId, role: "admin" });
     await db.update(storageLocations).set({ feedstockTypeId: fixture.feedstockTypeId }).where(eq(storageLocations.id, fixture.binId));
   }
   const credential = await createApiKey(a.ctx, { name: "Intake A", scopes, expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS });

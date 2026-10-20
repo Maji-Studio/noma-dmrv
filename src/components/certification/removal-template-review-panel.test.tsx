@@ -113,7 +113,7 @@ describe("RemovalTemplateReviewPanel", () => {
     expect(screen.getByText("Dark Earth Carbon Template")).toBeTruthy();
     expect(screen.getByText("Default")).toBeTruthy();
     expect(screen.getByText("To decide")).toBeTruthy();
-    expect(screen.getByText("Ask an Owner or Admin to decide the components marked To decide.")).toBeTruthy();
+    expect(screen.getByText("Ask an Admin to decide the components marked To decide.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Accept proposal/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Change/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();

@@ -22,7 +22,7 @@ import * as sources from "./source-candidates";
 const ORG_CONTEXT = {
   userId: "removal-evidence-plan-user",
   organizationId: "removal-evidence-plan-org",
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 } as const;
 

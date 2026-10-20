@@ -317,8 +317,7 @@ Notes:
 Runtime registry credentials are stored per organization in
 `certifier_credentials`, encrypted at rest with AES-256-GCM using
 `CREDENTIALS_ENCRYPTION_KEY`. Only masked status (configured, access-token last
-four, update time) may cross a server-action boundary. Each organization's Owners
-and Admins manage these write-only values themselves from the organization admin
+four, update time) may cross a server-action boundary. Each organization's Admins manage these write-only values themselves from the organization admin
 area, with Platform Admins as an override
 (`assertCanManageOrgCredentials`, `src/data-access/certifier-credentials.ts`; see
 [auth.md](./auth.md)). Certification readiness
@@ -367,7 +366,7 @@ skipping the shared local/test teammate. It is idempotent and never clobbers liv
 state (existing admin password untouched; credentials inserted only when none
 exist) and fails loudly rather than exiting 0 without a credential row. The
 Platform Admin must use the organization invitation flow to add the first real
-Owner.
+Admin.
 
 The manually confirmed `reset-seed-staging` job loads the Isometric trio from
 the staging item. The Mafinga seed stores the organization credentials and, when
