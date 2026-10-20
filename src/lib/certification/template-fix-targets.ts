@@ -1,37 +1,37 @@
-import { LINE_NO_MAPPING_MESSAGE, LINE_TRANSPORT_REPLACEMENT_MESSAGE } from "@/lib/isometric/emission-line-constants";
 import type { UnbindableTemplateInput } from "@/lib/isometric/template-binding-coverage";
-import type { RemovalBlocker, RemovalBlockerCode } from "./removal-blockers";
-import { removalTemplateBlockerDestination } from "./removal-template-blockers";
+import type { BatchHealthFixTarget } from "./batch-health";
+import {
+  isTemplateRoutedCode,
+  removalTemplateBlockerDestination,
+  type RemovalTemplateBlockerDestination,
+  type TemplateRoutedBlockerCode,
+} from "./removal-template-blockers";
 
-export type TemplateFixTarget = "creditBatchTemplate" | "templateLineReview" | "templateLines" | "templateReplacement";
+export type TemplateFixTarget = RemovalTemplateBlockerDestination;
+const TEMPLATE_FIX_TARGETS: ReadonlySet<string> = new Set<TemplateFixTarget>([
+  "creditBatchTemplate", "templateLineReview", "templateLines", "templateReplacement",
+]);
 
-/** A line can be decided but still need a corrected template. */
-export function templateFixTarget(code: RemovalBlockerCode): TemplateFixTarget {
-  switch (code) {
-    case "templateLinesNeedReview":
-    case "lineNeedsReview":
-      return "templateLineReview";
-    case "templateNotFullyRead":
-    case "forbiddenLine":
-    case "lineNeedsSetup":
-    case "lineHasNoSource":
-    case "entryMissingEvidence":
-    case "feedstockTypeMapping":
-    case "entityReadiness":
-    case "durabilityTier":
-    case "durabilityConfiguration":
-    case "legacy":
-      return "templateLines";
-    default:
-      return removalTemplateBlockerDestination(code);
-  }
+/** Delegates to the one routing table in `removal-template-blockers.ts`. */
+export function templateFixTarget(code: TemplateRoutedBlockerCode): TemplateFixTarget {
+  return removalTemplateBlockerDestination(code);
 }
 
-export function templateLineFixTarget(blocker: Pick<RemovalBlocker, "code" | "message">): TemplateFixTarget {
-  if (blocker.message.includes(LINE_NO_MAPPING_MESSAGE) || blocker.message.includes(LINE_TRANSPORT_REPLACEMENT_MESSAGE)) {
-    return "templateReplacement";
-  }
-  return templateFixTarget(blocker.code);
+/** Whether a fix target is one of the template destinations above. */
+export function isTemplateFixTarget(target: string | null | undefined): target is TemplateFixTarget {
+  return !!target && TEMPLATE_FIX_TARGETS.has(target);
+}
+
+/**
+ * The table decides for every routed code. The one target set as data is
+ * `templateReplacement`: the line binding knows only another template can fill
+ * that line. A code the table does not route keeps its own template target,
+ * else opens Removal templates.
+ */
+export function templateLineFixTarget(blocker: { code: string; fixTarget?: BatchHealthFixTarget | null }): TemplateFixTarget {
+  if (blocker.fixTarget === "templateReplacement") return "templateReplacement";
+  if (isTemplateRoutedCode(blocker.code)) return templateFixTarget(blocker.code);
+  return isTemplateFixTarget(blocker.fixTarget) ? blocker.fixTarget : "templateLines";
 }
 
 export function templateCoverageFixTarget(input: UnbindableTemplateInput): TemplateFixTarget {

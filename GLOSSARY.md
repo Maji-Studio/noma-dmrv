@@ -527,10 +527,10 @@ template.
 
 **Template line**:
 One component of a **Removal template**, named as Isometric names it. Its
-decision (scope, **automatic datapoints**, whether it takes **emissions
-entries**) belongs to the template in this Organization: every facility and
-credit batch using that template follows it. noma proposes a decision where it
-can; an Owner or Admin decides.
+decision covers its scope, its **automatic datapoints** and whether it takes
+**emissions entries**. A template's line decisions are made once, and every
+facility and credit batch using that template follows them. noma proposes a
+decision where it can; an Owner or Admin decides.
 _Avoid_: component (the registry's API name), template input.
 
 **Lines to decide**:

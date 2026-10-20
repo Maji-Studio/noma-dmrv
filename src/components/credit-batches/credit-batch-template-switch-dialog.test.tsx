@@ -120,6 +120,9 @@ describe("CreditBatchTemplateSwitchDialog", () => {
 
     expect(screen.getByText("Template not fully read")).toBeTruthy();
     expect(screen.getByText(/stay blocked until the template is read in full/)).toBeTruthy();
+    // No lines to decide, so the link does not say "Decide lines".
+    expect(screen.queryByRole("link", { name: /^Decide lines/ })).toBeNull();
+    expect(screen.getByRole("link", { name: /^Open Removal templates/ }).getAttribute("href")).toContain("template=rvt_new");
   });
 
   it("confirms a chosen template whose lines are all reviewed", async () => {

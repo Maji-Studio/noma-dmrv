@@ -14,7 +14,7 @@ import { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE } from "@/components/
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { useRemovalTemplateReviewPreview } from "@/hooks/use-removal-template-review";
-import { certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL } from "@/lib/certification/links";
+import { certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
 
 export interface TemplateReviewPreviewProps {
   facilityId: string;
@@ -73,7 +73,8 @@ export function TemplateReviewPreview({ facilityId, removalTemplateId, creditBat
           rel="noreferrer"
           className="inline-flex items-center gap-4 body-small underline underline-offset-2"
         >
-          {DECIDE_LINES_LINK_LABEL}
+          {/* "Decide lines" only when there are lines to decide; a read problem has none. */}
+          {needsReviewCount > 0 ? DECIDE_LINES_LINK_LABEL : OPEN_REMOVAL_TEMPLATES_LINK_LABEL}
           <ArrowSquareOutIcon size={12} aria-hidden />
           <span className="sr-only"> (opens in a new tab)</span>
         </Link>

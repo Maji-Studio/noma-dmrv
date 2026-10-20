@@ -68,7 +68,7 @@ export interface CertRequirementMeta {
 export const NO_REMOVAL_TEMPLATE_LABEL = "No Removal template chosen";
 
 /** The unmet Emissions label when an entry needs checking rather than a file. */
-export const EMISSION_ENTRIES_TO_CHECK_LABEL = "Emission entries to check";
+export const EMISSION_ENTRIES_TO_CHECK_LABEL = "Emissions entries to check";
 
 /** The unmet Lines decided label when no line is undecided: the read or the lines are the problem. */
 export const TEMPLATE_LINES_NOT_READY_LABEL = "Template lines not ready";
@@ -141,7 +141,7 @@ export const CERT_REQUIREMENT_META: Record<
   },
   emissions: {
     requirementLabel: "Emissions",
-    unmetLabel: "Emission entries without a file",
+    unmetLabel: "Emissions entries without a file",
     whyDetail: "Emissions entries with a value need a file before the Removal can be submitted.",
   },
   templateSet: {

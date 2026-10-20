@@ -20,22 +20,39 @@ export function removalTemplateBlocker(code: RemovalTemplateBlockerCode): Remova
   return { code, message: REMOVAL_TEMPLATE_BLOCKERS[code] };
 }
 
+/** Per-line template blocker codes, routed by the same table as the template codes. */
+export type TemplateLineBlockerCode = "lineNeedsReview" | "lineNeedsSetup" | "lineHasNoSource";
+/** Every blocker code that is settled on the template or the batch's template pin. */
+export type TemplateRoutedBlockerCode = RemovalTemplateBlockerCode | TemplateLineBlockerCode;
+
 /**
- * Where an operator settles each blocker: the credit batch's own template pin,
- * or the line review in Certification settings.
+ * Where an operator settles a template blocker. The one routing table:
+ * - `creditBatchTemplate`: the credit batch's own template pin (Switch template);
+ * - `templateLineReview`: lines without a decision (Decide lines);
+ * - `templateLines`: decided lines or a read problem (Open Removal templates);
+ * - `templateReplacement`: a decided line only another template can fill
+ *   (Switch template, else Open Removal templates). Set as data by the line
+ *   binding; no code maps to it by default.
  */
-export type RemovalTemplateBlockerDestination = "creditBatchTemplate" | "templateLineReview";
-const BLOCKER_DESTINATIONS: Record<RemovalTemplateBlockerCode, RemovalTemplateBlockerDestination> = {
-  forbiddenLine: "templateLineReview",
+export type RemovalTemplateBlockerDestination = "creditBatchTemplate" | "templateLineReview" | "templateLines" | "templateReplacement";
+const BLOCKER_DESTINATIONS: Record<TemplateRoutedBlockerCode, RemovalTemplateBlockerDestination> = {
+  forbiddenLine: "templateLines",
   notRemovalTemplate: "creditBatchTemplate",
   unpinnedTemplate: "creditBatchTemplate",
   mixedTemplatePins: "creditBatchTemplate",
   templateNotFound: "creditBatchTemplate",
-  templateNotFullyRead: "templateLineReview",
+  templateNotFullyRead: "templateLines",
   // Line review cannot supply a fixed value. The operator can switch to a corrected template.
   missingFixedDatapoint: "creditBatchTemplate",
   templateLinesNeedReview: "templateLineReview",
+  lineNeedsReview: "templateLineReview",
+  lineNeedsSetup: "templateLines",
+  lineHasNoSource: "templateLines",
 };
-export function removalTemplateBlockerDestination(code: RemovalTemplateBlockerCode): RemovalTemplateBlockerDestination {
+export function removalTemplateBlockerDestination(code: TemplateRoutedBlockerCode): RemovalTemplateBlockerDestination {
   return BLOCKER_DESTINATIONS[code];
+}
+/** Whether a blocker code is settled on the template or the pin (and so has a row in the table). */
+export function isTemplateRoutedCode(code: string): code is TemplateRoutedBlockerCode {
+  return Object.hasOwn(BLOCKER_DESTINATIONS, code);
 }

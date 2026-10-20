@@ -291,7 +291,7 @@ it.each([LINE_NO_MAPPING_MESSAGE, LINE_TRANSPORT_REPLACEMENT_MESSAGE])("links re
   const facts: RemovalReadinessFacts = {
     local: null, lockInFlight: false, hasMapping: true, hasOrgCredentials: true, hasRemovalTemplate: true,
     hasSubmittableRuns: true, unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], requiredTransport: [], feedstockTypeMappingGaps: [],
-    emissionLineBlockers: [{ code: "lineNeedsSetup", message, fixTarget: "templateLineReview" }],
+    emissionLineBlockers: [{ code: "lineNeedsSetup", message, fixTarget: "templateReplacement" }],
   };
   const checks = buildRemovalRequirementsChecklist(facts);
   for (const count of [0, 1, 2]) {

@@ -52,6 +52,9 @@ it.each(cases)("coverage, readiness and submission agree for %s", (name, code, r
   const coverage = findUnbindableTemplateInputs(template, { lineSources: sources });
   expect([...new Set(coverage.map((finding) => finding.componentId))].sort()).toEqual(blockedIds.sort());
   expect(lines[0].blocker?.code).toBe(code);
+  // Routing is data: a decided line only another template can fill says so on its blocker.
+  if (code === "lineNeedsSetup" || code === "lineHasNoSource") expect(lines[0].blocker?.fixTarget).toBe("templateReplacement");
+  if (code === "lineNeedsReview") expect(lines[0].blocker?.fixTarget).toBe("templateLineReview");
   expect(coverage[0]?.reason).toBe(reason);
   const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], {
     templatesById: { [template.id]: { template, observation: { lineSources: sources }, enrichmentProblems: [],

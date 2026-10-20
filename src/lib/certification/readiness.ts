@@ -552,7 +552,7 @@ function templateRequirementChecks(facts: RemovalReadinessFacts): RemovalRequire
     (blocker) => removalTemplateBlockerDestination(blocker.code) === "creditBatchTemplate",
   );
   const lineBlockers = (facts.templateBlockers ?? []).filter(
-    (blocker) => removalTemplateBlockerDestination(blocker.code) === "templateLineReview",
+    (blocker) => removalTemplateBlockerDestination(blocker.code) !== "creditBatchTemplate",
   );
   // Unbindable inputs come from the line decisions, so they belong to the lines check.
   const pinFacts = { ...facts, templateBlockers: pinBlockers, emissionLineBlockers: [], unbindableTemplateInputs: [] };

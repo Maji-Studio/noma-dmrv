@@ -132,7 +132,7 @@ describe("Removal template requirement split", () => {
     expect(lines.status).toBe("met");
     const emissions = buildRemovalRequirementsChecklist(input).find((check) => check.key === "emissions");
     expect(emissions).toMatchObject({ status: "unmet", detail: entry.message });
-    expect(certCheckLabel(emissions!)).toBe("Emission entries without a file");
+    expect(certCheckLabel(emissions!)).toBe("Emissions entries without a file");
     expect(deriveRemovalReadiness(input)).toMatchObject({ state: "blocked", reasons: [entry.message] });
     expect(certCheckLabel(templateChecks(facts({ emissionLineBlockers: [entry, lineBlocker("one")], undecidedLineIds: ["one"] }))[1]))
       .toBe("1 line to decide");

@@ -17,6 +17,7 @@ import { transportRepairDestination } from "@/lib/isometric/semantic-binding-cat
 import { certificationSettingsHref } from "@/lib/certification/links";
 import type { RemovalBlockerCode } from "@/lib/certification/removal-blockers";
 import { templateFixTarget, type TemplateFixTarget } from "@/lib/certification/template-fix-targets";
+import { isTemplateRoutedCode } from "@/lib/certification/removal-template-blockers";
 import {
   buildFeedstockTypeEditDeepLink,
   FEEDSTOCK_TYPE_EDIT_LABEL,
@@ -59,7 +60,7 @@ function templateFixLinks(
   creditBatches: readonly CheckCreditBatch[],
   targets?: readonly TemplateFixTarget[],
 ): { label: string; href: string }[] {
-  const destinations = new Set(targets ?? codes.map(templateFixTarget));
+  const destinations = new Set(targets ?? codes.filter(isTemplateRoutedCode).map(templateFixTarget));
   if (destinations.size === 0) {
     return [batchHealthFixLinkFor({ key: "templateLines", fixTarget: "templateLines" }, facilityId)];
   }
