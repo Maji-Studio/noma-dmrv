@@ -1,12 +1,12 @@
-import { expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { emissionEntrySourceCandidates } from "./emission-entry-source-bindings";
 import type { RemovalEntryContributions } from "./removal-emission-contributions";
 import { buildRemovalSourceBindingPlan, buildRemovalSourceDescription, sourceIdsForDatapointTarget } from "./removal-source-bindings";
 import { readRemovalCandidateSources, readRemovalSourceBindingPlan } from "@/fn/certification/removal-snapshot-readers";
 
-const warn = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/log", () => ({ logger: { warn } }));
+import { EmissionEntryEvidenceError } from "./emission-entry-evidence-error";
+import { EMISSION_ENTRIES_CHANGED, EMISSION_ENTRY_FILE_DUPLICATE, EMISSION_ENTRY_FILE_MISMATCH } from "./emission-entry-messages";
 
 const contributions: RemovalEntryContributions = {
   manifest: ["concentration", "flow"].map((inputKey) => ({ componentId: "paired", componentDisplayName: "Diesel for machinery", inputKey,
@@ -37,15 +37,18 @@ it.each(["component", "input", "entry", "document", "revision", "frozen"])("fail
   if (invalid === "revision") entryContributions.entrySet[0].contentRevision++;
   if (invalid === "frozen") entryContributions.entrySet = [];
   expect(() => plan({ candidates: altered, entryContributions })).toThrow(
-    "An emissions entry file no longer matches this Removal's entries. Refresh the Removal and submit again.");
-  expect(warn).toHaveBeenLastCalledWith(expect.objectContaining({ removalId: "removal",
-    documentId: altered[0].documentId, entryId: altered[0].binding.lineage.entityId,
-  }), expect.any(String));
+    EMISSION_ENTRY_FILE_MISMATCH);
+  expect(() => plan({ candidates: altered, entryContributions })).toThrow(EmissionEntryEvidenceError);
+  try { plan({ candidates: altered, entryContributions }); } catch (error) {
+    expect((error as EmissionEntryEvidenceError).ids).toMatchObject({
+      documentId: altered[0].documentId, entryId: altered[0].binding.lineage.entityId,
+    });
+  }
 });
 it("rejects a target present in the template but absent from the entry's contributions", () => {
   const altered = candidates();
   altered[0].binding.intendedTarget = { kind: "explicit", componentId: "unrelated", inputKey: "flow" };
-  expect(() => plan({ candidates: altered })).toThrow("An emissions entry file no longer matches this Removal's entries. Refresh the Removal and submit again.");
+  expect(() => plan({ candidates: altered })).toThrow(EMISSION_ENTRY_FILE_MISMATCH);
 });
 it("zeros and absent (including tombstoned) entries create no candidates", () => {
   const zeros = structuredClone(contributions);
@@ -77,4 +80,21 @@ it("keeps the entry id for lineage and never uses it as a missing label fallback
   expect(emissionEntrySourceCandidates(minimal)[0].binding.lineage).toEqual({
     entityType: "emission_entry", entityId: "entry", entityLabel: "Emissions entry",
   });
+});
+
+it("uses actionable copy and carries ids when evidence is outside the frozen set", () => {
+  expect(() => emissionEntrySourceCandidates({ ...contributions, entrySet: [] })).toThrow(EMISSION_ENTRIES_CHANGED);
+});
+it("refuses a file attached to two entries with actionable copy and both ids", () => {
+  const duplicate = structuredClone(contributions);
+  duplicate.manifest[0].entries.push({ ...duplicate.manifest[0].entries[0], entryId: "other-entry" });
+  duplicate.entrySet.push({ entryId: "other-entry", contentRevision: 2 });
+  try {
+    emissionEntrySourceCandidates(duplicate);
+    expect.fail("Expected duplicate evidence to fail");
+  } catch (error) {
+    expect(error).toBeInstanceOf(EmissionEntryEvidenceError);
+    expect(error).toHaveProperty("message", EMISSION_ENTRY_FILE_DUPLICATE);
+    expect((error as EmissionEntryEvidenceError).ids).toEqual({ entryId: "other-entry", otherEntryId: "entry", documentId: "document" });
+  }
 });

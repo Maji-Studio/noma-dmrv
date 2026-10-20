@@ -1,3 +1,4 @@
+import { EMISSION_ENTRIES_CHANGED, EMISSION_ENTRY_FILE_DUPLICATE, EMISSION_ENTRY_FILE_UNAVAILABLE } from "@/lib/certification/emission-entry-messages";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
@@ -36,9 +37,9 @@ it("reads org-scoped entry documents and binds only IDs in the manifest on every
 });
 it("fails closed when a manifest file is absent or not uploaded", async () => {
   mocks.documents.mockResolvedValue([]);
-  await expect(collect()).rejects.toThrow(/file is unavailable/);
+  await expect(collect()).rejects.toThrow(EMISSION_ENTRY_FILE_UNAVAILABLE);
   mocks.documents.mockResolvedValue([{ id: "frozen-file", entityId: "entry", uploadStatus: "pending" }]);
-  await expect(collect()).rejects.toThrow(/file is unavailable/);
+  await expect(collect()).rejects.toThrow(EMISSION_ENTRY_FILE_UNAVAILABLE);
 });
 it("does not walk entries absent from the contribution manifest", async () => {
   expect(await collect({ ...contributions, manifest: [], entrySet: [] })).toEqual([]);
@@ -67,8 +68,19 @@ it("loads multiple entries in one manifest-id query", async () => {
 });
 it("refuses a document belonging to a different manifest entry and logs only identifiers", async () => {
   mocks.documents.mockResolvedValue([{ id: "frozen-file", entityId: "different-entry", uploadStatus: "uploaded" }]);
-  await expect(collect()).rejects.toThrow("An emissions entry file is unavailable. Refresh the Removal and submit again.");
+  await expect(collect()).rejects.toThrow(EMISSION_ENTRY_FILE_UNAVAILABLE);
   expect(mocks.warn).toHaveBeenCalledWith({ removalId: "removal", documentId: "frozen-file", entryId: "entry",
     targets: [{ componentId: "component", inputKey: "energy" }],
   }, expect.any(String));
+});
+
+it("logs ids at the fn boundary before rethrowing changed-entry and duplicate-file errors", async () => {
+  await expect(collect({ ...contributions, entrySet: [] })).rejects.toThrow(EMISSION_ENTRIES_CHANGED);
+  expect(mocks.warn).toHaveBeenLastCalledWith({ removalId: "removal", entryId: "entry", componentId: "component", inputKey: "energy" }, expect.any(String));
+  const duplicate = structuredClone(contributions);
+  duplicate.manifest[0].entries.push({ ...duplicate.manifest[0].entries[0], entryId: "other-entry" });
+  duplicate.entrySet.push({ entryId: "other-entry", contentRevision: 3 });
+  await expect(collect(duplicate)).rejects.toThrow(EMISSION_ENTRY_FILE_DUPLICATE);
+  expect(mocks.warn).toHaveBeenLastCalledWith({ removalId: "removal", documentId: "frozen-file", entryId: "other-entry", otherEntryId: "entry" }, expect.any(String));
+  expect(mocks.documents).not.toHaveBeenCalled();
 });

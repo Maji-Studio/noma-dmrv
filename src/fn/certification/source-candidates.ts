@@ -1,3 +1,5 @@
+import { EMISSION_ENTRY_FILE_UNAVAILABLE } from "@/lib/certification/emission-entry-messages";
+import { withEmissionEntryEvidenceDiagnostics } from "./emission-entry-evidence-diagnostics";
 import { logger } from "@/lib/log";
 import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
 import { emissionEntrySourceCandidates } from "@/lib/certification/emission-entry-source-bindings";
@@ -445,7 +447,7 @@ export async function resolveSourceIdsForRemoval(
 
 /** Read through the org-scoped document store, then select exactly the manifest IDs. */
 async function collectEntrySourceDocuments(orgCtx: OrgContext, contributions?: RemovalEntryContributions, removalId?: string) {
-  const candidates = emissionEntrySourceCandidates(contributions);
+  const candidates = withEmissionEntryEvidenceDiagnostics(removalId, () => emissionEntrySourceCandidates(contributions));
   if (!candidates.length) return [];
   const entryIds = [...new Set(candidates.map((candidate) => candidate.binding.lineage.entityId))];
   const documents = await listEmissionEntryDocumentsByIds(orgCtx, entryIds, candidates.map((candidate) => candidate.documentId));
@@ -458,7 +460,7 @@ async function collectEntrySourceDocuments(orgCtx: OrgContext, contributions?: R
           componentId: target.kind === "explicit" ? target.componentId : undefined, inputKey: target.inputKey,
         })),
       }, "Contributing emissions entry file unavailable");
-      throw new SafeError("An emissions entry file is unavailable. Refresh the Removal and submit again.");
+      throw new SafeError(EMISSION_ENTRY_FILE_UNAVAILABLE);
     }
     return { document, binding };
   });

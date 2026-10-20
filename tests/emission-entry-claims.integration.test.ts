@@ -1,3 +1,5 @@
+import { requestDocumentUploadInTransaction, confirmDocumentUploadInTransaction, uploadFactsFor } from "@/data-access/document-writes";
+import { cleanupDocumentUploads } from "./helpers/document-upload-cleanup";
 import { documents } from "@/db/schema";
 import { insertDocument, listDocumentsForEntity, listEmissionEntryDocumentsByIds } from "@/data-access/documents";
 import { collectCandidateSourceDocumentsForRemoval } from "@/fn/certification/source-candidates";
@@ -291,5 +293,44 @@ it("finds an uploaded manifest file behind more than the listing cap of pending 
   } finally {
     await db.delete(documents).where(and(eq(documents.organizationId, ctx.organizationId),
       or(eq(documents.id, document.id), and(eq(documents.entityType, "emission_entry"), eq(documents.entityId, entry.id)))));
+  }
+});
+
+it.each(["writable", "reserved", "sent"] as const)("upload confirmation preserves the frozen evidence contract for a %s entry", async (state) => {
+  const entry = await value();
+  const fileBytes = Buffer.from("%PDF-1.7");
+  const document = await db.transaction((tx) => requestDocumentUploadInTransaction(ctx, tx, {
+    entityType: "emission_entry", entityId: entry.id, documentType: "pdf", fileName: "Evidence.pdf",
+    contentType: "application/pdf", sizeBytes: fileBytes.length, storageProvider: "local-fs", storageBucket: "test",
+  }));
+  try {
+    const before = await getEmissionEntry(ctx, entry.id);
+    expect(before.contentRevision).toBe(entry.contentRevision);
+    expect((await loadBatchEmissionEntryFacts(ctx, fixture.batchId, observation)).entries[0].evidenceDocumentIds).toEqual([]);
+    if (state !== "writable") {
+      const attempt = await draft([{ entryId: entry.id, contentRevision: before.contentRevision }]);
+      await reserve(attempt);
+      if (state === "sent") await markSubmissionSubmitted(ctx, attempt.id, { externalId: "upload-confirm-fixture", expectedLockedAt: attempt.lockedAt!,
+        productionEmissionsClaim: { removalId: fixture.removalId, creditBatchIds: [fixture.batchId] } });
+    }
+    // Simulate the inspected storage boundary; this test exercises the locked DB transition.
+    const facts = { ...uploadFactsFor(document), finalKey: `objects/${document.id}/confirmed.pdf`,
+      inspectedSizeBytes: fileBytes.length, inspectedSha256: "fixture-checksum", inspectedContentType: "application/pdf" };
+    const result = await db.transaction((tx) => confirmDocumentUploadInTransaction(ctx, tx, facts));
+    const after = await getEmissionEntry(ctx, entry.id);
+    const evidence = (await loadBatchEmissionEntryFacts(ctx, fixture.batchId, observation)).entries[0].evidenceDocumentIds;
+    if (state === "writable") {
+      expect(result).toMatchObject({ kind: "uploaded", transitioned: true });
+      expect(after.contentRevision).toBe(before.contentRevision + 1);
+      expect(evidence).toEqual([document.id]);
+      expect(await db.transaction((tx) => confirmDocumentUploadInTransaction(ctx, tx, facts))).toMatchObject({ kind: "uploaded", transitioned: false });
+      expect((await getEmissionEntry(ctx, entry.id)).contentRevision).toBe(after.contentRevision);
+    } else {
+      expect(result).toMatchObject({ kind: "refused", reason: "certification_locked", document: { uploadStatus: "failed" } });
+      expect(after.contentRevision).toBe(before.contentRevision);
+      expect(evidence).toEqual([]);
+    }
+  } finally {
+    await cleanupDocumentUploads(ctx, [document.id]);
   }
 });

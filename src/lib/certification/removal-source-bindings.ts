@@ -1,4 +1,5 @@
-import { logger } from "@/lib/log";
+import { EmissionEntryEvidenceError } from "./emission-entry-evidence-error";
+import { EMISSION_ENTRY_FILE_MISMATCH } from "./emission-entry-messages";
 import type { RemovalEntryContributions } from "./removal-emission-contributions";
 import { effectiveContract, type LineContract, type LineSources } from "@/lib/isometric/template-observations/line-sources";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
@@ -455,10 +456,10 @@ export function buildRemovalSourceBindingPlan(args: {
               frozen.entryId === entry.entryId && frozen.contentRevision === entry.contentRevision)) ?? [];
           if (binding.nomaRole !== "emission_entry" || binding.lineage.entityType !== "emission_entry" ||
             matches.length !== 1 || entries.length !== 1) {
-            logger.warn({ removalId: args.removalId, componentId: target.componentId, inputKey: target.inputKey,
-              entryId: binding.lineage.entityId, documentId, role: binding.nomaRole,
-            }, "Emissions entry file did not match its contributing component");
-            throw new SafeError("An emissions entry file no longer matches this Removal's entries. Refresh the Removal and submit again.");
+            throw new EmissionEntryEvidenceError(EMISSION_ENTRY_FILE_MISMATCH, {
+              componentId: target.componentId, inputKey: target.inputKey,
+              entryId: binding.lineage.entityId, documentId,
+            });
           }
           const { group, component } = matches[0];
           return [{ documentId, sourceId, nomaRole: binding.nomaRole, lineage: binding.lineage,
@@ -467,10 +468,9 @@ export function buildRemovalSourceBindingPlan(args: {
             mappingRevision: binding.mappingRevision }];
         }
         if (binding.nomaRole === "emission_entry") {
-          logger.warn({ removalId: args.removalId, inputKey: target.inputKey,
-            entryId: binding.lineage.entityId, documentId,
-          }, "Emissions entry file has no explicit component target");
-          throw new SafeError("An emissions entry file no longer matches this Removal's entries. Refresh the Removal and submit again.");
+          throw new EmissionEntryEvidenceError(EMISSION_ENTRY_FILE_MISMATCH, {
+            inputKey: target.inputKey, entryId: binding.lineage.entityId, documentId,
+          });
         }
         const matchingComponents = args.template.groups
           .filter((group) => group.key === target.groupKey)

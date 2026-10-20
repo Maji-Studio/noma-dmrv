@@ -1,11 +1,12 @@
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
-import { creditBatchApplications, creditBatches, emissionEntries } from "@/db/schema";
+import { emissionEntries } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import { requireOrgScope } from "./utils";
 import { nextVersion } from "./row-version";
 import { recordEmissionEntryActivity } from "./emission-entry-activity";
+import { lockBatchesThenEntries } from "./emission-entry-release-locks";
 
 /** Caller fences Removal deletion; acquire all affected batches before entry locks. */
 export async function releaseDeletedRemovalEntries(ctx: OrgContext, tx: DbTransaction, removalId: string, submissionIds: string[]) {
@@ -13,15 +14,8 @@ export async function releaseDeletedRemovalEntries(ctx: OrgContext, tx: DbTransa
   const matched = or(
     eq(emissionEntries.confirmedForRemovalId, removalId), eq(emissionEntries.sentByRemovalId, removalId),
     submissionIds.length ? inArray(emissionEntries.sendReservedBySubmissionId, submissionIds) : undefined,
-  );
-  const entries = await tx.select({ creditBatchId: emissionEntries.creditBatchId }).from(emissionEntries).where(and(eq(emissionEntries.organizationId, ctx.organizationId), matched));
-  const members = await tx.select({ creditBatchId: creditBatchApplications.creditBatchId }).from(creditBatchApplications)
-    .where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.removalId, removalId)));
-  const batchIds = [...new Set([...entries, ...members].map(row => row.creditBatchId))];
-  if (batchIds.length) await tx.select({ id: creditBatches.id }).from(creditBatches)
-    .where(and(eq(creditBatches.organizationId, ctx.organizationId), inArray(creditBatches.id, batchIds)))
-    .orderBy(creditBatches.id).for("update");
-  const rows = await tx.select().from(emissionEntries).where(and(eq(emissionEntries.organizationId, ctx.organizationId), matched)).orderBy(emissionEntries.id).for("update");
+  )!;
+  const rows = await lockBatchesThenEntries(ctx, tx, { removalId, entryFilter: matched });
   // Finalized Removals cannot reach this finalizer. Preserve sent zero history even if that invariant is violated.
   if (rows.some((row) => row.kind === "zero" && row.sentByRemovalId)) throw new SafeError("A Removal with sent recorded zeros cannot be deleted.");
   for (const row of rows) {

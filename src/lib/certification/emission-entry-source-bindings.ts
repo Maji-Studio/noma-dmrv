@@ -1,4 +1,5 @@
-import { SafeError } from "@/lib/errors";
+import { EmissionEntryEvidenceError } from "./emission-entry-evidence-error";
+import { EMISSION_ENTRIES_CHANGED, EMISSION_ENTRY_FILE_DUPLICATE } from "./emission-entry-messages";
 import type { RemovalEntryContributions } from "./removal-emission-contributions";
 import {
   SOURCE_BINDING_MAPPING_REVISION,
@@ -16,14 +17,14 @@ export function emissionEntrySourceCandidates(
       if (entry.kind === "zero") continue;
       if (!contributions?.entrySet.some((frozen) => frozen.entryId === entry.entryId &&
         frozen.contentRevision === entry.contentRevision)) {
-        throw new SafeError("Emissions entry evidence is outside the frozen contribution set. Refresh the Removal before submitting.");
+        throw new EmissionEntryEvidenceError(EMISSION_ENTRIES_CHANGED, { entryId: entry.entryId, componentId: input.componentId, inputKey: input.inputKey });
       }
       const target: RemovalSourceIntendedTarget = { kind: "explicit", componentId: input.componentId, inputKey: input.inputKey };
       for (const documentId of entry.evidenceDocumentIds) {
         const existing = candidates.get(documentId);
         if (existing) {
           if (existing.binding.lineage.entityId !== entry.entryId) {
-            throw new SafeError("Emissions entry evidence must belong to exactly one entry.");
+            throw new EmissionEntryEvidenceError(EMISSION_ENTRY_FILE_DUPLICATE, { documentId, entryId: entry.entryId, otherEntryId: existing.binding.lineage.entityId });
           }
           const targets = [existing.binding.intendedTarget, ...(existing.binding.additionalIntendedTargets ?? [])];
           if (!targets.some((item) => item.kind === "explicit" && item.componentId === target.componentId && item.inputKey === target.inputKey)) {
