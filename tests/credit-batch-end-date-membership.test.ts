@@ -495,6 +495,7 @@ describe("credit batch membership by production run end date", () => {
     expect(issue).toContain(`Production run ${latest.code}`);
     expect(issue).toContain(october.code);
     expect(issue).toContain("one month or more");
+    expect(issue).toContain(`Shorten the dates of credit batch ${october.code}`);
     expect(issue).not.toContain(first.code);
   });
 });
