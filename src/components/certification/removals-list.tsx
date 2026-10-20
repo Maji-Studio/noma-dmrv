@@ -38,7 +38,7 @@ import {
 import { deriveRemovalWorkflowStatus } from "@/lib/certification/status";
 import { formatDateRange } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { SubmittedOnCell, submittedOnText } from "./submitted-on-cell";
+import { SubmittedOnCell, submittedOnSortingFn, submittedOnSortValue } from "./submitted-on-cell";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import { NewRemovalDialog } from "./new-removal-dialog";
 import { CORRECTION_NEEDED_LABEL, RemovalCorrectionCell } from "./removal-correction-needed";
@@ -304,7 +304,9 @@ const createColumns = (
   {
     id: "submittedOn",
     header: "Submitted on",
-    accessorFn: (summary) => submittedOnText(summary.submittedOn),
+    accessorFn: (summary) => submittedOnSortValue(summary.submittedOn),
+    sortingFn: submittedOnSortingFn,
+    sortUndefined: "last",
     cell: SubmittedOnColumnCell,
   },
   {

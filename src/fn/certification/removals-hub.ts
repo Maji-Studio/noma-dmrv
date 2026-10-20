@@ -3,7 +3,6 @@ import { requireOrgFacility } from "@/data-access/utils";
 import { hasFinalizedSubmission } from "@/data-access/certification-submissions";
 import {
   getLatestSubmissionsForEntities,
-  getLatestSubmittedForEntities,
   type CertificationSubmissionRow,
 } from "@/data-access/certification";
 import {
@@ -66,8 +65,10 @@ export async function loadRemovalsForFacility(
       localEntityIds: removalRows.map((removal) => removal.id),
     };
     const [submissions, submittedRows] = await Promise.all([
-      getLatestSubmissionsForEntities(orgCtx, submissionKey),
-      getLatestSubmittedForEntities(orgCtx, submissionKey),
+      getLatestSubmissionsForEntities(orgCtx, submissionKey, facilityId),
+      getLatestSubmissionsForEntities(orgCtx, submissionKey, facilityId, undefined, {
+        submitted: "ledger",
+      }),
     ]);
     // Bounded chunks preserve order without bursting the connection pool.
     const removals: RemovalHubEntry[] = [];

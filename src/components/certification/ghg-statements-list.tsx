@@ -43,7 +43,7 @@ import { certificationSettingsHref } from "@/lib/certification/links";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
-import { SubmittedOnCell, submittedOnText } from "./submitted-on-cell";
+import { SubmittedOnCell, submittedOnSortingFn, submittedOnSortValue } from "./submitted-on-cell";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementDetailSheet } from "./ghg-statement-detail-sheet";
@@ -303,7 +303,9 @@ const createColumns = (
   {
     id: "submittedOn",
     header: "Submitted on",
-    accessorFn: (item) => submittedOnText(item.submittedOn),
+    accessorFn: (item) => submittedOnSortValue(item.submittedOn),
+    sortingFn: submittedOnSortingFn,
+    sortUndefined: "last",
     cell: ({ row }) => (
       <SubmittedOnCell state={row.original.submittedOn} />
     ),

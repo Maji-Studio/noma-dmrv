@@ -41,6 +41,8 @@ const LATEST_VERSION = 2;
 // ledger version, rather than max(submittedAt) or insertion order.
 const FIRST_SUBMITTED_AT = new Date("2026-03-20T12:00:00.000Z");
 const LATEST_SUBMITTED_AT = new Date("2026-03-15T10:30:00.000Z");
+const VERIFIER_SUBMITTED_AT = "2026-04-02T08:00:00.000Z";
+const VERIFIER_RESUBMITTED_AT = "2026-04-20T08:00:00.000Z";
 const REPORTING_PERIOD_END = "2026-03-31";
 const DRAFT_REPORTING_PERIOD_END = "2026-02-28";
 const EMPTY_REPORTING_PERIOD_END = "2026-01-31";
@@ -164,12 +166,15 @@ describe("submitted on list payloads (real DB)", () => {
     expect(entries.get(submitted.id)!.submittedOn).toEqual({
       kind: "submitted", at: LATEST_SUBMITTED_AT,
     });
-    expect(lookup).toHaveBeenCalledExactlyOnceWith(makeTestOrgContext(), {
-      provider: ISOMETRIC_PROVIDER,
-      submissionType: REMOVAL_SUBMISSION_TYPE,
-      localEntityType: REMOVAL_ENTITY_TYPE,
-      localEntityIds: expect.arrayContaining([empty.id, draft.id, submitted.id]),
-    });
+    // One batched lookup per kind for N removals, never one per row.
+    expect(lookup).toHaveBeenCalledTimes(2);
+    expect(lookup.mock.calls.map(([, , , , options]) => options?.submitted)).toEqual(
+      expect.arrayContaining([undefined, "ledger"]),
+    );
+    for (const [, key, facilityId] of lookup.mock.calls) {
+      expect(key.localEntityIds).toEqual(expect.arrayContaining([empty.id, draft.id, submitted.id]));
+      expect(facilityId).toBe(facility.id);
+    }
   });
 
   it("keeps the earlier submission date for a Removal whose latest version is a draft", async () => {
@@ -192,70 +197,93 @@ describe("submitted on list payloads (real DB)", () => {
     expect(entry.hasFinalizedSubmission).toBe(true);
   });
 
-  it("keeps the earlier submission date for a GHG Statement whose latest version is a draft", async () => {
-    const facility = await createFacility();
-    const statement = await createStatement(facility);
-    await insertSubmission(statement, GHG_STATEMENT_ENTITY_TYPE, {
-      status: "superseded", submittedAt: FIRST_SUBMITTED_AT,
-    });
-    const draft = await insertSubmission(statement, GHG_STATEMENT_ENTITY_TYPE, {
-      version: LATEST_VERSION,
-    });
-
-    const result = await loadGhgStatementsForFacility(facility.id);
-    expect(result.success).toBe(true);
-    if (!result.success) throw new Error(result.error);
-    const [entry] = result.data;
-    expect(entry.latestSubmission).toEqual(draft);
-    expect(entry.submittedOn).toEqual({ kind: "submitted", at: FIRST_SUBMITTED_AT });
-  });
-
-  it("loads never-submitted and latest submitted GHG Statements", async () => {
+  it("keeps a created but still draft GHG Statement as never submitted", async () => {
     const facility = await createFacility();
     const empty = await createStatement(facility, EMPTY_REPORTING_PERIOD_END);
-    const draft = await createStatement(facility, DRAFT_REPORTING_PERIOD_END);
-    const submitted = await createStatement(facility);
-    await insertSubmission(draft, GHG_STATEMENT_ENTITY_TYPE);
-    await insertSubmission(submitted, GHG_STATEMENT_ENTITY_TYPE, {
-      status: "superseded", submittedAt: FIRST_SUBMITTED_AT,
-    });
-    const latest = await insertSubmission(submitted, GHG_STATEMENT_ENTITY_TYPE, {
-      version: LATEST_VERSION,
+    const created = await createStatement(facility);
+    // finalizeGhgStatement stamps ledger submitted_at when the remote DRAFT is
+    // created; that is not a verifier submission.
+    await insertSubmission(created, GHG_STATEMENT_ENTITY_TYPE, {
       status: "submitted",
       submittedAt: LATEST_SUBMITTED_AT,
+      metadata: { remoteStatus: "DRAFT" },
     });
 
     const result = await loadGhgStatementsForFacility(facility.id);
     expect(result.success).toBe(true);
     if (!result.success) throw new Error(result.error);
     const entries = new Map(result.data.map((entry) => [entry.statement.id, entry]));
-    expect([...entries.keys()].sort()).toEqual([empty.id, draft.id, submitted.id].sort());
     expect(entries.get(empty.id)?.latestSubmission).toBeNull();
-    expect(entries.get(empty.id)!.submittedOn).toEqual({ kind: "never" });
-    expect(entries.get(draft.id)?.latestSubmission?.status).toBe("draft");
-    expect(entries.get(draft.id)!.submittedOn).toEqual({ kind: "never" });
-    expect(entries.get(submitted.id)?.latestSubmission).toEqual(latest);
-    expect(entries.get(submitted.id)!.submittedOn).toEqual({
-      kind: "submitted", at: LATEST_SUBMITTED_AT,
-    });
+    expect(entries.get(empty.id)?.submittedOn).toEqual({ kind: "never" });
+    expect(entries.get(created.id)?.submittedOn).toEqual({ kind: "never" });
   });
 
-  it("recognizes a registry-discovery snapshot despite its submittedAt", async () => {
+  it("uses the recorded verifier submission time for a GHG Statement", async () => {
     const facility = await createFacility();
     const statement = await createStatement(facility);
-    // Same ledger shape written by reconcileRegistryGhgStatement: the
-    // submitted timestamp records discovery, not an operator submission.
-    const discovered = await insertSubmission(statement, GHG_STATEMENT_ENTITY_TYPE, {
+    await insertSubmission(statement, GHG_STATEMENT_ENTITY_TYPE, {
       status: "submitted",
       submittedAt: LATEST_SUBMITTED_AT,
-      payloadSnapshot: { semantic: { source: REGISTRY_DISCOVERY_SOURCE } },
+      metadata: { remoteStatus: "AWAITING_VERIFIER", submittedToVerifierAt: VERIFIER_SUBMITTED_AT },
     });
 
     const result = await loadGhgStatementsForFacility(facility.id);
     expect(result.success).toBe(true);
     if (!result.success) throw new Error(result.error);
-    expect(result.data[0].latestSubmission).toEqual(discovered);
-    expect(result.data[0].submittedOn).toEqual({ kind: "registryDiscovered" });
+    expect(result.data[0].submittedOn).toEqual({ kind: "submitted", at: VERIFIER_SUBMITTED_AT });
+  });
+
+  it("uses the latest resubmission time and survives a newer draft version", async () => {
+    const facility = await createFacility();
+    const resubmitted = await createStatement(facility);
+    await insertSubmission(resubmitted, GHG_STATEMENT_ENTITY_TYPE, {
+      status: "superseded", metadata: { submittedToVerifierAt: VERIFIER_SUBMITTED_AT },
+    });
+    await insertSubmission(resubmitted, GHG_STATEMENT_ENTITY_TYPE, {
+      version: LATEST_VERSION,
+      status: "submitted",
+      metadata: { submittedToVerifierAt: VERIFIER_RESUBMITTED_AT },
+    });
+    const withDraft = await createStatement(facility, DRAFT_REPORTING_PERIOD_END);
+    await insertSubmission(withDraft, GHG_STATEMENT_ENTITY_TYPE, {
+      status: "superseded", metadata: { submittedToVerifierAt: VERIFIER_SUBMITTED_AT },
+    });
+    const draft = await insertSubmission(withDraft, GHG_STATEMENT_ENTITY_TYPE, { version: LATEST_VERSION });
+
+    const result = await loadGhgStatementsForFacility(facility.id);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error(result.error);
+    const entries = new Map(result.data.map((entry) => [entry.statement.id, entry]));
+    expect(entries.get(resubmitted.id)?.submittedOn).toEqual({ kind: "submitted", at: VERIFIER_RESUBMITTED_AT });
+    expect(entries.get(withDraft.id)?.latestSubmission).toEqual(draft);
+    expect(entries.get(withDraft.id)?.submittedOn).toEqual({ kind: "submitted", at: VERIFIER_SUBMITTED_AT });
+  });
+
+  it("shows a registry-discovered statement's own timestamp, or says it was submitted in Isometric", async () => {
+    const facility = await createFacility();
+    const dated = await createStatement(facility);
+    const undated = await createStatement(facility, DRAFT_REPORTING_PERIOD_END);
+    // Same ledger shape written by reconcileRegistryGhgStatement: submitted_at
+    // records discovery; applyGhgRemoteState stores the registry's timestamp.
+    await insertSubmission(dated, GHG_STATEMENT_ENTITY_TYPE, {
+      status: "submitted",
+      submittedAt: LATEST_SUBMITTED_AT,
+      payloadSnapshot: { semantic: { source: REGISTRY_DISCOVERY_SOURCE } },
+      metadata: { remoteStatus: "VERIFIED", submittedToVerifierAt: VERIFIER_SUBMITTED_AT },
+    });
+    await insertSubmission(undated, GHG_STATEMENT_ENTITY_TYPE, {
+      status: "submitted",
+      submittedAt: LATEST_SUBMITTED_AT,
+      payloadSnapshot: { semantic: { source: REGISTRY_DISCOVERY_SOURCE } },
+      metadata: { remoteStatus: "AWAITING_VERIFIER" },
+    });
+
+    const result = await loadGhgStatementsForFacility(facility.id);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error(result.error);
+    const entries = new Map(result.data.map((entry) => [entry.statement.id, entry]));
+    expect(entries.get(dated.id)?.submittedOn).toEqual({ kind: "submitted", at: VERIFIER_SUBMITTED_AT });
+    expect(entries.get(undated.id)?.submittedOn).toEqual({ kind: "registryDiscovered" });
   });
 
   it("excludes another organization's entities and refuses its facility", async () => {
