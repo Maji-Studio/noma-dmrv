@@ -563,19 +563,26 @@ export function useCreditBatchHealthSummaries(
 // credit-batch variant it refetches while a submission is locked in flight.
 // It also polls while a clock-derived future-date blocker exists so an open
 // dialog becomes ready when that timestamp passes, without broad idle polling.
+/** One definition of the Removal context read, shared by the hook and any prefetch. */
+export function removalCertifyContextQueryOptions(
+  facilityId: string,
+  removalId: string,
+) {
+  return {
+    queryKey: certificationKeys.certifyContextForRemoval(facilityId, removalId),
+    queryFn: async () => unwrap(await loadRemovalCertifyContext(facilityId, removalId)),
+    staleTime: DEFAULT_STALE_MS,
+  };
+}
+
 export function useRemovalCertifyContext(
   facilityId: string,
   removalId: string,
   enabled = true,
 ) {
   return useQuery({
-    queryKey: certificationKeys.certifyContextForRemoval(
-      facilityId,
-      removalId,
-    ),
-    queryFn: async () => unwrap(await loadRemovalCertifyContext(facilityId, removalId)),
+    ...removalCertifyContextQueryOptions(facilityId, removalId),
     enabled: enabled && !!facilityId && !!removalId,
-    staleTime: DEFAULT_STALE_MS,
     refetchInterval: (query) =>
       getRemovalCertifyRefetchInterval(query.state.data),
   });

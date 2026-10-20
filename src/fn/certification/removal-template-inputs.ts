@@ -54,7 +54,6 @@ export function resolveTemplateInputs(args: {
   externalProjectId: string;
   sourceIds: string[];
   sourceBindingPlan: RemovalSourceBindingPlanEntry[];
-  allowPeriodInputStub: boolean;
   omitProductionComponents: boolean;
 }): ResolvedTemplateInputs {
   const {
@@ -65,7 +64,6 @@ export function resolveTemplateInputs(args: {
     externalProjectId,
     sourceIds,
     sourceBindingPlan,
-    allowPeriodInputStub,
     omitProductionComponents,
   } = args;
 
@@ -165,7 +163,6 @@ export function resolveTemplateInputs(args: {
                   inputKey: rtcInput.input_key,
                 })
               : sourceIds,
-          allowPeriodInputStub,
         });
         monitored.push({
           removalTemplateComponentId: component.id,

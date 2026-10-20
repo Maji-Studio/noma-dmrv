@@ -33,101 +33,24 @@ import {
   statusCountsAsPhysicalProduction,
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
-import {
-  AmbiguousLocalTimeError,
-  combineDateAndTime,
-  UNKNOWN_FACILITY_TIMEZONE,
-  formatLocalDate,
-  NonexistentLocalTimeError,
-} from "@/lib/date-utils";
+import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import {
   getFutureProductionRunTimeFields,
   PRODUCTION_RUN_FUTURE_TIME_MESSAGES,
 } from "@/lib/production-runs/time-validation";
+import { resolveRunWindow, WALL_CLOCK_TIME_RE } from "@/lib/production-runs/run-window";
 
 // ============================================
 // Time-window helpers (start/end date + time pairs)
 // ============================================
 
-const TIME_ONLY_RE = /^\d{2}:\d{2}$/;
-const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const RESIDENCE_TIME_INTEGER_MESSAGE = "Enter residence time as a whole number of minutes.";
 const START_DATE_REQUIRED_MESSAGE = "Enter the start date.";
 const START_TIME_REQUIRED_MESSAGE = "Enter a start time.";
-const START_TIME_INVALID_MESSAGE = "Enter a valid start time.";
+export const START_TIME_INVALID_MESSAGE = "Enter a valid start time.";
 const END_TIME_INVALID_MESSAGE = "Enter a valid end time.";
 export const CANCELLATION_REASON_MAX_LENGTH = 2000;
 export { DRY_MASS_BALANCE_MESSAGE } from "@/lib/production-runs/lifecycle";
-
-/**
- * Outcome of {@link resolveInstant}. `instant` is null both when the pair is
- * incomplete/malformed and when the wall clock does not exist; only the latter
- * sets `wallClockErrorMessage`, so the caller can tell "nothing to check yet"
- * from "the operator entered a time that is not a unique instant".
- */
-type ResolvedInstant = {
-  instant: Date | null;
-  wallClockErrorMessage: string | null;
-};
-
-const UNRESOLVED_INSTANT: ResolvedInstant = {
-  instant: null,
-  wallClockErrorMessage: null,
-};
-
-/**
- * Resolve a calendar-date value + a time value into a single instant, robust to
- * either shape the schema produces: on the client the date field has been
- * transformed to a `Date` (local midnight) and the time is an "HH:MM" string;
- * on server re-validation the time is already a combined `Date`. Returns a null
- * instant when either part is missing/malformed (the field-level validators
- * surface the specific error).
- *
- * `timeZone` must be the facility's IANA zone, matching what the form submits
- * via `combineDateAndTime`. Resolving here in the browser's zone while the
- * submitted instant is built in the facility's zone lets the two disagree
- * across a DST boundary that only one of the zones observes (a run that is
- * valid when saved can be rejected by the client, or vice versa). Sharing the
- * combiner also means the two share its DST gap/fold policy, so validation
- * rejects exactly the wall clocks the submit path would refuse to build.
- */
-function resolveInstant(
-  dateVal: unknown,
-  timeVal: unknown,
-  timeZone: string
-): ResolvedInstant {
-  if (timeVal instanceof Date) {
-    return { instant: timeVal, wallClockErrorMessage: null };
-  }
-  if (typeof timeVal !== "string" || !TIME_ONLY_RE.test(timeVal)) {
-    return UNRESOLVED_INSTANT;
-  }
-
-  // `requiredDateOnlySchema`/`optionalDateOnly` parse "YYYY-MM-DD" at local midnight,
-  // so reading the calendar day back off the Date is the exact inverse.
-  let dateStr: string | null = null;
-  if (dateVal instanceof Date) {
-    dateStr = formatLocalDate(dateVal);
-  } else if (typeof dateVal === "string" && DATE_ONLY_RE.test(dateVal)) {
-    dateStr = dateVal;
-  }
-  if (!dateStr) return UNRESOLVED_INSTANT;
-
-  try {
-    return {
-      instant: combineDateAndTime(dateStr, timeVal, timeZone),
-      wallClockErrorMessage: null,
-    };
-  } catch (error) {
-    if (
-      error instanceof NonexistentLocalTimeError ||
-      error instanceof AmbiguousLocalTimeError
-    ) {
-      return { instant: null, wallClockErrorMessage: error.message };
-    }
-    throw error;
-  }
-}
 
 /** Whether an end-time value is actually present (Date or non-empty "HH:MM"). */
 function hasEndTime(value: unknown): boolean {
@@ -232,15 +155,15 @@ const productionRunFormObject = z.object({
 
   // Timing — explicit date + time pairs. The run's start (date + time) is
   // required; the end pair is optional (a blank end = the run has not finished
-  // yet). `endDate` defaults to `startDate` when only an end time is entered;
-  // an overnight run sets `endDate` to the next day (no implicit day rollover).
+  // yet). `resolveRunWindow` defaults an empty end date to the start date;
+  // an overnight run needs an explicit next-day end date.
   startDate: requiredDateOnlySchema(START_DATE_REQUIRED_MESSAGE),
   endDate: optionalDateOnly,
   // Time values accept "HH:MM" strings (from the form) or Date objects (server
   // re-validation of an already-combined instant).
   startTime: dateOrStringSchema(START_TIME_REQUIRED_MESSAGE, (text) =>
     text.min(1, START_TIME_REQUIRED_MESSAGE).transform((val, ctx) => {
-      if (TIME_ONLY_RE.test(val)) return val;
+      if (WALL_CLOCK_TIME_RE.test(val)) return val;
       const date = new Date(val);
       if (isNaN(date.getTime())) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: START_TIME_INVALID_MESSAGE });
@@ -253,7 +176,7 @@ const productionRunFormObject = z.object({
     .optional()
     .transform((val, ctx) => {
       if (val === undefined || val === null || val === "") return undefined;
-      if (typeof val === "string" && TIME_ONLY_RE.test(val)) return val;
+      if (typeof val === "string" && WALL_CLOCK_TIME_RE.test(val)) return val;
       if (typeof val === "string") {
         const date = new Date(val);
         if (isNaN(date.getTime())) {
@@ -316,37 +239,33 @@ export function makeProductionRunFormSchema(
   savedStatus?: ProductionRunStatus,
 ) {
   return productionRunFormObject.superRefine((data, ctx) => {
-    const start = resolveInstant(data.startDate, data.startTime, timeZone);
+    const { start, end, startError, endError } = resolveRunWindow(data, timeZone);
     const endPresent = hasEndTime(data.endTime);
-    const endDateVal = data.endDate ?? data.startDate;
-    const end = endPresent
-      ? resolveInstant(endDateVal, data.endTime, timeZone)
-      : UNRESOLVED_INSTANT;
 
     // A wall clock inside a DST gap or fold is not a unique instant, so it is
     // reported on its own field and then treated as unresolved. The
     // downstream window checks all guard on a non-null instant, so they stay
     // silent rather than piling a second, misleading message onto the same
     // field ("End must be after start" for a time that has no instant at all).
-    if (start.wallClockErrorMessage) {
+    if (startError) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["startTime"],
-        message: start.wallClockErrorMessage,
+        message: startError,
       });
     }
-    if (end.wallClockErrorMessage) {
+    if (endError) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["endTime"],
-        message: end.wallClockErrorMessage,
+        message: endError,
       });
     }
 
     const futureTimeFields = getFutureProductionRunTimeFields(
       {
-        startTime: start.instant,
-        endTime: end.instant,
+        startTime: start,
+        endTime: end,
       },
       now(),
     );
@@ -365,8 +284,8 @@ export function makeProductionRunFormSchema(
     );
     const violations = getProductionRunOutcomeViolations({
       status: data.status,
-      startTime: start.instant,
-      endTime: end.instant,
+      startTime: start,
+      endTime: end,
       endTimePresent: endPresent,
       cancellationReason: data.cancellationReason,
       biocharOutputKg: data.biocharOutputKg,

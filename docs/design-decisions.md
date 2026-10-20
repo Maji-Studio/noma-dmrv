@@ -8,6 +8,7 @@ This is the per-surface log of what we tried, what replaced it, and why. Read it
 - **Simple and Detailed** (#821/#822 → #847; 2026-09-21 to 09-29): Simple hid derived blocks and some inputs → both modes show the same information, Detailed adds explanation only. Rejected: any "Add X" reveal or hidden step in Simple.
 - **Certification marker** (#851 → #858, #1117; 2026-09-30, 10-16): seal glyph and a sheet legend → "CERT" text chip, no legend. A requiredness legend was rebuilt in #1117 and closed unmerged. Rejected: "Required for certification" text.
 - **Typography layering** (#822; 2026-09-21 to 09-23): a layered typography import switched on unreviewed utilities app-wide → reverted; only `.font-medium` is overridden.
+- **Stat card scope** (#690, #1279; 2026-10-20): "on this page" sums became whole-facility server totals; a failed stats load shows "Could not load" instead of 0. Rejected: page-scoped figures.
 - **List-page subtitle** (#1245; 2026-10-20): "every list page gets a subtitle" → a subtitle stays only when it adds information the title lacks. Why: a subtitle that restates the title ("Orders" / "Manage your orders") is filler.
 - **Form subgrid** (2026-07-24): `.grid > .form-field` subgrid → reverted; shorten labels instead.
 - **Dialog actions** (#1150; 2026-10-17): right-aligned footers → bottom left, primary first, secondary after; refused delete is a dialog with "Archive instead" first.
@@ -41,6 +42,10 @@ This is the per-surface log of what we tried, what replaced it, and why. Read it
 - **Distance refresh action** (#1262; Kenji, 2026-10-20): the outlined uppercase "Refresh from location" button was "huge" → "text only with underline and a refresh icon before, so it fits into the row". The edit row and the read-view notice both use it. Rejected: the boxed button on the hint line.
 - **Production run flow** (#888, #999): Sankey, left to right, with numbers; water taken up shown as an inflow.
 - **Energy → Emissions** (2026-10-01 → #1140): toggled explorer (variant F) was "too complicated" → list and Sankey toggle (G) → replaced by Emissions: overview C, detail C3c (monthly ledger, whole row clickable, ⋮ menu), then accordion layout E (full width, line description above Source, comment as an action). Rejected: a "Nothing to record" button; default reads "Nothing recorded" with a quiet "Add manual entry".
+
+## Removals
+
+- **Empty components in New Removal** (epic #1058 PR 4, round 7; 2026-10-20, Kenji): empty template components confirmed on the submit step (A) or inside the compact batch boxes of selection (C, #1202) → version B, its own "Empty components" step between selection and Confirm & submit. One card per credit batch, "Add entry" per component (new tab), one optional note and "Record n components as zero", "Recorded zero" once confirmed, Undo on this step only. The step is skipped when nothing is empty; Continue refuses with a reason that names the components and batches; the submit step shows a read-only "Components sent" (value, source, files). Copy says "component", never "line" (2026-10-20). Rejected: confirming on the submit step, and the confirmation inside the selection boxes.
 
 ## Credit batches and locks
 
