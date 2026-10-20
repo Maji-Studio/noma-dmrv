@@ -28,7 +28,7 @@ import {
 const ICON_SIZE = 14;
 const LINK_ICON_SIZE = 12;
 const SECTION_HINT =
-  "What Isometric receives for each component of the Removal template, per credit batch.";
+  "What Isometric receives for each component of the Removal template, across its credit batches.";
 
 const ROW_GRID =
   "grid grid-cols-[minmax(0,1fr)_auto] gap-x-12 gap-y-4 md:items-center";
@@ -125,14 +125,28 @@ interface ComponentsSentProps {
   facilityId: string;
   /** The compiled review: its inputs are what this Removal sends. */
   review: RemovalCompilationView["review"] | null;
+  /** The review is still being prepared: rows would show blanks and a wrong source. */
+  isLoading: boolean;
 }
 
-export function ComponentsSent({ ctx, facilityId, review }: ComponentsSentProps) {
+export function ComponentsSent({ ctx, facilityId, review, isLoading }: ComponentsSentProps) {
   const byBatch = ctx.emissionLinesByBatchId ?? {};
   const batches = ctx.memberBatches.filter(
     (batch) => (byBatch[batch.id] ?? []).length > 0,
   );
   if (batches.length === 0) return null;
+  if (isLoading) {
+    return (
+      <section className="flex flex-col gap-12" aria-label="Components sent">
+        <SectionLabel hint={SECTION_HINT}>Components sent</SectionLabel>
+        <p className="body-small text-[var(--color-text-tertiary)]">
+          Preparing the components sent…
+        </p>
+      </section>
+    );
+  }
+  // Without a compiled review nothing is known about what is sent.
+  if (!review) return null;
   const rows = sentComponentRows(
     batches.map((batch) => byBatch[batch.id]),
     {

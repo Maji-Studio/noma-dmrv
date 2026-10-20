@@ -39,7 +39,7 @@ const LINK_ICON_SIZE = 12;
 const STATE_ICON_SIZE = 14;
 /** Said by every failed read of the empty components, here and in the wizard. */
 export const CHECK_FAILED_MESSAGE =
-  "The empty components could not be checked. Try again.";
+  "The empty components could not be checked.";
 const NOTE_PLACEHOLDER = "For example: no staff travel in September.";
 const NOTE_HINT =
   "The note is copied to each recorded zero. It stays in noma. Isometric receives 0 for each component, with no file.";

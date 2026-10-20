@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const BATCH = "batch-1";
 const mocks = vi.hoisted(() => ({
-  landing: { data: undefined as unknown, isError: false, refetch: vi.fn() },
+  landing: { data: undefined as unknown, isError: false, error: null as unknown, refetch: vi.fn() },
   query: { data: undefined as unknown, isLoading: false, isError: false },
   queryArgs: [] as unknown[][],
   load: vi.fn(),
@@ -28,6 +28,7 @@ vi.mock("@/hooks/use-certification", () => ({
   useRemovalCertifyContext: () => ({ data: { memberBatches: [] }, isLoading: false, error: null }),
 }));
 vi.mock("@/hooks/use-removal-empty-components", () => ({
+  EmptyComponentsCheckError: class EmptyComponentsCheckError extends Error {},
   useRemovalLanding: () => mocks.landing,
   useRemovalEmptyComponents: (...args: unknown[]) => {
     mocks.queryArgs.push(args);
@@ -51,6 +52,7 @@ vi.mock("@/components/ui/notice", () => ({
 vi.mock("./submit-step", () => ({ SubmitStep: () => <div>submit step</div> }));
 
 import { NewRemovalDialog } from "./index";
+import { EmptyComponentsCheckError } from "@/hooks/use-removal-empty-components";
 
 const OPEN = {
   removalVersion: 1,
@@ -73,7 +75,7 @@ function renderDialog(resumeRemovalId: string | null) {
 
 afterEach(cleanup);
 beforeEach(() => {
-  mocks.landing = { data: undefined, isError: false, refetch: vi.fn() };
+  mocks.landing = { data: undefined, isError: false, error: null, refetch: vi.fn() };
   mocks.query = { data: undefined, isLoading: false, isError: false };
   mocks.queryArgs = [];
   mocks.load.mockReset();
@@ -131,10 +133,23 @@ describe("New Removal wizard with empty components", () => {
 
   it("offers a retry when the landing read fails, instead of treating it as nothing empty", () => {
     mocks.landing.isError = true;
+    mocks.landing.error = new EmptyComponentsCheckError("x");
     renderDialog("removal-1");
     expect(screen.getByRole("alert").textContent).toContain("The empty components could not be checked. Try again.");
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(mocks.landing.refetch).toHaveBeenCalled();
+  });
+
+  it("shows the original message, not the empty components one, when the context itself fails to load", () => {
+    mocks.landing.isError = true;
+    mocks.landing.error = new Error("context failed");
+    renderDialog("removal-1");
+    expect(screen.getByRole("alert").textContent).toBe("This Removal could not be loaded. Refresh the page.");
+  });
+
+  it("marks no step current while the landing is unresolved", () => {
+    renderDialog("removal-1");
+    expect(document.querySelector('[aria-current="step"]')).toBeNull();
   });
 
   it("sends a new Removal to the landing the server picks", () => {

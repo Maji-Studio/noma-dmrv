@@ -145,7 +145,7 @@ describe("ComponentsSent", () => {
   } as unknown as Pick<RemovalCertifyContext, "memberBatches" | "emissionLinesByBatchId" | "unbindableTemplateInputs">;
 
   it("lists every component with its value, source and files", () => {
-    render(<ComponentsSent ctx={ctx} facilityId="facility-1" review={REVIEW} />);
+    render(<ComponentsSent ctx={ctx} facilityId="facility-1" review={REVIEW} isLoading={false} />);
     const list = screen.getByRole("list", { name: "Components sent" });
 
     const travel = within(list).getByText("Staff travel").closest("li")!;
@@ -159,27 +159,36 @@ describe("ComponentsSent", () => {
   });
 
   it("explains a component not sent once, in the source column", () => {
-    render(<ComponentsSent ctx={ctx} facilityId="facility-1" review={review([binding("auto", 72, "kWh")], ["manual"])} />);
+    render(<ComponentsSent ctx={ctx} facilityId="facility-1" review={review([binding("auto", 72, "kWh")], ["manual"])} isLoading={false} />);
     const row = screen.getByText("Staff travel").closest("li")!;
     expect(within(row).getAllByText("Not sent")).toHaveLength(1);
     expect(within(row).getByRole("button", { name: "Why Staff travel is not sent" }).getAttribute("data-reason")).toBe("Sent with an earlier Removal.");
   });
 
   it("offers the file names behind a toggletip, reachable on a tap", () => {
-    render(<ComponentsSent ctx={ctx} facilityId="facility-1" review={REVIEW} />);
+    render(<ComponentsSent ctx={ctx} facilityId="facility-1" review={REVIEW} isLoading={false} />);
     expect(screen.getAllByRole("button", { name: "File names for Staff travel" }).length).toBeGreaterThan(0);
   });
 
   it("hides the Files column in a batch where no component has files", () => {
     const noFiles = { ...ctx, emissionLinesByBatchId: { [BATCH_ID]: [LINES[0], LINES[2]] } } as unknown as typeof ctx;
-    const { container } = render(<ComponentsSent ctx={noFiles} facilityId="facility-1" review={REVIEW} />);
+    const { container } = render(<ComponentsSent ctx={noFiles} facilityId="facility-1" review={REVIEW} isLoading={false} />);
     expect(container.querySelector("li[class*='120px']")).toBeNull();
     expect(screen.queryByText(/files?$/)).toBeNull();
   });
 
+  it("shows a loading line, not blank rows, while the review is prepared, and nothing when it is not available", () => {
+    const loading = render(<ComponentsSent ctx={ctx} facilityId="facility-1" review={null} isLoading />);
+    expect(screen.getByText("Preparing the components sent…")).toBeTruthy();
+    expect(screen.queryByText("None")).toBeNull();
+    loading.unmount();
+    const unavailable = render(<ComponentsSent ctx={ctx} facilityId="facility-1" review={null} isLoading={false} />);
+    expect(unavailable.container.textContent).toBe("");
+  });
+
   it("renders nothing without lines", () => {
     const { container } = render(
-      <ComponentsSent ctx={{ memberBatches: [], emissionLinesByBatchId: {}, unbindableTemplateInputs: [] } as never} facilityId="facility-1" review={null} />,
+      <ComponentsSent ctx={{ memberBatches: [], emissionLinesByBatchId: {}, unbindableTemplateInputs: [] } as never} facilityId="facility-1" review={null} isLoading={false} />,
     );
     expect(container.textContent).toBe("");
   });

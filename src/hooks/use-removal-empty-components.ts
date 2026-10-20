@@ -38,6 +38,9 @@ function unwrapZero<T>(result: ActionResult<T>): T {
   return result.data;
 }
 
+/** Reading the empty components failed (as opposed to loading the Removal itself). */
+export class EmptyComponentsCheckError extends Error {}
+
 async function readEmptyComponents(removalId: string) {
   return unwrapZero(await getRemovalEmptyLinesFn({ removalId }));
 }
@@ -116,7 +119,10 @@ export function useRemovalLanding(
         removalCertifyContextQueryOptions(facilityId, removalId!),
       );
       if (!ctx.emissionsEntriesEnabled) return { entriesEnabled: false, step: "submit" as const };
-      return { entriesEnabled: true, step: landingStep(await readEmptyComponents(removalId!)) };
+      const empties = await readEmptyComponents(removalId!).catch((error: unknown) => {
+        throw new EmptyComponentsCheckError(error instanceof Error ? error.message : "Check failed");
+      });
+      return { entriesEnabled: true, step: landingStep(empties) };
     },
     enabled: enabled && !!removalId,
     // Once per opening: stable while the dialog is open, gone when it closes, so

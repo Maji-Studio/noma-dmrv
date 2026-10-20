@@ -384,6 +384,7 @@ export function SubmitStep({
           ctx={ctx}
           facilityId={facilityId}
           review={compilationQuery.data?.review ?? null}
+          isLoading={compilationQuery.isLoading}
         />
       )}
 

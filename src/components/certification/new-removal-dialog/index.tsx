@@ -41,6 +41,7 @@ import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { isSubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
 import {
+  EmptyComponentsCheckError,
   useEmptyComponentsActions,
   useLoadRemovalEmptyComponents,
   useRefreshRemovalReview,
@@ -213,9 +214,8 @@ function WizardBody({
     );
   };
 
-  const currentIndex = step
-    ? steps.findIndex((item) => item.key === step)
-    : steps.length - 1;
+  // No step is current while the landing is unresolved (the rail shows none).
+  const currentIndex = step ? steps.findIndex((item) => item.key === step) : -1;
 
   // Continue from the empty components re-reads the server first, so an entry
   // added in another tab counts, then refreshes the review the submit step reads.
@@ -321,7 +321,7 @@ function WizardBody({
           />
         )}
         {step === null &&
-          (landing.isError ? (
+          (landing.error instanceof EmptyComponentsCheckError ? (
             <Notice
               tone="error"
               action={
@@ -332,6 +332,11 @@ function WizardBody({
             >
               {CHECK_FAILED_MESSAGE}
             </Notice>
+          ) : landing.isError ? (
+            // The context itself failed to load: the message the dialog always showed.
+            <p className="body-small text-[var(--clr-red)]" role="alert">
+              This Removal could not be loaded. Refresh the page.
+            </p>
           ) : (
             <p className="body-small text-[var(--color-text-tertiary)]">
               Loading…
