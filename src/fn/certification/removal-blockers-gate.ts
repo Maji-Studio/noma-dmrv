@@ -74,7 +74,7 @@ export async function evaluateRemovalBlockers(args: {
   if (!prepared) return [legacyBlocker(REMOVAL_PREPARATION_BLOCKERS.noTemplate, "creditBatchTemplate")];
   const inputs = await getProductionBatchRegistryInputs(args.orgCtx, args.ctx.memberBatches.map(batch => batch.id));
   const undeletableHolders = await getCreditBatchUndeletableRemovalCodes(
-    args.orgCtx, inputs.map(input => input.creditBatchId), args.removalId,
+    args.orgCtx, inputs.map(input => input.creditBatchId),
   );
   for (const input of inputs) {
     const issue = getCreditBatchProductionSpanIssue({

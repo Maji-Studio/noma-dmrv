@@ -2,22 +2,27 @@ import { and, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import {
-  applications, certificationSubmissions, certifierProjects, certifierRemovals,
+  activityEvents, applications, certificationSubmissions, certifierProjects, certifierRemovals,
+  certifierSyncEvents,
   creditBatchApplications, creditBatchProductionRuns, feedstocks,
   productionRunFeedstockDraws, productionRunFeedstocks, productionRuns,
   reactors, storageLocations,
 } from "@/db/schema";
 import { getCreditBatchUndeletableRemovalCodes } from "@/data-access/credit-batch-removal-holders";
+import {
+  REMOVAL_DELETE_STATEMENT_ERROR, REMOVAL_DELETE_SUBMITTED_ERROR,
+} from "@/data-access/certifier-removal-deletion";
 import { getProductionBatchRegistryInputs } from "@/data-access/certifier-production-batches";
 import { getRecordLock } from "@/data-access/certification-lineage-guards";
 import { assertCreditBatchSlicesAreUnassigned } from "@/data-access/credit-batch-certification-lock";
 import { createProductionRun, updateProductionRun } from "@/data-access/production-runs";
 import { evaluateRemovalBlockers } from "@/fn/certification/removal-blockers-gate";
+import { deleteRemoval } from "@/fn/certification/delete-removal";
 import { ensureProductionBatchesForCreditBatches } from "@/fn/certification/production-batches";
 import type { RemovalSubmissionContext } from "@/fn/certification/certify-context-types";
 import { getCreditBatchProductionSpanIssue } from "@/lib/credit-batch-production-span";
 import { logger } from "@/lib/log";
-import { withLineageFixture } from "./helpers/certification-lineage-fixture";
+import { withLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";
 import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { feedstockFixtureValues } from "./helpers/feedstock-fixture";
 import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
@@ -53,6 +58,37 @@ const RETRY_VERSION = 2;
 const FOREIGN_ORG_ID = "span-holder-foreign-org";
 
 beforeAll(() => ensureTestOrg());
+
+function makeReadinessContext(
+  batchId: string,
+  mapping: RemovalSubmissionContext["mapping"],
+): RemovalSubmissionContext {
+  const template = makeTemplate();
+  // The gate consumes these prepared context fields before its span check.
+  // Registry/template loading is outside this DB contract.
+  return {
+    mapping, hasOrgCredentials: true, removalTemplate: template,
+    lineSources: reviewedTemplateSources(template), templateBlockers: [],
+    unresolvedBlueprintKeys: [], blueprintsForTemplate: [],
+    feedstockTypeMappingGaps: [], entityReadinessGaps: [],
+    memberBatches: [{ id: batchId }],
+    batchesWithSamples: [{ durabilityOption: "1000_year" }],
+  } as unknown as RemovalSubmissionContext;
+}
+
+async function markRemovalReturned(f: LineageFixture): Promise<void> {
+  await db.insert(certificationSubmissions).values({
+    organizationId: TEST_ORG_ID, provider: "isometric", submissionType: "removal",
+    localEntityType: "removal", localEntityId: f.removalId, externalId: remote.ghg_entry_ids[0],
+    version: FIRST_VERSION, status: "submitted", submittedAt: new Date("2026-06-17T00:00:00Z"),
+  });
+  await db.update(certificationSubmissions).set({
+    metadata: { remoteStatus: remote.status, submittedToVerifierAt: remote.submitted_at, removalIds: remote.ghg_entry_ids },
+  }).where(and(
+    eq(certificationSubmissions.organizationId, TEST_ORG_ID),
+    eq(certificationSubmissions.localEntityId, f.ghgStatementId!),
+  ));
+}
 
 describe("credit batch span refusal with undeletable Removal holders", () => {
   it.each(["submitted", "accepted", "superseded", "statement"] as const)(
@@ -91,11 +127,11 @@ describe("credit batch span refusal with undeletable Removal holders", () => {
             organizationId: TEST_ORG_ID, creditBatchId: f.batchId, applicationId: application.id,
             removalId: draft.id, allocatedWetMassKg: SLICE_WET_KG, allocatedDryMassKg: SLICE_DRY_KG,
           });
-          const codes = await getCreditBatchUndeletableRemovalCodes(ctx, [f.batchId], draft.id);
-          expect(codes.get(f.batchId)).toEqual([holder.code]);
-          expect(await getCreditBatchUndeletableRemovalCodes(ctx, [f.batchId], holder.id)).toEqual(new Map());
+          const codes = await getCreditBatchUndeletableRemovalCodes(ctx, [f.batchId]);
+          // The holder stays listed when it is the Removal being evaluated.
+          expect(codes).toEqual(new Map([[f.batchId, [holder.code]]]));
           expect(await getCreditBatchUndeletableRemovalCodes(
-            { ...ctx, organizationId: FOREIGN_ORG_ID }, [f.batchId], draft.id,
+            { ...ctx, organizationId: FOREIGN_ORG_ID }, [f.batchId],
           )).toEqual(new Map());
 
           const [input] = await getProductionBatchRegistryInputs(ctx, [f.batchId]);
@@ -103,17 +139,7 @@ describe("credit batch span refusal with undeletable Removal holders", () => {
           expect(expected).toContain(`Removal ${holder.code} was sent to Isometric and cannot be deleted`);
           expect(expected).not.toContain("Discard or delete");
           expect(expected).not.toContain(draft.code);
-          const template = makeTemplate();
-          // The gate consumes these prepared context fields before its span
-          // check. Registry/template loading is outside this DB contract.
-          const readinessContext = {
-            mapping, hasOrgCredentials: true, removalTemplate: template,
-            lineSources: reviewedTemplateSources(template), templateBlockers: [],
-            unresolvedBlueprintKeys: [], blueprintsForTemplate: [],
-            feedstockTypeMappingGaps: [], entityReadinessGaps: [],
-            memberBatches: [{ id: f.batchId }],
-            batchesWithSamples: [{ durabilityOption: "1000_year" }],
-          } as unknown as RemovalSubmissionContext;
+          const readinessContext = makeReadinessContext(f.batchId, mapping);
           expect(await evaluateRemovalBlockers({ orgCtx: ctx, removalId: draft.id, ctx: readinessContext }))
             .toEqual([expect.objectContaining({ message: expected, fixTarget: "batchDetails" })]);
           await expect(ensureProductionBatchesForCreditBatches({
@@ -130,16 +156,76 @@ describe("credit batch span refusal with undeletable Removal holders", () => {
     },
   );
 
+  it("names the evaluated Removal when it is returned and the only undeletable holder", async () => {
+    await withLineageFixture(async f => {
+      await markRemovalReturned(f);
+      await db.update(productionRuns).set({ startTime: new Date(SPAN_START), endTime: new Date(MONTH_BOUNDARY) })
+        .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, f.productionRunId)));
+      const [holder] = await db.select().from(certifierRemovals).where(and(
+        eq(certifierRemovals.organizationId, TEST_ORG_ID), eq(certifierRemovals.id, f.removalId),
+      ));
+      const [mapping] = await db.insert(certifierProjects).values({
+        organizationId: TEST_ORG_ID, facilityId: f.facilityId, provider: "isometric",
+        externalProjectId: `prj_${holder.id}`, externalFacilityId: `fcl_${holder.id}`,
+      }).returning();
+      try {
+        expect(await getCreditBatchUndeletableRemovalCodes(ctx, [f.batchId]))
+          .toEqual(new Map([[f.batchId, [holder.code]]]));
+        const blockers = await evaluateRemovalBlockers({
+          orgCtx: ctx, removalId: holder.id, ctx: makeReadinessContext(f.batchId, mapping),
+        });
+        expect(blockers).toHaveLength(1);
+        const [blocker] = blockers;
+        expect(blocker.message).toContain(`Removal ${holder.code} was sent to Isometric and cannot be deleted`);
+        expect(blocker.message).not.toContain("Discard or delete");
+        await expect(ensureProductionBatchesForCreditBatches({
+          orgCtx: ctx, removalId: holder.id, submissionRow: { id: crypto.randomUUID() },
+          creditBatchIds: [f.batchId], log: logger,
+        })).rejects.toThrow(blocker.message);
+      } finally {
+        await db.delete(certifierProjects).where(and(
+          eq(certifierProjects.organizationId, TEST_ORG_ID), eq(certifierProjects.id, mapping.id),
+        ));
+      }
+    }, "ghgStatement");
+  });
+
+  it.each(["removal", "ghgStatement", "none"] as const)(
+    "keeps holder lookup in parity with deletion for %s",
+    async blockingVia => {
+      await withLineageFixture(async f => {
+        const [holder] = await db.select().from(certifierRemovals).where(and(
+          eq(certifierRemovals.organizationId, TEST_ORG_ID), eq(certifierRemovals.id, f.removalId),
+        ));
+        const codes = await getCreditBatchUndeletableRemovalCodes(ctx, [f.batchId]);
+        const refusal = blockingVia === "removal" ? REMOVAL_DELETE_SUBMITTED_ERROR
+          : blockingVia === "ghgStatement" ? REMOVAL_DELETE_STATEMENT_ERROR : null;
+        expect(codes).toEqual(refusal ? new Map([[f.batchId, [holder.code]]]) : new Map());
+        try {
+          const deletion = deleteRemoval(ctx, { facilityId: f.facilityId, removalId: holder.id });
+          if (refusal) {
+            await expect(deletion).rejects.toThrow(refusal);
+          } else {
+            await expect(deletion).resolves.toMatchObject({ removalId: holder.id, releasedSliceCount: 1 });
+            expect(await db.select({ id: certifierRemovals.id }).from(certifierRemovals).where(and(
+              eq(certifierRemovals.organizationId, TEST_ORG_ID), eq(certifierRemovals.id, holder.id),
+            ))).toEqual([]);
+          }
+        } finally {
+          await db.delete(certifierSyncEvents).where(and(
+            eq(certifierSyncEvents.organizationId, TEST_ORG_ID), eq(certifierSyncEvents.entityId, holder.id),
+          ));
+          await db.delete(activityEvents).where(and(
+            eq(activityEvents.organizationId, TEST_ORG_ID), eq(activityEvents.facilityId, f.facilityId),
+          ));
+        }
+      }, blockingVia);
+    },
+  );
+
   it("allows a cohort-only run end edit across the month boundary after return, while batch dates stay locked", async () => {
     await withLineageFixture(async f => {
-      await db.insert(certificationSubmissions).values({
-        organizationId: TEST_ORG_ID, provider: "isometric", submissionType: "removal",
-        localEntityType: "removal", localEntityId: f.removalId, externalId: remote.ghg_entry_ids[0],
-        version: FIRST_VERSION, status: "submitted", submittedAt: new Date("2026-06-17T00:00:00Z"),
-      });
-      await db.update(certificationSubmissions).set({
-        metadata: { remoteStatus: remote.status, submittedToVerifierAt: remote.submitted_at, removalIds: remote.ghg_entry_ids },
-      }).where(eq(certificationSubmissions.localEntityId, f.ghgStatementId!));
+      await markRemovalReturned(f);
       const outputBinId = await createProductionRunOutputBin(TEST_ORG_ID, f.facilityId);
       const [reactor] = await db.insert(reactors).values({
         organizationId: TEST_ORG_ID, facilityId: f.facilityId, code: `RE-SPAN-${f.batchId}`,

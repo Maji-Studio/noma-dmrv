@@ -203,7 +203,7 @@ export async function ensureProductionBatchesForCreditBatches(
   );
 
   const undeletableHolders = await getCreditBatchUndeletableRemovalCodes(
-    args.orgCtx, creditBatchIds, args.removalId,
+    args.orgCtx, creditBatchIds,
   );
   assertCreditBatchRunSpansUnderOneMonth(inputs.map(input => ({
     ...input, undeletableRemovalCodes: undeletableHolders.get(input.creditBatchId),

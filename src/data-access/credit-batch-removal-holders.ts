@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, ne, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { db } from "@/db";
 import { certificationSubmissions, certifierRemovals } from "@/db/schema/certification";
 import { creditBatchApplications } from "@/db/schema/credits";
@@ -7,17 +7,17 @@ import { ISOMETRIC_PROVIDER, REMOVAL_ENTITY_TYPE } from "@/lib/isometric/utils/c
 import { FINALIZED_SUBMISSION_STATUSES } from "./certification-submissions";
 import { requireOrgScope } from "./utils";
 
-/** Other slice holders that deletion refuses, even after Isometric returns them. */
+/** Slice holders that deletion refuses, including the Removal being evaluated. */
 export async function getCreditBatchUndeletableRemovalCodes(
   ctx: OrgContext,
   creditBatchIds: string[],
-  currentRemovalId: string,
 ): Promise<Map<string, string[]>> {
   requireOrgScope(ctx);
   if (!creditBatchIds.length) return new Map();
 
   // Match certifier-removal-deletion: statement membership or any finalized
   // ledger version. The current record-lock level cannot establish deletability.
+  // The parity test in tests/credit-batch-span-removal-holders.test.ts guards this rule.
   const holders = await db.selectDistinct({
     creditBatchId: creditBatchApplications.creditBatchId,
     removalCode: certifierRemovals.code,
@@ -37,7 +37,6 @@ export async function getCreditBatchUndeletableRemovalCodes(
     .where(and(
       eq(creditBatchApplications.organizationId, ctx.organizationId),
       inArray(creditBatchApplications.creditBatchId, creditBatchIds),
-      ne(certifierRemovals.id, currentRemovalId),
       or(isNotNull(certifierRemovals.ghgStatementId), isNotNull(certificationSubmissions.id)),
     ))
     .orderBy(creditBatchApplications.creditBatchId, certifierRemovals.code);

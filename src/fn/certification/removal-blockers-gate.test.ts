@@ -70,7 +70,7 @@ describe("Removal preflight", () => {
     expect(blocker.message).toContain("Removal REM-SENT and Removal REM-RETURNED were sent to Isometric and cannot be deleted");
     expect(blocker.message).not.toContain("Discard or delete");
     expect(getCreditBatchUndeletableRemovalCodes).toHaveBeenCalledWith(
-      orgCtx, inputs.map(input => input.creditBatchId), REMOVAL_ID,
+      orgCtx, inputs.map(input => input.creditBatchId),
     );
     vi.mocked(loadRemovalSubmissionContext).mockResolvedValue(ctx);
     await expect(submitRemoval({ orgCtx, removalId: REMOVAL_ID, confirmProduction: true }))
@@ -89,6 +89,8 @@ describe("Removal preflight", () => {
     expect(blockers).toEqual([expect.objectContaining({
       message: expect.stringContaining("Production run RUN-OVER"), fixTarget: "batchDetails",
     })]);
+    expect(blockers[0].message).toContain("Discard or delete every Removal");
+    expect(blockers[0].message).toContain("including this one");
     vi.mocked(loadRemovalSubmissionContext).mockResolvedValue(ctx);
     await expect(submitRemoval({ orgCtx, removalId: REMOVAL_ID, confirmProduction: true }))
       .rejects.toThrow("Production run RUN-OVER");
