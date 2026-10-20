@@ -1,10 +1,12 @@
 import { expect, it } from "vitest";
-import { deliveryActionFieldIssues, deliveryActionIssues, throwDeliveryActionError } from "./delivery-action-errors";
+import { throwActionError } from "@/lib/stale-version";
+import { ActionError } from "./action-error";
+import { deliveryActionFieldIssues, deliveryActionIssues } from "./delivery-action-errors";
 import { deliveryReferenceNotFound } from "./delivery-domain-errors";
 
 it("shows a source bin not_found refusal on the source bin field", () => {
   const refusal = deliveryReferenceNotFound(["storageLocationId"], "Source bin");
-  try { throwDeliveryActionError({ success: false, error: refusal.message, code: refusal.code, issues: refusal.issues }); }
+  try { throwActionError({ success: false, error: refusal.message, code: refusal.code, issues: refusal.issues }); }
   catch (error) {
     expect(deliveryActionFieldIssues(error, ["storageLocationId"])).toEqual([
       { field: "storageLocationId", message: "Source bin was not found." },
@@ -15,7 +17,7 @@ it("shows a source bin not_found refusal on the source bin field", () => {
 });
 it("keeps typed field issues when the action is thrown by the hook", () => {
   const issues = [{ path: ["deliveryDate"], code: "validation_failed", message: "Enter a time at or before now." }];
-  try { throwDeliveryActionError({ success: false, error: issues[0].message, issues }); }
+  try { throwActionError({ success: false, error: issues[0].message, issues }); }
   catch (error) {
     expect(deliveryActionIssues(error)).toEqual(issues);
     return;
@@ -25,7 +27,7 @@ it("keeps typed field issues when the action is thrown by the hook", () => {
 
 const renderedFields = ["deliveryDate", "deliveredWetMassKg"] as const;
 const issue = (path: (string | number)[]) => ({ path, code: "validation_failed", message: "Refused" });
-const refusal = (paths: (string | number)[][]) => Object.assign(new Error("Refused"), { issues: paths.map(issue) });
+const refusal = (paths: (string | number)[][]) => new ActionError({ error: "Refused", issues: paths.map(issue) });
 
 it("maps every issue to rendered fields, including source issues to mass", () => {
   expect(deliveryActionFieldIssues(refusal([["deliveryDate"], ["sources", 0, "layerId"]]), renderedFields)).toEqual([

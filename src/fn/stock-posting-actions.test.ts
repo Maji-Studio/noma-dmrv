@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { throwActionError } from "@/lib/stale-version";
 import { conflictCode } from "@/lib/conflict-ref";
 import { DomainError } from "@/lib/domain-errors";
 import { ActionConflictError } from "@/lib/errors";
-import { deliveryActionFieldIssues, throwDeliveryActionError } from "@/lib/delivery-action-errors";
+import { deliveryActionFieldIssues } from "@/lib/delivery-action-errors";
 import type { OrgContext } from "@/lib/auth/server";
 
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), autoCode: vi.fn(), log: vi.fn(), run: vi.fn(), update: vi.fn() }));
@@ -161,7 +162,7 @@ describe("delivery action field mapping and partial notes", () => {
     expect(result).toEqual({ success: false, error: message, code: "certification_locked", issues });
     if (result.success) throw new Error("Expected a lineage refusal");
     try {
-      throwDeliveryActionError(result);
+      throwActionError(result);
       expect.fail("Expected the action refusal to throw");
     }
     catch (error) {

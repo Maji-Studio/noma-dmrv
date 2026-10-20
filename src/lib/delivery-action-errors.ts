@@ -1,15 +1,8 @@
 import type { DomainIssue } from "./domain-errors";
-import type { ActionResult } from "@/types/actions";
-import { throwActionError } from "./stale-version";
-
-/** Preserve the shared stale/conflict error classes and the delivery field issues. */
-export function throwDeliveryActionError(result: Extract<ActionResult<unknown>, { success: false }>): never {
-  try { throwActionError(result); }
-  catch (error) { throw Object.assign(error as Error, { issues: result.issues }); }
-}
+import { isActionError } from "./action-error";
 
 export function deliveryActionIssues(error: unknown): DomainIssue[] | undefined {
-  return error instanceof Error && "issues" in error ? error.issues as DomainIssue[] | undefined : undefined;
+  return isActionError(error) ? error.issues : undefined;
 }
 
 /** Use field errors only when the entire refusal is visible in this form. */
