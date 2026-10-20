@@ -62,6 +62,10 @@ Pay special attention to:
 - provider retries that can create duplicate registry state;
 - tests that pass because of row order, shared seed state, or leaked artifacts.
 
+## UI action order
+
+Dialog and form footers follow docs/design-system.md (Modal: actions bottom left, primary first) and docs/forms.md (FormActions); flag a footer that breaks that order.
+
 ## Comment quality
 
 Keep findings actionable and evidence-based. Do not produce PR summaries,
