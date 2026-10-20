@@ -783,9 +783,10 @@ drawn only on a complete basis; until then the block shows its unresolved state.
   **no card, no frame and no tinted panel**: the bar sits directly under the
   wet-mass and moisture inputs it describes and moves as they change, with one
   key line of swatches under it ("Dry 3,200 kg", "Water 800 kg") and an (i)
-  after it. The (i) opens the `CompositionLedger` and the provenance `note`;
-  the wet-basis arithmetic stays inline in one sentence ("Dry = wet × (1 -
-  moisture). 4,000 kg × (1 - 20%) = 3,200 kg."). `calculation={false}` drops the
+  as its last item, so it wraps with the key. The (i) opens the `CompositionLedger` and the provenance `note`;
+  the derived wet-basis formula stays inline in one sentence ("Dry = wet × (1 -
+  moisture). 4,000 kg × (1 - 20%) = 3,200 kg."); a stored dry mass has no inline
+  line, its sentence sits in the (i) after the ledger. `calculation={false}` drops the
   (i) and the sentence where the host surface owns the explanation (the stock
   movement card: its (i) holds the FIFO draw, so the split contributes bar and
   key line only). The bar names **dry solids**, not the tracked quantity: a blended

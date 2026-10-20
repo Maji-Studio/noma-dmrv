@@ -585,8 +585,9 @@ formula version, held allocations. It sits behind an (i).
   both: the `hint` leads the panel, then the tables. A block with only a
   definition keeps `InfoHint`.
 - **Two short lines stay inline,** because the operator checks them on every
-  entry: the dry mass formula sentence under each moisture split
-  (`formatSplitArithmetic` in `ui/moisture-split`) and the dry biochar before →
+  entry: the dry mass formula sentence under a moisture split
+  that derives dry mass from moisture (`formatSplitArithmetic` in
+  `ui/moisture-split`; a stored dry mass explains itself inside the (i)) and the dry biochar before →
   after line on a stock movement ("Dry biochar in bin 540 → 135 kg"). Add no
   third without a decision in `docs/design-decisions.md`. Other explanation
   goes behind the (i).
