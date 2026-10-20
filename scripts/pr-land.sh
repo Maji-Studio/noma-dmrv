@@ -89,9 +89,9 @@ read_checks() {
     0|"$GH_CHECKS_FAILURE_STATUS"|"$GH_CHECKS_PENDING_STATUS") ;;
     *) die "$EXIT_FAILURE" "could not read checks for #$PR: $CHECKS_JSON" ;;
   esac
-  # Some gh versions return an error message instead of [] before checks exist.
+  # gh prints a message instead of [] before checks exist (with --required: "no required checks ...").
   case "$CHECKS_JSON" in
-    'no checks reported on '*) CHECKS_JSON='[]' ;;
+    'no checks reported on '*|'no required checks reported on '*) CHECKS_JSON='[]' ;;
   esac
   printf '%s\n' "$CHECKS_JSON" | jq -e '
     type == "array" and all(.[];
