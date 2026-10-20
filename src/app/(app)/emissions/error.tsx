@@ -21,8 +21,7 @@ export default function EmissionsErrorBoundary({
   return (
     <div className="container-max py-32">
       <div className="max-w-md border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-24">
-        <p className="title-chapter-title text-[var(--color-text-secondary)]">Emissions unavailable</p>
-        <h1 className="title-heading-2 mt-8">The emissions page could not be displayed.</h1>
+        <h1 className="title-heading-2">The emissions page could not be displayed.</h1>
         <p className="body-medium mt-16 text-[var(--color-text-secondary)]">
           Try again. If the page still does not load, share the reference below with the support team.
         </p>

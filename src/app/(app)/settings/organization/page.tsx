@@ -7,7 +7,6 @@ import { OrganizationSettings } from "@/components/organizations/organization-se
 import { SettingsConsole } from "@/components/settings";
 import { canOwnApiKey } from "@/lib/auth/api-scopes";
 import { getOrgContext } from "@/lib/auth/server";
-import { readActiveOrganization } from "@/lib/read-models";
 
 export default async function OrganizationSettingsPage() {
   const ctx = await getOrgContext();
@@ -17,7 +16,6 @@ export default async function OrganizationSettingsPage() {
     redirect("/dashboard");
   }
 
-  const org = await readActiveOrganization(ctx);
   const canManage =
     ctx.isPlatformAdmin || ctx.orgRole === "owner" || ctx.orgRole === "admin";
 
@@ -26,11 +24,6 @@ export default async function OrganizationSettingsPage() {
       title="Members"
       caption="Who can sign in to this organization, and what each of them may change."
       access="Owners and Admins"
-      subtitle={
-        org
-          ? `Manage members and access for ${org.name}.`
-          : "Manage members and access for your organization."
-      }
       canManageDefaults={canManage}
       canManageApiKeys={canOwnApiKey(ctx.orgRole)}
       isPlatformAdmin={ctx.isPlatformAdmin}

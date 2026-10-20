@@ -32,10 +32,7 @@ export default function CertificationErrorBoundary({
   return (
     <div className="flex min-h-[60vh] items-center justify-center p-24">
       <div className="max-w-md border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-24">
-        <p className="title-chapter-title text-[var(--color-text-secondary)]">
-          Certification unavailable
-        </p>
-        <h1 className="title-heading-2 mt-8">
+        <h1 className="title-heading-2">
           This certification step could not be displayed.
         </h1>
         <p className="body-medium mt-16 text-[var(--color-text-secondary)]">

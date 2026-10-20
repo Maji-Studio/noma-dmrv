@@ -615,7 +615,6 @@ export function ApplicationForm({
       <FormSection
         title="Evidence method"
         icon={<MapTrifoldIcon size={14} weight="bold" />}
-        hint="Choose one way to identify where the biochar was applied."
         fields={["evidenceMethod", "gisBoundary"]}
       >
         <ApplicationEvidencePanel

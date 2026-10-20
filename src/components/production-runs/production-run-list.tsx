@@ -442,7 +442,6 @@ export function ProductionRunList() {
         <PageHeader
           area="production"
           title="Production Runs"
-          subtitle="Pyrolysis batches from feedstock to biochar output"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its production runs." />
       </div>
@@ -476,7 +475,6 @@ export function ProductionRunList() {
       <PageHeader
         area="production"
         title="Production Runs"
-        subtitle="Pyrolysis batches from feedstock to biochar output"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -487,7 +485,7 @@ export function ProductionRunList() {
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
-        <StatCard title="Total runs" value={statsData?.totalRuns ?? 0} icon={<FireIcon size={24} weight="bold" />} description="All production batches" isLoading={statsLoading} />
+        <StatCard title="Total runs" value={statsData?.totalRuns ?? 0} icon={<FireIcon size={24} weight="bold" />} isLoading={statsLoading} />
         <StatCard
           title="Biochar output"
           value={
@@ -500,8 +498,8 @@ export function ProductionRunList() {
           icon={<LeafIcon size={24} weight="bold" />}
           isLoading={statsLoading}
         />
-        <StatCard title="Running" value={statsData?.runningCount ?? 0} icon={<ClockIcon size={24} weight="bold" />} description="Currently active runs" isLoading={statsLoading} />
-        <StatCard title="Completed" value={statsData?.completedCount ?? 0} icon={<CheckCircleIcon size={24} weight="bold" />} description="Finished production runs" isLoading={statsLoading} />
+        <StatCard title="Running" value={statsData?.runningCount ?? 0} icon={<ClockIcon size={24} weight="bold" />} isLoading={statsLoading} />
+        <StatCard title="Completed" value={statsData?.completedCount ?? 0} icon={<CheckCircleIcon size={24} weight="bold" />} isLoading={statsLoading} />
       </div>
 
       <RecordLockListNotice read={runLocks} />

@@ -35,7 +35,7 @@ test.describe("Security: Admin Panel Protection", () => {
 
     // Should redirect to login
     await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
-    await expect(page.locator('text="Sign in to your account"')).toBeVisible({
+    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible({
       timeout: 5000,
     });
   });

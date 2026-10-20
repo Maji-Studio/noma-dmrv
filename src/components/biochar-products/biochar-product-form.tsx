@@ -575,7 +575,7 @@ export function BiocharProductForm({
             id="waterAddedKg"
             label="Water added (kg)"
             error={errors.waterAddedKg?.message}
-            helperText={isEditMode ? POSTED_FIELD_HINT : "Water added to reach target moisture"}
+            helperText={isEditMode ? POSTED_FIELD_HINT : undefined}
             hint="Dry mass is unchanged by added water."
             required
           >

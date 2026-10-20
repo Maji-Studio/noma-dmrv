@@ -287,7 +287,7 @@ export function TransportLegForm({
               unit="kg"
               required
               error={errors.loadMassKg?.message}
-              helperText="Mass moved on this leg. Used to weight transport emissions."
+              helperText="Used to weight transport emissions."
               certifyRequired={isTransportLegCertifyField("loadMassKg")}
               certifyStatus={certStatus("loadMassKg")}
             >

@@ -52,7 +52,7 @@ function VehicleSection() {
         noun="vehicle"
         query={query}
         emptyIcon={<TruckIcon size={EMPTY_ICON_SIZE} />}
-        emptyDescription="Vehicles carry feedstock and biochar. Vehicle type and model year are kept as transport evidence."
+        emptyDescription="Vehicles carry feedstock and biochar."
         primary={(vehicle) => vehicle.name}
         secondary={(vehicle) =>
           joinDetails([vehicle.code, formatVehicleType(vehicle.vehicleType), vehicle.identifier, vehicle.fuelType])

@@ -14,7 +14,6 @@ export default async function ApiKeysPage() {
       title="API keys"
       caption="A key acts as its owner, limited to the permissions you select."
       access="Organization Owners and Admins"
-      subtitle="Manage API access for your organization."
       canManageDefaults={ctx.isPlatformAdmin || canManage}
       canManageApiKeys={canManage}
       isPlatformAdmin={ctx.isPlatformAdmin}
