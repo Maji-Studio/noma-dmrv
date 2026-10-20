@@ -22,8 +22,10 @@ import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-
 import { hasMissingFixedDatapoint } from "@/lib/certification/template-fixed-datapoints";
 import { sectionTemplateLines, type TemplateLineSection } from "@/lib/isometric/template-observations/template-sections";
 import { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE } from "@/lib/certification/requirement-labels";
+import { SOURCE_LABELS } from "@/lib/certification/removal-template-source-labels";
 
 export { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE };
+export { SOURCE_LABELS };
 /** Section grouping, lines still to decide and readiness, under the names the review uses. */
 export { isTemplateReady, linesToDecideCount, sectionTemplateLines };
 
@@ -47,19 +49,6 @@ export const ENTRY_POLICY_LABELS: Record<EntryPolicy, string> = {
   none: "No entries",
   additive: "Entries add to the total",
   single: "One entry per batch",
-};
-
-export const SOURCE_LABELS: Record<AutomaticSourceId, string> = {
-  "run-genset-diesel": "Generator diesel from production runs",
-  "run-startup-diesel": "Startup diesel from production runs",
-  "run-electricity": "Electricity from production runs",
-  "feedstock-transport": "Feedstock transport legs",
-  "delivery-transport": "Delivery transport legs",
-  "sample-transport": "Sample transport legs",
-  "feedstock-dry-mass": "Feedstock dry mass",
-  "biochar-dry-mass": "Biochar dry mass",
-  sequestration: "Applications and lab results",
-  "safety-margin": "Safety margin on biochar dry mass",
 };
 
 export const ORIGIN_LABELS: Record<LineContract["origin"], string> = {

@@ -91,9 +91,40 @@ it("keeps an added decision visible when an unused template already has a matchi
 it.each(["default", "pinned"])("refreshes facts for a %s template", async (use) => {
   if (use === "default") mocks.mapping.mockResolvedValue({ externalProjectId: fixture.project_id, defaultRemovalTemplateId: fixture.id });
   else mocks.batches.mockResolvedValue([{ id: "batch", code: "CB", version: 1, removalTemplateId: fixture.id }]);
-  await loadRemovalTemplateSetupCore(ctx, input.facilityId);
-  expect(mocks.facts).toHaveBeenCalledTimes(1);
+  const result = await loadRemovalTemplateSetupCore(ctx, input.facilityId);
+  expect(result.viewerCanManage).toBe(true);
+  expect(mocks.facts).toHaveBeenCalledExactlyOnceWith(ctx, {
+    client: {}, template: fixture, externalProjectId: fixture.project_id, blueprints: [],
+  });
   expect(mocks.preview).not.toHaveBeenCalled();
+});
+it.each(["default", "pinned", "unused"])("never observes a %s template for a Member", async (use) => {
+  if (use === "default") mocks.mapping.mockResolvedValue({ externalProjectId: fixture.project_id, defaultRemovalTemplateId: fixture.id });
+  if (use === "pinned") mocks.batches.mockResolvedValue([{ id: "batch", code: "CB", version: 1, removalTemplateId: fixture.id }]);
+  const member: OrgContext = { ...ctx, orgRole: "member" };
+  const result = await loadRemovalTemplateSetupCore(member, input.facilityId);
+  expect(result.fitting).toHaveLength(1);
+  expect(result.viewerCanManage).toBe(false);
+  expect(mocks.preview).toHaveBeenCalledWith({}, fixture, [], observation, fixture.project_id);
+  expect(mocks.facts).not.toHaveBeenCalled();
+  expect(mocks.transaction).not.toHaveBeenCalled();
+  expect(mocks.facilityGuard).toHaveBeenCalledWith(member, input.facilityId);
+});
+it.each(["matching", "missing"])("keeps a Member's default template read-only with a %s observation", async (stored) => {
+  const latest = stored === "matching" ? { ...observation,
+    semanticFingerprint: semanticFingerprint(definition, {}),
+    fullFingerprint: fullFingerprint(definition, {}),
+  } : null;
+  mocks.mapping.mockResolvedValue({ externalProjectId: fixture.project_id, defaultRemovalTemplateId: fixture.id });
+  mocks.latest.mockResolvedValue(latest);
+  const member: OrgContext = { ...ctx, orgRole: "member" };
+  const result = await loadRemovalTemplateSetupCore(member, input.facilityId);
+  expect(result.fitting).toHaveLength(1);
+  expect(mocks.preview).toHaveBeenCalledWith({}, fixture, [], latest, fixture.project_id);
+  if (latest) expect(mocks.previous).toHaveBeenCalledWith(member, "isometric", fixture.id, latest.id);
+  else expect(mocks.previous).not.toHaveBeenCalled();
+  expect(mocks.facts).not.toHaveBeenCalled();
+  expect(mocks.transaction).not.toHaveBeenCalled();
 });
 it("omits Reductions, names non-fitting Removals once and marks Members read-only", async () => {
   mocks.templates.mockResolvedValue([{ ...fixture, credit_type: "REDUCTION" }, { ...fixture, id: "empty", groups: [] }]);

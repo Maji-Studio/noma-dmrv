@@ -2,10 +2,11 @@ import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { SafeError } from "@/lib/errors";
 import { expectedSequestrationBlueprintKeys, isSequestrationBlueprintFamily, isStorageBlueprintKey, type DurabilityTier } from "@/lib/isometric/storage-blueprints";
 import { assertSequestrationTemplateSelectable } from "@/lib/isometric/transformers/sequestration-binding";
-import { catalogCandidates, hasCatalogDisambiguation } from "@/lib/isometric/template-observations/catalog-sources";
+import { catalogCandidates, hasCatalogDisambiguation, type AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
 import { allowedEntryPolicies } from "@/lib/isometric/template-observations/entry-policies";
 import { isAcceptableProposal, lineNeedsReview, type LineContract, type LineSources, type LineSourceProblem } from "@/lib/isometric/template-observations/line-sources";
 import type { ComponentChange, TemplateComponent, TemplateDefinition } from "@/lib/isometric/template-observations";
+import { SOURCE_LABELS } from "./removal-template-source-labels";
 
 export type SetupAssignment = Pick<LineContract, "scope" | "automaticSource" | "entryPolicy">;
 export interface SetupOption { id: string; label: string; assignments: Record<string, SetupAssignment> }
@@ -103,5 +104,30 @@ export function assignmentsFromPlan(plan: RemovalTemplateSetupPlan, answers: Rec
     if (!option) throw new SafeError("Choose an offered option for this component.");
     Object.assign(assignments, option.assignments);
   }
+  const usedSources = new Set<AutomaticSourceId>();
+  const allAssignments = { ...Object.fromEntries(plan.decided.map((line) => [line.component.id, line.contract])), ...assignments };
+  for (const assignment of Object.values(allAssignments)) {
+    const source = assignment?.automaticSource;
+    if (!source) continue;
+    if (usedSources.has(source)) {
+      const label = SOURCE_LABELS[source];
+      throw new SafeError(`${label ? `${label} is selected more than once. ` : ""}Each source can fill only one component. Choose a different source or Neither, entry.`);
+    }
+    usedSources.add(source);
+  }
   return assignments;
+}
+
+/** Includes decided sources and current defaults; unanswered decisions take nothing. */
+export function sourcesTakenElsewhere(plan: RemovalTemplateSetupPlan, answers: Record<string, string>, overrides: Record<string, string>, componentOrDecisionId: string): Set<AutomaticSourceId> {
+  const assignments: Record<string, SetupAssignment | undefined> = Object.fromEntries(plan.decided.map((line) => [line.component.id, line.contract]));
+  for (const decision of plan.decisions) {
+    Object.assign(assignments, decision.options.find((option) => option.id === answers[decision.id])?.assignments);
+  }
+  for (const line of plan.defaults) {
+    Object.assign(assignments, line.options.find((option) => option.id === (overrides[line.component.id] ?? line.proposal.id))?.assignments);
+  }
+  const excluded = new Set(plan.decisions.find((decision) => decision.id === componentOrDecisionId)?.components.map((line) => line.component.id) ?? [componentOrDecisionId]);
+  return new Set(Object.entries(assignments).flatMap(([componentId, assignment]) =>
+    !excluded.has(componentId) && assignment?.automaticSource ? [assignment.automaticSource] : []));
 }

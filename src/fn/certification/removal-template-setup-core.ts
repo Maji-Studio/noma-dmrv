@@ -29,6 +29,7 @@ async function setupContext(ctx: OrgContext, facilityId: string) {
 }
 
 export async function loadRemovalTemplateSetupCore(ctx: OrgContext, facilityId: string) {
+  const viewerCanManage = hasOrgRole(ctx, "admin");
   const { facility, mapping, client, templates } = await setupContext(ctx, facilityId);
   const [batches, blueprints, projects] = await Promise.all([
     listSetupCreditBatches(ctx, facilityId), listComponentBlueprints(client), listProjects(client),
@@ -40,7 +41,7 @@ export async function loadRemovalTemplateSetupCore(ctx: OrgContext, facilityId: 
     if ("reason" in fit) { notFitting.push({ id: template.id, name: template.display_name, reason: fit.reason }); continue; }
     const latest = await getLatestTemplateObservation(ctx, "isometric", template.id);
     const used = template.id === mapping.defaultRemovalTemplateId || batches.some((batch) => batch.removalTemplateId === template.id);
-    const facts = used ? await loadRemovalTemplateFacts(ctx, { client, template, externalProjectId: mapping.externalProjectId, blueprints }) : null;
+    const facts = viewerCanManage && used ? await loadRemovalTemplateFacts(ctx, { client, template, externalProjectId: mapping.externalProjectId, blueprints }) : null;
     const preview = facts ? null : await readOnlyEntry(client, template, blueprints, latest, mapping.externalProjectId);
     const observation = facts?.observation ?? null;
     const definition = normalizeTemplateDefinition(template);
@@ -76,7 +77,7 @@ export async function loadRemovalTemplateSetupCore(ctx: OrgContext, facilityId: 
     batchesWithoutTemplate: batches.filter((batch) => !batch.removalTemplateId).map(({ id, code, version }) => ({ id, code, version })),
     batchesOnOtherTemplates: batches.filter((batch) => batch.removalTemplateId && batch.removalTemplateId !== mapping.defaultRemovalTemplateId)
       .map((batch) => ({ code: batch.code, removalTemplateId: batch.removalTemplateId, templateName: templates.find((template) => template.id === batch.removalTemplateId)?.display_name ?? null })),
-    viewerCanManage: hasOrgRole(ctx, "admin"),
+    viewerCanManage,
   };
 }
 
