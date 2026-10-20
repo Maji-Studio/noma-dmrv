@@ -10,6 +10,8 @@ vi.mock("next/link", () => ({ default: ({ href, children, ...rest }: { href: str
 vi.mock("@/components/forms/section-label", () => ({ SectionLabel: ({ children }: { children: React.ReactNode }) => <h3>{children}</h3> }));
 
 import { CreditBatchEmissionsPanel } from "./credit-batch-emissions-panel";
+import { EmissionLinesBlockedError } from "@/lib/certification/emission-lines-blocked-error";
+import { removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 
 const line = (componentId: string, label: string, state: string) => ({ componentId, label, state });
 const render_ = (enabled = true) => render(<CreditBatchEmissionsPanel creditBatchId="cb-1" facilityId="f-1" enabled={enabled} />);
@@ -41,5 +43,29 @@ describe("CreditBatchEmissionsPanel", () => {
     render_();
     expect(screen.getByText("All lines recorded")).toBeTruthy();
     expect(screen.getByRole("link", { name: /Open emissions/ }).getAttribute("href")).toBe("/emissions/cb-1?facility=f-1");
+  });
+
+  it("explains an unpinned template and links to the batch template, without Retry", () => {
+    query.error = new EmissionLinesBlockedError(removalTemplateBlocker("unpinnedTemplate"));
+    render_();
+    expect(screen.getByText("Choose a Removal template for this credit batch.")).toBeTruthy();
+    const link = screen.getByRole("link", { name: "Set template" });
+    expect(link.getAttribute("href")).toContain("/credit-batches/cb-1");
+    expect(link.getAttribute("href")).toContain("facility=f-1");
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+  });
+
+  it("sends a line-review blocker to the template review", () => {
+    query.error = new EmissionLinesBlockedError(removalTemplateBlocker("templateNotFullyRead"));
+    render_();
+    expect(screen.getByRole("link", { name: "Review template lines" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+  });
+
+  it("keeps Retry for a real load failure", () => {
+    query.error = new Error("Network down");
+    render_();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Set template" })).toBeNull();
   });
 });
