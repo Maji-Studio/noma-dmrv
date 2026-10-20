@@ -70,6 +70,14 @@ vi.mock("@/lib/read-models/api-drivers", () => ({ readApiDriverList: vi.fn() }))
 vi.mock("@/lib/read-models/api-feedstocks", () => ({ readApiFeedstockList: vi.fn(), readApiFeedstock: vi.fn() }));
 
 const ENDPOINT = "http://localhost:3100/api/mcp";
+/** Far below the route's 30 s maxDuration; a listen stream that is still open here never ends. */
+const STREAM_END_LIMIT_MS = 2000;
+const MODERN_REVISION = "2026-07-28";
+const ENVELOPE = {
+  "io.modelcontextprotocol/protocolVersion": MODERN_REVISION,
+  "io.modelcontextprotocol/clientCapabilities": {},
+  "io.modelcontextprotocol/clientInfo": { name: "unit-test", version: "1" },
+};
 const rateHeaders = { "RateLimit-Limit": "600", "RateLimit-Remaining": "599", "RateLimit-Reset": "1" };
 function rpc(method: string, params: Record<string, unknown> = {}, headers: Record<string, string> = {}) {
   return new Request(ENDPOINT, { method: "POST", headers: {
@@ -495,4 +503,33 @@ it.each(LOCATION_WRITE_TOOLS)("returns a retryable deadline result for %s before
   const response = await call(name, { requestKey: "write" });
   expect(response.status).toBe(200);
   expect(await body(response)).toMatchObject({ result: { isError: true, structuredContent: { code: "deadline_exceeded", retryable: true } } });
+});
+
+function modernRequest(method: string, id: number, params: Record<string, unknown> = {}) {
+  return new Request(ENDPOINT, { method: "POST", headers: {
+    "content-type": "application/json", accept: "application/json, text/event-stream", authorization: "Bearer test-key",
+    "mcp-protocol-version": MODERN_REVISION, "mcp-method": method,
+  }, body: JSON.stringify({ jsonrpc: "2.0", id, method, params: { ...params, _meta: ENVELOPE } }) });
+}
+
+async function readsToEnd(response: Response) {
+  const reader = response.body!.getReader();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limit = new Promise<"open">((resolve) => { timer = setTimeout(() => resolve("open"), STREAM_END_LIMIT_MS); });
+  try {
+    for (;;) {
+      const next = await Promise.race([reader.read(), limit]);
+      if (next === "open") { await reader.cancel(); return false; }
+      if (next.done) return true;
+    }
+  } finally { clearTimeout(timer); }
+}
+
+// Stateless serverless MCP cannot push list changes; an open listen stream only burns the function to maxDuration.
+it("does not advertise tool list changes and closes subscriptions/listen at once", async () => {
+  const listen = await POST(modernRequest("subscriptions/listen", 1, { notifications: { toolsListChanged: true } }));
+  expect(listen.status).toBe(200);
+  expect(await readsToEnd(listen)).toBe(true);
+  const discover = await (await POST(modernRequest("server/discover", 2))).json();
+  expect(discover.result.capabilities.tools.listChanged).not.toBe(true);
 });
