@@ -196,6 +196,10 @@ Read directly from `process.env`, **not** validated by `env.ts`:
   parses the same shared schema used by `envSchema` directly from `process.env`.
   It always reads off in browser bundles, where this private variable is absent.
   Client code must receive gate-dependent results from the server.
+- `NEXT_PUBLIC_SHOT_MODE` — `next.config.ts` and
+  `src/components/navigation/sidebar-content.tsx`. Only the literal `true` counts and it is ignored when
+  `NODE_ENV=production`. Hides the sidebar account text and the dev indicator for PR screenshots
+  (the PR screenshots section of `docs/testing.md`). Never put it in a 1Password item or a deployment.
 - `LOG_LEVEL` — validated in `src/lib/log/index.ts`: `trace`, `debug`, `info`,
   `warn`, `error`, `fatal`, or `silent`. Unset/blank defaults to `info` in
   production and `debug` otherwise; invalid values are rejected.

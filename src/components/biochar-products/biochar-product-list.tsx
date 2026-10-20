@@ -22,10 +22,12 @@ import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import {
   PURE_BIOCHAR_LABEL,
 } from "@/config/product-labels";
+import type { BiocharProductStats } from "@/data-access/biochar-product-stats";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import {
   useBiocharProduct,
   useBiocharProducts,
+  useBiocharProductStats,
   useCreateBiocharProduct,
   useDeleteBiocharProduct,
   useUpdateBiocharProduct,
@@ -40,10 +42,9 @@ import {
 } from "@/hooks/use-list-pagination";
 import {
   deriveBlendEffectiveMoisturePercent,
-  deriveSourceBiocharDryMassKg,
   fromCompositionJsonb,
 } from "@/lib/biochar-composition";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { FACILITY_NOT_FOUND, MISSING_VALUE } from "@/lib/copy-utils";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   ENTITY_DEEP_LINK_MODE_PARAM,
@@ -53,7 +54,7 @@ import { formatDayString, formatDateRange } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
 } from "@/lib/mass-moisture";
-import { sumNullable, sumNullableBy } from "@/lib/nullable-sum";
+import { finalWetProductMassKg, sourceBiocharDryMassKg } from "@/lib/biochar-product-mass";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
 import {
   CubeIcon,
@@ -72,30 +73,6 @@ import { ILLUSTRATION_SIZE, BiocharProductArt } from "@/components/ui/illustrati
 
 const WET_PRODUCT_LABEL = "Wet product";
 const DRY_BIOCHAR_LABEL = "Dry biochar";
-
-function sourceBiocharDryMassKg(
-  product: Pick<
-    BiocharProductWithRelations,
-    | "massKg"
-    | "moistureContentPercent"
-    | "composition"
-    | "sourceAllocatedDryMassKg"
-  >,
-): number | null {
-  return product.sourceAllocatedDryMassKg ?? deriveSourceBiocharDryMassKg(
-    product.massKg,
-    product.moistureContentPercent,
-    fromCompositionJsonb(product.composition),
-  );
-}
-
-function finalWetProductMassKg(
-  product: Pick<BiocharProductWithRelations, "massKg" | "waterAddedKg">,
-): number | null {
-  return product.massKg == null
-    ? null
-    : sumNullable([product.massKg, product.waterAddedKg]);
-}
 
 function productEffectiveMoisturePercent(
   product: Pick<
@@ -145,7 +122,7 @@ function createColumns(
       header: "Facility",
       accessorFn: (row) => row.facility?.name ?? "",
       cell: ({ row }) =>
-        row.original.facility?.name || MISSING_VALUE.notAvailable,
+        row.original.facility?.name || FACILITY_NOT_FOUND,
     },
     {
       id: "formulation",
@@ -222,28 +199,25 @@ type SideSheetState =
   | { mode: "view"; entity: BiocharProductWithRelations }
   | { mode: "edit"; entity: BiocharProductWithRelations };
 
-interface BiocharProductPageMassSummaryProps {
-  products: BiocharProductWithRelations[];
+interface BiocharProductMassSummaryProps {
+  stats: Pick<BiocharProductStats, "totalWetMassKg" | "totalDryBiocharMassKg"> | undefined;
   isLoading?: boolean;
+  isError?: boolean;
 }
 
-export function BiocharProductPageMassSummary({
-  products,
+export function BiocharProductMassSummary({
+  stats,
   isLoading = false,
-}: BiocharProductPageMassSummaryProps) {
-  const wetKg = sumNullableBy(products, finalWetProductMassKg);
-  const dryMassesKg = products.map(sourceBiocharDryMassKg);
-  const dryKg = dryMassesKg.some((massKg) => massKg === null)
-    ? null
-    : sumNullable(dryMassesKg);
-
+  isError = false,
+}: BiocharProductMassSummaryProps) {
   return (
     <StatCard
-      title="Mass on this page"
+      title="Total mass"
+      description="Across all products in this facility"
       value={
         <MassPair
-          wetKg={wetKg}
-          dryKg={dryKg}
+          wetKg={stats?.totalWetMassKg ?? null}
+          dryKg={stats?.totalDryBiocharMassKg ?? null}
           wetLabel={WET_PRODUCT_LABEL}
           dryLabel={DRY_BIOCHAR_LABEL}
         />
@@ -251,6 +225,7 @@ export function BiocharProductPageMassSummary({
       valueLayout="breakdown"
       icon={<ScalesIcon size={24} weight="bold" />}
       isLoading={isLoading}
+      isError={isError}
     />
   );
 }
@@ -357,8 +332,10 @@ export function BiocharProductList() {
     toast,
   ]);
 
-  // Computed stats
-  const totalProducts = productsData?.total ?? 0;
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useBiocharProductStats(
+    contextFacilityId || undefined,
+    { enabled: !!contextFacilityId },
+  );
   const totalPages = productsData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -499,14 +476,13 @@ export function BiocharProductList() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
           title="Total products"
-          value={totalProducts}
+          value={statsData?.totalProducts ?? 0}
+          description="All products in this facility"
           icon={<CubeIcon size={24} weight="bold" />}
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
-        <BiocharProductPageMassSummary
-          products={products}
-          isLoading={isLoading}
-        />
+        <BiocharProductMassSummary stats={statsData} isLoading={statsLoading} isError={statsError} />
       </div>
 
       <RecordLockListNotice read={productLocks} />

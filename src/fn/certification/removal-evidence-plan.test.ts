@@ -1,3 +1,9 @@
+import { EMISSION_ENTRY_FILE_MISMATCH } from "@/lib/certification/emission-entry-messages";
+const warn = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/log", async (original) => {
+  const actual = await original<typeof import("@/lib/log")>();
+  return { ...actual, logger: { ...actual.logger, warn } };
+});
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./source-candidates", async (importOriginal) => ({
@@ -66,6 +72,7 @@ const template = {
 } as unknown as IsometricGhgEntryTemplate;
 
 const ctx = {
+  facilityTimezone: "UTC",
   lineages: [
     {
       application: { id: "application-1", code: "APP-001" },
@@ -167,4 +174,15 @@ describe("Removal evidence plan", () => {
     expect(evidence.sourceBindingPlan).toEqual([]);
     expect(evidence.semanticSourceBindingPlan).toEqual([]);
   });
+});
+
+it.each([true, false])("logs invalid entry bindings from either plan at the fn boundary (ready=%s)", async (ready) => {
+  const candidate = { documentId: "entry-file", binding: { nomaRole: "emission_entry", nomaRoleLabel: "Emissions entry",
+    lineage: { entityType: "emission_entry", entityId: "entry", entityLabel: "Private display label" },
+    intendedTarget: { kind: "explicit", componentId: "absent-component", inputKey: "mass" }, mappingRevision: "revision" } };
+  await expect(plan({ candidateSourceDocuments: [candidate] as never,
+    sourceBindingCandidates: (ready ? [{ ...candidate, sourceId: "source" }] : []) as never,
+  })).rejects.toThrow(EMISSION_ENTRY_FILE_MISMATCH);
+  expect(warn).toHaveBeenCalledExactlyOnceWith({ removalId: "removal-1", documentId: "entry-file", entryId: "entry",
+    componentId: "absent-component", inputKey: "mass" }, expect.any(String));
 });

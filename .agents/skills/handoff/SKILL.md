@@ -4,7 +4,7 @@ description: Compact the current conversation into a handoff document for anothe
 argument-hint: "What will the next session be used for?"
 ---
 
-Write a handoff document summarising the current conversation so a fresh agent can continue the work. Save to `~/.claude/projects/<project>/handoffs/<date>-<topic>.md` (the project's Claude Code folder, which outlives the session) - not the current workspace or OS temp.
+Write a handoff document summarising the current conversation so a fresh agent can continue the work. Save to `~/.claude/projects/<project>/handoffs/<date>-<topic>.md` (the project's Claude Code folder, which outlives the session) - not the current workspace or OS temp. When the file is written, print its absolute path in the final message so the user can paste it into the next session.
 
 Record the worktree, branch and PR for each piece of open work, and whether the user gave a merge OK (it does not carry over to the next session).
 

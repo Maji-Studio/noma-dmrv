@@ -61,7 +61,7 @@ import {
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { FACILITY_NOT_FOUND } from "@/lib/copy-utils";
 import { ILLUSTRATION_SIZE, ReactorArt } from "@/components/ui/illustrations";
 
 function productionRunDetailHref(run: ProductionRunWithRelations) {
@@ -105,7 +105,7 @@ function createColumns(
       header: "Facility",
       accessorFn: (row) => row.facilityName ?? "",
       cell: ({ row }) => (
-        <span>{row.original.facilityName || MISSING_VALUE.notAvailable}</span>
+        <span>{row.original.facilityName || FACILITY_NOT_FOUND}</span>
       ),
     },
     {
