@@ -1,5 +1,7 @@
 "use server";
 
+import { getBiocharProductStats as getBiocharProductStatsData, type BiocharProductStats } from "@/data-access/biochar-product-stats";
+
 import { deletePostedBiocharProduct } from "@/lib/operations/biochar-products";
 
 /**
@@ -58,6 +60,26 @@ export async function getBiocharProductsFn(
     fallbackMessage: "Failed to load biochar products",
     zodErrorPrefix: "Invalid filter parameters",
     log: { message: LOG_MESSAGE, context: { op: "biochar-product:list" } },
+  });
+}
+
+const biocharProductStatsFilterSchema = z.object({
+  facilityId: z.string().uuid().optional(),
+}).optional();
+
+export async function getBiocharProductStatsFn(
+  filters?: { facilityId?: string },
+): Promise<ActionResult<BiocharProductStats>> {
+  return withAction(async (ctx) => {
+    const validatedFilters = biocharProductStatsFilterSchema.parse(filters);
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
+    return getBiocharProductStatsData(ctx, validatedFilters);
+  }, {
+    fallbackMessage: "Failed to load biochar product stats",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: LOG_MESSAGE, context: { op: "biochar-product:stats" } },
   });
 }
 

@@ -40,7 +40,6 @@ import {
 } from "@/hooks/use-list-pagination";
 import {
   deriveBlendEffectiveMoisturePercent,
-  deriveSourceBiocharDryMassKg,
   fromCompositionJsonb,
 } from "@/lib/biochar-composition";
 import { MISSING_VALUE } from "@/lib/copy-utils";
@@ -53,6 +52,7 @@ import { formatDayString, formatDateRange } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
 } from "@/lib/mass-moisture";
+import { finalWetProductMassKg, sourceBiocharDryMassKg } from "@/lib/biochar-product-mass";
 import { sumNullable, sumNullableBy } from "@/lib/nullable-sum";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
 import {
@@ -72,30 +72,6 @@ import { ILLUSTRATION_SIZE, BiocharProductArt } from "@/components/ui/illustrati
 
 const WET_PRODUCT_LABEL = "Wet product";
 const DRY_BIOCHAR_LABEL = "Dry biochar";
-
-function sourceBiocharDryMassKg(
-  product: Pick<
-    BiocharProductWithRelations,
-    | "massKg"
-    | "moistureContentPercent"
-    | "composition"
-    | "sourceAllocatedDryMassKg"
-  >,
-): number | null {
-  return product.sourceAllocatedDryMassKg ?? deriveSourceBiocharDryMassKg(
-    product.massKg,
-    product.moistureContentPercent,
-    fromCompositionJsonb(product.composition),
-  );
-}
-
-function finalWetProductMassKg(
-  product: Pick<BiocharProductWithRelations, "massKg" | "waterAddedKg">,
-): number | null {
-  return product.massKg == null
-    ? null
-    : sumNullable([product.massKg, product.waterAddedKg]);
-}
 
 function productEffectiveMoisturePercent(
   product: Pick<

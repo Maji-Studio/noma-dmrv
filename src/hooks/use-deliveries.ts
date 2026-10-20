@@ -156,6 +156,7 @@ export function useCreateDelivery(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
       for (const row of data.savedProducts) {
         patchListCachesWithSavedRow(queryClient, biocharProductKeys.lists(), row);
         queryClient.setQueryData(biocharProductKeys.detail(row.id), (old: object | undefined) => old ? { ...old, ...row } : old);
@@ -265,6 +266,7 @@ export function useUpdateDelivery(
       return { previousDelivery, previousLists };
     },
     onSuccess: async ({ savedProducts, ...data }, variables) => {
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
       // A mass or moisture edit re-posted stock: merge the products' new versions, then refresh what reads stock.
       for (const row of savedProducts) {
         patchListCachesWithSavedRow(queryClient, biocharProductKeys.lists(), row);
@@ -381,6 +383,7 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
       return { previousDelivery, previousLists };
     },
     onSuccess: async (_, variables) => {
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
       const { deliveryId } = variables;
       // Remove specific delivery from cache
       queryClient.removeQueries({ queryKey: deliveryKeys.detail(deliveryId) });
