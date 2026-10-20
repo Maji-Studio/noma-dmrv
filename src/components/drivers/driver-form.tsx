@@ -1,5 +1,6 @@
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput } from "@/components/forms";
@@ -27,6 +28,7 @@ export function DriverForm({
   errorMessage,
   submitLabel,
 }: DriverFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!driver;
 
   const {
@@ -44,7 +46,7 @@ export function DriverForm({
   });
 
   return (
-    <form onSubmit={handleSubmit((data) => onSubmit(data))} className="space-y-20">
+    <form onSubmit={latched(handleSubmit((data) => onSubmit(data)))} className="space-y-20">
       <FormField id="name" label="Name" error={errors.name?.message} required>
         <FormInput
           id="name"

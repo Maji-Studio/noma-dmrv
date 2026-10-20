@@ -23,6 +23,7 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { numericValue } from "@/lib/form-utils";
 import { facilityTimeCue } from "@/lib/date-utils";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
@@ -122,6 +123,7 @@ export function SampleForm({
   focusTarget,
   hideTransport = false,
 }: SampleFormProps) {
+  const latched = useLatchedSubmit();
   const formId = useId();
   const isEditMode = !!sample;
   const { facilityId: contextFacilityId } = useFacilityContext();
@@ -318,7 +320,7 @@ export function SampleForm({
 
   const defaultSubmitLabel = isEditMode ? "Update Sample" : "Create Sample";
 
-  const handleFormSubmit = handleSubmit((entered) => {
+  const handleFormSubmit = latched(handleSubmit((entered) => {
     if (!samplingClock.ready) {
       setError("samplingTime", { type: "validate", message: samplingClock.hint });
       return;
@@ -335,8 +337,8 @@ export function SampleForm({
       setError(error.ratio, { type: "max", message: Number.isFinite(error.value) ? RATIO_MAX_MESSAGE : error.message });
       return;
     }
-    onSubmit(submission as unknown as SampleFormData);
-  });
+    return onSubmit(submission as unknown as SampleFormData);
+  }));
 
   return (
     <div className="space-y-20">

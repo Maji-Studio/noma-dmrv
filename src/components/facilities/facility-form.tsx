@@ -1,5 +1,6 @@
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -70,6 +71,7 @@ export function FacilityForm({
   submitLabel,
   cancelLabel,
 }: FacilityFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!facility;
   // Organization operating defaults seed create mode only; an existing record
   // always wins. Warmed once per session in FacilityProvider, so this is a
@@ -123,7 +125,7 @@ export function FacilityForm({
   // or a settled mutation still allows a later legitimate resubmit.
   const submitLockRef = useRef(false);
 
-  const handleFormSubmit = handleSubmit(async (data) => {
+  const handleFormSubmit = latched(handleSubmit(async (data) => {
     if (submitLockRef.current) return;
     submitLockRef.current = true;
     try {
@@ -131,7 +133,7 @@ export function FacilityForm({
     } finally {
       submitLockRef.current = false;
     }
-  });
+  }));
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">

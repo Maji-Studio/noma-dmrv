@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { pluralize } from "@/lib/copy-utils";
 import {
   useDeferredAttachments,
@@ -203,6 +203,7 @@ export function useCreateWithEvidence<
   options: UseCreateWithEvidenceOptions<TInput, TEntity, TResult>,
 ): UseCreateWithEvidenceResult<TInput> {
   const deferredAttachments = useDeferredAttachments();
+  const inFlight = useRef<Promise<void> | null>(null);
   const [createdEntityIds, setCreatedEntityIds] = useState<string[]>([]);
   const [isFlushing, setIsFlushing] = useState(false);
   const unsavedAttachmentCount = deferredAttachments.attachments.filter(
@@ -210,14 +211,19 @@ export function useCreateWithEvidence<
   ).length;
 
   function handleCreate(input: TInput) {
-    return runCreateWithEvidenceChoreography({
+    if (inFlight.current) return inFlight.current;
+    // Share the entire create + evidence choreography, including failure cleanup.
+    inFlight.current = runCreateWithEvidenceChoreography({
       ...options,
       input,
       flushMany: deferredAttachments.flushMany,
       clearAttachments: deferredAttachments.clear,
       retainCreatedEntityIds: setCreatedEntityIds,
       setFlushing: setIsFlushing,
+    }).finally(() => {
+      inFlight.current = null;
     });
+    return inFlight.current;
   }
 
   function guardUpdate(hasAdditionalUnresolved = false): boolean {
