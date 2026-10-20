@@ -107,19 +107,19 @@ function main(): void {
     generate([]);
 
     const generatedFile = join(directory, `${nextTag}.sql`);
-    const previousSql = readFileSync(join(backupDirectory, `${branchOnly.at(-1)!}.sql`));
+    // Collapsed migrations are compared as one chain, joined the way drizzle-kit joins statements.
+    const previousSql = Buffer.from(branchOnly
+      .map((tag) => readFileSync(join(backupDirectory!, `${tag}.sql`), "utf8"))
+      .join(`\n${STATEMENT_BREAKPOINT}\n`));
     if (!existsSync(generatedFile)) {
       // No schema diff: the branch migration was hand-written SQL only (triggers, functions, data).
       generate(["--custom"]);
-      const allSql = branchOnly
-        .map((tag) => readFileSync(join(backupDirectory!, `${tag}.sql`), "utf8"))
-        .join(`\n${STATEMENT_BREAKPOINT}\n`);
-      writeFileSync(generatedFile, allSql);
+      writeFileSync(generatedFile, previousSql);
       console.log("No schema changes found; kept the hand-written SQL as a custom migration.");
     } else if (readFileSync(generatedFile).equals(previousSql)) {
-      console.log("Generated SQL is identical to the last branch migration's backed-up SQL.");
+      console.log("Generated SQL is identical to the backed-up SQL of the branch migration(s).");
     } else {
-      console.warn(`WARNING: Generated SQL differs from the last branch migration. Re-apply hand-written SQL from ${backupDirectory}.`);
+      console.warn(`WARNING: Generated SQL differs from the branch migration SQL. Re-apply hand-written SQL from ${backupDirectory}.`);
     }
     if (branchOnly.length > SINGLE_MIGRATION_COUNT) {
       console.warn(`Collapsed ${branchOnly.length} branch migrations into one. Review all SQL backups in ${backupDirectory}.`);
