@@ -185,4 +185,22 @@ describe("CreditBatchTemplateSwitchDialog", () => {
       creditBatchId: BATCH.id, removalTemplateId: "rvt_new", expectedVersion: 5,
     });
   });
+
+  it("keeps only the current template choosable when readiness cannot be read", async () => {
+    const retry = vi.fn();
+    render(
+      <CreditBatchTemplateSwitchDialog
+        isOpen onClose={onClose} onStale={onStale} creditBatch={BATCH} defaultTemplateId="rvt_new"
+        templates={TEMPLATES} templatesLoading={false} templatesError={null}
+        readinessError onRetryReadiness={retry}
+      />,
+    );
+    await screen.findByRole("dialog", { name: "Switch template" });
+    const select = document.getElementById("removalTemplateId") as HTMLSelectElement;
+    const option = (id: string) => [...select.options].find((candidate) => candidate.value === id)!;
+    expect(option("rvt_old").disabled).toBe(false);
+    expect(option("rvt_new").disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(retry).toHaveBeenCalledOnce();
+  });
 });

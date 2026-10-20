@@ -62,7 +62,7 @@ export function CreditBatchRemovalTemplate({
   const needsTemplates = !!pinnedId || switching;
   const templates = useIsometricProjectTemplates(needsTemplates ? projectId : null);
   // Readiness comes from Removal templates, read only while the dialog is open.
-  const review = useRemovalTemplateReview(batch.facilityId, switching && canManage);
+  const review = useRemovalTemplateReview(batch.facilityId, switching && canManage, { fresh: true });
   const readiness = review.data
     ? new Map(review.data.map((entry) => [entry.templateId, templateReadiness(entry)]))
     : undefined;
@@ -129,6 +129,8 @@ export function CreditBatchRemovalTemplate({
           templatesError={templates.error}
           readiness={readiness}
           readinessLoading={review.isLoading}
+          readinessError={review.isError && !review.data}
+          onRetryReadiness={() => void review.refetch()}
           unavailableReason={summary.isSuccess && !projectId
             ? "Link this facility to an Isometric project in Certification settings first."
             : undefined}

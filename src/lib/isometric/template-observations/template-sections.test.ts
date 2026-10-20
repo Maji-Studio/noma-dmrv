@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fixture from "../../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
+import enrichment from "../../../../tests/fixtures/isometric/sandbox-enrichment-2026-10-15.json";
+import type { IsometricComponentBlueprint } from "../projects";
 import { sectionTemplateLines, templateLineSection, type ComponentType } from "./template-sections";
 import { normalizeTemplateDefinition } from "./normalize";
 import type { GhgEntryTemplate } from "./types";
@@ -20,7 +22,10 @@ describe("templateLineSection", () => {
 
 it("matches the sandbox sections, group counts and display-name order", () => {
   const template = fixture as GhgEntryTemplate;
-  const lines = removalTemplateReviewLines(normalizeTemplateDefinition(template), {}, {}, [], template);
+  // The sandbox's own blueprint catalog, so sections come from blueprint types, not the key fallback.
+  const blueprints = enrichment.blueprints as IsometricComponentBlueprint[];
+  const lines = removalTemplateReviewLines(normalizeTemplateDefinition(template), {}, {}, blueprints, template);
+  expect(lines.every((line) => line.blueprintType !== null)).toBe(true);
   const before = structuredClone(lines);
   const sections = sectionTemplateLines(lines);
   expect(sections.map(({ section, lineCount, groups }) => ({

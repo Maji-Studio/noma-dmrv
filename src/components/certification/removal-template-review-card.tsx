@@ -122,7 +122,7 @@ export function RemovalTemplateReviewCard({
   const setDefault = useSetFacilityDefaultRemovalTemplate();
   const startSetup = useStartRemovalTemplateSetup();
   const toast = useToast();
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [expandedByToggle, setExpanded] = useState(defaultExpanded);
 
   const name = templateName(entry);
   const notFullyRead = isNotFullyRead(entry);
@@ -208,6 +208,9 @@ export function RemovalTemplateReviewCard({
     }
   };
   const bodyId = `${headingId}-lines`;
+  // Unsaved drafts and problems that need attention never sit behind "Show lines".
+  const needsAttention = missing || notFullyRead;
+  const expanded = expandedByToggle || pendingCount > 0 || needsAttention;
 
   return (
     <article
@@ -233,21 +236,23 @@ export function RemovalTemplateReviewCard({
               Make default
             </Button>
           )}
-          <Button
-            size="small"
-            variant="noOutline"
-            aria-expanded={expanded}
-            aria-controls={bodyId}
-            onClick={() => setExpanded((open) => !open)}
-          >
-            {expanded ? "Hide lines" : "Show lines"}
-            <CaretDownIcon
-              size={14}
-              weight="bold"
-              aria-hidden
-              className={expanded ? "rotate-180 transition-[rotate] duration-200" : "transition-[rotate] duration-200"}
-            />
-          </Button>
+          {pendingCount === 0 && !needsAttention && (
+            <Button
+              size="small"
+              variant="noOutline"
+              aria-expanded={expanded}
+              aria-controls={bodyId}
+              onClick={() => setExpanded((open) => !open)}
+            >
+              {expanded ? "Hide lines" : "Show lines"}
+              <CaretDownIcon
+                size={14}
+                weight="bold"
+                aria-hidden
+                className={expanded ? "rotate-180 transition-[rotate] duration-200" : "transition-[rotate] duration-200"}
+              />
+            </Button>
+          )}
         </div>
       </header>
 
@@ -265,7 +270,9 @@ export function RemovalTemplateReviewCard({
               </Link>
             }
           >
-            Switch the credit batches that use it to another Removal template.
+            {entry.isDefault
+              ? "Make another Removal template the default, and switch the credit batches that use it."
+              : "Switch the credit batches that use it to another Removal template."}
           </Notice>
         ) : (
           <form

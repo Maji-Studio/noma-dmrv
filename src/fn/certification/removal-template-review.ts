@@ -127,6 +127,8 @@ export async function switchCreditBatchRemovalTemplate(input: SwitchCreditBatchR
       })) throw new SafeError(notReadyMessage);
     }
     const facts = await loadRemovalTemplateFacts(ctx, { client, template, externalProjectId: mapping.externalProjectId, blueprints: await listComponentBlueprints(client) });
+    // A failed read is not a line to decide: say what actually blocks the switch.
+    if (changingTemplate && !facts.observation) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
     if (changingTemplate && !isTemplateReady({
       availability: "listed", template, observation: facts.observation,
       enrichmentProblems: facts.enrichmentProblems, lineSourceProblems: facts.lineSourceProblems,

@@ -75,6 +75,9 @@ export interface CreditBatchTemplateSwitchDialogProps {
    */
   readiness?: ReadonlyMap<string, TemplateReadiness>;
   readinessLoading?: boolean;
+  /** Readiness could not be read: only the current template stays selectable. */
+  readinessError?: boolean;
+  onRetryReadiness?: () => void;
 }
 
 export interface TemplateReadiness {
@@ -102,6 +105,8 @@ function SwitchTemplateForm({
   unavailableReason,
   readiness,
   readinessLoading = false,
+  readinessError = false,
+  onRetryReadiness,
 }: CreditBatchTemplateSwitchDialogProps) {
   const {
     control,
@@ -145,7 +150,8 @@ function SwitchTemplateForm({
       code: template.id,
       name: template.display_name,
       subtitle: notes.length ? notes.join(", ") : undefined,
-      disabled: notReadyIds.has(template.id),
+      // Without readiness nothing but the current template is known to be choosable.
+      disabled: notReadyIds.has(template.id) || (readinessError && !current),
     };
   });
   const unchanged = field.value === baseline.removalTemplateId;
@@ -211,6 +217,17 @@ function SwitchTemplateForm({
           onBlur={field.onBlur}
         />
       </FormField>
+
+      {!unavailableReason && readinessError && (
+        <Notice
+          tone="warning"
+          action={onRetryReadiness ? (
+            <Button size="small" variant="weak" onClick={onRetryReadiness}>Try again</Button>
+          ) : undefined}
+        >
+          Which templates are ready could not be read from Isometric. Try again to choose another template.
+        </Notice>
+      )}
 
       {!unavailableReason && notReady.length > 0 && (
         <Notice tone="info" title="Not ready for credit batches">

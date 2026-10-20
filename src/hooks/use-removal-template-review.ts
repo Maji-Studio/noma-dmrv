@@ -35,11 +35,17 @@ export function useStartRemovalTemplateSetup() {
     onSuccess: () => client.invalidateQueries({ queryKey: certificationKeys.all }),
   });
 }
-export function useRemovalTemplateReview(facilityId: string, enabled = true) {
+/**
+ * `fresh` reads again whenever the window regains focus: the batch dialog
+ * sends "Decide lines" to a new tab and must see those decisions on return.
+ */
+export function useRemovalTemplateReview(facilityId: string, enabled = true, { fresh = false } = {}) {
   return useQuery({
     queryKey: certificationKeys.removalTemplateReview(facilityId),
     queryFn: async () => unwrap(await loadRemovalTemplateReview(facilityId)),
-    enabled: enabled && !!facilityId, staleTime: REVIEW_STALE_MS,
+    enabled: enabled && !!facilityId,
+    staleTime: fresh ? 0 : REVIEW_STALE_MS,
+    refetchOnWindowFocus: fresh,
   });
 }
 
