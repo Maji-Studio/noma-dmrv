@@ -102,8 +102,11 @@ Re-run the migrate line after pulling new migrations. A worktree made with
 `scripts/worktree.sh` gets its own test database.
 
 Vitest checks the test DB's migration count and latest timestamp before suites
-load and reports how to migrate a stale DB. A DB ahead of or diverged from this
-branch's journal must be reset or recreated. It never repairs the DB automatically.
+load. Local runs auto-migrate a stale local database only when its decoded name
+matches `^noma_dmrv_wt_[a-z0-9_]+_test$`, with no target override parameters,
+and its history matches a prefix of this branch's journal. Other databases and
+CI still throw with migration instructions. A DB ahead of or diverged from this
+branch's journal must be reset or recreated.
 Set `VITEST_SKIP_MIGRATION_CHECK=1` for pure unit runs without a DB; the check
 also skips when no DB URL is configured.
 
@@ -354,7 +357,8 @@ Parallel sessions each work in their own worktree, one writer per worktree.
 ```bash
 scripts/worktree.sh new <name> <type/branch>   # .claude/worktrees/<name>, cut from origin/staging
 scripts/worktree.sh status                      # owners, ports, servers, PR state, unmanaged leftovers
-scripts/worktree.sh teardown <name>             # only what `new` recorded for <name>
+scripts/worktree.sh migrate <name>              # migrate both recorded dev and test databases
+scripts/worktree.sh teardown <name> [--force] [--dry-run] # only what `new` recorded for <name>
 ```
 
 `new` creates `noma_dmrv_wt_<name>_dev` (dev server and Playwright fixtures) and
@@ -365,6 +369,10 @@ the test DB. It cuts the branch with `--no-track`, so a bare `git push` never
 targets `staging`. It does not seed; run `pnpm db:seed` there if you need data.
 
 See [the Vitest migration preflight](#vitest-only-runs-against-a-throwaway-database) for migration and reset guidance.
+After pulling migrations, run `scripts/worktree.sh migrate <name>` to update
+both databases. Vitest can auto-migrate its stale worktree test DB, but
+Playwright also needs the dev DB migrated. Database names replace worktree
+name hyphens with underscores.
 
 - Start the dev server with the one-line command `new` prints, in your own
   terminal: background commands from an agent stop after two hours. Don't use
@@ -375,7 +383,12 @@ See [the Vitest migration preflight](#vitest-only-runs-against-a-throwaway-datab
   the worktree's own server.
 - `teardown` runs from outside the worktree and refuses while it has uncommitted
   changes. A worktree another session (or you, from a terminal) created needs
-  `--force`, after checking with its owner. It stops only processes running
+  `--force`, after checking with its owner, unless it is registered and clean and
+  its HEAD is part of a merged PR for the branch (checked with `gh`; a squash
+  merge deletes the upstream, so the PR head is the reference). The skip is
+  printed. `--dry-run` runs the checks and previews removals without changing
+  anything; it combines with `--force` in either order.
+  Teardown stops only processes running
   inside the worktree, drops only databases `new` recorded as created, and
   deletes the branch only if it is merged.
 - `status` lists worktrees and `noma_dmrv_*` databases the script did not

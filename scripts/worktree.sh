@@ -4,13 +4,15 @@
 #
 #   scripts/worktree.sh new <name> <branch>   worktree at .claude/worktrees/<name>, cut from origin/staging
 #   scripts/worktree.sh status                 managed worktrees, DBs, ports, owners, PR state, and strays
-#   scripts/worktree.sh teardown <name> [--force]
+#   scripts/worktree.sh migrate <name>         migrate both recorded worktree databases
+#   scripts/worktree.sh teardown <name> [--force] [--dry-run]
 #
 # `new` claims the name and a port atomically (mkdir), copies .env.local and .env.test by name,
 # creates noma_dmrv_wt_<name>_dev (dev server, Playwright) and noma_dmrv_wt_<name>_test (Vitest),
 # installs, resets and migrates both, and records them in .claude/worktrees/.owners/<name>/owner.
 # `teardown` removes only what that record lists as created, refuses from inside the worktree or
-# while it has uncommitted changes, and needs --force for another session's worktree.
+# while it has uncommitted changes, and needs --force for another session's worktree unless
+# it is clean and its HEAD is part of a merged PR. --dry-run checks and previews without removing anything.
 # See docs/testing.md#worktrees.
 set -euo pipefail
 
@@ -70,6 +72,20 @@ read_owner() {
   [ -f "$file" ] || die "no owner record for '$1' (not created by this script, or already torn down)"
   # shellcheck disable=SC1090
   . "$file"
+}
+
+cmd_migrate() {
+  local name="${1:-}" dev_url test_url
+  [ -n "$name" ] || die "usage: migrate <name>"
+  read_owner "$name"
+  [ -n "${WT_PATH:-}" ] && [ -d "$WT_PATH" ] || die "worktree directory missing for '$name'"
+  [ -n "${WT_DEV_DB:-}" ] && [ -n "${WT_TEST_DB:-}" ] || die "database names missing from owner record for '$name'"
+  dev_url="$(db_url_for "$WT_DEV_DB")"
+  test_url="$(db_url_for "$WT_TEST_DB")"
+  info "migrating $WT_DEV_DB"
+  (cd "$WT_PATH" && DATABASE_URL="$dev_url" pnpm -s db:migrate)
+  info "migrating $WT_TEST_DB"
+  (cd "$WT_PATH" && DATABASE_URL="$test_url" pnpm -s db:migrate)
 }
 
 cmd_new() {
@@ -252,12 +268,48 @@ stop_processes_in() {
   die "processes still running after waiting $STOP_WAIT_TICKS x ${STOP_TICK_SECONDS}s:$pids; stop them and rerun (nothing was removed)"
 }
 
+# Succeeds, printing why, when nothing of this worktree can be lost: it is clean and every commit
+# on its HEAD is part of a merged PR for the branch. A squash merge deletes the remote branch, so
+# the check is against the merged PR's head commit, not an upstream that no longer exists.
+merged_clean_reason() {
+  local head pr_number pr_head
+  [ -d "$WT_PATH" ] || return 1
+  git -C "$MAIN" worktree list --porcelain | grep -xF "worktree $WT_PATH" >/dev/null || return 1
+  [ -z "$(git -C "$WT_PATH" status --porcelain)" ] || return 1
+  head="$(git -C "$WT_PATH" rev-parse HEAD)" || return 1
+  command -v gh >/dev/null || return 1
+  while read -r pr_number pr_head; do
+    [[ "$pr_number" =~ ^[0-9]+$ ]] || continue
+    if [ "$head" = "$pr_head" ] ||
+      { git -C "$WT_PATH" cat-file -e "${pr_head}^{commit}" 2>/dev/null &&
+        git -C "$WT_PATH" merge-base --is-ancestor "$head" "$pr_head"; }; then
+      printf 'clean worktree, HEAD is part of merged PR #%s' "$pr_number"
+      return 0
+    fi
+  done < <(cd "$MAIN" && gh pr list --head "$WT_BRANCH" --state merged --json number,headRefOid \
+    --jq '.[] | "\(.number) \(.headRefOid)"' 2>/dev/null)
+  return 1
+}
+
 cmd_teardown() {
-  local name="${1:-}" force="${2:-}"
-  [ -n "$name" ] || die "usage: teardown <name> [--force]"
+  local name="${1:-}" force=0 dry_run=0 reason
+  [ -n "$name" ] || die "usage: teardown <name> [--force] [--dry-run]"
+  shift
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --force) force=1 ;;
+      --dry-run) dry_run=1 ;;
+      *) die "usage: teardown <name> [--force] [--dry-run]" ;;
+    esac
+    shift
+  done
   read_owner "$name"
-  if [ "$OWNER_SESSION" != "$SESSION" ] && [ "$force" != "--force" ]; then
-    die "'$name' belongs to session $OWNER_SESSION; check with that session, then rerun with --force"
+  if [ "$OWNER_SESSION" != "$SESSION" ] && [ "$force" != 1 ]; then
+    if reason="$(merged_clean_reason)"; then
+      info "skipping owner check for '$name': $reason"
+    else
+      die "'$name' belongs to session $OWNER_SESSION; check with that session, then rerun with --force"
+    fi
   fi
   case "$PWD/" in
     "$WT_PATH"/*) die "run teardown from outside $WT_PATH (e.g. cd \"$MAIN\")" ;;
@@ -268,6 +320,23 @@ cmd_teardown() {
       die "$WT_PATH exists but is no longer a git worktree (an interrupted teardown?); inspect it, delete it, rerun"
     [ -z "$(git -C "$WT_PATH" status --porcelain)" ] ||
       die "$WT_PATH has uncommitted changes; commit or discard them first (nothing was removed)"
+  fi
+
+  if [ "$dry_run" = 1 ]; then
+    if [ -d "$WT_PATH" ] || git -C "$MAIN" worktree list --porcelain | grep -xF "worktree $WT_PATH" >/dev/null; then
+      info "would remove worktree $WT_PATH"
+    fi
+    for db in ${WT_DBS_CREATED:-}; do
+      info "would drop $db"
+    done
+    if [ "$WT_BRANCH_CREATED" = 1 ] && git -C "$MAIN" show-ref --verify --quiet "refs/heads/$WT_BRANCH"; then
+      info "would delete branch $WT_BRANCH if merged (otherwise keep it)"
+    fi
+    info "would remove port claim $WT_PORT and owner record for '$name'"
+    return 0
+  fi
+
+  if [ -d "$WT_PATH" ]; then
     stop_processes_in "$WT_PATH"
     port_listening "$WT_PORT" && info "something else still listens on :$WT_PORT; left running"
     git -C "$MAIN" worktree remove "$WT_PATH"
@@ -298,6 +367,7 @@ cmd_teardown() {
 case "${1:-}" in
   new) shift; cmd_new "$@" ;;
   status) cmd_status ;;
+  migrate) shift; cmd_migrate "$@" ;;
   teardown) shift; cmd_teardown "$@" ;;
   *) sed -n '2,/^set -euo/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac

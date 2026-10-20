@@ -13,7 +13,7 @@ import { isLocalHost } from "./local-host";
 
 const THROWAWAY_NAME = /(^|_)(test|e2e)(_|$)/;
 /** pg lets these query parameters override the URL's host and database. */
-const TARGET_OVERRIDE_PARAMS = ["host", "hostaddr", "database", "dbname"];
+export const TARGET_OVERRIDE_PARAMS = ["host", "hostaddr", "database", "dbname"];
 
 /**
  * Vitest reads TEST_DATABASE_URL first. Playwright reads only DATABASE_URL
