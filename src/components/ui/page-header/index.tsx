@@ -31,7 +31,7 @@ interface PageHeaderProps {
   /** Override the eyebrow text (defaults to the area label). */
   eyebrow?: string;
   title: string;
-  /** One-line page description — every list page should have one. */
+  /** Optional one-line subtitle. Use it only when it adds something the title lacks: scope, what is counted, or a constraint. */
   subtitle?: string;
   /** Right-aligned slot, typically the New Entity button. */
   actions?: React.ReactNode;
