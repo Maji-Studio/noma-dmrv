@@ -267,7 +267,7 @@ companion inherits this file's schema, invariants, and resolution rules.
   actually found (feedstock and biochar transport) when the scheduled live
   workflows were repaired, so `sampling-required-for-mrv` is no longer exercised
   against the registry.
-- The legacy binding remains available with the gate off:
+- Catalog projections stay stable, but runtime sample sources are always excluded:
   `src/lib/isometric/semantic-binding-catalog.ts` declares
   `sampling-required-for-mrv / mass_distance_based_ci_emissions /
   mass_distance` (`INPUT_MAPPING`, the certify field registry tuples and the

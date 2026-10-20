@@ -227,6 +227,19 @@ it("records feedstock-owned transport and its documents against the batch", asyn
   expect((await events("document", document.id))[0].creditBatchId).toBe(fixture.batch.id);
 });
 
+it("records sample-owned transport and its documents against the sample's batch", async () => {
+  const sample = await insertSample();
+  // New sample legs are refused; this row represents a leg saved before retirement.
+  const [leg] = await db.insert(transportLegs).values({
+    ...legInput(), organizationId: ctx.organizationId, entityType: "sample", entityId: sample.id, calculationMethodType: "distance_based",
+  }).returning();
+  const document = await insertDocument(ctx, documentInput("transport_leg", leg.id));
+  expect((await events("document", document.id))[0].creditBatchId).toBe(fixture.batch.id);
+  await runOperationInProcess(deleteLabSample, ctx, { labSampleId: sample.id, expectedVersion: sample.version });
+  expect((await events("transport_leg", leg.id))[0]).toMatchObject({ action: "deleted", source: "form", actorUserId: ctx.userId, creditBatchId: fixture.batch.id });
+  expect((await events("document", document.id))[0]).toMatchObject({ action: "deleted", source: "form", actorUserId: ctx.userId, creditBatchId: fixture.batch.id });
+});
+
 it("records cascade transport deletes and document retirement with captured ownership", async () => {
   const leg = await createTransportLeg(ctx, legInput());
   const document = await insertDocument(ctx, documentInput("transport_leg", leg.id));
@@ -267,9 +280,14 @@ it("upserts identical derived syncs without events and records changed fields on
   for (const row of rows) expect(row).toMatchObject({ source: "system", actorUserId: ctx.userId, creditBatchId: fixture.batch.id });
 });
 
-it.each(["form", "rest", "mcp", "script"] as const)("preserves %s source through lab-sample and document deletion", async source => {
+it.each(["form", "rest", "mcp", "script"] as const)("preserves %s source through lab-sample leg and document deletion", async source => {
   const sample = await insertSample();
+  // New sample legs are refused; this row represents a leg saved before retirement.
+  const [leg] = await db.insert(transportLegs).values({
+    ...legInput(), organizationId: ctx.organizationId, entityType: "sample", entityId: sample.id, calculationMethodType: "distance_based",
+  }).returning();
   const sampleDocument = await insertDocument(ctx, documentInput("sample", sample.id));
+  const legDocument = await insertDocument(ctx, documentInput("transport_leg", leg.id));
   const input = { labSampleId: sample.id, expectedVersion: sample.version };
   if (source === "form") await runOperationInProcess(deleteLabSample, ctx, input);
   else if (source === "script") await runOperation(deleteLabSample, ctx, input, { activitySource: source });
@@ -277,7 +295,7 @@ it.each(["form", "rest", "mcp", "script"] as const)("preserves %s source through
   expect(await events("lab_sample", sample.id)).toMatchObject([
     { action: "deleted", source, actorUserId: source === "script" ? null : ctx.userId, creditBatchId: fixture.batch.id },
   ]);
-  for (const [type, id] of [["document", sampleDocument.id]] as const) {
+  for (const [type, id] of [["transport_leg", leg.id], ["document", sampleDocument.id], ["document", legDocument.id]] as const) {
     expect((await events(type, id))[0]).toMatchObject({ action: "deleted", source, actorUserId: source === "script" ? null : ctx.userId, creditBatchId: fixture.batch.id });
   }
 });
