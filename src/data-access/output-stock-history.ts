@@ -94,16 +94,17 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
     const ingredientSolids = ingredients.filter(i => i.biocharProductId === p.id).reduce((sum, i) => sum + Number(i.drySolidsKg), 0);
     const composition = p.composition as { ingredients?: { massKg: number }[] };
     const resolved = (composition.ingredients ?? []).filter(i => i.massKg > 0).length === ingredients.filter(i => i.biocharProductId === p.id).length;
-    return { solids: resolved ? dry + ingredientSolids : null, id: p.id, code: p.code, occurredAt: p.placedAt.toISOString(), createdAt: p.createdAt,
+    return { solids: resolved ? dry + ingredientSolids : null, id: p.id, code: p.code, occurredAt: p.placedAt.toISOString(), recordedAt: p.createdAt,
       wet: Number(p.massKg ?? 0) + Number(p.waterAddedKg ?? 0), moisture: p.moistureContentPercent,
       dry,
       runs: provenance.map(s => ({ productionRunId: s.productionRunId, code: runCode.get(s.productionRunId) ?? s.productionRunId, dryMassKg: Number(s.allocatedDryMassKg) })) };
   }) : runs.filter(r => r.biocharStorageLocationId === storageLocationId && r.status === 'complete' && r.endTime).map(r => ({
-    solids: r.biocharDryMassKg === null ? null : Number(r.biocharDryMassKg), id: r.id, code: r.code, occurredAt: r.endTime!.toISOString(), createdAt: r.createdAt,
+    // A product posts its stock when it is created; a run posts its output when it is completed (or its output last changed), never at creation.
+    solids: r.biocharDryMassKg === null ? null : Number(r.biocharDryMassKg), id: r.id, code: r.code, occurredAt: r.endTime!.toISOString(), recordedAt: r.updatedAt,
     wet: Number(r.biocharOutputKg ?? 0), moisture: r.biocharMoisturePercent, dry: Number(r.biocharDryMassKg ?? 0),
     runs: [{ productionRunId: r.id, code: r.code, dryMassKg: Number(r.biocharDryMassKg ?? 0) }],
   }));
-  for (const r of receipts) history.push({ id: r.id, kind: 'intake', occurredAt: r.occurredAt, recordedAt: r.createdAt.toISOString(), actorName: null,
+  for (const r of receipts) history.push({ id: r.id, kind: 'intake', occurredAt: r.occurredAt, recordedAt: r.recordedAt.toISOString(), actorName: null,
     reason: `Intake ${r.code}`, wetMassKg: r.wet, moisturePercent: r.moisture, dryMassKg: -r.dry, beforeDryKg: 0, afterDryKg: 0,
     correctsMovementId: null, deliveryId: null, source: { entity: bin.type === 'product_bin' ? 'biocharProduct' : 'productionRun', id: r.id },
     // A batch added without a moisture reading has no wet basis, so its wet change has no figure.
@@ -157,13 +158,9 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   return history;
 }
 
-/** An allocation's frozen exact solids, or null when the snapshot has none to read; display only. */
+/** An allocation's frozen exact solids, or null when the snapshot has none; an unreadable one throws, as on every posting path. */
 function frozenSolidsKg(value: unknown): number | null {
-  try {
-    return rationalToNumber(readRational(value));
-  } catch {
-    return null;
-  }
+  return value == null ? null : rationalToNumber(readRational(value));
 }
 
 /** The "Moisture updated" row a movement's readings add to the bin's history. */

@@ -19,30 +19,32 @@ export interface OpenCreateIntentOptions {
 }
 
 /**
- * Owns create deep-link state without depending on a caller callback's identity.
- * Server pages pass `initialOpen` (and optional context) so hard entries render
- * the create sheet immediately; the effect only captures client navigations and
- * consumes the handled query parameters.
+ * Owns create deep-link state, or hands it to the caller's opener (`onOpen`,
+ * or a bare function). Server pages pass `initialOpen` (and optional context)
+ * so hard entries render the create sheet immediately; the effect only
+ * captures client navigations and consumes the handled query parameters. An
+ * opener's identity is an effect dependency, so an inline arrow re-runs the
+ * effect each render; `handledRef` keeps it to one open per intent.
  */
 export function useOpenCreateIntent(
-  optionsOrLegacyCallback: OpenCreateIntentOptions | (() => void) = {},
+  optionsOrOpener: OpenCreateIntentOptions | (() => void) = {},
 ) {
-  const legacyCallback: ((context: string | null) => void) | null =
-    typeof optionsOrLegacyCallback === "function"
-      ? optionsOrLegacyCallback
-      : (optionsOrLegacyCallback.onOpen ?? null);
+  const openCallback: ((context: string | null) => void) | null =
+    typeof optionsOrOpener === "function"
+      ? optionsOrOpener
+      : (optionsOrOpener.onOpen ?? null);
   const initialOpen =
-    typeof optionsOrLegacyCallback === "function"
+    typeof optionsOrOpener === "function"
       ? false
-      : (optionsOrLegacyCallback.initialOpen ?? false);
+      : (optionsOrOpener.initialOpen ?? false);
   const contextParam =
-    typeof optionsOrLegacyCallback === "function"
+    typeof optionsOrOpener === "function"
       ? undefined
-      : optionsOrLegacyCallback.contextParam;
+      : optionsOrOpener.contextParam;
   const initialContext =
-    typeof optionsOrLegacyCallback === "function"
+    typeof optionsOrOpener === "function"
       ? null
-      : (optionsOrLegacyCallback.initialContext ?? null);
+      : (optionsOrOpener.initialContext ?? null);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const handledRef = useRef(false);
@@ -66,8 +68,8 @@ export function useOpenCreateIntent(
 
     handledRef.current = true;
     const context = contextParam ? searchParams.get(contextParam) : null;
-    if (legacyCallback) {
-      legacyCallback(context);
+    if (openCallback) {
+      openCallback(context);
     } else {
       queueMicrotask(() => setIntent({ context }));
     }
@@ -87,7 +89,7 @@ export function useOpenCreateIntent(
       "",
       nextQuery ? `${pathname}?${nextQuery}` : pathname,
     );
-  }, [contextParam, legacyCallback, pathname, searchParams]);
+  }, [contextParam, openCallback, pathname, searchParams]);
 
   return {
     isOpen: intent !== null,

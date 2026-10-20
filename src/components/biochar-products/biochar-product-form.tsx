@@ -60,6 +60,7 @@ import { Notice } from "@/components/ui/notice";
 import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
 import { recordInUseFreeFields } from "@/lib/record-lock";
 import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+import type { AddStockBin } from "@/lib/add-stock-intent";
 
 /** Native min, max and step for each number input, read from the schema. */
 const numberBounds = numberInputConstraintsFor(biocharProductEntrySchema);
@@ -146,7 +147,7 @@ interface BiocharProductFormProps {
    * Create only: the product bin to open with (from a bin's "adding stock"
    * link), with the formulation it is reserved for, if any.
    */
-  initialBin?: { storageLocationId: string; formulationId: string | null } | null;
+  initialBin?: AddStockBin | null;
 }
 
 /** Shown on the posted fields a saved product keeps (`POSTED_FIELDS` on the server). */
@@ -174,7 +175,8 @@ export function BiocharProductForm({
     product?.sourceBiocharStorageLocationId,
   );
   // A bin reserved for a formulation brings that formulation, so the bin stays valid.
-  const createBin = product ? null : (initialBin ?? null);
+  // Read once at mount: a later refetch of the bin never changes an open form.
+  const [createBin] = useState(() => (product ? null : (initialBin ?? null)));
   const initialFormulationId =
     product?.formulation?.id ?? product?.formulationId ?? createBin?.formulationId ?? null;
   const initialIngredientBins = fromCompositionJsonb(product?.composition);

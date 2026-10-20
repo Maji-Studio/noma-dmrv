@@ -66,6 +66,7 @@ import { parseAsString, useQueryState } from "nuqs";
 import { BIOCHAR_PRODUCT_DEEP_LINK_PARAM } from "@/lib/biochar-product-links";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useAddStockBin } from "@/hooks/use-add-stock-bin";
+import { AddStockFormSlot } from "@/components/forms/add-stock-form-slot";
 import { ADD_STOCK_BIN_PARAM } from "@/lib/add-stock-intent";
 import { useEffect, useState } from "react";
 import { BiocharProductForm } from "./biochar-product-form";
@@ -629,21 +630,22 @@ export function BiocharProductList() {
         editLabel="Edit product"
         sections={viewedEntity ? productSheetSections(viewedEntity, resolveFacilityTimezone(facilities, viewedEntity.facilityId)) : undefined}
       >
-        <BiocharProductForm
-          // Opens again once a linked bin resolves, so the form starts with it chosen.
-          key={editingEntity?.id ?? `create:${addStockBin.bin?.storageLocationId ?? ""}`}
-          product={editingEntity ?? undefined}
-          initialBin={addStockBin.bin}
-          lock={sheetLock}
-          onSubmit={displaySideSheet?.mode === "edit" ? handleUpdate : handleCreate}
-          onCancel={closeSideSheet}
-          isSubmitting={isSubmitting}
-          errorMessage={formError ?? undefined}
-          submitLabel={displaySideSheet?.mode === "edit" ? "Save changes" : "Create product"}
-          focusTarget={
-            displaySideSheet?.mode === "edit" ? activeFocusTarget : null
-          }
-        />
+        <AddStockFormSlot settling={addStockBin.settling}>
+          <BiocharProductForm
+            key={editingEntity?.id ?? "create"}
+            product={editingEntity ?? undefined}
+            initialBin={addStockBin.bin}
+            lock={sheetLock}
+            onSubmit={displaySideSheet?.mode === "edit" ? handleUpdate : handleCreate}
+            onCancel={closeSideSheet}
+            isSubmitting={isSubmitting}
+            errorMessage={formError ?? undefined}
+            submitLabel={displaySideSheet?.mode === "edit" ? "Save changes" : "Create product"}
+            focusTarget={
+              displaySideSheet?.mode === "edit" ? activeFocusTarget : null
+            }
+          />
+        </AddStockFormSlot>
       </EntitySideSheet>
     </div>
   );

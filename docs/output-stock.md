@@ -161,7 +161,8 @@ leave water out rather than show 0 kg (`stockWaterKg` in `stock-replay.ts`).
 Water is display only; no balance, guard, preview or posting reads it. The
 replay re-bases an unknown wet or solids figure on a movement's saved
 after-balance only while no earlier-dated entry was recorded after that balance
-was saved. Bay, pile-band and chart
+was saved. A run intake counts as recorded when its output was posted (the
+run's last save as complete, `updatedAt`), not when the run was created. Bay, pile-band and chart
 point details open on hover, keyboard focus or tap. A product bin's bays and
 pile bands name their parts as the product composition does (dry biochar,
 "<ingredient> solids", estimated water): `getOutputSubBins` splits each layer's

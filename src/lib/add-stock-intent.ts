@@ -28,6 +28,12 @@ export function addStockBinId(value: string | null | undefined): string | null {
   return binIdSchema.safeParse(value).success ? (value as string) : null;
 }
 
+/** The bin a create form opens with, and the formulation it is reserved for, if any. */
+export interface AddStockBin {
+  storageLocationId: string;
+  formulationId: string | null;
+}
+
 interface AddStockBinCandidate {
   id: string;
   type: string;
@@ -45,7 +51,7 @@ export function resolveAddStockBin(
   bin: AddStockBinCandidate | null | undefined,
   lane: AddStockLane,
   facilityId: string | null | undefined,
-): { storageLocationId: string; formulationId: string | null } | null {
+): AddStockBin | null {
   if (!bin || !facilityId || bin.type !== ADD_STOCK[lane].binType || bin.facilityId !== facilityId || bin.archivedAt) return null;
   return { storageLocationId: bin.id, formulationId: bin.formulationId };
 }

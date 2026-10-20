@@ -50,6 +50,17 @@ describe("replayStock", () => {
     expect(last([measured, backDated, draw])).toMatchObject({ dryKg: 110, solidsKg: 110, wetKg: null });
   });
 
+  it("never re-bases on a frozen balance saved before a run completed with an earlier end time", () => {
+    // The delivery at 12:00 froze 75 kg wet after it.
+    const draw = entry({ id: "d1", kind: "delivery", occurredAt: AT(12), recordedAt: AT(12), dryMassKg: 20, wetDeltaKg: -25, solidsDeltaKg: -20, afterWetKg: 75, afterSolidsKg: 60 });
+    // Created at 08:00, completed at 16:00 with an 11:00 end and no moisture reading. The history dates a
+    // run intake by its completion (getOutputStockHistory), so the delivery's balance never saw this run.
+    const run = entry({ id: "run1", kind: "intake", occurredAt: AT(11), recordedAt: AT(16), moisturePercent: null, dryMassKg: -50, wetDeltaKg: null, solidsDeltaKg: 50 });
+    expect(last([measured, run, draw])).toMatchObject({ dryKg: 110, solidsKg: 110, wetKg: null });
+    // Dated by its creation instead, the run would let the stale 75 kg back in.
+    expect(last([measured, { ...run, recordedAt: AT(8) }, draw])).toMatchObject({ wetKg: 75 });
+  });
+
   it("still re-bases on a frozen balance saved after every earlier-dated entry", () => {
     const count = entry({ id: "c1", kind: "count", occurredAt: AT(12), recordedAt: AT(15), dryMassKg: 0, wetDeltaKg: null, solidsDeltaKg: 0, afterWetKg: 160, afterSolidsKg: 130 });
     const backDated = { ...unmeasured, occurredAt: AT(11), recordedAt: AT(14) };

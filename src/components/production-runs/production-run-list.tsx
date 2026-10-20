@@ -45,6 +45,7 @@ import { isProductionRunOutputLocked, isRecordDeletable, isRecordEditable, type 
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useAddStockBin } from "@/hooks/use-add-stock-bin";
+import { AddStockFormSlot } from "@/components/forms/add-stock-form-slot";
 import { ADD_STOCK_BIN_PARAM } from "@/lib/add-stock-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
@@ -634,31 +635,32 @@ export function ProductionRunList() {
         size="wide"
         sections={sideSheetEntity ? productionRunSheetSections(sideSheetEntity, facilities) : undefined}
       >
-        <ProductionRunForm
-          // Opens again once a linked bin resolves, so the form starts with it chosen.
-          key={sideSheetEntity?.id ?? `create:${addStockBin.bin?.storageLocationId ?? ""}`}
-          productionRun={sideSheetEntity ?? undefined}
-          initialBiocharStorageLocationId={addStockBin.bin?.storageLocationId}
-          lock={sheetLock}
-          onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
-          onCancel={attemptCloseSideSheet}
-          isSubmitting={createRun.isPending || updateRun.isPending || isFlushing}
-          errorMessage={createError || updateError || undefined}
-          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create production run"}
-          deferredAttachments={deferredAttachments}
-        >
-          {sideSheetEntity && sideSheetMode === "edit" ? (
-            <>
-              <ProductionSampleTable facilityId={sideSheetEntity.facilityId} productionRunId={sideSheetEntity.id} />
-              <ProductionIncidentTable
-                productionRunId={sideSheetEntity.id}
-                facilityId={sideSheetEntity.facilityId}
-                defaultReactorId={sideSheetEntity.reactorId}
-                defaultOperatorId={sideSheetEntity.operatorId}
-              />
-            </>
-          ) : null}
-        </ProductionRunForm>
+        <AddStockFormSlot settling={addStockBin.settling}>
+          <ProductionRunForm
+            key={sideSheetEntity?.id ?? "create"}
+            productionRun={sideSheetEntity ?? undefined}
+            initialBiocharStorageLocationId={addStockBin.bin?.storageLocationId}
+            lock={sheetLock}
+            onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
+            onCancel={attemptCloseSideSheet}
+            isSubmitting={createRun.isPending || updateRun.isPending || isFlushing}
+            errorMessage={createError || updateError || undefined}
+            submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create production run"}
+            deferredAttachments={deferredAttachments}
+          >
+            {sideSheetEntity && sideSheetMode === "edit" ? (
+              <>
+                <ProductionSampleTable facilityId={sideSheetEntity.facilityId} productionRunId={sideSheetEntity.id} />
+                <ProductionIncidentTable
+                  productionRunId={sideSheetEntity.id}
+                  facilityId={sideSheetEntity.facilityId}
+                  defaultReactorId={sideSheetEntity.reactorId}
+                  defaultOperatorId={sideSheetEntity.operatorId}
+                />
+              </>
+            ) : null}
+          </ProductionRunForm>
+        </AddStockFormSlot>
       </EntitySideSheet>
     </div>
   );

@@ -96,6 +96,8 @@ export function useStorageLocation(storageLocationId: string | null) {
     queryKey: storageLocationKeys.detailWithFacility(storageLocationId ?? ""),
     queryFn: async () => unwrap(await getStorageLocationFn({ storageLocationId: storageLocationId! })),
     enabled: storageLocationId !== null,
+    // The create form waits on this read; a bin it cannot read opens the form without one, not after retries.
+    retry: false,
   });
 }
 
