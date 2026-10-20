@@ -534,7 +534,6 @@ export function requiredDateOnlySchema(requiredMessage = "Enter a date.") {
   );
 }
 
-export const requiredDateOnly = requiredDateOnlySchema();
 
 /**
  * Optional date field fed by `<input type="date">` ("YYYY-MM-DD").

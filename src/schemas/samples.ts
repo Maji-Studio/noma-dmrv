@@ -187,34 +187,38 @@ export function getSampleCarbonReconciliationErrors(
   return errors;
 }
 
-function carbonReconciliationSuperRefine(
-  value: SampleCarbonValues,
-  ctx: z.RefinementCtx,
-): void {
-  const errors = getSampleCarbonReconciliationErrors(value);
+/** The inputs each carbon refusal reads. */
+const CARBON_REFUSAL_INPUTS: Record<keyof SampleCarbonReconciliationErrors, readonly PropertyKey[]> = {
+  organicCarbonPercent: ["totalCarbonPercent", "organicCarbonPercent"],
+  inorganicCarbonPercent: ["totalCarbonPercent", "organicCarbonPercent", "inorganicCarbonPercent"],
+  residualCarbonPercent: ["reactiveCarbonPercent", "residualCarbonPercent"],
+};
 
-  if (errors.organicCarbonPercent) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["organicCarbonPercent"],
-      message: errors.organicCarbonPercent,
-    });
-  }
+/**
+ * Zod skips object refinements once any field has failed, so a Save with an
+ * empty sampling time would not list a carbon refusal the form already shows
+ * live. Each carbon check runs unless one of its own inputs failed to parse.
+ * Custom issues are refusals, such as the carbon ones before this check, not
+ * parse failures: the carbon inputs raise none.
+ */
+function inputsParsed(fields: readonly PropertyKey[]) {
+  return (payload: z.core.ParsePayload): boolean => !payload.issues.some((issue) =>
+    issue.code !== "custom" && fields.includes(issue.path?.[0] as PropertyKey),
+  );
+}
 
-  if (errors.inorganicCarbonPercent) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["inorganicCarbonPercent"],
-      message: errors.inorganicCarbonPercent,
-    });
-  }
-  if (errors.residualCarbonPercent) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["residualCarbonPercent"],
-      message: errors.residualCarbonPercent,
-    });
-  }
+/** One refinement per refused field, so each refusal sits on its own input. */
+function carbonRefusal(
+  field: keyof SampleCarbonReconciliationErrors,
+): [(value: SampleCarbonValues) => boolean, z.core.$ZodCustomParams] {
+  return [
+    (value) => !getSampleCarbonReconciliationErrors(value)[field],
+    {
+      path: [field],
+      when: inputsParsed(CARBON_REFUSAL_INPUTS[field]),
+      error: (issue) => getSampleCarbonReconciliationErrors(issue.input as SampleCarbonValues)[field],
+    },
+  ];
 }
 
 // ============================================
@@ -314,9 +318,10 @@ export const sampleFormSchema = z
     calciumPercent: optionalPercentInput,
     ironPercent: optionalPercentInput,
   })
+  .refine(...carbonRefusal("organicCarbonPercent"))
+  .refine(...carbonRefusal("inorganicCarbonPercent"))
+  .refine(...carbonRefusal("residualCarbonPercent"))
   .superRefine((value, ctx) => {
-    carbonReconciliationSuperRefine(value, ctx);
-
     // Conditional validation for nutrient claims
     if (value.nutrientClaimEnabled) {
       const nutrientFields = [
@@ -396,7 +401,10 @@ export const updateSampleSchema = z.object({
   magnesiumPercent: percentNumber.optional().nullable(),
   calciumPercent: percentNumber.optional().nullable(),
   ironPercent: percentNumber.optional().nullable(),
-}).superRefine(carbonReconciliationSuperRefine);
+})
+  .refine(...carbonRefusal("organicCarbonPercent"))
+  .refine(...carbonRefusal("inorganicCarbonPercent"))
+  .refine(...carbonRefusal("residualCarbonPercent"));
 
 /**
  * Schema for deleting a sample

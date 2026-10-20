@@ -80,6 +80,18 @@ describe("reactive plus residual organic carbon", () => {
     expect(updateLabSampleApiInput.safeParse(over).error?.issues).toEqual(residualIssue);
   });
 
+  it("still lists the carbon refusals on a Save that also misses the sampling time", () => {
+    const issues = sampleFormSchema.safeParse({ ...baseForm, samplingTime: "", reactiveCarbonPercent: 40, residualCarbonPercent: 70, organicCarbonPercent: 81 }).error?.issues ?? [];
+    expect(issues.map(issue => issue.path[0]).sort()).toEqual(["organicCarbonPercent", "residualCarbonPercent", "samplingTime"]);
+    expect(issues).toContainEqual(expect.objectContaining({ path: ["residualCarbonPercent"], message: OVER_100 }));
+    // A carbon input that failed itself is not reconciled on top.
+    const bad = sampleFormSchema.safeParse({ ...baseForm, reactiveCarbonPercent: 140, residualCarbonPercent: 70 }).error?.issues ?? [];
+    expect(bad.map(issue => issue.path[0])).toEqual(["reactiveCarbonPercent"]);
+    // An empty total carbon does not hold back the reactive plus residual check.
+    const noTotal = sampleFormSchema.safeParse({ ...baseForm, totalCarbonPercent: undefined, reactiveCarbonPercent: 40, residualCarbonPercent: 70 }).error?.issues ?? [];
+    expect(noTotal.map(issue => issue.path[0]).sort()).toEqual(["residualCarbonPercent", "totalCarbonPercent"]);
+  });
+
   it("refuses the saved Sample whose stored reactive plus a new residual goes over", () => {
     const stored = { totalCarbonPercent: 80, organicCarbonPercent: 75, inorganicCarbonPercent: null, reactiveCarbonPercent: 40, residualCarbonPercent: 50 };
     expect(() => assertCarbonReconciliation(stored, {})).not.toThrow();

@@ -99,7 +99,7 @@ function resolveInstant(
     return UNRESOLVED_INSTANT;
   }
 
-  // `requiredDateOnly`/`optionalDateOnly` parse "YYYY-MM-DD" at local midnight,
+  // `requiredDateOnlySchema`/`optionalDateOnly` parse "YYYY-MM-DD" at local midnight,
   // so reading the calendar day back off the Date is the exact inverse.
   let dateStr: string | null = null;
   if (dateVal instanceof Date) {

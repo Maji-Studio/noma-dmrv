@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { deliveryFormSchema, updateDeliverySchema } from "./deliveries";
 import { createEventInstantSchema } from "./event-instant";
-import { optionalDateOnly, requiredDateOnly } from "./helpers";
+import { optionalDateOnly, requiredDateOnlySchema } from "./helpers";
 import { productionRunFormSchema, updateProductionRunSchema } from "./production-runs";
 import { SAMPLING_TIME_REQUIRED_MESSAGE, sampleFormSchema, updateSampleSchema } from "./samples";
 
@@ -21,6 +21,7 @@ async function formMessage(schema: z.ZodType, value: unknown): Promise<string | 
 const ZOD_FALLBACK = /^Invalid input/;
 const EMPTY_VALUES = ["", undefined, null] as const;
 const ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+const requiredDateOnly = requiredDateOnlySchema();
 
 describe("sampling time", () => {
   it.each(EMPTY_VALUES)("asks for the sampling time in the form and the error summary when the value is %j", async (value) => {

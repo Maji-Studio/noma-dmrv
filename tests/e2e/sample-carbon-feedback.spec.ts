@@ -89,14 +89,16 @@ test.describe("Sample carbon feedback", () => {
     await residualCarbon.fill("70");
     await expect(dialog.getByText(REACTIVE_RESIDUAL_OVER_100, { exact: true })).toBeVisible();
 
-    await dialog.getByRole("button", { name: "Save" }).click();
+    await dialog.getByRole("button", { name: "Create Sample" }).click();
     const summary = dialog.locator("[data-form-error-summary]");
     await expect(summary.getByRole("link", { name: /Sampling time/ })).toBeVisible();
     await expect(summary).toContainText("Enter the sampling time.");
     await expect(summary).toContainText(REACTIVE_RESIDUAL_OVER_100);
     await expect(summary).not.toContainText("Invalid input");
 
-    await residualCarbon.fill("60");
+    // Correcting the other addend clears the refusal on Residual carbon too.
+    await reactiveCarbon.fill("20");
     await expect(dialog.getByText(REACTIVE_RESIDUAL_OVER_100, { exact: true })).toHaveCount(0);
+    await expect(summary).not.toContainText(REACTIVE_RESIDUAL_OVER_100);
   });
 });
