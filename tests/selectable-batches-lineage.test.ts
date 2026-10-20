@@ -24,6 +24,7 @@ vi.mock("@/lib/certification/facility-setup-gaps", () => ({
 }));
 
 const mockedListUngrouped = vi.mocked(listUngroupedCreditBatches);
+const APPLIED_DRY_TONS = 1;
 
 const orgCtx: OrgContext = {
   userId: "user-1",
@@ -41,7 +42,10 @@ function accountingRecord(
     appliedWeightTons,
     co2ePreview: { co2eStoredTonnes },
     batch: { id: batchId },
-    lineageFacts: { batchId },
+    lineageFacts: {
+      batchId,
+      applications: [{ biocharAppliedDryTons: APPLIED_DRY_TONS }],
+    },
   };
 }
 
@@ -85,8 +89,8 @@ describe("buildSelectableBatchesData", () => {
     );
     expect(result).toMatchObject({
       batches: [
-        { id: "batch-1", appliedWeightTons: 1.25 },
-        { id: "batch-2", appliedWeightTons: 2.5 },
+        { id: "batch-1", appliedWeightTons: 1.25, appliedDryTons: APPLIED_DRY_TONS },
+        { id: "batch-2", appliedWeightTons: 2.5, appliedDryTons: APPLIED_DRY_TONS },
       ],
     });
     expect(result.batches[0]).not.toHaveProperty("co2eStoredTonnes");
