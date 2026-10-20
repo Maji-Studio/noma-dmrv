@@ -1,6 +1,6 @@
 /**
  * Operator words for the Removal template setup page. The server offers
- * options by stable id (a source id, a component id, `entry`, `project`) and a
+ * options by stable id (a source id, a component id, or `entry`) and a
  * raw label; this module turns each into the sentence an operator reads, and
  * derives the pure facts (open decisions, entry counts, the start step) the
  * page and its tests share.
@@ -58,7 +58,6 @@ export function optionSource(option: SetupOption): AutomaticSourceId | undefined
 
 /** A human label for one offered option; the server may send a raw source id. */
 export function optionLabel(option: SetupOption): string {
-  if (option.id === "project") return PROJECT_LABEL;
   if (option.id === "entry") return option.label === "Entry" ? ENTRY_LABEL : "Neither, entry";
   return SOURCE_LABELS[option.label as AutomaticSourceId] ?? option.label;
 }
@@ -80,13 +79,12 @@ export function decisionSituation(decision: SetupDecision): string {
     const source = decision.id.replace("clash:", "");
     return `noma records ${sourceRecords(source)}. ${formatCount(decision.components.length, "component")} in this template measure ${sourceNoun(source)}, and one figure cannot fill ${decision.components.length === 2 ? "both" : "all of them"}.`;
   }
-  if (decision.kind === "added") return `${first} was added to this template after it was last set up. noma lists its proposal first.`;
+  if (decision.kind === "added") return `${first} is not decided yet for this template. noma lists its proposal first, and nothing is preselected.`;
   return `noma has more than one record that could fill ${first}. The component name does not say which one it means.`;
 }
 
 export function optionDescription(decision: SetupDecision, option: SetupOption): string {
   if (option.id === "entry") return `Record it as ${ENTRY_EACH_BATCH}.`;
-  if (option.id === "project") return "Not sent to Isometric. The emissions stay at project level.";
   if (decision.kind === "clash") {
     const others = decision.components.filter((line) => line.component.id !== option.id).map((line) => line.component.displayName);
     return `${others.join(" and ")} then take${others.length === 1 ? "s" : ""} ${ENTRY_EACH_BATCH}.`;
@@ -98,7 +96,6 @@ export function optionDescription(decision: SetupDecision, option: SetupOption):
 export function answerSummary(decision: SetupDecision, option: SetupOption): string {
   const first = decision.components[0].component.displayName;
   if (decision.kind === "clash") return `${sourceNoun(decision.id.replace("clash:", "")).replace(/^./, (c) => c.toUpperCase())} fills ${option.label}`;
-  if (option.id === "project") return `${first} stays at project level`;
   if (option.id === "entry") return `${first} takes ${ENTRY_EACH_BATCH}`;
   return `${optionLabel(option)} fills ${first}`;
 }
