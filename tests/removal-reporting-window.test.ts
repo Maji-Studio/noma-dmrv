@@ -150,35 +150,36 @@ describe("resolveLatestApplicationTime", () => {
 });
 
 describe("resolveRemovalReportingWindow", () => {
-  it("contains a Los Angeles run whose local application day precedes its UTC start day", () => {
-    const earliestProductionStartTime = new Date("2026-09-15T03:00:00Z");
-    const latestProductionEndTime = new Date("2026-09-15T05:00:00Z");
-    const latestApplicationTime = new Date("2026-09-14T00:00:00Z");
-    const facilityTimezone = "America/Los_Angeles";
+  it("keeps the UTC refusal for a Los Angeles run ending September 30 at 20:00 local", () => {
+    const message = thrownMessage(() => resolveRemovalReportingWindow({
+      earliestProductionStartTime: new Date("2026-09-30T15:00:00Z"),
+      latestProductionEndTime: new Date("2026-10-01T03:00:00Z"),
+      latestApplicationTime: new Date("2026-09-30T00:00:00Z"),
+      facilityTimezone: "America/Los_Angeles",
+    }));
 
-    expect(() => assertReportingWindowNotInverted({
-      lineages: [lineage("2026-09-14T00:00:00Z", "APP-A", RUN_A)],
-      runStartTimeByRunId: new Map([[RUN_A, earliestProductionStartTime]]),
-      facilityTimezone,
-    })).not.toThrow();
-
-    const window = resolveRemovalReportingWindow({
-      earliestProductionStartTime,
-      latestProductionEndTime,
-      latestApplicationTime,
-      facilityTimezone,
-    });
-
-    expect(window.startedOn).toEqual(earliestProductionStartTime);
-    expect(window.completedOn).toEqual(latestProductionEndTime);
-    expect(window.completedOn.getTime()).toBeGreaterThanOrEqual(latestProductionEndTime.getTime());
-    expect(window.completedOn.getTime()).toBeGreaterThanOrEqual(window.startedOn.getTime());
+    expect(message).toBe(
+      "Latest application date 2026-09-30 precedes latest production end date 2026-10-01. " +
+        "Correct the application date before submitting.",
+    );
+    expect(message).not.toMatch(EN_OR_EM_DASH);
   });
 
+  // Expected outcomes from origin/staging's UTC guard and completion rule.
   it.each([
+    {
+      scenario: "earlier day refusal",
+      application: "2026-07-28T00:00:00Z",
+      oldCompletedOn: null,
+    },
     {
       scenario: "same day earlier application",
       application: "2026-07-29T00:00:00Z",
+      oldCompletedOn: "2026-07-29T15:30:00Z",
+    },
+    {
+      scenario: "same instant",
+      application: "2026-07-29T15:30:00Z",
       oldCompletedOn: "2026-07-29T15:30:00Z",
     },
     {
@@ -191,16 +192,27 @@ describe("resolveRemovalReportingWindow", () => {
       application: "2026-07-30T00:00:00Z",
       oldCompletedOn: "2026-07-30T00:00:00Z",
     },
-  ])("keeps the old UTC completion rule for $scenario", ({ application, oldCompletedOn }) => {
+  ])("matches origin/staging for UTC inputs: $scenario", ({ application, oldCompletedOn }) => {
     const earliestProductionStartTime = new Date("2026-07-29T06:00:00Z");
     const latestProductionEndTime = new Date("2026-07-29T15:30:00Z");
     const latestApplicationTime = new Date(application);
-    expect(resolveRemovalReportingWindow({
+    const resolve = () => resolveRemovalReportingWindow({
       earliestProductionStartTime,
       latestProductionEndTime,
       latestApplicationTime,
       facilityTimezone: "UTC",
-    })).toEqual({ startedOn: earliestProductionStartTime, completedOn: new Date(oldCompletedOn) });
+    });
+    if (oldCompletedOn === null) {
+      expect(thrownMessage(resolve)).toBe(
+        "Latest application date 2026-07-28 precedes latest production end date 2026-07-29. " +
+          "Correct the application date before submitting.",
+      );
+    } else {
+      expect(resolve()).toEqual({
+        startedOn: earliestProductionStartTime,
+        completedOn: new Date(oldCompletedOn),
+      });
+    }
   });
 
   it("uses the latest run end as the same-day application time floor", () => {

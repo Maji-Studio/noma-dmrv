@@ -71,16 +71,20 @@ export function resolveRemovalReportingWindow(args: {
     facilityTimezone,
   } = args;
   const applicationDate = formatUtcDate(latestApplicationTime);
-  const latestProductionEndDate = formatFacilityDate(latestProductionEndTime, facilityTimezone);
-  if (applicationDate < latestProductionEndDate) {
+  const latestProductionEndDate = formatUtcDate(latestProductionEndTime);
+  const facilityProductionEndDate = formatFacilityDate(latestProductionEndTime, facilityTimezone);
+  // The later UTC or facility day binds while registry payload dates use UTC days.
+  const bindingDay = facilityProductionEndDate > latestProductionEndDate
+    ? facilityProductionEndDate
+    : latestProductionEndDate;
+  if (applicationDate < bindingDay) {
     throw new SafeError(
       `Latest application date ${applicationDate} precedes latest production end date ` +
-        `${latestProductionEndDate}. Correct the application date before submitting.`,
+        `${bindingDay}. Correct the application date before submitting.`,
     );
   }
-  // Old UTC-day guards accepted only same/later days: same-day used the later
-  // instant, and a later-day application was already after production end.
   const completedOn =
+    applicationDate === latestProductionEndDate &&
     latestApplicationTime < latestProductionEndTime
       ? latestProductionEndTime
       : latestApplicationTime;
@@ -129,8 +133,8 @@ export function assertRemovalDatesNotFuture(args: {
 // The application date is a stored facility business date, represented as UTC
 // midnight of that day. Convert the run start instant to its facility day for
 // this comparison so a same-day application can follow a mid-day run start.
-// resolveRemovalReportingWindow uses the same facility-day comparison for its
-// production-end refusal; completion is floored at the production end instant.
+// resolveRemovalReportingWindow requires the later UTC or facility production-end
+// day and floors completion at production end only on the same UTC day.
 // Fail closed when the lineage's production run start cannot be resolved.
 export function assertReportingWindowNotInverted(args: {
   lineages: {

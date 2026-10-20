@@ -258,6 +258,11 @@ Registry-specific deferred decisions live in
 [Isometric Certify open questions](./open-questions-isometric.md). That
 companion inherits this file's schema, invariants, and resolution rules.
 
+- Registry dates (started_on, completed_on) are UTC days; facilities west of UTC
+  keep the UTC refusal in resolveRemovalReportingWindow until the payload uses
+  facility days (#1282, #1316). See
+  `src/fn/certification/removal-reporting-window.ts:resolveRemovalReportingWindow`.
+
 ### One sample transport source cannot fill the template's two sample shipping lines (`isometric/sample-transport-template-drift`, opened 2026-08-21)
 
 - **Observed:** the live sandbox check in
