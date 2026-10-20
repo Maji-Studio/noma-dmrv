@@ -405,7 +405,9 @@ Three seams carry it:
 
 `MoistureSplit`'s unresolved state and `MassPair`'s "Not recorded" are the two
 worked examples: an absent input stays visible, because dry mass drives
-certification readiness.
+certification readiness. A missing `MassPair` figure renders `body-small`, tertiary
+ink, regular weight, with `data-empty` (no mono, no semibold): two full-size
+placeholders collide in a stat card. Both labels stay visible.
 
 ---
 
@@ -683,8 +685,9 @@ The one outcome screen for auth pages (check your email, email verified, verific
   the full card width and does not apply headline typography to its children.
   Optional `sparkline` slot takes any node.
 - **`MassPair`** — the shared wet/dry comparison for KPI cards and dense table
-  cells. It keeps both labels visible, renders missing values as "Not recorded",
-  and keeps both figures in kg with up to one decimal. Use the default summary
+  cells. It keeps both labels visible, renders a missing value as "Not recorded"
+  in the small placeholder style (`body-small`, tertiary ink, regular weight,
+  `data-empty`), and keeps both figures in kg with up to one decimal. Use the default summary
   variant in `StatCard valueLayout="breakdown"`; use `variant="compact"` with
   `layout="stacked"` in table cells. Its figures own their mono numeric style;
   do not wrap them in a body typography class.

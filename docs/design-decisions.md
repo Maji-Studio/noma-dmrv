@@ -11,6 +11,7 @@ This is the per-surface log of what we tried, what replaced it, and why. Read it
 - **Form subgrid** (2026-07-24): `.grid > .form-field` subgrid → reverted; shorten labels instead.
 - **Dialog actions** (#1150; 2026-10-17): right-aligned footers → bottom left, primary first, secondary after; refused delete is a dialog with "Archive instead" first.
 - **Override controls** (#1123; 2026-10-16 to 10-18): the user asked for the override inside the input → reverted the next day ("it sucks what i proposed"): a secondary outline button next to the input, labelled "Reset to default"; "Refresh from location" is a compact action below the input that opens a dialog showing old → new.
+- **Missing mass figure** (#1251; 2026-10-20, Kenji): two full-size "Not recorded" figures in the Biochar output stat card collided at 1440 px → each missing `MassPair` figure is small grey regular text with `data-empty`, both labels kept. Rejected: collapsing the pair into one line.
 - **Value changes** (2026-09): sentences describing a change → two blocks with an arrow (before → after); unchanged readings ("30% → 30%") are not shown.
 
 ## Pickers and forms
