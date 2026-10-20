@@ -2,7 +2,7 @@
  * One compact box per credit batch in New Removal's selection step (#1202).
  * A box holds the batch code (a link to the batch page), its period, its
  * applied dry mass and one status line. A batch that is not ready names its
- * first open check and how many more there are, then links to its checklist on
+ * first open check and how many more there are, then links to its open to-dos on
  * the batch page; the full list lives there, never here.
  */
 "use client";
@@ -20,6 +20,8 @@ import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { CREDIT_BATCH_READY_LABEL } from "@/lib/certification/credit-batch-lifecycle";
 import type { BatchHealth } from "@/lib/certification/batch-health";
 import type { SelectableBatch } from "@/fn/certification";
+// The link names the panel it lands on (Kenji, 2026-10-20).
+import { OPEN_TODOS_LABEL } from "@/lib/credit-batches/batch-page";
 import { cn } from "@/lib/utils";
 
 const STATUS_ICON = 14;
@@ -29,8 +31,6 @@ const HIT_AREA = "relative after:absolute after:inset-x-0 after:-inset-y-12 afte
 /** The same from sm; below it the link has its own 44px row. */
 const HIT_AREA_FROM_SM = "sm:relative sm:after:absolute sm:after:inset-x-0 sm:after:-inset-y-12 sm:after:content-['']";
 
-/** The link text that leads from a not-ready box to the batch page's open to-dos. */
-export const OPEN_CHECKLIST_LABEL = "Open checklist";
 
 /**
  * The one status line of a not-ready batch: the count of open checks and the
@@ -161,7 +161,7 @@ export function NotReadyBatchBox({
   facilityId: string;
 }) {
   return (
-    // Phone: the checklist link takes its own row so the status line keeps
+    // Phone: the to-dos link takes its own row so the status line keeps
     // the width. From sm it sits beside the status line.
     <li className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-12 gap-y-2 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] pt-12 pr-16 pb-4 pl-44 sm:pb-12">
       <span className="col-start-1 row-start-1 min-w-0">
@@ -175,10 +175,10 @@ export function NotReadyBatchBox({
         href={creditBatchDeepLinkHref(batch.id, facilityId)}
         target="_blank"
         rel="noopener noreferrer"
-        aria-label={`${OPEN_CHECKLIST_LABEL} for ${batch.code}`}
+        aria-label={`${OPEN_TODOS_LABEL} for ${batch.code}`}
         className={cn(HIT_AREA_FROM_SM, "col-start-1 row-start-3 inline-flex min-h-44 items-center gap-4 justify-self-start body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline sm:col-start-2 sm:row-start-2 sm:min-h-0 sm:justify-self-end")}
       >
-        {OPEN_CHECKLIST_LABEL}
+        {OPEN_TODOS_LABEL}
         <ArrowSquareOutIcon size={LINK_ICON} aria-hidden />
       </Link>
     </li>

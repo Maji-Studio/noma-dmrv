@@ -61,7 +61,7 @@ describe("SelectBatchesStep", () => {
     expect(html).not.toContain("CO₂e preview");
   });
 
-  it("shows a not-ready batch as one status line and a checklist link", () => {
+  it("shows a not-ready batch as one status line and an open to-dos link", () => {
     const unmet = (key: string, unmetLabel: string) => ({
       key, status: "unmet", label: unmetLabel, requirementLabel: unmetLabel, unmetLabel,
       detail: `Detail for ${unmetLabel}`, fixTarget: "productionRuns",
@@ -101,7 +101,7 @@ describe("SelectBatchesStep", () => {
     expect(html).not.toContain("No production run linked");
     expect(html).not.toContain("Detail for");
     expect(html).not.toContain("Link production data");
-    expect(html).toContain('aria-label="Open checklist for CB-2"');
+    expect(html).toContain('aria-label="Open to-dos for CB-2"');
     expect(html).toContain('href="/credit-batches/batch-2?facility=facility-1"');
     // Only ready batches can be selected; unknown dry mass is not a zero.
     expect(html).not.toContain("Select credit batch for Jul 1 to Jul 31, 2026, CB-2");

@@ -1,7 +1,7 @@
 /**
  * SelectBatchesStep, step 1 of the New-Removal wizard. One compact box per
  * credit batch (#1202): ready batches lead and can be selected; a batch that is
- * not ready shows one status line and links to its checklist on the batch page,
+ * not ready shows one status line and links to its open to-dos on the batch page,
  * where every open item is listed and fixed. The selection step never repeats
  * that list.
  *
@@ -173,7 +173,7 @@ export function SelectBatchesStep({
         </p>
       ) : (
         // One compact box per batch (#1202): ready batches first, then the
-        // ones still open, each pointing at its checklist on the batch page.
+        // ones still open, each pointing at its open to-dos on the batch page.
         <ul className="flex flex-col gap-8" aria-label="Credit batches">
           {readyBatches.map((batch) => (
             <ReadyBatchBox

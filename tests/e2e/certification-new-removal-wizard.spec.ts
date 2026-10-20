@@ -413,7 +413,7 @@ test.describe("Certification — New-Removal wizard (Phase 0 cross-surface)", { 
 // @live: the selection step needs a linked registry to render batches, so this
 // runs in the nightly e2e-live workflow, not PR CI (--grep-invert @live). A
 // batch that is not ready is one box (#1202): its code, one status line with
-// the count and the first open check, and a link to its checklist on the batch
+// the count and the first open check, and a link to its open to-dos on the batch
 // page. The full list of gaps and their fix links live there, not here.
 test.describe("Certification — New-Removal wizard (one box per batch)", { tag: "@live" }, () => {
   test.skip(
@@ -421,7 +421,7 @@ test.describe("Certification — New-Removal wizard (one box per batch)", { tag:
     "Requires ISOMETRIC_DEMO_PROJECT_ID (real sandbox project) to link the facility.",
   );
 
-  test("shows a not-ready batch as one box with a link to its checklist", async ({
+  test("shows a not-ready batch as one box with a link to its open to-dos", async ({
     adminPage: page,
     seededData,
     cleanupTestData,
@@ -458,7 +458,7 @@ test.describe("Certification — New-Removal wizard (one box per batch)", { tag:
       await expect(dialog.getByRole("link", { name: "Link production data" })).toHaveCount(0);
       await expect(dialog.getByText(/Not ready yet/)).toHaveCount(0);
 
-      const checklist = box.getByRole("link", { name: `Open checklist for ${batch.code}` });
+      const checklist = box.getByRole("link", { name: `Open to-dos for ${batch.code}` });
       await expect(checklist).toHaveAttribute(
         "href",
         new RegExp(`/credit-batches/${batch.creditBatchId}\\?facility=${facilityId}`),
