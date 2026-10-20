@@ -75,6 +75,9 @@ export function linesDecidedByOwnerOrAdmin(count: number): string {
   return `An Owner or Admin decides ${count === 1 ? "it" : "them"} in Removal templates.`;
 }
 
+/** Who fixes a template line problem other than a decision, for a viewer who can't open Removal templates. */
+export const TEMPLATE_LINES_FIXED_BY_OWNER_OR_ADMIN = "An Owner or Admin fixes this in Removal templates.";
+
 /** The unmet Lines decided label when no line is undecided: the read or the lines are the problem. */
 export const TEMPLATE_LINES_NOT_READY_LABEL = "Template lines not ready";
 

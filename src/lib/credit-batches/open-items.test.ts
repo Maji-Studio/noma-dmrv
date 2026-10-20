@@ -224,6 +224,22 @@ describe("buildCreditBatchOpenItems", () => {
     expect(owner.check[0].target).toEqual({ href: batchHealthFixLinkFor({ key: "emissions", fixTarget: "templateLineReview" }, "facility", "batch").href });
   });
 
+  it("gives a member no Removal templates link on a template line problem", () => {
+    const check = { key: "templateLines" as const, label: "Lines decided", requirementLabel: "Lines decided", unmetLabel: "Template not fully read",
+      status: "unmet" as const, fixTarget: "templateLines" as const, detail: "Some inputs could not be read from Isometric." };
+    const input = { ...batchContext, health: { state: "incomplete" as const, issueCount: 1, checks: [check] } };
+
+    const member = buildCreditBatchOpenItems({ ...input, canManage: false });
+    expect(member.blocking[0]).toMatchObject({
+      title: "Template not fully read", detail: "An Owner or Admin fixes this in Removal templates.", target: null,
+    });
+
+    const owner = buildCreditBatchOpenItems({ ...input, canManage: true });
+    expect(owner.blocking[0].detail).toBe("Some inputs could not be read from Isometric.");
+    expect(owner.blocking[0].target).toEqual({ href: batchHealthFixLinkFor(check, "facility", "batch").href });
+    expect(batchHealthFixLinkFor(check, "facility", "batch").label).toBe("Open Removal templates");
+  });
+
   it("groups threshold, pairing, emission review and waiting items", () => {
     const input = {
       ...fixture(),
