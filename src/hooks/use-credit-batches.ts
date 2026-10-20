@@ -1,3 +1,4 @@
+import { useCreateIntentKey } from "./use-create-intent-key";
 import { getCreditBatchPageModelFn } from "@/fn/credit-batch-page-model";
 import type { ActionResult } from "@/types/actions";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
@@ -174,18 +175,20 @@ export function useCreditBatchProductionRunOptions(params: {
  */
 export function useCreateCreditBatch() {
   const queryClient = useQueryClient();
+  const intent = useCreateIntentKey();
 
-  return useMutation({
+  const mutation = useMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.creditBatch),
     // The batch and the warning are two facts about one committed write: the
     // batch is saved either way, and `warning` says its accounting roll-up did
     // not load with it (issue #769).
     mutationFn: async (data: CreditBatchFormData) => {
-      const result = await createCreditBatchFn(data);
+      const result = await createCreditBatchFn(data, { intentKey: intent.current() });
       if (!result.success) throw new Error(result.error);
       return { creditBatch: result.data, warning: result.warning };
     },
     onSuccess: ({ creditBatch }) => {
+      intent.rotate();
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.runPreviewPrefix() });
       // The created row is not an authoritative detail: when its post-commit
       // roll-up did not load, its applied tonnage and application slices are
@@ -204,6 +207,7 @@ export function useCreateCreditBatch() {
       return listRefresh;
     },
   });
+  return { ...mutation, startDraft: intent.rotate };
 }
 
 /**

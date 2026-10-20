@@ -7,7 +7,7 @@
 import { lockFormulationReference } from "./formulation-reference-guards";
 
 import { and, eq } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   drivers,
@@ -52,8 +52,13 @@ export interface CreateDriverData {
  */
 export async function createDriver(ctx: OrgContext, data: CreateDriverData): Promise<EntityOption> {
   requireOrgScope(ctx);
+  return db.transaction((tx) => createDriverInTransaction(ctx, tx, data));
+}
 
-  const [driver] = await db
+export async function createDriverInTransaction(ctx: OrgContext, tx: DbTransaction, data: CreateDriverData): Promise<EntityOption> {
+  requireOrgScope(ctx);
+
+  const [driver] = await tx
     .insert(drivers)
     .values({
       organizationId: ctx.organizationId,
@@ -82,14 +87,19 @@ export interface CreateOperatorData {
   contactPhone?: string | null;
 }
 
-export async function createOperator(
-  ctx: OrgContext,
+export async function createOperator(ctx: OrgContext, data: CreateOperatorData): Promise<EntityOption> {
+  requireOrgScope(ctx);
+  return db.transaction((tx) => createOperatorInTransaction(ctx, tx, data));
+}
+
+export async function createOperatorInTransaction(
+  ctx: OrgContext, tx: DbTransaction,
   data: CreateOperatorData
 ): Promise<EntityOption> {
   requireOrgScope(ctx);
 
   try {
-    const [operator] = await db
+    const [operator] = await tx
       .insert(operators)
       .values({
         organizationId: ctx.organizationId,

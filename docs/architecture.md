@@ -52,6 +52,11 @@ components (UI)
   correction and transport legs share its transaction. Both use the shared
   stock writer with the same dependency check as native corrections (ADR 0035).
   These UI options and the delivery operation are not published in REST/MCP.
+  Production sample, production incident, transport leg, driver, operator and
+  credit batch creates run app-only operations (`record_production_sample`,
+  `record_production_incident`, `record_transport_leg`, `create_driver`,
+  `create_operator`, `create_credit_batch`) so their forms can send an intent
+  key; the credit batch roll-up still runs after the runner returns.
 - The runner owns the transaction. Data-access ...InTransaction(ctx, tx, ...)
   functions and the helpers they call read and write only through `tx`,
   including reference checks and result enrichment. After-commit hooks run

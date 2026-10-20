@@ -8,7 +8,7 @@ import { assertRowVersion, nextVersion } from "./row-version";
  */
 
 import { and, asc, eq } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { productionSamples, operators } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope, type Executor } from "./utils";
@@ -113,8 +113,14 @@ export async function getProductionSampleById(
 /**
  * Create a new production sample
  */
-export async function createProductionSample(
+export async function createProductionSample(ctx: OrgContext, data: Parameters<typeof createProductionSampleInTransaction>[2]) {
+  requireOrgScope(ctx);
+  return db.transaction((tx) => createProductionSampleInTransaction(ctx, tx, data));
+}
+
+export async function createProductionSampleInTransaction(
   ctx: OrgContext,
+  tx: DbTransaction,
   data: {
     productionRunId: string;
     timestamp: EventInstant;
@@ -131,34 +137,32 @@ export async function createProductionSample(
   }
 ): Promise<ProductionSampleWithRelations> {
   requireOrgScope(ctx);
-  if (data.sampledById) await assertSameOrg(ctx, operators, data.sampledById);
+  if (data.sampledById) await assertSameOrg(ctx, operators, data.sampledById, tx);
 
-  return db.transaction(async (tx) => {
-    const timestamp = await resolveProductionRunEventTime(ctx, tx, data.productionRunId, data.timestamp, "timestamp");
-    const [inserted] = await tx
-      .insert(productionSamples)
-      .values({
-        organizationId: ctx.organizationId,
-        productionRunId: data.productionRunId,
-        timestamp,
-        weightGrams: data.weightGrams ?? null,
-        volumeMl: data.volumeMl ?? null,
-        temperatureC: data.temperatureC ?? null,
-        moistureContentPercent: data.moistureContentPercent ?? null,
-        fixedCarbonPercent: data.fixedCarbonPercent ?? null,
-        volatileMatterPercent: data.volatileMatterPercent ?? null,
-        ashContentPercent: data.ashContentPercent ?? null,
-        photoUrl: data.photoUrl ?? null,
-        sampledById: data.sampledById ?? null,
-        notes: data.notes ?? null,
-      })
-      .returning({ id: productionSamples.id });
+  const timestamp = await resolveProductionRunEventTime(ctx, tx, data.productionRunId, data.timestamp, "timestamp");
+  const [inserted] = await tx
+    .insert(productionSamples)
+    .values({
+      organizationId: ctx.organizationId,
+      productionRunId: data.productionRunId,
+      timestamp,
+      weightGrams: data.weightGrams ?? null,
+      volumeMl: data.volumeMl ?? null,
+      temperatureC: data.temperatureC ?? null,
+      moistureContentPercent: data.moistureContentPercent ?? null,
+      fixedCarbonPercent: data.fixedCarbonPercent ?? null,
+      volatileMatterPercent: data.volatileMatterPercent ?? null,
+      ashContentPercent: data.ashContentPercent ?? null,
+      photoUrl: data.photoUrl ?? null,
+      sampledById: data.sampledById ?? null,
+      notes: data.notes ?? null,
+    })
+    .returning({ id: productionSamples.id });
 
-    // Read the row back inside the transaction. After the commit, a failed
-    // read leaves nothing to report but "not found" for a measurement that is
-    // in fact saved (issue #769).
-    return getProductionSampleById(ctx, inserted.id, tx);
-  });
+  // Read the row back inside the transaction. After the commit, a failed
+  // read leaves nothing to report but "not found" for a measurement that is
+  // in fact saved (issue #769).
+  return getProductionSampleById(ctx, inserted.id, tx);
 }
 
 // ============================================

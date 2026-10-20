@@ -52,7 +52,7 @@ import {
   biocharTransportEvidenceDocumentCount,
   transportEvidenceDocumentCount,
 } from "./transport-evidence-projections";
-import { requireOrgScope } from "./utils";
+import { requireOrgScope, type Executor } from "./utils";
 import { lockSampleParent } from "./samples/write-scope";
 
 export type TransportEntityType = TransportEntityTypeValue;
@@ -84,9 +84,10 @@ async function resolveEntityFacility(
   ctx: OrgContext,
   entityType: TransportEntityType,
   entityId: string,
+  executor: Executor = db,
 ): Promise<{ facilityId: string }> {
   if (entityType === "feedstock") {
-    const [row] = await db
+    const [row] = await executor
       .select({ facilityId: feedstocks.facilityId })
       .from(feedstocks)
       .where(and(eq(feedstocks.id, entityId), eq(feedstocks.organizationId, ctx.organizationId)));
@@ -95,7 +96,7 @@ async function resolveEntityFacility(
   }
 
   if (entityType === "biochar") {
-    const [row] = await db
+    const [row] = await executor
       .select({ facilityId: biocharProducts.facilityId })
       .from(biocharProducts)
       .where(and(eq(biocharProducts.id, entityId), eq(biocharProducts.organizationId, ctx.organizationId)));
@@ -104,7 +105,7 @@ async function resolveEntityFacility(
   }
 
   // sample: samples → credit_batches → facility.
-  const [row] = await db
+  const [row] = await executor
     .select({ facilityId: creditBatches.facilityId })
     .from(samples)
     .innerJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
@@ -242,52 +243,56 @@ export type CreateTransportLegInput = Omit<
   entityType: TransportEntityType;
 };
 
-export async function createTransportLeg(
+export async function createTransportLeg(ctx: OrgContext, input: CreateTransportLegInput): Promise<TransportLeg> {
+  requireOrgScope(ctx);
+  return db.transaction((tx) => createTransportLegInTransaction(ctx, tx, input, "form"));
+}
+
+export async function createTransportLegInTransaction(
   ctx: OrgContext,
+  tx: DbTransaction,
   input: CreateTransportLegInput,
+  source: ActivityEventInput["source"],
 ): Promise<TransportLeg> {
   requireOrgScope(ctx);
   assertTransportEntryType(input.entityType);
 
-  await resolveEntityFacility(ctx, input.entityType, input.entityId);
+  await resolveEntityFacility(ctx, input.entityType, input.entityId, tx);
 
-  const [row] = await db.transaction(async (tx) => {
-    if (input.entityType === "sample") {
-      // The pre-check above read the parent outside this transaction. A Sample
-      // parent takes the Sample writers' full lock scope (artifacts, every
-      // batch its lineage reaches, the Sample) and its lineage is re-checked
-      // under those locks, so neither a concurrent Sample delete nor a Removal
-      // assigned while the leg waited can be missed.
-      const parent = await lockSampleParent(ctx, tx, input.entityId, { mutation: "create", subjectEntityType: "transportLeg", lineageRelationship: "linked" });
-      if (!parent) throw new SafeError(`${ENTITY_LABEL.sample} not found`);
-    } else {
-      await assertCanMutateCertifiedLineage(
-        ctx,
-        tx,
-        {
-          entityType: CERTIFIED_LINEAGE_TARGET[input.entityType],
-          entityId: input.entityId,
-        },
-        "create",
-        "transportLeg",
-        "linked",
-      );
-    }
+  if (input.entityType === "sample") {
+    // The pre-check above resolved the parent inside this transaction. A Sample
+    // parent takes the Sample writers' full lock scope (artifacts, every
+    // batch its lineage reaches, the Sample) and its lineage is re-checked
+    // under those locks, so neither a concurrent Sample delete nor a Removal
+    // assigned while the leg waited can be missed.
+    const parent = await lockSampleParent(ctx, tx, input.entityId, { mutation: "create", subjectEntityType: "transportLeg", lineageRelationship: "linked" });
+    if (!parent) throw new SafeError(`${ENTITY_LABEL.sample} not found`);
+  } else {
+    await assertCanMutateCertifiedLineage(
+      ctx,
+      tx,
+      {
+        entityType: CERTIFIED_LINEAGE_TARGET[input.entityType],
+        entityId: input.entityId,
+      },
+      "create",
+      "transportLeg",
+      "linked",
+    );
+  }
 
-    const rows = await tx
-      .insert(transportLegs)
-      .values({
-        ...input,
-        organizationId: ctx.organizationId,
-        entityType: input.entityType,
-      })
-      .returning();
-    const [saved] = rows;
-    if (saved) await recordScopedActivityChange(ctx, tx, {
-      entityType: "transport_leg", entityId: saved.id, action: "created", source: "form",
-    }, await resolveWriteActivityScopes(ctx, tx, saved.entityType, saved.entityId), null, saved);
-    return rows;
-  });
+  const rows = await tx
+    .insert(transportLegs)
+    .values({
+      ...input,
+      organizationId: ctx.organizationId,
+      entityType: input.entityType,
+    })
+    .returning();
+  const [row] = rows;
+  if (row) await recordScopedActivityChange(ctx, tx, {
+    entityType: "transport_leg", entityId: row.id, action: "created", source,
+  }, await resolveWriteActivityScopes(ctx, tx, row.entityType, row.entityId), null, row);
 
   if (!row) {
     throw new SafeError(

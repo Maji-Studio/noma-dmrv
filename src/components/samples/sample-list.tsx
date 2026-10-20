@@ -8,7 +8,7 @@ import { toDeleteErrorMessage } from "@/lib/stale-version";
  */
 
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FlaskIcon, LeafIcon, PlusIcon, XIcon, FireIcon, CertificateIcon } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, useQueryState } from "nuqs";
@@ -283,6 +283,15 @@ export function SampleList({
   const toast = useToast();
   const createTransportLeg = useCreateTransportLeg();
   const [deferredLegs, setDeferredLegs] = useState<TransportLegFormData[]>([]);
+  // One intent key per pending leg, kept while a failed leg waits for a retry,
+  // so a lost response never saves that leg twice. Read only in handlers.
+  const legIntentKeys = useRef(new WeakMap<TransportLegFormData, string>());
+  const legIntentKey = (leg: TransportLegFormData) => {
+    const keys = legIntentKeys.current;
+    const key = keys.get(leg) ?? crypto.randomUUID();
+    keys.set(leg, key);
+    return key;
+  };
 
   const samples = samplesData?.items ?? [];
   const totalPages = samplesData?.totalPages ?? 0;
@@ -353,6 +362,7 @@ export function SampleList({
         try {
           await createTransportLeg.mutateAsync({
             ...leg,
+            intentKey: legIntentKey(leg),
             entityType: "sample",
             entityId: sample.id,
           });
@@ -436,6 +446,7 @@ export function SampleList({
         try {
           await createTransportLeg.mutateAsync({
             ...leg,
+            intentKey: legIntentKey(leg),
             entityType: "sample",
             entityId: sideSheet.entity.id,
           });
