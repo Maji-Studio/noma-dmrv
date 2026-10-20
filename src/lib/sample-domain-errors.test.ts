@@ -50,7 +50,7 @@ it("maps a merged residual carbon refusal to 422 on /residualCarbonPercent", asy
   expect((await response.json()).errors).toEqual([{
     pointer: "/residualCarbonPercent",
     code: "validation_failed",
-    detail: "Reactive and residual carbon add up to 110%. They can be at most 100%.",
+    detail: "Reactive and residual carbon add up to 110%. Correct them to 100% or less.",
   }]);
   expect(() => assertCarbonReconciliation(STORED_CARBON_VALUES, {
     reactiveCarbonPercent: null,

@@ -52,14 +52,14 @@ describe("getSampleCarbonReconciliationErrors", () => {
 // Soil Environments v1.3 Eq. 6 reads only the residual value; the sum check is
 // noma's own (Kenji, 20 Oct): refuse only above 100% by more than the tolerance.
 describe("reactive plus residual organic carbon", () => {
-  const OVER_100 = "Reactive and residual carbon add up to 110%. They can be at most 100%.";
+  const OVER_100 = "Reactive and residual carbon add up to 110%. Correct them to 100% or less.";
   const ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
   const baseForm = { creditBatchId: ID, samplingTime: "2026-10-12T09:30:00Z", totalCarbonPercent: 80, organicCarbonPercent: 75, durabilityOption: "1000_year" };
 
   it("refuses on Residual carbon when the two add up to more than 100% beyond the tolerance", () => {
     expect(getSampleCarbonReconciliationErrors({ reactiveCarbonPercent: 40, residualCarbonPercent: 70 })).toEqual({ residualCarbonPercent: OVER_100 });
     expect(getSampleCarbonReconciliationErrors({ reactiveCarbonPercent: 40.1, residualCarbonPercent: 70.2 }).residualCarbonPercent)
-      .toBe("Reactive and residual carbon add up to 110.3%. They can be at most 100%.");
+      .toBe("Reactive and residual carbon add up to 110.3%. Correct them to 100% or less.");
     expect(getSampleCarbonReconciliationErrors({ reactiveCarbonPercent: 30, residualCarbonPercent: 70.6 }).residualCarbonPercent).toBeDefined();
   });
 
@@ -90,6 +90,24 @@ describe("reactive plus residual organic carbon", () => {
     // An empty total carbon does not hold back the reactive plus residual check.
     const noTotal = sampleFormSchema.safeParse({ ...baseForm, totalCarbonPercent: undefined, reactiveCarbonPercent: 40, residualCarbonPercent: 70 }).error?.issues ?? [];
     expect(noTotal.map(issue => issue.path[0]).sort()).toEqual(["residualCarbonPercent", "totalCarbonPercent"]);
+  });
+
+  it("refuses a body that is not an object without reading carbon from it", () => {
+    for (const body of [null, undefined]) {
+      for (const schema of [sampleFormSchema, updateSampleSchema, recordLabSampleInput, updateLabSampleApiInput]) {
+        const issues = schema.safeParse(body).error?.issues ?? [];
+        expect(issues.map(issue => issue.path), String(body)).toEqual([[]]);
+      }
+    }
+  });
+
+  it("lists the carbon refusal beside an unrelated field error in the API bodies", () => {
+    const over = { reactiveCarbonPercent: 40, residualCarbonPercent: 70 };
+    const create = recordLabSampleInput.safeParse({ creditBatchId: ID, samplingTime: "2026-10-12T09:30:00Z", totalCarbonPercent: 80, organicCarbonPercent: 75, ph: 20, ...over }).error?.issues ?? [];
+    expect(create.map(issue => issue.path[0]).sort()).toEqual(["ph", "residualCarbonPercent"]);
+    const update = updateLabSampleApiInput.safeParse({ labName: 7, ...over }).error?.issues ?? [];
+    expect(update.map(issue => issue.path[0]).sort()).toEqual(["labName", "residualCarbonPercent"]);
+    expect(update).toContainEqual(expect.objectContaining({ path: ["residualCarbonPercent"], message: OVER_100 }));
   });
 
   it("refuses the saved Sample whose stored reactive plus a new residual goes over", () => {

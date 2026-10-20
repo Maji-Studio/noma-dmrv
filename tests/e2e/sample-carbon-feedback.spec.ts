@@ -4,7 +4,7 @@ import { setFacilityDurabilityTier } from "./fixtures/certification-mapping-help
 import { selectEntity } from "./fixtures/page-helpers";
 import { seedCreditBatch } from "./fixtures/seed-chain-data";
 
-const REACTIVE_RESIDUAL_OVER_100 = "Reactive and residual carbon add up to 110%. They can be at most 100%.";
+const REACTIVE_RESIDUAL_OVER_100 = "Reactive and residual carbon add up to 110%. Correct them to 100% or less.";
 
 test.describe("Sample carbon feedback", () => {
   test("shows and clears concise reconciliation errors while entering carbon values", async ({

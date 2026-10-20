@@ -4,7 +4,7 @@ import {
   calendarDateSchema, clearableNumber, expectedVersionSchema, optionalNumber, PG_INTEGER_MAX, pipeToCanonicalNumber,
   RATIO_INPUT_MAX, RATIO_MAX_MESSAGE, requiredNumber, toClearableNumber, toNumberOrNull, uuidSchema,
 } from "./helpers";
-import { CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS, getSampleCarbonReconciliationErrors, samplePhysicalNumber, updateSampleSchema } from "./samples";
+import { CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS, samplePhysicalNumber, updateSampleSchema, withCarbonRefusals } from "./samples";
 
 /**
  * What REST and MCP publish for one lab Sample (Phase 5a). Not published:
@@ -103,29 +103,12 @@ const sharedFields = {
   tgaAnalysisDate: calendarDateSchema().nullable().optional().describe(DESCRIPTIONS.tgaAnalysisDate),
 };
 
-interface CarbonValues {
-  totalCarbonPercent?: number | null;
-  organicCarbonPercent?: number | null;
-  inorganicCarbonPercent?: number | null;
-  reactiveCarbonPercent?: number | null;
-  residualCarbonPercent?: number | null;
-}
-
-/** The carbon excess check on the figures in this body; the writer repeats it on the merged row. */
-function refineCarbon(value: CarbonValues, ctx: z.RefinementCtx<CarbonValues>) {
-  const errors = getSampleCarbonReconciliationErrors(value);
-  for (const field of ["organicCarbonPercent", "inorganicCarbonPercent", "residualCarbonPercent"] as const) {
-    const message = errors[field];
-    if (message) ctx.addIssue({ code: "custom", path: [field], message });
-  }
-}
-
 /**
  * The published body of `record_lab_sample`. `samplingTime` is an offset
  * instant, or a `{ date, time }` read in the credit batch facility's zone;
  * a time in the future is refused.
  */
-export const recordLabSampleInput = z.strictObject({
+export const recordLabSampleInput = withCarbonRefusals(z.strictObject({
   creditBatchId: uuidSchema("Choose a valid credit batch.").describe(DESCRIPTIONS.creditBatchId),
   samplingTime: eventInstantSchema,
   totalCarbonPercent: pipeToCanonicalNumber(requiredNumber(CARBON_REQUIRED_MESSAGE), percent).describe(DESCRIPTIONS.totalCarbonPercent),
@@ -133,7 +116,7 @@ export const recordLabSampleInput = z.strictObject({
   ...sharedFields,
   ...numericFields(optional),
   r0MeasurementCount: z.preprocess(toNumberOrNull, count.nullable().optional()).describe(DESCRIPTIONS.r0MeasurementCount),
-}).superRefine(refineCarbon);
+}));
 
 export type RecordLabSampleInput = z.output<typeof recordLabSampleInput>;
 
@@ -151,14 +134,14 @@ const publishedUpdateFields = {
 };
 
 /** The published PATCH body; the transport supplies the sample id and the If-Match version. */
-export const updateLabSampleApiInput = z.strictObject(publishedUpdateFields).superRefine(refineCarbon);
+export const updateLabSampleApiInput = withCarbonRefusals(z.strictObject(publishedUpdateFields));
 
 /** The `update_lab_sample` input: the id and version join the body because MCP has no path or If-Match. */
-export const updateLabSampleInput = z.strictObject({
+export const updateLabSampleInput = withCarbonRefusals(z.strictObject({
   labSampleId: uuidSchema().describe("Target lab sample UUID."),
   expectedVersion: expectedVersionSchema.describe("Version from get_lab_sample."),
   ...publishedUpdateFields,
-}).superRefine(refineCarbon);
+}));
 
 export type UpdateLabSampleInput = z.output<typeof updateLabSampleInput>;
 

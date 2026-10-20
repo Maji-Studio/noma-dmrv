@@ -219,7 +219,7 @@ a UTC-midnight `Date`, and publishes as `format: date`. Server re-validation
 accepts a `Date` only at UTC midnight. Use `toDateInputValue` for defaults of
 these persisted UTC date-only values.
 
-Use `requiredDateOnly` / `optionalDateOnly` where a date is combined with a
+Use `requiredDateOnlySchema(<required message>)` / `optionalDateOnly` where a date is combined with a
 facility time, as in production runs. They parse `"YYYY-MM-DD"` at **local**
 midnight, because `new Date("YYYY-MM-DD")` parses as **UTC** midnight, which can
 render as the adjacent day and walk a stored date on an edit/save round-trip.

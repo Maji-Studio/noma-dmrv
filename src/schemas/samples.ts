@@ -138,7 +138,7 @@ export interface SampleCarbonReconciliationErrors {
 }
 
 export function reactiveResidualCarbonExceedsCeilingMessage(sum: number): string {
-  return `Reactive and residual carbon add up to ${formatPercent(sum, { digits: CARBON_SUM_DISPLAY_DIGITS })}. They can be at most ${CARBON_PERCENT_CEILING}%.`;
+  return `Reactive and residual carbon add up to ${formatPercent(sum, { digits: CARBON_SUM_DISPLAY_DIGITS })}. Correct them to ${CARBON_PERCENT_CEILING}% or less.`;
 }
 
 function isCompleteNumber(value: number | null | undefined): value is number {
@@ -194,22 +194,31 @@ const CARBON_REFUSAL_INPUTS: Record<keyof SampleCarbonReconciliationErrors, read
   residualCarbonPercent: ["reactiveCarbonPercent", "residualCarbonPercent"],
 };
 
+/** The fields a carbon refusal sits on, in the order the writer reports them. */
+export const SAMPLE_CARBON_REFUSAL_FIELDS = Object.keys(CARBON_REFUSAL_INPUTS) as (keyof SampleCarbonReconciliationErrors)[];
+
+export type SampleCarbonRefusalField = keyof SampleCarbonReconciliationErrors;
+
 /**
  * Zod skips object refinements once any field has failed, so a Save with an
  * empty sampling time would not list a carbon refusal the form already shows
- * live. Each carbon check runs unless one of its own inputs failed to parse.
+ * live. Each carbon check runs unless one of its own inputs failed to parse,
+ * or the body itself is not an object.
  * Custom issues are refusals, such as the carbon ones before this check, not
  * parse failures: the carbon inputs raise none.
  */
 function inputsParsed(fields: readonly PropertyKey[]) {
-  return (payload: z.core.ParsePayload): boolean => !payload.issues.some((issue) =>
-    issue.code !== "custom" && fields.includes(issue.path?.[0] as PropertyKey),
-  );
+  return (payload: z.core.ParsePayload): boolean =>
+    typeof payload.value === "object" && payload.value !== null &&
+    !payload.issues.some((issue) =>
+      !issue.path?.length ||
+      (issue.code !== "custom" && fields.includes(issue.path[0] as PropertyKey)),
+    );
 }
 
 /** One refinement per refused field, so each refusal sits on its own input. */
 function carbonRefusal(
-  field: keyof SampleCarbonReconciliationErrors,
+  field: SampleCarbonRefusalField,
 ): [(value: SampleCarbonValues) => boolean, z.core.$ZodCustomParams] {
   return [
     (value) => !getSampleCarbonReconciliationErrors(value)[field],
@@ -219,6 +228,18 @@ function carbonRefusal(
       error: (issue) => getSampleCarbonReconciliationErrors(issue.input as SampleCarbonValues)[field],
     },
   ];
+}
+
+/**
+ * Adds the carbon reconciliation refusals to a Sample body schema: the form,
+ * the server update and the REST/MCP bodies all use this one chain.
+ */
+export function withCarbonRefusals<T extends z.ZodType<SampleCarbonValues>>(schema: T): T {
+  let refined = schema;
+  for (const field of SAMPLE_CARBON_REFUSAL_FIELDS) {
+    refined = refined.refine(...carbonRefusal(field)) as T;
+  }
+  return refined;
 }
 
 // ============================================
@@ -238,7 +259,7 @@ function carbonRefusal(
  * 6. Stability — hToCOrgRatio (calculated)
  * 7. 1000-Year Durability (conditional) — R₀ reflectance, TGA non-reactive carbon
  */
-export const sampleFormSchema = z
+export const sampleFormSchema = withCarbonRefusals(z
   .object({
     // === Section 1: Sample Info ===
     // The credit batch (protocol production batch) this lab replicate
@@ -317,10 +338,7 @@ export const sampleFormSchema = z
     magnesiumPercent: optionalPercentInput,
     calciumPercent: optionalPercentInput,
     ironPercent: optionalPercentInput,
-  })
-  .refine(...carbonRefusal("organicCarbonPercent"))
-  .refine(...carbonRefusal("inorganicCarbonPercent"))
-  .refine(...carbonRefusal("residualCarbonPercent"))
+  }))
   .superRefine((value, ctx) => {
     // Conditional validation for nutrient claims
     if (value.nutrientClaimEnabled) {
@@ -357,7 +375,7 @@ export const createSampleSchema = sampleFormSchema;
  * Schema for updating a sample (server action)
  * All fields optional except sampleId
  */
-export const updateSampleSchema = z.object({
+export const updateSampleSchema = withCarbonRefusals(z.object({
   expectedVersion: expectedVersionSchema,
   sampleId: z.string().uuid("Choose a valid Sample."),
   sampleCode: z
@@ -401,10 +419,7 @@ export const updateSampleSchema = z.object({
   magnesiumPercent: percentNumber.optional().nullable(),
   calciumPercent: percentNumber.optional().nullable(),
   ironPercent: percentNumber.optional().nullable(),
-})
-  .refine(...carbonRefusal("organicCarbonPercent"))
-  .refine(...carbonRefusal("inorganicCarbonPercent"))
-  .refine(...carbonRefusal("residualCarbonPercent"));
+}));
 
 /**
  * Schema for deleting a sample

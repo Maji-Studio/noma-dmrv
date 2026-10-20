@@ -17,7 +17,7 @@
  */
 import type { samples } from "@/db/schema";
 import { SampleFieldError } from "@/lib/sample-domain-errors";
-import { getSampleCarbonReconciliationErrors } from "@/schemas/samples";
+import { getSampleCarbonReconciliationErrors, SAMPLE_CARBON_REFUSAL_FIELDS } from "@/schemas/samples";
 
 export function assertCarbonReconciliation(
   existing: Pick<
@@ -66,7 +66,7 @@ export function assertCarbonReconciliation(
     reactiveCarbonPercent: reactive,
     residualCarbonPercent: residual,
   });
-  for (const field of ["organicCarbonPercent", "inorganicCarbonPercent", "residualCarbonPercent"] as const) {
+  for (const field of SAMPLE_CARBON_REFUSAL_FIELDS) {
     const message = errors[field];
     if (message) throw new SampleFieldError(message, field);
   }
