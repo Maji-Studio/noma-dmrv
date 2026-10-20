@@ -5,6 +5,7 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { deliveryActionFieldIssues } from "@/lib/delivery-action-errors";
 import { Notice } from "@/components/ui/notice";
 import { deliveryAfterDistanceFill } from "@/lib/delivery-distance-refresh";
@@ -85,6 +86,7 @@ interface DeliveryFormProps {
 }
 
 export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, errorMessage, submitLabel, deferredAttachments, focusTarget, onDistanceRefreshed }: DeliveryFormProps) {
+  const latched = useLatchedSubmit();
   const refreshedDelivery = useDeliveryWithRelations(delivery?.id ?? "");
   const distanceRecord = delivery ? deliveryAfterDistanceFill(delivery, refreshedDelivery.data) : undefined;
   const isEditMode = !!delivery;
@@ -237,7 +239,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
   const defaultSubmitLabel = isEditMode ? "Update delivery" : "Create delivery";
 
-  const submitDelivery = handleSubmit(async (data) => {
+  const submitDelivery = latched(handleSubmit(async (data) => {
     if (!canSave || (stockLocked && (massChanged || dateChanged))) return;
     const submitted = { overriding, distanceKm: data.distanceKmOverride, source: data.distanceSource, note: data.distanceNote };
     const overrideError = overrideDistanceError(submitted);
@@ -263,7 +265,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       });
       return true;
     }, distanceRecord?.version);
-  });
+  }));
 
   return (
     // The wrapper div absorbs the side-sheet Body's direct-child flex-col

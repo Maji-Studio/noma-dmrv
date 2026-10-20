@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -70,6 +70,7 @@ export function FacilityForm({
   submitLabel,
   cancelLabel,
 }: FacilityFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!facility;
   // Organization operating defaults seed create mode only; an existing record
   // always wins. Warmed once per session in FacilityProvider, so this is a
@@ -112,26 +113,8 @@ export function FacilityForm({
   const durabilityOption = watch("durabilityOption") ?? DEFAULT_DURABILITY_OPTION;
   const timezoneField = register("timezone");
 
-  // Re-entrancy latch against a rapid double-submit (QA: a double-click on
-  // Create Facility created two facilities). The parent's `isSubmitting`
-  // disables the button only after its async mutation state round-trips a
-  // render, so two submits dispatched in the same tick both slip through before
-  // the button disables. The latch is touched only inside this event handler
-  // (never during render, per the React Compiler refs rule); microtask FIFO
-  // ordering means the first validated submit sets it before the second's
-  // validation resolves, and the `finally` re-arms it so a validation failure
-  // or a settled mutation still allows a later legitimate resubmit.
-  const submitLockRef = useRef(false);
-
-  const handleFormSubmit = handleSubmit(async (data) => {
-    if (submitLockRef.current) return;
-    submitLockRef.current = true;
-    try {
-      await onSubmit(data as FacilityFormData);
-    } finally {
-      submitLockRef.current = false;
-    }
-  });
+  // `latched` holds a double-click (QA: one created two facilities) until the save settles.
+  const handleFormSubmit = latched(handleSubmit((data) => onSubmit(data as FacilityFormData)));
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">

@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
@@ -56,6 +57,7 @@ export function ProductionSampleForm({
   onRetryDeferredAttachment,
   onRemoveDeferredAttachment,
 }: ProductionSampleFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!sample;
   // A saved measurement inherits its run's lineage; once submitted its files cannot change.
   const locked = useIsRecordCertificationLocked("production_sample", sample?.id);
@@ -90,7 +92,7 @@ export function ProductionSampleForm({
 
   // Rendered via the parent ProductionRunForm's `children` slot, which lives
   // outside its <form> element — so a real <form> is safe here (no nesting).
-  const onFormSubmit = handleSubmit((data) => onSubmit(data as ProductionSampleFormData));
+  const onFormSubmit = latched(handleSubmit((data) => onSubmit(data as ProductionSampleFormData)));
 
   return (
     <form className="space-y-20" onSubmit={onFormSubmit}>

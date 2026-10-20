@@ -30,11 +30,11 @@ vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ fa
 vi.mock("@/hooks/use-organization-settings", () => ({ useOrganizationDefaultValues: () => ({ defaults: { defaultCountry: "Tanzania" } }) }));
 vi.mock("@/hooks/use-suppliers", () => ({
   useCreateSupplierWithLocations: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useCreateSupplierLocation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateSupplierLocation: () => ({ startDraft: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useUpdateSupplierLocation: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock("@/hooks/use-customers", () => ({
-  useCreateCustomerLocation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateCustomerLocation: () => ({ startDraft: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useUpdateCustomerLocation: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock("@/hooks/use-geo", () => ({

@@ -11,6 +11,7 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { formatUtcDate, toDateInputValue } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
@@ -114,6 +115,7 @@ export function CreditBatchForm({
   windowForFeedstock,
   lock,
 }: CreditBatchFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!creditBatch;
   // Fail closed: the definition stays fixed until the lock answers, so a
   // lock that arrives Held can never meet an edited membership.
@@ -323,14 +325,14 @@ export function CreditBatchForm({
     ? "Update credit batch"
     : "Create credit batch";
 
-  const handleFormSubmit = handleSubmit((data) => {
+  const handleFormSubmit = latched(handleSubmit((data) => {
     const sampling =
       isEditMode ||
       (showSamplingControl && methodBEligibility.data?.unsampledAllowed)
         ? data.sampling
         : "sampled";
-    onSubmit({ ...data, sampling });
-  });
+    return onSubmit({ ...data, sampling });
+  }));
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">

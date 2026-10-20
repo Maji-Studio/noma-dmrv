@@ -229,6 +229,7 @@ export function OrderList() {
 
   // Side sheet helpers
   const openCreate = () => {
+    createOrder.startDraft();
     void setFocusedOrderId(null);
     setFormError(null);
     setSideSheet({ entity: null, mode: "create" });

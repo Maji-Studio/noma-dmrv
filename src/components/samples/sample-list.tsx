@@ -490,6 +490,7 @@ export function SampleList({
   };
 
   const openCreate = () => {
+    createSample.startDraft();
     createIntent.clear();
     setFocusedSampleId(null);
     setDeepLinkMode(null);
@@ -514,6 +515,8 @@ export function SampleList({
     setSideSheet({ mode: "edit", entity: sample });
   };
   const closeSideSheet = () => {
+    // A deep-linked create skips openCreate, so closing ends the draft and its key.
+    createSample.startDraft();
     createIntent.clear();
     setFocusedSampleId(null);
     setDeepLinkMode(null);

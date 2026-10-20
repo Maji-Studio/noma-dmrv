@@ -20,6 +20,7 @@ import {
   applicationEvidenceMethods,
   applicationStatuses,
 } from "@/schemas/applications";
+import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
 
 const MAX_APPLICATION_LIST_SIZE = 100;
 
@@ -75,8 +76,11 @@ export async function getApplicationDeliveryOptionsFn(
   });
 }
 
-export async function createApplicationFn(data: z.input<typeof recordApplicationInput>): Promise<ActionResult<Application>> {
-  return withAction(async ctx => (await runOperationInProcess(recordApplication, ctx, recordApplicationInput.parse(data))).application, {
+export async function createApplicationFn(
+  data: z.input<typeof recordApplicationInput>,
+  options?: CreateIntentOptions
+): Promise<ActionResult<Application>> {
+  return withAction(async ctx => (await runOperationInProcess(recordApplication, ctx, recordApplicationInput.parse(data), createIntentOptionsSchema.parse(options))).application, {
     fallbackMessage: "Failed to create application", log: { message: "application action failed", context: { op: "application:create" } },
   });
 }

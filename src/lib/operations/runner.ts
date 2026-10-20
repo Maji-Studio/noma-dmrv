@@ -25,7 +25,7 @@ import { z } from "zod";
 import type { Pool } from "pg";
 import type { DbTransaction } from "@/db";
 import { pgErrorCode, PG_LOCK_NOT_AVAILABLE, PG_QUERY_CANCELED } from "@/db/errors";
-import { OPERATION_DEADLINE_MS, OPERATION_MAX_ATTEMPTS } from "@/config/operations";
+import { APP_FORM_CREDENTIAL_PREFIX, OPERATION_DEADLINE_MS, OPERATION_MAX_ATTEMPTS } from "@/config/operations";
 import { isRetryableTransactionError, nextRetryDelayOrThrow } from "@/lib/db/transaction-retry";
 import {
   assertIdempotencyKeyUnused,
@@ -47,6 +47,12 @@ export type { OperationEffect } from "@/lib/operation-effect";
 
 /** Version of the request contract folded into idempotency fingerprints. */
 const API_CONTRACT_VERSION = "v1";
+const APP_INTENT_ERROR_COPY = {
+  idempotency_key_reused: "This entry was already saved with other values. Close the form and check the list.",
+  idempotency_in_progress: "This entry is still saving. Wait a moment, then check the list.",
+  outcome_unknown: "It is not known whether this entry was saved. Save again: it will not be saved twice.",
+  replay_unavailable: "This entry was already saved. Close the form and check the list.",
+} as const;
 
 export interface OperationScope {
   /** Absolute request deadline, including after-commit work. */
@@ -202,12 +208,32 @@ export function keylessOutcomeUnknown(error: unknown): unknown {
   return error;
 }
 
-/** Native results for server actions; replay and previews are JSON-only contracts. */
+/** JSON for app outcomes only; tag Dates before JSON can call Date.toJSON. */
+function encodeAppOutcome(value: unknown): unknown {
+  if (value instanceof Date) return { $date: value.toISOString() };
+  if (Array.isArray(value)) return value.map(encodeAppOutcome);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, encodeAppOutcome(nested)]));
+  }
+  return value;
+}
+
+function decodeAppOutcome(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(decodeAppOutcome);
+  if (value && typeof value === "object") {
+    if ("$date" in value && typeof value.$date === "string" && Object.keys(value).length === 1) return new Date(value.$date);
+    return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, decodeAppOutcome(nested)]));
+  }
+  return value;
+}
+
+/** Native results for server actions, including replayed create intents. */
 export async function runOperationInProcess<Input extends z.ZodType, Output>(
   operation: Operation<Input, Output, OperationEffect | undefined>,
   ctx: OrgContext,
   input: unknown,
   options: Pick<RunOptions, "deadlineMs" | "pool" | "activitySource"> & {
+    intentKey?: string;
     idempotency?: never;
     dryRun?: never;
   } = {},
@@ -216,9 +242,24 @@ export async function runOperationInProcess<Input extends z.ZodType, Output>(
     throw new DomainError("validation_failed", "In-process operations do not accept idempotency or dry run.");
   }
   try {
+    if (options.intentKey !== undefined) {
+      const result = await runOperationCore(operation, ctx, input, {
+        ...options,
+        idempotency: { credentialId: `${APP_FORM_CREDENTIAL_PREFIX}${ctx.userId}`, key: options.intentKey },
+      }, (data) => toJson(encodeAppOutcome(data)));
+      return decodeAppOutcome(result.data) as Output;
+    }
     const result = await runOperationCore(operation, ctx, input, options, (data) => data);
     return result.data;
   } catch (error) {
+    if (options.intentKey !== undefined) {
+      if (error instanceof DomainError && error.code in APP_INTENT_ERROR_COPY) {
+        throw new DomainError(error.code, APP_INTENT_ERROR_COPY[error.code as keyof typeof APP_INTENT_ERROR_COPY], {
+          cause: error, retryable: error.retryable, retryAfterSeconds: error.retryAfterSeconds,
+        });
+      }
+      throw error;
+    }
     throw keylessOutcomeUnknown(error);
   }
 }

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
+import { withAction } from "@/fn/with-action";
 import { toActionFailure } from "@/fn/action-errors";
 import { runOperation, runOperationInProcess, type Operation, type OperationScope, type RunOptions } from "./runner";
 
@@ -13,6 +14,7 @@ vi.mock("@/data-access/activity-events", () => ({ recordActivity: activity }));
 vi.mock("@/data-access/owned-transaction", () => ({ runOwnedTransaction: owned }));
 vi.mock("@/data-access/api-idempotency-records", () => ({ recordIdempotencyOutcome: record, claimIdempotencyKey: claim, assertIdempotencyKeyUnused: vi.fn() }));
 vi.mock("@/lib/log", () => ({ logger: { warn, error: vi.fn() }, sanitizeErrorMessage: () => "sanitized" }));
+vi.mock("@/lib/auth/server", () => ({ requireOrgContext: async () => ctx }));
 const ctx = { userId: "user-id", organizationId: "org-id", orgRole: "admin", isPlatformAdmin: false } satisfies OrgContext;
 const tx = {} as OperationScope["tx"];
 const saved = new Date("2026-10-06T00:00:00Z");
@@ -256,6 +258,57 @@ describe("shared operation runner", () => {
     expect(apiError.message).toContain("Retry with the same idempotency key.");
   });
 
+  it("claims an app intent and returns the same native Dates on first save and replay", async () => {
+    const intentKey = "11111111-1111-4111-8111-111111111111";
+    claim.mockResolvedValueOnce({ kind: "owner", recordId: "app-record" });
+    const execute = vi.fn(operation.execute);
+    const first = await runOperationInProcess({ ...operation, execute }, ctx, { amount: 1 }, { intentKey });
+    expect(claim).toHaveBeenCalledWith(ctx, tx, expect.objectContaining({ credentialId: "app-form:user-id", key: intentKey }));
+    const stored = JSON.parse(JSON.stringify(record.mock.calls[0][3]));
+    expect(stored).toEqual({ date: { $date: saved.toISOString() }, amount: 1 });
+    claim.mockResolvedValueOnce({ kind: "replay", outcome: stored });
+    const replay = await runOperationInProcess({ ...operation, execute }, ctx, { amount: 1 }, { intentKey });
+    expect(first).toEqual({ date: saved, amount: 1 });
+    expect(replay).toEqual(first);
+    expect(replay.date).toBeInstanceOf(Date);
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["idempotency_key_reused", "This entry was already saved with other values. Close the form and check the list."],
+    ["idempotency_in_progress", "This entry is still saving. Wait a moment, then check the list."],
+    ["outcome_unknown", "It is not known whether this entry was saved. Save again: it will not be saved twice."],
+    ["replay_unavailable", "This entry was already saved. Close the form and check the list."],
+  ] as const)("preserves the cause and exposes app copy for keyed %s", async (code, message) => {
+    const cause = new DomainError(code, "Transport copy", { retryable: true });
+    owned.mockRejectedValueOnce(cause);
+    const error = await runOperationInProcess(operation, ctx, { amount: 1 }, { intentKey: "draft" }).catch(error => error);
+    expect(error).toMatchObject({ code, message, cause });
+    expect(toActionFailure(error, { fallbackMessage: "Fallback", log: { message: "failed" } }))
+      .toEqual({ success: false, code, error: message });
+    owned.mockRejectedValueOnce(cause);
+    expect(await withAction(ctx => runOperationInProcess(operation, ctx, { amount: 1 }, { intentKey: "draft" })))
+      .toEqual({ success: false, code, error: message });
+  });
+
+  it("leaves keyless errors and claims unchanged", async () => {
+    const error = new DomainError("replay_unavailable", "Original copy");
+    owned.mockRejectedValueOnce(error);
+    await expect(runOperationInProcess(operation, ctx, { amount: 1 })).rejects.toBe(error);
+    expect(claim).not.toHaveBeenCalled();
+  });
+
+  it("revives nested Dates while leaving date strings and null values alone", async () => {
+    const output = { entries: [{ when: saved, text: saved.toISOString(), missing: null }] };
+    const op = { ...operation, describe: undefined, execute: async () => output };
+    claim.mockResolvedValueOnce({ kind: "owner", recordId: "nested" });
+    const options = { intentKey: "nested-draft" };
+    const first = await runOperationInProcess(op, ctx, { amount: 1 }, options);
+    claim.mockResolvedValueOnce({ kind: "replay", outcome: JSON.parse(JSON.stringify(record.mock.calls[0][3])) });
+    expect(await runOperationInProcess(op, ctx, { amount: 1 }, options)).toEqual(output);
+    expect(first).toEqual(output);
+  });
+
   it("keeps native Dates for in-process results and JSON Dates for API responses and replays", async () => {
     expect((await runOperationInProcess(operation, ctx, { amount: 1 })).date).toBe(saved);
     claim.mockResolvedValueOnce({ kind: "claimed", recordId: "record-id" });
@@ -267,10 +320,10 @@ describe("shared operation runner", () => {
     expect((await runOperation(operation, ctx, { amount: 1 }, options)).data).toEqual(first.data);
   });
 
-  it("refuses dry run and idempotency at runtime on the native seam", async () => {
+  it.each([undefined, "11111111-1111-4111-8111-111111111111"])("refuses dry run and idempotency at runtime with intent %s", async (intentKey) => {
     for (const options of [{ dryRun: true }, { dryRun: false }, { idempotency: { credentialId: "id", key: "key" } }] satisfies RunOptions[]) {
       // @ts-expect-error The type contract also refuses these options.
-      await expect(runOperationInProcess(operation, ctx, { amount: 1 }, options)).rejects.toMatchObject({ code: "validation_failed" });
+      await expect(runOperationInProcess(operation, ctx, { amount: 1 }, { ...options, intentKey })).rejects.toMatchObject({ code: "validation_failed" });
     }
     expect(owned).not.toHaveBeenCalled();
   });

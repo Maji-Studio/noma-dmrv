@@ -8,6 +8,7 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
@@ -74,6 +75,7 @@ export function ReactorForm({
   submitLabel,
   cancelLabel,
 }: ReactorFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!reactor;
   const { facilityId: contextFacilityId } = useFacilityContext();
   const defaultReactorType = isReactorType(reactor?.reactorType)
@@ -109,13 +111,13 @@ export function ReactorForm({
 
   const defaultSubmitLabel = isEditMode ? "Update reactor" : "Create reactor";
 
-  const handleFormSubmit = handleSubmit((data) => {
+  const handleFormSubmit = latched(handleSubmit((data) => {
     const { capacityTph, ...rest } = data as ReactorFormData;
-    onSubmit({
+    return onSubmit({
       ...rest,
       nominalThroughputTph: capacityTph ?? null,
     });
-  });
+  }));
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">

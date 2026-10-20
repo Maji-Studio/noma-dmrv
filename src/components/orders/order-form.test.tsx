@@ -9,7 +9,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { CustomerLocation, Facility, Order } from "@/db/schema";
 import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
 import type { RecordLockView } from "@/lib/record-lock-view";
@@ -426,4 +426,32 @@ describe("OrderForm record lock (#1119)", () => {
     const fields = renderLocked("sent");
     expect(Object.values(fields).every(isDisabled)).toBe(true);
   });
+});
+
+it("keeps one order submit in flight and allows a separate entry after it settles", async () => {
+  let resolve!: () => void;
+  const pending = new Promise<void>((done) => { resolve = done; });
+  const submit = vi.fn(() => pending);
+  const client = new QueryClient();
+  render(<QueryClientProvider client={client}>
+    <OrderForm order={{
+      id: "order-1", facilityId: "22222222-2222-4222-8222-222222222222",
+      customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: "11111111-1111-4111-8111-111111111111",
+      formulationId: "44444444-4444-4444-8444-444444444444",
+      orderDate: new Date("2026-09-01T00:00:00Z"), quantityKg: 1000, packaging: "loose",
+    } as Order} onSubmit={submit} lock={OPEN_LOCK} />
+  </QueryClientProvider>);
+  const form = screen.getByLabelText(/^Order date/).closest("form")!;
+  await act(async () => {
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+  });
+  expect(submit).toHaveBeenCalledTimes(1);
+  // The latch must still hold after validation and a render, until the save ends.
+  await act(async () => { fireEvent.submit(form); });
+  expect(submit).toHaveBeenCalledTimes(1);
+  await act(async () => { resolve(); await pending; });
+  await act(async () => { fireEvent.submit(form); });
+  expect(submit).toHaveBeenCalledTimes(2);
+  client.clear();
 });

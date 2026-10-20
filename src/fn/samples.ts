@@ -26,6 +26,7 @@ import {
   sampleFilterSchema,
 } from "@/schemas/samples";
 import type { ActionResult } from "@/types/actions";
+import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
 
 /** Keep the per-operation log context the legacy actions emitted. */
 function logFor(op: string) {
@@ -114,7 +115,8 @@ export async function getSampleStatsFn(
  * nutrient toggle, file URLs without an input) stay behind.
  */
 export async function createSampleFn(
-  data: z.infer<typeof createSampleSchema>
+  data: z.infer<typeof createSampleSchema>,
+  options?: CreateIntentOptions
 ): Promise<ActionResult<SampleWithRelations>> {
   return withAction(async (ctx) => {
     const validated = createSampleSchema.parse(data);
@@ -151,7 +153,7 @@ export async function createSampleFn(
       magnesiumPercent: validated.magnesiumPercent ?? null,
       calciumPercent: validated.calciumPercent ?? null,
       ironPercent: validated.ironPercent ?? null,
-    });
+    }, createIntentOptionsSchema.parse(options));
     return result.sample;
   }, { fallbackMessage: "Failed to create sample", log: logFor("sample:create") });
 }

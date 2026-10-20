@@ -115,7 +115,7 @@ vi.mock("@/hooks/use-feedstocks", () => ({
     error: null,
     isSuccess: true,
   }),
-  useCreateFeedstock: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateFeedstock: () => ({ startDraft: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useUpdateFeedstock: () => ({
     mutateAsync: mocks.updateMutation.mockRejectedValue(mocks.updateRejection),
     isPending: false,

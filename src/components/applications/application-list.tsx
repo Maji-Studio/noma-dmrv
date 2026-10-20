@@ -465,6 +465,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   };
 
   const openCreate = () => {
+    createApplication.startDraft();
     void setFocusedApplicationId(null);
     setCreateError(null);
     setUpdateError(null);

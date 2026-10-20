@@ -11,6 +11,7 @@
  * longer carries a single GPS position.
  */
 "use client";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useLocationEditIntent } from "@/hooks/use-location-edit-intent";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 import { useToast } from "@/components/ui/toast";
@@ -133,6 +134,7 @@ export function SupplierForm({
   errorMessage,
   submitLabel,
 }: SupplierFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!supplier;
   const [pendingLocations, setPendingLocations] = useState<PendingSupplierLocation[]>([]);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -163,17 +165,17 @@ export function SupplierForm({
   // without an id would otherwise show the pending-list builder yet drop it here.
   const managesLiveLocations = isEditMode && !!supplierId;
 
-  const handleFormSubmit = handleSubmit((data) => {
+  const handleFormSubmit = latched(handleSubmit((data) => {
     if (!managesLiveLocations && pendingLocations.length === 0) {
       setLocationError("At least one location is required");
       return;
     }
     setLocationError(null);
-    onSubmit(
+    return onSubmit(
       data as SupplierFormData,
       managesLiveLocations ? undefined : pendingLocations
     );
-  });
+  }));
 
   const handleAddPendingLocation = (loc: PendingSupplierLocation) => {
     setPendingLocations((prev) => withAddedLocation(prev, loc));

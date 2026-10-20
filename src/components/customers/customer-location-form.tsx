@@ -5,6 +5,7 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { facilityDistanceDefaults } from "@/lib/facility-distance-defaults";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { Notice } from "@/components/ui/notice";
@@ -94,6 +95,7 @@ export function CustomerLocationForm({
   errorMessage,
   submitLabel,
 }: CustomerLocationFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!location;
   const { facilities } = useFacilityContext();
   const { defaults: organizationDefaults } = useOrganizationDefaultValues();
@@ -124,9 +126,9 @@ export function CustomerLocationForm({
 
   const defaultSubmitLabel = isEditMode ? "Update location" : "Add location";
 
-  const handleFormSubmit = form.handleSubmit((data) => {
+  const handleFormSubmit = latched(form.handleSubmit((data) => {
     return onSubmit(data);
-  });
+  }));
 
   return (
     <form

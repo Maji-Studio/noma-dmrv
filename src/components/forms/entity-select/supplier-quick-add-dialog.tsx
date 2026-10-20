@@ -5,6 +5,7 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRef, useState } from "react";
 import type { FacilityDistanceInput } from "@/schemas/facility-distances";
@@ -41,6 +42,7 @@ export function SupplierQuickAddDialog({
   onClose,
   onSuccess = () => undefined,
 }: SupplierQuickAddDialogProps) {
+  const latched = useLatchedSubmit();
   const { selectedFacility } = useFacilityContext();
   const [error, setError] = useState<string | null>(null);
   const activePayloadRef = useRef<CreateSupplierWithLocationsData | null>(null);
@@ -151,7 +153,7 @@ export function SupplierQuickAddDialog({
       <form
         onSubmit={(event) => {
           event.stopPropagation();
-          return handleSubmit(submitSupplier)(event);
+          return latched(handleSubmit(submitSupplier))(event);
         }}
         className="space-y-20"
       >

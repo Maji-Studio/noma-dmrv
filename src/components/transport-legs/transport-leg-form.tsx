@@ -1,6 +1,7 @@
 "use client";
 
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useController, useForm, useWatch } from "react-hook-form";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -87,6 +88,7 @@ export function TransportLegForm({
   isSubmitting = false,
   errorMessage,
 }: TransportLegFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!leg;
   const isPersisted = !!leg && isSavedTransportLeg(leg);
   const defaultValues = legToFormDefaults(leg);
@@ -133,9 +135,9 @@ export function TransportLegForm({
     (useWatch({ control, name: "transportMethodType" }) as string | undefined) ??
     selectableTransportMethods[0];
 
-  const submit = handleSubmit(async (data) => {
+  const submit = latched(handleSubmit(async (data) => {
     await onSubmit(data as TransportLegFormData);
-  });
+  }));
 
   return (
     <form
