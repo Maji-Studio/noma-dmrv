@@ -250,7 +250,7 @@ describe("API key management", () => {
     await render(<ApiKeySettings canManage organizationId="org-1" />);
     expect(text(tree.root)).toContain("Example owner");
     expect(text(tree.root)).toContain(MISSING_VALUE.notRecorded);
-    expect(text(tree.root)).toContain("Feedstocks: Read");
+    expect(text(tree.root)).toContain("Reads Feedstocks");
     expect(tree.root.findAllByType("li").map(text)).toEqual([
       expect.stringContaining("Active"), expect.stringContaining("Disabled"), expect.stringContaining("Expired"),
     ]);
