@@ -4,7 +4,7 @@ import { getCreditBatchProductionSpanIssue } from "./credit-batch-production-spa
 const span = { creditBatchCode: "CB-1", latestEndingRunCode: "RUN-31", startedAt: "2026-01-01T08:00:00Z" };
 it("names the run that ends beyond an otherwise valid January window", () => {
   expect(getCreditBatchProductionSpanIssue({ ...span, endedAt: "2026-02-01T08:00:00Z" }))
-    .toBe("Production run RUN-31 ends on or after Feb 1, 2026, 08:00 UTC, so credit batch CB-1 would cover one month or more. Shorten the dates of credit batch CB-1 so its production runs span less than one month.");
+    .toBe("Production run RUN-31 ends on or after Feb 1, 2026, 08:00 UTC, so credit batch CB-1 would cover one month or more. Its Start date and End date are locked while this Removal holds its applied mass. To change them, discard or delete this Removal first. Then shorten the dates so its production runs span less than one month, and create the Removal again.");
 });
 it("accepts a span just below the boundary", () => {
   expect(getCreditBatchProductionSpanIssue({ ...span, endedAt: "2026-02-01T07:59:59.999Z" })).toBeNull();

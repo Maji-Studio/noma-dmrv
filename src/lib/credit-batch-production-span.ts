@@ -21,7 +21,7 @@ export function getCreditBatchProductionSpanIssue(input: ProductionSpan): string
   const end = new Date(input.endedAt);
   if (isCreditBatchUnderOneMonth(start, end)) return null;
   const boundary = getCreditBatchMonthBoundary(start);
-  return `Production run ${input.latestEndingRunCode} ends on or after ${formatDayString(formatUtcDate(boundary))}, ${formatUtcTime(boundary)} UTC, so credit batch ${input.creditBatchCode} would cover one month or more. Shorten the dates of credit batch ${input.creditBatchCode} so its production runs span less than one month.`;
+  return `Production run ${input.latestEndingRunCode} ends on or after ${formatDayString(formatUtcDate(boundary))}, ${formatUtcTime(boundary)} UTC, so credit batch ${input.creditBatchCode} would cover one month or more. Its Start date and End date are locked while this Removal holds its applied mass. To change them, discard or delete this Removal first. Then shorten the dates so its production runs span less than one month, and create the Removal again.`;
 }
 
 /** Throws a SafeError naming the run that pushes any credit batch to a one month span or more. */
