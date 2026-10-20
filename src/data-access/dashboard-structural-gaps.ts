@@ -1,3 +1,4 @@
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 /**
  * Facility-scoped certification structure checks for the dashboard.
  *
@@ -284,7 +285,7 @@ export async function loadDashboardStructuralGapCounts(
               isNull(biocharProducts.archivedAt),
             ),
             and(
-              isNotNull(samples.id),
+              !emissionsEntriesEnabled() ? isNotNull(samples.id) : sql`false`,
               eq(creditBatches.facilityId, facilityId),
               isNull(creditBatches.archivedAt),
             ),

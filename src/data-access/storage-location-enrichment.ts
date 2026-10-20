@@ -38,7 +38,6 @@ import { notInArray, and, count, eq, inArray, sql } from "drizzle-orm";
 import {
   productDryBiocharKgSql,
   productWetMassKgSql,
-  sourceBiocharMassKgSql,
 } from "./biochar-product-source-mass";
 import { deriveLaneStock } from "./lane-stock-derivation";
 import { requireOrgScope } from "./utils";
@@ -80,7 +79,7 @@ export interface StorageLocationWithFacility extends StorageLocation {
     batchCount: number;
     currentMassKg: number | null;
     dryMassKg?: number | null;
-    biocharEquivalentKg: number | null;
+    biocharEquivalentKg: number;
     formulationNames: string[];
     appliedApplicationCount: number;
     appliedDryMassKg: number;
@@ -241,12 +240,16 @@ export async function enrichStorageLocationRows(
                 biocharProducts.waterAddedKg,
               ),
             ),
+            // Source columns are NOT NULL, so a sum of 0 means nothing was received.
             biocharEquivalentKg: numericAggregate(sql<number>`
               COALESCE(
                 SUM(
-                  ${sourceBiocharMassKgSql(
+                  ${productDryBiocharKgSql(
+                    biocharProducts.id,
                     biocharProducts.massKg,
+                    biocharProducts.moistureContentPercent,
                     biocharProducts.composition,
+                    ctx.organizationId,
                   )}
                 ),
                 0
@@ -535,7 +538,7 @@ export async function enrichStorageLocationRows(
         batchCount: Number(productInventoryRow?.batchCount ?? 0),
         currentMassKg: outputStock?.estimatedWetMassKg ?? null,
         dryMassKg: outputStock?.availableDryKg ?? null,
-        biocharEquivalentKg: outputStock?.availableDryKg ?? null,
+        biocharEquivalentKg: productInventoryRow?.biocharEquivalentKg ?? 0,
         formulationNames: splitAggregateLabels(
           productInventoryRow?.formulationNames ?? null
         ),

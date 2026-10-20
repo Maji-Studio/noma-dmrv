@@ -1,5 +1,6 @@
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm, type UseFormRegisterReturn } from "react-hook-form";
@@ -34,6 +35,7 @@ export function CreateApiKeyForm({ onSubmit, onCancel, isPending }: {
   onCancel: () => void;
   isPending: boolean;
 }) {
+  const latched = useLatchedSubmit();
   const [error, setError] = useState("");
   const { register, control, handleSubmit, formState: { errors, isSubmitting } } = useForm<CreateApiKeyFormInput, unknown, CreateApiKeyInput>({
     resolver: zodResolver(createApiKeySchema),
@@ -48,7 +50,7 @@ export function CreateApiKeyForm({ onSubmit, onCancel, isPending }: {
   }
 
   return (
-    <form onSubmit={handleSubmit(submit)} className="flex flex-col gap-20">
+    <form onSubmit={latched(handleSubmit(submit))} className="flex flex-col gap-20">
       <NameField registration={register("name")} error={errors.name?.message} disabled={busy} />
       <Controller name="expiresIn" control={control} render={({ field }) => (
         <FormField id="api-key-expiry" label="Expires after" required error={errors.expiresIn?.message}>
@@ -69,6 +71,7 @@ export function EditApiKeyForm({ apiKey, onSubmit, onCancel, isPending }: {
   onCancel: () => void;
   isPending: boolean;
 }) {
+  const latched = useLatchedSubmit();
   const [error, setError] = useState("");
   const { register, control, handleSubmit, formState: { errors, isSubmitting } } = useForm<UpdateApiKeyInput>({
     resolver: zodResolver(updateApiKeySchema),
@@ -83,7 +86,7 @@ export function EditApiKeyForm({ apiKey, onSubmit, onCancel, isPending }: {
   }
 
   return (
-    <form onSubmit={handleSubmit(submit)} className="flex flex-col gap-20">
+    <form onSubmit={latched(handleSubmit(submit))} className="flex flex-col gap-20">
       <NameField registration={register("name")} error={errors.name?.message} disabled={busy} />
       <Controller name="scopes" control={control} render={({ field }) => (
         <ApiKeyPermissionGrid value={field.value} onChange={field.onChange} disabled={busy} error={errors.scopes?.message} />

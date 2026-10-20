@@ -237,7 +237,7 @@ beforeAll(async () => {
         biocharOutputKg: 100,
         biocharDryMassKg: 100,
       },
-    ].map((row) => ({ ...row, status: "complete" as const, biocharMoisturePercent: 0, biocharStorageLocationId: row.facilityId === facilityA.id ? outputBinA : outputBinB })))
+    ].map((row) => ({ ...row, status: "complete" as const, biocharOutputKg: row.biocharOutputKg ?? row.biocharDryMassKg, biocharMoisturePercent: 0, biocharStorageLocationId: row.facilityId === facilityA.id ? outputBinA : outputBinB })))
     .returning({ id: productionRuns.id });
   [
     runInFacilityA,

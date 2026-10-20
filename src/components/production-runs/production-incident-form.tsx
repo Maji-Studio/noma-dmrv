@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { EventTimeInput } from "@/components/forms/event-time-input";
@@ -48,6 +49,7 @@ export function ProductionIncidentForm({
   isSubmitting = false,
   errorMessage,
 }: ProductionIncidentFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!incident;
   const { timeZone, hint } = useFacilityClock(facilityId);
 
@@ -70,7 +72,7 @@ export function ProductionIncidentForm({
     },
   });
 
-  const onFormSubmit = handleSubmit((data) => onSubmit(data));
+  const onFormSubmit = latched(handleSubmit((data) => onSubmit(data)));
 
   return (
     <form className="space-y-20" onSubmit={onFormSubmit}>

@@ -11,6 +11,7 @@
  */
 "use client";
 
+import { useCreateIntentKey } from "@/hooks/use-create-intent-key";
 import { createFormulationFn } from "@/fn/formulations";
 import { FormulationForm } from "@/components/formulations";
 import type { FormulationFormData } from "@/schemas/formulations";
@@ -29,6 +30,12 @@ export function FormulationQuickAddDialog({
   onClose,
   onSuccess = () => undefined,
 }: FormulationQuickAddDialogProps) {
+  const intent = useCreateIntentKey();
+  // The shell stays mounted while closed: closing ends the draft and its key.
+  const close = () => {
+    intent.rotate();
+    onClose();
+  };
   const { error, isSubmitting, handleSubmit } = useQuickAddSubmit<FormulationFormData>({
     entityType: "formulation",
     // `createFormulationFn` answers with the full formulation; the select only
@@ -37,8 +44,9 @@ export function FormulationQuickAddDialog({
     serverFn: async (data) => {
       // `createFormulationSchema` *is* the form schema, so the form's data is
       // already the payload.
-      const result = await createFormulationFn(data);
+      const result = await createFormulationFn(data, { intentKey: intent.current() });
       if (!result.success) return result;
+      intent.rotate();
       return {
         success: true,
         data: {
@@ -49,20 +57,20 @@ export function FormulationQuickAddDialog({
       };
     },
     onSuccess,
-    onClose,
+    onClose: close,
   });
 
   return (
     <QuickAddDialogShell
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={close}
       title="New formulation"
       width="lg"
       testId="formulation-quick-add-dialog"
     >
       <FormulationForm
         onSubmit={handleSubmit}
-        onCancel={onClose}
+        onCancel={close}
         isSubmitting={isSubmitting}
         errorMessage={error ?? undefined}
         submitLabel="Create formulation"

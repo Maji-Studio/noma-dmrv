@@ -181,6 +181,7 @@ beforeAll(async () => {
         endTime: new Date(`${date}T12:00:00Z`),
         biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
         biocharDryMassKg: 4000,
+        biocharOutputKg: 4000,
       })),
     )
     .returning({ id: productionRuns.id });
@@ -385,6 +386,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
         startTime: new Date("2025-06-20T08:00:00Z"),
         endTime: new Date("2025-06-20T12:00:00Z"),
         biocharDryMassKg: 4000,
+        biocharOutputKg: 4000,
       })
       .returning({ id: productionRuns.id });
     createdIds.productionRuns.push(kRun.id);

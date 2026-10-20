@@ -47,12 +47,12 @@ vi.mock("@/components/forms/distance-calc-field", () => ({
 }));
 
 vi.mock("@/hooks/use-customers", () => ({
-  useCreateCustomerLocation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateCustomerLocation: () => ({ startDraft: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useUpdateCustomerLocation: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@/hooks/use-suppliers", () => ({
-  useCreateSupplierLocation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateSupplierLocation: () => ({ startDraft: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useUpdateSupplierLocation: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 

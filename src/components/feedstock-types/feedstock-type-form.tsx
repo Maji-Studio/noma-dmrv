@@ -1,5 +1,6 @@
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { makeCertFieldStatus } from "@/components/forms/cert-field-status";
 import { useState, type KeyboardEvent } from "react";
@@ -102,6 +103,7 @@ export function FeedstockTypeForm({
   stickyActions = true,
   guardDialogCancel,
 }: FeedstockTypeFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!feedstockType;
   const certStatus = makeCertFieldStatus(feedstockType);
   const { facilityId } = useFacilityContext();
@@ -318,7 +320,7 @@ export function FeedstockTypeForm({
       )}
 
       <form
-        onSubmit={handleSubmit((data) => onSubmit(data))}
+        onSubmit={latched(handleSubmit((data) => onSubmit(data)))}
         className="space-y-20"
       >
         <ResolvedErrorRevalidator control={control} trigger={trigger} />

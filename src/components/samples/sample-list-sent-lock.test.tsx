@@ -47,7 +47,7 @@ vi.mock("@/hooks/use-samples", () => ({
     error: null,
     isSuccess: true,
   }),
-  useCreateSample: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useCreateSample: () => ({ startDraft: vi.fn(), isPending: false, mutateAsync: vi.fn() }),
   useUpdateSample: () => ({ isPending: false, mutateAsync: harness.update }),
   useDeleteSample: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));

@@ -12,6 +12,7 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useEffect, useState } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -170,6 +171,7 @@ export function FormulationForm({
   errorMessage,
   submitLabel,
 }: FormulationFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!formulation;
 
   const {
@@ -205,9 +207,9 @@ export function FormulationForm({
 
   const defaultSubmitLabel = isEditMode ? "Update formulation" : "Create formulation";
 
-  const handleFormSubmit = handleSubmit((data) => {
+  const handleFormSubmit = latched(handleSubmit((data) => {
     return onSubmit(percentFormToRatioPayload(data as FormulationPercentFormData));
-  });
+  }));
 
   // Watch shares for auto-balance, the allocation bar, and the total.
   const biocharPercent = useWatch({ control, name: "biocharPercent" });

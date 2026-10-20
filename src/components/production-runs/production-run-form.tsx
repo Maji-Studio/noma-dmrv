@@ -5,6 +5,7 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { formatLocalDate, resolveFacilityTimezone } from "@/lib/date-utils";
@@ -111,6 +112,8 @@ interface ProductionRunFormProps {
   deferredAttachments?: UseDeferredAttachmentsResult;
   /** The saved run's lock: a product, stock entry or count fixes its output basis. */
   lock?: RecordLockView;
+  /** Create only: the biochar bin to open with, from a bin's "adding stock" link. */
+  initialBiocharStorageLocationId?: string;
 }
 export function ProductionRunForm({
   productionRun,
@@ -122,7 +125,9 @@ export function ProductionRunForm({
   children,
   deferredAttachments,
   lock,
+  initialBiocharStorageLocationId,
 }: ProductionRunFormProps) {
+  const latched = useLatchedSubmit();
   const formId = useId();
   const isEditMode = !!productionRun;
   // `assertProductionRunOutputBasisChange` refuses these once stock is used.
@@ -164,7 +169,7 @@ export function ProductionRunForm({
     electricityKwh: productionRun?.electricityKwh ?? null,
     biocharOutputKg: productionRun?.biocharOutputKg ?? null,
     biocharMoisturePercent: productionRun?.biocharMoisturePercent ?? null,
-    biocharStorageLocationId: productionRun?.biocharStorageLocationId ?? "",
+    biocharStorageLocationId: productionRun ? (productionRun.biocharStorageLocationId ?? "") : (initialBiocharStorageLocationId ?? ""),
   };
   type ProductionRunFormValues = typeof defaultValues;
   const resolver: Resolver<
@@ -316,7 +321,7 @@ export function ProductionRunForm({
 
   const defaultSubmitLabel = isEditMode ? "Update production run" : "Create production run";
 
-  const handleFormSubmit = handleSubmit(async (data) => {
+  const handleFormSubmit = latched(handleSubmit(async (data) => {
     // Dates arrive as "YYYY-MM-DD" strings from the inputs. The end date
     // defaults to the start date when only an end time was entered.
     const startDateStr =
@@ -377,7 +382,7 @@ export function ProductionRunForm({
       }
       throw error;
     }
-  });
+  }));
 
   return (
     <div className="space-y-20">

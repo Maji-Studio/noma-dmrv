@@ -110,6 +110,61 @@ describe("running end time validation", () => {
 });
 
 describe("productionRunFormSchema mass balance", () => {
+  for (const [schemaName, schema] of [
+    ["form", productionRunFormSchema],
+    ["create", createProductionRunSchema],
+  ] as const) {
+    for (const status of ["complete", "running"] as const) {
+      const base = {
+        ...completeProductionRunInput,
+        status,
+        endTime: status === "complete" ? completeProductionRunInput.endTime : undefined,
+        feedstockDraws: [{
+          ...completeProductionRunInput.feedstockDraws[0],
+          wetMassKg: 1_500,
+        }],
+        biocharOutputKg: 300,
+        biocharMoisturePercent: 20,
+      };
+
+      describe(`${schemaName} schema with ${status} status`, () => {
+        it("starts from a valid fixture", () => {
+          expect(schema.safeParse(base).success).toBe(true);
+        });
+
+        it.each([
+          {
+            label: "negative feedstock draw mass",
+            overrides: { feedstockDraws: [{ ...base.feedstockDraws[0], wetMassKg: -1_500 }] },
+            path: ["feedstockDraws", 0, "wetMassKg"],
+          },
+          {
+            label: "negative biochar output",
+            overrides: { biocharOutputKg: -300 },
+            path: ["biocharOutputKg"],
+          },
+          ...["feedstockMoisturePercent", "biocharMoisturePercent"].flatMap(field =>
+            [-1, 101].map(value => ({
+              label: `${field} ${value}`,
+              overrides: { [field]: value },
+              path: [field],
+            })),
+          ),
+        ])("returns a field issue without throwing for $label", ({ overrides, path }) => {
+          const result = schema.safeParse({ ...base, ...overrides });
+
+          expect(result.success).toBe(false);
+          if (!result.success) {
+            expect(result.error.issues).toContainEqual(expect.objectContaining({ path }));
+            expect(result.error.issues).not.toContainEqual(expect.objectContaining({
+              message: expect.stringMatching(/dry.*output.*dry.*input/i),
+            }));
+          }
+        });
+      });
+    }
+  }
+
   it("rejects dry biochar output above dry feedstock input", () => {
     const result = productionRunFormSchema.safeParse(validProductionRunInput);
 

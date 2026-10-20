@@ -52,7 +52,7 @@ export function aggregateReport({ pr, baseSha, headSha, reports, skippedPractice
 
   for (const practice of DEFAULT_PRACTICES) {
     if (skippedPractices.has(practice)) {
-      sections.push("", `## ${displayPractice(practice)}`, "", "_No spec available; practice skipped._");
+      sections.push("", `## ${displayPractice(practice)}`, "", `_${skippedPractices.get(practice)}; practice skipped._`);
       continue;
     }
     const practiceReports = reports.filter((report) => report.practice === practice);
@@ -88,7 +88,8 @@ export function aggregateReport({ pr, baseSha, headSha, reports, skippedPractice
   sections.push("", "## Per-practice summary", "");
   for (const practice of DEFAULT_PRACTICES) {
     if (skippedPractices.has(practice)) {
-      sections.push(`- **${displayPractice(practice)}:** skipped; no spec available.`);
+      const reason = skippedPractices.get(practice);
+      sections.push(`- **${displayPractice(practice)}:** skipped; ${reason[0].toLowerCase()}${reason.slice(1)}.`);
       continue;
     }
     const practiceReports = reports.filter((report) => report.practice === practice);
@@ -115,4 +116,3 @@ export function displayPractice(practice) {
 export function displayModel(model) {
   return model === "codex" ? "Codex (gpt-6-astra, medium)" : "Claude Opus (high)";
 }
-

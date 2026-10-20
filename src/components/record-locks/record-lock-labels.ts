@@ -16,6 +16,18 @@ export const RECORD_LOCK_LEVEL_LABELS: Record<RecordLockView["level"], string> =
   sent: "Sent",
 };
 
+/** The Sent tag when sending every holding Removal was started and not finished (matches the Removal's own badge). */
+export const RECORD_LOCK_INTERRUPTED_LABEL = "Interrupted";
+export const RECORD_LOCK_SENT_TITLE = "Sent to Isometric";
+export const RECORD_LOCK_INTERRUPTED_TITLE = "Sending to Isometric was started and not finished";
+
+/** Sent with every holder interrupted. Mixed or normal Sent keeps "Sent". */
+export function isInterruptedLockDisplay(lock: RecordLockView | undefined): boolean {
+  if (lock?.level !== "sent") return false;
+  const interrupted = lock.interruptedHolders ?? [];
+  return lock.heldBy.length > 0 && interrupted.length >= lock.heldBy.length;
+}
+
 /** Mid-sentence nouns. Glossary terms keep their capital (Removal, Sample). */
 const KIND_NOUNS: Record<string, string> = {
   feedstock: "feedstock", productionRun: "production run", sample: "Sample", biocharProduct: "biochar product",

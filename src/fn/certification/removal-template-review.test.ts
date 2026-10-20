@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { getCreditBatchById } from "@/data-access/credit-batches";
@@ -13,6 +13,7 @@ import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-
 import { enrichmentProblems, fullFingerprint, lineNeedsReview, lineSourcesForObservation, normalizeTemplateDefinition, resolveLineSources, semanticFingerprint, validateLineSources, type TemplateEnrichment } from "@/lib/isometric/template-observations";
 import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/load-enrichment";
 import { loadRemovalTemplateReview, loadRemovalTemplateReviewEntry, reviewRemovalTemplateLines, switchCreditBatchRemovalTemplate } from "./removal-template-review";
+import { canAcceptProposal, problemMessages } from "@/components/certification/removal-template-review-model";
 
 const ctx = vi.hoisted((): OrgContext => ({ userId: "review-user", organizationId: "review-org", orgRole: "owner", isPlatformAdmin: false }));
 vi.mock("../with-action", async () => {
@@ -39,6 +40,7 @@ const id = "00000000-0000-4000-8000-000000000001";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false");
   vi.mocked(getLatestTemplateObservation).mockResolvedValue(null);
   vi.mocked(listPinnedRemovalTemplateIds).mockResolvedValue([]);
   vi.mocked(listComponentBlueprints).mockResolvedValue([]);
@@ -48,6 +50,8 @@ beforeEach(() => {
   vi.mocked(getCertifierProjectByFacility).mockResolvedValue({ externalProjectId: fixture.project_id } as never);
   vi.mocked(listGhgEntryTemplates).mockResolvedValue([fixture as IsometricGhgEntryTemplate]);
 });
+
+afterEach(() => { vi.unstubAllEnvs(); });
 
 describe("project template listing", () => {
   it("lists unused templates as read-only without observing them, even without a default", async () => {
@@ -152,6 +156,29 @@ describe("switch readiness", () => {
     } as never);
     expect(await switchCreditBatchRemovalTemplate(input)).toEqual(linesRefusal);
     expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
+    expect(persistSwitch).not.toHaveBeenCalled();
+  });
+
+  it.each(["stored", "refreshed"])("refuses a settled retired source with no entries in the %s read", async (phase) => {
+    vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
+    const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
+    const componentId = "rtc_1M4ZRPH1RSBXADG2";
+    const lineSources = resolveLineSources({ definition });
+    for (const component of definition.groups.flatMap((group) => group.components)) {
+      lineSources[component.id] = { scope: "operating", entryPolicy: "none", origin: "reviewed" };
+    }
+    lineSources[componentId].automaticSource = "sample-transport";
+    const retiredObservation = { ...observation, definition, lineSources };
+    const lineSourceProblems = validateLineSources(definition, lineSources);
+    expect(lineSourceProblems).toEqual([{ componentId, code: "retired-automatic-source" }]);
+    vi.mocked(getLatestTemplateObservation).mockResolvedValue((phase === "stored" ? retiredObservation : observation) as never);
+    vi.mocked(listGhgEntryTemplates).mockResolvedValue([fixture as IsometricGhgEntryTemplate]);
+    vi.mocked(loadRemovalTemplateFacts).mockResolvedValue({
+      template: fixture, observation: retiredObservation, blueprintsForTemplate: [], enrichmentProblems: [], lineSourceProblems,
+    } as never);
+
+    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(linesRefusal);
+    expect(loadRemovalTemplateFacts).toHaveBeenCalledTimes(phase === "stored" ? 0 : 1);
     expect(persistSwitch).not.toHaveBeenCalled();
   });
 
@@ -307,6 +334,20 @@ describe("loadRemovalTemplateReviewEntry", () => {
     expect(reviewLineContracts).not.toHaveBeenCalled();
   });
 
+  it("keeps a sample shipping proposal's scope and entry policy once its source is retired", async () => {
+    vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
+    const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
+    const lineSources = resolveLineSources({ definition });
+    const componentId = "rtc_1M4ZRPH1RSBXADG2";
+    lineSources[componentId] = { scope: "operating", automaticSource: "sample-transport", entryPolicy: "additive", origin: "proposed" };
+    vi.mocked(getLatestTemplateObservation).mockResolvedValueOnce({ definition, lineSources, enrichedAt: new Date(),
+      semanticFingerprint: semanticFingerprint(definition, {}), fullFingerprint: fullFingerprint(definition, {}) } as never);
+    const result = await loadRemovalTemplateReviewEntry({ facilityId: id, removalTemplateId: fixture.id });
+    if (!result.success) throw new Error("expected a read");
+    expect(result.data.lines.find((line) => line.component.id === componentId)?.contract)
+      .toEqual({ scope: "operating", automaticSource: undefined, entryPolicy: "additive", origin: "proposed" });
+  });
+
   it("shows a template no batch uses yet, proposals included, without observing it", async () => {
     const result = await loadRemovalTemplateReviewEntry({ facilityId: id, removalTemplateId: fixture.id });
     if (!result.success) throw new Error("expected a read");
@@ -324,6 +365,58 @@ describe("loadRemovalTemplateReviewEntry", () => {
     expect(listGhgEntryTemplates).not.toHaveBeenCalled();
     expect((await loadRemovalTemplateReviewEntry({ facilityId: id, removalTemplateId: "other-project-template" })).success).toBe(false);
   });
+});
+
+it.each([false, true])("sends gate-adjusted contracts and candidates for client proposal validation (gate: %s)", async (enabled) => {
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
+  const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
+  const lineSources = resolveLineSources({ definition });
+  const ids = ["rtc_1M4ZRPH1RSBXADG2", "rtc_1M4ZRRN6PSBXHQ7C"];
+  for (const componentId of ids) {
+    lineSources[componentId] = { scope: "operating", automaticSource: "sample-transport", entryPolicy: "additive", origin: "proposed" };
+  }
+  const before = structuredClone(lineSources);
+  const observation = { id, definition, lineSources };
+  vi.mocked(listPinnedRemovalTemplateIds).mockResolvedValue([fixture.id]);
+  vi.mocked(loadRemovalTemplateFacts).mockResolvedValueOnce({
+    template: fixture, observation, blueprintsForTemplate: [], enrichmentProblems: [], lineSourceProblems: validateLineSources(definition, lineSources),
+  } as never);
+  const result = await loadRemovalTemplateReview(id);
+  if (!result.success) throw new Error("expected a read");
+  const entry = result.data[0];
+  expect(entry.observation?.id).toBe(id);
+  expect(lineSources).toEqual(before);
+  if (enabled) expect(Object.values(entry.observation!.lineSources).some((contract) => contract.automaticSource === "sample-transport")).toBe(false);
+  // Private environment variables are absent in the browser after this server read.
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", undefined);
+  for (const componentId of ids) {
+    const line = entry.lines.find((candidate) => candidate.component.id === componentId)!;
+    expect(line.contract).toEqual(entry.observation?.lineSources[componentId]);
+    expect(line.contract).toMatchObject({ scope: "operating", entryPolicy: "additive", origin: "proposed" });
+    expect(line.contract.automaticSource).toBe(enabled ? undefined : "sample-transport");
+    expect(line.catalogCandidates.includes("sample-transport")).toBe(!enabled);
+    expect(canAcceptProposal(entry, line, {})).toBe(enabled);
+  }
+});
+
+it("preserves the server's retired-source review problem and operator guidance after stripping the source", async () => {
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
+  const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
+  const lineSources = resolveLineSources({ definition });
+  const componentId = "rtc_1M4ZRPH1RSBXADG2";
+  lineSources[componentId] = { scope: "operating", automaticSource: "sample-transport", entryPolicy: "none", origin: "reviewed" };
+  vi.mocked(listPinnedRemovalTemplateIds).mockResolvedValue([fixture.id]);
+  vi.mocked(loadRemovalTemplateFacts).mockResolvedValueOnce({
+    template: fixture, observation: { id, definition, lineSources }, blueprintsForTemplate: [], enrichmentProblems: [], lineSourceProblems: validateLineSources(definition, lineSources),
+  } as never);
+  const result = await loadRemovalTemplateReview(id);
+  if (!result.success) throw new Error("expected a read");
+  const entry = result.data[0];
+  const line = entry.lines.find((candidate) => candidate.component.id === componentId)!;
+  expect(line.contract.automaticSource).toBeUndefined();
+  expect(problemMessages(line, entry.lineSourceProblems)).toEqual([
+    "These automatic datapoints are no longer available. Choose others or allow entries for this component.",
+  ]);
 });
 
 it("recomputes entry contracts when live enrichment differs from the stored read", async () => {

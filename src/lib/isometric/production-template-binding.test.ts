@@ -1,5 +1,7 @@
+beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
+afterEach(() => { vi.unstubAllEnvs(); });
 import { reviewedTemplateSources } from "../../../tests/helpers/template-line-sources";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import production from "../../../tests/fixtures/isometric/production-template-2026-07-03.json";
 import type { components } from "./generated/certify";
 import { findUnbindableTemplateInputs as findCoverage, formatUnbindableTemplateInputsText } from "./template-binding-coverage";
@@ -117,3 +119,9 @@ describe("production template binding coverage", () => {
 function findUnbindableTemplateInputs(template: Parameters<typeof findCoverage>[0], options: Parameters<typeof findCoverage>[1] = {}) {
   return findCoverage(template, { lineSources: reviewedTemplateSources(template), ...options });
 }
+
+it.each([false, true])("reports legacy sample shipping as entry-only after activation (gate: %s)", (enabled) => {
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
+  const findings = findUnbindableTemplateInputs(template);
+  expect(findings.some((finding) => finding.componentId === "rtc_1KWKNGJZY1S0HNRT")).toBe(enabled);
+});

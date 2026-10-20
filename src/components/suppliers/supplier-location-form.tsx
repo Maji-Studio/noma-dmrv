@@ -5,6 +5,7 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useController, useForm } from "react-hook-form";
 import type { FacilityDistanceInput } from "@/schemas/facility-distances";
 import { PartyFacilityDistances } from "@/components/party-facility-distances";
@@ -81,6 +82,7 @@ export function SupplierLocationForm({
   errorMessage,
   submitLabel,
 }: SupplierLocationFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!location;
   const { facilities } = useFacilityContext();
   // The default moves only by setting another location as default.
@@ -145,9 +147,9 @@ export function SupplierLocationForm({
       ? { lat: gpsLatitude, lng: gpsLongitude }
       : null;
 
-  const handleFormSubmit = handleSubmit((data) => {
+  const handleFormSubmit = latched(handleSubmit((data) => {
     return onSubmit(data);
-  });
+  }));
 
   return (
     <form

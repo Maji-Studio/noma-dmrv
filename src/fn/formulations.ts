@@ -23,6 +23,7 @@ import {
   formulationFilterSchema,
 } from "@/schemas/formulations";
 import type { ActionResult } from "@/types/actions";
+import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
 
 const LOG_MESSAGE = "formulation action failed";
 
@@ -73,7 +74,8 @@ export async function getFormulationByIdFn(
  * Create a new formulation with optional ingredients
  */
 export async function createFormulationFn(
-  data: z.infer<typeof createFormulationSchema>
+  data: z.infer<typeof createFormulationSchema>,
+  options?: CreateIntentOptions
 ): Promise<ActionResult<FormulationWithIngredients>> {
   return withAction(async (ctx) => {
     const validated = createFormulationSchema.parse(data);
@@ -83,7 +85,7 @@ export async function createFormulationFn(
       biocharRatio: validated.biocharRatio ?? null,
       description: validated.description || null,
       lines: validated.ingredients?.map(({ feedstockTypeId, ratio }) => ({ feedstockTypeId, ratio: ratio ?? null })),
-    });
+    }, createIntentOptionsSchema.parse(options));
 
     return formulation;
   }, {

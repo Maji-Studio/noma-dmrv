@@ -1,5 +1,8 @@
 "use server";
 
+import { automaticSourceAvailable } from "@/lib/isometric/template-observations/catalog-sources";
+import type { LineSources } from "@/lib/isometric/template-observations/line-sources";
+
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 
 import { getCreditBatchById } from "@/data-access/credit-batches";
@@ -24,6 +27,15 @@ import { removalTemplateReviewLines as reviewLines } from "@/lib/certification/r
 import { isTemplateReady, linesToDecideCount } from "@/lib/certification/removal-template-readiness";
 import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
 
+/** The browser validates these contracts without access to the server's gate. */
+function reviewLineSources(lineSources: LineSources): LineSources {
+  return Object.fromEntries(Object.entries(lineSources).map(([id, contract]) => [id,
+    contract.automaticSource && !automaticSourceAvailable(contract.automaticSource)
+      ? { ...contract, automaticSource: undefined }
+      : contract,
+  ]));
+}
+
 async function readOnlyEntry(
   client: IsometricClient, template: IsometricGhgEntryTemplate, blueprints: IsometricComponentBlueprint[],
   latest: RemovalTemplateObservation | null, externalProjectId: string,
@@ -38,7 +50,7 @@ async function readOnlyEntry(
     templateId: template.id, template, observation: null, preview: true,
     availability: "listed" as const, enrichment,
     changes: {} as Record<string, ComponentChange>,
-    lines: reviewLines(definition, lineSources, {}, blueprints, template),
+    lines: reviewLines(definition, reviewLineSources(lineSources), {}, blueprints, template),
     enrichmentProblems: enrichmentProblems(definition, enrichment),
     lineSourceProblems: validateLineSources(definition, lineSources),
   };
@@ -76,9 +88,10 @@ export async function loadRemovalTemplateReview(facilityId: string) {
       const current = template ? await loadRemovalTemplateFacts(ctx, {
         client, template, externalProjectId: mapping.externalProjectId, blueprints,
       }) : null;
-      const observation = current?.observation ?? null;
-      const previous = observation ? await getPreviousTemplateObservation(ctx, ISOMETRIC_PROVIDER, templateId, observation.id) : null;
-      const changes = observation && previous ? compareTemplateObservations(previous, observation) : {};
+      const stored = current?.observation ?? null;
+      const observation = stored ? { ...stored, lineSources: reviewLineSources(stored.lineSources) } : null;
+      const previous = stored ? await getPreviousTemplateObservation(ctx, ISOMETRIC_PROVIDER, templateId, stored.id) : null;
+      const changes = stored && previous ? compareTemplateObservations(previous, stored) : {};
       const definition = observation?.definition ?? (current ? normalizeTemplateDefinition(current.template) : null);
       entries.push({
         templateId, template: current?.template ?? null, observation,
@@ -123,7 +136,7 @@ export async function switchCreditBatchRemovalTemplate(input: SwitchCreditBatchR
         availability: "listed" as const, template, observation: latest,
         enrichmentProblems: enrichmentProblems(latest.definition, latest.enrichment),
         lineSourceProblems: validateLineSources(latest.definition, latest.lineSources),
-        lines: reviewLines(latest.definition, latest.lineSources, {}, [], template),
+        lines: reviewLines(latest.definition, reviewLineSources(latest.lineSources), {}, [], template),
       };
       if (!isTemplateReady(storedRead)) throw new SafeError(linesToDecideCount(storedRead) > 0
         ? REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview : REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
@@ -135,7 +148,7 @@ export async function switchCreditBatchRemovalTemplate(input: SwitchCreditBatchR
       const refreshedRead = {
         availability: "listed" as const, template, observation: facts.observation,
         enrichmentProblems: facts.enrichmentProblems, lineSourceProblems: facts.lineSourceProblems,
-        lines: reviewLines(normalizeTemplateDefinition(template), facts.observation?.lineSources ?? {}, {}, facts.blueprintsForTemplate, template),
+        lines: reviewLines(normalizeTemplateDefinition(template), reviewLineSources(facts.observation?.lineSources ?? {}), {}, facts.blueprintsForTemplate, template),
       };
       if (!isTemplateReady(refreshedRead)) throw new SafeError(linesToDecideCount(refreshedRead) > 0
         ? REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview : REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);

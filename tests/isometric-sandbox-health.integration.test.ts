@@ -163,7 +163,7 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
     };
 
     it(
-      "resolves every transport category to mass_distance (tonne·km) against the live template",
+      "resolves automatic feedstock and biochar transport against the live template",
       async () => {
         const { listGhgEntryTemplates } = await import("@/lib/isometric");
         const { lookupInputMapping } = await import(
@@ -181,16 +181,14 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
             .filter((c) => c.blueprint_key === "mass_distance_based_ci_emissions")
             .map((c) => ({ groupKey: g.key, component: c })),
         );
-        // Assert the categories by group key, not by count: a bare floor stays
-        // green when the template drops one category and adds another. The
-        // current live template carries feedstock and biochar transport; sample
-        // transport (`sampling-required-for-mrv`) is still mapped locally but no
-        // longer observed here — see docs/open-questions.md
-        // (`isometric/sample-transport-template-drift`).
+        // Feedstock and biochar remain automatic. Sample shipping is entry-only
+        // after EMISSIONS_ENTRIES_ENABLED activation; its stable legacy mapping
+        // remains available only with the gate off. Drift closes on activation.
         const transportGroupKeys = transportComponents.map((t) => t.groupKey);
         expect(transportGroupKeys).toContain("biomass-feedstock-transport");
         expect(transportGroupKeys).toContain("biochar-transport");
 
+        const { emissionsEntriesEnabled } = await import("@/lib/certification/emissions-entry-gate");
         for (const { groupKey, component } of transportComponents) {
           const input = component.inputs.find(
             (i) => i.input_key === "mass_distance",
@@ -201,6 +199,10 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
             "mass_distance_based_ci_emissions",
             "mass_distance",
           );
+          if (groupKey === "sampling-required-for-mrv" && emissionsEntriesEnabled()) {
+            expect(mapping).toBeUndefined();
+            continue;
+          }
           expect(mapping, `INPUT_MAPPING for ${groupKey}`).toBeDefined();
           expect(mapping!.unit).toBe("tonne * km");
           expect(mapping!.expectedQuantityKind).toBe("mass_distance");
