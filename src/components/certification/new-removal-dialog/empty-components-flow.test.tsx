@@ -41,7 +41,13 @@ vi.mock("@/lib/certification/readiness", () => ({ deriveRemovalReadiness: () => 
 vi.mock("@/lib/certification/readiness-facts", () => ({ toRemovalReadinessFacts: () => ({}) }));
 vi.mock("./resume-state", () => ({ shouldBlockRemovalResume: () => false }));
 vi.mock("./select-batches-step", () => ({ SelectBatchesStep: () => <div>select step</div> }));
-vi.mock("./empty-components-step", () => ({ EmptyComponentsStep: () => <div>empty components step</div> }));
+vi.mock("./empty-components-step", () => ({
+  EmptyComponentsStep: () => <div>empty components step</div>,
+  CHECK_FAILED_MESSAGE: "The empty components could not be checked. Try again.",
+}));
+vi.mock("@/components/ui/notice", () => ({
+  Notice: ({ children, action }: { children: ReactNode; action?: ReactNode }) => <div role="alert">{children}{action}</div>,
+}));
 vi.mock("./submit-step", () => ({ SubmitStep: () => <div>submit step</div> }));
 
 import { NewRemovalDialog } from "./index";
@@ -169,6 +175,24 @@ describe("New Removal wizard with empty components", () => {
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Continue" })); });
     await waitFor(() => expect(screen.getByText("submit step")).toBeTruthy());
     expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("goes on to submit when the Removal stopped being editable while the operator was on the step", async () => {
+    mocks.landing.data = LAND_EMPTY;
+    mocks.query.data = OPEN;
+    // The fresh read still lists open components, but zeros can no longer change.
+    mocks.load.mockResolvedValue({ ...OPEN, editable: false });
+    renderDialog("removal-1");
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Continue" })); });
+    await waitFor(() => expect(screen.getByText("submit step")).toBeTruthy());
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("offers Cancel next to Continue, like the selection step", () => {
+    mocks.landing.data = LAND_EMPTY;
+    mocks.query.data = OPEN;
+    renderDialog("removal-1");
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
   });
 
   it("offers no way back to the step once the Removal is submitted or cannot take zeros", () => {

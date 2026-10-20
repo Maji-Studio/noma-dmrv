@@ -2,7 +2,7 @@
 import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { RemovalEmptyComponents } from "@/hooks/use-removal-empty-components";
+import type { RemovalEmptyComponents } from "@/lib/certification/empty-components-state";
 
 const mocks = vi.hoisted(() => ({
   record: vi.fn(),
@@ -22,6 +22,7 @@ vi.mock("@/components/ui", () => ({
   ),
 }));
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null }));
+vi.mock("@/components/ui/notice", () => ({ Notice: ({ children, action }: { children: ReactNode; action?: ReactNode }) => <div role="alert">{children}{action}</div> }));
 
 import { EmptyComponentsStep } from "./empty-components-step";
 
@@ -59,6 +60,7 @@ function renderStep(data: unknown, focusRequest: { batchId: string; nonce: numbe
       data={data as RemovalEmptyComponents}
       isLoading={false}
       isError={false}
+      onRetry={vi.fn()}
       batchDates={{ [BATCH_ID]: { startDate: "2026-09-01", endDate: "2026-09-30" } }}
       actions={actions()}
       focusRequest={focusRequest}
@@ -158,6 +160,7 @@ describe("EmptyComponentsStep", () => {
         data={{ removalVersion: 1, editable: true, batches: [batch({ lines: ["A"] })] } as unknown as RemovalEmptyComponents}
         isLoading={false}
         isError={false}
+        onRetry={vi.fn()}
         batchDates={{}}
         actions={actions()}
         focusRequest={{ batchId: BATCH_ID, nonce: 1 }}
@@ -166,9 +169,10 @@ describe("EmptyComponentsStep", () => {
     expect(document.activeElement).not.toBe(screen.getByRole("textbox"));
   });
 
-  it("says so when a batch has nothing empty", () => {
+  it("says a batch has nothing empty once, in its header", () => {
     renderStep({ removalVersion: 1, editable: true, batches: [batch({})] });
-    expect(screen.getByText("No empty components")).toBeTruthy();
+    expect(screen.getAllByText(/empty components/i).filter((node) => node.tagName !== "H3")).toHaveLength(1);
+    expect(screen.queryByText(/Every component has/)).toBeNull();
   });
 
   it("announces the state in a live region that stays mounted", () => {

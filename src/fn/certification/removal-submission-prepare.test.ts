@@ -183,8 +183,8 @@ it.each([unsupportedTemplate(), production as RegistryComponents["schemas"]["Ghg
   });
 });
 
-it.each(["sandbox", "production"])("blocks entry-only components in %s", (environment) => {
-  vi.stubEnv("ISOMETRIC_ENVIRONMENT", environment);
+// No environment input exists anymore: entry-only components are blocked the same way everywhere.
+it("blocks entry-only components", () => {
   const removalTemplate = production as RegistryComponents["schemas"]["GhgEntryTemplate"];
   const result = prepareRemovalSubmission(context({ removalTemplate }));
   const findings = findUnbindableTemplateInputs(removalTemplate);

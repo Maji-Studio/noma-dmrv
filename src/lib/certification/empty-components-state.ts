@@ -4,10 +4,11 @@
  * what is empty; this file only reads its answer.
  */
 import { pluralize } from "@/lib/copy-utils";
-import type {
-  RemovalEmptyComponents,
-  RemovalEmptyComponentsBatch,
-} from "@/hooks/use-removal-empty-components";
+import type { loadRemovalEmptyLines } from "@/fn/certification/removal-empty-lines-core";
+
+/** What the server reports for a Removal's empty components. */
+export type RemovalEmptyComponents = Awaited<ReturnType<typeof loadRemovalEmptyLines>>;
+export type RemovalEmptyComponentsBatch = RemovalEmptyComponents["batches"][number];
 
 const LIST_FORMAT = new Intl.ListFormat("en-GB", { style: "long", type: "conjunction" });
 
@@ -55,7 +56,8 @@ export interface ContinueRefusal {
 }
 
 export function continueRefusal(data: RemovalEmptyComponents): ContinueRefusal {
-  const open = openBatches(data);
+  // Zeros can no longer change (submitted, in flight or being deleted): there is nothing to ask for.
+  const open = data.editable ? openBatches(data) : [];
   if (open.length === 0) return { count: 0, reason: null, firstBatchId: null };
   const count = openComponentCount(data);
   const codes = LIST_FORMAT.format(open.map((batch) => batch.code));

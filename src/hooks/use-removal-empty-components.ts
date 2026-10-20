@@ -14,20 +14,24 @@ import {
 } from "@/fn/certification/emission-zeros";
 import { throwActionError } from "@/lib/stale-version";
 import type { ActionResult } from "@/types/actions";
-import { loadRemovalCertifyContext } from "@/fn/certification";
-import { landingStep } from "@/lib/certification/empty-components-state";
+import {
+  landingStep,
+  type RemovalEmptyComponents,
+} from "@/lib/certification/empty-components-state";
 import {
   certificationKeys,
   invalidateCertificationReadiness,
+  removalCertifyContextQueryOptions,
 } from "./use-certification";
 
-type EmptyLinesResult = Awaited<ReturnType<typeof getRemovalEmptyLinesFn>>;
-export type RemovalEmptyComponents = Extract<
-  EmptyLinesResult,
-  { success: true }
->["data"];
-export type RemovalEmptyComponentsBatch =
-  RemovalEmptyComponents["batches"][number];
+export type {
+  RemovalEmptyComponents,
+  RemovalEmptyComponentsBatch,
+} from "@/lib/certification/empty-components-state";
+
+const removalLandingKeys = {
+  removal: (removalId: string) => ["removal-landing", removalId] as const,
+};
 
 function unwrapZero<T>(result: ActionResult<T>): T {
   if (!result.success) throwActionError(result);
@@ -95,7 +99,7 @@ interface ZeroScope {
  * Where a New Removal opens: the empty components step while any is
  * unconfirmed, the submit step otherwise, and straight to submit when the
  * emissions entries switch is off (the server supplies it on the context).
- * Resolved once per Removal: later edits must not move the operator, so the
+ * Resolved once per opening: later edits must not move the operator, so the
  * key sits outside `certificationKeys.all`, which every write invalidates.
  */
 export function useRemovalLanding(
@@ -105,19 +109,20 @@ export function useRemovalLanding(
 ) {
   const queryClient = useQueryClient();
   return useQuery({
-    queryKey: ["removal-landing", removalId ?? ""],
+    queryKey: removalLandingKeys.removal(removalId ?? ""),
     queryFn: async () => {
       // The dialog reads the same context: share it instead of loading it twice.
-      const ctx = await queryClient.ensureQueryData({
-        queryKey: certificationKeys.certifyContextForRemoval(facilityId, removalId!),
-        queryFn: async () => unwrapZero(await loadRemovalCertifyContext(facilityId, removalId!)),
-        staleTime: 30_000,
-      });
+      const ctx = await queryClient.ensureQueryData(
+        removalCertifyContextQueryOptions(facilityId, removalId!),
+      );
       if (!ctx.emissionsEntriesEnabled) return { entriesEnabled: false, step: "submit" as const };
       return { entriesEnabled: true, step: landingStep(await readEmptyComponents(removalId!)) };
     },
     enabled: enabled && !!removalId,
+    // Once per opening: stable while the dialog is open, gone when it closes, so
+    // a reopened draft is read again and never lands from an earlier session.
     staleTime: Infinity,
+    gcTime: 0,
     retry: false,
     refetchOnWindowFocus: false,
   });

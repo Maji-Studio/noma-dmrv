@@ -307,7 +307,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - A line can carry entries only when its contract is `operating` with an entry policy other than `none`. An entry existing on it is not enough.
 - Additive entries go alongside an automatic source when the contract has both, including entry-only follow-ups.
 - `forbidden` and `unassigned` lines stay blocked.
-- The sandbox zero stub is removed in every environment. Empty operating components need entries or Removal-confirmed zeros; the nightly E2E template selector applies the same guard.
+- Period inputs are never stubbed. Empty operating components need entries or Removal-confirmed zeros; the nightly E2E template selector applies the same guard.
 
 **Snapshot and hash**
 - `semanticPayload` gains the semantic fingerprint and a contribution manifest per input: entry id, `contentRevision`, values and evidence document ids. Any change that alters what is sent therefore moves `payloadHash`.

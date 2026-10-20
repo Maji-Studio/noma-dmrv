@@ -1,15 +1,18 @@
 /**
- * What a Removal sends per template component, read from the lines the server
- * already derived for the submission (`ctx.emissionLinesByBatchId`): the same
- * facts the submit gate uses, never recomputed from raw records here.
+ * What a Removal sends per template component. Figures come from the compiled
+ * review (the Removal-scoped inputs the submission will post, as the technical
+ * drawer lists them): never from batch-wide automatic figures, which count
+ * shipments and production this Removal does not send. Entry counts and files
+ * come from the server's per-batch lines (`ctx.emissionLinesByBatchId`).
  */
 import {
-  formatFigure,
+  displayUnit,
+  formatMagnitude,
   hasRecordsFigure,
   manualEntriesText,
 } from "@/components/emissions/emission-line-display";
+import type { RemovalCompilationView } from "@/fn/certification";
 import type { BatchEmissionLine } from "@/lib/certification/emission-lines";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 
 export const SENT_SOURCE = {
   automatic: "Automatic datapoints",
@@ -21,6 +24,7 @@ export const SENT_SOURCE = {
 } as const;
 
 export const CARBON_LEDGER_POINTER = "See Carbon ledger";
+const EARLIER_REMOVAL_REASON = "Sent with an earlier Removal.";
 const UNBINDABLE_REASON =
   "noma cannot submit this component. Review the Removal template.";
 
@@ -29,120 +33,123 @@ export interface SentComponentRow {
   name: string;
   groupKey: string;
   groupName: string;
-  /** The figure sent, or a missing-value token. */
-  value: string;
-  /** True when `value` is a token, not a figure. */
-  valueMissing: boolean;
+  /** What the source column says. A component not sent says only that, once. */
   source: string;
+  /** The figure sent, or null when there is none to show. */
+  value: string | null;
+  /** True when `value` points elsewhere instead of giving a figure. */
+  valuePointer: boolean;
   fileCount: number;
   /** Entries holding files, to read their names on demand. */
   fileEntryIds: string[];
-  /** Why the component is not sent (a blocker or no mapping), or null when it is. */
+  /** Why the component is not sent, or null when it is. */
   notSentReason: string | null;
 }
 
 export interface SentRowContext {
-  /** Components whose datapoints are fixed in the template and sent with it. */
-  fixedComponentIds?: ReadonlySet<string>;
+  /** The compiled review; null while it is not ready. */
+  review?: RemovalCompilationView["review"] | null;
   /** Components the template cannot submit. */
   unbindableComponentIds?: ReadonlySet<string>;
 }
 
-function countingValues(line: BatchEmissionLine) {
-  return line.entries.filter((entry) => entry.kind === "value" && entry.counts);
+type Binding = NonNullable<RemovalCompilationView["review"]>["bindings"][number];
+
+function figure(binding: Binding): string | null {
+  if (binding.wireMagnitude === undefined) return null;
+  return `${formatMagnitude(binding.wireMagnitude)} ${displayUnit(binding.wireUnit)}`.trim();
 }
 
-export function sourceText(line: BatchEmissionLine): string {
-  if (line.state === "confirmedZero") return SENT_SOURCE.zero;
-  const automatic =
-    hasRecordsFigure(line.records) || line.automaticFigure !== null;
-  const manual = countingValues(line).length;
-  if (automatic && manual) {
-    return `${SENT_SOURCE.automatic}, ${manualEntriesText(manual)}`;
-  }
-  if (automatic) return SENT_SOURCE.automatic;
-  if (manual) return manualEntriesText(manual);
-  return SENT_SOURCE.none;
+function sourceParts(lines: readonly BatchEmissionLine[]): string[] {
+  const automatic = lines.some(
+    (line) => hasRecordsFigure(line.records) || line.automaticFigure !== null,
+  );
+  const manual = lines.reduce(
+    (sum, line) =>
+      sum + line.entries.filter((entry) => entry.kind === "value" && entry.counts).length,
+    0,
+  );
+  const zero = lines.some((line) => line.state === "confirmedZero");
+  return [
+    ...(automatic ? [SENT_SOURCE.automatic] : []),
+    ...(manual > 0 ? [manualEntriesText(manual)] : []),
+    ...(zero ? [SENT_SOURCE.zero] : []),
+  ];
 }
 
-function valueText(line: BatchEmissionLine): string {
-  if (line.total) return formatFigure(line.total);
-  if (line.state === "confirmedZero") return "0";
-  const recorded =
-    hasRecordsFigure(line.records) ||
-    line.entries.some((entry) => entry.kind === "value");
-  return recorded ? MISSING_VALUE.notAvailable : MISSING_VALUE.notRecorded;
+function filesOf(lines: readonly BatchEmissionLine[]) {
+  const withFiles = lines.flatMap((line) =>
+    line.entries.filter(
+      (entry) =>
+        entry.kind === "value" && entry.counts && (entry.documentCount ?? 0) > 0 && entry.id,
+    ),
+  );
+  return {
+    count: withFiles.reduce((sum, entry) => sum + (entry.documentCount ?? 0), 0),
+    entryIds: withFiles.map((entry) => entry.id!),
+  };
 }
 
-function isSequestration(line: BatchEmissionLine): boolean {
-  return line.contract?.automaticSource === "sequestration";
-}
-
-function notSentReason(line: BatchEmissionLine, context: SentRowContext): string | null {
-  if (line.blocker) return line.blocker.message;
-  if (context.unbindableComponentIds?.has(line.componentId)) return UNBINDABLE_REASON;
-  return null;
-}
-
+/** One row per template component, in template order, for the whole Removal. */
 export function sentComponentRows(
-  lines: readonly BatchEmissionLine[],
+  batchLines: readonly (readonly BatchEmissionLine[])[],
   context: SentRowContext = {},
 ): SentComponentRow[] {
-  return lines.map((line) => {
-    const withFiles = countingValues(line).filter(
-      (entry) => (entry.documentCount ?? 0) > 0 && entry.id,
+  const byComponent = new Map<string, BatchEmissionLine[]>();
+  for (const lines of batchLines) {
+    for (const line of lines) {
+      byComponent.set(line.componentId, [...(byComponent.get(line.componentId) ?? []), line]);
+    }
+  }
+  const omitted = new Set(context.review?.omittedComponentIds ?? []);
+  return [...byComponent.values()].map((lines) => {
+    const first = lines[0];
+    const bindings = (context.review?.bindings ?? []).filter(
+      (binding) => binding.componentId === first.componentId,
     );
-    const reason = notSentReason(line, context);
-    let source = sourceText(line);
-    let value = valueText(line);
+    const blocker = lines.find((line) => line.blocker)?.blocker?.message;
+    const reason = omitted.has(first.componentId)
+      ? EARLIER_REMOVAL_REASON
+      : (blocker ??
+        (context.unbindableComponentIds?.has(first.componentId) ? UNBINDABLE_REASON : null));
+    const base = {
+      componentId: first.componentId,
+      name: first.displayName,
+      groupKey: first.groupKey,
+      groupName: first.groupName,
+    };
     if (reason) {
       // A component the submission cannot send must not read as sent.
-      source = SENT_SOURCE.notSent;
-      value = SENT_SOURCE.notSent;
-    } else if (isSequestration(line)) {
-      // Compiled from Samples and applications, shown in the Carbon ledger.
-      source = SENT_SOURCE.samples;
-      value = CARBON_LEDGER_POINTER;
-    } else if (source === SENT_SOURCE.none && context.fixedComponentIds?.has(line.componentId)) {
-      source = SENT_SOURCE.template;
-      value = SENT_SOURCE.template;
+      return { ...base, source: SENT_SOURCE.notSent, value: null, valuePointer: false,
+        fileCount: 0, fileEntryIds: [], notSentReason: reason };
     }
-    const pointer = value === CARBON_LEDGER_POINTER || value === SENT_SOURCE.template;
+    const files = filesOf(lines);
+    const common = { ...base, fileCount: files.count, fileEntryIds: files.entryIds, notSentReason: null };
+    if (lines.some((line) => line.contract?.automaticSource === "sequestration")) {
+      // Compiled from Samples and applications, shown in the Carbon ledger.
+      return { ...common, source: SENT_SOURCE.samples, value: CARBON_LEDGER_POINTER, valuePointer: true };
+    }
+    const figures = bindings
+      .filter((binding) => binding.binding !== "measurement-sample")
+      .map(figure)
+      .filter((value): value is string => value !== null);
+    const parts = sourceParts(lines);
+    const fixed = bindings.some((binding) => binding.binding === "fixed");
     return {
-      componentId: line.componentId,
-      name: line.displayName,
-      groupKey: line.groupKey,
-      groupName: line.groupName,
-      value,
-      valueMissing:
-        pointer ||
-        !!reason ||
-        value === MISSING_VALUE.notAvailable ||
-        value === MISSING_VALUE.notRecorded,
-      source,
-      fileCount: reason
-        ? 0
-        : withFiles.reduce((sum, entry) => sum + (entry.documentCount ?? 0), 0),
-      fileEntryIds: reason ? [] : withFiles.map((entry) => entry.id!),
-      notSentReason: reason,
+      ...common,
+      source: parts.length ? parts.join(", ") : fixed ? SENT_SOURCE.template : SENT_SOURCE.none,
+      value: figures.length ? figures.join(", ") : null,
+      valuePointer: false,
     };
   });
 }
 
 export function groupSentRows(rows: readonly SentComponentRow[]) {
-  const groups = new Map<
-    string,
-    { key: string; label: string; rows: SentComponentRow[] }
-  >();
+  const groups = new Map<string, { key: string; label: string; rows: SentComponentRow[] }>();
   for (const row of rows) {
     const group = groups.get(row.groupKey);
     if (group) group.rows.push(row);
-    else
-      groups.set(row.groupKey, {
-        key: row.groupKey,
-        label: row.groupName,
-        rows: [row],
-      });
+    else groups.set(row.groupKey, { key: row.groupKey, label: row.groupName, rows: [row] });
   }
   return [...groups.values()];
 }

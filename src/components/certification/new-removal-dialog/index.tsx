@@ -47,7 +47,12 @@ import {
   useRemovalEmptyComponents,
   useRemovalLanding,
 } from "@/hooks/use-removal-empty-components";
-import { EmptyComponentsStep, type FocusRequest } from "./empty-components-step";
+import {
+  CHECK_FAILED_MESSAGE,
+  EmptyComponentsStep,
+  type FocusRequest,
+} from "./empty-components-step";
+import { Notice } from "@/components/ui/notice";
 import {
   continueRefusal,
   hasEmptyComponentsStep,
@@ -60,8 +65,7 @@ const SELECT_STEP: StepFlowStep = { key: "select", label: "Select batches" };
 const EMPTY_STEP: StepFlowStep = { key: "empty", label: "Empty components" };
 const SUBMIT_STEP: StepFlowStep = { key: "submit", label: "Confirm & submit" };
 type StepKey = "select" | "empty" | "submit";
-const CHECK_FAILED_MESSAGE =
-  "The empty components could not be checked. Try again.";
+
 
 interface NewRemovalDialogProps {
   facilityId: string;
@@ -318,14 +322,16 @@ function WizardBody({
         )}
         {step === null &&
           (landing.isError ? (
-            <div className="flex flex-col items-start gap-12">
-              <p className="body-small text-[var(--st-bad)]" role="alert">
-                {CHECK_FAILED_MESSAGE}
-              </p>
-              <Button variant="default" onClick={() => void landing.refetch()}>
-                Try again
-              </Button>
-            </div>
+            <Notice
+              tone="error"
+              action={
+                <Button variant="default" onClick={() => void landing.refetch()}>
+                  Try again
+                </Button>
+              }
+            >
+              {CHECK_FAILED_MESSAGE}
+            </Notice>
           ) : (
             <p className="body-small text-[var(--color-text-tertiary)]">
               Loading…
@@ -338,6 +344,7 @@ function WizardBody({
             data={emptyQuery.data}
             isLoading={emptyQuery.isLoading}
             isError={emptyQuery.isError}
+            onRetry={() => void emptyQuery.refetch()}
             actions={actions}
             focusRequest={focusRequest}
             batchDates={Object.fromEntries(
@@ -395,6 +402,7 @@ function WizardBody({
           reason={continueReason}
           busy={advancing || actions.busy}
           onContinue={() => void continueFromEmpty()}
+          onCancel={onClose}
         />
       )}
     </div>
@@ -405,23 +413,26 @@ function EmptyStepFooter({
   reason,
   busy,
   onContinue,
+  onCancel,
 }: {
   /** Why the last press of Continue was refused, announced where the action is. */
   reason: string | null;
   busy: boolean;
   onContinue: () => void;
+  onCancel: () => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-start gap-x-16 gap-y-12 border-t border-[var(--color-border-secondary)] pt-16">
-      {/* BTN-09: Continue stays pressable; pressing it while blocked names what is missing. */}
-      <Button variant="primary" onClick={onContinue} busy={busy}>
-        Continue
-      </Button>
-      {reason && (
-        <span role="alert" className="body-caption text-[var(--st-bad)]">
-          {reason}
-        </span>
-      )}
+    <div className="flex flex-col gap-12 border-t border-[var(--color-border-secondary)] pt-16">
+      <div className="flex items-center gap-12">
+        {/* BTN-09: Continue stays pressable; pressing it while blocked names what is missing. */}
+        <Button variant="primary" onClick={onContinue} busy={busy}>
+          Continue
+        </Button>
+        <Button variant="default" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+      {reason && <Notice tone="error">{reason}</Notice>}
     </div>
   );
 }

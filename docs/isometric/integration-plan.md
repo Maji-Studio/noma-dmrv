@@ -268,7 +268,7 @@ Operating components, including staff travel, direct gases, lab electricity and
 sampling consumables, use their reviewed template contracts and emissions
 entries under [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
 
-The sandbox zero stub is removed in every environment, independently of the
+Period inputs are never stubbed, independently of the
 emissions-entry activation gate. A missing operating input blocks submission
 until records, entries or a Removal-confirmed zero supply it. Operators confirm
 zeros on Empty components. Forbidden project-level inputs still fail closed.

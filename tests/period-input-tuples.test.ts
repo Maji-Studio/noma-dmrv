@@ -242,8 +242,8 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
       });
   }
 
-  it.each(["sandbox", "production"])("rejects unsourced period inputs in %s", (environment) => {
-    vi.stubEnv("ISOMETRIC_ENVIRONMENT", environment);
+  // No environment input exists anymore: period inputs are never stubbed, so one fail-closed case covers every environment.
+  it("rejects unsourced period inputs", () => {
     for (const t of PERIOD_INPUT_TUPLE_CANON) {
       let err: unknown;
       try {

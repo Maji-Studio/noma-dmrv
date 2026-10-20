@@ -24,20 +24,22 @@ import { MAX_NOTE_LENGTH } from "@/components/emissions/emission-line-display";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { formatDateRange, formatDateTime } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
-import type {
-  EmptyComponentsActions,
-  RemovalEmptyComponents,
-  RemovalEmptyComponentsBatch,
-} from "@/hooks/use-removal-empty-components";
+import type { EmptyComponentsActions } from "@/hooks/use-removal-empty-components";
 import {
   componentsWord,
   recordedAt,
   recordedNote,
   stepRows,
+  type RemovalEmptyComponents,
+  type RemovalEmptyComponentsBatch,
 } from "@/lib/certification/empty-components-state";
+import { Notice } from "@/components/ui/notice";
 
 const LINK_ICON_SIZE = 12;
 const STATE_ICON_SIZE = 14;
+/** Said by every failed read of the empty components, here and in the wizard. */
+export const CHECK_FAILED_MESSAGE =
+  "The empty components could not be checked. Try again.";
 const NOTE_PLACEHOLDER = "For example: no staff travel in September.";
 const NOTE_HINT =
   "The note is copied to each recorded zero. It stays in noma. Isometric receives 0 for each component, with no file.";
@@ -61,6 +63,8 @@ interface EmptyComponentsStepProps {
   data: RemovalEmptyComponents | undefined;
   isLoading: boolean;
   isError: boolean;
+  /** Reads the components again after a failed load. */
+  onRetry: () => void;
   /** Start and end of each selected batch, by credit batch id. */
   batchDates: Record<string, BatchDates>;
   actions: EmptyComponentsActions;
@@ -73,6 +77,7 @@ export function EmptyComponentsStep({
   data,
   isLoading,
   isError,
+  onRetry,
   batchDates,
   actions,
   focusRequest,
@@ -84,9 +89,16 @@ export function EmptyComponentsStep({
   }
   if (isError || !data) {
     return (
-      <p className="body-small text-[var(--st-bad)]" role="alert">
-        The empty components could not be loaded. Refresh the page.
-      </p>
+      <Notice
+        tone="error"
+        action={
+          <Button variant="default" onClick={onRetry}>
+            Try again
+          </Button>
+        }
+      >
+        {CHECK_FAILED_MESSAGE}
+      </Notice>
     );
   }
   return (
@@ -190,7 +202,7 @@ function BatchCard({
             href={creditBatchDeepLinkHref(batch.creditBatchId, facilityId)}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-4 font-mono text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline"
+            className="inline-flex min-h-44 items-center gap-4 font-mono text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline md:min-h-0"
           >
             {batch.code}
             <ArrowSquareOutIcon size={LINK_ICON_SIZE} aria-hidden />
@@ -212,12 +224,6 @@ function BatchCard({
           )}
         </span>
       </div>
-
-      {open === 0 && recorded === 0 && (
-        <p className="px-16 py-12 body-small text-[var(--color-text-secondary)]">
-          Every component has an entry or automatic datapoints.
-        </p>
-      )}
 
       {(open > 0 || recorded > 0) && (
         <ul className="flex flex-col" aria-label={`Components in ${batch.code}`}>
@@ -335,12 +341,9 @@ function BatchCard({
       )}
 
       {error && (
-        <p
-          className="px-16 pb-12 body-small text-[var(--st-bad)]"
-          role="alert"
-        >
+        <Notice tone="error" className="px-16 pb-12">
           {error.message}
-        </p>
+        </Notice>
       )}
     </section>
   );

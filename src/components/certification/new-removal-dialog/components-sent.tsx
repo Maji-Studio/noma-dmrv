@@ -10,6 +10,7 @@ import { Fragment } from "react";
 import Link from "next/link";
 import { ArrowSquareOutIcon, PaperclipIcon } from "@phosphor-icons/react/dist/ssr";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
+import type { RemovalCompilationView } from "@/fn/certification";
 import { SectionLabel } from "@/components/forms/section-label";
 import { InfoHint } from "@/components/ui/tooltip";
 import { ENTRY_ENTITY_TYPE } from "@/components/emissions/emission-entry-files";
@@ -85,7 +86,14 @@ function SentRow({ row, withFiles }: { row: SentComponentRow; withFiles: boolean
         {row.name}
       </span>
       <span className="col-start-1 row-start-2 flex flex-wrap items-center gap-x-8 body-small text-[var(--color-text-secondary)] md:col-auto md:row-auto">
-        <span>{row.source}</span>
+        <span className="inline-flex items-center gap-4">
+          {row.source}
+          {row.notSentReason && (
+            <InfoHint label={`Why ${row.name} is not sent`}>
+              {row.notSentReason}
+            </InfoHint>
+          )}
+        </span>
         <span className="body-small md:hidden">
           {row.fileCount > 0 && <FilesCell row={row} />}
         </span>
@@ -98,17 +106,12 @@ function SentRow({ row, withFiles }: { row: SentComponentRow; withFiles: boolean
       <span
         className={cn(
           "col-start-2 row-start-2 text-right body-small font-mono tabular-nums md:col-auto md:row-auto",
-          row.valueMissing
+          row.valuePointer
             ? "text-[var(--color-text-tertiary)]"
             : "text-[var(--color-text-primary)]",
         )}
       >
         {row.value}
-        {row.notSentReason && (
-          <InfoHint label={`Why ${row.name} is not sent`} className="ml-4">
-            {row.notSentReason}
-          </InfoHint>
-        )}
       </span>
     </li>
   );
@@ -120,40 +123,39 @@ interface ComponentsSentProps {
     "memberBatches" | "emissionLinesByBatchId" | "unbindableTemplateInputs"
   >;
   facilityId: string;
-  /** Components whose datapoints are fixed in the template (from the compiled review). */
-  fixedComponentIds?: ReadonlySet<string>;
+  /** The compiled review: its inputs are what this Removal sends. */
+  review: RemovalCompilationView["review"] | null;
 }
 
-export function ComponentsSent({ ctx, facilityId, fixedComponentIds }: ComponentsSentProps) {
-  const unbindableComponentIds = new Set(
-    (ctx.unbindableTemplateInputs ?? []).map((input) => input.componentId),
-  );
+export function ComponentsSent({ ctx, facilityId, review }: ComponentsSentProps) {
   const byBatch = ctx.emissionLinesByBatchId ?? {};
   const batches = ctx.memberBatches.filter(
     (batch) => (byBatch[batch.id] ?? []).length > 0,
   );
   if (batches.length === 0) return null;
+  const rows = sentComponentRows(
+    batches.map((batch) => byBatch[batch.id]),
+    {
+      review,
+      unbindableComponentIds: new Set(
+        (ctx.unbindableTemplateInputs ?? []).map((input) => input.componentId),
+      ),
+    },
+  );
+  const withFiles = rows.some((row) => row.fileCount > 0);
   return (
     <section className="flex flex-col gap-12" aria-label="Components sent">
       <SectionLabel hint={SECTION_HINT}>Components sent</SectionLabel>
-      {batches.map((batch) => {
-        const rows = sentComponentRows(byBatch[batch.id], {
-          fixedComponentIds,
-          unbindableComponentIds,
-        });
-        const withFiles = rows.some((row) => row.fileCount > 0);
-        return (
-          <div
-            key={batch.id}
-            className="flex flex-col bg-[var(--paper)] [border:var(--panel-border)]"
-          >
-            <div className="flex flex-wrap items-baseline justify-between gap-x-12 gap-y-4 bg-[var(--sea)] px-16 py-10">
-              <span className="inline-flex flex-wrap items-baseline gap-x-8 body-small font-medium">
+      <div className="flex flex-col bg-[var(--paper)] [border:var(--panel-border)]">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-12 gap-y-4 bg-[var(--sea)] px-16 py-10">
+          <span className="inline-flex flex-wrap items-baseline gap-x-16 gap-y-4 body-small font-medium">
+            {batches.map((batch) => (
+              <span key={batch.id} className="inline-flex flex-wrap items-baseline gap-x-8">
                 <Link
                   href={creditBatchDeepLinkHref(batch.id, facilityId)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-4 font-mono text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline"
+                  className="inline-flex min-h-44 items-center gap-4 font-mono text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline md:min-h-0"
                 >
                   {batch.code}
                   <ArrowSquareOutIcon size={LINK_ICON_SIZE} aria-hidden />
@@ -162,25 +164,25 @@ export function ComponentsSent({ ctx, facilityId, fixedComponentIds }: Component
                   {formatDateRange(batch.startDate, batch.endDate)}
                 </span>
               </span>
-              <span className="body-caption text-[var(--color-text-secondary)]">
-                {rows.length} {pluralize(rows.length, "component", "components")}
-              </span>
-            </div>
-            <ul aria-label={`Components sent for ${batch.code}`}>
-              {groupSentRows(rows).map((group) => (
-                <Fragment key={group.key}>
-                  <li className="px-16 pt-12 pb-2 body-caption font-medium text-[var(--color-text-tertiary)] [border-top:var(--row-divider)]">
-                    {group.label}
-                  </li>
-                  {group.rows.map((row) => (
-                    <SentRow key={row.componentId} row={row} withFiles={withFiles} />
-                  ))}
-                </Fragment>
+            ))}
+          </span>
+          <span className="body-caption text-[var(--color-text-secondary)]">
+            {rows.length} {pluralize(rows.length, "component", "components")}
+          </span>
+        </div>
+        <ul aria-label="Components sent">
+          {groupSentRows(rows).map((group) => (
+            <Fragment key={group.key}>
+              <li className="px-16 pt-12 pb-2 body-caption font-medium text-[var(--color-text-tertiary)] [border-top:var(--row-divider)]">
+                {group.label}
+              </li>
+              {group.rows.map((row) => (
+                <SentRow key={row.componentId} row={row} withFiles={withFiles} />
               ))}
-            </ul>
-          </div>
-        );
-      })}
+            </Fragment>
+          ))}
+        </ul>
+      </div>
     </section>
   );
 }

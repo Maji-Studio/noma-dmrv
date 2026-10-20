@@ -130,6 +130,8 @@ export interface RemovalSubmissionReview {
     deliveryCode: string;
   }>;
   reportingWindow: { startedOn: string; completedOn: string };
+  /** Components this Removal leaves out: already sent with, or claimed by, an earlier Removal. */
+  omittedComponentIds?: string[];
   productionEmissionClaims?: Array<{
     creditBatchId: string;
     creditBatchCode: string;
@@ -349,18 +351,29 @@ export async function compileRemovalSubmission(
       wireUnit: input.quantity.unit,
       wireType: input.datapointType,
     })),
-    ...build.fixed.map((input) => ({
-      componentId: input.removalTemplateComponentId,
-      componentBlueprintKey:
-        templateComponentById.get(input.removalTemplateComponentId)
-          ?.blueprint_key ?? MISSING_VALUE.notAvailable,
-      componentDisplayName: templateComponentById.get(
+    ...build.fixed.map((input) => {
+      const component = templateComponentById.get(
         input.removalTemplateComponentId,
-      )?.display_name,
-      inputKey: input.inputKey,
-      binding: "fixed" as const,
-      fixedDatapointId: input.preboundDatapointId,
-    })),
+      );
+      const fixedValue = args.ctx.fixedInputValues?.find(
+        (value) =>
+          value.componentId === input.removalTemplateComponentId &&
+          value.inputKey === input.inputKey,
+      );
+      return {
+        componentId: input.removalTemplateComponentId,
+        componentBlueprintKey:
+          component?.blueprint_key ?? MISSING_VALUE.notAvailable,
+        componentDisplayName: component?.display_name,
+        inputKey: input.inputKey,
+        binding: "fixed" as const,
+        // The datapoint's own value, read with the template observation.
+        ...(fixedValue
+          ? { wireMagnitude: fixedValue.magnitude, wireUnit: fixedValue.unit }
+          : {}),
+        fixedDatapointId: input.preboundDatapointId,
+      };
+    }),
     ...args.prepared.removalTemplate.groups.flatMap((group) =>
       group.components
         .filter((component) =>
@@ -411,6 +424,7 @@ export async function compileRemovalSubmission(
       mappingRevision: MAPPING_REVISION,
     },
     bindings,
+    omittedComponentIds: [...build.omittedTemplateComponentIds],
     measurementSamples,
     directSequestrationDatapoints,
     sourceIds: [...build.sourceIds],

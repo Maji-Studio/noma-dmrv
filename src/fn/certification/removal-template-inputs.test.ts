@@ -159,8 +159,8 @@ it("compiles gas concentration and mass flow from the same single entry", () => 
   expect(compileEntries("ghg_direct_emissions", true).monitored.map((input) => input.quantity.magnitude)).toEqual([2, 3]);
 });
 
-it.each(["sandbox", "production"])("blocks an empty operating component in %s until recorded", (environment) => {
-  vi.stubEnv("ISOMETRIC_ENVIRONMENT", environment);
+// No environment input exists anymore: an empty operating component is blocked the same way everywhere.
+it("blocks an empty operating component until recorded", () => {
   vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
   const template = structuredClone(sandbox);
   const group = template.groups.find((group) => group.components.some((component) => component.blueprint_key === "ghg_direct_emissions"))!;
@@ -173,8 +173,7 @@ it.each(["sandbox", "production"])("blocks an empty operating component in %s un
   })).toThrow(EMPTY_REMOVAL_LINE);
 });
 
-it.each(["sandbox", "production"])("compiles a Removal-confirmed zero with no evidence in %s", (environment) => {
-  vi.stubEnv("ISOMETRIC_ENVIRONMENT", environment);
+it("compiles a Removal-confirmed zero with no evidence", () => {
   const result = compileEntries("ghg_direct_emissions", true, false, true);
   expect(result.monitored.map((input) => input.quantity.magnitude)).toEqual([0, 0]);
   expect([...result.datapointBodyByKey.values()].every((body) => body.source_ids?.length === 0)).toBe(true);

@@ -136,7 +136,7 @@ direct gases, storage fuel, lab electricity and sampling consumables, need a
 reviewed operating contract and a supported source under
 [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
 
-The sandbox zero stub is removed in every environment. Missing operating
+Period inputs are never stubbed. Missing operating
 inputs require records, emissions entries or explicit zero confirmation on
 Empty components. The E2E template selector supplies no entries or confirmed
 zeros, so it rejects entry-only components using the normal submission coverage

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { RemovalEmptyComponents } from "@/hooks/use-removal-empty-components";
+import type { RemovalEmptyComponents } from "./empty-components-state";
 import {
   continueRefusal,
   hasEmptyComponentsStep,

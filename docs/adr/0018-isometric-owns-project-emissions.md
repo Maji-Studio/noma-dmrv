@@ -31,7 +31,7 @@ Status: accepted (2026-07-02)
 > emissions entries. Establishment and end-of-life stay project-level, and the
 > scope guard keeps those tuples. ADR 0032 was accepted on 2026-10-19.
 > The historical decisions below apply only where ADR 0032 has not superseded
-> them. The sandbox zero stub is removed in every environment.
+> them. Period inputs are never stubbed.
 
 ## Context
 
