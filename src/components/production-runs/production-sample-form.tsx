@@ -278,7 +278,6 @@ export function ProductionSampleForm({
           <FormField
             id="attachments"
             label="Attachments"
-            helperText="Upload measurement photos or records"
           >
             <FormFileUpload
               id="attachments"

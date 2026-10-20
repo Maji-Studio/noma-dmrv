@@ -279,7 +279,6 @@ export function SupplierForm({
             id="location"
             label="Location"
             error={errors.location?.message}
-            helperText="General location or region of the supplier"
           >
             <FormInput
               id="location"

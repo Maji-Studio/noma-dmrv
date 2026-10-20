@@ -475,7 +475,6 @@ export function BiocharProductList() {
         <PageHeader
           area="production"
           title="Biochar Products"
-          subtitle="Finished biochar inventory and certifications"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its biochar products." />
       </div>
@@ -495,7 +494,6 @@ export function BiocharProductList() {
       <PageHeader
         area="production"
         title="Biochar Products"
-        subtitle="Finished biochar inventory and certifications"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -510,7 +508,6 @@ export function BiocharProductList() {
           title="Total products"
           value={totalProducts}
           icon={<CubeIcon size={24} weight="bold" />}
-          description="Finished product batches"
           isLoading={isLoading}
         />
         <BiocharProductPageMassSummary

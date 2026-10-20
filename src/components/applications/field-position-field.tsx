@@ -15,8 +15,6 @@ const MODE_OPTIONS: readonly { value: FieldPositionMode; label: string }[] = [
 
 /** Deriving has a consequence the operator needs to see: the position moves with the delivery. */
 const DERIVE_CUE = "Follows the delivery destination, and updates if you change it.";
-/** Entering by hand only needs an explanation, behind the ⓘ. */
-const MANUAL_HELPER = "Search an address, click the map, or type the coordinates.";
 
 export interface DerivedPosition {
   gpsLatitude: number;
@@ -91,7 +89,6 @@ export function FieldPositionField({
           id="fieldPositionMode"
           label="Field position"
           cue={mode === "derive" ? DERIVE_CUE : undefined}
-          helperText={mode === "manual" ? MANUAL_HELPER : undefined}
         >
           <SegmentedControl
             id="fieldPositionMode"

@@ -165,7 +165,6 @@ export function ReactorForm({
             id="capacityTph"
             label="Nominal throughput (tph)"
             error={errors.capacityTph?.message}
-            helperText="Designed feedstock throughput per hour"
           >
             <FormInput
               id="capacityTph"

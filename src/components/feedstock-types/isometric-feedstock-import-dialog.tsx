@@ -75,9 +75,6 @@ export function IsometricFeedstockImportDialog({
               Import from Isometric
             </h2>
           </div>
-          <p className="body-small text-[var(--color-text-secondary)]">
-            Choose a registry catalogue entry, then assign its local category.
-          </p>
         </div>
 
         <IsometricFeedstockBrowser
