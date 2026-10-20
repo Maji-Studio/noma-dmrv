@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
+import { switchCreditBatchRemovalTemplate as switchTemplate } from "@/data-access/credit-batch-removal-template";
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getLatestTemplateObservation, reviewLineContracts } from "@/data-access/removal-template-observations";
 import { getCertifierProjectByFacility } from "@/data-access/certification";
@@ -8,7 +9,8 @@ import { listGhgEntryTemplates, type IsometricGhgEntryTemplate } from "@/lib/iso
 import { loadRemovalTemplateFacts } from "./removal-template-facts";
 import { observeRemovalTemplate } from "./observe-removal-template";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
-import { normalizeTemplateDefinition, resolveLineSources } from "@/lib/isometric/template-observations";
+import { enrichmentProblems, fullFingerprint, lineNeedsReview, lineSourcesForObservation, normalizeTemplateDefinition, resolveLineSources, semanticFingerprint, validateLineSources } from "@/lib/isometric/template-observations";
+import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/load-enrichment";
 import { loadRemovalTemplateReviewEntry, loadRemovalTemplateReviewPreview, reviewRemovalTemplateLines, switchCreditBatchRemovalTemplate } from "./removal-template-review";
 
 const ctx = vi.hoisted((): OrgContext => ({ userId: "review-user", organizationId: "review-org", orgRole: "owner", isPlatformAdmin: false }));
@@ -34,6 +36,8 @@ const id = "00000000-0000-4000-8000-000000000001";
 beforeEach(() => {
   vi.clearAllMocks();
   ctx.orgRole = "owner";
+  vi.mocked(getLatestTemplateObservation).mockResolvedValue(null);
+  vi.mocked(loadTemplateEnrichment).mockResolvedValue({});
   vi.mocked(requireOrgFacility).mockResolvedValue(undefined as never);
   vi.mocked(getCertifierProjectByFacility).mockResolvedValue({ externalProjectId: fixture.project_id } as never);
   vi.mocked(listGhgEntryTemplates).mockResolvedValue([fixture as IsometricGhgEntryTemplate]);
@@ -68,16 +72,40 @@ it("uses the accurate non-Removal refusal for Switch template", async () => {
   expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
 });
 
+it("still observes the template facts before switching", async () => {
+  vi.mocked(getCreditBatchById).mockResolvedValue({ facilityId: id } as never);
+  vi.mocked(switchTemplate).mockResolvedValue({ id } as never);
+  const input = { creditBatchId: id, removalTemplateId: fixture.id, expectedVersion: 1 };
+  expect(await switchCreditBatchRemovalTemplate(input)).toEqual({ success: true, data: { id } });
+  expect(loadRemovalTemplateFacts).toHaveBeenCalledWith(ctx, {
+    client: {}, template: fixture, externalProjectId: fixture.project_id, blueprints: [],
+  });
+  expect(switchTemplate).toHaveBeenCalledWith(ctx, input);
+  expect(vi.mocked(loadRemovalTemplateFacts).mock.invocationCallOrder[0])
+    .toBeLessThan(vi.mocked(switchTemplate).mock.invocationCallOrder[0]);
+});
+
 it("lets a member preview an unpinned target in their facility's registry project", async () => {
   ctx.orgRole = "member";
   const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
   const lineSources = resolveLineSources({ definition });
-  lineSources.rtc_1KWHFRM4GSBX5Y7A.origin = "proposed";
-  vi.mocked(loadRemovalTemplateFacts).mockResolvedValue({ observation: { lineSources }, enrichmentProblems: [], lineSourceProblems: [] } as never);
+  const componentId = "rtc_1KWHFRM4GSBX5Y7A";
+  lineSources[componentId].origin = "proposed";
+  // Keep one pending line and surface real validation problems from the live read.
+  lineSources[componentId].scope = "unassigned";
+  lineSources[componentId].entryPolicy = "none";
+  delete lineSources[componentId].automaticSource;
+  const latest = { definition, lineSources, semanticFingerprint: semanticFingerprint(definition, {}), fullFingerprint: fullFingerprint(definition, {}) };
+  vi.mocked(getLatestTemplateObservation).mockResolvedValueOnce(latest as never);
+  const expectedSources = lineSourcesForObservation({ definition, enrichment: {}, latest });
+  const problems = validateLineSources(definition, expectedSources);
   const result = await loadRemovalTemplateReviewPreview({ facilityId: id, removalTemplateId: fixture.id });
   expect(result).toEqual({ success: true, data: {
-    templateId: fixture.id, needsReviewCount: 1, enrichmentProblems: [], lineSourceProblems: [],
+    templateId: fixture.id, needsReviewCount: 1, enrichmentProblems: enrichmentProblems(definition, {}), lineSourceProblems: problems,
   } });
+  expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
+  expect(observeRemovalTemplate).not.toHaveBeenCalled();
+  expect(loadTemplateEnrichment).toHaveBeenCalledWith({}, fixture, []);
   expect(requireOrgFacility).toHaveBeenCalledWith(ctx, id);
   expect(getCertifierProjectByFacility).toHaveBeenCalledWith(ctx, id, "isometric");
   expect(listGhgEntryTemplates).toHaveBeenCalledWith({}, fixture.project_id);
@@ -104,7 +132,7 @@ describe("loadRemovalTemplateReviewEntry", () => {
       lineSources[componentId] = { scope: "operating", automaticSource: "run-genset-diesel", entryPolicy: "additive", origin: "proposed" };
     }
     const before = structuredClone(lineSources);
-    vi.mocked(getLatestTemplateObservation).mockResolvedValueOnce({ definition, lineSources } as never);
+    vi.mocked(getLatestTemplateObservation).mockResolvedValueOnce({ definition, lineSources, semanticFingerprint: semanticFingerprint(definition, {}), fullFingerprint: fullFingerprint(definition, {}) } as never);
     const result = await loadRemovalTemplateReviewEntry({ facilityId: id, removalTemplateId: fixture.id });
     if (!result.success) throw new Error("expected a read");
     for (const componentId of ids) {
@@ -133,4 +161,26 @@ describe("loadRemovalTemplateReviewEntry", () => {
     expect(listGhgEntryTemplates).not.toHaveBeenCalled();
     expect((await loadRemovalTemplateReviewEntry({ facilityId: id, removalTemplateId: "other-project-template" })).success).toBe(false);
   });
+});
+
+it("keeps Preview and Entry consistent when live enrichment differs from the stored read", async () => {
+  const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
+  const lineSources = resolveLineSources({ definition });
+  const latest = { definition, lineSources, semanticFingerprint: semanticFingerprint(definition, {}), fullFingerprint: fullFingerprint(definition, {}) };
+  const component = definition.groups.flatMap((group) => group.components).find((component) => component.inputs.length)!;
+  const enrichment = { [component.id]: { [component.inputs[0].key]: { unit: "changed-unit" } } };
+  vi.mocked(getLatestTemplateObservation).mockResolvedValue(latest as never);
+  vi.mocked(loadTemplateEnrichment).mockResolvedValue(enrichment);
+  const preview = await loadRemovalTemplateReviewPreview({ facilityId: id, removalTemplateId: fixture.id });
+  const entry = await loadRemovalTemplateReviewEntry({ facilityId: id, removalTemplateId: fixture.id });
+  if (!preview.success || !entry.success) throw new Error("expected preview reads");
+  expect(preview.data).toEqual({
+    templateId: fixture.id,
+    needsReviewCount: entry.data.lines.filter((line) => lineNeedsReview(line.component.id, line.contract, entry.data.lineSourceProblems)).length,
+    enrichmentProblems: entry.data.enrichmentProblems,
+    lineSourceProblems: entry.data.lineSourceProblems,
+  });
+  expect(entry.data.lines.find((line) => line.contract.origin === "carried")).toBeDefined();
+  expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
+  expect(observeRemovalTemplate).not.toHaveBeenCalled();
 });
