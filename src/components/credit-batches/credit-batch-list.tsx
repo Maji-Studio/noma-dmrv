@@ -830,6 +830,7 @@ export function CreditBatchList({
                 canManage,
                 emissionsEntriesEnabled,
                 locked: sideSheetLocked,
+                inRemoval: membershipLocked,
                 activeFocusTarget:
                   sideSheetEntity.id === focusedBatchId
                     ? parseEntityFocusTarget(deepLinkFocus)

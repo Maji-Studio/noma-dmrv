@@ -57,7 +57,7 @@ export function tabBadge(tab: CreditBatchPageTab, items: CreditBatchOpenItemGrou
     const total = overviewBadgeCount(items);
     return total > 0 ? { count: total, blocking: items.blocking.length > 0 } : null;
   }
-  const onTab = (item: CreditBatchOpenItem) => "tab" in item.target && item.target.tab === tab;
+  const onTab = (item: CreditBatchOpenItem) => item.target !== null && "tab" in item.target && item.target.tab === tab;
   const blocking = items.blocking.filter(onTab).length;
   const count = blocking + items.check.filter(onTab).length;
   return count > 0 ? { count, blocking: blocking > 0 } : null;

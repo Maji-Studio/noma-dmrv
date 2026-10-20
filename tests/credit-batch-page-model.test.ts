@@ -239,7 +239,7 @@ describe("credit batch page model", () => {
       expect(decimalModel.mass).toEqual({ producedDryKg: 0.9, appliedDryKg: 0.9,
         inSubmittedDryKg: 0.1, inDraftDryKg: 0.1, notInRemovalDryKg: 0.7, notAppliedDryKg: 0 });
       expect(buildCreditBatchOpenItems({
-        facilityId: fixture.facilityId, creditBatchId: fixture.batchId, pageModel: decimalModel,
+        facilityId: fixture.facilityId, creditBatchId: fixture.batchId, pageModel: decimalModel, canManage: true,
       }).waiting).toEqual([]);
 
       const [statement] = await db.insert(certifierGhgStatements).values({

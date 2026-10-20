@@ -19,7 +19,7 @@ vi.mock("@/data-access/certifier-removals", () => ({}));
 vi.mock("@/data-access/credit-batch-samples", () => ({ getCreditBatchesWithSamples: vi.fn() }));
 vi.mock("./certify-context-core", () => ({ buildCreditBatchContexts: vi.fn(), loadFacilityCertifierFacts: vi.fn() }));
 vi.mock("./biochar-application-source-readback", () => ({}));
-vi.mock("@/lib/certification/batch-health", () => ({ deriveBatchHealth: vi.fn() }));
+vi.mock("@/lib/certification/batch-health", () => ({ deriveBatchHealth: vi.fn(), batchLinesToDecide: vi.fn() }));
 vi.mock("@/lib/certification/batch-health-facts", () => ({ toBatchHealthFacts: vi.fn() }));
 vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: vi.fn() }));
 vi.mock("@/lib/read-models/batches-emission-lines", () => ({ loadBatchesEmissionLines: vi.fn() }));
@@ -28,12 +28,13 @@ import { requireOrgContext } from "@/lib/auth/server";
 import { requireOrgFacility } from "@/data-access/utils";
 import { listCreditBatchCertificationLinks } from "@/data-access/credit-batch-certification-links";
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
-import { deriveBatchHealth } from "@/lib/certification/batch-health";
+import { batchLinesToDecide, deriveBatchHealth } from "@/lib/certification/batch-health";
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { loadBatchesEmissionLines } from "@/lib/read-models/batches-emission-lines";
 import { buildCreditBatchContexts } from "./certify-context-core";
 import { loadCreditBatchHealthSummaries } from "./overview";
 
+const LINES_TO_DECIDE = 3;
 const ctx = makeTestOrgContext();
 const facilityId = "10000000-0000-4000-8000-000000000000";
 const ids = ["20000000-0000-4000-8000-000000000000", "30000000-0000-4000-8000-000000000000"];
@@ -59,6 +60,7 @@ beforeEach(() => {
   vi.mocked(listCreditBatchCertificationLinks).mockResolvedValue(batches as never);
   vi.mocked(buildCreditBatchContexts).mockResolvedValue({ contextsByBatch: Object.fromEntries(ids.map(id => [id, { facilityId }])) } as never);
   vi.mocked(deriveBatchHealth).mockReturnValue(health);
+  vi.mocked(batchLinesToDecide).mockReturnValue(LINES_TO_DECIDE);
   vi.mocked(getCreditBatchesWithSamples).mockResolvedValue(sampling as never);
   vi.mocked(loadBatchesEmissionLines).mockResolvedValue(new Map([
     [ids[0], { lines: emissionLines, storedEntries: [] }],
@@ -72,11 +74,13 @@ it("uses the page builder for document, outlier, unpaired and emission Check ite
   if (!result.success) throw new Error("Expected summaries");
   const durability = buildDurabilityBatchSummaries(sampling as never);
   const pageItems = buildCreditBatchOpenItems({ facilityId, creditBatchId: ids[0], health,
+    canManage: ctx.isPlatformAdmin || ctx.orgRole === "owner" || ctx.orgRole === "admin",
     durability: durability[0], emissionLines });
   expect(pageItems.check.map(item => item.id)).toEqual([
     "document:lab-report", "outlier:S-1", "unpaired:S-2", "emission:diesel",
   ]);
-  expect(result.data[ids[0]]).toMatchObject({ issueCount: 1, checkCount: 4 });
+  expect(result.data[ids[0]]).toMatchObject({ issueCount: 1, checkCount: 4, linesToDecide: LINES_TO_DECIDE });
+  expect(batchLinesToDecide).toHaveBeenCalledWith(health);
   expect(result.data[ids[0]].issueCount + result.data[ids[0]].checkCount).toBe(overviewBadgeCount(pageItems));
   // A sibling with no derivable lines still gets its document warning.
   expect(result.data[ids[1]].checkCount).toBe(1);

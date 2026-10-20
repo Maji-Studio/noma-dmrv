@@ -5,6 +5,7 @@ import { creditBatchStateOf } from "./batch-state";
 const open: CreditBatchHealthSummary = {
   state: "incomplete",
   issueCount: 2,
+  linesToDecide: 0,
   checkCount: 1,
   removalId: null,
   removalCode: null,

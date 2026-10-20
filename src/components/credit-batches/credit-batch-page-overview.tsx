@@ -58,7 +58,15 @@ function OpenItemRow({ item }: { item: CreditBatchOpenItem }) {
     </>
   );
   const rowClass = itemRowClass(!!item.why);
-  const target = "href" in item.target ? (
+  // A row the viewer can't act on reads as text: no arrow, no hover, no link.
+  const target = item.target === null ? (
+    <div className={cn("flex min-h-44 items-center py-12", item.why && "pr-12")}>
+      <span className="flex min-w-0 flex-col gap-2">
+        <span className="body-medium font-medium">{item.title}</span>
+        {item.detail && <span className={cn("body-small", MUTED_TEXT)}>{item.detail}</span>}
+      </span>
+    </div>
+  ) : "href" in item.target ? (
     <Link href={item.target.href} className={rowClass}>
       {body}
     </Link>
@@ -205,7 +213,7 @@ function LockMark({ text }: { text: string }) {
 
 /** Batch details: the definition, sampling, notes and the Removal template. Edit starts from the header. */
 function DetailsPanel() {
-  const { batch, lock, canManage, focus } = useCreditBatchPage();
+  const { batch, lock, canManage, focus, linesToDecide } = useCreditBatchPage();
   const sent = lock?.level === "sent";
   const membershipLocked = isCreditBatchMembershipLocked(lock);
   // When everything is locked the panel says so once and the rows stay quiet.
@@ -223,7 +231,7 @@ function DetailsPanel() {
           <DetailRow label="Notes" value={batch.siteManagementNotes?.trim() || null} />
         </dl>
         <div className="border-t border-[var(--color-border-secondary)] pt-16">
-          <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} locked={sent} activeFocusTarget={focus} />
+          <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} locked={sent} activeFocusTarget={focus} linesToDecide={linesToDecide} inRemoval={membershipLocked} />
         </div>
       </PagePanel>
     </FocusRow>

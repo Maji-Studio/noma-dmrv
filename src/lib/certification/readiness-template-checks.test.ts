@@ -7,6 +7,7 @@ import {
 import { certCheckLabel } from "./requirement-labels";
 import { removalTemplateBlocker } from "./removal-template-blockers";
 import type { RemovalBlocker } from "./removal-blockers";
+import { batchLinesToDecide, deriveBatchHealth, type BatchHealthFacts } from "./batch-health";
 
 function facts(overrides: Partial<RemovalReadinessFacts> = {}): RemovalReadinessFacts {
   return {
@@ -29,6 +30,59 @@ function lineBlocker(componentId?: string): RemovalBlocker {
     ...(componentId ? { lineRef: { componentId, displayName: componentId } } : {}),
   };
 }
+
+function batchFacts(overrides: Partial<BatchHealthFacts> = {}): BatchHealthFacts {
+  return {
+    carbonMissingInputs: [], facilityEmissionsBlockers: [], feedstockTypeMappingGaps: [],
+    entityReadinessGaps: [], hasSubmittableRuns: true, facilitySetupComplete: true,
+    requiredTransport: [], ...overrides,
+  };
+}
+
+describe("batch lines to decide", () => {
+  it("carries the undecided line count on the Decide lines check only, as its label does", () => {
+    const health = deriveBatchHealth(batchFacts({
+      templateBlockers: [
+        removalTemplateBlocker("templateNotFound"),
+        removalTemplateBlocker("templateNotFullyRead"),
+        removalTemplateBlocker("templateLinesNeedReview"),
+      ],
+      undecidedLineIds: ["one", "two", "two"],
+      emissionLines: [],
+    }));
+    const counted = health.checks.filter((check) => check.linesToDecide !== undefined);
+    expect(counted).toHaveLength(1);
+    expect(counted[0]).toMatchObject({ key: "templateLines", status: "unmet", fixTarget: "templateLineReview", linesToDecide: 2 });
+    expect(certCheckLabel(counted[0])).toBe("2 lines to decide");
+    expect(batchLinesToDecide(health)).toBe(2);
+    for (const status of ["met", "skipped"] as const) {
+      expect(batchLinesToDecide({ ...health, checks: [{ ...counted[0], status }] })).toBe(0);
+    }
+  });
+
+  it("has no count when the template was not read in full", () => {
+    const health = deriveBatchHealth(batchFacts({
+      templateBlockers: [removalTemplateBlocker("templateNotFullyRead")],
+      emissionLines: [],
+    }));
+    const check = health.checks.find((item) => item.key === "templateLines")!;
+    expect(certCheckLabel(check)).toBe("Template not fully read");
+    expect(check).not.toHaveProperty("linesToDecide");
+    expect(batchLinesToDecide(health)).toBe(0);
+  });
+
+  it("returns zero for a pin-only blocker", () => {
+    const health = deriveBatchHealth(batchFacts({
+      templateBlockers: [removalTemplateBlocker("unpinnedTemplate")],
+    }));
+    expect(batchLinesToDecide(health)).toBe(0);
+    expect(health.checks.every((check) => !("linesToDecide" in check))).toBe(true);
+  });
+
+  it.each([undefined, null])("returns zero for missing health: %s", (health) => {
+    expect(batchLinesToDecide(health)).toBe(0);
+  });
+});
 
 describe("Removal template requirement split", () => {
   it("shows both affirmative labels when the template is ready", () => {
