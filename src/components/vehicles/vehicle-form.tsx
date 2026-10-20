@@ -1,6 +1,7 @@
 "use client";
 
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { numericValue } from "@/lib/form-utils";
@@ -38,6 +39,7 @@ export function VehicleForm({
   errorMessage,
   submitLabel,
 }: VehicleFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!vehicle;
   const vehicleTypeField = selectOptionsForStoredValue(VEHICLE_TYPE_OPTIONS, vehicle?.vehicleType, { ignoreCase: false });
   const fuelTypeField = selectOptionsForStoredValue(FUEL_TYPE_OPTIONS, vehicle?.fuelType, { ignoreCase: true });
@@ -65,7 +67,7 @@ export function VehicleForm({
   const isElectric = watchedFuelType === "Electric";
 
   return (
-    <form onSubmit={handleSubmit((data) => onSubmit(data))} className="space-y-20">
+    <form onSubmit={latched(handleSubmit((data) => onSubmit(data)))} className="space-y-20">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
         <FormField id="name" label="Name" error={errors.name?.message} required>
           <FormInput

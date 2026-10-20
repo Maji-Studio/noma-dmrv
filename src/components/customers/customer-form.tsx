@@ -4,6 +4,7 @@
  * Used in both create and edit views for customers
  */
 "use client";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -81,6 +82,7 @@ export function CustomerForm({
   errorMessage,
   submitLabel,
 }: CustomerFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!customer;
   const [pendingLocations, setPendingLocations] = useState<PendingLocation[]>([]);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -103,14 +105,14 @@ export function CustomerForm({
 
   const defaultSubmitLabel = isEditMode ? "Update customer" : "Create customer";
 
-  const handleFormSubmit = handleSubmit((data) => {
+  const handleFormSubmit = latched(handleSubmit((data) => {
     if (!isEditMode && pendingLocations.length === 0) {
       setLocationError("At least one location is required");
       return;
     }
     setLocationError(null);
-    onSubmit(data as CustomerFormData, isEditMode ? undefined : pendingLocations);
-  });
+    return onSubmit(data as CustomerFormData, isEditMode ? undefined : pendingLocations);
+  }));
 
   const handleAddPendingLocation = (loc: PendingLocation) => {
     setPendingLocations((prev) => withAddedLocation(prev, loc));

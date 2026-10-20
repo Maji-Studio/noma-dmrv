@@ -30,6 +30,7 @@ import {
 } from "@/schemas/suppliers";
 import { supplierVersionInput } from "@/schemas/supplier-input";
 import type { ActionResult } from "@/types/actions";
+import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
 
 const LOG_MESSAGE = "supplier action failed";
 const supplierIdSchema = z.string().uuid("Invalid supplier ID");
@@ -184,7 +185,8 @@ export async function getSupplierLocationsBySupplierFn(
 }
 
 export async function createSupplierLocationFn(
-  data: z.infer<typeof createSupplierLocationSchema>
+  data: z.infer<typeof createSupplierLocationSchema>,
+  options?: CreateIntentOptions
 ): Promise<ActionResult<SupplierLocation>> {
   return withAction(async (ctx) => {
     const validated = createSupplierLocationSchema.parse(data);
@@ -200,7 +202,7 @@ export async function createSupplierLocationFn(
       address: validated.address || null,
       facilityDistances: validated.facilityDistances,
       isDefault: validated.isDefault,
-    });
+    }, createIntentOptionsSchema.parse(options));
 
     return location;
   }, {

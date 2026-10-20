@@ -373,6 +373,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   };
 
   const openCreate = () => {
+    createFeedstock.startDraft();
     setFocusedFeedstockId(null);
     setDeepLinkMode(null);
     setDeepLinkFocus(null);

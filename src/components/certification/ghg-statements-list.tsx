@@ -394,14 +394,14 @@ function ListBody({ facilityId }: { facilityId: string }) {
   return (
     <>
       <section className="flex flex-col gap-16">
-        <div className="flex items-center justify-between gap-24">
+        <div className="flex flex-wrap items-center justify-between gap-x-24 gap-y-12">
           <h2 className="title-heading-3">
             Statements{" "}
             <span className="body-small text-[var(--color-text-tertiary)]">
               ({statements.length})
             </span>
           </h2>
-          <div className="flex flex-wrap items-center justify-end gap-12">
+          <div className="flex max-w-full flex-wrap items-center gap-12">
             <Button
               variant="default"
               onClick={syncFromRegistry}
@@ -471,20 +471,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
               description={
                 searchQuery
                   ? "Try clearing your search."
-                  : "Sync existing registry statements, or create one for submitted Removals in a reporting period."
-              }
-              action={
-                searchQuery ? undefined : (
-                  <Button
-                    variant="default"
-                    onClick={syncFromRegistry}
-                    busy={syncMutation.isPending}
-                    disabled={!gate.canSync}
-                  >
-                    <ArrowsClockwiseIcon size={20} weight="bold" />
-                    Sync from registry
-                  </Button>
-                )
+                  : "Sync existing statements from the registry above, or create one for submitted Removals in a reporting period."
               }
               padding="md"
             />

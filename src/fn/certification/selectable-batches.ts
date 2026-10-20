@@ -13,6 +13,7 @@ import {
   type FacilitySetupGap,
 } from "@/lib/certification/facility-setup-gaps";
 import type { OrgContext } from "@/lib/auth/server";
+import { deriveAppliedDryTons } from "./applied-dry-tons";
 import type {
   CreditBatchContextSet,
   FacilityCertifierFacts,
@@ -24,6 +25,8 @@ export interface SelectableBatch extends UngroupedCreditBatchRow {
   health: BatchHealth;
   // Derived on read (issue #285): Σ member applications' biocharAppliedTons.
   appliedWeightTons: number;
+  /** Σ the unassigned application slices' dry mass; null when any slice has no dry mass. */
+  appliedDryTons: number | null;
 }
 
 export interface SelectableBatchesData {
@@ -70,6 +73,7 @@ export async function buildSelectableBatchesData(
       ...row,
       health: deriveBatchHealth(toBatchHealthFacts(context, row.id)),
       appliedWeightTons: accounting?.appliedWeightTons ?? 0,
+      appliedDryTons: deriveAppliedDryTons(accounting?.lineageFacts.applications ?? []),
     };
   });
   const facilitySetupGaps = deriveFacilityConnectionGaps(facilityFacts);

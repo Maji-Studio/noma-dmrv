@@ -19,6 +19,8 @@ export interface CreditBatchPageContextValue {
   /** Blocking items once the batch health has answered; null before. */
   blockingCount: number | null;
   healthError: Error | null;
+  /** The Lines decided check's count of template lines to decide; 0 when none or before health answers. */
+  linesToDecide: number;
   retryHealth: () => void;
   retryingHealth: boolean;
   lock: RecordLockView | undefined;

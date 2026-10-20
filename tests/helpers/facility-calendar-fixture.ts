@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   creditBatchProductionRuns, creditBatches, facilities, feedstocks, feedstockTypes, samples,
-  productionProcesses, productionRuns, reactors,
+  productionProcesses, productionRuns, reactors, storageLocations,
 } from "@/db/schema";
 import { cleanupFeedstockFixtureParents, feedstockFixtureValues } from "./feedstock-fixture";
 import { TEST_ORG_ID, TEST_SITE_POSITION } from "./test-org";
@@ -11,12 +11,15 @@ const TAG_LENGTH = 8;
 const RUN_DURATION_MS = 60 * 60 * 1000;
 const SAMPLE_TOTAL_CARBON_PERCENT = 80;
 const SAMPLE_ORGANIC_CARBON_PERCENT = 78;
+const RUN_OUTPUT_KG = 100;
+const RUN_OUTPUT_MOISTURE_PERCENT = 0;
 
 /** Minimal persisted records for calendar reads and facility edit guards. */
 export function facilityCalendarFixture(prefix: string) {
   const tag = crypto.randomUUID().slice(0, TAG_LENGTH).toUpperCase();
   const facilityIds: string[] = [];
   const reactorIds: string[] = [];
+  const outputBinIds: string[] = [];
   const runIds: string[] = [];
   const batchIds: string[] = [];
   const sampleIds: string[] = [];
@@ -42,10 +45,17 @@ export function facilityCalendarFixture(prefix: string) {
       identifier: `Calendar reactor ${code}`, reactorType: "auger",
     }).returning();
     reactorIds.push(reactor.id);
+    const [outputBin] = await db.insert(storageLocations).values({
+      organizationId, facilityId, code: `BIN-${code}`,
+      name: `Calendar output ${code}`, type: "biochar_bin",
+    }).returning({ id: storageLocations.id });
+    outputBinIds.push(outputBin.id);
     const startTime = new Date(start);
     const [row] = await db.insert(productionRuns).values({
       organizationId, facilityId, code: `PR-${code}`, reactorId: reactor.id,
       status: "complete", startTime,
+      biocharStorageLocationId: outputBin.id,
+      biocharOutputKg: RUN_OUTPUT_KG, biocharMoisturePercent: RUN_OUTPUT_MOISTURE_PERCENT,
       endTime: new Date(startTime.getTime() + RUN_DURATION_MS),
     }).returning();
     runIds.push(row.id);
@@ -123,6 +133,9 @@ export function facilityCalendarFixture(prefix: string) {
     ));
     if (reactorIds.length) await db.delete(reactors).where(and(
       eq(reactors.organizationId, organizationId), inArray(reactors.id, reactorIds),
+    ));
+    if (outputBinIds.length) await db.delete(storageLocations).where(and(
+      eq(storageLocations.organizationId, organizationId), inArray(storageLocations.id, outputBinIds),
     ));
     if (facilityIds.length) await db.delete(facilities).where(and(
       eq(facilities.organizationId, organizationId), inArray(facilities.id, facilityIds),

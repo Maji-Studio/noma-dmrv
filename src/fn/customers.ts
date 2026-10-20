@@ -31,6 +31,7 @@ import { customerLocationVersionInput } from "@/schemas/customer-location-input"
 import { customerVersionInput, deleteCustomerInput } from "@/schemas/customer-input";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
+import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
 
 const LOG_MESSAGE = "customer action failed";
 
@@ -218,7 +219,8 @@ export async function previewDeleteCustomerFn(data: z.infer<typeof deleteCustome
  * Create a new customer location
  */
 export async function createCustomerLocationFn(
-  data: z.infer<typeof createCustomerLocationSchema>
+  data: z.infer<typeof createCustomerLocationSchema>,
+  options?: CreateIntentOptions
 ): Promise<ActionResult<CustomerLocation & { warnings: string[] }>> {
   return withAction(async (ctx) => {
     const validated = createCustomerLocationSchema.parse(data);
@@ -236,7 +238,7 @@ export async function createCustomerLocationFn(
       facilityDistances: validated.facilityDistances,
       defaultSoilTemperatureC: validated.defaultSoilTemperatureC,
       isDefault: validated.isDefault,
-    });
+    }, createIntentOptionsSchema.parse(options));
 
     return location;
   }, {

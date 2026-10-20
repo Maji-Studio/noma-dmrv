@@ -269,7 +269,7 @@ all three membership transactions. It retries 40P01, 40001 and 55P03; production
 run writers still take runs before artifacts. The residual order is tracked in
 `data/production-run-artifact-order` and `data/lock-order`.
 
-`certification_submissions.payload_snapshot` is guarded by migration 0166's
+`certification_submissions.payload_snapshot` is guarded by migration 0167's
 `refuse_frozen_submission_payload_update` trigger. Leaving draft freezes the
 payload, with `payload_snapshot_frozen` retaining that freeze through retries
 and status resets. Only the `journaled` recovery key remains mutable.

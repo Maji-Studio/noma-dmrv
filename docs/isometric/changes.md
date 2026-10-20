@@ -9,7 +9,19 @@ manifest participates in the payload hash. `PRODUCTION_CLAIM_POLICY` is now
 in every environment. Mutation-free claimed drafts with an older revision are
 retired for review; attempts with possible registry writes require reconciliation.
 The flag remains off by default, preserving the automatic-input path. Migration
-0166 freezes `payload_snapshot` after draft, except its `journaled` recovery key.
+0167 freezes `payload_snapshot` after draft, except its `journaled` recovery key.
+
+## 2026-10-20: Retire sample transport automatic figures on activation (#1058)
+
+With `EMISSIONS_ENTRIES_ENABLED` on, sample shipping lines take only emissions
+entries. Legacy sample legs no longer supply aggregation, automatic figures,
+transport coverage, readiness or dashboard gaps. The declarative catalog and
+`MAPPING_REVISION` stay stable across flag states; runtime source availability
+retires the binding. With the gate off, legacy behavior is preserved.
+The activation CLI deletes old legs and their owned evidence through the
+existing scoped, logged deletion path; no migration deletes data. Run it per
+organization as described in the [plan activation notes](../plans/2026-10-15-template-driven-emissions.md#5-delivery).
+The sample-template drift question closes on activation, not on merge.
 
 ## 2026-10-16: Emissions entries behind EMISSIONS_ENTRIES_ENABLED (#1058)
 

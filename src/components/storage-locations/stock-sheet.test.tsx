@@ -65,7 +65,7 @@ it("keeps old counts and corrections readable, folds reversals, groups days and 
   await act(async () => renderer.unmount());
 });
 
-it("leads with the dry biochar and links adding stock when the last batch added has no moisture reading", async () => {
+it("leads with the dry biochar and links adding stock into this bin when a batch has no moisture reading", async () => {
   state.output = [entry({ id: "product", kind: "intake", moisturePercent: null, wetMassKg: 0, dryMassKg: -120, wetDeltaKg: null, solidsDeltaKg: 120 })];
   state.balance = { beforeEstimatedWetKg: null, beforeDryKg: 120, lane: "product" };
   let renderer!: ReactTestRenderer;
@@ -73,11 +73,11 @@ it("leads with the dry biochar and links adding stock when the last batch added 
   await act(async () => renderer.root.findByType("button").props.onClick());
   const markup = text(renderer.root);
   expect(markup).toContain("120 kg dry biochar");
-  expect(markup).toContain("The last batch added has no moisture reading, so there is no wet mass. Record one when");
+  expect(markup).toContain("A batch in this bin has no moisture reading, so there is no wet mass. Record one when");
   expect(markup).toContain("Added 120 kg dry biochar");
   expect(markup).not.toContain("wet mass at day end");
   const link = renderer.root.findAllByType("a").find(node => text(node) === "adding stock");
-  expect(link?.props.href).toBe(`/biochar-products?facility=${FACILITY_ID}&create=true`);
+  expect(link?.props.href).toBe(`/biochar-products?facility=${FACILITY_ID}&create=true&bin=${BIN_ID}`);
   await act(async () => renderer.unmount());
 });
 
@@ -121,9 +121,19 @@ it("wraps every split bay and fills a lone bay against capacity", async () => {
 
 it("exposes chart details through labelled HTML buttons while the drawing is decorative", async () => {
   let renderer!: ReactTestRenderer;
-  await act(async () => { renderer = create(<StockLevelChart points={[{ t: Date.parse(INSTANT), dryKg: 80, waterKg: 20 }]} now={Date.parse(NEXT_DAY)} timeZone="UTC" />); });
+  await act(async () => { renderer = create(<StockLevelChart points={[{ t: Date.parse(INSTANT), dryKg: 80, waterKg: 20, wetKg: 100 }]} now={Date.parse(NEXT_DAY)} timeZone="UTC" />); });
   expect(renderer.root.findByType("svg").props["aria-hidden"]).toBe("true");
   expect(renderer.root.findByType("button").props["aria-label"]).toContain("details");
+  await act(async () => renderer.unmount());
+});
+
+it("leaves the water figure out of the chart key when the latest point has none", async () => {
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<StockLevelChart points={[{ t: Date.parse(INSTANT), dryKg: 80, waterKg: 20, wetKg: 100 },
+    { t: Date.parse(NEXT_DAY), dryKg: 55, waterKg: null, wetKg: 50 }]} now={Date.parse(NEXT_DAY)} timeZone="UTC" />); });
+  const key = text(renderer.root.findByType("figcaption"));
+  expect(key).toContain("Water, estimated");
+  expect(key).not.toMatch(/Not recorded|Not available|0 kg$/);
   await act(async () => renderer.unmount());
 });
 

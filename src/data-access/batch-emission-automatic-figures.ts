@@ -1,4 +1,5 @@
 import { db, type DbTransaction } from "@/db";
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { emissionDeliveryShares } from "@/lib/certification/emission-delivery-shares";
 import { requireOrgFacility, requireOrgScope } from "@/data-access/utils";
 import { getEmissionAutomaticMasses } from "@/data-access/emission-automatic-masses";
@@ -26,7 +27,7 @@ export async function loadBatchesEmissionAutomaticFacts(
   if (!ids.length) return {};
   const [rollups, samples] = await Promise.all([
     loadCreditBatchRollups(ctx, ids, { includeRunForwards: true }, executor),
-    getSamplesByCreditBatchIds(ctx, ids, executor),
+    emissionsEntriesEnabled() ? [] : getSamplesByCreditBatchIds(ctx, ids, executor),
   ]);
   const batches = ids.map((id) => {
     const lineage = rollups[id]?.lineageFacts;
@@ -50,7 +51,7 @@ export async function loadBatchesEmissionAutomaticFacts(
     loadBiocharDeliveryTransportLegs(ctx, [...deliveryById.values()].map((delivery) => ({
       deliveryId: delivery.id, loadMassKg: Number(delivery.exactWetMassKg!),
     })), executor),
-    getTransportLegsForEntities(ctx, "sample", samples.map((sample) => sample.id), executor),
+    emissionsEntriesEnabled() ? [] : getTransportLegsForEntities(ctx, "sample", samples.map((sample) => sample.id), executor),
   ]);
   const exact = await getEmissionAutomaticMasses(ctx, runIds, [...feedstock, ...sample].map((leg) => leg.id), executor);
   return Object.fromEntries(batches.map(({ id, lineage, deliveries, missing }) => {

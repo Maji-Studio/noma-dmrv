@@ -34,7 +34,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 | Operating lines | Stay on each Removal and are entered per batch. #1020 drops the move to project level. |
 | Pyrolyzer CO, CH₄ | Ordinary entries per batch, typed by the operator. The form shows Cula's line description (with the 36,792 / 17,520 formula) and the batch's dry feedstock beside the gas-mass field. Nothing is computed for the operator. |
 | Entry dates (2026-10-16) | Single lines cover the whole batch and store its start date; other create dates are optional and default to facility today clamped to the batch window. Explicit dates keep their validation; updates never move single-line dates. |
-| Sample shipping | Entered per line. Sample transport legs are hidden in the app, API and MCP, and stop feeding Removals. There is no production data to keep. Sample labs are deferred. |
+| Sample shipping | Entered per line. Old sample transport legs are deleted by the hand-run retirement CLI at activation (Kenji, 2026-10-16), rather than hidden. Certification-locked legs are skipped. Sample legs stop feeding Removals. There is no production data to keep. Sample labs are deferred. |
 | Lab electricity, consumables | Typed per batch with evidence. |
 | Project-wide flight | Goes on one batch the operator picks. |
 | Empty lines | Shown as "Not recorded" on the batch sheet (`docs/ux-writing.md`, missing values; Kenji, 2026-10-15, replacing "0 so far"). They show 0 only once confirmed. In the Removal flow, one confirmation covers the empty lines and records a zero per line. |
@@ -364,7 +364,10 @@ Kenji's round 2 note asks to reopen general edits when Isometric pushes a submis
 
 **Merge order:** 1, then 2, then 3, then 4. PR 3's server half can be developed next to PR 2 but merges after it. The app-wide lock predicate (§4.6) is a prerequisite of PR 4's Corrections part; if it has not landed when the rest of PR 4 is ready, the Corrections part moves to PR 5, which waits for it too. The first real submission waits for Corrections.
 
-**Activation gate:** one server-side flag, `EMISSIONS_ENTRIES_ENABLED`, read through `envSchema` and off by default. It covers entry UI, API and MCP availability, and the sample-leg retirement, including PR 4's removal of sample legs from aggregation and the catalog. PR 3 merges with it off, and it is switched on only once PR 4 is deployed. With it off, sample legs keep working as today.
+**Activation gate:** one server-side flag, `EMISSIONS_ENTRIES_ENABLED`, off by default. `emissions-entry-gate.ts` parses it directly from `process.env` using the shared schema also used by `envSchema`. It always reads off in browser bundles, so the server sends gate-dependent results to client code. It covers entry UI, API and MCP availability, and the sample-leg retirement, including PR 4's removal of sample legs from aggregation and the catalog. PR 3 merges with it off, and it is switched on only once PR 4 is deployed. With it off, sample legs keep working as today.
+
+With the application environment supplied, run `pnpm exec tsx src/lib/cli/retire-sample-transport.ts --organization-id <org-id>` per organization for a dry-run; after switching the gate on, repeat with `--delete` to delete old sample legs and owned evidence (idempotent, counts/ids only).
+The CLI uses the existing Platform Admin bootstrap seam (`ALLOW_DEV_BOOTSTRAP`), so it runs against local, sandbox or staging databases only; running it against production needs Kenji's explicit approval and a matching change to the `ALLOW_DEV_BOOTSTRAP` entry in `docs/security.md`. Certification-locked legs are skipped and listed. Storage cleanup uses the durable deletion queue. Run `--delete` only once the deployed app has the gate on: after deletion, switching the gate back off would read the sample lines as 0 t·km, so a rollback then needs manual entries on those lines first.
 
 **Working rules**
 - Claude verifies each PR, commits, and runs E2E in the PR's worktree (`scripts/worktree.sh`).

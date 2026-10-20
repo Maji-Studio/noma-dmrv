@@ -124,8 +124,9 @@ export function StockLevelChart({ points, modeChanges = [], timeZone, now, solid
           return <DetailsTooltip key={index} title={title} rows={[
             { label: solidLabel, value: formatMassKg(point.dryKg) },
             ...((point.ingredientsKg ?? 0) > 0 ? [{ label: INGREDIENT_SOLIDS_LABEL, value: formatMassKg(point.ingredientsKg) }] : []),
-            { label: ESTIMATED_WATER_LABEL, value: formatMassKg(point.waterKg) },
-            { label: ESTIMATED_WET_LABEL, value: formatMassKg(point.waterKg === null ? null : point.dryKg + (point.ingredientsKg ?? 0) + point.waterKg) },
+            // Water without an honest figure is left out, as in the history.
+            ...(point.waterKg === null ? [] : [{ label: ESTIMATED_WATER_LABEL, value: formatMassKg(point.waterKg) }]),
+            { label: ESTIMATED_WET_LABEL, value: formatMassKg(point.wetKg) },
           ]} trigger={<Button type="button" variant="noOutline" aria-label={`${title} details`}
             className="absolute min-h-44 min-w-44 rounded-none p-0 hover:bg-transparent focus-visible:ring-2 focus-visible:ring-inset"
             style={{ left: `min(${left / VIEW_W * PERCENT}%, calc(100% - ${TOUCH_TARGET_PX}px))`, width: `${Math.max(right - left, HIT_MIN_W) / VIEW_W * PERCENT}%`, top: `${PAD.top / viewH * PERCENT}%`, height: `${(baseY - PAD.top) / viewH * PERCENT}%` }} />} />;
@@ -134,7 +135,7 @@ export function StockLevelChart({ points, modeChanges = [], timeZone, now, solid
       <figcaption className="flex flex-wrap gap-x-16 gap-y-4 body-caption text-[var(--color-text-secondary)]">
         <span className="inline-flex items-center gap-6"><span aria-hidden="true" className="inline-block h-12 w-12 bg-[var(--clr-dark-purple-80)]" />{solidLabel} {formatMassKg(last.dryKg)}</span>
         {hasIngredients && <span className="inline-flex items-center gap-6"><span aria-hidden="true" className="inline-block h-12 w-12 bg-[var(--acc-infra)]" />{INGREDIENT_SOLIDS_LABEL} {formatMassKg(last.ingredientsKg)}</span>}
-        {hasWater && <span className="inline-flex items-center gap-6"><span aria-hidden="true" className="inline-block h-12 w-12 border border-[var(--color-border-secondary)] moisture-water-hatch" />{ESTIMATED_WATER_LABEL} {formatMassKg(last.waterKg)}</span>}
+        {hasWater && <span className="inline-flex items-center gap-6"><span aria-hidden="true" className="inline-block h-12 w-12 border border-[var(--color-border-secondary)] moisture-water-hatch" />{ESTIMATED_WATER_LABEL}{last.waterKg === null ? "" : ` ${formatMassKg(last.waterKg)}`}</span>}
       </figcaption>
     </figure>
   );

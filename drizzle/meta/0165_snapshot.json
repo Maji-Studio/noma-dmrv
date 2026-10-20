@@ -1,5 +1,5 @@
 {
-  "id": "7659563a-5a18-4967-98e6-10720a13e0af",
+  "id": "63ed896d-6e53-49b4-a798-e27da343d700",
   "prevId": "c23f7750-8449-434e-a2a4-4f04c88e82cf",
   "version": "7",
   "dialect": "postgresql",
@@ -2542,13 +2542,6 @@
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
-        },
-        "payload_snapshot_frozen": {
-          "name": "payload_snapshot_frozen",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
         },
         "payload_hash": {
           "name": "payload_hash",
@@ -6354,38 +6347,6 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "emission_entries_sent_by_removal_idx": {
-          "name": "emission_entries_sent_by_removal_idx",
-          "columns": [
-            {
-              "expression": "sent_by_removal_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"emission_entries\".\"sent_by_removal_id\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "emission_entries_send_reserved_by_submission_idx": {
-          "name": "emission_entries_send_reserved_by_submission_idx",
-          "columns": [
-            {
-              "expression": "send_reserved_by_submission_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"emission_entries\".\"send_reserved_by_submission_id\" is not null",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -10965,6 +10926,10 @@
         "production_runs_biochar_dry_lte_wet": {
           "name": "production_runs_biochar_dry_lte_wet",
           "value": "\"production_runs\".\"biochar_output_kg\" is null or \"production_runs\".\"biochar_dry_mass_kg\" is null or \"production_runs\".\"biochar_dry_mass_kg\" <= \"production_runs\".\"biochar_output_kg\""
+        },
+        "production_runs_complete_has_output": {
+          "name": "production_runs_complete_has_output",
+          "value": "\"production_runs\".\"status\" <> 'complete' or (\"production_runs\".\"biochar_moisture_percent\" is not null and \"production_runs\".\"biochar_output_kg\" is not null and \"production_runs\".\"biochar_output_kg\" > 0 and \"production_runs\".\"biochar_storage_location_id\" is not null)"
         }
       },
       "isRLSEnabled": false

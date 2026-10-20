@@ -361,6 +361,7 @@ export async function deleteTransportLeg(
   ctx: OrgContext,
   id: string,
   expectedVersion: number,
+  source: ActivityEventInput["source"] = "form",
 ): Promise<void> {
   requireOrgScope(ctx);
 
@@ -391,7 +392,7 @@ export async function deleteTransportLeg(
     assertRowVersion({ entity: "transportLeg", id, expectedVersion, actualVersion: versionRow.version });
     const activityScopes = await resolveWriteActivityScopes(ctx, tx, versionRow.entityType, versionRow.entityId);
     await recordScopedActivityChange(ctx, tx, {
-      entityType: "transport_leg", entityId: id, action: "deleted", source: "form",
+      entityType: "transport_leg", entityId: id, action: "deleted", source, actorUserId: ctx.userId,
     }, activityScopes, versionRow, null);
     const rows = await tx
       .delete(transportLegs)
@@ -399,7 +400,7 @@ export async function deleteTransportLeg(
       .returning({ id: transportLegs.id });
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "transport_leg", entityId: id, activityScopes },
-    ], "form");
+    ], source, ctx.userId);
     return rows;
   });
 

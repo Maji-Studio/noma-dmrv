@@ -408,7 +408,9 @@ Three seams carry it:
 
 `MoistureSplit`'s unresolved state and `MassPair`'s "Not recorded" are the two
 worked examples: an absent input stays visible, because dry mass drives
-certification readiness.
+certification readiness. A missing `MassPair` figure renders `body-small`, tertiary
+ink, regular weight, with `data-empty` (no mono, no semibold): two full-size
+placeholders collide in a stat card. Both labels stay visible.
 
 ---
 
@@ -686,8 +688,9 @@ The one outcome screen for auth pages (check your email, email verified, verific
   the full card width and does not apply headline typography to its children.
   Optional `sparkline` slot takes any node.
 - **`MassPair`** — the shared wet/dry comparison for KPI cards and dense table
-  cells. It keeps both labels visible, renders missing values as "Not recorded",
-  and keeps both figures in kg with up to one decimal. Use the default summary
+  cells. It keeps both labels visible, renders a missing value as "Not recorded"
+  in the small placeholder style (`body-small`, tertiary ink, regular weight,
+  `data-empty`), and keeps both figures in kg with up to one decimal. Use the default summary
   variant in `StatCard valueLayout="breakdown"`; use `variant="compact"` with
   `layout="stacked"` in table cells. Its figures own their mono numeric style;
   do not wrap them in a body typography class.
@@ -695,10 +698,13 @@ The one outcome screen for auth pages (check your email, email verified, verific
   as `DataTable.Pagination`. Facilities and Credit Batches are the sanctioned
   KPI-rich card-list hubs; ordinary entity lists stay data tables.
 - **`PageHeader`** — mono uppercase area eyebrow → `title-heading-2` title →
-  one-line subtitle → actions. `area` sets the eyebrow text and ink; `eyebrow`
-  overrides the text; omit `area` for pages outside the nav groups
-  (Traceability). **Every list page gets a subtitle** — one descriptive line,
-  sentence case.
+  optional one-line subtitle → actions. `area` sets the eyebrow text and ink;
+  `eyebrow` overrides the text; omit `area` for pages outside the nav groups
+  (Traceability). **A list-page subtitle stays only when it says something the
+  title does not**: scope, what is counted, or a constraint the operator must
+  know. One line, sentence case. Test: delete it; would anyone miss it? Good:
+  "Deliveries of the last 90 days, newest first" under "Deliveries". Filler:
+  "Manage your orders" under "Orders".
 - **`DropdownMenu` / `RowActionsMenu`** — `RowActionsMenu` is *the* single
   row-action pattern for table and card lists: a quiet ⋮ per row, verbs in the
   menu. A clickable `DataTable` marks its code or name column
@@ -853,8 +859,8 @@ stays as a preview whose lead footer action opens the page
 
 ```tsx
 <div className="container-max page-shell">
-  {/* 1. Header — area eyebrow → title → one-line subtitle → actions */}
-  <PageHeader area="production" title="Orders" subtitle="…" actions={<Button …/>} />
+  {/* 1. Header — area eyebrow → title → optional subtitle (only if it adds information) → actions */}
+  <PageHeader area="production" title="Orders" actions={<Button …/>} />
 
   {/* 2. KPI strip — StatCards, every card carries a 24px Phosphor icon */}
   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">

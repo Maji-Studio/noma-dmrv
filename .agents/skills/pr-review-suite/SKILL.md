@@ -1,6 +1,6 @@
 ---
 name: pr-review-suite
-description: Submit or review a GitHub pull request through independent Standards, Spec, and Deep Correctness practices using subscription-authenticated Codex gpt-6-astra and Claude Opus CLI sessions, then publish one updateable practice-first PR comment. Use when asked to publish changes with follow-up reviews, after opening or updating a PR, before marking a draft ready, or for a multi-model PR review without API-key billing.
+description: Submit or review a GitHub pull request through four independent practices (Standards, Spec, Deep Correctness, and Design) using subscription-authenticated Codex gpt-6-astra and Claude Opus CLI sessions, then publish one updateable practice-first PR comment. Design runs only for UI changes. Use when asked to publish changes with follow-up reviews, after opening or updating a PR, before marking a draft ready, or for a multi-model PR review without API-key billing.
 ---
 
 # PR Review Suite
@@ -53,7 +53,7 @@ CLI sessions. It must not request or materialize OpenAI or Anthropic API keys.
 
 ## Practices
 
-Keep practices separate throughout collection, inference, and reporting:
+Keep four practices separate throughout collection, inference, and reporting:
 
 1. **Standards** compares the diff with base-branch repository standards and
    the judgement-only smell baseline.
@@ -61,6 +61,8 @@ Keep practices separate throughout collection, inference, and reporting:
    explicitly when no spec is available.
 3. **Deep Correctness** applies the base branch's `.greptile` protocol, scoped
    rules, domain glossary, and canonical context.
+4. **Design** applies the design review criteria only for UI changes. Skip it
+   when the base branch's practices file has no Design section.
 
 Read [`references/practices.md`](references/practices.md) before changing a
 practice or its output contract. Do not merge or rerank findings across
@@ -73,15 +75,16 @@ practices. Models are independent evidence sources inside each practice.
   definitions and the context files are read from the base commit, not the
   checkout. When `references/practices.md` does not exist in the base commit
   yet, the run warns and falls back to the head copy, and `metadata.json`
-  records which source was used.
+  records which source was used. Design requires a base-branch definition and
+  never uses that fallback.
 - Run both CLIs read-only. Do not install dependencies, execute PR code, edit
   files, or enable network tools for inference.
 - Refuse to publish if local `HEAD` differs from the PR head or the remote head
   changes during review.
-- Publish only when every requested model succeeds. A missing Spec practice is
-  a documented skip, not a partial failure. A single finding whose file and line
-  cannot be resolved is dropped and listed in the report; it does not discard
-  the rest of that reviewer's findings.
+- Publish only when every requested model succeeds on every practice that ran.
+  Skipped practices include a reason and do not count as failures. A single
+  finding whose file and line cannot be resolved is dropped and listed in the
+  report; it does not discard the rest of that reviewer's findings.
 - Keep the report advisory. Do not approve, request changes, fix findings, push,
   or merge as part of this skill.
 - Update the marker-owned comment instead of adding duplicates.

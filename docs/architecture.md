@@ -29,7 +29,15 @@ components (UI)
 - `src/lib/operations/` defines each operation as an `id`, an `input` Zod
   schema and an `execute` function. `runOperation` serves transports with
   JSON-normalized results, idempotency and dry run. `runOperationInProcess`
-  serves Server Actions with native types, including `Date` and `undefined`.
+  serves Server Actions with native types. Keyless calls preserve `Date` and
+  `undefined` directly. Create actions may pass an optional UUID `intentKey`:
+  the runner reuses the idempotency store under an app user namespace, scoped
+  to the Organization, and revives tagged Dates on both the first result and
+  replay. Other keyed values follow JSON semantics. Create hooks keep one key
+  per draft: a retry after a failure reuses it, and it rotates after a
+  successful save or when a new draft starts (`startDraft`). Equal values with
+  a new key create a separate entry. App replay uses the store's existing
+  retention period.
   The action shape is `withAction((ctx) => runOperationInProcess(op, ctx, input))`.
   `src/lib/operations/registry.ts` is the explicit allowlist of exposed
   operations; its keys match operation ids. Feedstock, production-run, biochar-product and
@@ -227,7 +235,9 @@ Quick-Add lets a form create a missing prerequisite without leaving the page:
 schemas in `src/schemas/quick-add.ts` (minimal fields only); after create call
 `seedEntityCache()` from `@/components/forms/entity-select/cache-utils` to
 populate the dropdown; `useOpenCreateIntent()` opens create dialogs from
-`?create=true` deep links. `FormEntitySelect` auto-clears when parent values
+`?create=true` deep links, with an optional context parameter for the form (an
+output bin's "adding stock" link passes `?bin=`, read back through the org-scoped
+bin lookup in `useAddStockBin`). `FormEntitySelect` auto-clears when parent values
 change via `dependsOn` (backed by the standalone `useClearOnDependencyChange`).
 See [forms.md](./forms.md).
 

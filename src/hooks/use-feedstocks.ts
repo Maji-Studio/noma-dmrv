@@ -1,3 +1,4 @@
+import { useCreateIntentKey } from "./use-create-intent-key";
 import { invalidateRecordedTransport } from "./transport-distance-query-keys";
 /**
  * Feedstock React Query Hooks
@@ -107,11 +108,13 @@ export function useFeedstockStats(
 
 export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstockResult, CreateFeedstockData>) {
   const queryClient = useQueryClient();
+  const intent = useCreateIntentKey();
 
-  return useMutation({
+  const mutation = useMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.feedstock),
-    mutationFn: async (data: CreateFeedstockData) => unwrap(await createFeedstockFn(data)),
+    mutationFn: async (data: CreateFeedstockData) => unwrap(await createFeedstockFn(data, { intentKey: intent.current() })),
     onSuccess: async (data, variables) => {
+      intent.rotate();
       for (const feedstock of data.feedstocks) {
         queryClient.setQueryData(feedstockKeys.detail(feedstock.id), feedstock);
       }
@@ -133,6 +136,8 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
     },
     onError: callbacks?.onError,
   });
+  // Call when a create sheet or dialog opens: each draft gets its own key.
+  return { ...mutation, startDraft: intent.rotate };
 }
 
 export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRelations, UpdateFeedstockData>) {
