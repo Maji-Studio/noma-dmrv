@@ -9,20 +9,14 @@
  */
 "use client";
 
-import Link from "next/link";
-import { Fragment } from "react";
 import { useWatch, type Control } from "react-hook-form";
-import { CertificateIcon } from "@phosphor-icons/react/dist/ssr";
-import { Button } from "@/components/ui/button";
-import { FormFooterPreview } from "@/components/forms/form-footer-preview";
+import { CreditBatchLine } from "@/components/credit-batches/credit-batch-line";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useProductionRunCreditBatchPreview } from "@/hooks/use-production-run-credit-batch-preview";
 import { combineDateAndTime, formatLocalDate } from "@/lib/date-utils";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 import type { ProductionRunCreditBatchPreviewInput } from "@/schemas/production-run-credit-batch-preview";
 import {
-  CREDIT_BATCH_INFO_LABEL,
   describeCreditBatchPreview,
   type ProductionRunCreditBatchPreviewView,
 } from "./production-run-credit-batch-preview-copy";
@@ -122,34 +116,11 @@ export function ProductionRunCreditBatchPreview<TFieldValues extends CreditBatch
   const copy = describeCreditBatchPreview(view);
 
   return (
-    <FormFooterPreview
-      icon={CertificateIcon}
-      tone={copy.tone}
-      busy={copy.busy}
-      info={copy.info ? { label: CREDIT_BATCH_INFO_LABEL, content: copy.info } : null}
-      action={copy.retry ? (
-        <Button type="button" variant="default" size="small" busy={query.isFetching} onClick={() => void query.refetch()}>
-          Retry
-        </Button>
-      ) : undefined}
-    >
-      {copy.lead}
-      {copy.batches.map((batch, index) => (
-        <Fragment key={batch.id}>
-          {index > 0 && ", "}
-          {/* A new tab, so the unsaved run stays open. */}
-          <Link
-            href={creditBatchDeepLinkHref(batch.id, context.facilityId ?? undefined)}
-            target="_blank"
-            rel="noreferrer"
-            className="font-mono text-[var(--clr-dark-purple)] underline underline-offset-2"
-          >
-            {batch.code}
-            <span className="sr-only"> (opens in a new tab)</span>
-          </Link>
-        </Fragment>
-      ))}
-      {copy.tail}
-    </FormFooterPreview>
+    <CreditBatchLine
+      copy={copy}
+      facilityId={context.facilityId}
+      retrying={query.isFetching}
+      onRetry={() => void query.refetch()}
+    />
   );
 }
