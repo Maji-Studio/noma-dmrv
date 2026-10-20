@@ -6,7 +6,10 @@ import { apiScopeDenialResponse } from "./scope-denial";
 const mocks = vi.hoisted(() => ({ record: vi.fn(), warn: vi.fn() }));
 vi.mock("@/data-access/oauth-step-up", () => ({ recordOAuthStepUp: mocks.record }));
 vi.mock("@/lib/log", () => ({ logger: { warn: mocks.warn } }));
-vi.mock("@/config/env", () => ({ env: { OAUTH_PROVIDER_ENABLED: true, NEXT_PUBLIC_APP_URL: "https://noma.test" } }));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: { OAUTH_PROVIDER_ENABLED: true, NEXT_PUBLIC_APP_URL: "https://noma.test" } };
+});
 const ctx = { ...apiKeyContext({ scopes: ["feedstocks:read"] }),
   principal: { kind: "oauth" as const, userId: "user", credentialId: "grant", oauthClientId: "client" } };
 beforeEach(() => { vi.resetAllMocks(); env.OAUTH_PROVIDER_ENABLED = true; });

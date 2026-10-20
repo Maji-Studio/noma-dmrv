@@ -5,7 +5,10 @@ import { OAUTH_REQUESTABLE_SCOPES } from "./oauth-scopes";
 const mocks = vi.hoisted(() => ({ scopes: vi.fn() }));
 vi.mock("better-auth/api", async importOriginal => ({ ...await importOriginal<typeof import("better-auth/api")>(),
   getSessionFromCtx: vi.fn().mockResolvedValue(null) }));
-vi.mock("@/config/env", () => ({ env: { NEXT_PUBLIC_APP_URL: "https://noma.test", OAUTH_CIMD_CLIENT_IDS: ["https://listed.test/metadata"] } }));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: { NEXT_PUBLIC_APP_URL: "https://noma.test", OAUTH_CIMD_CLIENT_IDS: ["https://listed.test/metadata"] } };
+});
 vi.mock("@/data-access/oauth-provider", () => ({ findOAuthClientScopes: mocks.scopes,
   findOAuthClientResources: vi.fn(), findOAuthOfflineGenerations: vi.fn() }));
 vi.mock("@/data-access/oauth-token-lookups", () => ({ findOAuthAuthorizationCode: vi.fn(), findOAuthRefreshToken: vi.fn(), findOAuthRevocationToken: vi.fn() }));

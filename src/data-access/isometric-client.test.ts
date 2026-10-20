@@ -16,17 +16,20 @@ const mocks = vi.hoisted(() => ({
   decrypt: vi.fn((value: string) => value.replace("encrypted-", "")),
   env: { ISOMETRIC_ENVIRONMENT: "sandbox" },
 }));
-vi.mock("@/config/env", () => ({ env: mocks.env }));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: mocks.env };
+});
 vi.mock("@/db", () => ({ db: { select: mocks.select } }));
 vi.mock("@/lib/auth/providers/better-auth-server", () => ({
   getBetterAuthSession: vi.fn(),
   mapBetterAuthUser: vi.fn(),
   signOut: vi.fn(),
 }));
-vi.mock("@/lib/crypto/secrets", () => ({
-  decryptSecret: mocks.decrypt,
-  encryptSecret: vi.fn(),
-}));
+vi.mock("@/lib/crypto/secrets", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/crypto/secrets")>();
+  return { ...actual, decryptSecret: mocks.decrypt, encryptSecret: vi.fn() };
+});
 
 const CTX: OrgContext = {
   userId: "user-isometric-client",

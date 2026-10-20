@@ -23,9 +23,10 @@ vi.mock("../with-action", async () => {
   const { mockWithAction } = await import("../../../tests/helpers/mock-with-action");
   return mockWithAction(ORG_CTX);
 });
-vi.mock("@/config/env", () => ({
-  env: { ISOMETRIC_ENVIRONMENT: "sandbox" },
-}));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: { ISOMETRIC_ENVIRONMENT: "sandbox" } };
+});
 vi.mock("@/data-access/certifier-storage-locations", () => ({
   getStorageLocationRegistryInput: mocks.getInput,
   getStorageLocationRegistration: mocks.getRegistration,

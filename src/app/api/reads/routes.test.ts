@@ -49,9 +49,10 @@ vi.mock("@/data-access/certification", () => ({
 vi.mock("@/data-access/organizations", () => ({ getActiveOrganization: mocks.getActiveOrganization }));
 vi.mock("@/data-access/onboarding", () => ({ getOnboardingStatus: mocks.getOnboardingStatus }));
 vi.mock("@/data-access/dashboard-overview", () => ({ getDashboardOverview: mocks.getDashboardOverview }));
-vi.mock("@/config/env", () => ({
-  env: { ISOMETRIC_ENVIRONMENT: "sandbox" },
-}));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: { ISOMETRIC_ENVIRONMENT: "sandbox" } };
+});
 vi.mock("@/lib/log", () => ({
   logger: mocks.logger,
   sanitizeErrorMessage: (error: unknown) =>

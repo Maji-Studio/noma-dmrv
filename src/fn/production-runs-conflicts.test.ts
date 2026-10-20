@@ -22,7 +22,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/db", () => ({ db: {} }));
-vi.mock("@/db/schema", () => ({ productionRuns: { code: "code" } }));
+vi.mock("@/db/schema", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/db/schema")>();
+  return { ...actual, productionRuns: { code: "code" } };
+});
 
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: mocks.requireOrgContext,

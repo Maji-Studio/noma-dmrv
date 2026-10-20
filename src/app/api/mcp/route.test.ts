@@ -55,7 +55,10 @@ vi.mock("@/lib/read-models/api-biochar-products", () => ({ readApiBiocharProduct
 vi.mock("@/lib/read-models/api-formulations", () => ({ readApiFormulation: vi.fn(), readApiFormulationList: vi.fn() }));
 vi.mock("@/lib/read-models/api-output-stock-movements", () => ({ readApiOutputStockMovement: vi.fn(), readApiOutputStockMovementList: vi.fn() }));
 vi.mock("@/lib/mcp/server", { spy: true });
-vi.mock("@/config/env", () => ({ env: mocks.env }));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: mocks.env };
+});
 vi.mock("@/lib/auth/api-context", () => ({ resolveApiContext: mocks.resolve }));
 vi.mock("@/lib/api/guards", () => ({ preAuthGuard: mocks.pre, credentialAdmissionGuard: vi.fn(async () => ({ response: null, result: null })), postAuthGuard: mocks.post }));
 vi.mock("@/lib/read-models/api-me", () => ({ readApiMe: mocks.me }));
