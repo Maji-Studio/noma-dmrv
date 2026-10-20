@@ -9,8 +9,9 @@ BEGIN
   END IF;
 
   -- Serialize all losses of Admin membership, including plugin writes.
+  -- Compatible with FK KEY SHARE locks held by keyed API-key issuance.
   -- A cascading organization deletion has already removed the parent row.
-  PERFORM id FROM organizations WHERE id = OLD.organization_id FOR UPDATE;
+  PERFORM id FROM organizations WHERE id = OLD.organization_id FOR NO KEY UPDATE;
   IF NOT FOUND THEN
     RETURN NULL;
   END IF;

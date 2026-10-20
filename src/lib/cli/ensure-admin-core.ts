@@ -2,6 +2,7 @@
  * Testable core for the admin and default-organization bootstrap.
  * Does not load dotenv or self-execute; the adjacent CLI entrypoint owns both.
  */
+import { isLastAdminDatabaseError } from '../auth/organization-role-policy';
 import { and, eq, sql } from 'drizzle-orm';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
@@ -72,9 +73,9 @@ export function resolveBootstrapMode(
 }
 
 /**
- * Ensure the default organization exists and the Platform Admin has no member
- * row. Local/test resets also create a dev teammate Admin; production never
- * creates shared credentials and relies on invitations for the first real Admin.
+ * Ensure the default organization exists and remove the Platform Admin member
+ * row unless production would lose its last Admin. Local/test resets also create
+ * a dev teammate Admin; production never creates shared credentials.
  */
 export async function ensureOrgFoundation(
   db: EnsureAdminDb,
@@ -82,23 +83,29 @@ export async function ensureOrgFoundation(
   passwordHash: string,
   bootstrapMode: BootstrapMode = resolveBootstrapMode(),
 ): Promise<void> {
+  // A savepoint keeps a last-Admin refusal from aborting a caller's transaction.
+  async function removePlatformAdminMembership() {
+    await db.transaction(async (tx) => {
+      await tx.delete(schema.members).where(and(
+        eq(schema.members.organizationId, DEC_ORG_ID),
+        eq(schema.members.userId, adminUserId),
+      ));
+    });
+  }
+
   const isProduction = bootstrapMode === 'production';
   await db
     .insert(schema.organizations)
     .values({ id: DEC_ORG_ID, name: DEC_ORG_NAME, slug: DEC_ORG_SLUG })
     .onConflictDoNothing({ target: schema.organizations.id });
 
-  // Platform Admin authority comes from users.role only.
-  await db
-    .delete(schema.members)
-    .where(
-      and(
-        eq(schema.members.organizationId, DEC_ORG_ID),
-        eq(schema.members.userId, adminUserId),
-      ),
-    );
-
   if (isProduction) {
+    try {
+      await removePlatformAdminMembership();
+    } catch (error) {
+      if (!isLastAdminDatabaseError(error)) throw error;
+      console.log(`Retained last Admin membership organizationId=${DEC_ORG_ID} userId=${adminUserId}`);
+    }
     console.log(
       `Skipping dev teammate in production organizationId=${DEC_ORG_ID}`,
     );
@@ -156,6 +163,8 @@ export async function ensureOrgFoundation(
       .set({ role: 'admin' })
       .where(eq(schema.members.id, teammateMembership.id));
   }
+
+  await removePlatformAdminMembership();
 
   console.log(
     `Ensured organization organizationId=${DEC_ORG_ID} with teammate admin`,

@@ -225,11 +225,13 @@ test.describe("First-run onboarding", () => {
         schema.suppliers,
         schema.reactors,
         schema.facilities,
-        schema.members,
       ] as const;
       for (const table of orgTables) {
         await db.delete(table).where(eq(table.organizationId, ORG_ID));
       }
+      await db
+        .delete(schema.organizations)
+        .where(eq(schema.organizations.id, ORG_ID));
       await db
         .delete(schema.sessions)
         .where(eq(schema.sessions.userId, USER_ID));
@@ -237,9 +239,6 @@ test.describe("First-run onboarding", () => {
         .delete(schema.accounts)
         .where(eq(schema.accounts.userId, USER_ID));
       await db.delete(schema.users).where(eq(schema.users.id, USER_ID));
-      await db
-        .delete(schema.organizations)
-        .where(eq(schema.organizations.id, ORG_ID));
       await pool.end();
     }
   });

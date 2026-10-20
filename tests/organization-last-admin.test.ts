@@ -1,6 +1,7 @@
 import { createHmac, randomUUID } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { removeMemberAsPlatformAdmin, updateMemberRoleAsPlatformAdmin } from "@/data-access/organizations";
 import { db } from "@/db";
 import { members, organizations, sessions, users } from "@/db/schema";
 import { isLastAdminDatabaseError, LAST_ADMIN_MESSAGE } from "@/lib/auth/organization-role-policy";
@@ -95,4 +96,36 @@ it("returns LAST_ADMIN_MESSAGE through real session auth and the server action",
   const signature = createHmac("sha256", context.secret).update(token).digest("base64");
   request.headers = new Headers({ cookie: `${context.authCookies.sessionToken.name}=${encodeURIComponent(`${token}.${signature}`)}` });
   expect(await changeMemberRoleAction({ memberId: memberIds[0], role: "member" })).toEqual({ success: false, error: LAST_ADMIN_MESSAGE });
+});
+
+it.each(["demote", "remove"] as const)("finishes a plugin update overlapping Platform Admin %s without deadlock", async operation => {
+  const locked = Promise.withResolvers<number>();
+  const release = Promise.withResolvers<void>();
+  const plugin = db.transaction(async tx => {
+    const result = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+    await tx.select().from(members).where(eq(members.id, memberIds[0])).for("no key update");
+    locked.resolve(result.rows[0].pid);
+    await release.promise;
+    await tx.update(members).set({ role: "member" }).where(eq(members.id, memberIds[0]));
+  });
+  const pid = await Promise.race([locked.promise, plugin.then(() => { throw new Error("Missing lock barrier"); })]);
+  const ctx = { organizationId, userId: userIds[1], orgRole: null, isPlatformAdmin: true };
+  const platform = operation === "demote"
+    ? updateMemberRoleAsPlatformAdmin(ctx, memberIds[0], "member")
+    : removeMemberAsPlatformAdmin(ctx, memberIds[0]);
+  const outcomes = Promise.allSettled([plugin, platform]);
+  try {
+    // Confirm the Platform Admin writer is waiting for the plugin's member row.
+    await vi.waitFor(async () => {
+      const waiting = await db.execute<{ blocked: boolean }>(sql`
+        select exists(select 1 from pg_stat_activity where ${pid} = any(pg_blocking_pids(pid))) as blocked
+      `);
+      expect(waiting.rows[0].blocked).toBe(true);
+    });
+  } finally {
+    release.resolve();
+    const results = await outcomes;
+    expect(results.map(result => result.status)).toEqual(["fulfilled", "fulfilled"]);
+  }
+  expect(await db.select().from(members).where(and(eq(members.organizationId, organizationId), eq(members.role, "admin")))).toHaveLength(1);
 });

@@ -1,6 +1,6 @@
 import { retainFixtureAdmin } from "./helpers/retained-admin";
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Pool } from "pg";
 import { afterAll, afterEach, beforeEach, expect, it, vi } from "vitest";
 import { db, withDedicatedLockConnection } from "@/db";
@@ -169,8 +169,7 @@ it("waits for keyed issuance before demotion revokes the key permanently", async
   let created: Awaited<typeof creating>;
   try {
     await Promise.race([entered.promise, creating]);
-    // A dedicated writer avoids pool starvation; the platform-admin path also
-    // locks the organization, masking the member-row race with the owner FK.
+    // A dedicated writer avoids pool starvation while issuance holds the member.
     demotion = withDedicatedLockConnection(async (tx) => {
       updating.resolve();
       await tx.update(members).set({ role: "member" }).where(and(
@@ -321,4 +320,32 @@ it("locks the member before the previous key, so a member-first demotion cannot 
   expect(rows).toHaveLength(2);
   expect(rows.every(row => !row.enabled)).toBe(true);
   await expectUnusable(first.key);
+});
+
+it("finishes keyed issuance holding its FK claim while a plugin role UPDATE completes", async () => {
+  const member = await credentialAuth.findApiCredentialMember(ctx.organizationId, ctx.userId);
+  const original = auth.api.createApiKey;
+  let demotion: Promise<unknown> | undefined;
+  vi.spyOn(auth.api, "createApiKey").mockImplementationOnce(async (...args) => {
+    const issued = await original(...args);
+    // The claim is inserted and its organization FK KEY SHARE is still held.
+    // The trigger must complete without waiting for that transaction to finish.
+    demotion = withDedicatedLockConnection(async tx => {
+      await tx.execute(sql`select set_config('lock_timeout', ${String(CONTENDER_TIMEOUT_MS)}, true)`);
+      await tx.update(members).set({ role: "member" }).where(and(
+        eq(members.id, member.id), eq(members.organizationId, ctx.organizationId),
+      ));
+    });
+    await demotion;
+    return issued;
+  });
+  const creating = createApiKey(ctx, input, randomUUID());
+  // The role update wins; issuance finishes with the expected membership refusal.
+  await expect(creating).rejects.toMatchObject({ code: "forbidden" });
+  await expect(demotion).resolves.toBeUndefined();
+  expect(await db.select({ role: members.role }).from(members).where(eq(members.id, member.id)))
+    .toEqual([{ role: "member" }]);
+  expect(await db.select().from(members).where(and(
+    eq(members.organizationId, ctx.organizationId), eq(members.role, "admin"),
+  ))).toHaveLength(1);
 });

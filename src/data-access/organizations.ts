@@ -198,11 +198,8 @@ export async function updateMemberRoleAsPlatformAdmin(
 ): Promise<void> {
   requirePlatformAdminOverride(ctx);
   await db.transaction(async (tx) => {
-    await tx
-      .select({ id: organizations.id })
-      .from(organizations)
-      .where(eq(organizations.id, ctx.organizationId))
-      .for("update");
+    // The trigger serializes Admin losses after the member write, matching
+    // plugin lock order. This pre-count only supplies the sequential refusal.
     const [member] = await tx
       .select({ id: members.id, role: members.role, userId: members.userId })
       .from(members)
@@ -259,11 +256,8 @@ export async function removeMemberAsPlatformAdmin(
 ): Promise<void> {
   requirePlatformAdminOverride(ctx);
   await db.transaction(async (tx) => {
-    await tx
-      .select({ id: organizations.id })
-      .from(organizations)
-      .where(eq(organizations.id, ctx.organizationId))
-      .for("update");
+    // The trigger serializes Admin losses after the member write, matching
+    // plugin lock order. This pre-count only supplies the sequential refusal.
     const [member] = await tx
       .select({ id: members.id, role: members.role, userId: members.userId })
       .from(members)

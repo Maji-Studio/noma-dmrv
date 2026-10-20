@@ -140,7 +140,7 @@ export function OrganizationsAdmin() {
             id="org-admin-email"
             label="Admin email"
             error={errors.adminEmail?.message}
-            cue="Must be an existing user account; they become the org Admin."
+            cue="Must be an existing user account. They become the organization Admin."
             required
           >
             <FormInput

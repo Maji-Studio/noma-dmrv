@@ -1,6 +1,9 @@
+import { isPgCheckViolation } from "@/db/errors";
 import { APIError } from "better-auth/api";
 import { SafeError } from "@/lib/errors";
 import { orgRoleSchema } from "@/schemas/organizations";
+
+const LAST_ADMIN_CONSTRAINT = "members_last_admin";
 
 export const LAST_ADMIN_MESSAGE =
   "An organization must keep at least one Admin. Make another member an Admin first.";
@@ -44,14 +47,7 @@ export function translateLastAdminError(result: unknown, actingRole?: string) {
 
 /** PostgreSQL check violation from the members trigger, possibly wrapped by Drizzle. */
 export function isLastAdminDatabaseError(error: unknown): boolean {
-  const seen = new Set<unknown>();
-  while (error && typeof error === "object" && !seen.has(error)) {
-    seen.add(error);
-    if ("code" in error && error.code === "23514" &&
-        "constraint" in error && error.constraint === "members_last_admin") return true;
-    error = "cause" in error ? error.cause : undefined;
-  }
-  return false;
+  return isPgCheckViolation(error, LAST_ADMIN_CONSTRAINT);
 }
 
 /** For `.catch()` on server-action paths: turn the members trigger refusal into

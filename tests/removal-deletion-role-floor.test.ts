@@ -1,5 +1,5 @@
 /**
- * Issue #746: registry deletion requires Admin or Admin, while a Removal
+ * Issue #746: registry deletion requires Admin, while a Removal
  * that never touched the registry remains deletable by a Member.
  * Real Postgres owns claims and persistence; only the registry is faked.
  */
@@ -77,7 +77,6 @@ const roles: Array<{ name: string; ctx: OrgContext; allowedAtRegistry: boolean }
     ctx: { ...makeTestOrgContext(), orgRole: "admin" },
     allowedAtRegistry: true,
   },
-  { name: "admin", ctx: makeTestOrgContext(), allowedAtRegistry: true },
   {
     name: "platform admin outside the organization",
     ctx: { ...makeTestOrgContext(), orgRole: null, isPlatformAdmin: true },

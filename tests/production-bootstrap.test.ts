@@ -1,8 +1,7 @@
-import { retainFixtureAdmin } from "./helpers/retained-admin";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { DEC_ORG_ID, DEC_ORG_NAME, DEC_ORG_SLUG } from "@/db/org-defaults";
+import { DEC_ORG_ID } from "@/db/org-defaults";
 import { accounts, members, organizations, users } from "@/db/schema";
 import {
   ensureAdminUser,
@@ -20,80 +19,17 @@ const IPV4_LOCAL_DATABASE_URL = "postgresql://user:password@127.0.0.1:5433/test"
 const IPV6_LOCAL_DATABASE_URL = "postgresql://user:password@[::1]:5433/test";
 const REMOTE_DATABASE_URL = "postgresql://user:password@db.example.invalid/test";
 
-interface FoundationSnapshot {
-  organizationExisted: boolean;
-  teammateId: string | null;
-  teammateMembership: typeof members.$inferSelect | null;
-}
-
-async function prepareFoundation(): Promise<FoundationSnapshot> {
-  const [existingOrganization] = await db
-    .select({ id: organizations.id })
-    .from(organizations)
-    .where(eq(organizations.id, DEC_ORG_ID))
-    .limit(1);
-  await db
-    .insert(organizations)
-    .values({ id: DEC_ORG_ID, name: DEC_ORG_NAME, slug: DEC_ORG_SLUG })
-    .onConflictDoNothing({ target: organizations.id });
-
-  const [teammate] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.email, TEAMMATE_EMAIL))
-    .limit(1);
-  const [teammateMembership] = teammate
-    ? await db
-        .select()
-        .from(members)
-        .where(
-          and(
-            eq(members.organizationId, DEC_ORG_ID),
-            eq(members.userId, teammate.id),
-          ),
-        )
-        .limit(1)
-    : [];
-
-  await retainFixtureAdmin(DEC_ORG_ID);
-
-  if (teammateMembership) {
-    await db.delete(members).where(eq(members.id, teammateMembership.id));
-  }
-
-  return {
-    organizationExisted: Boolean(existingOrganization),
-    teammateId: teammate?.id ?? null,
-    teammateMembership: teammateMembership ?? null,
-  };
-}
-
-async function restoreFoundation(snapshot: FoundationSnapshot): Promise<void> {
-  const [currentTeammate] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.email, TEAMMATE_EMAIL))
-    .limit(1);
-
-  if (currentTeammate) {
-    await db
-      .delete(members)
-      .where(
-        and(
-          eq(members.organizationId, DEC_ORG_ID),
-          eq(members.userId, currentTeammate.id),
-        ),
-      );
-  }
-
-  if (snapshot.teammateId === null && currentTeammate) {
-    await db.delete(users).where(eq(users.id, currentTeammate.id));
-  } else if (snapshot.teammateMembership) {
-    await db.insert(members).values(snapshot.teammateMembership);
-  }
-
-  if (!snapshot.organizationExisted) {
-    await db.delete(organizations).where(eq(organizations.id, DEC_ORG_ID));
+// Roll back the complete foundation fixture, including any existing DEC rows.
+async function withEmptyFoundation(run: (tx: EnsureAdminDb) => Promise<void>) {
+  const rollback = new Error("Rollback foundation fixture");
+  try {
+    await db.transaction(async tx => {
+      await tx.delete(organizations).where(eq(organizations.id, DEC_ORG_ID));
+      await run(tx as EnsureAdminDb);
+      throw rollback;
+    });
+  } catch (error) {
+    if (error !== rollback) throw error;
   }
 }
 
@@ -169,105 +105,44 @@ describe("bootstrap environment classification", () => {
 });
 
 describe("production organization foundation", () => {
-  it("creates the organization, removes the admin membership, and skips the dev teammate", async () => {
-    const snapshot = await prepareFoundation();
-    const adminUserId = `production-bootstrap-admin-${crypto.randomUUID()}`;
-
-    try {
-      await db.insert(users).values({
-        id: adminUserId,
-        email: `${adminUserId}@example.test`,
-        name: "Production Bootstrap Test Admin",
-        role: "admin",
-        emailVerified: true,
+  it.each([false, true])("retains only the last Admin in production (another Admin: %s)", async anotherAdmin => {
+    await withEmptyFoundation(async tx => {
+      const adminUserId = crypto.randomUUID();
+      const otherUserId = crypto.randomUUID();
+      await tx.insert(users).values([adminUserId, otherUserId].map(id => ({
+        id, email: `${id}@example.test`, name: "Bootstrap fixture", role: "admin",
+      })));
+      await ensureOrgFoundation(tx, adminUserId, TEST_PASSWORD_HASH, "production");
+      await tx.insert(members).values({ id: crypto.randomUUID(), organizationId: DEC_ORG_ID, userId: adminUserId, role: "admin" });
+      if (anotherAdmin) await tx.insert(members).values({
+        id: crypto.randomUUID(), organizationId: DEC_ORG_ID, userId: otherUserId, role: "admin",
       });
-      await db.insert(members).values({
-        id: crypto.randomUUID(),
-        organizationId: DEC_ORG_ID,
-        userId: adminUserId,
-        role: "admin",
-      });
-      vi.stubEnv("NODE_ENV", "production");
-      await ensureOrgFoundation(db, adminUserId, TEST_PASSWORD_HASH);
-
-      const [organization] = await db
-        .select({ id: organizations.id })
-        .from(organizations)
-        .where(eq(organizations.id, DEC_ORG_ID));
-      const [adminMembership] = await db
-        .select({ id: members.id })
-        .from(members)
-        .where(
-          and(
-            eq(members.organizationId, DEC_ORG_ID),
-            eq(members.userId, adminUserId),
-          ),
-        );
-      const [teammate] = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.email, TEAMMATE_EMAIL));
-      const [teammateMembership] = teammate
-        ? await db
-            .select({ id: members.id })
-            .from(members)
-            .where(
-              and(
-                eq(members.organizationId, DEC_ORG_ID),
-                eq(members.userId, teammate.id),
-              ),
-            )
-        : [];
-
-      expect(organization?.id).toBe(DEC_ORG_ID);
-      expect(adminMembership).toBeUndefined();
-      expect(teammateMembership).toBeUndefined();
-      if (snapshot.teammateId === null) {
-        expect(teammate).toBeUndefined();
-      }
-    } finally {
-      await db.delete(users).where(eq(users.id, adminUserId));
-      await restoreFoundation(snapshot);
-    }
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      await ensureOrgFoundation(tx, adminUserId, TEST_PASSWORD_HASH, "production");
+      const remaining = await tx.select().from(members).where(eq(members.organizationId, DEC_ORG_ID));
+      expect(remaining.map(row => row.userId)).toEqual([anotherAdmin ? otherUserId : adminUserId]);
+      if (!anotherAdmin) expect(log).toHaveBeenCalledWith(
+        `Retained last Admin membership organizationId=${DEC_ORG_ID} userId=${adminUserId}`,
+      );
+      const teammates = await tx.select().from(members).innerJoin(users, eq(users.id, members.userId))
+        .where(and(eq(members.organizationId, DEC_ORG_ID), eq(users.email, TEAMMATE_EMAIL)));
+      expect(teammates).toEqual([]);
+    });
   });
 
-  it("creates the dev teammate owner outside production", async () => {
-    const snapshot = await prepareFoundation();
-    const adminUserId = `local-bootstrap-admin-${crypto.randomUUID()}`;
-
-    try {
-      await db.insert(users).values({
-        id: adminUserId,
-        email: `${adminUserId}@example.test`,
-        name: "Local Bootstrap Test Admin",
-        role: "admin",
-        emailVerified: true,
-      });
-      vi.stubEnv("NODE_ENV", "test");
-      await ensureOrgFoundation(db, adminUserId, TEST_PASSWORD_HASH);
-
-      const [teammate] = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.email, TEAMMATE_EMAIL));
-      const [membership] = teammate
-        ? await db
-            .select({ role: members.role })
-            .from(members)
-            .where(
-              and(
-                eq(members.organizationId, DEC_ORG_ID),
-                eq(members.userId, teammate.id),
-              ),
-            )
-        : [];
-
-      expect(teammate).toBeDefined();
-      expect(membership?.role).toBe("admin");
-    } finally {
-      await db.delete(users).where(eq(users.id, adminUserId));
-      await restoreFoundation(snapshot);
-    }
+  it("ensures the local teammate Admin before removing the sole Platform Admin membership", async () => {
+    await withEmptyFoundation(async tx => {
+      const adminUserId = crypto.randomUUID();
+      await tx.insert(users).values({ id: adminUserId, email: `${adminUserId}@example.test`, name: "Bootstrap fixture", role: "admin" });
+      await ensureOrgFoundation(tx, adminUserId, TEST_PASSWORD_HASH, "production");
+      await tx.insert(members).values({ id: crypto.randomUUID(), organizationId: DEC_ORG_ID, userId: adminUserId, role: "admin" });
+      await ensureOrgFoundation(tx, adminUserId, TEST_PASSWORD_HASH, "development");
+      const remaining = await tx.select({ userId: members.userId, role: members.role, email: users.email })
+        .from(members).innerJoin(users, eq(users.id, members.userId))
+        .where(eq(members.organizationId, DEC_ORG_ID));
+      expect(remaining).toEqual([{ userId: expect.any(String), role: "admin", email: TEAMMATE_EMAIL }]);
+      expect(remaining[0].userId).not.toBe(adminUserId);
+    });
   });
 });
 
