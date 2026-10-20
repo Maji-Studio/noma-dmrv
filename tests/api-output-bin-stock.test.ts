@@ -80,7 +80,7 @@ describe("output bin stock REST and MCP", { timeout: TIMEOUT_MS }, () => {
       const result = await call(identifier, a.key, { facilityId: a.facility.id });
       expect(result.isError).toBeUndefined();
       expect(result.structuredContent).toEqual(body);
-      expect(result.content).toEqual([{ type: "text", text: `Bin ${body.data.code} stock read.` }]);
+      expect(result.content).toEqual([{ type: "text", text: `Bin ${body.data.code} stock read.\n\n${JSON.stringify(result.structuredContent)}` }]);
     }
     expect((await (await stock(a.pureBin.id)).json()).data).toMatchObject({ type: "product_bin", formulationId: a.pure.id,
       subBins: [expect.objectContaining({ layerKind: "biochar_product" })] });
