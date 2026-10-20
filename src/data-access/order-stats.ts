@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { sumNumeric } from "@/db/aggregate";
 import { deliveries, orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { and, count, eq, isNull } from "drizzle-orm";
+import { and, count, eq, isNull, sql } from "drizzle-orm";
 import { requireOrgScope } from "./utils";
 
 export interface OrderStats {
@@ -28,7 +28,7 @@ export async function getOrderStats(
   const [[orderStats], [deliveryStats]] = await Promise.all([
     db.select({
       totalOrders: count(),
-      totalQuantityKg: sumNumeric(orders.quantityKg),
+      totalQuantityKg: sumNumeric(sql`${orders.quantityKg}::numeric`),
     })
       .from(orders)
       .where(and(eq(orders.organizationId, ctx.organizationId), ...conditions)),

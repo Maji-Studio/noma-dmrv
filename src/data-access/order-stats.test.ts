@@ -9,7 +9,10 @@ import { getOrderStats } from "./order-stats";
 
 const ORDER_COUNT = 25;
 const PAGE_SIZE = 10;
-const QUANTITY_KG = 100;
+const QUANTITY_KG = 1000.1;
+const TENTHS = 10;
+/** Exact sum in tenths of a kilogram: a float4 SUM would drift on fractional quantities. */
+const totalKg = (orderCount: number) => Math.round(orderCount * QUANTITY_KG * TENTHS) / TENTHS;
 const DELIVERY_WET_KG = 10;
 const EXTRA_DELIVERY_COUNT = 1;
 const FIXTURE_DATE = new Date("2026-09-12T12:00:00Z");
@@ -88,7 +91,7 @@ describe("getOrderStats whole-facility totals", () => {
     const expected = {
       totalOrders: ORDER_COUNT,
       totalDeliveries: ORDER_COUNT + EXTRA_DELIVERY_COUNT,
-      totalQuantityKg: ORDER_COUNT * QUANTITY_KG,
+      totalQuantityKg: totalKg(ORDER_COUNT),
     };
     expect(await getOrderStats(fixture.ctx, scope)).toEqual(expected);
     const page = await getOrders(fixture.ctx, { ...scope, page: 1, pageSize: PAGE_SIZE });
@@ -109,7 +112,7 @@ describe("getOrderStats whole-facility totals", () => {
     expect(await getOrderStats(fixture.ctx)).toEqual({
       totalOrders: ORDER_COUNT + 1,
       totalDeliveries: ORDER_COUNT + EXTRA_DELIVERY_COUNT + 1,
-      totalQuantityKg: (ORDER_COUNT + 1) * QUANTITY_KG,
+      totalQuantityKg: totalKg(ORDER_COUNT + 1),
     });
     expect(await getOrderStats(fixture.ctx, { facilityId: otherFacilityId })).toEqual({
       totalOrders: 1, totalDeliveries: 1, totalQuantityKg: QUANTITY_KG,

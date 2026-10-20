@@ -686,7 +686,9 @@ The one outcome screen for auth pages (check your email, email verified, verific
   single scalar or short text value, and `valueLayout="breakdown"` for a
   structured comparison such as `MassPair`. Breakdown layout gives the value
   the full card width and does not apply headline typography to its children.
-  Optional `sparkline` slot takes any node.
+  Optional `sparkline` slot takes any node. A card fed by a server stats query
+  passes `isError`; it then shows "Could not load" and "Reload the page to try
+  again" in headline layout instead of a value that was never computed.
 - **`MassPair`** — the shared wet/dry comparison for KPI cards and dense table
   cells. It keeps both labels visible, renders a missing value as "Not recorded"
   in the small placeholder style (`body-small`, tertiary ink, regular weight,
@@ -931,7 +933,8 @@ Fifteen list components share one shape. Copy it rather than re-deriving:
   `onModeChange`. Plus `searchQuery`, per-column filters, `currentPage`/
   `pageSize`, `hasActiveFilters`, `clearFilters`.
 - **Entity-data loading is prop-driven.** Continue to pass `isLoading` to
-  `DataTable` and each `StatCard`; nested tables use `LoadingSkeleton`. Do not
+  `DataTable` and each `StatCard`, and pass `isError` from the stats query so a
+  failed load never reads as zero; nested tables use `LoadingSkeleton`. Do not
   add a shared `(app)/loading.tsx`: a parent Suspense fallback can replace a
   detail route's canonical `not-found.tsx` response. If server-render latency
   needs a route fallback, add the narrowest leaf `loading.tsx` and verify that
