@@ -107,12 +107,14 @@ interface CarbonValues {
   totalCarbonPercent?: number | null;
   organicCarbonPercent?: number | null;
   inorganicCarbonPercent?: number | null;
+  reactiveCarbonPercent?: number | null;
+  residualCarbonPercent?: number | null;
 }
 
 /** The carbon excess check on the figures in this body; the writer repeats it on the merged row. */
 function refineCarbon(value: CarbonValues, ctx: z.RefinementCtx<CarbonValues>) {
   const errors = getSampleCarbonReconciliationErrors(value);
-  for (const field of ["organicCarbonPercent", "inorganicCarbonPercent"] as const) {
+  for (const field of ["organicCarbonPercent", "inorganicCarbonPercent", "residualCarbonPercent"] as const) {
     const message = errors[field];
     if (message) ctx.addIssue({ code: "custom", path: [field], message });
   }

@@ -208,6 +208,10 @@ Prefer the `PositionPicker` component (map preview + address search + manual lat
 
 ## Dates
 
+Union date fields use `dateOrStringSchema` from `@/schemas/helpers`.
+The resolver shows the first branch's first issue, so the helper puts strings
+first and shares that message with server validation.
+
 Use `calendarDateSchema` from `@/schemas/helpers` for business dates persisted
 as **UTC-midnight date-only values**, such as the feedstock delivery date. It
 accepts strict `YYYY-MM-DD` strings and real calendar days only, decodes them to

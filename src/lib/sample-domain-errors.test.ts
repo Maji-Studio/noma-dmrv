@@ -1,6 +1,8 @@
 import { expect, it, vi } from "vitest";
 vi.mock("@/lib/log", () => ({ logger: { error: vi.fn(), warn: vi.fn(), child: vi.fn() } }));
 import { assertSamplingTimeNotFuture } from "@/data-access/samples/future-time";
+import { assertCarbonReconciliation } from "@/data-access/samples/carbon-reconciliation";
+import { actionFailureResponse } from "@/lib/api/problem";
 import { staleRowVersion } from "@/data-access/row-version";
 import { toActionFailure } from "@/fn/action-errors";
 import { SampleRatioCapError } from "@/lib/calculations/sample-ratios";
@@ -17,10 +19,44 @@ import {
 } from "./sample-domain-errors";
 
 const failureOptions = { fallbackMessage: "Failed to save", log: { message: "test" } };
+const VALIDATION_FAILED_STATUS = 422;
+const STORED_CARBON_VALUES = {
+  totalCarbonPercent: 80,
+  organicCarbonPercent: 75,
+  inorganicCarbonPercent: null,
+  reactiveCarbonPercent: 40,
+  residualCarbonPercent: 50,
+};
+const EXCESS_RESIDUAL_CARBON_PERCENT = 70;
 
 async function outcome(error: unknown) {
   return withSampleErrors(async () => { throw error; }).catch((failure: unknown) => failure);
 }
+
+it("maps a merged residual carbon refusal to 422 on /residualCarbonPercent", async () => {
+  const failure = await withSampleErrors(async () => {
+    assertCarbonReconciliation(STORED_CARBON_VALUES, {
+      reactiveCarbonPercent: undefined,
+      residualCarbonPercent: EXCESS_RESIDUAL_CARBON_PERCENT,
+    });
+  }).catch((error: unknown) => error);
+  expect(failure).toBeInstanceOf(DomainError);
+  const response = actionFailureResponse(
+    toActionFailure(failure, failureOptions),
+    "/api/v1/samples",
+    "request-id",
+  );
+  expect(response.status).toBe(VALIDATION_FAILED_STATUS);
+  expect((await response.json()).errors).toEqual([{
+    pointer: "/residualCarbonPercent",
+    code: "validation_failed",
+    detail: "Reactive and residual carbon add up to 110%. They can be at most 100%.",
+  }]);
+  expect(() => assertCarbonReconciliation(STORED_CARBON_VALUES, {
+    reactiveCarbonPercent: null,
+    residualCarbonPercent: EXCESS_RESIDUAL_CARBON_PERCENT,
+  })).not.toThrow();
+});
 
 it("keeps the legacy operator copy byte for byte", () => {
   // The writers throw these strings today (src/data-access/samples.ts, src/fn/samples.ts).

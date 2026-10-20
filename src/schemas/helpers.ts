@@ -32,6 +32,27 @@ export function uuidSchema(message?: string) {
 /** 24-hour wall-clock time, HH:MM, with zero-padded hours and minutes. */
 export const LOCAL_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+/**
+ * Accept the form's string or a native Date for server re-validation.
+ * RHF's Zod resolver shows the first branch's first issue for invalid_union.
+ * Put strings first and repeat that issue on the union so forms and server
+ * actions show the same guidance. Every branch uses our copy for wrong types.
+ */
+export function dateOrStringSchema<Out>(
+  message: string,
+  fromString: (text: z.ZodString) => z.ZodType<Out, string>,
+  fromDate: (date: z.ZodDate) => z.ZodDate = (date) => date,
+) {
+  return z.union([
+    fromString(z.string({ error: message })),
+    fromDate(z.date({ error: message })),
+  ], {
+    error: (issue) => issue.code === "invalid_union"
+      ? issue.errors[0]?.[0]?.message ?? message
+      : message,
+  });
+}
+
 // ============================================
 // GPS Coordinate Schemas
 // ============================================
@@ -456,9 +477,9 @@ function isUtcCalendarDay(date: Date): boolean {
  * decoded value without accepting an arbitrary instant.
  */
 export function calendarDateSchema(message = INVALID_CALENDAR_DATE_MESSAGE) {
-  const schema = z.union([
-    z.date({ error: message }).refine(isUtcCalendarDay, message),
-    z.string({ error: message }).transform((value, ctx): Date => {
+  const schema = dateOrStringSchema(
+    message,
+    (text) => text.transform((value, ctx): Date => {
       const date = parseCalendarDate(value);
       if (!date) {
         ctx.addIssue({ code: "custom", message });
@@ -466,7 +487,8 @@ export function calendarDateSchema(message = INVALID_CALENDAR_DATE_MESSAGE) {
       }
       return date;
     }),
-  ], { error: message });
+    (date) => date.refine(isUtcCalendarDay, message),
+  );
   publishedJsonSchemas.add(schema, {
     jsonSchema: { type: "string", format: "date" },
   });
@@ -487,29 +509,32 @@ export function optionalCalendarDateSchema() {
  * Parses date-only strings at LOCAL midnight for the same reason as
  * optionalDateOnly below: the field represents a calendar day, not an instant.
  */
-export const requiredDateOnly = z.union([
-  z.date(),
-  z.string().min(1, "Required").transform((val, ctx): Date => {
-    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(val);
-    const date = dateOnly
-      ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
-      : new Date(val);
-    if (
-      dateOnly &&
-      (date.getFullYear() !== Number(dateOnly[1]) ||
-        date.getMonth() !== Number(dateOnly[2]) - 1 ||
-        date.getDate() !== Number(dateOnly[3]))
-    ) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
-      return z.NEVER;
-    }
-    if (isNaN(date.getTime())) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
-      return z.NEVER;
-    }
-    return date;
-  }),
-]);
+export function requiredDateOnlySchema(requiredMessage = "Enter a date.") {
+  return dateOrStringSchema(requiredMessage, (text) =>
+    text.min(1, requiredMessage).transform((val, ctx): Date => {
+      const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(val);
+      const date = dateOnly
+        ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+        : new Date(val);
+      if (
+        dateOnly &&
+        (date.getFullYear() !== Number(dateOnly[1]) ||
+          date.getMonth() !== Number(dateOnly[2]) - 1 ||
+          date.getDate() !== Number(dateOnly[3]))
+      ) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: INVALID_CALENDAR_DATE_MESSAGE });
+        return z.NEVER;
+      }
+      if (isNaN(date.getTime())) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: INVALID_CALENDAR_DATE_MESSAGE });
+        return z.NEVER;
+      }
+      return date;
+    }),
+  );
+}
+
+export const requiredDateOnly = requiredDateOnlySchema();
 
 /**
  * Optional date field fed by `<input type="date">` ("YYYY-MM-DD").
@@ -520,19 +545,17 @@ export const requiredDateOnly = z.union([
  * round-trip. Empty or invalid input becomes undefined; Date values (e.g.
  * server-side re-validation of an already-transformed payload) pass through.
  */
-export const optionalDateOnly = z
-  .union([
-    z.date(),
-    z.string().transform((val): Date | undefined => {
-      if (val === "") return undefined;
-      const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(val);
-      const date = dateOnly
-        ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
-        : new Date(val);
-      return isNaN(date.getTime()) ? undefined : date;
-    }),
-  ])
-  .optional();
+export const optionalDateOnly = dateOrStringSchema(
+  INVALID_CALENDAR_DATE_MESSAGE,
+  (text) => text.transform((val): Date | undefined => {
+    if (val === "") return undefined;
+    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(val);
+    const date = dateOnly
+      ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+      : new Date(val);
+    return isNaN(date.getTime()) ? undefined : date;
+  }),
+).optional();
 
 // ============================================
 // Instant Helpers

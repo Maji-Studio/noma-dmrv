@@ -9,8 +9,10 @@ import { expectedVersionSchema } from "./helpers";
  */
 
 import { z } from "zod";
+import { formatPercent } from "@/lib/format-utils";
 import { offsetInstantSchema } from "./event-instant";
 import {
+  dateOrStringSchema,
   optionalNumber,
   optionalPercent,
   PG_INTEGER_MAX,
@@ -31,6 +33,8 @@ const PH_MIN = 0;
 const PH_MAX = 14;
 const PH_RANGE_MESSAGE = `Must be between ${PH_MIN} and ${PH_MAX}`;
 export const CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS = 0.5;
+const CARBON_PERCENT_CEILING = 100;
+const CARBON_SUM_DISPLAY_DIGITS = 2;
 export const ORGANIC_CARBON_EXCEEDS_TOTAL_MESSAGE =
   `Organic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points. Correct the carbon values.`;
 export const COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE =
@@ -67,13 +71,13 @@ const SAMPLING_TIME_OFFSET_MESSAGE =
  * facility wall clock to that instant with `EventTimeInput`, so a time is
  * never read in the browser's zone.
  */
-const samplingTimeSchema = z.union([
-  z.date(),
-  z.string()
+const samplingTimeSchema = dateOrStringSchema(
+  SAMPLING_TIME_REQUIRED_MESSAGE,
+  (text) => text
     .min(1, SAMPLING_TIME_REQUIRED_MESSAGE)
     .pipe(offsetInstantSchema(SAMPLING_TIME_OFFSET_MESSAGE))
     .transform((value) => new Date(value)),
-], { error: SAMPLING_TIME_REQUIRED_MESSAGE });
+);
 
 const percentNumber = z
   .number()
@@ -123,11 +127,18 @@ interface SampleCarbonValues {
   totalCarbonPercent?: number | null;
   organicCarbonPercent?: number | null;
   inorganicCarbonPercent?: number | null;
+  reactiveCarbonPercent?: number | null;
+  residualCarbonPercent?: number | null;
 }
 
 export interface SampleCarbonReconciliationErrors {
   organicCarbonPercent?: string;
   inorganicCarbonPercent?: string;
+  residualCarbonPercent?: string;
+}
+
+export function reactiveResidualCarbonExceedsCeilingMessage(sum: number): string {
+  return `Reactive and residual carbon add up to ${formatPercent(sum, { digits: CARBON_SUM_DISPLAY_DIGITS })}. They can be at most ${CARBON_PERCENT_CEILING}%.`;
 }
 
 function isCompleteNumber(value: number | null | undefined): value is number {
@@ -160,6 +171,19 @@ export function getSampleCarbonReconciliationErrors(
     errors.inorganicCarbonPercent = COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE;
   }
 
+  // Isometric Soil Environments v1.3, Eq. 6 uses only residual carbon and
+  // states no sum rule. This is noma's own plausibility check (20 Oct 2026,
+  // #684), using the same tolerance as the other carbon reconciliation rules.
+  if (
+    isCompleteNumber(value.reactiveCarbonPercent) &&
+    isCompleteNumber(value.residualCarbonPercent)
+  ) {
+    const sum = value.reactiveCarbonPercent + value.residualCarbonPercent;
+    if (sum - CARBON_PERCENT_CEILING > CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS) {
+      errors.residualCarbonPercent = reactiveResidualCarbonExceedsCeilingMessage(sum);
+    }
+  }
+
   return errors;
 }
 
@@ -182,6 +206,13 @@ function carbonReconciliationSuperRefine(
       code: z.ZodIssueCode.custom,
       path: ["inorganicCarbonPercent"],
       message: errors.inorganicCarbonPercent,
+    });
+  }
+  if (errors.residualCarbonPercent) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["residualCarbonPercent"],
+      message: errors.residualCarbonPercent,
     });
   }
 }

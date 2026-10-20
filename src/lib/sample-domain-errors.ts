@@ -29,7 +29,7 @@ const SAMPLE_CARBON_RECONCILIATION_MESSAGES = {
 } as const;
 
 export type SampleCarbonField = keyof typeof SAMPLE_CARBON_RECONCILIATION_MESSAGES;
-export type SampleRefusalField = SampleCarbonField | "samplingTime";
+export type SampleRefusalField = SampleCarbonField | "residualCarbonPercent" | "samplingTime";
 
 export interface SampleBatchWindow {
   code: string;

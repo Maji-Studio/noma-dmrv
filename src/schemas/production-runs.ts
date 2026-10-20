@@ -6,6 +6,7 @@
 
 import { z } from "zod";
 import {
+  dateOrStringSchema,
   emptyToNull,
   MASS_INPUT_MAX_KG,
   massKgSchema,
@@ -13,7 +14,7 @@ import {
   optionalDateOnly,
   optionalStoredMoisture,
   PG_INTEGER_MAX,
-  requiredDateOnly,
+  requiredDateOnlySchema,
   requiredPositiveMassKgSchema,
   storedMoistureSchema,
   toIntOrNull,
@@ -229,13 +230,12 @@ const productionRunFormObject = z.object({
   // required; the end pair is optional (a blank end = the run has not finished
   // yet). `endDate` defaults to `startDate` when only an end time is entered;
   // an overnight run sets `endDate` to the next day (no implicit day rollover).
-  startDate: requiredDateOnly,
+  startDate: requiredDateOnlySchema("Enter the start date."),
   endDate: optionalDateOnly,
   // Time values accept "HH:MM" strings (from the form) or Date objects (server
   // re-validation of an already-combined instant).
-  startTime: z.union([
-    z.date(),
-    z.string().min(1, "Enter a start time.").transform((val, ctx) => {
+  startTime: dateOrStringSchema("Enter a start time.", (text) =>
+    text.min(1, "Enter a start time.").transform((val, ctx) => {
       if (TIME_ONLY_RE.test(val)) return val;
       const date = new Date(val);
       if (isNaN(date.getTime())) {
@@ -244,11 +244,8 @@ const productionRunFormObject = z.object({
       }
       return date;
     }),
-  ]),
-  endTime: z.union([
-    z.date(),
-    z.string(),
-  ])
+  ),
+  endTime: dateOrStringSchema("Enter a valid end time.", (text) => text)
     .optional()
     .transform((val, ctx) => {
       if (val === undefined || val === null || val === "") return undefined;
@@ -488,9 +485,8 @@ export const updateProductionRunSchema = z.object({
   status: z.enum(productionRunStatuses).optional(),
   expectedVersion: expectedVersionSchema,
   cancellationReason: z.string().max(CANCELLATION_REASON_MAX_LENGTH).nullable().optional(),
-  startTime: z.union([
-    z.date(),
-    z.string().transform((val, ctx) => {
+  startTime: dateOrStringSchema("Enter a start time.", (text) =>
+    text.min(1, "Enter a start time.").transform((val, ctx) => {
       const date = new Date(val);
       if (isNaN(date.getTime())) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid start time." });
@@ -498,13 +494,11 @@ export const updateProductionRunSchema = z.object({
       }
       return date;
     }),
-  ]).optional(),
+  ).optional(),
   // Nullable: an explicit null clears the end time (reopens the run). Undefined
   // leaves it unchanged.
-  endTime: z.union([
-    z.date(),
-    z.null(),
-    z.string().transform((val, ctx) => {
+  endTime: dateOrStringSchema("Enter a valid end time.", (text) =>
+    text.transform((val, ctx) => {
       const date = new Date(val);
       if (isNaN(date.getTime())) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid end time." });
@@ -512,7 +506,7 @@ export const updateProductionRunSchema = z.object({
       }
       return date;
     }),
-  ]).optional(),
+  ).nullable().optional(),
   operatorId: emptyToNull.or(uuidSchema()).nullable().optional(),
   feedstockDraws: productionRunFeedstockDrawsSchema.optional(),
   feedstockMoisturePercent: storedMoistureSchema()
