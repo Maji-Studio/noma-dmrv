@@ -36,7 +36,7 @@ Lock order: boundary lock, then observation advisory lock, then batch locks. Con
 
 ## 3. UI (PR 2, Claude)
 
-- Route `src/app/(app)/certification/settings/removal-template-setup/page.tsx` (`?facility&template&step`); Members are redirected to the Settings pane.
+- Planned route file: src/app/(app)/certification/settings/removal-template-setup/page.tsx (`?facility&template&step`); Members are redirected to the Settings pane.
 - Page: `PageHeader` "Set up Removal template", facility subtitle, back link to Settings. Vertical step rail:
   - **Template**: radio cards for fitting templates only, then one line naming those not offered and why. One fit is preselected; more than one, no preselection and Continue waits for a pick.
   - **Decisions**: numbered decision blocks, then the folded "noma decided N components" list with Change on noma's defaults. Decided components are read-only: "Decided for every facility using this template".
@@ -57,7 +57,7 @@ Lock order: boundary lock, then observation advisory lock, then batch locks. Con
 
 - PR 1 unit: `setupPlan` on the 2026-10-15 sandbox fixture and a Protocol default fixture (bootstrapped gives 0 decisions; Protocol default gives the electricity clash and the diesel source; `added` becomes a decision; no candidate gives an entry default; `assignmentsFromPlan` refusals); `templateFitsFacility` per tier, deprecated 1000-year, no storage component.
 - PR 1 DB integration `tests/removal-template-setup.integration.test.ts`: Member rejected before any registry read; cross-org facility refused; archived facility refused and rolled back; stale fingerprint; a batch held by a Removal rolls back default and decisions; a batch pinned meanwhile is stale; success makes the template ready, sets the default, pins N batches with N activity events. Keep `removal-template-review-read-only.integration.test.ts`, `credit-batch-removal-template.test.ts`, `removal-template-review.test.ts` green.
-- PR 2: component tests (step gating, zero-decision path, Member card without buttons, "N to decide" after an added component); E2E `tests/e2e/removal-template-setup.spec.ts` on the sandbox (skipped without credentials). Before | After at 1440 and 390: Settings pane, the three steps, Member card, switch dialog link target.
+- PR 2: component tests (step gating, zero-decision path, Member card without buttons, "N to decide" after an added component); planned E2E file: tests/e2e/removal-template-setup.spec.ts on the sandbox (skipped without credentials). Before | After at 1440 and 390: Settings pane, the three steps, Member card, switch dialog link target.
 
 ## Follow-ups
 

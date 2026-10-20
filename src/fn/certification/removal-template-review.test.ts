@@ -240,9 +240,9 @@ describe("Removal template action guards", () => {
   });
   it.each(["owner", "admin"] as const)("permits %s reviews with server-resolved scope", async (role) => {
     ctx.orgRole = role;
-    vi.mocked(reviewLineContracts).mockResolvedValue({ id } as never);
+    vi.mocked(reviewLineContracts).mockResolvedValue({ id, lineSources: {} } as never);
     const input = { observationId: id, expectedVersion: 1, assignments: {} };
-    expect(await reviewRemovalTemplateLines(input)).toEqual({ success: true, data: { id } });
+    expect(await reviewRemovalTemplateLines(input)).toEqual({ success: true, data: { id, lineSources: {} } });
     expect(reviewLineContracts).toHaveBeenCalledWith(ctx, input);
   });
   it("validates contracts and versions before persistence", async () => {
@@ -505,4 +505,14 @@ describe("read-only entry enrichment reuse", () => {
     expect(observeRemovalTemplate).not.toHaveBeenCalled();
     expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
   });
+});
+
+
+it("gates automatic sources in the saved review response", async () => {
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
+  const sources = { component: { scope: "operating", entryPolicy: "additive", automaticSource: "sample-transport", origin: "reviewed" } };
+  vi.mocked(reviewLineContracts).mockResolvedValue({ id, lineSources: sources } as never);
+  const result = await reviewRemovalTemplateLines({ observationId: id, expectedVersion: 1, assignments: {} });
+  expect(result).toMatchObject({ success: true, data: { lineSources: { component: { automaticSource: undefined } } } });
+  expect(sources.component.automaticSource).toBe("sample-transport");
 });

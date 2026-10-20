@@ -119,6 +119,7 @@ export function getRemovalPreflightRefetchInterval(
 export const certificationKeys = {
   removalEmptyLines: (removalId: string) => ["certification", "removal-empty-lines", removalId] as const,
   removalTemplateReviewEntry: (facilityId: string, templateId: string) => ["certification", "removal-template-review-entry", facilityId, templateId] as const,
+  removalTemplateSetup: (facilityId: string) => ["certification", "removal-template-setup", facilityId] as const,
   removalTemplateReview: (facilityId: string) => ["certification", "removal-template-review", facilityId] as const,
   all: ["certification"] as const,
   /** Whether a submitted Removal or GHG statement freezes the record's files. */

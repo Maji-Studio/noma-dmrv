@@ -1,0 +1,107 @@
+import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
+import { SafeError } from "@/lib/errors";
+import { expectedSequestrationBlueprintKeys, isSequestrationBlueprintFamily, isStorageBlueprintKey, type DurabilityTier } from "@/lib/isometric/storage-blueprints";
+import { assertSequestrationTemplateSelectable } from "@/lib/isometric/transformers/sequestration-binding";
+import { catalogCandidates, hasCatalogDisambiguation } from "@/lib/isometric/template-observations/catalog-sources";
+import { allowedEntryPolicies } from "@/lib/isometric/template-observations/entry-policies";
+import { isAcceptableProposal, lineNeedsReview, type LineContract, type LineSources, type LineSourceProblem } from "@/lib/isometric/template-observations/line-sources";
+import type { ComponentChange, TemplateComponent, TemplateDefinition } from "@/lib/isometric/template-observations";
+
+export type SetupAssignment = Pick<LineContract, "scope" | "automaticSource" | "entryPolicy">;
+export interface SetupOption { id: string; label: string; assignments: Record<string, SetupAssignment> }
+export interface SetupComponent { component: TemplateComponent; groupKey: string; contract: LineContract | undefined }
+export interface SetupDefault extends SetupComponent { proposal: SetupOption; options: SetupOption[] }
+export interface SetupDecision { id: string; kind: "clash" | "source" | "added"; components: SetupComponent[]; options: SetupOption[] }
+export interface RemovalTemplateSetupPlan { decided: SetupComponent[]; defaults: SetupDefault[]; decisions: SetupDecision[] }
+
+export function templateFitsFacility(template: IsometricGhgEntryTemplate, durabilityOption: DurabilityTier | null): { fits: true } | { reason: string } {
+  if (template.credit_type !== "REMOVAL") return { reason: "This is not a Removal template." };
+  try { assertSequestrationTemplateSelectable(template); }
+  catch (error) { if (error instanceof SafeError) return { reason: "This template uses an unsupported storage component." }; throw error; }
+  const keys = template.groups.flatMap((group) => group.components.map((component) => component.blueprint_key));
+  if (!keys.some(isStorageBlueprintKey)) return { reason: "This template has no storage component." };
+  if (durabilityOption && keys.some((key) => isSequestrationBlueprintFamily(key) && !expectedSequestrationBlueprintKeys(durabilityOption).has(key))) {
+    return { reason: "The storage component does not match this facility's durability tier." };
+  }
+  return { fits: true };
+}
+
+function componentOptions(line: SetupComponent): SetupOption[] {
+  const { component, groupKey } = line;
+  const entryPolicy = allowedEntryPolicies(component).find((policy) => policy !== "none") ?? "none";
+  const options: SetupOption[] = catalogCandidates(component, groupKey).map((source) => ({
+    id: source, label: source,
+    assignments: { [component.id]: { scope: "operating", automaticSource: source, entryPolicy: entryPolicy === "single" ? "none" : entryPolicy } },
+  }));
+  options.push({ id: "entry", label: options.length ? "Neither, entry" : "Entry", assignments: { [component.id]: { scope: "operating", entryPolicy } } });
+  if (groupKey === "direct-emissions" && component.blueprintKey === "ghg_direct_emissions") {
+    options.push({ id: "project", label: "Project level (not sent)", assignments: { [component.id]: { scope: "forbidden", entryPolicy: "none" } } });
+  }
+  return options;
+}
+
+/** Each component appears once. A clash is one joint choice, preventing duplicate source assignments. */
+export function setupPlan(definition: TemplateDefinition, lineSources: LineSources, problems: readonly LineSourceProblem[], changes: Record<string, ComponentChange>): RemovalTemplateSetupPlan {
+  const plan: RemovalTemplateSetupPlan = { decided: [], defaults: [], decisions: [] };
+  const pending: SetupComponent[] = [];
+  for (const group of definition.groups) for (const component of group.components) {
+    const line = { component, groupKey: group.key, contract: lineSources[component.id] };
+    (lineNeedsReview(component.id, line.contract, problems) ? pending : plan.decided).push(line);
+  }
+  const hasReviewed = Object.values(lineSources).some((line) => line.origin === "reviewed" || line.origin === "carried");
+  const usedSources = new Set(plan.decided.flatMap((line) => line.contract?.automaticSource ?? []));
+  const consumed = new Set<string>();
+  for (const line of pending) {
+    const id = line.component.id;
+    if (consumed.has(id)) continue;
+    const candidates = catalogCandidates(line.component, line.groupKey).filter((source) => !usedSources.has(source));
+    const competitors = candidates.length === 1 ? pending.filter((other) => {
+      const sources = catalogCandidates(other.component, other.groupKey);
+      return sources.length === 1 && sources[0] === candidates[0];
+    }) : [];
+    if (competitors.length > 1) {
+      competitors.forEach((other) => consumed.add(other.component.id));
+      plan.decisions.push({ id: `clash:${candidates[0]}`, kind: "clash", components: competitors,
+        options: competitors.map((winner) => ({ id: winner.component.id, label: winner.component.displayName,
+          assignments: Object.assign({}, ...competitors.map((other) => componentOptions(other).find((option) => option.id === (other === winner ? candidates[0] : "entry"))!.assignments)),
+        })),
+      });
+      continue;
+    }
+    const options = componentOptions(line).filter((option) => !usedSources.has(option.id as NonNullable<LineContract["automaticSource"]>));
+    const acceptable = isAcceptableProposal(definition, lineSources, id);
+    const proposal = acceptable
+      ? options.find((option) => option.id === line.contract?.automaticSource) ?? options[0]
+      : options[0];
+    if (hasReviewed && changes[id] === "added") {
+      plan.decisions.push({ id, kind: "added", components: [line],
+        options: [proposal, ...options.filter((option) => option !== proposal)] });
+    } else if (!acceptable && hasCatalogDisambiguation(line.component.blueprintKey) && candidates.length > 1) {
+      plan.decisions.push({ id, kind: "source", components: [line], options });
+    } else {
+      plan.defaults.push({ ...line, proposal, options });
+    }
+  }
+  return plan;
+}
+
+/** Only server-offered option IDs are accepted, never client-supplied contracts. */
+export function assignmentsFromPlan(plan: RemovalTemplateSetupPlan, answers: Record<string, string>, overrides: Record<string, string>): Record<string, SetupAssignment> {
+  const assignments: Record<string, SetupAssignment> = {};
+  if (Object.keys(answers).some((id) => !plan.decisions.some((decision) => decision.id === id)) ||
+      Object.keys(overrides).some((id) => !plan.defaults.some((line) => line.component.id === id))) {
+    throw new SafeError("Choose only the component options offered in this setup.");
+  }
+  for (const decision of plan.decisions) {
+    const option = decision.options.find((candidate) => candidate.id === answers[decision.id]);
+    if (!option) throw new SafeError("Answer every component decision before applying setup.");
+    Object.assign(assignments, option.assignments);
+  }
+  for (const line of plan.defaults) {
+    const optionId = overrides[line.component.id] ?? line.proposal.id;
+    const option = line.options.find((candidate) => candidate.id === optionId);
+    if (!option) throw new SafeError("Choose an offered option for this component.");
+    Object.assign(assignments, option.assignments);
+  }
+  return assignments;
+}
