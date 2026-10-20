@@ -89,7 +89,7 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
         {subBins.error && <Notice tone="error">{subBins.error.message}</Notice>}
       </>}
       figure={ready && <>
-        {outputStockFigure(wetKg, dryKg)}
+        {outputStockFigure(wetKg, dryKg ?? 0)}
         {capacityKg != null && <span className="body-small text-[var(--color-text-tertiary)]"> of {formatMassKg(capacityKg)}</span>}
       </>}
       caption={ready && wetKg !== null && dryKg !== null && <SecondaryFigure label={DRY_BIOCHAR_LABEL} value={formatMassKg(dryKg)} />}

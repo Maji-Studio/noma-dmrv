@@ -27,12 +27,16 @@ const ICON_PX = 16;
 const HISTORY_HINT =
   "Each entry is one measurement. Wet stock is wet mass added less wet mass taken out. A later entry never changes an earlier one.";
 
-/** A day's heading: the date, and the wet mass when it ended; a day end the records give no wet figure for shows none. */
+/**
+ * A day's heading: the date, and the wet mass when it ended. A day end without a
+ * wet figure shows none: a replayed dry balance is not always an honest figure
+ * (a history that starts mid-stream replays below zero), unlike the headline's read.
+ */
 function DayHeader({ day }: { day: HistoryDay }) {
   return (
     <h4 className="flex flex-col gap-2 border-b border-[var(--clr-dark-purple-40)] pb-6 pt-12 body-caption text-[var(--color-text-tertiary)] sm:flex-row sm:justify-between sm:gap-12">
       <span>{day.day}</span>
-      {day.end.wetKg !== null && <span className="tabular-nums">{outputStockFigure(day.end.wetKg, null)} at day end</span>}
+      {day.end.wetKg !== null && <span className="tabular-nums">{outputStockFigure(day.end.wetKg, day.end.dryKg)} at day end</span>}
     </h4>
   );
 }

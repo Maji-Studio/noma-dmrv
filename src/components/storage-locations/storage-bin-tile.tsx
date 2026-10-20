@@ -182,7 +182,7 @@ export function StorageBinTile({
                     : "text-[var(--color-text-primary)]"
               }`}
             >
-              {!loading && <TileFigure feedstock={bin.type === "feedstock_bin"} archived={isArchived} massKg={massKg} wetEstimateKg={wetEstimateKg} />}
+              {!loading && <TileFigure feedstock={bin.type === "feedstock_bin"} massKg={massKg} wetEstimateKg={wetEstimateKg} />}
             </span>
             {needsReconciliation && (
               <ReconcileLink bin={bin} onReconcile={onReconcile} />
@@ -207,12 +207,11 @@ export function StorageBinTile({
  * the sheet shows. An archived bin has no stock read, so the dry biochar it
  * holds is its one figure.
  */
-function TileFigure({ feedstock, archived, massKg, wetEstimateKg }: { feedstock: boolean; archived: boolean; massKg: number | null; wetEstimateKg: number | null }) {
-  if (!feedstock && wetEstimateKg != null && wetEstimateKg > 0) return outputStockFigure(wetEstimateKg, massKg);
+function TileFigure({ feedstock, massKg, wetEstimateKg }: { feedstock: boolean; massKg: number | null; wetEstimateKg: number | null }) {
+  if (!feedstock && wetEstimateKg != null && wetEstimateKg > 0) return outputStockFigure(wetEstimateKg, 0);
   if (massKg == null) return MISSING_VALUE.notAvailable;
   if (massKg === 0) return "Empty";
   if (feedstock) return `${formatMassKg(massKg)} wet mass`;
-  if (archived) return `${formatMassKg(massKg)} dry biochar`;
   return outputStockFigure(wetEstimateKg, massKg);
 }
 

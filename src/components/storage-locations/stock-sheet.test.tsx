@@ -60,9 +60,9 @@ it("keeps old counts and corrections readable, folds reversals, groups days and 
   expect(renderer.root.findAllByType("a").map(link => link.props.href)).toEqual([stockSourceHref({ entity: "delivery", id: "delivery-id" }, FACILITY_ID),
     "#output-movement-loss", "#output-movement-fixed"]);
   // One day heading for the loss and correction, one for the following day's actions. These entries carry no wet
-  // figure, so no heading shows a stock at day end, and none falls back to the dry biochar.
+  // figure, so no heading shows a stock at day end (a replayed dry balance here would read below zero).
   expect(renderer.root.findAllByType("h4").map(text)).toHaveLength(2);
-  expect(renderer.root.findAllByType("h4").some(node => /at day end|dry biochar/.test(text(node)))).toBe(false);
+  expect(renderer.root.findAllByType("h4").some(node => /at day end/.test(text(node)))).toBe(false);
   await act(async () => renderer.unmount());
 });
 

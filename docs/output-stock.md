@@ -109,7 +109,7 @@ shares, including physical residuals whose dry grams were already attributed.
 
 ## Operator stock sheets
 
-Every bin uses the same stock card and a separate Stock over time card. The headline reads "200 kg wet mass" with "90 kg dry biochar" under it. Every run and product enters its bin with a wet mass (a product's moisture is required, and `production_runs_complete_has_output` refuses a complete run without moisture, output above zero and a bin), so the headline never falls back to the dry biochar; a wet figure the read cannot derive shows Not available. No approximation sign and no "estimated" in the figures. "Estimated" lives in the details, the chart key and the ⓘ tooltip, and the line under the bays says how they are drawn. Split
+Every bin uses the same stock card and a separate Stock over time card. The headline reads "200 kg wet mass" with "90 kg dry biochar" under it. Every run and product enters its bin with a wet mass (a product's moisture is required, and `production_runs_complete_has_output` refuses a complete run without moisture, output above zero and a bin), so the headline is always the wet mass. A wet figure that is still missing would be a defect; the known dry biochar then stands in, never a placeholder. No approximation sign and no "estimated" in the figures. "Estimated" lives in the details, the chart key and the ⓘ tooltip, and the line under the bays says how they are drawn. Split
 output bins show fixed-width bays in the bin's default draw order, wrapping when
 needed, with a key below. Mix and feedstock bins show one pile. A lone vessel
 fills against the configured capacity and lists its parts beside it. Multiple
