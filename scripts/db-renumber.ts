@@ -15,6 +15,7 @@ const CLI_ARGUMENTS_START = 2;
 const SINGLE_MIGRATION_COUNT = 1;
 const OFFLINE_DATABASE_URL = "postgresql://offline.invalid/none";
 const SAFE_MIGRATION_TAG = /^[\w-]+$/;
+const STATEMENT_BREAKPOINT = "--> statement-breakpoint";
 const BACKUP_ROOT = "node_modules/.cache/db-renumber";
 
 function printFollowUp(): void {
@@ -98,7 +99,10 @@ function main(): void {
     if (!existsSync(generatedFile)) {
       // No schema diff: the branch migration was hand-written SQL only (triggers, functions, data).
       generate(["--custom"]);
-      writeFileSync(generatedFile, previousSql);
+      const allSql = branchOnly
+        .map((tag) => readFileSync(join(backupDirectory!, `${tag}.sql`), "utf8"))
+        .join(`\n${STATEMENT_BREAKPOINT}\n`);
+      writeFileSync(generatedFile, allSql);
       console.log("No schema changes found; kept the hand-written SQL as a custom migration.");
     } else if (readFileSync(generatedFile).equals(previousSql)) {
       console.log("Generated SQL is identical to the last branch migration's backed-up SQL.");
