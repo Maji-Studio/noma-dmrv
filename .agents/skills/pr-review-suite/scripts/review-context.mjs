@@ -40,6 +40,6 @@ export function materializeGlobalDesignSkill(artifactDir) {
   writeFileSync(absolute, content);
   return {
     designGlobalSkill: source,
-    contextFile: { path: GLOBAL_DESIGN_SKILL_PATH, absolute },
+    contextFile: { path: GLOBAL_DESIGN_SKILL_PATH, absolute, source: "global" },
   };
 }

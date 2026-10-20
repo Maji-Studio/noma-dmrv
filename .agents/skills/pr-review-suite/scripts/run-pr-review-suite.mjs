@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { selfTestDesignContext } from "./review-context-self-test.mjs";
+import { selfTestDesignContext, selfTestDesignRuntime } from "./review-context-self-test.mjs";
 import {
   materializeGlobalDesignSkill,
   selectDesignContextPaths,
@@ -600,84 +600,7 @@ async function selfTest() {
     join(SKILL_ROOT, "references/practices.md"),
     "utf8",
   );
-  if (
-    !parseArgs(["--plan", "--practices", "design"]).practices.includes("design") ||
-    !REVIEW_SCHEMA.properties.practice.enum.includes("design") ||
-    displayPractice("design") !== "Design"
-  ) {
-    throw new Error("Design selection/schema self-test failed");
-  }
-  const selectionCases = [
-    [["src/example.ts"], reference, "No UI files changed"],
-    [["src/components/foo.tsx"], reference, undefined],
-    [["src/components/foo.test.tsx"], reference, "No UI files changed"],
-    ...["jsx", "css", "scss", "html", "vue", "svelte"].map((extension) =>
-      [[`src/foo.${extension}`], reference, undefined]),
-    ...["e2e", "tests", "__tests__", "__mocks__"].map((directory) =>
-      [[`src/${directory}/foo.tsx`], reference, "No UI files changed"]),
-    [["src/foo.spec.tsx"], reference, "No UI files changed"],
-    [["src/tests-helper/foo.tsx", "src/foo.test.tsx"], reference, undefined],
-    [["src/foo.tsx"], undefined, "No Design practice in the base branch"],
-    [["src/foo.tsx"], reference.replace(/^## Design$/gm, "## Other"), "No Design practice in the base branch"],
-  ];
-  for (const [changedFiles, basePracticeReference, reason] of selectionCases) {
-    const selection = selectPractices({
-      practices: DEFAULT_PRACTICES, spec: undefined, changedFiles, basePracticeReference,
-    });
-    if (
-      selection.skippedPractices.get("design") !== reason ||
-      selection.practices.includes("design") !== (reason === undefined) ||
-      selection.skippedPractices.get("spec") !== "No spec available" ||
-      selection.practices.length !== (reason ? 2 : 3)
-    ) {
-      throw new Error(`practice selection self-test failed for ${changedFiles}`);
-    }
-    const selectionReport = aggregateReport({
-      pr: { number: 1, url: "https://github.com/example/repo/pull/1", baseRefName: "staging" },
-      baseSha: "a".repeat(40), headSha: "b".repeat(40), reports: [],
-      skippedPractices: selection.skippedPractices,
-    });
-    if (
-      !selectionReport.includes("_No spec available; practice skipped._") ||
-      !selectionReport.includes("**Spec:** skipped; no spec available.") ||
-      (reason && (!selectionReport.includes(`_${reason}; practice skipped._`) ||
-        !selectionReport.includes(`**Design:** skipped; ${reason[0].toLowerCase()}${reason.slice(1)}.`)))
-    ) {
-      throw new Error("practice skip reason self-test failed");
-    }
-  }
-  const contextFiles = [
-    { path: "GLOSSARY.md", absolute: "/artifacts/base-context/GLOSSARY.md" },
-  ];
-  for (const practice of DEFAULT_PRACTICES) {
-    const practiceDefinition = extractPracticeDefinition(reference, practice);
-    if (!practiceDefinition.startsWith(`## ${displayPractice(practice)}`)) {
-      throw new Error(`practice definition self-test failed for ${practice}`);
-    }
-    const prompt = createPrompt({
-      practice,
-      model: "codex",
-      pr: { number: 1, title: "Example", body: "Body" },
-      baseRef: "a".repeat(40),
-      baseSha: "a".repeat(40),
-      headSha: "b".repeat(40),
-      diff: {
-        diffRange: "base...HEAD",
-        changedFiles: ["src/example.ts"],
-        commits: "abc1234 example",
-        patch: "diff --git a/src/example.ts b/src/example.ts",
-      },
-      contextFiles,
-      spec: undefined,
-      practiceDefinition,
-    });
-    if (
-      !prompt.includes(practiceDefinition) ||
-      !prompt.includes(contextFiles[0].absolute)
-    ) {
-      throw new Error(`prompt self-test failed for ${practice}`);
-    }
-  }
+  selfTestDesignRuntime(reference);
   const generated = (path) => GENERATED_PAYLOAD_GLOBS.some((glob) => matchesScope(path, glob));
   if (
     !generated("drizzle/meta/0121_snapshot.json") ||
@@ -804,20 +727,23 @@ async function main() {
     basePracticeReference,
   });
   const selectedContext = await selectContext(base.name, diff.changedFiles, cwd);
+  const contextFiles = await materializeBaseContext(
+    base.name, selectedContext, artifactDir, cwd,
+  );
+  const designContextFiles = [];
   if (practices.includes("design")) {
     const basePaths = await git(
       ["ls-tree", "-r", "--name-only", "-z", base.name, "--", ".agents/skills"],
       { cwd },
     );
-    selectedContext.push(...selectDesignContextPaths(basePaths.stdout.split("\0"), practices));
+    designContextFiles.push(...await materializeBaseContext(
+      base.name, selectDesignContextPaths(basePaths.stdout.split("\0"), practices), artifactDir, cwd,
+    ));
   }
-  const contextFiles = await materializeBaseContext(
-    base.name, [...new Set(selectedContext)], artifactDir, cwd,
-  );
   const globalDesign = practices.includes("design")
     ? materializeGlobalDesignSkill(artifactDir)
     : {};
-  if (globalDesign.contextFile) contextFiles.push(globalDesign.contextFile);
+  if (globalDesign.contextFile) designContextFiles.push(globalDesign.contextFile);
 
   const metadata = {
     generatedAt: new Date().toISOString(),
@@ -835,6 +761,7 @@ async function main() {
     },
     spec,
     contextFiles,
+    designContextFiles,
     designGlobalSkill: globalDesign.designGlobalSkill,
     practiceReferenceSource,
     models: options.models,
@@ -859,7 +786,7 @@ async function main() {
         baseSha: base.sha,
         headSha,
         diff,
-        contextFiles,
+        contextFiles: practice === "design" ? [...contextFiles, ...designContextFiles] : contextFiles,
         spec,
         practiceDefinition: extractPracticeDefinition(
           practiceReference,
