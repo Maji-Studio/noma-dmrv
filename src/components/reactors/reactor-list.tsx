@@ -270,10 +270,9 @@ export function ReactorList() {
           isLoading={isLoading}
         />
         <StatCard
-          title="Throughput on this page"
+          title="Nominal throughput on this page"
           value={totalThroughputValue}
           icon={<FlaskIcon size={24} weight="bold" />}
-          description="Combined nominal throughput"
           isLoading={isLoading}
         />
       </div>

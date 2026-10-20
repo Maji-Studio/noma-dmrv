@@ -643,7 +643,7 @@ export function ApplicationForm({
       <FormSection
         title="Supporting evidence"
         icon={<FileIcon size={14} weight="bold" />}
-        hint="Optional."
+        hint="Optional. Add images or documents that support this application."
       >
         <ApplicationSupportingEvidencePanel
           applicationId={application?.id}

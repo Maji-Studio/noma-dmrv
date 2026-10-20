@@ -122,6 +122,10 @@ export function IsometricFeedstockBrowser({
 
   return (
     <div className="flex flex-col gap-12">
+      <p className="body-caption text-[var(--color-text-tertiary)]">
+        Choose the certified Isometric feedstock first. noma fills in its
+        details, then you choose the category and save.
+      </p>
       <ul
         className="max-h-[320px] overflow-y-auto border border-[var(--color-border-secondary)] divide-y divide-[var(--color-border-tertiary)]"
         data-testid="isometric-feedstock-list"

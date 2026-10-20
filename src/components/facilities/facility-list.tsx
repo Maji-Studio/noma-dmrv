@@ -286,6 +286,7 @@ export function FacilityList() {
           title={showArchived ? "Archived facilities" : "Active facilities"}
           value={totalFacilities}
           icon={<FactoryIcon size={24} weight="bold" />}
+          description="Matching the current filters"
           isLoading={isLoading}
         />
         <StatCard
