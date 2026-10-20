@@ -9,12 +9,13 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment } from "react";
 import { CertificateIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
+import { Popover } from "@/components/ui/popover";
+import { formatDateRange } from "@/lib/format-utils";
 import { FormFooterPreview } from "@/components/forms/form-footer-preview";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
-import { CREDIT_BATCH_INFO_LABEL, type CreditBatchLineCopy } from "./credit-batch-line-copy";
+import { CREDIT_BATCH_INFO_LABEL, type CreditBatchLineBatch, type CreditBatchLineCopy } from "./credit-batch-line-copy";
 
 export interface CreditBatchLineProps {
   copy: CreditBatchLineCopy;
@@ -26,7 +27,59 @@ export interface CreditBatchLineProps {
   retrying?: boolean;
 }
 
+/** A batch code as a link; a new tab, so the unsaved form stays open. */
+function BatchLink({ batch, facilityId }: { batch: CreditBatchLineBatch; facilityId?: string | null }) {
+  return (
+    <Link
+      href={creditBatchDeepLinkHref(batch.id, facilityId ?? undefined)}
+      target="_blank"
+      rel="noreferrer"
+      className="font-mono text-[var(--clr-dark-purple)] underline underline-offset-2"
+    >
+      {batch.code}
+      <span className="sr-only"> (opens in a new tab)</span>
+    </Link>
+  );
+}
+
+/** "+N": lists every batch and date window. The hit area is 44px tall and at least 24px wide, extending right from the button's left edge to avoid the preceding batch link. */
+function MoreBatches({ batches, rest, facilityId }: { batches: CreditBatchLineBatch[]; rest: number; facilityId?: string | null }) {
+  return (
+    <>
+      {" "}
+      <Popover
+        title="Credit batches"
+        align="start"
+        trigger={
+          <button
+            type="button"
+            aria-label={`Show all ${batches.length} credit batches`}
+            className="relative cursor-pointer text-[var(--clr-dark-purple)] after:absolute after:left-0 after:top-1/2 after:h-44 after:w-full after:min-w-24 after:-translate-y-1/2 after:content-[''] underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-interaction)]"
+          >
+            +{rest}
+          </button>
+        }
+      >
+        <ul className="flex flex-col gap-8">
+          {batches.map((batch) => (
+            <li key={batch.id} className="flex flex-col">
+              <BatchLink batch={batch} facilityId={facilityId} />
+              {batch.startDate && batch.endDate && (
+                <span className="body-caption text-[var(--color-text-tertiary)]">
+                  {formatDateRange(batch.startDate, batch.endDate)}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </Popover>
+    </>
+  );
+}
+
 export function CreditBatchLine({ copy, facilityId, onRetry, retrying = false }: CreditBatchLineProps) {
+  const [first] = copy.batches;
+  const rest = copy.batches.length - 1;
   return (
     <FormFooterPreview
       icon={CertificateIcon}
@@ -40,21 +93,8 @@ export function CreditBatchLine({ copy, facilityId, onRetry, retrying = false }:
       ) : undefined}
     >
       {copy.lead}
-      {copy.batches.map((batch, index) => (
-        <Fragment key={batch.id}>
-          {index > 0 && ", "}
-          {/* A new tab, so the unsaved form stays open. */}
-          <Link
-            href={creditBatchDeepLinkHref(batch.id, facilityId ?? undefined)}
-            target="_blank"
-            rel="noreferrer"
-            className="font-mono text-[var(--clr-dark-purple)] underline underline-offset-2"
-          >
-            {batch.code}
-            <span className="sr-only"> (opens in a new tab)</span>
-          </Link>
-        </Fragment>
-      ))}
+      {first && <BatchLink batch={first} facilityId={facilityId} />}
+      {rest > 0 && <MoreBatches batches={copy.batches} rest={rest} facilityId={facilityId} />}
       {copy.tail}
     </FormFooterPreview>
   );
