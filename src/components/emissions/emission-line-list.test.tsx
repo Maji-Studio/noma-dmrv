@@ -90,9 +90,9 @@ describe("EmissionLineList", () => {
     expect(rowTotal.className).toContain("max-md:hidden");
   });
 
-  it("points Not set up lines at the template review", () => {
+  it("points Not set up lines at Removal templates", () => {
     renderList([makeLine({ state: "needsSetup" })]);
-    expect(screen.getByRole("link", { name: "An admin sets this line up in the template review" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open Removal templates" })).toBeTruthy();
   });
 
   it("says which chip hides every line", () => {
@@ -139,7 +139,7 @@ describe("EmissionLineList", () => {
   it("folds a line with nothing yet into one sentence and offers Add manual entry once", () => {
     renderList([makeLine()], true, ["line-1"]);
     const body = screen.getByRole("region", { name: /details/ });
-    expect(within(body).getByText("No records source and no manual entries yet.")).toBeTruthy();
+    expect(within(body).getByText("No automatic datapoints and no manual entries yet.")).toBeTruthy();
     expect(within(body).queryByRole("table")).toBeNull();
     expect(screen.getAllByRole("button", { name: /Add manual entry/ })).toHaveLength(1);
     expect(within(body).getByRole("button", { name: "Add comment" })).toBeTruthy();
@@ -187,7 +187,7 @@ describe("EmissionLineList", () => {
 
   it("shows Add manual entry as a quiet link in an empty Sources cell", () => {
     const actions = renderList([makeLine()]);
-    expect(screen.queryByText("No records source")).toBeNull();
+    expect(screen.queryByText("No automatic datapoints")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Add manual entry on Metered electricity use emissions" }));
     expect(actions.form).toHaveBeenCalledWith(expect.anything(), { kind: "add" });
     expect(actions.toggle).not.toHaveBeenCalled();
@@ -195,7 +195,7 @@ describe("EmissionLineList", () => {
 
   it("keeps the quiet Sources text when the line cannot take an entry", () => {
     renderList([makeLine()], false);
-    expect(screen.getByText("No records source")).toBeTruthy();
+    expect(screen.getByText("No automatic datapoints")).toBeTruthy();
   });
 
   it("hides Add manual entry when manual entries are off or the line takes none", () => {

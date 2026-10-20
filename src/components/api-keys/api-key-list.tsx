@@ -7,7 +7,7 @@ import type { ApiKeyListItem } from "@/hooks/use-api-keys";
 import { scopesFromPermissions } from "@/lib/auth/api-scopes";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDateTime } from "@/lib/format-utils";
-import { permissionSummary } from "./api-key-permissions";
+import { compactPermissionSummary } from "./api-key-permissions";
 
 function keyStatus(key: ApiKeyListItem) {
   if (!key.enabled) return "disabled";
@@ -44,7 +44,7 @@ export function ApiKeyList({ keys, onEdit, onRevoke }: {
             details={
               <OrganizationRosterDetails items={[
                 { label: "Owner", value: key.ownerName },
-                { label: "Permissions", value: permissionSummary(scopesFromPermissions(key.permissions)) },
+                { label: "Permissions", value: compactPermissionSummary(scopesFromPermissions(key.permissions)) },
                 { label: "Created", value: formatDateTime(key.createdAt) },
                 { label: "Last used", value: formatDateTime(key.lastUsedAt) },
                 { label: "Expires", value: formatDateTime(key.expiresAt) },

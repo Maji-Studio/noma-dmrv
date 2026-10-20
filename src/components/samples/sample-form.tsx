@@ -197,6 +197,8 @@ export function SampleForm({
   const watchedTotalCarbonPercent = watch("totalCarbonPercent");
   const watchedOrganicCarbonPercent = watch("organicCarbonPercent");
   const watchedInorganicCarbonPercent = watch("inorganicCarbonPercent");
+  const watchedReactiveCarbonPercent = watch("reactiveCarbonPercent");
+  const watchedResidualCarbonPercent = watch("residualCarbonPercent");
   const watchedOToCOrgRatio = watch("oToCOrgRatio");
   const watchedNutrientClaimEnabled = watch("nutrientClaimEnabled");
 
@@ -270,6 +272,8 @@ export function SampleForm({
     totalCarbonPercent: watchedTotalCarbonPercent,
     organicCarbonPercent: watchedOrganicCarbonPercent,
     inorganicCarbonPercent: watchedInorganicCarbonPercent,
+    reactiveCarbonPercent: watchedReactiveCarbonPercent,
+    residualCarbonPercent: watchedResidualCarbonPercent,
   });
   const organicCarbonError =
     liveCarbonErrors.organicCarbonPercent ??
@@ -277,6 +281,9 @@ export function SampleForm({
   const inorganicCarbonError =
     liveCarbonErrors.inorganicCarbonPercent ??
     errors.inorganicCarbonPercent?.message;
+  const residualCarbonError =
+    liveCarbonErrors.residualCarbonPercent ??
+    errors.residualCarbonPercent?.message;
 
   // O:Corg is the only typed ratio; H:Corg is always derived, so it reads as a
   // figure in the derived line below rather than as an input nobody can edit.
@@ -895,7 +902,7 @@ export function SampleForm({
                     id="residualCarbonPercent"
                     label="Residual carbon"
                     unit="%"
-                    error={errors.residualCarbonPercent?.message}
+                    error={residualCarbonError}
                     certifyRequired={isSampleCertifyField("residualCarbonPercent")}
                     certifyStatus={certStatus("residualCarbonPercent")}
                   >
@@ -905,7 +912,7 @@ export function SampleForm({
                       {...numberBounds("residualCarbonPercent")}
                       placeholder="e.g., 85.0"
                       disabled={isSubmitting}
-                      error={!!errors.residualCarbonPercent}
+                      error={!!residualCarbonError}
                       {...register("residualCarbonPercent", {
                         setValueAs: numericValue,
                       })}

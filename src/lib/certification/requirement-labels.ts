@@ -1,3 +1,4 @@
+import type { RemovalBlockerCode } from "./removal-blockers";
 /**
  * One plain-language source for every certification readiness requirement
  * (Phase 0 of the removal/GHG "legible + guided" redesign, rides #246).
@@ -38,7 +39,8 @@ export type CertRequirementKey =
   | "mapping"
   | "credentials"
   | "emissions"
-  | "template"
+  | "templateSet"
+  | "templateLines"
   | "evidence"
   | "durability";
 
@@ -64,6 +66,14 @@ export interface CertRequirementMeta {
 
 /** The template check's unmet label when the batch has no Removal template at all. */
 export const NO_REMOVAL_TEMPLATE_LABEL = "No Removal template chosen";
+
+/** The unmet Emissions label when an entry needs checking rather than a file. */
+export const EMISSION_ENTRIES_TO_CHECK_LABEL = "Emissions entries to check";
+
+/** The unmet Lines decided label when no line is undecided: the read or the lines are the problem. */
+export const TEMPLATE_LINES_NOT_READY_LABEL = "Template lines not ready";
+
+export const TEMPLATE_NOT_FULLY_READ_TITLE = "Template not fully read";
 
 export const CERT_REQUIREMENT_META: Record<
   CertRequirementKey,
@@ -131,14 +141,20 @@ export const CERT_REQUIREMENT_META: Record<
   },
   emissions: {
     requirementLabel: "Emissions",
-    unmetLabel: "Emission entries without a file",
+    unmetLabel: "Emissions entries without a file",
     whyDetail: "Emissions entries with a value need a file before the Removal can be submitted.",
   },
-  template: {
-    requirementLabel: "Removal template resolved",
-    unmetLabel: "Removal template has unresolved parts",
+  templateSet: {
+    requirementLabel: "Template set",
+    unmetLabel: "Template cannot be used",
     whyDetail:
-      "The facility's default Removal template defines the inputs and transport categories the registry expects. Every referenced component must be available before a Removal can be assembled.",
+      "Each credit batch uses one Removal template from the facility's Isometric project. Removals are built from that template, so Isometric must still list it as a Removal template.",
+  },
+  templateLines: {
+    requirementLabel: "Lines decided",
+    unmetLabel: TEMPLATE_LINES_NOT_READY_LABEL,
+    whyDetail:
+      "noma fills each template line from its records or from emissions entries, as decided in Removal templates. A line without a decision, or a template Isometric did not return in full, blocks Removals on that template.",
   },
   evidence: {
     requirementLabel: "Registry value sources linked",
@@ -156,6 +172,17 @@ export const CERT_REQUIREMENT_META: Record<
 
 /** Suffix that turns a per-field entity readiness label ("Proof of delivery") into its unmet form. */
 export const ENTITY_FIELD_UNMET_SUFFIX = "not complete";
+
+/** "3 lines to decide", the one phrase every template surface counts with. */
+export function linesToDecideLabel(count: number): string {
+  return `${count} ${count === 1 ? "line" : "lines"} to decide`;
+}
+
+/** A count names undecided lines; otherwise name the read or filling problem. */
+export function templateLinesUnmetLabel(lineCount: number, codes: readonly RemovalBlockerCode[] = []): string {
+  if (lineCount > 0) return linesToDecideLabel(lineCount);
+  return codes.includes("templateNotFullyRead") ? TEMPLATE_NOT_FULLY_READ_TITLE : TEMPLATE_LINES_NOT_READY_LABEL;
+}
 
 /** The unmet form of a per-field entity readiness label: "Proof of delivery not complete". */
 export function entityFieldUnmetLabel(fieldLabel: string): string {

@@ -52,7 +52,7 @@ function formatInstruction(input: UnbindableTemplateInput, count = 1): string {
   if (input.reason === "project-scope" || input.reason === "unrecognized-component") {
     return `Add ${target} as a project component in Isometric, then remove ${plural ? "them" : "it"} from the Removal template.`;
   }
-  if (input.reason === "ambiguous") return `${REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview} Choose a different automatic source for each line.`;
+  if (input.reason === "ambiguous") return `${REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview} Give each line its own automatic datapoints.`;
   if (input.blueprintKey === TRANSPORT_BLUEPRINT_KEY) return LINE_TRANSPORT_REPLACEMENT_MESSAGE.replace("Replace it", `Replace ${target}`);
   return LINE_NO_MAPPING_MESSAGE;
 }

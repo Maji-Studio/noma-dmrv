@@ -37,6 +37,8 @@ export interface RemovalCertifyContext {
   removalTemplate: IsometricGhgEntryTemplate | null;
   lineSources: LineSources;
   templateBlockers: RemovalTemplateBlocker[];
+  /** Current template lines without a saved, unambiguous decision. */
+  undecidedLineIds?: readonly string[];
   emissionLinesByBatchId?: Record<string, BatchEmissionLine[]>;
   emissionLines?: BatchEmissionLine[] | null;
   blueprintsForTemplate: IsometricComponentBlueprint[];
@@ -92,6 +94,8 @@ export interface RemovalCertifyContext {
   // A submit attempt opened the registry boundary (Source mirroring) before
   // any ledger row existed. Deletion treats it as registry exposure.
   registryBoundaryOpened: boolean;
+  /** A fresh Removal deletion lease hides Delete for every viewer. */
+  deletionInProgress: boolean;
   // The GHG Statement this removal rolls into + its verifier status, or null
   // when the removal isn't linked to one. See `LinkedGhgStatementStatus`.
   linkedGhgStatement: LinkedGhgStatementStatus | null;
