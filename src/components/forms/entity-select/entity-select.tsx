@@ -343,7 +343,7 @@ function EntitySelectView({
     : undefined;
   // The trigger's aria-label names the field, which hides its content from
   // the accessible name. The selected label can carry the stock change
-  // ("(−100 kg wet)"), so it is announced as the first description instead.
+  // ("(−100 kg wet mass)"), so it is announced as the first description instead.
   const triggerDescribedBy = [
     ariaDescribedBy,
     displayText ? selectedLabelId : undefined,

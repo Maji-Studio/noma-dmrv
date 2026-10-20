@@ -97,7 +97,7 @@ export function processFlowDiagram(props: ProcessFlowProps): MassFlowDiagram | n
     const lossKg = Math.max(0, feedstockKg - biocharKg);
     return {
       nodes: [
-        { id: "source", column: 0, ...source, caption: `${formatMassKg(feedstockKg)} wet`, segments: [{ id: "feed", kg: feedstockKg, kind: "wet" }] },
+        { id: "source", column: 0, ...source, caption: `${formatMassKg(feedstockKg)} wet mass`, segments: [{ id: "feed", kg: feedstockKg, kind: "wet" }] },
         {
           id: "reactor",
           column: 1,
@@ -107,7 +107,7 @@ export function processFlowDiagram(props: ProcessFlowProps): MassFlowDiagram | n
             { id: "made", kg: biocharKg, kind: "process" },
           ],
         },
-        { id: "destination", column: 2, ...destination, caption: `${formatMassKg(biocharKg)} wet`, segments: [{ id: "biochar", kg: biocharKg, kind: "wet" }] },
+        { id: "destination", column: 2, ...destination, caption: `${formatMassKg(biocharKg)} wet mass`, segments: [{ id: "biochar", kg: biocharKg, kind: "wet" }] },
       ],
       links: [
         { from: "feed", to: "reactor" },
@@ -127,7 +127,7 @@ export function processFlowDiagram(props: ProcessFlowProps): MassFlowDiagram | n
         id: "source",
         column: 0,
         ...source,
-        caption: `${formatMassKg(feedstockKg)} wet, ${formatMassKg(feedstockDryKg)} dry`,
+        caption: `${formatMassKg(feedstockKg)} wet mass, ${formatMassKg(feedstockDryKg)} dry`,
         segments: [
           { id: "feed-water", kg: feedWaterKg, kind: "water" },
           { id: "feed-dry", kg: feedstockDryKg, kind: "dry" },
@@ -146,7 +146,7 @@ export function processFlowDiagram(props: ProcessFlowProps): MassFlowDiagram | n
         id: "destination",
         column: 2,
         ...destination,
-        caption: `${formatMassKg(biocharKg)} wet, ${formatMassKg(biocharDryKg)} dry`,
+        caption: `${formatMassKg(biocharKg)} wet mass, ${formatMassKg(biocharDryKg)} dry`,
         segments: [
           { id: "biochar-dry", kg: biocharDryKg, kind: "dry" },
           { id: "biochar-water", kg: showBiocharWater ? biocharWaterKg : 0, kind: "addedWater" },

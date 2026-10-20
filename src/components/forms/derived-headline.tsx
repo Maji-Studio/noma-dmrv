@@ -2,7 +2,7 @@
  * DerivedHeadline — the one figure a derived block leads with.
  *
  * A caption line naming the figure, the figure itself, and an optional caption
- * line under it for the entry that produced it ("310 kg wet removed at 22.7%
+ * line under it for the entry that produced it ("310 kg wet mass removed at 22.7%
  * moisture"). Pass `before` to show a change: the old value muted, an arrow,
  * then the new value. One per block at most; everything else in the block is a
  * picture, a key line or a calculation row.

@@ -16,7 +16,7 @@ const REASON_REQUIRED = "Enter why you delete this entry.";
 const CONFLICT_MESSAGE = "This entry was already changed from this dialog. Close it and check the stock history.";
 
 interface LossDeleteDialogProps {
-  /** The entry's own size as the history shows it, such as "120 kg wet". */
+  /** The entry's own size as the history shows it, such as "120 kg wet mass". */
   amount: string;
   occurredAt: string;
   storageLocationId: string;
@@ -93,7 +93,7 @@ interface EntryDialogProps<Entry> {
 export function FeedstockLossDeleteDialog({ entry, ...props }: EntryDialogProps<FeedstockLedgerEntry>) {
   const remove = useRemoveLoss();
   const massKg = entry.wetDeltaKg === null ? null : Math.abs(entry.wetDeltaKg);
-  return <LossDeleteDialog {...props} remove={remove} movementId={entry.id} occurredAt={entry.occurredAt} amount={`${formatMassKg(massKg)} wet`} />;
+  return <LossDeleteDialog {...props} remove={remove} movementId={entry.id} occurredAt={entry.occurredAt} amount={`${formatMassKg(massKg)} wet mass`} />;
 }
 
 /** An output bin names the entry the way its history line does: wet when weighed wet, else dry. */

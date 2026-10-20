@@ -44,7 +44,7 @@ import { requireOrgScope } from "../utils";
 
 
 /**
- * Bin option subtitle, in the words of the selected bin's caption: "≈ 277 kg wet, 249.6 kg dry biochar".
+ * Bin option subtitle, in the words of the selected bin's caption: "≈ 277 kg wet mass, 249.6 kg dry biochar".
  * Product bins lead with their formulation so bins with similar names stay distinguishable.
  */
 function outputBinStockSubtitle(

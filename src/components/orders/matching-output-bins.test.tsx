@@ -92,7 +92,7 @@ describe("MatchingOutputBins", () => {
     state.bins = [{ id: "bin", code: "B1", name: "Bin", dryMassKg: 100, estimatedWetMassKg: 118 }];
     const html = renderList();
     expect(html).toContain("Available wet stock, estimate");
-    expect(html).toContain("118 kg wet");
+    expect(html).toContain("118 kg wet mass");
     expect(html).toContain("Wet mass added less wet mass taken out");
     expect(html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")).toContain("100 kg dry biochar");
   });

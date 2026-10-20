@@ -157,7 +157,7 @@ test.describe("Output-bin conserved FIFO", () => {
     await fillStockMoisture(page, "delivery", "30");
     // Simple shows the preview headline and picture; Detailed adds the dry
     // pair and the calculation. Stock history lives on the storage bin.
-    await expect(preview.getByText("2,000 kg wet loaded at 30% moisture", { exact: true })).toBeVisible();
+    await expect(preview.getByText("2,000 kg wet mass loaded at 30% moisture", { exact: true })).toBeVisible();
     await expect(preview.getByRole("button", { name: "Stock history", exact: true })).toHaveCount(0);
     await expect(preview.getByRole("group", { name: "Dry biochar in bin: 1,500 kg before, 350 kg after" })).toBeHidden();
     await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
@@ -165,7 +165,7 @@ test.describe("Output-bin conserved FIFO", () => {
     // is the dry biochar the bin tracks; the bar names solids for that reason.
     // Wet first: the bin's wet estimate leads, captioned by the load as entered.
     await expect(preview.getByText("Wet stock in bin, estimate", { exact: true })).toBeVisible();
-    await expect(preview.getByText("2,000 kg wet loaded at 30% moisture", { exact: true })).toBeVisible();
+    await expect(preview.getByText("2,000 kg wet mass loaded at 30% moisture", { exact: true })).toBeVisible();
     await expect(preview.getByText(/Dry solids\s+1,400 kg/)).toBeVisible();
     await expect(preview.getByRole("group", { name: "Dry biochar in bin: 1,500 kg before, 350 kg after" })).toBeVisible();
     const draw = preview.getByRole("table", { name: /^Batches this movement draws from/ });
@@ -238,9 +238,9 @@ test.describe("Output-bin conserved FIFO", () => {
     await page.getByRole("button", { name: "Adjust stock", exact: true }).click();
     await fillStock(page, "120", "30", "E2E FIFO spill");
     await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
-    await expect(page.getByText("120 kg wet lost at 30% moisture", { exact: true })).toBeVisible();
+    await expect(page.getByText("120 kg wet mass lost at 30% moisture", { exact: true })).toBeVisible();
     await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
-    await expect(page.getByText("120 kg wet lost at 30% moisture", { exact: true })).toBeVisible();
+    await expect(page.getByText("120 kg wet mass lost at 30% moisture", { exact: true })).toBeVisible();
     await expect(page.getByRole("group", { name: "Dry biochar in bin: 350 kg before, 280 kg after" })).toBeVisible();
     await page.getByRole("button", { name: "Save lost mass", exact: true }).last().click();
     await expect(page.getByRole("dialog")).toHaveCount(0);

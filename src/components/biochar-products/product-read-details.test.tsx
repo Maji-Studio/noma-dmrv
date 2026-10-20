@@ -74,7 +74,7 @@ describe("Product read view levels", () => {
     const flows = renderer.root.findAll(node => node.props["data-mass-flow"] !== undefined && typeof node.type === "string");
     expect(flows).toHaveLength(1);
     expect(text(flows[0]).trim()).toBe(
-      "Biochar 250 kg wet Chicken manure 100 kg wet Water added 50 kg Wet biochar product 400 kg " +
+      "Biochar 250 kg wet mass Chicken manure 100 kg wet mass Water added 50 kg Wet biochar product 400 kg " +
         "Dry biochar 200 kg (50%) Chicken manure solids 80 kg (20%) Water 70 kg (18%) Water added 50 kg (12%)",
     );
     // Dry figures are data: a secondary line under each wet mass.

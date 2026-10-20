@@ -111,9 +111,9 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
   const estimatedMoisturePercent = currentWetKg > 0 && estimatedDryKg !== null ? Math.max(0, (currentWetKg - estimatedDryKg) / currentWetKg * PERCENT) : null;
   const waterKg = estimatedDryKg === null ? null : Math.max(currentWetKg - estimatedDryKg, 0);
   const bands: PileBand[] = (stock.data?.batches ?? []).filter((batch) => batch.wetKg > 0).map((batch) => ({ label: batch.code, kg: estimatedDryKg === null ? batch.wetKg : batch.dryKg ?? 0, details: [
-    { label: "In the pile now", value: `${formatMassKg(batch.wetKg)} wet` },
+    { label: "In the pile now", value: `${formatMassKg(batch.wetKg)} wet mass` },
     { label: "Share of the pile", value: currentWetKg > 0 ? `${Math.round((batch.wetKg / currentWetKg) * PERCENT)}%` : MISSING_VALUE.notAvailable },
-    { label: "Received", value: `${formatMassKg(batch.intakeWetKg)} wet` },
+    { label: "Received", value: `${formatMassKg(batch.intakeWetKg)} wet mass` },
     { label: "Moisture at intake", value: batch.moisturePercent === null ? MISSING_VALUE.notAvailable : formatMoisturePercent(batch.moisturePercent) },
     { label: "Received on", value: formatFacilityDateTime(batch.receivedAt, clock.timeZone) },
   ] }));

@@ -85,7 +85,7 @@ describe("OutputStockPreview", () => {
 
   it("captions an addition as added and splits the wet mass it received", () => {
     const html = renderToStaticMarkup(<OutputStockPreview preview={{ ...rain, removedDryKg: -70, removedWetKg: -100, allocations: [], beforeAllocations: [], afterAllocations: [{ layerId: "new", code: "New product", wetMassKg: 100, dryMassKg: 70, runs: [] }] }} />);
-    expect(html).toContain("100 kg wet added");
+    expect(html).toContain("100 kg wet mass added");
     expect(html).toContain("Dry solids 70 kg");
     expect(html).toContain("Dry biochar added");
   });
@@ -195,7 +195,7 @@ describe("StockMovementCard", () => {
     const text = card.text();
     expect(text).toContain("Wet stock in bin, estimate");
     expect(text).toMatch(/≈ 500\s+490 kg/);
-    expect(text).toContain("10 kg wet lost at 30% moisture");
+    expect(text).toContain("10 kg wet mass lost at 30% moisture");
     // A biochar bin's dry part is dry biochar itself, so the bar names it.
     expect(text).toMatch(/Dry biochar\s+7 kg/);
     expect(text).toMatch(/Water\s+3 kg/);
@@ -213,15 +213,15 @@ describe("StockMovementCard", () => {
 
   it("names each entry kind in the headline caption", async () => {
     for (const [entry, line] of [
-      [{ kind: "correction", wetMassKg: 10 }, "10 kg wet removed at 30% moisture"],
-      [{ kind: "delivery", wetMassKg: 10 }, "10 kg wet loaded at 30% moisture"],
+      [{ kind: "correction", wetMassKg: 10 }, "10 kg wet mass removed at 30% moisture"],
+      [{ kind: "delivery", wetMassKg: 10 }, "10 kg wet mass loaded at 30% moisture"],
     ] as const) {
       const card = await render(loss, entry);
       expect(card.text()).toContain(line);
       await act(async () => card.renderer.unmount());
     }
     const count = await render({ ...loss, removedWetKg: null, removedDryKg: 0, afterDryKg: 350, allocations: [] }, { kind: "count", wetMassKg: 2650 });
-    expect(count.text()).toContain("Counted 2,650 kg wet at 30% moisture");
+    expect(count.text()).toContain("Counted 2,650 kg wet mass at 30% moisture");
     await count.open();
     expect(count.text()).toContain("Counted wet mass");
     await act(async () => count.renderer.unmount());
@@ -250,7 +250,7 @@ describe("StockMovementCard", () => {
     expect(card.text()).not.toContain("Not available");
     expect(card.text()).toContain("Dry biochar in bin");
     expect(card.text()).toContain("343 kg");
-    expect(card.text()).toContain("Counted 0 kg wet");
+    expect(card.text()).toContain("Counted 0 kg wet mass");
     await card.open();
     expect(card.text()).toContain("Dry biochar removed");
     expect(card.text()).not.toContain("Moisture");
@@ -296,7 +296,7 @@ describe("StockMovementCard", () => {
     const text = card.text();
     // Before is ≈ 500 kg wet and 350 kg dry; the refused after figures never show.
     expect(text).toContain("≈ 500 kg");
-    expect(text).toContain("10 kg wet at 30% moisture");
+    expect(text).toContain("10 kg wet mass at 30% moisture");
     expect(text).not.toMatch(/lost at|≈ 500\s+500 kg|350 kg\s+350 kg/);
     expect(text).not.toContain("Unchanged");
     await act(async () => card.renderer.unmount());

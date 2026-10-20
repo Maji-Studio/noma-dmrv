@@ -28,7 +28,7 @@ export const outputStockWriteTools: WriteTool[] = [
     },
     summarize(body, dryRun) {
       const row = body.data as OutputStockMovementRepresentation;
-      return dryRun ? `Dry run: would record a ${row.kind} of ${row.wetMassKg} kg wet.` : `Recorded a ${row.kind} of ${row.wetMassKg} kg wet.`;
+      return dryRun ? `Dry run: would record a ${row.kind} of ${row.wetMassKg} kg wet mass.` : `Recorded a ${row.kind} of ${row.wetMassKg} kg wet mass.`;
     },
   },
 ];

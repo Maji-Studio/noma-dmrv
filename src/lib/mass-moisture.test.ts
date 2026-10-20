@@ -138,7 +138,7 @@ describe("split descriptions", () => {
   it("spells the split out for screen readers", () => {
     const split = splitWetMass(1000, 20)!;
     expect(describeMassSplit(split)).toBe(
-      "1,000 kg wet: 800 kg dry mass and 200 kg water at 20% moisture."
+      "1,000 kg wet mass: 800 kg dry mass and 200 kg water at 20% moisture."
     );
   });
 
@@ -219,19 +219,19 @@ describe("formatWetDryMass", () => {
 
 describe("formatWetDryStock", () => {
   it("words a stock pair like the bin caption", () => {
-    expect(formatWetDryStock({ wetKg: 2_500, dryKg: 1_500 })).toBe("2,500 kg wet, 1,500 kg dry biochar");
+    expect(formatWetDryStock({ wetKg: 2_500, dryKg: 1_500 })).toBe("2,500 kg wet mass, 1,500 kg dry biochar");
   });
 
   it("marks an estimated wet figure and names a missing side", () => {
     expect(formatWetDryStock({ wetKg: 277.3, dryKg: null, estimatedWet: true })).toBe(
-      "≈ 277.3 kg wet, dry biochar not available",
+      "≈ 277.3 kg wet mass, dry biochar not available",
     );
     expect(formatWetDryStock({ wetKg: null, dryKg: 249.6 })).toBe(
-      "wet not available, 249.6 kg dry biochar",
+      "wet mass not available, 249.6 kg dry biochar",
     );
   });
 
   it("shows a negative balance instead of calling it missing", () => {
-    expect(formatWetDryStock({ wetKg: -50, dryKg: -40 })).toBe("-50 kg wet, -40 kg dry biochar");
+    expect(formatWetDryStock({ wetKg: -50, dryKg: -40 })).toBe("-50 kg wet mass, -40 kg dry biochar");
   });
 });

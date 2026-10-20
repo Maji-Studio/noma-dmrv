@@ -153,7 +153,7 @@ describe("EntitySelect selected-value display", () => {
     );
 
     expect(html).toContain(
-      "Remaining now: 3,000 kg wet, 2,900 kg dry biochar",
+      "Remaining now: 3,000 kg wet mass, 2,900 kg dry biochar",
     );
     expect(html).toContain('aria-describedby="field-helper ');
     expect(html).toContain('aria-invalid="true"');
@@ -176,7 +176,7 @@ describe("EntitySelect selected-value display", () => {
     const describedBy = html.match(/aria-describedby="([^"]*)"/)?.[1].split(" ") ?? [];
     expect(describedBy[0]).toBe("field-helper");
     expect(describedBy).toHaveLength(3);
-    expect(html).toContain("Remaining now: 3,000 kg wet, 2,900 kg dry biochar");
+    expect(html).toContain("Remaining now: 3,000 kg wet mass, 2,900 kg dry biochar");
   });
 
   it("qualifies a selected stock figure that excludes the edited order", () => {
@@ -201,7 +201,7 @@ describe("EntitySelect selected-value display", () => {
     );
 
     expect(html).toContain(
-      "Remaining, excluding this order: 3,000 kg wet, 2,900 kg dry biochar",
+      "Remaining, excluding this order: 3,000 kg wet mass, 2,900 kg dry biochar",
     );
   });
 
@@ -223,7 +223,7 @@ describe("EntitySelect selected-value display", () => {
       />,
     );
 
-    expect(html).toContain("Remaining now: 500 kg wet");
+    expect(html).toContain("Remaining now: 500 kg wet mass");
     expect(html).not.toContain("dry mass");
   });
 
@@ -275,7 +275,7 @@ describe("EntitySelect selected-value display", () => {
     expect(html).toContain("Detail label");
     expect(html).not.toContain("List label");
     expect(html).toContain(
-      "Remaining now: 3,000 kg wet, 2,900 kg dry biochar",
+      "Remaining now: 3,000 kg wet mass, 2,900 kg dry biochar",
     );
   });
 
@@ -299,7 +299,7 @@ describe("EntitySelect selected-value display", () => {
     entityState.selectedPending = false;
 
     expect(render("reactor-1")).toContain(
-      "Remaining now: 2,000 kg wet, 1,900 kg dry biochar",
+      "Remaining now: 2,000 kg wet mass, 1,900 kg dry biochar",
     );
   });
 
@@ -328,7 +328,7 @@ describe("EntitySelect selected-value display", () => {
     const html = render("reactor-1");
     expect(html).toContain("Retained detail label");
     expect(html).toContain(
-      "Remaining now: 3,000 kg wet, 2,900 kg dry biochar",
+      "Remaining now: 3,000 kg wet mass, 2,900 kg dry biochar",
     );
   });
 
