@@ -19,6 +19,8 @@ vi.mock("@/components/forms/entity-select", () => ({
 }));
 vi.mock("./production-run-feedstock-draw-row", () => ({ ProductionRunFeedstockDrawRow: () => null }));
 vi.mock("./production-run-mix-bin-notice", () => ({ ProductionRunMixBinNotice: () => null }));
+// The footer line has its own tests; here it only marks its place in the footer.
+vi.mock("./production-run-credit-batch-preview", () => ({ ProductionRunCreditBatchPreview: () => <p data-testid="credit-batch-preview" /> }));
 vi.mock("./production-readings-field", () => ({ ProductionReadingsField: () => null }));
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null, Tooltip: ({ children }: { children: ReactNode }) => children }));
 
@@ -50,6 +52,18 @@ describe("ProductionRunForm reactor picker", () => {
       createHref: "/reactors?facility=11111111-1111-4111-8111-111111111111&create=true",
       emptyHint: { message: "This facility has no reactors yet." },
     });
+  });
+});
+
+describe("ProductionRunForm credit batch line", () => {
+  it("puts the credit batch line in the footer, directly before Save", () => {
+    render(<ProductionRunForm onSubmit={vi.fn()} />);
+    const line = screen.getByTestId("credit-batch-preview");
+    const save = screen.getByRole("button", { name: "Create production run" });
+    // Outside the <form>, in the footer, and before the buttons.
+    expect(line.closest("form")).toBeNull();
+    expect(line.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(save.getAttribute("form")).toBe(document.querySelector("form")!.id);
   });
 });
 

@@ -86,6 +86,24 @@ describe("describeCreditBatchPreview", () => {
       .toBe("In credit batch CB-26-009-A (Sep 1 to Sep 30, 2026). This end day is outside it, so the save is refused.");
   });
 
+  const START_DAY_VIEWS: ProductionRunCreditBatchPreviewView[] = [
+    { state: "no-match", basis: START_BASIS, expected: true },
+    { state: "locked", batch: SEPTEMBER, basis: START_BASIS, expected: true },
+    { state: "ambiguous", batches: [OCTOBER, SEPTEMBER], basis: START_BASIS, expected: true },
+  ];
+  it.each(START_DAY_VIEWS)("qualifies a $state answer decided by the start day", (view) => {
+    const copy = describeCreditBatchPreview(view);
+    expect(line(view)).toMatch(/start day/);
+    expect(copy.info).toContain("no end time yet, so its start day stands in");
+  });
+
+  it("does not promise a running run stays unassigned in a locked batch", () => {
+    expect(line({ state: "locked", batch: OCTOBER, basis: END_BASIS, expected: true }))
+      .toBe("Expected credit batch CB-26-010-A is locked, so the run would stay unassigned.");
+    expect(line({ state: "locked", batch: OCTOBER, basis: END_BASIS, expected: false }))
+      .toBe("Credit batch CB-26-010-A is locked, so the run stays unassigned.");
+  });
+
   it("says pending while checking, with no batch", () => {
     const copy = describeCreditBatchPreview({ state: "pending" });
     expect(copy.busy).toBe(true);

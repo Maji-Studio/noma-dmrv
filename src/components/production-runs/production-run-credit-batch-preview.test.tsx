@@ -136,6 +136,23 @@ describe("ProductionRunCreditBatchPreview", () => {
     expect(status().getAttribute("aria-busy")).toBe("true");
   });
 
+  it("checks again when the inputs go back to earlier values", async () => {
+    renderLine();
+    await waitFor(() => expect(calls).toHaveLength(1));
+    await act(async () => {
+      calls[0].resolve({ success: true, data: { state: "match", batch: SEPTEMBER, basis: { ...BASIS, day: "2026-09-30" }, expected: false } });
+    });
+    await waitFor(() => expect(status().textContent).toContain("CB-26-009"));
+
+    fireEvent.change(screen.getByLabelText("End date"), { target: { value: "2026-10-01" } });
+    await waitFor(() => expect(calls).toHaveLength(2));
+    fireEvent.change(screen.getByLabelText("End date"), { target: { value: "2026-09-30" } });
+    await waitFor(() => expect(calls).toHaveLength(3));
+    // The September answer may be outdated by now: it is asked for again, not reused.
+    expect(status().textContent).toContain("Checking credit batch...");
+    expect(status().textContent).not.toContain("CB-26-009");
+  });
+
   it("links the batch code in a new tab so the unsaved run stays open", async () => {
     renderLine();
     await waitFor(() => expect(calls).toHaveLength(1));

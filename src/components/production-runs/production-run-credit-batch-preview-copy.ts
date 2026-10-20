@@ -73,6 +73,20 @@ function windowLabel(batch: CreditBatchPreviewBatch): string {
   return ` (${formatDateRange(batch.startDate, batch.endDate)})`;
 }
 
+/** "Oct 2, 2026", or "Sep 30, 2026 (start day)" while the start day stands in. */
+function dayLabel(basis: ProductionRunCreditBatchPreviewBasis): string {
+  return `${formatDayString(basis.day)}${basis.dayBasis === "start" ? " (start day)" : ""}`;
+}
+
+function startDaySuffix(basis: ProductionRunCreditBatchPreviewBasis): string {
+  return basis.dayBasis === "start" ? ", by start day," : "";
+}
+
+/** Leads with the stand-in caveat whenever the start day decided the answer. */
+function provisional(basis: ProductionRunCreditBatchPreviewBasis, text: string): string {
+  return basis.dayBasis === "start" ? `${START_DAY_STANDS_IN} ${text}` : text;
+}
+
 function joinInfo(basis: ProductionRunCreditBatchPreviewBasis, expected: boolean): string {
   if (basis.dayBasis === "start") return `${START_DAY_STANDS_IN} ${matchedOn(basis)}`;
   if (expected) return `A running run joins when it is completed, by its end day. ${matchedOn(basis)}`;
@@ -157,25 +171,34 @@ export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreview
       return {
         ...BASE,
         tone: "warning",
-        lead: "Credit batch ",
+        lead: view.expected ? "Expected credit batch " : "Credit batch ",
         batches: [view.batch],
-        tail: " is locked, so the run stays unassigned.",
-        info: `Its Removal was submitted, so no run can join it. You can still save the run. ${matchedOn(view.basis)}`,
+        tail: `${startDaySuffix(view.basis)} is locked, so the run ${view.expected ? "would stay" : "stays"} unassigned.`,
+        info: provisional(
+          view.basis,
+          `Its Removal was submitted, so runs do not join it. If the registry returned the Removal for revision, the save checks again and the run can still join. You can save the run either way. ${matchedOn(view.basis)}`,
+        ),
       };
     case "ambiguous":
       return {
         ...BASE,
         tone: "warning",
-        lead: `More than one credit batch covers ${formatDayString(view.basis.day)}: `,
+        lead: `More than one credit batch covers ${dayLabel(view.basis)}: `,
         batches: view.batches,
         tail: ".",
-        info: "The run joins none of them until only one batch covers this day. Change the batch windows on the credit batch page.",
+        info: provisional(
+          view.basis,
+          "The run joins none of them until only one batch covers this day. Change the batch windows on the credit batch page.",
+        ),
       };
     case "no-match":
       return {
         ...BASE,
-        lead: `No credit batch covers ${formatDayString(view.basis.day)}${view.basis.dayBasis === "start" ? " (start day)" : ""} yet.`,
-        info: `You can save the run. ${view.expected ? "Once completed, it" : "It"} joins a credit batch automatically when one is created that covers this day at ${view.basis.facilityName} with ${view.basis.feedstockTypeName}.`,
+        lead: `No credit batch covers ${dayLabel(view.basis)} yet.`,
+        info: provisional(
+          view.basis,
+          `You can save the run. ${view.expected ? "Once completed, it" : "It"} joins a credit batch automatically when one is created that covers its end day at ${view.basis.facilityName} with ${view.basis.feedstockTypeName}.`,
+        ),
       };
   }
 }
