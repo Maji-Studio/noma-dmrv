@@ -8,7 +8,7 @@ import { assertRowVersion, nextVersion } from "./row-version";
  */
 
 import { and, asc, eq } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { incidentReports, operators, reactors } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope, type Executor } from "./utils";
@@ -88,8 +88,14 @@ export async function getProductionIncidentById(
   return rows[0];
 }
 
-export async function createProductionIncident(
+export async function createProductionIncident(ctx: OrgContext, data: Parameters<typeof createProductionIncidentInTransaction>[2]) {
+  requireOrgScope(ctx);
+  return db.transaction((tx) => createProductionIncidentInTransaction(ctx, tx, data));
+}
+
+export async function createProductionIncidentInTransaction(
   ctx: OrgContext,
+  tx: DbTransaction,
   data: {
     productionRunId: string;
     incidentTime: EventInstant;
@@ -103,30 +109,28 @@ export async function createProductionIncident(
 ): Promise<ProductionIncidentWithRelations> {
   requireOrgScope(ctx);
 
-  if (data.operatorId) await assertSameOrg(ctx, operators, data.operatorId);
-  if (data.reactorId) await assertSameOrg(ctx, reactors, data.reactorId);
+  if (data.operatorId) await assertSameOrg(ctx, operators, data.operatorId, tx);
+  if (data.reactorId) await assertSameOrg(ctx, reactors, data.reactorId, tx);
 
-  return db.transaction(async (tx) => {
-    const incidentTime = await resolveProductionRunEventTime(ctx, tx, data.productionRunId, data.incidentTime, "incidentTime");
-    const [inserted] = await tx
-      .insert(incidentReports)
-      .values({
-        organizationId: ctx.organizationId,
-        productionRunId: data.productionRunId,
-        incidentTime,
-        operatorId: data.operatorId ?? null,
-        reactorId: data.reactorId ?? null,
-        description: data.description,
-        severity: data.severity,
-        correctiveActions: data.correctiveActions ?? null,
-        notes: data.notes ?? null,
-      })
-      .returning({ id: incidentReports.id });
+  const incidentTime = await resolveProductionRunEventTime(ctx, tx, data.productionRunId, data.incidentTime, "incidentTime");
+  const [inserted] = await tx
+    .insert(incidentReports)
+    .values({
+      organizationId: ctx.organizationId,
+      productionRunId: data.productionRunId,
+      incidentTime,
+      operatorId: data.operatorId ?? null,
+      reactorId: data.reactorId ?? null,
+      description: data.description,
+      severity: data.severity,
+      correctiveActions: data.correctiveActions ?? null,
+      notes: data.notes ?? null,
+    })
+    .returning({ id: incidentReports.id });
 
-    // Read the row back inside the transaction, so a failed read never reports
-    // a saved incident as missing (issue #769).
-    return getProductionIncidentById(ctx, inserted.id, tx);
-  });
+  // Read the row back inside the transaction, so a failed read never reports
+  // a saved incident as missing (issue #769).
+  return getProductionIncidentById(ctx, inserted.id, tx);
 }
 
 export async function updateProductionIncident(

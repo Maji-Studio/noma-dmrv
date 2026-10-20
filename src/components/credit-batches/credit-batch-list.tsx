@@ -384,6 +384,7 @@ export function CreditBatchList({
     return { startDate: window.start, endDate: window.end };
   };
   const openCreate = (request?: NewBatchRequest) => {
+    createCreditBatch.startDraft();
     createIntent.clear();
     setCreateDefaults(request ?? null);
     void setFocusedBatchId(null);
@@ -402,6 +403,8 @@ export function CreditBatchList({
     setSideSheet({ entity: batch, mode: "edit" });
   };
   const closeSideSheet = () => {
+    // A deep-linked create skips openCreate, so closing ends the draft and its key.
+    createCreditBatch.startDraft();
     createIntent.clear();
     void setFocusedBatchId(null);
     void setDeepLinkFocus(null);
