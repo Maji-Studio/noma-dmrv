@@ -1,6 +1,6 @@
 import { offsetInstantSchema } from "./event-instant";
 import { DELIVERY_CODE_MAX_LENGTH, DELIVERY_CODE_PATTERN, DELIVERY_DISTANCE_MESSAGE, DELIVERY_DISTANCE_NOTE_MAX_LENGTH, recordDeliveryInput } from "./delivery-input";
-import { expectedVersionSchema } from "./helpers";
+import { dateOrStringSchema, expectedVersionSchema } from "./helpers";
 /**
  * Deliveries Validation Schemas
  * Zod schemas for delivery forms, server actions, and filtering
@@ -35,6 +35,9 @@ import { deliveryDryMassSchema } from "./isometric";
 // Constants and Enums
 // ============================================
 
+const DELIVERY_DATE_REQUIRED_MESSAGE = "Delivery date is required";
+const DELIVERY_DATE_OFFSET_MESSAGE = "Enter the delivery date with a time zone offset, as in 2026-10-12T09:30:00Z.";
+
 /**
  * Valid delivery statuses
  */
@@ -60,7 +63,12 @@ export function resolveDeliveryDistanceSource(
 // ============================================
 
 const optionalNumber = z.number().finite().optional().nullable();
-const deliveryInstantSchema = z.union([z.date(), offsetInstantSchema().transform(value => new Date(value))], { error: issue => issue.input === "" || issue.input == null ? "Delivery date is required" : undefined });
+const deliveryInstantSchema = dateOrStringSchema(
+  DELIVERY_DATE_REQUIRED_MESSAGE,
+  (text) => text.min(1, DELIVERY_DATE_REQUIRED_MESSAGE)
+    .pipe(offsetInstantSchema(DELIVERY_DATE_OFFSET_MESSAGE))
+    .transform(value => new Date(value)),
+);
 const optionalWetMassKg = positiveMassKgSchema(
   DELIVERED_WET_MASS_RANGE_MESSAGE,
 ).min(DELIVERED_WET_MASS_MIN_KG, DELIVERED_WET_MASS_RANGE_MESSAGE)
