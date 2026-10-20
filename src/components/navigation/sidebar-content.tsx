@@ -52,6 +52,16 @@ import { useToast } from "@/components/ui/toast";
 import { FacilitySelector } from "./facility-selector";
 import { OrgBrand } from "./org-brand";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import {
+  PrototypeAccountMenuB,
+  PrototypeAccountPopoverD,
+  PrototypeBrand,
+  PrototypeFacilityRow,
+  PrototypeFooterA,
+  PrototypeOrgSwitcherD,
+  useSidebarPrototypeVariant,
+} from "./settings-prototype-chrome";
+import type { SettingsPrototypeVariant } from "@/components/settings/prototype/use-settings-prototype-variant";
 
 interface NavItem {
   href: string;
@@ -176,6 +186,69 @@ const adminSection: NavSection = {
     },
   ],
 };
+
+/**
+ * Prototype only (prototype/settings-simplification): variants A, B and D fold
+ * registry setup and the organization directory out of the sidebar. A no-op
+ * unless `/settings?variant=` is open.
+ */
+function applySettingsPrototypeNav(
+  sections: NavSection[],
+  variant: SettingsPrototypeVariant | null,
+): NavSection[] {
+  if (variant !== "A" && variant !== "B" && variant !== "D") return sections;
+  const folded = sections
+    .filter((section) => section !== adminSection)
+    .map((section) =>
+      section.title === CERTIFICATION_SECTION_TITLE
+        ? {
+            ...section,
+            items: section.items.filter(
+              (item) => item.href !== CERTIFICATION_SETTINGS_HREF,
+            ),
+          }
+        : section,
+    )
+    .filter((section) => section.items.length > 0);
+  if (variant === "A") {
+    // A: Vehicles and crew is master data, so it becomes a normal list page.
+    return folded.map((section) =>
+      section.title === "Distribution"
+        ? {
+            ...section,
+            items: [
+              ...section.items,
+              {
+                href: "/settings/vehicles-and-crew",
+                label: "Vehicles and Crew",
+                icon: TruckIcon,
+              },
+            ],
+          }
+        : section,
+    );
+  }
+  if (variant === "B") {
+    // B: facility configuration lives on the facility, so facilities get a nav item.
+    return folded.map((section) =>
+      section.title === "Infrastructure"
+        ? {
+            ...section,
+            items: [
+              {
+                href: "/settings?variant=B&b-page=facilities",
+                label: "Facilities",
+                icon: BuildingsIcon,
+                skipFacilityParam: true,
+              },
+              ...section.items,
+            ],
+          }
+        : section,
+    );
+  }
+  return folded;
+}
 
 function NavLink({
   item,
@@ -304,6 +377,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   // mounts after hydration). Server-side `requireAdmin()` in
   // src/app/admin/layout.tsx remains the actual access boundary.
   const isAdmin = useIsAdmin();
+  const prototypeVariant = useSidebarPrototypeVariant();
 
   // Gate the Certification operational routes on the current facility having a
   // registry link. The summary is DB-only (no Isometric API) and shared with
@@ -316,7 +390,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const hasRegistry = Boolean(certifierSummary?.mapping);
 
   const baseSections = isAdmin ? [...navSections, adminSection] : navSections;
-  const sections = baseSections.map((section) =>
+  const gatedSections = baseSections.map((section) =>
     section.title === CERTIFICATION_SECTION_TITLE && !hasRegistry
       ? {
           ...section,
@@ -326,6 +400,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         }
       : section,
   );
+  const sections = applySettingsPrototypeNav(gatedSections, prototypeVariant);
 
   return (
     <div
@@ -333,10 +408,24 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       style={{ background: SIDEBAR_BACKGROUND_GRADIENT }}
     >
       {/* Brand header — doubles as the org switcher for multi-org users */}
-      <OrgBrand onNavigate={onNavigate} />
+      {prototypeVariant === "D" ? (
+        <PrototypeOrgSwitcherD onNavigate={onNavigate} />
+      ) : prototypeVariant === "A" ? (
+        <PrototypeBrand param="a-org" />
+      ) : prototypeVariant === "B" ? (
+        <PrototypeBrand param="b-org" />
+      ) : (
+        <OrgBrand onNavigate={onNavigate} />
+      )}
 
       {/* Facility Selector */}
-      <FacilitySelector />
+      {prototypeVariant === "A" ||
+      prototypeVariant === "B" ||
+      prototypeVariant === "D" ? (
+        <PrototypeFacilityRow />
+      ) : (
+        <FacilitySelector />
+      )}
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-16 px-8 md:py-12 md:px-6">
@@ -371,6 +460,13 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       {/* Footer — pinned to bottom, never scrolls */}
+      {prototypeVariant === "A" ? (
+        <PrototypeFooterA onNavigate={onNavigate} />
+      ) : prototypeVariant === "B" ? (
+        <PrototypeAccountMenuB onNavigate={onNavigate} />
+      ) : prototypeVariant === "D" ? (
+        <PrototypeAccountPopoverD onNavigate={onNavigate} />
+      ) : (
       <div className="shrink-0 px-6 pb-12 flex flex-col gap-4">
         {/* User row */}
         <div className="flex items-center gap-10 px-12 py-8 mt-2 bg-[var(--color-white-100)]/[0.03]">
@@ -420,6 +516,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }
