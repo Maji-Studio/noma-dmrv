@@ -1,7 +1,7 @@
 import { LinkSimpleIcon, LockSimpleIcon, LockSimpleOpenIcon } from "@phosphor-icons/react/dist/ssr";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import { statusBadgeVariants } from "@/components/ui/status-badge";
-import { RECORD_LOCK_CHIP_CLASSES } from "@/lib/status-state";
+import { RECORD_LOCK_CHIP_CLASSES, STATUS_STATE_BADGE_CLASSES } from "@/lib/status-state";
 import { cn } from "@/lib/utils";
 import {
   isInterruptedLockDisplay, RECORD_LOCK_INTERRUPTED_LABEL, RECORD_LOCK_INTERRUPTED_TITLE,
@@ -9,6 +9,8 @@ import {
 } from "./record-lock-labels";
 
 const CHIP_ICON_SIZE = 14;
+/** Interrupted waits on someone to resume or delete the Removal: the warning colour, as "Needs review" uses. */
+const INTERRUPTED_CHIP_CLASSES = STATUS_STATE_BADGE_CLASSES.warning;
 
 
 /** Open lock, link, closed lock: the icon repeats the level for colour-blind readers. */
@@ -35,7 +37,7 @@ export function RecordLockChip({ level, interrupted = false, className }: {
     <span
       data-record-lock={level}
       // StatusBadge's anatomy; the lock colours replace its status colours.
-      className={cn(statusBadgeVariants({ size: "default" }), "gap-4", RECORD_LOCK_CHIP_CLASSES[level], className)}
+      className={cn(statusBadgeVariants({ size: "default" }), "gap-4", level === "sent" && interrupted ? INTERRUPTED_CHIP_CLASSES : RECORD_LOCK_CHIP_CLASSES[level], className)}
     >
       <LevelIcon level={level} />
       {level === "sent" && interrupted ? RECORD_LOCK_INTERRUPTED_LABEL : RECORD_LOCK_LEVEL_LABELS[level]}
@@ -59,7 +61,7 @@ export function RecordLockSentMark({ lock, className }: { lock: RecordLockView |
       aria-label={interrupted ? RECORD_LOCK_INTERRUPTED_LABEL : RECORD_LOCK_LEVEL_LABELS.sent}
       title={interrupted ? RECORD_LOCK_INTERRUPTED_TITLE : RECORD_LOCK_SENT_TITLE}
       data-record-lock="sent"
-      className={cn("inline-flex shrink-0 text-[var(--st-run)]", className)}
+      className={cn("inline-flex shrink-0", interrupted ? "text-[var(--st-wait)]" : "text-[var(--st-run)]", className)}
     >
       <LockSimpleIcon size={SENT_MARK_SIZE} weight="bold" aria-hidden />
     </span>
