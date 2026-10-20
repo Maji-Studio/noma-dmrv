@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { NOT_SET_UP_TITLE, templateReadiness, TEMPLATE_NOT_FULLY_READ_TITLE, type RemovalTemplateReviewEntry } from "./removal-template-review-model";
+import {
+  MISSING_TEMPLATE_NAME,
+  NOT_SET_UP_TITLE,
+  templateName,
+  templateReadiness,
+  TEMPLATE_NOT_FULLY_READ_TITLE,
+  type RemovalTemplateReviewEntry,
+} from "./removal-template-review-model";
 
 const DECIDED = { scope: "operating", origin: "reviewed", entryPolicy: "additive" } as const;
 const PROPOSED = { scope: "operating", origin: "proposed", entryPolicy: "additive" } as const;
@@ -40,5 +47,16 @@ describe("templateReadiness", () => {
   it("calls a preview with no stored read not set up yet", () => {
     expect(templateReadiness(entry({ observation: null, preview: true, lines: [] })))
       .toEqual({ ready: false, reason: NOT_SET_UP_TITLE });
+  });
+});
+
+describe("templateName", () => {
+  it("uses the template's display name", () => {
+    expect(templateName(entry())).toBe("Template");
+  });
+
+  it("names a template Isometric no longer lists, keeping Isometric capitalised", () => {
+    expect(templateName(entry({ availability: "missing", template: null }))).toBe(MISSING_TEMPLATE_NAME);
+    expect(MISSING_TEMPLATE_NAME).toBe("Template not found on Isometric");
   });
 });

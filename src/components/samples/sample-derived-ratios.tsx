@@ -21,6 +21,13 @@ import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatSampleRatio, SAMPLE_RATIO_MOLAR_MASS as MOLAR_MASS } from "@/lib/calculations/sample-ratios";
 
+/**
+ * Why a ratio has no figure when every entry it needs is filled: the values
+ * give no usable ratio (a negative entry, or an organic carbon too small to
+ * divide by). The label and its CERT tag stay with this reason.
+ */
+export const RATIO_NOT_CALCULABLE = "Cannot be calculated from these values";
+
 function formatRatio(value: number | null): string {
   return value == null ? MISSING_VALUE.notRecorded : formatSampleRatio(value);
 }
@@ -42,7 +49,7 @@ function withLabRatio(gap: string | null): string | null {
 function DerivedRatio({ label, value, gap, certifyRequired, certifyStatus }: {
   label: string;
   value: number | null;
-  /** Why there is no figure, when the empty inputs say so. */
+  /** Why there is no figure, when the empty inputs say so. Null when every input is filled. */
   gap: string | null;
   certifyRequired?: boolean;
   certifyStatus?: CertFieldStatus;
@@ -54,7 +61,7 @@ function DerivedRatio({ label, value, gap, certifyRequired, certifyStatus }: {
         {certifyRequired && <CertificationFieldTag status={certifyStatus} />}
       </span>}
       value={value == null ? null : formatRatio(value)}
-      sub={value == null ? gap ?? undefined : undefined}
+      sub={value == null ? gap ?? RATIO_NOT_CALCULABLE : undefined}
     />
   );
 }

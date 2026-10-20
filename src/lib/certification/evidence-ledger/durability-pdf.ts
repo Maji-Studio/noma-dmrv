@@ -20,7 +20,7 @@
  */
 import { createElement as h, type ReactElement } from "react";
 import { Document, Page, StyleSheet, Text } from "@react-pdf/renderer";
-import { FACILITY_NOT_FOUND, formatCount, MISSING_VALUE, pluralize } from "@/lib/copy-utils";
+import { FACILITY_NOT_FOUND, formatCount, MISSING_VALUE, NO_USABLE_REPLICATE, pluralize } from "@/lib/copy-utils";
 import { C, MONO, SANS, Text_, renderLedgerToBuffer, t, theme, v } from "./pdf-theme";
 import type {
   DurabilityLedgerModel,
@@ -41,10 +41,9 @@ const nf1 = (n: number): string =>
 const nfi = (n: number): string =>
   n.toLocaleString("en-US", { maximumFractionDigits: 0 });
 
-// "mean ± s.d." for a column, at the given precision; mean alone when s.d. null.
-/** A column with no replicate to average says so rather than print a placeholder. */
-const NO_USABLE_REPLICATE = "No usable replicate";
-
+// "mean ± s.d." for a column, at the given precision; mean alone when s.d.
+// null. A column with no replicate to average says so rather than print a
+// placeholder.
 function stat(value: LedgerStat | null, fmt: (n: number) => string): string {
   if (value == null) return NO_USABLE_REPLICATE;
   return value.stdDev == null

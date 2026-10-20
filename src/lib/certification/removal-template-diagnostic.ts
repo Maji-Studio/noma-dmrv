@@ -28,7 +28,7 @@ import {
   attachRemovalCompilationToDiagnostic,
   type RemovalTemplateDiagnosticCompilation,
 } from "./removal-template-diagnostic-resolution";
-import { ISOMETRIC_GIVES_NO_UNIT, MISSING_VALUE } from "@/lib/copy-utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 export type { RemovalTemplateDiagnosticCompilation } from "./removal-template-diagnostic-resolution";
 
@@ -130,7 +130,18 @@ export interface BuildRemovalTemplateDiagnosticArgs {
   compilation?: RemovalTemplateDiagnosticCompilation | null;
 }
 
-const ISOMETRIC_GIVES_NO_DATA_SHAPE = "Isometric gives no data shape";
+/**
+ * Why an expected value is missing when noma has no blueprint input to read
+ * it from. These name noma's side: the blueprint's fields are required, so a
+ * gap here means noma did not resolve the component's blueprint, or the
+ * template input is not in it. Never blame Isometric for either.
+ */
+export const BLUEPRINT_NOT_RESOLVED = "Blueprint not resolved";
+export const INPUT_NOT_IN_BLUEPRINT = "Input not in the blueprint";
+
+function blueprintGap(blueprint: IsometricComponentBlueprint | undefined): string {
+  return blueprint ? INPUT_NOT_IN_BLUEPRINT : BLUEPRINT_NOT_RESOLVED;
+}
 
 const GHG_ENTRY_INPUT_PATH =
   "/ghg-entries.ghg_entry_template_components[].inputs[]";
@@ -249,10 +260,11 @@ function buildOrdinaryInputs(args: {
       lineContract: args.contract,
       inputKey: input.input_key,
     });
+    const gap = blueprintGap(blueprint);
     const expected = {
-      dataShape: blueprintInput?.data_shape ?? ISOMETRIC_GIVES_NO_DATA_SHAPE,
+      dataShape: blueprintInput?.data_shape ?? gap,
       quantityKind: blueprintInput?.quantity_kind ?? input.quantity_kind,
-      unit: blueprintInput?.compatible_unit ?? ISOMETRIC_GIVES_NO_UNIT,
+      unit: blueprintInput?.compatible_unit ?? gap,
     };
 
     if (!blueprint) {
@@ -454,20 +466,15 @@ function buildSequestrationInputs(args: {
       binding?.source === "measurement-property"
         ? binding.measurementProperty.quantity_kind
         : binding?.quantityKind;
+    const gap = blueprintGap(blueprint);
     const expected = {
-      dataShape:
-        binding?.dataShape ??
-        blueprintInput?.data_shape ??
-        ISOMETRIC_GIVES_NO_DATA_SHAPE,
+      dataShape: binding?.dataShape ?? blueprintInput?.data_shape ?? gap,
       quantityKind:
         expectedQuantityKind ??
         blueprintInput?.quantity_kind ??
         input?.quantity_kind ??
-        "Isometric gives no quantity kind",
-      unit:
-        sourceContract?.wireUnit ??
-        blueprintInput?.compatible_unit ??
-        ISOMETRIC_GIVES_NO_UNIT,
+        gap,
+      unit: sourceContract?.wireUnit ?? blueprintInput?.compatible_unit ?? gap,
     };
     const raw = inputRaw({
       templateId: template.id,

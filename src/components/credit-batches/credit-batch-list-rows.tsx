@@ -21,7 +21,6 @@ import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
 import type { CreditBatchStateView } from "@/lib/credit-batches/batch-state";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
-import { LOAD_FAILED } from "@/lib/copy-utils";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
@@ -57,16 +56,16 @@ export function isCreditBatchDeletable(lock: RecordLockView | undefined): boolea
 
 /**
  * The row's dry applied biochar: never the wet figure, never a guess. `null`
- * while the facts load. A failed read says so; a batch the facts do not cover
- * leaves the figure out, since it is only a sum.
+ * while the facts load. A batch the facts do not cover leaves the figure out,
+ * since it is only a sum. A failed read leaves it out too: the list's Notice
+ * above the rows says the read failed and carries Retry, so no row repeats it.
  */
 export function appliedDryLabel(
   facts: CreditBatchTimelineFacts | undefined,
   status: FactsStatus,
-): { figure: string } | { reason: string } | { leftOut: true } | null {
+): { figure: string } | { leftOut: true } | null {
   if (status === "loading") return null;
-  if (status === "failed") return { reason: LOAD_FAILED };
-  if (!facts) return { leftOut: true };
+  if (status === "failed" || !facts) return { leftOut: true };
   return { figure: formatTonnes(kgToTonnes(facts.appliedDryKg)) };
 }
 
@@ -113,10 +112,9 @@ function BatchState({
           {view.openTodoCount > 0 ? OPEN_TODOS_LABEL : STATE_TONE[view.state].title}
           {view.openTodoCount > 0 && <BlockingCount count={view.openTodoCount} role="img" aria-label={todosLabel(view.openTodoCount)} />}
         </span>
-      ) : readinessStatus === "loading" ? (
+      ) : readinessStatus === "loading" && (
+        // A failed read shows nothing here: the list's Notice says so once, with Retry.
         <Skeleton width={STATE_SKELETON_WIDTH_PX} height={SKELETON_HEIGHT_PX} />
-      ) : readinessStatus === "failed" && (
-        <span className={cn("body-small", MUTED)}>{LOAD_FAILED}</span>
       )}
       <LockChip lock={lock} className="hidden xl:inline-flex" />
     </span>
@@ -202,10 +200,8 @@ export function CreditBatchListRow({
             )}
             {applied === null ? (
               <Skeleton width={FIGURE_SKELETON_WIDTH_PX} height={SKELETON_HEIGHT_PX} />
-            ) : "figure" in applied ? (
+            ) : "figure" in applied && (
               <span data-applied-dry className="body-small font-medium tabular-nums">{applied.figure}</span>
-            ) : "reason" in applied && (
-              <span data-applied-dry className="body-small tabular-nums text-[var(--color-text-tertiary)]">{applied.reason}</span>
             )}
           </span>
         </div>

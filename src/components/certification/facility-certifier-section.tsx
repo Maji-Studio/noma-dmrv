@@ -131,8 +131,10 @@ function CertifierActions({ children }: { children: ReactNode }) {
 
 /**
  * The mapping fields grid, shared by both modes. When `projectName` is
- * `undefined` the friendly name is unavailable (read-only path, which doesn't
- * fetch the project list) so the persisted identifiers stand in for it.
+ * `undefined` the app has not looked the names up (the read-only path does not
+ * fetch the project list, and without Isometric keys there is nothing to
+ * fetch), so the persisted identifiers stand in for them. `null` means a
+ * configured lookup ran and did not find the ID on Isometric.
  */
 function CertifierMappingFields({
   facilityId,
@@ -397,8 +399,10 @@ function FacilityCertifierManage({
                     facilityId={facilityId}
                     mapping={mapping}
                     isProduction={isProduction}
-                    projectName={projectName}
-                    templateName={templateName}
+                    // Without Isometric keys the app never looked the IDs up,
+                    // so it shows them as saved instead of claiming they are gone.
+                    projectName={data.isConfigured ? projectName : undefined}
+                    templateName={data.isConfigured ? templateName : undefined}
                   />
                 ) : data.isConfigured ? (
                   <p className="body-small text-[var(--color-text-secondary)]">

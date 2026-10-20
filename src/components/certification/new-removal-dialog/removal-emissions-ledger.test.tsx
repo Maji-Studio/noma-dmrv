@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { RemovalCompilationView } from "@/fn/certification";
+import { NO_LEGS_RECORDED } from "@/fn/certification/removal-ledger-preview";
 import { RemovalEmissionsLedger } from "./removal-emissions-ledger";
 
 describe("RemovalEmissionsLedger", () => {
@@ -19,6 +20,7 @@ describe("RemovalEmissionsLedger", () => {
             input: "Mass and distance",
             magnitude: 42,
             unit: "t·km",
+            missingReason: null,
           }],
           inputsUnavailable: false,
           creditBatches: [{ id: "batch-1", code: "CB-001" }],
@@ -81,14 +83,14 @@ describe("RemovalEmissionsLedger", () => {
     expect(html).not.toContain("<table");
   });
 
-  it("leaves out an input that cannot be summed", () => {
+  it("keeps a required input it cannot sum, with the reason in its value", () => {
     const html = renderToStaticMarkup(
       <RemovalEmissionsLedger
         compilation={{ estimatedStoredCo2eTonnes: null } as RemovalCompilationView}
         ledger={{
           inputs: [
-            { id: "diesel", component: "Production", input: "Diesel", magnitude: null, unit: "L" },
-            { id: "biochar-dry-mass", component: "Stored carbon", input: "Biochar, dry mass", magnitude: 3, unit: "t" },
+            { id: "feedstock-transport", component: "Feedstock transport", input: "Mass and distance", magnitude: null, unit: "t·km", missingReason: NO_LEGS_RECORDED },
+            { id: "biochar-dry-mass", component: "Stored carbon", input: "Biochar, dry mass", magnitude: 3, unit: "t", missingReason: null },
           ],
           inputsUnavailable: false,
           creditBatches: [],
@@ -102,7 +104,9 @@ describe("RemovalEmissionsLedger", () => {
     );
 
     expect(html).toContain("Biochar, dry mass");
-    expect(html).not.toContain("Diesel");
+    expect(html).toContain("Feedstock transport");
+    expect(html).toContain(NO_LEGS_RECORDED);
+    expect(html).not.toContain("t·km");
     expect(html).toContain("No credit batch");
   });
 });

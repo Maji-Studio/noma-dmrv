@@ -22,13 +22,15 @@ const LEDGER_NOTE =
 
 type LedgerInput = RemovalLedgerPreview["inputs"][number];
 
-function inputValue(input: LedgerInput & { magnitude: number }): string {
-  return `${input.magnitude.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${input.unit}`.trim();
-}
-
-/** Each input is a sum over the runs, so one that cannot be summed is left out rather than shown blank. */
-function hasMagnitude(input: LedgerInput): input is LedgerInput & { magnitude: number } {
-  return input.magnitude != null;
+/**
+ * The input's sum, or why a required input has none. A required input never
+ * drops out of the table: its row stays and names the gap.
+ */
+function InputValue({ input }: { input: LedgerInput }) {
+  if (input.magnitude == null) {
+    return <span className="font-sans text-[var(--color-text-tertiary)]">{input.missingReason}</span>;
+  }
+  return <>{`${input.magnitude.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${input.unit}`.trim()}</>;
 }
 
 function LedgerLink({ href, children }: { href: string; children: ReactNode }) {
@@ -79,7 +81,7 @@ export function RemovalEmissionsLedger({
     claims.length > 1 &&
     productionAndDeliveryCount > 0 &&
     deliveryOnlyCount > 0;
-  const inputs = ledger.inputsUnavailable ? [] : ledger.inputs.filter(hasMagnitude);
+  const inputs = ledger.inputsUnavailable ? [] : ledger.inputs;
   const creditBatchCodeById = new Map(
     ledger.creditBatches.map((batch) => [batch.id, batch.code]),
   );
@@ -155,7 +157,7 @@ export function RemovalEmissionsLedger({
                       {input.input}
                     </td>
                     <td className="py-4 pl-12 text-right font-mono tabular-nums text-[var(--color-text-primary)]">
-                      {inputValue(input)}
+                      <InputValue input={input} />
                     </td>
                   </tr>
                 ))}

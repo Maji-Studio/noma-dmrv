@@ -10,6 +10,7 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import { formatCount } from "@/lib/copy-utils";
 import { getSchemaTableByName, type SchemaArea } from "@/lib/schema/catalog";
+import { NO_COLUMN_DESCRIPTION } from "@/lib/schema/copy";
 import columnExamples from "@/lib/schema/column-examples.json";
 import columnDescriptions from "@/lib/schema/column-descriptions.json";
 
@@ -303,7 +304,7 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
                       )}
                     </td>
                     <td className="py-[8px] px-[12px] body-small text-[var(--color-text-secondary)]">
-                      {descriptions[col.name] ?? <span className="text-[var(--color-text-tertiary)]">No description</span>}
+                      {descriptions[col.name] ?? <span className="text-[var(--color-text-tertiary)]">{NO_COLUMN_DESCRIPTION}</span>}
                     </td>
                   </tr>
                 ))}

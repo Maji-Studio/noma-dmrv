@@ -16,7 +16,7 @@ import {
   type LineSources,
 } from "@/lib/isometric/template-observations/line-sources";
 import type { ComponentEnrichment, EntryPolicy, QuantityKind } from "@/lib/isometric/template-observations/types";
-import { humanizeEnum, ISOMETRIC_GIVES_NO_UNIT, MISSING_VALUE, NOT_FOUND_ON_ISOMETRIC } from "@/lib/copy-utils";
+import { humanizeEnum, ISOMETRIC_GIVES_NO_UNIT, MISSING_VALUE } from "@/lib/copy-utils";
 import { isTemplateReady, linesToDecideCount } from "@/lib/certification/removal-template-readiness";
 import { sectionTemplateLines, type TemplateLineSection } from "@/lib/isometric/template-observations/template-sections";
 import { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE } from "@/lib/certification/requirement-labels";
@@ -88,6 +88,8 @@ const PROBLEM_COPY: Partial<Record<LineSourceProblem["code"], string>> = {
 /** The badge on a line without a saved decision. */
 export const TO_DECIDE_LABEL = "To decide";
 export const DEPRECATED_FACTORS_LABEL = "Deprecated factors";
+/** The card name of a template Isometric no longer lists. Isometric keeps its capital. */
+export const MISSING_TEMPLATE_NAME = "Template not found on Isometric";
 
 export function sourceLabel(source: AutomaticSourceId | undefined): string {
   return source ? SOURCE_LABELS[source] : MISSING_VALUE.none;
@@ -164,7 +166,7 @@ export function isNotFullyRead(entry: RemovalTemplateReviewEntry): boolean {
 
 export function templateName(entry: RemovalTemplateReviewEntry): string {
   // Only a template Isometric no longer lists comes without a template.
-  return entry.template?.display_name ?? `Template ${NOT_FOUND_ON_ISOMETRIC.toLowerCase()}`;
+  return entry.template?.display_name ?? MISSING_TEMPLATE_NAME;
 }
 
 /** Fixed factors Isometric reports as deprecated, or null when it reports none. */

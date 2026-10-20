@@ -65,6 +65,9 @@ export const FACILITY_NOT_FOUND = "Facility not found";
 /** Who made a change when the recorded user row is gone or carries no name. */
 export const UNKNOWN_USER = "Unknown user";
 
+/** A durability statistic with no usable replicate to average. Shared by the web panel and the evidence ledger PDF. */
+export const NO_USABLE_REPLICATE = "No usable replicate";
+
 /** The situations a missing value can name. One situation, one token. */
 export type MissingValueSituation =
   | "notRecorded"

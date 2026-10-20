@@ -69,9 +69,12 @@ function Figure({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-function HoverCardBody({ batch }: { batch: HoverCardBatch }) {
+/** Exported for tests. */
+export function HoverCardBody({ batch }: { batch: HoverCardBatch }) {
   const { facts, state } = batch;
   const notInRemoval = facts ? kgToTonnes(facts.notInRemovalDryKg) : 0;
+  const produced = tonnesOrMissing(facts?.producedDryKg, batch.factsStatus);
+  const applied = tonnesOrMissing(facts?.appliedDryKg, batch.factsStatus);
   return (
     <div className="flex w-[300px] max-w-[calc(100vw-32px)] flex-col">
       <div className="flex flex-col gap-10 px-16 pt-16 pb-12">
@@ -96,10 +99,13 @@ function HoverCardBody({ batch }: { batch: HoverCardBatch }) {
           <BlockingCount count={batch.todoCount} role="img" aria-label={todosLabel(batch.todoCount)} />
         </div>
       )}
-      <dl className="grid grid-cols-2 gap-12 border-t border-[var(--color-border-tertiary)] px-16 py-12">
-        <Figure label="Produced (dry)" value={tonnesOrMissing(facts?.producedDryKg, batch.factsStatus)} />
-        <Figure label="Applied (dry)" value={tonnesOrMissing(facts?.appliedDryKg, batch.factsStatus)} />
-      </dl>
+      {/* Both figures left out leaves no strip behind: no empty bordered row. */}
+      {(produced !== null || applied !== null) && (
+        <dl className="grid grid-cols-2 gap-12 border-t border-[var(--color-border-tertiary)] px-16 py-12">
+          <Figure label="Produced (dry)" value={produced} />
+          <Figure label="Applied (dry)" value={applied} />
+        </dl>
+      )}
       {facts && notInRemoval > NEGLIGIBLE_TONNES && (
         <p className={cn("border-t border-[var(--color-border-tertiary)] px-16 py-10 body-small", MUTED)}>
           {`${formatTonnes(notInRemoval)} not in a Removal`}

@@ -30,7 +30,7 @@ import {
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { useCreateTransportLeg } from "@/hooks/use-transport-legs";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { LOAD_FAILED, MISSING_VALUE } from "@/lib/copy-utils";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
@@ -67,6 +67,9 @@ import {
 } from "@/lib/sample-create-intent";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ILLUSTRATION_SIZE, SampleVialArt } from "@/components/ui/illustrations";
+
+/** The average carbon card when the stats read settled and no Sample has a total carbon result. */
+const NO_TOTAL_CARBON_RESULTS = "No total carbon results";
 
 /** One template for the create-failure banner so its two call sites (post-flush
  * failure and inline retry recount) can never drift apart. Null when resolved. */
@@ -261,7 +264,7 @@ export function SampleList({
   const { data: samplesData, isLoading, error: fetchError } = useSamples(filters, {
     enabled: !!contextFacilityId,
   });
-  const { data: statsData, isLoading: statsLoading } = useSampleStats(
+  const { data: statsData, isLoading: statsLoading, isError: statsFailed } = useSampleStats(
     creditBatchFilter || undefined,
     !!contextFacilityId,
     contextFacilityId || undefined,
@@ -609,7 +612,7 @@ export function SampleList({
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
         <StatCard title="Total Samples" value={statsData?.totalSamples ?? 0} icon={<FlaskIcon size={24} weight="bold" />} isLoading={statsLoading} />
-        <StatCard title="Avg total carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? <span className="body-small font-normal text-[var(--color-text-tertiary)]">No total carbon results</span>} icon={<LeafIcon size={24} weight="bold" />} isLoading={statsLoading} />
+        <StatCard title="Avg total carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? <span className="body-small font-normal text-[var(--color-text-tertiary)]">{!statsData && statsFailed ? LOAD_FAILED : NO_TOTAL_CARBON_RESULTS}</span>} icon={<LeafIcon size={24} weight="bold" />} isLoading={statsLoading} />
         <StatCard title="200-Year" value={statsData?.samples200Year ?? 0} icon={<FireIcon size={24} weight="bold" />} description="Standard durability" isLoading={statsLoading} />
         <StatCard title="1000-Year" value={statsData?.samples1000Year ?? 0} icon={<CertificateIcon size={24} weight="bold" />} description="Enhanced durability" isLoading={statsLoading} />
       </div>

@@ -22,6 +22,7 @@ import {
   type DurabilitySummaryEligibility,
 } from "@/lib/certification/durability-batch-summary";
 import type { ValueWithStdDev } from "@/lib/isometric/utils/durability-aggregation";
+import { NO_USABLE_REPLICATE } from "@/lib/copy-utils";
 import { describeUnpairedHToCSamples } from "@/lib/certification/durability-submission-gates";
 
 type Tone = "ok" | "wait" | "bad" | "off";
@@ -72,9 +73,6 @@ function ReadinessChip({
     </Tooltip>
   );
 }
-
-/** What a submitted figure says when the batch has no usable replicate for it. */
-export const NO_USABLE_REPLICATE = "No usable replicate";
 
 /**
  * Format a submitted mean ± sample std-dev for display. `"0.412 ± 0.018"`, or

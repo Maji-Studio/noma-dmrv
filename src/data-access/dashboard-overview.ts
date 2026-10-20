@@ -103,7 +103,7 @@ export interface DashboardKpi {
   hint?: string;
   /** Display unit, e.g. "t", "tCO₂e". */
   unit: string;
-  /** Null = no data in range (the band says "No data in this period", never 0). */
+  /** Null = no data in range (the band shows `detail` as the reason, never 0). */
   value: number | null;
   /** Percent change vs the previous equal-length period; null when not comparable. */
   deltaPercent: number | null;
