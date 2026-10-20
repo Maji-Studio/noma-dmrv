@@ -509,7 +509,6 @@ export function ProductionRunForm({
           <FormField
             id="endDate"
             label="End date"
-            required={terminal}
             error={errors.endDate?.message}
             helperText="Leave the end blank until the run finishes. For an overnight run, set the next day."
           >
