@@ -29,7 +29,8 @@ const LINK_ICON = 12;
 /** A 44px tall hit area around an inline link without growing its row. */
 const HIT_AREA = "relative after:absolute after:inset-x-0 after:-inset-y-12 after:content-['']";
 /** The same from sm; below it the link has its own 44px row. */
-const HIT_AREA_FROM_SM = "sm:relative sm:after:absolute sm:after:inset-x-0 sm:after:-inset-y-12 sm:after:content-['']";
+const HIT_AREA_FROM_SM =
+  "sm:relative sm:after:absolute sm:after:inset-x-0 sm:after:top-1/2 sm:after:h-44 sm:after:-translate-y-1/2 sm:after:content-['']";
 
 
 /**
@@ -47,12 +48,21 @@ export function batchIssueLine(health: BatchHealth): string {
   return `${count} ${noun}: ${certCheckLabel(first)}${more > 0 ? ` and ${more} more` : ""}`;
 }
 
-function StatusLine({ ok, children }: { ok?: boolean; children: ReactNode }) {
+function StatusLine({
+  ok,
+  className,
+  children,
+}: {
+  ok?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
   return (
     <span
       className={cn(
         "inline-flex items-start gap-6 body-caption font-medium",
         ok ? "text-[var(--st-ok)]" : "text-[var(--color-signal-orange-strong)]",
+        className,
       )}
     >
       {ok ? (
@@ -145,7 +155,8 @@ export function ReadyBatchBox({
         />
         <span className="flex min-w-0 flex-col gap-2">
           <BatchHeading batch={batch} facilityId={facilityId} />
-          <StatusLine ok>{CREDIT_BATCH_READY_LABEL}</StatusLine>
+          {/* relative: paints above the code link's enlarged hit area, so a click here still toggles the label's checkbox. */}
+          <StatusLine ok className="relative">{CREDIT_BATCH_READY_LABEL}</StatusLine>
         </span>
         <DryMass tons={batch.appliedDryTons} />
       </label>
@@ -163,6 +174,7 @@ export function NotReadyBatchBox({
   return (
     // Phone: the to-dos link takes its own row so the status line keeps
     // the width. From sm it sits beside the status line.
+    // pl-44 = 16 padding + 16 checkbox + 12 gap, the text column of ReadyBatchBox.
     <li className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-12 gap-y-2 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] pt-12 pr-16 pb-4 pl-44 sm:pb-12">
       <span className="col-start-1 row-start-1 min-w-0">
         <BatchHeading batch={batch} facilityId={facilityId} />
