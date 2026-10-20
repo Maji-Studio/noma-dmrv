@@ -471,20 +471,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
               description={
                 searchQuery
                   ? "Try clearing your search."
-                  : "Sync existing registry statements, or create one for submitted Removals in a reporting period."
-              }
-              action={
-                searchQuery ? undefined : (
-                  <Button
-                    variant="default"
-                    onClick={syncFromRegistry}
-                    busy={syncMutation.isPending}
-                    disabled={!gate.canSync}
-                  >
-                    <ArrowsClockwiseIcon size={20} weight="bold" />
-                    Sync from registry
-                  </Button>
-                )
+                  : "Sync existing statements from the registry above, or create one for submitted Removals in a reporting period."
               }
               padding="md"
             />
