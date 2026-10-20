@@ -1,7 +1,9 @@
 /**
- * RemovalTemplateReviewPanel — the "Removal templates" pane of Certification
- * settings. Lists the facility default template and every template a credit
- * batch pins, each with its lines and where every line gets its figure.
+ * RemovalTemplateReviewPanel: the "Removal templates" pane of Certification
+ * settings, the one place a Removal template is set up. Lists every Removal
+ * template of the facility's Isometric project (the default first, then the
+ * ones credit batches use), each with its lines and noma's decision per line.
+ * An Owner or Admin chooses the facility default here.
  *
  * Every viewer can read it; `canManage` (server-computed, Owner or Admin) adds
  * the assignment controls. The review reads the templates live from Isometric,
@@ -78,7 +80,7 @@ export function RemovalTemplateReviewPanel({ facilityId, canManage, templateId }
       <EmptyState
         icon={<ListChecksIcon size={EMPTY_ICON_SIZE} weight="bold" />}
         title="No Removal templates yet"
-        description="Choose a default Removal template for this facility in Certifier. Its lines show here for review."
+        description="Link this facility to an Isometric project in Certifier. Its Removal templates show here."
         padding="sm"
         action={
           <Link href={certificationSettingsHref(facilityId)} className="body-small underline underline-offset-2">
@@ -103,8 +105,10 @@ export function RemovalTemplateReviewPanel({ facilityId, canManage, templateId }
           entry={entry}
           facilityId={facilityId}
           canManage={canManage}
-          onRetry={entry.preview ? () => void preview.refetch() : retry}
-          isRetrying={entry.preview ? preview.isFetching : query.isFetching}
+          // Only the linked template Isometric's list did not include is read on its own.
+          onRetry={!listed && entry.templateId === requested ? () => void preview.refetch() : retry}
+          isRetrying={!listed && entry.templateId === requested ? preview.isFetching : query.isFetching}
+          defaultExpanded={entry.isDefault || entry.templateId === requested}
         />
       ))}
     </div>

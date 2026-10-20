@@ -14,6 +14,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -22,6 +23,7 @@ import {
   useFacilityCertifierSummary,
 } from "@/hooks/use-certification";
 import { isometricRegistry } from "@/lib/isometric/links";
+import { certificationRemovalTemplatesHref } from "@/lib/certification/links";
 import { formatDate } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import type { CertifierProjectRow } from "@/data-access/certification";
@@ -133,11 +135,13 @@ function CertifierActions({ children }: { children: ReactNode }) {
  * fetch the project list) so the persisted identifiers stand in for it.
  */
 function CertifierMappingFields({
+  facilityId,
   mapping,
   isProduction,
   projectName,
   templateName,
 }: {
+  facilityId: string;
   mapping: CertifierProjectRow;
   isProduction: boolean;
   projectName?: string | null;
@@ -201,6 +205,13 @@ function CertifierMappingFields({
             {mapping.defaultRemovalTemplateId ?? MISSING_VALUE.notSet}
           </span>
         )}
+        {/* Chosen with its lines in Removal templates; shown here read-only. */}
+        <Link
+          href={certificationRemovalTemplatesHref(facilityId)}
+          className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
+        >
+          Open Removal templates
+        </Link>
       </Field>
       <Field label="Linked at">
         <span className="body-small">
@@ -250,7 +261,7 @@ function FacilityCertifierReadOnly({
           <>
             <CertifierHeader isProduction={isProduction} embedded={embedded} />
             {mapping ? (
-              <CertifierMappingFields mapping={mapping} isProduction={isProduction} />
+              <CertifierMappingFields facilityId={facilityId} mapping={mapping} isProduction={isProduction} />
             ) : (
               <p className="body-small text-[var(--color-text-secondary)]">
                 This facility has no Isometric project link. Ask an Admin to link one
@@ -382,6 +393,7 @@ function FacilityCertifierManage({
                   />
                 ) : mapping ? (
                   <CertifierMappingFields
+                    facilityId={facilityId}
                     mapping={mapping}
                     isProduction={isProduction}
                     projectName={projectName}

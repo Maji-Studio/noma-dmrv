@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { db } from "@/db";
 import { certifierProjects, facilities, members, organizations, removalTemplateObservations, sessions, users } from "@/db/schema";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
-import { loadRemovalTemplateReviewEntry, loadRemovalTemplateReviewPreview } from "@/fn/certification/removal-template-review";
+import { loadRemovalTemplateReviewEntry, loadRemovalTemplateReview } from "@/fn/certification/removal-template-review";
 import { loadRemovalTemplateFacts } from "@/fn/certification/removal-template-facts";
 import { observeRemovalTemplate } from "@/fn/certification/observe-removal-template";
 import { auth } from "@/lib/auth/better-auth";
@@ -20,6 +20,10 @@ import { TEST_SITE_POSITION } from "./helpers/test-org";
 // registry boundary are supplied by the test. tests/setup.ts guards TEST_DATABASE_URL.
 const request = vi.hoisted(() => ({ headers: new Headers() }));
 vi.mock("next/headers", () => ({ headers: async () => request.headers }));
+vi.mock("@/data-access/certifier-credentials", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/data-access/certifier-credentials")>(),
+  hasCertifierCredentials: vi.fn(async () => true),
+}));
 vi.mock("@/lib/isometric/client", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/isometric/client")>(),
   createIsometricClient: vi.fn(() => ({})),
@@ -103,14 +107,21 @@ describe("read-only Removal template previews", () => {
     if (withPrior) expect((await facts()).observation).not.toBeNull();
     const before = await storedObservations();
     const input = { facilityId, removalTemplateId: template.id };
-    const preview = await loadRemovalTemplateReviewPreview(input);
-    expect(preview.success).toBe(true);
-    expect(await storedObservations()).toHaveLength(before.length);
-    expect(await storedObservations()).toEqual(before);
     const entry = await loadRemovalTemplateReviewEntry(input);
-    expect(entry.success).toBe(true);
+    expect(entry).toMatchObject({ success: true, data: { observation: null, preview: true } });
     expect(await storedObservations()).toEqual(before);
     expect(loadTemplateEnrichment).toHaveBeenCalled();
+  });
+
+  it("lists an unused template without storing observations", async () => {
+    const before = await storedObservations();
+    const result = await loadRemovalTemplateReview(facilityId);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("expected a read");
+    expect(result.data.find((entry) => entry.templateId === template.id)).toMatchObject({
+      observation: null, preview: true, isDefault: false, isPinned: false,
+    });
+    expect(await storedObservations()).toEqual(before);
   });
 
   it("still stores an observation through loadRemovalTemplateFacts", async () => {

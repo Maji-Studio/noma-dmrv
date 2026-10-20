@@ -1,5 +1,5 @@
 import { principalAllows } from "@/lib/auth/api-scopes";
-import { apiDenialResponse } from "@/lib/api/problem";
+import { apiScopeDenialResponse } from "@/lib/api/scope-denial";
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
 import { localhostAllowedOrigins, originValidationResponse } from "@modelcontextprotocol/server";
 import { env } from "@/config/env";
@@ -29,9 +29,7 @@ const authenticatedHandler = apiRoute("api.mcp", undefined, serveMcp, {
     }
     const requiredScopes = mcpRequestRequiredScopes(ctx, body);
     if (requiredScopes.some(scope => !principalAllows(ctx, scope))) {
-      return { request, access: "read", response: apiDenialResponse("missing_scope", context.instance, context.requestId, {
-        oauth: true, role: ctx.orgRole, scopes: ctx.scopes, requiredScopes,
-      }) };
+      return { request, access: "read", response: await apiScopeDenialResponse(ctx, context.instance, context.requestId, requiredScopes) };
     }
     // Preserve the pre-auth start instant when the tool declares its own budget.
     context.deadlineAt += mcpRequestDeadlineMs(ctx, body, BASE_DEADLINE_MS) - BASE_DEADLINE_MS;

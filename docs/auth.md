@@ -320,7 +320,9 @@ and `Cache-Control: private, no-store`.
 | `missing_scope`, `insufficient_role`, `api_access_disabled` | 403 |
 
 When `OAUTH_PROVIDER_ENABLED` is true, authentication denials include a Bearer
-challenge with resource metadata and read scopes. OAuth bearer denials on 401s also include `error="invalid_token"`. Unknown or purged credentials
+challenge with resource metadata and all requestable scopes, including
+`offline_access`. OAuth bearer denials on 401s also include `error="invalid_token"`.
+Unknown or purged credentials
 return `credential_invalid`; expired credentials still present in storage
 return `credential_expired`. API-key owner demotion uses `credential_owner_removed`
 as required by the credential lifecycle contract, rather than the operation's

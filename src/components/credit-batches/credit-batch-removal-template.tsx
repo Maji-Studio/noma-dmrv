@@ -23,6 +23,8 @@ import { Notice } from "@/components/ui/notice";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { useFacilityCertifierSummary, useIsometricProjectTemplates } from "@/hooks/use-certification";
 import { useCreditBatch } from "@/hooks/use-credit-batches";
+import { useRemovalTemplateReview } from "@/hooks/use-removal-template-review";
+import { templateReadiness } from "@/components/certification/removal-template-review-model";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { REMOVAL_TEMPLATE_LANDING_LINE } from "@/lib/certification/removal-template-blockers";
 import { certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL } from "@/lib/certification/links";
@@ -77,6 +79,11 @@ export function CreditBatchRemovalTemplate({
   const projectId = summary.data?.mapping?.externalProjectId ?? null;
   const needsTemplates = !!pinnedId || switching;
   const templates = useIsometricProjectTemplates(needsTemplates ? projectId : null);
+  // Readiness comes from Removal templates, read only while the dialog is open.
+  const review = useRemovalTemplateReview(batch.facilityId, switching && canManage, { fresh: true });
+  const readiness = review.data
+    ? new Map(review.data.map((entry) => [entry.templateId, templateReadiness(entry)]))
+    : undefined;
 
   const pinned = pinnedId ? templates.data?.find((template) => template.id === pinnedId) : undefined;
   const lookupSettled = !!projectId && templates.isSuccess;
@@ -154,6 +161,10 @@ export function CreditBatchRemovalTemplate({
           templates={templates.data}
           templatesLoading={summary.isLoading || templates.isLoading}
           templatesError={templates.error}
+          readiness={readiness}
+          readinessLoading={review.isLoading}
+          readinessError={review.isError && !review.data}
+          onRetryReadiness={() => void review.refetch()}
           unavailableReason={summary.isSuccess && !projectId
             ? "Link this facility to an Isometric project in Certification settings first."
             : undefined}

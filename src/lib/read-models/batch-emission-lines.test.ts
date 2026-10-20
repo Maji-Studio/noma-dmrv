@@ -2,10 +2,18 @@ vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntries: vi.fn() 
 vi.mock("@/data-access/emission-line-comments", () => ({ listEmissionLineComments: vi.fn() }));
 vi.mock("@/db", () => ({ db: {} }));
 const gate = vi.hoisted(() => ({ enabled: true }));
+const pinOverride = vi.hoisted(() => ({ code: null as RemovalTemplateBlockerCode | null }));
+vi.mock("@/lib/certification/resolve-batch-pin", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/certification/resolve-batch-pin")>();
+  return {
+    resolveBatchPin: (batches: Parameters<typeof actual.resolveBatchPin>[0]) =>
+      pinOverride.code ? { code: pinOverride.code } : actual.resolveBatchPin(batches),
+  };
+});
 vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => gate.enabled }));
 vi.mock("@/data-access/emission-automatic-masses", () => ({ getEmissionAutomaticMasses: vi.fn() }));
 vi.mock("@/data-access/utils", () => ({ requireOrgFacility: vi.fn(), requireOrgScope: vi.fn() }));
-import { beforeEach, expect, it, vi } from "vitest";
+import { assert, beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 
 vi.mock("@/data-access/credit-batches", () => ({ getCreditBatchById: vi.fn() }));
@@ -31,6 +39,8 @@ import { getEmissionAutomaticMasses } from "@/data-access/emission-automatic-mas
 import { getTemplateObservationById } from "@/data-access/removal-template-observations";
 import { getLatestTemplateObservation } from "@/data-access/removal-template-observations";
 import { loadBatchEmissionLines } from "./batch-emission-lines";
+import { REMOVAL_TEMPLATE_BLOCKERS, removalTemplateBlocker, type RemovalTemplateBlockerCode } from "@/lib/certification/removal-template-blockers";
+import { SafeError } from "@/lib/errors";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { normalizeTemplateDefinition, resolveLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
 import { withTemplateOrder } from "@/lib/isometric/template-observations/template-order";
@@ -38,6 +48,7 @@ import { withTemplateOrder } from "@/lib/isometric/template-observations/templat
 beforeEach(() => {
   vi.resetAllMocks();
   gate.enabled = true;
+  pinOverride.code = null;
   vi.mocked(listEmissionLineComments).mockResolvedValue([]);
   vi.mocked(getCreditBatchById).mockResolvedValue({
     removalTemplateId: "template",
@@ -46,6 +57,59 @@ beforeEach(() => {
   vi.mocked(getLatestTemplateObservation).mockResolvedValue({} as never);
   vi.mocked(getProductionRunsForCertification).mockResolvedValue([]);
   vi.mocked(getSamplesByCreditBatchIds).mockResolvedValue([]);
+});
+
+async function loadReadyLines() {
+  const result = await loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch");
+  expect(result).toEqual({ status: "ready", lines: expect.any(Array) });
+  assert(result.status === "ready");
+  return result.lines;
+}
+
+it("returns an unpinned template blocker before loading accounting", async () => {
+  vi.mocked(getCreditBatchById).mockResolvedValue({
+    facilityId: "facility", removalTemplateId: null,
+  } as never);
+  await expect(loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch")).resolves.toEqual({
+    status: "blocked", blocker: removalTemplateBlocker("unpinnedTemplate"),
+  });
+  expect(getLatestTemplateObservation).not.toHaveBeenCalled();
+  expect(loadCreditBatchRollups).not.toHaveBeenCalled();
+});
+
+it("keeps a missing observation as a retryable failure, not a blocker", async () => {
+  vi.mocked(getLatestTemplateObservation).mockResolvedValue(null);
+  await expect(loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch")).rejects.toThrow(
+    new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead),
+  );
+  expect(loadCreditBatchRollups).not.toHaveBeenCalled();
+});
+
+// The current resolver only derives missing or mixed pins from batch inputs.
+it.each(["notRemovalTemplate", "templateNotFound", "mixedTemplatePins"] as const)(
+  "preserves a %s resolver blocker before loading accounting", async (code) => {
+    pinOverride.code = code;
+    await expect(loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch")).resolves.toEqual({
+      status: "blocked", blocker: removalTemplateBlocker(code),
+    });
+    expect(getLatestTemplateObservation).not.toHaveBeenCalled();
+    expect(loadCreditBatchRollups).not.toHaveBeenCalled();
+  },
+);
+
+it("keeps a missing batch as a real failure", async () => {
+  vi.mocked(getCreditBatchById).mockResolvedValue(null);
+  await expect(loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch")).rejects.toThrow(
+    new SafeError("Credit batch was not found."),
+  );
+  expect(loadCreditBatchRollups).not.toHaveBeenCalled();
+});
+
+it("propagates observation read failures", async () => {
+  const error = new Error("Observation read failed.");
+  vi.mocked(getLatestTemplateObservation).mockRejectedValue(error);
+  await expect(loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch")).rejects.toBe(error);
+  expect(loadCreditBatchRollups).not.toHaveBeenCalled();
 });
 
 it("loads saved template order and group names without registry access", async () => {
@@ -58,7 +122,7 @@ it("loads saved template order and group names without registry access", async (
   vi.mocked(getTransportLegsForEntities).mockResolvedValue([]);
   vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
   vi.mocked(getEmissionAutomaticMasses).mockResolvedValue({ runs: {}, legs: {} });
-  const lines = await loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch");
+  const lines = await loadReadyLines();
   expect(lines.map(({ componentId, groupName, groupPosition, position }) => ({ componentId, groupName, groupPosition, position })))
     .toEqual(fixture.groups.flatMap((group, groupPosition) => group.components.map((component, position) => ({
       componentId: component.id, groupName: group.display_name, groupPosition, position,
@@ -91,7 +155,7 @@ it("shows the lines when a delivery has no load mass, leaving delivery transport
   vi.mocked(getTransportLegsForEntities).mockResolvedValue([]);
   vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
   vi.mocked(getEmissionAutomaticMasses).mockResolvedValue({ runs: {}, legs: {} });
-  const lines = await loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch");
+  const lines = await loadReadyLines();
   expect(lines.length).toBeGreaterThan(0);
   expect(loadBiocharDeliveryTransportLegs).toHaveBeenCalledWith(expect.anything(), [{ deliveryId: "complete", loadMassKg: 10 }], expect.anything());
   const delivery = lines.filter((line) => line.contract?.automaticSource === "delivery-transport");
@@ -158,7 +222,7 @@ it("returns typed entry details and retains removed lines for re-entry", async (
   ] as never);
   const comment = { id: "comment", componentId: "line", body: "Line context", version: 2, updatedAt: new Date(), updatedBy: "user-id" };
   vi.mocked(listEmissionLineComments).mockResolvedValue([comment] as never);
-  const [line] = await loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch");
+  const [line] = await loadReadyLines();
   expect(line).toMatchObject({
     label: "Lab electricity",
     description: "Lab use",
@@ -173,7 +237,7 @@ it("returns typed entry details and retains removed lines for re-entry", async (
   // Switched off, the page shows what records hold, like the overview and readiness.
   gate.enabled = false;
   vi.mocked(listEmissionEntries).mockClear();
-  const [recordsOnly] = await loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch");
+  const [recordsOnly] = await loadReadyLines();
   expect(listEmissionEntries).not.toHaveBeenCalled();
   expect(recordsOnly).toMatchObject({ state: "empty", total: null, entries: [] });
   gate.enabled = true;
@@ -183,7 +247,7 @@ it("returns typed entry details and retains removed lines for re-entry", async (
     lineSources: {},
     enrichment: {},
   } as never);
-  const [removed] = await loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch");
+  const [removed] = await loadReadyLines();
   expect(removed).toMatchObject({
     label: "Lab electricity",
     entries: [{ id: "entry", counts: false, canConfirm: false }],
@@ -243,7 +307,7 @@ it("shows re-entry for unit changes and keeps other lines healthy", async () => 
       values: [{ inputKey: "electricity_use", magnitude: "1", unit: "kWh" }],
     })) as never,
   );
-  const lines = await loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch");
+  const lines = await loadReadyLines();
   expect(lines[0]).toMatchObject({ state: "needsReview", total: null, blocker: { code: "lineNeedsReview", message: "Enter the values again for the current template line." }, entries: [expect.objectContaining({ counts: false, canConfirm: false })] });
   expect(lines[1]).toMatchObject({ state: "filled", total: { magnitude: "1", unit: "kWh" }, removedFromTemplate: false });
   expect(lines.every((line) => line.comment === null)).toBe(true);
@@ -251,7 +315,7 @@ it("shows re-entry for unit changes and keeps other lines healthy", async () => 
     { id: "comment", componentId: "healthy", body: "Context", version: 1, updatedAt: new Date(), updatedBy: "user-id" },
     { id: "orphan", componentId: "removed", body: "Old context", version: 1 },
   ] as never);
-  const withComments = await loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch");
+  const withComments = await loadReadyLines();
   expect(withComments[0].comment).toBeNull();
   expect(withComments[1].comment).toMatchObject({ id: "comment", body: "Context" });
   expect(withComments.map((line) => ({ ...line, comment: null }))).toEqual(lines);

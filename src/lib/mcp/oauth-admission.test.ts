@@ -4,7 +4,8 @@ import { rpc, rpcBody } from "../../../tests/helpers/mcp";
 import { API_SCOPES, principalAllows } from "@/lib/auth/api-scopes";
 import { oauthRoleCeiling } from "@/lib/auth/oauth-scopes";
 import { API_DOCUMENT_OWNER_TYPES } from "@/lib/documents/api-owners";
-const mocks = vi.hoisted(() => ({ resolve: vi.fn() }));
+const mocks = vi.hoisted(() => ({ resolve: vi.fn(), record: vi.fn() }));
+vi.mock("@/data-access/oauth-step-up", () => ({ recordOAuthStepUp: mocks.record }));
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/lib/auth/api-context", () => ({ resolveApiContext: mocks.resolve }));
 vi.mock("@/lib/mcp/server", { spy: true });
@@ -69,6 +70,7 @@ it.each([
   expect(response.headers.get("www-authenticate")).toContain(`error="insufficient_scope", scope="feedstocks:read ${scope}"`);
   expect(await response.json()).toMatchObject({ code: "missing_scope" });
   expect(serveMcp).not.toHaveBeenCalled();
+  expect(mocks.record).toHaveBeenCalledWith({ userId: oauth().userId, clientId: "client", organizationId: oauth().organizationId }, [scope]);
 });
 const writeStepUps = (["owner", "admin", "member"] as const).flatMap(role => {
   const ceiling = { ...oauth(role), scopes: [...oauthRoleCeiling(role)] };
@@ -104,4 +106,12 @@ it("keeps hidden key tools unknown and owner-scope errors inside MCP", async () 
   const document = await POST(rpc("synthetic", "tools/call", { name: "find_documents", arguments: { ownerType: "delivery" } }));
   expect(document.status).toBe(200);
   expect((await rpcBody(document)).result).toMatchObject({ isError: true, structuredContent: { code: "missing_scope" } });
+});
+
+it("preserves the MCP step-up challenge when recording fails", async () => {
+  mocks.record.mockRejectedValueOnce(new Error("Storage unavailable"));
+  const response = await POST(rpc("synthetic", "tools/call", { name: "log_feedstock_delivery", arguments: {} }));
+  expect(response.status).toBe(403);
+  expect(response.headers.get("www-authenticate")).toContain('error="insufficient_scope"');
+  expect(serveMcp).not.toHaveBeenCalled();
 });
