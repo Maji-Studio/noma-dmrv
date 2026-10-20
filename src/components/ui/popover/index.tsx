@@ -14,7 +14,7 @@
  * closes it. The body mounts only while open, so a query inside it fetches on
  * open.
  *
- * Escape or the close button always return focus to the trigger. Base UI's
+ * Escape or the close button return focus to the trigger when focus was inside the popup or lost. Base UI's
  * own return is skipped intermittently once a press has landed inside the popup
  * (focus ended on the body about half the time in E2E, #1283), so the trigger is
  * focused explicitly on those closes.
