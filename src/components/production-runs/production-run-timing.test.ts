@@ -129,17 +129,17 @@ describe("shouldResetProductionRunTimingDefaults", () => {
   });
 });
 
-// The submit path shares `combineDateAndTime` with the schema, so it inherits
+// The submit path shares `resolveRunWindow` with the schema, so it inherits
 // the same DST policy: a gap wall clock comes back as a field-targeted
 // rejection the form can `setError` on, never a thrown error or a shifted
 // instant written to the run window.
 describe("buildProductionRunWindow", () => {
   const NEW_YORK = "America/New_York";
   const base = {
-    startDateStr: "2026-11-01",
-    startTimeStr: "00:30",
-    endDateStr: "2026-11-01",
-    endTimeStr: "03:00",
+    startDate: "2026-11-01",
+    startTime: "00:30",
+    endDate: "2026-11-01",
+    endTime: "03:00",
     includeEndTime: true,
     clearEndTime: false,
     timeZone: NEW_YORK,
@@ -149,7 +149,7 @@ describe("buildProductionRunWindow", () => {
     process.env.TZ = "Europe/Zurich";
     const result = buildProductionRunWindow({
       ...base,
-      startTimeStr: "01:30",
+      startTime: "01:30",
     });
 
     expect(result).toEqual({
@@ -164,8 +164,8 @@ describe("buildProductionRunWindow", () => {
   it("reports an ambiguous fall-back end on the end field", () => {
     const result = buildProductionRunWindow({
       ...base,
-      startTimeStr: "00:30",
-      endTimeStr: "01:30",
+      startTime: "00:30",
+      endTime: "01:30",
     });
 
     expect(result).toEqual({
@@ -181,10 +181,10 @@ describe("buildProductionRunWindow", () => {
     process.env.TZ = "UTC";
     const result = buildProductionRunWindow({
       ...base,
-      startDateStr: "2026-03-08",
-      startTimeStr: "02:30",
-      endDateStr: "2026-03-08",
-      endTimeStr: "04:00",
+      startDate: "2026-03-08",
+      startTime: "02:30",
+      endDate: "2026-03-08",
+      endTime: "04:00",
     });
 
     expect(result).toEqual({
@@ -198,10 +198,10 @@ describe("buildProductionRunWindow", () => {
     process.env.TZ = "UTC";
     const result = buildProductionRunWindow({
       ...base,
-      startDateStr: "2026-03-08",
-      startTimeStr: "01:30",
-      endDateStr: "2026-03-08",
-      endTimeStr: "02:30",
+      startDate: "2026-03-08",
+      startTime: "01:30",
+      endDate: "2026-03-08",
+      endTime: "02:30",
     });
 
     expect(result).toEqual({
@@ -221,7 +221,7 @@ describe("buildProductionRunWindow", () => {
 
     expect(endOf({ clearEndTime: true })).toBeNull();
     expect(endOf({ includeEndTime: false })).toBeUndefined();
-    expect(endOf({ endTimeStr: "" })).toBeUndefined();
+    expect(endOf({ endTime: "" })).toBeUndefined();
     expect(endOf({})).toEqual(new Date("2026-11-01T08:00:00.000Z"));
   });
 });
