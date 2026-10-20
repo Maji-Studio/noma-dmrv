@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { APP_FORM_CREDENTIAL_PREFIX } from "@/config/operations";
@@ -15,8 +14,9 @@ import { assertRowVersion, nextVersion } from "./row-version";
 import { requireOrgScope } from "./utils";
 
 const CREATE_API_KEY_OPERATION = "create_api_key";
-// A draft retry replaces the key even when its name or scopes were edited.
-const CREATE_API_KEY_FINGERPRINT = createHash("sha256").update(CREATE_API_KEY_OPERATION).digest("hex");
+// One fixed fingerprint for every draft (SHA-256 hex of the operation id), so an
+// edited retry still replaces. Precomputed: nothing is hashed at runtime.
+const CREATE_API_KEY_FINGERPRINT = "822ab1d396dd26843e51986d491234b38251baf5afbb09e4aea38f1e426b3e35";
 const createdKeyOutcomeSchema = z.object({ id: z.string().min(1) });
 
 async function requireCredentialManager(ctx: OrgContext) {
