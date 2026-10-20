@@ -67,6 +67,13 @@ jobs:
           restore-keys: |
             ${{ steps.lint-routes.outputs.prefix }}
 
+      - name: Fetch staging migration history
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64)" fetch --no-tags --depth=1 origin staging:refs/remotes/origin/staging || echo "::warning::Could not fetch staging; migration staging comparison will be skipped."
+
       - name: Static quality checks
         run: pnpm verify:static
 
