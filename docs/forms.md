@@ -208,6 +208,10 @@ Prefer the `PositionPicker` component (map preview + address search + manual lat
 
 ## Dates
 
+Union date fields use `dateOrStringSchema` from `@/schemas/helpers`.
+The resolver shows the first branch's first issue, so the helper puts strings
+first and shares that message with server validation.
+
 Use `calendarDateSchema` from `@/schemas/helpers` for business dates persisted
 as **UTC-midnight date-only values**, such as the feedstock delivery date. It
 accepts strict `YYYY-MM-DD` strings and real calendar days only, decodes them to
@@ -215,7 +219,7 @@ a UTC-midnight `Date`, and publishes as `format: date`. Server re-validation
 accepts a `Date` only at UTC midnight. Use `toDateInputValue` for defaults of
 these persisted UTC date-only values.
 
-Use `requiredDateOnly` / `optionalDateOnly` where a date is combined with a
+Use `requiredDateOnlySchema(<required message>)` / `optionalDateOnly` where a date is combined with a
 facility time, as in production runs. They parse `"YYYY-MM-DD"` at **local**
 midnight, because `new Date("YYYY-MM-DD")` parses as **UTC** midnight, which can
 render as the adjacent day and walk a stored date on an edit/save round-trip.
