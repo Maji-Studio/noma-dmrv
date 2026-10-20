@@ -37,7 +37,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 | Sample shipping | Entered per line. Old sample transport legs are deleted by the hand-run retirement CLI at activation (Kenji, 2026-10-16), rather than hidden. Certification-locked legs are skipped. Sample legs stop feeding Removals. There is no production data to keep. Sample labs are deferred. |
 | Lab electricity, consumables | Typed per batch with evidence. |
 | Project-wide flight | Goes on one batch the operator picks. |
-| Empty lines | Shown as "Not recorded" on the batch sheet (`docs/ux-writing.md`, missing values; Kenji, 2026-10-15, replacing "0 so far"). They show 0 only once confirmed. In the Removal flow, one confirmation covers the empty lines and records a zero per line. |
+| Empty lines | Shown as "Not recorded" on the batch sheet (`docs/ux-writing.md`, missing values; Kenji, 2026-10-15, replacing "0 so far"). They show 0 only once confirmed. In the Removal flow, the Empty components step records a zero per component with one note per credit batch. |
 | Extra fuel or electricity | Added on top of the run figures. The form shows the run total and the earlier entries, and the sum is sent. |
 | Meter readings | While a template asks for readings, the operator enters both. The form follows the template: two fields if it has two inputs, one if it has one. |
 | Late entries | Go on the next Removal from the same batch. If none is left, they go on the facility's next Removal covering their date (§7, deferred to #1059). |
@@ -86,7 +86,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - Batch health has exhaustive fix-target switches (`resolutionDestination` in `src/lib/certification/batch-health.ts`, `batch-health-links.ts`).
 
 **UI**
-- The Removal flow has two steps, select and submit (`src/components/certification/new-removal-dialog/index.tsx`). The per-input value table exists only inside the technical-details drawer (`compiled-submission-review.tsx`).
+- The Removal flow had two steps, select and submit (`src/components/certification/new-removal-dialog/index.tsx`); PR 4 adds the Empty components step between them (Removal flow, §4.5). The per-input value table exists only inside the technical-details drawer (`compiled-submission-review.tsx`).
 - The credit batch side sheet's sections are in `creditBatchSheetSections` (`src/components/credit-batches/credit-batch-view.tsx`). Self-fetching panels mount in `viewModeChildren` (`credit-batch-list.tsx`).
 - The Energy page is `src/app/(app)/energy/page.tsx` with `src/components/energy/*` and `src/lib/energy/*`. Its batch filter is client state, not in the URL.
 - The nearest reference for a small versioned, org-scoped child table with documents is production incidents (`src/db/schema/production.ts` `incidentReports`, `src/data-access/production-incidents.ts`).
@@ -322,9 +322,15 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - Snapshot readers (`removal-snapshot-readers.ts`) learn the new role.
 
 **Removal flow**
-- The submit step gets a "Lines sent" section, promoted from the technical drawer. It shows every line with its value, its source and its files.
-- Empty lines are grouped behind one "These n lines had nothing this batch" confirmation, which writes `kind: zero` entries.
-- Submit stays blocked until confirmed.
+Round 7, version B (Kenji, 2026-10-20). Screens say "component", never "line".
+- A new step, **Empty components**, sits between batch selection and Confirm & submit. The draft Removal already exists then (created on Continue from selection), and the zeros belong to it.
+  - One card per selected credit batch lists its components with nothing recorded for this Removal. Each has "Add entry", which opens that batch's Emissions page in a new tab.
+  - Per batch: one optional note, copied by the server into each zero entry, and "Record n components as zero". Recorded components read "Recorded zero".
+  - Undo (of that batch's recorded zeros) lives on this step only, and stays reachable from the submit step's rail until the Removal is submitted.
+  - Continue refuses with its reason while any component is unconfirmed. The step reads the server again on return from the Emissions tab, so an added entry counts.
+- The step is skipped when no selected batch has empty components, when zeros can no longer change (a submitted or in-flight Removal), and when the emissions entries switch is off (the dialog then looks as before). A reopened draft lands on the step while any component is unconfirmed.
+- The submit step gets a read-only **Components sent** section, promoted from the technical drawer's data. It shows every component with its value, its source (Automatic datapoints, manual entries, Recorded zero, Samples, or set in the template) and its files. A component the submission cannot send reads "Not sent" with the reason.
+- Submit stays blocked until every component is confirmed.
 
 **Sample legs**
 - `sampleTransportMassDistanceTonneKm` leaves aggregation, the catalog, `certify-field-registry.ts`, transport coverage, readiness and dashboard gaps, behind the activation gate.

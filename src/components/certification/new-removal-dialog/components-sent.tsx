@@ -30,7 +30,11 @@ const SECTION_HINT =
   "What Isometric receives for each component of the Removal template, per credit batch.";
 
 const ROW_GRID =
-  "grid grid-cols-[minmax(0,1fr)_auto] gap-x-12 gap-y-4 md:grid-cols-[minmax(0,1fr)_minmax(0,272px)_120px_104px] md:items-center";
+  "grid grid-cols-[minmax(0,1fr)_auto] gap-x-12 gap-y-4 md:items-center";
+// The Files column exists only in a batch where some component has files.
+const ROW_GRID_WITH_FILES =
+  "md:grid-cols-[minmax(0,1fr)_minmax(0,272px)_120px_104px]";
+const ROW_GRID_NO_FILES = "md:grid-cols-[minmax(0,1fr)_minmax(0,272px)_104px]";
 
 function EntryFileNames({ entryId }: { entryId: string }) {
   const { data } = useDocumentsForEntity(ENTRY_ENTITY_TYPE, entryId);
@@ -68,9 +72,15 @@ function FilesCell({ row }: { row: SentComponentRow }) {
   );
 }
 
-function SentRow({ row }: { row: SentComponentRow }) {
+function SentRow({ row, withFiles }: { row: SentComponentRow; withFiles: boolean }) {
   return (
-    <li className={cn(ROW_GRID, "px-16 py-10 [border-top:var(--row-divider)]")}>
+    <li
+      className={cn(
+        ROW_GRID,
+        withFiles ? ROW_GRID_WITH_FILES : ROW_GRID_NO_FILES,
+        "px-16 py-10 [border-top:var(--row-divider)]",
+      )}
+    >
       <span className="col-span-2 body-small text-[var(--color-text-primary)] md:col-span-1">
         {row.name}
       </span>
@@ -80,9 +90,11 @@ function SentRow({ row }: { row: SentComponentRow }) {
           {row.fileCount > 0 && <FilesCell row={row} />}
         </span>
       </span>
-      <span className="hidden body-small md:block">
-        <FilesCell row={row} />
-      </span>
+      {withFiles && (
+        <span className="hidden body-small md:block">
+          {row.fileCount > 0 && <FilesCell row={row} />}
+        </span>
+      )}
       <span
         className={cn(
           "col-start-2 row-start-2 text-right body-small font-mono tabular-nums md:col-auto md:row-auto",
@@ -92,17 +104,30 @@ function SentRow({ row }: { row: SentComponentRow }) {
         )}
       >
         {row.value}
+        {row.notSentReason && (
+          <InfoHint label={`Why ${row.name} is not sent`} className="ml-4">
+            {row.notSentReason}
+          </InfoHint>
+        )}
       </span>
     </li>
   );
 }
 
 interface ComponentsSentProps {
-  ctx: Pick<RemovalCertifyContext, "memberBatches" | "emissionLinesByBatchId">;
+  ctx: Pick<
+    RemovalCertifyContext,
+    "memberBatches" | "emissionLinesByBatchId" | "unbindableTemplateInputs"
+  >;
   facilityId: string;
+  /** Components whose datapoints are fixed in the template (from the compiled review). */
+  fixedComponentIds?: ReadonlySet<string>;
 }
 
-export function ComponentsSent({ ctx, facilityId }: ComponentsSentProps) {
+export function ComponentsSent({ ctx, facilityId, fixedComponentIds }: ComponentsSentProps) {
+  const unbindableComponentIds = new Set(
+    (ctx.unbindableTemplateInputs ?? []).map((input) => input.componentId),
+  );
   const byBatch = ctx.emissionLinesByBatchId ?? {};
   const batches = ctx.memberBatches.filter(
     (batch) => (byBatch[batch.id] ?? []).length > 0,
@@ -112,7 +137,11 @@ export function ComponentsSent({ ctx, facilityId }: ComponentsSentProps) {
     <section className="flex flex-col gap-12" aria-label="Components sent">
       <SectionLabel hint={SECTION_HINT}>Components sent</SectionLabel>
       {batches.map((batch) => {
-        const rows = sentComponentRows(byBatch[batch.id]);
+        const rows = sentComponentRows(byBatch[batch.id], {
+          fixedComponentIds,
+          unbindableComponentIds,
+        });
+        const withFiles = rows.some((row) => row.fileCount > 0);
         return (
           <div
             key={batch.id}
@@ -144,7 +173,7 @@ export function ComponentsSent({ ctx, facilityId }: ComponentsSentProps) {
                     {group.label}
                   </li>
                   {group.rows.map((row) => (
-                    <SentRow key={row.componentId} row={row} />
+                    <SentRow key={row.componentId} row={row} withFiles={withFiles} />
                   ))}
                 </Fragment>
               ))}

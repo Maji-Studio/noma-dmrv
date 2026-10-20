@@ -19,9 +19,10 @@ function zero(componentId: string) {
     createdAt: new Date("2026-10-20T10:00:00Z"), displayName: componentId, position: POSITIONS[componentId] ?? 99,
   };
 }
-function data(batches: Array<{ code: string; lines?: string[]; zeros?: string[] }>): RemovalEmptyComponents {
+function data(batches: Array<{ code: string; lines?: string[]; zeros?: string[] }>, editable = true): RemovalEmptyComponents {
   return {
     removalVersion: 1,
+    editable,
     batches: batches.map((batch) => ({
       creditBatchId: `id-${batch.code}`,
       code: batch.code,
@@ -45,6 +46,10 @@ describe("landingStep", () => {
     expect(landingStep(data([{ code: "CB-1", zeros: ["a", "b"] }]))).toBe("submit");
   });
 
+  it("goes to the submit step when the Removal can no longer take zeros", () => {
+    expect(landingStep(data([{ code: "CB-1", lines: ["a"] }], false))).toBe("submit");
+  });
+
   it("goes to the submit step when the read is unavailable", () => {
     expect(landingStep(null)).toBe("submit");
   });
@@ -55,6 +60,8 @@ describe("hasEmptyComponentsStep", () => {
     expect(hasEmptyComponentsStep(data([{ code: "CB-1" }]))).toBe(false);
     expect(hasEmptyComponentsStep(data([{ code: "CB-1", lines: ["a"] }]))).toBe(true);
     expect(hasEmptyComponentsStep(data([{ code: "CB-1", zeros: ["a"] }]))).toBe(true);
+    // A submitted Removal refuses new zeros and Undo: no step, no way back to it.
+    expect(hasEmptyComponentsStep(data([{ code: "CB-1", zeros: ["a"] }], false))).toBe(false);
   });
 });
 
@@ -64,6 +71,9 @@ describe("continueRefusal", () => {
       data([{ code: "CB-1", lines: ["a", "b"] }, { code: "CB-2", lines: ["c"] }, { code: "CB-3", zeros: ["d"] }]),
     );
     expect(refusal.reason).toBe("Record the 3 components with nothing in CB-1 and CB-2 as zero, or add entries.");
+    expect(
+      continueRefusal(data([{ code: "CB-1", lines: ["a"] }, { code: "CB-2", lines: ["b"] }, { code: "CB-3", lines: ["c"] }])).reason,
+    ).toContain("nothing in CB-1, CB-2 and CB-3 as zero");
     expect(refusal.count).toBe(3);
     expect(refusal.firstBatchId).toBe("id-CB-1");
   });

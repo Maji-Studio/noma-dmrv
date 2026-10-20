@@ -62,8 +62,9 @@ _Avoid_: activity (reserved for the history log).
 **Recorded zero**:
 A confirmation that one template line had no emissions for a specific Removal.
 It is an emissions entry owned by that Removal, contributes 0, and needs no file.
-It is never pooled into another Removal. Distinct from the sandbox zero stub,
-which is a temporary compilation exception and is not an operator confirmation.
+It is never pooled into another Removal. Distinct from the sandbox zero stub
+(removed), which was a temporary compilation exception and never an operator
+confirmation. On screen it is a component recorded as zero.
 
 **Line comment**:
 One editable comment on a credit batch's Removal-template line, identified by
@@ -521,10 +522,10 @@ An Isometric removal-template input bound in the registry to a
 policy-level value (an emission factor, a global-warming potential) —
 the same for every submission. Contrast **monitored input**.
 
-**Zero stub**:
-A placeholder mapping that emits `0` for a **monitored input** noma
-cannot yet source. A template carrying any zero stub must not be used
-against a production registry project.
+**Zero stub** (removed):
+A placeholder mapping that emitted `0` for a **monitored input** noma
+could not yet source, on the sandbox only. Removed in PR 4 of epic #1058:
+operators now confirm empty components as a **Recorded zero** instead.
 
 **Removal template**:
 The Isometric template (credit type REMOVAL) a **Removal** is built from. It

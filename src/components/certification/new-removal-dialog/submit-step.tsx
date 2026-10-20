@@ -73,6 +73,17 @@ interface SubmitStepProps {
   submitMutation: ReturnType<typeof useSubmitRemoval>;
 }
 
+/** Components whose datapoints the template fixes: the compiled review names them. */
+function fixedComponentIds(
+  compilation: ReturnType<typeof useRemovalCompilation>["data"] | null,
+): Set<string> {
+  return new Set(
+    (compilation?.review?.bindings ?? [])
+      .filter((binding) => binding.binding === "fixed")
+      .map((binding) => binding.componentId),
+  );
+}
+
 export function SubmitStep({
   removalId,
   ctx,
@@ -379,7 +390,13 @@ export function SubmitStep({
         }
       />
 
-      <ComponentsSent ctx={ctx} facilityId={facilityId} />
+      {ctx.emissionsEntriesEnabled && (
+        <ComponentsSent
+          ctx={ctx}
+          facilityId={facilityId}
+          fixedComponentIds={fixedComponentIds(compilationQuery.data ?? null)}
+        />
+      )}
 
       <RemovalEmissionsLedger
         compilation={compilationQuery.data ?? null}

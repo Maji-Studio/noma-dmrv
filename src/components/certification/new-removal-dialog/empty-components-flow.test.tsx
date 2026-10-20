@@ -5,10 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const BATCH = "batch-1";
 const mocks = vi.hoisted(() => ({
+  landing: { data: undefined as unknown, isError: false, refetch: vi.fn() },
   query: { data: undefined as unknown, isLoading: false, isError: false },
+  queryArgs: [] as unknown[][],
   load: vi.fn(),
   refresh: vi.fn(),
   create: vi.fn(),
+  submit: { isPending: false, isSuccess: false },
 }));
 
 vi.mock("@/components/ui", () => ({
@@ -19,13 +22,18 @@ vi.mock("@/components/ui", () => ({
 }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: vi.fn() }) }));
 vi.mock("@/hooks/use-certification", () => ({
-  useSubmitRemoval: () => ({ isPending: false, reset: vi.fn(), error: null }),
+  useSubmitRemoval: () => ({ ...mocks.submit, reset: vi.fn(), error: null }),
   useSelectableBatches: () => ({ data: { batches: [{ id: BATCH, health: { state: "ready" } }], facilitySetupComplete: true }, isLoading: false, isError: false }),
   useCreateRemovalWithBatches: () => ({ mutate: mocks.create, isPending: false }),
   useRemovalCertifyContext: () => ({ data: { memberBatches: [] }, isLoading: false, error: null }),
 }));
 vi.mock("@/hooks/use-removal-empty-components", () => ({
-  useRemovalEmptyComponents: () => mocks.query,
+  useRemovalLanding: () => mocks.landing,
+  useRemovalEmptyComponents: (...args: unknown[]) => {
+    mocks.queryArgs.push(args);
+    return mocks.query;
+  },
+  useEmptyComponentsActions: () => ({ busy: false, pendingBatchId: null, error: null, errorBatchId: null, recordZeros: vi.fn(), undoZeros: vi.fn() }),
   useLoadRemovalEmptyComponents: () => mocks.load,
   useRefreshRemovalReview: () => mocks.refresh,
 }));
@@ -40,13 +48,16 @@ import { NewRemovalDialog } from "./index";
 
 const OPEN = {
   removalVersion: 1,
+  editable: true,
   batches: [{ creditBatchId: BATCH, code: "CB-26-001", lines: [{ componentId: "a" }, { componentId: "b" }], zeros: [] }],
 };
 const CONFIRMED = {
   removalVersion: 2,
+  editable: true,
   batches: [{ creditBatchId: BATCH, code: "CB-26-001", lines: [], zeros: [{ id: "z", componentId: "a" }] }],
 };
-const NOTHING = { removalVersion: 1, batches: [{ creditBatchId: BATCH, code: "CB-26-001", lines: [], zeros: [] }] };
+const LAND_EMPTY = { entriesEnabled: true, step: "empty" };
+const LAND_SUBMIT = { entriesEnabled: true, step: "submit" };
 
 function renderDialog(resumeRemovalId: string | null) {
   return render(
@@ -56,62 +67,121 @@ function renderDialog(resumeRemovalId: string | null) {
 
 afterEach(cleanup);
 beforeEach(() => {
+  mocks.landing = { data: undefined, isError: false, refetch: vi.fn() };
   mocks.query = { data: undefined, isLoading: false, isError: false };
+  mocks.queryArgs = [];
   mocks.load.mockReset();
   mocks.refresh.mockReset().mockResolvedValue(undefined);
   mocks.create.mockReset();
+  mocks.submit = { isPending: false, isSuccess: false };
 });
 
 describe("New Removal wizard with empty components", () => {
   it("lands a reopened draft on the Empty components step while components are unconfirmed", () => {
-    mocks.query = { data: OPEN, isLoading: false, isError: false };
+    mocks.landing.data = LAND_EMPTY;
+    mocks.query.data = OPEN;
     renderDialog("removal-1");
     expect(screen.getByText("empty components step")).toBeTruthy();
     expect(screen.getByText("Empty components")).toBeTruthy();
   });
 
-  it("lands a reopened draft with every component confirmed on the submit step", () => {
-    mocks.query = { data: CONFIRMED, isLoading: false, isError: false };
+  it("lands a reopened draft with every component confirmed on submit, and keeps the step in the rail for Undo", () => {
+    mocks.landing.data = LAND_SUBMIT;
+    mocks.query.data = CONFIRMED;
     renderDialog("removal-1");
     expect(screen.getByText("submit step")).toBeTruthy();
-    // The rail still offers the step, so a recorded zero can be undone.
     expect(screen.getByRole("button", { name: /Empty components/ })).toBeTruthy();
   });
 
   it("skips the step entirely when no selected batch has empty components", () => {
-    mocks.query = { data: NOTHING, isLoading: false, isError: false };
+    mocks.landing.data = LAND_SUBMIT;
+    mocks.query.data = { removalVersion: 1, editable: true, batches: [{ creditBatchId: BATCH, code: "CB-26-001", lines: [], zeros: [] }] };
     renderDialog("removal-1");
     expect(screen.getByText("submit step")).toBeTruthy();
     expect(screen.queryByText("Empty components")).toBeNull();
   });
 
-  it("sends a new Removal to the step when its batch has empty components, and past it when not", async () => {
-    for (const [answer, expected] of [[OPEN, "empty components step"], [NOTHING, "submit step"]] as const) {
-      cleanup();
-      mocks.load.mockResolvedValue(answer);
-      mocks.create.mockImplementation((_input: unknown, options: { onSuccess: (value: { removalId: string }) => Promise<void> }) =>
-        options.onSuccess({ removalId: "removal-new" }));
-      renderDialog(null);
-      fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-      await waitFor(() => expect(screen.getByText(expected)).toBeTruthy());
-    }
+  it("with entries switched off looks like before: no read, no step", () => {
+    mocks.landing.data = { entriesEnabled: false, step: "submit" };
+    renderDialog("removal-1");
+    expect(screen.getByText("submit step")).toBeTruthy();
+    expect(screen.queryByText("Empty components")).toBeNull();
+    // The empty components read is never enabled, so no refused call repeats on focus.
+    expect(mocks.queryArgs.every(([, options]) => (options as { enabled: boolean }).enabled === false)).toBe(true);
   });
 
-  it("refuses Continue with the reason while a component is unconfirmed, then proceeds once none is", async () => {
-    mocks.query = { data: OPEN, isLoading: false, isError: false };
+  it("does not move the operator when the data changes while they are on the step", () => {
+    mocks.landing.data = LAND_EMPTY;
+    mocks.query.data = OPEN;
+    const view = renderDialog("removal-1");
+    expect(screen.getByText("empty components step")).toBeTruthy();
+
+    // Recording the last zeros: the read now says everything is confirmed.
+    mocks.query.data = CONFIRMED;
+    view.rerender(<NewRemovalDialog facilityId="f" facilityName="Facility" isOpen onClose={vi.fn()} resumeRemovalId="removal-1" />);
+    expect(screen.getByText("empty components step")).toBeTruthy();
+    expect(screen.queryByText("submit step")).toBeNull();
+  });
+
+  it("offers a retry when the landing read fails, instead of treating it as nothing empty", () => {
+    mocks.landing.isError = true;
+    renderDialog("removal-1");
+    expect(screen.getByRole("alert").textContent).toContain("The empty components could not be checked. Try again.");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(mocks.landing.refetch).toHaveBeenCalled();
+  });
+
+  it("sends a new Removal to the landing the server picks", () => {
+    mocks.landing.data = LAND_EMPTY;
+    mocks.query.data = OPEN;
+    mocks.create.mockImplementation((_input: unknown, options: { onSuccess: (value: { removalId: string }) => void }) =>
+      options.onSuccess({ removalId: "removal-new" }));
+    renderDialog(null);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByText("empty components step")).toBeTruthy();
+  });
+
+  it("stays on the step when the fresh read fails, and says it could not check", async () => {
+    mocks.landing.data = LAND_EMPTY;
+    mocks.query.data = OPEN;
+    mocks.load.mockResolvedValue(null);
+    renderDialog("removal-1");
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Continue" })); });
+    expect(screen.getByRole("alert").textContent).toContain("The empty components could not be checked. Try again.");
+    expect(screen.getByText("empty components step")).toBeTruthy();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+  });
+
+  it("names what blocks Continue only after a refused press, then proceeds once none is open", async () => {
+    mocks.landing.data = LAND_EMPTY;
+    mocks.query.data = OPEN;
     mocks.load.mockResolvedValueOnce(OPEN).mockResolvedValueOnce(CONFIRMED);
     renderDialog("removal-1");
 
-    // The reason sits next to the action before it is pressed.
-    expect(screen.getByText("Record the 2 components with nothing in CB-26-001 as zero, or add entries.")).toBeTruthy();
+    // The cards already count the components: no second line at rest.
+    expect(screen.queryByRole("alert")).toBeNull();
 
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Continue" })); });
-    expect(screen.getByRole("alert").textContent).toContain("Record the 2 components");
+    expect(screen.getByRole("alert").textContent).toBe("Record the 2 components with nothing in CB-26-001 as zero, or add entries.");
     expect(screen.getByText("empty components step")).toBeTruthy();
     expect(mocks.refresh).not.toHaveBeenCalled();
 
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Continue" })); });
     await waitFor(() => expect(screen.getByText("submit step")).toBeTruthy());
     expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers no way back to the step once the Removal is submitted or cannot take zeros", () => {
+    mocks.landing.data = LAND_SUBMIT;
+    mocks.query.data = CONFIRMED;
+    mocks.submit = { isPending: false, isSuccess: true };
+    renderDialog("removal-1");
+    expect(screen.queryByRole("button", { name: /Empty components/ })).toBeNull();
+
+    cleanup();
+    mocks.submit = { isPending: false, isSuccess: false };
+    mocks.query.data = { ...CONFIRMED, editable: false };
+    renderDialog("removal-1");
+    expect(screen.queryByText("Empty components")).toBeNull();
   });
 });

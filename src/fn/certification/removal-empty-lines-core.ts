@@ -1,6 +1,7 @@
 import { emptyRemovalEmissionLines } from "@/lib/certification/removal-emission-lines";
 import { requireEmissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { listEmissionEntriesForBatches } from "@/data-access/emission-entries";
+import { isRemovalZeroEditable } from "@/data-access/emission-zeros";
 import { getCertifierRemovalById } from "@/data-access/certifier-removals";
 import type { OrgContext } from "@/lib/auth/server";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
@@ -11,8 +12,11 @@ export async function loadRemovalEmptyLines(ctx: OrgContext, removalId: string) 
   const context = await loadRemovalSubmissionContext(ctx, removalId);
   const entries = await listEmissionEntriesForBatches(ctx, context.memberBatches.map((batch) => batch.id));
   const removal = await getCertifierRemovalById(ctx, removalId);
+  const editable = await isRemovalZeroEditable(ctx, removalId);
   const emptyLines = emptyRemovalEmissionLines(context.emissionLinesByBatchId ?? {});
-  return { removalVersion: removal?.updatedAt.getTime() ?? null, batches: context.memberBatches.map((batch) => {
+  return { removalVersion: removal?.updatedAt.getTime() ?? null,
+    /** False once an attempt was submitted or is in flight, or the Removal is being deleted: zeros cannot change. */
+    editable, batches: context.memberBatches.map((batch) => {
     const templateLines = context.emissionLinesByBatchId?.[batch.id] ?? [];
     // Template order (group, then component): the derived lines are already sorted that way.
     const position = (componentId: string) => {

@@ -37,6 +37,10 @@ This is the per-surface log of what we tried, what replaced it, and why. Read it
 - **Production run flow** (#888, #999): Sankey, left to right, with numbers; water taken up shown as an inflow.
 - **Energy → Emissions** (2026-10-01 → #1140): toggled explorer (variant F) was "too complicated" → list and Sankey toggle (G) → replaced by Emissions: overview C, detail C3c (monthly ledger, whole row clickable, ⋮ menu), then accordion layout E (full width, line description above Source, comment as an action). Rejected: a "Nothing to record" button; default reads "Nothing recorded" with a quiet "Add manual entry".
 
+## Removals
+
+- **Empty components in New Removal** (epic #1058 PR 4, round 7; 2026-10-20, Kenji): empty template components confirmed on the submit step (A) or inside the compact batch boxes of selection (C, #1202) → version B, its own "Empty components" step between selection and Confirm & submit. One card per credit batch, "Add entry" per component (new tab), one optional note and "Record n components as zero", "Recorded zero" once confirmed, Undo on this step only. The step is skipped when nothing is empty; Continue refuses with a reason that names the components and batches; the submit step shows a read-only "Components sent" (value, source, files). Copy says "component", never "line" (2026-10-20). Rejected: confirming on the submit step, and the confirmation inside the selection boxes.
+
 ## Credit batches and locks
 
 - **Credit batch line in forms** (#1164, #1059; 2026-10-20): Production Run form footer gets one quiet line above Save, credit batch icon, code linked in a new tab, ⓘ for the rule. Matched by the run's facility-local end day (#1099), not the start date of the Oct 15 prototypes. Running runs say "Expected credit batch"; a start-day stand-in says "by start day". Rejected: an "on save" suffix and a "What happens next" heading.

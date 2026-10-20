@@ -14,6 +14,8 @@ import {
 } from "@/fn/certification/emission-zeros";
 import { throwActionError } from "@/lib/stale-version";
 import type { ActionResult } from "@/types/actions";
+import { loadRemovalCertifyContext } from "@/fn/certification";
+import { landingStep } from "@/lib/certification/empty-components-state";
 import {
   certificationKeys,
   invalidateCertificationReadiness,
@@ -89,9 +91,45 @@ interface ZeroScope {
   expectedRemovalVersion: number | null;
 }
 
-export function useRecordEmissionZeros() {
+/**
+ * Where a New Removal opens: the empty components step while any is
+ * unconfirmed, the submit step otherwise, and straight to submit when the
+ * emissions entries switch is off (the server supplies it on the context).
+ * Resolved once per Removal: later edits must not move the operator, so the
+ * key sits outside `certificationKeys.all`, which every write invalidates.
+ */
+export function useRemovalLanding(
+  removalId: string | null,
+  facilityId: string,
+  enabled: boolean,
+) {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useQuery({
+    queryKey: ["removal-landing", removalId ?? ""],
+    queryFn: async () => {
+      // The dialog reads the same context: share it instead of loading it twice.
+      const ctx = await queryClient.ensureQueryData({
+        queryKey: certificationKeys.certifyContextForRemoval(facilityId, removalId!),
+        queryFn: async () => unwrapZero(await loadRemovalCertifyContext(facilityId, removalId!)),
+        staleTime: 30_000,
+      });
+      if (!ctx.emissionsEntriesEnabled) return { entriesEnabled: false, step: "submit" as const };
+      return { entriesEnabled: true, step: landingStep(await readEmptyComponents(removalId!)) };
+    },
+    enabled: enabled && !!removalId,
+    staleTime: Infinity,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Record and undo as one unit: one write at a time (the Removal version moves
+ * with each), and a stale error from one never outlives the other.
+ */
+export function useEmptyComponentsActions() {
+  const queryClient = useQueryClient();
+  const record = useMutation({
     mutationFn: async (input: ZeroScope & { componentIds: string[]; note: string }) =>
       unwrapZero(
         await recordEmissionZerosFn({
@@ -104,13 +142,10 @@ export function useRecordEmissionZeros() {
             : {}),
         }),
       ),
+    // Awaited: the write stays pending until the reads behind it are fresh.
     onSettled: () => invalidateCertificationReadiness(queryClient),
   });
-}
-
-export function useUndoEmissionZeros() {
-  const queryClient = useQueryClient();
-  return useMutation({
+  const undo = useMutation({
     mutationFn: async (input: ZeroScope) =>
       unwrapZero(
         await undoEmissionZerosFn({
@@ -123,4 +158,25 @@ export function useUndoEmissionZeros() {
       ),
     onSettled: () => invalidateCertificationReadiness(queryClient),
   });
+  const failed = record.isError ? record : undo.isError ? undo : null;
+  return {
+    busy: record.isPending || undo.isPending,
+    pendingBatchId: record.isPending
+      ? record.variables?.creditBatchId
+      : undo.isPending
+        ? undo.variables?.creditBatchId
+        : null,
+    error: failed?.error ?? null,
+    errorBatchId: failed?.variables?.creditBatchId ?? null,
+    recordZeros: (input: ZeroScope & { componentIds: string[]; note: string }) => {
+      undo.reset();
+      record.mutate(input);
+    },
+    undoZeros: (input: ZeroScope) => {
+      record.reset();
+      undo.mutate(input);
+    },
+  };
 }
+
+export type EmptyComponentsActions = ReturnType<typeof useEmptyComponentsActions>;

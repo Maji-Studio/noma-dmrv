@@ -7,7 +7,7 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowSquareOutIcon,
@@ -24,18 +24,17 @@ import { MAX_NOTE_LENGTH } from "@/components/emissions/emission-line-display";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { formatDateRange, formatDateTime } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
-import {
-  useRecordEmissionZeros,
-  useUndoEmissionZeros,
-  type RemovalEmptyComponents,
-  type RemovalEmptyComponentsBatch,
+import type {
+  EmptyComponentsActions,
+  RemovalEmptyComponents,
+  RemovalEmptyComponentsBatch,
 } from "@/hooks/use-removal-empty-components";
 import {
   componentsWord,
   recordedAt,
   recordedNote,
   stepRows,
-} from "./empty-components-state";
+} from "@/lib/certification/empty-components-state";
 
 const LINK_ICON_SIZE = 12;
 const STATE_ICON_SIZE = 14;
@@ -50,6 +49,12 @@ interface BatchDates {
   endDate: string;
 }
 
+/** Asks a card to put the cursor in its note; a new nonce asks again. */
+export interface FocusRequest {
+  batchId: string;
+  nonce: number;
+}
+
 interface EmptyComponentsStepProps {
   removalId: string;
   facilityId: string;
@@ -58,6 +63,8 @@ interface EmptyComponentsStepProps {
   isError: boolean;
   /** Start and end of each selected batch, by credit batch id. */
   batchDates: Record<string, BatchDates>;
+  actions: EmptyComponentsActions;
+  focusRequest: FocusRequest | null;
 }
 
 export function EmptyComponentsStep({
@@ -67,6 +74,8 @@ export function EmptyComponentsStep({
   isLoading,
   isError,
   batchDates,
+  actions,
+  focusRequest,
 }: EmptyComponentsStepProps) {
   if (isLoading) {
     return (
@@ -94,6 +103,13 @@ export function EmptyComponentsStep({
           removalVersion={data.removalVersion}
           facilityId={facilityId}
           dates={batchDates[batch.creditBatchId]}
+          editable={data.editable}
+          actions={actions}
+          focusNonce={
+            focusRequest?.batchId === batch.creditBatchId
+              ? focusRequest.nonce
+              : null
+          }
         />
       ))}
     </div>
@@ -132,16 +148,21 @@ function BatchCard({
   removalVersion,
   facilityId,
   dates,
+  editable,
+  actions,
+  focusNonce,
 }: {
   batch: RemovalEmptyComponentsBatch;
   removalId: string;
   removalVersion: number | null;
   facilityId: string;
   dates: BatchDates | undefined;
+  editable: boolean;
+  actions: EmptyComponentsActions;
+  focusNonce: number | null;
 }) {
   const [note, setNote] = useState("");
-  const record = useRecordEmissionZeros();
-  const undo = useUndoEmissionZeros();
+  const handledFocus = useRef<number | null>(null);
   const open = batch.lines.length;
   const recorded = batch.zeros.length;
   const noteId = `zero-note-${batch.creditBatchId}`;
@@ -150,9 +171,13 @@ function BatchCard({
     creditBatchId: batch.creditBatchId,
     expectedRemovalVersion: removalVersion,
   };
-  const error = record.error ?? undo.error;
+  const error =
+    actions.errorBatchId === batch.creditBatchId ? actions.error : null;
+  const mine = actions.pendingBatchId === batch.creditBatchId;
   const savedNote = recordedNote(batch);
   const savedAt = recordedAt(batch);
+  // A row names its state only when the rows differ; the header says it otherwise.
+  const mixed = open > 0 && recorded > 0;
 
   return (
     <section
@@ -203,9 +228,11 @@ function BatchCard({
                 className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-12 px-16 py-8 body-small [border-top:var(--row-divider)]"
               >
                 <span className="min-w-0">{row.name}</span>
-                <span className="body-caption text-[var(--color-text-secondary)]">
-                  Recorded zero
-                </span>
+                {mixed && (
+                  <span className="body-caption text-[var(--color-text-secondary)]">
+                    Recorded zero
+                  </span>
+                )}
               </li>
             ) : (
               <li
@@ -214,7 +241,9 @@ function BatchCard({
               >
                 <span className="min-w-0">{row.name}</span>
                 <Link
-                  href={emissionsBatchHref(batch.creditBatchId)}
+                  href={emissionsBatchHref(batch.creditBatchId, {
+                    facility: facilityId,
+                  })}
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={`Add entry for ${row.name}`}
@@ -229,31 +258,36 @@ function BatchCard({
         </ul>
       )}
 
-      {open > 0 && (
+      {editable && open > 0 && (
         <div
           id={`zero-confirm-${batch.creditBatchId}`}
           className="flex flex-col gap-12 px-16 py-16 [border-top:var(--row-divider)]"
         >
-          <FormField
-            id={noteId}
-            label="Note (optional)"
-            hint={NOTE_HINT}
-          >
+          <FormField id={noteId} label="Note (optional)" hint={NOTE_HINT}>
             <FormTextarea
               id={noteId}
+              ref={(element) => {
+                // After the card has mounted: a refused Continue puts the cursor here once.
+                if (element && focusNonce !== null && handledFocus.current !== focusNonce) {
+                  handledFocus.current = focusNonce;
+                  element.scrollIntoView({ block: "center", behavior: "smooth" });
+                  element.focus({ preventScroll: true });
+                }
+              }}
               value={note}
               maxLength={MAX_NOTE_LENGTH}
               onChange={(event) => setNote(event.target.value)}
               placeholder={NOTE_PLACEHOLDER}
-              className="min-h-[72px]"
+              className="min-h-72"
             />
           </FormField>
           <div className="flex flex-wrap items-center gap-12">
             <Button
               variant="default"
-              busy={record.isPending}
+              busy={mine && actions.busy}
+              disabled={actions.busy}
               onClick={() =>
-                record.mutate({
+                actions.recordZeros({
                   ...scope,
                   componentIds: batch.lines.map((line) => line.componentId),
                   note,
@@ -285,14 +319,16 @@ function BatchCard({
               </span>
             )}
           </span>
-          <Button
-            size="small"
-            variant="default"
-            busy={undo.isPending}
-            onClick={() => undo.mutate(scope)}
-          >
-            Undo
-          </Button>
+          {editable && (
+            <Button
+              variant="default"
+              busy={mine && actions.busy}
+              disabled={actions.busy}
+              onClick={() => actions.undoZeros(scope)}
+            >
+              Undo
+            </Button>
+          )}
         </div>
       )}
 

@@ -10,7 +10,7 @@ vi.mock("@/components/ui/tooltip", () => ({ InfoHint: ({ label }: { label?: stri
 vi.mock("@/hooks/use-documents", () => ({ useDocumentsForEntity: () => ({ data: [] }) }));
 
 import { ComponentsSent } from "./components-sent";
-import { sentComponentRows, SENT_SOURCE } from "./components-sent-model";
+import { CARBON_LEDGER_POINTER, sentComponentRows, SENT_SOURCE } from "./components-sent-model";
 
 const BATCH_ID = "batch-1";
 
@@ -54,13 +54,43 @@ describe("sentComponentRows", () => {
     expect(rows.map((row) => row.fileCount)).toEqual([0, 3, 0]);
     expect(rows[1].fileEntryIds).toEqual(["e1", "e2"]);
   });
+
+  it("shows the sequestration component's real source and points to the Carbon ledger", () => {
+    const [row] = sentComponentRows([
+      line({ componentId: "seq", displayName: "Biochar sequestration", contract: { automaticSource: "sequestration" } }),
+    ] as never);
+    expect(row.source).toBe(SENT_SOURCE.samples);
+    expect(row.value).toBe(CARBON_LEDGER_POINTER);
+  });
+
+  it("shows a component fixed in the template as set there, not as not recorded", () => {
+    const rows = sentComponentRows([line({ componentId: "fixed", displayName: "Fixed" })] as never, {
+      fixedComponentIds: new Set(["fixed"]),
+    });
+    expect(rows[0].source).toBe(SENT_SOURCE.template);
+    expect(rows[0].value).toBe(SENT_SOURCE.template);
+  });
+
+  it("never shows a blocked or unbindable component as sent, whatever its zero", () => {
+    const rows = sentComponentRows(
+      [
+        line({ componentId: "blocked", displayName: "Blocked", state: "confirmedZero", blocker: { message: "Add a file for each emissions entry with a value." } }),
+        line({ componentId: "unbindable", displayName: "Unbindable", state: "confirmedZero" }),
+      ] as never,
+      { unbindableComponentIds: new Set(["unbindable"]) },
+    );
+    expect(rows.map((row) => row.value)).toEqual([SENT_SOURCE.notSent, SENT_SOURCE.notSent]);
+    expect(rows[0].notSentReason).toBe("Add a file for each emissions entry with a value.");
+    expect(rows[1].notSentReason).toContain("noma cannot submit");
+  });
 });
 
 describe("ComponentsSent", () => {
   const ctx = {
     memberBatches: [{ id: BATCH_ID, code: "CB-26-001", startDate: "2026-09-01", endDate: "2026-09-30" }],
     emissionLinesByBatchId: { [BATCH_ID]: LINES },
-  } as unknown as Pick<RemovalCertifyContext, "memberBatches" | "emissionLinesByBatchId">;
+    unbindableTemplateInputs: [],
+  } as unknown as Pick<RemovalCertifyContext, "memberBatches" | "emissionLinesByBatchId" | "unbindableTemplateInputs">;
 
   it("lists every component with its value, source and files", () => {
     render(<ComponentsSent ctx={ctx} facilityId="facility-1" />);
@@ -84,9 +114,20 @@ describe("ComponentsSent", () => {
     expect(screen.getAllByRole("button", { name: "File names for Staff travel" }).length).toBeGreaterThan(0);
   });
 
+  it("hides the Files column in a batch where no component has files", () => {
+    const noFiles = {
+      memberBatches: ctx.memberBatches,
+      emissionLinesByBatchId: { [BATCH_ID]: [LINES[0], LINES[2]] },
+      unbindableTemplateInputs: [],
+    } as unknown as Pick<RemovalCertifyContext, "memberBatches" | "emissionLinesByBatchId" | "unbindableTemplateInputs">;
+    const { container } = render(<ComponentsSent ctx={noFiles} facilityId="facility-1" />);
+    expect(container.querySelector("li[class*='120px']")).toBeNull();
+    expect(screen.queryByText(/files?$/)).toBeNull();
+  });
+
   it("renders nothing without lines", () => {
     const { container } = render(
-      <ComponentsSent ctx={{ memberBatches: [], emissionLinesByBatchId: {} } as never} facilityId="facility-1" />,
+      <ComponentsSent ctx={{ memberBatches: [], emissionLinesByBatchId: {}, unbindableTemplateInputs: [] } as never} facilityId="facility-1" />,
     );
     expect(container.textContent).toBe("");
   });
