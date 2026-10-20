@@ -452,6 +452,21 @@ pages and contexts for admin/operator/labTechnician/viewer, plus `seededData`,
   the trigger `data-testid` is not per-field and these do the xpath-ancestor scoping for
   you. Don't hand-roll the locator.
 
+## Known flakes
+
+Check here before chasing a red E2E as a branch regression. Rerun the single spec with
+`--repeat-each=3`; if it fails alone, compare with a clean `staging` worktree. No open
+`ci-health` issue tracks a flake; add a line (with the issue link) when one is filed.
+
+- Popover Escape did not return focus to its trigger after a press inside the popup
+  (`certification-workspace.spec.ts` "closes it with Escape"): fixed in the shared
+  `Popover`, which now focuses the trigger on Escape and Close. Issue #1283.
+- Local only, under a multi-spec run (pass alone): `production-runs.spec.ts` and
+  `full-chain-ui` "Create Sample" (the side sheet does not close after submit);
+  `feedstock-types.spec.ts` (the row's Archive menu item detaches after an edit). No issue.
+- Local only: `certifier-credentials-self-serve` "Keys saved" fails because the spec
+  encrypts with the test key and the dev server cannot decrypt it; run it alone. No issue.
+
 ## Parallelism
 
 `fullyParallel: false` serializes tests only within a single file. Locally,
