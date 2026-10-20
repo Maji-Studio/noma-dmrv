@@ -12,7 +12,7 @@ import { ArrowUpRightIcon, FileIcon, PlusIcon, WarningIcon } from "@phosphor-ico
 import { ServerError } from "@/components/forms/server-error";
 import { Button, Notice } from "@/components/ui";
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
-import { certificationRemovalTemplatesHref } from "@/lib/certification/links";
+import { certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL } from "@/lib/certification/links";
 import { cn } from "@/lib/utils";
 import { EntryFileUpload, useEntryFiles } from "./emission-entry-files";
 import {
@@ -226,15 +226,15 @@ export function NothingYet({ line, className }: { line: EmissionLine; className?
   const text = line.entryPolicy === "single"
     ? "No manual entry yet. One manual entry counts for the whole credit batch."
     : line.entryPolicy === "none"
-      ? "No records source yet. This line takes no manual entries."
-      : "No records source and no manual entries yet.";
+      ? "No automatic datapoints yet. This line takes no manual entries."
+      : "No automatic datapoints and no manual entries yet.";
   return <p className={cn("body-small text-[var(--color-text-tertiary)]", className)}>{text}</p>;
 }
 
 function TemplateReviewLink({ scope }: { scope: EmissionBatchScope }) {
   return (
     <Link href={certificationRemovalTemplatesHref(scope.facilityId)} className="body-small font-medium underline underline-offset-4">
-      Open template review
+      {DECIDE_LINES_LINK_LABEL}
     </Link>
   );
 }
@@ -246,7 +246,7 @@ export function SetupNotice({ scope }: { scope: EmissionBatchScope }) {
 export function ReviewNotice({ line, scope }: { line: EmissionLine; scope: EmissionBatchScope }) {
   return (
     <Notice tone="warning" action={<TemplateReviewLink scope={scope} />}>
-      {line.blocker?.message ?? "An admin reviews this line in the template review."}
+      {line.blocker?.message ?? "An Owner or Admin decides this line in Removal templates."}
     </Notice>
   );
 }

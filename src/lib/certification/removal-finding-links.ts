@@ -36,5 +36,5 @@ export function removalFindingFixLink(
       href: batchId ? creditBatchDeepLinkHref(batchId, facilityId) : creditBatchListHref(facilityId),
     };
   }
-  return batchHealthFixLinkFor({ key: "template", fixTarget: target }, facilityId, batchId);
+  return batchHealthFixLinkFor({ key: target === "templateLineReview" ? "templateLines" : "templateSet", fixTarget: target }, facilityId, batchId);
 }

@@ -29,7 +29,7 @@ export const DECIMAL_MESSAGE = "Enter a non-negative decimal value.";
 export const DATE_BEFORE_START_MESSAGE = "Entry date cannot be before the credit batch start date.";
 export const DATE_IN_FUTURE_MESSAGE = "Entry date cannot be in the future at this facility.";
 export const DATE_INVALID_MESSAGE = "Enter a valid entry date.";
-export const NEEDS_SETUP_COPY = "noma cannot fill this template line yet. An admin sets it up in the template review.";
+export const NEEDS_SETUP_COPY = "noma cannot fill this line yet. An Owner or Admin decides it in Removal templates.";
 export const SINGLE_LINE_CAPTION = "One manual entry per credit batch. It counts for the whole credit batch.";
 /**
  * The server's note limit (MAX_ENTRY_TEXT_LENGTH in src/schemas/emission-entries.ts).

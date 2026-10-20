@@ -63,10 +63,17 @@ const PASSING_CHECKS: RemovalRequirementCheck[] = [
     status: "met",
   },
   {
-    key: "template",
-    label: "Removal template resolved",
-    requirementLabel: "Removal template resolved",
-    unmetLabel: "Removal template has unresolved parts",
+    key: "templateSet",
+    label: "Template set",
+    requirementLabel: "Template set",
+    unmetLabel: "Template not set",
+    status: "met",
+  },
+  {
+    key: "templateLines",
+    label: "Lines decided",
+    requirementLabel: "Lines decided",
+    unmetLabel: "Lines to decide",
     status: "met",
   },
 ];
@@ -112,7 +119,7 @@ describe("SubmissionSummary", () => {
     });
     expect(html).toContain("Submission notes");
     expect(html.split(message)).toHaveLength(2);
-    expect(html).toContain("Review template lines");
+    expect(html).toContain("Decide lines");
     expect(html).toContain("/certification/settings?section=removal-templates&amp;facility=facility-1");
     expect(html).not.toContain('role="alert"');
   });
@@ -135,7 +142,7 @@ describe("SubmissionSummary", () => {
     expect(html).toContain("Record Sample moisture");
     expect(html.split("Switch template")).toHaveLength(2);
     expect(html).not.toContain("#batch-details");
-    expect(html).not.toContain("Review template lines");
+    expect(html).not.toContain("Decide lines");
   });
 
   it("sends a per-record blocker to the records list, not a create intent, with one member batch", () => {
@@ -194,10 +201,10 @@ describe("SubmissionSummary", () => {
     const html = render();
 
     expect(html).toContain("Ready to submit");
-    expect(html).toContain("2 checks passed.");
+    expect(html).toContain("3 checks passed.");
     expect(html).not.toContain("Nothing left to fix.");
     expect(html).not.toContain("What to fix");
-    expect(html).not.toContain("Removal template resolved");
+    expect(html).not.toContain("Template set");
   });
 
   it("does not render an empty verdict detail when no checks were evaluated", () => {

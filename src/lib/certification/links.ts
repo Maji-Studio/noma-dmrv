@@ -27,6 +27,9 @@ export const CERTIFICATION_SETTINGS_REMOVAL_TEMPLATES_SECTION =
 export const CERTIFICATION_SETTINGS_CERTIFIER_SECTION = "certifier";
 export const CERTIFICATION_SETTINGS_LEGACY_CONNECTION_SECTION = "connection";
 
+/** The one link text that leads to Removal templates to decide template lines. */
+export const DECIDE_LINES_LINK_LABEL = "Decide lines";
+
 /** Narrows the Removal templates pane to one template, even one not yet in use. */
 export const CERTIFICATION_SETTINGS_TEMPLATE_PARAM = "template";
 

@@ -24,8 +24,8 @@ import {
   defaultProductionReadinessGap,
   type ProductionReadinessGap,
 } from "./production-readiness";
-import { CERT_REQUIREMENT_META, NO_REMOVAL_TEMPLATE_LABEL } from "./requirement-labels";
-import type { RemovalTemplateBlocker, RemovalTemplateBlockerCode } from "./removal-template-blockers";
+import { CERT_REQUIREMENT_META, NO_REMOVAL_TEMPLATE_LABEL, templateLinesUnmetLabel } from "./requirement-labels";
+import { removalTemplateBlockerDestination, type RemovalTemplateBlocker, type RemovalTemplateBlockerCode } from "./removal-template-blockers";
 import { pluralize } from "@/lib/copy-utils";
 import {
   describeFeedstockTypeMappingGap,
@@ -481,7 +481,9 @@ const TRANSPORT_UNIFORMITY_LABEL = "Transport legs aggregate cleanly";
 export type RemovalRequirementKey =
   | "mapping"
   | "credentials"
-  | "template"
+  | "templateSet"
+  | "templateLines"
+  | "emissions"
   | "transport"
   | "transportUniformity"
   | "production"
@@ -524,7 +526,7 @@ type RemovalRequirementCheckBase = Omit<
   RemovalRequirementCheck,
   "requirementLabel" | "unmetLabel" | "whyDetail"
 > & {
-  /** Overrides the meta's unmet label for one specific problem (no template chosen). */
+  /** Overrides the shared unmet label for a missing pin or a known line count. */
   unmetLabel?: string;
 };
 
@@ -538,6 +540,53 @@ function withRequirementMeta(
     unmetLabel: check.unmetLabel ?? meta.unmetLabel,
     whyDetail: meta.whyDetail,
   };
+}
+
+function templateRequirementChecks(facts: RemovalReadinessFacts): RemovalRequirementCheckBase[] {
+  const canEvaluate = facts.hasMapping && facts.hasOrgCredentials;
+  const pinBlockers = (facts.templateBlockers ?? []).filter(
+    (blocker) => removalTemplateBlockerDestination(blocker.code) === "creditBatchTemplate",
+  );
+  const lineBlockers = (facts.templateBlockers ?? []).filter(
+    (blocker) => removalTemplateBlockerDestination(blocker.code) === "templateLineReview",
+  );
+  const pinFacts = { ...facts, templateBlockers: pinBlockers, emissionLineBlockers: [] };
+  const templateSet = templateResolvesCleanly(pinFacts);
+  // Entry problems (a missing file, an entry to check) are fixed on Emissions,
+  // so they get their own check rather than reading as a line to decide.
+  const entryBlockers = (facts.emissionLineBlockers ?? []).filter((blocker) => blocker.fixTarget === "emissions");
+  const emissionBlockers = (facts.emissionLineBlockers ?? []).filter((blocker) => blocker.fixTarget !== "emissions");
+  const linesToDecide = new Set(emissionBlockers
+    .flatMap((blocker) => blocker.fixTarget === "templateLineReview" && blocker.lineRef
+      ? [blocker.lineRef.componentId] : [])).size;
+  const lineMessages = [...new Set([...lineBlockers, ...emissionBlockers].map((blocker) => blocker.message))];
+  return [
+    {
+      key: "templateSet",
+      label: CERT_REQUIREMENT_META.templateSet.requirementLabel,
+      status: !canEvaluate ? "skipped" : templateSet ? "met" : "unmet",
+      detail: canEvaluate ? templateBlockerReason(pinFacts) ?? undefined : undefined,
+      ...(canEvaluate && pinBlockers.length
+        ? { templateBlockerCodes: pinBlockers.map((blocker) => blocker.code) } : {}),
+      ...(noTemplateChosen(pinFacts) ? { unmetLabel: NO_REMOVAL_TEMPLATE_LABEL } : {}),
+    },
+    {
+      key: "templateLines",
+      label: CERT_REQUIREMENT_META.templateLines.requirementLabel,
+      status: !canEvaluate || !templateSet ? "skipped" : lineMessages.length ? "unmet" : "met",
+      detail: canEvaluate && templateSet ? lineMessages.join(" ") || undefined : undefined,
+      ...(canEvaluate && lineBlockers.length
+        ? { templateBlockerCodes: lineBlockers.map((blocker) => blocker.code) } : {}),
+      unmetLabel: templateLinesUnmetLabel(linesToDecide),
+    },
+    // Only an open entry problem adds this check; batch health covers the met case.
+    ...(canEvaluate && templateSet && entryBlockers.length ? [{
+      key: "emissions" as const,
+      label: CERT_REQUIREMENT_META.emissions.requirementLabel,
+      status: "unmet" as const,
+      detail: [...new Set(entryBlockers.map((blocker) => blocker.message))].join(" "),
+    }] : []),
+  ];
 }
 
 /**
@@ -679,24 +728,7 @@ export function buildRemovalRequirementsChecklist(
           ? NO_ORG_CREDENTIALS_REASON
           : undefined,
     },
-    {
-      key: "template",
-      label: "Removal template resolved",
-      status:
-        !linked || !credentialsConfigured
-          ? "skipped"
-          : templateClean
-            ? "met"
-            : "unmet",
-      detail:
-        !linked || !credentialsConfigured
-          ? undefined
-          : (templateBlockerReason(facts) ?? undefined),
-      ...(linked && credentialsConfigured && facts.templateBlockers?.length
-        ? { templateBlockerCodes: facts.templateBlockers.map((blocker) => blocker.code) }
-        : {}),
-      ...(noTemplateChosen(facts) ? { unmetLabel: NO_REMOVAL_TEMPLATE_LABEL } : {}),
-    },
+    ...templateRequirementChecks(facts),
     ...transport,
     ...uniformity,
     production,

@@ -59,7 +59,7 @@ function templateFixLinks(
   }
   const links: { label: string; href: string }[] = [];
   if (destinations.has("creditBatchTemplate")) {
-    const target = { key: "template", fixTarget: "creditBatchTemplate" } as const;
+    const target = { key: "templateSet", fixTarget: "creditBatchTemplate" } as const;
     if (creditBatches.length === 0) links.push(batchHealthFixLinkFor(target, facilityId));
     for (const batch of creditBatches) {
       const link = batchHealthFixLinkFor(target, facilityId, batch.id);
@@ -67,7 +67,7 @@ function templateFixLinks(
     }
   }
   if (destinations.has("templateLineReview")) {
-    links.push(batchHealthFixLinkFor({ key: "template", fixTarget: "templateLineReview" }, facilityId));
+    links.push(batchHealthFixLinkFor({ key: "templateLines", fixTarget: "templateLineReview" }, facilityId));
   }
   return links;
 }
@@ -107,8 +107,16 @@ function fixLinksFor(
       return [
         { label: "Open settings", href: certificationSettingsHref(facilityId) },
       ];
-    case "template":
+    case "templateSet":
+    case "templateLines":
       return templateFixLinks(check.templateBlockerCodes ?? [], facilityId, creditBatches);
+    case "emissions":
+      return creditBatches.length === 1
+        ? [batchHealthFixLinkFor({ key: "emissions" }, facilityId, creditBatches[0].id)]
+        : creditBatches.map((batch) => {
+          const link = batchHealthFixLinkFor({ key: "emissions" }, facilityId, batch.id);
+          return { ...link, label: `${link.label} on ${batch.code}` };
+        });
     case "measurementDates":
       if (check.fixTarget === "productionRuns") return [productionRuns];
       if (check.fixTarget === "labSamples") return [labSamples];

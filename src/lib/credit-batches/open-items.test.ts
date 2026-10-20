@@ -108,7 +108,7 @@ describe("buildCreditBatchOpenItems", () => {
             status: "unmet",
           },
           {
-            key: "template",
+            key: "templateSet",
             label: "Template",
             requirementLabel: "Template resolved",
             unmetLabel: "Template has unresolved parts",
@@ -171,7 +171,7 @@ describe("buildCreditBatchOpenItems", () => {
     "creditBatchTemplate", "batchDetails", "labSamples", "emissions",
     "templateLineReview", "certificationTemplates", "certificationEmissions", "productionRuns",
   ])("preserves the repair destination for %s", fixTarget => {
-    const check = { key: "template" as const, label: "Template", requirementLabel: "Template ready", unmetLabel: "Template not ready",
+    const check = { key: "templateSet" as const, label: "Template", requirementLabel: "Template ready", unmetLabel: "Template not ready",
       status: "unmet" as const, fixTarget };
     const localTargets = {
       creditBatchTemplate: { tab: "overview", rowId: CREDIT_BATCH_TEMPLATE_ROW },

@@ -6,7 +6,7 @@ import {
   type BatchHealthCheckKey,
   type BatchHealthFacts,
 } from "./batch-health";
-import { CERT_REQUIREMENT_META } from "./requirement-labels";
+import { CERT_REQUIREMENT_META, certCheckLabel } from "./requirement-labels";
 import { batchHealthFixLinkFor } from "./batch-health-links";
 import { removalTemplateBlocker } from "./removal-template-blockers";
 import { deriveBatchEmissionLines } from "./emission-lines";
@@ -47,19 +47,58 @@ describe("deriveBatchHealth", () => {
       ],
     }));
     const links = result.checks
-      .filter((check) => check.key === "template")
+      .filter((check) => check.key === "templateSet" || check.key === "templateLines")
       .map((check) => batchHealthFixLinkFor(check, "facility-1", "batch-1"));
     expect(links).toEqual([
       { label: "Switch template", href: "/credit-batches/batch-1?facility=facility-1&focus=removal-template" },
-      { label: "Review template lines", href: "/certification/settings?section=removal-templates&facility=facility-1" },
+      { label: "Decide lines", href: "/certification/settings?section=removal-templates&facility=facility-1" },
     ]);
+    expect(result.checks.filter((check) => check.key === "templateSet" || check.key === "templateLines")
+      .map(certCheckLabel)).toEqual(["No Removal template chosen", "Lines to decide"]);
   });
 
-  it("names a missing template as not chosen, and other template problems as unresolved", () => {
-    const unpinned = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("unpinnedTemplate")] })), "template");
+  it("names missing pins and undecided lines separately", () => {
+    const unpinned = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("unpinnedTemplate")] })), "templateSet");
     expect(unpinned.unmetLabel).toBe("No Removal template chosen");
-    const lines = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("templateLinesNeedReview")] })), "template");
-    expect(lines.unmetLabel).toBe("Removal template has unresolved parts");
+    const lines = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("templateLinesNeedReview")] })), "templateLines");
+    expect(lines.unmetLabel).toBe("Lines to decide");
+  });
+
+  it.each([
+    { ids: ["one"], label: "1 line to decide" },
+    { ids: ["one", "two"], label: "2 lines to decide" },
+  ])("counts distinct lines for $label while merging template blockers", ({ ids, label }) => {
+    const lines = deriveBatchEmissionLines({
+      definition: { groups: [{
+        id: "group", key: "pyrolysis", displayName: "Pyrolysis", description: "",
+        components: ids.map((id) => ({
+          id, displayName: id, description: null, blueprintKey: "grid_electricity_use",
+          inputs: [{ key: "electricity_use", type: "monitored", quantityKind: "energy" }],
+        })),
+      }] },
+      lineSources: {}, problems: [], enrichmentComplete: true, automaticFigures: {}, entries: [],
+    });
+    const result = deriveBatchHealth(facts({
+      templateBlockers: [
+        removalTemplateBlocker("templateNotFound"),
+        removalTemplateBlocker("templateNotFullyRead"),
+        removalTemplateBlocker("templateLinesNeedReview"),
+      ],
+      emissionLines: [...lines, ...lines, {
+        ...lines[0], componentId: "evidence",
+        blocker: { code: "entryMissingEvidence", message: "Add evidence.", fixTarget: "emissions" },
+      }],
+    }));
+    const checks = result.checks.filter((check) => check.key === "templateSet" || check.key === "templateLines");
+    expect(checks.map(certCheckLabel)).toEqual(["Template not set", label]);
+    expect(checks.map((check) => check.fixTarget)).toEqual(["creditBatchTemplate", "templateLineReview"]);
+  });
+
+  it("uses the general pin label when an unpinned batch is not the only pin problem", () => {
+    const result = deriveBatchHealth(facts({ templateBlockers: [
+      removalTemplateBlocker("unpinnedTemplate"), removalTemplateBlocker("templateNotFound"),
+    ] }));
+    expect(certCheckLabel(checkFor(result, "templateSet"))).toBe("Template not set");
   });
 
   it("keeps document warnings separate from blocking issues", () => {
@@ -412,7 +451,7 @@ it("evidence gaps fail emissions; template review and setup gaps stay in Removal
   const health = deriveBatchHealth(facts({ emissionLines: [missingEvidence, missingEvidence, { ...line, state: "needsSetup", blocker: { code: "lineNeedsSetup", message: "Do not include this copy.", fixTarget: "templateLineReview" } }] }));
   expect(health.issueCount).toBe(1);
   expect(health.checks.find((check) => check.key === "emissions")).toMatchObject({ status: "unmet", fixTarget: "emissions", detail: "Add a file for Line." });
-  expect(health.checks.some((check) => check.key === "template")).toBe(false);
+  expect(health.checks.some((check) => check.key === "templateSet" || check.key === "templateLines")).toBe(false);
   for (const code of ["lineNeedsReview", "lineNeedsSetup", "lineHasNoSource"] as const) {
     const state = code === "lineNeedsSetup" ? "needsSetup" : "needsReview";
     const result = deriveBatchHealth(facts({ emissionLines: [{ ...line, state,
@@ -420,7 +459,7 @@ it("evidence gaps fail emissions; template review and setup gaps stay in Removal
     // Facility/template setup stays outside batch-local emissions health.
     expect(result.issueCount).toBe(0);
     expect(result.checks.find((check) => check.key === "emissions")?.status).toBe("met");
-    expect(result.checks.some((check) => check.key === "template")).toBe(false);
+    expect(result.checks.some((check) => check.key === "templateSet" || check.key === "templateLines")).toBe(false);
   }
   expect(deriveBatchHealth(facts({ emissionLines: null })).checks.some((check) => check.key === "emissions")).toBe(false);
 });

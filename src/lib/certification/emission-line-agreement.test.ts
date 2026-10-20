@@ -69,7 +69,7 @@ it.each(cases)("coverage, readiness and submission agree for %s", (name, code, r
     emissionLineBlockers: resolved.emissionLines?.flatMap((line) => line.blocker ? [line.blocker] : []),
   };
   expect(deriveRemovalReadiness(facts).state === "ready").toBe(!code);
-  expect(buildRemovalRequirementsChecklist(facts).find((check) => check.key === "template")?.status).toBe(code ? "unmet" : "met");
+  expect(buildRemovalRequirementsChecklist(facts).find((check) => check.key === "templateSet")?.status).toBe(code ? "unmet" : "met");
   const agg = { ...aggregateProductionRuns([{ id: "run", code: "RUN", startTime: new Date("2026-10-01"), endTime: new Date("2026-10-02"), electricityKwh: 10 } as ProductionRunForCertification]), weightedOrganicCarbonPercent: null, weightedHToCorgRatio: null, weightedOToCorgRatio: null } satisfies AggregatedProductionData;
   const compile = () => resolveTemplateInputs({ template, lineSources: sources, blueprintsByKey: new Map((enrichment.blueprints as IsometricComponentBlueprint[]).map((blueprint) => [blueprint.key, blueprint])), agg,
     externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: true, omitProductionComponents: false });

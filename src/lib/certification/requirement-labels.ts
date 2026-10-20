@@ -38,7 +38,8 @@ export type CertRequirementKey =
   | "mapping"
   | "credentials"
   | "emissions"
-  | "template"
+  | "templateSet"
+  | "templateLines"
   | "evidence"
   | "durability";
 
@@ -134,11 +135,17 @@ export const CERT_REQUIREMENT_META: Record<
     unmetLabel: "Emission entries without a file",
     whyDetail: "Emissions entries with a value need a file before the Removal can be submitted.",
   },
-  template: {
-    requirementLabel: "Removal template resolved",
-    unmetLabel: "Removal template has unresolved parts",
+  templateSet: {
+    requirementLabel: "Template set",
+    unmetLabel: "Template not set",
     whyDetail:
-      "The facility's default Removal template defines the inputs and transport categories the registry expects. Every referenced component must be available before a Removal can be assembled.",
+      "Each credit batch uses one Removal template from the facility's Isometric project. Removals are built from that template, so Isometric must still list it as a Removal template.",
+  },
+  templateLines: {
+    requirementLabel: "Lines decided",
+    unmetLabel: "Lines to decide",
+    whyDetail:
+      "noma fills each template line from its records or from emissions entries, as decided in Removal templates. A line without a decision, or a template Isometric did not return in full, blocks Removals on that template.",
   },
   evidence: {
     requirementLabel: "Registry value sources linked",
@@ -156,6 +163,13 @@ export const CERT_REQUIREMENT_META: Record<
 
 /** Suffix that turns a per-field entity readiness label ("Proof of delivery") into its unmet form. */
 export const ENTITY_FIELD_UNMET_SUFFIX = "not complete";
+
+/** Name distinct lines when available, otherwise keep the template-wide label. */
+export function templateLinesUnmetLabel(lineCount: number): string {
+  return lineCount > 0
+    ? `${lineCount} ${lineCount === 1 ? "line" : "lines"} to decide`
+    : CERT_REQUIREMENT_META.templateLines.unmetLabel;
+}
 
 /** The unmet form of a per-field entity readiness label: "Proof of delivery not complete". */
 export function entityFieldUnmetLabel(fieldLabel: string): string {

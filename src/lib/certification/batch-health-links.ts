@@ -11,7 +11,7 @@ import {
 } from "@/lib/entity-deep-link";
 import { sampleCreateHref } from "@/lib/sample-create-intent";
 import { creditBatchDeepLinkHref, creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
-import { certificationEmissionEstimatesHref, certificationRemovalTemplatesHref } from "./links";
+import { certificationEmissionEstimatesHref, certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL } from "./links";
 
 export const BATCH_DETAILS_FIX_LABEL = "Edit details";
 
@@ -36,7 +36,8 @@ export function fallbackBatchHealthFixTarget(
   switch (key) {
     case "emissions":
       return "emissions";
-    case "template":
+    case "templateSet":
+    case "templateLines":
       return "certificationTemplates";
     case "carbon":
       // Carbon & durability inputs (organic carbon %, H:Corg ratio) are lab
@@ -97,7 +98,7 @@ export function batchHealthFixLinkFor(
         ? { label: "Switch template", href: creditBatchRemovalTemplateHref(creditBatchId, facilityId) }
         : { label: "Review credit batches", href: `/credit-batches?${query(undefined, false)}` };
     case "templateLineReview":
-      return { label: "Review template lines", href: certificationRemovalTemplatesHref(facilityId) };
+      return { label: DECIDE_LINES_LINK_LABEL, href: certificationRemovalTemplatesHref(facilityId) };
     case "batchDetails":
       return {
         label: BATCH_DETAILS_FIX_LABEL,

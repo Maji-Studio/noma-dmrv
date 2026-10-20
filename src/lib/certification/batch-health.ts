@@ -23,7 +23,7 @@ import {
   defaultProductionReadinessGap,
   type ProductionReadinessGap,
 } from "./production-readiness";
-import { CERT_REQUIREMENT_META, entityFieldUnmetLabel, NO_REMOVAL_TEMPLATE_LABEL } from "./requirement-labels";
+import { CERT_REQUIREMENT_META, entityFieldUnmetLabel, NO_REMOVAL_TEMPLATE_LABEL, templateLinesUnmetLabel } from "./requirement-labels";
 import {
   removalTemplateBlockerDestination,
   type RemovalTemplateBlocker,
@@ -39,7 +39,8 @@ export type BatchHealthState =
 
 export type BatchHealthCheckKey =
   | "emissions"
-  | "template"
+  | "templateSet"
+  | "templateLines"
   | "carbon" // carbon & durability lab inputs resolved
   | "facilityEmissions" // facility emission-estimate inputs resolved
   | "feedstockTypeMapping" // declared pyrolysis feedstock type linked to Isometric
@@ -493,14 +494,28 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
   const emissionIssues = new Map(facts.emissionLines
     ?.filter((line) => line.blocker?.fixTarget === "emissions")
     .map((line) => [line.componentId, line]));
+  const linesToDecide = new Set(facts.emissionLines
+    ?.filter((line) => line.blocker?.fixTarget === "templateLineReview")
+    .map((line) => line.componentId)).size;
+  const pinBlockers = (facts.templateBlockers ?? []).filter(
+    (blocker) => removalTemplateBlockerDestination(blocker.code) === "creditBatchTemplate",
+  );
+  const onlyUnpinned = pinBlockers.length > 0 &&
+    pinBlockers.every((blocker) => blocker.code === "unpinnedTemplate");
   const checks = mergeUnmetChecksByDestination(
     [
       // A pin problem is fixed on the batch; a line problem in the template review.
-      ...(facts.templateBlockers ?? []).map((blocker): BatchHealthCheckBase => ({
-        key: "template", label: "Removal template reviewed", status: "unmet", detail: blocker.message,
-        fixTarget: removalTemplateBlockerDestination(blocker.code),
-        ...(blocker.code === "unpinnedTemplate" ? { unmetLabel: NO_REMOVAL_TEMPLATE_LABEL } : {}),
-      })),
+      ...(facts.templateBlockers ?? []).map((blocker): BatchHealthCheckBase => {
+        const fixTarget = removalTemplateBlockerDestination(blocker.code);
+        const key = fixTarget === "creditBatchTemplate" ? "templateSet" : "templateLines";
+        return {
+          key, label: CERT_REQUIREMENT_META[key].requirementLabel, status: "unmet",
+          detail: blocker.message, fixTarget,
+          unmetLabel: key === "templateLines"
+            ? templateLinesUnmetLabel(linesToDecide)
+            : onlyUnpinned ? NO_REMOVAL_TEMPLATE_LABEL : CERT_REQUIREMENT_META.templateSet.unmetLabel,
+        };
+      }),
       ...(facts.emissionLines != null ? [{
         key: "emissions" as const, label: "Emissions", fixTarget: "emissions" as const,
         status: emissionIssues.size ? "unmet" as const : "met" as const,

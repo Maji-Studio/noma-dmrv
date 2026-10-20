@@ -149,7 +149,7 @@ export async function reviewLineContracts(ctx: OrgContext, input: ReviewLineCont
     for (const [id, assignment] of Object.entries(input.assignments)) {
       if (!componentIds.has(id)) throw new SafeError("Template line not found.");
       if (!lineNeedsReview(id, row.lineSources[id], currentProblems)) {
-        throw new SafeError("This template line needs no review. Only assign sources to lines that need review.");
+        throw new SafeError("This template line is already decided. Only lines to decide take a decision.");
       }
       if (assignment.scope !== "operating" && (assignment.automaticSource || assignment.entryPolicy !== "none")) {
         throw new SafeError("Only operating lines can use automatic sources or entries.");

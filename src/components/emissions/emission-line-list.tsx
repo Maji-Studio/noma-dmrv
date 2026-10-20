@@ -17,7 +17,7 @@ import { CaretDownIcon, CaretRightIcon, ChatTextIcon, DotsThreeVerticalIcon, Fun
 import { Button, DropdownMenu, EmptyState } from "@/components/ui";
 import { InfoHint } from "@/components/ui/tooltip";
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
-import { certificationRemovalTemplatesHref } from "@/lib/certification/links";
+import { certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL } from "@/lib/certification/links";
 import { cn } from "@/lib/utils";
 import { EmissionLineAccordionBody } from "./emission-line-accordion-body";
 import { MENU_PULL, PHONE_COLUMNS, ROW_COLUMNS } from "./emission-line-grid";
@@ -219,7 +219,7 @@ function LineRow({ line, showGroup, scope, actions, canWrite, expanded, editingC
                 onClick={(event) => event.stopPropagation()}
                 className="body-caption text-[var(--color-text-secondary)] underline underline-offset-4 hover:text-[var(--color-text-primary)]"
               >
-                An admin sets this line up in the template review
+                {DECIDE_LINES_LINK_LABEL}
               </Link>
             ) : (
               <SourceChips
@@ -263,7 +263,7 @@ function LineRow({ line, showGroup, scope, actions, canWrite, expanded, editingC
   );
 }
 
-/** The row menu: Add (or Edit) manual entry, the records page, template review, the comment. */
+/** The row menu: Add (or Edit) manual entry, the records page, Decide lines, the comment. */
 function RowMenu({ line, scope, actions, canWrite }: { line: EmissionLine; scope: EmissionBatchScope; actions: LineActions; canWrite: boolean }) {
   const records = lineRecords(line);
   const entry = canWrite ? entryMenuItem(line, actions.form) : null;
@@ -274,7 +274,7 @@ function RowMenu({ line, scope, actions, canWrite }: { line: EmissionLine; scope
   ) : null;
   const setup = line.state === "needsSetup" ? (
     <DropdownMenu.Item key="setup" render={<Link href={certificationRemovalTemplatesHref(scope.facilityId)} />}>
-      Open template review
+      {DECIDE_LINES_LINK_LABEL}
     </DropdownMenu.Item>
   ) : null;
   const comment = canWrite && line.state !== "needsSetup" && !line.removedFromTemplate ? (

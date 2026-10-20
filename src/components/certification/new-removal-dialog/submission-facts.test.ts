@@ -170,7 +170,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
   it("pluralises the blocking issue count", () => {
     expect(
       facts({
-        checks: [check("mapping", "unmet"), check("template", "unmet")],
+        checks: [check("mapping", "unmet"), check("templateSet", "unmet")],
       }).headline,
     ).toBe("2 issues block submission");
   });
@@ -280,7 +280,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
       facts({
         checks: [
           check("mapping", "met"),
-          check("template", "met"),
+          check("templateSet", "met"),
           check("evidence", "warning"),
         ],
       }),
@@ -299,7 +299,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
       facts({
         checks: [
           check("mapping", "met"),
-          check("template", "met"),
+          check("templateSet", "met"),
           check("durability", "skipped"),
         ],
       }),
