@@ -58,7 +58,7 @@ it("refuses unread templates and fingerprint drift before the apply transaction"
 it("delegates all setup writes to one transaction after observing", async () => {
   await applyRemovalTemplateSetupCore(ctx, input);
   expect(mocks.transaction).toHaveBeenCalledTimes(1);
-  expect(mocks.apply).toHaveBeenCalledWith(ctx, "transaction", input, fixture, observation, null);
+  expect(mocks.apply).toHaveBeenCalledWith(ctx, "transaction", input, fixture, observation);
 });
 it("previews an unused template even when it has a stored observation", async () => {
   const result = await loadRemovalTemplateSetupCore(ctx, input.facilityId);
@@ -157,5 +157,5 @@ it("keeps raw retired-source problems after hiding that source from the browser"
   const result = await loadRemovalTemplateSetupCore(ctx, input.facilityId);
   expect(result.fitting[0].ready).toBe(false);
   expect(result.fitting[0].plan.decided.some((line) => line.component.id === retiredId)).toBe(false);
-  expect(result.fitting[0].plan.defaults.find((line) => line.component.id === retiredId)?.proposal.assignments[retiredId]).toEqual({ scope: "operating", entryPolicy: "additive" });
+  expect(result.fitting[0].plan.decisions.find((decision) => decision.id === retiredId)?.options[0].assignments[retiredId]).toEqual({ scope: "operating", entryPolicy: "additive" });
 });

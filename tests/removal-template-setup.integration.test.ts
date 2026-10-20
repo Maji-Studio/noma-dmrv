@@ -82,9 +82,12 @@ async function expectUnapplied() {
 }
 
 it("rejects Member before any registry read", async () => {
+  const planned = await input();
   vi.mocked(requireOrgContext).mockResolvedValue({ ...ctx, orgRole: "member" });
-  expect((await applyRemovalTemplateSetup({} as ApplyRemovalTemplateSetupInput)).success).toBe(false);
+  vi.mocked(listGhgEntryTemplates).mockClear();
+  expect(await applyRemovalTemplateSetup(planned)).toMatchObject({ success: false, error: "You don't have permission to perform this action." });
   expect(listGhgEntryTemplates).not.toHaveBeenCalled();
+  await expectUnapplied();
 });
 it("refuses a facility outside the session organization", async () => {
   const planned = await input();
