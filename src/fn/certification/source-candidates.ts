@@ -1,3 +1,6 @@
+import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
+import { emissionEntrySourceCandidates } from "@/lib/certification/emission-entry-source-bindings";
+import { loadEntrySourceContributions } from "./emission-entry-source-context";
 import type { OrgContext } from "@/lib/auth/server";
 import type { DbTransaction } from "@/db";
 import {
@@ -32,7 +35,8 @@ export type CandidateLineageEntityType =
   | "delivery"
   | "feedstock"
   | "credit_batch"
-  | "sample";
+  | "sample"
+  | "emission_entry";
 
 export interface CandidateLineageEntity {
   entityType: CandidateLineageEntityType;
@@ -171,6 +175,12 @@ export async function loadCandidateDocumentsForRemovalForUser(
     }
   }
 
+  const entryCandidates = await collectEntrySourceDocuments(orgCtx, await loadEntrySourceContributions(orgCtx, removalId));
+  const entryBindingByDocumentId = new Map(entryCandidates.map(({ document, binding }) => [document.id, binding]));
+  for (const { document, binding } of entryCandidates) {
+    seenDocuments.set(document.id, { document, entity: { ...binding.lineage, entityType: "emission_entry" } });
+  }
+
   const mirrorRows = await listDocumentUploadsForDocuments(
     orgCtx,
     ISOMETRIC_PROVIDER,
@@ -181,7 +191,8 @@ export async function loadCandidateDocumentsForRemovalForUser(
   );
   const candidates = Array.from(seenDocuments.values()).flatMap(
     ({ document, entity }): CandidateDocument[] => {
-      const eligibility = sourceCandidateEligibility({
+      const entryBinding = entryBindingByDocumentId.get(document.id);
+      const eligibility = entryBinding ? { binding: entryBinding, biocharApplicationId: null } : sourceCandidateEligibility({
         document,
         lineage: entity,
         removalId,
@@ -314,6 +325,7 @@ export async function collectCandidateSourceDocumentsForRemoval(
     lineages: SourceCandidateLineage[];
     memberBatches?: Array<{ id: string; code?: string | null }>;
     memberSamples?: Array<{ id: string; code?: string | null }>;
+    entryContributions?: RemovalEntryContributions;
   },
 ): Promise<CandidateSourceDocument[]> {
   const entities = new Map<string, CandidateLineageEntity>();
@@ -381,6 +393,9 @@ export async function collectCandidateSourceDocumentsForRemoval(
       }
     }
   }
+  for (const { document, binding } of await collectEntrySourceDocuments(orgCtx, args.entryContributions)) {
+    candidates.set(document.id, { documentId: document.id, binding });
+  }
   return Array.from(candidates.values()).sort((left, right) =>
     left.documentId.localeCompare(right.documentId),
   );
@@ -425,4 +440,19 @@ export async function resolveSourceIdsForRemoval(
     txOrDb,
   );
   return Array.from(new Set(uploads.map((u) => u.externalDocumentId))).sort();
+}
+
+/** Read through the org-scoped document store, then select exactly the manifest IDs. */
+async function collectEntrySourceDocuments(orgCtx: OrgContext, contributions?: RemovalEntryContributions) {
+  const candidates = emissionEntrySourceCandidates(contributions);
+  const entryIds = [...new Set(candidates.map((candidate) => candidate.binding.lineage.entityId))];
+  const documentsByEntry = new Map(await Promise.all(entryIds.map(async (id) =>
+    [id, await listDocumentsForEntity(orgCtx, "emission_entry", id)] as const)));
+  return candidates.map(({ documentId, binding }) => {
+    const document = documentsByEntry.get(binding.lineage.entityId)?.find((row) => row.id === documentId);
+    if (!document || !isApplicationEvidenceDocumentReady(document)) {
+      throw new SafeError("A contributing emissions entry file is unavailable. Refresh the Removal before submitting.");
+    }
+    return { document, binding };
+  });
 }

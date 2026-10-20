@@ -1,3 +1,7 @@
+import { documents } from "@/db/schema";
+import { insertDocument } from "@/data-access/documents";
+import { collectCandidateSourceDocumentsForRemoval } from "@/fn/certification/source-candidates";
+import { planRemovalEvidence } from "@/fn/certification/removal-evidence-plan";
 import { frozenEntriesForAttempt } from "@/fn/certification/removal-entry-context";
 import { discardLocalRemovalDraft } from "@/data-access/certifier-removals";
 import { deleteCreditBatchApplicationSlices } from "@/data-access/credit-batch-delete-slices";
@@ -218,4 +222,36 @@ it("retries an empty frozen set after production reservation and a new entry", a
   const entries = await db.select().from(emissionEntries).where(eq(emissionEntries.creditBatchId, fixture.batchId));
   expect(entries).toHaveLength(1);
   expect(entries[0].sentByRemovalId).toBeNull();
+});
+
+it("plans the exact file of an entry on the submitted contribution path", async () => {
+  const entry = await value();
+  const document = await insertDocument(ctx, { entityType: "emission_entry", entityId: entry.id,
+    documentType: "pdf", fileName: "Entry evidence.pdf", fileUrl: "https://example.test/evidence.pdf" });
+  try {
+    const { entries } = await loadBatchEmissionEntryFacts(ctx, fixture.batchId, observation);
+    const contributions = deriveRemovalEntryContributions({ removalId: fixture.removalId,
+      memberBatchIds: [fixture.batchId], window: { start: "2026-06-01", end: "2026-06-16" },
+      contenders: [{ contenderKind: "draft", removalId: fixture.removalId, createdAt: "2026-06-16",
+        creditBatchIds: [fixture.batchId], window: { start: "2026-06-01", end: "2026-06-16" } }],
+      entries, lineSources: observation.lineSources,
+      monitoredInputs: [{ componentId: "line", inputKey: "electricity_use", unit: "kWh" }],
+    });
+    const candidates = await collectCandidateSourceDocumentsForRemoval(ctx, {
+      removalId: fixture.removalId, lineages: [], entryContributions: contributions,
+    });
+    const evidence = await planRemovalEvidence({ orgCtx: ctx, removalId: fixture.removalId,
+      ctx: { lineages: [], memberBatchClaims: [], batchesWithSamples: [],
+        removalEntryContext: { contributions } } as never,
+      template: { groups: [{ key: "pyrolysis", components: [{ id: "line", blueprint_key: "grid_electricity_use",
+        inputs: [{ input_key: "electricity_use", type: "monitored" }] }] }] } as never,
+      compiledBiocharApplicationIntents: [], supplied: { candidateSourceDocuments: candidates,
+        sourceBindingCandidates: candidates.map((candidate) => ({ ...candidate, sourceId: "source-entry-file" })) },
+    });
+    expect(evidence.sourceBindingPlan).toMatchObject([{ documentId: document.id, nomaRole: "emission_entry",
+      lineage: { entityId: entry.id }, intendedTarget: { componentId: "line", inputKey: "electricity_use" } }]);
+    expect(evidence.sourceBindingPlan).toHaveLength(1);
+  } finally {
+    await db.delete(documents).where(and(eq(documents.organizationId, ctx.organizationId), eq(documents.id, document.id)));
+  }
 });
