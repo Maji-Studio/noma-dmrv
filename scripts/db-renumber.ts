@@ -1,10 +1,9 @@
 /** Regenerate branch migrations offline from origin/staging's metadata. */
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  checkMigrations,
   checkStagingCollisions,
   readStagingJournal,
   type MigrationEntry,
@@ -60,8 +59,6 @@ function main(): void {
     if (dirtyMigrations.trim()) {
       throw new Error("Commit or stash changes under drizzle/ before renumbering. Unrelated working tree edits are allowed.");
     }
-    const failures = checkMigrations(branch.entries, readdirSync(directory));
-    if (failures.length) throw new Error(`Fix the migration journal before renumbering:\n${failures.join("\n")}`);
     if (branchOnly.some((tag) => !SAFE_MIGRATION_TAG.test(tag))) {
       throw new Error("Branch migration tags must contain only letters, digits, underscores or hyphens.");
     }
