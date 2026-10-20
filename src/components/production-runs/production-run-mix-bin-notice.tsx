@@ -6,11 +6,9 @@
 "use client";
 
 import { useOutputStockBalance } from "@/hooks/use-output-stock";
-import { useDebounce } from "@/hooks/use-debounce";
 import { resolveRunWindow } from "@/lib/production-runs/run-window";
 import { backdatedNotice } from "@/lib/output-stock/messages";
 import { Notice } from "@/components/ui/notice";
-import { CREDIT_BATCH_PREVIEW_DEBOUNCE_MS } from "./production-run-credit-batch-preview";
 
 export function ProductionRunMixBinNotice({ binId, facilityId, startDate, endDate, endTime, timeZone, complete }: {
   binId: string | null | undefined;
@@ -23,9 +21,7 @@ export function ProductionRunMixBinNotice({ binId, facilityId, startDate, endDat
   complete: boolean;
 }) {
   const end = complete ? resolveRunWindow({ startDate, startTime: undefined, endDate, endTime }, timeZone).end : null;
-  const endInstant = end?.toISOString() ?? null;
-  const settledInstant = useDebounce(endInstant, CREDIT_BATCH_PREVIEW_DEBOUNCE_MS);
-  const at = endInstant === settledInstant ? endInstant : null;
+  const at = end?.toISOString() ?? null;
   const bin = binId && facilityId && at ? { storageLocationId: binId, facilityId } : null;
   const balance = useOutputStockBalance(bin, at ?? undefined);
   const notice = bin && balance.data ? backdatedNotice(balance.data) : null;
