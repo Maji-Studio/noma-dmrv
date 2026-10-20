@@ -9,7 +9,7 @@ export class ActionError extends Error {
   readonly code: ActionFailure["code"];
   readonly issues: NonNullable<ActionFailure["issues"]>;
   readonly conflict: ActionFailure["conflict"];
-  declare readonly blockers?: ActionFailure["blockers"];
+  readonly blockers?: ActionFailure["blockers"];
   readonly preview: ActionFailure["preview"];
 
   constructor(result: ActionFailure) {

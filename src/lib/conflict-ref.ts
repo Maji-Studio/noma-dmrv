@@ -49,11 +49,12 @@ export function conflictCode(value: string): ConflictCode {
  * the records the refusal named.
  */
 export class ConflictError extends ActionError implements ConflictPayload {
-  declare readonly conflict: ConflictRef;
+  readonly conflict: ConflictRef;
 
   constructor(message: string, payload: ConflictPayload & Omit<ActionFailure, "error">) {
     super({ ...payload, error: message });
     this.name = "ConflictError";
+    this.conflict = payload.conflict;
   }
 }
 

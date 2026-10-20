@@ -42,11 +42,12 @@ export type StaleVersionConflict = ConflictRef;
  * can keep the draft instead of treating it as an ordinary save failure.
  */
 export class StaleVersionError extends ActionError {
-  declare readonly conflict: StaleVersionConflict;
+  readonly conflict: StaleVersionConflict;
 
   constructor(message: string, conflict: StaleVersionConflict, details: Omit<ActionFailure, "error" | "conflict"> = {}) {
     super({ ...details, error: message, conflict });
     this.name = "StaleVersionError";
+    this.conflict = conflict;
   }
 }
 
