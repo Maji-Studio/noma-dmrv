@@ -438,7 +438,7 @@ export default async function globalTeardown() {
       `);
 
       // ─── Formulations ───
-      await client.query(`DELETE FROM formulations WHERE code LIKE 'E2E-%'`);
+      await client.query(`DELETE FROM formulations WHERE code LIKE 'E2E-%' OR name LIKE 'E2E %'`);
 
       // ─── Customer locations (references customers) ───
       await client.query(`
@@ -625,7 +625,7 @@ export default async function globalTeardown() {
       await client.query(`DELETE FROM organizations WHERE name LIKE 'E2E OAuth Organization %'`);
 
       // App create intents (#1238) saved by E2E users in the test organization.
-      // The credential is `app-form:<userId>` and E2E user ids start `e2e-`. The
+      // The credential uses APP_FORM_CREDENTIAL_PREFIX and E2E user ids start `e2e-`. The
       // worker fixtures delete their users first, so match the id, not a join.
       // Nothing outside DEC_ORG_ID is touched.
       await client.query(`
