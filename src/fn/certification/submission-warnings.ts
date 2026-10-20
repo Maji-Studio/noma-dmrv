@@ -105,7 +105,7 @@ export function buildSubmissionAdvisories(args: {
   ];
   return droppedFacts.map((source) => ({
     code: "droppedRecordedFact", fixTarget: "templateLines",
-    message: `${source.label} is recorded, but the active Removal template takes no automatic datapoints for it. Check which template line should take it in Removal templates.`,
+    message: `${source.label} is recorded, but the active Removal template takes no automatic datapoints for it. Check which template component should take it in Removal templates.`,
   }));
 }
 

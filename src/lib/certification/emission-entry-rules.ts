@@ -68,7 +68,7 @@ export function validateEmissionEntry(args: {
   dateDefaulted?: boolean;
 }) {
   const line = entryLine(args.observation, args.componentId);
-  if (!line) throw new SafeError("This template line is no longer available. Choose another line.");
+  if (!line) throw new SafeError("This template component is no longer available. Choose another component.");
   if (
     line.contract.scope !== "operating" ||
     line.entryPolicy === "none" ||
@@ -76,16 +76,16 @@ export function validateEmissionEntry(args: {
       (problem) => problem.componentId === args.componentId,
     )
   ) {
-    throw new SafeError("This template line does not allow entries. Review its setup.");
+    throw new SafeError("This template component does not allow entries. Review its setup.");
   }
   if (line.entryPolicy === "single" && args.activeValueCount > 0)
-    throw new SafeError("This line already has an entry. Edit that entry instead.");
+    throw new SafeError("This component already has an entry. Edit that entry instead.");
   const shape = line.component.inputs.filter((input) => input.type === "monitored");
   if (
     args.values.length !== shape.length ||
     new Set(args.values.map((value) => value.inputKey)).size !== shape.length
   ) {
-    throw new SafeError("Enter a value for each input on this template line.");
+    throw new SafeError("Enter a value for each input on this template component.");
   }
   if (
     shape.some((input) => {
@@ -97,7 +97,7 @@ export function validateEmissionEntry(args: {
   for (const value of args.values) {
     const input = shape.find((input) => input.key === value.inputKey);
     if (!input || input.quantityKind !== value.quantityKind)
-      throw new SafeError("The entry inputs do not match this template line. Enter the values again.");
+      throw new SafeError("The entry inputs do not match this template component. Enter the values again.");
     requireEntryMagnitude(value.magnitude);
     const enriched = ownValue(line.enrichment, input.key)!;
     if (
@@ -135,7 +135,7 @@ export function emissionEntryCounts(
   const after = entryLine(current, componentId);
   const incompatible = {
     counts: false,
-    reason: "Enter the values again for the current template line.",
+    reason: "Enter the values again for the current template component.",
     canConfirm: false,
   };
   if (
@@ -162,7 +162,7 @@ export function emissionEntryCounts(
     canonicalJson({ ...after.contract, origin: undefined, templateOrder: undefined });
   if ((change === "unchanged" || change === "cosmetic") && contractsMatch)
     return { counts: true, reason: null, canConfirm: true };
-  return { counts: false, reason: "Confirm this entry for the changed template line.", canConfirm: true };
+  return { counts: false, reason: "Confirm this entry for the changed template component.", canConfirm: true };
 }
 
 /** Compare persisted content, excluding row identity and input order. */

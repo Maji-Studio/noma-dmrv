@@ -71,9 +71,9 @@ const PASSING_CHECKS: RemovalRequirementCheck[] = [
   },
   {
     key: "templateLines",
-    label: "Lines decided",
-    requirementLabel: "Lines decided",
-    unmetLabel: "Template lines not ready",
+    label: "Components decided",
+    requirementLabel: "Components decided",
+    unmetLabel: "Template components not ready",
     status: "met",
   },
 ];
@@ -109,7 +109,7 @@ describe("SubmissionSummary", () => {
   });
 
   it("links a dropped recorded fact as a warning, not a blocker", () => {
-    const message = "Genset diesel is recorded, but the active Removal template takes no automatic datapoints for it. Check which template line should take it in Removal templates.";
+    const message = "Genset diesel is recorded, but the active Removal template takes no automatic datapoints for it. Check which template component should take it in Removal templates.";
     const html = render({
       compilation: {
         ...COMPILATION,
@@ -142,7 +142,7 @@ describe("SubmissionSummary", () => {
     expect(html).toContain("Record Sample moisture");
     expect(html.split("Switch template")).toHaveLength(2);
     expect(html).not.toContain("#batch-details");
-    expect(html).not.toContain("Decide lines");
+    expect(html).not.toContain("Decide components");
   });
 
   it("sends a per-record blocker to the records list, not a create intent, with one member batch", () => {
