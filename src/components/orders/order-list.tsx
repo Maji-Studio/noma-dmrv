@@ -26,7 +26,7 @@ import {
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
 import { useCreateOrder, useDeleteOrder, useOrderWithRelations, useOrders, useUpdateOrder } from "@/hooks/use-orders";
-import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
+import { FACILITY_NOT_FOUND, MISSING_VALUE, pluralize } from "@/lib/copy-utils";
 import { formatCalendarDate } from "@/lib/format-utils";
 import {
   ORDER_FULFILLMENT_DISPLAY,
@@ -83,7 +83,7 @@ function createColumns(
       accessorFn: (row) => row.facilityName ?? "",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
-          {row.original.facilityName || MISSING_VALUE.notAvailable}
+          {row.original.facilityName || FACILITY_NOT_FOUND}
         </span>
       ),
     },

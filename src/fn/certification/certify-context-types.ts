@@ -105,6 +105,7 @@ export interface RemovalCertifyContext {
 // Extends the UI context with the raw chain data the submit pipeline needs.
 // Kept server-internal so the cached UI payload stays lean.
 export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "emissionsLedger"> {
+  facilityTimezone: string;
   removalEntryContext?: Omit<NonNullable<Awaited<ReturnType<typeof loadRemovalEntryContext>>>, "batchFacts">;
   lineages: ChainOfCustodyData[];
   runs: ProductionRunForCertification[];

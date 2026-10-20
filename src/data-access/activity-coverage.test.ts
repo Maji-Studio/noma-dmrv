@@ -47,6 +47,9 @@ const ACTIVITY_COVERAGE = {
     insertProductionRunReadingsSkippingDuplicates: { status: "exempt", reason: "Telemetry ingestion is measurement data, separate from operator entity activity." },
     recordReadingsImportOutcome: { status: "exempt", reason: "Import outcome metadata is internal bookkeeping; document lifecycle is recorded separately." },
   },
+  "submission-reservation-release.ts": {
+    releaseSubmissionReservations: { status: "direct" },
+  },
   "production-claim-reservations.ts": {
     reserveProductionEmissionsClaims: { status: "direct" },
     rejectSubmissionAndReleaseProductionClaims: { status: "direct" },
@@ -75,6 +78,7 @@ const ACTIVITY_COVERAGE = {
   },
   "credit-batches.ts": {
     createCreditBatch: { status: "direct" },
+    createCreditBatchInTransaction: { status: "direct" },
     updateCreditBatch: { status: "direct" },
     deleteCreditBatch: { status: "direct" },
   },
@@ -136,11 +140,13 @@ const ACTIVITY_COVERAGE = {
   },
   "production-incidents.ts": {
     createProductionIncident: { status: "exempt", reason: "Incident records have no entity activity type; their document retirements are covered." },
+    createProductionIncidentInTransaction: { status: "exempt", reason: "Incident records have no entity activity type." },
     updateProductionIncident: { status: "exempt", reason: "Incident records have no entity activity type." },
     deleteProductionIncident: { status: "exempt", reason: "Incident records have no entity activity type; their document retirements are covered." },
   },
   "production-samples.ts": {
     createProductionSample: { status: "exempt", reason: "In-process measurements have no entity activity type; their document retirements are covered." },
+    createProductionSampleInTransaction: { status: "exempt", reason: "In-process measurements have no entity activity type." },
     updateProductionSample: { status: "exempt", reason: "In-process measurements have no entity activity type." },
     deleteProductionSample: { status: "exempt", reason: "In-process measurements have no entity activity type; their document retirements are covered." },
   },
@@ -183,6 +189,7 @@ const ACTIVITY_COVERAGE = {
   },
   "transport-legs.ts": {
     createTransportLeg: { status: "direct" },
+    createTransportLegInTransaction: { status: "direct" },
     updateTransportLeg: { status: "direct" },
     deleteTransportLeg: { status: "direct" },
     deleteTransportLegsForEntity: { status: "direct" },

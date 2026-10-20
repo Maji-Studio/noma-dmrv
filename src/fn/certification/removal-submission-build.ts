@@ -5,7 +5,6 @@ import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from
 import type { OrgContext } from "@/lib/auth/server";
 import { env } from "@/config/env";
 import { SafeError } from "@/lib/errors";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   aggregateProductionRuns,
   buildRemovalSupplierRef,
@@ -61,8 +60,9 @@ import {
   productionClaimContribution,
 } from "./production-claim-policy";
 import { normalizeSequestrationTemplateForHash } from "./removal-template-hash";
+import { normalizeEntryContributionsForHash, normalizeEntrySourceBindingForHash } from "./removal-entry-hash";
 import { planRemovalEvidence } from "./removal-evidence-plan";
-import type { PreparedRemovalSubmission } from "./removal-submission-prepare";
+import { removalSubmissionBindingOptions, type PreparedRemovalSubmission } from "./removal-submission-prepare";
 
 export { normalizeSequestrationTemplateForHash } from "./removal-template-hash";
 
@@ -239,7 +239,10 @@ export async function compileRemovalSubmission(
     allowPendingSources?: boolean;
   },
 ): Promise<CompiledRemovalSubmission> {
-  const unbindable = findUnbindableTemplateInputs(args.prepared.removalTemplate, { lineSources: args.prepared.lineSources });
+  const unbindable = findUnbindableTemplateInputs(
+    args.prepared.removalTemplate,
+    removalSubmissionBindingOptions(args.ctx, args.prepared.lineSources),
+  );
   if (unbindable.length > 0) {
     return {
       review: emptyReview(args.prepared.removalTemplate),
@@ -353,7 +356,8 @@ export async function compileRemovalSubmission(
       componentId: input.removalTemplateComponentId,
       componentBlueprintKey:
         templateComponentById.get(input.removalTemplateComponentId)
-          ?.blueprint_key ?? MISSING_VALUE.notAvailable,
+          // A fixed input whose component the template no longer carries keeps a string key, saying so.
+          ?.blueprint_key ?? "Component not in the template",
       componentDisplayName: templateComponentById.get(
         input.removalTemplateComponentId,
       )?.display_name,
@@ -705,6 +709,7 @@ export async function buildRemovalSubmissionBuild(args: {
   const agg = transportAgg;
   const latestApplicationTime = resolveLatestApplicationTime(ctx.lineages);
   assertReportingWindowNotInverted({
+    facilityTimezone: ctx.facilityTimezone,
     lineages: ctx.lineages,
     runStartTimeByRunId: new Map(
       ctx.runs.map((run) => [run.id, run.startTime]),
@@ -795,7 +800,7 @@ export async function buildRemovalSubmissionBuild(args: {
     removalId,
     mappingRevision: MAPPING_REVISION,
     ...(ctx.removalEntryContext ? { templateSemanticFingerprint: ctx.removalEntryContext.semanticFingerprint,
-      entryContributions: ctx.removalEntryContext.contributions.manifest } : {}),
+      entryContributions: normalizeEntryContributionsForHash(ctx.removalEntryContext.contributions.manifest) } : {}),
     externalProjectId,
     templateId: removalTemplate.id,
     omittedTemplateComponentIds,
@@ -806,11 +811,11 @@ export async function buildRemovalSubmissionBuild(args: {
     startedOn: reportingWindow.startedOn.toISOString(),
     completedOn: reportingWindow.completedOn.toISOString(),
     sourceIds,
-    sourceBindingPlan: semanticSourceBindingPlan,
+    sourceBindingPlan: semanticSourceBindingPlan.map(normalizeEntrySourceBindingForHash),
     candidateSources: candidateSourceDocuments
       .map((candidate) => ({
         documentId: candidate.documentId,
-        binding: candidate.binding,
+        binding: candidate.binding ? normalizeEntrySourceBindingForHash(candidate.binding) : null,
         biocharApplicationId: candidate.biocharApplicationId,
       }))
       .sort((left, right) =>

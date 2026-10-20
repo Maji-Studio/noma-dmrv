@@ -100,18 +100,17 @@ function BatchHeading({ batch, facilityId }: { batch: SelectableBatch; facilityI
   );
 }
 
-/** Applied dry mass of the slices not yet in a Removal; an unknown mass reads as the placeholder, not a zero. */
+/** Applied dry mass of the slices not yet in a Removal. It is derived, so an unknown mass is left out, never a zero. */
 function DryMass({ tons, className }: { tons: number | null; className?: string }) {
+  if (tons == null) return null;
   return (
     <span
       className={cn(
-        "body-small font-mono tabular-nums whitespace-nowrap text-right",
-        tons == null ? "text-[var(--color-text-tertiary)]" : "text-[var(--color-text-primary)]",
+        "body-small font-mono tabular-nums whitespace-nowrap text-right text-[var(--color-text-primary)]",
         className,
       )}
     >
-      {formatTonnes(tons)}
-      {tons != null && " dry"}
+      {formatTonnes(tons)} dry
     </span>
   );
 }
