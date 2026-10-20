@@ -18,8 +18,9 @@ vi.mock("@/components/ui", async () => ({
 const QUERY = "client_id=app&redirect_uri=https%3A%2F%2Fclient.test%2Fcb&sig=s&ba_param=redirect_uri";
 const view = (overrides = {}) => ({ data: {
   clientName: "Claude", clientHost: "claude.ai", redirectHost: "claude.ai", organization: { id: "org-1", name: "E2E Mafinga Biochar" },
-  newlyRequestedScopes: ["feedstocks:read", "orders:read"], alreadyAllowedScopes: [], offlineAccessRequested: true, isStepUp: false, stepUpScopes: [], ...overrides }, isError: false });
+  newlyRequestedScopes: ["feedstocks:read", "feedstocks:write", "orders:read"], alreadyAllowedScopes: [], offlineAccessRequested: true, isStepUp: false, stepUpScopes: [], ...overrides }, isError: false });
 const box = (name: string) => screen.getByRole("checkbox", { name }) as HTMLInputElement;
+const choose = (name: string) => fireEvent.click(screen.getByRole("radio", { name: new RegExp(`^${name}`) }));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -27,54 +28,109 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-it("offers first-time writes unticked and reads ticked, with no delete column", () => {
-  mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["feedstocks:read", "feedstocks:write"], stepUpScopes: ["feedstocks:write"] }));
+it("starts a first consent on Read only with the board closed", () => {
+  mocks.view.mockReturnValue(view());
   render(<ConsentForm />);
   expect(screen.getByRole("heading", { name: "Allow Claude to use noma?" })).toBeTruthy();
   expect(screen.getByText("It wants to act for you in E2E Mafinga Biochar.")).toBeTruthy();
   // The card names the host the app identifies as and the one it returns to.
   expect(screen.getAllByText("claude.ai")).toHaveLength(2);
-  expect(box("Feedstocks Read").checked).toBe(true);
-  expect(box("Feedstocks Write").checked).toBe(false);
-  expect(screen.queryByRole("columnheader", { name: "Delete" })).toBeNull();
-  expect(box("Allow reading everything listed").checked).toBe(true);
+  expect((screen.getByRole("radio", { name: /^Read only/ }) as HTMLInputElement).checked).toBe(true);
+  expect(screen.getByRole("radio", { name: /^Read and write/ })).toBeTruthy();
+  expect(screen.getByRole("radio", { name: /^Choose per area/ })).toBeTruthy();
+  expect(screen.queryByRole("table")).toBeNull();
 });
 
-it("ticks the newly requested writes on a step-up and shows the rest as already allowed", () => {
-  mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["feedstocks:write"], alreadyAllowedScopes: ["feedstocks:read"], isStepUp: true, stepUpScopes: ["feedstocks:write"] }));
+it("omits Read and write when the request offers no write", () => {
+  mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["feedstocks:read", "orders:read"] }));
   render(<ConsentForm />);
-  expect(box("Feedstocks Write").checked).toBe(true);
-  expect(screen.getByText("Already allowed")).toBeTruthy();
-  expect(screen.getByText("Feedstocks: Read")).toBeTruthy();
-  expect(screen.queryByRole("checkbox", { name: "Feedstocks Read" })).toBeNull();
+  expect(screen.queryByRole("radio", { name: /^Read and write/ })).toBeNull();
 });
 
-const SEVENTEEN_READS = ["applications", "production-runs", "reactors", "biochar-products", "formulations", "feedstocks", "facilities", "suppliers",
-  "customers", "orders", "deliveries", "feedstock-types", "storage-locations", "vehicles", "drivers", "lab-samples", "credit-batches"].map(entity => `${entity}:read`);
-
-it("keeps the one newly requested write visible when 17 reads are already allowed, and collapses only the allowed group", () => {
-  mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["feedstocks:write"], alreadyAllowedScopes: SEVENTEEN_READS, isStepUp: true, stepUpScopes: ["feedstocks:write"] }));
-  const { container } = render(<ConsentForm />);
-  const write = box("Feedstocks Write");
-  expect(write.checked).toBe(true);
-  // The request is never inside a collapsible.
-  expect(write.closest("details")).toBeNull();
-  const allowed = container.querySelector("details") as HTMLDetailsElement;
-  expect(allowed.open).toBe(false);
-  expect(allowed.textContent).toContain("Already allowed (17)");
-  expect(allowed.textContent).toContain("Applications: Read");
+it("submits reads only for the default Read only choice", async () => {
+  mocks.view.mockReturnValue(view());
+  mocks.mutateAsync.mockResolvedValue("https://client.test/cb?code=c&iss=https%3A%2F%2Fnoma.test%2Fapi%2Fauth");
+  render(<ConsentForm />);
+  fireEvent.click(screen.getByRole("button", { name: "Allow" }));
+  await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({ accept: true, scope: "feedstocks:read orders:read offline_access" }));
+  await waitFor(() => expect(mocks.assign).toHaveBeenCalledWith("https://client.test/cb?code=c&iss=https%3A%2F%2Fnoma.test%2Fapi%2Fauth"));
 });
 
-it("does not collapse a short already allowed group", () => {
-  mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["feedstocks:write"], alreadyAllowedScopes: ["feedstocks:read"], isStepUp: true, stepUpScopes: ["feedstocks:write"] }));
-  const { container } = render(<ConsentForm />);
-  expect(container.querySelector("details")).toBeNull();
+it("submits every offered scope for Read and write", async () => {
+  mocks.view.mockReturnValue(view());
+  mocks.mutateAsync.mockResolvedValue("https://client.test/cb?code=c");
+  render(<ConsentForm />);
+  choose("Read and write");
+  fireEvent.click(screen.getByRole("button", { name: "Allow" }));
+  await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({ accept: true, scope: "feedstocks:read feedstocks:write orders:read offline_access" }));
+});
+
+it("opens the per-area board from the current choice and links write to read", () => {
+  mocks.view.mockReturnValue(view());
+  render(<ConsentForm />);
+  choose("Choose per area");
+  expect(box("Feedstocks, read").checked).toBe(true);
+  expect(box("Feedstocks, write").checked).toBe(false);
+  // Areas without a write scope show only the read peg.
+  expect(screen.queryByRole("checkbox", { name: "Orders, write" })).toBeNull();
+  expect(screen.queryByRole("columnheader", { name: "Delete" })).toBeNull();
+  fireEvent.click(box("Feedstocks, read"));
+  fireEvent.click(box("Feedstocks, write"));
+  expect(box("Feedstocks, read").checked).toBe(true);
+  expect(box("Feedstocks, write").checked).toBe(true);
+  fireEvent.click(box("Feedstocks, read"));
+  expect(box("Feedstocks, read").checked).toBe(false);
+  expect(box("Feedstocks, write").checked).toBe(false);
+});
+
+it("All areas, write turns every offered write on and its read with it", async () => {
+  mocks.view.mockReturnValue(view());
+  mocks.mutateAsync.mockResolvedValue("https://client.test/cb?code=c");
+  render(<ConsentForm />);
+  choose("Choose per area");
+  fireEvent.click(box("All areas, read"));
+  expect(box("Orders, read").checked).toBe(false);
+  fireEvent.click(box("All areas, write"));
+  expect(box("Feedstocks, read").checked).toBe(true);
+  expect(box("Feedstocks, write").checked).toBe(true);
+  expect(box("Orders, read").checked).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Allow" }));
+  await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({ accept: true, scope: "feedstocks:write feedstocks:read offline_access" }));
+});
+
+it("preticks only the refused write on a step-up, listed first with New", () => {
+  mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["feedstocks:write", "orders:write", "orders:read", "lab-samples:write", "lab-samples:read"],
+    alreadyAllowedScopes: ["feedstocks:read"], isStepUp: true, stepUpScopes: ["lab-samples:write"] }));
+  render(<ConsentForm />);
+  expect(screen.queryByRole("radio")).toBeNull();
+  expect(box("Lab samples, write").checked).toBe(true);
+  // The refused write needs its read, so the read is on too.
+  expect(box("Lab samples, read").checked).toBe(true);
+  expect(box("Orders, write").checked).toBe(false);
+  expect(box("Orders, read").checked).toBe(false);
+  expect(screen.queryByRole("checkbox", { name: "Feedstocks, read" })).toBeNull();
+  expect(screen.getByText("Feedstocks, read, already allowed")).toBeTruthy();
+  const rows = screen.getAllByRole("row").map(row => row.textContent ?? "");
+  const labs = rows.findIndex(text => text.startsWith("Lab samples"));
+  expect(rows[labs]).toContain("New");
+  expect(labs).toBeLessThan(rows.findIndex(text => text.startsWith("Feedstocks")));
+  expect(labs).toBeLessThan(rows.findIndex(text => text.startsWith("Orders")));
+  expect(screen.getAllByText("New")).toHaveLength(1);
+});
+
+it("shows the board with nothing new ticked and no New row when a step-up has no refusal", () => {
+  mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["feedstocks:write", "orders:read"],
+    alreadyAllowedScopes: ["feedstocks:read"], isStepUp: true, stepUpScopes: [] }));
+  render(<ConsentForm />);
+  expect(box("Feedstocks, write").checked).toBe(false);
+  expect(box("Orders, read").checked).toBe(false);
+  expect(screen.queryByText("New")).toBeNull();
 });
 
 it("keeps Allow enabled when existing permissions remain after unticking new scopes", () => {
   mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["feedstocks:write"], alreadyAllowedScopes: ["feedstocks:read"], isStepUp: true, stepUpScopes: ["feedstocks:write"] }));
   render(<ConsentForm />);
-  fireEvent.click(box("Feedstocks Write"));
+  fireEvent.click(box("Feedstocks, write"));
   expect((screen.getByRole("button", { name: "Allow" }) as HTMLButtonElement).disabled).toBe(false);
 });
 
@@ -111,14 +167,6 @@ it("links the footer to Connected apps", () => {
   expect(screen.getByRole("link", { name: "Settings, Connected apps" }).getAttribute("href")).toBe("/settings/connected-apps");
 });
 
-it("disables Allow while nothing is ticked and re-enables it from the summary row", () => {
-  mocks.view.mockReturnValue(view());
-  render(<ConsentForm />);
-  fireEvent.click(box("Allow reading everything listed"));
-  expect((screen.getByRole("button", { name: "Allow" }) as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.click(box("Allow reading everything listed"));
-  expect((screen.getByRole("button", { name: "Allow" }) as HTMLButtonElement).disabled).toBe(false);
-});
 
 it("puts Allow before Deny", () => {
   mocks.view.mockReturnValue(view());
@@ -127,15 +175,6 @@ it("puts Allow before Deny", () => {
   expect(labels.indexOf("Allow")).toBeLessThan(labels.indexOf("Deny"));
 });
 
-it("posts the ticked scopes plus offline_access and follows the callback", async () => {
-  mocks.view.mockReturnValue(view());
-  mocks.mutateAsync.mockResolvedValue("https://client.test/cb?code=c&iss=https%3A%2F%2Fnoma.test%2Fapi%2Fauth");
-  render(<ConsentForm />);
-  fireEvent.click(box("Orders Read"));
-  fireEvent.click(screen.getByRole("button", { name: "Allow" }));
-  await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({ accept: true, scope: "feedstocks:read offline_access" }));
-  await waitFor(() => expect(mocks.assign).toHaveBeenCalledWith("https://client.test/cb?code=c&iss=https%3A%2F%2Fnoma.test%2Fapi%2Fauth"));
-});
 
 it("keeps the already allowed scopes in a step-up acceptance", async () => {
   mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["feedstocks:write"], alreadyAllowedScopes: ["feedstocks:read"], isStepUp: true, stepUpScopes: ["feedstocks:write"], offlineAccessRequested: false }));
@@ -169,12 +208,6 @@ it("tells the person to start again when the request cannot be read", () => {
   expect(screen.getByText("Start again from the app.")).toBeTruthy();
 });
 
-it("shows no Write column when only reads are requested", () => {
-  mocks.view.mockReturnValue(view());
-  render(<ConsentForm />);
-  expect(screen.getByRole("columnheader", { name: "Read" })).toBeTruthy();
-  expect(screen.queryByRole("columnheader", { name: "Write" })).toBeNull();
-});
 
 it("accepts forced re-consent when every requested scope is already allowed", async () => {
   mocks.view.mockReturnValue(view({ newlyRequestedScopes: [], alreadyAllowedScopes: ["feedstocks:read"] }));
@@ -186,21 +219,20 @@ it("accepts forced re-consent when every requested scope is already allowed", as
   await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({ accept: true, scope: "feedstocks:read offline_access" }));
 });
 
-it("preselects only the refused operation when discovery requests unrelated reads and writes", async () => {
+
+it("disables Allow when a first consent ticks nothing", () => {
+  mocks.view.mockReturnValue(view());
+  render(<ConsentForm />);
+  choose("Choose per area");
+  fireEvent.click(box("All areas, read"));
+  expect((screen.getByRole("button", { name: "Allow" }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+it("keeps the already allowed scopes and ticks a refused write on a discovery re-ask", async () => {
   mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["feedstocks:write", "orders:write", "orders:read"],
     alreadyAllowedScopes: ["feedstocks:read"], isStepUp: true, stepUpScopes: ["feedstocks:write"] }));
   mocks.mutateAsync.mockResolvedValue("https://client.test/cb?code=c");
   render(<ConsentForm />);
-  expect(box("Feedstocks Write").checked).toBe(true);
-  expect(box("Orders Write").checked).toBe(false);
-  expect(box("Orders Read").checked).toBe(false);
   fireEvent.click(screen.getByRole("button", { name: "Allow" }));
   await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({ accept: true, scope: "feedstocks:read feedstocks:write offline_access" }));
-});
-it("leaves new scopes unticked on a step-up without a pending operation", () => {
-  mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["feedstocks:write", "orders:read"],
-    alreadyAllowedScopes: ["feedstocks:read"], isStepUp: true, stepUpScopes: [] }));
-  render(<ConsentForm />);
-  expect(box("Feedstocks Write").checked).toBe(false);
-  expect(box("Orders Read").checked).toBe(false);
 });
