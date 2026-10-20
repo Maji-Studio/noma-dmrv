@@ -1,6 +1,6 @@
 ---
 name: noma-design
-description: noma-dmrv's UI layer on top of maji-design-app. Points to noma's design system, forms, copy and decision docs, and covers what is specific here (wet mass first, Simple and Detailed, worktree prototypes, Before | After evidence). Use for any UI work in noma-dmrv, such as building or changing a page, sheet, form, dialog, table, chart or map, choosing between layouts, writing interface copy, prototyping, or reviewing a UI PR.
+description: noma-dmrv's UI layer on top of maji-design-app. Points to noma's design system, forms, copy and decision docs, and covers what is specific here (wet mass first, Simple and Detailed, worktree prototypes, Before | After evidence, advisory design review). Use for any UI work in noma-dmrv, such as building or changing a page, sheet, form, dialog, table, chart or map, choosing between layouts, writing interface copy, prototyping, or reviewing a UI PR.
 ---
 
 # noma design
@@ -36,6 +36,17 @@ Load `maji-design-app` first and follow its steps. This skill adds what noma dec
 - Every UI PR carries Before | After at 1440 and 390, plus GIFs for interactions, hosted on the orphan `issue-assets` branch.
 - UI PRs wait for the user's OK before merging, even when merging is otherwise allowed.
 
+## Design review (advisory)
+
+Review a PR or branch for design drift. Findings never block; the author decides.
+
+- Scope: the files the PR or branch changes, plus screenshots at 1440 and 390 of the screens it touches.
+- Run `pnpm tsx scripts/check-design-rules.ts --changed` first. It is report-only (rules `radius`, `shadow`, `raw-button`, `formatting`; `--rule <name>` limits it; explicit file paths also work) and exits 0 with findings. Confirm each hit against the code before reporting it.
+- Then the judgement checks: the LLM text habits in `maji-design-app` section 5, then the noma list in `references/design-review.md`.
+- Report findings as `path:line`, each with the rule and its owning doc, ordered by what the operator would notice first. No score.
+
 ## Guards
 
 `pnpm verify:static` runs the mechanical design checks: spacing scale (`check:spacing-scale`), CSS variables (`check:css-vars`), UX copy dashes (`check:ux-copy`), and the ESLint rules for Phosphor imports. A check failure is a design bug, not a lint nuisance.
+
+The design-rules helper above is not part of `pnpm verify:static`. It never fails a build.

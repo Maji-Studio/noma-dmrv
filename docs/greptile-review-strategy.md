@@ -18,6 +18,11 @@ without creating two versions of the same review. Greptile documents
 comments; both are set in [the versioned config](../.greptile/config.json)
 ([Greptile file reference](https://www.greptile.com/docs/code-review/greptile-config-reference)).
 
+Dialog and form footer action order is the one deliberate exception to the
+logic-only scope. Action order is workflow semantics: primary action first is
+how the operator finds the safe path. The `ui-action-order` rule in [config.json](../.greptile/config.json)
+points to [design-system.md](design-system.md) and [forms.md](forms.md) as its owners.
+
 ## Evidence from the initial rollout
 
 [PR #489](https://github.com/Maji-Studio/noma-dmrv/pull/489) provided a useful
@@ -136,7 +141,7 @@ Review weekly for the first month:
 - high-impact issues found only by Greptile;
 - missed reruns on later commits and review latency.
 
-Tighten a noisy rule or scope before reducing depth. Keep logic-only comments.
+Tighten a noisy rule or scope before reducing depth. Keep logic-only comments, apart from the `ui-action-order` exception above.
 Move strictness from `1` to `2` only if scoping and feedback cannot produce an
 acceptable signal-to-noise ratio. When Greptile misses an important issue, add a
 measurable rule or a targeted context file before enabling style or syntax
