@@ -35,7 +35,7 @@ export async function getEmissionLineComment(ctx: OrgContext, id: string, execut
   const [comment] = await executor.select().from(emissionLineComments).where(and(
     eq(emissionLineComments.organizationId, ctx.organizationId), eq(emissionLineComments.id, id),
   ));
-  if (!comment) throw new DomainError("not_found", "Line comment was not found.");
+  if (!comment) throw new DomainError("not_found", "Component comment was not found.");
   return comment;
 }
 
@@ -60,14 +60,14 @@ export async function setEmissionLineComment(ctx: OrgContext, input: SetEmission
     if (!observation) throw new DomainError("validation_failed", REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
     // Comments are allowed on every template component, including lines that cannot take entries.
     if (!observation.definition.groups.some((group) => group.components.some((line) => line.id === data.componentId)))
-      throw new DomainError("validation_failed", "This template line is no longer available. Choose another line.");
+      throw new DomainError("validation_failed", "This template component is no longer available. Choose another component.");
     const [before] = await tx.select().from(emissionLineComments).where(and(
       eq(emissionLineComments.organizationId, ctx.organizationId),
       eq(emissionLineComments.creditBatchId, batch.id), eq(emissionLineComments.componentId, data.componentId),
     )).for("update");
     if (before) {
       if (data.expectedVersion === undefined)
-        throw new DomainError("conflict", "This line already has a comment. Refresh and edit that comment.");
+        throw new DomainError("conflict", "This component already has a comment. Refresh and edit that comment.");
       if (data.id !== before.id) throw staleRowVersion("emission_line_comment", data.id!);
       assertRowVersion({ entity: "emission_line_comment", id: before.id,
         expectedVersion: data.expectedVersion, actualVersion: before.version });

@@ -402,7 +402,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       <PageHeader
         area="infrastructure"
         title="Feedstock Types"
-        subtitle="Organization-wide catalogue for pyrolysis feedstocks and blend materials"
+        subtitle="Shared by every facility in your organization."
         actions={
           canManage ? (
             hasRegistryConnection ? (
@@ -435,7 +435,6 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
           title="Total types"
           value={feedstockTypes.length}
           icon={<DatabaseIcon size={24} weight="bold" />}
-          description="Pyrolysis and blend catalogue entries"
           isLoading={feedstockTypesQuery.isLoading}
         />
         <StatCard

@@ -28,10 +28,7 @@ export default function AppErrorBoundary({
   return (
     <div className="flex min-h-screen items-center justify-center p-24">
       <div className="max-w-md border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-24">
-        <p className="title-chapter-title text-[var(--color-text-secondary)]">
-          Page unavailable
-        </p>
-        <h1 className="title-heading-2 mt-8">This page could not be displayed.</h1>
+        <h1 className="title-heading-2">This page could not be displayed.</h1>
         <p className="body-medium mt-16 text-[var(--color-text-secondary)]">
           Try again. If the page still does not load, share the reference below
           with the support team.

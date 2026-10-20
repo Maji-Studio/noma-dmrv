@@ -52,22 +52,22 @@ describe("deriveBatchHealth", () => {
     expect(links).toEqual([
       { label: "Switch template", href: "/credit-batches/batch-1?facility=facility-1&focus=removal-template" },
       { label: "Open Removal templates", href: "/certification/settings?section=removal-templates&facility=facility-1" },
-      { label: "Decide lines", href: "/certification/settings?section=removal-templates&facility=facility-1" },
+      { label: "Decide components", href: "/certification/settings?section=removal-templates&facility=facility-1" },
     ]);
     expect(result.checks.filter((check) => check.key === "templateSet" || check.key === "templateLines")
-      .map(certCheckLabel)).toEqual(["No Removal template chosen", "Template not fully read", "Template lines not ready"]);
+      .map(certCheckLabel)).toEqual(["No Removal template chosen", "Template not fully read", "Template components not ready"]);
   });
 
   it("names missing pins and undecided lines separately", () => {
     const unpinned = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("unpinnedTemplate")] })), "templateSet");
     expect(unpinned.unmetLabel).toBe("No Removal template chosen");
     const lines = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("templateLinesNeedReview")] })), "templateLines");
-    expect(lines.unmetLabel).toBe("Template lines not ready");
+    expect(lines.unmetLabel).toBe("Template components not ready");
   });
 
   it.each([
-    { ids: ["one"], label: "1 line to decide" },
-    { ids: ["one", "two"], label: "2 lines to decide" },
+    { ids: ["one"], label: "1 component to decide" },
+    { ids: ["one", "two"], label: "2 components to decide" },
   ])("counts distinct lines for $label while merging template blockers", ({ ids, label }) => {
     const lines = deriveBatchEmissionLines({
       definition: { groups: [{
@@ -495,8 +495,8 @@ it("keeps an undecided check separate from a decided line it cannot fill, and co
     undecidedLineIds: ["one", "two"],
     templateBlockers: [removalTemplateBlocker("templateLinesNeedReview"), removalTemplateBlocker("forbiddenLine")],
   })).checks.filter((check) => check.key === "templateLines");
-  expect(checks.map(certCheckLabel)).toEqual(["2 lines to decide", "Template lines not ready"]);
-  expect(batchHealthFixLinkFor(checks[0], "facility-1", "batch-1").label).toBe("Decide lines");
+  expect(checks.map(certCheckLabel)).toEqual(["2 components to decide", "Template components not ready"]);
+  expect(batchHealthFixLinkFor(checks[0], "facility-1", "batch-1").label).toBe("Decide components");
   expect(batchHealthFixLinkFor(checks[1], "facility-1", "batch-1").label).toBe("Open Removal templates");
 });
 

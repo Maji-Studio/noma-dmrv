@@ -11,28 +11,21 @@ export interface OpenCreateIntentOptions {
   initialOpen?: boolean;
   contextParam?: string;
   initialContext?: string | null;
-  /**
-   * Opens the caller's own create sheet on a client navigation, given the
-   * context parameter's value, instead of this hook holding the open state.
-   */
-  onOpen?: (context: string | null) => void;
 }
 
 /**
- * Owns create deep-link state, or hands it to the caller's opener (`onOpen`,
- * or a bare function). Server pages pass `initialOpen` (and optional context)
- * so hard entries render the create sheet immediately; the effect only
- * captures client navigations and consumes the handled query parameters. An
- * opener's identity is an effect dependency, so an inline arrow re-runs the
- * effect each render; `handledRef` keeps it to one open per intent.
+ * Owns create deep-link state, or hands it to the caller's opener (a bare
+ * function). Server pages pass `initialOpen` (and optional context) so hard
+ * entries render the create sheet immediately; the effect only captures client
+ * navigations and consumes the handled query parameters. An opener's identity
+ * is an effect dependency, so an inline arrow re-runs the effect each render;
+ * `handledRef` keeps it to one open per intent.
  */
 export function useOpenCreateIntent(
   optionsOrOpener: OpenCreateIntentOptions | (() => void) = {},
 ) {
-  const openCallback: ((context: string | null) => void) | null =
-    typeof optionsOrOpener === "function"
-      ? optionsOrOpener
-      : (optionsOrOpener.onOpen ?? null);
+  const openCallback =
+    typeof optionsOrOpener === "function" ? optionsOrOpener : null;
   const initialOpen =
     typeof optionsOrOpener === "function"
       ? false
@@ -67,10 +60,10 @@ export function useOpenCreateIntent(
     }
 
     handledRef.current = true;
-    const context = contextParam ? searchParams.get(contextParam) : null;
     if (openCallback) {
-      openCallback(context);
+      openCallback();
     } else {
+      const context = contextParam ? searchParams.get(contextParam) : null;
       queueMicrotask(() => setIntent({ context }));
     }
 

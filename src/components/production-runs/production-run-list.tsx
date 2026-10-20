@@ -44,9 +44,6 @@ import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { isProductionRunOutputLocked, isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
-import { useAddStockBin } from "@/hooks/use-add-stock-bin";
-import { AddStockFormSlot } from "@/components/forms/add-stock-form-slot";
-import { ADD_STOCK_BIN_PARAM } from "@/lib/add-stock-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
@@ -357,7 +354,6 @@ export function ProductionRunList() {
     setCreateError(null);
     setUpdateError(null);
     createWithEvidence.reset();
-    addStockBin.clear();
     setSideSheet({ entity: null, mode: "create" });
   };
   const openView = (run: ProductionRunWithRelations) => { setFocusedRunId(run.id); setSideSheet({ entity: run, mode: "view" }); };
@@ -369,8 +365,7 @@ export function ProductionRunList() {
     setUpdateError(null);
     createWithEvidence.reset();
   };
-  // "Adding stock" from a biochar bin's history lands here with ?create=true and the bin to fill.
-  useOpenCreateIntent({ contextParam: ADD_STOCK_BIN_PARAM, onOpen: (binId) => { openCreate(); addStockBin.request(binId); } });
+  useOpenCreateIntent(openCreate);
 
   const clearFilters = () => {
     setSearchQuery("");
@@ -427,7 +422,6 @@ export function ProductionRunList() {
       ? ({ entity: focusedRun.data, mode: "view" } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
-  const addStockBin = useAddStockBin("biochar", facilityId, displaySideSheet?.mode === "create");
   const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("productionRun", displaySideSheet?.entity?.id);
 
   const confirmCreateClose = () =>
@@ -449,7 +443,6 @@ export function ProductionRunList() {
         <PageHeader
           area="production"
           title="Production Runs"
-          subtitle="Pyrolysis batches from feedstock to biochar output"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its production runs." />
       </div>
@@ -483,7 +476,6 @@ export function ProductionRunList() {
       <PageHeader
         area="production"
         title="Production Runs"
-        subtitle="Pyrolysis batches from feedstock to biochar output"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -494,7 +486,7 @@ export function ProductionRunList() {
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
-        <StatCard title="Total runs" value={statsData?.totalRuns ?? 0} icon={<FireIcon size={24} weight="bold" />} description="All production batches" isLoading={statsLoading} />
+        <StatCard title="Total runs" value={statsData?.totalRuns ?? 0} icon={<FireIcon size={24} weight="bold" />} isLoading={statsLoading} />
         <StatCard
           title="Biochar output"
           value={
@@ -507,8 +499,8 @@ export function ProductionRunList() {
           icon={<LeafIcon size={24} weight="bold" />}
           isLoading={statsLoading}
         />
-        <StatCard title="Running" value={statsData?.runningCount ?? 0} icon={<ClockIcon size={24} weight="bold" />} description="Currently active runs" isLoading={statsLoading} />
-        <StatCard title="Completed" value={statsData?.completedCount ?? 0} icon={<CheckCircleIcon size={24} weight="bold" />} description="Finished production runs" isLoading={statsLoading} />
+        <StatCard title="Running" value={statsData?.runningCount ?? 0} icon={<ClockIcon size={24} weight="bold" />} isLoading={statsLoading} />
+        <StatCard title="Completed" value={statsData?.completedCount ?? 0} icon={<CheckCircleIcon size={24} weight="bold" />} isLoading={statsLoading} />
       </div>
 
       <RecordLockListNotice read={runLocks} />
@@ -636,32 +628,29 @@ export function ProductionRunList() {
         size="wide"
         sections={sideSheetEntity ? productionRunSheetSections(sideSheetEntity, facilities) : undefined}
       >
-        <AddStockFormSlot settling={addStockBin.settling}>
-          <ProductionRunForm
-            key={sideSheetEntity?.id ?? "create"}
-            productionRun={sideSheetEntity ?? undefined}
-            initialBiocharStorageLocationId={addStockBin.bin?.storageLocationId}
-            lock={sheetLock}
-            onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
-            onCancel={attemptCloseSideSheet}
-            isSubmitting={createRun.isPending || updateRun.isPending || isFlushing}
-            errorMessage={createError || updateError || undefined}
-            submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create production run"}
-            deferredAttachments={deferredAttachments}
-          >
-            {sideSheetEntity && sideSheetMode === "edit" ? (
-              <>
-                <ProductionSampleTable facilityId={sideSheetEntity.facilityId} productionRunId={sideSheetEntity.id} />
-                <ProductionIncidentTable
-                  productionRunId={sideSheetEntity.id}
-                  facilityId={sideSheetEntity.facilityId}
-                  defaultReactorId={sideSheetEntity.reactorId}
-                  defaultOperatorId={sideSheetEntity.operatorId}
-                />
-              </>
-            ) : null}
-          </ProductionRunForm>
-        </AddStockFormSlot>
+        <ProductionRunForm
+          key={sideSheetEntity?.id ?? "create"}
+          productionRun={sideSheetEntity ?? undefined}
+          lock={sheetLock}
+          onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
+          onCancel={attemptCloseSideSheet}
+          isSubmitting={createRun.isPending || updateRun.isPending || isFlushing}
+          errorMessage={createError || updateError || undefined}
+          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create production run"}
+          deferredAttachments={deferredAttachments}
+        >
+          {sideSheetEntity && sideSheetMode === "edit" ? (
+            <>
+              <ProductionSampleTable facilityId={sideSheetEntity.facilityId} productionRunId={sideSheetEntity.id} />
+              <ProductionIncidentTable
+                productionRunId={sideSheetEntity.id}
+                facilityId={sideSheetEntity.facilityId}
+                defaultReactorId={sideSheetEntity.reactorId}
+                defaultOperatorId={sideSheetEntity.operatorId}
+              />
+            </>
+          ) : null}
+        </ProductionRunForm>
       </EntitySideSheet>
     </div>
   );

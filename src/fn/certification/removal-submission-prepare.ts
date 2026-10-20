@@ -80,6 +80,7 @@ type PreparationContext = Pick<
   | "hasOrgCredentials"
   | "templateBlockers"
   | "lineSources"
+  | "removalEntryContext"
   | "removalTemplate"
   | "unresolvedBlueprintKeys"
   | "blueprintsForTemplate"
@@ -130,7 +131,7 @@ export function prepareRemovalSubmission(
   const hasDurabilityComponents = hasDurabilityMeasurementComponents(removalTemplate);
   const blockers: RemovalPreparationBlocker[] = [...ctx.templateBlockers];
   const isometricEnvironment = options.isometricEnvironment ?? env.ISOMETRIC_ENVIRONMENT;
-  const unbindable = findUnbindableTemplateInputs(removalTemplate, { lineSources: ctx.lineSources, enrichmentComplete: !ctx.templateBlockers.some((blocker) => blocker.code === "templateNotFullyRead") });
+  const unbindable = findUnbindableTemplateInputs(removalTemplate, { lineSources: ctx.lineSources, entriesCanSubmit: !!ctx.removalEntryContext, enrichmentComplete: !ctx.templateBlockers.some((blocker) => blocker.code === "templateNotFullyRead") });
   // The template lives on Isometric and can change credit_type after binding;
   // a REDUCTION template must never mislabel a GHG entry.
   if (removalTemplate.credit_type !== "REMOVAL") {

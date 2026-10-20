@@ -63,6 +63,7 @@ beforeEach(() => {
     () => [batch], () => [{ archivedAt: null, timezone: "UTC" }], () => [batch], () => [locked],
     () => [locked], () => oldValues, () => [{ count: 1 }],
     () => [], // Active sibling values after the old row was tombstoned.
+    () => [], // No draft zeros to tombstone.
     () => [saved], () => newValues, () => [{ count: 0 }],
     () => [saved], () => newValues, () => [{ count: 1 }]];
   select.mockImplementation(() => {
@@ -87,7 +88,7 @@ beforeEach(() => {
 it("replaces in one transaction with ordered locks, current binding, normalized values and moved evidence", async () => {
   expect(await replaceEmissionEntry(ctx, input)).toMatchObject({ id: "replacement", values: newValues, documentCount: 1 });
   expect(mocks.transaction).toHaveBeenCalledTimes(1);
-  expect(locks).toEqual(["share", "update", "update"]);
+  expect(locks).toEqual(["share", "update", "update", "update"]);
   expect(inserted).toHaveBeenCalledWith(emissionEntries, expect.objectContaining({
     organizationId: ctx.organizationId, creditBatchId: original.creditBatchId, componentId: original.componentId,
     observationId: current.id, occurredOn: batch.endDate, note: input.note, createdBy: ctx.userId,

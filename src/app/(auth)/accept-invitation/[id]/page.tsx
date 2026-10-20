@@ -84,10 +84,7 @@ function InvitationCard({
   return (
     <div className="w-full max-w-[400px] mx-auto">
       <div className="mb-32 text-center">
-        <h1 className="title-heading-2 mb-16">Join organization</h1>
-        <p className="body-medium text-[var(--color-text-secondary)]">
-          You&apos;ve been invited to collaborate.
-        </p>
+        <h1 className="title-heading-2">Join organization</h1>
       </div>
       <div className="bg-[var(--color-background-white)] border border-[var(--color-border-primary)] p-32 shadow-sm">
         {children}

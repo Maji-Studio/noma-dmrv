@@ -11,6 +11,7 @@ import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-conte
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
 
+import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
 import { EntitySelect, FormActions, FormField, FormInput, FormSection, FormSpine, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
 import { EventTimeInput } from "@/components/forms/event-time-input";
@@ -61,7 +62,6 @@ import { Notice } from "@/components/ui/notice";
 import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
 import { recordInUseFreeFields } from "@/lib/record-lock";
 import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
-import type { AddStockBin } from "@/lib/add-stock-intent";
 
 /** Native min, max and step for each number input, read from the schema. */
 const numberBounds = numberInputConstraintsFor(biocharProductEntrySchema);
@@ -144,11 +144,6 @@ interface BiocharProductFormProps {
   focusTarget?: EntityFocusTarget | null;
   /** The saved product's lock; Sent disables every field before typing. */
   lock?: RecordLockView;
-  /**
-   * Create only: the product bin to open with (from a bin's "adding stock"
-   * link), with the formulation it is reserved for, if any.
-   */
-  initialBin?: AddStockBin | null;
 }
 
 /** Shown on the posted fields a saved product keeps (`POSTED_FIELDS` on the server). */
@@ -164,7 +159,6 @@ export function BiocharProductForm({
   children,
   focusTarget,
   lock,
-  initialBin,
 }: BiocharProductFormProps) {
   const latched = useLatchedSubmit();
   const formId = useId();
@@ -176,11 +170,8 @@ export function BiocharProductForm({
   const hasFrozenSourceAllocation = Boolean(
     product?.sourceBiocharStorageLocationId,
   );
-  // A bin reserved for a formulation brings that formulation, so the bin stays valid.
-  // Read once at mount: a later refetch of the bin never changes an open form.
-  const [createBin] = useState(() => (product ? null : (initialBin ?? null)));
   const initialFormulationId =
-    product?.formulation?.id ?? product?.formulationId ?? createBin?.formulationId ?? null;
+    product?.formulation?.id ?? product?.formulationId ?? null;
   const initialIngredientBins = fromCompositionJsonb(product?.composition);
   const initialSourceBiocharMassKg = product
     ? deriveSourceBiocharMassKg(product.massKg, initialIngredientBins)
@@ -204,7 +195,7 @@ export function BiocharProductForm({
         product?.sourceBiocharStorageLocationId ??
         product?.linkedProductionRun?.biocharStorageLocationId ??
         "",
-      storageLocationId: product?.storageLocation?.id ?? createBin?.storageLocationId ?? "",
+      storageLocationId: product?.storageLocation?.id ?? "",
       status: product?.status ?? "testing",
       // The field carries the biochar-only wet mass; the record stores the
       // blend total, so edit mode subtracts the persisted ingredient masses.
@@ -268,16 +259,14 @@ export function BiocharProductForm({
 
   // Clear the destination bin when the formulation changes — a product bin is
   // reserved for a single formulation, so a previously chosen bin may no longer
-  // be valid for the new formulation (or for pure biochar). An unassigned bin
-  // the form opened with stays: it takes any formulation on first use.
+  // be valid for the new formulation (or for pure biochar).
   const previousFormulationIdRef = useRef(selectedFormulationId);
   useEffect(() => {
     if (selectedFormulationId !== previousFormulationIdRef.current) {
-      const keepsOpeningBin = createBin !== null && createBin.formulationId === null && getValues("storageLocationId") === createBin.storageLocationId;
-      if (!keepsOpeningBin) setValue("storageLocationId", "");
+      setValue("storageLocationId", "");
       previousFormulationIdRef.current = selectedFormulationId;
     }
-  }, [selectedFormulationId, setValue, getValues, createBin]);
+  }, [selectedFormulationId, setValue]);
 
   const defaultSubmitLabel = isEditMode ? "Update product" : "Create product";
 
@@ -587,7 +576,7 @@ export function BiocharProductForm({
             id="waterAddedKg"
             label="Water added (kg)"
             error={errors.waterAddedKg?.message}
-            helperText={isEditMode ? POSTED_FIELD_HINT : "Water added to reach target moisture"}
+            helperText={isEditMode ? POSTED_FIELD_HINT : undefined}
             hint="Dry mass is unchanged by added water."
             required
           >
@@ -709,6 +698,7 @@ export function BiocharProductForm({
         submitDisabled={hasZeroSourceBiochar || submitDisabled}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
+        preview={<RecordCreditBatchLine kind="biochar-product" id={product?.id} />}
       />
     </div>
   );

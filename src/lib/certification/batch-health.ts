@@ -88,7 +88,7 @@ export interface BatchHealthCheck {
   requirementLabel: string;
   /** The problem, named; rendered instead of `requirementLabel` while unmet (`certCheckLabel`). */
   unmetLabel: string;
-  /** Template lines without a saved decision; set on the templateLines check only, and only when above zero. */
+  /** Template components without a saved decision; set on the templateLines check only, and only when above zero. */
   linesToDecide?: number;
   /** Protocol/lab context for the ⓘ "Why?" affordance (Phase 1). */
   whyDetail?: string;
@@ -177,7 +177,7 @@ export interface BatchHealthFacts {
    */
   facilitySetupComplete: boolean;
   templateBlockers?: RemovalTemplateBlocker[];
-  /** Current template lines without a saved, unambiguous decision. */
+  /** Current template components without a saved, unambiguous decision. */
   undecidedLineIds?: readonly string[];
   /**
    * Transport coverage for the categories the facility's default template
@@ -529,7 +529,8 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
       ...(facts.emissionLines != null ? [{
         key: "emissions" as const, label: "Emissions", fixTarget: "emissions" as const,
         status: emissionIssues.size ? "unmet" as const : "met" as const,
-        detail: [...emissionIssues.values()].map((line) => line.blocker?.code === "entryMissingEvidence"
+        detail: [...emissionIssues.values()].map((line) => line.blocker?.code === "entryHasNoRemoval"
+          ? line.blocker.message : line.blocker?.code === "entryMissingEvidence"
           ? `Add a file for ${line.displayName}.` : `Check the manual entry on ${line.displayName}.`).join(" ") || undefined,
       }] : []),
       // Template line blockers (no source, unassigned, not set up) are
@@ -553,7 +554,7 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
   };
 }
 
-/** The lines-to-decide count behind the batch's Lines decided check, or 0. One source with the check's label. */
+/** The lines-to-decide count behind the batch's Components decided check, or 0. One source with the check's label. */
 export function batchLinesToDecide(health: BatchHealth | undefined | null): number {
   return health?.checks.find((check) => check.status === "unmet" && check.linesToDecide)?.linesToDecide ?? 0;
 }

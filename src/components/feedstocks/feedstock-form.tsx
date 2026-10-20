@@ -22,6 +22,7 @@ import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-supplie
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
 import { FormError, FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
+import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
 import {
@@ -660,6 +661,7 @@ export function FeedstockForm({
         errorAction={serverErrorAction}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
+        preview={<RecordCreditBatchLine kind="feedstock" id={feedstock?.id} />}
       />
       </div>
 

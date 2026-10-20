@@ -15,7 +15,6 @@ export interface FacilityCertifierFacts {
   /** Settings and diagnostics only. Removal compilation resolves batch pins. */
   defaultTemplate: IsometricGhgEntryTemplate | null;
   missingDefaultTemplateId: string | null;
-  removalTemplateIds: string[];
   /** Only templates the registry still lists; a pinned id may be absent. */
   templatesById: Partial<Record<string, RemovalTemplateFacts>>;
   blueprintsForTemplate: IsometricComponentBlueprint[];
@@ -25,7 +24,7 @@ export interface FacilityCertifierFacts {
 }
 
 const UNRESOLVED_FACILITY_FACTS = {
-  defaultTemplate: null, missingDefaultTemplateId: null, removalTemplateIds: [], templatesById: {},
+  defaultTemplate: null, missingDefaultTemplateId: null, templatesById: {},
   blueprintsForTemplate: [], unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], requiredTransportCategories: [],
 };
 
@@ -58,7 +57,6 @@ export async function loadFacilityCertifierFacts(orgCtx: OrgContext, facilityId:
     defaultTemplate: defaultFacts?.template ?? null,
     missingDefaultTemplateId: defaultFacts ? null : mapping.defaultRemovalTemplateId,
     templatesById,
-    removalTemplateIds: [...ids].filter((id): id is string => !!id),
     blueprintsForTemplate: defaultFacts?.blueprintsForTemplate ?? [],
     unresolvedBlueprintKeys: defaultFacts?.unresolvedBlueprintKeys ?? [],
     unbindableTemplateInputs: defaultFacts?.unbindableTemplateInputs ?? [],

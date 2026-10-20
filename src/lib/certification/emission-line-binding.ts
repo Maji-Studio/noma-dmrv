@@ -30,10 +30,10 @@ export function lineCompilesWithoutEmissionSource(component: TemplateComponent):
       (!hasExplicitSequestrationBinding(component.blueprintKey) || !!getSequestrationInputBinding(component.blueprintKey, input.key))));
 }
 
-/** The shared, batch-independent decision. Entries cannot supply submission inputs until PR 4. */
+/** Shared capability guard; Removal-specific selection supplies entry values. */
 export function emissionLineBindingDecision(args: {
   component: TemplateComponent; groupKey: string; contract?: LineContract;
-  problems: readonly LineSourceProblem[]; enrichmentComplete: boolean;
+  problems: readonly LineSourceProblem[]; enrichmentComplete: boolean; entriesCanSubmit?: boolean;
 }): EmissionLineBindingDecision | undefined {
   const { component, groupKey, problems } = args;
   const contract = args.contract && effectiveContract(args.contract);
@@ -60,6 +60,7 @@ export function emissionLineBindingDecision(args: {
     blocker: { ...templateRemovalBlocker("forbiddenLine"), lineRef },
   };
   if (lineCompilesWithoutEmissionSource(component)) return undefined;
+  if (args.entriesCanSubmit && contract?.scope === "operating" && contract.entryPolicy !== "none") return undefined;
   const unmappedKeys = component.inputs.filter((input) => input.type === "monitored" &&
     !getSequestrationInputBinding(component.blueprintKey, input.key) &&
     !lookupInputMapping(groupKey, component.blueprintKey, input.key, contract)).map((input) => input.key);

@@ -267,7 +267,6 @@ function ConnectorBody({
         facilityId,
         externalProjectId: selected,
         protocolSlug: mapping?.protocolSlug ?? DEFAULT_PROTOCOL_SLUG,
-        defaultRemovalTemplateId: null,
         externalFacilityId: trimmedFacilityId,
         confirmProduction,
       });
@@ -377,8 +376,8 @@ function ConnectorBody({
 
       {clearsAdvancedBinding && (
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          Changing the project clears the default Removal template. Set it
-          again in Certification → Settings.
+          Changing the project clears the default Removal template. Choose it
+          again in Removal templates.
         </p>
       )}
 

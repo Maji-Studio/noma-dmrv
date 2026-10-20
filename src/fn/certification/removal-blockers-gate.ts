@@ -1,4 +1,5 @@
 import { getProductionBatchRegistryInputs } from "@/data-access/certifier-production-batches";
+import { getCreditBatchUndeletableRemovalCodes } from "@/data-access/credit-batch-removal-holders";
 import { getCreditBatchProductionSpanIssue } from "@/lib/credit-batch-production-span";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
@@ -27,7 +28,10 @@ export function collectContextRemovalBlockers(
   ctx: RemovalSubmissionContext,
   options: { beforeConfirmation?: boolean } = {},
 ): RemovalBlocker[] {
-  const blockers: RemovalBlocker[] = [];
+  const blockers: RemovalBlocker[] = ctx.removalEntryContext ? [
+    ...ctx.removalEntryContext.contributions.blockers,
+    ...Object.entries(ctx.emissionLinesByBatchId && Object.keys(ctx.emissionLinesByBatchId).length ? ctx.emissionLinesByBatchId : { "": ctx.emissionLines ?? [] }).flatMap(([creditBatchId, lines]) => lines.flatMap((line) => line.blocker ? [{ ...line.blocker, creditBatchId }] : [])),
+  ].filter((blocker, index, all) => all.findIndex((other) => other.code === blocker.code && other.creditBatchId === blocker.creditBatchId && other.lineRef?.componentId === blocker.lineRef?.componentId) === index) : [];
   // Submit checks these before recovery. Review needs the same connection refusal.
   const preparation = prepareRemovalSubmission(ctx);
   if (!ctx.mapping || !ctx.hasOrgCredentials) return preparation.blockers.map(preparationBlocker);
@@ -72,8 +76,13 @@ export async function evaluateRemovalBlockers(args: {
   const { prepared } = prepareRemovalSubmission(args.ctx);
   if (!prepared) return [legacyBlocker(REMOVAL_PREPARATION_BLOCKERS.noTemplate, "creditBatchTemplate")];
   const inputs = await getProductionBatchRegistryInputs(args.orgCtx, args.ctx.memberBatches.map(batch => batch.id));
+  const undeletableHolders = await getCreditBatchUndeletableRemovalCodes(
+    args.orgCtx, inputs.map(input => input.creditBatchId),
+  );
   for (const input of inputs) {
-    const issue = getCreditBatchProductionSpanIssue(input);
+    const issue = getCreditBatchProductionSpanIssue({
+      ...input, undeletableRemovalCodes: undeletableHolders.get(input.creditBatchId),
+    });
     if (issue) blockers.push(legacyBlocker(issue, "batchDetails"));
   }
   if (blockers.length) return blockers;

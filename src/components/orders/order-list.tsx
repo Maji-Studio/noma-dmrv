@@ -344,7 +344,6 @@ export function OrderList() {
         <PageHeader
           area="distribution"
           title="Orders"
-          subtitle="Customer orders for biochar products"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its orders." />
       </div>
@@ -373,16 +372,15 @@ export function OrderList() {
       <PageHeader
         area="distribution"
         title="Orders"
-        subtitle="Customer orders for biochar products"
         actions={
           <Button variant="primary" onClick={openCreate}><PlusIcon size={20} weight="bold" />New order</Button>
         }
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
-        <StatCard title="Total orders" value={totalOrders} icon={<PackageIcon size={24} weight="bold" />} description="All orders" isLoading={isLoading} />
-        <StatCard title="Total deliveries" value={totalDeliveries} icon={<TruckIcon size={24} weight="bold" />} description="Deliveries on this page" isLoading={isLoading} />
-        <StatCard title="Total quantity" value={`${totalQuantityKg.toLocaleString()} kg`} icon={<PackageIcon size={24} weight="bold" />} description="Quantity on this page" isLoading={isLoading} />
+        <StatCard title="Total orders" value={totalOrders} icon={<PackageIcon size={24} weight="bold" />} isLoading={isLoading} />
+        <StatCard title="Deliveries on this page" value={totalDeliveries} icon={<TruckIcon size={24} weight="bold" />} isLoading={isLoading} />
+        <StatCard title="Quantity on this page" value={`${totalQuantityKg.toLocaleString()} kg`} icon={<PackageIcon size={24} weight="bold" />} isLoading={isLoading} />
       </div>
 
       <RecordLockListNotice read={orderLocks} />

@@ -6,7 +6,7 @@ import { SafeError } from "@/lib/errors";
 import { and, eq, inArray } from "drizzle-orm";
 import type { TransportLegWithEvidence } from "./transport-legs";
 import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
-import { requireOrgScope } from "./utils";
+import { requireOrgScope, type Executor } from "./utils";
 
 /**
  * Project frozen application loads onto recorded delivery distances. These rows are
@@ -15,6 +15,7 @@ import { requireOrgScope } from "./utils";
 export async function loadBiocharDeliveryTransportLegs(
   ctx: OrgContext,
   slices: readonly { deliveryId: string; loadMassKg: number }[],
+  executor: Executor = db,
 ): Promise<TransportLegWithEvidence[]> {
   requireOrgScope(ctx);
   const massByDelivery = new Map<string, number>();
@@ -23,7 +24,7 @@ export async function loadBiocharDeliveryTransportLegs(
   }
   const ids = [...massByDelivery.keys()].sort();
   if (!ids.length) return [];
-  const rows = await db.select({ delivery: deliveries, facility: {
+  const rows = await executor.select({ delivery: deliveries, facility: {
       name: facilities.name,
       gpsLatitude: facilities.gpsLatitude,
       gpsLongitude: facilities.gpsLongitude,
@@ -36,7 +37,7 @@ export async function loadBiocharDeliveryTransportLegs(
     .where(and(inArray(deliveries.id, ids), eq(deliveries.organizationId, ctx.organizationId)));
   if (rows.length !== ids.length) throw new SafeError("A Removal delivery could not be loaded.");
   const locationIds = rows.flatMap(({ orderLocationId }) => orderLocationId ? [orderLocationId] : []);
-  const locations = locationIds.length ? await db.select().from(customerLocations).where(and(
+  const locations = locationIds.length ? await executor.select().from(customerLocations).where(and(
     inArray(customerLocations.id, locationIds), eq(customerLocations.organizationId, ctx.organizationId),
   )) : [];
   const locationsById = new Map(locations.map(location => [location.id, location]));

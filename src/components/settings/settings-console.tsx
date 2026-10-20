@@ -45,7 +45,8 @@ interface SettingsConsoleProps {
   caption: string;
   /** Who may change what is in this pane, for the pane footnote. */
   access: string;
-  subtitle: string;
+  /** Optional. Only when it says something the title and caption do not. */
+  subtitle?: string;
   /** Owner/Admin. Gates the Defaults category — it is Owner/Admin-only. */
   canManageDefaults: boolean;
   /** Live Owner/Admin membership only. Platform status grants no override. */

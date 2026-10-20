@@ -5,6 +5,12 @@
  */
 import { formatDateRange, formatDayString } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import {
+  CREDIT_BATCH_LINE_BASE,
+  errorLineCopy,
+  pendingLineCopy,
+  type CreditBatchLineCopy,
+} from "@/components/credit-batches/credit-batch-line-copy";
 import type {
   CreditBatchPreviewBatch,
   ProductionRunCreditBatchPreview,
@@ -16,33 +22,6 @@ export type ProductionRunCreditBatchPreviewView =
   | { state: "pending" }
   | { state: "error" }
   | ProductionRunCreditBatchPreview;
-
-export interface CreditBatchPreviewCopy {
-  tone: "neutral" | "warning";
-  /** Text before the batch links. */
-  lead: string;
-  /** Batches named in the line, each a link to its page. */
-  batches: CreditBatchPreviewBatch[];
-  /** Text after the batch links. */
-  tail: string;
-  /** The ⓘ explanation, or null when the line says it all. */
-  info: string | null;
-  /** The check failed: offer Retry. */
-  retry: boolean;
-  busy: boolean;
-}
-
-const BASE: Omit<CreditBatchPreviewCopy, "lead"> = {
-  tone: "neutral",
-  batches: [],
-  tail: "",
-  info: null,
-  retry: false,
-  busy: false,
-};
-
-/** The line's label for the ⓘ, so a screen reader names what it explains. */
-export const CREDIT_BATCH_INFO_LABEL = "How the credit batch is chosen";
 
 const INCOMPLETE_LEAD = {
   facility: "Choose a facility in the sidebar to see the credit batch.",
@@ -95,9 +74,9 @@ function joinInfo(basis: ProductionRunCreditBatchPreviewBasis, expected: boolean
 
 function memberCopy(
   preview: Extract<ProductionRunCreditBatchPreview, { state: "member" }>,
-): CreditBatchPreviewCopy {
+): CreditBatchLineCopy {
   const { batch, basis, conflict } = preview;
-  const base = { ...BASE, lead: "In credit batch ", batches: [batch] };
+  const base = { ...CREDIT_BATCH_LINE_BASE, lead: "In credit batch ", batches: [batch] };
   switch (conflict) {
     case null:
       return { ...base, tail: windowLabel(batch), info: basis ? matchedOn(basis) : null };
@@ -132,27 +111,27 @@ function memberCopy(
   }
 }
 
-export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreviewView): CreditBatchPreviewCopy {
+export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreviewView): CreditBatchLineCopy {
   switch (view.state) {
     case "pending":
-      return { ...BASE, lead: "Checking credit batch...", busy: true };
+      return pendingLineCopy();
     case "error":
-      return { ...BASE, tone: "warning", lead: "Credit batch could not be checked.", retry: true };
+      return errorLineCopy();
     case "not-applicable":
       return {
-        ...BASE,
+        ...CREDIT_BATCH_LINE_BASE,
         lead: `Credit batch: ${MISSING_VALUE.notApplicable}`,
         info: "Failed and cancelled runs do not join a credit batch.",
       };
     case "incomplete":
       return {
-        ...BASE,
+        ...CREDIT_BATCH_LINE_BASE,
         lead: INCOMPLETE_LEAD[view.missing],
         info: view.missing === "facility" ? null : END_DAY_RULE,
       };
     case "mixed-feedstock":
       return {
-        ...BASE,
+        ...CREDIT_BATCH_LINE_BASE,
         tone: "warning",
         lead: `No credit batch: the source bins hold ${view.feedstockTypeCount} feedstock types.`,
         info: "A credit batch holds one feedstock type, so this run stays unassigned. You can still save it.",
@@ -161,7 +140,7 @@ export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreview
       return memberCopy(view);
     case "match":
       return {
-        ...BASE,
+        ...CREDIT_BATCH_LINE_BASE,
         lead: view.expected ? "Expected credit batch: " : "Joins credit batch ",
         batches: [view.batch],
         tail: `${windowLabel(view.batch)}${byStartDay(view.basis)}`,
@@ -169,7 +148,7 @@ export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreview
       };
     case "locked":
       return {
-        ...BASE,
+        ...CREDIT_BATCH_LINE_BASE,
         tone: "warning",
         lead: view.expected ? "Expected credit batch " : "Credit batch ",
         batches: [view.batch],
@@ -181,7 +160,7 @@ export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreview
       };
     case "ambiguous":
       return {
-        ...BASE,
+        ...CREDIT_BATCH_LINE_BASE,
         tone: "warning",
         lead: `More than one credit batch covers ${formatDayString(view.basis.day)}${byStartDay(view.basis)}: `,
         batches: view.batches,
@@ -193,7 +172,7 @@ export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreview
       };
     case "no-match":
       return {
-        ...BASE,
+        ...CREDIT_BATCH_LINE_BASE,
         lead: `No credit batch covers ${formatDayString(view.basis.day)} yet${byStartDay(view.basis)}. ${view.expected ? "Once completed, the run" : "The run"} joins one when it is created.`,
         info: provisional(
           view.basis,

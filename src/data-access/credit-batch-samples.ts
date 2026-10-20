@@ -7,7 +7,7 @@ import { productionRuns, samples } from "@/db/schema/production";
 import type { Sample } from "@/db/schema";
 import type { CreditBatchDurabilityInput } from "@/lib/isometric/utils/durability-aggregation";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
-import { requireOrgScope } from "./utils";
+import { requireOrgScope, type Executor } from "./utils";
 import { getBatchesWithLabReports, getBatchesWithReflectanceHistograms } from "./sample-document-evidence";
 
 /**
@@ -146,12 +146,13 @@ export interface CreditBatchSampleRef {
 export async function getSamplesByCreditBatchIds(
   ctx: OrgContext,
   creditBatchIds: string[],
+  executor: Executor = db,
 ): Promise<CreditBatchSampleRef[]> {
   requireOrgScope(ctx);
   const ids = Array.from(new Set(creditBatchIds));
   if (ids.length === 0) return [];
 
-  const rows = await db
+  const rows = await executor
     .select({
       id: samples.id,
       creditBatchId: samples.creditBatchId,

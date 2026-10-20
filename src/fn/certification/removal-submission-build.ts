@@ -76,6 +76,8 @@ export interface RemovalSubmissionBuild {
   datapointSourceIds: string[];
   sourceBindingPlan: RemovalSourceBindingPlanEntry[];
   semanticPayload: Record<string, unknown>;
+  templateObservationId?: string;
+  frozenEntrySet?: { entryId: string; contentRevision: number }[];
   monitored: ResolvedMonitoredInput[];
   fixed: ResolvedFixedInput[];
   datapointBodyByKey: Map<string, CreateDatapointRequest>;
@@ -166,6 +168,8 @@ export interface CompiledRemovalSubmission {
 export interface MaterializedRemovalSubmissionSnapshot {
   payloadSnapshot: {
     __mappingRevision: string;
+    templateObservationId?: string;
+    frozenEntrySet?: { entryId: string; contentRevision: number }[];
     semantic: Record<string, unknown>;
     memberCreditBatchIds: string[];
     sourceBindingPlan: RemovalSourceBindingPlanEntry[];
@@ -562,6 +566,8 @@ export function materializeRemovalSubmissionSnapshot(args: {
     payloadSnapshot: {
       __mappingRevision: MAPPING_REVISION,
       semantic: compiled.semanticPayload,
+      ...(compiled.templateObservationId ? { templateObservationId: compiled.templateObservationId,
+        frozenEntrySet: compiled.frozenEntrySet ?? [] } : {}),
       memberCreditBatchIds: compiled.memberCreditBatchIds,
       sourceBindingPlan: compiled.sourceBindingPlan,
       transport: {
@@ -748,6 +754,7 @@ export async function buildRemovalSubmissionBuild(args: {
     template: removalTemplate,
     lineSources: args.prepared.lineSources,
     emissionLines: ctx.emissionLines,
+    entryContributions: ctx.removalEntryContext?.contributions,
     blueprintsByKey,
     agg,
     externalProjectId,
@@ -787,6 +794,8 @@ export async function buildRemovalSubmissionBuild(args: {
   const semanticPayload = {
     removalId,
     mappingRevision: MAPPING_REVISION,
+    ...(ctx.removalEntryContext ? { templateSemanticFingerprint: ctx.removalEntryContext.semanticFingerprint,
+      entryContributions: ctx.removalEntryContext.contributions.manifest } : {}),
     externalProjectId,
     templateId: removalTemplate.id,
     omittedTemplateComponentIds,
@@ -844,6 +853,8 @@ export async function buildRemovalSubmissionBuild(args: {
     datapointSourceIds,
     sourceBindingPlan,
     semanticPayload,
+    templateObservationId: ctx.removalEntryContext?.observationId,
+    frozenEntrySet: ctx.removalEntryContext?.contributions.entrySet,
     monitored,
     fixed,
     datapointBodyByKey,

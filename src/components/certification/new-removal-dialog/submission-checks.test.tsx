@@ -15,7 +15,7 @@ const CHECKS = [
   ["mapping", "Facility linked to a registry project"],
   ["credentials", "Organization registry credentials"],
   ["templateSet", "Template set"],
-  ["templateLines", "Lines decided"],
+  ["templateLines", "Components decided"],
   ["transport", "Transport legs recorded"],
   ["transportUniformity", "Transport legs aggregate cleanly"],
   ["production", "Production lineage complete"],
@@ -55,9 +55,9 @@ describe("SubmissionChecks", () => {
     expect(html).toContain('href="/credit-batches/batch-1?facility=facility-1&amp;focus=removal-template"');
     expect(html).toContain(">Switch template on CB-2</a>");
     expect(html).toContain('href="/certification/settings?section=removal-templates&amp;facility=facility-1"');
-    expect(html).toContain(">Decide lines</a>");
+    expect(html).toContain(">Decide components</a>");
     expect(html).toContain("Template cannot be used");
-    expect(html).toContain("Template lines not ready");
+    expect(html).toContain("Template components not ready");
     expect(html).not.toContain(">Open settings</a>");
   });
 
@@ -284,7 +284,7 @@ it.each(["templateNotFullyRead", "forbiddenLine", "lineNeedsSetup", "lineHasNoSo
   });
   const html = renderToStaticMarkup(<SubmissionChecks checks={checks} facilityId="facility-1" />);
   expect(html).toContain(">Open Removal templates</a>");
-  expect(html).not.toContain(">Decide lines</a>");
+  expect(html).not.toContain(">Decide components</a>");
 });
 
 it.each([LINE_NO_MAPPING_MESSAGE, LINE_TRANSPORT_REPLACEMENT_MESSAGE])("links replacement guidance to each batch or Removal templates: %s", (message) => {
@@ -300,7 +300,7 @@ it.each([LINE_NO_MAPPING_MESSAGE, LINE_TRANSPORT_REPLACEMENT_MESSAGE])("links re
     expect(html).toContain(`>${count === 0 ? "Open Removal templates" : count === 1 ? "Switch template" : "Switch template on CB-1"}</a>`);
     if (count > 0) expect(html).toContain('href="/credit-batches/batch-1?facility=facility-1&amp;focus=removal-template"');
     if (count === 2) expect(html).toContain(">Switch template on CB-2</a>");
-    expect(html).not.toContain(">Decide lines</a>");
+    expect(html).not.toContain(">Decide components</a>");
   }
 });
 
