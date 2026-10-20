@@ -44,6 +44,7 @@ import { withFacilityCertificationBoundarySessionLock } from "@/data-access/faci
 import { requireOrgFacility } from "@/data-access/utils";
 import { redactReportSecrets } from "@/lib/certification/report-url";
 import { overlayLiveRemoteStatus } from "@/lib/certification/from-submission";
+import { statementSubmittedOnState, type SubmittedOnState } from "@/lib/certification/submitted-on";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import {
@@ -89,6 +90,7 @@ import {
   type SubmitGhgStatementResult,
 } from "./submit-ghg-statement";
 import {
+  appendSyncEventBestEffort,
   assertProductionConfirmed,
   GHG_STATEMENT_ENTITY_TYPE,
   GHG_STATEMENT_SUBMISSION_TYPE,
@@ -98,6 +100,11 @@ import {
   submitRateLimit,
 } from "./shared";
 import { readRemovalReportingWindow } from "./removal-reporting-window";
+import {
+  GHG_STATEMENT_SYNC_OPERATION,
+  getGhgStatementLastSyncedAt,
+  ghgStatementSyncEvent,
+} from "./ghg-statement-last-synced";
 
 // =====================================================================
 // Result + state shapes
@@ -151,6 +158,9 @@ export interface GhgStatementState {
 export interface GhgStatementListItem {
   statement: CertifierGhgStatementRow;
   latestSubmission: CertificationSubmissionRow | null;
+  /** Date of the latest submission, even when a newer draft version exists. */
+  submittedOn: SubmittedOnState;
+  lastSyncedAt: Date | null;
   linkedRemovalCount: number;
   effectiveReportingPeriodEndOn: string;
   remotePeriodMissing: boolean;
@@ -667,7 +677,7 @@ export async function refreshGhgStatementStatus(
     // stay frozen so the audit trail keeps showing the snapshot from when
     // they were submitted; refreshing a stale row would silently rewrite
     // history with whatever the new version's remote state happens to be.
-    return withFacilityDurabilityLock(
+    const remote = await withFacilityDurabilityLock(
       orgCtx,
       statement.facilityId,
       async (tx) => {
@@ -700,6 +710,12 @@ export async function refreshGhgStatementStatus(
         return redactReportSecrets(remote);
       },
     );
+    // The mirror transaction has committed and released its connection.
+    await appendSyncEventBestEffort(
+      orgCtx,
+      ghgStatementSyncEvent(statement.id),
+    );
+    return remote;
   });
 }
 
@@ -730,6 +746,8 @@ export async function loadGhgStatementState(
           entityType: GHG_STATEMENT_ENTITY_TYPE,
           entityId: ghgStatementId,
           limit: RECENT_SYNC_EVENTS_LIMIT,
+          // Per-sync bookkeeping rows would push failed submit rows out of the window.
+          excludeOperations: [GHG_STATEMENT_SYNC_OPERATION],
         }),
       ]);
 
@@ -794,24 +812,32 @@ export async function loadGhgStatementsForFacility(
     const statements = await listGhgStatementsForFacility(orgCtx, facilityId);
     if (statements.length === 0) return [];
 
-    // Two batched lookups for the whole list — the latest ledger row per
-    // statement and the linked-removal count per statement — instead of a
-    // pair of queries per row.
+    // Batch ledger, membership and sync history for the whole list.
     const statementIds = statements.map((statement) => statement.id);
-    const [submissions, removalCounts] = await Promise.all([
-      getLatestSubmissionsForEntities(orgCtx, {
-        provider: ISOMETRIC_PROVIDER,
-        submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
-        localEntityType: GHG_STATEMENT_ENTITY_TYPE,
-        localEntityIds: statementIds,
+    const submissionKey = {
+      provider: ISOMETRIC_PROVIDER,
+      submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
+      localEntityType: GHG_STATEMENT_ENTITY_TYPE,
+      localEntityIds: statementIds,
+    };
+    const [submissions, submittedRows, removalCounts, lastSyncedAt] = await Promise.all([
+      getLatestSubmissionsForEntities(orgCtx, submissionKey, facilityId),
+      getLatestSubmissionsForEntities(orgCtx, submissionKey, facilityId, undefined, {
+        submitted: "verifier",
       }),
       countRemovalsByGhgStatementIds(orgCtx, statementIds),
+      getGhgStatementLastSyncedAt(orgCtx, statementIds),
     ]);
 
     return statements.map((statement) => ({
       statement,
       latestSubmission: submissions.get(statement.id) ?? null,
+      submittedOn: statementSubmittedOnState(
+        submittedRows.get(statement.id) ?? null,
+        submissions.get(statement.id) ?? null,
+      ),
       linkedRemovalCount: removalCounts.get(statement.id) ?? 0,
+      lastSyncedAt: lastSyncedAt.get(statement.id) ?? null,
       effectiveReportingPeriodEndOn:
         getEffectiveReportingPeriodEndOn(statement),
       remotePeriodMissing: hasMissingRemotePeriod(statement),

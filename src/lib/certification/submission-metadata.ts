@@ -1,6 +1,8 @@
 export const SUBMISSION_METADATA_KEYS = {
   evidenceRefreshCandidates: "evidenceRefreshCandidates",
   remoteStatus: "remoteStatus",
+  // ISO time the registry (or the operator submit) recorded the statement as sent to the verifier.
+  submittedToVerifierAt: "submittedToVerifierAt",
   pendingTotalCo2eRemovedKg: "pendingTotalCo2eRemovedKg",
   removalIds: "removalIds",
   rejectionReason: "rejectionReason",

@@ -17,7 +17,8 @@
 "use client";
 
 import { certificationRemovalsHref } from "@/lib/certification/links";
-import type { CellContext, ColumnDef } from "@tanstack/react-table";
+import type { CellContext, ColumnDef, SortingState } from "@tanstack/react-table";
+import { isSortedDescending } from "./undated-last-sort";
 import { parseAsString, useQueryState } from "nuqs";
 import { createContext, useContext, useState } from "react";
 import {
@@ -38,6 +39,7 @@ import {
 import { deriveRemovalWorkflowStatus } from "@/lib/certification/status";
 import { formatDateRange } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { SubmittedOnCell, submittedOnSortingFn, submittedOnText } from "./submitted-on-cell";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import { NewRemovalDialog } from "./new-removal-dialog";
 import { CORRECTION_NEEDED_LABEL, RemovalCorrectionCell } from "./removal-correction-needed";
@@ -266,12 +268,17 @@ function BatchesColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
   return <MemberBatchesCell summary={row.original} />;
 }
 
+function SubmittedOnColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
+  return <SubmittedOnCell state={row.original.submittedOn} />;
+}
+
 function StatusColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
   const locks = useContext(RemovalLocksContext);
   return <StatusCell summary={row.original} lock={locks[row.original.removalId]} />;
 }
 
 const createColumns = (
+  submittedOnDescending: boolean,
   locks: RecordLockViews,
   registryHref: (externalId: string) => string | null,
 ): ColumnDef<RemovalListRow>[] => [
@@ -295,6 +302,13 @@ const createColumns = (
     header: "Credit batches",
     accessorFn: (summary) => summary.memberBatchCodes.join(" "),
     cell: BatchesColumnCell,
+  },
+  {
+    id: "submittedOn",
+    header: "Submitted on",
+    accessorFn: (summary) => submittedOnText(summary.submittedOn),
+    sortingFn: submittedOnSortingFn<RemovalListRow>(submittedOnDescending),
+    cell: SubmittedOnColumnCell,
   },
   {
     id: "status",
@@ -322,6 +336,7 @@ function ListBody({
 }) {
   const identities = useRemovalsForFacility(facilityId);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [removalId, setRemovalId] = useQueryState(
     "removal",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
@@ -352,7 +367,7 @@ function ListBody({
   const externalProjectId =
     certifierSummary.data?.mapping?.externalProjectId ?? null;
   const isProduction = identities.data?.isProduction ?? false;
-  const columns = createColumns(removalLocks.locks, (externalId) =>
+  const columns = createColumns(isSortedDescending(sorting, "submittedOn"), removalLocks.locks, (externalId) =>
     registryRecordUrl({
       kind: "removal",
       externalId,
@@ -384,6 +399,7 @@ function ListBody({
             enablePagination
             globalFilter={searchQuery}
             onGlobalFilterChange={setSearchQuery}
+            onSortingChange={setSorting}
             isLoading={identities.isLoading}
             hoverable
             onRowClick={(row) => setRemovalId(row.removalId)}

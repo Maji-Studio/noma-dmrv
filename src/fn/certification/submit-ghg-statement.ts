@@ -70,6 +70,7 @@ import {
   ISOMETRIC_PROVIDER,
 } from "./shared";
 import { verifyStoredGhgStatementReport } from "./stored-ghg-statement-report-core";
+import { ghgStatementSyncEvent } from "./ghg-statement-last-synced";
 
 export interface SubmitGhgStatementResult {
   externalId: string;
@@ -648,6 +649,8 @@ export async function submitGhgStatementToVerifierCore(args: {
       };
     }),
   );
+  // All success branches persisted registry state; record one sync after locks settle.
+  await appendSyncEventBestEffort(orgCtx, ghgStatementSyncEvent(ghgStatementId));
   onProgress?.({ step: "ghg_statement.confirming", state: "complete" });
   onProgress?.({ step: "ghg_statement.complete", state: "complete" });
   return result;
