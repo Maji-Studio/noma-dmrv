@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   formatRecordedMass,
   MASS_MOISTURE_LABELS,
@@ -14,6 +15,10 @@ export interface MassPairProps {
   className?: string;
 }
 
+function isRecorded(kg: number | null | undefined): boolean {
+  return formatRecordedMass(kg) !== MISSING_VALUE.notRecorded;
+}
+
 /** A structured wet/dry comparison for KPI cards and dense table cells. */
 export function MassPair({
   wetKg,
@@ -25,8 +30,8 @@ export function MassPair({
   className,
 }: MassPairProps) {
   const figures = [
-    { label: wetLabel, value: formatRecordedMass(wetKg) },
-    { label: dryLabel, value: formatRecordedMass(dryKg) },
+    { label: wetLabel, value: formatRecordedMass(wetKg), recorded: isRecorded(wetKg) },
+    { label: dryLabel, value: formatRecordedMass(dryKg), recorded: isRecorded(dryKg) },
   ];
   const isCompact = variant === "compact";
 
@@ -57,9 +62,15 @@ export function MassPair({
             {figure.label}
           </dt>
           <dd
+            {...(figure.recorded ? {} : { "data-empty": true })}
             className={cn(
-              "m-0 whitespace-nowrap font-mono tabular-nums text-[var(--color-text-primary)]",
-              isCompact
+              "m-0 whitespace-nowrap",
+              figure.recorded
+                ? "font-mono tabular-nums text-[var(--color-text-primary)]"
+                : "text-[var(--color-text-tertiary)]",
+              // A missing figure is a placeholder, not a headline value: small
+              // regular text, so two of them never run into each other.
+              isCompact || !figure.recorded
                 ? "text-[length:var(--text-body-small)] leading-[var(--text-body-small--line-height)]"
                 : "text-[length:var(--text-body-large)] leading-[var(--text-body-large--line-height)] font-semibold",
             )}
