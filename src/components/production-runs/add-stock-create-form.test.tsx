@@ -17,7 +17,7 @@ vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ fa
 vi.mock("@/hooks/use-production-runs", () => ({
   useProductionRuns: () => ({ data: { items: [], totalPages: 1 } }),
   useProductionRun: () => ({}), useProductionRunStats: () => ({}),
-  useCreateProductionRun: () => ({}), useUpdateProductionRun: () => ({}), useDeleteProductionRun: () => ({}),
+  useCreateProductionRun: () => ({ startDraft: vi.fn() }), useUpdateProductionRun: () => ({}), useDeleteProductionRun: () => ({}),
 }));
 vi.mock("@/hooks/use-biochar-products", () => ({
   useBiocharProducts: () => ({ data: { items: [], totalPages: 1 } }),

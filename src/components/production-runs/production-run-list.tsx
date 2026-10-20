@@ -352,6 +352,7 @@ export function ProductionRunList() {
   };
 
   const openCreate = () => {
+    createRun.startDraft();
     setFocusedRunId(null);
     setCreateError(null);
     setUpdateError(null);

@@ -211,6 +211,7 @@ export function CustomerList() {
 
   // Side sheet helpers
   const openCreate = () => {
+    createCustomer.startDraft();
     void setFocusedCustomerId(null);
     void setDeepLinkMode(null);
     void setLocationIntent(null);

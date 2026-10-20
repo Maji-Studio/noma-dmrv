@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { useCreateApplication } from "./use-applications";
 import type { ApplicationFormData } from "@/schemas/applications";
-import { useCreateIntentKey } from "./use-create-intent-key";
+import { useCreateIntentKey, useIntentMutation } from "./use-create-intent-key";
 import { useCreateOrder } from "./use-orders";
 import type { CreateOrderData } from "@/schemas/orders";
 
@@ -67,7 +67,7 @@ it("keeps an application intent when its action returns a failure result", async
   createApplication.mockResolvedValueOnce({ success: false, error: "Save again" })
     .mockResolvedValue({ success: true, data: { id: "application" } });
   const input = {} as ApplicationFormData;
-  await act(async () => { await result.current.mutateAsync(input); });
+  await act(async () => { await expect(result.current.mutateAsync(input)).rejects.toThrow("Save again"); });
   await act(async () => { await result.current.mutateAsync(input); });
   await act(async () => { await result.current.mutateAsync(input); });
   const keys = createApplication.mock.calls.map(([, options]) => options.intentKey);
@@ -87,4 +87,58 @@ it("mints lazily and keeps separate keys for separate hook instances", () => {
   rerender();
   expect(result.current.first.current()).toBe(first);
   expect(result.current.second.current()).toBe(second);
+});
+
+it("passes the variables and the same key through an automatic retry", async () => {
+  const client = new QueryClient();
+  const mutationFn = vi.fn<(variables: string, intentKey: string) => Promise<string>>()
+    .mockRejectedValueOnce(new Error("Try again"))
+    .mockResolvedValue("saved");
+  const { result, unmount } = renderHook(() => useIntentMutation({ mutationFn, retry: 1, retryDelay: 0 }), {
+    wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+  });
+  await act(async () => { expect(await result.current.mutateAsync("draft")).toBe("saved"); });
+  const key = mutationFn.mock.calls[0][1];
+  expect(key).toEqual(expect.any(String));
+  expect(mutationFn.mock.calls).toEqual([["draft", key], ["draft", key]]);
+  unmount();
+  client.clear();
+});
+
+it("rotates before the caller's onSuccess and forwards every lifecycle argument", async () => {
+  const client = new QueryClient();
+  const mutationFn = vi.fn<(variables: string, intentKey: string) => Promise<string>>().mockResolvedValue("saved");
+  const uuid = vi.spyOn(crypto, "randomUUID");
+  const onSuccess = vi.fn(() => { expect(uuid).toHaveBeenCalledTimes(mutationFn.mock.calls.length + 1); });
+  const onMutateResult = { previous: "old" };
+  const { result, unmount } = renderHook(() => useIntentMutation({
+    mutationFn,
+    onMutate: () => onMutateResult,
+    onSuccess,
+  }), {
+    wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+  });
+  await act(async () => { await result.current.mutateAsync("draft"); });
+  expect(onSuccess).toHaveBeenCalledExactlyOnceWith("saved", "draft", onMutateResult, expect.objectContaining({ client }));
+  await act(async () => { await result.current.mutateAsync("next draft"); });
+  expect(mutationFn.mock.calls[1][1]).not.toBe(mutationFn.mock.calls[0][1]);
+  unmount();
+  client.clear();
+});
+
+it("rotates a failed intent when startDraft is called", async () => {
+  const client = new QueryClient();
+  const mutationFn = vi.fn<(variables: string, intentKey: string) => Promise<string>>().mockRejectedValue(new Error("Try again"));
+  const { result, rerender, unmount } = renderHook(() => useIntentMutation({ mutationFn }), {
+    wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+  });
+  await act(async () => { await expect(result.current.mutateAsync("draft")).rejects.toThrow("Try again"); });
+  rerender();
+  await act(async () => { await expect(result.current.mutateAsync("draft")).rejects.toThrow("Try again"); });
+  act(() => { result.current.startDraft(); });
+  await act(async () => { await expect(result.current.mutateAsync("new draft")).rejects.toThrow("Try again"); });
+  expect(mutationFn.mock.calls[1][1]).toBe(mutationFn.mock.calls[0][1]);
+  expect(mutationFn.mock.calls[2][1]).not.toBe(mutationFn.mock.calls[0][1]);
+  unmount();
+  client.clear();
 });

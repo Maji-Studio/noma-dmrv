@@ -122,6 +122,7 @@ export function SupplierQuickAddDialog({
   };
 
   const handleOpen = () => {
+    createSupplier.startDraft();
     activePayloadRef.current = null;
     setError(null);
     reset({

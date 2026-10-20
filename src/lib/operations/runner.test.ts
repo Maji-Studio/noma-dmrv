@@ -24,6 +24,8 @@ const operation: Operation<z.ZodObject<{ amount: z.ZodNumber }>, { date: Date; a
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  claim.mockReset();
+  record.mockReset();
   owned.mockImplementation(async (_ctx, _deadline, callback) => {
     try { return { kind: "committed", data: await callback(tx) }; }
     catch (error) { return { kind: "callback_threw", error }; }
@@ -274,11 +276,38 @@ describe("shared operation runner", () => {
     expect(execute).toHaveBeenCalledOnce();
   });
 
+  it.each(["create_customer", "create_supplier", "start_production_run"])("saves %s once when a draft retries after a lost acknowledgement", async (operationId) => {
+    // Fake only the store and transaction boundary; the real runner owns replay.
+    const outcomes = new Map<string, unknown>();
+    claim.mockImplementation(async (_ctx, _tx, request) => {
+      const recordId = `${request.credentialId}:${request.key}:${request.operationId}`;
+      return outcomes.has(recordId)
+        ? { kind: "replay", outcome: outcomes.get(recordId) }
+        : { kind: "owner", recordId };
+    });
+    record.mockImplementation(async (_ctx, _tx, recordId, outcome) => {
+      outcomes.set(recordId, JSON.parse(JSON.stringify(outcome)));
+    });
+    const execute = vi.fn(operation.execute);
+    const op = { ...operation, id: operationId, execute };
+    const options = { intentKey: "11111111-1111-4111-8111-111111111111" };
+    owned.mockImplementationOnce(async (_ctx, _deadline, callback) => {
+      await callback(tx);
+      throw new DomainError("outcome_unknown", "Lost commit acknowledgement", { retryable: true });
+    });
+    await expect(runOperationInProcess(op, ctx, { amount: 1 }, options)).rejects.toMatchObject({ code: "outcome_unknown" });
+    expect(await runOperationInProcess(op, ctx, { amount: 1 }, options)).toEqual({ date: saved, amount: 1 });
+    expect(await runOperationInProcess(op, ctx, { amount: 1 }, options)).toEqual({ date: saved, amount: 1 });
+    expect(execute).toHaveBeenCalledOnce();
+    expect(record).toHaveBeenCalledOnce();
+    expect(outcomes.size).toBe(1);
+  });
+
   it.each([
-    ["idempotency_key_reused", "This entry was already saved with other values. Close the form and check the list."],
-    ["idempotency_in_progress", "This entry is still saving. Wait a moment, then check the list."],
-    ["outcome_unknown", "It is not known whether this entry was saved. Save again: it will not be saved twice."],
-    ["replay_unavailable", "This entry was already saved. Close the form and check the list."],
+    ["idempotency_key_reused", "The app already saved this record with other values. Close the form and check the list."],
+    ["idempotency_in_progress", "The app is still saving this record. Wait a moment, then check the list."],
+    ["outcome_unknown", "The app could not confirm the save. Save again: the app will not save this record twice."],
+    ["replay_unavailable", "The app already saved this record. Close the form and check the list."],
   ] as const)("preserves the cause and exposes app copy for keyed %s", async (code, message) => {
     const cause = new DomainError(code, "Transport copy", { retryable: true });
     owned.mockRejectedValueOnce(cause);
