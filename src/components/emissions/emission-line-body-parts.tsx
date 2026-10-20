@@ -231,7 +231,7 @@ export function NothingYet({ line, className }: { line: EmissionLine; className?
   return <p className={cn("body-small text-[var(--color-text-tertiary)]", className)}>{text}</p>;
 }
 
-/** "Decide lines" only for a line without a decision; any other template problem opens Removal templates. */
+/** "Decide components" only for a line without a decision; any other template problem opens Removal templates. */
 function TemplateReviewLink({ scope, undecided }: { scope: EmissionBatchScope; undecided: boolean }) {
   return (
     <Link href={certificationRemovalTemplatesHref(scope.facilityId)} className="body-small font-medium underline underline-offset-4">
@@ -240,7 +240,7 @@ function TemplateReviewLink({ scope, undecided }: { scope: EmissionBatchScope; u
   );
 }
 
-/** A decided line noma cannot fill: nothing to decide, so no "Decide lines". */
+/** A decided line noma cannot fill: nothing to decide, so no "Decide components". */
 export function SetupNotice({ scope }: { scope: EmissionBatchScope }) {
   return <Notice tone="info" action={<TemplateReviewLink scope={scope} undecided={false} />}>{NEEDS_SETUP_COPY}</Notice>;
 }

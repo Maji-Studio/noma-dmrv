@@ -60,7 +60,7 @@ export async function setEmissionLineComment(ctx: OrgContext, input: SetEmission
     if (!observation) throw new DomainError("validation_failed", REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
     // Comments are allowed on every template component, including lines that cannot take entries.
     if (!observation.definition.groups.some((group) => group.components.some((line) => line.id === data.componentId)))
-      throw new DomainError("validation_failed", "This template line is no longer available. Choose another line.");
+      throw new DomainError("validation_failed", "This template component is no longer available. Choose another component.");
     const [before] = await tx.select().from(emissionLineComments).where(and(
       eq(emissionLineComments.organizationId, ctx.organizationId),
       eq(emissionLineComments.creditBatchId, batch.id), eq(emissionLineComments.componentId, data.componentId),

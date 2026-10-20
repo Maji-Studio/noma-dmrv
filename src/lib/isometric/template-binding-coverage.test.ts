@@ -59,7 +59,7 @@ describe("contract-based template coverage", () => {
   });
   it("still fails closed on diesel without a contract", () => {
     const mapping = lookupInputMapping("pyrolysis", "fuel_usage_by_volume", "volume_of_fuel")!;
-    expect(() => resolveDatapointSource(mapping)).toThrow("This Removal template has lines to decide.");
+    expect(() => resolveDatapointSource(mapping)).toThrow("This Removal template has components to decide.");
   });
   it("blocks entry-only operating lines in both environments until entries can be submitted", () => {
     const value = realTemplate as GhgEntryTemplate;

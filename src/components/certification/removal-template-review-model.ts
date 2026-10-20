@@ -70,7 +70,7 @@ export const ORIGIN_LABELS: Record<LineContract["origin"], string> = {
 /** Line badges. Unchanged lines carry none. */
 export const CHANGE_LABELS: Partial<Record<ComponentChange, string>> = {
   changed: "Changed",
-  added: "New line",
+  added: "New component",
   cosmetic: "Wording changed",
 };
 
@@ -78,10 +78,10 @@ export const CHANGE_LABELS: Partial<Record<ComponentChange, string>> = {
 const PROBLEM_COPY: Partial<Record<LineSourceProblem["code"], string>> = {
   "single-with-automatic-source":
     "One entry per batch cannot add to automatic datapoints. Remove the automatic datapoints.",
-  "foreign-automatic-source": "These automatic datapoints do not fit this line. Choose others.",
+  "foreign-automatic-source": "These automatic datapoints do not fit this component. Choose others.",
   "retired-automatic-source": "These automatic datapoints are no longer available. Choose others or allow entries for this component.",
-  "disallowed-entry-policy": "This entry rule does not fit the line's inputs. Choose another one.",
-  ambiguous: "Another line uses the same automatic datapoints. Give them to one line only.",
+  "disallowed-entry-policy": "This entry rule does not fit the component's inputs. Choose another one.",
+  ambiguous: "Another component uses the same automatic datapoints. Give them to one component only.",
   "missing-contract": "This line has no contract yet. Assign one.",
 };
 
@@ -184,9 +184,9 @@ export function changeSummary(changes: RemovalTemplateReviewEntry["changes"]): s
   if (values.length === 0) return "No earlier read to compare with.";
   const count = (change: ComponentChange) => values.filter((value) => value === change).length;
   const parts = [
-    count("changed") && plural(count("changed"), "line changed", "lines changed"),
-    count("added") && plural(count("added"), "new line", "new lines"),
-    count("removed") && plural(count("removed"), "line removed", "lines removed"),
+    count("changed") && plural(count("changed"), "component changed", "components changed"),
+    count("added") && plural(count("added"), "new component", "new components"),
+    count("removed") && plural(count("removed"), "component removed", "components removed"),
     count("cosmetic") && plural(count("cosmetic"), "wording change", "wording changes"),
   ].filter(Boolean);
   return parts.length === 0 ? "No changes since the last read." : `Since the last read: ${parts.join(", ")}.`;
@@ -194,8 +194,8 @@ export function changeSummary(changes: RemovalTemplateReviewEntry["changes"]): s
 
 export function reviewCountSummary(lineCount: number, toDecide: number): string {
   return toDecide === 0
-    ? `${plural(lineCount, "line", "lines")}, all decided.`
-    : `${toDecide} of ${plural(lineCount, "line", "lines")} to decide.`;
+    ? `${plural(lineCount, "component", "components")}, all decided.`
+    : `${toDecide} of ${plural(lineCount, "component", "components")} to decide.`;
 }
 
 /** Isometric's section names on its template page. */
@@ -215,9 +215,9 @@ export const NOT_SET_UP_TITLE = "Not set up yet";
 /** Whether a Removal template can be chosen for a credit batch, and why not. */
 export interface TemplateReadiness {
   ready: boolean;
-  /** Why it cannot be chosen yet: "3 lines to decide", "Not set up yet". */
+  /** Why it cannot be chosen yet: "3 components to decide", "Not set up yet". */
   reason?: string;
-  /** Lines without a decision; only then does the link say "Decide lines". */
+  /** Lines without a decision; only then does the link say "Decide components". */
   toDecide?: number;
 }
 

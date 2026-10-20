@@ -8,8 +8,8 @@
  *
  * Only ready templates can be chosen: read in full, set up, and with no lines
  * to decide. A template that is not ready stays in the list, disabled, with its
- * count ("3 lines to decide"), and the dialog links each one to Removal
- * templates ("Decide lines"). The batch's current template stays selectable
+ * count ("3 components to decide"), and the dialog links each one to Removal
+ * templates ("Decide components"). The batch's current template stays selectable
  * even when it is not ready. The server refuses a template that is not ready.
  *
  * The form sends the batch version it opened on, never a refetched one, so a
@@ -191,7 +191,7 @@ function SwitchTemplateForm({
       <header className="flex flex-col gap-4">
         <h2 id={DIALOG_TITLE_ID} className="title-heading-3">{copy.title}</h2>
         <p className="body-small text-[var(--color-text-secondary)]">
-          {`Removals for ${creditBatch.code} use this template's lines.`}
+          {`Removals for ${creditBatch.code} use this template's components.`}
         </p>
       </header>
 

@@ -1,6 +1,6 @@
 /**
  * CreditBatchEmissionsPanel: the batch sheet's "Emissions" section. It lists
- * the template lines that still need an operator (Not recorded, File missing,
+ * the template components that still need an operator (Not recorded, File missing,
  * Check entry, Not set up) and links to the Emissions page for the batch.
  * Self-fetching and read-only; recording happens on the Emissions page.
  */

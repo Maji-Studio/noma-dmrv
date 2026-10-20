@@ -74,21 +74,21 @@ describe("CreditBatchRemovalTemplate", () => {
     expect(screen.getByText("This credit batch has no Removal template. Ask an Owner or Admin to choose one.")).toBeTruthy();
   });
 
-  describe("while the template has lines to decide", () => {
-    const LEAD = "17 lines to decide, so this credit batch can't go into a Removal.";
+  describe("while the template has components to decide", () => {
+    const LEAD = "17 components to decide, so this credit batch can't go into a Removal.";
 
     it("tells a member who decides them, with no link", () => {
       mocks.linesToDecide = 17;
       mount(false);
       expect(screen.getByText(`${LEAD} An Owner or Admin decides them in Removal templates.`)).toBeTruthy();
-      expect(screen.queryByRole("link", { name: "Decide lines" })).toBeNull();
+      expect(screen.queryByRole("link", { name: "Decide components" })).toBeNull();
     });
 
-    it("gives Owners and Admins the Decide lines link to this template", () => {
+    it("gives Owners and Admins the Decide components link to this template", () => {
       mocks.linesToDecide = 17;
       mount(true);
       expect(screen.getByText(LEAD)).toBeTruthy();
-      expect(screen.getByRole("link", { name: "Decide lines" }).getAttribute("href")).toBe(
+      expect(screen.getByRole("link", { name: "Decide components" }).getAttribute("href")).toBe(
         "/certification/settings?section=removal-templates&facility=facility-1&template=rvt_new",
       );
     });
@@ -96,11 +96,11 @@ describe("CreditBatchRemovalTemplate", () => {
     it("says another Removal once a Removal holds the batch", () => {
       mocks.linesToDecide = 1;
       mount(false, true, undefined, true);
-      expect(screen.getByText("1 line to decide, so this credit batch can't go into another Removal. An Owner or Admin decides it in Removal templates.")).toBeTruthy();
+      expect(screen.getByText("1 component to decide, so this credit batch can't go into another Removal. An Owner or Admin decides it in Removal templates.")).toBeTruthy();
       cleanup();
       mocks.linesToDecide = 17;
       mount(true, false, undefined, true);
-      expect(screen.getByText("17 lines to decide, so this credit batch can't go into another Removal.")).toBeTruthy();
+      expect(screen.getByText("17 components to decide, so this credit batch can't go into another Removal.")).toBeTruthy();
     });
 
     it("says nothing when every line is decided or the pin is gone", () => {

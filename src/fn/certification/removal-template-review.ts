@@ -142,7 +142,7 @@ export async function switchCreditBatchRemovalTemplate(input: SwitchCreditBatchR
         ? REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview : REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
     }
     const facts = await loadRemovalTemplateFacts(ctx, { client, template, externalProjectId: mapping.externalProjectId, blueprints: await listComponentBlueprints(client) });
-    // A failed read is not a line to decide: say what actually blocks the switch.
+    // A failed read is not a component to decide: say what actually blocks the switch.
     if (changingTemplate && !facts.observation) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
     if (changingTemplate) {
       const refreshedRead = {

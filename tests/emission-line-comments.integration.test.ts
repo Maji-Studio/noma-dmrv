@@ -170,7 +170,7 @@ it("enforces uniqueness and a nonblank body in the database", async () => {
   await expect(db.insert(emissionLineComments).values({ ...created, id: crypto.randomUUID(), componentId: "other", body: "   " })).rejects.toThrow();
 });
 
-it("joins only matching current-template lines and keeps all derived emissions facts unchanged", async () => {
+it("joins only matching current-template components and keeps all derived emissions facts unchanged", async () => {
   const beforeResult = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
   assert(beforeResult.status === "ready");
   const before = beforeResult.lines;
