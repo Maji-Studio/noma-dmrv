@@ -40,4 +40,5 @@ export {
 
 export { ProductionRunOverlapError } from "./overlap";
 
+/** Facility-local start day for display and date filtering. */
 export { productionRunDateExpr } from "./date-expr";

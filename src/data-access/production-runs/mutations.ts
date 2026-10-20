@@ -34,13 +34,13 @@ import {
 } from "@/lib/production-runs/lifecycle";
 import { and, eq, isNull } from "drizzle-orm";
 import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
-import { assertRowVersion, nextVersion } from "../row-version";
+import { assertRowVersion, nextVersion, staleRowVersion } from "../row-version";
 import {
   CODE_CONFLICT_MESSAGES,
   withUniqueCodeGuard,
 } from "../code-generator";
 import { attachProductionRunToMatchingCreditBatch } from "../credit-batch-membership";
-import { lockActiveFacilityReference } from "../facility-reference-guards";
+import { lockActiveFacilityReference, lockFacilityReferences } from "../facility-reference-guards";
 import { lockBinStocks } from "../lock-bin-stocks";
 import {
   assertProductionRunBiocharStockNotOverdrawn,
@@ -399,8 +399,7 @@ export async function updateProductionRunInTransaction(
       ? undefined
       : normalizeProductionRunFeedstockDraws(inputFeedstockDraws);
 
-  // Moving the run to another facility requires that facility to be active
-  // (no children move under an archived parent — mirrors createProductionRun).
+  // Moving a run requires an active target facility.
   if (data.facilityId && data.facilityId !== existing.facilityId) {
     const [facility] = await tx
       .select({ id: facilities.id, archivedAt: facilities.archivedAt })
@@ -533,8 +532,10 @@ export async function updateProductionRunInTransaction(
       productionRuns.code,
       CODE_CONFLICT_MESSAGES.productionRun,
       async () => {
-    if (data.facilityId !== undefined) {
-      await lockActiveFacilityReference(ctx, tx, data.facilityId);
+    // Lock both facilities before stock, run or lineage locks.
+    await lockFacilityReferences(ctx, tx, [existing.facilityId, targetFacilityId]);
+    if (targetFacilityId !== existing.facilityId) {
+      await lockActiveFacilityReference(ctx, tx, targetFacilityId);
     }
 
     if (effectiveReactorId && (data.reactorId !== undefined || data.facilityId !== undefined)) {
@@ -570,6 +571,9 @@ export async function updateProductionRunInTransaction(
       expectedVersion: data.expectedVersion,
       actualVersion: locked.version,
     });
+    if (locked.facilityId !== existing.facilityId) {
+      throw staleRowVersion(PRODUCTION_RUN_CONFLICT_ENTITY, productionRunId);
+    }
     const lockedFeedstockStorageLocationIds =
       await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
     assertProductionRunStockSnapshot(

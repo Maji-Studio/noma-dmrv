@@ -24,6 +24,10 @@ import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { chainOfCustodyKeys } from "./use-chain-of-custody";
+import { productionRunKeys } from "./use-production-runs";
+import { invalidateEntityTypeQueries } from "./entity-query-keys";
+import { creditBatchKeys } from "./credit-batch-query-keys";
+import { dashboardOverviewKeys } from "./use-dashboard-overview";
 
 // ============================================
 // Query Keys
@@ -206,18 +210,15 @@ export function useUpdateFacility(
       return result.data;
     },
     onMutate: async (variables) => {
-      if (!optimistic) {
-        await callbacks?.onMutate?.(variables);
-        return;
-      }
-
       // Cancel outgoing refetches to avoid overwriting optimistic update
-      await queryClient.cancelQueries({
-        queryKey: facilityKeys.detail(variables.facilityId),
-      });
-      await queryClient.cancelQueries({
-        queryKey: facilityKeys.lists(),
-      });
+      if (optimistic) {
+        await queryClient.cancelQueries({
+          queryKey: facilityKeys.detail(variables.facilityId),
+        });
+        await queryClient.cancelQueries({
+          queryKey: facilityKeys.lists(),
+        });
+      }
 
       // Snapshot previous values for rollback
       const previousFacility = queryClient.getQueryData<Facility>(
@@ -226,6 +227,16 @@ export function useUpdateFacility(
       const previousLists = queryClient.getQueriesData<PaginatedFacilities>({
         queryKey: facilityKeys.lists(),
       });
+      const previousTimezone = queryClient.getQueriesData<Facility>({
+        queryKey: facilityKeys.detail(variables.facilityId),
+      }).find(([, facility]) => facility?.timezone)?.[1]?.timezone
+        ?? previousLists.flatMap(([, list]) => list?.items ?? [])
+          .find((facility) => facility.id === variables.facilityId)?.timezone;
+
+      if (!optimistic) {
+        await callbacks?.onMutate?.(variables);
+        return { previousTimezone };
+      }
 
       // Optimistically update the facility detail cache
       if (previousFacility) {
@@ -263,9 +274,9 @@ export function useUpdateFacility(
       await callbacks?.onMutate?.(variables);
 
       // Return context with snapshots for rollback
-      return { previousFacility, previousLists };
+      return { previousFacility, previousLists, previousTimezone };
     },
-    onSuccess: async (data, variables) => {
+    onSuccess: async (data, variables, context) => {
       // Update cache with actual server data
       queryClient.setQueryData(facilityKeys.detail(data.id), data);
       queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
@@ -281,6 +292,14 @@ export function useUpdateFacility(
       );
       queryClient.invalidateQueries({ queryKey: facilityKeys.lists() });
       queryClient.invalidateQueries({ queryKey: facilityKeys.countriesPrefix() });
+
+      if (context?.previousTimezone == null || context.previousTimezone !== data.timezone) {
+        queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: productionRunKeys.details() });
+        invalidateEntityTypeQueries(queryClient, "productionRun");
+        queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+        queryClient.invalidateQueries({ queryKey: creditBatchKeys.productionRunOptionsPrefix() });
+      }
 
       await callbacks?.onSuccess?.(data, variables);
     },

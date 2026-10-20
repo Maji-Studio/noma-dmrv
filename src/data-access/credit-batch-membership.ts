@@ -2,13 +2,13 @@ import type { CertifierProvider } from "@/schemas/credit-batches";
 import { recordMembershipActivity } from "./write-activity";
 /**
  * Explicit credit-batch create, update and delete lock sequence:
- * 1. Discover the batch (update/delete), current/prospective runs and artifacts
- *    without row locks.
- * 2. Lock the batch's certification artifacts. Both artifact helpers delegate
- *    to acquireCertificationArtifactLocksSorted, using one global key order.
+ * 1. Discover the batch's facility (update/delete) without row locks.
+ * 2. Facilities FOR SHARE, sorted, before reading facility-local dates or
+ *    taking any other locks. Facility UPDATE holders take the facility first.
+ * 3. Discover current/prospective runs and lock the batch's certification
+ *    artifacts. Both helpers use acquireCertificationArtifactLocksSorted
+ *    with one global key order.
  *    Create has no existing batch or certification lineage to guard.
- * 3. Facilities FOR SHARE, sorted, before runs and batch: facility archive and
- *    Removal create take the facility first, including before child FK checks.
  * 4. Current/prospective runs FOR UPDATE, sorted, on create or membership refresh.
  * 5. Production-process advisory scope. Keep runs before scope: auto-attachment
  *    already holds its run before requesting this scope. Other scope holders
@@ -132,6 +132,7 @@ export async function lockCreditBatchDeclarationRuns(
   runIds: string[];
   lockedRuns: LockedCreditBatchProductionRun[];
 }> {
+  await lockMembershipFacilities(ctx, tx, [params.facilityId]);
   const matchingBeforeLock = params.matchingProductionRunIds ?? await findMatchingUnassignedProductionRunIds(
     ctx,
     tx,
@@ -143,7 +144,6 @@ export async function lockCreditBatchDeclarationRuns(
       ...matchingBeforeLock,
     ]),
   ].sort();
-  await lockMembershipFacilities(ctx, tx, [params.facilityId]);
   const lockedRuns = await lockCreditBatchProductionRuns(ctx, tx, [
     ...(params.currentProductionRunIds ?? []),
     ...runIds,
@@ -192,6 +192,7 @@ function sameIds(before: readonly string[], after: readonly string[]): boolean {
 }
 
 async function lockMembershipFacilities(ctx: OrgContext, tx: DbTransaction, ids: string[]) {
+  requireOrgScope(ctx);
   await tx.select({ id: facilities.id }).from(facilities)
     .where(and(inArray(facilities.id, [...new Set(ids)].sort()), eq(facilities.organizationId, ctx.organizationId)))
     .orderBy(facilities.id).for("share");
@@ -214,7 +215,7 @@ async function readMembershipRunIds(ctx: OrgContext, tx: DbTransaction, id: stri
   return links.map(link => link.id);
 }
 
-/** Discover before any row locks; update then locks its prospective runs too. */
+/** First transaction locks: facilities, before date reads and certification artifacts. */
 export async function prepareCreditBatchMembershipWrite(
   ctx: OrgContext,
   tx: DbTransaction,
@@ -226,6 +227,7 @@ export async function prepareCreditBatchMembershipWrite(
   const [snapshot] = await tx.select(batchMembershipFields).from(creditBatches)
     .where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)));
   if (!snapshot) throw new SafeError("Credit batch not found");
+  await lockMembershipFacilities(ctx, tx, [snapshot.facilityId, target.facilityId ?? snapshot.facilityId]);
   const currentProductionRunIds = await readMembershipRunIds(ctx, tx, id);
   const certifier = await getFacilityCertifierWithExecutor(ctx, tx, target.facilityId ?? snapshot.facilityId);
   const matchingProductionRunIds = refreshMembership
@@ -238,7 +240,6 @@ export async function prepareCreditBatchMembershipWrite(
       })
     : undefined;
   const lockedRemovals = await lockCreditBatchArtifacts(ctx, tx, id);
-  await lockMembershipFacilities(ctx, tx, [snapshot.facilityId, target.facilityId ?? snapshot.facilityId]);
   return { snapshot, currentProductionRunIds, matchingProductionRunIds, lockedRemovals, certifier };
 }
 
@@ -665,7 +666,8 @@ export async function findMatchingUnassignedProductionRunIds(
  * Attach one completed run to the credit batch identified by its facility,
  * single feedstock type, and facility-local end day. Called inside the
  * production-run write transaction after feedstock allocation is final,
- * so membership commits atomically with completion.
+ * so membership commits atomically with completion. The caller holds the run's
+ * facility FOR SHARE from before its first child lock.
  */
 export async function attachProductionRunToMatchingCreditBatch(
   ctx: OrgContext,

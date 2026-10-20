@@ -127,7 +127,7 @@ async function loadLineageWithExecutor(
       runId: productionRuns.id,
       runCode: productionRuns.code,
       runStatus: productionRuns.status,
-      runDate: productionRunDateExpr(),
+      runDate: productionRunDateExpr(ctx.organizationId),
       biocharStorageName: storageLocations.name,
       biocharOutputKg: productionRuns.biocharOutputKg,
       biocharDryMassKg: productionRuns.biocharDryMassKg,

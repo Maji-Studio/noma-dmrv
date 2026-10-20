@@ -113,18 +113,16 @@ export async function getProductionRuns(
   }
 
   if (startDate) {
-    // Inclusive-day range on the run's calendar date (derived from start_time).
-    conditions.push(gte(productionRunDateExpr(), formatLocalDate(startDate)));
+    conditions.push(gte(productionRunDateExpr(ctx.organizationId), formatLocalDate(startDate)));
   }
 
   if (endDate) {
-    conditions.push(lte(productionRunDateExpr(), formatLocalDate(endDate)));
+    conditions.push(lte(productionRunDateExpr(ctx.organizationId), formatLocalDate(endDate)));
   }
 
   const whereClause = and(...conditions);
 
-  // Build sort clause. The "date" sort key now orders by start_time (the run's
-  // instant), which sorts identically to the old date column but breaks ties.
+  // Keep chronological instant ordering, including across facility time zones.
   const sortColumn = {
     code: productionRuns.code,
     date: productionRuns.startTime,
@@ -156,7 +154,7 @@ export async function getProductionRuns(
       id: productionRuns.id,
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
-      date: productionRunDateExpr(),
+      date: productionRunDateExpr(ctx.organizationId),
       status: productionRuns.status,
       cancellationReason: productionRuns.cancellationReason,
       startTime: productionRuns.startTime,
@@ -381,7 +379,7 @@ export async function getProductionRunById(
       id: productionRuns.id,
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
-      date: productionRunDateExpr(),
+      date: productionRunDateExpr(ctx.organizationId),
       status: productionRuns.status,
       cancellationReason: productionRuns.cancellationReason,
       startTime: productionRuns.startTime,

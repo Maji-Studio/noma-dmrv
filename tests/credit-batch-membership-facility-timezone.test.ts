@@ -246,7 +246,7 @@ describe("credit batch membership by facility-local day", () => {
     expect(await assignments(completed.id)).toEqual([]);
   });
 
-  it("offers a completed run only in its local end month and keeps its UTC start date", async () => {
+  it("offers a completed run only in its local end month and shows its local start date", async () => {
     const f = await fixture("OPTIONS-COMPLETE", DAR_ES_SALAAM);
     const completed = await run(f, "COMPLETE", DAR_START, DAR_END);
 
@@ -261,7 +261,7 @@ describe("credit batch membership by facility-local day", () => {
     expect(september).toEqual([]);
   });
 
-  it("offers a running run only in its local start month and keeps its UTC start date", async () => {
+  it("offers a running run only in its local start month and shows its local start date", async () => {
     const f = await fixture("OPTIONS-RUNNING", DAR_ES_SALAAM);
     const running = await run(f, "RUNNING", DAR_END, null);
 
@@ -271,7 +271,7 @@ describe("credit batch membership by facility-local day", () => {
     expect(october).toEqual([expect.objectContaining({
       id: running.id,
       status: "running",
-      date: "2025-09-30",
+      date: "2025-10-01",
     })]);
     expect(september).toEqual([]);
     expect(await assignments(running.id)).toEqual([]);
