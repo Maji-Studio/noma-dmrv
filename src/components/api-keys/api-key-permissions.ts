@@ -39,10 +39,10 @@ export function permissionSummary(scopes: readonly ApiScope[]) {
 }
 
 const EVERYTHING = "everything";
-const ACCESS_VERBS = { read: "reads", write: "saves", delete: "deletes" } as const;
+const ACCESS_VERBS = { read: "reads", write: "writes", delete: "deletes" } as const;
 
 /**
- * The short permission line for lists, such as "Reads everything; saves Feedstocks, Orders".
+ * The short permission line for lists, such as "Reads everything; writes Feedstocks, Orders".
  * An action granted on every entity that offers it collapses to "everything"; otherwise the entities are named.
  */
 export function compactPermissionSummary(scopes: readonly ApiScope[]): string {

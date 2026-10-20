@@ -39,7 +39,7 @@ it("shows a member only their own connections", () => {
   const own = screen.getByRole("list", { name: "Your connections" });
   expect(within(own).getByText("Claude")).toBeTruthy();
   expect(within(own).getByText("claude.ai")).toBeTruthy();
-  expect(within(own).getByText("Reads Feedstocks; saves Feedstocks", { exact: false })).toBeTruthy();
+  expect(within(own).getByText("Reads Feedstocks; writes Feedstocks", { exact: false })).toBeTruthy();
   expect(within(own).getByText("Not recorded")).toBeTruthy();
   expect(screen.queryByRole("heading", { name: "All members" })).toBeNull();
 });

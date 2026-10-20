@@ -73,12 +73,12 @@ const ALL_READS = API_SCOPES.filter((scope) => scope.endsWith(":read"));
 
 it.each([
   ["reads everything", ALL_READS, "Reads everything"],
-  ["reads everything and writes some", [...ALL_READS, "feedstocks:write", "orders:write"], "Reads everything; saves Feedstocks, Orders"],
-  ["reads everything, writes some, deletes one", [...ALL_READS, "feedstocks:write", "orders:delete"], "Reads everything; saves Feedstocks; deletes Orders"],
-  ["writes everything", API_SCOPES.filter((scope) => scope.endsWith(":write")), "Saves everything"],
-  ["everything", API_SCOPES, "Reads everything; saves everything; deletes everything"],
+  ["reads everything and writes some", [...ALL_READS, "feedstocks:write", "orders:write"], "Reads everything; writes Feedstocks, Orders"],
+  ["reads everything, writes some, deletes one", [...ALL_READS, "feedstocks:write", "orders:delete"], "Reads everything; writes Feedstocks; deletes Orders"],
+  ["writes everything", API_SCOPES.filter((scope) => scope.endsWith(":write")), "Writes everything"],
+  ["everything", API_SCOPES, "Reads everything; writes everything; deletes everything"],
   ["partial read only", ["feedstocks:read", "orders:read"], "Reads Feedstocks, Orders"],
-  ["write without read", ["deliveries:write"], "Saves Deliveries"],
+  ["write without read", ["deliveries:write"], "Writes Deliveries"],
   ["no access", [], "None"],
 ] as const)("compact summary: %s", (_name, scopes, line) => {
   expect(compactPermissionSummary(scopes)).toBe(line);
