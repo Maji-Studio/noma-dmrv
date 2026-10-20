@@ -52,7 +52,8 @@ test.describe("Removal template setup", { tag: "@live" }, () => {
       await expect(page.getByRole("radio", { checked: true })).toHaveCount(0);
       await page.getByRole("button", { name: "Continue" }).click();
       await expect(page.getByText("Pick a template to continue.")).toBeVisible();
-      await radios.first().check({ force: true });
+      // Templates Isometric cannot take yet are listed but disabled.
+      await page.getByRole("radio", { disabled: false }).first().check({ force: true });
     }
     await page.getByRole("button", { name: "Continue" }).click();
 

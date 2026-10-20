@@ -68,7 +68,8 @@ export function RemovalTemplateSummaryCard({ facilityId }: { facilityId: string 
   const { data } = query;
   const defaultTemplate = data.fitting.find((template) => template.id === data.defaultRemovalTemplateId);
   const unfit = data.notFitting.find((template) => template.id === data.defaultRemovalTemplateId);
-  const setupHref = (step?: "template" | "decisions") => removalTemplateSetupHref(facilityId, { templateId: defaultTemplate?.id, step });
+  // Review keeps the template; Change starts with nothing picked, like a first setup.
+  const setupHref = (step: "template" | "decisions") => removalTemplateSetupHref(facilityId, { templateId: step === "decisions" ? defaultTemplate?.id : undefined, step });
 
   if (!data.defaultRemovalTemplateId || (!defaultTemplate && !unfit)) {
     return (

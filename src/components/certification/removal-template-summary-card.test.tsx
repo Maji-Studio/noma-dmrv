@@ -29,6 +29,7 @@ describe("RemovalTemplateSummaryCard", () => {
     expect(screen.getByRole("link", { name: "CB-26-001" }).getAttribute("href")).toContain("/credit-batches/b1");
     expect(screen.getByRole("link", { name: "Review decisions" }).getAttribute("href")).toContain("step=decisions");
     expect(screen.getByRole("link", { name: "Change template" }).getAttribute("href")).toContain("step=template");
+    expect(screen.getByRole("link", { name: "Change template" }).getAttribute("href")).not.toContain("template=tpl-ready");
   });
 
   it("shows the same card to a Member without buttons or raw ids", () => {
