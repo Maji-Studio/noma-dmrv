@@ -16,7 +16,8 @@ import { planSaveRefusal } from "@/lib/save-refusal";
 import { LOCKED_ERROR_TYPE } from "./form-error-summary";
 import { locateInDirectory, readFieldDirectory } from "./form-error-summary-dom";
 
-const SERVER_ERROR_TYPE = "server";
+/** `setError` type of a refused save's field error. */
+export const SERVER_ERROR_TYPE = "server";
 
 export interface SaveRefusalOutcome {
   /** What the footer says, or null when every issue sits at a field. */

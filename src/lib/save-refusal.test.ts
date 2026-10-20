@@ -48,6 +48,14 @@ describe("planSaveRefusal", () => {
     });
   });
 
+  it("keeps a second reason for the same field in the footer", () => {
+    const error = refusal([issue(["fieldSizeHa"], "Enter a field size."), issue(["fieldSizeHa"], "Field size is too large.")]);
+    expect(planSaveRefusal(error, everything)).toEqual({
+      fieldErrors: [{ field: "fieldSizeHa", message: "Enter a field size.", locked: false }],
+      footer: "Field size is too large.",
+    });
+  });
+
   it("does not need a change to show an ordinary issue", () => {
     const plan = planSaveRefusal(refusal([issue(["notes"], "Too long.")]), { isShown: () => true, isChanged: () => false });
     expect(plan?.fieldErrors).toEqual([{ field: "notes", message: "Too long.", locked: false }]);

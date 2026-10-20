@@ -66,15 +66,20 @@ const OPEN_LOCK: RecordLockView = { level: "open", heldBy: [], usedBy: [], freeF
 const refusal = (path: string, message: string) =>
   new ActionError({ error: message, code: "validation_failed", issues: [{ path: [path], code: "validation_failed", message }] });
 
-function renderRefused(error: ActionError) {
+const LOCK_REASON = "This application is in a Removal sent to Isometric. Undo the change to save.";
+const lockRefusal = (path: string) =>
+  new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [{ path: [path], code: "certification_locked", message: LOCK_REASON }] });
+
+function renderRefused(error: ActionError, { footer = null as string | null, edit = () => {} } = {}) {
   const onSubmit = vi.fn((_data, onRefusal) => {
-    expect(onRefusal(error)).toEqual({ footer: null });
+    expect(onRefusal(error)).toEqual({ footer });
   });
   const view = render(
     <QueryClientProvider client={new QueryClient()}>
       <ApplicationForm application={APPLICATION} lock={OPEN_LOCK} deliveries={[DELIVERY]} onSubmit={onSubmit} />
     </QueryClientProvider>,
   );
+  edit();
   fireEvent.submit(view.container.querySelector("form")!);
   return onSubmit;
 }
@@ -94,10 +99,10 @@ describe("ApplicationForm server refusals", () => {
   });
 
   it("shows a date before the delivery at the application date", async () => {
-    const message = "Application date cannot be before the delivery date of DL-26-001";
+    const message = "Application date cannot be before the delivery date of DL-26-001 (Sep 22, 2026).";
     const onSubmit = renderRefused(refusal("applicationDate", message));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect((await screen.findAllByText(new RegExp(message))).length).toBeGreaterThanOrEqual(2);
+    expect((await screen.findAllByText(new RegExp(message.replace(/[().]/g, "\\$&")))).length).toBeGreaterThanOrEqual(2);
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Application date/)));
   });
 
@@ -107,5 +112,23 @@ describe("ApplicationForm server refusals", () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     expect((await screen.findAllByText(new RegExp(message))).length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText(/Remaining now/)).toBeTruthy();
+  });
+
+  it("marks a changed field that became locked and gives the reason once", async () => {
+    const onSubmit = renderRefused(lockRefusal("fieldSizeHa"), {
+      footer: LOCK_REASON,
+      edit: () => fireEvent.change(screen.getByLabelText(/Field size/), { target: { value: "3" } }),
+    });
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(await screen.findByText("Not saved. 1 field is locked.")).toBeTruthy();
+    expect(screen.getAllByText("Locked").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(LOCK_REASON)).toBeNull();
+  });
+
+  it("leaves a whole-record lock on the unchanged delivery to the footer", async () => {
+    const onSubmit = renderRefused(lockRefusal("deliveryId"), { footer: LOCK_REASON });
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(screen.queryByText("Locked")).toBeNull();
+    expect(screen.queryByText(/Not saved\./)).toBeNull();
   });
 });

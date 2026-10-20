@@ -55,9 +55,11 @@ export function planSaveRefusal(error: unknown, options: SaveRefusalOptions): Sa
     const locked = issue.code === LOCK_CODE;
     if (locked) footer.add(issue.message);
     const atField = options.isShown(field) && (!locked || options.isChanged(field));
-    if (!atField) {
+    // A field shows one error; a second reason for it goes to the footer.
+    const taken = fieldErrors.find((existing) => existing.field === field);
+    if (!atField || (taken && !locked && taken.message !== issue.message)) {
       footer.add(issue.message);
-    } else if (!fieldErrors.some((existing) => existing.field === field)) {
+    } else if (!taken) {
       fieldErrors.push({ field, message: locked ? LOCKED_FIELD_MESSAGE : issue.message, locked });
     }
   }

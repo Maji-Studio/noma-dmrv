@@ -41,7 +41,8 @@ import {
 } from "@/schemas/applications";
 import type { Application } from "@/db/schema/application";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
-import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { SERVER_ERROR_TYPE, useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { APPLICATION_REFUSAL_ALIASES } from "@/lib/application-operation-input";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import type { DurabilityOption } from "@/schemas/credit-batches";
@@ -208,6 +209,7 @@ export function ApplicationForm({
     setValue,
     resetField,
     getFieldState,
+    clearErrors,
     formState: { errors },
   } = useForm<z.input<typeof applicationFormSchema>, unknown, ApplicationFormData>({
     resolver: zodResolver(applicationFormSchema),
@@ -223,6 +225,10 @@ export function ApplicationForm({
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
   const { field: deliveryField } = useController({ control, name: "deliveryId" });
   const watchedAppliedKg = useWatch({ control, name: "biocharAppliedKg" });
+  // A refused over-draw named the old delivery's remaining mass; another delivery voids it.
+  useClearOnDependencyChange(selectedDeliveryId, () => {
+    if (getFieldState("biocharAppliedKg").error?.type === SERVER_ERROR_TYPE) clearErrors("biocharAppliedKg");
+  });
   const evidenceMethod = useWatch({ control, name: "evidenceMethod" }) as ApplicationEvidenceMethod;
   const gpsLatitude = useWatch({ control, name: "gpsLatitude" }) as number | null | undefined;
   const gpsLongitude = useWatch({ control, name: "gpsLongitude" }) as number | null | undefined;
