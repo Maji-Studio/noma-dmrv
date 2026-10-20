@@ -851,7 +851,19 @@ function buildMergedChainGraph(
     applicationMasses.set(lineage.application.id, totals);
   }
   const productMasses = new Map<string, { wetKg: number; dryKg: number }>();
+  const runMasses = new Map<string, { wetKg: number | null; dryKg: number | null }>();
   for (const lineage of lineages) {
+    for (const source of resolveChainSources(lineage)) {
+      const runId = source.productionRun.id;
+      const total = runMasses.get(runId) ?? { wetKg: null, dryKg: null };
+      if (source.allocatedWetMassKg != null) {
+        total.wetKg = (total.wetKg ?? 0) + source.allocatedWetMassKg;
+      }
+      if (source.allocatedDryMassKg != null) {
+        total.dryKg = (total.dryKg ?? 0) + source.allocatedDryMassKg;
+      }
+      runMasses.set(runId, total);
+    }
     if (!lineage.biocharProduct) continue;
     const total = productMasses.get(lineage.biocharProduct.id) ?? { wetKg: 0, dryKg: 0 };
     total.wetKg += tonnesToKg(lineage.application.biocharAppliedTons ?? 0);
@@ -874,6 +886,14 @@ function buildMergedChainGraph(
   const edgeById = new Map<string, Edge>();
   for (const [index, lineage] of lineages.entries()) {
     for (const node of buildLineageNodes(normalizedLineages[index])) {
+      if (node.kind === "productionRun") {
+        const total = runMasses.get(node.id.slice("production-run:".length));
+        if (total) {
+          node.details = node.details.map(row => row.label === "Applied from source"
+            ? { ...row, value: formatWetDryMass(total) }
+            : row);
+        }
+      }
       if (node.kind === "biocharProduct" && lineage.biocharProduct) {
         const total = productMasses.get(lineage.biocharProduct.id);
         if (total) node.details = [{ label: "Applied from batch", value: formatWetDryMass(total) }];
