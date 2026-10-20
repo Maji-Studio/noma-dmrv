@@ -24,6 +24,8 @@ import { loadRemovalTemplateFacts } from "./removal-template-facts";
 import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
 import { removalTemplateReviewLines as reviewLines } from "@/lib/certification/removal-template-review-lines";
 import { isTemplateReady, linesToDecideCount } from "@/lib/certification/removal-template-readiness";
+import { hasMissingFixedDatapoint } from "@/lib/certification/template-fixed-datapoints";
+import { assertSequestrationTemplateSelectable } from "@/lib/isometric/transformers/sequestration-binding";
 
 export async function loadRemovalTemplateReview(facilityId: string) {
   return withAction(async (ctx) => {
@@ -98,7 +100,9 @@ export async function switchCreditBatchRemovalTemplate(input: SwitchCreditBatchR
     const template = templates.find((candidate) => candidate.id === parsed.removalTemplateId);
     if (!template) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFound);
     if (template.credit_type !== "REMOVAL") throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.notRemovalTemplate);
+    assertSequestrationTemplateSelectable(template);
     const changingTemplate = batch.removalTemplateId !== parsed.removalTemplateId;
+    if (changingTemplate && hasMissingFixedDatapoint(template)) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint);
     if (changingTemplate) {
       const latest = await getLatestTemplateObservation(ctx, ISOMETRIC_PROVIDER, template.id);
       if (!latest) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
