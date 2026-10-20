@@ -60,6 +60,34 @@ describe("API key hooks", () => {
     expect(cached.includes(created.key)).toBe(false);
   });
 
+  it("keeps the draft key after failure and rotates after success or startDraft", async () => {
+    actions.create.mockResolvedValueOnce({ success: false, error: "Lost response" })
+      .mockResolvedValue({ success: true, data: { id: "key-1", key: "test-only-placeholder" } });
+    function Harness() {
+      const mutation = useCreateApiKey("org-1", vi.fn());
+      return <>
+        <button onClick={() => mutation.mutateAsync(input)}>Create</button>
+        <button onClick={mutation.startDraft}>New draft</button>
+      </>;
+    }
+    await render(<Harness />);
+    const submit = () => tree.root.findAllByType("button")[0].props.onClick();
+    await act(async () => { await expect(submit()).rejects.toThrow("Lost response"); });
+    const firstKey = actions.create.mock.calls[0][1].intentKey;
+    expect(firstKey).toMatch(/^[0-9a-f-]{36}$/);
+    await act(async () => { await submit(); });
+    expect(actions.create).toHaveBeenNthCalledWith(2, input, { intentKey: firstKey });
+    await act(async () => { await submit(); });
+    const nextKey = actions.create.mock.calls[2][1].intentKey;
+    expect(nextKey).not.toBe(firstKey);
+    actions.create.mockResolvedValue({ success: false, error: "Lost response" });
+    await act(async () => { await expect(submit()).rejects.toThrow(); });
+    const failedKey = actions.create.mock.calls[3][1].intentKey;
+    await act(async () => { tree.root.findAllByType("button")[1].props.onClick(); });
+    await act(async () => { await expect(submit()).rejects.toThrow(); });
+    expect(actions.create.mock.calls[4][1].intentKey).not.toBe(failedKey);
+  });
+
   it("throws action failures for create, edit and revoke without delivering plaintext", async () => {
     const failure = { success: false, error: "An organization membership is required." };
     actions.create.mockResolvedValue(failure);

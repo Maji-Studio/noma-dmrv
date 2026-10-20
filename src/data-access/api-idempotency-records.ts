@@ -45,7 +45,7 @@ export interface IdempotencyClaim {
 
 export type ClaimResult =
   | { kind: "owner"; recordId: string }
-  | { kind: "replay"; outcome: unknown; effect?: OperationEffect };
+  | { kind: "replay"; recordId: string; outcome: unknown; effect?: OperationEffect };
 
 interface CommittedRecord {
   id: string;
@@ -193,6 +193,7 @@ export async function claimIdempotencyKey(
   }
   return {
     kind: "replay",
+    recordId: record.id,
     outcome: record.outcome.data,
     ...("effect" in record.outcome ? { effect: record.outcome.effect as OperationEffect } : {}),
   };
