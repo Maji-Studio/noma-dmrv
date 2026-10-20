@@ -4,7 +4,7 @@ import { makeTestOrgContext } from "../../tests/helpers/test-org";
 
 const mocks = vi.hoisted(() => ({ transaction: vi.fn(), lock: vi.fn(), latest: vi.fn(), activity: vi.fn(), gate: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
-vi.mock("./emission-entry-lock", () => ({ lockEmissionEntryBatch: mocks.lock }));
+vi.mock("./emission-entry-lock", () => ({ lockEmissionCommentBatch: mocks.lock }));
 vi.mock("./removal-template-observations", () => ({ getLatestTemplateObservation: mocks.latest }));
 vi.mock("./activity-events", () => ({ recordActivityChange: mocks.activity }));
 vi.mock("@/lib/certification/emissions-entry-gate", () => ({ requireEmissionsEntriesEnabled: mocks.gate }));

@@ -71,3 +71,19 @@ it("discovers a Certify web verifier submission from an unmarked saved DRAFT", a
   const [removal] = await readRecordLockLineage(makeTestOrgContext(), statementReader("DRAFT"), [{ removalId: "removal", ghgStatementId: "statement" }], true);
   expect(isSentRemoval(removal)).toBe(false);
 });
+
+it.each(["VERIFIED", "CREDITS_ISSUED", "AWAITING_VERIFICATION", "UNKNOWN"])("does not refresh a saved %s statement on fresh reads", async (status) => {
+  const { getGhgStatement } = await import("@/lib/isometric/ghg-statements");
+  const [removal] = await readRecordLockLineage(makeTestOrgContext(), statementReader(status), [{ removalId: "removal", ghgStatementId: "statement" }], true);
+  expect(getGhgStatement).not.toHaveBeenCalled();
+  expect(removal.statements[0]).toMatchObject({ status, fresh: false });
+  expect(isSentRemoval(removal)).toBe(true);
+});
+it("shares statement requests across readers only with an explicit request cache", async () => {
+  const { getGhgStatement } = await import("@/lib/isometric/ghg-statements");
+  vi.mocked(getGhgStatement).mockResolvedValue({ status: "DRAFT", submitted_at: "2026-10-02", ghg_entry_ids: ["entry"] } as Awaited<ReturnType<typeof getGhgStatement>>);
+  const statementReads = new Map();
+  await Promise.all([statementReader(), statementReader()].map((tx) => readRecordLockLineage(makeTestOrgContext(), tx,
+    [{ removalId: "removal", ghgStatementId: "statement" }], true, { statementReads })));
+  expect(getGhgStatement).toHaveBeenCalledTimes(1);
+});

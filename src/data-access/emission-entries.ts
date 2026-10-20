@@ -310,6 +310,8 @@ export async function replaceEmissionEntry(ctx: OrgContext, input: ReplaceEmissi
       const window = emissionCorrectionWindow(ctx, tx, entry.creditBatchId, entry.sentByRemovalId);
       if (!window || replacement.occurredOn < window.start || replacement.occurredOn > window.end)
         throw new SafeError("Keep the entry date within this Removal's period.");
+      await tx.update(emissionEntries).set({ sentByRemovalId: entry.sentByRemovalId })
+        .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, replacement.id)));
     }
     // Documents have polymorphic owners, not an entry-document join table.
     // Keep retained evidence and live uploads; failed uploads remain on the old row.

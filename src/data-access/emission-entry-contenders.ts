@@ -1,5 +1,7 @@
 import { isRemovalCorrectionWindowOpen } from "@/lib/record-lock";
-import { readRecordLockLineage } from "./record-lock-lineage";
+import { getCertifiedLineageForBatches } from "./certification-lineage-guards";
+import { emissionCorrectionBatchIds } from "./emission-entry-corrections";
+import type { StatementReads } from "./record-lock-lineage";
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -12,7 +14,7 @@ import { deriveRemovalEntryWindow, type EntryContender } from "@/lib/certificati
 import { requireOrgScope, type Executor } from "./utils";
 
 /** Every unsubmitted Removal is a contender, even before it acquires a ledger row. */
-export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBatchIds: string[], executor: Executor = db): Promise<EntryContender[]> {
+export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBatchIds: string[], executor: Executor & Pick<typeof db, "selectDistinct"> = db): Promise<EntryContender[]> {
   requireOrgScope(ctx);
   if (!creditBatchIds.length) return [];
   const enabled = emissionsEntriesEnabled();
@@ -37,22 +39,30 @@ export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBa
     return window ? [{ contenderKind: "draft" as const, removalId, createdAt: group[0].createdAt.toISOString(),
       creditBatchIds: [...new Set(group.map((row) => row.creditBatchId))], window }] : [];
   });
-  const memberBatchIds = [...new Set(rows.map((row) => row.creditBatchId))];
-  const sharedMembers = memberBatchIds.length ? await executor.select({ removalId: certifierRemovals.id,
-    ghgStatementId: certifierRemovals.ghgStatementId, creditBatchId: creditBatchApplications.creditBatchId })
-    .from(creditBatchApplications).innerJoin(certifierRemovals, and(eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, creditBatchApplications.removalId)))
-    .where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.creditBatchId, memberBatchIds))) : [];
-  const facts = await readRecordLockLineage(ctx, executor, sharedMembers, emissionsEntriesEnabled());
+  const statementReads: StatementReads = new Map();
+  const lineageReads = new Map<string, ReturnType<typeof getCertifiedLineageForBatches>>();
+  const lineageByBatch = new Map(await Promise.all([...new Set(rows.map((row) => row.creditBatchId))].map(async (batchId) => {
+    const union = await emissionCorrectionBatchIds(ctx, executor, batchId);
+    const key = JSON.stringify([...union].sort());
+    if (!lineageReads.has(key)) lineageReads.set(key, getCertifiedLineageForBatches(ctx, executor, union, statementReads));
+    const lineage = await lineageReads.get(key)!;
+    return [batchId, lineage.map((row) => row.recordLockRemoval)] as const;
+  })));
+  const facts = [...lineageByBatch.values()].flat();
   return ids.flatMap((removalId) => {
     const group = rows.filter((row) => row.removalId === removalId && !hasFreshRemovalDeletionLease(row.metadata));
     const fact = facts.find((item) => item.id === removalId);
-    const shared = facts.filter((item) => sharedMembers.some((row) => row.removalId === item.id && group.some((member) => member.creditBatchId === row.creditBatchId)));
-    const correction = !!fact && emissionsEntriesEnabled() && isRemovalCorrectionWindowOpen(fact, shared);
+    if (!fact) return [];
+    const eligibleBatchIds = group.map((row) => row.creditBatchId).filter((id) => {
+      const shared = lineageByBatch.get(id);
+      return !!fact && !!shared && isRemovalCorrectionWindowOpen(fact, shared);
+    });
+    const correction = eligibleBatchIds.length > 0;
     const submitted = fact?.submissions.some((submission) => submission.submittedAt || ["submitted", "accepted"].includes(submission.status));
     if (submitted && !correction) return [];
     const window = deriveRemovalEntryWindow(group, group.map((row) => row.applicationDate));
     return window ? [{ contenderKind: correction ? "correction" as const : "draft" as const, removalId, createdAt: group[0].createdAt.toISOString(),
-      creditBatchIds: [...new Set(group.map((row) => row.creditBatchId))], window }] : [];
+      creditBatchIds: [...new Set(correction ? eligibleBatchIds : group.map((row) => row.creditBatchId))], window }] : [];
   });
 }
 

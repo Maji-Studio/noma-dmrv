@@ -74,8 +74,8 @@ export async function loadBatchEmissionContext(
       entriesWithoutRemoval: entriesWithoutRemoval(entries, contenders, liveReservationIds, availableApplications) };
   }
   for (const contender of contenders.filter((item) => item.contenderKind === "correction")) {
-    const correction = await loadRemovalEntryCorrection(ctx, contender.removalId);
-    for (const id of contender.creditBatchIds) if (result[id]) (result[id].corrections ??= []).push(correction);
+    const correction = await loadRemovalEntryCorrection(ctx, contender.removalId, contenders);
+    for (const id of correction.changedBatchIds ?? []) if (result[id]) (result[id].corrections ??= []).push(correction);
   }
   return result;
 }

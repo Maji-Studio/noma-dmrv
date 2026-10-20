@@ -11,7 +11,7 @@ import {
   type SetEmissionLineCommentInput, type DeleteEmissionLineCommentInput,
 } from "@/schemas/emission-line-comments";
 import { requireOrgScope, type Executor } from "./utils";
-import { lockEmissionEntryBatch } from "./emission-entry-lock";
+import { lockEmissionCommentBatch } from "./emission-entry-lock";
 import { getLatestTemplateObservation } from "./removal-template-observations";
 import { assertRowVersion, nextVersion, staleRowVersion } from "./row-version";
 import { recordActivityChange } from "./activity-events";
@@ -42,7 +42,7 @@ export async function getEmissionLineComment(ctx: OrgContext, id: string, execut
 /** Serialize creates and template switches on the batch, without a record-lock gate. */
 async function lockCommentBatch(ctx: OrgContext, tx: DbTransaction, creditBatchId: string, facilityId?: string) {
   requireOrgScope(ctx);
-  const { batch, facility } = await lockEmissionEntryBatch(ctx, tx, creditBatchId);
+  const { batch, facility } = await lockEmissionCommentBatch(ctx, tx, creditBatchId);
   if (batch.archivedAt || facility.archivedAt || (facilityId !== undefined && batch.facilityId !== facilityId))
     throw new DomainError("not_found", "Credit batch was not found.");
   return batch;

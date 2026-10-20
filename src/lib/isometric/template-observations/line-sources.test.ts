@@ -143,7 +143,7 @@ describe("acceptable proposals", () => {
   ];
   const shared = { groups: [{ ...group, components: trucks }] };
   const lone = { groups: [{ ...group, components: [trucks[0]] }] };
-  const proposal: LineContract = { scope: "operating", automaticSource: "feedstock-transport", entryPolicy: "additive", origin: "proposed" };
+  const proposal: LineContract = { scope: "operating", automaticSource: "feedstock-transport", entryPolicy: "none", origin: "proposed" };
   const unassigned: LineContract = { scope: "unassigned", entryPolicy: "none", origin: "proposed" };
 
   it("proposes a dropped figure again once the clash is gone", () => {
@@ -328,4 +328,12 @@ it.each(["bootstrap", "carried", "reviewed"] as const)("reopens a settled %s sam
   expect(lineNeedsReview(id, sources[id], problems)).toBe(true);
   const reassigned: LineSources = { ...sources, [id]: { scope: "operating", entryPolicy: "additive", origin: "reviewed" } };
   expect(validateLineSources(legacy, reassigned)).toEqual([]);
+});
+
+it("keeps separate mass and distance inputs single and flags stored additive contracts", () => {
+  const pair = adHoc("transport", [{ key: "mass", type: "monitored", quantityKind: "mass" }, { key: "distance", type: "monitored", quantityKind: "distance" }]);
+  expect(allowedEntryPolicies(pair)).toEqual(["none", "single"]);
+  expect(validateLineSources({ groups: [{ ...definition.groups[0], components: [pair] }] }, {
+    [pair.id]: { scope: "operating", origin: "reviewed", entryPolicy: "additive" },
+  })).toContainEqual({ code: "disallowed-entry-policy", componentId: pair.id });
 });

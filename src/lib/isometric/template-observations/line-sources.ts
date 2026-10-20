@@ -109,12 +109,17 @@ export function resolveLineSources({ definition, previous }: {
       }
       const bootstrap = ownValue(BOOTSTRAP_LINE_SOURCES, component.id);
       if (bootstrap) {
-        sources[component.id] = { ...bootstrap, origin: "bootstrap" };
+        const policies = allowedEntryPolicies(component);
+        const automaticSingle = bootstrap.automaticSource && policies.includes("single") &&
+          catalogCandidates(component, group.key).includes(bootstrap.automaticSource);
+        sources[component.id] = { ...bootstrap,
+          entryPolicy: automaticSingle ? "none" : bootstrap.entryPolicy,
+          origin: "bootstrap" };
         continue;
       }
       const candidates = catalogCandidates(component, group.key);
       if (candidates.length === 1 && !hasCatalogDisambiguation(component.blueprintKey)) {
-        const entryPolicy = allowedEntryPolicies(component).find((policy) => policy !== "none") ?? "none";
+        const entryPolicy = allowedEntryPolicies(component).includes("additive") ? "additive" : "none";
         sources[component.id] = { scope: "operating", automaticSource: candidates[0], entryPolicy, origin: "proposed" };
       } else {
         sources[component.id] = { scope: "unassigned", entryPolicy: "none", origin: "proposed" };

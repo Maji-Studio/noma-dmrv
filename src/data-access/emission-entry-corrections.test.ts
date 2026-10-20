@@ -10,3 +10,11 @@ it("does not load lineage or authorize corrections with the flag off", async () 
   await expect(lockRemovalEntryCorrectionAttempt(ctx, tx, "removal")).resolves.toBeUndefined();
   expect(emissionCorrectionWindow(ctx, tx, "batch", "removal")).toBeUndefined();
 });
+
+it("discovers the same full batch union from every owner of the edited batch", async () => {
+  const { emissionCorrectionBatchIds } = await import("./emission-entry-corrections");
+  const results = [[{ id: "owner-a" }, { id: "owner-b" }, { id: null }], [{ id: "a" }, { id: "b" }, { id: "b" }]];
+  const tx = { select: () => ({ from: () => ({ where: async () => results.shift() }) }) } as unknown as DbTransaction;
+  expect(await emissionCorrectionBatchIds(makeTestOrgContext(), tx, "a")).toEqual(["a", "b"]);
+  expect(results).toEqual([]);
+});

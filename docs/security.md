@@ -96,6 +96,7 @@ transport legs and retires sample legs from automatic figures, aggregation,
 catalog availability, transport coverage, readiness and dashboards. At activation,
 the hand-run retirement CLI deletes old sample legs, skipping certification-locked
 legs. Keep it disabled until entry submission support is deployed.
+Finish or release interrupted drafts with a frozen entry set before switching the flag off: reservation drops the entry claim while finalize still checks the frozen set, so finalize throws after the registry POST.
 
 **App environment list: the `envSchema` object in `src/config/env.ts`.**
 The logger validates `LOG_LEVEL` locally; standalone Isometric scripts and health

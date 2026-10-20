@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
-const mocks = vi.hoisted(() => ({ transaction: vi.fn(), batch: vi.fn(), facts: vi.fn(), contenders: vi.fn(), reservations: vi.fn(), available: vi.fn(), automatic: vi.fn(), activity: vi.fn(), context: vi.fn(), entries: vi.fn() }));
+const mocks = vi.hoisted(() => ({ transaction: vi.fn(), batch: vi.fn(), facts: vi.fn(), contenders: vi.fn(), reservations: vi.fn(), available: vi.fn(), automatic: vi.fn(), activity: vi.fn(), context: vi.fn(), entries: vi.fn(), correctionScope: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
 vi.mock("./emission-entries", () => ({ lockedBatch: mocks.batch, listEmissionEntriesForBatches: mocks.entries }));
 vi.mock("./emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: mocks.facts }));
@@ -10,6 +10,8 @@ vi.mock("@/lib/certification/emissions-entry-gate", () => ({ requireEmissionsEnt
 vi.mock("./batch-emission-automatic-figures", () => ({ loadBatchesEmissionAutomaticFacts: mocks.automatic }));
 vi.mock("@/fn/certification/certify-context-core", () => ({ loadRemovalSubmissionContext: mocks.context }));
 vi.mock("./certifier-removals", () => ({ getCertifierRemovalById: vi.fn(async () => ({ updatedAt: new Date("2026-01-01") })) }));
+// These drafts have no returned lineage; keep correction locking at its own tested boundary.
+vi.mock("./emission-entry-corrections", () => ({ lockEmissionCorrectionScope: mocks.correctionScope, emissionCorrectionWindow: () => undefined }));
 import { loadRemovalEmptyLines } from "@/fn/certification/removal-empty-lines-core";
 import { loadRemovalEntryContext } from "@/fn/certification/removal-entry-context";
 import { resolveRemovalTemplate } from "@/fn/certification/resolve-removal-template";
@@ -117,6 +119,8 @@ it.each(["sent-single", "omitted-production", "automatic-figure", "stale-value"]
 it("locks the Removal before its batch", async () => {
   await recordEmissionZeros(ctx, input);
   expect(mocks.batch).toHaveBeenCalledOnce();
+  expect(mocks.correctionScope).toHaveBeenCalledWith(ctx, mocks.batch.mock.calls[0][1], creditBatchId);
+  expect(mocks.correctionScope.mock.invocationCallOrder[0]).toBeLessThan(mocks.batch.mock.invocationCallOrder[0]);
   // The Removal read has already consumed the first result when the batch lock is requested.
   mocks.batch.mockImplementationOnce(async () => {
     expect(rows).toHaveLength(2);

@@ -31,7 +31,7 @@ import {
 import { SafeError } from "@/lib/errors";
 import { and, eq, inArray, or, type SQL } from "drizzle-orm";
 import { requireOrgScope } from "./utils";
-import { readRecordLockLineage } from "./record-lock-lineage";
+import { readRecordLockLineage, type StatementReads } from "./record-lock-lineage";
 import { readRecordDependents } from "./record-lock-dependents";
 
 export type CertifiedLineageEntityType = Exclude<
@@ -169,9 +169,9 @@ export async function getCertifiedLineage(
 type LineageRow = Awaited<ReturnType<ReturnType<typeof lineageQueryWhere>["execute"]>>[number];
 export type LockedCertifiedLineageRow = LineageRow & { recordLockRemoval: RecordLockRemoval };
 
-async function resolveLineage(ctx: OrgContext, tx: DbTransaction, condition: SQL, fresh = false): Promise<LockedCertifiedLineageRow[]> {
+async function resolveLineage(ctx: OrgContext, tx: Pick<DbTransaction, "select" | "selectDistinct">, condition: SQL, fresh = false, options: { statementReads?: StatementReads; excludeSubmissionId?: string } = {}): Promise<LockedCertifiedLineageRow[]> {
   const rows = await lineageQueryWhere(ctx, tx, condition);
-  const facts = await readRecordLockLineage(ctx, tx, rows, fresh);
+  const facts = await readRecordLockLineage(ctx, tx, rows, fresh, options);
   const factsById = new Map(facts.map(fact => [fact.id, fact]));
   return rows.map(row => ({ ...row, recordLockRemoval: factsById.get(row.removalId)! }));
 }
@@ -212,10 +212,10 @@ export async function getLockedCertifiedLineage(
 }
 
 /** A multi-batch entry operation locks the union in one artifact pass. */
-export async function getLockedCertifiedLineageForBatches(ctx: OrgContext, tx: DbTransaction, batchIds: readonly string[]) {
+export async function getLockedCertifiedLineageForBatches(ctx: OrgContext, tx: DbTransaction, batchIds: readonly string[], excludeSubmissionId?: string) {
   requireOrgScope(ctx);
   if (!batchIds.length) return [];
-  return lockLineage(tx, (fresh) => resolveLineage(ctx, tx, inArray(creditBatches.id, [...batchIds]), fresh));
+  return lockLineage(tx, (fresh) => resolveLineage(ctx, tx, inArray(creditBatches.id, [...batchIds]), fresh, { excludeSubmissionId }));
 }
 
 /**
@@ -431,3 +431,10 @@ const LINEAGE_TARGET_COLUMNS = {
   biocharProduct: biocharProducts.id, delivery: deliveries.id, order: orders.id,
   feedstock: feedstocks.id, application: creditBatchApplications.applicationId,
 } as const;
+
+/** Advisory counterpart of the locked batch-union reader. Cache belongs to its caller. */
+export async function getCertifiedLineageForBatches(ctx: OrgContext, tx: Pick<DbTransaction, "select" | "selectDistinct">, batchIds: readonly string[], statementReads: StatementReads) {
+  requireOrgScope(ctx);
+  if (!batchIds.length) return [];
+  return resolveLineage(ctx, tx, inArray(creditBatches.id, [...batchIds]), true, { statementReads });
+}

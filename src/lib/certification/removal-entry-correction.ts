@@ -1,6 +1,8 @@
 import type { EntryInputManifest } from "./removal-emission-contributions";
 
 export interface EntryCorrectionState {
+  removalId?: string;
+  changedBatchIds?: string[];
   windowOpen: boolean;
   correctionNeeded: boolean;
   changedComponentIds: string[];
@@ -19,7 +21,13 @@ export function deriveEntryCorrection(windowOpen: boolean, previous: readonly En
   );
   const changedComponentIds = windowOpen ? [...new Set([...previous, ...current].map((input) => input.componentId))]
     .filter((id) => signature(previous, id) !== signature(current, id)).sort() : [];
+  const batchIds = [...new Set([...previous, ...current].flatMap((input) => input.entries.map((entry) => entry.creditBatchId)))];
+  const forBatch = (manifest: readonly EntryInputManifest[], batchId: string) => manifest
+    .map((input) => ({ ...input, entries: input.entries.filter((entry) => entry.creditBatchId === batchId) }))
+    .filter((input) => input.entries.length);
+  const changedBatchIds = batchIds.filter((batchId) => changedComponentIds.some((id) =>
+    signature(forBatch(previous, batchId), id) !== signature(forBatch(current, batchId), id))).sort();
   const count = changedComponentIds.length;
-  return { windowOpen, correctionNeeded: count > 0, changedComponentIds,
+  return { windowOpen, correctionNeeded: count > 0, changedComponentIds, changedBatchIds,
     message: count ? `Correction needed: ${count} ${count === 1 ? "component" : "components"} changed since this Removal was sent.` : null };
 }

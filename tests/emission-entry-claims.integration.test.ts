@@ -1,3 +1,5 @@
+import { claimSubmissionDraft } from "@/data-access/certification-submissions";
+import { deleteCreditBatch } from "@/data-access/credit-batches";
 import type { PoolClient } from "pg";
 import { pgSchema, integer, text } from "drizzle-orm/pg-core";
 import { listEmissionEntryDraftContenders } from "@/data-access/emission-entry-contenders";
@@ -18,10 +20,10 @@ import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, certificationSubmissions, creditBatchApplications, creditBatches, emissionEntries, emissionEntryValues,
-  removalTemplateObservations, users, certifierRemovals, certifierGhgStatements, certifierProductionBatches, organizations, facilities } from "@/db/schema";
-import { createEmissionEntry, deleteEmissionEntry, getEmissionEntry, updateEmissionEntry } from "@/data-access/emission-entries";
+  removalTemplateObservations, users, certifierRemovals, certifierGhgStatements, certifierProductionBatches, organizations, facilities, certifierProjects, samples } from "@/db/schema";
+import { createEmissionEntry, deleteEmissionEntry, getEmissionEntry, updateEmissionEntry, replaceEmissionEntry } from "@/data-access/emission-entries";
 import { assertEmissionEntryDocumentWritable } from "@/data-access/emission-entry-lock";
-import { recordEmissionZeros } from "@/data-access/emission-zeros";
+import { recordEmissionZeros, undoEmissionZeros } from "@/data-access/emission-zeros";
 import { reserveProductionEmissionsClaims, rejectSubmissionAndReleaseProductionClaims } from "@/data-access/production-claim-reservations";
 import { markSubmissionSubmitted, retireStaleSubmissionDraft } from "@/data-access/submission-ledger-transitions";
 import { claimRemovalDeletion, finalizeRemovalDeletion } from "@/data-access/certifier-removal-deletion";
@@ -72,8 +74,9 @@ afterEach(async () => {
     await cleanupLineageFixture(second);
     second = undefined;
   }
+  await db.delete(certifierProjects).where(eq(certifierProjects.facilityId, fixture.facilityId));
   await cleanupLineageFixture(fixture);
-  await db.delete(removalTemplateObservations).where(eq(removalTemplateObservations.id, observation.id));
+  await db.delete(removalTemplateObservations).where(eq(removalTemplateObservations.externalTemplateId, observation.externalTemplateId));
   await db.delete(activityEvents).where(eq(activityEvents.actorUserId, userId));
   await db.delete(users).where(eq(users.id, userId));
 });
@@ -349,9 +352,11 @@ it.each(["writable", "reserved", "sent"] as const)("upload confirmation preserve
   }
 });
 
-async function sentCorrectionEntry() {
+async function sentCorrectionEntry(withZero = false) {
   const entry = await value();
-  const original = await draft([{ entryId: entry.id, contentRevision: entry.contentRevision }]);
+  const zeroIds = withZero ? (await recordEmissionZeros(ctx, { removalId: fixture.removalId, creditBatchId: fixture.batchId, componentIds: ["zero"] })).entryIds : [];
+  const zeros = zeroIds.length ? await db.select().from(emissionEntries).where(inArray(emissionEntries.id, zeroIds)) : [];
+  const original = await draft([entry, ...zeros].map((row) => ({ entryId: row.id, contentRevision: row.contentRevision })));
   await reserve(original);
   await markSubmissionSubmitted(ctx, original.id, { externalId: "correction-original", expectedLockedAt: original.lockedAt!,
     productionEmissionsClaim: { removalId: fixture.removalId, creditBatchIds: [fixture.batchId] } });
@@ -363,7 +368,7 @@ async function sentCorrectionEntry() {
     submissionType: "ghg_statement", localEntityType: "ghgStatement", localEntityId: statement.id,
     externalId: "correction-statement", version: 1, status: "submitted", submittedAt: new Date(),
     metadata: { remoteStatus: "DRAFT", removalIds: ["correction-original"] } });
-  return { entry: await getEmissionEntry(ctx, entry.id), original, statement };
+  return { entry: await getEmissionEntry(ctx, entry.id), original, statement, zeroIds };
 }
 
 it("refuses a sent entry before the return and edits it after a fresh FAILED_VERIFICATION read", async () => {
@@ -445,4 +450,109 @@ it("finalizes a ledger-less Removal with registered and unregistered member batc
   await finalizeRemovalDeletion(ctx, claim, { deletedGhgEntryIds: [], deletedBiocharApplicationIds: [], absentGhgEntryIds: [], absentBiocharApplicationIds: [], unresolvedBiocharApplicationReferences: [],
     productionBatches: (claim.productionBatches ?? []).map((batch) => ({ creditBatchId: batch.creditBatchId, externalId: batch.externalProductionBatchId, outcome: "absent" as const })) });
   expect(await db.select().from(creditBatchApplications).where(eq(creditBatchApplications.removalId, fixture.removalId))).toEqual([]);
+});
+
+async function correctionClaim() {
+  const projectId = `correction-project-${fixture.facilityId}`;
+  await db.insert(certifierProjects).values({ organizationId: ctx.organizationId, provider: "isometric", facilityId: fixture.facilityId,
+    externalProjectId: projectId, externalFacilityId: `facility-${fixture.facilityId}` }).onConflictDoNothing();
+  return claimSubmissionDraft(ctx, {
+    key: { provider: "isometric", localEntityType: "removal", submissionType: "removal", localEntityId: fixture.removalId },
+    guard: { facilityId: fixture.facilityId, provider: "isometric", expectedExternalProjectId: projectId },
+    policy: { onSubmittedHashChanged: "supersede" }, tentativeInputs: "corrected", hashOf: (input) => input,
+    buildSnapshot: () => ({ payloadSnapshot: { frozenEntrySet: [], templateObservationId: observation.id } }),
+  });
+}
+
+it("gates createDraft on the real correction window before claiming a new version", async () => {
+  await sentCorrectionEntry();
+  await expect(correctionClaim()).rejects.toThrow("This Removal is sent");
+  correctionRemote.status = "FAILED_VERIFICATION";
+  expect(await correctionClaim()).toMatchObject({ kind: "claimed", resumed: false, row: { version: 2 } });
+});
+
+it("rechecks the window on resume and excludes only the resumed attempt", async () => {
+  await sentCorrectionEntry();
+  correctionRemote.status = "FAILED_VERIFICATION";
+  const claimed = await correctionClaim();
+  expect(claimed.kind).toBe("claimed");
+  if (claimed.kind !== "claimed") throw new Error("Expected a correction draft");
+  await db.update(certificationSubmissions).set({ lockedAt: new Date(0) }).where(eq(certificationSubmissions.id, claimed.row.id));
+  correctionRemote.status = "AWAITING_VERIFICATION";
+  await expect(correctionClaim()).rejects.toThrow("This Removal is sent");
+  correctionRemote.status = "FAILED_VERIFICATION";
+  expect(await correctionClaim()).toMatchObject({ kind: "claimed", resumed: true, row: { id: claimed.row.id } });
+});
+
+it("refuses a corrected entry date outside its owner's window without changing it", async () => {
+  const { entry } = await sentCorrectionEntry();
+  correctionRemote.status = "FAILED_VERIFICATION";
+  await expect(updateEmissionEntry(ctx, { id: entry.id, expectedVersion: entry.version, occurredOn: "2026-06-20" }))
+    .rejects.toThrow("Keep the entry date within this Removal's period.");
+  expect(await getEmissionEntry(ctx, entry.id)).toMatchObject({ occurredOn: entry.occurredOn, version: entry.version });
+});
+
+it("keeps a replaced sent entry claimed by its original Removal even after the window closes", async () => {
+  const { entry } = await sentCorrectionEntry();
+  correctionRemote.status = "FAILED_VERIFICATION";
+  await db.insert(removalTemplateObservations).values({ ...observation, id: undefined,
+    semanticFingerprint: "replacement", fullFingerprint: "replacement", lastObservedAt: new Date("2099-01-01"),
+    enrichment: { ...observation.enrichment, line: { electricity_use: { unit: "Wh" } } },
+  });
+  const replacement = await replaceEmissionEntry(ctx, { id: entry.id, expectedVersion: entry.version,
+    occurredOn: entry.occurredOn, values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "2000", unit: "Wh" }] });
+  expect(replacement.sentByRemovalId).toBe(fixture.removalId);
+  const [original] = await db.select().from(emissionEntries).where(eq(emissionEntries.id, entry.id));
+  expect(original.deletedAt).not.toBeNull();
+  expect(original.sentByRemovalId).toBe(fixture.removalId);
+  correctionRemote.status = "AWAITING_VERIFICATION";
+  expect(removalEntryOwner({ ...replacement, counts: true, evidenceDocumentIds: [] }, [] )).toBe(fixture.removalId);
+  await expect(updateEmissionEntry(ctx, { id: replacement.id, expectedVersion: replacement.version, note: "closed" })).rejects.toThrow("reserved or sent");
+});
+
+it.each([false, true])("records and undoes zeros inside an open window, already sent=%s", async (sent) => {
+  const { zeroIds } = await sentCorrectionEntry(sent);
+  correctionRemote.status = "FAILED_VERIFICATION";
+  const ids = sent ? zeroIds : (await recordEmissionZeros(ctx, { removalId: fixture.removalId, creditBatchId: fixture.batchId, componentIds: ["zero"] })).entryIds;
+  await undoEmissionZeros(ctx, { removalId: fixture.removalId, creditBatchId: fixture.batchId });
+  const [zero] = await db.select().from(emissionEntries).where(eq(emissionEntries.id, ids[0]));
+  expect(zero.deletedAt).not.toBeNull();
+  expect(zero.sentByRemovalId).toBe(sent ? fixture.removalId : null);
+});
+
+it("tombstones a sent zero when an in-window value replaces it", async () => {
+  const { zeroIds } = await sentCorrectionEntry(true);
+  correctionRemote.status = "FAILED_VERIFICATION";
+  await createEmissionEntry(ctx, { creditBatchId: fixture.batchId, componentId: "zero", occurredOn: "2026-06-10",
+    values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "1", unit: "kWh" }] });
+  const [after] = await db.select().from(emissionEntries).where(eq(emissionEntries.id, zeroIds[0]));
+  expect(after.deletedAt).not.toBeNull();
+  expect(after.sentByRemovalId).toBe(fixture.removalId);
+});
+
+it("reports contention, not a missing Removal, when the zero writer skips its row lock", async () => {
+  let acquired!: () => void;
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => { acquired = resolve; });
+  const hold = new Promise<void>((resolve) => { release = resolve; });
+  const blocker = db.transaction(async (tx) => {
+    await tx.select().from(certifierRemovals).where(eq(certifierRemovals.id, fixture.removalId)).for("no key update");
+    acquired();
+    await hold;
+  });
+  await ready;
+  try {
+    await expect(recordEmissionZeros(ctx, { removalId: fixture.removalId, creditBatchId: fixture.batchId, componentIds: ["zero"] }))
+      .rejects.toMatchObject({ code: "conflict", retryable: true, message: "This Removal is being updated. Refresh and retry." });
+  } finally { release(); await blocker; }
+});
+
+it.each([false, true])("deletes a batch with never-sent zeros, undone=%s, preserving one tombstone", async (undone) => {
+  const zeros = await recordEmissionZeros(ctx, { removalId: fixture.removalId, creditBatchId: fixture.batchId, componentIds: ["zero"] });
+  if (undone) await undoEmissionZeros(ctx, { removalId: fixture.removalId, creditBatchId: fixture.batchId });
+  await db.delete(samples).where(eq(samples.id, fixture.sampleId));
+  const [batch] = await db.select().from(creditBatches).where(eq(creditBatches.id, fixture.batchId));
+  await deleteCreditBatch(ctx, batch.id, batch.version);
+  expect(await db.select().from(emissionEntries).where(eq(emissionEntries.id, zeros.entryIds[0]))).toEqual([]);
+  expect(await db.select().from(activityEvents).where(and(eq(activityEvents.entityId, zeros.entryIds[0]), eq(activityEvents.action, "deleted")))).toHaveLength(1);
 });

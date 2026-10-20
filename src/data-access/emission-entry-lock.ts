@@ -39,6 +39,13 @@ export async function lockWritableEmissionEntry(ctx: OrgContext, tx: DbTransacti
 export async function lockEmissionEntryBatch(ctx: OrgContext, tx: DbTransaction, creditBatchId: string) {
   requireOrgScope(ctx);
   await lockEmissionCorrectionScope(ctx, tx, creditBatchId);
+  const result = await lockEmissionCommentBatch(ctx, tx, creditBatchId);
+  await revalidateEmissionCorrectionScope(ctx, tx, creditBatchId);
+  return result;
+}
+/** Comments serialize with batch changes without entering the certification lineage. */
+export async function lockEmissionCommentBatch(ctx: OrgContext, tx: DbTransaction, creditBatchId: string) {
+  requireOrgScope(ctx);
   const [initial] = await tx.select().from(creditBatches)
     .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, creditBatchId)));
   if (!initial) throw new DomainError("not_found", "Credit batch was not found.");
@@ -51,7 +58,6 @@ export async function lockEmissionEntryBatch(ctx: OrgContext, tx: DbTransaction,
     .for("update");
   if (!batch) throw new DomainError("not_found", "Credit batch was not found.");
   if (batch.facilityId !== initial.facilityId) throw emissionEntryParentChanged();
-  await revalidateEmissionCorrectionScope(ctx, tx, creditBatchId);
   return { batch, facility };
 }
 export function emissionEntryParentChanged() {

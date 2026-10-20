@@ -326,6 +326,10 @@ async function resumeDraft<H>(
 ): Promise<ClaimOutcome> {
   const run = async (tx: DbTransaction): Promise<ClaimOutcome> => {
     await lockAndVerifyMapping(ctx, tx, args.guard);
+    if (args.key.localEntityType === "removal" && args.key.submissionType === "removal") {
+      const candidate = await getLatestSubmissionWithExecutor(ctx, tx, args.key);
+      await lockRemovalEntryCorrectionAttempt(ctx, tx, args.key.localEntityId, candidate?.id);
+    }
     await lockSubmissionArtifact(tx, args.key);
     if (await isRemovalDeletionLeased(ctx, args.key, tx)) return { kind: "blocked", reason: "in-flight" };
 

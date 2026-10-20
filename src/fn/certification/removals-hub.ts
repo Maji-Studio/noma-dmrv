@@ -1,5 +1,3 @@
-import { loadRemovalEntryCorrection } from "@/data-access/removal-entry-correction";
-import type { EntryCorrectionState } from "@/lib/certification/removal-entry-correction";
 import { env } from "@/config/env";
 import { requireOrgFacility } from "@/data-access/utils";
 import {
@@ -30,7 +28,6 @@ const FANOUT_CONCURRENCY = 8;
 
 export interface RemovalHubEntry {
   removal: CertifierRemovalRow;
-  entryCorrection?: EntryCorrectionState;
   memberBatches: Pick<MemberCreditBatch, "id" | "code">[];
   latestSubmission: CertificationSubmissionRow | null;
   hasFinalizedSubmission: boolean;
@@ -76,7 +73,6 @@ export async function loadRemovalsForFacility(
           ]);
           return {
             removal,
-            entryCorrection: await loadRemovalEntryCorrection(orgCtx, removal.id),
             memberBatches: batches.map((b) => ({ id: b.id, code: b.code })),
             latestSubmission,
             hasFinalizedSubmission: finalized,

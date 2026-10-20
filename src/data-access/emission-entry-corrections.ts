@@ -7,7 +7,7 @@ import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gat
 import { deriveRemovalEntryWindow, type RemovalEntryWindow } from "@/lib/certification/removal-emission-contributions";
 import { isRemovalCorrectionWindowOpen } from "@/lib/record-lock";
 import { CertificationLineageChangedError, getCertifiedLineage, getLockedCertifiedLineageForBatches } from "./certification-lineage-guards";
-import { requireOrgScope } from "./utils";
+import { requireOrgScope, type Executor } from "./utils";
 
 type CorrectionScope = { batchIds: string[]; artifactIds: Set<string>; windows: Map<string, RemovalEntryWindow> };
 const scopes = new WeakMap<DbTransaction, Map<string, CorrectionScope>>();
@@ -19,14 +19,7 @@ export async function lockEmissionCorrectionScope(ctx: OrgContext, tx: DbTransac
   if (!emissionsEntriesEnabled()) return;
   const key = scopeKey(ctx, batchId);
   if (scopes.get(tx)?.has(key)) return;
-  const owners = await tx.select({ id: creditBatchApplications.removalId }).from(creditBatchApplications).where(and(
-    eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.creditBatchId, batchId),
-  ));
-  const ownerIds = owners.flatMap((row) => row.id ? [row.id] : []);
-  const shared = ownerIds.length ? await tx.select({ id: creditBatchApplications.creditBatchId }).from(creditBatchApplications).where(and(
-    eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.removalId, ownerIds),
-  )) : [];
-  const batchIds = [...new Set([batchId, ...shared.map((row) => row.id)])];
+  const batchIds = await emissionCorrectionBatchIds(ctx, tx, batchId);
   const lineage = await getLockedCertifiedLineageForBatches(ctx, tx, batchIds);
   const facts = lineage.map((row) => row.recordLockRemoval);
   const ids = facts.filter((fact) => isRemovalCorrectionWindowOpen(fact, facts)).map((fact) => fact.id);
@@ -71,20 +64,33 @@ export function emissionCorrectionWindow(ctx: OrgContext, tx: DbTransaction, bat
 /** New attempts are allowed only after the registry returned the prior submission.
  * Called before the claim's own artifact lock so the union keeps global order.
  */
-export async function lockRemovalEntryCorrectionAttempt(ctx: OrgContext, tx: DbTransaction, removalId: string) {
+export async function lockRemovalEntryCorrectionAttempt(ctx: OrgContext, tx: DbTransaction, removalId: string, excludeSubmissionId?: string) {
   requireOrgScope(ctx);
   if (!emissionsEntriesEnabled()) return;
   const prior = await tx.select().from(certificationSubmissions).where(and(
     eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.localEntityType, "removal"),
     eq(certificationSubmissions.localEntityId, removalId), eq(certificationSubmissions.submissionType, "removal"),
   ));
-  if (!prior.some((row) => row.submittedAt)) return;
+  if (!prior.some((row) => row.id !== excludeSubmissionId && row.submittedAt)) return;
   const members = await tx.select({ id: creditBatchApplications.creditBatchId }).from(creditBatchApplications).where(and(
     eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.removalId, removalId),
   ));
-  const lineage = await getLockedCertifiedLineageForBatches(ctx, tx, members.map((row) => row.id));
+  const lineage = await getLockedCertifiedLineageForBatches(ctx, tx, members.map((row) => row.id), excludeSubmissionId);
   const facts = lineage.map((row) => row.recordLockRemoval);
   const removal = facts.find((fact) => fact.id === removalId);
   if (!removal || !isRemovalCorrectionWindowOpen(removal, facts))
     throw new SafeError("This Removal is sent. If Isometric sends the GHG Statement back, refresh its status to correct it.");
+}
+
+/** The same one-hop batch union governs advisory and locked correction eligibility. */
+export async function emissionCorrectionBatchIds(ctx: OrgContext, executor: Executor, batchId: string) {
+  requireOrgScope(ctx);
+  const owners = await executor.select({ id: creditBatchApplications.removalId }).from(creditBatchApplications).where(and(
+    eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.creditBatchId, batchId),
+  ));
+  const ownerIds = owners.flatMap((row) => row.id ? [row.id] : []);
+  const shared = ownerIds.length ? await executor.select({ id: creditBatchApplications.creditBatchId }).from(creditBatchApplications).where(and(
+    eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.removalId, ownerIds),
+  )) : [];
+  return [...new Set([batchId, ...shared.map((row) => row.id)])];
 }

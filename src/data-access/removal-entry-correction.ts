@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { certificationSubmissions } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
+import type { EntryContender } from "@/lib/certification/removal-emission-contributions";
 import { deriveEntryCorrection } from "@/lib/certification/removal-entry-correction";
 import { deriveRemovalEntryInputs } from "@/lib/certification/removal-entry-inputs";
 import { requireOrgScope } from "./utils";
@@ -20,20 +21,21 @@ const manifestSchema = z.array(z.object({ componentId: z.string(), inputKey: z.s
 })) }));
 
 /** Advisory state only. Mutation authorization comes from the locked lineage loader. */
-export async function loadRemovalEntryCorrection(ctx: OrgContext, removalId: string) {
+export async function loadRemovalEntryCorrection(ctx: OrgContext, removalId: string, suppliedContenders?: EntryContender[]) {
   requireOrgScope(ctx);
   const closed = deriveEntryCorrection(false, [], []);
   if (!emissionsEntriesEnabled()) return closed;
-  const batches = await getCreditBatchesByRemovalId(ctx, removalId);
-  const ids = batches.map((batch) => batch.id);
-  const contenders = await listEmissionEntryDraftContenders(ctx, ids);
-  const correction = contenders.find((item) => item.removalId === removalId && item.contenderKind === "correction");
-  if (!correction) return closed;
   const [submitted] = await db.select().from(certificationSubmissions).where(and(
     eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.localEntityType, "removal"),
     eq(certificationSubmissions.submissionType, "removal"), eq(certificationSubmissions.provider, "isometric"),
     eq(certificationSubmissions.localEntityId, removalId), isNotNull(certificationSubmissions.submittedAt),
   )).orderBy(desc(certificationSubmissions.version)).limit(1);
+  if (!submitted) return closed;
+  const batches = await getCreditBatchesByRemovalId(ctx, removalId);
+  const ids = batches.map((batch) => batch.id);
+  const contenders = suppliedContenders ?? await listEmissionEntryDraftContenders(ctx, ids);
+  const correction = contenders.find((item) => item.removalId === removalId && item.contenderKind === "correction");
+  if (!correction) return closed;
   const snapshot = z.object({ semantic: z.object({ entryContributions: manifestSchema }) }).safeParse(submitted?.payloadSnapshot);
   const pin = batches[0]?.removalTemplateId;
   const observation = pin ? await getLatestTemplateObservation(ctx, "isometric", pin) : null;
@@ -43,5 +45,5 @@ export async function loadRemovalEntryCorrection(ctx: OrgContext, removalId: str
   const reservations = await loadEmissionEntryReservations(ctx, entries.flatMap((entry) => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []));
   const current = deriveRemovalEntryInputs({ removalId, memberBatchIds: ids, window: correction.window,
     contenders, entries, observation, reservations, nowMs: Date.now() });
-  return deriveEntryCorrection(true, snapshot.data.semantic.entryContributions, current.manifest);
+  return { ...deriveEntryCorrection(true, snapshot.data.semantic.entryContributions, current.manifest), removalId };
 }

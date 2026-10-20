@@ -35,6 +35,6 @@ export function allowedEntryPolicies(component: TemplateComponent): EntryPolicy[
     inputs.some((input) => input.key === key && kinds.has(input.quantityKind));
   if (has("initial_readout", ENERGY_KINDS) && has("final_readout", ENERGY_KINDS)) return ["none", "single"];
   if (has("concentration", GAS_CONCENTRATION_KINDS) && has("mass_flow", GAS_MASS_KINDS)) return ["none", "single"];
-  if (has("mass", MASS_KINDS) && has("distance", DISTANCE_KINDS)) return ["none", "additive"];
+  if (has("mass", MASS_KINDS) && has("distance", DISTANCE_KINDS)) return ["none", "single"];
   return ["none"];
 }

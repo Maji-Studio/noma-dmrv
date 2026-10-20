@@ -1,7 +1,5 @@
 "use server";
 
-import { loadRemovalEntryCorrection } from "@/data-access/removal-entry-correction";
-import type { EntryCorrectionState } from "@/lib/certification/removal-entry-correction";
 
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { buildDurabilityBatchSummaries } from "@/lib/certification/durability-batch-summary";
@@ -111,7 +109,6 @@ export interface CreditBatchHealthSummary {
 // submission identity, and the readiness verdict (the same one the table hint
 // and wizard submit step render).
 export interface RemovalPreflightSummary {
-  entryCorrection?: EntryCorrectionState;
   removalId: string;
   code: string;
   startedOn: string | null;
@@ -179,7 +176,6 @@ async function buildRemovalPreflightSummary(
       completedOn,
     });
   return {
-    entryCorrection: await loadRemovalEntryCorrection(orgCtx, removalId),
     removalId,
     code: scope.removal.code,
     startedOn,

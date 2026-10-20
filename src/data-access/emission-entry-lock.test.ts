@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import type { DbTransaction } from "@/db";
 import { creditBatches, emissionEntries, facilities } from "@/db/schema";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
-import { assertEmissionEntryDocumentWritable, lockEmissionEntryBatch, lockEmissionEntryDocumentOwner } from "./emission-entry-lock";
+import { assertEmissionEntryDocumentWritable, lockEmissionCommentBatch, lockEmissionEntryBatch, lockEmissionEntryDocumentOwner } from "./emission-entry-lock";
 
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/lib/certification/emissions-entry-gate", () => ({
@@ -56,4 +56,15 @@ it("refuses files on recorded zeros", async () => {
   const batch = { id: "batch", facilityId: "facility", archivedAt: null };
   const tx = transaction([[entry], [batch], [{ archivedAt: null }], [batch], [entry]]);
   await expect(assertEmissionEntryDocumentWritable(ctx, "entry", tx)).rejects.toThrow("Recorded zeros cannot have files.");
+});
+
+it("locks comment ancestors without any correction scope or statement reads", async () => {
+  const { lockEmissionCorrectionScope, revalidateEmissionCorrectionScope } = await import("./emission-entry-corrections");
+  vi.mocked(lockEmissionCorrectionScope).mockClear();
+  vi.mocked(revalidateEmissionCorrectionScope).mockClear();
+  const batch = { id: "batch", facilityId: "facility" };
+  await lockEmissionCommentBatch(ctx, transaction([[batch], [{}], [batch]]), "batch");
+  expect(locks).toEqual([[facilities, "share"], [creditBatches, "update"]]);
+  expect(lockEmissionCorrectionScope).not.toHaveBeenCalled();
+  expect(revalidateEmissionCorrectionScope).not.toHaveBeenCalled();
 });

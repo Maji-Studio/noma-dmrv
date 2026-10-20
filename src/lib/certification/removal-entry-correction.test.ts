@@ -19,3 +19,11 @@ it.each(["revision", "files", "value"])("detects %s changes", (change) => {
 it("ignores display labels and unchanged contributions", () => {
   expect(deriveEntryCorrection(true, manifest, [{ ...manifest[0], componentDisplayName: "Renamed" }]).correctionNeeded).toBe(false);
 });
+
+it("attributes a changed component only to the batch whose contribution changed", () => {
+  const previous = [{ ...manifest[0], entries: [...manifest[0].entries, { ...manifest[0].entries[0], entryId: "other", creditBatchId: "unchanged" }] }];
+  const current = structuredClone(previous);
+  current[0].entries[0].contentRevision++;
+  expect(deriveEntryCorrection(true, previous, current).changedBatchIds).toEqual(["batch"]);
+  expect(deriveEntryCorrection(true, previous, [{ ...previous[0], entries: [previous[0].entries[1]] }]).changedBatchIds).toEqual(["batch"]);
+});

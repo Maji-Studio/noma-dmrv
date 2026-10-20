@@ -130,7 +130,12 @@ export function deriveRemovalEntryContributions(args: {
   for (const componentId of components) {
     const entries = selected.filter((entry) => entry.componentId === componentId).sort((a, b) => a.id.localeCompare(b.id));
     const values = entries.filter((entry) => entry.kind === "value");
-    if (args.lineSources[componentId].entryPolicy === "single" && values.length > 1) {
+    const inputs = args.monitoredInputs.filter((input) => input.componentId === componentId);
+    if (inputs.length > 1 && effectiveContract(args.lineSources[componentId]).entryPolicy === "additive") {
+      result.blockers.push({ code: "lineNeedsReview", message: "Review this component's entry policy. Paired inputs require a single entry.", fixTarget: "emissions", creditBatchId: entries[0].creditBatchId, lineRef: { componentId, displayName: componentId } });
+      continue;
+    }
+    if ((inputs.length > 1 || effectiveContract(args.lineSources[componentId]).entryPolicy === "single") && values.length > 1) {
       result.blockers.push({ code: "singleLineMultipleEntries", message: "This component has values on more than one credit batch. Create separate Removals for these batches.", fixTarget: "emissions", creditBatchId: values[0].creditBatchId, lineRef: { componentId, displayName: componentId } });
       continue;
     }

@@ -12,7 +12,7 @@ import { requireOrgScope } from "./utils";
 
 const STATEMENT_REFRESH_TIMEOUT_MS = 1_000;
 const TRANSACTION_FINISH_RESERVE_MS = 100;
-type StatementReads = Map<string, Promise<GhgStatement>>;
+export type StatementReads = Map<string, Promise<GhgStatement>>;
 // Transaction objects are short lived. Never retain fresh facts on the shared DB reader.
 const transactionStatementReads = new WeakMap<object, StatementReads>();
 
@@ -20,7 +20,7 @@ type Removal = { removalId: string; ghgStatementId: string | null };
 type Submission = typeof certificationSubmissions.$inferSelect;
 
 /** Include historical statement membership, not just the Removal's current FK. */
-export async function readRecordLockLineage(ctx: OrgContext, tx: Pick<DbTransaction, "select">, removals: readonly Removal[], fresh = false): Promise<RecordLockRemoval[]> {
+export async function readRecordLockLineage(ctx: OrgContext, tx: Pick<DbTransaction, "select">, removals: readonly Removal[], fresh = false, options: { statementReads?: StatementReads; excludeSubmissionId?: string } = {}): Promise<RecordLockRemoval[]> {
   requireOrgScope(ctx);
   const ids = [...new Set(removals.map(row => row.removalId))];
   if (!ids.length) return [];
@@ -46,11 +46,11 @@ export async function readRecordLockLineage(ctx: OrgContext, tx: Pick<DbTransact
   const labels = await tx.select({ id: certifierRemovals.id, startedOn: certifierRemovals.startedOn, completedOn: certifierRemovals.completedOn })
     .from(certifierRemovals).where(and(eq(certifierRemovals.organizationId, ctx.organizationId), inArray(certifierRemovals.id, ids)));
   const labelsById = new Map(labels.map(row => [row.id, row.startedOn && row.completedOn ? `${row.startedOn} to ${row.completedOn}` : undefined]));
-  const reads = (tx !== db && transactionStatementReads.get(tx)) || new Map<string, Promise<GhgStatement>>();
+  const reads = (tx !== db && transactionStatementReads.get(tx)) || options.statementReads || new Map<string, Promise<GhgStatement>>();
   if (tx !== db) transactionStatementReads.set(tx, reads);
   const busyStatements = new Set(statementRows.filter(row => isLockedInFlight(row) || !isTerminalAttemptStatus(row.status)).map(row => row.localEntityId));
   return Promise.all(ids.map(async id => {
-    const submissions = removalRows.filter(row => row.localEntityId === id);
+    const submissions = removalRows.filter(row => row.localEntityId === id && row.id !== options.excludeSubmissionId);
     const externalIds = new Set(submissions.map(row => row.externalId).filter(Boolean));
     const currentIds = new Set(removals.filter(row => row.removalId === id).map(row => row.ghgStatementId));
     const covering = statementRows.filter(row => {
@@ -75,7 +75,7 @@ async function readStatement(ctx: OrgContext, tx: Pick<DbTransaction, "select">,
     removalExternalIds: Array.isArray(getMetadataValue(row.metadata, "removalIds")) ? getMetadataValue(row.metadata, "removalIds") as string[] : [],
     inFlight: isLockedInFlight(row) || !isTerminalAttemptStatus(row.status),
   };
-  if (!fresh || !row.externalId || fact.inFlight) return fact;
+  if (!fresh || !row.externalId || fact.inFlight || !["DRAFT", "FAILED_VERIFICATION"].includes(fact.status ?? "")) return fact;
   try {
     const { resolveIsometricClient } = await import("./certifier-credentials");
     const key = `${ctx.organizationId}:${row.externalId}`;

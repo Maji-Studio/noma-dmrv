@@ -189,6 +189,8 @@ export interface BatchHealthFacts {
 }
 
 export interface BatchHealth {
+  /** Advisory actions belong to the returned Removal and never affect batch eligibility. */
+  advisories?: { message: string; fixTarget: "removal"; removalId: string }[];
   warnings?: string[];
   /** Non-blocking Sample document gaps behind `warnings`, as typed keys. */
   documentWarnings?: SampleDocumentWarningKey[];
@@ -499,7 +501,8 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
  * uniformity) live in `deriveRemovalReadiness`, not here.
  */
 export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
-  const correctionMessages = facts.entryCorrections?.flatMap((state) => state.message ? [state.message] : []) ?? [];
+  const advisories = facts.entryCorrections?.flatMap((state) => state.message && state.removalId
+    ? [{ message: state.message, fixTarget: "removal" as const, removalId: state.removalId }] : []) ?? [];
   const emissionIssues = new Map(facts.emissionLines
     ?.filter((line) => line.blocker?.fixTarget === "emissions")
     .map((line) => [line.componentId, line]));
@@ -530,8 +533,8 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
       }),
       ...(facts.emissionLines != null ? [{
         key: "emissions" as const, label: "Emissions", fixTarget: "emissions" as const,
-        status: emissionIssues.size || correctionMessages.length ? "unmet" as const : "met" as const,
-        detail: [correctionMessages.join(" "), [...emissionIssues.values()].map((line) => line.blocker?.code === "entryHasNoRemoval"
+        status: emissionIssues.size ? "unmet" as const : "met" as const,
+        detail: [[...emissionIssues.values()].map((line) => line.blocker?.code === "entryHasNoRemoval"
           ? line.blocker.message : line.blocker?.code === "entryMissingEvidence"
           ? `Add a file for ${line.displayName}.` : `Check the manual entry on ${line.displayName}.`).join(" ")].filter(Boolean).join(" ") || undefined,
       }] : []),
@@ -551,6 +554,7 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
     state: issueCount > 0 ? "incomplete" : "ready",
     issueCount,
     checks,
+    advisories,
     warnings: facts.warnings ?? [],
     documentWarnings: facts.documentWarnings ?? [],
   };

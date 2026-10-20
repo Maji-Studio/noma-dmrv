@@ -12,6 +12,7 @@ import { requireEmissionsEntriesEnabled } from "@/lib/certification/emissions-en
 import { entryLine } from "@/lib/certification/emission-entry-rules";
 import { entriesWithoutRemoval, isLiveEntryReservation } from "@/lib/certification/removal-emission-contributions";
 import { validateLineSources } from "@/lib/isometric/template-observations/line-sources";
+import { DomainError } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
 import { recordEmissionZerosSchema, undoEmissionZerosSchema } from "@/schemas/emission-zeros";
 import { lockedBatch } from "./emission-entries";
@@ -32,7 +33,13 @@ async function lockZeroDraft(ctx: OrgContext, tx: DbTransaction, data: z.infer<t
   )).for("no key update", { skipLocked: true });
   // Deletion takes the Removal row before its artifact. Never wait on that
   // inverse order while holding lineage artifacts.
-  if (!removal) throw new SafeError("This credit batch is not on an editable Removal.");
+  if (!removal) {
+    const [existing] = await tx.select({ id: certifierRemovals.id }).from(certifierRemovals).where(and(
+      eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, data.removalId),
+    ));
+    if (existing) throw new DomainError("conflict", "This Removal is being updated. Refresh and retry.", { retryable: true });
+    throw new SafeError("This credit batch is not on an editable Removal.");
+  }
   const context = await lockedBatch(ctx, tx, data.creditBatchId);
   const members = await tx.select({ batch: creditBatches }).from(creditBatchApplications)
     .innerJoin(creditBatches, and(eq(creditBatches.id, creditBatchApplications.creditBatchId), eq(creditBatches.organizationId, ctx.organizationId))).where(and(
