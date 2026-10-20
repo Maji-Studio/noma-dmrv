@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { IsometricComponentBlueprint, IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { deriveRemovalEntryContributions, type RemovalEntryFact } from "@/lib/certification/removal-emission-contributions";
 import type { LineSources } from "@/lib/isometric/template-observations/line-sources";
@@ -90,7 +90,6 @@ async function compile(ctx: RemovalSubmissionContext) {
 }
 
 describe("entry-only component compilation", () => {
-  afterEach(() => vi.unstubAllEnvs());
   it.each(["zero", "value"] as const)("compiles recorded %s entries without an unbindable blocker", async (kind) => {
     const ctx = context(kind);
     expect(ctx.removalEntryContext?.contributions.blockers).toEqual([]);

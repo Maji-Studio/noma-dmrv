@@ -40,7 +40,7 @@ it("only reopens the settled sample line for an additive assignment after retire
     assignments: { [componentId]: { scope: "operating", entryPolicy: "additive" } },
   });
   const reviewed = await review;
-expect(reviewed.lineSources[componentId]).toMatchObject({ scope: "operating", entryPolicy: "additive", origin: "reviewed" });
-expect(reviewed.lineSources[componentId].automaticSource).toBeUndefined();
-expect(set).toHaveBeenCalledOnce();
+  expect(reviewed.lineSources[componentId]).toMatchObject({ scope: "operating", entryPolicy: "additive", origin: "reviewed" });
+  expect(reviewed.lineSources[componentId].automaticSource).toBeUndefined();
+  expect(set).toHaveBeenCalledOnce();
 });

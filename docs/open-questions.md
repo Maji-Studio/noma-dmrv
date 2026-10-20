@@ -292,6 +292,11 @@ companion inherits this file's schema, invariants, and resolution rules.
   reads exclude sample legs. Run the org-scoped retirement CLI in §5 to delete
   old legs and owned evidence. Keep this question open until the CLI has run
   for the sandbox/staging organization and cleanup is verified (M).
+- **Leftover sample slots (from #1324 review):** `transportEntityTypes` in
+  `src/schemas/transport-legs.ts` still lists `sample`, so the REST/MCP
+  `record_transport_leg` input advertises a type the server always refuses.
+  `TransportLegsByCategory.sample`, `sampleIds` and `TransportCoverage.sample`
+  are still typed but always empty. Drop them in one API change (S).
 
 ### Unsampled batches with incidental Samples may still submit an H/C_org mean (`isometric/unsampled-incidental-chemistry`, opened 2026-10-13)
 

@@ -20,7 +20,6 @@ import {
 import { seedCreditBatch } from "./fixtures/seed-chain-data";
 import type { Page } from "@playwright/test";
 
-// Same flag the app server reads; Playwright passes its env to the server it starts.
 const FUTURE_DATE = "2026-08-01";
 const ACTION_LABEL_PREFIX = "Actions for ";
 

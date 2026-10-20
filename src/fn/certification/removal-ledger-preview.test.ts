@@ -107,7 +107,6 @@ describe("buildRemovalLedgerPreview", () => {
       "grid-electricity",
       "feedstock-transport",
       "biochar-transport",
-      ...([]),
     ]);
     expect(preview.applications).toEqual([
       expect.objectContaining({

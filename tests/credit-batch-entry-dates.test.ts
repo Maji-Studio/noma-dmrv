@@ -13,7 +13,7 @@ import { ActionConflictError } from "@/lib/errors";
 import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { TEST_SITE_POSITION, TEST_ORG_ID, ensureTestOrg, makeTestOrgContext } from "./helpers/test-org";
 
-// Real DB and writers. Only the feature switch is controlled by the suite.
+// Real DB and writers.
 
 const tag = crypto.randomUUID();
 const userId = `batch-entry-dates-${tag}`;
