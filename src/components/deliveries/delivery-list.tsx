@@ -438,7 +438,6 @@ export function DeliveryList() {
     setDeleteError(null);
     try {
       await deleteDelivery.mutateAsync({ deliveryId: deleting.id, expectedVersion: deleting.version });
-      if (displaySideSheet?.entity?.id === deleting.id) closeSideSheet();
       setDeleting(null);
       toast.success("Delivery deleted.");
     } catch (error) {
@@ -635,7 +634,7 @@ export function DeliveryList() {
           setDeleteError(null);
         }}
         isPending={deleteDelivery.isPending}
-        // A refusal keeps the confirmation open, also over the detail sheet.
+        // A refusal keeps the confirmation open with its reason.
         errorMessage={deleting ? deleteError ?? undefined : undefined}
       />
 
@@ -661,8 +660,6 @@ export function DeliveryList() {
         {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit delivery"
-        onDelete={sideSheetEntity && isRecordDeletable(sheetLock) ? () => setDeleting(sideSheetEntity) : undefined}
-        deleteLabel="Delete delivery"
         sections={
           sideSheetEntity
             ? deliverySheetSections(sideSheetEntity, facilities)

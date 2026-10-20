@@ -24,11 +24,11 @@ beforeAll(() => {
 });
 afterEach(() => act(() => renderer?.unmount()));
 
-function renderView(viewPrimaryAction?: ReactNode, onDelete?: () => void) {
+function renderView(viewPrimaryAction?: ReactNode) {
   act(() => {
     renderer = create(
       <EntitySideSheet open mode="view" onModeChange={() => undefined} onOpenChange={() => undefined} title="CB-1"
-        editLabel="Edit" viewPrimaryAction={viewPrimaryAction} onDelete={onDelete} deleteLabel="Delete delivery">
+        editLabel="Edit" viewPrimaryAction={viewPrimaryAction}>
         <form />
       </EntitySideSheet>,
     );
@@ -45,9 +45,5 @@ describe("EntitySideSheet viewPrimaryAction", () => {
     const buttons = renderView(<span data-testid="lead">Open credit batch</span>);
     expect(renderer.root.findByProps({ "data-testid": "lead" }).props.children).toBe("Open credit batch");
     expect(buttons.filter(([label]) => label === "Edit" || label === "Close")).toEqual([["Edit", "default"]]);
-  });
-
-  it("puts Delete after Edit, destructive, only when the caller offers it", () => {
-    expect(renderView(undefined, () => undefined)).toEqual([["Edit", "primary"], ["Delete delivery", "destructive"]]);
   });
 });

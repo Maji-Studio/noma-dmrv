@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Delete for an Open delivery, from the row menu and the detail footer: one
+ * Delete for an Open delivery, from the row menu like products: one
  * confirmed request with the row's version, and no Delete once the delivery
  * is In use. The server restores the bin stock (record-lock-deletes test).
  */
@@ -31,7 +31,6 @@ const harness = vi.hoisted(() => ({
   level: "open" as RecordLockView["level"],
   remove: vi.fn(),
   success: vi.fn(),
-  sheet: null as null | { open: boolean; mode: string; onDelete?: () => void; deleteLabel?: string },
 }));
 
 function lockView(): RecordLockView {
@@ -106,15 +105,13 @@ vi.mock("@/components/ui", () => ({
 }));
 vi.mock("@/components/ui/data-table", () => ({
   DataTable: Object.assign(
-    ({ columns, data, onRowClick }: {
+    ({ columns, data }: {
       columns: Array<{ id?: string; cell?: (context: { row: { original: unknown } }) => ReactNode }>;
       data: unknown[];
-      onRowClick: (row: unknown) => void;
     }) => (
       <div>
         {data.map((row, index) => (
           <div key={index}>
-            <button type="button" onClick={() => onRowClick(row)}>Open row</button>
             {columns.find((column) => column.id === "actions")?.cell?.({ row: { original: row } })}
           </div>
         ))}
@@ -143,12 +140,7 @@ vi.mock("@/components/ui/delete-confirm-dialog", () => ({
       </div>
     ) : null,
 }));
-vi.mock("@/components/ui/entity-side-sheet", () => ({
-  EntitySideSheet: (props: { open: boolean; mode: string; onDelete?: () => void; deleteLabel?: string }) => {
-    harness.sheet = { open: props.open, mode: props.mode, onDelete: props.onDelete, deleteLabel: props.deleteLabel };
-    return null;
-  },
-}));
+vi.mock("@/components/ui/entity-side-sheet", () => ({ EntitySideSheet: () => null }));
 vi.mock("./delivery-read-sections", () => ({ deliverySheetSections: () => [] }));
 vi.mock("./delivery-form", () => ({ DeliveryForm: () => null }));
 
@@ -157,7 +149,6 @@ import { DeliveryList } from "./delivery-list";
 beforeEach(() => {
   harness.query = {};
   harness.level = "open";
-  harness.sheet = null;
   harness.remove.mockReset().mockResolvedValue(undefined);
   harness.success.mockReset();
 });
@@ -182,26 +173,10 @@ describe("DeliveryList delete", () => {
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 
-  it("offers no Delete for an In use delivery, in the row menu or the detail footer", () => {
+  it("offers no Delete for an In use delivery", () => {
     harness.level = "inUse";
     render(<DeliveryList />);
     expect([...screen.getByTestId("row-menu").querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Edit"]);
-    fireEvent.click(screen.getByRole("button", { name: "Open row" }));
-    expect(harness.sheet).toMatchObject({ open: true, mode: "view" });
-    expect(harness.sheet?.onDelete).toBeUndefined();
-  });
-
-  it("deletes from the detail footer and closes the sheet", async () => {
-    render(<DeliveryList />);
-    fireEvent.click(screen.getByRole("button", { name: "Open row" }));
-    expect(harness.sheet).toMatchObject({ open: true, mode: "view", deleteLabel: "Delete delivery" });
-
-    act(() => harness.sheet?.onDelete?.());
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
-    });
-    expect(harness.remove).toHaveBeenCalledWith({ deliveryId: DELIVERY_ID, expectedVersion: 3 });
-    expect(harness.sheet?.open).toBe(false);
   });
 
   it("keeps the confirmation open with the refusal", async () => {
