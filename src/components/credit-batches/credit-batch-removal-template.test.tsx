@@ -103,14 +103,14 @@ describe("CreditBatchRemovalTemplate", () => {
       expect(screen.getByText("17 components to decide, so this credit batch can't go into another Removal.")).toBeTruthy();
     });
 
-    it("says nothing when every line is decided or the pin is gone", () => {
+    it("says nothing when every component is decided or the pin is gone", () => {
       mount(true);
-      expect(screen.queryByText(/lines? to decide/)).toBeNull();
+      expect(screen.queryByText(/components? to decide/)).toBeNull();
       cleanup();
       mocks.linesToDecide = 17;
       mocks.listed = [];
       mount(true);
-      expect(screen.queryByText(/lines? to decide/)).toBeNull();
+      expect(screen.queryByText(/components? to decide/)).toBeNull();
     });
   });
 

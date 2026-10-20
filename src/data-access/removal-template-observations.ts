@@ -151,7 +151,7 @@ export async function reviewLineContracts(ctx: OrgContext, input: ReviewLineCont
         throw new SafeError("This template component is already decided. Only components to decide take a decision.");
       }
       if (assignment.scope !== "operating" && (assignment.automaticSource || assignment.entryPolicy !== "none")) {
-        throw new SafeError("Only operating lines can take automatic datapoints or entries.");
+        throw new SafeError("Only operating components can take automatic datapoints or entries.");
       }
       lineSources[id] = { ...assignment, origin: "reviewed", templateOrder: lineSources[id]?.templateOrder };
     }

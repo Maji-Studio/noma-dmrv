@@ -183,7 +183,7 @@ describe("RemovalTemplateReviewPanel", () => {
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Change Startup diesel usage" })); });
     const scope = document.getElementById("rvt_test-cmp_startup-scope") as HTMLSelectElement;
     await act(async () => { fireEvent.change(scope, { target: { value: "forbidden" } }); });
-    // Only operating lines take entries, so the policy resets with the scope.
+    // Only operating components take entries, so the policy resets with the scope.
     expect((document.getElementById("rvt_test-cmp_startup-entries") as HTMLSelectElement).disabled).toBe(true);
 
     await act(async () => { fireEvent.click(saveButton()); });

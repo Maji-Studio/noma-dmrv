@@ -82,7 +82,7 @@ const PROBLEM_COPY: Partial<Record<LineSourceProblem["code"], string>> = {
   "retired-automatic-source": "These automatic datapoints are no longer available. Choose others or allow entries for this component.",
   "disallowed-entry-policy": "This entry rule does not fit the component's inputs. Choose another one.",
   ambiguous: "Another component uses the same automatic datapoints. Give them to one component only.",
-  "missing-contract": "This line has no contract yet. Assign one.",
+  "missing-contract": "This component has no contract yet. Assign one.",
 };
 
 /** The badge on a line without a saved decision. */

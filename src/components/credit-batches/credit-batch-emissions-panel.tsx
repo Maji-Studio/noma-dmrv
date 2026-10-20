@@ -90,7 +90,7 @@ export function CreditBatchEmissionsPanel({
         <div className="flex items-center justify-between gap-12">
           <span className="flex items-center gap-8 body-small text-[var(--color-text-secondary)]">
             <CheckCircleIcon size={16} weight="bold" aria-hidden />
-            All lines recorded
+            All components recorded
           </span>
           <OpenEmissionsLink creditBatchId={creditBatchId} facilityId={facilityId} />
         </div>
