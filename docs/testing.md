@@ -397,7 +397,9 @@ name hyphens with underscores.
 ### Landing a PR and reading red CI
 
 `scripts/pr-land.sh <pr> [--teardown <name>] [--dry-run]` merges `origin/staging` into the
-PR branch when behind (in the worktree that has it checked out) and pushes, waits for
+PR branch only when it conflicts (`mergeStateStatus` is `DIRTY`, in the worktree that has it
+checked out) and pushes. A PR that is merely behind is enqueued as is because the queue
+retests on top of staging. The script waits for
 GitHub to show that head and for every required check to pass, enqueues the PR in the merge queue
 through GraphQL, and watches until MERGED. A drop from the queue prints the
 `RemovedFromMergeQueueEvent` reason and exits non-zero. `--teardown` runs
