@@ -77,6 +77,12 @@ export function apiHttpErrorResponse(error: ApiHttpError, instance: string, requ
 
 type DenialChallenge = { role?: string; oauth?: boolean; audience?: string; scopes?: readonly ApiScope[]; requiredScopes?: readonly ApiScope[] };
 
+export function oauthStepUpChallengeApplies(denial: ApiContextDenial, challenge: DenialChallenge): boolean {
+  return env.OAUTH_PROVIDER_ENABLED && denial === "missing_scope" && challenge.oauth === true
+    && Boolean(challenge.requiredScopes?.length)
+    && (challenge.requiredScopes ?? []).every(scope => OAUTH_GRANTABLE_SCOPES.has(scope) && oauthRoleCeiling(challenge.role ?? null).has(scope));
+}
+
 export function oauthInsufficientScopeChallenge(audience: string, scopes: readonly ApiScope[], requiredScopes: readonly ApiScope[]): string {
   const union = [...new Set([...scopes, ...requiredScopes])].filter(scope => OAUTH_GRANTABLE_SCOPES.has(scope));
   return `Bearer error="insufficient_scope", scope="${union.join(" ")}", resource_metadata="${oauthResourceMetadataUrl(audience)}"`;
@@ -89,8 +95,7 @@ export function apiDenialResponse(denial: ApiContextDenial, instance: string, re
   const audience = challenge.audience ?? (instance === "/api/mcp" ? getOAuthConfig().mcp : getOAuthConfig().rest);
   if (status === 401) {
     response.headers.set("WWW-Authenticate", `Bearer ${challenge.oauth ? 'error="invalid_token", ' : ""}resource_metadata="${oauthResourceMetadataUrl(audience)}", scope="${OAUTH_REQUESTABLE_SCOPES.join(" ")}"`);
-  } else if (denial === "missing_scope" && challenge.oauth && challenge.requiredScopes?.length
-    && challenge.requiredScopes.every(scope => OAUTH_GRANTABLE_SCOPES.has(scope) && oauthRoleCeiling(challenge.role ?? null).has(scope))) {
+  } else if (oauthStepUpChallengeApplies(denial, challenge)) {
     response.headers.set("WWW-Authenticate", oauthInsufficientScopeChallenge(audience, challenge.scopes ?? [], challenge.requiredScopes ?? []));
   }
   return response;

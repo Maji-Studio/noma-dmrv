@@ -6,7 +6,8 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
 import { and, eq, inArray } from "drizzle-orm";
-import { OAUTH_STEP_UP_NAMESPACE, OAUTH_STEP_UP_TTL_MS } from "../../../src/config/oauth";
+import { OAUTH_STEP_UP_TTL_MS } from "../../../src/config/oauth";
+import { stepUpKey } from "../../../src/lib/auth/oauth-step-up-key";
 import * as schema from "../../../src/db/schema";
 import { createDbConnection } from "./db";
 
@@ -159,8 +160,7 @@ export async function readE2EOAuthConsentScopes(clientId: string, userId: string
 
 /** The hint a 403 insufficient_scope leaves, so the next consent preticks what the app actually asked for. Returns its cleanup. */
 export async function seedE2EOAuthStepUp(input: { client: E2EOAuthClient; organizationId: string; userId: string; scopes: string[] }): Promise<() => Promise<void>> {
-  const identifier = OAUTH_STEP_UP_NAMESPACE + JSON.stringify([input.userId, input.client.clientId, input.organizationId]);
-  const id = OAUTH_STEP_UP_NAMESPACE + createHash("sha256").update(identifier).digest("hex");
+  const { identifier, id } = stepUpKey({ userId: input.userId, clientId: input.client.clientId, organizationId: input.organizationId });
   const now = new Date();
   const { db, pool } = createDbConnection();
   try {

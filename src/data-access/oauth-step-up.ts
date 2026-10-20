@@ -1,17 +1,9 @@
-import { createHash } from "node:crypto";
 import { and, eq, gt } from "drizzle-orm";
 import { db } from "@/db";
 import { verifications } from "@/db/schema";
-import { OAUTH_STEP_UP_NAMESPACE, OAUTH_STEP_UP_TTL_MS } from "@/config/oauth";
+import { OAUTH_STEP_UP_TTL_MS } from "@/config/oauth";
 import type { ApiScope } from "@/lib/auth/api-scopes";
-
-type StepUpBinding = { userId: string; clientId: string; organizationId: string };
-
-/** The full tuple is the identifier; a deterministic primary key makes replacement atomic. */
-function stepUpKey(binding: StepUpBinding) {
-  const identifier = OAUTH_STEP_UP_NAMESPACE + JSON.stringify([binding.userId, binding.clientId, binding.organizationId]);
-  return { identifier, id: OAUTH_STEP_UP_NAMESPACE + createHash("sha256").update(identifier).digest("hex") };
-}
+import { stepUpKey, type StepUpBinding } from "@/lib/auth/oauth-step-up-key";
 
 // org-scope-ok: authenticated OAuth refusal records only the token's user/client/organization tuple
 export async function recordOAuthStepUp(binding: StepUpBinding, scopes: readonly ApiScope[], now = new Date()) {

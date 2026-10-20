@@ -118,10 +118,10 @@ cases live in `src/config/env-oauth.test.ts`.
 
 | Coverage | Suites |
 |---|---|
-| Pure or mocked boundaries | Colocated `oauth-config`, `oauth-scopes`, `oauth-role-policy`, `oauth-request-policy`, `oauth-token-hash`, `oauth-context`, `oauth-provider`, `api-credential-header`, `lib/api/problem`, `lib/mcp/oauth-admission` and `lib/mcp/tools/required-scopes` tests |
+| Pure or mocked boundaries | Colocated `oauth-config`, `oauth-scopes`, `oauth-role-policy`, `oauth-request-policy`, `oauth-token-hash`, `oauth-context`, `oauth-provider`, `oauth-hooks`, `api-credential-header`, `lib/api/problem`, `scope-denial`, `lib/mcp/oauth-admission` and `lib/mcp/tools/required-scopes` tests |
 | Schema, generations, attempts and eligibility | `tests/oauth-schema-contract.test.ts`, `tests/oauth-grants.test.ts`, `tests/oauth-grant-lifecycle.test.ts`, `tests/oauth-eligibility.test.ts`, `tests/oauth-membership-hooks.test.ts` |
 | API authority, isolation, parity and admission | `tests/oauth-api-context.test.ts`, `tests/oauth-bola.test.ts`, `tests/oauth-member-parity.test.ts`, `tests/api-mcp-oauth.test.ts`, `tests/oauth-documents.test.ts`, `tests/api-admission-limits.test.ts` |
-| Real provider, rotation and public boundary | `tests/oauth-flow.test.ts`, `tests/oauth-refresh.test.ts`, `tests/oauth-endpoint-lockdown.test.ts`, `tests/oauth-cimd.test.ts`, `tests/oauth-discovery.test.ts`, `tests/oauth-endpoint-limits.test.ts`, `tests/oauth-endpoint-limits-db.test.ts` |
+| Real provider, rotation and public boundary | `tests/oauth-flow.test.ts`, `tests/oauth-refresh.test.ts`, `tests/oauth-endpoint-lockdown.test.ts`, `tests/oauth-cimd.test.ts`, `tests/oauth-discovery.test.ts`, `tests/oauth-endpoint-limits.test.ts`, `tests/oauth-endpoint-limits-db.test.ts`, `tests/oauth-offer-writes.test.ts` |
 | Actions and UI | `tests/oauth-actions.test.ts`, colocated `src/fn/oauth.test.ts`, `src/hooks/use-oauth-grants.test.tsx`, `src/components/oauth/*.test.tsx` |
 | Browser flows | `tests/e2e/oauth-consent.spec.ts`, `tests/e2e/connected-apps.spec.ts` |
 

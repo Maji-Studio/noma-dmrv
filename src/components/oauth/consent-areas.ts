@@ -19,7 +19,7 @@ export const isWriteScope = (scope: string) => scope.endsWith(":write");
 export function buildConsentAreas(offered: readonly ApiScope[]): ConsentArea[] {
   return API_PERMISSION_ROWS.flatMap((row) => {
     const read = row.scopes.find((scope) => isReadScope(scope) && offered.includes(scope)) ?? null;
-    const write = row.scopes.find((scope) => isWriteScope(scope) && offered.includes(scope)) ?? null;
+    const write = read ? row.scopes.find((scope) => isWriteScope(scope) && offered.includes(scope)) ?? null : null;
     return read || write ? [{ entity: row.entity, label: row.label, read, write }] : [];
   });
 }
@@ -34,6 +34,18 @@ export function togglePeg(ticked: readonly ApiScope[], area: ConsentArea, kind: 
     else { next.delete(area.read); if (area.write) next.delete(area.write); }
   }
   return [...next];
+}
+
+/** Preselect refused scopes through the same peg linkage, keeping only scopes still up for decision. */
+export function preselectStepUp(areas: readonly ConsentArea[], undecided: readonly ApiScope[], stepUpScopes: readonly ApiScope[]): ApiScope[] {
+  let ticked: ApiScope[] = [];
+  for (const area of areas) {
+    for (const kind of ["read", "write"] as const) {
+      const scope = area[kind];
+      if (scope && undecided.includes(scope) && stepUpScopes.includes(scope)) ticked = togglePeg(ticked, area, kind, true);
+    }
+  }
+  return undecided.filter((scope) => ticked.includes(scope));
 }
 
 /** The "All areas" row: every scope of one kind that is still up for decision. */

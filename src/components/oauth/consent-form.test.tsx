@@ -47,6 +47,45 @@ it("omits Read and write when the request offers no write", () => {
   expect(screen.queryByRole("radio", { name: /^Read and write/ })).toBeNull();
 });
 
+it("cannot select or submit a write-only request without its read", () => {
+  mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["feedstocks:write"] }));
+  render(<ConsentForm />);
+  expect(screen.queryByRole("radio", { name: /^Read and write/ })).toBeNull();
+  choose("Choose per area");
+  expect(screen.queryByRole("checkbox", { name: "Feedstocks, write" })).toBeNull();
+  expect(screen.queryByRole("checkbox", { name: "All areas, write" })).toBeNull();
+  const allow = screen.getByRole("button", { name: "Allow" }) as HTMLButtonElement;
+  expect(allow.disabled).toBe(true);
+  fireEvent.click(allow);
+  expect(mocks.mutateAsync).not.toHaveBeenCalled();
+});
+
+it("submits only writes with pegs for Read and write and All areas", async () => {
+  mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["feedstocks:write", "orders:read", "orders:write"] }));
+  mocks.mutateAsync.mockResolvedValue("https://client.test/cb?code=c");
+  render(<ConsentForm />);
+  choose("Read and write");
+  fireEvent.click(screen.getByRole("button", { name: "Allow" }));
+  await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({ accept: true, scope: "orders:read orders:write offline_access" }));
+  mocks.mutateAsync.mockClear();
+  choose("Choose per area");
+  expect(screen.queryByRole("checkbox", { name: "Feedstocks, write" })).toBeNull();
+  fireEvent.click(box("All areas, write"));
+  fireEvent.click(box("All areas, write"));
+  fireEvent.click(screen.getByRole("button", { name: "Allow" }));
+  await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledExactlyOnceWith({ accept: true, scope: "orders:read orders:write offline_access" }));
+});
+
+it("ignores a refused lone write during step-up preselection", async () => {
+  mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["feedstocks:write"], alreadyAllowedScopes: ["orders:read"],
+    isStepUp: true, stepUpScopes: ["feedstocks:write"] }));
+  mocks.mutateAsync.mockResolvedValue("https://client.test/cb?code=c");
+  render(<ConsentForm />);
+  expect(screen.queryByRole("checkbox", { name: "Feedstocks, write" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Allow" }));
+  await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({ accept: true, scope: "orders:read offline_access" }));
+});
+
 it("submits reads only for the default Read only choice", async () => {
   mocks.view.mockReturnValue(view());
   mocks.mutateAsync.mockResolvedValue("https://client.test/cb?code=c&iss=https%3A%2F%2Fnoma.test%2Fapi%2Fauth");

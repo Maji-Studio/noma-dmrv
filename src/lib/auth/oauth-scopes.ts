@@ -2,7 +2,6 @@ import { API_SCOPES, type ApiScope } from "./api-scope-values";
 import { oauthRolePolicy, OAUTH_ROLE_POLICY } from "./oauth-role-policy";
 
 export const OAUTH_GRANTABLE_SCOPES: ReadonlySet<ApiScope> = new Set(API_SCOPES.filter(scope => scope.endsWith(":read") || scope.endsWith(":write")));
-export const OAUTH_READ_SCOPES = API_SCOPES.filter(scope => scope.endsWith(":read"));
 export type OAuthScope = ApiScope | "offline_access";
 export const OAUTH_REQUESTABLE_SCOPES: OAuthScope[] = [...OAUTH_GRANTABLE_SCOPES, "offline_access"];
 

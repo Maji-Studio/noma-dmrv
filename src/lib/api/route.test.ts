@@ -8,11 +8,11 @@ import { ApiHttpError } from "./http-error";
 import { problemResponse } from "./problem";
 import { apiRoute } from "./route";
 
-const mocks = vi.hoisted(() => ({ resolve: vi.fn(), log: vi.fn(), pre: vi.fn(), post: vi.fn(), record: vi.fn() }));
+const mocks = vi.hoisted(() => ({ resolve: vi.fn(), log: vi.fn(), warn: vi.fn(), pre: vi.fn(), post: vi.fn(), record: vi.fn() }));
 vi.mock("@/lib/auth/api-context", () => ({ resolveApiContext: mocks.resolve }));
 vi.mock("@/data-access/oauth-step-up", () => ({ recordOAuthStepUp: mocks.record }));
 vi.mock("./guards", () => ({ preAuthGuard: mocks.pre, credentialAdmissionGuard: vi.fn(async () => ({ response: null, result: null })), postAuthGuard: mocks.post }));
-vi.mock("@/lib/log", () => ({ logger: { error: mocks.log } }));
+vi.mock("@/lib/log", () => ({ logger: { error: mocks.log, warn: mocks.warn } }));
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.pre.mockResolvedValue({ response: null, result: null });
@@ -248,6 +248,9 @@ it.each([false, true])("records REST step-up without changing the 403 when stora
     expect(response.status).toBe(403);
     expect(response.headers.get("www-authenticate")).toContain('error="insufficient_scope", scope="feedstocks:read feedstocks:write"');
     expect(mocks.record).toHaveBeenCalledWith({ userId: ctx.userId, clientId: "client", organizationId: ctx.organizationId }, ["feedstocks:write"]);
+    if (fails) expect(mocks.warn).toHaveBeenCalled();
+    else expect(mocks.warn).not.toHaveBeenCalled();
+    expect(mocks.log).not.toHaveBeenCalled();
     expect(handler).not.toHaveBeenCalled();
     expect(mocks.post).not.toHaveBeenCalled();
   } finally { env.OAUTH_PROVIDER_ENABLED = wasEnabled; }

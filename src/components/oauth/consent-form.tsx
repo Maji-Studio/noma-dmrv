@@ -9,7 +9,7 @@ import type { ApiScope } from "@/lib/auth/api-scopes";
 import { useOAuthQuery } from "@/hooks/use-oauth-query";
 import { followOAuthContinuation } from "@/lib/auth/oauth-continuation";
 import { SETTINGS_CONNECTED_APPS_HREF } from "@/lib/settings/links";
-import { buildConsentAreas, isReadScope } from "./consent-areas";
+import { buildConsentAreas, isReadScope, preselectStepUp } from "./consent-areas";
 import { ConsentChoices, type ConsentPreset } from "./consent-choices";
 import { ConsentPegBoard } from "./consent-peg-board";
 import { OAuthAppIdentity, OAuthCard, OAuthRestartNotice } from "./oauth-card";
@@ -39,7 +39,7 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
   const hasConsent = view.isStepUp || allowed.length > 0;
   // Step-up ticks only what a recent refusal asked for (plus the read it needs), since discovery may request every scope.
   const [ticked, setTicked] = useState<ApiScope[]>(() => hasConsent
-    ? newScopes.filter((scope) => stepUpScopes.includes(scope) || areas.some((area) => area.read === scope && area.write && stepUpScopes.includes(area.write)))
+    ? preselectStepUp(areas, newScopes, stepUpScopes)
     : newReads);
   const [preset, setPreset] = useState<ConsentPreset>("read");
   const [failed, setFailed] = useState(false);
@@ -51,7 +51,7 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
   function choose(next: ConsentPreset) {
     setPreset(next);
     if (next === "read") setTicked(newReads);
-    else if (next === "write") setTicked(newScopes);
+    else if (next === "write") setTicked(newScopes.filter((scope) => areas.some((area) => area.read === scope || area.write === scope)));
   }
 
   async function decide(accept: boolean) {
