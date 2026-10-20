@@ -447,6 +447,7 @@ function projectUiContext(
     removalTemplate: ctx.removalTemplate,
     lineSources: ctx.lineSources,
     templateBlockers: ctx.templateBlockers,
+    undecidedLineIds: ctx.undecidedLineIds,
     emissionLines: ctx.emissionLines,
     emissionLinesByBatchId: ctx.emissionLinesByBatchId,
     blueprintsForTemplate: ctx.blueprintsForTemplate,

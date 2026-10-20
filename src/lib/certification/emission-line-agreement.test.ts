@@ -52,6 +52,9 @@ it.each(cases)("coverage, readiness and submission agree for %s", (name, code, r
   const coverage = findUnbindableTemplateInputs(template, { lineSources: sources });
   expect([...new Set(coverage.map((finding) => finding.componentId))].sort()).toEqual(blockedIds.sort());
   expect(lines[0].blocker?.code).toBe(code);
+  // Routing is data: a decided line only another template can fill says so on its blocker.
+  if (code === "lineNeedsSetup" || code === "lineHasNoSource") expect(lines[0].blocker?.fixTarget).toBe("templateReplacement");
+  if (code === "lineNeedsReview") expect(lines[0].blocker?.fixTarget).toBe("templateLineReview");
   expect(coverage[0]?.reason).toBe(reason);
   const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], {
     templatesById: { [template.id]: { template, observation: { lineSources: sources }, enrichmentProblems: [],
@@ -69,7 +72,9 @@ it.each(cases)("coverage, readiness and submission agree for %s", (name, code, r
     emissionLineBlockers: resolved.emissionLines?.flatMap((line) => line.blocker ? [line.blocker] : []),
   };
   expect(deriveRemovalReadiness(facts).state === "ready").toBe(!code);
-  expect(buildRemovalRequirementsChecklist(facts).find((check) => check.key === "template")?.status).toBe(code ? "unmet" : "met");
+  // Line findings are template line problems: the template itself stays set.
+  expect(buildRemovalRequirementsChecklist(facts).find((check) => check.key === "templateSet")?.status).toBe("met");
+  expect(buildRemovalRequirementsChecklist(facts).find((check) => check.key === "templateLines")?.status).toBe(code ? "unmet" : "met");
   const agg = { ...aggregateProductionRuns([{ id: "run", code: "RUN", startTime: new Date("2026-10-01"), endTime: new Date("2026-10-02"), electricityKwh: 10 } as ProductionRunForCertification]), weightedOrganicCarbonPercent: null, weightedHToCorgRatio: null, weightedOToCorgRatio: null } satisfies AggregatedProductionData;
   const compile = () => resolveTemplateInputs({ template, lineSources: sources, blueprintsByKey: new Map((enrichment.blueprints as IsometricComponentBlueprint[]).map((blueprint) => [blueprint.key, blueprint])), agg,
     externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: true, omitProductionComponents: false });
