@@ -125,7 +125,7 @@ export function CreditBatchRemovalTemplate({
           action={canManage ? (
             <Link
               href={certificationRemovalTemplatesHref(batch.facilityId, pinnedId)}
-              className="inline-flex items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
+              className="inline-flex min-h-44 items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
             >
               {DECIDE_LINES_LINK_LABEL}
             </Link>
