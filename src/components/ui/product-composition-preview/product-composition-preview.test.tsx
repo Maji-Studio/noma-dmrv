@@ -1,30 +1,34 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
-import type { ReactNode } from "react";
-
-// The real InfoHint mounts a floating-ui tooltip, which reads `window` on mount,
-// and this suite runs in the node environment. The hint is covered by the
-// tooltip tests; here it is inert.
-vi.mock("@/components/ui/tooltip", () => ({
-  InfoHint: ({ label }: { children: ReactNode; label: string }) => <span aria-label={label} />,
-  Tooltip: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-}));
+import { afterEach, describe, expect, it } from "vitest";
+import type { ReactElement } from "react";
 import { ProductCompositionPreview } from "./product-composition-preview";
+
+afterEach(cleanup);
 
 function text(html: string): string {
   return html.replace(/<[^>]+>/g, "");
 }
 
+/** Opens the block's (i) and returns the panel's text: the ledger and the arithmetic live there. */
+async function explanation(element: ReactElement): Promise<string> {
+  render(element);
+  fireEvent.click(screen.getByRole("button", { name: "How product composition is worked out" }));
+  return (await screen.findByRole("dialog")).textContent ?? "";
+}
+
 describe("ProductCompositionPreview", () => {
-  it("draws dry biochar against the rest of the wet product when the parts are unknown", () => {
-    const html = renderToStaticMarkup(
+  it("draws dry biochar against the rest of the wet product when the parts are unknown", async () => {
+    const element = (
       <ProductCompositionPreview
         wetMassKg={4_000}
         dryBiocharKg={1_800}
         moisturePercent={40}
         testId="composition-under-test"
-      />,
+      />
     );
+    const html = renderToStaticMarkup(element);
 
     expect(html).toContain('data-testid="composition-under-test"');
     expect(html).toContain('data-segment="dry-biochar"');
@@ -32,8 +36,12 @@ describe("ProductCompositionPreview", () => {
     expect(text(html)).toContain("Product composition");
     expect(text(html)).toContain("Dry biochar 1,800 kg");
     expect(text(html)).toContain("Ingredients + water 2,200 kg");
-    expect(text(html)).toContain("Measured moisture: 40%");
-    expect(text(html)).toContain(
+    // The arithmetic and the measured moisture wait behind the (i).
+    expect(text(html)).not.toContain("Measured moisture");
+    expect(text(html)).not.toContain("is the sum of its parts");
+    const panel = await explanation(element);
+    expect(panel).toContain("Measured moisture: 40%");
+    expect(panel).toContain(
       "Wet biochar product is the sum of its parts: 1,800 kg + 2,200 kg = 4,000 kg.",
     );
   });
@@ -80,8 +88,8 @@ describe("ProductCompositionPreview", () => {
     expect(html).not.toContain('role="img"');
   });
 
-  it("splits each ingredient into solids and pools every water", () => {
-    const html = renderToStaticMarkup(
+  it("splits each ingredient into solids and pools every water", async () => {
+    const element = (
       <ProductCompositionPreview
         wetMassKg={1_100}
         components={[
@@ -90,15 +98,16 @@ describe("ProductCompositionPreview", () => {
           { label: "Water", massKg: 150, kind: "water" },
           { label: "Water added", massKg: 160, kind: "addedWater" },
         ]}
-      />,
+      />
     );
+    const html = renderToStaticMarkup(element);
 
     expect(text(html)).toContain("Dry biochar 600 kg");
     expect(text(html)).toContain("Compost solids 190 kg");
     expect(text(html)).toContain("Water 150 kg");
     expect(text(html)).toContain("Water added 160 kg");
     expect(html).toContain('data-segment="ingredient-solids"');
-    expect(text(html)).toContain(
+    expect(await explanation(element)).toContain(
       "Wet biochar product is the sum of its parts: 600 kg + 190 kg + 150 kg + 160 kg = 1,100 kg.",
     );
   });
@@ -165,8 +174,8 @@ describe("ProductCompositionPreview", () => {
     expect(text(html)).toContain("Stock history");
   });
 
-  it("takes a headline, a mass formatter and a basis line for a saved record", () => {
-    const html = renderToStaticMarkup(
+  it("takes a headline, a mass formatter and a basis line for a saved record", async () => {
+    const element = (
       <ProductCompositionPreview
         wetMassKg={100.125}
         components={[
@@ -176,15 +185,18 @@ describe("ProductCompositionPreview", () => {
         formatMass={(mass) => `${mass.toFixed(3)} kg`}
         headline={<span>Saved total</span>}
         basis={<p>Saved with the product.</p>}
-      />,
+      />
     );
+    const html = renderToStaticMarkup(element);
 
     expect(text(html)).toContain("Saved total");
     expect(text(html)).toContain("Water 10.125 kg");
-    expect(text(html)).toContain(
+    expect(text(html)).not.toContain("Saved with the product.");
+    const panel = await explanation(element);
+    expect(panel).toContain(
       "Wet biochar product is the sum of its parts: 90.000 kg + 10.125 kg = 100.125 kg.",
     );
-    expect(text(html)).toContain("Saved with the product.");
+    expect(panel).toContain("Saved with the product.");
   });
 
   describe("mass flow", () => {
