@@ -8,3 +8,4 @@ export { allowedEntryPolicies } from "./entry-policies";
 export { lineNeedsReview, effectiveContract, isAcceptableProposal, withoutUnacceptableProposals, resolveLineSources, validateLineSources, type LineContract, type LineSources, type LineSourceProblem } from "./line-sources";
 export { BOOTSTRAP_LINE_SOURCES } from "./bootstrap";
 export { compareTemplateObservations, isEntryCompatible, type ComponentChange } from "./compare";
+export { lineSourcesForObservation } from "./line-sources-for-observation";
