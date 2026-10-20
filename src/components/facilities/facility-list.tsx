@@ -276,7 +276,9 @@ export function FacilityList() {
         }
       />
 
-      {createdFacility && <FacilityRegistryLinkNotice facility={createdFacility} />}
+      {createdFacility && (
+        <FacilityRegistryLinkNotice facility={createdFacility} onDismiss={() => setCreatedFacility(null)} />
+      )}
 
       <div className="grid grid-cols-1 gap-24 md:grid-cols-2 xl:grid-cols-3">
         <StatCard

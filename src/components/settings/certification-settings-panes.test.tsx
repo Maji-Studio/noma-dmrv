@@ -96,9 +96,19 @@ describe("RegistrySettingsPane", () => {
     expect(html.indexOf("Keys not saved.")).toBeLessThan(html.indexOf("Keys form"));
   });
 
-  it("reports failing keys", () => {
-    state.mappingQuery = { isLoading: false, error: new Error("401") };
-    expect(renderToStaticMarkup(<RegistrySettingsPane viewer={viewer} />)).toContain("Connection failing.");
+  it("reports failing keys only when the read says they cannot be used", () => {
+    state.mappingQuery = { data: { isConfigured: false }, isLoading: false, error: null };
+    const html = renderToStaticMarkup(<RegistrySettingsPane viewer={viewer} />);
+    expect(html).toContain("Connection failing.");
+    expect(html).toContain("Replace them below.");
+  });
+
+  it("stays neutral when the check itself fails", () => {
+    state.mappingQuery = { isLoading: false, error: new Error("The server could not be reached.") };
+    const html = renderToStaticMarkup(<RegistrySettingsPane viewer={viewer} />);
+    expect(html).toContain("Couldn&#x27;t check the connection right now.");
+    expect(html).not.toContain("Connection failing.");
+    expect(html).not.toContain("Replace them");
   });
 
   it("shows a member the status without the keys form", () => {

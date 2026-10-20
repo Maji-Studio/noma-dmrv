@@ -46,6 +46,8 @@ export interface SettingsRailGroup {
 }
 
 const SELECT_LABEL = "Settings page";
+/** The phone select's value while the current page is not a rail row. */
+const UNLISTED_VALUE = "";
 
 function isPlainLeftClick(event: MouseEvent): boolean {
   return (
@@ -67,9 +69,16 @@ export function SettingsRail({
   onNavigate,
   ariaLabel = "Settings categories",
   idPrefix = "settings-rail",
+  currentLabel,
 }: {
   groups: readonly SettingsRailGroup[];
   selectedKey: string;
+  /**
+   * The page's own name, for when it is not one of the rail's rows (a URL the
+   * viewer may open but the rail does not list for them). The phone select
+   * shows it as the current choice, so picking any listed row navigates.
+   */
+  currentLabel?: string;
   /**
    * Called instead of the default navigation for a plain click on a row and
    * for a change of the phone select. Omit to let links navigate as usual.
@@ -92,7 +101,7 @@ export function SettingsRail({
         </label>
         <select
           id={selectId}
-          value={selected?.href ?? ""}
+          value={selected?.href ?? UNLISTED_VALUE}
           onChange={(event) => {
             const href = event.target.value;
             if (onNavigate) onNavigate(href);
@@ -100,6 +109,11 @@ export function SettingsRail({
           }}
           className="body-medium h-44 w-full border border-[var(--color-border-secondary)] bg-[var(--paper)] px-12"
         >
+          {!selected && (
+            <option value={UNLISTED_VALUE} disabled>
+              {currentLabel ?? SELECT_LABEL}
+            </option>
+          )}
           {groups.map((group) => (
             <optgroup
               key={group.key}

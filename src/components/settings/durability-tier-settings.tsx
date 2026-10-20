@@ -4,7 +4,15 @@
  * once per facility (ADR 0021), not site master data. Same control and same
  * rules as before (1000-year selectable, 200-year shown locked until a
  * 200-year client onboards), saved through the facility update action with
- * only the tier in the payload, so the server's durability lock still applies.
+ * only the tier in the payload, so the server's durability lock and its
+ * Owner/Admin rule apply.
+ *
+ * The save is not optimistic. An optimistic write changes the facility in the
+ * cache before the server answers, and a refusal (the tier is locked by a
+ * registry submission, a concurrent edit) would then arrive at a form that
+ * had already moved on. The form stays mounted for the facility while the
+ * request settles, and follows a refetched tier only where the operator has
+ * not chosen one.
  *
  * Members see the tier as read-only information.
  */
@@ -14,6 +22,7 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { DurabilityTierSelect } from "@/components/certification/durability-tier-select";
 import { FormActions, FormField } from "@/components/forms";
+import { Notice } from "@/components/ui/notice";
 import { useToast } from "@/components/ui/toast";
 import type { Facility } from "@/db/schema";
 import { useUpdateFacility } from "@/hooks/use-facilities";
@@ -35,9 +44,15 @@ function resolveTier(option: Facility["durabilityOption"] | null | undefined): D
 export function DurabilityTierSettings({
   facility,
   canManage,
+  blockedReason,
 }: {
   facility: Facility;
   canManage: boolean;
+  /**
+   * Why a changed tier cannot be saved yet, such as an unsaved soil reference
+   * draft the change would drop. Replaces the Save action while set.
+   */
+  blockedReason?: string;
 }) {
   const savedTier = resolveTier(facility.durabilityOption);
 
@@ -49,13 +64,14 @@ export function DurabilityTierSettings({
     );
   }
 
-  // Keyed on the saved tier and version: react-hook-form reads `defaultValues`
-  // once, so a remount is how a saved or refetched tier reaches the control.
+  // Keyed on the facility only: a remount mid-request would drop the pending
+  // state and the server's answer.
   return (
     <DurabilityTierForm
-      key={`${facility.id}-${facility.version}-${savedTier}`}
+      key={facility.id}
       facility={facility}
       savedTier={savedTier}
+      blockedReason={blockedReason}
     />
   );
 }
@@ -63,19 +79,28 @@ export function DurabilityTierSettings({
 function DurabilityTierForm({
   facility,
   savedTier,
+  blockedReason,
 }: {
   facility: Facility;
   savedTier: DurabilityOption;
+  blockedReason?: string;
 }) {
   const toast = useToast();
-  const updateFacility = useUpdateFacility();
+  const updateFacility = useUpdateFacility(undefined, { optimistic: false });
   const [serverError, setServerError] = useState("");
-  const { control, handleSubmit, setValue } = useForm<{ durabilityOption: DurabilityOption }>({
+  const { control, handleSubmit, setValue, reset } = useForm<{ durabilityOption: DurabilityOption }>({
     defaultValues: { durabilityOption: savedTier },
+    // A refetched tier (another tab, a saved change) replaces the baseline
+    // without overwriting a tier the operator has picked and not saved.
+    values: { durabilityOption: savedTier },
+    resetOptions: { keepDirtyValues: true },
   });
   const tier = useWatch({ control, name: "durabilityOption" }) ?? savedTier;
+  const changed = tier !== savedTier;
+  const blocked = changed && !!blockedReason;
 
   const onSubmit = handleSubmit(async ({ durabilityOption }) => {
+    if (blockedReason) return;
     setServerError("");
     try {
       await updateFacility.mutateAsync({
@@ -85,6 +110,7 @@ function DurabilityTierForm({
         expectedVersion: facility.version,
         durabilityOption,
       });
+      reset({ durabilityOption });
       toast.success(`Durability tier saved for ${facility.code}.`);
     } catch (error) {
       setServerError(toSaveErrorMessage(error, "The durability tier was not saved. Try again."));
@@ -96,16 +122,20 @@ function DurabilityTierForm({
       <FormField id="facility-durability-tier" label="Durability tier" hint={DURABILITY_TIER_HINT}>
         <DurabilityTierSelect
           value={tier}
-          onChange={(value) => setValue("durabilityOption", value, { shouldDirty: true })}
+          onChange={(value) => {
+            setServerError("");
+            setValue("durabilityOption", value, { shouldDirty: true });
+          }}
           disabled={updateFacility.isPending}
           aria-label="Facility durability tier"
         />
       </FormField>
+      {blocked && <Notice tone="warning">{blockedReason}</Notice>}
       <FormActions
         control={control}
         isSubmitting={updateFacility.isPending}
         errorMessage={serverError}
-        showSubmit={tier !== savedTier}
+        showSubmit={changed && !blocked}
         submitLabel="Save durability tier"
         submittingLabel="Saving…"
         sticky={false}

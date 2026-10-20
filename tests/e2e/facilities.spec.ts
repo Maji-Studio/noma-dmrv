@@ -14,6 +14,40 @@ import {
 } from "./fixtures";
 import type { Locator } from "@playwright/test";
 import * as crypto from "crypto";
+import { and, eq } from "drizzle-orm";
+import { DEC_ORG_ID } from "@/db/org-defaults";
+import { certifierCredentials } from "@/db/schema/certification";
+import { encryptSecret } from "@/lib/crypto/secrets";
+import { createDbConnection } from "./fixtures/db";
+
+/**
+ * Settings, Facilities waits on the organization's registry keys. Store
+ * placeholder keys when the shared organization has none, and remove only the
+ * row this call stored. Nothing here reaches Isometric.
+ */
+async function ensureRegistryKeys(): Promise<() => Promise<void>> {
+  const { db, pool } = createDbConnection();
+  const where = and(
+    eq(certifierCredentials.organizationId, DEC_ORG_ID),
+    eq(certifierCredentials.provider, "isometric"),
+  );
+  const [existing] = await db.select({ id: certifierCredentials.organizationId }).from(certifierCredentials).where(where).limit(1);
+  if (!existing) {
+    await db.insert(certifierCredentials).values({
+      organizationId: DEC_ORG_ID,
+      provider: "isometric",
+      accessTokenEncrypted: encryptSecret(`e2e-tier-token-${RUN_ID}`),
+      clientSecretEncrypted: encryptSecret(`e2e-tier-secret-${RUN_ID}`),
+    });
+  }
+  return async () => {
+    try {
+      if (!existing) await db.delete(certifierCredentials).where(where);
+    } finally {
+      await pool.end();
+    }
+  };
+}
 
 // ============================================
 // Unique run identifier for this test file
@@ -312,28 +346,29 @@ test.describe("Facility durability tier", () => {
     await expect(dialog.getByText("Durability tier")).toHaveCount(0);
     await page.keyboard.press("Escape");
 
-    await page.goto(`/settings/facilities?facility=${seededData.facility.id}`);
-    await page.waitForURL(/\/settings\/(facilities|registry)/, { timeout: 30000 });
-    test.skip(
-      new URL(page.url()).pathname !== "/settings/facilities",
-      "Settings, Facilities needs the organization's registry keys saved.",
-    );
+    const removeKeys = await ensureRegistryKeys();
+    try {
+      await page.goto(`/settings/facilities?facility=${seededData.facility.id}`);
+      await expect(page).toHaveURL(/\/settings\/facilities/, { timeout: 30000 });
 
-    const tierGroup = page.getByRole("radiogroup", {
-      name: "Facility durability tier",
-    });
-    await expect(tierGroup).toBeVisible({ timeout: 15000 });
-    // The seeded facility is on the 200-year tier, which stays shown but locked;
-    // 1000-year is the selectable pathway, and choosing it offers Save.
-    const locked = tierGroup.getByRole("radio", { name: /200-year/i });
-    await expect(locked).toHaveAttribute("aria-checked", "true");
-    await expect(locked).toHaveAttribute("aria-disabled", "true");
-    await expect(tierGroup.getByText("Available later")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Save durability tier" })).toHaveCount(0);
-    await tierGroup.getByRole("radio", { name: /1000-year/i }).click();
-    await expect(page.getByRole("button", { name: "Save durability tier" })).toBeVisible();
-    await expect(
-      page.getByText("No soil reference temperature: only the 200-year model uses it."),
-    ).toHaveCount(0);
+      const tierGroup = page.getByRole("radiogroup", {
+        name: "Facility durability tier",
+      });
+      await expect(tierGroup).toBeVisible({ timeout: 15000 });
+      // The seeded facility is on the 200-year tier, which stays shown but locked;
+      // 1000-year is the selectable pathway, and choosing it offers Save.
+      const locked = tierGroup.getByRole("radio", { name: /200-year/i });
+      await expect(locked).toHaveAttribute("aria-checked", "true");
+      await expect(locked).toHaveAttribute("aria-disabled", "true");
+      await expect(tierGroup.getByText("Available later")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Save durability tier" })).toHaveCount(0);
+      await tierGroup.getByRole("radio", { name: /1000-year/i }).click();
+      await expect(page.getByRole("button", { name: "Save durability tier" })).toBeVisible();
+      await expect(
+        page.getByText("No soil reference temperature: only the 200-year model uses it."),
+      ).toHaveCount(0);
+    } finally {
+      await removeKeys();
+    }
   });
 });

@@ -10,6 +10,8 @@ import RetiredOrganizationPage from "./organization/page";
 import RetiredVehiclesPage from "./vehicles-and-crew/page";
 import CertificationSettingsPage from "../certification/settings/page";
 
+const context = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/auth/server", () => ({ getOrgContext: context }));
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
     throw new Error(`redirect:${url}`);
@@ -37,9 +39,17 @@ describe("settings redirects", () => {
   });
 
   it("moves /certification/settings sections onto their panes", async () => {
+    context.mockResolvedValue({ isPlatformAdmin: false });
     await expect(CertificationSettingsPage(params({ section: "emission-estimates", facility: "f" }))).rejects.toThrow(
       "permanent:/settings/facilities?facility=f",
     );
     await expect(CertificationSettingsPage(params({}))).rejects.toThrow("permanent:/settings/registry");
+    await expect(CertificationSettingsPage(params({ section: "diagnostics" }))).rejects.toThrow(
+      "permanent:/settings/registry",
+    );
+    context.mockResolvedValue({ isPlatformAdmin: true });
+    await expect(CertificationSettingsPage(params({ section: "diagnostics" }))).rejects.toThrow(
+      "permanent:/settings/diagnostics",
+    );
   });
 });

@@ -153,6 +153,7 @@ export function SettingsConsole({ pane: paneKey, viewer, subtitle, children }: S
           onNavigate={(href) => guard.requestLeave(() => router.push(href))}
           ariaLabel="Settings categories"
           idPrefix="settings"
+          currentLabel={pane.label}
         />
 
         {/* A presentational card, so a plain div: as a `section` it became an

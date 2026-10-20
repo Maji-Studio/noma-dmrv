@@ -71,6 +71,12 @@ const LEGACY_CERTIFICATION_SECTION_ROUTES: Record<string, string> = {
   "template-mapping": SETTINGS_TEMPLATE_MAPPING_HREF,
 };
 
+/** Platform Admin panes; anyone else lands on Registry instead of a 404. */
+const PLATFORM_ONLY_LEGACY_ROUTES: ReadonlySet<string> = new Set([
+  SETTINGS_DIAGNOSTICS_HREF,
+  SETTINGS_TEMPLATE_MAPPING_HREF,
+]);
+
 const LEGACY_SECTION_PARAM = "section";
 const FORWARDED_LEGACY_PARAMS = ["facility", REMOVAL_TEMPLATES_TEMPLATE_PARAM] as const;
 
@@ -78,14 +84,24 @@ function firstValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-/** Where an old `/certification/settings?section=` link goes now. */
+/**
+ * Where an old `/certification/settings?section=` link goes now. The platform
+ * sections were open to the viewers who could see them, so for anyone else
+ * the link lands on Registry rather than on a 404.
+ */
 export function legacyCertificationSettingsRedirect(
   searchParams: CertificationSearchParams = {},
+  viewer: { isPlatformAdmin: boolean } = { isPlatformAdmin: false },
 ): string {
   const section = firstValue(searchParams[LEGACY_SECTION_PARAM]);
+  const mapped =
+    section && Object.hasOwn(LEGACY_CERTIFICATION_SECTION_ROUTES, section)
+      ? LEGACY_CERTIFICATION_SECTION_ROUTES[section]
+      : SETTINGS_REGISTRY_HREF;
   const target =
-    (section && LEGACY_CERTIFICATION_SECTION_ROUTES[section]) ??
-    SETTINGS_REGISTRY_HREF;
+    PLATFORM_ONLY_LEGACY_ROUTES.has(mapped) && !viewer.isPlatformAdmin
+      ? SETTINGS_REGISTRY_HREF
+      : mapped;
   const params = new URLSearchParams();
   for (const key of FORWARDED_LEGACY_PARAMS) {
     const value = firstValue(searchParams[key]);

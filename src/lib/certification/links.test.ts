@@ -53,8 +53,16 @@ describe("legacyCertificationSettingsRedirect", () => {
     ["diagnostics", "/settings/diagnostics"],
     ["template-mapping", "/settings/template-mapping"],
     ["not-a-section", "/settings/registry"],
-  ])("maps ?section=%s onto %s", (section, target) => {
-    expect(legacyCertificationSettingsRedirect(section ? { section } : {})).toBe(target);
+    ["toString", "/settings/registry"],
+    ["constructor", "/settings/registry"],
+    ["__proto__", "/settings/registry"],
+  ])("maps ?section=%s onto %s for a Platform Admin", (section, target) => {
+    expect(legacyCertificationSettingsRedirect(section ? { section } : {}, { isPlatformAdmin: true })).toBe(target);
+  });
+
+  it.each(["diagnostics", "template-mapping"])("lands anyone else on Registry for ?section=%s", (section) => {
+    expect(legacyCertificationSettingsRedirect({ section, facility: "f" })).toBe("/settings/registry?facility=f");
+    expect(legacyCertificationSettingsRedirect({ section }, { isPlatformAdmin: false })).toBe("/settings/registry");
   });
 
   it("keeps the facility and template, and drops the section", () => {

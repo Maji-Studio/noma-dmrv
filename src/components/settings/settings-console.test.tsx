@@ -89,6 +89,12 @@ describe("SettingsConsole", () => {
     expect(html).toContain('<option value="/settings/registry?facility=fac-1" selected="">Registry</option>');
   });
 
+  it("names an unlisted current pane in the phone select so every row stays selectable", () => {
+    const html = render("developers", { canManage: false, canManageApiKeys: false });
+    expect(html).not.toContain(">Developers</a>");
+    expect(html).toContain('<option value="" disabled="" selected="">Developers</option>');
+  });
+
   it("hides Removal templates and Facilities while no registry keys are saved, and marks Registry", () => {
     state.configured = false;
     const html = render("registry");

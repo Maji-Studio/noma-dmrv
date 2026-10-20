@@ -7,7 +7,10 @@
  * The status says only what is known:
  *  - Keys not saved: the organization has no Isometric keys.
  *  - Connected: Isometric listed projects with the saved keys just now.
- *  - Connection failing: Isometric did not answer the saved keys.
+ *  - Connection failing: the saved keys cannot be used to reach Isometric
+ *    (the read answered "not configured").
+ *  - Not checked: the check itself failed (network, a 5xx, a rate limit). That
+ *    says nothing about the keys, so it asks for nothing.
  *  - Keys saved: saved, not checked here (members, or no facility to check
  *    with), so it is not called connected.
  *
@@ -34,7 +37,8 @@ export type RegistryConnectionStatus =
   | "keys-not-saved"
   | "keys-saved"
   | "connected"
-  | "failing";
+  | "failing"
+  | "unchecked";
 
 interface StatusCopy {
   title: string;
@@ -60,9 +64,18 @@ export function registryStatusCopy(
     case "failing":
       return {
         title: "Connection failing.",
-        detail: `${REGISTRY_NAME} did not accept the saved keys. Replace them below, or refresh the page to check again.`,
+        detail: canManage
+          ? `The saved keys cannot be used to reach ${REGISTRY_NAME}. Replace them below.`
+          : `The saved keys cannot be used to reach ${REGISTRY_NAME}.`,
         icon: WarningCircleIcon,
         colorClass: "text-[var(--st-bad)]",
+      };
+    case "unchecked":
+      return {
+        title: "Couldn't check the connection right now.",
+        detail: "Refresh the page to try again.",
+        icon: CircleIcon,
+        colorClass: "text-[var(--st-off)]",
       };
     case "connected":
       return {
@@ -104,7 +117,7 @@ export function useRegistryConnectionStatus({
   if (keysSaved === undefined) return null;
   if (!keysSaved) return "keys-not-saved";
   if (!canManage || !facilityId || mapping.isLoading) return "keys-saved";
-  if (mapping.error) return "failing";
+  if (mapping.error) return "unchecked";
   if (mapping.data) return mapping.data.isConfigured ? "connected" : "failing";
   return "keys-saved";
 }

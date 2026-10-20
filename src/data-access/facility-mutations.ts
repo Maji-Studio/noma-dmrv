@@ -1,8 +1,9 @@
 import { and, eq } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { facilities, type Facility } from "@/db/schema";
-import type { OrgContext } from "@/lib/auth/server";
+import { hasOrgRole, type OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { ORGANIZATION_SETTINGS_ROLES } from "@/lib/settings/panes";
 import { DomainError } from "@/lib/domain-errors";
 import { hasBlockingFacilitySubmission } from "./certification";
 import {
@@ -136,6 +137,11 @@ async function updateFacilityRow(
   return updated;
 }
 
+/** Who may change a facility's durability tier (Settings, Facilities, #1277). */
+const DURABILITY_TIER_MIN_ROLE = "admin";
+export const DURABILITY_TIER_ROLE_REFUSAL =
+  `Only organization ${ORGANIZATION_SETTINGS_ROLES} can change the durability tier. Nothing was changed.`;
+
 /** Update a facility, serializing only real durability-tier changes. */
 export async function updateFacility(
   ctx: OrgContext,
@@ -158,6 +164,12 @@ export async function updateFacility(
   const tierChangeRequested =
     data.durabilityOption !== undefined &&
     data.durabilityOption !== existing.durabilityOption;
+  // The tier is certification configuration: every member edits site details,
+  // only Owners and Admins (and Platform Admins) change the tier. A save that
+  // echoes the current tier is not a change and stays open to members.
+  if (tierChangeRequested && !hasOrgRole(ctx, DURABILITY_TIER_MIN_ROLE)) {
+    throw new SafeError(DURABILITY_TIER_ROLE_REFUSAL);
+  }
   if (!tierChangeRequested) {
     // Strip a stale echoed tier so this cheap path cannot revert a concurrent
     // real tier edit. It still takes no durability lock and runs no ledger
