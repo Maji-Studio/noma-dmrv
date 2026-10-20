@@ -420,6 +420,7 @@ export function ProductionRunForm({
             label="Cancellation reason"
             error={errors.cancellationReason?.message}
             required
+            helperText="Explain why this run did not take place."
           >
             <FormTextarea
               id="cancellationReason"

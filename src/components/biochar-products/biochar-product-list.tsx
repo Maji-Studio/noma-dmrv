@@ -253,7 +253,6 @@ export function BiocharProductPageMassSummary({
       }
       valueLayout="breakdown"
       icon={<ScalesIcon size={24} weight="bold" />}
-      description="Combined product mass on the current page"
       isLoading={isLoading}
     />
   );
