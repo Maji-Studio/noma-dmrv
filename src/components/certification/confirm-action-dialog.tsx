@@ -38,6 +38,8 @@ interface ConfirmActionDialogProps {
   errorMessage?: string;
   /** Blocks the primary action when the body names a blocker. Cancel stays live. */
   confirmDisabled?: boolean;
+  /** False holds the dialog open against Escape, the backdrop and the X, e.g. while a request runs. */
+  dismissible?: boolean;
 }
 
 const TITLE_ID = "confirm-action-title";
@@ -55,12 +57,13 @@ export function ConfirmActionDialog({
   isProduction = false,
   errorMessage,
   confirmDisabled = false,
+  dismissible = true,
 }: ConfirmActionDialogProps) {
   const isDestructive = variant === "destructive";
   const isNeutral = variant === "neutral";
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} ariaLabelledBy={TITLE_ID} width="sm">
+    <Modal isOpen={isOpen} onClose={onClose} dismissible={dismissible} ariaLabelledBy={TITLE_ID} width="sm">
       <div className="flex flex-col gap-20">
         {isProduction && <EnvBanner isProduction variant="inline" />}
 
