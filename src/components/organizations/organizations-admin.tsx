@@ -22,7 +22,7 @@ import {
   useEnterOrganization,
 } from "@/hooks/use-organizations";
 import { createOrganizationSchema } from "@/schemas/organizations";
-import { useViewerOrg } from "@/components/navigation/viewer-org";
+import { useViewerOrg } from "@/components/navigation";
 import { OrganizationAdminRow } from "./organization-admin-row";
 import { OrganizationRosterList } from "./organization-roster-list";
 

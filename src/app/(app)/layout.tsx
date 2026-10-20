@@ -5,15 +5,17 @@
 import { getOrgContext, requireAuth } from "@/lib/auth/server";
 import { getActiveOrganization } from "@/data-access/organizations";
 import { getOrganizationDefaults } from "@/data-access/organization-settings";
-import { AppSidebar, MobileNav } from "@/components/navigation";
-import { FacilityProvider } from "@/components/navigation/facility-provider";
-import { PlatformAdminBar, PLATFORM_ADMIN_BAR_HEIGHT } from "@/components/navigation/platform-admin-bar";
-import { OrgSwitchToast } from "@/components/navigation/org-switch-toast";
-import { ViewerOrgProvider } from "@/components/navigation/viewer-org";
 import {
+  AppSidebar,
+  MobileNav,
+  OrgSwitchToast,
+  PLATFORM_ADMIN_BAR_HEIGHT,
+  PlatformAdminBar,
+  ViewerOrgProvider,
   shouldShowPlatformAdminBar,
   type ViewerOrg,
-} from "@/components/navigation/viewer-org-rules";
+} from "@/components/navigation";
+import { FacilityProvider } from "@/components/navigation/facility-provider";
 import { SessionSignOutListener } from "@/components/auth/session-signout-listener";
 
 export default async function AppLayout({
@@ -103,9 +105,7 @@ export default async function AppLayout({
               : undefined
           }
         >
-          {showPlatformAdminBar && viewerOrg && (
-            <PlatformAdminBar organizationName={viewerOrg.organizationName} />
-          )}
+          <PlatformAdminBar />
           <main id="main-content" tabIndex={-1} className="flex-1 min-h-0 min-w-0 overflow-auto focus:outline-none">
             {children}
           </main>

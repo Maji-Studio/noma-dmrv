@@ -23,7 +23,7 @@ import {
 } from "@/hooks/use-organizations";
 import { shouldShowOrganizationSwitcher } from "./org-brand-switching";
 import { useViewerOrg } from "./viewer-org";
-import { viewerRoleLabel } from "./viewer-org-rules";
+import { FALLBACK_ORG_NAME, viewerRoleLabel } from "./viewer-org-rules";
 
 type SwitchableOrg = { id: string; name: string };
 
@@ -122,9 +122,10 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
   const canSwitch = shouldShowOrganizationSwitcher(switchable);
 
   const activeOrgName =
+    viewer?.organizationName ||
     activeOrg?.name?.trim() ||
     switchable.find((org) => org.id === activeOrganizationId)?.name ||
-    "noma dMRV";
+    FALLBACK_ORG_NAME;
   const orgInitial = activeOrgName.charAt(0).toUpperCase();
 
   const organizationStatePending =

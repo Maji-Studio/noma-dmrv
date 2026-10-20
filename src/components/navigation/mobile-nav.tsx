@@ -19,13 +19,14 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { SidebarContent } from "./sidebar-content";
 import { useViewerOrg } from "./viewer-org";
+import { FALLBACK_ORG_NAME } from "./viewer-org-rules";
 
 export function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
   const [lastPath, setLastPath] = useState(pathname);
   const isMobile = useIsMobile();
-  const organizationName = useViewerOrg()?.organizationName ?? "noma dMRV";
+  const organizationName = useViewerOrg()?.organizationName ?? FALLBACK_ORG_NAME;
 
   // The drawer (and its focus trap + scroll lock) only belongs below `md`. If
   // the viewport grows to desktop while it's open — rotate, resize — the popup

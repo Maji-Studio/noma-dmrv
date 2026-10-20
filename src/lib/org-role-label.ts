@@ -4,8 +4,6 @@
  */
 import type { OrgRole } from "@/lib/auth/server";
 
-export const PLATFORM_ADMIN_LABEL = "Platform Admin";
-
 const ORG_ROLE_LABELS: Readonly<Record<OrgRole, string>> = {
   owner: "Owner",
   admin: "Admin",

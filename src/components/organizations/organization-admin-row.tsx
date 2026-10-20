@@ -85,7 +85,7 @@ export function OrganizationAdminRow({ org, apiAccessEnabled, entering, current 
               Isometric keys
             </Button>
             {current ? (
-              <StatusBadge status="active" label="Current" />
+              <span className="body-small font-medium text-[var(--color-text-secondary)]">Current</span>
             ) : (
               <Button
                 type="button"

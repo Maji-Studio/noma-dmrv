@@ -53,7 +53,7 @@ describe("org switch notice", () => {
   });
 
   it("words the confirmation", () => {
-    expect(orgSwitchMessage("Mafinga Biochar")).toBe("Now working in Mafinga Biochar");
+    expect(orgSwitchMessage("Mafinga Biochar")).toBe("Now working in Mafinga Biochar.");
   });
 });
 

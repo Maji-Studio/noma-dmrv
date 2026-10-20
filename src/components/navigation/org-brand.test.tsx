@@ -218,10 +218,10 @@ describe("OrgBrand", () => {
       expect(html).toContain('aria-haspopup="listbox"');
     });
 
-    it("shows Platform Admin for a Platform Admin without a membership", () => {
+    it("shows no chip for a Platform Admin without a membership (the bar says it)", () => {
       const html = settle({ ...base, orgRole: null, isPlatformAdmin: true }, two);
 
-      expect(html).toContain("Platform Admin");
+      expect(html).not.toContain("Platform Admin");
       expect(html).toContain('aria-haspopup="listbox"');
     });
   });

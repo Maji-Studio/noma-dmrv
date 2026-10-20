@@ -62,5 +62,5 @@ export function orgNameToAnnounce(
 }
 
 export function orgSwitchMessage(organizationName: string): string {
-  return `Now working in ${organizationName}`;
+  return `Now working in ${organizationName}.`;
 }
