@@ -50,7 +50,7 @@ const API_CONTRACT_VERSION = "v1";
 const APP_INTENT_ERROR_COPY = {
   idempotency_key_reused: "The app already saved this record with other values. Close the form and check the list.",
   idempotency_in_progress: "The app is still saving this record. Wait a moment, then check the list.",
-  outcome_unknown: "The app could not confirm the save. Save again: the app will not save this record twice.",
+  outcome_unknown: "The app could not confirm the save. Try again: the app will not save this record twice.",
   replay_unavailable: "The app already saved this record. Close the form and check the list.",
 } as const;
 
@@ -201,7 +201,7 @@ export function keylessOutcomeUnknown(error: unknown): unknown {
   if (error instanceof DomainError && error.code === "outcome_unknown") {
     return new DomainError(
       "outcome_unknown",
-      "It is not known whether this change was saved. Check the list before trying again.",
+      "The app could not confirm that it saved this change. Check the list before trying again.",
       { cause: error },
     );
   }

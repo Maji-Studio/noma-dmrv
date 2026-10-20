@@ -251,7 +251,7 @@ describe("shared operation runner", () => {
     })).toEqual({
       success: false,
       code: "outcome_unknown",
-      error: "It is not known whether this change was saved. Check the list before trying again.",
+      error: "The app could not confirm that it saved this change. Check the list before trying again.",
     });
     await expect(runOperation(operation, ctx, { amount: 1 }, {
       idempotency: { credentialId: "credential-id", key: "key" },
@@ -276,7 +276,7 @@ describe("shared operation runner", () => {
     expect(execute).toHaveBeenCalledOnce();
   });
 
-  it.each(["create_customer", "create_supplier", "start_production_run"])("saves %s once when a draft retries after a lost acknowledgement", async (operationId) => {
+  it("replays a keyed retry once after a lost acknowledgement", async () => {
     // Fake only the store and transaction boundary; the real runner owns replay.
     const outcomes = new Map<string, unknown>();
     claim.mockImplementation(async (_ctx, _tx, request) => {
@@ -289,7 +289,7 @@ describe("shared operation runner", () => {
       outcomes.set(recordId, JSON.parse(JSON.stringify(outcome)));
     });
     const execute = vi.fn(operation.execute);
-    const op = { ...operation, id: operationId, execute };
+    const op = { ...operation, execute };
     const options = { intentKey: "11111111-1111-4111-8111-111111111111" };
     owned.mockImplementationOnce(async (_ctx, _deadline, callback) => {
       await callback(tx);
@@ -306,7 +306,7 @@ describe("shared operation runner", () => {
   it.each([
     ["idempotency_key_reused", "The app already saved this record with other values. Close the form and check the list."],
     ["idempotency_in_progress", "The app is still saving this record. Wait a moment, then check the list."],
-    ["outcome_unknown", "The app could not confirm the save. Save again: the app will not save this record twice."],
+    ["outcome_unknown", "The app could not confirm the save. Try again: the app will not save this record twice."],
     ["replay_unavailable", "The app already saved this record. Close the form and check the list."],
   ] as const)("preserves the cause and exposes app copy for keyed %s", async (code, message) => {
     const cause = new DomainError(code, "Transport copy", { retryable: true });
