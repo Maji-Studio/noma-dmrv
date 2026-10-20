@@ -111,6 +111,7 @@ describe("Removal Application-slice assignment", () => {
           startTime: new Date(`2026-04-0${number}T08:00:00Z`),
           endTime: new Date(`2026-04-0${number}T12:00:00Z`),
           biocharDryMassKg: 100,
+          biocharOutputKg: 100,
         })),
       )
       .returning();
