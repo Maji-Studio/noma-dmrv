@@ -1,7 +1,7 @@
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  applications,
+  applications, biocharProducts,
   creditBatchApplications, creditBatchProductionRuns, creditBatches, deliveries,
   feedstocks,
   productionRunFeedstocks, productionRuns,
@@ -10,7 +10,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { RecordCreditBatchesInput } from "@/schemas/record-credit-batches";
 import type { RecordCreditBatch, RecordCreditBatches } from "@/types/record-credit-batches";
 import { getMixBinHeldApplicationIds } from "./mix-bin-credit-hold";
-import { inApplicationCreditBatchLineage, inDeliveryCreditBatchLineage } from "./credit-batch-lineage-filter";
+import { inApplicationCreditBatchLineage, inCreditBatchLineage, inDeliveryCreditBatchLineage } from "./credit-batch-lineage-filter";
 import { assertSameOrg, requireOrgScope } from "./utils";
 
 const batchSelection = {
@@ -20,14 +20,31 @@ const batchSelection = {
   endDate: creditBatches.endDate,
 };
 
+/** The org's credit batches a lineage predicate matches, in window order. */
+function batchesWhere(ctx: OrgContext, lineage: SQL): Promise<RecordCreditBatch[]> {
+  return db.select(batchSelection).from(creditBatches).where(and(
+    eq(creditBatches.organizationId, ctx.organizationId),
+    lineage,
+  )).orderBy(creditBatches.startDate, creditBatches.code);
+}
+
 /** Read saved provenance only; record dates never choose a credit batch. */
 export async function getRecordCreditBatches(
   ctx: OrgContext,
   input: RecordCreditBatchesInput,
 ): Promise<RecordCreditBatches> {
   requireOrgScope(ctx);
-  const table = { feedstock: feedstocks, delivery: deliveries, application: applications }[input.kind];
+  const table = {
+    feedstock: feedstocks, "biochar-product": biocharProducts,
+    delivery: deliveries, application: applications,
+  }[input.kind];
   await assertSameOrg(ctx, table, input.id);
+
+  if (input.kind === "biochar-product") {
+    const batches = await batchesWhere(ctx, inCreditBatchLineage(ctx, creditBatches.id, input.id));
+    // ADR 0030 holds out application slices, not the product's source provenance.
+    return { batches, heldOut: false };
+  }
 
   if (input.kind === "application") {
     const held = await getMixBinHeldApplicationIds(ctx, db, [input.id]);
@@ -47,18 +64,12 @@ export async function getRecordCreditBatches(
     }
 
     // Otherwise include the union of frozen slices and positive source-run shares.
-    const batches = await db.select(batchSelection).from(creditBatches).where(and(
-      eq(creditBatches.organizationId, ctx.organizationId),
-      inApplicationCreditBatchLineage(ctx, creditBatches.id, input.id),
-    )).orderBy(creditBatches.startDate, creditBatches.code);
+    const batches = await batchesWhere(ctx, inApplicationCreditBatchLineage(ctx, creditBatches.id, input.id));
     return { batches, heldOut: false };
   }
 
   if (input.kind === "delivery") {
-    const batches = await db.select(batchSelection).from(creditBatches).where(and(
-      eq(creditBatches.organizationId, ctx.organizationId),
-      inDeliveryCreditBatchLineage(ctx, creditBatches.id, input.id),
-    )).orderBy(creditBatches.startDate, creditBatches.code);
+    const batches = await batchesWhere(ctx, inDeliveryCreditBatchLineage(ctx, creditBatches.id, input.id));
     return { batches, heldOut: false };
   }
 

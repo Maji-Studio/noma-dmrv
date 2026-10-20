@@ -383,7 +383,7 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
   `CreditBatchLineCopy`. The Lab Sample line repeats the batch chosen in the
   form, read from the batch summary the form already loads. The line never blocks Save, and it shows "Checking" whenever
   its last answer is not for the current inputs.
-  Feedstock, Delivery and Application render `RecordCreditBatchLine` from saved
+  Feedstock, Delivery, Application and Biochar Product render `RecordCreditBatchLine` from saved
   provenance via `getRecordCreditBatches` and show "Not yet computed" while creating.
   When several batches apply, "+N" opens a list of all their batches.
 - The submit skips the browser's constraint bubbles except for unparsed number text (see [Native number constraints](#native-number-constraints)); a nested `submitType="button"` is untouched.

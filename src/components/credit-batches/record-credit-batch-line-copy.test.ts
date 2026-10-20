@@ -3,7 +3,7 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import { CREDIT_BATCH_LINE_ERROR, CREDIT_BATCH_LINE_PENDING } from "./credit-batch-line-copy";
 import { describeRecordCreditBatchLine, type RecordCreditBatchKind } from "./record-credit-batch-line-copy";
 
-const KINDS: RecordCreditBatchKind[] = ["feedstock", "delivery", "application"];
+const KINDS: RecordCreditBatchKind[] = ["feedstock", "delivery", "application", "biochar-product"];
 const ONE = { id: "b1", code: "CB-26-001" };
 const TWO = { id: "b2", code: "CB-26-002" };
 
