@@ -6,6 +6,11 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { selfTestDesignContext } from "./review-context-self-test.mjs";
+import {
+  materializeGlobalDesignSkill,
+  selectDesignContextPaths,
+} from "./review-context.mjs";
 import {
   createPrompt,
   extractPracticeDefinition,
@@ -25,6 +30,7 @@ import {
   parseArgs,
   requireCommand,
   run,
+  selectPractices,
   truncateForComment,
   usage,
 } from "./review-runtime.mjs";
@@ -539,6 +545,7 @@ async function removeReviewWorktree(cwd, worktree) {
 }
 
 async function selfTest() {
+  selfTestDesignContext();
   const sample = {
     practice: "standards",
     findings: [
@@ -581,7 +588,7 @@ async function selfTest() {
     baseSha: "a".repeat(40),
     headSha: "b".repeat(40),
     reports: [{ practice: "standards", model: "codex", output: sample }],
-    skippedPractices: new Set(["spec"]),
+    skippedPractices: new Map([["spec", "No spec available"]]),
   });
   if (!report.includes(COMMENT_MARKER) || !report.includes("Duplicated policy branch")) {
     throw new Error("aggregation self-test failed");
@@ -593,6 +600,52 @@ async function selfTest() {
     join(SKILL_ROOT, "references/practices.md"),
     "utf8",
   );
+  if (
+    !parseArgs(["--plan", "--practices", "design"]).practices.includes("design") ||
+    !REVIEW_SCHEMA.properties.practice.enum.includes("design") ||
+    displayPractice("design") !== "Design"
+  ) {
+    throw new Error("Design selection/schema self-test failed");
+  }
+  const selectionCases = [
+    [["src/example.ts"], reference, "No UI files changed"],
+    [["src/components/foo.tsx"], reference, undefined],
+    [["src/components/foo.test.tsx"], reference, "No UI files changed"],
+    ...["jsx", "css", "scss", "html", "vue", "svelte"].map((extension) =>
+      [[`src/foo.${extension}`], reference, undefined]),
+    ...["e2e", "tests", "__tests__", "__mocks__"].map((directory) =>
+      [[`src/${directory}/foo.tsx`], reference, "No UI files changed"]),
+    [["src/foo.spec.tsx"], reference, "No UI files changed"],
+    [["src/tests-helper/foo.tsx", "src/foo.test.tsx"], reference, undefined],
+    [["src/foo.tsx"], undefined, "No Design practice in the base branch"],
+    [["src/foo.tsx"], reference.replace(/^## Design$/gm, "## Other"), "No Design practice in the base branch"],
+  ];
+  for (const [changedFiles, basePracticeReference, reason] of selectionCases) {
+    const selection = selectPractices({
+      practices: DEFAULT_PRACTICES, spec: undefined, changedFiles, basePracticeReference,
+    });
+    if (
+      selection.skippedPractices.get("design") !== reason ||
+      selection.practices.includes("design") !== (reason === undefined) ||
+      selection.skippedPractices.get("spec") !== "No spec available" ||
+      selection.practices.length !== (reason ? 2 : 3)
+    ) {
+      throw new Error(`practice selection self-test failed for ${changedFiles}`);
+    }
+    const selectionReport = aggregateReport({
+      pr: { number: 1, url: "https://github.com/example/repo/pull/1", baseRefName: "staging" },
+      baseSha: "a".repeat(40), headSha: "b".repeat(40), reports: [],
+      skippedPractices: selection.skippedPractices,
+    });
+    if (
+      !selectionReport.includes("_No spec available; practice skipped._") ||
+      !selectionReport.includes("**Spec:** skipped; no spec available.") ||
+      (reason && (!selectionReport.includes(`_${reason}; practice skipped._`) ||
+        !selectionReport.includes(`**Design:** skipped; ${reason[0].toLowerCase()}${reason.slice(1)}.`)))
+    ) {
+      throw new Error("practice skip reason self-test failed");
+    }
+  }
   const contextFiles = [
     { path: "GLOSSARY.md", absolute: "/artifacts/base-context/GLOSSARY.md" },
   ];
@@ -666,7 +719,7 @@ async function selfTest() {
     baseSha: "a".repeat(40),
     headSha: "b".repeat(40),
     reports: [],
-    skippedPractices: new Set(),
+    skippedPractices: new Map(),
     omittedFiles: ["drizzle/meta/0121_snapshot.json"],
   });
   if (!omittedReport.includes("drizzle/meta/0121_snapshot.json")) {
@@ -722,22 +775,15 @@ async function main() {
   const headSha = await verifyHead(pr, cwd);
   const diff = await getDiffMetadata(base.name, cwd);
   const spec = await discoverSpec(options, pr, diff, cwd, artifactDir);
-  const selectedContext = await selectContext(base.name, diff.changedFiles, cwd);
-  const contextFiles = await materializeBaseContext(
-    base.name,
-    selectedContext,
-    artifactDir,
-    cwd,
-  );
-
   // The review criteria must come from the base branch. Reading the working tree
   // would let the PR under review rewrite the standards it is judged against.
   let practiceReferenceSource = "base";
-  let practiceReference = await readFromBase(
+  const basePracticeReference = await readFromBase(
     base.name,
     PRACTICE_REFERENCE_PATH,
     cwd,
   );
+  let practiceReference = basePracticeReference;
   if (practiceReference === undefined) {
     // The PR that introduces this skill has no copy in its base commit. Fall back
     // rather than making the suite unable to review its own introducing PR.
@@ -751,14 +797,27 @@ async function main() {
     );
   }
 
-  const skippedPractices = new Set();
-  const practices = options.practices.filter((practice) => {
-    if (practice === "spec" && !spec) {
-      skippedPractices.add(practice);
-      return false;
-    }
-    return true;
+  const { practices, skippedPractices } = selectPractices({
+    practices: options.practices,
+    spec,
+    changedFiles: diff.changedFiles,
+    basePracticeReference,
   });
+  const selectedContext = await selectContext(base.name, diff.changedFiles, cwd);
+  if (practices.includes("design")) {
+    const basePaths = await git(
+      ["ls-tree", "-r", "--name-only", "-z", base.name, "--", ".agents/skills"],
+      { cwd },
+    );
+    selectedContext.push(...selectDesignContextPaths(basePaths.stdout.split("\0"), practices));
+  }
+  const contextFiles = await materializeBaseContext(
+    base.name, [...new Set(selectedContext)], artifactDir, cwd,
+  );
+  const globalDesign = practices.includes("design")
+    ? materializeGlobalDesignSkill(artifactDir)
+    : {};
+  if (globalDesign.contextFile) contextFiles.push(globalDesign.contextFile);
 
   const metadata = {
     generatedAt: new Date().toISOString(),
@@ -776,6 +835,7 @@ async function main() {
     },
     spec,
     contextFiles,
+    designGlobalSkill: globalDesign.designGlobalSkill,
     practiceReferenceSource,
     models: options.models,
     practices,
