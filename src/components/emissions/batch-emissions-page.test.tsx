@@ -4,9 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EmissionLine } from "./emission-line-display";
 import type { LineActions, RowUndo } from "./emission-line-list";
 import { makeEntry, makeLine } from "./emission-line-test-fixtures";
+import { EmissionLinesBlockedError } from "@/lib/certification/emission-lines-blocked-error";
+import { removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 
 const mocks = vi.hoisted(() => ({
   lines: [] as unknown[],
+  linesError: null as Error | null,
   filter: null as string | null,
   deleteEntry: vi.fn(),
   restoreEntry: vi.fn(),
@@ -27,7 +30,7 @@ vi.mock("@/hooks/use-emissions-overview", () => ({
   }),
 }));
 vi.mock("@/hooks/use-emission-entries", () => ({
-  useBatchEmissionLines: () => ({ data: mocks.lines, isLoading: false, error: null, refetch: vi.fn() }),
+  useBatchEmissionLines: () => ({ data: mocks.linesError ? undefined : mocks.lines, isLoading: false, error: mocks.linesError, refetch: vi.fn() }),
   useDeleteEmissionEntry: () => ({ isPending: false, mutateAsync: mocks.deleteEntry }),
   useRestoreEmissionEntry: () => ({ isPending: false, mutateAsync: mocks.restoreEntry }),
 }));
@@ -61,6 +64,7 @@ const COUNTING = makeLine({ state: "filled", entries: [makeEntry({ version: 4 })
 
 beforeEach(() => {
   mocks.lines = [COUNTING];
+  mocks.linesError = null;
   mocks.filter = null;
   mocks.deleteEntry.mockResolvedValue({ id: "entry-1", version: 5 });
   mocks.restoreEntry.mockResolvedValue({});
@@ -106,5 +110,23 @@ describe("BatchEmissionsPage undo", () => {
     await waitFor(() => expect(mocks.deleteEntry).toHaveBeenCalledWith({ id: "entry-1", expectedVersion: 2 }));
     await waitFor(() => expect(mocks.toast.success).toHaveBeenCalled());
     expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+  });
+});
+
+describe("BatchEmissionsPage template blocker", () => {
+  it("explains a missing template with a link and no Try again", () => {
+    mocks.lines = [];
+    mocks.linesError = new EmissionLinesBlockedError(removalTemplateBlocker("unpinnedTemplate"));
+    render(<BatchEmissionsPage creditBatchId="cb" entriesEnabled />);
+    expect(screen.getByText("Choose a Removal template for this credit batch.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Set template" }).getAttribute("href")).toContain("/credit-batches/cb");
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("keeps Try again for a real load failure", () => {
+    mocks.lines = [];
+    mocks.linesError = new Error("Network down");
+    render(<BatchEmissionsPage creditBatchId="cb" entriesEnabled />);
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 });

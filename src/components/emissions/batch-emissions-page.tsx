@@ -41,6 +41,8 @@ import {
   type EmissionLine,
 } from "./emission-line-display";
 import { EmissionsUndoBar } from "./emissions-undo-bar";
+import { TemplateSetupNotice } from "./template-setup-notice";
+import { isEmissionLinesBlocked } from "@/lib/certification/emission-lines-blocked-error";
 import { MONTH_PREFIX_LENGTH, useEmissionsOverviewQuery } from "./emissions-overview-query";
 
 const SUBTITLE = "Manual entries add on top of what records already hold.";
@@ -220,7 +222,9 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
         />
       </div>
       {!entriesEnabled && <Notice tone="info">Manual entries are not switched on yet. Lines show what records hold.</Notice>}
-      {linesQuery.error && !linesQuery.data ? (
+      {isEmissionLinesBlocked(linesQuery.error) ? (
+        <TemplateSetupNotice blocker={linesQuery.error.blocker} facilityId={scope.facilityId} creditBatchId={scope.creditBatchId} />
+      ) : linesQuery.error && !linesQuery.data ? (
         <Notice tone="error" action={<Button size="small" variant="default" onClick={() => void linesQuery.refetch()}>Try again</Button>}>
           {linesQuery.error.message || "The emission lines could not be loaded."}
         </Notice>

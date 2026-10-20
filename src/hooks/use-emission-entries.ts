@@ -17,6 +17,7 @@ import {
   updateEmissionEntryFn,
 } from "@/fn/emission-entries";
 import { throwActionError } from "@/lib/stale-version";
+import { EmissionLinesBlockedError } from "@/lib/certification/emission-lines-blocked-error";
 import type { ActionResult } from "@/types/actions";
 import type { EmissionLineRecords, EmissionRecordSource } from "@/lib/certification/emission-lines";
 import { creditBatchKeys } from "./credit-batch-query-keys";
@@ -24,7 +25,10 @@ import { invalidateCertificationReadiness } from "./use-certification";
 import { energyKeys } from "./use-energy";
 
 type LinesResult = Awaited<ReturnType<typeof getBatchEmissionLinesFn>>;
-type ServerLine = Extract<LinesResult, { success: true }>["data"][number];
+type LinesData = Extract<LinesResult, { success: true }>["data"];
+type ServerLine = Extract<LinesData, { status: "ready" }>["lines"][number];
+
+const EMISSION_LINES_RETRY_LIMIT = 3;
 
 export type RecordsSource = EmissionRecordSource;
 export type LineRecords = EmissionLineRecords;
@@ -47,7 +51,12 @@ export function useBatchEmissionLines(scope: EmissionBatchScope | null) {
     queryKey: scope
       ? creditBatchKeys.emissionLines(scope.facilityId, scope.creditBatchId)
       : creditBatchKeys.emissionLines("", ""),
-    queryFn: async (): Promise<EmissionLine[]> => unwrapEntry(await getBatchEmissionLinesFn(scope!)),
+    queryFn: async (): Promise<EmissionLine[]> => {
+      const result = unwrapEntry(await getBatchEmissionLinesFn(scope!));
+      if (result.status === "blocked") throw new EmissionLinesBlockedError(result.blocker);
+      return result.lines;
+    },
+    retry: (failureCount, error) => !(error instanceof EmissionLinesBlockedError) && failureCount < EMISSION_LINES_RETRY_LIMIT,
     enabled: !!scope,
     // Records come from runs, legs, deliveries and applications edited on
     // other pages; refetch on every visit rather than wiring all of them here.
