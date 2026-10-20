@@ -59,7 +59,7 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); client.clear(); });
 
-async function open(record = delivery, onDistanceRefreshed?: () => void) {
+async function open(record = delivery, onDistanceRefreshed?: () => Promise<void>) {
   const save = vi.fn();
   const view = render(<QueryClientProvider client={client}><DeliveryForm delivery={record} onSubmit={save} onDistanceRefreshed={onDistanceRefreshed} /></QueryClientProvider>);
   const reading = await screen.findByRole("spinbutton", { name: /^P1 moisture/ });
@@ -216,7 +216,7 @@ it("asks to save or discard unsaved edits before refreshing", async () => {
 it("refreshes with the drift's version and asks the sheet to reopen on the new one", async () => {
   state.drift.mockResolvedValue({ success: true, data: drift });
   state.refresh.mockResolvedValue({ success: true, data: { ...drift, expectedVersion: 4, recordedDistanceKm: 55, hasDrift: false } });
-  const reopened = vi.fn();
+  const reopened = vi.fn(async () => undefined);
   const { save } = await open(recorded, reopened);
   fireEvent.click(await screen.findByRole("button", { name: "Refresh from location" }));
   const dialog = await screen.findByRole("dialog", { name: "Refresh distance from location?" });

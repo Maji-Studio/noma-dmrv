@@ -45,6 +45,7 @@ function feedstockStockPoints(entries: readonly FeedstockLedgerEntry[]): StockLe
     t: Date.parse(entry.occurredAt),
     dryKg: entry.estimatedDryKg!,
     waterKg: entry.estimatedDryKg === null ? null : Math.max(entry.afterWetKg - entry.estimatedDryKg, 0),
+    wetKg: entry.afterWetKg,
     label: FEEDSTOCK_ENTRY_LABELS[entry.kind],
   }));
 }

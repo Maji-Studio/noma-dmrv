@@ -15,6 +15,7 @@ import {
   getLatestSubmission,
   hasFinalizedSubmission,
 } from "@/data-access/certification-submissions";
+import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
 import { removalMayHaveExternalMutation } from "@/lib/certification/removal-external-mutation";
 import {
   getCertifierRemovalById,
@@ -144,6 +145,7 @@ export async function buildRemovalContext(
         : Promise.resolve(false),
       loadLinkedGhgStatementStatus(orgCtx, scope.removal),
     ]);
+  const deletionInProgress = hasFreshRemovalDeletionLease(scope.removal?.metadata);
   const registryBoundaryOpened = removalMayHaveExternalMutation(
     scope.removal?.metadata ?? null,
   );
@@ -266,6 +268,7 @@ export async function buildRemovalContext(
       latestSubmission,
       hasFinalizedSubmission: hasFinalized,
       registryBoundaryOpened,
+      deletionInProgress,
       linkedGhgStatement,
       isProduction,
       lineages: [],
@@ -399,6 +402,7 @@ export async function buildRemovalContext(
     latestSubmission,
     hasFinalizedSubmission: hasFinalized,
     registryBoundaryOpened,
+    deletionInProgress,
     linkedGhgStatement,
     isProduction,
     lineages,
@@ -443,6 +447,7 @@ function projectUiContext(
     removalTemplate: ctx.removalTemplate,
     lineSources: ctx.lineSources,
     templateBlockers: ctx.templateBlockers,
+    undecidedLineIds: ctx.undecidedLineIds,
     emissionLines: ctx.emissionLines,
     emissionLinesByBatchId: ctx.emissionLinesByBatchId,
     blueprintsForTemplate: ctx.blueprintsForTemplate,
@@ -469,6 +474,7 @@ function projectUiContext(
     latestSubmission: ctx.latestSubmission,
     hasFinalizedSubmission: ctx.hasFinalizedSubmission,
     registryBoundaryOpened: ctx.registryBoundaryOpened,
+    deletionInProgress: ctx.deletionInProgress,
     linkedGhgStatement: ctx.linkedGhgStatement,
     isProduction: ctx.isProduction,
   };

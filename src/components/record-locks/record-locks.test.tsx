@@ -95,6 +95,54 @@ describe("overview surfaces show only Sent", () => {
   });
 });
 
+describe("Interrupted display", () => {
+  const OTHER: RecordLockLink = { ...REMOVAL, id: "removal-2" };
+  const allInterrupted = { ...view("sent", [REMOVAL, OTHER]), interruptedHolders: [REMOVAL, OTHER] };
+  const mixed = { ...view("sent", [REMOVAL, OTHER]), interruptedHolders: [OTHER] };
+  const normal = view("sent", [REMOVAL]);
+
+  it("reads Interrupted in the sheet tag only when every holder is interrupted", () => {
+    const tag = (lock: RecordLockView) => recordLockSheetProps({ lock, status: "ready" }).titleBadge;
+    const { unmount } = render(<>{tag(allInterrupted)}</>);
+    expect(screen.getByText("Interrupted").getAttribute("data-record-lock")).toBe("sent");
+    // Interrupted takes the red of the Removal's own "Submission interrupted" badge, not Sent's.
+    expect(screen.getByText("Interrupted").className).toContain("--st-bad");
+    expect(screen.queryByText("Sent")).toBeNull();
+    unmount();
+    for (const lock of [mixed, normal]) {
+      const r = render(<>{tag(lock)}</>);
+      expect(screen.getByText("Sent")).toBeTruthy();
+      expect(screen.queryByText("Interrupted")).toBeNull();
+      r.unmount();
+    }
+  });
+
+  it("names the overview mark Interrupted only when every holder is interrupted", () => {
+    const { unmount } = render(<RecordLockSentMark lock={allInterrupted} />);
+    const icon = screen.getByRole("img", { name: "Interrupted" });
+    expect(icon.getAttribute("title")).toBe("Sending to Isometric was started and not finished");
+    expect(icon.getAttribute("data-record-lock")).toBe("sent");
+    unmount();
+    for (const lock of [mixed, normal]) {
+      const r = render(<RecordLockSentMark lock={lock} />);
+      const sent = screen.getByRole("img", { name: "Sent" });
+      expect(sent.getAttribute("title")).toBe("Sent to Isometric");
+      r.unmount();
+    }
+  });
+
+  it("labels tiles and credit batch rows Interrupted only when every holder is interrupted", () => {
+    const { unmount } = render(<RecordLockOverviewChip lock={allInterrupted} />);
+    expect(screen.getByText("Interrupted")).toBeTruthy();
+    unmount();
+    for (const lock of [mixed, normal]) {
+      const r = render(<RecordLockOverviewChip lock={lock} />);
+      expect(screen.getByText("Sent")).toBeTruthy();
+      r.unmount();
+    }
+  });
+});
+
 describe("RecordLockNotice", () => {
   it("renders nothing while Open or unknown", () => {
     const { container } = render(<><RecordLockNotice lock={view("open", [])} /><RecordLockNotice lock={undefined} /></>);

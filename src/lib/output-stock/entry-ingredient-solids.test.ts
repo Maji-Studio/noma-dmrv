@@ -26,6 +26,22 @@ describe('entryIngredientSolids', () => {
     expect(parts[0].solidsKg).toBeCloseTo(-60);
   });
 
+  it('keeps the ingredient change of a draw whose dry biochar rounds to zero grams', () => {
+    // 1 kg dry biochar blended with 999 kg compost: taking 0.4 kg of solids moves 0.4 g of dry biochar, posted as 0 g.
+    const parts = entryIngredientSolids({ dryChangeKg: 0, solidsChangeKg: -0.4, draws: [{ layerId: 'tiny', dryMassKg: 0, solidsKg: 0.4 }],
+      productDryKg: new Map([['tiny', 1]]), saved: new Map([['tiny', [{ name: 'Compost', drySolidsKg: 999 }]]]) });
+    expect(parts).toHaveLength(1);
+    expect(parts[0].name).toBe('Compost');
+    expect(parts[0].solidsKg).toBeCloseTo(-0.4);
+  });
+
+  it('weights each batch by its exact solids, not its rounded dry biochar', () => {
+    // p2 gives 0.0004 kg dry (rounded to 0) alongside p1's 100 kg: p2's compost still counts.
+    const parts = entryIngredientSolids({ dryChangeKg: -100, solidsChangeKg: null,
+      draws: [{ layerId: 'p1', dryMassKg: 100, solidsKg: 160 }, { layerId: 'p2', dryMassKg: 0, solidsKg: 0.0006 }], productDryKg, saved });
+    expect(parts.find(part => part.name === 'Compost')?.solidsKg).toBeCloseTo(-50.0002);
+  });
+
   it('has nothing for biochar runs or products without saved lines', () => {
     expect(entryIngredientSolids({ dryChangeKg: -50, solidsChangeKg: -50, draws: [{ layerId: 'run', dryMassKg: 50 }], productDryKg, saved })).toEqual([]);
     expect(entryIngredientSolids({ dryChangeKg: 0, solidsChangeKg: 0, draws: [], productDryKg, saved })).toEqual([]);

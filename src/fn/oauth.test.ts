@@ -1,14 +1,14 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { getOAuthOrganizationChoicesFn } from "./oauth";
 
-const mocks = vi.hoisted(() => ({ verify: vi.fn(), session: vi.fn(), selection: vi.fn(), client: vi.fn(), resolve: vi.fn(), pending: vi.fn() }));
+const mocks = vi.hoisted(() => ({ verify: vi.fn(), session: vi.fn(), selection: vi.fn(), isAdmin: vi.fn(), client: vi.fn(), resolve: vi.fn(), pending: vi.fn() }));
 vi.mock("@better-auth/oauth-provider", () => ({ verifyOAuthQueryParams: mocks.verify, getOAuthProviderState: vi.fn() }));
 vi.mock("@/lib/auth/better-auth", () => ({ auth: { $context: Promise.resolve({ secret: "unit-test-secret" }) } }));
 vi.mock("@/lib/auth/providers/better-auth-server", () => ({ getBetterAuthSession: mocks.session }));
 vi.mock("@/config/env", () => ({ env: { OAUTH_PROVIDER_ENABLED: true, NEXT_PUBLIC_APP_URL: "https://noma.test", BETTER_AUTH_SECRET: "unit-oauth-secret-at-least-32-characters" } }));
 vi.mock("@/data-access/oauth-grant-lifecycle", () => ({ getOAuthOrganizationSelection: mocks.selection, selectOAuthOrganization: vi.fn(), resolveAttemptGrant: mocks.resolve }));
 vi.mock("@/data-access/oauth-credential-auth", () => ({ findOAuthClient: mocks.client }));
-vi.mock("@/data-access/oauth-provider", () => ({ findOAuthClientResources: vi.fn(), findOAuthAttempt: vi.fn(), getOAuthAttemptConsent: vi.fn() }));
+vi.mock("@/data-access/oauth-provider", () => ({ findOAuthClientResources: vi.fn(), findOAuthAttempt: vi.fn(), getOAuthAttemptConsent: vi.fn(), isPlatformAdminUser: mocks.isAdmin }));
 vi.mock("@/lib/auth/oauth-eligibility", () => ({ assertGenerationEligible: vi.fn() }));
 vi.mock("@/data-access/oauth-step-up", () => ({ findOAuthStepUp: mocks.pending }));
 vi.mock("@/data-access/oauth-grants", () => ({ listOwnOAuthGrants: vi.fn(), listAllOAuthGrants: vi.fn(), revokeOAuthGrant: vi.fn() }));
@@ -28,8 +28,14 @@ beforeEach(() => {
 it("returns disabled membership choices without requiring an active organization", async () => {
   expect(await getOAuthOrganizationChoicesFn({ oauthQuery })).toEqual({ success: true, data: {
     clientName: "Example app", clientHost: "client.test", redirectHost: "callback.test",
-    memberships: [{ organizationId: "org", name: "Organization", role: "member", disabledReason: "API access is disabled." }], preselectedOrganizationId: null,
+    memberships: [{ organizationId: "org", name: "Organization", role: "member", disabledReason: "API access is disabled." }], preselectedOrganizationId: null, isPlatformAdmin: false,
   } });
+  expect(mocks.isAdmin).not.toHaveBeenCalled();
+});
+it("flags a Platform Admin without memberships", async () => {
+  mocks.selection.mockResolvedValue({ memberships: [], preselectedOrganizationId: null });
+  mocks.isAdmin.mockResolvedValue(true);
+  expect(await getOAuthOrganizationChoicesFn({ oauthQuery })).toMatchObject({ success: true, data: { memberships: [], isPlatformAdmin: true } });
 });
 it("refuses an invalid signed query before reading memberships", async () => {
   mocks.verify.mockResolvedValue(false);

@@ -88,12 +88,16 @@ const BATCH_HEALTH_SUMMARY_CHUNK_SIZE = 50;
 type RemovalCertifyPollingData = {
   latestSubmission?: { lockedAt?: Date | string | null } | null;
   futureDatedMeasurements?: readonly string[];
+  // A Removal deletion lease hides Delete; polling brings it back if the
+  // deletion fails or the lease expires.
+  deletionInProgress?: boolean;
 };
 
 export function getRemovalCertifyRefetchInterval(
   data: RemovalCertifyPollingData | undefined,
 ): number | false {
   return data?.latestSubmission?.lockedAt ||
+    data?.deletionInProgress ||
     (data?.futureDatedMeasurements?.length ?? 0) > 0
     ? LOCKED_REFETCH_INTERVAL_MS
     : false;
@@ -101,12 +105,15 @@ export function getRemovalCertifyRefetchInterval(
 
 type RemovalPreflightPollingData = {
   lockInFlight: boolean;
+  deletionInProgress?: boolean;
 };
 
 export function getRemovalPreflightRefetchInterval(
   data: RemovalPreflightPollingData | undefined,
 ): number | false {
-  return data?.lockInFlight ? LOCKED_REFETCH_INTERVAL_MS : false;
+  return data?.lockInFlight || data?.deletionInProgress
+    ? LOCKED_REFETCH_INTERVAL_MS
+    : false;
 }
 
 export const certificationKeys = {
@@ -600,12 +607,24 @@ export function useRemovalTemplateDiagnostic(
 
 // Removals hub listing for a facility — removals + members + status, plus
 // the pool of credit batches not yet grouped into a removal.
+// The list falls back to these rows' deletion lease while a preflight read is
+// loading or failed, so the hub polls on its own until every lease clears.
+export function getRemovalsHubRefetchInterval(
+  data: { removals: readonly { deletionInProgress: boolean }[] } | undefined,
+): number | false {
+  return data?.removals.some((entry) => entry.deletionInProgress)
+    ? LOCKED_REFETCH_INTERVAL_MS
+    : false;
+}
+
 export function useRemovalsForFacility(facilityId: string, enabled = true) {
   return useQuery({
     queryKey: certificationKeys.removalsForFacility(facilityId),
     queryFn: async () => unwrap(await loadRemovalsForFacility(facilityId)),
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,
+    refetchInterval: (query) =>
+      getRemovalsHubRefetchInterval(query.state.data),
   });
 }
 

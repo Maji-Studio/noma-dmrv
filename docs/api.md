@@ -774,6 +774,7 @@ other admitted MCP requests count as reads.
 
 `src/lib/mcp/tools/read-tools.ts` defines whoami, the intake find tools and
 get_feedstock. Each request captures its resolved context in a fresh server.
+Tool list changes are not advertised because stateless serving cannot push them.
 `src/lib/mcp/tools/write-tools.ts` adds log_feedstock_delivery, update_feedstock
 and delete_feedstock through the same operation runner as REST. Each write needs
 one requestKey reused on retry; dryRun previews may omit it. Updates and deletes
@@ -798,8 +799,9 @@ HTTP-only ETag builders live in `lib/api/representation-etags.ts`.
 
 The SDK publishes schemas through `toToolSchema`. A low-level tools/call
 handler owns argument parsing so validation failures remain structured.
-Success structuredContent uses the matching REST response envelope. Expected
-failures use the REST problem code and JSON Pointer errors, named `issues` in
+Success structuredContent uses the matching REST response envelope. The text block
+carries the summary plus serialized JSON for clients that read only text (claude.ai chat).
+Expected failures use the REST problem code and JSON Pointer errors, named `issues` in
 MCP, without HTTP metadata. Tool errors carry `retryable: true` for retryable
 domain errors. Both transports include query validation issues
 with JSON Pointers: REST uses `errors` and MCP uses `issues`. Each issue carries

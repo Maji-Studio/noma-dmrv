@@ -40,7 +40,7 @@ import { useOutputStockBalance } from "@/hooks/use-output-stock";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDate, formatDateTime, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
-import { formatWetEstimate } from "./stock-preview-shared";
+import { outputStockFigure } from "./stock-preview-shared";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   BIN_TYPE_META,
@@ -209,11 +209,11 @@ export function StorageBinTile({
  * the sheet shows.
  */
 function TileFigure({ feedstock, massKg, wetEstimateKg }: { feedstock: boolean; massKg: number | null; wetEstimateKg: number | null }) {
-  if (!feedstock && wetEstimateKg != null && wetEstimateKg > 0) return `${formatWetEstimate(wetEstimateKg)} kg wet mass`;
+  if (!feedstock && wetEstimateKg != null && wetEstimateKg > 0) return outputStockFigure(wetEstimateKg, massKg ?? 0);
   if (massKg == null) return MISSING_VALUE.notAvailable;
   if (massKg === 0) return "Empty";
   if (feedstock) return `${formatMassKg(massKg)} wet mass`;
-  return wetEstimateKg == null ? `${formatMassKg(massKg)} dry biochar` : `${formatWetEstimate(wetEstimateKg)} kg wet mass`;
+  return outputStockFigure(wetEstimateKg ?? null, massKg);
 }
 
 /**

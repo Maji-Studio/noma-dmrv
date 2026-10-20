@@ -495,6 +495,8 @@ describe("credit batch membership by production run end date", () => {
     expect(issue).toContain(`Production run ${latest.code}`);
     expect(issue).toContain(october.code);
     expect(issue).toContain("one month or more");
+    expect(issue).toContain(`Discard or delete every Removal that holds applied mass from credit batch ${october.code}, including this one.`);
+    expect(issue).toContain(`the Start date and End date of credit batch ${october.code} stay locked`);
     expect(issue).not.toContain(first.code);
   });
 });

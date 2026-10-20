@@ -23,6 +23,7 @@ function identity(
     latestSubmission: null,
     hasFinalizedSubmission: false,
     registryBoundaryOpened: false,
+    deletionInProgress: false,
   } as RemovalHubEntry;
 }
 
@@ -42,6 +43,7 @@ function enrichment(
     submissionInterrupted: false,
     hasFinalizedSubmission: false,
     registryBoundaryOpened: false,
+    deletionInProgress: false,
     readiness: { state: "ready", reasons: [], advisories: [], transportVehicleAdvisories: [] },
     evidenceHealth: null,
     evidenceLinks: { unconfirmedCount: 1, mismatchCount: 2, checkedAt: null },
@@ -51,6 +53,30 @@ function enrichment(
 }
 
 describe("buildRemovalListRows", () => {
+  it.each(["loading", "unavailable"] as const)(
+    "uses the identity deletion lease while enrichment is %s",
+    (status) => {
+      const deleting = { ...identity("removal-deleting", "CB-DELETE"), deletionInProgress: true };
+      const [row] = buildRemovalListRows([deleting], {
+        "removal-deleting": { status, data: enrichment("removal-deleting") },
+      });
+
+      expect(row.deletionInProgress).toBe(true);
+    },
+  );
+
+  it.each([true, false])("uses an available enrichment deletion lease of %s", (deletionInProgress) => {
+    const entry = { ...identity("removal-lease", "CB-LEASE"), deletionInProgress: !deletionInProgress };
+    const [row] = buildRemovalListRows([entry], {
+      "removal-lease": {
+        status: "available",
+        data: { ...enrichment("removal-lease"), deletionInProgress },
+      },
+    });
+
+    expect(row.deletionInProgress).toBe(deletionInProgress);
+  });
+
   it("keeps every identity row visible while enrichment loads or fails independently", () => {
     const rows = buildRemovalListRows(
       [identity("removal-a", "CB-A"), identity("removal-b", "CB-B")],
@@ -156,6 +182,7 @@ const LOCAL_ROW = {
   submissionInterrupted: false,
   hasFinalizedSubmission: false,
   registryBoundaryOpened: false,
+  deletionInProgress: false,
 } as const;
 const FLOOR_MET = {
   viewerCanDeleteRegistryRemovals: true,
@@ -167,6 +194,18 @@ const BELOW_FLOOR = {
 } as const;
 
 describe("canDeleteRemovalRow", () => {
+  it.each([
+    ["draft", { ...LOCAL_ROW, local: "draft" as const }, FLOOR_MET],
+    ["ledgerless", LOCAL_ROW, FLOOR_MET],
+    ["rejected", { ...LOCAL_ROW, local: "rejected" as const }, FLOOR_MET],
+    ["ledgerless with a registered Production Batch", LOCAL_ROW, { ...FLOOR_MET, hasRegisteredProductionBatches: true }],
+    ["interrupted", { ...LOCAL_ROW, local: "draft" as const, lockInFlight: true, submissionInterrupted: true }, FLOOR_MET],
+    ["local Member", LOCAL_ROW, BELOW_FLOOR],
+  ])("hides Delete for a %s Removal until its deletion lease clears", (_label, row, access) => {
+    expect(canDeleteRemovalRow({ ...row, deletionInProgress: true }, access)).toBe(false);
+    expect(canDeleteRemovalRow({ ...row, deletionInProgress: false }, access)).toBe(true);
+  });
+
   it("allows removals that never finalized a submission", () => {
     expect(canDeleteRemovalRow(LOCAL_ROW, FLOOR_MET)).toBe(true);
     expect(canDeleteRemovalRow({ ...LOCAL_ROW, local: "draft" }, FLOOR_MET)).toBe(true);

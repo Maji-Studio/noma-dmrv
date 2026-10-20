@@ -8,6 +8,7 @@ This is the per-surface log of what we tried, what replaced it, and why. Read it
 - **Simple and Detailed** (#821/#822 → #847; 2026-09-21 to 09-29): Simple hid derived blocks and some inputs → both modes show the same information, Detailed adds explanation only. Rejected: any "Add X" reveal or hidden step in Simple.
 - **Certification marker** (#851 → #858, #1117; 2026-09-30, 10-16): seal glyph and a sheet legend → "CERT" text chip, no legend. A requiredness legend was rebuilt in #1117 and closed unmerged. Rejected: "Required for certification" text.
 - **Typography layering** (#822; 2026-09-21 to 09-23): a layered typography import switched on unreviewed utilities app-wide → reverted; only `.font-medium` is overridden.
+- **List-page subtitle** (#1245; 2026-10-20): "every list page gets a subtitle" → a subtitle stays only when it adds information the title lacks. Why: a subtitle that restates the title ("Orders" / "Manage your orders") is filler.
 - **Form subgrid** (2026-07-24): `.grid > .form-field` subgrid → reverted; shorten labels instead.
 - **Dialog actions** (#1150; 2026-10-17): right-aligned footers → bottom left, primary first, secondary after; refused delete is a dialog with "Archive instead" first.
 - **Override controls** (#1123; 2026-10-16 to 10-18): the user asked for the override inside the input → reverted the next day ("it sucks what i proposed"): a secondary outline button next to the input, labelled "Reset to default"; "Refresh from location" is a compact action below the input that opens a dialog showing old → new.
@@ -37,6 +38,7 @@ This is the per-surface log of what we tried, what replaced it, and why. Read it
 
 ## Credit batches and locks
 
+- **Credit batch line in forms** (#1164, #1059; 2026-10-20): Production Run form footer gets one quiet line above Save, credit batch icon, code linked in a new tab, ⓘ for the rule. Matched by the run's facility-local end day (#1099), not the start date of the Oct 15 prototypes. Running runs say "Expected credit batch"; a start-day stand-in says "by start day". Rejected: an "on save" suffix and a "What happens next" heading.
 - **Credit batch page** (epic #1136; 2026-10-16): sheet-only → routed page with tabs, variant A, Overview first ("what needs me"). Progress label "Data complete 6" → "Missing data 6".
 - **Credit batch overview**: card grid (kanban-like) and calendar → timeline with quiet bars, (+) slots in gaps defaulting to the rest of the month, applied mass in dry tonnes, hover cards only where they add information. Rejected: hovers that repeat a label or say "open batch page"; "Sampled" stats.
 - **Locks** (#1101, #1134): ad hoc per-form locking → one rule (Open, In use, Sent); a locked record shows an informative box and no call to action it cannot take.

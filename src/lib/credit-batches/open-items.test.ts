@@ -108,10 +108,10 @@ describe("buildCreditBatchOpenItems", () => {
             status: "unmet",
           },
           {
-            key: "template",
+            key: "templateSet",
             label: "Template",
             requirementLabel: "Template resolved",
-            unmetLabel: "Template has unresolved parts",
+            unmetLabel: "Template lines not ready",
             status: "unmet",
           },
           {
@@ -140,7 +140,7 @@ describe("buildCreditBatchOpenItems", () => {
     expect(result.blocking.map(row => [row.title, row.target])).toEqual([
       ["No Sample data", { tab: "samples" }],
       ["Emissions not recorded", { tab: "emissions" }],
-      ["Template has unresolved parts", { href: "/certification/settings?section=removal-templates&facility=facility" }],
+      ["Template lines not ready", { href: "/certification/settings?section=removal-templates&facility=facility" }],
       ["Distances not recorded", { href: "/customers?location=location" }],
     ]);
   });
@@ -171,7 +171,7 @@ describe("buildCreditBatchOpenItems", () => {
     "creditBatchTemplate", "batchDetails", "labSamples", "emissions",
     "templateLineReview", "certificationTemplates", "certificationEmissions", "productionRuns",
   ])("preserves the repair destination for %s", fixTarget => {
-    const check = { key: "template" as const, label: "Template", requirementLabel: "Template ready", unmetLabel: "Template not ready",
+    const check = { key: "templateSet" as const, label: "Template", requirementLabel: "Template ready", unmetLabel: "Template not ready",
       status: "unmet" as const, fixTarget };
     const localTargets = {
       creditBatchTemplate: { tab: "overview", rowId: CREDIT_BATCH_TEMPLATE_ROW },

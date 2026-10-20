@@ -1,7 +1,7 @@
 "use server";
 
 import { getOAuthOrganizationSelection, selectOAuthOrganization, resolveAttemptGrant } from "@/data-access/oauth-grant-lifecycle";
-import { getOAuthAttemptConsent } from "@/data-access/oauth-provider";
+import { getOAuthAttemptConsent, isPlatformAdminUser } from "@/data-access/oauth-provider";
 import { listOwnOAuthGrants, listAllOAuthGrants, revokeOAuthGrant } from "@/data-access/oauth-grants";
 import { assertGenerationEligible } from "@/lib/auth/oauth-eligibility";
 import { findOAuthStepUp } from "@/data-access/oauth-step-up";
@@ -16,7 +16,9 @@ export async function getOAuthOrganizationChoicesFn(input: unknown) {
     const { attempt, display } = await verifiedOAuthRequest(oauthQuerySchema.parse(input).oauthQuery);
     const selection = await getOAuthOrganizationSelection(attempt);
     return { ...display, memberships: selection.memberships.map(({ organizationId, name, role, disabledReason }) =>
-      ({ organizationId, name, role, disabledReason })), preselectedOrganizationId: selection.preselectedOrganizationId };
+      ({ organizationId, name, role, disabledReason })), preselectedOrganizationId: selection.preselectedOrganizationId,
+      // Platform Admins have no member rows and no OAuth override; the picker explains that when it is empty.
+      isPlatformAdmin: selection.memberships.length === 0 && await isPlatformAdminUser(attempt.userId) };
   });
 }
 

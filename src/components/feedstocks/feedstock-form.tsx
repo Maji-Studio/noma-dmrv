@@ -81,8 +81,8 @@ interface FeedstockFormProps {
   /** All rows a failed create produced, so evidence retry reaches each. */
   retryEntityIds?: string[];
   focusTarget?: EntityFocusTarget | null;
-  /** A refresh from location saved a new version: reopen the form on it. */
-  onDistanceRefreshed?: () => void;
+  /** A refresh from location saved a new version: reopen the form on it; resolves once the sheet holds it. */
+  onDistanceRefreshed?: () => Promise<void>;
 }
 
 export function FeedstockForm({
