@@ -124,6 +124,16 @@ describe("getRemovalCertifyRefetchInterval", () => {
       }),
     ).toBe(60_000);
   });
+
+  it("polls while a Removal deletion lease hides Delete", () => {
+    expect(
+      getRemovalCertifyRefetchInterval({
+        latestSubmission: null,
+        futureDatedMeasurements: [],
+        deletionInProgress: true,
+      }),
+    ).toBe(60_000);
+  });
 });
 
 describe("getRemovalPreflightRefetchInterval", () => {
@@ -135,6 +145,21 @@ describe("getRemovalPreflightRefetchInterval", () => {
     expect(getRemovalPreflightRefetchInterval({ lockInFlight: true })).toBe(
       60_000,
     );
+  });
+
+  it("polls while a Removal deletion lease hides Delete", () => {
+    expect(
+      getRemovalPreflightRefetchInterval({
+        lockInFlight: false,
+        deletionInProgress: true,
+      }),
+    ).toBe(60_000);
+    expect(
+      getRemovalPreflightRefetchInterval({
+        lockInFlight: false,
+        deletionInProgress: false,
+      }),
+    ).toBe(false);
   });
 
   it("is wired into every removal preflight query", () => {
