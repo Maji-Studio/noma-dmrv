@@ -49,15 +49,23 @@ describe("MoistureSplit", () => {
     expect(html).toContain("20% moisture");
   });
 
-  it("explains a stored dry mass as a subtraction rather than a moisture formula", () => {
-    const html = renderToStaticMarkup(
-      <MoistureSplit wetMassKg={850} dryMassKg={820} moisturePercent={null} />,
-    );
-
-    expect(html).toContain(
-      "Dry mass comes from the saved record. Water is the wet mass minus the dry mass: 850 kg - 820 kg = 30 kg.",
-    );
+  it("keeps the stored dry mass sentence in the (i) panel and nothing inline", async () => {
+    const element = <MoistureSplit wetMassKg={850} dryMassKg={820} moisturePercent={null} />;
+    const html = renderToStaticMarkup(element);
+    expect(html).not.toContain("Dry mass comes from the saved record");
     expect(html).not.toContain("Dry = wet");
+
+    render(element);
+    fireEvent.click(screen.getByRole("button", { name: "About Material composition" }));
+    expect(await screen.findByText(
+      "Dry mass comes from the saved record. Water is the wet mass minus the dry mass: 850 kg - 820 kg = 30 kg.",
+    )).toBeTruthy();
+  });
+
+  it("puts the (i) inside the key row, after the last swatch item, so it wraps with the key", () => {
+    const { container } = render(<MoistureSplit wetMassKg={450} moisturePercent={10} addedWaterKg={50} />);
+    const key = container.querySelector('[aria-live="polite"]')!;
+    expect(key.lastElementChild?.hasAttribute("data-explanation-info")).toBe(true);
   });
 
   it("puts the key line under the bar and names each segment with its mass", () => {

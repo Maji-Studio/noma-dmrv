@@ -333,12 +333,15 @@ function SplitKey({
   materialLabel,
   dryLabel,
   finalMoistureLabel,
+  trailing,
 }: {
   split: MassSplit;
   addedWaterState: AddedWaterState | null;
   materialLabel?: string;
   dryLabel?: string;
   finalMoistureLabel?: string;
+  /** Rendered as the last item of the wrapping row, so it follows the last swatch. */
+  trailing?: ReactNode;
 }) {
   return (
     <div
@@ -368,6 +371,7 @@ function SplitKey({
           </span>
         </>
       )}
+      {trailing}
     </div>
   );
 }
@@ -502,15 +506,7 @@ export function MoistureSplit({
     );
   }
 
-  const key = (
-    <SplitKey
-      split={split}
-      addedWaterState={addedWaterState}
-      materialLabel={materialLabel}
-      dryLabel={dryLabel}
-      finalMoistureLabel={finalMoistureLabel}
-    />
-  );
+  const keyProps = { split, addedWaterState, materialLabel, dryLabel, finalMoistureLabel };
   if (!calculation) {
     return (
       <div className={`flex flex-col gap-12 ${className}`}>
@@ -521,7 +517,7 @@ export function MoistureSplit({
             addedWaterState={addedWaterState}
             widthPercent={barWidthPercent}
           />
-          {key}
+          <SplitKey {...keyProps} />
         </div>
       </div>
     );
@@ -537,46 +533,55 @@ export function MoistureSplit({
           addedWaterState={addedWaterState}
           widthPercent={barWidthPercent}
         />
-        <div className="flex items-center gap-8">
-          {key}
-          <ExplanationInfo title={panelTitle}>
-            <CompositionLedger
-              label={panelTitle}
-              totalLabel={wetLabel ?? "Wet total"}
-              total={displayedSplit.wetKg}
-              segments={[
-                {
-                  label: unresolvedDryLabel,
-                  mass: split.dryKg,
-                  category: "dry-biochar",
-                },
-                {
-                  label: MASS_MOISTURE_LABELS.water,
-                  mass: split.waterKg,
-                  category: "existing-water",
-                },
-                ...(addedWaterState
-                  ? [
-                      {
-                        label: MASS_MOISTURE_LABELS.waterAdded,
-                        mass: addedWaterState.addedWaterKg,
-                        category: "added-water" as const,
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-            {addedWaterState && (
-              <p className="body-caption text-[var(--color-text-tertiary)]">
-                {formatAddedWaterArithmetic(split, addedWaterState)}
-              </p>
-            )}
-            {note && <p className="body-caption">{note}</p>}
-          </ExplanationInfo>
-        </div>
-        <p className="body-caption text-[var(--color-text-tertiary)]">
-          {formatSplitArithmetic({ split, dryMassIsStored })}
-        </p>
+        <SplitKey
+          {...keyProps}
+          trailing={(
+            <ExplanationInfo title={panelTitle}>
+                <CompositionLedger
+                  label={panelTitle}
+                  totalLabel={wetLabel ?? "Wet total"}
+                  total={displayedSplit.wetKg}
+                  segments={[
+                    {
+                      label: unresolvedDryLabel,
+                      mass: split.dryKg,
+                      category: "dry-biochar",
+                    },
+                    {
+                      label: MASS_MOISTURE_LABELS.water,
+                      mass: split.waterKg,
+                      category: "existing-water",
+                    },
+                    ...(addedWaterState
+                      ? [
+                          {
+                            label: MASS_MOISTURE_LABELS.waterAdded,
+                            mass: addedWaterState.addedWaterKg,
+                            category: "added-water" as const,
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+                {dryMassIsStored && (
+                  <p className="body-caption text-[var(--color-text-tertiary)]">
+                    {formatSplitArithmetic({ split, dryMassIsStored })}
+                  </p>
+                )}
+                {addedWaterState && (
+                  <p className="body-caption text-[var(--color-text-tertiary)]">
+                    {formatAddedWaterArithmetic(split, addedWaterState)}
+                  </p>
+                )}
+                {note && <p className="body-caption">{note}</p>}
+              </ExplanationInfo>
+          )}
+        />
+        {!dryMassIsStored && (
+          <p className="body-caption text-[var(--color-text-tertiary)]">
+            {formatSplitArithmetic({ split, dryMassIsStored })}
+          </p>
+        )}
       </div>
     </div>
   );
