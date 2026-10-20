@@ -21,9 +21,11 @@ import {
   certificationKeys,
   getRemovalCertifyRefetchInterval,
   getRemovalPreflightRefetchInterval,
+  getRemovalsHubRefetchInterval,
   invalidateCertificationReadiness,
   useFacilityCertifierSummary,
   useRemovalPreflightSummaries,
+  useRemovalsForFacility,
   useSaveFacilityCertifierMapping,
   useSubmitGhgStatementToVerifier,
 } from "./use-certification";
@@ -186,6 +188,41 @@ describe("getRemovalPreflightRefetchInterval", () => {
         query.refetchInterval({ state: { data: { lockInFlight: false } } }),
       ).toBe(false);
     }
+  });
+});
+
+describe("getRemovalsHubRefetchInterval", () => {
+  it("polls while any hub row holds a Removal deletion lease", () => {
+    expect(getRemovalsHubRefetchInterval(undefined)).toBe(false);
+    expect(
+      getRemovalsHubRefetchInterval({
+        removals: [{ deletionInProgress: false }],
+      }),
+    ).toBe(false);
+    expect(
+      getRemovalsHubRefetchInterval({
+        removals: [{ deletionInProgress: false }, { deletionInProgress: true }],
+      }),
+    ).toBe(60_000);
+  });
+
+  it("is wired into the removals hub query, so the fallback lease refreshes without preflight", () => {
+    reactQueryMocks.useQuery.mockClear();
+    reactQueryMocks.useQuery.mockReturnValue({ data: undefined });
+
+    useRemovalsForFacility("facility-1");
+
+    const [options] = reactQueryMocks.useQuery.mock.calls[0] as [{
+      refetchInterval: (query: {
+        state: { data: { removals: { deletionInProgress: boolean }[] } | undefined };
+      }) => number | false;
+    }];
+    expect(
+      options.refetchInterval({
+        state: { data: { removals: [{ deletionInProgress: true }] } },
+      }),
+    ).toBe(60_000);
+    expect(options.refetchInterval({ state: { data: undefined } })).toBe(false);
   });
 });
 

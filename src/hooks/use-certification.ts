@@ -607,12 +607,24 @@ export function useRemovalTemplateDiagnostic(
 
 // Removals hub listing for a facility — removals + members + status, plus
 // the pool of credit batches not yet grouped into a removal.
+// The list falls back to these rows' deletion lease while a preflight read is
+// loading or failed, so the hub polls on its own until every lease clears.
+export function getRemovalsHubRefetchInterval(
+  data: { removals: readonly { deletionInProgress: boolean }[] } | undefined,
+): number | false {
+  return data?.removals.some((entry) => entry.deletionInProgress)
+    ? LOCKED_REFETCH_INTERVAL_MS
+    : false;
+}
+
 export function useRemovalsForFacility(facilityId: string, enabled = true) {
   return useQuery({
     queryKey: certificationKeys.removalsForFacility(facilityId),
     queryFn: async () => unwrap(await loadRemovalsForFacility(facilityId)),
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,
+    refetchInterval: (query) =>
+      getRemovalsHubRefetchInterval(query.state.data),
   });
 }
 
