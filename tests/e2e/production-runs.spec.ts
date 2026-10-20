@@ -543,9 +543,11 @@ test.describe("Production Run lifecycle (#254)", () => {
       await expect(dialog.locator(`label[for="${field}"]`)).not.toContainText("Required");
     }
     await chooseRunStatus(dialog, "complete");
-    for (const field of ["endDate", "endTime", "feedstockMoisturePercent", "biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"]) {
+    for (const field of ["endTime", "feedstockMoisturePercent", "biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"]) {
       await expect(dialog.locator(`label[for="${field}"]`)).toContainText("Required");
     }
+    // A blank end date defaults to the start date, so it carries no star.
+    await expect(dialog.locator('label[for="endDate"]')).not.toContainText("Required");
     await dialog
       .getByRole("button", { name: "Remove feedstock source 1" })
       .click();

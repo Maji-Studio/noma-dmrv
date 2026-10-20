@@ -49,6 +49,14 @@ describe("TransportJourney leg row", () => {
     expect(html).toContain('aria-label="No evidence"');
   });
 
+  it("leaves the load out of a leg that records none, and keeps a recorded one", () => {
+    const without = render({ loadMassKg: null });
+
+    expect(without).toContain("Distance source: Manual entry");
+    expect(without).not.toContain("Load:");
+    expect(render({ loadMassKg: 2000 })).toContain("Load: 2.0 t");
+  });
+
   it("renders a leg with a distance as before", () => {
     const rendered = render({});
 

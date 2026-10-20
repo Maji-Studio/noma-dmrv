@@ -101,9 +101,10 @@ function LegRow({
   // Without a distance there is nothing to have a source, and the right-hand
   // column already says "Not recorded", so the left side names only the method.
   // The counted distance derives from the one-way distance, so both are missing
-  // together.
+  // together. The same goes for a load: with none recorded the caption drops
+  // its Load part instead of repeating "Not recorded" on every line.
   const hasDistance = leg.oneWayKm != null;
-  const load = showLoad ? `Load: ${formatMass(leg.loadKg)}` : "";
+  const load = showLoad && leg.loadKg != null ? `Load: ${formatMass(leg.loadKg)}` : "";
   const captionParts = [
     hasDistance ? `Distance source: ${leg.sourceLabel ?? MISSING_VALUE.notRecorded}` : "",
     load,
