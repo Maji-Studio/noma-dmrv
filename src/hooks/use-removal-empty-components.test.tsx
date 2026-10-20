@@ -18,7 +18,10 @@ const OPEN = { removalVersion: 1, editable: true, batches: [{ creditBatchId: "b"
 const CONFIRMED = { removalVersion: 2, editable: true, batches: [{ creditBatchId: "b", code: "CB-1", lines: [], zeros: [{ id: "z", componentId: "a" }] }] };
 
 function wrapper(client: QueryClient) {
-  return ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  function Wrapper({ children }: { children: ReactNode }) {
+    return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  }
+  return Wrapper;
 }
 
 beforeEach(() => {
